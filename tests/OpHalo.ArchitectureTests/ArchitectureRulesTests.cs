@@ -80,6 +80,23 @@ public class ArchitectureRulesTests
     }
 
     [Theory]
+    [InlineData("CurrentUser")]   // identity is a Foundation concern (build plan §3.3)
+    [InlineData("EmailSender")]   // email sending is a Foundation concern
+    [InlineData("DbContext")]     // persistence is Infrastructure
+    [InlineData("Account")]       // account logic is a Foundation concern
+    [InlineData("Notification")]  // notifications are a Foundation concern
+    [InlineData("Entitlement")]   // entitlements are a Foundation concern
+    [InlineData("Keep")]          // no product concepts in SharedKernel
+    public void SharedKernel_must_not_contain_business_typed_names(string forbiddenFragment)
+    {
+        var result = Types.InAssembly(SharedKernel)
+            .ShouldNot().HaveNameMatching($".*{forbiddenFragment}.*")
+            .GetResult();
+
+        AssertPasses(result, $"SharedKernel must not contain a type named like '{forbiddenFragment}'");
+    }
+
+    [Theory]
     [InlineData("OpHalo.Signal")]
     [InlineData("OpHalo.Continuity")]
     [InlineData("OpHalo.Platform")]

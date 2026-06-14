@@ -2,6 +2,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\OpHalo.Foundation.Core\OpHalo.Foundation.Core.csproj" />
+    <ProjectReference Include="..\OpHalo.SharedKernel\OpHalo.SharedKernel.csproj" />
   </ItemGroup>
 
   <PropertyGroup>

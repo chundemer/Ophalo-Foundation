@@ -480,3 +480,9 @@ $RECYCLE.BIN/
 
 # Vim temporary swap files
 *.swp
+
+# Read-only alias to the reference (legacy) application — not part of the build
+_reference
+
+# Personal Claude Code overrides (machine-specific paths)
+.claude/settings.local.json
