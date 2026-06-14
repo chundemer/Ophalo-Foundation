@@ -36,7 +36,13 @@ decision. This file is authoritative for the new project.
 | ADR-012 | Solution skeleton + **real** architecture tests (NetArchTest) before any behavior movement | Implemented | commit `00227b0` |
 | ADR-013 | Exclude legacy families from the target: `Signal.*`, `Continuity.*`, `Platform.*`, separate `Auth` project, second API host | Implemented | build-log/001 |
 | ADR-014 | Disciplined SharedKernel: `Result`/`Error`/`IClock` only. Canonical `ICurrentUser` + `IEmailSender` live in `Foundation.Application` (forbidden in SharedKernel); duplicate abstractions collapsed | Implemented | build-log/002 |
+| ADR-015 | _(Phase4-001)_ `AccountUserRole` = Owner/Admin/Operator/Viewer. Legacy maps Owner→Owner, Admin→Admin, Technician→Operator, Member→Viewer. Roles are product-neutral; "Technician"/"Member" dropped as trade-specific/vague | Locked | Phase 4 discovery |
+| ADR-016 | _(Phase4-002)_ `MembershipStatus` = Invited/Active/Suspended/Removed. PendingInvite→Invited; **add** membership-level Suspended (per-member access block, distinct from account-lifecycle Suspended) | Locked | Phase 4 discovery |
+| ADR-017 | _(Phase4-003)_ Foundation `AccountUser` is **membership-only** (AccountId, UserId, Role, MembershipStatus, invite lifecycle, ownership ref, timestamps). Push subscription, `HasSeenMemberWelcome`, `HasDismissedInstallPrompt` excluded → move to KeepUserSettings / AccountUserDevice / NotificationDestination later | Locked | Phase 4 discovery |
+| ADR-018 | _(Phase4-004)_ Foundation `Account` trimmed to identity + lifecycle + purpose + core profile. Quotas/credits→entitlements/usage (§4.11), commercial/plan/billing→AccountEntitlements/commercial profile, public slug + intake token→Keep public-intake (§4.19), notification policy→AccountNotificationPolicy | Locked | Phase 4 discovery |
+| ADR-019 | Primary ownership modeled as `Account.PrimaryOwnerAccountUserId` (FK), **not** an `AccountUser.IsPrimaryOwner` flag — guarantees exactly-one primary owner; greenfield (ADR-005) means no migration cost. Ownership is separate from role | Locked | Phase 4 discovery |
+| ADR-020 | Foundation `Account` keeps `TimeZone` (account-wide, product-neutral: quiet hours, business-hours, reporting boundaries, SLA, scheduling). `ServiceCategory` is deferred — vertical/business-domain context belongs to a KeepBusinessProfile / later AccountBusinessProfile satellite, not Foundation identity | Locked | Phase 4 discovery |
 
 ---
 
-_Next free ID: **ADR-015**._
+_Next free ID: **ADR-021**._
