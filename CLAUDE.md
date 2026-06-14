@@ -19,7 +19,7 @@ verify — redesign only when the old implementation blocks the foundation.
 
 **Tier 1 — Discovery session** (new phase/domain, pre-work not done):
 1. Read `docs/session-log.md`
-2. Read the latest entries in `docs/build-log/` (what shipped, exit gates met)
+2. Read `docs/decisions/decision-index.md` and the latest `docs/build-log/` entries
 3. Ask Christian what we are working on today
 4. Read only the build-plan phase for that work — nothing else
 5. Read the specific reference source under `_reference/src/...` needed to understand current behavior
@@ -43,15 +43,17 @@ Keep sessions well within the context limit. If a task touches more than ~8–10
 
 ---
 
-## ⚠️ Pending Validation — Do NOT Load
+## Authoritative vs Pending
 
-The legacy `decision-index.md`, `docs/reference/decisions/**`, and `coding-rules.md`
-from the reference app are **not yet validated** and are deliberately excluded.
-Do not load them or rely on them until Christian validates and ports them. They
-remain visible read-only under `_reference/docs/` if a specific fact must be checked.
+**Authoritative for this build:** the **build plan**, `docs/decisions/decision-index.md`
+(this project's own decision ledger), the `docs/build-log/` entries, and the
+**architecture tests**. Add a one-liner to the decision index the moment a decision
+is made.
 
-Until then, the authoritative sources are: the **build plan**, the **`docs/build-log/`**
-entries, and the **architecture tests**.
+**⚠️ Pending validation — do NOT load:** the *legacy* `decision-index.md`,
+`docs/reference/decisions/**`, and `coding-rules.md` from the reference app are not
+yet validated and are deliberately excluded. They remain readable under
+`_reference/docs/` for historical reference only, after validation.
 
 ---
 
@@ -108,6 +110,7 @@ Canonical types ported so far:
 ## Documentation Maintenance — Mandatory
 
 - Every phase ends with a `docs/build-log/NNN-*.md` entry (preserved / moved / renamed / adapted / redesigned / why / tests / exit gate / risks) shipped with the code.
+- Every decision gets a one-line entry in `docs/decisions/decision-index.md` (full ADR only when it needs more than a line).
 - Every session ends with a rewritten, approved `docs/session-log.md`.
 
 ---

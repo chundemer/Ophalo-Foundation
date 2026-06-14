@@ -31,6 +31,9 @@ Build-log entries: `docs/build-log/001-phase-2-legacy-exclusion.md`,
   App↛Infra, SharedKernel discipline, no Signal/Continuity/Platform) — green.
 - SharedKernel: `Result`/`Result<T>`/`Error` (ported verbatim), `IClock`.
 - Foundation.Application: canonical `ICurrentUser`, `IEmailSender`.
+- `docs/decisions/decision-index.md`: this project's own decision ledger (seeded
+  ADR-001…014; next free ID ADR-015). The legacy decision-index/decisions are
+  excluded pending validation.
 
 ## Environment / setup (this machine)
 
