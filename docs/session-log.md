@@ -1,99 +1,65 @@
 # Session Log — OpHalo Foundation
 
 **Last updated:** 2026-06-14
-**Next session tier:** Tier 2 — Implementation · **Pre-work complete** (Phase 4a target confirmed)
+**Next session tier:** Tier 1 — Discovery (next Phase 4 slice not yet confirmed)
 **Branch:** `main` (no remote yet)
 
-> Next session **implements Phase 4a** (Account / User / AccountUser + lifecycle +
-> access policy). The target below is fully confirmed — read this log, confirm the
-> few signatures with targeted reads, then build. Do **not** re-run discovery.
+> Phase 4a is **built and green**. The next session picks the next Phase 4 slice
+> (permissions or entitlements) and must run discovery first — its implementation
+> target is **not** pre-confirmed. Do not assume scope; read the build-plan phase and
+> the relevant reference source before writing code.
 
 ---
 
 ## Where we are
 
-Phases 0–3 complete and committed. Phase 4 **discovery done** this session; the
-implementation target and its decisions (ADR-015…020) are locked. No Phase 4 code
-written yet. Build clean, **33 tests passing**.
+Phases 0–3 complete. **Phase 4a complete this session** (commit pending Christian's
+approval): the trimmed Account/User/membership domain + the account-access policy,
+ported per ADR-015…026. Build clean (0 warnings). **Tests: UnitTests 71, ArchitectureTests 14,
+IntegrationTests 1 — all green.**
 
 | Phase | Status | Notes |
 |-------|--------|-------|
 | 1 — Skeleton + architecture tests | ✅ done | `00227b0` |
 | 2 — Legacy exclusion (doc) | ✅ done | `2fce382` |
 | 3 — SharedKernel + abstraction cleanup | ✅ done | `2fce382` |
-| 4 — Account/User/lifecycle/entitlements/permissions | 🔵 discovery done; 4a target locked | this session |
+| 4a — Account/User/AccountUser + lifecycle + access policy | ✅ done | build-log/003, this session |
+| 4b+ — permissions, entitlements, invitations | ⬜ not started | next discovery |
 
-## Phase 4 decisions locked this session (ADR-015…020)
+## What 4a shipped
 
-- **ADR-015 Roles:** `AccountUserRole` = Owner/Admin/Operator/Viewer. Legacy maps
-  Owner→Owner, Admin→Admin, Technician→Operator, Member→Viewer.
-- **ADR-016 Membership:** `MembershipStatus` = Invited/Active/Suspended/Removed
-  (PendingInvite→Invited; Suspended is new, per-member, distinct from account-lifecycle Suspended).
-- **ADR-017 AccountUser membership-only:** push subscription, `HasSeenMemberWelcome`,
-  `HasDismissedInstallPrompt` excluded → future KeepUserSettings / AccountUserDevice / NotificationDestination.
-- **ADR-018 Account trimmed:** identity + lifecycle + purpose + core profile only.
-  Quotas/credits → entitlements/usage; commercial/plan/billing → AccountEntitlements;
-  public slug + intake token → Keep public-intake; notification policy → AccountNotificationPolicy.
-- **ADR-019 Primary owner:** `Account.PrimaryOwnerAccountUserId` (FK), not an
-  `AccountUser.IsPrimaryOwner` flag. Ownership is separate from role.
-- **ADR-020 Core profile:** keep `TimeZone` on Account; defer `ServiceCategory` to a Keep/business-profile satellite.
+- **Core:** `BaseEntity`, `EmailNormalizer` (in Foundation.Core), 6 account enums (explicit values),
+  trimmed `AccountErrors`/`AccountUserErrors`, `User`, trimmed `Account`, membership-only `AccountUser`.
+- **Application:** `Accounts/Access/*` — `AccountAccessPolicy` ported verbatim.
+- **Tests:** account lifecycle, AccountUser membership, access-posture matrix (+38 tests).
+- **Decisions locked & built:** ADR-015…020 now `Implemented`; new ADR-021…026 (see decision-index):
+  Account drops `Email`; `CreateVerified(businessName, purpose, timeZone)` required/non-null;
+  `IsActive` computed; self-validating `AssignPrimaryOwner(AccountUser)`; invites accept any
+  non-owner role; explicit enum values + `Pilot` dropped.
 
-## Next — Phase 4a implementation target (CONFIRMED)
+## Next — candidate Phase 4 slices (pick one at discovery, confirm with Christian)
 
-Build in the target repo (`/Users/christian/saas/ophalo-foundation`):
+- **Permissions:** permission keys + role→permission map (plan §4.8) — Application-layer authorization.
+- **Entitlements:** feature-key entitlements + the `AccountEntitlements` entity (plan §4.11),
+  which is what actually *sources* the commercial/operating-mode inputs the access policy already consumes.
+- **Invitations flow:** the handler/orchestration around `CreatePendingInvite`/`Activate`.
 
-**`OpHalo.Foundation.Core`**
-- `Account` — trimmed: `Id`, `BusinessName`, `Purpose`, `LifecycleState`, `TimeZone`,
-  `PrimaryOwnerAccountUserId`, created/updated timestamps. Methods: `Suspend`/`Close`/
-  `Reactivate` (preserve reference semantics), trimmed `CreateVerified` factory,
-  `RecordLogin`, trimmed profile update. Drop quotas/credits/slug/intake-token.
-- `User` — port near-verbatim (email, name, phone, verified flags, last login; `CreateVerified`).
-- `AccountUser` — membership-only: `AccountId`, `UserId?`, `Role`, `MembershipStatus`,
-  invite lifecycle (`InviteTokenHash`, `InviteExpiresAtUtc`), `ActivatedAtUtc`, timestamps.
-  Methods `Activate`/`RefreshInvite`/`Remove` (+ a `Suspend`/membership-suspend for the new status).
-  Factories `CreateOwner` (Role=Owner now, not legacy Admin), `CreatePendingInvite`.
-  **Drop** push-subscription + welcome + install-prompt fields/methods.
-- Enums: `AccountUserRole` (Owner/Admin/Operator/Viewer), `MembershipStatus`
-  (Invited/Active/Suspended/Removed), `AccountLifecycleState` (Active/Suspended/Closed),
-  `AccountPurpose` (Business/Internal). Also port `AccountCommercialState` +
-  `AccountOperatingMode` enums (the access policy context needs them; the
-  AccountEntitlements **entity** stays deferred).
-- Errors: trimmed `AccountErrors` (lifecycle/access/commercial transitions in scope) +
-  `AccountUserErrors` (membership transitions; drop push errors).
-- Support: port `BaseEntity` and `EmailNormalizer`. **`EmailNormalizer` goes in Foundation,
-  not SharedKernel** (§8 — no email concepts in SharedKernel).
+Recommendation: do **AccountEntitlements** next — it closes the loop on the access policy
+(currently fed by a context with no producer) and unlocks the commercial-posture path end-to-end.
 
-**`OpHalo.Foundation.Application`**
-- Port `AccountAccessPolicy` + `IAccountAccessPolicy`, `AccountAccessContext`,
-  `AccountAccessDecision`, `AccountAccessPosture`, `AccountAccessReason` into
-  `Accounts/Access/` — **verbatim logic**, new namespaces, `SharedKernel.Results`.
-  No redesign: it already matches plan §4.10.
+## Reference source map (for next discovery)
 
-**Tests (`OpHalo.UnitTests`)**
-- Account lifecycle transition tests (Suspend/Close/Reactivate guards).
-- AccountUser membership transition tests (Activate/RefreshInvite/Remove/Suspend).
-- `AccountAccessPolicy` posture matrix (the exit-gate "account posture" tests):
-  lifecycle blocks, Internal bypass, Trial/PastDue-grace/Expired/Canceled, OffSeason read-only.
+- Permissions: `_reference/src/OpHalo.Application/...` (locate permission-key definitions + role map).
+- Entitlements: `_reference/src/OpHalo.Core/Entities/Accounts/AccountEntitlements.cs` (+ `AccountPlan` enum).
+- Invitations: `_reference/src/OpHalo.Application/...Invitations/` and `InviteErrors.cs`.
 
-**Deferred to later Phase 4 sessions (NOT 4a):** permission keys + role→permission map,
-feature-key entitlements (§4.11), AccountEntitlements entity, invitations flow,
-sessions/devices (Phase 5).
+## Watch-outs / debt carried forward (from build-log/003)
 
-**Exit gate (plan §Phase 4, partial — posture/lifecycle slice):** unit tests for account
-posture green; Foundation has no Keep references; build + arch tests stay green.
-
-## Reference source map (already read — re-verify signatures only)
-
-- `_reference/src/OpHalo.Core/Entities/Accounts/Account.cs` (bloated — trim per ADR-018)
-- `_reference/src/OpHalo.Core/Entities/Users/User.cs` (clean)
-- `_reference/src/OpHalo.Core/Entities/Accounts/AccountUser.cs` (strip product fields per ADR-017)
-- `_reference/src/OpHalo.Core/Entities/Accounts/Enums/*` and `Errors/*`
-- `_reference/src/OpHalo.Application/Accounts/Access/*` (port verbatim)
-- Still to locate at build time: `BaseEntity` + `EmailNormalizer` source paths under
-  `_reference/src/OpHalo.Core/Entities/Shared/` and `_reference/src/OpHalo.Shared/Helpers/`.
-
-## Blockers / watch-outs
-
+- **No persistence yet** — EF config (FKs, unique normalized-email index, handling the computed
+  `AccountUser.IsActive` per ADR-023) lands in the persistence phase, not here.
+- **No membership reactivate** (`Suspended → Active`) — deferred to the admin/invitations flow.
+- **Internal accounts** still require a `BusinessName` via `CreateVerified` — revisit if a distinct
+  internal-account factory is needed.
 - Never glob through `_reference/**/bin` (recursive nesting). Read specific source paths.
 - Legacy `decision-index`/`decisions/**`/`coding-rules` remain **pending validation** — do not load.
 - Real repo is `/Users/christian/saas/ophalo-foundation`; the launch cwd `Ophalo/` is empty.
