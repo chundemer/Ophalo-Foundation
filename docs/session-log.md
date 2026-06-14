@@ -1,13 +1,14 @@
 # Session Log — OpHalo Foundation
 
 **Last updated:** 2026-06-14
-**Next session tier:** Tier 1 — Discovery (next Phase 4 slice not yet confirmed)
-**Branch:** `main` (no remote yet)
+**Next session tier:** Tier 1 — Discovery · **next slice = AccountEntitlements** (agreed)
+**Branch:** `main` (no remote yet) · Phase 4a committed `ec4c35c`
 
-> Phase 4a is **built and green**. The next session picks the next Phase 4 slice
-> (permissions or entitlements) and must run discovery first — its implementation
-> target is **not** pre-confirmed. Do not assume scope; read the build-plan phase and
-> the relevant reference source before writing code.
+> Phase 4a is **built, green, and committed** (`ec4c35c`). The next slice is
+> **AccountEntitlements** (decided with Christian) — it closes the loop on the access
+> policy, which currently consumes commercial/operating-mode inputs with no producer.
+> Still run discovery first: read the build-plan §4.11 entitlements phase and the
+> reference source before writing code; the implementation target is **not** yet locked.
 
 ---
 
