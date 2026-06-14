@@ -1,0 +1,18 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/OpHalo.Api/OpHalo.Api.csproj" />
+    <Project Path="src/OpHalo.Foundation.Application/OpHalo.Foundation.Application.csproj" />
+    <Project Path="src/OpHalo.Foundation.Core/OpHalo.Foundation.Core.csproj" />
+    <Project Path="src/OpHalo.Foundation.Infrastructure/OpHalo.Foundation.Infrastructure.csproj" />
+    <Project Path="src/OpHalo.Keep.Application/OpHalo.Keep.Application.csproj" />
+    <Project Path="src/OpHalo.Keep.Core/OpHalo.Keep.Core.csproj" />
+    <Project Path="src/OpHalo.Keep.Infrastructure/OpHalo.Keep.Infrastructure.csproj" />
+    <Project Path="src/OpHalo.SharedKernel/OpHalo.SharedKernel.csproj" />
+    <Project Path="src/OpHalo.Worker/OpHalo.Worker.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/OpHalo.ArchitectureTests/OpHalo.ArchitectureTests.csproj" />
+    <Project Path="tests/OpHalo.IntegrationTests/OpHalo.IntegrationTests.csproj" />
+    <Project Path="tests/OpHalo.UnitTests/OpHalo.UnitTests.csproj" />
+  </Folder>
+</Solution>
