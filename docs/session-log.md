@@ -2,7 +2,7 @@
 
 **Last updated:** 2026-06-14
 **Next session tier:** Tier 1 — Discovery · **Persistence phase (Phase 6) is the natural next — it is the consumer this slice was built for**
-**Branch:** `main` (no remote yet) · Account-creation orchestration built, **uncommitted — awaiting Christian's approval**
+**Branch:** `main` (no remote yet) · Account-creation orchestration **committed** (`e09d876`)
 
 > The first **composing caller** is built: `AccountProvisioningService` assembles the canonical
 > new-account graph (`User` + `Account` + owner `AccountUser` + `AccountEntitlements`) from the
@@ -26,7 +26,7 @@ Phase 4 factories. Work is **uncommitted** pending approval.
 | 4b — AccountEntitlements (commercial posture producer) | ✅ done | `7cf49aa`, build-log/004 |
 | 4c — Permission keys + role access policy (User permitted) | ✅ done | `034eee4`, build-log/005 |
 | 4d — Feature keys / entitlements (Account entitled) | ✅ done | `eef4b07`, build-log/006 |
-| Account-creation orchestration (first composing caller) | 🟡 built, uncommitted | build-log/007, ADR-039/040 |
+| Account-creation orchestration (first composing caller) | ✅ done | `e09d876`, build-log/007, ADR-039/040 |
 
 ## What this session shipped
 
