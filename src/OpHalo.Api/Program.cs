@@ -1,13 +1,17 @@
 using System.Threading.RateLimiting;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
+using OpHalo.Api.Auth;
+using OpHalo.Api.Helpers;
 using OpHalo.Api.Keep;
 using OpHalo.Foundation.Application.Abstractions.Security;
 using OpHalo.Foundation.Application.Accounts.Access;
 using OpHalo.Foundation.Application.Accounts.Authorization;
 using OpHalo.Foundation.Application.Accounts.Entitlements;
+using OpHalo.Foundation.Core.Constants;
 using OpHalo.Foundation.Infrastructure.Persistence;
 using OpHalo.Foundation.Infrastructure.Security;
 using OpHalo.Foundation.Infrastructure.Services;
@@ -16,7 +20,6 @@ using OpHalo.Keep.Application.Requests;
 using OpHalo.Keep.Application.Services;
 using OpHalo.Keep.Infrastructure.Persistence;
 using OpHalo.SharedKernel.Abstractions;
-using OpHalo.SharedKernel.Results;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -53,7 +56,7 @@ builder.Services.AddScoped<OpHaloDbContext>(sp =>
 });
 
 // --- Services ---
-builder.Services.AddSingleton<IClock, SystemClock>();
+builder.Services.AddSingleton<IClock, OpHalo.Foundation.Infrastructure.Services.SystemClock>();
 
 builder.Services.AddScoped<IKeepIntakePersistence, KeepIntakePersistence>();
 builder.Services.AddScoped<IKeepRequestListPersistence, KeepRequestListPersistence>();
@@ -65,19 +68,40 @@ builder.Services.AddSingleton<IAccountAccessPolicy, AccountAccessPolicy>();
 builder.Services.AddSingleton<IUserAccessPolicy, UserAccessPolicy>();
 builder.Services.AddSingleton<IFeatureAccessPolicy, FeatureAccessPolicy>();
 
-// --- Identity ---
-// AnonymousCurrentUser until Phase 5 auth (ADR-058).
-// Tests override this via WebApplicationFactory.ConfigureTestServices.
-builder.Services.AddScoped<ICurrentUser, AnonymousCurrentUser>();
+// --- Auth ---
+builder.Services.AddHttpContextAccessor();
+builder.Services.Configure<AuthCookieSettings>(builder.Configuration.GetSection("Auth"));
+builder.Services.AddSingleton<AuthCookieOptionsFactory>();
+
+builder.Services.AddScoped<ICurrentUser, CurrentUser>();
+builder.Services.AddScoped<ISessionStore, SessionStore>();
+builder.Services.AddScoped<IAccountSessionService, AccountSessionService>();
+
+builder.Services.AddAuthentication(AuthConstants.SessionSchemeName)
+    .AddScheme<AuthenticationSchemeOptions, SessionAuthenticationHandler>(
+        AuthConstants.SessionSchemeName, _ => { });
+
+builder.Services.AddAuthorization();
 
 // --- Rate Limiting (ADR-060) ---
-// Per-IP fixed-window on all unauthenticated public routes. CF-Connecting-IP cannot be
+// Per-IP fixed-window on all rate-limited routes. CF-Connecting-IP cannot be
 // forged when Railway ingress is Cloudflare-only — a deploy-time constraint (ADR-060).
 builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
 
     options.AddPolicy<string>("public-intake", context =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            GetClientIp(context),
+            _ => new FixedWindowRateLimiterOptions
+            {
+                Window = TimeSpan.FromMinutes(1),
+                PermitLimit = 10,
+                QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                QueueLimit = 0,
+            }));
+
+    options.AddPolicy<string>("auth", context =>
         RateLimitPartition.GetFixedWindowLimiter(
             GetClientIp(context),
             _ => new FixedWindowRateLimiterOptions
@@ -99,6 +123,8 @@ if (app.Environment.IsDevelopment())
 if (!app.Environment.IsEnvironment("Testing"))
     app.UseHttpsRedirection();
 
+app.UseAuthentication();
+app.UseAuthorization();
 app.UseRateLimiter();
 
 // --- Routes ---
@@ -111,12 +137,14 @@ app.MapPost("/keep/public-intake/token/{publicIntakeToken}", HandlePublicIntake)
 app.MapPost("/continuity/public-intake/token/{publicIntakeToken}", HandlePublicIntake)
    .RequireRateLimiting("public-intake");
 
-// Operator list — no RequireAuthorization() until Phase 5 auth; service fails closed (ADR-058)
+// Operator list — requires authenticated session (Phase 5A)
 app.MapGet("/keep/requests", async (GetKeepRequestListService service, CancellationToken ct) =>
 {
     var result = await service.ExecuteAsync(ct);
-    return result.IsSuccess ? Results.Ok(result.Value) : ToProblem(result.Error);
-});
+    return result.IsSuccess ? Results.Ok(result.Value) : ErrorHttpMapper.ToHttpResult(result.Error);
+}).RequireAuthorization();
+
+app.MapAuthEndpoints();
 
 app.Run();
 
@@ -138,32 +166,12 @@ static async Task<IResult> HandlePublicIntake(
     var result = await service.ExecuteAsync(command, ct);
 
     if (!result.IsSuccess)
-        return ToProblem(result.Error);
+        return ErrorHttpMapper.ToHttpResult(result.Error);
 
     return Results.Created(
         (string?)null,
         new { result.Value.RequestId, result.Value.ReferenceCode, result.Value.PageToken });
 }
-
-// --- Error mapping ---
-// Maps domain errors to RFC 7807 ProblemDetails (build-log/014, ADR-059).
-// Validation errors (KeepRequest.*Required) fall through to the default 400 —
-// no enumeration of specific codes needed; all unknown codes are client errors.
-static IResult ToProblem(Error error) => error.Code switch
-{
-    "auth.unauthorized"              => Problem(StatusCodes.Status401Unauthorized,         "Unauthorized.",         error),
-    "auth.forbidden"                 => Problem(StatusCodes.Status403Forbidden,            "Forbidden.",            error),
-    "keep.public_intake.unavailable" => Problem(StatusCodes.Status422UnprocessableEntity, "Unprocessable entity.", error),
-    _                                => Problem(StatusCodes.Status400BadRequest,           "Bad request.",          error),
-};
-
-static IResult Problem(int statusCode, string title, Error error) =>
-    Results.Problem(
-        statusCode: statusCode,
-        title: title,
-        detail: error.Message,
-        type: "about:blank",
-        extensions: new Dictionary<string, object?> { ["code"] = error.Code });
 
 // --- Utilities ---
 

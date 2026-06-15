@@ -3,8 +3,8 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
-using OpHalo.Foundation.Application.Abstractions.Security;
 using OpHalo.Foundation.Application.Accounts.Provisioning;
+using OpHalo.Foundation.Core.Constants;
 using OpHalo.Foundation.Core.Entities.Accounts.Enums;
 using OpHalo.Foundation.Infrastructure.Persistence;
 using OpHalo.Keep.Application.Services;
@@ -17,7 +17,8 @@ namespace OpHalo.IntegrationTests.Api;
 ///
 /// Tests 1–7 match the minimum test list from build-log/014 exactly.
 /// All tests share one factory instance (class fixture) and the database seeded
-/// in InitializeAsync. Tests that need auth set CurrentUser before their request.
+/// in InitializeAsync. Auth tests seed real AccountSession rows and send real
+/// cookie headers — no ICurrentUser override.
 /// </summary>
 public sealed class KeepIntakeApiTests : IClassFixture<KeepApiWebFactory>, IAsyncLifetime
 {
@@ -103,8 +104,6 @@ public sealed class KeepIntakeApiTests : IClassFixture<KeepApiWebFactory>, IAsyn
     [Fact]
     public async Task PublicIntake_ValidRequest_Returns201AndPersistsRequest()
     {
-        _factory.CurrentUser = Anonymous();
-
         var response = await _client.PostAsJsonAsync(
             $"/keep/public-intake/token/{_rawToken}",
             new { customerName = "Bob Jones", customerPhone = "0499999999", description = "Leaking tap" });
@@ -134,8 +133,6 @@ public sealed class KeepIntakeApiTests : IClassFixture<KeepApiWebFactory>, IAsyn
     [Fact]
     public async Task PublicIntake_LegacyAlias_Returns201()
     {
-        _factory.CurrentUser = Anonymous();
-
         var response = await _client.PostAsJsonAsync(
             $"/continuity/public-intake/token/{_rawToken}",
             new { customerName = "Alice Brown", customerPhone = "0411111111", description = "Hot water system fault" });
@@ -150,9 +147,11 @@ public sealed class KeepIntakeApiTests : IClassFixture<KeepApiWebFactory>, IAsyn
     [Fact]
     public async Task RequestList_AuthenticatedOwner_Returns200WithSeededRequest()
     {
-        _factory.CurrentUser = Authenticated(_ownerAccountUserId, _accountId);
+        var rawToken = await _factory.SeedSessionAsync(_ownerAccountUserId, _accountId);
 
-        var response = await _client.GetAsync("/keep/requests");
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/keep/requests");
+        request.Headers.Add("Cookie", $"{AuthConstants.CookieName}={rawToken}");
+        var response = await _client.SendAsync(request);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
@@ -169,35 +168,60 @@ public sealed class KeepIntakeApiTests : IClassFixture<KeepApiWebFactory>, IAsyn
     }
 
     // -------------------------------------------------------------------------
-    // Test 4 — GET /keep/requests → 401 when current user is anonymous
+    // Test 4 — GET /keep/requests → 401 when no session cookie is present
     // -------------------------------------------------------------------------
 
     [Fact]
     public async Task RequestList_Anonymous_Returns401()
     {
-        _factory.CurrentUser = Anonymous();
-
         var response = await _client.GetAsync("/keep/requests");
 
+        // Framework challenge: SessionAuthenticationHandler sets 401 with no body.
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
-
-        var problem = await response.Content.ReadFromJsonAsync<ProblemBody>(
-            new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-        Assert.NotNull(problem);
-        Assert.Equal("auth.unauthorized", problem.Code);
     }
 
     // -------------------------------------------------------------------------
-    // Test 5 — GET /keep/requests → 403 when user has no resolvable membership
+    // Test 5 — GET /keep/requests → 403 when authenticated but no entitlements
     // -------------------------------------------------------------------------
 
     [Fact]
-    public async Task RequestList_AuthenticatedButNoMembership_Returns403()
+    public async Task RequestList_AuthenticatedButNoEntitlements_Returns403()
     {
-        // Authenticated-looking IDs that have no rows in the database.
-        _factory.CurrentUser = Authenticated(Guid.NewGuid(), Guid.NewGuid());
+        // Seed Account B: real user + account + accountUser (Active), deliberately no entitlements.
+        // GetAccountAccessSnapshotAsync finds no AccountEntitlements row → returns null → Forbidden.
+        var now = DateTime.UtcNow;
+        var provisionResult = new AccountProvisioningService().CreateVerified(
+            email: "noaccess@keep-api-tests.com",
+            name: "No Access User",
+            businessName: "No Access Co",
+            purpose: AccountPurpose.Business,
+            timeZone: "Australia/Sydney",
+            plan: AccountPlan.Trial,
+            isPilot: false,
+            nowUtc: now,
+            trialEndsAtUtc: now.AddDays(30));
 
-        var response = await _client.GetAsync("/keep/requests");
+        Assert.True(provisionResult.IsSuccess);
+        var graph = provisionResult.Value;
+
+        await using (var scope = _factory.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+            db.Users.Add(graph.User);
+            db.Accounts.Add(graph.Account);
+            db.AccountUsers.Add(graph.Owner);
+            var ownerEntry = db.Entry(graph.Account).Property(a => a.PrimaryOwnerAccountUserId);
+            ownerEntry.CurrentValue = null;
+            await db.SaveChangesAsync();
+            ownerEntry.CurrentValue = graph.Owner.Id;
+            await db.SaveChangesAsync();
+        }
+
+        var rawToken = await _factory.SeedSessionAsync(graph.Owner.Id, graph.Account.Id);
+
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/keep/requests");
+        request.Headers.Add("Cookie", $"{AuthConstants.CookieName}={rawToken}");
+        var response = await _client.SendAsync(request);
 
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
 
@@ -214,8 +238,6 @@ public sealed class KeepIntakeApiTests : IClassFixture<KeepApiWebFactory>, IAsyn
     [Fact]
     public async Task PublicIntake_MissingRequiredFields_Returns400()
     {
-        _factory.CurrentUser = Anonymous();
-
         // customerName omitted — service returns KeepRequest.CustomerNameRequired → 400
         var response = await _client.PostAsJsonAsync(
             $"/keep/public-intake/token/{_rawToken}",
@@ -236,8 +258,6 @@ public sealed class KeepIntakeApiTests : IClassFixture<KeepApiWebFactory>, IAsyn
     [Fact]
     public async Task PublicIntake_UnknownToken_Returns422Unavailable()
     {
-        _factory.CurrentUser = Anonymous();
-
         var response = await _client.PostAsJsonAsync(
             "/keep/public-intake/token/token_that_does_not_exist_in_db",
             new { customerName = "Bob Jones", customerPhone = "0499999999", description = "Leaking tap" });
@@ -262,22 +282,4 @@ public sealed class KeepIntakeApiTests : IClassFixture<KeepApiWebFactory>, IAsyn
 
     private sealed record RequestSummaryBody(Guid Id, string ReferenceCode, string Status);
     private sealed record RequestListBody(List<RequestSummaryBody> Requests);
-
-    // -------------------------------------------------------------------------
-    // Helpers
-    // -------------------------------------------------------------------------
-
-    private static ICurrentUser Anonymous() =>
-        new Foundation.Infrastructure.Security.AnonymousCurrentUser();
-
-    private static ICurrentUser Authenticated(Guid accountUserId, Guid accountId) =>
-        new FakeCurrentUser(accountUserId, accountId);
-
-    private sealed class FakeCurrentUser(Guid userId, Guid accountId) : ICurrentUser
-    {
-        public Guid UserId => userId;
-        public Guid AccountId => accountId;
-        public bool IsAuthenticated => true;
-        public bool IsVerified => true;
-    }
 }

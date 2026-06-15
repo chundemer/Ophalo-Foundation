@@ -1,12 +1,13 @@
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
-using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.DependencyInjection.Extensions;
-using OpHalo.Foundation.Application.Abstractions.Security;
+using OpHalo.Foundation.Core.Entities.Accounts;
+using OpHalo.Foundation.Core.Entities.Accounts.Enums;
 using OpHalo.Foundation.Infrastructure.Persistence;
+using OpHalo.Foundation.Infrastructure.Security;
+using System.Security.Cryptography;
 using Testcontainers.PostgreSql;
 
 namespace OpHalo.IntegrationTests.Api;
@@ -19,20 +20,13 @@ namespace OpHalo.IntegrationTests.Api;
 /// string BEFORE Program.cs reads it, so the fail-fast check and the DbContext factory
 /// both see the test value — no service replacement needed for the DbContext.
 ///
-/// Tests control auth state by setting CurrentUser before each request. The factory
-/// re-evaluates it per DI scope so each HTTP call sees the current value.
+/// Auth: tests seed real AccountSession rows and send cookie or Bearer headers.
+/// No ICurrentUser override — the auth handler runs exactly as in production.
 /// </summary>
 public sealed class KeepApiWebFactory : WebApplicationFactory<Program>, IAsyncLifetime
 {
     private readonly PostgreSqlContainer _container = new PostgreSqlBuilder("postgres:17.5-alpine")
         .Build();
-
-    /// <summary>
-    /// Set before making a request to control which ICurrentUser the service layer sees.
-    /// Defaults to unauthenticated. Changes take effect on the next request scope.
-    /// </summary>
-    public ICurrentUser CurrentUser { get; set; } =
-        new Foundation.Infrastructure.Security.AnonymousCurrentUser();
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
@@ -49,14 +43,32 @@ public sealed class KeepApiWebFactory : WebApplicationFactory<Program>, IAsyncLi
                 ["ConnectionStrings:DefaultConnection"] = _container.GetConnectionString()
             });
         });
+    }
 
-        // Replace only ICurrentUser — the DbContext picks up the test connection string
-        // from configuration automatically via the Program.cs factory.
-        builder.ConfigureTestServices(services =>
-        {
-            services.RemoveAll<ICurrentUser>();
-            services.AddScoped<ICurrentUser>(_ => CurrentUser);
-        });
+    /// <summary>
+    /// Seeds a real AccountSession row and returns the raw token.
+    /// Pass the token as a cookie (<c>ophalo.sid=rawToken</c>) or Bearer header in tests.
+    /// </summary>
+    /// <param name="overrideCreatedAt">
+    /// Set to a past date to produce a session whose ExpiresAtUtc (createdAt + 30 days)
+    /// is in the past, simulating an expired session.
+    /// </param>
+    public async Task<string> SeedSessionAsync(
+        Guid accountUserId,
+        Guid accountId,
+        SessionClientType clientType = SessionClientType.Browser,
+        DateTime? overrideCreatedAt = null)
+    {
+        var now = overrideCreatedAt ?? DateTime.UtcNow;
+        var rawToken = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
+        var tokenHash = SessionHasher.HashToken(rawToken);
+        var session = AccountSession.Create(accountId, accountUserId, tokenHash, clientType, null, now, now.AddDays(30));
+
+        await using var scope = Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+        db.AccountSessions.Add(session);
+        await db.SaveChangesAsync();
+        return rawToken;
     }
 
     /// <summary>

@@ -1,88 +1,90 @@
 # Session Log — OpHalo Foundation
 
 **Last updated:** 2026-06-15
-**Next session tier:** Tier 1 — Discovery (next phase TBD with Christian)
+**Next session tier:** Tier 1 (new phase)
 **Branch:** `main` (no remote yet)
 
 ---
 
-## Current state — Phase 7B complete
+## Phase 5A — COMPLETE
 
-Build: ✅ 0 warnings / 0 errors
-UnitTests: ✅ **260** passed
-ArchitectureTests: ✅ **14** passed
-IntegrationTests: ✅ **22** passed (+7 new HTTP integration tests)
+**34/34 tests passing. 0 build errors.**
 
 ---
 
-## What was completed this session (Phase 7B Session B)
+## What was completed
+
+Phase 5A: Auth/Session Foundation — server-side opaque session, dual transport, framework auth wiring.
+
+All files written and verified:
 
 | File | Notes |
 |------|-------|
-| `Foundation.Infrastructure/Security/AnonymousCurrentUser.cs` | ICurrentUser placeholder, IsAuthenticated=false, Guid.Empty IDs (ADR-058) |
-| `Api/Keep/PublicIntakeRequest.cs` | Body DTO; emailNotificationsEnabled accepted/ignored (ADR-059) |
-| `Api/Program.cs` | Full rewrite: AddProblemDetails, AddOpenApi, rate limiter, DI registrations, minimal API routes, RFC 7807 error mapper, Testing-env HTTPS bypass |
-| `Api/appsettings.json` | Added ConnectionStrings:DefaultConnection (empty; supplied by environment) |
-| `IntegrationTests/OpHalo.IntegrationTests.csproj` | Added Microsoft.AspNetCore.Mvc.Testing 10.0.9 + OpHalo.Api project reference |
-| `IntegrationTests/Api/KeepApiWebFactory.cs` | WebApplicationFactory<Program> with Testcontainers postgres, ConfigureAppConfiguration for connection string, ICurrentUser override, ResetDatabaseAsync |
-| `IntegrationTests/Api/KeepIntakeApiTests.cs` | 7 HTTP tests covering all build-log/014 exit criteria |
-| `docs/decisions/decision-index.md` | ADR-060 added (rate limiting policy) |
-| `docs/build-log/015-phase-7b-implementation.md` | Full build-log for both Session A + B |
+| `Foundation.Core/Constants/AuthConstants.cs` | ✅ |
+| `Foundation.Core/Entities/Accounts/Enums/SessionClientType.cs` | ✅ |
+| `Foundation.Core/Entities/Accounts/AccountSession.cs` | ✅ standalone entity, no BaseEntity |
+| `Foundation.Application/Abstractions/Security/IAccountSessionService.cs` | ✅ Foundation-neutral name |
+| `Foundation.Application/Abstractions/Security/CreateSessionResult.cs` | ✅ |
+| `Foundation.Infrastructure/OpHalo.Foundation.Infrastructure.csproj` | ✅ FrameworkReference added |
+| `Foundation.Infrastructure/Security/SessionHasher.cs` | ✅ |
+| `Foundation.Infrastructure/Security/SessionData.cs` | ✅ MembershipStatus? null = missing or AccountId mismatch |
+| `Foundation.Infrastructure/Security/ISessionStore.cs` | ✅ |
+| `Foundation.Infrastructure/Security/SessionStore.cs` | ✅ two-query, AccountId cross-check |
+| `Foundation.Infrastructure/Security/SessionAuthenticationHandler.cs` | ✅ Bearer-first, Active-only gate |
+| `Foundation.Infrastructure/Security/CurrentUser.cs` | ✅ |
+| `Foundation.Infrastructure/Security/AccountSessionService.cs` | ✅ |
+| `Foundation.Infrastructure/Persistence/Configurations/AccountSessionConfiguration.cs` | ✅ |
+| `Foundation.Infrastructure/Persistence/OpHaloDbContext.cs` | ✅ AccountSessions DbSet added |
+| `Migrations/20260615173121_AccountSessions.cs` | ✅ |
+| `Migrations/20260615173121_AccountSessions.Designer.cs` | ✅ |
+| `Migrations/OpHaloDbContextModelSnapshot.cs` | ✅ |
+| `Api/Auth/AuthCookieSettings.cs` | ✅ |
+| `Api/Auth/AuthCookieOptionsFactory.cs` | ✅ |
+| `Api/Auth/AuthEndpoints.cs` | ✅ GET /auth/me + POST /auth/logout, both RequireAuthorization |
+| `Api/Helpers/ErrorHttpMapper.cs` | ✅ |
+| `Api/Program.cs` | ✅ full rewrite — auth wired, RequireAuthorization on /keep/requests |
+| `Api/appsettings.json` | ✅ Auth:CookieDomain section added |
+| `IntegrationTests/Api/KeepApiWebFactory.cs` | ✅ SeedSessionAsync, no ICurrentUser override |
+| `IntegrationTests/Api/KeepIntakeApiTests.cs` | ✅ real session cookies, test 5 redesigned |
+| `IntegrationTests/Api/AuthApiTests.cs` | ✅ 12 new tests |
+| `docs/decisions/decision-index.md` | ✅ ADR-061 through ADR-064 |
+| `docs/build-log/017-phase-5a-auth-session-foundation.md` | ✅ |
 
 ---
 
-## Process corrections made this session
+## Key decisions made this session
 
-Two feedback memories saved:
-1. **Reference app check before declaring a decision open** — grep `_reference/src/` first; evaluate critically before surfacing as open
-2. **Read handoff build-log before the Pre-Implementation Gate** — when session-log references a build-log as a handoff, read it before writing any code; it is the implementation spec, not background context
+- **ADR-061:** AccountSession standalone entity; `LastActivityAtUtc` and `LastSeenAtUtc` updated together on renewal
+- **ADR-062:** One session model, Bearer-first (mobile), cookie fallback (browser); raw token never stored
+- **ADR-063:** Active-only gate; AccountId cross-check in SessionStore prevents cross-account identity confusion from corrupt rows
+- **ADR-064:** ErrorHttpMapper replaces inline helpers; explicit codes first, then patterns
 
----
-
-## Architecture decisions (ADR-055…060)
-
-| ADR | Decision |
-|-----|---------|
-| ADR-055 | Intent-revealing persistence abstractions; EF stays out of Keep.Application; retry contract via PublicIntakeCommitResult enum |
-| ADR-056 | All public gate failures return `keep.public_intake.unavailable` — no gate-specific codes |
-| ADR-057 | KeepRequestStatus → lowercase snake_case slugs; exhaustive switch with `default: throw` |
-| ADR-058 | Interim auth: AnonymousCurrentUser in production; ICurrentUser overridden in tests |
-| ADR-059 | HTTP contract locked: 201/400/422/401/403; ProblemDetails with extensions.code |
-| ADR-060 | Rate limiting: per-IP fixed-window 10 req/min, CF-Connecting-IP → X-Forwarded-For → RemoteIpAddress; deploy-time Cloudflare constraint documented |
+**`POST /auth/logout` requires authorization** (RequireAuthorization) — anonymous logout returns 401, not 200.
 
 ---
 
-## Phase status
+## Build state
 
-| Phase | Status | Notes |
-|-------|--------|-------|
-| 1 — Skeleton + architecture tests | ✅ done | `00227b0` |
-| 2 — Legacy exclusion (doc) | ✅ done | `2fce382` |
-| 3 — SharedKernel + abstraction cleanup | ✅ done | `2fce382` |
-| 4a — Account/User/AccountUser + lifecycle + access policy | ✅ done | `ec4c35c` |
-| 4b — AccountEntitlements | ✅ done | `7cf49aa` |
-| 4c — Permission keys + role access policy | ✅ done | `034eee4` |
-| 4d — Feature keys / entitlements | ✅ done | `eef4b07` |
-| Account-creation orchestration | ✅ done | `e09d876` |
-| 6 — Persistence Session A (infra) | ✅ done | `68354dc` |
-| 6 — Persistence Session B (proof tests) | ✅ done | `88a9dd6` |
-| 7 — Keep intake to operator view discovery | ✅ done | |
-| 7A — Keep domain + persistence foundation | ✅ done | `41f4f0c` |
-| 7B — Application + Infrastructure + API + HTTP tests | ✅ done | `a1b67ee` + this session |
-| **Next** | ⏭️ TBD | Discuss with Christian at next session start |
+- `dotnet build` → 0 errors, 4 NU1510 warnings (see watch-outs below)
+- Architecture tests → passing
+- Unit tests → passing
+- Integration tests → 34/34 passing
 
 ---
 
 ## Watch-outs / debt carried forward
 
-- **Connection string fail-fast** — currently deferred to first DB scope creation; a hosted service should validate at startup before production traffic
-- **Phone normalization** — `primaryPhone` stored as submitted (trimmed only)
-- **AnonymousCurrentUser** — placeholder for Phase 5 auth
-- **Two-phase provisioning save (ADR-044)** — canonical pattern; future repository must encapsulate
-- **`AccountUser.IsActive` is `Ignore`d** — computed (ADR-023); never reintroduce as a column
-- **EF model caching** — every context must build Foundation+Keep model together
-- **Notifications** — CustomerEmail/EmailNotificationsEnabled stored, no delivery yet (ADR-053/059)
-- **No GitHub remote yet**
-- **Schema-drop reset pattern** — `DROP SCHEMA public CASCADE` + recreate + `MigrateAsync`
-- **Migration generation** — always `--startup-project src/OpHalo.Keep.Infrastructure`
-- Legacy `decision-index`/`decisions/**`/`coding-rules` remain **pending validation**
+- **NU1510 warnings** — `Microsoft.Extensions.Configuration`, `.Json`, `.UserSecrets`, `.EnvironmentVariables` are now redundant in Foundation.Infrastructure.csproj after adding `<FrameworkReference Include="Microsoft.AspNetCore.App" />`. Remove in a follow-up.
+- **ADR-058** — still marked `Locked` in the decision index; was superseded this session. Update status when revisiting ADRs.
+- **AnonymousCurrentUser** — kept in codebase for potential worker/test use; no longer registered in production.
+- **No Phase 5B yet** — login endpoint (magic-link exchange → session creation) is out of scope. Tests seed sessions directly via `SeedSessionAsync`.
+- **SystemClock ambiguity** — `using Microsoft.AspNetCore.Authentication` in Program.cs conflicts with `SystemClock`; resolved with fully-qualified name `OpHalo.Foundation.Infrastructure.Services.SystemClock`.
+- **Schema-drop reset pattern** — `DROP SCHEMA public CASCADE` + recreate + `MigrateAsync` in factory.
+- **Migration generation** — always `--startup-project src/OpHalo.Keep.Infrastructure` for full-schema migrations.
+- **No GitHub remote yet.**
+
+---
+
+## Next phase
+
+Phase 5B (magic-link authentication) or whichever phase Christian selects. This session ended Phase 5A cleanly.

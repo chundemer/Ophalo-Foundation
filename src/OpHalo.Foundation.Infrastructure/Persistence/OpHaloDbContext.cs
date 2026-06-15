@@ -6,6 +6,7 @@ using OpHalo.Foundation.Core.Entities.Shared;
 using OpHalo.Foundation.Core.Entities.Users;
 using OpHalo.SharedKernel.Abstractions;
 
+
 namespace OpHalo.Foundation.Infrastructure.Persistence;
 
 /// <summary>
@@ -36,6 +37,7 @@ public sealed class OpHaloDbContext(
         additionalModelAssemblies?.ToList() ?? [];
     public DbSet<Account> Accounts => Set<Account>();
     public DbSet<AccountUser> AccountUsers => Set<AccountUser>();
+    public DbSet<AccountSession> AccountSessions => Set<AccountSession>();
     public DbSet<User> Users => Set<User>();
     public DbSet<AccountEntitlements> AccountEntitlements => Set<AccountEntitlements>();
 
