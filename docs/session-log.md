@@ -2,12 +2,12 @@
 
 **Last updated:** 2026-06-14
 **Next session tier:** Tier 1 — Discovery · **Phase 4 entitlement surface COMPLETE; next = orchestration or persistence (pick at discovery)**
-**Branch:** `main` (no remote yet) · Phase 4d built this session, **awaiting commit approval**
+**Branch:** `main` (no remote yet) · Phase 4d committed (`eef4b07`)
 
-> Phase 4d (**feature keys + entitlements**, §4.11 / ADR-009 "Account is entitled") is **built and
-> green**, not yet committed. This closes the Phase 4 authorization triad: account **allowed**
-> (4a/4b) · user **permitted** (4c) · account **entitled** (4d) — three independent policy halves
-> that compose at the call site, never collapse. Working tree has the 4d files staged-but-uncommitted.
+> Phase 4d (**feature keys + entitlements**, §4.11 / ADR-009 "Account is entitled") is **committed**
+> (`eef4b07`). This closes the Phase 4 authorization triad: account **allowed** (4a/4b) · user
+> **permitted** (4c) · account **entitled** (4d) — three independent policy halves that compose at
+> the call site, never collapse. Working tree clean.
 
 ---
 
@@ -25,7 +25,7 @@ static `PlanEntitlements` map, and fail-closed `FeatureAccessPolicy`. Build clea
 | 4a — Account/User/AccountUser + lifecycle + access policy | ✅ done | `ec4c35c`, build-log/003 |
 | 4b — AccountEntitlements (commercial posture producer) | ✅ done | `7cf49aa`, build-log/004 |
 | 4c — Permission keys + role access policy (User permitted) | ✅ done | `034eee4`, build-log/005 |
-| 4d — Feature keys / entitlements (Account entitled) | ✅ built, **uncommitted** | build-log/006 |
+| 4d — Feature keys / entitlements (Account entitled) | ✅ done | `eef4b07`, build-log/006 |
 
 ## What 4d shipped
 
