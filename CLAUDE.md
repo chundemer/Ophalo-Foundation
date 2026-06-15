@@ -29,7 +29,7 @@ verify — redesign only when the old implementation blocks the foundation.
 1. Read `docs/session-log.md` only — it holds the confirmed facts
 2. Ask Christian what we are working on today
 3. Verify specific facts with targeted reads (a signature, an import) — do not re-read whole files
-4. State scope and proceed
+4. State scope and open design decisions — wait for confirmation before writing any file (see Pre-Implementation Gate)
 
 **How to tell which tier:** the session log header says `Pre-work complete` for Tier 2. If absent, default to Tier 1.
 
@@ -54,6 +54,37 @@ is made.
 `docs/reference/decisions/**`, and `coding-rules.md` from the reference app are not
 yet validated and are deliberately excluded. They remain readable under
 `_reference/docs/` for historical reference only, after validation.
+
+---
+
+## Quality Over Speed — Non-Negotiable
+
+This rebuild exists because the reference app accumulated shortcuts that compounded into structural debt. Every session must hold this boundary: **a correct foundation built slowly is the goal; fast code that compromises the foundation is not an acceptable trade.**
+
+- If a design decision is not already locked in the ADRs, surface it as a question — do not resolve it silently and write code.
+- If something feels like a shortcut or a rationalization ("the tests don't prevent it", "the reference app does it this way", "we can clean it up later"), treat that feeling as a flag, not a green light. Stop and ask.
+- Delivery pressure does not override architecture. The cost of a bad abstraction in the foundation compounds across every phase that follows.
+
+---
+
+## Pre-Implementation Gate — Mandatory Before Writing Any File
+
+After reading and stating scope, and **before writing the first file**, explicitly list:
+
+1. **Files to create or modify** — names and layers.
+2. **Open design decisions** — any architectural choice the implementation will resolve that is not already in the ADRs or the session-log confirmed facts. Each must be stated and confirmed by Christian before code is written.
+
+If a design decision surfaces mid-implementation, stop, surface it, and wait for confirmation. Do not rationalize past it.
+
+## Writing Code — Cross-Reference Before Every External Call
+
+Before writing any file that calls existing code (domain factories, service methods, policy interfaces), do one explicit pass:
+
+> For every external method this file will call, verify the method's signature and failure modes against the already-read source — argument guards, throw conditions, what null means.
+
+This is not optional when in execution mode. The planning phase builds a mental model; that model drifts. The cross-reference step corrects drift before it becomes a bug in a written file.
+
+Specifically: if a method throws on null/whitespace input, the caller must guard before calling it. If a switch covers an owned enum, it must be exhaustive with a `default` throw.
 
 ---
 

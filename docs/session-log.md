@@ -1,98 +1,137 @@
 # Session Log — OpHalo Foundation
 
 **Last updated:** 2026-06-15
-**Next session tier:** Tier 1 — Discovery · _Phase 7B — Keep intake/operator-list application + API vertical_
+**Next session tier:** Tier 2 — Implementation · _Phase 7B Session B — API + HTTP integration tests + build-log_
 **Branch:** `main` (no remote yet)
 
 ---
 
-## Current state — Phase 7A complete ✅
+## Current state — Phase 7B Session A complete, ready to commit
 
-Keep domain + persistence foundation is built, migrated, and proven against real
-PostgreSQL. All four suites green. Build-log/012 written; ADR-047…050 added to the
-decision index (next free ID: **ADR-051**).
-
-### Test baselines (verified this session)
-
-| Suite | Result |
-|-------|--------|
-| Build (`OpHalo.slnx`) | succeeded, 0 warnings / 0 errors |
-| UnitTests | **230** passed |
-| ArchitectureTests | **14** passed |
-| IntegrationTests | **15** passed (7 Foundation + 8 Keep) |
-
-### What landed
-
-- Keep.Core: `KeepCustomer`, `KeepRequest`, `KeepRequestEvent`, `KeepPublicIntakeLink`, three enums, two error classes.
-- Keep.Application: `KeepTokenService` (page token, public intake token, SHA-256 hash, reference code).
-- Foundation.Infrastructure: `BaseEntityConfiguration<T>` made `public` (ADR-047); `OpHaloDbContext` optional `additionalModelAssemblies` (ADR-048).
-- Keep.Infrastructure: four EF configs, `KeepDesignTimeDbContextFactory` (ADR-049), `EFCore.Design` package.
-- Migration `20260615105355_KeepDomain` in Foundation.Infrastructure (single migration assembly, ADR-005/049).
-- Unit tests (40 Keep) + 8 Keep integration proof tests.
+Build: ✅ 0 warnings / 0 errors  
+UnitTests: ✅ **260** passed (+30 new — KeepPublicIntakeServiceTests + KeepRequestListServiceTests)  
+ArchitectureTests: ✅ **14** passed  
+IntegrationTests: ✅ **15** passed  
 
 ---
 
-## Next session — Phase 7B (discovery first)
+## What was completed this session (not yet committed)
 
-Application/API vertical for "customer submits intake → operator sees request".
-This is a **Tier 1 discovery** session: confirm scope before generating code.
-Open questions to resolve with Christian (from build-log/011):
-
-1. Public route names: only `/keep/...`, or also legacy `/continuity/...` aliases as cutover contracts?
-2. Is the `publicSlug` segment required in the first backend route, or ship token-only first?
-3. Does customer email-on-intake move into 7B or stay deferred to Phase 9 notifications?
-4. Does the operator "sign in" exit-gate require real Phase 5 auth before 7B, or can 7B use `ICurrentUser` with integration-level fakes?
-
-Likely surface (confirm + split if needed under the Session Size Rule):
-- Public intake endpoint + create-request service (resolves account via `KeepPublicIntakeLink`, no client `AccountId`).
-- Foundation access-policy + feature-key + permission-key + public-guard + rate-limit checks.
-- Operator request-list endpoint (minimal account-scoped list).
-- HTTP-level tests.
-
-DI registration + host DbContext wiring + `appsettings` connection string will
-likely first be needed here (deferred since Phase 6).
-
----
-
-## Architecture decisions made this session
-
-- **ADR-047** — `BaseEntityConfiguration<T>` `internal` → `public` (visibility only).
-- **ADR-048** — `OpHaloDbContext` optional `additionalModelAssemblies`; Keep registers configs without Foundation referencing Keep.
-- **ADR-049** — single migration assembly (Foundation.Infrastructure); `KeepDesignTimeDbContextFactory` is the migration entrypoint for Keep tables.
-- **ADR-050** — `KeepRequestStatus.Cancelled = 6`; reason lives on the event, not the status enum.
+| File | Notes |
+|------|-------|
+| `Keep.Application/Abstractions/AccountAccessSnapshot.cs` | Foundation state as Keep read model |
+| `Keep.Application/Abstractions/AccountUserSnapshot.cs` | AccountUser state as Keep read model |
+| `Keep.Application/PublicIntake/PublicIntakeCommitResult.cs` | Explicit enum: Committed=1, UniqueTokenCollision=2 |
+| `Keep.Application/PublicIntake/IKeepIntakePersistence.cs` | Intent-revealing interface, EF-free |
+| `Keep.Application/PublicIntake/CreateKeepPublicIntakeCommand.cs` | Command record |
+| `Keep.Application/PublicIntake/CreateKeepPublicIntakeResult.cs` | Result record |
+| `Keep.Application/PublicIntake/CreateKeepPublicIntakeService.cs` | Full service with null guard + exhaustive switch |
+| `Keep.Application/Requests/IKeepRequestListPersistence.cs` | Intent-revealing interface, EF-free |
+| `Keep.Application/Requests/KeepRequestSummary.cs` | Operator list read model |
+| `Keep.Application/Requests/GetKeepRequestListResult.cs` | Result wrapper |
+| `Keep.Application/Requests/GetKeepRequestListService.cs` | Auth → permission → access → feature → list |
+| `Keep.Infrastructure/Persistence/KeepIntakePersistence.cs` | EF impl, Postgres collision detection |
+| `Keep.Infrastructure/Persistence/KeepRequestListPersistence.cs` | EF impl, open requests ordered by LastBusinessActivityAt |
+| `Keep.Infrastructure/OpHalo.Keep.Infrastructure.csproj` | Added `Npgsql.EntityFrameworkCore.PostgreSQL` |
+| `UnitTests/Keep/KeepPublicIntakeServiceTests.cs` | 17 tests, manual fakes |
+| `UnitTests/Keep/KeepRequestListServiceTests.cs` | 13 tests, manual fakes |
+| `docs/decisions/decision-index.md` | ADR-055 added |
+| `docs/session-log.md` | This file |
 
 ---
 
-## Where we are
+## CLAUDE.md changes made this session (earlier in context)
+
+Three additions:
+1. **Quality Over Speed** — explicit rule that delivery pressure does not override architecture.
+2. **Pre-Implementation Gate** — mandatory step: list files AND open design decisions, wait for confirmation before writing any file.
+3. **Cross-Reference Before Every External Call** — before writing a file, verify every external method's signature and failure modes against already-read source; guard against throws; exhaustive switches on owned enums.
+
+---
+
+## Next session — Phase 7B Session B
+
+**Pre-work complete.** Proceed with API wiring, HTTP integration tests, and build-log.
+
+### Session B scope (in order)
+
+1. `Foundation.Infrastructure/Security/AnonymousCurrentUser.cs` — implements `ICurrentUser` with `IsAuthenticated = false`; used as the DI registration in the API host until Phase 5 auth exists
+2. `Api/Program.cs` full rewrite — DI registrations (`OpHaloDbContext`, Keep.Infrastructure persistence classes, `KeepTokenService`, access/feature policies, `AnonymousCurrentUser`), rate limiting, minimal API routes (`POST /keep/public-intake/token/{token}`, `GET /keep/requests`)
+3. `Api/appsettings.json` — add `ConnectionStrings:DefaultConnection`
+4. `IntegrationTests.csproj` — add `Microsoft.AspNetCore.Mvc.Testing` + project reference to `OpHalo.Api`
+5. `IntegrationTests/Api/KeepApiWebFactory.cs` — `WebApplicationFactory<Program>` with test DB configuration
+6. `IntegrationTests/Api/KeepIntakeApiTests.cs` — HTTP integration tests for both endpoints
+7. `docs/build-log/014-phase-7b-implementation.md` — build-log entry for both Session A + B
+8. Final session-log.md rewrite + commit
+
+### API design (confirmed in Session A/discovery)
+
+**POST `/keep/public-intake/token/{publicIntakeToken}`**  
+Anonymous (no auth). Body: `customerName`, `customerPhone`, `customerEmail?`, `description`. Returns `{ requestId, referenceCode, pageToken }` on 201. All failures → 422 `keep.public_intake.unavailable` (no information leakage).
+
+**GET `/keep/requests`**  
+Operator auth required. Returns `{ requests: [...] }` with KeepRequestSummary items. 401 unauthorized, 403 forbidden.
+
+---
+
+## Architecture decisions (ADR-055…057)
+
+**ADR-055** — Intent-revealing persistence abstractions (`IKeepIntakePersistence`, `IKeepRequestListPersistence`) with `AccountAccessSnapshot`/`AccountUserSnapshot` read models; EF Core stays out of Keep.Application; bounded retry (MaxAttempts=5); `PublicIntakeCommitResult` enum makes retry contract explicit; Infrastructure owns EF entity state cleanup on collision.
+
+**ADR-056** — All public intake gate failures return the same generic `keep.public_intake.unavailable` error — no gate-specific codes on the public surface (information hiding, extends ADR-011 public-guard posture).
+
+**ADR-057** — `KeepRequestStatus` serializes to lowercase snake_case slugs (`received`, `in_progress`, `pending_customer`, `resolved`, `closed`, `cancelled`). These are an API contract; breaking to change. Mapping is exhaustive with `default: throw`.
+
+---
+
+## Service design notes (carry into Session B for API wiring)
+
+### CreateKeepPublicIntakeService
+- Returns `Result<CreateKeepPublicIntakeResult>` — map to 201/422 in API
+- All gate failures return the generic `keep.public_intake.unavailable` error (public-safe — no internal state revealed)
+- Validation errors (`KeepRequest.CustomerNameRequired` etc.) are also returned as 422 — map the same way or distinguish
+
+### GetKeepRequestListService
+- Returns `Result<GetKeepRequestListResult>` — map to 200/401/403 in API
+- `auth.unauthorized` → 401; `auth.forbidden` → 403; anything else → 403
+
+### Infrastructure watch-out (EF entity state on collision)
+`CommitPublicIntakeAsync`: detaches request + event + new customer on `UniqueTokenCollision`; leaves existing tracked customer alone. ✅ Implemented.
+
+---
+
+## Phase status
 
 | Phase | Status | Notes |
 |-------|--------|-------|
 | 1 — Skeleton + architecture tests | ✅ done | `00227b0` |
 | 2 — Legacy exclusion (doc) | ✅ done | `2fce382` |
 | 3 — SharedKernel + abstraction cleanup | ✅ done | `2fce382` |
-| 4a — Account/User/AccountUser + lifecycle + access policy | ✅ done | `ec4c35c`, build-log/003 |
-| 4b — AccountEntitlements (commercial posture producer) | ✅ done | `7cf49aa`, build-log/004 |
-| 4c — Permission keys + role access policy (User permitted) | ✅ done | `034eee4`, build-log/005 |
-| 4d — Feature keys / entitlements (Account entitled) | ✅ done | `eef4b07`, build-log/006 |
-| Account-creation orchestration | ✅ done | `e09d876`, build-log/007, ADR-039/040 |
-| 6 — Persistence · Session A (infra) | ✅ done | `68354dc`, build-log/008, ADR-041/042 |
-| 6 — Persistence · Session B (proof tests) | ✅ done | build-log/009/010, ADR-043/044 |
-| 7 — Keep intake to operator view discovery | ✅ done | build-log/011, ADR-045/046 |
-| 7A — Keep domain + persistence foundation | ✅ done | build-log/012, ADR-047…050 |
-| 7B — Keep intake/operator-list application + API | ⏭️ next | discovery |
+| 4a — Account/User/AccountUser + lifecycle + access policy | ✅ done | `ec4c35c` |
+| 4b — AccountEntitlements | ✅ done | `7cf49aa` |
+| 4c — Permission keys + role access policy | ✅ done | `034eee4` |
+| 4d — Feature keys / entitlements | ✅ done | `eef4b07` |
+| Account-creation orchestration | ✅ done | `e09d876` |
+| 6 — Persistence Session A (infra) | ✅ done | `68354dc` |
+| 6 — Persistence Session B (proof tests) | ✅ done | `88a9dd6` |
+| 7 — Keep intake to operator view discovery | ✅ done | |
+| 7A — Keep domain + persistence foundation | ✅ done | `41f4f0c` |
+| 7B discovery | ✅ done | build-log/013 |
+| 7B Session A — Application + Infrastructure | ✅ complete, pending commit | |
+| 7B Session B — API + HTTP tests + build-log | ⏭️ next | |
 
 ---
 
 ## Watch-outs / debt carried forward
 
-- **Phase 7B route compatibility** — public route names may be external contracts; decide `/keep/...` vs legacy `/continuity/...` before shipping.
-- **DI registration + `appsettings` connection string** — still deferred; 7B is the likely first runtime caller needing host DbContext wiring.
-- **Two-phase provisioning save (ADR-044)** — future persistence boundary must encapsulate the null-then-update `PrimaryOwnerAccountUserId` sequence.
-- **Keep public intake token (ADR-046)** — store hashed token in the Keep-owned satellite; never revive `Account.PublicIntakeToken` or trust client `AccountId`.
-- **`AccountUser.IsActive` is `Ignore`d** — computed (ADR-023); never reintroduce as a column. Same for Keep `IsTerminal`/`IsActive`.
-- **EF model caching** — every integration context must build the same Foundation+Keep model (`PostgresFixture` passes the Keep assembly unconditionally). Don't revert.
-- **Schema-drop reset pattern** — `DROP SCHEMA public CASCADE` + `CREATE SCHEMA public` + `MigrateAsync`; `EnsureDeletedAsync` is unreliable with Npgsql pooling.
-- **Migration generation** — always `--startup-project src/OpHalo.Keep.Infrastructure` when Keep tables are involved; a dummy `ConnectionStrings__DefaultConnection` is enough for `migrations add` (no DB touched).
-- Never glob through `_reference/**/bin` or legacy `obj` trees.
-- Legacy `decision-index`/`decisions/**`/`coding-rules` remain **pending validation** — do not load.
-- No GitHub remote yet. When added, repo must be named `ophalo-foundation`.
+- **Phone normalization** — deferred; `primaryPhone` stored as submitted (trimmed only)
+- **DI registration + `appsettings`** — wired in Session B
+- **AnonymousCurrentUser** — placeholder for Phase 5 auth, lives in Foundation.Infrastructure; deferred to Session B
+- **Two-phase provisioning save (ADR-044)** — future persistence boundary concern
+- **`AccountUser.IsActive` is `Ignore`d** — computed (ADR-023); never reintroduce as a column
+- **EF model caching** — every context must build Foundation+Keep model together
+- **Schema-drop reset pattern** — `DROP SCHEMA public CASCADE` + recreate + `MigrateAsync`
+- **Migration generation** — always `--startup-project src/OpHalo.Keep.Infrastructure`
+- Never glob through `_reference/**/bin` or legacy `obj` trees
+- Legacy `decision-index`/`decisions/**`/`coding-rules` remain **pending validation**
+- No GitHub remote yet
