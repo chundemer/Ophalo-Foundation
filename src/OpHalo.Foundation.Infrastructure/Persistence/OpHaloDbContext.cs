@@ -1,4 +1,5 @@
 using System.Linq.Expressions;
+using System.Reflection;
 using Microsoft.EntityFrameworkCore;
 using OpHalo.Foundation.Core.Entities.Accounts;
 using OpHalo.Foundation.Core.Entities.Shared;
@@ -19,11 +20,20 @@ namespace OpHalo.Foundation.Infrastructure.Persistence;
 /// DbSets and the legacy <c>SystemRecord</c> / non-<see cref="BaseEntity"/> branches,
 /// none of which exist in this foundation.
 /// </remarks>
+/// <param name="additionalModelAssemblies">
+/// Optional extra assemblies to scan for <see cref="IEntityTypeConfiguration{T}"/>
+/// implementations. Pass the Keep.Infrastructure assembly here so EF discovers Keep
+/// entity configs without Foundation.Infrastructure taking a compile-time dependency
+/// on Keep (architecture boundary: Foundation must not reference Keep).
+/// </param>
 public sealed class OpHaloDbContext(
     DbContextOptions<OpHaloDbContext> options,
-    IClock clock)
+    IClock clock,
+    IEnumerable<Assembly>? additionalModelAssemblies = null)
     : DbContext(options)
 {
+    private readonly IReadOnlyList<Assembly> _additionalAssemblies =
+        additionalModelAssemblies?.ToList() ?? [];
     public DbSet<Account> Accounts => Set<Account>();
     public DbSet<AccountUser> AccountUsers => Set<AccountUser>();
     public DbSet<User> Users => Set<User>();
@@ -34,6 +44,9 @@ public sealed class OpHaloDbContext(
         base.OnModelCreating(modelBuilder);
 
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(OpHaloDbContext).Assembly);
+
+        foreach (var assembly in _additionalAssemblies)
+            modelBuilder.ApplyConfigurationsFromAssembly(assembly);
 
         ApplySoftDeleteQueryFilters(modelBuilder);
     }

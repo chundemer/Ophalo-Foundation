@@ -20,6 +20,8 @@
     <ProjectReference Include="..\..\src\OpHalo.Foundation.Core\OpHalo.Foundation.Core.csproj" />
     <ProjectReference Include="..\..\src\OpHalo.Foundation.Application\OpHalo.Foundation.Application.csproj" />
     <ProjectReference Include="..\..\src\OpHalo.Foundation.Infrastructure\OpHalo.Foundation.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\OpHalo.Keep.Core\OpHalo.Keep.Core.csproj" />
+    <ProjectReference Include="..\..\src\OpHalo.Keep.Infrastructure\OpHalo.Keep.Infrastructure.csproj" />
   </ItemGroup>
 
   <ItemGroup>

@@ -9,7 +9,7 @@ namespace OpHalo.Foundation.Infrastructure.Persistence.Configurations;
 /// never DB-generated), audit timestamps, and soft-delete bookkeeping. Ported from the
 /// reference app. Subtypes add their own mapping via <see cref="ConfigureEntity"/>.
 /// </summary>
-internal abstract class BaseEntityConfiguration<TEntity> : IEntityTypeConfiguration<TEntity>
+public abstract class BaseEntityConfiguration<TEntity> : IEntityTypeConfiguration<TEntity>
     where TEntity : BaseEntity
 {
     public void Configure(EntityTypeBuilder<TEntity> builder)

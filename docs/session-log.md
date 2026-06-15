@@ -1,77 +1,65 @@
 # Session Log — OpHalo Foundation
 
 **Last updated:** 2026-06-15
-**Next session tier:** Tier 1 — Discovery · _Phase 7 (next build plan phase)_
-**Branch:** `main` (no remote yet) · Last commit pending
+**Next session tier:** Tier 1 — Discovery · _Phase 7B — Keep intake/operator-list application + API vertical_
+**Branch:** `main` (no remote yet)
 
 ---
 
-## Completed this session — Phase 6 Session B implementation
+## Current state — Phase 7A complete ✅
 
-Phase 6 is fully complete. Six Testcontainers.PostgreSql integration tests prove the
-`InitialFoundationSchema` migration and EF Core configuration against real PostgreSQL.
+Keep domain + persistence foundation is built, migrated, and proven against real
+PostgreSQL. All four suites green. Build-log/012 written; ADR-047…050 added to the
+decision index (next free ID: **ADR-051**).
 
-**Key discovery — ADR-044:** Persisting the provisioning graph requires a **two-phase save**
-because the circular FK (Account↔AccountUser, ADR-019) prevents EF Core from topologically
-ordering a single-unit insert. The `PersistGraph` test helper demonstrates the canonical
-persistence contract: insert with `PrimaryOwnerAccountUserId = NULL`, then update. The
-real persistence boundary (Phase 6 repository/unit-of-work) must encapsulate this sequence.
+### Test baselines (verified this session)
 
-Files added / modified:
+| Suite | Result |
+|-------|--------|
+| Build (`OpHalo.slnx`) | succeeded, 0 warnings / 0 errors |
+| UnitTests | **230** passed |
+| ArchitectureTests | **14** passed |
+| IntegrationTests | **15** passed (7 Foundation + 8 Keep) |
 
-- `tests/OpHalo.IntegrationTests/OpHalo.IntegrationTests.csproj` — `Testcontainers.PostgreSql`
-  4.12.0 + project refs to SharedKernel, Foundation.Core, Foundation.Application,
-  Foundation.Infrastructure.
-- `tests/OpHalo.IntegrationTests/Persistence/PostgresFixture.cs` — container lifecycle,
-  `CreateContext()`, `FakeClock`, `FixedNow`.
-- `tests/OpHalo.IntegrationTests/Persistence/PersistenceProofTests.cs` — 6 proof tests.
-- `docs/build-log/010-phase-6b-persistence-proof-implementation.md`
-- `docs/decisions/decision-index.md` — ADR-044 added; next free ID **ADR-045**.
+### What landed
 
-**Test baseline (all green):** UnitTests 176, ArchitectureTests 14, IntegrationTests 7.
-
----
-
-## Previous session — Phase 6 Session B discovery
-
-Decision: **use Testcontainers.PostgreSql** for persistence proof tests (ADR-043). This is the
-only honest harness for the risks in this slice: PostgreSQL partial unique indexes, FK enforcement
-around the Account↔AccountUser cycle, Npgsql duplicate-key exceptions, snake_case DDL, and applying
-the migration for real. EF InMemory/SQLite are explicitly rejected for Session B proof value.
-
-Docs added: `docs/build-log/009`, ADR-043 in decision-index.
+- Keep.Core: `KeepCustomer`, `KeepRequest`, `KeepRequestEvent`, `KeepPublicIntakeLink`, three enums, two error classes.
+- Keep.Application: `KeepTokenService` (page token, public intake token, SHA-256 hash, reference code).
+- Foundation.Infrastructure: `BaseEntityConfiguration<T>` made `public` (ADR-047); `OpHaloDbContext` optional `additionalModelAssemblies` (ADR-048).
+- Keep.Infrastructure: four EF configs, `KeepDesignTimeDbContextFactory` (ADR-049), `EFCore.Design` package.
+- Migration `20260615105355_KeepDomain` in Foundation.Infrastructure (single migration assembly, ADR-005/049).
+- Unit tests (40 Keep) + 8 Keep integration proof tests.
 
 ---
 
-## Previous session — Phase 6 Session A
+## Next session — Phase 7B (discovery first)
 
-Layer: `OpHalo.Foundation.Infrastructure` only. Files added:
+Application/API vertical for "customer submits intake → operator sees request".
+This is a **Tier 1 discovery** session: confirm scope before generating code.
+Open questions to resolve with Christian (from build-log/011):
 
-- `OpHalo.Foundation.Infrastructure.csproj` — EF packages (EFCore 10.0.5 + Relational + Design,
-  Npgsql 10.0.1, NamingConventions 10.0.1), direct SharedKernel ref, four
-  `Microsoft.Extensions.Configuration.*` (10.0.0) packages for the design-time factory.
-- `Persistence/OpHaloDbContext.cs` — 4 DbSets; `ApplyConfigurationsFromAssembly`; ctor `(options, IClock)`;
-  ported `SaveChangesAsync` timestamp interception + soft-delete global query filters (exempting
-  `AccountEntitlements`). Legacy `SystemRecord`/non-`BaseEntity` branches dropped.
-- `Persistence/Configurations/` — `BaseEntityConfiguration` + Account/AccountUser/User/AccountEntitlements.
-- `Persistence/OpHaloDbContextFactory.cs` — design-time factory; `__OpHaloMigrationsHistory`; snake_case.
-- `Services/SystemClock.cs` — wall-clock `IClock`.
-- `Migrations/…_InitialFoundationSchema.cs` — generated + inspected.
+1. Public route names: only `/keep/...`, or also legacy `/continuity/...` aliases as cutover contracts?
+2. Is the `publicSlug` segment required in the first backend route, or ship token-only first?
+3. Does customer email-on-intake move into 7B or stay deferred to Phase 9 notifications?
+4. Does the operator "sign in" exit-gate require real Phase 5 auth before 7B, or can 7B use `ICurrentUser` with integration-level fakes?
 
-Three divergences confirmed: `AccountUser.IsActive` ignored (no column, ADR-023); primary ownership =
-nullable FK `Account.PrimaryOwnerAccountUserId → AccountUser` (`Restrict`, ADR-019); history table
-`__OpHaloMigrationsHistory`. Docs: build-log/008, ADR-041/042.
+Likely surface (confirm + split if needed under the Session Size Rule):
+- Public intake endpoint + create-request service (resolves account via `KeepPublicIntakeLink`, no client `AccountId`).
+- Foundation access-policy + feature-key + permission-key + public-guard + rate-limit checks.
+- Operator request-list endpoint (minimal account-scoped list).
+- HTTP-level tests.
+
+DI registration + host DbContext wiring + `appsettings` connection string will
+likely first be needed here (deferred since Phase 6).
 
 ---
 
-## Optional operator step (Christian)
+## Architecture decisions made this session
 
-The migration is generated but **not applied to a long-lived live DB**. To apply:
-
-```
-dotnet user-secrets set "ConnectionStrings:DefaultConnection" "..." --project src/OpHalo.Foundation.Infrastructure
-dotnet ef database update --project src/OpHalo.Foundation.Infrastructure --context OpHaloDbContext
-```
+- **ADR-047** — `BaseEntityConfiguration<T>` `internal` → `public` (visibility only).
+- **ADR-048** — `OpHaloDbContext` optional `additionalModelAssemblies`; Keep registers configs without Foundation referencing Keep.
+- **ADR-049** — single migration assembly (Foundation.Infrastructure); `KeepDesignTimeDbContextFactory` is the migration entrypoint for Keep tables.
+- **ADR-050** — `KeepRequestStatus.Cancelled = 6`; reason lives on the event, not the status enum.
 
 ---
 
@@ -86,30 +74,25 @@ dotnet ef database update --project src/OpHalo.Foundation.Infrastructure --conte
 | 4b — AccountEntitlements (commercial posture producer) | ✅ done | `7cf49aa`, build-log/004 |
 | 4c — Permission keys + role access policy (User permitted) | ✅ done | `034eee4`, build-log/005 |
 | 4d — Feature keys / entitlements (Account entitled) | ✅ done | `eef4b07`, build-log/006 |
-| Account-creation orchestration (first composing caller) | ✅ done | `e09d876`, build-log/007, ADR-039/040 |
+| Account-creation orchestration | ✅ done | `e09d876`, build-log/007, ADR-039/040 |
 | 6 — Persistence · Session A (infra) | ✅ done | `68354dc`, build-log/008, ADR-041/042 |
-| 6 — Persistence · Session B (proof tests) | ✅ done | this session, build-log/009/010, ADR-043/044 |
-| 7 — next build plan phase | ⏭ next | |
-
-**Test baseline (must stay green):** UnitTests 176, ArchitectureTests 14, IntegrationTests 7.
+| 6 — Persistence · Session B (proof tests) | ✅ done | build-log/009/010, ADR-043/044 |
+| 7 — Keep intake to operator view discovery | ✅ done | build-log/011, ADR-045/046 |
+| 7A — Keep domain + persistence foundation | ✅ done | build-log/012, ADR-047…050 |
+| 7B — Keep intake/operator-list application + API | ⏭️ next | discovery |
 
 ---
 
 ## Watch-outs / debt carried forward
 
-- **Two-phase provisioning save (ADR-044)** — the Phase 6 repository/unit-of-work must
-  encapsulate the null-then-update sequence for `PrimaryOwnerAccountUserId`. No handler
-  should ever manage it manually.
-- **Circular FK** (Account↔AccountUser) — verified to order cleanly in the migration and at
-  runtime via the two-phase save. Re-check if the schema changes.
-- **`AccountUser.IsActive` is `Ignore`d** — computed (ADR-023); never reintroduce as a column.
-- **Migration not yet applied to a long-lived live DB** — Session B proved it via disposable
-  container; Christian may run the operator command against a local/manual DB.
-- **DI registration + `appsettings` connection string deferred to Phase 5** — design-time
-  factory reads its own config; no caller ⇒ no premature DI.
-- **Schema-drop reset pattern** — `EnsureDeletedAsync` is broken under Npgsql connection pooling;
-  the `DROP SCHEMA public CASCADE` + `CREATE SCHEMA public` + `MigrateAsync` sequence is the
-  correct per-test reset for this harness.
-- Never glob through `_reference/**/bin` (recursive nesting). Read specific source paths.
+- **Phase 7B route compatibility** — public route names may be external contracts; decide `/keep/...` vs legacy `/continuity/...` before shipping.
+- **DI registration + `appsettings` connection string** — still deferred; 7B is the likely first runtime caller needing host DbContext wiring.
+- **Two-phase provisioning save (ADR-044)** — future persistence boundary must encapsulate the null-then-update `PrimaryOwnerAccountUserId` sequence.
+- **Keep public intake token (ADR-046)** — store hashed token in the Keep-owned satellite; never revive `Account.PublicIntakeToken` or trust client `AccountId`.
+- **`AccountUser.IsActive` is `Ignore`d** — computed (ADR-023); never reintroduce as a column. Same for Keep `IsTerminal`/`IsActive`.
+- **EF model caching** — every integration context must build the same Foundation+Keep model (`PostgresFixture` passes the Keep assembly unconditionally). Don't revert.
+- **Schema-drop reset pattern** — `DROP SCHEMA public CASCADE` + `CREATE SCHEMA public` + `MigrateAsync`; `EnsureDeletedAsync` is unreliable with Npgsql pooling.
+- **Migration generation** — always `--startup-project src/OpHalo.Keep.Infrastructure` when Keep tables are involved; a dummy `ConnectionStrings__DefaultConnection` is enough for `migrations add` (no DB touched).
+- Never glob through `_reference/**/bin` or legacy `obj` trees.
 - Legacy `decision-index`/`decisions/**`/`coding-rules` remain **pending validation** — do not load.
 - No GitHub remote yet. When added, repo must be named `ophalo-foundation`.

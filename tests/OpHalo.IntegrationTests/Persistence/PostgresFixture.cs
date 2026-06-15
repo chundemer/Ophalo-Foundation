@@ -29,7 +29,14 @@ public sealed class PostgresFixture : IAsyncLifetime
             .UseSnakeCaseNamingConvention()
             .Options;
 
-        return new OpHaloDbContext(options, clock ?? new FakeClock());
+        // Always include Keep.Infrastructure so both Foundation and Keep test classes build
+        // the same Foundation+Keep model on first use. EF Core caches the model per context
+        // type — if Foundation tests ran first without Keep assembly, the cache would store a
+        // Foundation-only model and Keep tests would see "entity not in model" errors.
+        return new OpHaloDbContext(
+            options,
+            clock ?? new FakeClock(),
+            [typeof(OpHalo.Keep.Infrastructure.AssemblyMarker).Assembly]);
     }
 
     // Fixed clock so audit timestamp assertions are stable across all tests.
