@@ -87,6 +87,23 @@ public static class AccountErrors
     public static readonly Error NotInOffSeason =
         Error.Create("Account.NotInOffSeason", "This account is not in off-season mode.");
 
+    // --- Provisioning (cross-aggregate composition) ---
+    public static readonly Error InternalAccountPlanMismatch =
+        Error.Create("Account.InternalAccountPlanMismatch",
+            "Internal accounts must use the Internal plan, and the Internal plan is reserved for internal accounts.");
+
+    public static readonly Error InternalAccountCannotBePilot =
+        Error.Create("Account.InternalAccountCannotBePilot",
+            "An internal account cannot be enrolled as a pilot.");
+
+    public static readonly Error InternalAccountAllowsNoTrialWindow =
+        Error.Create("Account.InternalAccountAllowsNoTrialWindow",
+            "An internal account cannot have a trial window.");
+
+    public static readonly Error TrialWindowRequired =
+        Error.Create("Account.TrialWindowRequired",
+            "A trial end date is required for non-internal accounts.");
+
     // --- Primary owner (ADR-019) ---
     public static readonly Error PrimaryOwnerAccountMismatch =
         Error.Create("Account.PrimaryOwnerAccountMismatch",
