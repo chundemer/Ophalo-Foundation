@@ -1,21 +1,21 @@
 # Session Log — OpHalo Foundation
 
 **Last updated:** 2026-06-14
-**Next session tier:** Tier 1 — Discovery · **next slice = Phase 4d (feature keys / entitlements, §4.11)**
-**Branch:** `main` (no remote yet) · Phase 4b committed (`7cf49aa`); Phase 4c committed (`034eee4`)
+**Next session tier:** Tier 1 — Discovery · **Phase 4 entitlement surface COMPLETE; next = orchestration or persistence (pick at discovery)**
+**Branch:** `main` (no remote yet) · Phase 4d built this session, **awaiting commit approval**
 
-> Phase 4c (**permission keys + role access policy**, the "User is permitted" half of ADR-007) is
-> **committed** (`034eee4`); Phase 4b committed earlier this session (`7cf49aa`). The authz **core**
-> is now complete: Account entitled (4a/4b) + User permitted (4c). Working tree clean. Next is
-> Phase 4d (feature keys, §4.11) — run discovery and confirm before code.
+> Phase 4d (**feature keys + entitlements**, §4.11 / ADR-009 "Account is entitled") is **built and
+> green**, not yet committed. This closes the Phase 4 authorization triad: account **allowed**
+> (4a/4b) · user **permitted** (4c) · account **entitled** (4d) — three independent policy halves
+> that compose at the call site, never collapse. Working tree has the 4d files staged-but-uncommitted.
 
 ---
 
 ## Where we are
 
-Phases 0–4c complete and committed. **Phase 4c committed this session** (`034eee4`):
-the permission-key catalog, role→permission maps, and `UserAccessPolicy`. Build clean (0 warnings).
-**Tests: UnitTests 139, ArchitectureTests 14, IntegrationTests 1 — all green.**
+Phases 0–4d built. **Phase 4d this session:** `FeatureKeys` + `FeatureLimitKeys` catalogs,
+static `PlanEntitlements` map, and fail-closed `FeatureAccessPolicy`. Build clean (0 warnings).
+**Tests: UnitTests 163, ArchitectureTests 14, IntegrationTests 1 — all green.**
 
 | Phase | Status | Notes |
 |-------|--------|-------|
@@ -25,71 +25,72 @@ the permission-key catalog, role→permission maps, and `UserAccessPolicy`. Buil
 | 4a — Account/User/AccountUser + lifecycle + access policy | ✅ done | `ec4c35c`, build-log/003 |
 | 4b — AccountEntitlements (commercial posture producer) | ✅ done | `7cf49aa`, build-log/004 |
 | 4c — Permission keys + role access policy (User permitted) | ✅ done | `034eee4`, build-log/005 |
-| 4d — Feature keys / entitlements / usage limits (§4.11) | ⬜ not started | next discovery |
+| 4d — Feature keys / entitlements (Account entitled) | ✅ built, **uncommitted** | build-log/006 |
 
-## What 4c shipped
+## What 4d shipped
 
-- **Application** (new `Accounts/Authorization/`): `PermissionKeys` (string catalog,
-  `domain.resource.action`), `RolePermissions` (`Base` + `Internal` frozen maps, explicit set
-  composition), `IUserAccessPolicy` / `UserAccessPolicy`
-  (`IsPermitted(role, membershipStatus, accountPurpose, key)`, fail-closed).
-- **Tests:** `UserAccessPolicyTests` — full role/status/purpose/key matrix (+40).
-- **Decisions:** ADR-031 (scope = §4.8 only, permission≠feature, split from 4d), ADR-032 (hierarchical
-  naming, Foundation-owned string catalog), ADR-033 (hierarchy by explicit composition, two maps),
-  ADR-034 (3-gate composed policy; Active-only; `internal.*` requires Internal purpose; fail-closed;
-  billing Owner-only; Operator gets `keep.insights.view`).
+- **Application** (new `Accounts/Entitlements/`): `FeatureKeys` (boolean capability catalog,
+  `domain.capability`, all `keep.*`), `FeatureLimitKeys` (numeric allowances, `account.user_limit`
+  + `keep.monthly_request_limit`, `Unlimited = int.MaxValue`), `PlanEntitlements` (static
+  `AccountPlan → features + limit defaults`, explicit set composition), `IFeatureAccessPolicy` /
+  `FeatureAccessPolicy` (`IsEnabled` / `GetLimit` / `ResolveLimit`, fail-closed).
+- **Tests:** `FeatureAccessPolicyTests` — plan/feature/limit/seat-override matrix (+24).
+- **Decisions:** ADR-035 (plan→feature static map, no per-account feature booleans), ADR-036
+  (separate `FeatureKeys` vs `FeatureLimitKeys` catalogs; `keep.active_request_limit` deferred),
+  ADR-037 (limits = plan default + `MaxUserSeats` seat-only override; `Unlimited` sentinel),
+  ADR-038 (fail-closed + standalone; provisional matrix not locked).
+- **No Core change** — `AccountEntitlements` stays compact; capabilities derive from plan.
 
-## The locked 4c model (for reference)
+## The locked authorization triad (for reference)
 
-- **Permission key** = "can this *user* do this *action*?" · **Feature key** = "is this *account*
-  allowed this *capability*?" — distinct catalogs, **compose later, never collapse**.
-- Roles Owner ⊇ Admin ⊇ Operator ⊇ Viewer via explicit sets. Billing = Owner-only.
-  Operator gets `keep.insights.view`.
-- `internal.*` honored **only** when `AccountPurpose == Internal` (preserves the legacy
-  `AdminGuard` semantic). Only Active members are permitted anything.
-- Deferred internal keys: `internal.support.*`, `internal.platform.manage` (no caller yet).
+- **Account allowed** (`AccountAccessPolicy`, 4a/4b) — commercial/lifecycle/operating state.
+- **User permitted** (`UserAccessPolicy`, 4c) — role × membership status × purpose → permission key.
+- **Account entitled** (`FeatureAccessPolicy`, 4d) — plan → feature key / limit.
+- Compose at the call site later: `allowed && permitted && enabled`. **No combined facade yet**
+  (no caller exists). Three catalogs — `PermissionKeys` / `FeatureKeys` / `FeatureLimitKeys` —
+  stay distinct; permission ≠ feature ≠ limit.
 
-## Scope intentionally deferred (decided with Christian)
+## Provisional plan matrix (NOT locked — §4.11; lives only in `PlanEntitlements`)
 
-- **Feature keys + usage limits** (§4.11) → **Phase 4d** (next). Composes with `UserAccessPolicy`
-  (permitted **and** entitled).
-- **Stripe / billing / payment block** → billing-integration phase.
-- **Wiring `UserAccessPolicy` into the request pipeline** (behavior/endpoint filter, DI registration)
-  → handler/auth phases, when a caller exists.
+- Features: KeepCore (12 keys) every plan; Starter +`browser_push`; Professional/Business/
+  Enterprise/Internal/Trial = Full (+`mobile_push`, `insights`). Trial full-featured for eval —
+  limits constrain, not features.
+- Limits (`user_limit` / `monthly_request_limit`): Trial 3/50, Starter 3/250, Professional 10/1500,
+  Business 25/6000, Enterprise & Internal Unlimited/Unlimited.
 
 ## Next — candidate slices (pick one at discovery, confirm with Christian)
 
-- **Phase 4d — Feature keys / entitlements (§4.11)** *(recommended next)* — feature-key catalog
-  (`keep.enabled`, `keep.public_intake`, …) + usage limits (`account.user_limit`,
-  `keep.monthly_request_limit`) as explicit entitlement fields / snapshot on/around
-  `AccountEntitlements`. **No** generic flag-rules engine, Stripe catalog, or plan-matrix UI (§4.11).
-  Completes the Phase 4 entitlement exit gate.
-- **Account-creation orchestration** — the handler calling `Account.CreateVerified` +
-  `AccountEntitlements.CreateTrial/Pilot/Internal` + `AssignPrimaryOwner` together.
-- **Persistence phase** — EF config/migrations for the 4a + 4b entities (Infrastructure;
-  Christian runs `dotnet ef` / migrations himself).
-- **Invitations flow** — handler/orchestration around `CreatePendingInvite`/`Activate`.
+- **Account-creation orchestration** *(natural next)* — the handler/application service calling
+  `Account.CreateVerified` + `AccountEntitlements.CreateTrial/Pilot/Internal` + `AssignPrimaryOwner`
+  together. First real caller — would also surface the shape of the composed
+  `allowed && permitted && enabled` check and the DI registrations all three policies await.
+- **Persistence phase** — EF config/migrations for the 4a + 4b entities (Infrastructure; Christian
+  runs `dotnet ef` / migrations himself). Policies/catalogs are static — nothing to migrate there.
+- **Invitations flow** — handler/orchestration around `CreatePendingInvite`/`Activate`
+  (would exercise the `account.user_limit` seat check via `FeatureAccessPolicy.ResolveLimit`).
+- **Wire the policies into the request pipeline** — behavior/endpoint filter + DI registration,
+  once a caller exists.
 
-## Reference source map (for next discovery)
+## Scope intentionally deferred (decided with Christian)
 
-- Feature keys: build plan §4.11 lists `keep.*` capability keys + `account.user_limit` /
-  `keep.*_limit`. Legacy gated capability via **halo booleans** (dropped in ADR-028) and
-  `ContinuityEntitlementSnapshot` (`_reference/src/OpHalo.Continuity.Core/ReadModels/`).
-- Legacy entitlements entity: `_reference/src/OpHalo.Core/Entities/Accounts/AccountEntitlements.cs`.
-- Permissions (done): `Accounts/Authorization/` in Foundation.Application.
+- **Combined permitted+entitled facade** → built only when a real handler call site exists (ADR-038).
+- **Limit *enforcement*** (seat check at invite, monthly request cap) → the relevant handlers /
+  usage-tracking slice. 4d resolves the allowance; it does not count usage against it.
+- **`keep.active_request_limit`** → add with key + plan-default row when an enforcement caller needs it.
+- **Stripe / billing / payment block, plan-matrix UI, generic flag engine** → billing-integration phase (§4.11).
+- **Locking the tier matrix / pricing** → later product/billing slice (all in `PlanEntitlements`).
 
 ## Watch-outs / debt carried forward
 
 - **No persistence yet** — EF config for `Account`/`AccountUser`/`User`/`AccountEntitlements`
   (one-to-one `Account↔Entitlements`, FKs, unique normalized-email index, computed
-  `AccountUser.IsActive` per ADR-023) lands in the persistence phase. Permission keys are static
-  config — nothing to migrate there.
-- **Nothing provisions `AccountEntitlements` yet** — `CreateTrial/Pilot/Internal` factories exist
-  but no handler calls them (account-creation orchestration slice).
-- **`UserAccessPolicy` not yet wired/registered** — no caller invokes it yet; DI + pipeline
-  integration arrive with the handler/auth phases.
-- **`CreateInternal` sets `CommercialState = Active`** informationally — the policy bypasses
-  commercial checks for internal accounts via purpose, so it is never read.
+  `AccountUser.IsActive` per ADR-023) lands in the persistence phase.
+- **Nothing provisions `AccountEntitlements` yet** — `CreateTrial/Pilot/Internal` exist but no
+  handler calls them (account-creation orchestration slice).
+- **No policy wired/registered** — `AccountAccessPolicy` / `UserAccessPolicy` / `FeatureAccessPolicy`
+  have no callers and no DI registration yet; arrives with the handler/auth phases.
+- **`MaxUserSeats` is the only stored limit override** — `ResolveLimit` honors it for
+  `account.user_limit` only (`> 0` wins); all other limits are plan-derived.
 - Never glob through `_reference/**/bin` (recursive nesting). Read specific source paths.
 - Legacy `decision-index`/`decisions/**`/`coding-rules` remain **pending validation** — do not load.
 - No GitHub remote yet. When added, repo must be named `ophalo-foundation`.
