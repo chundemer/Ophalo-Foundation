@@ -2,7 +2,7 @@ namespace OpHalo.Foundation.Core.Entities.Accounts.Enums;
 
 /// <summary>
 /// Commercial standing of an account. In the Foundation this is owned by the
-/// (deferred) AccountEntitlements entity, not by <c>Account</c>; it is supplied to
+/// <c>AccountEntitlements</c> entity, not by <c>Account</c>; it is supplied to
 /// <c>AccountAccessContext</c> when access is evaluated.
 /// </summary>
 /// <remarks>

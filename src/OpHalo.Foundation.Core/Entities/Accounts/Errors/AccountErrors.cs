@@ -69,9 +69,23 @@ public static class AccountErrors
     public static readonly Error NotPastDue =
         Error.Create("Account.NotPastDue", "This account is not in a past-due state.");
 
+    public static readonly Error CommercialAccessAlreadyCanceled =
+        Error.Create("Account.CommercialAccessAlreadyCanceled",
+            "Commercial access for this account is already canceled.");
+
     public static readonly Error OffSeasonReadOnly =
         Error.Create("Account.OffSeasonReadOnly",
             "This operation is not available during off-season mode.");
+
+    public static readonly Error AlreadyInOffSeason =
+        Error.Create("Account.AlreadyInOffSeason", "This account is already in off-season mode.");
+
+    public static readonly Error OffSeasonEntryNotAllowed =
+        Error.Create("Account.OffSeasonEntryNotAllowed",
+            "Off-season mode can only be entered from an active commercial state.");
+
+    public static readonly Error NotInOffSeason =
+        Error.Create("Account.NotInOffSeason", "This account is not in off-season mode.");
 
     // --- Primary owner (ADR-019) ---
     public static readonly Error PrimaryOwnerAccountMismatch =
