@@ -1,102 +1,54 @@
 # Session Log — OpHalo Foundation
 
 **Last updated:** 2026-06-15
-**Next session tier:** Tier 2 — Implementation · _Phase 7B Session B — API + HTTP integration tests + build-log_
+**Next session tier:** Tier 1 — Discovery (next phase TBD with Christian)
 **Branch:** `main` (no remote yet)
 
 ---
 
-## Current state — Phase 7B Session A complete, ready to commit
+## Current state — Phase 7B complete
 
-Build: ✅ 0 warnings / 0 errors  
-UnitTests: ✅ **260** passed (+30 new — KeepPublicIntakeServiceTests + KeepRequestListServiceTests)  
-ArchitectureTests: ✅ **14** passed  
-IntegrationTests: ✅ **15** passed  
+Build: ✅ 0 warnings / 0 errors
+UnitTests: ✅ **260** passed
+ArchitectureTests: ✅ **14** passed
+IntegrationTests: ✅ **22** passed (+7 new HTTP integration tests)
 
 ---
 
-## What was completed this session (not yet committed)
+## What was completed this session (Phase 7B Session B)
 
 | File | Notes |
 |------|-------|
-| `Keep.Application/Abstractions/AccountAccessSnapshot.cs` | Foundation state as Keep read model |
-| `Keep.Application/Abstractions/AccountUserSnapshot.cs` | AccountUser state as Keep read model |
-| `Keep.Application/PublicIntake/PublicIntakeCommitResult.cs` | Explicit enum: Committed=1, UniqueTokenCollision=2 |
-| `Keep.Application/PublicIntake/IKeepIntakePersistence.cs` | Intent-revealing interface, EF-free |
-| `Keep.Application/PublicIntake/CreateKeepPublicIntakeCommand.cs` | Command record |
-| `Keep.Application/PublicIntake/CreateKeepPublicIntakeResult.cs` | Result record |
-| `Keep.Application/PublicIntake/CreateKeepPublicIntakeService.cs` | Full service with null guard + exhaustive switch |
-| `Keep.Application/Requests/IKeepRequestListPersistence.cs` | Intent-revealing interface, EF-free |
-| `Keep.Application/Requests/KeepRequestSummary.cs` | Operator list read model |
-| `Keep.Application/Requests/GetKeepRequestListResult.cs` | Result wrapper |
-| `Keep.Application/Requests/GetKeepRequestListService.cs` | Auth → permission → access → feature → list |
-| `Keep.Infrastructure/Persistence/KeepIntakePersistence.cs` | EF impl, Postgres collision detection |
-| `Keep.Infrastructure/Persistence/KeepRequestListPersistence.cs` | EF impl, open requests ordered by LastBusinessActivityAt |
-| `Keep.Infrastructure/OpHalo.Keep.Infrastructure.csproj` | Added `Npgsql.EntityFrameworkCore.PostgreSQL` |
-| `UnitTests/Keep/KeepPublicIntakeServiceTests.cs` | 17 tests, manual fakes |
-| `UnitTests/Keep/KeepRequestListServiceTests.cs` | 13 tests, manual fakes |
-| `docs/decisions/decision-index.md` | ADR-055 added |
-| `docs/session-log.md` | This file |
+| `Foundation.Infrastructure/Security/AnonymousCurrentUser.cs` | ICurrentUser placeholder, IsAuthenticated=false, Guid.Empty IDs (ADR-058) |
+| `Api/Keep/PublicIntakeRequest.cs` | Body DTO; emailNotificationsEnabled accepted/ignored (ADR-059) |
+| `Api/Program.cs` | Full rewrite: AddProblemDetails, AddOpenApi, rate limiter, DI registrations, minimal API routes, RFC 7807 error mapper, Testing-env HTTPS bypass |
+| `Api/appsettings.json` | Added ConnectionStrings:DefaultConnection (empty; supplied by environment) |
+| `IntegrationTests/OpHalo.IntegrationTests.csproj` | Added Microsoft.AspNetCore.Mvc.Testing 10.0.9 + OpHalo.Api project reference |
+| `IntegrationTests/Api/KeepApiWebFactory.cs` | WebApplicationFactory<Program> with Testcontainers postgres, ConfigureAppConfiguration for connection string, ICurrentUser override, ResetDatabaseAsync |
+| `IntegrationTests/Api/KeepIntakeApiTests.cs` | 7 HTTP tests covering all build-log/014 exit criteria |
+| `docs/decisions/decision-index.md` | ADR-060 added (rate limiting policy) |
+| `docs/build-log/015-phase-7b-implementation.md` | Full build-log for both Session A + B |
 
 ---
 
-## CLAUDE.md changes made this session (earlier in context)
+## Process corrections made this session
 
-Three additions:
-1. **Quality Over Speed** — explicit rule that delivery pressure does not override architecture.
-2. **Pre-Implementation Gate** — mandatory step: list files AND open design decisions, wait for confirmation before writing any file.
-3. **Cross-Reference Before Every External Call** — before writing a file, verify every external method's signature and failure modes against already-read source; guard against throws; exhaustive switches on owned enums.
-
----
-
-## Next session — Phase 7B Session B
-
-**Pre-work complete.** Proceed with API wiring, HTTP integration tests, and build-log.
-
-### Session B scope (in order)
-
-1. `Foundation.Infrastructure/Security/AnonymousCurrentUser.cs` — implements `ICurrentUser` with `IsAuthenticated = false`; used as the DI registration in the API host until Phase 5 auth exists
-2. `Api/Program.cs` full rewrite — DI registrations (`OpHaloDbContext`, Keep.Infrastructure persistence classes, `KeepTokenService`, access/feature policies, `AnonymousCurrentUser`), rate limiting, minimal API routes (`POST /keep/public-intake/token/{token}`, `GET /keep/requests`)
-3. `Api/appsettings.json` — add `ConnectionStrings:DefaultConnection`
-4. `IntegrationTests.csproj` — add `Microsoft.AspNetCore.Mvc.Testing` + project reference to `OpHalo.Api`
-5. `IntegrationTests/Api/KeepApiWebFactory.cs` — `WebApplicationFactory<Program>` with test DB configuration
-6. `IntegrationTests/Api/KeepIntakeApiTests.cs` — HTTP integration tests for both endpoints
-7. `docs/build-log/014-phase-7b-implementation.md` — build-log entry for both Session A + B
-8. Final session-log.md rewrite + commit
-
-### API design (confirmed in Session A/discovery)
-
-**POST `/keep/public-intake/token/{publicIntakeToken}`**  
-Anonymous (no auth). Body: `customerName`, `customerPhone`, `customerEmail?`, `description`. Returns `{ requestId, referenceCode, pageToken }` on 201. All failures → 422 `keep.public_intake.unavailable` (no information leakage).
-
-**GET `/keep/requests`**  
-Operator auth required. Returns `{ requests: [...] }` with KeepRequestSummary items. 401 unauthorized, 403 forbidden.
+Two feedback memories saved:
+1. **Reference app check before declaring a decision open** — grep `_reference/src/` first; evaluate critically before surfacing as open
+2. **Read handoff build-log before the Pre-Implementation Gate** — when session-log references a build-log as a handoff, read it before writing any code; it is the implementation spec, not background context
 
 ---
 
-## Architecture decisions (ADR-055…057)
+## Architecture decisions (ADR-055…060)
 
-**ADR-055** — Intent-revealing persistence abstractions (`IKeepIntakePersistence`, `IKeepRequestListPersistence`) with `AccountAccessSnapshot`/`AccountUserSnapshot` read models; EF Core stays out of Keep.Application; bounded retry (MaxAttempts=5); `PublicIntakeCommitResult` enum makes retry contract explicit; Infrastructure owns EF entity state cleanup on collision.
-
-**ADR-056** — All public intake gate failures return the same generic `keep.public_intake.unavailable` error — no gate-specific codes on the public surface (information hiding, extends ADR-011 public-guard posture).
-
-**ADR-057** — `KeepRequestStatus` serializes to lowercase snake_case slugs (`received`, `in_progress`, `pending_customer`, `resolved`, `closed`, `cancelled`). These are an API contract; breaking to change. Mapping is exhaustive with `default: throw`.
-
----
-
-## Service design notes (carry into Session B for API wiring)
-
-### CreateKeepPublicIntakeService
-- Returns `Result<CreateKeepPublicIntakeResult>` — map to 201/422 in API
-- All gate failures return the generic `keep.public_intake.unavailable` error (public-safe — no internal state revealed)
-- Validation errors (`KeepRequest.CustomerNameRequired` etc.) are also returned as 422 — map the same way or distinguish
-
-### GetKeepRequestListService
-- Returns `Result<GetKeepRequestListResult>` — map to 200/401/403 in API
-- `auth.unauthorized` → 401; `auth.forbidden` → 403; anything else → 403
-
-### Infrastructure watch-out (EF entity state on collision)
-`CommitPublicIntakeAsync`: detaches request + event + new customer on `UniqueTokenCollision`; leaves existing tracked customer alone. ✅ Implemented.
+| ADR | Decision |
+|-----|---------|
+| ADR-055 | Intent-revealing persistence abstractions; EF stays out of Keep.Application; retry contract via PublicIntakeCommitResult enum |
+| ADR-056 | All public gate failures return `keep.public_intake.unavailable` — no gate-specific codes |
+| ADR-057 | KeepRequestStatus → lowercase snake_case slugs; exhaustive switch with `default: throw` |
+| ADR-058 | Interim auth: AnonymousCurrentUser in production; ICurrentUser overridden in tests |
+| ADR-059 | HTTP contract locked: 201/400/422/401/403; ProblemDetails with extensions.code |
+| ADR-060 | Rate limiting: per-IP fixed-window 10 req/min, CF-Connecting-IP → X-Forwarded-For → RemoteIpAddress; deploy-time Cloudflare constraint documented |
 
 ---
 
@@ -116,22 +68,21 @@ Operator auth required. Returns `{ requests: [...] }` with KeepRequestSummary it
 | 6 — Persistence Session B (proof tests) | ✅ done | `88a9dd6` |
 | 7 — Keep intake to operator view discovery | ✅ done | |
 | 7A — Keep domain + persistence foundation | ✅ done | `41f4f0c` |
-| 7B discovery | ✅ done | build-log/013 |
-| 7B Session A — Application + Infrastructure | ✅ complete, pending commit | |
-| 7B Session B — API + HTTP tests + build-log | ⏭️ next | |
+| 7B — Application + Infrastructure + API + HTTP tests | ✅ done | `a1b67ee` + this session |
+| **Next** | ⏭️ TBD | Discuss with Christian at next session start |
 
 ---
 
 ## Watch-outs / debt carried forward
 
-- **Phone normalization** — deferred; `primaryPhone` stored as submitted (trimmed only)
-- **DI registration + `appsettings`** — wired in Session B
-- **AnonymousCurrentUser** — placeholder for Phase 5 auth, lives in Foundation.Infrastructure; deferred to Session B
-- **Two-phase provisioning save (ADR-044)** — future persistence boundary concern
+- **Connection string fail-fast** — currently deferred to first DB scope creation; a hosted service should validate at startup before production traffic
+- **Phone normalization** — `primaryPhone` stored as submitted (trimmed only)
+- **AnonymousCurrentUser** — placeholder for Phase 5 auth
+- **Two-phase provisioning save (ADR-044)** — canonical pattern; future repository must encapsulate
 - **`AccountUser.IsActive` is `Ignore`d** — computed (ADR-023); never reintroduce as a column
 - **EF model caching** — every context must build Foundation+Keep model together
+- **Notifications** — CustomerEmail/EmailNotificationsEnabled stored, no delivery yet (ADR-053/059)
+- **No GitHub remote yet**
 - **Schema-drop reset pattern** — `DROP SCHEMA public CASCADE` + recreate + `MigrateAsync`
 - **Migration generation** — always `--startup-project src/OpHalo.Keep.Infrastructure`
-- Never glob through `_reference/**/bin` or legacy `obj` trees
 - Legacy `decision-index`/`decisions/**`/`coding-rules` remain **pending validation**
-- No GitHub remote yet
