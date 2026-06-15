@@ -39,6 +39,11 @@ internal sealed class AccountAuthCodeConfiguration : IEntityTypeConfiguration<Ac
         builder.Property(x => x.EntryContext)
             .HasConversion<int>();
 
+        // NewAccount snapshots — null for ExistingMember codes.
+        builder.Property(x => x.BusinessNameSnapshot).HasMaxLength(200);
+        builder.Property(x => x.NameSnapshot).HasMaxLength(200);
+        builder.Property(x => x.TimeZoneSnapshot).HasMaxLength(100);
+
         // Derived — not persisted.
         builder.Ignore(x => x.IsConsumed);
         builder.Ignore(x => x.IsInvalidated);
@@ -51,6 +56,10 @@ internal sealed class AccountAuthCodeConfiguration : IEntityTypeConfiguration<Ac
         // InvalidatePriorCodesAsync filters by TargetAccountUserId.
         builder.HasIndex(x => x.TargetAccountUserId)
             .HasDatabaseName("ix_account_auth_codes_target_account_user_id");
+
+        // CommitStartCodeAsync invalidates prior NewAccount codes by email + context.
+        builder.HasIndex(x => new { x.DeliveryEmailSnapshot, x.EntryContext })
+            .HasDatabaseName("ix_account_auth_codes_delivery_email_entry_context");
 
         // Expiry cleanup queries.
         builder.HasIndex(x => x.ExpiresAtUtc)

@@ -12,6 +12,7 @@ using OpHalo.Foundation.Application.Abstractions.Security;
 using OpHalo.Foundation.Application.Accounts.Access;
 using OpHalo.Foundation.Application.Accounts.Authorization;
 using OpHalo.Foundation.Application.Accounts.Entitlements;
+using OpHalo.Foundation.Application.Accounts.Provisioning;
 using OpHalo.Foundation.Application.Auth;
 using OpHalo.Foundation.Infrastructure.Auth;
 using OpHalo.Foundation.Infrastructure.Email;
@@ -74,6 +75,9 @@ builder.Services.AddSingleton<IFeatureAccessPolicy, FeatureAccessPolicy>();
 
 // --- Auth services ---
 builder.Services.Configure<MagicLinkSettings>(builder.Configuration.GetSection("App"));
+builder.Services.Configure<SignupDefaultsSettings>(builder.Configuration.GetSection("SignupDefaults"));
+builder.Services.AddScoped<AccountProvisioningService>();
+builder.Services.AddScoped<StartAuthService>();
 builder.Services.AddScoped<SignInAuthService>();
 builder.Services.AddScoped<ExchangeAuthService>();
 builder.Services.AddScoped<IAuthCodePersistence, EfAuthCodePersistence>();

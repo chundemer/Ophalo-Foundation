@@ -13,10 +13,33 @@ public static class AuthEndpoints
     public static void MapAuthEndpoints(this IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/auth").RequireRateLimiting("auth");
+        group.MapPost("/start", Start);
         group.MapPost("/signin", SignIn);
         group.MapPost("/exchange", Exchange);
         group.MapGet("/me", Me).RequireAuthorization();
         group.MapPost("/logout", Logout).RequireAuthorization();
+    }
+
+    private static async Task<IResult> Start(
+        StartBody body,
+        StartAuthService service,
+        CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(body.Email))
+            return ValidationProblem("Email is required.", "Validation.EmailRequired");
+        if (string.IsNullOrWhiteSpace(body.BusinessName))
+            return ValidationProblem("Business name is required.", "Validation.BusinessNameRequired");
+        if (string.IsNullOrWhiteSpace(body.TimeZone))
+            return ValidationProblem("Time zone is required.", "Validation.TimeZoneRequired");
+        if (!IsValidIanaTimeZone(body.TimeZone))
+            return ValidationProblem("Time zone is not a valid IANA time zone identifier.", "Validation.TimeZoneInvalid");
+
+        var result = await service.HandleAsync(body.Email, body.BusinessName, body.Name, body.TimeZone, ct);
+
+        if (result.IsFailure)
+            return ErrorHttpMapper.ToHttpResult(result.Error);
+
+        return Results.Ok();
     }
 
     private static async Task<IResult> SignIn(
@@ -137,9 +160,13 @@ public static class AuthEndpoints
     private static string? ToEntryContextString(EntryContext? entryContext) =>
         entryContext switch
         {
+            EntryContext.NewAccount => "new_account",
             EntryContext.ExistingMember => "existing_member",
             _ => null
         };
+
+    private static bool IsValidIanaTimeZone(string tz) =>
+        TimeZoneInfo.TryFindSystemTimeZoneById(tz, out _);
 
     private static IResult ValidationProblem(string detail, string code) =>
         Results.Problem(
@@ -150,5 +177,6 @@ public static class AuthEndpoints
             extensions: new Dictionary<string, object?> { ["code"] = code });
 }
 
+internal sealed record StartBody(string? Email, string? BusinessName, string? Name, string? TimeZone);
 internal sealed record SignInBody(string? Email);
 internal sealed record ExchangeBody(string? Code, string? ClientType, string? DeviceName);

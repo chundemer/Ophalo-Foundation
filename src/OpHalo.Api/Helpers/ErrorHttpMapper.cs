@@ -53,6 +53,9 @@ public static class ErrorHttpMapper
             // Explicit match — Account.Expired resolves to 402, not the generic .Expired → 422 below.
             var c when c == "Account.Expired" => (StatusCodes.Status402PaymentRequired, "Payment required.", null),
 
+            // Explicit match — Account.PilotFull resolves to 409, not the default 400.
+            var c when c == "Account.PilotFull" => (StatusCodes.Status409Conflict, "Conflict.", null),
+
             var c when c.EndsWith(".PastDueBlocked") => (StatusCodes.Status402PaymentRequired, "Payment required.", null),
 
             // --- 403 — authenticated but forbidden by business rules ---

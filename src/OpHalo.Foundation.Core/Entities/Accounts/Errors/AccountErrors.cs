@@ -109,6 +109,14 @@ public static class AccountErrors
         Error.Create("Account.SessionCreationFailed",
             "We could not finish signing you in. Please try signing in again.");
 
+    public static readonly Error EmailAlreadyInUse =
+        Error.Create("Account.EmailAlreadyInUse",
+            "An account with this email address already exists. Please sign in instead.");
+
+    public static readonly Error PilotFull =
+        Error.Create("Account.PilotFull",
+            "We are not accepting new registrations at this time. Please check back soon.");
+
     // --- Primary owner (ADR-019) ---
     public static readonly Error PrimaryOwnerAccountMismatch =
         Error.Create("Account.PrimaryOwnerAccountMismatch",

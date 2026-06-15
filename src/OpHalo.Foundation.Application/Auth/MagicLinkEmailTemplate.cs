@@ -8,6 +8,7 @@ namespace OpHalo.Foundation.Application.Auth;
 internal static class MagicLinkEmailTemplate
 {
     public const string Subject = "Your OpHalo sign-in link";
+    public const string NewAccountSubject = "Finish setting up your OpHalo account";
 
     public static string BuildHtmlBody(string magicLink) =>
         $"<p>Click the link below to sign in to OpHalo:</p>" +

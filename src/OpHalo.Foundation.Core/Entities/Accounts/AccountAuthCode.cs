@@ -48,14 +48,29 @@ public sealed class AccountAuthCode
     /// </summary>
     public EntryContext? EntryContext { get; private init; }
 
+    // --- NewAccount snapshots (null for ExistingMember codes) ---
+
+    /// <summary>Business name captured at /auth/start for deferred account creation at /exchange.</summary>
+    public string? BusinessNameSnapshot { get; private init; }
+
+    /// <summary>Operator name captured at /auth/start. Optional — may be null if not provided.</summary>
+    public string? NameSnapshot { get; private init; }
+
+    /// <summary>IANA time zone captured at /auth/start for account creation at /exchange.</summary>
+    public string? TimeZoneSnapshot { get; private init; }
+
     // --- Derived state ---
 
     public bool IsConsumed => ConsumedAtUtc.HasValue;
     public bool IsInvalidated => InvalidatedAtUtc.HasValue;
     public bool IsExpired(DateTime nowUtc) => nowUtc >= ExpiresAtUtc;
 
-    // --- Factory ---
+    // --- Factories ---
 
+    /// <summary>
+    /// Creates an ExistingMember code. Use <see cref="CreateForNewAccount"/> for NewAccount codes —
+    /// passing <see cref="Enums.EntryContext.NewAccount"/> here throws.
+    /// </summary>
     public static AccountAuthCode Create(
         Guid? accountId,
         Guid? targetAccountUserId,
@@ -65,6 +80,8 @@ public sealed class AccountAuthCode
         string deliveryEmailSnapshot,
         EntryContext entryContext)
     {
+        if (entryContext == Enums.EntryContext.NewAccount)
+            throw new ArgumentException("Use CreateForNewAccount for NewAccount codes.", nameof(entryContext));
         if (accountId.HasValue && accountId.Value == Guid.Empty)
             throw new ArgumentException("AccountId must not be empty when provided.", nameof(accountId));
         if (targetAccountUserId.HasValue && targetAccountUserId.Value == Guid.Empty)
@@ -95,6 +112,54 @@ public sealed class AccountAuthCode
             ExpiresAtUtc = expiresAtUtc,
             DeliveryEmailSnapshot = deliveryEmailSnapshot,
             EntryContext = entryContext,
+        };
+    }
+
+    /// <summary>
+    /// Creates a NewAccount code with business-name, name, and time-zone snapshots
+    /// needed for deferred account creation at /exchange.
+    /// AccountId and TargetAccountUserId are always null for new-account codes.
+    /// </summary>
+    public static AccountAuthCode CreateForNewAccount(
+        string codeHash,
+        DateTime issuedAtUtc,
+        DateTime expiresAtUtc,
+        string deliveryEmailSnapshot,
+        string businessName,
+        string? name,
+        string timeZone)
+    {
+        if (string.IsNullOrWhiteSpace(codeHash))
+            throw new ArgumentException("CodeHash is required.", nameof(codeHash));
+        if (issuedAtUtc == default)
+            throw new ArgumentException("IssuedAtUtc must not be default.", nameof(issuedAtUtc));
+        if (issuedAtUtc.Kind != DateTimeKind.Utc)
+            throw new ArgumentException("IssuedAtUtc must be UTC.", nameof(issuedAtUtc));
+        if (expiresAtUtc == default)
+            throw new ArgumentException("ExpiresAtUtc must not be default.", nameof(expiresAtUtc));
+        if (expiresAtUtc.Kind != DateTimeKind.Utc)
+            throw new ArgumentException("ExpiresAtUtc must be UTC.", nameof(expiresAtUtc));
+        if (expiresAtUtc <= issuedAtUtc)
+            throw new ArgumentException("ExpiresAtUtc must be after IssuedAtUtc.", nameof(expiresAtUtc));
+        if (string.IsNullOrWhiteSpace(deliveryEmailSnapshot))
+            throw new ArgumentException("DeliveryEmailSnapshot is required.", nameof(deliveryEmailSnapshot));
+        if (string.IsNullOrWhiteSpace(businessName))
+            throw new ArgumentException("BusinessName is required for NewAccount codes.", nameof(businessName));
+        if (string.IsNullOrWhiteSpace(timeZone))
+            throw new ArgumentException("TimeZone is required for NewAccount codes.", nameof(timeZone));
+
+        return new AccountAuthCode
+        {
+            AccountId = null,
+            TargetAccountUserId = null,
+            CodeHash = codeHash,
+            IssuedAtUtc = issuedAtUtc,
+            ExpiresAtUtc = expiresAtUtc,
+            DeliveryEmailSnapshot = deliveryEmailSnapshot,
+            EntryContext = Enums.EntryContext.NewAccount,
+            BusinessNameSnapshot = businessName.Trim(),
+            NameSnapshot = string.IsNullOrWhiteSpace(name) ? null : name.Trim(),
+            TimeZoneSnapshot = timeZone.Trim(),
         };
     }
 

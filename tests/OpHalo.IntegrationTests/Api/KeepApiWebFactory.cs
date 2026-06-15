@@ -143,6 +143,65 @@ public sealed class CapturingEmailSender : IEmailSender
     public void Clear() => _emails.Clear();
 }
 
+/// <summary>
+/// WebApplicationFactory with IsPilot=true and MaxPilotAccounts=1.
+/// Used by AuthStartPilotCapTests to exercise the pilot capacity gate.
+/// </summary>
+public sealed class PilotCapWebFactory : WebApplicationFactory<Program>, IAsyncLifetime
+{
+    private readonly PostgreSqlContainer _container = new PostgreSqlBuilder("postgres:17.5-alpine")
+        .Build();
+
+    public readonly CapturingEmailSender EmailSender = new();
+
+    protected override void ConfigureWebHost(IWebHostBuilder builder)
+    {
+        builder.UseEnvironment("Testing");
+        builder.ConfigureAppConfiguration(config =>
+        {
+            config.AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["ConnectionStrings:DefaultConnection"] = _container.GetConnectionString(),
+                ["App:PublicBaseUrl"] = "https://test.ophalo.com",
+                ["SignupDefaults:IsPilot"] = "true",
+                ["SignupDefaults:TrialDurationDays"] = "30",
+                ["SignupDefaults:MaxPilotAccounts"] = "1"
+            });
+        });
+
+        builder.ConfigureServices(services =>
+        {
+            var descriptor = services.FirstOrDefault(d => d.ServiceType == typeof(IEmailSender));
+            if (descriptor is not null)
+                services.Remove(descriptor);
+            services.AddSingleton<IEmailSender>(EmailSender);
+        });
+    }
+
+    public async Task ResetDatabaseAsync()
+    {
+        await using var scope = Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+        await db.Database.ExecuteSqlRawAsync("DROP SCHEMA IF EXISTS public CASCADE");
+        await db.Database.ExecuteSqlRawAsync("CREATE SCHEMA public");
+        await db.Database.MigrateAsync();
+    }
+
+    public AsyncServiceScope CreateScope() => Services.CreateAsyncScope();
+
+    public async Task InitializeAsync()
+    {
+        await _container.StartAsync();
+        await ResetDatabaseAsync();
+    }
+
+    public new async Task DisposeAsync()
+    {
+        await _container.DisposeAsync();
+        await base.DisposeAsync();
+    }
+}
+
 public sealed record CapturedEmail(string To, string Subject, string HtmlBody)
 {
     /// <summary>

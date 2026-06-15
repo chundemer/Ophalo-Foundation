@@ -6,6 +6,9 @@ namespace OpHalo.Foundation.Core.Entities.Accounts.Enums;
 /// </summary>
 public enum EntryContext
 {
+    /// <summary>New email — Account, User, and AccountUser will be created at /exchange.</summary>
+    NewAccount = 1,
+
     /// <summary>Existing verified User with at least one active AccountUser — standard re-auth.</summary>
     ExistingMember = 2,
 }

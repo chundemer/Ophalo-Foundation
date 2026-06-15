@@ -1,65 +1,58 @@
 # Session Log — OpHalo Foundation
 
 **Last updated:** 2026-06-15
-**Next session tier:** Tier 1 — Phase 5C discovery (new-account registration/start)
+**Next session tier:** Tier 1 — Phase 5D discovery (member invites)
 **Branch:** `main` (no remote yet)
 
 ---
 
-## Phase 5B — COMPLETE
+## Phase 5C — COMPLETE
 
-Existing-member magic-link sign-in and exchange. All exit-gate items verified.
+New-account registration via `POST /auth/start` + extended `/auth/exchange`. All exit-gate items verified.
 
 ### What was built
 
 **Foundation.Core:**
-- `Entities/Accounts/Enums/EntryContext.cs` — `ExistingMember = 2` (values match reference to avoid future conflicts)
-- `Entities/Accounts/AccountAuthCode.cs` — single-use auth code entity; `AccountId?` and `TargetAccountUserId?` are nullable for Phase 5C NewAccount path; `Invalidate()` domain method
-- `Entities/Accounts/Errors/AccountAuthCodeErrors.cs` — `NotFound`, `Expired`, `AlreadyConsumed`, `CannotConsumeInvalidated`, `CannotInvalidateConsumed`
-- `AccountErrors.cs` — added `SessionCreationFailed` ("We could not finish signing you in. Please try signing in again.")
+- `Entities/Accounts/Enums/EntryContext.cs` — added `NewAccount = 1`
+- `Entities/Accounts/AccountAuthCode.cs` — added `BusinessNameSnapshot`, `NameSnapshot`, `TimeZoneSnapshot`; added `CreateForNewAccount` factory; `Create` now rejects `EntryContext.NewAccount` at call site
+- `Entities/Accounts/Errors/AccountErrors.cs` — added `EmailAlreadyInUse` + `PilotFull`
 
 **Foundation.Application:**
-- `Auth/MagicLinkSettings.cs` — `PublicBaseUrl`, bound from `"App"` section as `App:PublicBaseUrl`; this is the public frontend/auth site URL, not the API URL
-- `Auth/IAuthCodePersistence.cs` — `FindEligibleSignInMemberByEmailAsync`, `CommitSignInCodeAsync` (atomic), `FindCodeByHashAsync`, `ConsumeCodeAsync`
-- `Auth/MagicLinkCodeGenerator.cs` — `RandomNumberGenerator.GetBytes(32)` → URL-safe Base64 + SHA-256 hex
-- `Auth/MagicLinkEmailTemplate.cs` — subject + HTML body builder
-- `Auth/SignInAuthService.cs` — issues magic link for active existing members; neutral 200 for unknown/ineligible/ambiguous email; best-effort email delivery (delivery failure never changes public response)
-- `Auth/ExchangeAuthService.cs` — validates code state, routes by `EntryContext`, consumes atomically (race guard), creates session; logs session creation failure with AccountId/AccountUserId/CodeId; no raw codes/tokens/emails in logs
-- Added `Microsoft.Extensions.Logging.Abstractions` + `Microsoft.Extensions.Options` to csproj
+- `Auth/SignupDefaultsSettings.cs` — NEW: `IsPilot`, `TrialDurationDays`, `int? MaxPilotAccounts`
+- `Auth/StartAuthService.cs` — NEW: classifies request (ExistingMember / NewAccount / Neutral), issues code, sends best-effort email, enforces pilot cap gate
+- `Auth/IAuthCodePersistence.cs` — added `ClassifyStartRequestAsync`, `CommitStartCodeAsync`, `CountActivePilotAccountsAsync`, `CommitNewAccountExchangeAsync`; added `StartClassification` record hierarchy (`StartAsNewAccount`, `StartAsExistingMember`, `StartAsNeutral`)
+- `Auth/ExchangeAuthService.cs` — added `NewAccount` branch; injected `AccountProvisioningService` + `IOptions<SignupDefaultsSettings>`; extracted `CreateSessionAsync` helper
+- `Auth/MagicLinkEmailTemplate.cs` — added `NewAccountSubject`
 
 **Foundation.Infrastructure:**
-- `Auth/EfAuthCodePersistence.cs` — implements `IAuthCodePersistence`; `FindEligibleSignInMemberByEmailAsync` uses `.Take(2)` to detect multi-membership ambiguity; `CommitSignInCodeAsync` wraps invalidation + add + save in a single transaction
-- `Email/ResendEmailSender.cs` — typed `HttpClient` pointing to `https://api.resend.com/emails`
-- `Email/ResendSettings.cs` — `ApiKey`, `FromAddress`
-- `Persistence/Configurations/AccountAuthCodeConfiguration.cs` — `account_auth_codes` table, code hash unique index, target account user index, expiry index
-- `Persistence/OpHaloDbContext.cs` — added `AccountAuthCodes` DbSet
-- Migration: `AccountAuthCodes`
+- `Auth/EfAuthCodePersistence.cs` — implemented 4 new methods; `CommitNewAccountExchangeAsync` uses atomic consume + two-phase graph save (ADR-044) in one transaction; catches `PostgresErrorCodes.UniqueViolation` → `AccountErrors.EmailAlreadyInUse`
+- `Persistence/Configurations/AccountAuthCodeConfiguration.cs` — added snapshot columns (200/200/100) + composite index on `(delivery_email_snapshot, entry_context)`
+- Migration: `AccountAuthCodeNewAccountSnapshots`
 
 **Api:**
-- `Auth/AuthEndpoints.cs` — `POST /auth/signin` (anonymous, rate-limited), `POST /auth/exchange` (anonymous, rate-limited); `clientType` parsed from string only (`"browser"` / `"mobile_app"`); mobile gets token in body, browser gets HttpOnly cookie only; `entryContext` added to failure via `ErrorHttpMapper.ToHttpResult` extra extensions — status always from mapper, never overridden
-- `Helpers/ErrorHttpMapper.cs` — refactored to `GetProblemMeta` tuple approach so `extraExtensions` can be threaded in at one call site
-- `Program.cs` — wired `SignInAuthService`, `ExchangeAuthService`, `EfAuthCodePersistence`, `ResendEmailSender`; `UseRateLimiter` skipped in Testing environment
-- `appsettings.json` — added `App:PublicBaseUrl`, `Resend:ApiKey`, `Resend:FromAddress`
+- `Auth/AuthEndpoints.cs` — added `POST /auth/start`, `StartBody` record, IANA TZ validation via `TimeZoneInfo.TryFindSystemTimeZoneById`, `new_account` in `ToEntryContextString`
+- `Program.cs` — registered `AccountProvisioningService`, `StartAuthService`; bound `SignupDefaults`
+- `Helpers/ErrorHttpMapper.cs` — explicit `Account.PilotFull` → 409
+- `appsettings.json` — added `SignupDefaults` section
 
 **Tests:**
-- `Api/KeepApiWebFactory.cs` — added `CapturingEmailSender` (test double for `IEmailSender`), `App:PublicBaseUrl` config override, `IEmailSender` replacement in `ConfigureTestServices`
-- `Api/AuthMagicLinkTests.cs` — 15 tests covering: unknown/ineligible/suspended/removed email neutral 200, missing input 400, second sign-in invalidates prior code, valid exchange sets cookie, session from exchange allows `/auth/me`, unknown code 404, consumed/invalidated 422 with entryContext, invalid client type 400, mobile returns token in body (no cookie), mobile Bearer `/me`, concurrent exchange race (exactly one wins)
+- `UnitTests/Auth/AccountAuthCodeTests.cs` — NEW: 11 unit tests for `CreateForNewAccount` validation
+- `IntegrationTests/Api/KeepApiWebFactory.cs` — added `PilotCapWebFactory` (IsPilot=true, MaxPilotAccounts=1, own Testcontainers instance)
+- `IntegrationTests/Api/AuthStartTests.cs` — NEW: `AuthStartTests` (18 tests) + `AuthStartPilotCapTests` (2 tests)
 
 ### Key decisions applied
 
 | # | Decision | Applied |
-|---|---|---|
-| D1 | Code entity: `AccountAuthCode` | ✓ |
-| D2 | Phase 5B: `/signin` + `/exchange` only | ✓ |
-| D4 | Direct `IEmailSender`, best-effort | ✓ |
-| D5 | Optional `clientType`/`deviceName` at exchange | ✓ |
-| D8 | Unknown/ineligible/ambiguous email: neutral 200, no code | ✓ |
-| — | Logging policy: only session creation failure logged; no codes/tokens/emails in logs | ✓ |
-| — | Atomic `CommitSignInCodeAsync`: no partial-state window on issuance | ✓ |
-| — | Multi-membership `.Take(2)` guard: 2+ active memberships → neutral 200 | ✓ |
-| — | Mobile exchange returns token in body; browser gets cookie only | ✓ |
-| — | `ErrorHttpMapper` refactored: `extraExtensions` adds `entryContext` without status override | ✓ |
-| — | Magic-link email URL uses frontend `App:PublicBaseUrl`, not API/Auth URL | ✓ |
+|---|----------|---------|
+| ADR-065 | `EntryContext.NewAccount = 1`; `CreateForNewAccount` factory with snapshot validation; `Create` guard | ✓ |
+| ADR-066 | Config-backed `SignupDefaults`; no plan/pilot values hard-coded | ✓ |
+| ADR-067 | 3-query `ClassifyStartRequestAsync`: active AccountUsers → any AccountUser → any User → NewAccount | ✓ |
+| ADR-068 | Context-specific invalidation in `CommitStartCodeAsync`; composite index on email+context | ✓ |
+| ADR-069 | `CommitNewAccountExchangeAsync`: atomic consume + two-phase graph; unconsumed on any failure | ✓ |
+| ADR-070 | Pilot cap at both `/start` and `/exchange`; cap-full rejection leaves code unconsumed | ✓ |
+| ADR-071 | `NewAccountSubject` only email distinction; same `BuildHtmlBody` template | ✓ |
+| ADR-072 | `Account.PilotFull` explicit 409 in mapper | ✓ |
+| ADR-073 | IANA TZ via `TimeZoneInfo.TryFindSystemTimeZoneById` at endpoint | ✓ |
 
 ---
 
@@ -67,8 +60,9 @@ Existing-member magic-link sign-in and exchange. All exit-gate items verified.
 
 - `dotnet build` → 0 errors, 0 warnings
 - Architecture tests → 14/14 passing
-- Unit tests → 260/260 passing
-- Integration tests → 49/49 passing (34 existing + 15 new magic link tests)
+- Unit tests → 271/271 passing (11 new Phase 5C AccountAuthCode tests)
+- Integration tests → 69/69 passing (20 new Phase 5C tests)
+- Total → 354/354 passing
 
 ---
 
@@ -81,20 +75,20 @@ Existing-member magic-link sign-in and exchange. All exit-gate items verified.
 - **Migration generation** — always `--startup-project src/OpHalo.Keep.Infrastructure`; needs `ConnectionStrings__DefaultConnection` env var for design-time factory.
 - **No GitHub remote yet.**
 - **Resend `ApiKey` and `FromAddress`** — must be set via user secrets in production; appsettings.json values are empty placeholders.
-- **`App:PublicBaseUrl`** — must point at the public frontend/auth site that owns `/auth/exchange?code=...`; that frontend route posts the code to backend `POST /auth/exchange`. Do not point this value at `OpHalo.Api`.
-- **`App:OperatorBaseUrl`** — not needed for 5B, but Phase 5D invite links should add it following the reference app.
-- **`UseRateLimiter` skipped in Testing** — intentional, consistent with `UseHttpsRedirection` skip.
+- **`App:PublicBaseUrl`** — must point at the public frontend/auth site that owns `/auth/exchange?code=...`.
+- **`App:OperatorBaseUrl`** — Phase 5D invite links should add this following the reference app.
+- **`UseRateLimiter` skipped in Testing** — intentional.
+- **`CountActivePilotAccountsAsync`** — counts all `IsPilot = true` without filtering `CommercialState != Canceled`. Conservative count is safe for now; refine with a join on `Accounts.LifecycleState` if needed.
+- **`SignupDefaultsSettings` startup validation** — `TrialDurationDays <= 0` and `MaxPilotAccounts <= 0` are not validated at startup. Add `IValidateOptions<SignupDefaultsSettings>` in a follow-up.
+- **Session creation failure test** — not covered in 5C integration tests. Would require mocking `IAccountSessionService` to throw for a specific account ID. Deferred; 5B session-failure path is already covered.
 
 ---
 
-## Next session — Phase 5C discovery (Tier 1)
+## Next session — Phase 5D (member invites)
 
-Phase 5C adds `POST /auth/start` (new-account registration). Discovery required before any code:
+Phase 5D builds the member invite flow: sending invites, invite acceptance via magic-link exchange,
+and the `InvitedUser` entry context. Discovery session should read the reference app
+`_reference/src/OpHalo.Application/Accounts/Commands/Invites/` and the existing Phase 4/5 decisions
+to plan the new flow.
 
-1. Read reference `/auth/start` flow: `StartOnboardingCommandHandler.cs`
-2. Confirm time zone approach (recommendation: required IANA field — no silent UTC default)
-3. Confirm `Account.CreateVerified` signature matches what `/start` will provide
-4. Confirm `AccountAuthCode` entity is sufficient or needs `BusinessNameSnapshot` / `NameSnapshot`
-5. Decide account provisioning atomicity with code issuance (no outbox yet)
-
-Do not start Phase 5C implementation without a completed discovery pass. Phase 5D (member invites) follows 5C.
+Read the build plan §5D before proposing any design.
