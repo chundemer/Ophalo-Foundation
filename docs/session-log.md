@@ -2,18 +2,18 @@
 
 **Last updated:** 2026-06-14
 **Next session tier:** Tier 1 — Discovery · **next slice = Phase 4d (feature keys / entitlements, §4.11)**
-**Branch:** `main` (no remote yet) · Phase 4b committed (`7cf49aa`); Phase 4c built & green, **commit pending**
+**Branch:** `main` (no remote yet) · Phase 4b committed (`7cf49aa`); Phase 4c committed (`034eee4`)
 
 > Phase 4c (**permission keys + role access policy**, the "User is permitted" half of ADR-007) is
-> **built, green, and ready to commit** — awaiting Christian's approval. Phase 4b was committed
-> this session (`7cf49aa`). The authz **core** is now complete: Account entitled (4a/4b) +
-> User permitted (4c). Next is Phase 4d (feature keys, §4.11) — run discovery and confirm before code.
+> **committed** (`034eee4`); Phase 4b committed earlier this session (`7cf49aa`). The authz **core**
+> is now complete: Account entitled (4a/4b) + User permitted (4c). Working tree clean. Next is
+> Phase 4d (feature keys, §4.11) — run discovery and confirm before code.
 
 ---
 
 ## Where we are
 
-Phases 0–4b complete and committed. **Phase 4c built this session** (commit pending):
+Phases 0–4c complete and committed. **Phase 4c committed this session** (`034eee4`):
 the permission-key catalog, role→permission maps, and `UserAccessPolicy`. Build clean (0 warnings).
 **Tests: UnitTests 139, ArchitectureTests 14, IntegrationTests 1 — all green.**
 
@@ -24,7 +24,7 @@ the permission-key catalog, role→permission maps, and `UserAccessPolicy`. Buil
 | 3 — SharedKernel + abstraction cleanup | ✅ done | `2fce382` |
 | 4a — Account/User/AccountUser + lifecycle + access policy | ✅ done | `ec4c35c`, build-log/003 |
 | 4b — AccountEntitlements (commercial posture producer) | ✅ done | `7cf49aa`, build-log/004 |
-| 4c — Permission keys + role access policy (User permitted) | ✅ done | build-log/005, this session (commit pending) |
+| 4c — Permission keys + role access policy (User permitted) | ✅ done | `034eee4`, build-log/005 |
 | 4d — Feature keys / entitlements / usage limits (§4.11) | ⬜ not started | next discovery |
 
 ## What 4c shipped
