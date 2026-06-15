@@ -3,10 +3,13 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using OpHalo.Foundation.Application.Abstractions.Messaging;
 using OpHalo.Foundation.Core.Entities.Accounts;
 using OpHalo.Foundation.Core.Entities.Accounts.Enums;
 using OpHalo.Foundation.Infrastructure.Persistence;
 using OpHalo.Foundation.Infrastructure.Security;
+using OpHalo.SharedKernel.Results;
+using System.Collections.Concurrent;
 using System.Security.Cryptography;
 using Testcontainers.PostgreSql;
 
@@ -28,6 +31,12 @@ public sealed class KeepApiWebFactory : WebApplicationFactory<Program>, IAsyncLi
     private readonly PostgreSqlContainer _container = new PostgreSqlBuilder("postgres:17.5-alpine")
         .Build();
 
+    /// <summary>
+    /// Captures emails sent via IEmailSender during tests. Thread-safe.
+    /// Inspect after calling /auth/signin to retrieve the magic link.
+    /// </summary>
+    public readonly CapturingEmailSender EmailSender = new();
+
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         // "Testing" causes Program.cs to skip UseHttpsRedirection.
@@ -40,8 +49,21 @@ public sealed class KeepApiWebFactory : WebApplicationFactory<Program>, IAsyncLi
         {
             config.AddInMemoryCollection(new Dictionary<string, string?>
             {
-                ["ConnectionStrings:DefaultConnection"] = _container.GetConnectionString()
+                ["ConnectionStrings:DefaultConnection"] = _container.GetConnectionString(),
+                ["App:PublicBaseUrl"] = "https://test.ophalo.com"
             });
+        });
+
+        // Replace IEmailSender with the capturing implementation so tests can read
+        // the magic link without making real HTTP calls to Resend.
+        builder.ConfigureServices(services =>
+        {
+            // Remove the real typed HttpClient registration for IEmailSender.
+            var descriptor = services.FirstOrDefault(d => d.ServiceType == typeof(IEmailSender));
+            if (descriptor is not null)
+                services.Remove(descriptor);
+
+            services.AddSingleton<IEmailSender>(EmailSender);
         });
     }
 
@@ -99,5 +121,50 @@ public sealed class KeepApiWebFactory : WebApplicationFactory<Program>, IAsyncLi
     {
         await _container.DisposeAsync();
         await base.DisposeAsync();
+    }
+}
+
+/// <summary>
+/// Test double for IEmailSender. Stores sent emails in-memory so tests can read
+/// the magic link URL without making real HTTP calls to Resend.
+/// </summary>
+public sealed class CapturingEmailSender : IEmailSender
+{
+    private readonly ConcurrentQueue<CapturedEmail> _emails = new();
+
+    public IReadOnlyList<CapturedEmail> SentEmails => _emails.ToArray();
+
+    public Task<Result> SendAsync(string to, string subject, string htmlBody, CancellationToken cancellationToken)
+    {
+        _emails.Enqueue(new CapturedEmail(to, subject, htmlBody));
+        return Task.FromResult(Result.Success());
+    }
+
+    public void Clear() => _emails.Clear();
+}
+
+public sealed record CapturedEmail(string To, string Subject, string HtmlBody)
+{
+    /// <summary>
+    /// Extracts the magic link href from the HTML body.
+    /// Returns null if no href is found.
+    /// </summary>
+    public string? ExtractMagicLink()
+    {
+        const string hrefPrefix = "href=\"";
+        var start = HtmlBody.IndexOf(hrefPrefix, StringComparison.Ordinal);
+        if (start < 0) return null;
+        start += hrefPrefix.Length;
+        var end = HtmlBody.IndexOf('"', start);
+        return end < 0 ? null : HtmlBody[start..end];
+    }
+
+    public string? ExtractCode()
+    {
+        var link = ExtractMagicLink();
+        if (link is null) return null;
+        const string codeParam = "code=";
+        var idx = link.IndexOf(codeParam, StringComparison.Ordinal);
+        return idx < 0 ? null : Uri.UnescapeDataString(link[(idx + codeParam.Length)..]);
     }
 }

@@ -104,6 +104,11 @@ public static class AccountErrors
         Error.Create("Account.TrialWindowRequired",
             "A trial end date is required for non-internal accounts.");
 
+    // --- Auth ---
+    public static readonly Error SessionCreationFailed =
+        Error.Create("Account.SessionCreationFailed",
+            "We could not finish signing you in. Please try signing in again.");
+
     // --- Primary owner (ADR-019) ---
     public static readonly Error PrimaryOwnerAccountMismatch =
         Error.Create("Account.PrimaryOwnerAccountMismatch",

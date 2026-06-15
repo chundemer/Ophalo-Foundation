@@ -12,107 +12,127 @@ namespace OpHalo.Api.Helpers;
 /// </summary>
 public static class ErrorHttpMapper
 {
-    public static IResult ToHttpResult(Error error)
+    /// <param name="extraExtensions">
+    /// Optional fields merged into the ProblemDetails extensions alongside "code".
+    /// Use to attach context-specific metadata (e.g. "entryContext") without overriding
+    /// the HTTP status that the error code maps to.
+    /// </param>
+    public static IResult ToHttpResult(Error error, IReadOnlyDictionary<string, object?>? extraExtensions = null)
     {
-        return error.Code switch
+        var (statusCode, title, detailOverride) = GetProblemMeta(error);
+        return CreateProblem(statusCode, title, error, detailOverride, extraExtensions);
+    }
+
+    // Separates status/title routing from response building so extraExtensions can be
+    // threaded in once rather than repeated across every switch arm.
+    private static (int StatusCode, string Title, string? DetailOverride) GetProblemMeta(Error error) =>
+        error.Code switch
         {
             // --- Foundation auth codes (explicit — do not match patterns below) ---
-            "auth.unauthorized" => CreateProblem(StatusCodes.Status401Unauthorized, "Unauthorized.", error,
-                detailOverride: "Authentication is required to access this resource."),
+            "auth.unauthorized" => (StatusCodes.Status401Unauthorized, "Unauthorized.",
+                "Authentication is required to access this resource."),
 
-            "auth.forbidden" => CreateProblem(StatusCodes.Status403Forbidden, "Forbidden.", error),
+            "auth.forbidden" => (StatusCodes.Status403Forbidden, "Forbidden.", null),
 
             // --- Keep-specific codes (explicit) ---
-            "keep.public_intake.unavailable" => CreateProblem(StatusCodes.Status422UnprocessableEntity, "Unprocessable entity.", error),
+            "keep.public_intake.unavailable" => (StatusCodes.Status422UnprocessableEntity, "Unprocessable entity.", null),
 
             // --- 400 — validation / malformed client request ---
-            var c when c.Contains("Validation") => CreateProblem(StatusCodes.Status400BadRequest, "Validation failed.", error),
+            var c when c.Contains("Validation") => (StatusCodes.Status400BadRequest, "Validation failed.", null),
 
             // --- 401 — authentication failure ---
-            var c when c.EndsWith(".Unauthorized") => CreateProblem(StatusCodes.Status401Unauthorized, "Unauthorized.", error,
-                detailOverride: "Authentication is required to access this resource."),
+            var c when c.EndsWith(".Unauthorized") => (StatusCodes.Status401Unauthorized, "Unauthorized.",
+                "Authentication is required to access this resource."),
 
-            var c when c.EndsWith(".InvalidCredentials") => CreateProblem(StatusCodes.Status401Unauthorized, "Unauthorized.", error,
-                detailOverride: "Invalid credentials."),
+            var c when c.EndsWith(".InvalidCredentials") => (StatusCodes.Status401Unauthorized, "Unauthorized.",
+                "Invalid credentials."),
 
             // --- 402 — commercial state; trial lapsed, subscription expired, or past-due grace elapsed ---
-            var c when c.EndsWith(".TrialExpired") => CreateProblem(StatusCodes.Status402PaymentRequired, "Payment required.", error),
+            var c when c.EndsWith(".TrialExpired") => (StatusCodes.Status402PaymentRequired, "Payment required.", null),
 
-            var c when c == "Account.Expired" => CreateProblem(StatusCodes.Status402PaymentRequired, "Payment required.", error),
+            // Explicit match — Account.Expired resolves to 402, not the generic .Expired → 422 below.
+            var c when c == "Account.Expired" => (StatusCodes.Status402PaymentRequired, "Payment required.", null),
 
-            var c when c.EndsWith(".PastDueBlocked") => CreateProblem(StatusCodes.Status402PaymentRequired, "Payment required.", error),
+            var c when c.EndsWith(".PastDueBlocked") => (StatusCodes.Status402PaymentRequired, "Payment required.", null),
 
             // --- 403 — authenticated but forbidden by business rules ---
-            var c when c.EndsWith(".AccessDenied") => CreateProblem(StatusCodes.Status403Forbidden, "Forbidden.", error),
+            var c when c.EndsWith(".AccessDenied") => (StatusCodes.Status403Forbidden, "Forbidden.", null),
 
-            var c when c.EndsWith(".Forbidden") => CreateProblem(StatusCodes.Status403Forbidden, "Forbidden.", error),
+            var c when c.EndsWith(".Forbidden") => (StatusCodes.Status403Forbidden, "Forbidden.", null),
 
-            var c when c.EndsWith(".Suspended") => CreateProblem(StatusCodes.Status403Forbidden, "Forbidden.", error),
+            var c when c.EndsWith(".Suspended") => (StatusCodes.Status403Forbidden, "Forbidden.", null),
 
-            var c when c.EndsWith(".AdminRequired") => CreateProblem(StatusCodes.Status403Forbidden, "Forbidden.", error),
+            var c when c.EndsWith(".AdminRequired") => (StatusCodes.Status403Forbidden, "Forbidden.", null),
 
-            var c when c.EndsWith(".InconsistentState") => CreateProblem(StatusCodes.Status403Forbidden, "Forbidden.", error),
+            var c when c.EndsWith(".InconsistentState") => (StatusCodes.Status403Forbidden, "Forbidden.", null),
 
             // --- 404 — resource does not exist ---
-            var c when c.EndsWith(".NotFound") => CreateProblem(StatusCodes.Status404NotFound, "Resource not found.", error),
+            var c when c.EndsWith(".NotFound") => (StatusCodes.Status404NotFound, "Resource not found.", null),
 
             // --- 409 — valid request but current state conflicts ---
-            var c when c.EndsWith(".AlreadySent") => CreateProblem(StatusCodes.Status409Conflict, "Conflict.", error),
+            var c when c.EndsWith(".AlreadySent") => (StatusCodes.Status409Conflict, "Conflict.", null),
 
-            var c when c.EndsWith(".AlreadyClosed") => CreateProblem(StatusCodes.Status409Conflict, "Conflict.", error),
+            var c when c.EndsWith(".AlreadyClosed") => (StatusCodes.Status409Conflict, "Conflict.", null),
 
-            var c when c.EndsWith(".AlreadyActedOn") => CreateProblem(StatusCodes.Status409Conflict, "Conflict.", error),
+            var c when c.EndsWith(".AlreadyActedOn") => (StatusCodes.Status409Conflict, "Conflict.", null),
 
-            var c when c.EndsWith(".AlreadyActive") => CreateProblem(StatusCodes.Status409Conflict, "Conflict.", error),
+            var c when c.EndsWith(".AlreadyActive") => (StatusCodes.Status409Conflict, "Conflict.", null),
 
-            var c when c.EndsWith(".AlreadySuspended") => CreateProblem(StatusCodes.Status409Conflict, "Conflict.", error),
+            var c when c.EndsWith(".AlreadySuspended") => (StatusCodes.Status409Conflict, "Conflict.", null),
 
-            var c when c.EndsWith(".EmailAlreadyInUse") => CreateProblem(StatusCodes.Status409Conflict, "Conflict.", error),
+            var c when c.EndsWith(".EmailAlreadyInUse") => (StatusCodes.Status409Conflict, "Conflict.", null),
 
-            var c when c.EndsWith(".Cancelled") => CreateProblem(StatusCodes.Status409Conflict, "Conflict.", error),
+            var c when c.EndsWith(".Cancelled") => (StatusCodes.Status409Conflict, "Conflict.", null),
 
             // --- 422 — auth exchange failures (expired, used, superseded) ---
-            var c when c.EndsWith(".InvalidToken") => CreateProblem(StatusCodes.Status422UnprocessableEntity, "Unprocessable entity.", error),
+            var c when c.EndsWith(".InvalidToken") => (StatusCodes.Status422UnprocessableEntity, "Unprocessable entity.", null),
 
-            var c when c.EndsWith(".Expired") => CreateProblem(StatusCodes.Status422UnprocessableEntity, "Unprocessable entity.", error),
+            var c when c.EndsWith(".Expired") => (StatusCodes.Status422UnprocessableEntity, "Unprocessable entity.", null),
 
-            var c when c.EndsWith(".AlreadyConsumed") => CreateProblem(StatusCodes.Status422UnprocessableEntity, "Unprocessable entity.", error),
+            var c when c.EndsWith(".AlreadyConsumed") => (StatusCodes.Status422UnprocessableEntity, "Unprocessable entity.", null),
 
-            var c when c.EndsWith(".CannotConsumeInvalidated") => CreateProblem(StatusCodes.Status422UnprocessableEntity, "Unprocessable entity.", error),
+            var c when c.EndsWith(".CannotConsumeInvalidated") => (StatusCodes.Status422UnprocessableEntity, "Unprocessable entity.", null),
 
-            var c when c.EndsWith(".AlreadyVerified") => CreateProblem(StatusCodes.Status422UnprocessableEntity, "Unprocessable entity.", error),
+            var c when c.EndsWith(".AlreadyVerified") => (StatusCodes.Status422UnprocessableEntity, "Unprocessable entity.", null),
 
             // --- 422 — domain-rule transition rejections ---
-            var c when c.EndsWith(".CannotReopen") => CreateProblem(StatusCodes.Status422UnprocessableEntity, "Unprocessable entity.", error),
+            var c when c.EndsWith(".CannotReopen") => (StatusCodes.Status422UnprocessableEntity, "Unprocessable entity.", null),
 
-            var c when c.EndsWith(".CannotReactivate") => CreateProblem(StatusCodes.Status422UnprocessableEntity, "Unprocessable entity.", error),
+            var c when c.EndsWith(".CannotReactivate") => (StatusCodes.Status422UnprocessableEntity, "Unprocessable entity.", null),
 
-            var c when c.EndsWith(".NotSuspended") => CreateProblem(StatusCodes.Status422UnprocessableEntity, "Unprocessable entity.", error),
+            var c when c.EndsWith(".NotSuspended") => (StatusCodes.Status422UnprocessableEntity, "Unprocessable entity.", null),
 
-            // --- 503 — session creation or push delivery failures ---
-            var c when c.EndsWith(".SessionCreationFailed") => CreateProblem(StatusCodes.Status503ServiceUnavailable, "Service unavailable.", error),
+            // --- 503 — session creation or delivery failures ---
+            var c when c.EndsWith(".SessionCreationFailed") => (StatusCodes.Status503ServiceUnavailable, "Service unavailable.", null),
 
-            var c when c.EndsWith(".DeliveryFailed") => CreateProblem(StatusCodes.Status503ServiceUnavailable, "Service unavailable.", error),
+            var c when c.EndsWith(".DeliveryFailed") => (StatusCodes.Status503ServiceUnavailable, "Service unavailable.", null),
 
             // --- default — generic client error ---
-            _ => CreateProblem(StatusCodes.Status400BadRequest, "Bad request.", error)
+            _ => (StatusCodes.Status400BadRequest, "Bad request.", null)
         };
-    }
 
     private static IResult CreateProblem(
         int statusCode,
         string title,
         Error error,
-        string? detailOverride = null)
+        string? detailOverride = null,
+        IReadOnlyDictionary<string, object?>? extraExtensions = null)
     {
+        var extensions = new Dictionary<string, object?> { ["code"] = error.Code };
+
+        if (extraExtensions is not null)
+            foreach (var (key, value) in extraExtensions)
+            {
+                if (string.Equals(key, "code", StringComparison.OrdinalIgnoreCase))
+                    throw new ArgumentException("extraExtensions must not override the reserved 'code' extension.", nameof(extraExtensions));
+                extensions[key] = value;
+            }
+
         return Results.Problem(
             statusCode: statusCode,
             title: title,
             detail: detailOverride ?? error.Message,
             type: "about:blank",
-            extensions: new Dictionary<string, object?>
-            {
-                ["code"] = error.Code
-            });
+            extensions: extensions);
     }
 }

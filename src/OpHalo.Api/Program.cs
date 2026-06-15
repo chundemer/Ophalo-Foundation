@@ -7,10 +7,14 @@ using Microsoft.Extensions.Configuration;
 using OpHalo.Api.Auth;
 using OpHalo.Api.Helpers;
 using OpHalo.Api.Keep;
+using OpHalo.Foundation.Application.Abstractions.Messaging;
 using OpHalo.Foundation.Application.Abstractions.Security;
 using OpHalo.Foundation.Application.Accounts.Access;
 using OpHalo.Foundation.Application.Accounts.Authorization;
 using OpHalo.Foundation.Application.Accounts.Entitlements;
+using OpHalo.Foundation.Application.Auth;
+using OpHalo.Foundation.Infrastructure.Auth;
+using OpHalo.Foundation.Infrastructure.Email;
 using OpHalo.Foundation.Core.Constants;
 using OpHalo.Foundation.Infrastructure.Persistence;
 using OpHalo.Foundation.Infrastructure.Security;
@@ -67,6 +71,22 @@ builder.Services.AddScoped<GetKeepRequestListService>();
 builder.Services.AddSingleton<IAccountAccessPolicy, AccountAccessPolicy>();
 builder.Services.AddSingleton<IUserAccessPolicy, UserAccessPolicy>();
 builder.Services.AddSingleton<IFeatureAccessPolicy, FeatureAccessPolicy>();
+
+// --- Auth services ---
+builder.Services.Configure<MagicLinkSettings>(builder.Configuration.GetSection("App"));
+builder.Services.AddScoped<SignInAuthService>();
+builder.Services.AddScoped<ExchangeAuthService>();
+builder.Services.AddScoped<IAuthCodePersistence, EfAuthCodePersistence>();
+
+// --- Email ---
+var resendSettings = builder.Configuration.GetSection("Resend").Get<ResendSettings>()
+    ?? new ResendSettings();
+builder.Services.AddSingleton(resendSettings);
+builder.Services.AddHttpClient<IEmailSender, ResendEmailSender>(httpClient =>
+{
+    httpClient.BaseAddress = new Uri("https://api.resend.com");
+    httpClient.DefaultRequestHeaders.Add("Authorization", $"Bearer {resendSettings.ApiKey}");
+});
 
 // --- Auth ---
 builder.Services.AddHttpContextAccessor();
@@ -125,7 +145,11 @@ if (!app.Environment.IsEnvironment("Testing"))
 
 app.UseAuthentication();
 app.UseAuthorization();
-app.UseRateLimiter();
+
+// WebApplicationFactory sets environment to "Testing" — skip rate limiting so
+// integration tests are not throttled by per-IP limits (ADR-060).
+if (!app.Environment.IsEnvironment("Testing"))
+    app.UseRateLimiter();
 
 // --- Routes ---
 
