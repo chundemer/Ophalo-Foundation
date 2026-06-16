@@ -26,4 +26,15 @@ public interface IAccountSessionService
     /// No-op if the token hash is empty, the session does not exist, or is already revoked.
     /// </summary>
     Task RevokeSessionByHash(string tokenHash, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Revokes all non-expired, non-revoked sessions for the specified AccountUser within
+    /// the specified Account. The accountId cross-check mirrors the integrity pattern in
+    /// SessionStore.FindByTokenHash — prevents cross-account revocation on corrupt data.
+    /// No-op if no active sessions exist for the combination.
+    /// </summary>
+    Task RevokeAllSessionsByAccountUserId(
+        Guid accountId,
+        Guid accountUserId,
+        CancellationToken cancellationToken);
 }

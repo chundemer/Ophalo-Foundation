@@ -138,11 +138,87 @@ public sealed class AccountUser : BaseEntity
     }
 
     /// <summary>
-    /// Removes this membership. Terminal — transitions to Removed and revokes access.
+    /// Changes the role of this membership. Allowed for Active, Invited, and Suspended members.
+    /// Removed members cannot have their role changed — use reactivate or resend-invite first.
+    /// Business rules (Owner cap, primary-owner protection, admin-cannot-manage-owner) are enforced
+    /// by the caller; this method only guards local state validity.
+    /// </summary>
+    public Result ChangeRole(AccountUserRole newRole)
+    {
+        if (!Enum.IsDefined(newRole))
+            throw new ArgumentException("Role is invalid.", nameof(newRole));
+
+        if (MembershipStatus == MembershipStatus.Removed)
+            return Result.Failure(AccountUserErrors.InvalidStatusTransition);
+
+        Role = newRole;
+        return Result.Success();
+    }
+
+    /// <summary>
+    /// Reactivates this membership to Active. Allowed for Suspended members and Removed members
+    /// who have a linked UserId. Idempotent if already Active.
+    /// Removed members with no UserId cannot be reactivated — use RestoreInvite.
+    /// Seat-limit checks (required for Removed-with-UserId reactivation) are enforced by the caller.
+    /// Clears invite state unconditionally so Active members never carry stale token data.
+    /// </summary>
+    public Result Reactivate()
+    {
+        if (MembershipStatus == MembershipStatus.Active)
+            return Result.Success();
+
+        if (MembershipStatus == MembershipStatus.Invited)
+            return Result.Failure(AccountUserErrors.InvalidStatusTransition);
+
+        if (MembershipStatus == MembershipStatus.Removed && UserId is null)
+            return Result.Failure(AccountUserErrors.InvalidStatusTransition);
+
+        // Suspended or Removed-with-UserId.
+        MembershipStatus = MembershipStatus.Active;
+        InviteTokenHash = null;
+        InviteExpiresAtUtc = null;
+        return Result.Success();
+    }
+
+    /// <summary>
+    /// Restores a Removed membership (with no UserId) back to Invited with a fresh token and expiry.
+    /// Used when resending an invite to someone whose invite was canceled before they ever accepted.
+    /// Seat-limit checks (required because Removed does not occupy a seat) are enforced by the caller.
+    /// </summary>
+    public Result RestoreInvite(string inviteTokenHash, DateTime inviteExpiresAtUtc, DateTime nowUtc)
+    {
+        if (MembershipStatus != MembershipStatus.Removed || UserId is not null)
+            return Result.Failure(AccountUserErrors.InvalidStatusTransition);
+
+        if (string.IsNullOrWhiteSpace(inviteTokenHash))
+            throw new ArgumentException("InviteTokenHash is required.", nameof(inviteTokenHash));
+        if (nowUtc == default)
+            throw new ArgumentException("nowUtc must not be default.", nameof(nowUtc));
+        if (nowUtc.Kind != DateTimeKind.Utc)
+            throw new ArgumentException("nowUtc must be UTC.", nameof(nowUtc));
+        if (inviteExpiresAtUtc == default)
+            throw new ArgumentException("InviteExpiresAtUtc must not be default.", nameof(inviteExpiresAtUtc));
+        if (inviteExpiresAtUtc.Kind != DateTimeKind.Utc)
+            throw new ArgumentException("InviteExpiresAtUtc must be UTC.", nameof(inviteExpiresAtUtc));
+        if (inviteExpiresAtUtc <= nowUtc)
+            throw new ArgumentException("InviteExpiresAtUtc must be after nowUtc.", nameof(inviteExpiresAtUtc));
+
+        MembershipStatus = MembershipStatus.Invited;
+        InviteTokenHash = inviteTokenHash;
+        InviteExpiresAtUtc = inviteExpiresAtUtc;
+        return Result.Success();
+    }
+
+    /// <summary>
+    /// Removes this membership. Unconditionally transitions to Removed and clears invite state
+    /// so outstanding invite links are immediately invalid. Idempotent — safe to call on an
+    /// already-Removed member (invite state is cleared regardless).
     /// </summary>
     public Result Remove()
     {
         MembershipStatus = MembershipStatus.Removed;
+        InviteTokenHash = null;
+        InviteExpiresAtUtc = null;
         return Result.Success();
     }
 

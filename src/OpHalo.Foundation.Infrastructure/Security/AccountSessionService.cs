@@ -75,4 +75,23 @@ public sealed class AccountSessionService(
         session.Revoke(clock.UtcNow);
         await dbContext.SaveChangesAsync(cancellationToken);
     }
+
+    public async Task RevokeAllSessionsByAccountUserId(
+        Guid accountId,
+        Guid accountUserId,
+        CancellationToken cancellationToken)
+    {
+        var nowUtc = clock.UtcNow;
+
+        // ExecuteUpdateAsync for bulk revocation — avoids loading individual session entities.
+        // accountId cross-check mirrors the SessionStore integrity guard (ADR-062/063).
+        await dbContext.AccountSessions
+            .Where(s =>
+                s.AccountId == accountId &&
+                s.AccountUserId == accountUserId &&
+                s.RevokedAtUtc == null)
+            .ExecuteUpdateAsync(
+                setters => setters.SetProperty(s => s.RevokedAtUtc, nowUtc),
+                cancellationToken);
+    }
 }

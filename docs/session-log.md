@@ -1,8 +1,49 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-06-15
-**Next session tier:** Tier 1 — Phase 5E or next phase (discovery)
+**Last updated:** 2026-06-16
+**Next session tier:** Tier 2 — Phase 5E-C API + Integration Tests (Pre-work complete)
 **Branch:** `main` (no remote yet)
+
+---
+
+## Phase 5E-B — COMPLETE
+
+Member management: Application + Infrastructure layer. 389/389 tests passing.
+
+### What was built
+
+**Foundation.Core:**
+- `Entities/Accounts/Errors/MemberErrors.cs` — NEW: `Forbidden`, `NotFound`, `CannotModifySelf`, `CannotModifyOwner`, `PrimaryOwnerProtected`, `OwnerLimitReached`, `LastOwner`, `InvalidRole`, `InvalidStatusTransition`, `SeatLimitReached`, `PreviouslyRemoved`
+- `Entities/Accounts/AccountUser.cs` — added `ChangeRole(newRole)`, `Reactivate()`, `RestoreInvite(tokenHash, expiresAtUtc, nowUtc)` domain methods; `Remove()` now unconditionally clears `InviteTokenHash`/`InviteExpiresAtUtc` (idempotent); `Reactivate()` also clears invite state
+
+**Foundation.Application:**
+- `Abstractions/Security/IAccountSessionService.cs` — added `RevokeAllSessionsByAccountUserId(accountId, accountUserId, ct)`
+- `Members/InviteDeliveryMode.cs` — NEW: `Email = 1`, `ManualShare = 2`
+- `Members/IMemberManagementPersistence.cs` — NEW: `GetMemberListContextAsync`, `GetMemberManagementContextAsync`, `CommitAsync`; `MemberListContext`, `MemberListItem`, `MemberManagementContext` records
+- `Members/MemberManagementService.cs` — NEW: `ListMembersAsync`, `ChangeRoleAsync`, `SuspendAsync`, `ReactivateAsync`, `RemoveAsync`, `ResendInviteAsync(targetId, deliveryMode, ct)` → `Result<ResendInviteResult>`; `ResendInviteResult(DeliveryMode, InviteUrl?)`, `ListMembersResponse`, `MemberItem` response types
+- `Auth/SendInviteService.cs` — Removed members now return `MemberErrors.PreviouslyRemoved` instead of `InviteErrors.AlreadyActive` (suggestedAction metadata deferred to 5E-C)
+
+**Foundation.Infrastructure:**
+- `Security/AccountSessionService.cs` — implemented `RevokeAllSessionsByAccountUserId` via `ExecuteUpdateAsync` bulk revocation with accountId cross-check
+- `Members/EfMemberManagementPersistence.cs` — NEW: 5-query context load (caller, account, entitlements, owner counts, target); list query with optional Removed filter; `CommitAsync` in transaction
+- `Auth/EfInvitePersistence.cs` — expiry edge fix: `< nowUtc` → `<= nowUtc` (valid means expires after now)
+
+**Api:**
+- `Helpers/ErrorHttpMapper.cs` — explicit 409 mappings for `Member.OwnerLimitReached`, `Member.LastOwner`, `Member.SeatLimitReached`, `Member.PreviouslyRemoved`; suffix 422 patterns for `.CannotModifySelf`, `.CannotModifyOwner`, `.PrimaryOwnerProtected`, `.InvalidStatusTransition`
+
+**Tests:**
+- `IntegrationTests/Api/InviteTests.cs` — updated `SendInvite_RemovedMember_Returns409` to expect `Member.PreviouslyRemoved` (behavior changed by SendInviteService fix)
+
+### Key decisions applied
+
+| # | Decision | Applied |
+|---|----------|---------|
+| ADR-078 | `members` API/domain language; AccountId from session | ✓ |
+| ADR-079 | `account.members.manage` gate; Owner/Admin manage non-owner; Owner-only owner management | ✓ |
+| ADR-080 | Max 2 Owners; at least 1 Active Owner; primary owner protected | ✓ |
+| ADR-081 | Role changes for Active/Invited/Suspended; Removed via reactivate/resend-invite; Remove clears token; PreviouslyRemoved on send-invite to Removed email | ✓ |
+| ADR-082 | Suspend/remove revoke sessions via `RevokeAllSessionsByAccountUserId`; role change does not | ✓ |
+| ADR-083 | Off-season deferred | ✓ |
 
 ---
 
@@ -38,65 +79,6 @@ Member invites: send (`POST /accounts/me/invite`) + accept (`POST /accounts/invi
 - `IntegrationTests/Api/InviteTests.cs` — NEW: 26 tests
 - `IntegrationTests/Api/KeepApiWebFactory.cs` — added `App:OperatorBaseUrl` to test config; added `ExtractInviteToken()` helper
 
-### Key decisions applied
-
-| # | Decision | Applied |
-|---|----------|---------|
-| ADR-074 | `EntryContext.InvitedUser = 3`; not wired to exchange | ✓ |
-| ADR-075 | Non-owner roles only; `MembersManage` gate; `OperatorBaseUrl` in `MagicLinkSettings`; resend skips seat-limit check | ✓ |
-| ADR-076 | Direct token endpoint; uppercase SHA-256 hex; `ExecuteUpdateAsync` race guard; savepoint for User race; session outside tx; browser-only | ✓ |
-| ADR-077 | Separate `IInvitePersistence` seam; seat limit via `FeatureAccessPolicy.ResolveLimit`; `Invite.SeatLimitReached` explicit 409 | ✓ |
-
----
-
-## Phase 5C — COMPLETE
-
-New-account registration via `POST /auth/start` + extended `/auth/exchange`. All exit-gate items verified.
-
-### What was built
-
-**Foundation.Core:**
-- `Entities/Accounts/Enums/EntryContext.cs` — added `NewAccount = 1`
-- `Entities/Accounts/AccountAuthCode.cs` — added `BusinessNameSnapshot`, `NameSnapshot`, `TimeZoneSnapshot`; added `CreateForNewAccount` factory; `Create` now rejects `EntryContext.NewAccount` at call site
-- `Entities/Accounts/Errors/AccountErrors.cs` — added `EmailAlreadyInUse` + `PilotFull`
-
-**Foundation.Application:**
-- `Auth/SignupDefaultsSettings.cs` — NEW: `IsPilot`, `TrialDurationDays`, `int? MaxPilotAccounts`
-- `Auth/StartAuthService.cs` — NEW: classifies request (ExistingMember / NewAccount / Neutral), issues code, sends best-effort email, enforces pilot cap gate
-- `Auth/IAuthCodePersistence.cs` — added `ClassifyStartRequestAsync`, `CommitStartCodeAsync`, `CountActivePilotAccountsAsync`, `CommitNewAccountExchangeAsync`; added `StartClassification` record hierarchy (`StartAsNewAccount`, `StartAsExistingMember`, `StartAsNeutral`)
-- `Auth/ExchangeAuthService.cs` — added `NewAccount` branch; injected `AccountProvisioningService` + `IOptions<SignupDefaultsSettings>`; extracted `CreateSessionAsync` helper
-- `Auth/MagicLinkEmailTemplate.cs` — added `NewAccountSubject`
-
-**Foundation.Infrastructure:**
-- `Auth/EfAuthCodePersistence.cs` — implemented 4 new methods; `CommitNewAccountExchangeAsync` uses atomic consume + two-phase graph save (ADR-044) in one transaction; catches `PostgresErrorCodes.UniqueViolation` → `AccountErrors.EmailAlreadyInUse`
-- `Persistence/Configurations/AccountAuthCodeConfiguration.cs` — added snapshot columns (200/200/100) + composite index on `(delivery_email_snapshot, entry_context)`
-- Migration: `AccountAuthCodeNewAccountSnapshots`
-
-**Api:**
-- `Auth/AuthEndpoints.cs` — added `POST /auth/start`, `StartBody` record, IANA TZ validation via `TimeZoneInfo.TryFindSystemTimeZoneById`, `new_account` in `ToEntryContextString`
-- `Program.cs` — registered `AccountProvisioningService`, `StartAuthService`; bound `SignupDefaults`
-- `Helpers/ErrorHttpMapper.cs` — explicit `Account.PilotFull` → 409
-- `appsettings.json` — added `SignupDefaults` section
-
-**Tests:**
-- `UnitTests/Auth/AccountAuthCodeTests.cs` — NEW: 11 unit tests for `CreateForNewAccount` validation
-- `IntegrationTests/Api/KeepApiWebFactory.cs` — added `PilotCapWebFactory` (IsPilot=true, MaxPilotAccounts=1, own Testcontainers instance)
-- `IntegrationTests/Api/AuthStartTests.cs` — NEW: `AuthStartTests` (18 tests) + `AuthStartPilotCapTests` (2 tests)
-
-### Key decisions applied
-
-| # | Decision | Applied |
-|---|----------|---------|
-| ADR-065 | `EntryContext.NewAccount = 1`; `CreateForNewAccount` factory with snapshot validation; `Create` guard | ✓ |
-| ADR-066 | Config-backed `SignupDefaults`; no plan/pilot values hard-coded | ✓ |
-| ADR-067 | 3-query `ClassifyStartRequestAsync`: active AccountUsers → any AccountUser → any User → NewAccount | ✓ |
-| ADR-068 | Context-specific invalidation in `CommitStartCodeAsync`; composite index on email+context | ✓ |
-| ADR-069 | `CommitNewAccountExchangeAsync`: atomic consume + two-phase graph; unconsumed on any failure | ✓ |
-| ADR-070 | Pilot cap at both `/start` and `/exchange`; cap-full rejection leaves code unconsumed | ✓ |
-| ADR-071 | `NewAccountSubject` only email distinction; same `BuildHtmlBody` template | ✓ |
-| ADR-072 | `Account.PilotFull` explicit 409 in mapper | ✓ |
-| ADR-073 | IANA TZ via `TimeZoneInfo.TryFindSystemTimeZoneById` at endpoint | ✓ |
-
 ---
 
 ## Build state
@@ -111,7 +93,7 @@ New-account registration via `POST /auth/start` + extended `/auth/exchange`. All
 
 ## Watch-outs carried forward
 
-- **ADR-058** — still marked `Locked` in decision index; superseded by 5A real-auth. Update when revisiting.
+- **ADR-058** — updated to Superseded by ADR-061..064 in decision index.
 - **AnonymousCurrentUser** — kept for potential worker/test use; not registered in production.
 - **SystemClock** FQDN in Program.cs — `OpHalo.Foundation.Infrastructure.Services.SystemClock` (avoids collision).
 - **Schema-drop reset pattern** — integration test factory uses `DROP SCHEMA public CASCADE` + recreate + `MigrateAsync`.
@@ -125,9 +107,74 @@ New-account registration via `POST /auth/start` + extended `/auth/exchange`. All
 - **`SignupDefaultsSettings` startup validation** — `TrialDurationDays <= 0` and `MaxPilotAccounts <= 0` are not validated at startup. Add `IValidateOptions<SignupDefaultsSettings>` in a follow-up.
 - **Session creation failure test (invite accept)** — not covered in 5D integration tests. Would require overriding `IAccountSessionService`. Deferred; the 503 path is exercised by existing 5B tests.
 - **Mobile invite accept** — deferred (D9). Needs `clientType` parsing and bearer response when added.
+- **`Member.PreviouslyRemoved` suggestedAction** — `SendInviteService` returns one `Member.PreviouslyRemoved` error for both Removed-with-UserId and Removed-without-UserId cases. The `suggestedAction` field (`"reactivate"` vs `"resend_invite"`) in the HTTP response body is a 5E-C enhancement — endpoint needs to determine it from context.
+- **`SendInviteService` manual-share** — `POST /accounts/me/invite` does not yet support `manual_share` delivery mode. Deferred to a small follow-up after resend-invite manual-share is proven in 5E-C.
 
 ---
 
-## Next session — Phase 5E or next build-plan phase
+## Next session — Phase 5E-C API + Integration Tests
 
-Read the build plan to determine what comes after 5D. Likely: member management (suspend/remove/role change) or moving to a later phase. Start with Tier 1 discovery.
+**Pre-work complete.** Confirmed facts:
+
+### Routes to map in `AccountEndpoints.cs`
+
+```text
+GET    /accounts/me/members                              → ListMembersAsync(includeRemoved)
+PATCH  /accounts/me/members/{accountUserId}/role         → ChangeRoleAsync(id, role)
+POST   /accounts/me/members/{accountUserId}/resend-invite → ResendInviteAsync(id, deliveryMode)
+POST   /accounts/me/members/{accountUserId}/suspend      → SuspendAsync(id)
+POST   /accounts/me/members/{accountUserId}/reactivate   → ReactivateAsync(id)
+DELETE /accounts/me/members/{accountUserId}              → RemoveAsync(id)
+```
+
+All mutation routes: `RequireAuthorization()`.
+List route: `RequireAuthorization()` (Active-only enforced by session handler).
+
+### Request / response shapes
+
+**GET /accounts/me/members**
+- Query: `?includeRemoved=true` (default false)
+- Response 200: `{ "members": [ { accountUserId, email, role, status, isCurrentUser, isPrimaryOwner, activatedAtUtc, inviteExpiresAtUtc } ] }`
+
+**PATCH role**
+- Body: `{ "role": "admin" }` — validate against Owner/Admin/Operator/Viewer strings
+- Success 200: empty body
+
+**POST resend-invite**
+- Body: `{ "delivery": "email" | "manual_share" }` — default `"email"` if absent
+- Validation: `Validation.InviteDeliveryInvalid` → 400 for unknown delivery string
+- Success 200 (email): empty body
+- Success 200 (manual_share): `{ "inviteUrl": "..." }` — raw token in URL; do not log
+- `InviteDeliveryMode` enum string mapping: `"email"` → `Email`, `"manual_share"` → `ManualShare`
+
+**POST suspend / reactivate**
+- No body
+- Success 200: empty body
+
+**DELETE**
+- No body
+- Success 200: empty body
+
+### Error HTTP mappings already added in 5E-B
+
+Already in `ErrorHttpMapper`: `Member.OwnerLimitReached` → 409, `Member.LastOwner` → 409, `Member.SeatLimitReached` → 409, `Member.PreviouslyRemoved` → 409; `.CannotModifySelf` → 422, `.CannotModifyOwner` → 422, `.PrimaryOwnerProtected` → 422, `.InvalidStatusTransition` → 422.
+
+### PreviouslyRemoved suggestedAction (open design for 5E-C)
+
+`SendInviteService` returns one `Member.PreviouslyRemoved` error without context. The endpoint for `POST /accounts/me/invite` needs to add `suggestedAction` to the response. Options:
+1. Endpoint queries existing membership after the error to determine `UserId` presence (extra DB call)
+2. Extend `Error` with a `Metadata` dictionary in SharedKernel (small, unlocks the pattern)
+3. Change `SendInviteService` return to a richer type
+
+Resolve in 5E-C before mapping the endpoint.
+
+### Program.cs registrations to add
+
+```csharp
+builder.Services.AddScoped<MemberManagementService>();
+builder.Services.AddScoped<IMemberManagementPersistence, EfMemberManagementPersistence>();
+```
+
+### Integration tests to write (26 minimum from build-log/022)
+
+See build-log/022 "Tests To Require" list (tests 1–26).

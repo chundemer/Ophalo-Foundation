@@ -332,7 +332,7 @@ public sealed class InviteTests : IClassFixture<KeepApiWebFactory>, IAsyncLifeti
             new { email = "removed@example.com", role = "operator" });
 
         Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
-        await AssertCode(response, "Invite.AlreadyActive");
+        await AssertCode(response, "Member.PreviouslyRemoved");
     }
 
     // =========================================================================

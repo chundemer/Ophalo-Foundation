@@ -59,6 +59,15 @@ public static class ErrorHttpMapper
             // Explicit match — Invite.SeatLimitReached resolves to 409; no suffix pattern covers it.
             var c when c == "Invite.SeatLimitReached" => (StatusCodes.Status409Conflict, "Conflict.", null),
 
+            // --- Member-management codes (explicit where suffix patterns do not cover) ---
+            var c when c == "Member.OwnerLimitReached" => (StatusCodes.Status409Conflict, "Conflict.", null),
+
+            var c when c == "Member.LastOwner" => (StatusCodes.Status409Conflict, "Conflict.", null),
+
+            var c when c == "Member.SeatLimitReached" => (StatusCodes.Status409Conflict, "Conflict.", null),
+
+            var c when c == "Member.PreviouslyRemoved" => (StatusCodes.Status409Conflict, "Conflict.", null),
+
             var c when c.EndsWith(".PastDueBlocked") => (StatusCodes.Status402PaymentRequired, "Payment required.", null),
 
             // --- 403 — authenticated but forbidden by business rules ---
@@ -107,6 +116,14 @@ public static class ErrorHttpMapper
             var c when c.EndsWith(".CannotReactivate") => (StatusCodes.Status422UnprocessableEntity, "Unprocessable entity.", null),
 
             var c when c.EndsWith(".NotSuspended") => (StatusCodes.Status422UnprocessableEntity, "Unprocessable entity.", null),
+
+            var c when c.EndsWith(".CannotModifySelf") => (StatusCodes.Status422UnprocessableEntity, "Unprocessable entity.", null),
+
+            var c when c.EndsWith(".CannotModifyOwner") => (StatusCodes.Status422UnprocessableEntity, "Unprocessable entity.", null),
+
+            var c when c.EndsWith(".PrimaryOwnerProtected") => (StatusCodes.Status422UnprocessableEntity, "Unprocessable entity.", null),
+
+            var c when c.EndsWith(".InvalidStatusTransition") => (StatusCodes.Status422UnprocessableEntity, "Unprocessable entity.", null),
 
             // --- 503 — session creation or delivery failures ---
             var c when c.EndsWith(".SessionCreationFailed") => (StatusCodes.Status503ServiceUnavailable, "Service unavailable.", null),

@@ -79,9 +79,17 @@ public sealed class SendInviteService(
 
         var existing = context.ExistingMembership;
 
-        // Active, Suspended, or Removed members cannot be re-invited (D11).
         if (existing is not null && existing.MembershipStatus != MembershipStatus.Invited)
+        {
+            // Removed members surface as PreviouslyRemoved so the caller can route to
+            // reactivate or resend-invite. The suggestedAction field in the HTTP response
+            // is added by the endpoint in 5E-C (requires knowing whether UserId is set).
+            if (existing.MembershipStatus == MembershipStatus.Removed)
+                return Result<SendInviteResult>.Failure(MemberErrors.PreviouslyRemoved);
+
+            // Active or Suspended — use the member-management endpoints.
             return Result<SendInviteResult>.Failure(InviteErrors.AlreadyActive);
+        }
 
         // Resend: the invited seat is already counted. Skip the seat-limit check so a resend
         // at the limit still succeeds and rotates the token.

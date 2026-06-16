@@ -109,7 +109,7 @@ public sealed class EfInvitePersistence(OpHaloDbContext db) : IInvitePersistence
         if (invite is null || invite.MembershipStatus != MembershipStatus.Invited)
             return Result<AcceptedInvite>.Failure(InviteErrors.InvalidToken);
 
-        if (invite.InviteExpiresAtUtc < nowUtc)
+        if (invite.InviteExpiresAtUtc <= nowUtc)
             return Result<AcceptedInvite>.Failure(InviteErrors.Expired);
 
         // Find or create User. Use a savepoint to handle the unique-constraint race when
