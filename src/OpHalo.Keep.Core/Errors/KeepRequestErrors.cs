@@ -33,4 +33,13 @@ public static class KeepRequestErrors
 
     public static readonly Error TerminalState =
         Error.Create("KeepRequest.TerminalState", "This request is in a terminal state and cannot be updated.");
+
+    public static readonly Error BusinessUpdateMessageTooLong =
+        Error.Create("KeepRequest.BusinessUpdateMessageTooLong", "The business update exceeds the maximum allowed length of 4000 characters.");
+
+    public static readonly Error NoteRequired =
+        Error.Create("KeepRequest.NoteRequired", "An internal note is required.");
+
+    public static readonly Error NoteTooLong =
+        Error.Create("KeepRequest.NoteTooLong", "The internal note exceeds the maximum allowed length of 4000 characters.");
 }

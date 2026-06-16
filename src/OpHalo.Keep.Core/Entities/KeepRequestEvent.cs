@@ -99,4 +99,86 @@ public sealed class KeepRequestEvent : BaseEntity
             CommunicationChannel = normalizedMessage is not null ? Enums.CommunicationChannel.InApp : null
         };
     }
+
+    /// <summary>
+    /// Creates a MessageAdded event for a standalone customer-visible business update (no status
+    /// change). Visibility = All, MessageIntent = BusinessUpdate, CommunicationChannel = InApp (D4).
+    /// The caller is responsible for validating message length before calling this factory.
+    /// </summary>
+    public static KeepRequestEvent CreateBusinessUpdateMessage(
+        Guid requestId,
+        Guid accountId,
+        Guid actorAccountUserId,
+        string actorDisplayName,
+        string message,
+        DateTime occurredAtUtc)
+    {
+        if (requestId == Guid.Empty)
+            throw new ArgumentException("Request ID is required.", nameof(requestId));
+        if (accountId == Guid.Empty)
+            throw new ArgumentException("Account ID is required.", nameof(accountId));
+        if (actorAccountUserId == Guid.Empty)
+            throw new ArgumentException("Actor account user ID is required.", nameof(actorAccountUserId));
+        if (string.IsNullOrWhiteSpace(actorDisplayName))
+            throw new ArgumentException("Actor display name is required.", nameof(actorDisplayName));
+        if (string.IsNullOrWhiteSpace(message))
+            throw new ArgumentException("Message is required.", nameof(message));
+        if (occurredAtUtc == default)
+            throw new ArgumentException("occurredAtUtc must be a real timestamp.", nameof(occurredAtUtc));
+
+        return new KeepRequestEvent
+        {
+            RequestId = requestId,
+            AccountId = accountId,
+            EventType = KeepRequestEventType.MessageAdded,
+            Visibility = KeepRequestEventVisibility.All,
+            Content = message.Trim(),
+            ActorType = ActorType.AccountUser,
+            ActorAccountUserId = actorAccountUserId,
+            ActorDisplayName = actorDisplayName.Trim(),
+            OccurredAtUtc = occurredAtUtc,
+            MessageIntent = Enums.MessageIntent.BusinessUpdate,
+            CommunicationChannel = Enums.CommunicationChannel.InApp
+        };
+    }
+
+    /// <summary>
+    /// Creates an InternalNoteAdded event. Visibility = Internal — never customer-visible (D8).
+    /// MessageIntent and CommunicationChannel are intentionally null: internal notes are not
+    /// customer communication. The caller is responsible for validating note length.
+    /// </summary>
+    public static KeepRequestEvent CreateInternalNote(
+        Guid requestId,
+        Guid accountId,
+        Guid actorAccountUserId,
+        string actorDisplayName,
+        string note,
+        DateTime occurredAtUtc)
+    {
+        if (requestId == Guid.Empty)
+            throw new ArgumentException("Request ID is required.", nameof(requestId));
+        if (accountId == Guid.Empty)
+            throw new ArgumentException("Account ID is required.", nameof(accountId));
+        if (actorAccountUserId == Guid.Empty)
+            throw new ArgumentException("Actor account user ID is required.", nameof(actorAccountUserId));
+        if (string.IsNullOrWhiteSpace(actorDisplayName))
+            throw new ArgumentException("Actor display name is required.", nameof(actorDisplayName));
+        if (string.IsNullOrWhiteSpace(note))
+            throw new ArgumentException("Note is required.", nameof(note));
+        if (occurredAtUtc == default)
+            throw new ArgumentException("occurredAtUtc must be a real timestamp.", nameof(occurredAtUtc));
+
+        return new KeepRequestEvent
+        {
+            RequestId = requestId,
+            AccountId = accountId,
+            EventType = KeepRequestEventType.InternalNoteAdded,
+            Visibility = KeepRequestEventVisibility.Internal,
+            Content = note.Trim(),
+            ActorType = ActorType.AccountUser,
+            ActorAccountUserId = actorAccountUserId,
+            ActorDisplayName = actorDisplayName.Trim(),
+            OccurredAtUtc = occurredAtUtc
+        };
+    }
 }

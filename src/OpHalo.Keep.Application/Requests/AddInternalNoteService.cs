@@ -8,12 +8,11 @@ using OpHalo.SharedKernel.Results;
 
 namespace OpHalo.Keep.Application.Requests;
 
-public sealed record ChangeKeepRequestStatusCommand(
+public sealed record AddInternalNoteCommand(
     Guid RequestId,
-    string Status,
-    string? Message);
+    string Note);
 
-public sealed class ChangeKeepRequestStatusService(
+public sealed class AddInternalNoteService(
     IKeepRequestOperatePersistence operatePersistence,
     IKeepRequestDetailPersistence readPersistence,
     ICurrentUser currentUser,
@@ -29,7 +28,7 @@ public sealed class ChangeKeepRequestStatusService(
         Error.Create("auth.forbidden", "You do not have permission to perform this action.");
 
     public async Task<Result<KeepRequestDetailResult>> ExecuteAsync(
-        ChangeKeepRequestStatusCommand command, CancellationToken ct = default)
+        AddInternalNoteCommand command, CancellationToken ct = default)
     {
         // --- Auth stack ---
         if (!currentUser.IsAuthenticated)
@@ -67,42 +66,34 @@ public sealed class ChangeKeepRequestStatusService(
         if (!featurePolicy.IsEnabled(accountSnapshot.Plan, FeatureKeys.Keep.OperatorQueue))
             return Result<KeepRequestDetailResult>.Failure(Forbidden);
 
-        // --- Parse status slug ---
-        var parsedStatus = KeepRequestDetailMapper.ParseStatusSlug(command.Status);
-        if (parsedStatus is null)
-            return Result<KeepRequestDetailResult>.Failure(KeepRequestErrors.InvalidStatus);
-
         // --- Actor display name (denormalized onto the event) ---
         var actorDisplayName = await operatePersistence.GetActorDisplayNameAsync(currentUser.UserId, ct);
         if (actorDisplayName is null)
             return Result<KeepRequestDetailResult>.Failure(Forbidden);
 
-        // --- Load request for mutation ---
+        // --- Load request (terminal requests permitted for internal notes, D8) ---
         var request = await operatePersistence.GetRequestForUpdateAsync(command.RequestId, currentUser.AccountId, ct);
         if (request is null)
             return Result<KeepRequestDetailResult>.Failure(KeepRequestErrors.NotFound);
 
-        // --- Domain: apply status change ---
-        var changeResult = request.ChangeStatus(
-            parsedStatus.Value,
-            command.Message,
-            currentUser.UserId,
-            actorDisplayName,
-            clock.UtcNow);
+        // --- Domain: add internal note ---
+        // Domain validates null/blank and length (> 4000 → NoteTooLong). No terminal check (D8).
+        // Does not update LastBusinessActivityAt. Does not wire first-response (D1).
+        var noteResult = request.AddInternalNote(
+            command.Note, currentUser.UserId, actorDisplayName, clock.UtcNow);
 
-        if (changeResult.IsFailure)
-            return Result<KeepRequestDetailResult>.Failure(changeResult.Error);
+        if (noteResult.IsFailure)
+            return Result<KeepRequestDetailResult>.Failure(noteResult.Error);
 
-        // Commit only when there is an event to persist (IsNoOp = same-status/no-message).
-        if (!changeResult.Value.IsNoOp)
-            await operatePersistence.CommitAsync(request, changeResult.Value.StatusChangedEvent, ct);
+        await operatePersistence.CommitAsync(request, noteResult.Value, ct);
 
         // --- Load read data for the response ---
         var events = await readPersistence.GetAllEventsAsync(request.Id, ct);
         var participants = await readPersistence.GetParticipantsAsync(request.Id, ct);
         var businessName = await readPersistence.GetAccountBusinessNameAsync(currentUser.AccountId, ct);
 
-        // canOperate is confirmed true (passed the gate above).
+        // canOperate confirmed true (passed the gate above).
+        // CanAddInternalNote remains true even on terminal requests (D8).
         var availableActions = new AvailableActionsMetadata(
             CanChangeStatus: !request.IsTerminal,
             CanSendBusinessUpdate: !request.IsTerminal,

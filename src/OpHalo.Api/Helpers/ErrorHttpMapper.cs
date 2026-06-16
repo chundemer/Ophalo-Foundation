@@ -67,6 +67,12 @@ public static class ErrorHttpMapper
 
             var c when c == "KeepRequest.TerminalState" => (StatusCodes.Status409Conflict, "Conflict.", null),
 
+            var c when c == "KeepRequest.BusinessUpdateMessageTooLong" => (StatusCodes.Status400BadRequest, "Bad request.", null),
+
+            var c when c == "KeepRequest.NoteRequired" => (StatusCodes.Status400BadRequest, "Bad request.", null),
+
+            var c when c == "KeepRequest.NoteTooLong" => (StatusCodes.Status400BadRequest, "Bad request.", null),
+
             // Explicit match — Invite.SeatLimitReached resolves to 409; no suffix pattern covers it.
             var c when c == "Invite.SeatLimitReached" => (StatusCodes.Status409Conflict, "Conflict.", null),
 

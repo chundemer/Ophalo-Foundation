@@ -76,6 +76,8 @@ builder.Services.AddScoped<GetKeepRequestListService>();
 builder.Services.AddScoped<GetKeepRequestDetailService>();
 builder.Services.AddScoped<GetKeepCustomerPageService>();
 builder.Services.AddScoped<ChangeKeepRequestStatusService>();
+builder.Services.AddScoped<AddBusinessUpdateService>();
+builder.Services.AddScoped<AddInternalNoteService>();
 
 builder.Services.AddSingleton<IAccountAccessPolicy, AccountAccessPolicy>();
 builder.Services.AddSingleton<IUserAccessPolicy, UserAccessPolicy>();
@@ -203,6 +205,30 @@ app.MapPatch("/keep/requests/{requestId:guid}/status", async (
     CancellationToken ct) =>
 {
     var command = new ChangeKeepRequestStatusCommand(requestId, body.Status, body.Message);
+    var result = await service.ExecuteAsync(command, ct);
+    return result.IsSuccess ? Results.Ok(result.Value) : ErrorHttpMapper.ToHttpResult(result.Error);
+}).RequireAuthorization();
+
+// Add business update — authenticated, operator write (Phase 8-B2-beta)
+app.MapPost("/keep/requests/{requestId:guid}/business-updates", async (
+    Guid requestId,
+    BusinessUpdateRequestBody body,
+    AddBusinessUpdateService service,
+    CancellationToken ct) =>
+{
+    var command = new AddBusinessUpdateCommand(requestId, body.Message, body.SetStatus);
+    var result = await service.ExecuteAsync(command, ct);
+    return result.IsSuccess ? Results.Ok(result.Value) : ErrorHttpMapper.ToHttpResult(result.Error);
+}).RequireAuthorization();
+
+// Add internal note — authenticated, operator write (Phase 8-B2-beta)
+app.MapPost("/keep/requests/{requestId:guid}/internal-notes", async (
+    Guid requestId,
+    InternalNoteRequestBody body,
+    AddInternalNoteService service,
+    CancellationToken ct) =>
+{
+    var command = new AddInternalNoteCommand(requestId, body.Note);
     var result = await service.ExecuteAsync(command, ct);
     return result.IsSuccess ? Results.Ok(result.Value) : ErrorHttpMapper.ToHttpResult(result.Error);
 }).RequireAuthorization();

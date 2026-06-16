@@ -2,18 +2,19 @@ using OpHalo.Foundation.Application.Abstractions.Security;
 using OpHalo.Foundation.Application.Accounts.Access;
 using OpHalo.Foundation.Application.Accounts.Authorization;
 using OpHalo.Foundation.Application.Accounts.Entitlements;
+using OpHalo.Keep.Core.Entities.Enums;
 using OpHalo.Keep.Core.Errors;
 using OpHalo.SharedKernel.Abstractions;
 using OpHalo.SharedKernel.Results;
 
 namespace OpHalo.Keep.Application.Requests;
 
-public sealed record ChangeKeepRequestStatusCommand(
+public sealed record AddBusinessUpdateCommand(
     Guid RequestId,
-    string Status,
-    string? Message);
+    string Message,
+    string? SetStatus);
 
-public sealed class ChangeKeepRequestStatusService(
+public sealed class AddBusinessUpdateService(
     IKeepRequestOperatePersistence operatePersistence,
     IKeepRequestDetailPersistence readPersistence,
     ICurrentUser currentUser,
@@ -29,7 +30,7 @@ public sealed class ChangeKeepRequestStatusService(
         Error.Create("auth.forbidden", "You do not have permission to perform this action.");
 
     public async Task<Result<KeepRequestDetailResult>> ExecuteAsync(
-        ChangeKeepRequestStatusCommand command, CancellationToken ct = default)
+        AddBusinessUpdateCommand command, CancellationToken ct = default)
     {
         // --- Auth stack ---
         if (!currentUser.IsAuthenticated)
@@ -67,10 +68,14 @@ public sealed class ChangeKeepRequestStatusService(
         if (!featurePolicy.IsEnabled(accountSnapshot.Plan, FeatureKeys.Keep.OperatorQueue))
             return Result<KeepRequestDetailResult>.Failure(Forbidden);
 
-        // --- Parse status slug ---
-        var parsedStatus = KeepRequestDetailMapper.ParseStatusSlug(command.Status);
-        if (parsedStatus is null)
-            return Result<KeepRequestDetailResult>.Failure(KeepRequestErrors.InvalidStatus);
+        // --- Parse optional setStatus ---
+        KeepRequestStatus? parsedSetStatus = null;
+        if (command.SetStatus is not null)
+        {
+            parsedSetStatus = KeepRequestDetailMapper.ParseStatusSlug(command.SetStatus);
+            if (parsedSetStatus is null)
+                return Result<KeepRequestDetailResult>.Failure(KeepRequestErrors.InvalidStatus);
+        }
 
         // --- Actor display name (denormalized onto the event) ---
         var actorDisplayName = await operatePersistence.GetActorDisplayNameAsync(currentUser.UserId, ct);
@@ -82,27 +87,27 @@ public sealed class ChangeKeepRequestStatusService(
         if (request is null)
             return Result<KeepRequestDetailResult>.Failure(KeepRequestErrors.NotFound);
 
-        // --- Domain: apply status change ---
-        var changeResult = request.ChangeStatus(
-            parsedStatus.Value,
-            command.Message,
-            currentUser.UserId,
-            actorDisplayName,
-            clock.UtcNow);
+        // --- Domain: apply business update ---
+        // setStatus present → combined StatusChanged+message event (D3/D4, 4000-char limit).
+        // setStatus absent  → standalone MessageAdded event (D4, 4000-char limit).
+        // All validation (null/blank, length, terminal, transition) lives in the domain methods.
+        var updateResult = parsedSetStatus.HasValue
+            ? request.AddBusinessUpdateWithStatus(
+                parsedSetStatus.Value, command.Message, currentUser.UserId, actorDisplayName, clock.UtcNow)
+            : request.AddBusinessUpdate(
+                command.Message, currentUser.UserId, actorDisplayName, clock.UtcNow);
 
-        if (changeResult.IsFailure)
-            return Result<KeepRequestDetailResult>.Failure(changeResult.Error);
+        if (updateResult.IsFailure)
+            return Result<KeepRequestDetailResult>.Failure(updateResult.Error);
 
-        // Commit only when there is an event to persist (IsNoOp = same-status/no-message).
-        if (!changeResult.Value.IsNoOp)
-            await operatePersistence.CommitAsync(request, changeResult.Value.StatusChangedEvent, ct);
+        await operatePersistence.CommitAsync(request, updateResult.Value, ct);
 
         // --- Load read data for the response ---
         var events = await readPersistence.GetAllEventsAsync(request.Id, ct);
         var participants = await readPersistence.GetParticipantsAsync(request.Id, ct);
         var businessName = await readPersistence.GetAccountBusinessNameAsync(currentUser.AccountId, ct);
 
-        // canOperate is confirmed true (passed the gate above).
+        // canOperate confirmed true (passed the gate above).
         var availableActions = new AvailableActionsMetadata(
             CanChangeStatus: !request.IsTerminal,
             CanSendBusinessUpdate: !request.IsTerminal,

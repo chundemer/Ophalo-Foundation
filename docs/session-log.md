@@ -5,9 +5,50 @@
 
 ---
 
+## Phase 8-B2-beta — COMPLETE
+
+**Tests:** 454/454 (280 unit · 14 arch · 160 integration)
+**ADRs:** 108..110 (see decision-index.md and build-log/029)
+
+### Summary of what was built
+
+Two new operator write endpoints:
+- `POST /keep/requests/{requestId}/business-update` — customer-visible message with optional status change
+- `POST /keep/requests/{requestId}/internal-note` — operator-only note
+
+Full stack for both: domain methods, event factories, error codes, application services,
+API request types, DI + routes, error mappings, 18 integration tests.
+
+Shared mapper (`KeepRequestDetailMapper`) extracted to eliminate duplication across all
+read/write services that return `KeepRequestDetailResult`.
+
+First-response wiring corrected: now set in `ChangeStatus` (message path) and
+`AddBusinessUpdate`/`AddBusinessUpdateWithStatus`.
+
+**Key files:**
+
+| Layer | File |
+|-------|------|
+| Keep.Core | `KeepRequestErrors.cs` (+BusinessUpdateMessageTooLong, NoteRequired, NoteTooLong) |
+| Keep.Core | `KeepRequestEvent.cs` (+CreateBusinessUpdateMessage, +CreateInternalNote) |
+| Keep.Core | `KeepRequest.cs` (+first-response in ChangeStatus, +AddBusinessUpdate, +AddBusinessUpdateWithStatus, +AddInternalNote) |
+| Keep.Application | `KeepRequestDetailMapper.cs` (NEW — extracted) |
+| Keep.Application | `GetKeepRequestDetailService.cs` (uses mapper) |
+| Keep.Application | `ChangeKeepRequestStatusService.cs` (uses mapper, first-response wired) |
+| Keep.Application | `AddBusinessUpdateService.cs` (NEW) |
+| Keep.Application | `AddInternalNoteService.cs` (NEW) |
+| OpHalo.Api | `BusinessUpdateRequest.cs` (NEW) |
+| OpHalo.Api | `InternalNoteRequest.cs` (NEW) |
+| OpHalo.Api | `ErrorHttpMapper.cs` (+3 mappings) |
+| OpHalo.Api | `Program.cs` (+DI + 2 routes) |
+| IntegrationTests | `AddBusinessUpdateTests.cs` (NEW — 10 tests) |
+| IntegrationTests | `AddInternalNoteTests.cs` (NEW — 8 tests) |
+
+---
+
 ## Phase 8-B2-alpha — COMPLETE
 
-**Status:** 436/436 tests passing. Build log 028 and decision index (ADR-102..107) shipped with the code.
+**Status:** 436/436 tests passing. Build log 028 and decision index (ADR-102..107) shipped.
 
 ### Summary of what was built
 
@@ -64,16 +105,16 @@ Member management API + integration tests. See build-log/023.
   - `AllowedActions` always `[]` in `KeepCustomerPageResult`. B3/B4 owns this.
   - `NewRequestUrl` always `null`. B4 decides.
   - Customer page events sorted ascending — let frontend reverse if needed.
-- **B2-alpha mapper duplication:** `ChangeKeepRequestStatusService` duplicates all mapper methods from `GetKeepRequestDetailService`. Extract to `internal static KeepRequestDetailMapper` when B2-beta adds the next write service.
-- **`CanAcknowledgeAttention = false`** hardcoded. B2-gamma wires it.
+- **`CanAcknowledgeAttention = false`** hardcoded. B2-gamma wires it. Full formula when wired: `hasOperatePermission && request.AttentionLevel != AttentionLevel.None`.
 - **`Results.Problem` extension shape:** extension dict entries land at the top level of ProblemDetails JSON, not under an `"extensions"` key. Test assertions must use `body.GetProperty("code")`.
+- **`TerminatedAtUtc` not set by ChangeStatus/AddBusinessUpdateWithStatus** when target is Closed/Cancelled. Pre-existing gap, not yet in scope.
+- **`businessName ?? string.Empty`** — persistence returns null if account missing post-auth; never expected in production.
 
 ---
 
-## Next session — Phase 8-B2-beta (business updates + internal notes)
+## Next — Phase 8-B2-gamma
 
-**Pre-work:** Read build-log/027 section for B2-beta scope before starting.
+Attention acknowledge: wire `CanAcknowledgeAttention` and implement
+`POST /keep/requests/{id}/acknowledge-attention`.
 
-### B2-split remaining
-- **B2-beta** — business updates + internal notes (`POST /keep/requests/{id}/messages`, `POST /keep/requests/{id}/notes`)
-- **B2-gamma** — attention acknowledge + attention clearing
+Full formula: `hasOperatePermission && request.AttentionLevel != AttentionLevel.None`.

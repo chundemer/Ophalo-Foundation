@@ -69,6 +69,10 @@ public sealed class KeepRequest : BaseEntity
     /// Moves the request to a new status and optionally attaches a customer-visible message.
     /// Returns a KeepStatusChangeOutcome; IsNoOp is true when the call is a same-status
     /// no-op (same status, no message — success, nothing to persist).
+    /// Status-message limit: 2000 characters. For business updates with status use
+    /// AddBusinessUpdateWithStatus (4000-character business-update limit).
+    /// Wires first-response when a message is provided and this is the first customer-visible
+    /// contact on a customer-origin request (D1/B2-beta).
     /// </summary>
     public Result<KeepStatusChangeOutcome> ChangeStatus(
         KeepRequestStatus newStatus,
@@ -112,7 +116,142 @@ public sealed class KeepRequest : BaseEntity
         var statusEvent = KeepRequestEvent.CreateStatusChanged(
             Id, AccountId, actorAccountUserId, actorDisplayName, newStatus, trimmedMessage, nowUtc);
 
+        // D1: combined status+message counts as first response on customer-origin requests.
+        if (trimmedMessage is not null && Origin == KeepRequestOrigin.Customer && FirstRespondedAtUtc is null)
+        {
+            FirstRespondedAtUtc = nowUtc;
+            FirstResponderAccountUserId = actorAccountUserId;
+            FirstResponseEventId = statusEvent.Id;
+        }
+
         return Result<KeepStatusChangeOutcome>.Success(KeepStatusChangeOutcome.WithEvent(statusEvent));
+    }
+
+    /// <summary>
+    /// Adds a customer-visible business update without changing status. Creates a MessageAdded
+    /// event with Visibility=All, MessageIntent=BusinessUpdate, CommunicationChannel=InApp.
+    /// Business-update message limit: 4000 characters. Not allowed on terminal requests.
+    /// Wires first-response when this is the first customer-visible contact on a customer-origin
+    /// request (D1).
+    /// </summary>
+    public Result<KeepRequestEvent> AddBusinessUpdate(
+        string message,
+        Guid actorAccountUserId,
+        string actorDisplayName,
+        DateTime nowUtc)
+    {
+        if (nowUtc == default)
+            throw new ArgumentException("nowUtc must be a valid UTC timestamp.", nameof(nowUtc));
+
+        var trimmedMessage = string.IsNullOrWhiteSpace(message) ? null : message.Trim();
+
+        if (trimmedMessage is null)
+            return Result<KeepRequestEvent>.Failure(KeepRequestErrors.MessageRequired);
+
+        if (trimmedMessage.Length > 4000)
+            return Result<KeepRequestEvent>.Failure(KeepRequestErrors.BusinessUpdateMessageTooLong);
+
+        if (IsTerminal)
+            return Result<KeepRequestEvent>.Failure(KeepRequestErrors.TerminalState);
+
+        LastBusinessActivityAt = nowUtc;
+
+        var messageEvent = KeepRequestEvent.CreateBusinessUpdateMessage(
+            Id, AccountId, actorAccountUserId, actorDisplayName, trimmedMessage, nowUtc);
+
+        if (Origin == KeepRequestOrigin.Customer && FirstRespondedAtUtc is null)
+        {
+            FirstRespondedAtUtc = nowUtc;
+            FirstResponderAccountUserId = actorAccountUserId;
+            FirstResponseEventId = messageEvent.Id;
+        }
+
+        return Result<KeepRequestEvent>.Success(messageEvent);
+    }
+
+    /// <summary>
+    /// Combines a customer-visible business update with a status change. Creates a StatusChanged
+    /// event with Visibility=All, MessageIntent=BusinessUpdate, CommunicationChannel=InApp.
+    /// Business-update message limit: 4000 characters (not the 2000-char status-message limit).
+    /// Validates the status transition using the same rules as ChangeStatus. Not allowed on
+    /// terminal requests. Wires first-response (D1).
+    /// </summary>
+    public Result<KeepRequestEvent> AddBusinessUpdateWithStatus(
+        KeepRequestStatus newStatus,
+        string message,
+        Guid actorAccountUserId,
+        string actorDisplayName,
+        DateTime nowUtc)
+    {
+        if (!Enum.IsDefined(newStatus))
+            return Result<KeepRequestEvent>.Failure(KeepRequestErrors.InvalidStatus);
+
+        if (nowUtc == default)
+            throw new ArgumentException("nowUtc must be a valid UTC timestamp.", nameof(nowUtc));
+
+        var trimmedMessage = string.IsNullOrWhiteSpace(message) ? null : message.Trim();
+
+        if (trimmedMessage is null)
+            return Result<KeepRequestEvent>.Failure(KeepRequestErrors.MessageRequired);
+
+        if (trimmedMessage.Length > 4000)
+            return Result<KeepRequestEvent>.Failure(KeepRequestErrors.BusinessUpdateMessageTooLong);
+
+        if (IsTerminal)
+            return Result<KeepRequestEvent>.Failure(KeepRequestErrors.TerminalState);
+
+        if (newStatus != Status && !IsAllowedTransition(Status, newStatus))
+            return Result<KeepRequestEvent>.Failure(KeepRequestErrors.InvalidStatusTransition);
+
+        Status = newStatus;
+        CurrentStatusText = trimmedMessage;
+        LastBusinessActivityAt = nowUtc;
+
+        // CreateStatusChanged with a non-null message produces the combined event shape (D4):
+        // MessageIntent=BusinessUpdate, CommunicationChannel=InApp.
+        var statusEvent = KeepRequestEvent.CreateStatusChanged(
+            Id, AccountId, actorAccountUserId, actorDisplayName, newStatus, trimmedMessage, nowUtc);
+
+        if (Origin == KeepRequestOrigin.Customer && FirstRespondedAtUtc is null)
+        {
+            FirstRespondedAtUtc = nowUtc;
+            FirstResponderAccountUserId = actorAccountUserId;
+            FirstResponseEventId = statusEvent.Id;
+        }
+
+        return Result<KeepRequestEvent>.Success(statusEvent);
+    }
+
+    /// <summary>
+    /// Adds an internal operator note. Creates an InternalNoteAdded event with
+    /// Visibility=Internal. Allowed on terminal requests (D8). Does not update
+    /// LastBusinessActivityAt. Does not wire first-response (D1).
+    /// Internal-note limit: 4000 characters.
+    /// </summary>
+    public Result<KeepRequestEvent> AddInternalNote(
+        string note,
+        Guid actorAccountUserId,
+        string actorDisplayName,
+        DateTime nowUtc)
+    {
+        if (nowUtc == default)
+            throw new ArgumentException("nowUtc must be a valid UTC timestamp.", nameof(nowUtc));
+
+        var trimmedNote = string.IsNullOrWhiteSpace(note) ? null : note.Trim();
+
+        if (trimmedNote is null)
+            return Result<KeepRequestEvent>.Failure(KeepRequestErrors.NoteRequired);
+
+        if (trimmedNote.Length > 4000)
+            return Result<KeepRequestEvent>.Failure(KeepRequestErrors.NoteTooLong);
+
+        // No terminal check — D8: internal notes allowed after Closed/Cancelled.
+        // No LastBusinessActivityAt update — D8: internal notes do not update business activity.
+
+        var noteEvent = KeepRequestEvent.CreateInternalNote(
+            Id, AccountId, actorAccountUserId, actorDisplayName, trimmedNote, nowUtc);
+
+        return Result<KeepRequestEvent>.Success(noteEvent);
     }
 
     private static bool IsAllowedTransition(KeepRequestStatus from, KeepRequestStatus to) =>
