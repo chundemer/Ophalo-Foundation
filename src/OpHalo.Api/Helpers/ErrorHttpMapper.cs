@@ -56,6 +56,17 @@ public static class ErrorHttpMapper
             // Explicit match — Account.PilotFull resolves to 409, not the default 400.
             var c when c == "Account.PilotFull" => (StatusCodes.Status409Conflict, "Conflict.", null),
 
+            // --- Keep request operator-write codes (explicit where suffix patterns do not cover) ---
+            // NotFound → covered by .NotFound suffix; Forbidden → covered by .Forbidden suffix;
+            // InvalidStatusTransition → covered by .InvalidStatusTransition suffix.
+            var c when c == "KeepRequest.InvalidStatus" => (StatusCodes.Status400BadRequest, "Bad request.", null),
+
+            var c when c == "KeepRequest.MessageRequired" => (StatusCodes.Status400BadRequest, "Bad request.", null),
+
+            var c when c == "KeepRequest.MessageTooLong" => (StatusCodes.Status400BadRequest, "Bad request.", null),
+
+            var c when c == "KeepRequest.TerminalState" => (StatusCodes.Status409Conflict, "Conflict.", null),
+
             // Explicit match — Invite.SeatLimitReached resolves to 409; no suffix pattern covers it.
             var c when c == "Invite.SeatLimitReached" => (StatusCodes.Status409Conflict, "Conflict.", null),
 

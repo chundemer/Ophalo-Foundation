@@ -87,15 +87,18 @@ public sealed class EfKeepRequestDetailPersistence(OpHaloDbContext dbContext) : 
 
         return participants.Select(p =>
         {
-            accountUserLookup.TryGetValue(p.AccountUserId, out var au);
+            if (!accountUserLookup.TryGetValue(p.AccountUserId, out var au))
+                throw new InvalidOperationException(
+                    $"KeepRequestParticipant {p.AccountUserId} has no corresponding AccountUser — data integrity violation.");
+
             return new KeepParticipantProjection(
                 p.AccountUserId,
                 p.ParticipationType,
                 p.NotificationsEnabled,
                 p.AttachedAtUtc,
                 p.DetachedAtUtc,
-                DisplayName: au?.Email ?? string.Empty,
-                Role: au?.Role ?? default);
+                DisplayName: au.Email,
+                Role: au.Role);
         }).ToList();
     }
 

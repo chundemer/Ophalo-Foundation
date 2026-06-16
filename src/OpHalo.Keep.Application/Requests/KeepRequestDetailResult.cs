@@ -35,7 +35,31 @@ public sealed record KeepRequestDetailResult(
     string? FeedbackComment,
     DateTime? FeedbackSubmittedAtUtc,
     IReadOnlyList<KeepRequestParticipantItem> Participants,
-    IReadOnlyList<KeepRequestEventItem> Events);
+    IReadOnlyList<KeepRequestEventItem> Events,
+    AvailableActionsMetadata AvailableActions,
+    ValidationHintsMetadata Validation);
+
+/// <summary>
+/// Server-computed UI metadata so the frontend can render action buttons and inline
+/// validation hints without extra round-trips. Server validation remains authoritative.
+/// </summary>
+public sealed record AvailableActionsMetadata(
+    bool CanChangeStatus,
+    bool CanSendBusinessUpdate,
+    bool CanAddInternalNote,
+    bool CanAcknowledgeAttention,
+    IReadOnlyList<string> AllowedStatuses);
+
+/// <summary>
+/// Static validation constants for operator write actions. Sent with every operator
+/// detail response so the frontend can enforce limits locally before submitting.
+/// </summary>
+public sealed record ValidationHintsMetadata(
+    int BusinessUpdateMaxLength,
+    int InternalNoteMaxLength,
+    int StatusMessageMaxLength,
+    int AcknowledgeReasonMaxLength,
+    IReadOnlyList<string> MessageRequiredForStatuses);
 
 /// <summary>
 /// DisplayName = AccountUser.Email for B1-β; B4 enriches with User.Name when the participant
@@ -53,7 +77,9 @@ public sealed record KeepRequestParticipantItem(
 /// <summary>
 /// A single entry in the operator-facing event timeline, ordered oldest-first.
 /// ActorDisplayName is denormalized on KeepRequestEvent — no join required.
-/// MessageIntent and CommunicationChannel are non-null only on MessageAdded events.
+/// StatusAfter is non-null on StatusChanged events. MessageIntent and
+/// CommunicationChannel are non-null on combined StatusChanged+message and
+/// MessageAdded events (D4/D5).
 /// </summary>
 public sealed record KeepRequestEventItem(
     Guid Id,
@@ -64,5 +90,6 @@ public sealed record KeepRequestEventItem(
     string ActorType,
     Guid? ActorAccountUserId,
     string? ActorDisplayName,
+    string? StatusAfter,
     string? MessageIntent,
     string? CommunicationChannel);

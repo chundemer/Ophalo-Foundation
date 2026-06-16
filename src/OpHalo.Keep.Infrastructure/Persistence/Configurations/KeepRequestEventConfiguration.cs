@@ -44,13 +44,18 @@ internal sealed class KeepRequestEventConfiguration : BaseEntityConfiguration<Ke
         builder.Property(x => x.ActorDisplayName)
             .HasMaxLength(200);
 
-        // Message intent — present on MessageAdded events (D5/ADR-088).
+        // Message intent — present on MessageAdded events and combined StatusChanged+message events (D4/D5/ADR-088).
         builder.Property(x => x.MessageIntent)
             .HasConversion<string>()
             .HasMaxLength(50);
 
-        // Communication channel — present on externally-logged contact events (D7/ADR-090).
+        // Communication channel — present on externally-logged contact events and in-app combined updates (D4/D7/ADR-090).
         builder.Property(x => x.CommunicationChannel)
+            .HasConversion<string>()
+            .HasMaxLength(50);
+
+        // Status snapshot — present on StatusChanged events only.
+        builder.Property(x => x.StatusAfter)
             .HasConversion<string>()
             .HasMaxLength(50);
 

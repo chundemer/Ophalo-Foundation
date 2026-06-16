@@ -37,6 +37,7 @@ public static class PermissionKeys
         public const string RequestsUpdate = "keep.requests.update";
         public const string RequestsClose = "keep.requests.close";
         public const string RequestsRespond = "keep.requests.respond";
+        public const string RequestsOperate = "keep.requests.operate";  // B2: gates all operator write actions
         public const string UpdatesSend = "keep.updates.send";
         public const string CustomerMessagesSend = "keep.customer_messages.send";
         public const string InternalNotesAdd = "keep.internal_notes.add";

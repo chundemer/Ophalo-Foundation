@@ -18,4 +18,19 @@ public static class KeepRequestErrors
 
     public static readonly Error DescriptionRequired =
         Error.Create("KeepRequest.DescriptionRequired", "Description is required.");
+
+    public static readonly Error InvalidStatus =
+        Error.Create("KeepRequest.InvalidStatus", "The provided status is not valid.");
+
+    public static readonly Error InvalidStatusTransition =
+        Error.Create("KeepRequest.InvalidStatusTransition", "The requested status transition is not allowed.");
+
+    public static readonly Error MessageRequired =
+        Error.Create("KeepRequest.MessageRequired", "A customer-visible message is required for this status.");
+
+    public static readonly Error MessageTooLong =
+        Error.Create("KeepRequest.MessageTooLong", "The message exceeds the maximum allowed length of 2000 characters.");
+
+    public static readonly Error TerminalState =
+        Error.Create("KeepRequest.TerminalState", "This request is in a terminal state and cannot be updated.");
 }

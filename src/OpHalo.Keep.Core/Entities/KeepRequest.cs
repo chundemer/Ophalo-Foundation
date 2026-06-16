@@ -1,5 +1,7 @@
 using OpHalo.Foundation.Core.Entities.Shared;
 using OpHalo.Keep.Core.Entities.Enums;
+using OpHalo.Keep.Core.Errors;
+using OpHalo.SharedKernel.Results;
 
 namespace OpHalo.Keep.Core.Entities;
 
@@ -62,6 +64,78 @@ public sealed class KeepRequest : BaseEntity
     public bool? FeedbackWasResolved { get; private set; }
     public string? FeedbackComment { get; private set; }
     public DateTime? FeedbackSubmittedAtUtc { get; private set; }
+
+    /// <summary>
+    /// Moves the request to a new status and optionally attaches a customer-visible message.
+    /// Returns a KeepStatusChangeOutcome; IsNoOp is true when the call is a same-status
+    /// no-op (same status, no message — success, nothing to persist).
+    /// </summary>
+    public Result<KeepStatusChangeOutcome> ChangeStatus(
+        KeepRequestStatus newStatus,
+        string? message,
+        Guid actorAccountUserId,
+        string actorDisplayName,
+        DateTime nowUtc)
+    {
+        if (!Enum.IsDefined(newStatus))
+            return Result<KeepStatusChangeOutcome>.Failure(KeepRequestErrors.InvalidStatus);
+
+        if (nowUtc == default)
+            throw new ArgumentException("nowUtc must be a valid UTC timestamp.", nameof(nowUtc));
+
+        var trimmedMessage = string.IsNullOrWhiteSpace(message) ? null : message.Trim();
+
+        if (trimmedMessage?.Length > 2000)
+            return Result<KeepStatusChangeOutcome>.Failure(KeepRequestErrors.MessageTooLong);
+
+        // No-op before terminal: Closed→Closed/no-message is success, not an error.
+        if (newStatus == Status && trimmedMessage is null)
+            return Result<KeepStatusChangeOutcome>.Success(KeepStatusChangeOutcome.NoOp);
+
+        if (IsTerminal)
+            return Result<KeepStatusChangeOutcome>.Failure(KeepRequestErrors.TerminalState);
+
+        // PendingCustomer and Cancelled always require a customer-visible message.
+        if (trimmedMessage is null && newStatus is KeepRequestStatus.PendingCustomer or KeepRequestStatus.Cancelled)
+            return Result<KeepStatusChangeOutcome>.Failure(KeepRequestErrors.MessageRequired);
+
+        // Validate the transition for actual status changes (same-status is always permitted).
+        if (newStatus != Status && !IsAllowedTransition(Status, newStatus))
+            return Result<KeepStatusChangeOutcome>.Failure(KeepRequestErrors.InvalidStatusTransition);
+
+        Status = newStatus;
+        // Silent status change preserves the last meaningful customer-facing status text.
+        if (trimmedMessage is not null)
+            CurrentStatusText = trimmedMessage;
+        LastBusinessActivityAt = nowUtc;
+
+        var statusEvent = KeepRequestEvent.CreateStatusChanged(
+            Id, AccountId, actorAccountUserId, actorDisplayName, newStatus, trimmedMessage, nowUtc);
+
+        return Result<KeepStatusChangeOutcome>.Success(KeepStatusChangeOutcome.WithEvent(statusEvent));
+    }
+
+    private static bool IsAllowedTransition(KeepRequestStatus from, KeepRequestStatus to) =>
+        (from, to) switch
+        {
+            (KeepRequestStatus.Received
+             or KeepRequestStatus.Scheduled
+             or KeepRequestStatus.InProgress
+             or KeepRequestStatus.PendingCustomer,
+             KeepRequestStatus.Scheduled
+             or KeepRequestStatus.InProgress
+             or KeepRequestStatus.PendingCustomer
+             or KeepRequestStatus.Resolved
+             or KeepRequestStatus.Cancelled) => true,
+
+            (KeepRequestStatus.Resolved,
+             KeepRequestStatus.InProgress
+             or KeepRequestStatus.PendingCustomer
+             or KeepRequestStatus.Closed
+             or KeepRequestStatus.Cancelled) => true,
+
+            _ => false
+        };
 
     // ADR-095: origin optional, defaults to Customer (current public intake path).
     public static KeepRequest Create(

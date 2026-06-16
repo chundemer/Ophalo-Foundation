@@ -7,5 +7,6 @@ public enum KeepRequestStatus
     PendingCustomer = 3,
     Resolved = 4,
     Closed = 5,
-    Cancelled = 6
+    Cancelled = 6,
+    Scheduled = 7
 }

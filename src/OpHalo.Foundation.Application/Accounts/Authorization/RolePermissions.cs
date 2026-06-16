@@ -34,6 +34,7 @@ public static class RolePermissions
         PermissionKeys.Keep.RequestsUpdate,
         PermissionKeys.Keep.RequestsClose,
         PermissionKeys.Keep.RequestsRespond,
+        PermissionKeys.Keep.RequestsOperate,
         PermissionKeys.Keep.UpdatesSend,
         PermissionKeys.Keep.CustomerMessagesSend,
         PermissionKeys.Keep.InternalNotesAdd,

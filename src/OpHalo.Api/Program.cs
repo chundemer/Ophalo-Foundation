@@ -69,11 +69,13 @@ builder.Services.AddSingleton<IClock, OpHalo.Foundation.Infrastructure.Services.
 builder.Services.AddScoped<IKeepIntakePersistence, KeepIntakePersistence>();
 builder.Services.AddScoped<IKeepRequestListPersistence, KeepRequestListPersistence>();
 builder.Services.AddScoped<IKeepRequestDetailPersistence, EfKeepRequestDetailPersistence>();
+builder.Services.AddScoped<IKeepRequestOperatePersistence, EfKeepRequestOperatePersistence>();
 builder.Services.AddScoped<KeepTokenService>();
 builder.Services.AddScoped<CreateKeepPublicIntakeService>();
 builder.Services.AddScoped<GetKeepRequestListService>();
 builder.Services.AddScoped<GetKeepRequestDetailService>();
 builder.Services.AddScoped<GetKeepCustomerPageService>();
+builder.Services.AddScoped<ChangeKeepRequestStatusService>();
 
 builder.Services.AddSingleton<IAccountAccessPolicy, AccountAccessPolicy>();
 builder.Services.AddSingleton<IUserAccessPolicy, UserAccessPolicy>();
@@ -190,6 +192,18 @@ app.MapGet("/keep/requests/{requestId:guid}", async (
     CancellationToken ct) =>
 {
     var result = await service.ExecuteAsync(requestId, ct);
+    return result.IsSuccess ? Results.Ok(result.Value) : ErrorHttpMapper.ToHttpResult(result.Error);
+}).RequireAuthorization();
+
+// Change request status — authenticated, operator write (Phase 8-B2-alpha)
+app.MapPatch("/keep/requests/{requestId:guid}/status", async (
+    Guid requestId,
+    ChangeStatusRequestBody body,
+    ChangeKeepRequestStatusService service,
+    CancellationToken ct) =>
+{
+    var command = new ChangeKeepRequestStatusCommand(requestId, body.Status, body.Message);
+    var result = await service.ExecuteAsync(command, ct);
     return result.IsSuccess ? Results.Ok(result.Value) : ErrorHttpMapper.ToHttpResult(result.Error);
 }).RequireAuthorization();
 

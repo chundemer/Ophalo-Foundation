@@ -11,8 +11,14 @@ using OpHalo.SharedKernel.Results;
 
 namespace OpHalo.Keep.Application.Requests;
 
-public sealed class GetKeepRequestDetailService(
-    IKeepRequestDetailPersistence persistence,
+public sealed record ChangeKeepRequestStatusCommand(
+    Guid RequestId,
+    string Status,
+    string? Message);
+
+public sealed class ChangeKeepRequestStatusService(
+    IKeepRequestOperatePersistence operatePersistence,
+    IKeepRequestDetailPersistence readPersistence,
     ICurrentUser currentUser,
     IUserAccessPolicy userAccessPolicy,
     IAccountAccessPolicy accountAccessPolicy,
@@ -26,16 +32,17 @@ public sealed class GetKeepRequestDetailService(
         Error.Create("auth.forbidden", "You do not have permission to perform this action.");
 
     public async Task<Result<KeepRequestDetailResult>> ExecuteAsync(
-        Guid requestId, CancellationToken ct = default)
+        ChangeKeepRequestStatusCommand command, CancellationToken ct = default)
     {
+        // --- Auth stack ---
         if (!currentUser.IsAuthenticated)
             return Result<KeepRequestDetailResult>.Failure(Unauthorized);
 
-        var userSnapshot = await persistence.GetAccountUserSnapshotAsync(currentUser.UserId, ct);
+        var userSnapshot = await operatePersistence.GetAccountUserSnapshotAsync(currentUser.UserId, ct);
         if (userSnapshot is null)
             return Result<KeepRequestDetailResult>.Failure(Forbidden);
 
-        var accountSnapshot = await persistence.GetAccountAccessSnapshotAsync(currentUser.AccountId, ct);
+        var accountSnapshot = await operatePersistence.GetAccountAccessSnapshotAsync(currentUser.AccountId, ct);
         if (accountSnapshot is null)
             return Result<KeepRequestDetailResult>.Failure(Forbidden);
 
@@ -43,14 +50,8 @@ public sealed class GetKeepRequestDetailService(
                 userSnapshot.Role,
                 userSnapshot.MembershipStatus,
                 accountSnapshot.Purpose,
-                PermissionKeys.Keep.RequestsView))
+                PermissionKeys.Keep.RequestsOperate))
             return Result<KeepRequestDetailResult>.Failure(Forbidden);
-
-        var canOperate = userAccessPolicy.IsPermitted(
-            userSnapshot.Role,
-            userSnapshot.MembershipStatus,
-            accountSnapshot.Purpose,
-            PermissionKeys.Keep.RequestsOperate);
 
         var accessContext = new AccountAccessContext(
             accountSnapshot.LifecycleState,
@@ -69,20 +70,48 @@ public sealed class GetKeepRequestDetailService(
         if (!featurePolicy.IsEnabled(accountSnapshot.Plan, FeatureKeys.Keep.OperatorQueue))
             return Result<KeepRequestDetailResult>.Failure(Forbidden);
 
-        var request = await persistence.GetRequestAsync(requestId, currentUser.AccountId, ct);
+        // --- Parse status slug ---
+        var parsedStatus = ParseStatus(command.Status);
+        if (parsedStatus is null)
+            return Result<KeepRequestDetailResult>.Failure(KeepRequestErrors.InvalidStatus);
+
+        // --- Actor display name (denormalized onto the event) ---
+        var actorDisplayName = await operatePersistence.GetActorDisplayNameAsync(currentUser.UserId, ct);
+        if (actorDisplayName is null)
+            return Result<KeepRequestDetailResult>.Failure(Forbidden);
+
+        // --- Load request for mutation ---
+        var request = await operatePersistence.GetRequestForUpdateAsync(command.RequestId, currentUser.AccountId, ct);
         if (request is null)
             return Result<KeepRequestDetailResult>.Failure(KeepRequestErrors.NotFound);
 
-        var events = await persistence.GetAllEventsAsync(request.Id, ct);
-        var participants = await persistence.GetParticipantsAsync(request.Id, ct);
-        var businessName = await persistence.GetAccountBusinessNameAsync(currentUser.AccountId, ct);
+        // --- Domain: apply status change ---
+        var changeResult = request.ChangeStatus(
+            parsedStatus.Value,
+            command.Message,
+            currentUser.UserId,
+            actorDisplayName,
+            clock.UtcNow);
 
+        if (changeResult.IsFailure)
+            return Result<KeepRequestDetailResult>.Failure(changeResult.Error);
+
+        // Commit only when there is an event to persist (IsNoOp = same-status/no-message).
+        if (!changeResult.Value.IsNoOp)
+            await operatePersistence.CommitAsync(request, changeResult.Value.StatusChangedEvent, ct);
+
+        // --- Load read data for the response ---
+        var events = await readPersistence.GetAllEventsAsync(request.Id, ct);
+        var participants = await readPersistence.GetParticipantsAsync(request.Id, ct);
+        var businessName = await readPersistence.GetAccountBusinessNameAsync(currentUser.AccountId, ct);
+
+        // canOperate is confirmed true (passed the gate above).
         var availableActions = new AvailableActionsMetadata(
-            CanChangeStatus: canOperate && !request.IsTerminal,
-            CanSendBusinessUpdate: canOperate && !request.IsTerminal,
-            CanAddInternalNote: canOperate,
+            CanChangeStatus: !request.IsTerminal,
+            CanSendBusinessUpdate: !request.IsTerminal,
+            CanAddInternalNote: true,
             CanAcknowledgeAttention: false,  // B2-gamma
-            AllowedStatuses: canOperate && !request.IsTerminal
+            AllowedStatuses: !request.IsTerminal
                 ? ComputeAllowedStatuses(request.Status)
                 : []);
 
@@ -127,6 +156,22 @@ public sealed class GetKeepRequestDetailService(
 
         return Result<KeepRequestDetailResult>.Success(result);
     }
+
+    private static KeepRequestStatus? ParseStatus(string slug) =>
+        slug.ToLowerInvariant() switch
+        {
+            "received"         => KeepRequestStatus.Received,
+            "scheduled"        => KeepRequestStatus.Scheduled,
+            "in_progress"      => KeepRequestStatus.InProgress,
+            "pending_customer" => KeepRequestStatus.PendingCustomer,
+            "resolved"         => KeepRequestStatus.Resolved,
+            "closed"           => KeepRequestStatus.Closed,
+            "cancelled"        => KeepRequestStatus.Cancelled,
+            _                  => null
+        };
+
+    // --- Mappers (duplicated from GetKeepRequestDetailService; extract to shared helper
+    //     when a third operator-write service needs the same result shape) ---
 
     private static KeepRequestParticipantItem MapParticipant(KeepParticipantProjection p) => new(
         p.AccountUserId,
@@ -272,7 +317,6 @@ public sealed class GetKeepRequestDetailService(
         _ => throw new InvalidOperationException($"Unknown CommunicationChannel: {channel}")
     };
 
-    // Constant validation metadata sent with every operator detail response.
     private static readonly ValidationHintsMetadata ValidationHints = new(
         BusinessUpdateMaxLength: 4000,
         InternalNoteMaxLength: 4000,
