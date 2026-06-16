@@ -4,8 +4,10 @@ public enum KeepRequestEventType
 {
     RequestCreated = 1,
     StatusChanged = 2,
-    OperatorReplied = 3,
-    CustomerReplied = 4,
+    MessageAdded = 3,
+    // 4 intentionally unused — OperatorReplied and CustomerReplied removed; actor captured via ActorType (ADR-094)
     RequestClosed = 5,
-    RequestCancelled = 6
+    RequestCancelled = 6,
+    InternalNoteAdded = 7,
+    AttentionAcknowledged = 8
 }

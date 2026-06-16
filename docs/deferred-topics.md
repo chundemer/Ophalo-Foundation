@@ -1,0 +1,41 @@
+# Deferred Topics
+
+Durable backlog for work intentionally deferred out of earlier phases. Keep this file focused on still-open topics; resolved items should move to the relevant build log or ADR.
+
+| ID | Topic | Origin | Status | Recommended Phase | Notes |
+|---|---|---|---|---|---|
+| DEF-001 | `POST /accounts/me/invite` manual-share delivery | 5E-C | Deferred | Phase 5 follow-up | `POST /accounts/me/members/{id}/resend-invite` supports `manual_share`; initial invite send still only emails. |
+| DEF-002 | Mobile invite accept | 5D | Deferred | Mobile auth/API follow-up | Add `clientType` parsing and bearer-token response for invite acceptance. Browser accept remains complete. |
+| DEF-003 | Invite-accept session creation failure integration test | 5D | Deferred test coverage | Auth test follow-up | Requires overriding `IAccountSessionService`; service path should return 503 while leaving membership Active. |
+| DEF-004 | New-account exchange session creation failure integration test | 5C | Deferred test coverage | Auth test follow-up | Similar to DEF-003, but for new-account commit after `/auth/exchange`; account graph remains committed. |
+| DEF-005 | `SignupDefaultsSettings` startup validation | 5C | Follow-up | Config hardening | Add `IValidateOptions<SignupDefaultsSettings>` for `TrialDurationDays <= 0` and `MaxPilotAccounts <= 0`. |
+| DEF-006 | Pilot account count commercial-state filtering | 5C | Follow-up | Pilot readiness | `CountActivePilotAccountsAsync` currently counts all `IsPilot = true`; conservative over-count is safe for now. |
+| DEF-007 | Keep public-intake link creation during new-account registration | 5C | Deferred | Keep setup/account settings | New-account registration creates the account graph; Keep intake link setup remains later Keep/account setup work. |
+| DEF-008 | Off-season mode | 5E discovery | Deferred by ADR-083 | Billing/account posture phase | Model as account/commercial posture, not `MembershipStatus`; owner-only read-only access direction is documented, implementation deferred. |
+| DEF-009 | Primary-owner transfer flow | 5E discovery | Deferred by ADR-080 | Account ownership phase | Phase 5E protects primary owner from demote/suspend/remove; transfer requires an explicit later flow. |
+| DEF-010 | `ErrorHttpMapper` safety-net for internal previously-removed routing codes | 5E-C | Known limitation | Error contract cleanup | Safety-net maps internal routing codes to 409 but would expose internal code names if endpoint intercept failed; endpoint tests cover public contract. |
+| DEF-011 | Device management table | 5A discovery | Deferred | Device/session management | `AccountSession` has client type/device fields; separate `AccountUserDevice` table waits until richer device management is needed. |
+| DEF-012 | Notification preferences, quiet hours, watch/mute | Build plan / Phase 7 notes | Deferred | Phase 9 | Notification preference and audit behavior remain outside current Keep slice. |
+| DEF-013 | Attachments/file upload | Build plan | Deferred | Later Keep communication/file phase | Attachment posture is locked in the build plan, but actual file upload implementation is deferred. |
+| DEF-014 | Internal platform/support permission keys | Phase 4C | Deferred | Admin shell/internal tooling | Add `internal.support.*` / `internal.platform.manage` only when an internal admin shell or support tool needs them. |
+| DEF-015 | Active request feature limit | Phase 4D | Deferred | Keep limits | Add `keep.active_request_limit` key and plan-default row when a concrete product rule needs it. |
+| DEF-016 | Branded customer request URLs with public slug | Phase 8 discovery | Deferred | Account public identity / Keep setup | Future route can be `/keep/r/{publicSlug}/{pageToken}`; token remains the security primitive, slug is branding only, and slug mismatch returns 404. |
+| DEF-017 | Keep request-list SSE stream | Phase 8 discovery | Deferred | Real-time UX polish | Reference has `/continuity/requests/stream`; defer `/keep/requests/stream` until list invalidation needs real-time behavior. |
+| DEF-018 | External-contact capture workflows | Phase 8 discovery | Deferred workflow | Mobile/native communication slice | Reference has external-contact/revert actions. Phase 8 model must allow phone/SMS/email/in-person customer-contact events to count as first response when explicitly logged, but full capture UX/routes can follow later. |
+| DEF-019 | Customer contact preferences and email opt-out routes | Phase 8 discovery | Deferred | Phase 9 notifications | Reference customer page supports contact preferences and opt-out. Defer until notification preferences/quiet-hours work is designed. |
+| DEF-020 | Full Keep signal/projection attention engine | Phase 8 discovery | Deferred | Later intelligence/automation phase | Reference has a larger signal/attention projection engine. Phase 8 pilot uses direct `KeepRequest` attention fields plus events; revisit richer signal engine after pilot behavior is validated. |
+| DEF-021 | Native mobile push notifications and badge counts | Phase 8 discovery | Deferred | Phase 9 notifications / mobile | Phase 8 stores notification-ready routing state only. Phase 9 should use APNs/FCM for native push and badge counts; mobile app refreshes request state from the API after push/open. |
+| DEF-022 | SMS notification sending | Phase 8 discovery | Deferred / likely excluded for pilot | Post-pilot only if business case changes | Avoid Twilio-style outbound SMS in Keep/OpHalo pilot due per-message cost, carrier/compliance overhead, and cost-control posture. |
+
+## Operational Watch-outs
+
+These are not product backlog items, but should remain visible before deployment or infrastructure work.
+
+| ID | Topic | Origin | Notes |
+|---|---|---|
+| OPS-001 | Resend production secrets | 5D | `Resend:ApiKey` and `Resend:FromAddress` must be set via user secrets or deployment environment. |
+| OPS-002 | Public and operator base URLs | 5B/5D | `App:PublicBaseUrl` must point at the public auth site; `App:OperatorBaseUrl` must point at the operator app. |
+| OPS-003 | Migration generation command shape | Session log | Use `--startup-project src/OpHalo.Keep.Infrastructure`; design-time factory needs `ConnectionStrings__DefaultConnection`. |
+| OPS-004 | Test database reset pattern | Session log | Integration factory uses `DROP SCHEMA public CASCADE`, recreate schema, then `MigrateAsync`. |
+| OPS-005 | Testing rate limiter behavior | Session log | `UseRateLimiter` is skipped in `Testing` intentionally. |
+| OPS-006 | No GitHub remote | Session log | Branch is `main`; remote is not configured yet. |

@@ -1,0 +1,52 @@
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using OpHalo.Foundation.Infrastructure.Persistence.Configurations;
+using OpHalo.Keep.Core.Entities;
+using OpHalo.Keep.Core.Entities.Enums;
+
+namespace OpHalo.Keep.Infrastructure.Persistence.Configurations;
+
+internal sealed class KeepRequestParticipantConfiguration : BaseEntityConfiguration<KeepRequestParticipant>
+{
+    protected override void ConfigureEntity(EntityTypeBuilder<KeepRequestParticipant> builder)
+    {
+        builder.ToTable("keep_request_participants");
+
+        builder.Property(x => x.RequestId)
+            .IsRequired();
+
+        builder.Property(x => x.AccountId)
+            .IsRequired();
+
+        builder.Property(x => x.AccountUserId)
+            .IsRequired();
+
+        builder.Property(x => x.ParticipationType)
+            .HasConversion<string>()
+            .HasMaxLength(50)
+            .IsRequired();
+
+        builder.Property(x => x.NotificationsEnabled)
+            .IsRequired();
+
+        builder.Property(x => x.AttachedAtUtc)
+            .IsRequired();
+
+        builder.Property(x => x.DetachedAtUtc);
+
+        // IsActive is a computed C# property — no column.
+        builder.Ignore(x => x.IsActive);
+
+        // One row per user per request — ever. Reattach must update DetachedAtUtc on the
+        // existing row, not insert a new one. B4 owns the attach/detach/reattach contract.
+        builder.HasIndex(x => new { x.RequestId, x.AccountUserId })
+            .IsUnique()
+            .HasDatabaseName("ix_keep_request_participants_request_user");
+
+        builder.HasIndex(x => new { x.AccountId, x.AccountUserId })
+            .HasDatabaseName("ix_keep_request_participants_account_user");
+
+        builder.HasIndex(x => x.RequestId)
+            .HasDatabaseName("ix_keep_request_participants_request_id");
+    }
+}

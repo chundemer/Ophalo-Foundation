@@ -13,9 +13,19 @@ public sealed class KeepRequestEvent : BaseEntity
     public Guid AccountId { get; private set; }
     public KeepRequestEventType EventType { get; private set; }
     public string? Content { get; private set; }
-    public Guid? ActorAccountUserId { get; private set; }
     public KeepRequestEventVisibility Visibility { get; private set; }
     public DateTime OccurredAtUtc { get; private set; }
+
+    // Actor fields — who caused this event (D3/ADR-086).
+    public ActorType ActorType { get; private set; }
+    public Guid? ActorAccountUserId { get; private set; }
+    public string? ActorDisplayName { get; private set; }
+
+    // Present on MessageAdded events only (D5/ADR-088).
+    public MessageIntent? MessageIntent { get; private set; }
+
+    // Present on externally-logged communication events only (D7/ADR-090).
+    public CommunicationChannel? CommunicationChannel { get; private set; }
 
     public static KeepRequestEvent CreateRequestCreated(
         Guid requestId,
@@ -33,6 +43,7 @@ public sealed class KeepRequestEvent : BaseEntity
             AccountId = accountId,
             EventType = KeepRequestEventType.RequestCreated,
             Visibility = KeepRequestEventVisibility.System,
+            ActorType = ActorType.System,
             OccurredAtUtc = occurredAtUtc
         };
     }

@@ -27,7 +27,7 @@ public class KeepRequestTests
 
         Assert.Equal(KeepRequestStatus.Received, request.Status);
         Assert.Equal(Now, request.LastBusinessActivityAt);
-        Assert.Null(request.ClosedAtUtc);
+        Assert.Null(request.TerminatedAtUtc);
         Assert.Null(request.ExpiresAtUtc);
         Assert.Null(request.LastCustomerActivityAt);
         Assert.Null(request.CurrentStatusText);

@@ -25,8 +25,6 @@ internal sealed class KeepRequestEventConfiguration : BaseEntityConfiguration<Ke
         builder.Property(x => x.Content)
             .HasMaxLength(4000);
 
-        builder.Property(x => x.ActorAccountUserId);
-
         builder.Property(x => x.Visibility)
             .HasConversion<string>()
             .HasMaxLength(50)
@@ -34,6 +32,27 @@ internal sealed class KeepRequestEventConfiguration : BaseEntityConfiguration<Ke
 
         builder.Property(x => x.OccurredAtUtc)
             .IsRequired();
+
+        // Actor fields (D3/ADR-086).
+        builder.Property(x => x.ActorType)
+            .HasConversion<string>()
+            .HasMaxLength(50)
+            .IsRequired();
+
+        builder.Property(x => x.ActorAccountUserId);
+
+        builder.Property(x => x.ActorDisplayName)
+            .HasMaxLength(200);
+
+        // Message intent — present on MessageAdded events (D5/ADR-088).
+        builder.Property(x => x.MessageIntent)
+            .HasConversion<string>()
+            .HasMaxLength(50);
+
+        // Communication channel — present on externally-logged contact events (D7/ADR-090).
+        builder.Property(x => x.CommunicationChannel)
+            .HasConversion<string>()
+            .HasMaxLength(50);
 
         builder.HasIndex(x => x.RequestId)
             .HasDatabaseName("ix_keep_request_events_request_id");

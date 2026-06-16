@@ -26,14 +26,44 @@ public sealed class KeepRequest : BaseEntity
     public string ReferenceCode { get; private set; } = string.Empty;
     public string PageToken { get; private set; } = string.Empty;
 
+    // D7/ADR-090: who originated the request (Customer vs Business).
+    public KeepRequestOrigin Origin { get; private set; } = KeepRequestOrigin.Customer;
+
+    // Lifecycle timestamps.
     public DateTime? ExpiresAtUtc { get; private set; }
-    public DateTime? ClosedAtUtc { get; private set; }
+    public DateTime? TerminatedAtUtc { get; private set; }      // ADR-096: covers Closed and Cancelled
     public DateTime LastBusinessActivityAt { get; private set; }
     public DateTime? LastCustomerActivityAt { get; private set; }
 
     public bool IsTerminal =>
         Status is KeepRequestStatus.Closed or KeepRequestStatus.Cancelled;
 
+    // --- First-response fields (D7/ADR-090) ---
+
+    public DateTime? FirstResponseDueAtUtc { get; private set; }
+    public DateTime? FirstRespondedAtUtc { get; private set; }
+    public Guid? FirstResponderAccountUserId { get; private set; }
+    public Guid? FirstResponseEventId { get; private set; }
+
+    // --- Attention fields (D8/ADR-091) ---
+
+    public AttentionLevel AttentionLevel { get; private set; } = AttentionLevel.None;
+    public WaitingDirection WaitingDirection { get; private set; } = WaitingDirection.None;
+    public AttentionReason? AttentionReason { get; private set; }
+    public PriorityBand PriorityBand { get; private set; } = PriorityBand.Standard;
+    public DateTime? AttentionSinceUtc { get; private set; }
+    public DateTime? NextAttentionAtUtc { get; private set; }
+    public DateTime? AttentionClearedAtUtc { get; private set; }
+    public Guid? AttentionClearedByAccountUserId { get; private set; }
+    public string? AttentionClearReason { get; private set; }
+
+    // --- Terminal feedback fields (D6/ADR-089) ---
+
+    public bool? FeedbackWasResolved { get; private set; }
+    public string? FeedbackComment { get; private set; }
+    public DateTime? FeedbackSubmittedAtUtc { get; private set; }
+
+    // ADR-095: origin optional, defaults to Customer (current public intake path).
     public static KeepRequest Create(
         Guid accountId,
         Guid customerId,
@@ -43,7 +73,8 @@ public sealed class KeepRequest : BaseEntity
         string description,
         string referenceCode,
         string pageToken,
-        DateTime nowUtc)
+        DateTime nowUtc,
+        KeepRequestOrigin origin = KeepRequestOrigin.Customer)
     {
         if (accountId == Guid.Empty)
             throw new ArgumentException("Account ID is required.", nameof(accountId));
@@ -59,6 +90,8 @@ public sealed class KeepRequest : BaseEntity
             throw new ArgumentException("Reference code is required.", nameof(referenceCode));
         if (string.IsNullOrWhiteSpace(pageToken))
             throw new ArgumentException("Page token is required.", nameof(pageToken));
+        if (!Enum.IsDefined(origin))
+            throw new ArgumentException($"Unknown KeepRequestOrigin: {origin}.", nameof(origin));
 
         return new KeepRequest
         {
@@ -71,7 +104,12 @@ public sealed class KeepRequest : BaseEntity
             Status = KeepRequestStatus.Received,
             ReferenceCode = referenceCode.Trim(),
             PageToken = pageToken.Trim(),
-            LastBusinessActivityAt = nowUtc
+            Origin = origin,
+            LastBusinessActivityAt = nowUtc,
+            // ADR-098: attention starts at None for B1-α; B2 wires business-waiting behavior.
+            AttentionLevel = AttentionLevel.None,
+            WaitingDirection = WaitingDirection.None,
+            PriorityBand = PriorityBand.Standard
         };
     }
 }
