@@ -34,10 +34,20 @@ Keep domain model + EF schema. 417/417 tests passing.
 - `KeepRequestParticipantConfiguration.cs` — NEW: unique on (request_id, account_user_id).
 
 **Foundation.Infrastructure/Migrations:**
-- `20260616150747_Phase8KeepDataModel` — full schema migration.
+- `20260616150747_Phase8KeepDataModel` — full schema migration. Required string enum columns
+  carry valid defaults for existing rows: `attention_level="None"`, `origin="Customer"`,
+  `priority_band="Standard"`, `waiting_direction="None"`, `actor_type="System"`.
 
 **Tests:**
 - `UnitTests/Keep/KeepRequestTests.cs` — `ClosedAtUtc` → `TerminatedAtUtc` reference fixed.
+
+### Post-review fixes applied
+
+- Migration enum defaults corrected from `""` to valid enum names (review finding 1).
+- `KeepRequestParticipantConfiguration` comment updated: unique index is per row, not per active
+  row — reattach must update the existing row's `DetachedAtUtc`, not insert a new one (finding 2).
+- `Enum.IsDefined()` guards added in `KeepRequest.Create()` (origin) and
+  `KeepRequestParticipant.Create()` (participationType) (finding 3).
 
 ### Key decisions
 

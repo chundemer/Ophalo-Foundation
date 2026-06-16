@@ -89,6 +89,24 @@ no new integration tests — schema and domain only.
 
 ---
 
+## Post-Review Fixes
+
+Three issues found in Christian's review pass and resolved before commit:
+
+1. **Migration enum defaults** — EF generated `defaultValue: ""` for the five required string
+   enum columns. Corrected to valid enum names: `attention_level="None"`, `origin="Customer"`,
+   `priority_band="Standard"`, `waiting_direction="None"`, `actor_type="System"`. Blank defaults
+   would make existing rows unreadable on next EF load.
+
+2. **Participant reattach comment** — `KeepRequestParticipantConfiguration` comment said "one
+   active participation record" but the unique index covers all rows (not just active ones).
+   Corrected to: "one row per user per request — ever; reattach must update `DetachedAtUtc` on
+   the existing row, not insert a new one. B4 owns the attach/detach/reattach contract."
+
+3. **Enum factory guards** — `KeepRequest.Create()` and `KeepRequestParticipant.Create()` lacked
+   validation on enum parameters. Added `Enum.IsDefined()` guards for `origin` and
+   `participationType` respectively.
+
 ## Build State
 
 - `dotnet build` → 0 errors, 0 warnings
