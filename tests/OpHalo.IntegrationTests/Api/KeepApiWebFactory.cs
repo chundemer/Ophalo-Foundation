@@ -50,7 +50,8 @@ public sealed class KeepApiWebFactory : WebApplicationFactory<Program>, IAsyncLi
             config.AddInMemoryCollection(new Dictionary<string, string?>
             {
                 ["ConnectionStrings:DefaultConnection"] = _container.GetConnectionString(),
-                ["App:PublicBaseUrl"] = "https://test.ophalo.com"
+                ["App:PublicBaseUrl"] = "https://test.ophalo.com",
+                ["App:OperatorBaseUrl"] = "https://app.test.ophalo.com"
             });
         });
 
@@ -225,5 +226,14 @@ public sealed record CapturedEmail(string To, string Subject, string HtmlBody)
         const string codeParam = "code=";
         var idx = link.IndexOf(codeParam, StringComparison.Ordinal);
         return idx < 0 ? null : Uri.UnescapeDataString(link[(idx + codeParam.Length)..]);
+    }
+
+    public string? ExtractInviteToken()
+    {
+        var link = ExtractMagicLink();
+        if (link is null) return null;
+        const string tokenParam = "token=";
+        var idx = link.IndexOf(tokenParam, StringComparison.Ordinal);
+        return idx < 0 ? null : Uri.UnescapeDataString(link[(idx + tokenParam.Length)..]);
     }
 }

@@ -56,6 +56,9 @@ public static class ErrorHttpMapper
             // Explicit match — Account.PilotFull resolves to 409, not the default 400.
             var c when c == "Account.PilotFull" => (StatusCodes.Status409Conflict, "Conflict.", null),
 
+            // Explicit match — Invite.SeatLimitReached resolves to 409; no suffix pattern covers it.
+            var c when c == "Invite.SeatLimitReached" => (StatusCodes.Status409Conflict, "Conflict.", null),
+
             var c when c.EndsWith(".PastDueBlocked") => (StatusCodes.Status402PaymentRequired, "Payment required.", null),
 
             // --- 403 — authenticated but forbidden by business rules ---

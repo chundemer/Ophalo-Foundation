@@ -62,8 +62,9 @@ public interface IAuthCodePersistence
     Task CommitStartCodeAsync(AccountAuthCode code, CancellationToken cancellationToken);
 
     /// <summary>
-    /// Returns the count of active (non-deleted, non-cancelled) pilot accounts.
-    /// Used to enforce MaxPilotAccounts capacity gate.
+    /// Returns the current count of pilot account entitlements for MaxPilotAccounts gating.
+    /// Phase 5C intentionally counts all IsPilot entitlements conservatively; cancelled-account
+    /// filtering is documented as a follow-up in build-log/020.
     /// </summary>
     Task<int> CountActivePilotAccountsAsync(CancellationToken cancellationToken);
 

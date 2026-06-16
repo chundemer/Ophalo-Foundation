@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
+using OpHalo.Api.Accounts;
 using OpHalo.Api.Auth;
 using OpHalo.Api.Helpers;
 using OpHalo.Api.Keep;
@@ -81,6 +82,9 @@ builder.Services.AddScoped<StartAuthService>();
 builder.Services.AddScoped<SignInAuthService>();
 builder.Services.AddScoped<ExchangeAuthService>();
 builder.Services.AddScoped<IAuthCodePersistence, EfAuthCodePersistence>();
+builder.Services.AddScoped<SendInviteService>();
+builder.Services.AddScoped<AcceptInviteService>();
+builder.Services.AddScoped<IInvitePersistence, EfInvitePersistence>();
 
 // --- Email ---
 var resendSettings = builder.Configuration.GetSection("Resend").Get<ResendSettings>()
@@ -173,6 +177,7 @@ app.MapGet("/keep/requests", async (GetKeepRequestListService service, Cancellat
 }).RequireAuthorization();
 
 app.MapAuthEndpoints();
+app.MapAccountEndpoints();
 
 app.Run();
 

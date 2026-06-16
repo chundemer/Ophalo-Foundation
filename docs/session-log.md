@@ -1,8 +1,51 @@
 # Session Log — OpHalo Foundation
 
 **Last updated:** 2026-06-15
-**Next session tier:** Tier 1 — Phase 5D discovery (member invites)
+**Next session tier:** Tier 1 — Phase 5E or next phase (discovery)
 **Branch:** `main` (no remote yet)
+
+---
+
+## Phase 5D — COMPLETE
+
+Member invites: send (`POST /accounts/me/invite`) + accept (`POST /accounts/invite/accept`). All exit-gate items verified. 389/389 tests passing.
+
+### What was built
+
+**Foundation.Core:**
+- `Entities/Accounts/Enums/EntryContext.cs` — added `InvitedUser = 3`
+- `Entities/Accounts/Errors/InviteErrors.cs` — NEW: `Forbidden`, `InvalidToken`, `Expired`, `AlreadyActive`, `SeatLimitReached`
+
+**Foundation.Application:**
+- `Auth/InviteTokenGenerator.cs` — NEW: 32-byte URL-safe Base64 token; uppercase SHA-256 hex hash (ADR-076)
+- `Auth/IInvitePersistence.cs` — NEW: `GetSendInviteContextAsync`, `CommitSendInviteAsync`, `CommitAcceptInviteAsync`; `SendInviteContext`, `AcceptedInvite` records
+- `Auth/SendInviteService.cs` — NEW: permission gate, seat-limit check (bypassed for resend), best-effort email with try/catch
+- `Auth/AcceptInviteService.cs` — NEW: blank-token guard, `AcceptInviteResult` dedicated type, session outside transaction
+- `Auth/InviteEmailTemplate.cs` — NEW: `BuildSubject`, `BuildHtmlBody`
+- `Auth/MagicLinkSettings.cs` — added `OperatorBaseUrl`, corrected stale `"Auth"` → `"App"` comment
+
+**Foundation.Infrastructure:**
+- `Auth/EfInvitePersistence.cs` — NEW: 5-query context load; `EntityState.Detached` check for new vs tracked invite; `CommitAcceptInviteAsync` uses PostgreSQL savepoint for User creation race + `ExecuteUpdateAsync` conditioned on `Invited` state for activation race; `UpdatedAtUtc` set explicitly in `ExecuteUpdateAsync`
+
+**Api:**
+- `Accounts/AccountEndpoints.cs` — NEW: `POST /accounts/me/invite` (RequireAuthorization) + `POST /accounts/invite/accept` (RequireRateLimiting "auth")
+- `Program.cs` — registered `SendInviteService`, `AcceptInviteService`, `IInvitePersistence`; mapped `AccountEndpoints`
+- `Helpers/ErrorHttpMapper.cs` — explicit `Invite.SeatLimitReached` → 409
+- `appsettings.json` — added `OperatorBaseUrl` to `App` section
+
+**Tests:**
+- `UnitTests/Auth/InviteTokenGeneratorTests.cs` — NEW: 9 tests
+- `IntegrationTests/Api/InviteTests.cs` — NEW: 26 tests
+- `IntegrationTests/Api/KeepApiWebFactory.cs` — added `App:OperatorBaseUrl` to test config; added `ExtractInviteToken()` helper
+
+### Key decisions applied
+
+| # | Decision | Applied |
+|---|----------|---------|
+| ADR-074 | `EntryContext.InvitedUser = 3`; not wired to exchange | ✓ |
+| ADR-075 | Non-owner roles only; `MembersManage` gate; `OperatorBaseUrl` in `MagicLinkSettings`; resend skips seat-limit check | ✓ |
+| ADR-076 | Direct token endpoint; uppercase SHA-256 hex; `ExecuteUpdateAsync` race guard; savepoint for User race; session outside tx; browser-only | ✓ |
+| ADR-077 | Separate `IInvitePersistence` seam; seat limit via `FeatureAccessPolicy.ResolveLimit`; `Invite.SeatLimitReached` explicit 409 | ✓ |
 
 ---
 
@@ -60,9 +103,9 @@ New-account registration via `POST /auth/start` + extended `/auth/exchange`. All
 
 - `dotnet build` → 0 errors, 0 warnings
 - Architecture tests → 14/14 passing
-- Unit tests → 271/271 passing (11 new Phase 5C AccountAuthCode tests)
-- Integration tests → 69/69 passing (20 new Phase 5C tests)
-- Total → 354/354 passing
+- Unit tests → 280/280 passing
+- Integration tests → 95/95 passing
+- Total → 389/389 passing
 
 ---
 
@@ -76,19 +119,15 @@ New-account registration via `POST /auth/start` + extended `/auth/exchange`. All
 - **No GitHub remote yet.**
 - **Resend `ApiKey` and `FromAddress`** — must be set via user secrets in production; appsettings.json values are empty placeholders.
 - **`App:PublicBaseUrl`** — must point at the public frontend/auth site that owns `/auth/exchange?code=...`.
-- **`App:OperatorBaseUrl`** — Phase 5D invite links should add this following the reference app.
+- **`App:OperatorBaseUrl`** — must point at the operator app that owns `/invite/accept?token=...`.
 - **`UseRateLimiter` skipped in Testing** — intentional.
-- **`CountActivePilotAccountsAsync`** — counts all `IsPilot = true` without filtering `CommercialState != Canceled`. Conservative count is safe for now; refine with a join on `Accounts.LifecycleState` if needed.
+- **`CountActivePilotAccountsAsync`** — counts all `IsPilot = true` without filtering `CommercialState != Canceled`. Conservative count is safe for now.
 - **`SignupDefaultsSettings` startup validation** — `TrialDurationDays <= 0` and `MaxPilotAccounts <= 0` are not validated at startup. Add `IValidateOptions<SignupDefaultsSettings>` in a follow-up.
-- **Session creation failure test** — not covered in 5C integration tests. Would require mocking `IAccountSessionService` to throw for a specific account ID. Deferred; 5B session-failure path is already covered.
+- **Session creation failure test (invite accept)** — not covered in 5D integration tests. Would require overriding `IAccountSessionService`. Deferred; the 503 path is exercised by existing 5B tests.
+- **Mobile invite accept** — deferred (D9). Needs `clientType` parsing and bearer response when added.
 
 ---
 
-## Next session — Phase 5D (member invites)
+## Next session — Phase 5E or next build-plan phase
 
-Phase 5D builds the member invite flow: sending invites, invite acceptance via magic-link exchange,
-and the `InvitedUser` entry context. Discovery session should read the reference app
-`_reference/src/OpHalo.Application/Accounts/Commands/Invites/` and the existing Phase 4/5 decisions
-to plan the new flow.
-
-Read the build plan §5D before proposing any design.
+Read the build plan to determine what comes after 5D. Likely: member management (suspend/remove/role change) or moving to a later phase. Start with Tier 1 discovery.

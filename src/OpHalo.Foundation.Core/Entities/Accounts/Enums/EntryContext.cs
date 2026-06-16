@@ -11,4 +11,7 @@ public enum EntryContext
 
     /// <summary>Existing verified User with at least one active AccountUser — standard re-auth.</summary>
     ExistingMember = 2,
+
+    /// <summary>Invited member accepting via raw token — not routed through /auth/exchange (ADR-074).</summary>
+    InvitedUser = 3,
 }
