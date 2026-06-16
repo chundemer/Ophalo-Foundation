@@ -5,6 +5,41 @@
 
 ---
 
+## Phase 8-B2-gamma — COMPLETE
+
+**Tests:** 468/468 (280 unit · 14 arch · 174 integration)
+**ADRs:** 111..114 implemented; 113 gamma portion implemented, external-contact clause locked/deferred (ADR-115)
+
+### Summary of what was built
+
+Operator attention acknowledgement endpoint plus attention-clearing behaviour wired into
+the existing business-update and status-change paths.
+
+- `POST /keep/requests/{requestId}/attention/acknowledge` — dismisses active attention with a
+  required internal reason; creates `AttentionAcknowledged` (Visibility=Internal); does not
+  set first-response; does not update `LastBusinessActivityAt`
+- `ClearBusinessWaitingAttention` domain helper wired into `AddBusinessUpdate`,
+  `AddBusinessUpdateWithStatus`, and `ChangeStatus` (message-path only)
+- `CanAcknowledgeAttention` wired in mapper: `hasOperatePermission && AttentionLevel != None`
+- 11 integration tests (including the cross-account 404 pattern, silent-status vs business-update
+  attention-clearing contrast)
+
+**Key files:**
+
+| Layer | File |
+|-------|------|
+| Keep.Core | `KeepRequestErrors.cs` (+AttentionReasonRequired, AttentionReasonTooLong, AttentionNotRaised) |
+| Keep.Core | `KeepRequestEvent.cs` (+CreateAttentionAcknowledged) |
+| Keep.Core | `KeepRequest.cs` (+AcknowledgeAttention, +ClearBusinessWaitingAttention, wired in ChangeStatus/AddBusinessUpdate/AddBusinessUpdateWithStatus) |
+| Keep.Application | `AcknowledgeAttentionService.cs` (NEW) |
+| Keep.Application | `KeepRequestDetailMapper.cs` (+CanAcknowledgeAttention, +AcknowledgeReasonMaxLength in ValidationHints) |
+| OpHalo.Api | `AcknowledgeAttentionRequest.cs` (NEW) |
+| OpHalo.Api | `ErrorHttpMapper.cs` (+3 mappings) |
+| OpHalo.Api | `Program.cs` (+DI + 1 route) |
+| IntegrationTests | `AcknowledgeAttentionTests.cs` (NEW — 11 tests) |
+
+---
+
 ## Phase 8-B2-beta — COMPLETE
 
 **Tests:** 454/454 (280 unit · 14 arch · 160 integration)
@@ -13,11 +48,11 @@
 ### Summary of what was built
 
 Two new operator write endpoints:
-- `POST /keep/requests/{requestId}/business-update` — customer-visible message with optional status change
-- `POST /keep/requests/{requestId}/internal-note` — operator-only note
+- `POST /keep/requests/{requestId}/business-updates` — customer-visible message with optional `setStatus`
+- `POST /keep/requests/{requestId}/internal-notes` — operator-only note
 
 Full stack for both: domain methods, event factories, error codes, application services,
-API request types, DI + routes, error mappings, 18 integration tests.
+API request types, DI + routes, error mappings, 21 focused B2-beta integration tests.
 
 Shared mapper (`KeepRequestDetailMapper`) extracted to eliminate duplication across all
 read/write services that return `KeepRequestDetailResult`.
@@ -25,50 +60,15 @@ read/write services that return `KeepRequestDetailResult`.
 First-response wiring corrected: now set in `ChangeStatus` (message path) and
 `AddBusinessUpdate`/`AddBusinessUpdateWithStatus`.
 
-**Key files:**
-
-| Layer | File |
-|-------|------|
-| Keep.Core | `KeepRequestErrors.cs` (+BusinessUpdateMessageTooLong, NoteRequired, NoteTooLong) |
-| Keep.Core | `KeepRequestEvent.cs` (+CreateBusinessUpdateMessage, +CreateInternalNote) |
-| Keep.Core | `KeepRequest.cs` (+first-response in ChangeStatus, +AddBusinessUpdate, +AddBusinessUpdateWithStatus, +AddInternalNote) |
-| Keep.Application | `KeepRequestDetailMapper.cs` (NEW — extracted) |
-| Keep.Application | `GetKeepRequestDetailService.cs` (uses mapper) |
-| Keep.Application | `ChangeKeepRequestStatusService.cs` (uses mapper, first-response wired) |
-| Keep.Application | `AddBusinessUpdateService.cs` (NEW) |
-| Keep.Application | `AddInternalNoteService.cs` (NEW) |
-| OpHalo.Api | `BusinessUpdateRequest.cs` (NEW) |
-| OpHalo.Api | `InternalNoteRequest.cs` (NEW) |
-| OpHalo.Api | `ErrorHttpMapper.cs` (+3 mappings) |
-| OpHalo.Api | `Program.cs` (+DI + 2 routes) |
-| IntegrationTests | `AddBusinessUpdateTests.cs` (NEW — 10 tests) |
-| IntegrationTests | `AddInternalNoteTests.cs` (NEW — 8 tests) |
-
 ---
 
 ## Phase 8-B2-alpha — COMPLETE
 
 **Status:** 436/436 tests passing. Build log 028 and decision index (ADR-102..107) shipped.
 
-### Summary of what was built
-
 `PATCH /keep/requests/{requestId}/status` — authenticated operator status-change endpoint.
 Full stack: domain method, outcome wrapper, persistence interfaces, EF implementations,
 API endpoint, permission key, EF migration, 9 integration tests.
-
-**Key files:**
-
-| Layer | File |
-|-------|------|
-| Keep.Core | `KeepRequest.ChangeStatus`, `KeepStatusChangeOutcome`, `KeepRequestEvent.CreateStatusChanged`, `KeepRequestErrors` (+5), `KeepRequestStatus.Scheduled=7` |
-| Foundation.Application | `PermissionKeys.Keep.RequestsOperate`, `RolePermissions` (OperatorBase) |
-| Keep.Application | `IKeepRequestOperatePersistence`, `ChangeKeepRequestStatusService`, `KeepRequestDetailResult` (AvailableActions/Validation/StatusAfter), `GetKeepRequestDetailService` (canOperate/ComputeAllowedStatuses/Scheduled) |
-| Keep.Infrastructure | `EfKeepRequestOperatePersistence`, `KeepRequestEventConfiguration` (StatusAfter) |
-| Foundation.Infrastructure | Migration `20260616184305_AddStatusAfterToKeepRequestEvent` |
-| OpHalo.Api | `ChangeStatusRequest.cs`, `ErrorHttpMapper` (4 new mappings), `Program.cs` (DI + route) |
-| IntegrationTests | `ChangeKeepRequestStatusTests.cs` (9 tests) |
-
-**ADRs:** 102..107 (see decision-index.md and build-log/028).
 
 ---
 
@@ -105,16 +105,46 @@ Member management API + integration tests. See build-log/023.
   - `AllowedActions` always `[]` in `KeepCustomerPageResult`. B3/B4 owns this.
   - `NewRequestUrl` always `null`. B4 decides.
   - Customer page events sorted ascending — let frontend reverse if needed.
-- **`CanAcknowledgeAttention = false`** hardcoded. B2-gamma wires it. Full formula when wired: `hasOperatePermission && request.AttentionLevel != AttentionLevel.None`.
 - **`Results.Problem` extension shape:** extension dict entries land at the top level of ProblemDetails JSON, not under an `"extensions"` key. Test assertions must use `body.GetProperty("code")`.
-- **`TerminatedAtUtc` not set by ChangeStatus/AddBusinessUpdateWithStatus** when target is Closed/Cancelled. Pre-existing gap, not yet in scope.
+- **`TerminatedAtUtc` not set by ChangeStatus/AddBusinessUpdateWithStatus** when target is Closed/Cancelled. Scoped to B2-delta terminal lifecycle.
+- **Terminal transitions do not auto-clear active attention.** Scoped to B2-delta.
 - **`businessName ?? string.Empty`** — persistence returns null if account missing post-auth; never expected in production.
 
 ---
 
-## Next — Phase 8-B2-gamma
+## Next — Phase 8-B2-delta Terminal Lifecycle + Analytics Primitives
 
-Attention acknowledge: wire `CanAcknowledgeAttention` and implement
-`POST /keep/requests/{id}/acknowledge-attention`.
+**Pre-work complete**
 
-Full formula: `hasOperatePermission && request.AttentionLevel != AttentionLevel.None`.
+Scope confirmed in session log / build-log/030:
+
+- When status transitions to `Closed` or `Cancelled`, set `TerminatedAtUtc = now`.
+- When terminal transition happens with active attention, auto-clear attention:
+  - `AttentionLevel = None`, `WaitingDirection = None`, `AttentionReason = null`
+  - `PriorityBand = Standard`
+  - `AttentionSinceUtc = null`, `NextAttentionAtUtc = null`
+  - `AttentionClearedAtUtc = now`, `AttentionClearedByAccountUserId = actor`
+  - `AttentionClearReason = null`
+- Do not create `AttentionAcknowledged` for terminal auto-clear.
+- Do not require an acknowledge reason for terminal auto-clear.
+- Keep the terminal `StatusChanged` event as the audit anchor.
+- Preserve fallback acknowledge on terminal requests if active attention exists.
+
+Tests/docs expected:
+- Terminal status transition sets `TerminatedAtUtc`.
+- Terminal transition with active attention auto-clears attention fields.
+- Terminal auto-clear does not create `AttentionAcknowledged`.
+- Terminal fallback acknowledge works if active attention remains on a terminal request.
+- Add build log `031-phase-8-b2-delta-terminal-lifecycle.md`.
+
+Files expected to change:
+- `Keep.Core/Entities/KeepRequest.cs` — `ChangeStatus` (terminal path sets `TerminatedAtUtc` + calls auto-clear)
+- `IntegrationTests/Api/ChangeKeepRequestStatusTests.cs` — new terminal tests
+- Possibly `ChangeKeepRequestStatusService.cs` if any service-layer coordination is needed
+- `docs/decisions/decision-index.md` — ADR-116 → Implemented
+
+Out of scope for delta:
+- Notification delivery.
+- Participant routing.
+- External contact logging/capture (ADR-115, pre-go-live).
+- Customer writes.

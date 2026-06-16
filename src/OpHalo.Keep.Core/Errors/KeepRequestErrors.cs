@@ -42,4 +42,13 @@ public static class KeepRequestErrors
 
     public static readonly Error NoteTooLong =
         Error.Create("KeepRequest.NoteTooLong", "The internal note exceeds the maximum allowed length of 4000 characters.");
+
+    public static readonly Error AttentionReasonRequired =
+        Error.Create("KeepRequest.AttentionReasonRequired", "An acknowledgement reason is required.");
+
+    public static readonly Error AttentionReasonTooLong =
+        Error.Create("KeepRequest.AttentionReasonTooLong", "The acknowledgement reason exceeds the maximum allowed length of 500 characters.");
+
+    public static readonly Error AttentionNotRaised =
+        Error.Create("KeepRequest.AttentionNotRaised", "There is no active attention to acknowledge.");
 }

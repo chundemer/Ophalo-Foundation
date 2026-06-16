@@ -8,8 +8,13 @@ using OpHalo.SharedKernel.Results;
 
 namespace OpHalo.Keep.Application.Requests;
 
-public sealed class GetKeepRequestDetailService(
-    IKeepRequestDetailPersistence persistence,
+public sealed record AcknowledgeAttentionCommand(
+    Guid RequestId,
+    string Reason);
+
+public sealed class AcknowledgeAttentionService(
+    IKeepRequestOperatePersistence operatePersistence,
+    IKeepRequestDetailPersistence readPersistence,
     ICurrentUser currentUser,
     IUserAccessPolicy userAccessPolicy,
     IAccountAccessPolicy accountAccessPolicy,
@@ -23,16 +28,17 @@ public sealed class GetKeepRequestDetailService(
         Error.Create("auth.forbidden", "You do not have permission to perform this action.");
 
     public async Task<Result<KeepRequestDetailResult>> ExecuteAsync(
-        Guid requestId, CancellationToken ct = default)
+        AcknowledgeAttentionCommand command, CancellationToken ct = default)
     {
+        // --- Auth stack ---
         if (!currentUser.IsAuthenticated)
             return Result<KeepRequestDetailResult>.Failure(Unauthorized);
 
-        var userSnapshot = await persistence.GetAccountUserSnapshotAsync(currentUser.UserId, ct);
+        var userSnapshot = await operatePersistence.GetAccountUserSnapshotAsync(currentUser.UserId, ct);
         if (userSnapshot is null)
             return Result<KeepRequestDetailResult>.Failure(Forbidden);
 
-        var accountSnapshot = await persistence.GetAccountAccessSnapshotAsync(currentUser.AccountId, ct);
+        var accountSnapshot = await operatePersistence.GetAccountAccessSnapshotAsync(currentUser.AccountId, ct);
         if (accountSnapshot is null)
             return Result<KeepRequestDetailResult>.Failure(Forbidden);
 
@@ -40,14 +46,8 @@ public sealed class GetKeepRequestDetailService(
                 userSnapshot.Role,
                 userSnapshot.MembershipStatus,
                 accountSnapshot.Purpose,
-                PermissionKeys.Keep.RequestsView))
+                PermissionKeys.Keep.RequestsOperate))
             return Result<KeepRequestDetailResult>.Failure(Forbidden);
-
-        var canOperate = userAccessPolicy.IsPermitted(
-            userSnapshot.Role,
-            userSnapshot.MembershipStatus,
-            accountSnapshot.Purpose,
-            PermissionKeys.Keep.RequestsOperate);
 
         var accessContext = new AccountAccessContext(
             accountSnapshot.LifecycleState,
@@ -66,20 +66,38 @@ public sealed class GetKeepRequestDetailService(
         if (!featurePolicy.IsEnabled(accountSnapshot.Plan, FeatureKeys.Keep.OperatorQueue))
             return Result<KeepRequestDetailResult>.Failure(Forbidden);
 
-        var request = await persistence.GetRequestAsync(requestId, currentUser.AccountId, ct);
+        // --- Actor display name (denormalized onto the event) ---
+        var actorDisplayName = await operatePersistence.GetActorDisplayNameAsync(currentUser.UserId, ct);
+        if (actorDisplayName is null)
+            return Result<KeepRequestDetailResult>.Failure(Forbidden);
+
+        // --- Load request for mutation ---
+        var request = await operatePersistence.GetRequestForUpdateAsync(command.RequestId, currentUser.AccountId, ct);
         if (request is null)
             return Result<KeepRequestDetailResult>.Failure(KeepRequestErrors.NotFound);
 
-        var events = await persistence.GetAllEventsAsync(request.Id, ct);
-        var participants = await persistence.GetParticipantsAsync(request.Id, ct);
-        var businessName = await persistence.GetAccountBusinessNameAsync(currentUser.AccountId, ct);
+        // --- Domain: acknowledge attention ---
+        // Reason is required, max 500 chars. Does not update first-response or status.
+        var acknowledgeResult = request.AcknowledgeAttention(
+            command.Reason, currentUser.UserId, actorDisplayName, clock.UtcNow);
 
+        if (acknowledgeResult.IsFailure)
+            return Result<KeepRequestDetailResult>.Failure(acknowledgeResult.Error);
+
+        await operatePersistence.CommitAsync(request, acknowledgeResult.Value, ct);
+
+        // --- Load read data for the response ---
+        var events = await readPersistence.GetAllEventsAsync(request.Id, ct);
+        var participants = await readPersistence.GetParticipantsAsync(request.Id, ct);
+        var businessName = await readPersistence.GetAccountBusinessNameAsync(currentUser.AccountId, ct);
+
+        // canOperate confirmed true (passed the gate above).
         var availableActions = new AvailableActionsMetadata(
-            CanChangeStatus: canOperate && !request.IsTerminal,
-            CanSendBusinessUpdate: canOperate && !request.IsTerminal,
-            CanAddInternalNote: canOperate,
-            CanAcknowledgeAttention: KeepRequestDetailMapper.CanAcknowledgeAttention(canOperate, request),
-            AllowedStatuses: canOperate && !request.IsTerminal
+            CanChangeStatus: !request.IsTerminal,
+            CanSendBusinessUpdate: !request.IsTerminal,
+            CanAddInternalNote: true,
+            CanAcknowledgeAttention: KeepRequestDetailMapper.CanAcknowledgeAttention(true, request),
+            AllowedStatuses: !request.IsTerminal
                 ? KeepRequestDetailMapper.ComputeAllowedStatuses(request.Status)
                 : []);
 

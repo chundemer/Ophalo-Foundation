@@ -98,7 +98,7 @@ public sealed class AddInternalNoteService(
             CanChangeStatus: !request.IsTerminal,
             CanSendBusinessUpdate: !request.IsTerminal,
             CanAddInternalNote: true,
-            CanAcknowledgeAttention: false,  // B2-gamma
+            CanAcknowledgeAttention: KeepRequestDetailMapper.CanAcknowledgeAttention(true, request),
             AllowedStatuses: !request.IsTerminal
                 ? KeepRequestDetailMapper.ComputeAllowedStatuses(request.Status)
                 : []);

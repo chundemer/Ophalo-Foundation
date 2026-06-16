@@ -78,6 +78,7 @@ builder.Services.AddScoped<GetKeepCustomerPageService>();
 builder.Services.AddScoped<ChangeKeepRequestStatusService>();
 builder.Services.AddScoped<AddBusinessUpdateService>();
 builder.Services.AddScoped<AddInternalNoteService>();
+builder.Services.AddScoped<AcknowledgeAttentionService>();
 
 builder.Services.AddSingleton<IAccountAccessPolicy, AccountAccessPolicy>();
 builder.Services.AddSingleton<IUserAccessPolicy, UserAccessPolicy>();
@@ -229,6 +230,18 @@ app.MapPost("/keep/requests/{requestId:guid}/internal-notes", async (
     CancellationToken ct) =>
 {
     var command = new AddInternalNoteCommand(requestId, body.Note);
+    var result = await service.ExecuteAsync(command, ct);
+    return result.IsSuccess ? Results.Ok(result.Value) : ErrorHttpMapper.ToHttpResult(result.Error);
+}).RequireAuthorization();
+
+// Acknowledge attention — authenticated, operator write (Phase 8-B2-gamma)
+app.MapPost("/keep/requests/{requestId:guid}/attention/acknowledge", async (
+    Guid requestId,
+    AcknowledgeAttentionRequestBody body,
+    AcknowledgeAttentionService service,
+    CancellationToken ct) =>
+{
+    var command = new AcknowledgeAttentionCommand(requestId, body.Reason);
     var result = await service.ExecuteAsync(command, ct);
     return result.IsSuccess ? Results.Ok(result.Value) : ErrorHttpMapper.ToHttpResult(result.Error);
 }).RequireAuthorization();

@@ -124,6 +124,9 @@ public sealed class KeepRequest : BaseEntity
             FirstResponseEventId = statusEvent.Id;
         }
 
+        if (trimmedMessage is not null)
+            ClearBusinessWaitingAttention(actorAccountUserId, nowUtc);
+
         return Result<KeepStatusChangeOutcome>.Success(KeepStatusChangeOutcome.WithEvent(statusEvent));
     }
 
@@ -165,6 +168,8 @@ public sealed class KeepRequest : BaseEntity
             FirstResponderAccountUserId = actorAccountUserId;
             FirstResponseEventId = messageEvent.Id;
         }
+
+        ClearBusinessWaitingAttention(actorAccountUserId, nowUtc);
 
         return Result<KeepRequestEvent>.Success(messageEvent);
     }
@@ -219,6 +224,8 @@ public sealed class KeepRequest : BaseEntity
             FirstResponseEventId = statusEvent.Id;
         }
 
+        ClearBusinessWaitingAttention(actorAccountUserId, nowUtc);
+
         return Result<KeepRequestEvent>.Success(statusEvent);
     }
 
@@ -252,6 +259,62 @@ public sealed class KeepRequest : BaseEntity
             Id, AccountId, actorAccountUserId, actorDisplayName, trimmedNote, nowUtc);
 
         return Result<KeepRequestEvent>.Success(noteEvent);
+    }
+
+    /// <summary>
+    /// Acknowledges active attention without customer communication. Creates an internal
+    /// AttentionAcknowledged event and does not count as first response (D5/B2-gamma).
+    /// </summary>
+    public Result<KeepRequestEvent> AcknowledgeAttention(
+        string reason,
+        Guid actorAccountUserId,
+        string actorDisplayName,
+        DateTime nowUtc)
+    {
+        if (nowUtc == default)
+            throw new ArgumentException("nowUtc must be a valid UTC timestamp.", nameof(nowUtc));
+
+        var trimmedReason = string.IsNullOrWhiteSpace(reason) ? null : reason.Trim();
+
+        if (trimmedReason is null)
+            return Result<KeepRequestEvent>.Failure(KeepRequestErrors.AttentionReasonRequired);
+
+        if (trimmedReason.Length > 500)
+            return Result<KeepRequestEvent>.Failure(KeepRequestErrors.AttentionReasonTooLong);
+
+        if (AttentionLevel == AttentionLevel.None)
+            return Result<KeepRequestEvent>.Failure(KeepRequestErrors.AttentionNotRaised);
+
+        AttentionLevel = AttentionLevel.None;
+        WaitingDirection = WaitingDirection.None;
+        AttentionReason = null;
+        PriorityBand = PriorityBand.Standard;
+        AttentionSinceUtc = null;
+        NextAttentionAtUtc = null;
+        AttentionClearedAtUtc = nowUtc;
+        AttentionClearedByAccountUserId = actorAccountUserId;
+        AttentionClearReason = trimmedReason;
+
+        var attentionEvent = KeepRequestEvent.CreateAttentionAcknowledged(
+            Id, AccountId, actorAccountUserId, actorDisplayName, trimmedReason, nowUtc);
+
+        return Result<KeepRequestEvent>.Success(attentionEvent);
+    }
+
+    private void ClearBusinessWaitingAttention(Guid actorAccountUserId, DateTime nowUtc)
+    {
+        if (AttentionLevel == AttentionLevel.None || WaitingDirection != WaitingDirection.Business)
+            return;
+
+        AttentionLevel = AttentionLevel.None;
+        WaitingDirection = WaitingDirection.None;
+        AttentionReason = null;
+        PriorityBand = PriorityBand.Standard;
+        AttentionSinceUtc = null;
+        NextAttentionAtUtc = null;
+        AttentionClearedAtUtc = nowUtc;
+        AttentionClearedByAccountUserId = actorAccountUserId;
+        AttentionClearReason = null;
     }
 
     private static bool IsAllowedTransition(KeepRequestStatus from, KeepRequestStatus to) =>

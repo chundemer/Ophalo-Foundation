@@ -181,4 +181,43 @@ public sealed class KeepRequestEvent : BaseEntity
             OccurredAtUtc = occurredAtUtc
         };
     }
+
+    /// <summary>
+    /// Creates an AttentionAcknowledged event. Visibility = Internal; this is an operator
+    /// audit action, not customer communication.
+    /// </summary>
+    public static KeepRequestEvent CreateAttentionAcknowledged(
+        Guid requestId,
+        Guid accountId,
+        Guid actorAccountUserId,
+        string actorDisplayName,
+        string reason,
+        DateTime occurredAtUtc)
+    {
+        if (requestId == Guid.Empty)
+            throw new ArgumentException("Request ID is required.", nameof(requestId));
+        if (accountId == Guid.Empty)
+            throw new ArgumentException("Account ID is required.", nameof(accountId));
+        if (actorAccountUserId == Guid.Empty)
+            throw new ArgumentException("Actor account user ID is required.", nameof(actorAccountUserId));
+        if (string.IsNullOrWhiteSpace(actorDisplayName))
+            throw new ArgumentException("Actor display name is required.", nameof(actorDisplayName));
+        if (string.IsNullOrWhiteSpace(reason))
+            throw new ArgumentException("Reason is required.", nameof(reason));
+        if (occurredAtUtc == default)
+            throw new ArgumentException("occurredAtUtc must be a real timestamp.", nameof(occurredAtUtc));
+
+        return new KeepRequestEvent
+        {
+            RequestId = requestId,
+            AccountId = accountId,
+            EventType = KeepRequestEventType.AttentionAcknowledged,
+            Visibility = KeepRequestEventVisibility.Internal,
+            Content = reason.Trim(),
+            ActorType = ActorType.AccountUser,
+            ActorAccountUserId = actorAccountUserId,
+            ActorDisplayName = actorDisplayName.Trim(),
+            OccurredAtUtc = occurredAtUtc
+        };
+    }
 }

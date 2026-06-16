@@ -17,7 +17,7 @@ namespace OpHalo.IntegrationTests.Api;
 /// <summary>
 /// HTTP integration tests for POST /keep/requests/{requestId}/internal-notes (Phase 8-B2-beta).
 ///
-/// Coverage: 401 unauthenticated, 403 viewer, 404 unknown, 400 note required,
+/// Coverage: 401 unauthenticated, 403 viewer, 404 unknown/cross-account, 400 note required,
 /// 400 note too long, 200 InternalNoteAdded event on active request,
 /// 200 note allowed on closed request (D8), 200 note does not wire first-response.
 /// </summary>
@@ -173,7 +173,54 @@ public sealed class AddInternalNoteTests : IClassFixture<KeepApiWebFactory>, IAs
     }
 
     // =========================================================================
-    // Test 4 — Missing note → 400 NoteRequired
+    // Test 4 — Request belonging to a different account → 404 (no existence leak)
+    // =========================================================================
+
+    [Fact]
+    public async Task AddInternalNote_CrossAccountRequest_Returns404()
+    {
+        var now = DateTime.UtcNow;
+        var result = new AccountProvisioningService().CreateVerified(
+            email: "owner@account-b-note.com",
+            name: "Account B Owner",
+            businessName: "Account B Co",
+            purpose: AccountPurpose.Business,
+            timeZone: "Australia/Sydney",
+            plan: AccountPlan.Trial,
+            isPilot: false,
+            nowUtc: now,
+            trialEndsAtUtc: now.AddDays(30));
+
+        Assert.True(result.IsSuccess);
+        var graphB = result.Value;
+
+        await using (var scope = _factory.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+            db.Users.Add(graphB.User);
+            db.Accounts.Add(graphB.Account);
+            db.AccountUsers.Add(graphB.Owner);
+            db.AccountEntitlements.Add(graphB.Entitlements);
+
+            var ownerFk = db.Entry(graphB.Account).Property(a => a.PrimaryOwnerAccountUserId);
+            ownerFk.CurrentValue = null;
+            await db.SaveChangesAsync();
+            ownerFk.CurrentValue = graphB.Owner.Id;
+            await db.SaveChangesAsync();
+        }
+
+        var tokenB = await _factory.SeedSessionAsync(graphB.Owner.Id, graphB.Account.Id);
+        var cookieB = $"{AuthConstants.CookieName}={tokenB}";
+
+        var response = await AuthRequest(cookieB).PostAsJsonAsync(
+            $"/keep/requests/{_requestId}/internal-notes",
+            new { note = "Wrong-account private note." });
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    // =========================================================================
+    // Test 5 — Missing note → 400 NoteRequired
     // =========================================================================
 
     [Fact]
@@ -190,7 +237,7 @@ public sealed class AddInternalNoteTests : IClassFixture<KeepApiWebFactory>, IAs
     }
 
     // =========================================================================
-    // Test 5 — Note exceeds 4000 chars → 400 NoteTooLong
+    // Test 6 — Note exceeds 4000 chars → 400 NoteTooLong
     // =========================================================================
 
     [Fact]
@@ -207,7 +254,7 @@ public sealed class AddInternalNoteTests : IClassFixture<KeepApiWebFactory>, IAs
     }
 
     // =========================================================================
-    // Test 6 — Successful note on active request → 200, InternalNoteAdded event
+    // Test 7 — Successful note on active request → 200, InternalNoteAdded event
     // =========================================================================
 
     [Fact]
@@ -233,7 +280,7 @@ public sealed class AddInternalNoteTests : IClassFixture<KeepApiWebFactory>, IAs
     }
 
     // =========================================================================
-    // Test 7 — Note on closed request → 200 (D8: allowed after terminal)
+    // Test 8 — Note on closed request → 200 (D8: allowed after terminal)
     // =========================================================================
 
     [Fact]
@@ -262,7 +309,7 @@ public sealed class AddInternalNoteTests : IClassFixture<KeepApiWebFactory>, IAs
     }
 
     // =========================================================================
-    // Test 8 — Internal note does not wire first-response (D1)
+    // Test 9 — Internal note does not wire first-response (D1)
     // =========================================================================
 
     [Fact]

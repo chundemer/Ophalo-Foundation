@@ -2,15 +2,15 @@
 
 **Phase:** 8-B2-beta
 **Branch:** `main`
-**Tests:** 454/454 passing (280 unit · 14 arch · 160 integration)
+**Tests at original B2-beta handoff:** 454/454 passing (280 unit · 14 arch · 160 integration)
 
 ---
 
 ## Scope
 
 Operator write surfaces for customer-facing business updates and internal notes.
-Two new endpoints, two new domain methods, shared mapper extraction, and 18 new
-integration tests.
+Two new endpoints, three new domain methods, shared mapper extraction, and 21 focused
+B2-beta integration tests.
 
 ---
 
@@ -24,14 +24,14 @@ integration tests.
 | `Keep.Application/Requests/KeepRequestDetailMapper.cs` | New — extracted static mapper from both read/write services |
 | `Keep.Application/Requests/GetKeepRequestDetailService.cs` | Rewritten to use shared mapper |
 | `Keep.Application/Requests/ChangeKeepRequestStatusService.cs` | Rewritten to use shared mapper |
-| `Keep.Application/Requests/AddBusinessUpdateService.cs` | New — `POST /keep/requests/{id}/business-update` service |
-| `Keep.Application/Requests/AddInternalNoteService.cs` | New — `POST /keep/requests/{id}/internal-note` service |
-| `Api/Keep/BusinessUpdateRequest.cs` | New — `BusinessUpdateRequestBody(string? NewStatus, string Message)` |
+| `Keep.Application/Requests/AddBusinessUpdateService.cs` | New — `POST /keep/requests/{id}/business-updates` service |
+| `Keep.Application/Requests/AddInternalNoteService.cs` | New — `POST /keep/requests/{id}/internal-notes` service |
+| `Api/Keep/BusinessUpdateRequest.cs` | New — `BusinessUpdateRequestBody(string Message, string? SetStatus)` |
 | `Api/Keep/InternalNoteRequest.cs` | New — `InternalNoteRequestBody(string Note)` |
 | `Api/Helpers/ErrorHttpMapper.cs` | Added `BusinessUpdateMessageTooLong`→400, `NoteRequired`→400, `NoteTooLong`→400 |
 | `Api/Program.cs` | DI registrations; two new POST routes |
-| `IntegrationTests/Api/AddBusinessUpdateTests.cs` | New — 10 integration tests |
-| `IntegrationTests/Api/AddInternalNoteTests.cs` | New — 8 integration tests |
+| `IntegrationTests/Api/AddBusinessUpdateTests.cs` | New — 12 integration tests |
+| `IntegrationTests/Api/AddInternalNoteTests.cs` | New — 9 integration tests |
 
 ---
 
@@ -79,9 +79,9 @@ and the read service now call the shared mapper.
 
 ### `ParseStatusSlug` null/blank safety
 The helper returns `null` for null or blank input, avoiding a throw inside the switch.
-`AddBusinessUpdateService` and `AddInternalNoteService` use this: if `NewStatus` is null
-(pure update, no status change), `ParseStatusSlug` returns null and the service skips the
-status path cleanly.
+`AddBusinessUpdateService` uses this for optional `SetStatus`: if `SetStatus` is null
+(pure update, no status change), the service skips the status path cleanly. If `SetStatus`
+is present but blank or unknown, the service returns `KeepRequest.InvalidStatus`.
 
 ---
 
@@ -96,9 +96,9 @@ status path cleanly.
 
 ---
 
-## Integration test coverage (18 tests)
+## Integration test coverage (21 tests)
 
-### `AddBusinessUpdateTests` (10 tests)
+### `AddBusinessUpdateTests` (12 tests)
 
 | Test | Asserts |
 |------|---------|
@@ -106,14 +106,16 @@ status path cleanly.
 | `UnknownRequestId_Returns404` | Random GUID → 404 |
 | `CrossAccountRequest_Returns404` | Account B operator → Account A request → 404 |
 | `ViewerRole_Returns403` | Active Viewer (no `RequestsOperate`) → 403 |
+| `MissingMessage_Returns400` | Blank message → `KeepRequest.MessageRequired` |
 | `ValidBusinessUpdate_Returns200` | Message added, event in timeline, `currentStatusText` updated |
 | `ValidBusinessUpdateWithStatusChange_Returns200` | Message + status, event recorded, status transitions |
 | `InvalidStatusTransition_Returns422` | Disallowed status slug → `KeepRequest.InvalidStatusTransition` |
-| `UnknownStatusSlug_Returns400` | Garbage slug → `KeepRequest.InvalidStatus` |
+| `UnknownSetStatusSlug_Returns400` | Garbage slug → `KeepRequest.InvalidStatus` |
 | `MessageTooLong_Returns400` | >4000 chars → `KeepRequest.BusinessUpdateMessageTooLong` |
 | `TerminalRequest_Returns409` | Closed request → `KeepRequest.TerminalState` |
+| `FirstContactOnCustomerOriginRequest_WiresFirstResponse` | Business update sets first-response fields |
 
-### `AddInternalNoteTests` (8 tests)
+### `AddInternalNoteTests` (9 tests)
 
 | Test | Asserts |
 |------|---------|
@@ -124,7 +126,8 @@ status path cleanly.
 | `ValidInternalNote_Returns200` | Note event in timeline, not visible on customer page |
 | `EmptyNote_Returns400` | Blank string → `KeepRequest.NoteRequired` |
 | `NoteTooLong_Returns400` | >4000 chars → `KeepRequest.NoteTooLong` |
-| `TerminalRequest_Returns409` | Closed request → `KeepRequest.TerminalState` |
+| `ClosedRequest_Returns200` | Internal note is allowed after terminal state per D8 |
+| `DoesNotWireFirstResponse` | Internal note leaves first-response fields unset |
 
 ---
 

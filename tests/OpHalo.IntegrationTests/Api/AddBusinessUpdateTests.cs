@@ -20,7 +20,7 @@ namespace OpHalo.IntegrationTests.Api;
 /// Coverage: 401 unauthenticated, 403 viewer, 404 unknown/cross-account,
 /// 400 message required, 400 message too long, 200 standalone MessageAdded event,
 /// 200 combined setStatus StatusChanged event, 200 first-response wired,
-/// 409 terminal state, 422 invalid setStatus transition.
+/// 400 unknown setStatus, 409 terminal state, 422 invalid setStatus transition.
 /// </summary>
 public sealed class AddBusinessUpdateTests : IClassFixture<KeepApiWebFactory>, IAsyncLifetime
 {
@@ -174,7 +174,54 @@ public sealed class AddBusinessUpdateTests : IClassFixture<KeepApiWebFactory>, I
     }
 
     // =========================================================================
-    // Test 4 — Missing message → 400 MessageRequired
+    // Test 4 — Request belonging to a different account → 404 (no existence leak)
+    // =========================================================================
+
+    [Fact]
+    public async Task AddBusinessUpdate_CrossAccountRequest_Returns404()
+    {
+        var now = DateTime.UtcNow;
+        var result = new AccountProvisioningService().CreateVerified(
+            email: "owner@account-b-bizupdate.com",
+            name: "Account B Owner",
+            businessName: "Account B Co",
+            purpose: AccountPurpose.Business,
+            timeZone: "Australia/Sydney",
+            plan: AccountPlan.Trial,
+            isPilot: false,
+            nowUtc: now,
+            trialEndsAtUtc: now.AddDays(30));
+
+        Assert.True(result.IsSuccess);
+        var graphB = result.Value;
+
+        await using (var scope = _factory.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+            db.Users.Add(graphB.User);
+            db.Accounts.Add(graphB.Account);
+            db.AccountUsers.Add(graphB.Owner);
+            db.AccountEntitlements.Add(graphB.Entitlements);
+
+            var ownerFk = db.Entry(graphB.Account).Property(a => a.PrimaryOwnerAccountUserId);
+            ownerFk.CurrentValue = null;
+            await db.SaveChangesAsync();
+            ownerFk.CurrentValue = graphB.Owner.Id;
+            await db.SaveChangesAsync();
+        }
+
+        var tokenB = await _factory.SeedSessionAsync(graphB.Owner.Id, graphB.Account.Id);
+        var cookieB = $"{AuthConstants.CookieName}={tokenB}";
+
+        var response = await AuthRequest(cookieB).PostAsJsonAsync(
+            $"/keep/requests/{_requestId}/business-updates",
+            new { message = "Hello from the wrong account." });
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    // =========================================================================
+    // Test 5 — Missing message → 400 MessageRequired
     // =========================================================================
 
     [Fact]
@@ -191,7 +238,7 @@ public sealed class AddBusinessUpdateTests : IClassFixture<KeepApiWebFactory>, I
     }
 
     // =========================================================================
-    // Test 5 — Message exceeds 4000 chars → 400 BusinessUpdateMessageTooLong
+    // Test 6 — Message exceeds 4000 chars → 400 BusinessUpdateMessageTooLong
     // =========================================================================
 
     [Fact]
@@ -208,7 +255,7 @@ public sealed class AddBusinessUpdateTests : IClassFixture<KeepApiWebFactory>, I
     }
 
     // =========================================================================
-    // Test 6 — Terminal state (Closed) → 409
+    // Test 7 — Terminal state (Closed) → 409
     // =========================================================================
 
     [Fact]
@@ -225,7 +272,7 @@ public sealed class AddBusinessUpdateTests : IClassFixture<KeepApiWebFactory>, I
     }
 
     // =========================================================================
-    // Test 7 — Successful standalone update → 200, MessageAdded event
+    // Test 8 — Successful standalone update → 200, MessageAdded event
     // =========================================================================
 
     [Fact]
@@ -254,7 +301,7 @@ public sealed class AddBusinessUpdateTests : IClassFixture<KeepApiWebFactory>, I
     }
 
     // =========================================================================
-    // Test 8 — Successful update with setStatus → 200, StatusChanged event
+    // Test 9 — Successful update with setStatus → 200, StatusChanged event
     // =========================================================================
 
     [Fact]
@@ -286,7 +333,7 @@ public sealed class AddBusinessUpdateTests : IClassFixture<KeepApiWebFactory>, I
     }
 
     // =========================================================================
-    // Test 9 — Invalid setStatus transition (Received → Closed) → 422
+    // Test 10 — Invalid setStatus transition (Received → Closed) → 422
     // =========================================================================
 
     [Fact]
@@ -303,7 +350,24 @@ public sealed class AddBusinessUpdateTests : IClassFixture<KeepApiWebFactory>, I
     }
 
     // =========================================================================
-    // Test 10 — First-response wired on customer-origin request (D1)
+    // Test 11 — Unknown setStatus slug → 400 InvalidStatus
+    // =========================================================================
+
+    [Fact]
+    public async Task AddBusinessUpdate_UnknownSetStatusSlug_Returns400()
+    {
+        var response = await AuthRequest(_ownerCookie).PostAsJsonAsync(
+            $"/keep/requests/{_requestId}/business-updates",
+            new { message = "Definitely doing a status thing.", setStatus = "teleported" });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("KeepRequest.InvalidStatus", body.GetProperty("code").GetString());
+    }
+
+    // =========================================================================
+    // Test 12 — First-response wired on customer-origin request (D1)
     // =========================================================================
 
     [Fact]

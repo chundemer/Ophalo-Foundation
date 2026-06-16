@@ -67,8 +67,23 @@ Scope:
 - Add integration coverage.
 
 Out of scope:
+- Terminal lifecycle analytics (`TerminatedAtUtc`, terminal auto-clear) — split to B2-delta.
 - Notification delivery.
 - Participant routing.
+- External contact logging.
+
+### B2-delta — Terminal Lifecycle + Analytics Primitives
+
+Scope:
+- Set `TerminatedAtUtc` when a request transitions to `Closed` or `Cancelled`.
+- Auto-clear active attention when a request transitions to `Closed` or `Cancelled`.
+- Do not create `AttentionAcknowledged` or require an acknowledgement reason for terminal auto-clear.
+- Preserve fallback attention acknowledgement for terminal requests only when active attention remains due to legacy/bad data.
+- Add integration coverage for terminal timestamp and terminal auto-clear behavior.
+
+Out of scope:
+- Reopen.
+- Terminal customer feedback expansion.
 - External contact logging.
 
 ---
@@ -176,6 +191,11 @@ Does not clear attention:
 without customer communication, does not notify the customer, does not count as first response,
 creates an internal `AttentionAcknowledged` event, and records who cleared it and why.
 
+External customer contact, once explicitly logged in a later pre-go-live slice, also clears
+business-waiting attention and can count as first response when applicable. External contact logs
+are internal-only by default; any customer-visible receipt/recap is a separate explicit future
+option.
+
 ### D6 — Participant Routing Scope
 
 B2 does not include participant attach/detach. B2 may return participant information in operator
@@ -219,6 +239,14 @@ Not allowed after `Closed` or `Cancelled`:
 - status changes except no-op
 - new request work
 
+Terminal transition rule (B2-delta):
+- transitioning to `Closed` or `Cancelled` sets `TerminatedAtUtc = now`
+- active attention is auto-cleared as terminal cleanup
+- no `AttentionAcknowledged` event is created
+- no acknowledgement reason is required
+- `AttentionClearReason` remains null
+- the terminal `StatusChanged` event is the audit anchor
+
 ### D8 — Internal Notes After Terminal States
 
 Internal notes are allowed after `Closed` and `Cancelled` for private business recordkeeping.
@@ -234,12 +262,19 @@ Rules:
 
 ### D9 — External Contact Scope
 
-B2 does not include logged external customer contact. External contact deserves a dedicated later
-slice because it affects channel support, customer visibility, backdating, first response,
-attention clearing, and mobile capture.
+B2 does not include logged external customer contact. External contact deserves a dedicated
+pre-go-live slice because it affects channel support, customer visibility, backdating, first
+response, attention clearing, and mobile capture.
 
 B2 should preserve compatibility with that later slice: first-response and attention rules mention
 external contact, but no endpoint is implemented in B2.
+
+Locked posture for that later slice:
+- logged phone/SMS/email/in-person/other customer contact is internal-only by default
+- logged external contact can clear business-waiting attention
+- logged external contact can count as first response when applicable
+- it must not automatically appear on the customer timeline or notify the customer
+- any customer-visible receipt/recap must be a separate explicit operator choice
 
 ### D10 — Write Response Shape
 

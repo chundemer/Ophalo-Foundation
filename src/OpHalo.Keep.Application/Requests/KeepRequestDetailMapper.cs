@@ -99,6 +99,9 @@ internal static class KeepRequestDetailMapper
             _ => throw new InvalidOperationException($"Unknown KeepRequestStatus: {current}")
         };
 
+    internal static bool CanAcknowledgeAttention(bool canOperate, KeepRequest request) =>
+        canOperate && request.AttentionLevel != AttentionLevel.None;
+
     internal static string MapStatus(KeepRequestStatus status) => status switch
     {
         KeepRequestStatus.Received        => "received",
