@@ -113,6 +113,12 @@ public sealed class KeepRequest : BaseEntity
             CurrentStatusText = trimmedMessage;
         LastBusinessActivityAt = nowUtc;
 
+        if (newStatus is KeepRequestStatus.Closed or KeepRequestStatus.Cancelled)
+        {
+            TerminatedAtUtc = nowUtc;
+            ClearAllAttentionForTerminal(actorAccountUserId, nowUtc);
+        }
+
         var statusEvent = KeepRequestEvent.CreateStatusChanged(
             Id, AccountId, actorAccountUserId, actorDisplayName, newStatus, trimmedMessage, nowUtc);
 
@@ -212,6 +218,12 @@ public sealed class KeepRequest : BaseEntity
         CurrentStatusText = trimmedMessage;
         LastBusinessActivityAt = nowUtc;
 
+        if (newStatus is KeepRequestStatus.Closed or KeepRequestStatus.Cancelled)
+        {
+            TerminatedAtUtc = nowUtc;
+            ClearAllAttentionForTerminal(actorAccountUserId, nowUtc);
+        }
+
         // CreateStatusChanged with a non-null message produces the combined event shape (D4):
         // MessageIntent=BusinessUpdate, CommunicationChannel=InApp.
         var statusEvent = KeepRequestEvent.CreateStatusChanged(
@@ -299,6 +311,22 @@ public sealed class KeepRequest : BaseEntity
             Id, AccountId, actorAccountUserId, actorDisplayName, trimmedReason, nowUtc);
 
         return Result<KeepRequestEvent>.Success(attentionEvent);
+    }
+
+    private void ClearAllAttentionForTerminal(Guid actorAccountUserId, DateTime nowUtc)
+    {
+        if (AttentionLevel == AttentionLevel.None)
+            return;
+
+        AttentionLevel = AttentionLevel.None;
+        WaitingDirection = WaitingDirection.None;
+        AttentionReason = null;
+        PriorityBand = PriorityBand.Standard;
+        AttentionSinceUtc = null;
+        NextAttentionAtUtc = null;
+        AttentionClearedAtUtc = nowUtc;
+        AttentionClearedByAccountUserId = actorAccountUserId;
+        AttentionClearReason = null;
     }
 
     private void ClearBusinessWaitingAttention(Guid actorAccountUserId, DateTime nowUtc)

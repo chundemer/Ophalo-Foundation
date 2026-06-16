@@ -31,6 +31,7 @@ public sealed class AcknowledgeAttentionTests : IClassFixture<KeepApiWebFactory>
     private Guid _ownerAccountUserId;
     private Guid _attentionRequestId;
     private Guid _noAttentionRequestId;
+    private Guid _terminalWithAttentionRequestId;   // Closed terminal with attention seeded post-close (legacy cleanup scenario)
     private string _ownerCookie = string.Empty;
     private string _viewerCookie = string.Empty;
 
@@ -111,10 +112,34 @@ public sealed class AcknowledgeAttentionTests : IClassFixture<KeepApiWebFactory>
         db.Set<KeepRequestEvent>().Add(
             KeepRequestEvent.CreateRequestCreated(noAttentionRequest.Id, _accountId, now));
 
+        // Terminal request with attention seeded after closure — simulates a legacy cleanup
+        // scenario where AcknowledgeAttention must still work on a terminal request.
+        var terminalWithAttention = KeepRequest.Create(
+            _accountId, customer.Id,
+            "Jane Smith", "0412345678", null,
+            "Closed job with lingering attention", "ATTN003", "token_attn_003", now);
+        var eTerm1 = terminalWithAttention.ChangeStatus(
+            KeepRequestStatus.Resolved, null,
+            graph.Owner.Id, "owner@attention-tests.com", now);
+        var eTerm2 = terminalWithAttention.ChangeStatus(
+            KeepRequestStatus.Closed, null,
+            graph.Owner.Id, "owner@attention-tests.com", now);
+        // Seed attention after the terminal transition to simulate a request that arrived
+        // in the terminal state with active attention (e.g. migrated from legacy data).
+        SeedBusinessWaitingAttention(db, terminalWithAttention, now.AddMinutes(-60));
+        db.Set<KeepRequest>().Add(terminalWithAttention);
+        db.Set<KeepRequestEvent>().Add(
+            KeepRequestEvent.CreateRequestCreated(terminalWithAttention.Id, _accountId, now));
+        if (eTerm1.IsSuccess && eTerm1.Value.StatusChangedEvent is not null)
+            db.Set<KeepRequestEvent>().Add(eTerm1.Value.StatusChangedEvent);
+        if (eTerm2.IsSuccess && eTerm2.Value.StatusChangedEvent is not null)
+            db.Set<KeepRequestEvent>().Add(eTerm2.Value.StatusChangedEvent);
+
         await db.SaveChangesAsync();
 
         _attentionRequestId = attentionRequest.Id;
         _noAttentionRequestId = noAttentionRequest.Id;
+        _terminalWithAttentionRequestId = terminalWithAttention.Id;
 
         var rawOwner = await _factory.SeedSessionAsync(graph.Owner.Id, _accountId);
         _ownerCookie = $"{AuthConstants.CookieName}={rawOwner}";
@@ -321,6 +346,26 @@ public sealed class AcknowledgeAttentionTests : IClassFixture<KeepApiWebFactory>
         Assert.Equal("business", body.GetProperty("waitingDirection").GetString());
         Assert.Equal("customer_message", body.GetProperty("attentionReason").GetString());
         Assert.True(body.GetProperty("availableActions").GetProperty("canAcknowledgeAttention").GetBoolean());
+    }
+
+    // =========================================================================
+    // Terminal fallback acknowledge — AcknowledgeAttention has no terminal guard;
+    // a terminal request with active attention can still be cleaned up (B2-delta).
+    // =========================================================================
+
+    [Fact]
+    public async Task AcknowledgeAttention_TerminalRequestWithActiveAttention_Returns200()
+    {
+        var response = await AuthRequest(_ownerCookie).PostAsJsonAsync(
+            $"/keep/requests/{_terminalWithAttentionRequestId}/attention/acknowledge",
+            new { reason = "Missed during closure — cleaning up." });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("none", body.GetProperty("attentionLevel").GetString());
+        Assert.Equal("Missed during closure — cleaning up.", body.GetProperty("attentionClearReason").GetString());
+        Assert.False(body.GetProperty("availableActions").GetProperty("canAcknowledgeAttention").GetBoolean());
     }
 
     private static void SeedBusinessWaitingAttention(OpHaloDbContext db, KeepRequest request, DateTime sinceUtc)

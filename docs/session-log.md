@@ -5,6 +5,36 @@
 
 ---
 
+## Phase 8-B2-delta — COMPLETE
+
+**Tests:** 471/471 (280 unit · 14 arch · 177 integration)
+**ADRs:** 116..117 implemented (see decision-index.md and build-log/031)
+
+### Summary of what was built
+
+Terminal lifecycle analytics primitives:
+
+- `TerminatedAtUtc = now` set on `KeepRequest` whenever `ChangeStatus` or
+  `AddBusinessUpdateWithStatus` transitions to `Closed` or `Cancelled`.
+- `ClearAllAttentionForTerminal` private domain helper: clears any active attention
+  (any `WaitingDirection`) on terminal transitions without creating `AttentionAcknowledged`
+  and with `AttentionClearReason = null`. Distinct from `ClearBusinessWaitingAttention`
+  (business-response path, business-waiting only).
+- `AcknowledgeAttention` retains no terminal guard — fallback cleanup of terminal
+  requests with lingering attention remains possible.
+- 3 new integration tests (terminal sets TerminatedAtUtc, terminal auto-clears attention
+  without AttentionAcknowledged, fallback acknowledge on terminal request works).
+
+**Key files:**
+
+| Layer | File |
+|-------|------|
+| Keep.Core | `KeepRequest.cs` (+terminal branch in ChangeStatus and AddBusinessUpdateWithStatus, +ClearAllAttentionForTerminal helper) |
+| IntegrationTests | `ChangeKeepRequestStatusTests.cs` (2 new terminal tests) |
+| IntegrationTests | `AcknowledgeAttentionTests.cs` (1 new fallback-acknowledge test) |
+
+---
+
 ## Phase 8-B2-gamma — COMPLETE
 
 **Tests:** 468/468 (280 unit · 14 arch · 174 integration)
@@ -23,20 +53,6 @@ the existing business-update and status-change paths.
 - `CanAcknowledgeAttention` wired in mapper: `hasOperatePermission && AttentionLevel != None`
 - 11 integration tests (including the cross-account 404 pattern, silent-status vs business-update
   attention-clearing contrast)
-
-**Key files:**
-
-| Layer | File |
-|-------|------|
-| Keep.Core | `KeepRequestErrors.cs` (+AttentionReasonRequired, AttentionReasonTooLong, AttentionNotRaised) |
-| Keep.Core | `KeepRequestEvent.cs` (+CreateAttentionAcknowledged) |
-| Keep.Core | `KeepRequest.cs` (+AcknowledgeAttention, +ClearBusinessWaitingAttention, wired in ChangeStatus/AddBusinessUpdate/AddBusinessUpdateWithStatus) |
-| Keep.Application | `AcknowledgeAttentionService.cs` (NEW) |
-| Keep.Application | `KeepRequestDetailMapper.cs` (+CanAcknowledgeAttention, +AcknowledgeReasonMaxLength in ValidationHints) |
-| OpHalo.Api | `AcknowledgeAttentionRequest.cs` (NEW) |
-| OpHalo.Api | `ErrorHttpMapper.cs` (+3 mappings) |
-| OpHalo.Api | `Program.cs` (+DI + 1 route) |
-| IntegrationTests | `AcknowledgeAttentionTests.cs` (NEW — 11 tests) |
 
 ---
 
@@ -106,45 +122,18 @@ Member management API + integration tests. See build-log/023.
   - `NewRequestUrl` always `null`. B4 decides.
   - Customer page events sorted ascending — let frontend reverse if needed.
 - **`Results.Problem` extension shape:** extension dict entries land at the top level of ProblemDetails JSON, not under an `"extensions"` key. Test assertions must use `body.GetProperty("code")`.
-- **`TerminatedAtUtc` not set by ChangeStatus/AddBusinessUpdateWithStatus** when target is Closed/Cancelled. Scoped to B2-delta terminal lifecycle.
-- **Terminal transitions do not auto-clear active attention.** Scoped to B2-delta.
+- **External contact logging/capture (ADR-115)** remains pre-go-live/deferred.
 - **`businessName ?? string.Empty`** — persistence returns null if account missing post-auth; never expected in production.
 
 ---
 
-## Next — Phase 8-B2-delta Terminal Lifecycle + Analytics Primitives
+## Next — Phase 8-B3 Customer Writes
 
-**Pre-work complete**
+Customer-side write surfaces: customer replies, status feedback, and opt-out/preference
+management via the anonymous page-token-authenticated customer endpoint.
 
-Scope confirmed in session log / build-log/030:
-
-- When status transitions to `Closed` or `Cancelled`, set `TerminatedAtUtc = now`.
-- When terminal transition happens with active attention, auto-clear attention:
-  - `AttentionLevel = None`, `WaitingDirection = None`, `AttentionReason = null`
-  - `PriorityBand = Standard`
-  - `AttentionSinceUtc = null`, `NextAttentionAtUtc = null`
-  - `AttentionClearedAtUtc = now`, `AttentionClearedByAccountUserId = actor`
-  - `AttentionClearReason = null`
-- Do not create `AttentionAcknowledged` for terminal auto-clear.
-- Do not require an acknowledge reason for terminal auto-clear.
-- Keep the terminal `StatusChanged` event as the audit anchor.
-- Preserve fallback acknowledge on terminal requests if active attention exists.
-
-Tests/docs expected:
-- Terminal status transition sets `TerminatedAtUtc`.
-- Terminal transition with active attention auto-clears attention fields.
-- Terminal auto-clear does not create `AttentionAcknowledged`.
-- Terminal fallback acknowledge works if active attention remains on a terminal request.
-- Add build log `031-phase-8-b2-delta-terminal-lifecycle.md`.
-
-Files expected to change:
-- `Keep.Core/Entities/KeepRequest.cs` — `ChangeStatus` (terminal path sets `TerminatedAtUtc` + calls auto-clear)
-- `IntegrationTests/Api/ChangeKeepRequestStatusTests.cs` — new terminal tests
-- Possibly `ChangeKeepRequestStatusService.cs` if any service-layer coordination is needed
-- `docs/decisions/decision-index.md` — ADR-116 → Implemented
-
-Out of scope for delta:
+Out of scope until B3+:
 - Notification delivery.
 - Participant routing.
 - External contact logging/capture (ADR-115, pre-go-live).
-- Customer writes.
+- Admin/internal write surfaces.
