@@ -15,8 +15,10 @@ using OpHalo.Foundation.Application.Accounts.Authorization;
 using OpHalo.Foundation.Application.Accounts.Entitlements;
 using OpHalo.Foundation.Application.Accounts.Provisioning;
 using OpHalo.Foundation.Application.Auth;
+using OpHalo.Foundation.Application.Members;
 using OpHalo.Foundation.Infrastructure.Auth;
 using OpHalo.Foundation.Infrastructure.Email;
+using OpHalo.Foundation.Infrastructure.Members;
 using OpHalo.Foundation.Core.Constants;
 using OpHalo.Foundation.Infrastructure.Persistence;
 using OpHalo.Foundation.Infrastructure.Security;
@@ -85,6 +87,8 @@ builder.Services.AddScoped<IAuthCodePersistence, EfAuthCodePersistence>();
 builder.Services.AddScoped<SendInviteService>();
 builder.Services.AddScoped<AcceptInviteService>();
 builder.Services.AddScoped<IInvitePersistence, EfInvitePersistence>();
+builder.Services.AddScoped<MemberManagementService>();
+builder.Services.AddScoped<IMemberManagementPersistence, EfMemberManagementPersistence>();
 
 // --- Email ---
 var resendSettings = builder.Configuration.GetSection("Resend").Get<ResendSettings>()

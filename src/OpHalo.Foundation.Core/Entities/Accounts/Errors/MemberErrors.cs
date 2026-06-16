@@ -49,11 +49,35 @@ public static class MemberErrors
             "The account has reached its member seat limit.");
 
     /// <summary>
-    /// Returned when sending a new invite to an email that already has a Removed membership.
-    /// The API response should include a suggestedAction ("reactivate" when UserId is set,
-    /// "resend_invite" when UserId is null) — that metadata is added in 5E-C at the endpoint layer.
+    /// Public API code for the PreviouslyRemoved 409 response. Always use this code in the
+    /// HTTP response body — never expose the internal routing codes below.
     /// </summary>
     public static readonly Error PreviouslyRemoved =
         Error.Create("Member.PreviouslyRemoved",
             "This person was previously removed from the account.");
+
+    // -------------------------------------------------------------------------
+    // SERVICE-TO-ENDPOINT ROUTING ERRORS — not public API codes.
+    //
+    // SendInviteService uses these to carry suggestedAction context to the
+    // SendInvite endpoint. The endpoint MUST intercept both and translate them
+    // to Member.PreviouslyRemoved + suggestedAction before calling ErrorHttpMapper.
+    // These codes must NEVER appear in an API response body.
+    // -------------------------------------------------------------------------
+
+    /// <summary>
+    /// Internal routing code: Removed member has a UserId → caller should use reactivate.
+    /// The SendInvite endpoint translates this to Member.PreviouslyRemoved + suggestedAction: "reactivate".
+    /// </summary>
+    public static readonly Error PreviouslyRemovedNeedsReactivate =
+        Error.Create("Member.PreviouslyRemovedNeedsReactivate",
+            "This person was previously removed and has a user account — use reactivate.");
+
+    /// <summary>
+    /// Internal routing code: Removed invite has no UserId → caller should use resend-invite.
+    /// The SendInvite endpoint translates this to Member.PreviouslyRemoved + suggestedAction: "resend_invite".
+    /// </summary>
+    public static readonly Error PreviouslyRemovedNeedsResend =
+        Error.Create("Member.PreviouslyRemovedNeedsResend",
+            "This person was previously removed without accepting their invite — use resend-invite.");
 }

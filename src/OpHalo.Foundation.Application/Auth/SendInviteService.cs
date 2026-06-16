@@ -81,11 +81,17 @@ public sealed class SendInviteService(
 
         if (existing is not null && existing.MembershipStatus != MembershipStatus.Invited)
         {
-            // Removed members surface as PreviouslyRemoved so the caller can route to
-            // reactivate or resend-invite. The suggestedAction field in the HTTP response
-            // is added by the endpoint in 5E-C (requires knowing whether UserId is set).
+            // Removed members surface as an internal routing error so the SendInvite
+            // endpoint can include the correct suggestedAction in the 409 response body.
+            // The endpoint MUST translate both codes to Member.PreviouslyRemoved before
+            // calling ErrorHttpMapper — these internal codes must never reach the client.
             if (existing.MembershipStatus == MembershipStatus.Removed)
-                return Result<SendInviteResult>.Failure(MemberErrors.PreviouslyRemoved);
+            {
+                var routingError = existing.UserId is not null
+                    ? MemberErrors.PreviouslyRemovedNeedsReactivate
+                    : MemberErrors.PreviouslyRemovedNeedsResend;
+                return Result<SendInviteResult>.Failure(routingError);
+            }
 
             // Active or Suspended — use the member-management endpoints.
             return Result<SendInviteResult>.Failure(InviteErrors.AlreadyActive);

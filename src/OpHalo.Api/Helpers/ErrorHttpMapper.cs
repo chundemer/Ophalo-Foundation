@@ -68,6 +68,14 @@ public static class ErrorHttpMapper
 
             var c when c == "Member.PreviouslyRemoved" => (StatusCodes.Status409Conflict, "Conflict.", null),
 
+            // Safety-net only — these internal routing codes must be intercepted and translated
+            // by the SendInvite endpoint BEFORE reaching this path. If they arrive here, the
+            // status is 409 (not the default 400), but the response body will expose the
+            // internal code name rather than the public "Member.PreviouslyRemoved" contract.
+            var c when c == "Member.PreviouslyRemovedNeedsReactivate" => (StatusCodes.Status409Conflict, "Conflict.", null),
+
+            var c when c == "Member.PreviouslyRemovedNeedsResend" => (StatusCodes.Status409Conflict, "Conflict.", null),
+
             var c when c.EndsWith(".PastDueBlocked") => (StatusCodes.Status402PaymentRequired, "Payment required.", null),
 
             // --- 403 — authenticated but forbidden by business rules ---
