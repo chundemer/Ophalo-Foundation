@@ -129,4 +129,8 @@ decision. This file is authoritative for the new project.
 | ADR-097 | _(Phase8B1-004)_ `KeepResponsePolicy` inherits `BaseEntity` (surrogate `Guid Id`) for consistency with all other Keep entities. Unique index on `AccountId` enforces one policy per account | Implemented | B1-α session |
 | ADR-098 | _(Phase8B1-005)_ `KeepRequest.Create()` initializes attention to `AttentionLevel.None` / `WaitingDirection.None` for B1-α. B2 wires business-waiting + first-response-due behavior in the intake and operator write paths | Implemented | B1-α session |
 
-_Next free ID: **ADR-099**._
+| ADR-099 | _(Phase8B1-006)_ Expired customer page is modeled as a valid terminal read result (`IsExpired = true` on `KeepCustomerPageResult`), not an application error. The service returns `Result.Success` with only `BusinessName`, `ReferenceCode`, `IsExpired`, and `NewRequestUrl` populated; the endpoint maps this to HTTP 410. No `KeepRequestErrors.Expired` error needed; no `ErrorHttpMapper` change needed | Implemented | B1-β session |
+| ADR-100 | _(Phase8B1-007)_ `IKeepRequestDetailPersistence` is a separate persistence contract from `IKeepRequestListPersistence`. Snapshot methods (`GetAccountUserSnapshotAsync`, `GetAccountAccessSnapshotAsync`) are intentionally duplicated — no shared base until a third service requires them. `GetParticipantsAsync` returns `KeepParticipantProjection` (joined with `AccountUser` for display name + role) rather than raw `KeepRequestParticipant` entities, keeping EF out of the application layer | Implemented | B1-β session |
+| ADR-101 | _(Phase8B1-008)_ Customer page service applies a defensive `Visibility == All` filter in the service layer even though persistence already scopes to `Visibility = All`. A public endpoint must not rely solely on the persistence contract to prevent internal-event leakage; belt-and-suspenders is warranted here | Implemented | B1-β session |
+
+_Next free ID: **ADR-102**._

@@ -68,9 +68,12 @@ builder.Services.AddSingleton<IClock, OpHalo.Foundation.Infrastructure.Services.
 
 builder.Services.AddScoped<IKeepIntakePersistence, KeepIntakePersistence>();
 builder.Services.AddScoped<IKeepRequestListPersistence, KeepRequestListPersistence>();
+builder.Services.AddScoped<IKeepRequestDetailPersistence, EfKeepRequestDetailPersistence>();
 builder.Services.AddScoped<KeepTokenService>();
 builder.Services.AddScoped<CreateKeepPublicIntakeService>();
 builder.Services.AddScoped<GetKeepRequestListService>();
+builder.Services.AddScoped<GetKeepRequestDetailService>();
+builder.Services.AddScoped<GetKeepCustomerPageService>();
 
 builder.Services.AddSingleton<IAccountAccessPolicy, AccountAccessPolicy>();
 builder.Services.AddSingleton<IUserAccessPolicy, UserAccessPolicy>();
@@ -179,6 +182,33 @@ app.MapGet("/keep/requests", async (GetKeepRequestListService service, Cancellat
     var result = await service.ExecuteAsync(ct);
     return result.IsSuccess ? Results.Ok(result.Value) : ErrorHttpMapper.ToHttpResult(result.Error);
 }).RequireAuthorization();
+
+// Operator request detail — authenticated, scoped to caller's account (Phase 8-B1-β)
+app.MapGet("/keep/requests/{requestId:guid}", async (
+    Guid requestId,
+    GetKeepRequestDetailService service,
+    CancellationToken ct) =>
+{
+    var result = await service.ExecuteAsync(requestId, ct);
+    return result.IsSuccess ? Results.Ok(result.Value) : ErrorHttpMapper.ToHttpResult(result.Error);
+}).RequireAuthorization();
+
+// Customer page — anonymous, resolved by page token (Phase 8-B1-β)
+// Returns 200 (active) or 410 (expired). Expired body: { businessName, referenceCode, isExpired, newRequestUrl }.
+app.MapGet("/keep/r/{pageToken}", async (
+    string pageToken,
+    GetKeepCustomerPageService service,
+    CancellationToken ct) =>
+{
+    var result = await service.ExecuteAsync(pageToken, ct);
+    if (!result.IsSuccess)
+        return ErrorHttpMapper.ToHttpResult(result.Error);
+
+    var page = result.Value;
+    return page.IsExpired
+        ? Results.Json(page, statusCode: StatusCodes.Status410Gone)
+        : Results.Ok(page);
+});
 
 app.MapAuthEndpoints();
 app.MapAccountEndpoints();
