@@ -183,6 +183,48 @@ public sealed class KeepRequestEvent : BaseEntity
     }
 
     /// <summary>
+    /// Creates a MessageAdded event for a customer-submitted message. Visibility = All,
+    /// ActorType = Customer, ActorAccountUserId = null. The caller is responsible for
+    /// validating message length and mapping route → intent before calling this factory.
+    /// </summary>
+    public static KeepRequestEvent CreateCustomerMessage(
+        Guid requestId,
+        Guid accountId,
+        string customerName,
+        MessageIntent intent,
+        string message,
+        DateTime occurredAtUtc)
+    {
+        if (requestId == Guid.Empty)
+            throw new ArgumentException("Request ID is required.", nameof(requestId));
+        if (accountId == Guid.Empty)
+            throw new ArgumentException("Account ID is required.", nameof(accountId));
+        if (string.IsNullOrWhiteSpace(customerName))
+            throw new ArgumentException("Customer name is required.", nameof(customerName));
+        if (!Enum.IsDefined(intent))
+            throw new ArgumentException($"Unknown MessageIntent: {intent}.", nameof(intent));
+        if (string.IsNullOrWhiteSpace(message))
+            throw new ArgumentException("Message is required.", nameof(message));
+        if (occurredAtUtc == default)
+            throw new ArgumentException("occurredAtUtc must be a real timestamp.", nameof(occurredAtUtc));
+
+        return new KeepRequestEvent
+        {
+            RequestId = requestId,
+            AccountId = accountId,
+            EventType = KeepRequestEventType.MessageAdded,
+            Visibility = KeepRequestEventVisibility.All,
+            Content = message.Trim(),
+            ActorType = ActorType.Customer,
+            ActorAccountUserId = null,
+            ActorDisplayName = customerName.Trim(),
+            OccurredAtUtc = occurredAtUtc,
+            MessageIntent = intent,
+            CommunicationChannel = Enums.CommunicationChannel.InApp
+        };
+    }
+
+    /// <summary>
     /// Creates an AttentionAcknowledged event. Visibility = Internal; this is an operator
     /// audit action, not customer communication.
     /// </summary>

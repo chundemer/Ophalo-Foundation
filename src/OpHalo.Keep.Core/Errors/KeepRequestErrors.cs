@@ -51,4 +51,7 @@ public static class KeepRequestErrors
 
     public static readonly Error AttentionNotRaised =
         Error.Create("KeepRequest.AttentionNotRaised", "There is no active attention to acknowledge.");
+
+    public static readonly Error CustomerMessageTooLong =
+        Error.Create("KeepRequest.CustomerMessageTooLong", "The customer message exceeds the maximum allowed length of 4000 characters.");
 }

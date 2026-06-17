@@ -313,6 +313,117 @@ public sealed class KeepRequest : BaseEntity
         return Result<KeepRequestEvent>.Success(attentionEvent);
     }
 
+    /// <summary>
+    /// Records a customer-submitted message from the public customer page. Appends a
+    /// MessageAdded event with Visibility=All and ActorType=Customer. Raises or updates
+    /// business-waiting attention according to intent and response-policy targets (ADR-125).
+    /// Blocked on terminal requests (Closed/Cancelled); Resolved accepts messages (ADR-127).
+    /// Does not change status. Does not count as first business response.
+    /// Customer message limit: 4000 characters.
+    /// </summary>
+    /// <param name="firstResponseTargetMinutes">
+    /// Resolved from KeepResponsePolicy or pilot default (60). Passed in by the service
+    /// so the domain method stays persistence-free.
+    /// </param>
+    /// <param name="standardResponseTargetMinutes">
+    /// Resolved from KeepResponsePolicy or pilot default (240).
+    /// </param>
+    /// <param name="priorityResponseTargetMinutes">
+    /// Resolved from KeepResponsePolicy or pilot default (60).
+    /// </param>
+    public Result<KeepRequestEvent> AddCustomerMessage(
+        MessageIntent intent,
+        string message,
+        int firstResponseTargetMinutes,
+        int standardResponseTargetMinutes,
+        int priorityResponseTargetMinutes,
+        DateTime nowUtc)
+    {
+        if (nowUtc == default)
+            throw new ArgumentException("nowUtc must be a valid UTC timestamp.", nameof(nowUtc));
+
+        var trimmedMessage = string.IsNullOrWhiteSpace(message) ? null : message.Trim();
+
+        if (trimmedMessage is null)
+            return Result<KeepRequestEvent>.Failure(KeepRequestErrors.MessageRequired);
+
+        if (trimmedMessage.Length > 4000)
+            return Result<KeepRequestEvent>.Failure(KeepRequestErrors.CustomerMessageTooLong);
+
+        // Closed and Cancelled block customer writes. Resolved does not (ADR-127).
+        if (Status is KeepRequestStatus.Closed or KeepRequestStatus.Cancelled)
+            return Result<KeepRequestEvent>.Failure(KeepRequestErrors.TerminalState);
+
+        LastCustomerActivityAt = nowUtc;
+
+        var messageEvent = KeepRequestEvent.CreateCustomerMessage(
+            Id, AccountId, CustomerName, intent, trimmedMessage, nowUtc);
+
+        var (newReason, newPriority) = MapIntentToAttention(intent);
+        var responseTargetMinutes = newPriority == PriorityBand.Priority
+            ? priorityResponseTargetMinutes
+            : standardResponseTargetMinutes;
+
+        if (WaitingDirection == WaitingDirection.Customer)
+        {
+            // Flip: business now owes the next move. Reset AttentionSinceUtc to now
+            // because this begins a new waiting period from the customer's message.
+            AttentionLevel = AttentionLevel.Waiting;
+            WaitingDirection = WaitingDirection.Business;
+            AttentionReason = newReason;
+            PriorityBand = newPriority;
+            AttentionSinceUtc = nowUtc;
+            NextAttentionAtUtc = nowUtc.AddMinutes(responseTargetMinutes);
+        }
+        else if (AttentionLevel == AttentionLevel.None)
+        {
+            // Fresh attention: no prior attention on this request.
+            AttentionLevel = AttentionLevel.Waiting;
+            WaitingDirection = WaitingDirection.Business;
+            AttentionReason = newReason;
+            PriorityBand = newPriority;
+            AttentionSinceUtc = nowUtc;
+            NextAttentionAtUtc = nowUtc.AddMinutes(responseTargetMinutes);
+        }
+        else if (WaitingDirection == WaitingDirection.Business)
+        {
+            // Already business-waiting: preserve the oldest unresolved AttentionSinceUtc.
+            // Upgrade reason and priority only when the new message is higher-priority.
+            // NextAttentionAtUtc is NOT refreshed for same-priority repeated messages —
+            // the original deadline stands. A priority upgrade resets it because the
+            // response obligation changes to the priority target (ADR-125).
+            if (newPriority == PriorityBand.Priority && this.PriorityBand == PriorityBand.Standard)
+            {
+                AttentionReason = newReason;
+                PriorityBand = newPriority;
+                NextAttentionAtUtc = nowUtc.AddMinutes(responseTargetMinutes);
+            }
+        }
+        else
+        {
+            // AttentionLevel is non-None but WaitingDirection is neither Business nor Customer.
+            // This is an invalid domain state that should never occur in production.
+            throw new InvalidOperationException(
+                $"Request {Id} has AttentionLevel {AttentionLevel} with unexpected WaitingDirection {WaitingDirection}.");
+        }
+
+        return Result<KeepRequestEvent>.Success(messageEvent);
+    }
+
+    // Enums. prefix required: AttentionReason and PriorityBand instance properties shadow the
+    // enum type names from the using import in static method scope.
+    private static (Enums.AttentionReason Reason, Enums.PriorityBand Priority) MapIntentToAttention(MessageIntent intent) =>
+        intent switch
+        {
+            MessageIntent.GeneralMessage        => (Enums.AttentionReason.CustomerMessage, Enums.PriorityBand.Standard),
+            MessageIntent.Question              => (Enums.AttentionReason.CustomerMessage, Enums.PriorityBand.Standard),
+            MessageIntent.UpdateRequest         => (Enums.AttentionReason.UpdateRequest, Enums.PriorityBand.Standard),
+            MessageIntent.ScheduleChangeRequest => (Enums.AttentionReason.ScheduleChangeRequest, Enums.PriorityBand.Priority),
+            MessageIntent.ChangeOrCancelRequest => (Enums.AttentionReason.ChangeOrCancelRequest, Enums.PriorityBand.Priority),
+            MessageIntent.Complaint             => (Enums.AttentionReason.Complaint, Enums.PriorityBand.Priority),
+            _ => throw new InvalidOperationException($"MessageIntent {intent} is not a valid customer message intent.")
+        };
+
     private void ClearAllAttentionForTerminal(Guid actorAccountUserId, DateTime nowUtc)
     {
         if (AttentionLevel == AttentionLevel.None)
