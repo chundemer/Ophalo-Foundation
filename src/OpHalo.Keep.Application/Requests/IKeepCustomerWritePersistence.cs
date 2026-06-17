@@ -35,6 +35,13 @@ public interface IKeepCustomerWritePersistence
     Task CommitAsync(KeepRequest request, KeepRequestEvent newEvent, CancellationToken ct);
 
     /// <summary>
+    /// Saves the mutated request after feedback submission. No event is created (ADR-137:
+    /// feedback is stored as request-level fields only).
+    /// The request must have been loaded via GetRequestForUpdateAsync on the same DbContext.
+    /// </summary>
+    Task CommitFeedbackAsync(KeepRequest request, CancellationToken ct);
+
+    /// <summary>
     /// Returns all Visibility = All events for the request after commit, ordered
     /// chronologically. Used to build the updated customer page result returned to the caller.
     /// </summary>

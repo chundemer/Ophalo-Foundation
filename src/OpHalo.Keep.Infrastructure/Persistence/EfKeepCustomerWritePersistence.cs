@@ -23,6 +23,9 @@ public sealed class EfKeepCustomerWritePersistence(OpHaloDbContext dbContext) : 
         await dbContext.SaveChangesAsync(ct);
     }
 
+    public async Task CommitFeedbackAsync(KeepRequest request, CancellationToken ct) =>
+        await dbContext.SaveChangesAsync(ct);
+
     public async Task<IReadOnlyList<KeepRequestEvent>> GetCustomerVisibleEventsAsync(
         Guid requestId, CancellationToken ct) =>
         await dbContext.Set<KeepRequestEvent>()

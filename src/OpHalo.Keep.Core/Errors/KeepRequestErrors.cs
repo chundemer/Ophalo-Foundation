@@ -54,4 +54,16 @@ public static class KeepRequestErrors
 
     public static readonly Error CustomerMessageTooLong =
         Error.Create("KeepRequest.CustomerMessageTooLong", "The customer message exceeds the maximum allowed length of 4000 characters.");
+
+    public static readonly Error FeedbackResolutionRequired =
+        Error.Create("KeepRequest.FeedbackResolutionRequired", "wasResolved is required to submit feedback.");
+
+    public static readonly Error FeedbackCommentTooLong =
+        Error.Create("KeepRequest.FeedbackCommentTooLong", "The feedback comment exceeds the maximum allowed length of 2000 characters.");
+
+    public static readonly Error FeedbackUnavailable =
+        Error.Create("KeepRequest.FeedbackUnavailable", "Feedback is only available on closed requests.");
+
+    public static readonly Error FeedbackAlreadySubmitted =
+        Error.Create("KeepRequest.FeedbackAlreadySubmitted", "Feedback has already been submitted for this request.");
 }

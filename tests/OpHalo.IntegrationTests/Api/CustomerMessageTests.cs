@@ -533,7 +533,7 @@ public sealed class CustomerMessageTests : IClassFixture<KeepApiWebFactory>, IAs
             .Select(e => e.GetString()!).ToArray();
         Assert.Equal(expectedActive, resolvedActions);
 
-        // Closed — AllowedActions = []
+        // Closed without feedback — AllowedActions = ["feedback"] (ADR-139)
         await using (var scope = _factory.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
@@ -543,7 +543,9 @@ public sealed class CustomerMessageTests : IClassFixture<KeepApiWebFactory>, IAs
         var closedResponse = await _client.GetAsync($"/keep/r/{PageToken}");
         Assert.Equal(HttpStatusCode.OK, closedResponse.StatusCode);
         var closedBody = await closedResponse.Content.ReadFromJsonAsync<JsonElement>();
-        Assert.Empty(closedBody.GetProperty("allowedActions").EnumerateArray());
+        var closedActions = closedBody.GetProperty("allowedActions").EnumerateArray()
+            .Select(e => e.GetString()!).ToArray();
+        Assert.Equal(["feedback"], closedActions);
 
         // Cancelled — AllowedActions = []
         await using (var scope = _factory.CreateScope())

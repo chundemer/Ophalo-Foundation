@@ -410,6 +410,52 @@ public sealed class KeepRequest : BaseEntity
         return Result<KeepRequestEvent>.Success(messageEvent);
     }
 
+    /// <summary>
+    /// Records closed-request resolution feedback from the customer. Allowed only on Closed
+    /// requests; one-time only. Negative feedback raises priority business-waiting attention
+    /// without reopening the request or changing status (ADR-135..138).
+    /// Comment is optional even when wasResolved = false (ADR-135).
+    /// Comment max length: 2000 characters.
+    /// </summary>
+    public Result SubmitFeedback(
+        bool wasResolved,
+        string? comment,
+        int priorityResponseTargetMinutes,
+        DateTime nowUtc)
+    {
+        if (nowUtc == default)
+            throw new ArgumentException("nowUtc must be a valid UTC timestamp.", nameof(nowUtc));
+
+        if (Status != KeepRequestStatus.Closed)
+            return Result.Failure(KeepRequestErrors.FeedbackUnavailable);
+
+        if (FeedbackSubmittedAtUtc.HasValue)
+            return Result.Failure(KeepRequestErrors.FeedbackAlreadySubmitted);
+
+        var trimmedComment = string.IsNullOrWhiteSpace(comment) ? null : comment.Trim();
+
+        if (trimmedComment?.Length > 2000)
+            return Result.Failure(KeepRequestErrors.FeedbackCommentTooLong);
+
+        FeedbackWasResolved = wasResolved;
+        FeedbackComment = trimmedComment;
+        FeedbackSubmittedAtUtc = nowUtc;
+
+        if (!wasResolved)
+        {
+            // Intentional exception to the terminal-no-attention posture (ADR-138).
+            // Does not reopen or change status — business decides next action.
+            AttentionLevel = AttentionLevel.Waiting;
+            WaitingDirection = WaitingDirection.Business;
+            AttentionReason = Enums.AttentionReason.UnresolvedFeedback;
+            PriorityBand = Enums.PriorityBand.Priority;
+            AttentionSinceUtc = nowUtc;
+            NextAttentionAtUtc = nowUtc.AddMinutes(priorityResponseTargetMinutes);
+        }
+
+        return Result.Success();
+    }
+
     // Enums. prefix required: AttentionReason and PriorityBand instance properties shadow the
     // enum type names from the using import in static method scope.
     private static (Enums.AttentionReason Reason, Enums.PriorityBand Priority) MapIntentToAttention(MessageIntent intent) =>

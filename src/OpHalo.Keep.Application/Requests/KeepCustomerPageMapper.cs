@@ -11,6 +11,8 @@ internal static class KeepCustomerPageMapper
         "schedule_change_request", "change_or_cancel_request", "issue"
     ];
 
+    private static readonly IReadOnlyList<string> ClosedAllowedActions = ["feedback"];
+
     internal static KeepCustomerPageResult BuildExpiredResult(KeepPublicCustomerContext context) =>
         new(BusinessName: context.BusinessName,
             ReferenceCode: context.ReferenceCode,
@@ -46,7 +48,7 @@ internal static class KeepCustomerPageMapper
                 .Where(e => e.Visibility == KeepRequestEventVisibility.All)
                 .Select(MapEvent)
                 .ToList(),
-            AllowedActions: ComputeAllowedActions(context.Status));
+            AllowedActions: ComputeAllowedActions(context.Status, context.FeedbackSubmittedAtUtc.HasValue));
 
     internal static string MapStatus(KeepRequestStatus status) => status switch
     {
@@ -86,7 +88,8 @@ internal static class KeepCustomerPageMapper
         _ => throw new InvalidOperationException($"Unknown ActorType: {actorType}")
     };
 
-    private static IReadOnlyList<string> ComputeAllowedActions(KeepRequestStatus status) =>
+    private static IReadOnlyList<string> ComputeAllowedActions(
+        KeepRequestStatus status, bool feedbackAlreadySubmitted) =>
         status switch
         {
             KeepRequestStatus.Received
@@ -94,8 +97,9 @@ internal static class KeepCustomerPageMapper
                 or KeepRequestStatus.InProgress
                 or KeepRequestStatus.PendingCustomer
                 or KeepRequestStatus.Resolved => ActiveAllowedActions,
-            KeepRequestStatus.Closed
-                or KeepRequestStatus.Cancelled => Array.Empty<string>(),
+            KeepRequestStatus.Closed when !feedbackAlreadySubmitted => ClosedAllowedActions,
+            KeepRequestStatus.Closed => Array.Empty<string>(),
+            KeepRequestStatus.Cancelled => Array.Empty<string>(),
             _ => throw new InvalidOperationException($"Unknown KeepRequestStatus: {status}")
         };
 }

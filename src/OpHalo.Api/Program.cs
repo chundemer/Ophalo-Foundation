@@ -27,6 +27,7 @@ using OpHalo.Keep.Application.PublicIntake;
 using OpHalo.Keep.Application.Requests;
 using OpHalo.Keep.Application.Services;
 using OpHalo.Keep.Core.Entities.Enums;
+using OpHalo.Keep.Core.Errors;
 using OpHalo.Keep.Infrastructure.Persistence;
 using OpHalo.SharedKernel.Abstractions;
 
@@ -82,6 +83,7 @@ builder.Services.AddScoped<AddInternalNoteService>();
 builder.Services.AddScoped<AcknowledgeAttentionService>();
 builder.Services.AddScoped<KeepPublicCustomerAccessGuard>();
 builder.Services.AddScoped<AddCustomerMessageService>();
+builder.Services.AddScoped<SubmitFeedbackService>();
 builder.Services.AddScoped<IKeepCustomerWritePersistence, EfKeepCustomerWritePersistence>();
 
 builder.Services.AddSingleton<IAccountAccessPolicy, AccountAccessPolicy>();
@@ -313,6 +315,11 @@ app.MapPost("/keep/r/{pageToken}/issue",
         HandleCustomerMessage(pageToken, MessageIntent.Complaint, body.Message, service, ct))
     .RequireRateLimiting("customer-write");
 
+app.MapPost("/keep/r/{pageToken}/feedback",
+    (string pageToken, FeedbackBody body, SubmitFeedbackService service, CancellationToken ct) =>
+        HandleFeedback(pageToken, body, service, ct))
+    .RequireRateLimiting("customer-write");
+
 app.MapAuthEndpoints();
 app.MapAccountEndpoints();
 
@@ -351,6 +358,26 @@ static async Task<IResult> HandleCustomerMessage(
     CancellationToken ct)
 {
     var command = new AddCustomerMessageCommand(pageToken, intent, message);
+    var result = await service.ExecuteAsync(command, ct);
+    if (!result.IsSuccess)
+        return ErrorHttpMapper.ToHttpResult(result.Error);
+
+    var page = result.Value;
+    return page.IsExpired
+        ? Results.Json(page, statusCode: StatusCodes.Status410Gone)
+        : Results.Ok(page);
+}
+
+static async Task<IResult> HandleFeedback(
+    string pageToken,
+    FeedbackBody body,
+    SubmitFeedbackService service,
+    CancellationToken ct)
+{
+    if (body.WasResolved is null)
+        return ErrorHttpMapper.ToHttpResult(KeepRequestErrors.FeedbackResolutionRequired);
+
+    var command = new SubmitFeedbackCommand(pageToken, body.WasResolved.Value, body.Comment);
     var result = await service.ExecuteAsync(command, ct);
     if (!result.IsSuccess)
         return ErrorHttpMapper.ToHttpResult(result.Error);
