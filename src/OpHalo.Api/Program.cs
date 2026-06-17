@@ -26,6 +26,7 @@ using OpHalo.Foundation.Infrastructure.Services;
 using OpHalo.Keep.Application.PublicIntake;
 using OpHalo.Keep.Application.Requests;
 using OpHalo.Keep.Application.Services;
+using OpHalo.Keep.Core.Entities.Enums;
 using OpHalo.Keep.Infrastructure.Persistence;
 using OpHalo.SharedKernel.Abstractions;
 
@@ -79,6 +80,9 @@ builder.Services.AddScoped<ChangeKeepRequestStatusService>();
 builder.Services.AddScoped<AddBusinessUpdateService>();
 builder.Services.AddScoped<AddInternalNoteService>();
 builder.Services.AddScoped<AcknowledgeAttentionService>();
+builder.Services.AddScoped<KeepPublicCustomerAccessGuard>();
+builder.Services.AddScoped<AddCustomerMessageService>();
+builder.Services.AddScoped<IKeepCustomerWritePersistence, EfKeepCustomerWritePersistence>();
 
 builder.Services.AddSingleton<IAccountAccessPolicy, AccountAccessPolicy>();
 builder.Services.AddSingleton<IUserAccessPolicy, UserAccessPolicy>();
@@ -151,6 +155,21 @@ builder.Services.AddRateLimiter(options =>
                 QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
                 QueueLimit = 0,
             }));
+
+    // Composite IP+token partition so shared networks don't penalise multiple customers (ADR-129).
+    options.AddPolicy<string>("customer-write", context =>
+    {
+        var pageToken = context.Request.RouteValues["pageToken"]?.ToString() ?? string.Empty;
+        return RateLimitPartition.GetFixedWindowLimiter(
+            GetClientIp(context) + ":" + pageToken,
+            _ => new FixedWindowRateLimiterOptions
+            {
+                Window = TimeSpan.FromMinutes(1),
+                PermitLimit = 10,
+                QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                QueueLimit = 0,
+            });
+    });
 });
 
 var app = builder.Build();
@@ -263,6 +282,37 @@ app.MapGet("/keep/r/{pageToken}", async (
         : Results.Ok(page);
 });
 
+// Customer message routes — anonymous, one route per intent, rate limited (Phase 8-B3-beta, ADR-129..131)
+app.MapPost("/keep/r/{pageToken}/message",
+    (string pageToken, CustomerMessageBody body, AddCustomerMessageService service, CancellationToken ct) =>
+        HandleCustomerMessage(pageToken, MessageIntent.GeneralMessage, body.Message, service, ct))
+    .RequireRateLimiting("customer-write");
+
+app.MapPost("/keep/r/{pageToken}/question",
+    (string pageToken, CustomerMessageBody body, AddCustomerMessageService service, CancellationToken ct) =>
+        HandleCustomerMessage(pageToken, MessageIntent.Question, body.Message, service, ct))
+    .RequireRateLimiting("customer-write");
+
+app.MapPost("/keep/r/{pageToken}/update_request",
+    (string pageToken, CustomerMessageBody body, AddCustomerMessageService service, CancellationToken ct) =>
+        HandleCustomerMessage(pageToken, MessageIntent.UpdateRequest, body.Message, service, ct))
+    .RequireRateLimiting("customer-write");
+
+app.MapPost("/keep/r/{pageToken}/schedule_change_request",
+    (string pageToken, CustomerMessageBody body, AddCustomerMessageService service, CancellationToken ct) =>
+        HandleCustomerMessage(pageToken, MessageIntent.ScheduleChangeRequest, body.Message, service, ct))
+    .RequireRateLimiting("customer-write");
+
+app.MapPost("/keep/r/{pageToken}/change_or_cancel_request",
+    (string pageToken, CustomerMessageBody body, AddCustomerMessageService service, CancellationToken ct) =>
+        HandleCustomerMessage(pageToken, MessageIntent.ChangeOrCancelRequest, body.Message, service, ct))
+    .RequireRateLimiting("customer-write");
+
+app.MapPost("/keep/r/{pageToken}/issue",
+    (string pageToken, CustomerMessageBody body, AddCustomerMessageService service, CancellationToken ct) =>
+        HandleCustomerMessage(pageToken, MessageIntent.Complaint, body.Message, service, ct))
+    .RequireRateLimiting("customer-write");
+
 app.MapAuthEndpoints();
 app.MapAccountEndpoints();
 
@@ -291,6 +341,24 @@ static async Task<IResult> HandlePublicIntake(
     return Results.Created(
         (string?)null,
         new { result.Value.RequestId, result.Value.ReferenceCode, result.Value.PageToken });
+}
+
+static async Task<IResult> HandleCustomerMessage(
+    string pageToken,
+    MessageIntent intent,
+    string message,
+    AddCustomerMessageService service,
+    CancellationToken ct)
+{
+    var command = new AddCustomerMessageCommand(pageToken, intent, message);
+    var result = await service.ExecuteAsync(command, ct);
+    if (!result.IsSuccess)
+        return ErrorHttpMapper.ToHttpResult(result.Error);
+
+    var page = result.Value;
+    return page.IsExpired
+        ? Results.Json(page, statusCode: StatusCodes.Status410Gone)
+        : Results.Ok(page);
 }
 
 // --- Utilities ---

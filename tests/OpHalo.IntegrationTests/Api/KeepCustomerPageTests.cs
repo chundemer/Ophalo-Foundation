@@ -104,8 +104,9 @@ public sealed class KeepCustomerPageTests : IClassFixture<KeepApiWebFactory>, IA
         await using (var scope = _factory.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+            // Status must be terminal for expiry to apply (ADR-120 — guard enforces terminal-only expiry).
             await db.Database.ExecuteSqlRawAsync(
-                "UPDATE keep_requests SET expires_at_utc = @p0 WHERE page_token = @p1",
+                "UPDATE keep_requests SET status = 'Closed', expires_at_utc = @p0 WHERE page_token = @p1",
                 DateTime.UtcNow.AddDays(-1), PageToken);
         }
 
