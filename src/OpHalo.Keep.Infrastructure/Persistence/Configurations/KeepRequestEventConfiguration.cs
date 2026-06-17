@@ -59,6 +59,25 @@ internal sealed class KeepRequestEventConfiguration : BaseEntityConfiguration<Ke
             .HasConversion<string>()
             .HasMaxLength(50);
 
+        // External contact fields — present on ExternalContactLogged events only (ADR-215/217).
+        builder.Property(x => x.ExternalContactDirection)
+            .HasConversion<string>()
+            .HasMaxLength(50);
+
+        builder.Property(x => x.ExternalContactOutcome)
+            .HasConversion<string>()
+            .HasMaxLength(50);
+
+        builder.Property(x => x.ExternalContactRequiresFollowUp);
+
+        builder.Property(x => x.ExternalContactSetFirstResponse)
+            .IsRequired()
+            .HasDefaultValue(false);
+
+        builder.Property(x => x.ExternalContactClearedAttention)
+            .IsRequired()
+            .HasDefaultValue(false);
+
         builder.HasIndex(x => x.RequestId)
             .HasDatabaseName("ix_keep_request_events_request_id");
 

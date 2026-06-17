@@ -9,5 +9,6 @@ public enum KeepRequestEventType
     RequestClosed = 5,
     RequestCancelled = 6,
     InternalNoteAdded = 7,
-    AttentionAcknowledged = 8
+    AttentionAcknowledged = 8,
+    ExternalContactLogged = 9
 }

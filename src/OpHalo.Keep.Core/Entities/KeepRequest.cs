@@ -456,6 +456,210 @@ public sealed class KeepRequest : BaseEntity
         return Result.Success();
     }
 
+    /// <summary>
+    /// Logs operator-initiated outbound contact with the customer (call, SMS, or email).
+    /// Valid channels: Phone, Sms, Email. Outcome required for Phone only (ADR-168/203).
+    /// RequiresBusinessFollowUp required for spoke/voicemail/SMS/email; must be null for
+    /// no-answer/wrong-number (ADR-169/216). Summary required for SMS/Email (ADR-199).
+    /// Spoke/voicemail/SMS/email set first response on customer-origin requests that have none (ADR-198/213).
+    /// When requiresBusinessFollowUp = false, clears eligible business-waiting attention with
+    /// reason "external_contact_no_follow_up" (ADR-214). Not allowed on terminal requests (ADR-200).
+    /// </summary>
+    public Result<KeepRequestEvent> LogOutboundExternalContact(
+        CommunicationChannel channel,
+        ExternalContactOutcome? outcome,
+        bool? requiresBusinessFollowUp,
+        string? summary,
+        Guid actorAccountUserId,
+        string actorDisplayName,
+        DateTime nowUtc)
+    {
+        if (nowUtc == default)
+            throw new ArgumentException("nowUtc must be a valid UTC timestamp.", nameof(nowUtc));
+        if (actorAccountUserId == Guid.Empty)
+            throw new ArgumentException("Actor account user ID is required.", nameof(actorAccountUserId));
+        if (string.IsNullOrWhiteSpace(actorDisplayName))
+            throw new ArgumentException("Actor display name is required.", nameof(actorDisplayName));
+
+        if (IsTerminal)
+            return Result<KeepRequestEvent>.Failure(KeepRequestErrors.TerminalState);
+
+        if (channel is not (CommunicationChannel.Phone or CommunicationChannel.Sms or CommunicationChannel.Email))
+            return Result<KeepRequestEvent>.Failure(KeepRequestErrors.ExternalContactInvalidOutboundChannel);
+
+        // Guard undefined outcome before pattern matching — domain returns failure for user-shaped invalid input.
+        if (outcome.HasValue && !Enum.IsDefined(outcome.Value))
+            return Result<KeepRequestEvent>.Failure(KeepRequestErrors.ExternalContactOutcomeNotAllowed);
+
+        if (channel == CommunicationChannel.Phone)
+        {
+            if (!outcome.HasValue)
+                return Result<KeepRequestEvent>.Failure(KeepRequestErrors.ExternalContactOutcomeRequired);
+
+            if (outcome.Value is ExternalContactOutcome.SpokeWithCustomer or ExternalContactOutcome.LeftVoicemail)
+            {
+                if (!requiresBusinessFollowUp.HasValue)
+                    return Result<KeepRequestEvent>.Failure(KeepRequestErrors.ExternalContactFollowUpRequired);
+            }
+            else
+            {
+                // NoAnswer / WrongNumber: follow-up does not apply (ADR-216).
+                if (requiresBusinessFollowUp.HasValue)
+                    return Result<KeepRequestEvent>.Failure(KeepRequestErrors.ExternalContactFollowUpNotAllowed);
+            }
+        }
+        else
+        {
+            // Sms / Email: no outcome, follow-up required, summary required.
+            if (outcome.HasValue)
+                return Result<KeepRequestEvent>.Failure(KeepRequestErrors.ExternalContactOutcomeNotAllowed);
+
+            if (!requiresBusinessFollowUp.HasValue)
+                return Result<KeepRequestEvent>.Failure(KeepRequestErrors.ExternalContactFollowUpRequired);
+        }
+
+        var normalizedSummary = string.IsNullOrWhiteSpace(summary) ? null : summary.Trim();
+
+        if (channel is CommunicationChannel.Sms or CommunicationChannel.Email && normalizedSummary is null)
+            return Result<KeepRequestEvent>.Failure(KeepRequestErrors.ExternalContactSummaryRequired);
+
+        if (normalizedSummary?.Length > 4000)
+            return Result<KeepRequestEvent>.Failure(KeepRequestErrors.ExternalContactSummaryTooLong);
+
+        // Effect matrix (ADR-198).
+        bool countsFirstResponse = channel == CommunicationChannel.Phone
+            ? outcome!.Value is ExternalContactOutcome.SpokeWithCustomer or ExternalContactOutcome.LeftVoicemail
+            : true; // Sms / Email always count first response
+
+        bool setFirstResponse = countsFirstResponse
+            && Origin == KeepRequestOrigin.Customer
+            && FirstRespondedAtUtc is null;
+
+        bool clearAttention = requiresBusinessFollowUp == false
+            && AttentionLevel != AttentionLevel.None
+            && WaitingDirection == WaitingDirection.Business;
+
+        LastBusinessActivityAt = nowUtc;
+
+        var contactEvent = KeepRequestEvent.CreateExternalContactLogged(
+            Id, AccountId, actorAccountUserId, actorDisplayName.Trim(),
+            ExternalContactDirection.Outbound, channel, outcome,
+            requiresFollowUp: requiresBusinessFollowUp,
+            summary: normalizedSummary,
+            setFirstResponse: setFirstResponse,
+            clearedAttention: clearAttention,
+            occurredAtUtc: nowUtc);
+
+        if (setFirstResponse)
+        {
+            FirstRespondedAtUtc = nowUtc;
+            FirstResponderAccountUserId = actorAccountUserId;
+            FirstResponseEventId = contactEvent.Id;
+        }
+
+        if (clearAttention)
+        {
+            AttentionLevel = AttentionLevel.None;
+            WaitingDirection = WaitingDirection.None;
+            AttentionReason = null;
+            PriorityBand = PriorityBand.Standard;
+            AttentionSinceUtc = null;
+            NextAttentionAtUtc = null;
+            AttentionClearedAtUtc = nowUtc;
+            AttentionClearedByAccountUserId = actorAccountUserId;
+            AttentionClearReason = "external_contact_no_follow_up";
+        }
+
+        return Result<KeepRequestEvent>.Success(contactEvent);
+    }
+
+    /// <summary>
+    /// Logs inbound customer contact that occurred outside Keep (call, SMS, email, in-person, other).
+    /// Summary always required — captures customer-provided context for the team (ADR-199).
+    /// Never counts as business first response (ADR-198).
+    /// Updates LastCustomerActivityAt. When requiresBusinessFollowUp = true, raises or preserves
+    /// business-waiting attention at standard priority using response-policy timing (ADR-204).
+    /// Not allowed on terminal requests (ADR-200).
+    /// </summary>
+    public Result<KeepRequestEvent> LogInboundExternalContact(
+        CommunicationChannel channel,
+        bool requiresBusinessFollowUp,
+        string summary,
+        Guid actorAccountUserId,
+        string actorDisplayName,
+        int standardResponseTargetMinutes,
+        DateTime nowUtc)
+    {
+        if (nowUtc == default)
+            throw new ArgumentException("nowUtc must be a valid UTC timestamp.", nameof(nowUtc));
+        if (actorAccountUserId == Guid.Empty)
+            throw new ArgumentException("Actor account user ID is required.", nameof(actorAccountUserId));
+        if (string.IsNullOrWhiteSpace(actorDisplayName))
+            throw new ArgumentException("Actor display name is required.", nameof(actorDisplayName));
+        if (standardResponseTargetMinutes <= 0)
+            throw new ArgumentException("standardResponseTargetMinutes must be positive.", nameof(standardResponseTargetMinutes));
+
+        if (IsTerminal)
+            return Result<KeepRequestEvent>.Failure(KeepRequestErrors.TerminalState);
+
+        if (!Enum.IsDefined(channel) || channel == CommunicationChannel.InApp)
+            return Result<KeepRequestEvent>.Failure(KeepRequestErrors.ExternalContactInvalidInboundChannel);
+
+        var trimmedSummary = string.IsNullOrWhiteSpace(summary) ? null : summary.Trim();
+        if (trimmedSummary is null)
+            return Result<KeepRequestEvent>.Failure(KeepRequestErrors.ExternalContactSummaryRequired);
+        if (trimmedSummary.Length > 4000)
+            return Result<KeepRequestEvent>.Failure(KeepRequestErrors.ExternalContactSummaryTooLong);
+
+        LastCustomerActivityAt = nowUtc;
+
+        if (requiresBusinessFollowUp)
+        {
+            if (WaitingDirection == WaitingDirection.Customer)
+            {
+                // Flip: customer made external contact, business now owes the next move.
+                AttentionLevel = AttentionLevel.Waiting;
+                WaitingDirection = WaitingDirection.Business;
+                AttentionReason = Enums.AttentionReason.CustomerMessage;
+                PriorityBand = Enums.PriorityBand.Standard;
+                AttentionSinceUtc = nowUtc;
+                NextAttentionAtUtc = nowUtc.AddMinutes(standardResponseTargetMinutes);
+            }
+            else if (AttentionLevel == AttentionLevel.None)
+            {
+                // Fresh attention.
+                AttentionLevel = AttentionLevel.Waiting;
+                WaitingDirection = WaitingDirection.Business;
+                AttentionReason = Enums.AttentionReason.CustomerMessage;
+                PriorityBand = Enums.PriorityBand.Standard;
+                AttentionSinceUtc = nowUtc;
+                NextAttentionAtUtc = nowUtc.AddMinutes(standardResponseTargetMinutes);
+            }
+            else if (WaitingDirection == WaitingDirection.Business)
+            {
+                // Already business-waiting: preserve oldest AttentionSinceUtc — no change needed.
+            }
+            else
+            {
+                // AttentionLevel is non-None but WaitingDirection is neither Business nor Customer.
+                // This is an invalid domain state that should never occur in production.
+                throw new InvalidOperationException(
+                    $"Request {Id} has AttentionLevel {AttentionLevel} with unexpected WaitingDirection {WaitingDirection}.");
+            }
+        }
+
+        var contactEvent = KeepRequestEvent.CreateExternalContactLogged(
+            Id, AccountId, actorAccountUserId, actorDisplayName.Trim(),
+            ExternalContactDirection.Inbound, channel, outcome: null,
+            requiresFollowUp: requiresBusinessFollowUp,
+            summary: trimmedSummary,
+            setFirstResponse: false,
+            clearedAttention: false,
+            occurredAtUtc: nowUtc);
+
+        return Result<KeepRequestEvent>.Success(contactEvent);
+    }
+
     // Enums. prefix required: AttentionReason and PriorityBand instance properties shadow the
     // enum type names from the using import in static method scope.
     private static (Enums.AttentionReason Reason, Enums.PriorityBand Priority) MapIntentToAttention(MessageIntent intent) =>

@@ -2,10 +2,10 @@
 
 **Phase:** 8-B5 discovery / pre-implementation gate
 **Date:** 2026-06-17
-**Status:** Decision gate expanded. Ready for final implementation handoff review.
+**Status:** B5 Session 1 complete. Session 2 external-contact discovery ready for final implementation handoff review.
 **Build log preceding this:** `037-phase-8-b4-service-request-detail-enrichment-implementation.md`
-**ADRs locked:** 164..193
-**Next free ADR:** ADR-194
+**ADRs locked:** 164..218
+**Next free ADR:** ADR-219
 
 ---
 
@@ -962,6 +962,445 @@ with no first batch shortcut unless a later product decision changes it.
 ---
 
 ## Implementation Guidance For B5
+
+## Session 2 External Contact Discovery Checkpoint
+
+**Date:** 2026-06-17
+**Status:** Decisions ADR-196..218 locked. Ready for implementation handoff review.
+
+### ADR-196 — External contact logs are structured internal request events
+
+Session 2 stores external contact logs as first-class `KeepRequestEvent` rows, not a separate
+external-contact table.
+
+Rules:
+
+- add an `ExternalContactLogged` event type;
+- event visibility is internal-only in Session 2;
+- add structured nullable external-contact fields for direction, channel, outcome, follow-up,
+  first-response effect, and attention-clearing effect;
+- use event `Content` for the internal summary/note;
+- preserve actor and timestamp fields so later list/detail projections can render who did what
+  when;
+- external contact mutates `KeepRequest` through domain methods and the event remains the durable
+  audit/timeline record.
+
+Reason: request events are Foundation's canonical request audit trail. Structured fields avoid
+guessing from free text and keep later mobile list previews possible without changing the model.
+
+### ADR-197 — One external-contact endpoint and service
+
+Session 2 exposes one authenticated operator endpoint:
+
+```text
+POST /keep/requests/{requestId}/external-contact
+```
+
+Rules:
+
+- one `LogExternalContactService` handles inbound and outbound contact;
+- the request body is structured by direction, channel, outcome, follow-up need, and summary;
+- backend validation rejects invalid combinations before domain mutation;
+- backend derives first-response and attention effects instead of trusting client-provided state
+  flags.
+
+Reason: the product action is "log external contact." Splitting the API by phone/text/email would
+bake UI workflow into the backend too early.
+
+### ADR-198 — External contact state-effect matrix
+
+External contact logging is primarily team memory/audit for customer communication that happened
+outside Keep. Quick contact launch alone is not durable contact evidence.
+
+State effects:
+
+| Contact type | Counts first response? | Can clear eligible attention? | Can raise/preserve attention? |
+|---|---:|---:|---:|
+| Outbound phone: spoke with customer | Yes | Yes, when no follow-up is needed | No |
+| Outbound phone: left voicemail | Yes | Yes, when no follow-up is needed | No |
+| Outbound phone: no answer | No | No | No |
+| Outbound phone: wrong number | No | No | No |
+| Outbound email sent | Yes | Yes, when no follow-up is needed | No |
+| Outbound text sent | Yes | Yes, when no follow-up is needed | No |
+| Inbound customer contact | No | No | Yes, when follow-up is required |
+
+Rules:
+
+- logged contact is internal by default;
+- external contact never changes lifecycle status;
+- external contact never updates the customer page automatically;
+- customer-visible recap remains a separate explicit business update/status action;
+- no external contact resolves closed unresolved feedback.
+
+Reason: offline customer communication should count inside Keep without confusing internal audit
+with customer-visible communication.
+
+### ADR-199 — Summary requirements balance speed and team memory
+
+Session 2 keeps outbound call logging low-friction.
+
+Rules:
+
+- outbound phone outcomes can be logged without a required note;
+- outbound no-answer and wrong-number must be especially fast to log;
+- outbound email/text sent logs require a summary of what was sent;
+- inbound external customer contact always requires a summary because it captures customer-provided
+  context for the team;
+- all summaries are internal-only in Session 2.
+
+Reason: requiring notes for every call attempt discourages logging, but inbound contact without a
+summary does not give the team useful memory.
+
+### ADR-200 — External contact is non-terminal only
+
+Session 2 allows external contact logging only on non-terminal requests.
+
+Rules:
+
+- `Received`, `Scheduled`, `InProgress`, `PendingCustomer`, and `Resolved` may log external
+  contact;
+- `Closed` and `Cancelled` reject external contact logs;
+- internal notes remain available on terminal requests;
+- external contact never reopens requests and never resolves closed unresolved feedback.
+
+Reason: terminal feedback/contact follow-up needs the later feedback-review or closeout workflow,
+not the first external-contact logging slice.
+
+### ADR-201 — Detail timeline first; future list previews preserved
+
+Session 2 exposes external contact logs in request detail timeline metadata and updates request
+state fields that affect list ranking. It does not add default-list recent-activity previews, row
+expansion, or event loading.
+
+Rules:
+
+- `KeepRequestDetailResult` events expose structured external-contact fields;
+- the default list changes only indirectly through first-response, attention, and activity
+  timestamp mutations;
+- external-contact event data must be structured and actor/time-stamped so a later mobile
+  list UX/history slice can show compact last 1-2 activity previews, including who did what when,
+  without changing the contact-log model.
+
+Reason: detail is the full workbench today, but mobile operators will likely need list-level recent
+activity after pilot feedback. Session 2 should not build that UI, but it must not block it.
+
+### ADR-202 — External-contact write returns request detail
+
+`POST /keep/requests/{requestId}/external-contact` returns `KeepRequestDetailResult`.
+
+Rules:
+
+- response includes the new internal timeline event;
+- response includes updated request state/action metadata;
+- Session 2 does not return undo metadata and does not implement contact-log revert.
+
+Reason: this matches existing operator write endpoints and lets the UI refresh detail immediately.
+
+### ADR-203 — Explicit external-contact direction/outcome enums and stable API codes
+
+Session 2 adds explicit external-contact enums for direction and call outcome. It reuses existing
+`CommunicationChannel` for contact channel because that enum already has phone, SMS, email,
+in-person, and other, and `KeepRequestEvent.CommunicationChannel` already anticipates externally
+logged contact events.
+
+Recommended API codes:
+
+```text
+direction: outbound | inbound
+channel: phone | sms | email | in_person | other
+outcome: spoke_with_customer | left_voicemail | no_answer | wrong_number
+```
+
+Rules:
+
+- EF stores enum values as strings;
+- outcomes are valid only for outbound phone contact;
+- outbound contact initially supports phone, SMS, and email;
+- inbound contact supports phone, SMS, email, in-person, and other;
+- invalid combinations fail before domain mutation.
+
+Reason: stable codes protect clients while domain enums keep magic strings out of business logic.
+Reusing `CommunicationChannel` avoids a duplicate channel enum.
+
+### ADR-204 — Inbound follow-up uses response-policy timing
+
+Inbound external contact with `requiresBusinessFollowUp=true` raises or preserves
+business-waiting attention using the same response-policy timing rules as customer messages.
+
+Rules:
+
+- standard priority by default;
+- update last customer activity;
+- do not count as business first response;
+- if already business-waiting, preserve the oldest attention start;
+- if waiting on customer, flip to business-waiting from the inbound contact time;
+- future priority/intent workflow may add upgrades, but Session 2 does not.
+
+Reason: inbound phone/text/email/in-person contact is customer activity from an operational
+standpoint, even though it is not customer-page activity.
+
+### ADR-205 — Logged contact updates existing activity timestamps by direction
+
+When external contact is logged in Keep, activity timestamps update by direction.
+
+Rules:
+
+- all logged outbound contact attempts update `LastBusinessActivityAt`;
+- logged inbound customer contact updates `LastCustomerActivityAt`;
+- timestamps describe logged activity only and do not imply every off-platform call/text/email was
+  captured;
+- timestamps do not imply first response, attention clearing, status change, or customer-visible
+  page updates.
+
+Reason: existing activity fields are sufficient for freshness and tie-breakers in Session 2.
+
+### ADR-206 — No undo, revert, or mistake flag in Session 2
+
+Session 2 external contact logs are append-only.
+
+Rules:
+
+- no undo/revert action;
+- no mistake/ignore marker;
+- mistakes can be corrected with internal notes;
+- future mistake markers may visually mark logs without reversing state effects;
+- future true revert must use compensating events and define first-response, attention, activity,
+  and projection semantics explicitly.
+
+Reason: reversing contact logs is deceptively complex because logs can affect first response,
+attention, activity timestamps, and list ranking.
+
+### ADR-207 — Contact-specific validation errors
+
+Session 2 uses explicit contact-specific validation errors for external-contact request bodies.
+
+Rules:
+
+- add errors for invalid direction, channel, outcome, outcome-not-allowed, missing summary, and
+  missing follow-up answers;
+- reuse existing auth, permission, account-access, feature, not-found, and terminal-state errors;
+- validation fails before domain mutation and before any event is persisted.
+
+Reason: clients need field-specific feedback, and tests need precise failure assertions.
+
+### ADR-208 — OffSeason is frozen/read-mostly Keep posture
+
+OffSeason is a frozen/read-mostly Keep posture, not an active workflow mode.
+
+Rules:
+
+- normal role-based read access remains available for list, detail, timeline, customer/request data,
+  and future exports;
+- normal operator writes are blocked, including status changes, business updates, internal notes,
+  acknowledge attention, external contact logging, and future assignment/watch/mute writes;
+- customer writes are blocked, including customer-page messages and feedback submission;
+- background workflow processing, outbound notifications, email, and SMS are blocked for Keep;
+- existing requests remain in their current status when OffSeason begins and are not auto-closed;
+- Owner/Admin may perform a narrow closeout action for remaining non-terminal requests, with an
+  internal audit reason and no customer-visible update or notification;
+- public intake links remain reachable but switch to a read-only unavailable response instead of
+  404;
+- OffSeason public intake does not accept new requests, create customer/request records, send
+  notifications, or start background workflows;
+- the unavailable intake response may show business-approved fallback phone/email/message/social
+  links when configured, but fallback contact settings and preview are deferred.
+
+Reason: OffSeason should preserve access to records while limiting active workflow usage and OpHalo
+operating cost. Leaving public intake links reachable avoids a broken customer experience for links
+shared in email, social media, and websites, while blocking new work intake.
+
+### ADR-209 — External-contact authorization follows operator-write rules and OffSeason freeze
+
+External-contact logging uses the existing operator-write authorization stack, with the OffSeason
+freeze from ADR-208 applied.
+
+Rules:
+
+- authenticated current user required;
+- active account membership required;
+- `Keep.RequestsOperate` permission required;
+- `Keep.OperatorQueue` feature required;
+- request lookup is account-scoped;
+- Viewer/read-only users cannot log contact;
+- blocked account access still blocks the write;
+- OffSeason blocks external-contact logging because all normal Keep writes are frozen there.
+
+Reason: external contact can mutate first response, attention, and activity state, so it is an
+operator write. It should not diverge from the global Keep write policy.
+
+### ADR-210 — External contact uses log time only in Session 2
+
+External contact events use the existing `OccurredAtUtc` as the time the contact log is created in
+Keep.
+
+Rules:
+
+- Session 2 does not add `ExternalContactOccurredAtUtc`;
+- Session 2 does not add `ExternalContactSource`;
+- future analytics/backdating/provenance may add occurred-time and source fields together if pilot
+  usage shows a need;
+- Session 2 must not pretend Keep knows when an off-platform contact happened unless it was logged
+  in Keep.
+
+Reason: separate real-world occurred time is useful only with source/provenance and validation
+rules. Adding it alone would create misleading analytics.
+
+### ADR-211 — One application service, two domain methods
+
+Session 2 uses one endpoint/application service and two domain methods on `KeepRequest`.
+
+Recommended domain methods:
+
+```text
+LogOutboundExternalContact(...)
+LogInboundExternalContact(...)
+```
+
+Rules:
+
+- one API command/service remains `LogExternalContactService`;
+- outbound and inbound domain behavior is split because their invariants differ;
+- outbound can count first response and clear eligible attention;
+- inbound cannot count first response and can raise/preserve business-waiting attention.
+
+Reason: separate domain methods keep validation and side effects explicit while preserving one
+client-facing command.
+
+### ADR-212 — External contact source/provenance is deferred
+
+Session 2 does not distinguish Keep-initiated contact from manually logged contact.
+
+Rules:
+
+- both flows create the same `ExternalContactLogged` event after operator confirmation;
+- no `keep_initiated` / `manual_log` source field is added in Session 2;
+- future native-app/analytics work may add `ExternalContactSource` together with occurred-time and
+  provenance rules.
+
+Reason: quick contact launch alone is not evidence. Source becomes useful when native launch/return
+instrumentation and analytics semantics are designed together.
+
+### ADR-213 — External contact can become first-response evidence
+
+When an external contact log counts as the first business response, the request first-response fields
+point to that `ExternalContactLogged` event.
+
+Rules:
+
+- set `FirstRespondedAtUtc`, `FirstResponderAccountUserId`, and `FirstResponseEventId` from the
+  contact event when the contact counts as first response;
+- only set these fields when `Origin == Customer` and no first response is already recorded;
+- no-answer, wrong-number, inbound contact, business-origin requests, and already-first-responded
+  requests do not update first-response fields.
+
+Reason: first response should remain traceable to the exact event that satisfied it.
+
+### ADR-214 — External contact attention clear reason is stable code
+
+When outbound external contact clears active eligible attention, the request stores a stable internal
+attention clear reason.
+
+Rules:
+
+- `AttentionClearReason = "external_contact_no_follow_up"`;
+- channel, outcome, and summary remain on the `ExternalContactLogged` event;
+- no-answer, wrong-number, inbound contact, and contact that does not clear attention do not set an
+  attention clear reason.
+
+Reason: the clear reason should explain why attention cleared without duplicating structured event
+metadata.
+
+### ADR-215 — Detail timeline exposes nullable external-contact metadata
+
+Request detail timeline events expose nullable external-contact fields on the existing event DTO.
+
+Fields:
+
+```text
+externalContactDirection
+externalContactChannel
+externalContactOutcome
+externalContactRequiresFollowUp
+externalContactCountsFirstResponse
+externalContactClearedAttention
+```
+
+Rules:
+
+- non-contact events return null for these fields;
+- external-contact API values use stable lowercase codes;
+- customer page timelines continue to exclude internal external-contact logs.
+
+Reason: this follows the existing event DTO pattern of nullable event-specific metadata while keeping
+customer pages clean.
+
+### ADR-216 — External-contact request body shape
+
+External-contact request body uses five fields:
+
+```json
+{
+  "direction": "outbound",
+  "channel": "phone",
+  "outcome": "spoke_with_customer",
+  "requiresBusinessFollowUp": false,
+  "summary": "Confirmed tomorrow 9-11 arrival window."
+}
+```
+
+Rules:
+
+- `direction` and `channel` are required;
+- `outcome` is required only for outbound phone and rejected otherwise;
+- `requiresBusinessFollowUp` is required for inbound, outbound SMS/email, and outbound phone
+  spoke/voicemail;
+- `requiresBusinessFollowUp` is rejected for no-answer/wrong-number and should be represented as
+  null/not applicable in domain/event data rather than false;
+- `summary` is required for inbound and outbound SMS/email;
+- `summary` is optional for outbound phone;
+- summary max length is 4000 characters.
+
+Reason: one compact body supports all contact cases while validation keeps impossible combinations
+out. Summary requirements are domain invariants as well as API validation rules.
+
+### ADR-217 — Session 2 migration scope is event fields only
+
+Session 2 migration scope is limited to external-contact event support.
+
+Rules:
+
+- add `ExternalContactLogged` event type support;
+- add structured nullable external-contact fields on `KeepRequestEvent`;
+- do not add a separate contact table;
+- do not add occurred/source timestamp fields;
+- do not add mistake/revert fields;
+- do not add list preview fields;
+- do not add denormalized last-contact columns;
+- OffSeason freeze should use existing account operating-mode data unless implementation proves a
+  schema gap.
+
+Reason: the schema should support the locked workflow without pulling in deferred analytics,
+preview, source/provenance, or undo work.
+
+### ADR-218 — Session 2 test gate
+
+Session 2 completion requires focused domain/unit tests and integration tests.
+
+Required coverage:
+
+- external-contact effect matrix;
+- endpoint auth, permission, feature, account access, cross-account not-found, and OffSeason
+  blocking;
+- request-body validation and contact-specific errors;
+- event persistence with internal visibility and structured fields;
+- detail response metadata;
+- customer-page exclusion for internal external-contact logs;
+- OffSeason public-intake unavailable behavior;
+- full suite pass if feasible;
+- docs/session-log records exact tests run.
+
+Reason: external contact touches state, audit, public boundaries, and account-mode policy, so the
+completion gate must cover behavior and not only endpoint happy paths.
 
 Recommended B5 read-contract additions:
 

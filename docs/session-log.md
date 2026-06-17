@@ -9,8 +9,8 @@
 
 **Pre-work complete**
 **Tests:** 537/537 (299 unit · 14 arch · 224 integration)
-**ADRs in scope:** 164..193
-**Next free ADR:** 194
+**ADRs in scope:** 164..218
+**Next free ADR:** 219
 **Build logs:** `docs/build-log/038-phase-8-b5-request-list-triage-external-contact-decisions.md` (decisions) · `docs/build-log/039-phase-8-b5-claude-coding-sessions.md` (implementation spec)
 
 ---
@@ -63,13 +63,73 @@ Phase 8-B5: default command-center request list — ranking, attention indicator
 
 ---
 
-### Next session: Phase 8-B5 Session 2 — External Contact Logging
+### Session 2A — External Contact Schema + Domain — COMPLETE
 
-**Goal:** Implement authoritative external-contact writes after B5 list affordances.
+**Tests:** 355 unit · 14 arch (integration tests pending migration apply)
+**Migration:** `20260617224828_AddExternalContactEventFields` — 5 nullable columns on `keep_request_events`
+**Next free ADR:** ADR-219 (unchanged)
 
-Decision/deferred refs: ADR-167..172, ADR-180, ADR-191; DEF-018, DEF-031, DEF-032
+**Files changed:**
 
-See `docs/build-log/039-phase-8-b5-claude-coding-sessions.md` Session 2 for scope.
+| File | Change |
+|------|--------|
+| `Keep.Core/Entities/Enums/ExternalContactDirection.cs` | New: `Outbound = 1, Inbound = 2` |
+| `Keep.Core/Entities/Enums/ExternalContactOutcome.cs` | New: `SpokeWithCustomer = 1, LeftVoicemail = 2, NoAnswer = 3, WrongNumber = 4` |
+| `Keep.Core/Entities/Enums/KeepRequestEventType.cs` | Added `ExternalContactLogged = 9` |
+| `Keep.Core/Entities/KeepRequestEvent.cs` | Added 5 nullable fields + `CreateExternalContactLogged` factory |
+| `Keep.Core/Entities/KeepRequest.cs` | Added `LogOutboundExternalContact` + `LogInboundExternalContact` |
+| `Keep.Core/Errors/KeepRequestErrors.cs` | Added 8 external-contact domain errors |
+| `Keep.Infrastructure/Persistence/Configurations/KeepRequestEventConfiguration.cs` | EF config for 5 new event fields |
+| `Foundation.Infrastructure/Migrations/20260617224828_AddExternalContactEventFields.cs` | Schema migration |
+| `UnitTests/Keep/KeepRequestExternalContactTests.cs` | New: 36 domain unit tests covering full effect matrix |
+
+**Design decisions refined during 2A:**
+- `CommunicationChannel` reused for external contact channel (no new enum) — refinement to ADR-203
+- `ExternalContactSetFirstResponse` (not `CountsFirstResponse`) — field means "this event set first-response state"
+- Separate `ExternalContactInvalidInboundChannel` and `ExternalContactInvalidOutboundChannel` errors
+- `WaitingDirection.Customer` is not set by any current domain method; the flip branch mirrors `AddCustomerMessage`
+- ADR-215 DTO field `externalContactCountsFirstResponse` should be renamed to `externalContactSetFirstResponse` when timeline DTO is built in 2B
+
+---
+
+### Session 2 discovery checkpoint — External Contact Logging
+
+**Status:** Decisions ADR-196..218 locked. Ready for implementation in bounded sessions.
+**Goal:** Implement authoritative external-contact writes after B5 list affordances, applying the
+OffSeason freeze from ADR-208.
+
+Decision/deferred refs: ADR-167..172, ADR-180, ADR-191, ADR-196..218; DEF-018, DEF-031,
+DEF-032, DEF-040, DEF-041, DEF-042, DEF-043, DEF-044
+
+Locked discovery decisions:
+
+- External contact logs are structured internal `KeepRequestEvent` rows, not a separate table.
+- One endpoint/service: `POST /keep/requests/{requestId}/external-contact`.
+- Backend owns the first-response/attention effect matrix; quick contact launch alone is not durable evidence.
+- Customer-visible recap remains a separate explicit business update/status action.
+- Outbound phone logs stay low-friction; outbound email/text and inbound customer contact require summaries.
+- Only non-terminal requests can log external contact.
+- Detail timeline renders contact logs; list recent-activity previews are deferred but preserved by structured event data.
+- The endpoint returns `KeepRequestDetailResult`.
+- Explicit external-contact direction/outcome enums, existing `CommunicationChannel` reuse, stable API codes, and validation errors are required.
+- Inbound follow-up uses response-policy timing, standard priority by default.
+- Logged contact updates existing activity timestamps by direction.
+- No undo/revert/mistake flag in Session 2.
+- OffSeason is frozen/read-mostly: normal reads remain, normal writes are blocked, public intake
+  links show an unavailable response instead of 404, and Owner/Admin may perform narrow closeout.
+- External-contact logging follows operator-write permissions and is blocked in OffSeason.
+- External contact uses `OccurredAtUtc` as log time only; separate occurred-time/source provenance is deferred.
+- Implementation uses one endpoint/service and separate outbound/inbound domain methods.
+- First-response evidence links to the `ExternalContactLogged` event when contact counts as first response.
+- Attention clear reason uses stable code `external_contact_no_follow_up`.
+- Detail timeline DTO, request body shape, migration scope, and test gate are locked.
+
+Implementation watch-out:
+
+- Current code allows request writes in OffSeason via `RequestImplementsAllowedInOffSeason=true`.
+  Session 2 and/or the account-mode implementation must align policies/services with ADR-208.
+
+See `docs/build-log/038-phase-8-b5-request-list-triage-external-contact-decisions.md` Session 2 checkpoint and `docs/build-log/039-phase-8-b5-claude-coding-sessions.md` Session 2 for implementation scope.
 
 ---
 
@@ -157,7 +217,7 @@ Member management API + integration tests.
 - **Negative feedback on Closed raises attention** — intentional exception to terminal-no-attention posture (ADR-138).
 - **Feedback `WasResolved` is `bool?` at API layer** — null signals missing flag, validated before service. Domain method takes `bool`.
 - **Always rebuild before running tests** — `dotnet test --no-build` can run stale assemblies that mask real failures.
-- **Next free ADR: ADR-194.**
+- **Next free ADR: ADR-219.**
 - **B4 mapper signature:** `ToDetailResult` now takes `AccountUserRole role` and `bool canOperate` — all callers updated; write services pass `canOperate: true`.
 - **Participant `DisplayName`** computed in persistence (two-query approach retained; User.Name projected in the AccountUsers query via EF navigation LEFT JOIN).
 - **`KeepRequestStatus.Scheduled = 7`** — added to `MapStatus` in B5 service rewrite.
@@ -165,4 +225,4 @@ Member management API + integration tests.
 - **Post-close ranking fix** — `isPostClose` must be checked before priority band in `ComputeRankingGroup`. Post-close rows have `WaitingDirection=Business + Priority`, would otherwise hit group 2 instead of group 3.
 - **`post_customer_update.ClearsAttention`** — state-aware, not static. True only when `WaitingDirection=Business && AttentionLevel != None`.
 - **`ComputeSeverity` first-response-pending** — fixed in B5 completion. Now returns `"attention"` for first-response pending (was falling through to `"muted"`). Method signature takes `bool firstResponsePending` parameter.
-- **Resolved request resolved_quiet ranking** — requires `FirstRespondedAtUtc` to be set (via a status message or `AddBusinessUpdate`). A Resolved request with no first response remains in `first_response_pending` group.
+- **Resolved request resolved_quiet ranking** — applies only when neither first-response pending nor first-response overdue checks fire and `AttentionLevel=None`. A Resolved request with an outstanding first-response obligation stays in the first-response ranking path; `FirstRespondedAtUtc` suppresses those checks.

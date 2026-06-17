@@ -31,6 +31,15 @@ public sealed class KeepRequestEvent : BaseEntity
     // the timeline can render accurate historical labels without re-deriving from later state.
     public KeepRequestStatus? StatusAfter { get; private set; }
 
+    // Present on ExternalContactLogged events only (ADR-215/217).
+    public ExternalContactDirection? ExternalContactDirection { get; private set; }
+    public ExternalContactOutcome? ExternalContactOutcome { get; private set; }
+    // Null when not applicable (no-answer, wrong-number). See ADR-216.
+    public bool? ExternalContactRequiresFollowUp { get; private set; }
+    // Stored at log time for timeline rendering without re-deriving from request state.
+    public bool ExternalContactSetFirstResponse { get; private set; }
+    public bool ExternalContactClearedAttention { get; private set; }
+
     public static KeepRequestEvent CreateRequestCreated(
         Guid requestId,
         Guid accountId,
@@ -260,6 +269,67 @@ public sealed class KeepRequestEvent : BaseEntity
             ActorAccountUserId = actorAccountUserId,
             ActorDisplayName = actorDisplayName.Trim(),
             OccurredAtUtc = occurredAtUtc
+        };
+    }
+
+    /// <summary>
+    /// Creates an ExternalContactLogged event. Always Internal — never customer-visible.
+    /// Channel uses the existing CommunicationChannel enum; InApp is rejected (ADR-203 refinement).
+    /// Outcome is non-null only for outbound phone. RequiresFollowUp is null when not applicable
+    /// (no-answer, wrong-number) per ADR-216. SetFirstResponse means this specific event updated
+    /// the request's first-response state (not whether the contact type is capable of counting).
+    /// Caller must validate direction/channel/outcome/follow-up combinations and summary length.
+    /// </summary>
+    public static KeepRequestEvent CreateExternalContactLogged(
+        Guid requestId,
+        Guid accountId,
+        Guid actorAccountUserId,
+        string actorDisplayName,
+        ExternalContactDirection direction,
+        CommunicationChannel channel,
+        ExternalContactOutcome? outcome,
+        bool? requiresFollowUp,
+        string? summary,
+        bool setFirstResponse,
+        bool clearedAttention,
+        DateTime occurredAtUtc)
+    {
+        if (requestId == Guid.Empty)
+            throw new ArgumentException("Request ID is required.", nameof(requestId));
+        if (accountId == Guid.Empty)
+            throw new ArgumentException("Account ID is required.", nameof(accountId));
+        if (actorAccountUserId == Guid.Empty)
+            throw new ArgumentException("Actor account user ID is required.", nameof(actorAccountUserId));
+        if (string.IsNullOrWhiteSpace(actorDisplayName))
+            throw new ArgumentException("Actor display name is required.", nameof(actorDisplayName));
+        if (!Enum.IsDefined(direction))
+            throw new ArgumentException($"Unknown ExternalContactDirection: {direction}.", nameof(direction));
+        if (!Enum.IsDefined(channel))
+            throw new ArgumentException($"Unknown CommunicationChannel: {channel}.", nameof(channel));
+        if (channel == Enums.CommunicationChannel.InApp)
+            throw new ArgumentException("InApp is not a valid channel for external contact events.", nameof(channel));
+        if (outcome.HasValue && !Enum.IsDefined(outcome.Value))
+            throw new ArgumentException($"Unknown ExternalContactOutcome: {outcome}.", nameof(outcome));
+        if (occurredAtUtc == default)
+            throw new ArgumentException("occurredAtUtc must be a real timestamp.", nameof(occurredAtUtc));
+
+        return new KeepRequestEvent
+        {
+            RequestId = requestId,
+            AccountId = accountId,
+            EventType = KeepRequestEventType.ExternalContactLogged,
+            Visibility = KeepRequestEventVisibility.Internal,
+            Content = string.IsNullOrWhiteSpace(summary) ? null : summary.Trim(),
+            ActorType = ActorType.AccountUser,
+            ActorAccountUserId = actorAccountUserId,
+            ActorDisplayName = actorDisplayName.Trim(),
+            CommunicationChannel = channel,
+            OccurredAtUtc = occurredAtUtc,
+            ExternalContactDirection = direction,
+            ExternalContactOutcome = outcome,
+            ExternalContactRequiresFollowUp = requiresFollowUp,
+            ExternalContactSetFirstResponse = setFirstResponse,
+            ExternalContactClearedAttention = clearedAttention
         };
     }
 }

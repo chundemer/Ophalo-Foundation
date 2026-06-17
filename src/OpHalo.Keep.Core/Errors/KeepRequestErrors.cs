@@ -66,4 +66,29 @@ public static class KeepRequestErrors
 
     public static readonly Error FeedbackAlreadySubmitted =
         Error.Create("KeepRequest.FeedbackAlreadySubmitted", "Feedback has already been submitted for this request.");
+
+    // External contact logging errors (ADR-207).
+    public static readonly Error ExternalContactInvalidOutboundChannel =
+        Error.Create("KeepRequest.ExternalContactInvalidOutboundChannel", "Outbound external contact supports phone, SMS, and email only.");
+
+    public static readonly Error ExternalContactInvalidInboundChannel =
+        Error.Create("KeepRequest.ExternalContactInvalidInboundChannel", "Inbound external contact supports phone, SMS, email, in-person, and other.");
+
+    public static readonly Error ExternalContactOutcomeRequired =
+        Error.Create("KeepRequest.ExternalContactOutcomeRequired", "An outcome is required for outbound phone contact.");
+
+    public static readonly Error ExternalContactOutcomeNotAllowed =
+        Error.Create("KeepRequest.ExternalContactOutcomeNotAllowed", "An outcome may only be provided for outbound phone contact.");
+
+    public static readonly Error ExternalContactFollowUpRequired =
+        Error.Create("KeepRequest.ExternalContactFollowUpRequired", "Follow-up status is required for this contact type.");
+
+    public static readonly Error ExternalContactFollowUpNotAllowed =
+        Error.Create("KeepRequest.ExternalContactFollowUpNotAllowed", "Follow-up status does not apply to no-answer or wrong-number outcomes.");
+
+    public static readonly Error ExternalContactSummaryRequired =
+        Error.Create("KeepRequest.ExternalContactSummaryRequired", "A summary is required for this contact type.");
+
+    public static readonly Error ExternalContactSummaryTooLong =
+        Error.Create("KeepRequest.ExternalContactSummaryTooLong", "The summary exceeds the maximum allowed length of 4000 characters.");
 }

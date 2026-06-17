@@ -3,7 +3,7 @@
 **Date:** 2026-06-17
 **Purpose:** Claude-ready implementation sessions after B5 decisions.
 **Decision source:** `038-phase-8-b5-request-list-triage-external-contact-decisions.md`
-**ADRs covered:** 164..193
+**ADRs covered:** 164..218
 **Deferred tracker:** `docs/deferred-topics.md`
 
 ---
@@ -116,54 +116,219 @@ docs/session-log updated with exact tests and file changes
 
 ---
 
-## Session 2 — External Contact Logging
+## Session 2A — External Contact Schema + Domain
 
-**Goal:** Implement authoritative external-contact writes after B5 list affordances.
+**Goal:** Add the external-contact event model, migration, and `KeepRequest` domain behavior.
 
 Decision/deferred refs:
 
 ```text
-ADR-167..172, ADR-180, ADR-191
-DEF-018, DEF-031, DEF-032
+ADR-167..172, ADR-196, ADR-198, ADR-199, ADR-200, ADR-203, ADR-204,
+ADR-205, ADR-206, ADR-210, ADR-211, ADR-212, ADR-213, ADR-214, ADR-217
+DEF-018, DEF-031, DEF-032, DEF-041, DEF-044
 ```
 
 Scope:
 
-- Outbound call outcome logging:
-  - spoke with customer
-  - left voicemail
-  - no answer
-  - wrong number
-  - follow-up needed yes/no where applicable
-- Outbound email/text sent logging:
-  - sent activity only, no customer outcome claims
-  - text means operator-used external channel; no Keep-owned SMS sending
-- Inbound external customer contact logging:
-  - customer called/texted/emailed/spoke in person/other
-  - summary/note
-  - requires business follow-up yes/no
-- Internal audit/timeline event(s).
-- First-response effects where applicable.
-- Business-waiting attention clearing only when explicitly allowed.
-- Business-waiting attention creation/preservation for inbound follow-up.
+- Add external-contact enums:
+  - direction: outbound/inbound
+  - outcome: spoke with customer/left voicemail/no answer/wrong number
+- Reuse existing `CommunicationChannel` for phone/SMS/email/in-person/other.
+- Add `ExternalContactLogged` event support.
+- Add structured nullable external-contact fields to `KeepRequestEvent`.
+- Add EF configuration and migration.
+- Add event factory for internal external-contact logs.
+- Add `KeepRequest.LogOutboundExternalContact(...)`.
+- Add `KeepRequest.LogInboundExternalContact(...)`.
+- Enforce summary requirements in the domain methods, not only in the later API layer.
+- Use nullable `requiresBusinessFollowUp` in domain/event data so no-answer/wrong-number can be
+  represented as not applicable rather than false.
+- Apply the state-effect matrix:
+  - spoke/voicemail/email/text sent can count first response;
+  - no-answer/wrong-number log only;
+  - inbound does not count first response;
+  - inbound follow-up raises/preserves business-waiting attention;
+  - eligible outbound contact can clear attention when no follow-up is needed.
+- Set `FirstResponseEventId` to the `ExternalContactLogged` event when external contact counts as
+  first response.
+- Use `AttentionClearReason = "external_contact_no_follow_up"` when contact clears attention.
+- Use existing `OccurredAtUtc` as log time; do not add occurred/source/provenance fields.
 
 Out of scope:
 
-- customer-visible receipt/recap;
-- SMS delivery by Keep;
-- notification delivery;
-- customer page telemetry;
-- assignment/watch writes.
+- API endpoint/service.
+- Request detail response DTO updates.
+- OffSeason account/public-intake behavior.
+- List previews or last-contact denormalization.
+- Undo/revert/mistake flag.
 
-Key semantic tests:
+Required tests:
 
-- Quick contact activation alone has no effects.
-- Spoke/left voicemail count first response.
-- No answer/wrong number do not count first response or clear attention.
-- Email/text sent activity can count first response but does not claim resolved/answered.
-- Inbound contact does not count business first response.
-- Inbound follow-up required raises/preserves business-waiting attention.
-- Logged contact remains internal-only.
+- Domain/unit tests for every row in the effect matrix.
+- First-response event linkage tests.
+- Attention clear reason tests.
+- Non-terminal vs terminal request domain behavior.
+- Migration/model snapshot generated and inspected.
+
+Completion gate:
+
+```text
+unit tests for domain behavior pass
+migration generated with only the locked schema additions
+docs/session-log updated with files/tests
+```
+
+---
+
+## Session 2B — External Contact API + Detail Timeline
+
+**Goal:** Add the operator endpoint/application service and expose contact logs in request detail.
+
+Decision/deferred refs:
+
+```text
+ADR-197, ADR-199, ADR-200, ADR-202, ADR-203, ADR-207, ADR-209,
+ADR-211, ADR-215, ADR-216
+```
+
+Scope:
+
+- Add `POST /keep/requests/{requestId}/external-contact`.
+- Add request body:
+  - `direction`
+  - `channel`
+  - `outcome`
+  - `requiresBusinessFollowUp`
+  - `summary`
+- Add contact-specific validation and error codes.
+- Add `LogExternalContactService`.
+- Use existing operator-write authorization stack.
+- Block Viewer/read-only users.
+- Block terminal requests.
+- Return `KeepRequestDetailResult`.
+- Add nullable external-contact metadata fields to detail timeline event DTO.
+- Ensure customer page timelines exclude internal external-contact logs.
+
+Out of scope:
+
+- OffSeason policy changes beyond preserving a clear integration point for ADR-208.
+- Public intake OffSeason unavailable behavior.
+- List recent-activity previews.
+- Customer-visible recap/update shortcut.
+- Native app launch/source/provenance.
+
+Required tests:
+
+- Endpoint requires auth.
+- Viewer cannot log contact.
+- Owner/Admin/Operator with operate permission can log contact on non-terminal requests.
+- Cross-account request returns not found.
+- Invalid direction/channel/outcome combinations fail with contact-specific errors.
+- Summary/follow-up validation rules are enforced.
+- Event persists with internal visibility and structured fields.
+- Detail response includes new event metadata.
+- Customer page excludes internal external-contact logs.
+
+Completion gate:
+
+```text
+targeted unit/integration tests pass
+docs/session-log updated with files/tests
+```
+
+---
+
+## Session 2C — OffSeason Freeze + Public Intake Unavailable
+
+**Goal:** Align Keep write/public-intake behavior with the OffSeason frozen/read-mostly posture.
+
+Decision/deferred refs:
+
+```text
+ADR-208, ADR-209
+DEF-042, DEF-043
+```
+
+Scope:
+
+- Update account-access/write policy usage so normal Keep writes are blocked in OffSeason.
+- Ensure external-contact logging is blocked in OffSeason.
+- Preserve normal role-based reads in OffSeason.
+- Keep public intake links reachable in OffSeason.
+- Return unavailable/read-only public intake response instead of 404.
+- Block public-intake POST creation in OffSeason.
+- Ensure no customer/request records, notifications, or background workflows start from OffSeason
+  public intake.
+- Add the narrow Owner/Admin closeout action only if it is already supported by existing status
+  mechanics without expanding scope; otherwise document as follow-up inside DEF-042.
+
+Out of scope:
+
+- OffSeason fallback contact settings UI.
+- Custom unavailable message/social links/reopen date.
+- Export workflow.
+- Batch closeout/archive tools.
+
+Required tests:
+
+- Existing list/detail reads still work in OffSeason for permitted roles.
+- Operator/customer writes are blocked in OffSeason.
+- External-contact endpoint returns forbidden/conflict according to existing account-access mapping.
+- Public intake GET/token resolution returns unavailable response in OffSeason.
+- Public intake POST does not create request/customer records in OffSeason.
+- Non-OffSeason intake/write behavior remains green.
+
+Completion gate:
+
+```text
+OffSeason-focused integration tests pass
+affected existing integration tests updated intentionally
+docs/session-log updated with files/tests
+```
+
+---
+
+## Session 2D — External Contact Completion Gate
+
+**Goal:** Finish cross-slice verification, docs, and handoff after Sessions 2A-2C.
+
+Decision/deferred refs:
+
+```text
+ADR-196..218
+DEF-018, DEF-031, DEF-032, DEF-040, DEF-041, DEF-042, DEF-043, DEF-044
+```
+
+Scope:
+
+- Run the complete external-contact semantic matrix across domain and API where applicable.
+- Verify no deferred work was pulled in:
+  - no customer-visible recap;
+  - no SMS delivery by Keep;
+  - no notification delivery;
+  - no customer page telemetry;
+  - no assignment/watch writes;
+  - no list recent-activity previews;
+  - no undo/revert/mistake flag;
+  - no source/provenance/occurred-time fields.
+- Verify request list behavior still changes only through request state fields.
+- Verify migration/model snapshot and full suite if feasible.
+- Update `docs/session-log.md` with exact files changed and tests run.
+
+Required tests:
+
+- Full request-list suite remains green.
+- Full request-detail/customer-page boundary tests remain green.
+- Full external-contact tests pass.
+- Full suite pass if feasible.
+
+Completion gate:
+
+```text
+all targeted tests pass
+full suite pass if feasible
+decision index/deferred topics/session log updated
+```
 
 ---
 
