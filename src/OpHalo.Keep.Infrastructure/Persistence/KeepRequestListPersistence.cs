@@ -49,13 +49,39 @@ public sealed class KeepRequestListPersistence(OpHaloDbContext dbContext) : IKee
             entitlements.PastDueGraceEndsAtUtc);
     }
 
-    public async Task<IReadOnlyList<KeepRequest>> GetOpenRequestsAsync(
-        Guid accountId, CancellationToken ct) =>
+    public async Task<IReadOnlyList<KeepRequest>> GetDefaultListRequestsAsync(
+        Guid accountId, bool includeClosedUnresolvedFeedback, CancellationToken ct) =>
         await dbContext.Set<KeepRequest>()
             .AsNoTracking()
             .Where(r => r.AccountId == accountId
-                && r.Status != KeepRequestStatus.Closed
-                && r.Status != KeepRequestStatus.Cancelled)
-            .OrderByDescending(r => r.LastBusinessActivityAt)
+                && ((r.Status != KeepRequestStatus.Closed && r.Status != KeepRequestStatus.Cancelled)
+                    || (includeClosedUnresolvedFeedback
+                        && r.Status == KeepRequestStatus.Closed
+                        && r.AttentionReason == AttentionReason.UnresolvedFeedback
+                        && r.AttentionLevel != AttentionLevel.None)))
             .ToListAsync(ct);
+
+    public async Task<Dictionary<Guid, KeepRequestParticipantSummary>> GetParticipantSummariesAsync(
+        IReadOnlyList<Guid> requestIds, Guid currentAccountUserId, CancellationToken ct)
+    {
+        var rows = await dbContext.Set<KeepRequestParticipant>()
+            .AsNoTracking()
+            .Where(p => requestIds.Contains(p.RequestId) && p.DetachedAtUtc == null)
+            .ToListAsync(ct);
+
+        return rows
+            .GroupBy(p => p.RequestId)
+            .ToDictionary(
+                g => g.Key,
+                g =>
+                {
+                    var responsibleCount = g.Count(p => p.ParticipationType == ParticipationType.Responsible);
+                    var watchingCount = g.Count(p => p.ParticipationType == ParticipationType.Watching);
+                    var currentUserRow = g.FirstOrDefault(p => p.AccountUserId == currentAccountUserId);
+                    return new KeepRequestParticipantSummary(
+                        responsibleCount, watchingCount,
+                        currentUserRow?.ParticipationType,
+                        currentUserRow?.NotificationsEnabled);
+                });
+    }
 }

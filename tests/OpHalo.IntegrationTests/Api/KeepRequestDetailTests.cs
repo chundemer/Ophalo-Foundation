@@ -73,7 +73,7 @@ public sealed class KeepRequestDetailTests : IClassFixture<KeepApiWebFactory>, I
         var request = KeepRequest.Create(
             _accountId, customer.Id,
             "Jane Smith", "0412345678", null,
-            "Burst pipe in bathroom", "PQRS7842", "seed_page_token_detail", now);
+            "Burst pipe in bathroom", "PQRS7842", "seed_page_token_detail", now, 60);
         db.Set<KeepRequest>().Add(request);
         db.Set<KeepRequestEvent>().Add(
             KeepRequestEvent.CreateRequestCreated(request.Id, _accountId, now));

@@ -91,7 +91,7 @@ public sealed class CustomerMessageTests : IClassFixture<KeepApiWebFactory>, IAs
         var request = KeepRequest.Create(
             graph.Account.Id, customer.Id,
             "Jane Smith", "0412345678", null,
-            "Burst pipe in bathroom", "CM001", PageToken, now);
+            "Burst pipe in bathroom", "CM001", PageToken, now, 60);
         db.Set<KeepRequest>().Add(request);
         db.Set<KeepRequestEvent>().Add(
             KeepRequestEvent.CreateRequestCreated(request.Id, graph.Account.Id, now));

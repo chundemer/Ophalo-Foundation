@@ -73,7 +73,7 @@ public sealed class KeepPersistenceProofTests : IClassFixture<PostgresFixture>, 
         var request = KeepRequest.Create(
             AccountId, customer.Id,
             "Jane Smith", "0412345678", null,
-            "Burst pipe in bathroom", "PQRS7842", "tok_abc123", Now);
+            "Burst pipe in bathroom", "PQRS7842", "tok_abc123", Now, 60);
         var ev = KeepRequestEvent.CreateRequestCreated(request.Id, AccountId, Now);
 
         await using (var ctx = CreateContext())
@@ -136,7 +136,7 @@ public sealed class KeepPersistenceProofTests : IClassFixture<PostgresFixture>, 
     public async Task Duplicate_page_token_is_rejected()
     {
         var customer = KeepCustomer.Create(AccountId, "Jane", "0412345678");
-        var r1 = KeepRequest.Create(AccountId, customer.Id, "Jane", "04123", null, "Desc", "REF1", "shared-tok", Now);
+        var r1 = KeepRequest.Create(AccountId, customer.Id, "Jane", "04123", null, "Desc", "REF1", "shared-tok", Now, 60);
 
         await using (var ctx = CreateContext())
         {
@@ -145,7 +145,7 @@ public sealed class KeepPersistenceProofTests : IClassFixture<PostgresFixture>, 
             await ctx.SaveChangesAsync();
         }
 
-        var r2 = KeepRequest.Create(AccountId, customer.Id, "Jane", "04123", null, "Other desc", "REF2", "shared-tok", Now);
+        var r2 = KeepRequest.Create(AccountId, customer.Id, "Jane", "04123", null, "Other desc", "REF2", "shared-tok", Now, 60);
 
         await using var ctx2 = CreateContext();
         ctx2.Set<KeepRequest>().Add(r2);
@@ -165,7 +165,7 @@ public sealed class KeepPersistenceProofTests : IClassFixture<PostgresFixture>, 
     public async Task Duplicate_account_reference_code_is_rejected()
     {
         var customer = KeepCustomer.Create(AccountId, "Jane", "0412345678");
-        var r1 = KeepRequest.Create(AccountId, customer.Id, "Jane", "04123", null, "Desc", "SAME-REF", "tok1", Now);
+        var r1 = KeepRequest.Create(AccountId, customer.Id, "Jane", "04123", null, "Desc", "SAME-REF", "tok1", Now, 60);
 
         await using (var ctx = CreateContext())
         {
@@ -174,7 +174,7 @@ public sealed class KeepPersistenceProofTests : IClassFixture<PostgresFixture>, 
             await ctx.SaveChangesAsync();
         }
 
-        var r2 = KeepRequest.Create(AccountId, customer.Id, "Jane", "04123", null, "Other", "SAME-REF", "tok2", Now);
+        var r2 = KeepRequest.Create(AccountId, customer.Id, "Jane", "04123", null, "Other", "SAME-REF", "tok2", Now, 60);
 
         await using var ctx2 = CreateContext();
         ctx2.Set<KeepRequest>().Add(r2);

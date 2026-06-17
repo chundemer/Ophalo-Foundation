@@ -95,7 +95,7 @@ public sealed class AddBusinessUpdateTests : IClassFixture<KeepApiWebFactory>, I
         var request = KeepRequest.Create(
             _accountId, customer.Id,
             "Jane Smith", "0412345678", null,
-            "Burst pipe in bathroom", "BIZUPD001", "token_bizupd_001", now);
+            "Burst pipe in bathroom", "BIZUPD001", "token_bizupd_001", now, 60);
         db.Set<KeepRequest>().Add(request);
         db.Set<KeepRequestEvent>().Add(
             KeepRequestEvent.CreateRequestCreated(request.Id, _accountId, now));
@@ -104,7 +104,7 @@ public sealed class AddBusinessUpdateTests : IClassFixture<KeepApiWebFactory>, I
         var closedRequest = KeepRequest.Create(
             _accountId, customer.Id,
             "Jane Smith", "0412345678", null,
-            "Already resolved job", "BIZUPD002", "token_bizupd_002", now);
+            "Already resolved job", "BIZUPD002", "token_bizupd_002", now, 60);
         var r1 = closedRequest.ChangeStatus(
             KeepRequestStatus.Resolved, null, graph.Owner.Id, "owner@bizupdate-tests.com", now);
         var r2 = closedRequest.ChangeStatus(
@@ -384,7 +384,7 @@ public sealed class AddBusinessUpdateTests : IClassFixture<KeepApiWebFactory>, I
                 _accountId, customer.Id,
                 "First Response Customer", "0411111111", null,
                 "First response test request", "BIZFR001", "token_bizfr_001",
-                DateTime.UtcNow);
+                DateTime.UtcNow, 60);
             db.Set<KeepRequest>().Add(req);
             db.Set<KeepRequestEvent>().Add(
                 KeepRequestEvent.CreateRequestCreated(req.Id, _accountId, DateTime.UtcNow));

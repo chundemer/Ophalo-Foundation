@@ -1,5 +1,6 @@
 using OpHalo.Keep.Application.Abstractions;
 using OpHalo.Keep.Core.Entities;
+using OpHalo.Keep.Core.Entities.Enums;
 
 namespace OpHalo.Keep.Application.Requests;
 
@@ -15,8 +16,30 @@ public interface IKeepRequestListPersistence
     Task<AccountAccessSnapshot?> GetAccountAccessSnapshotAsync(Guid accountId, CancellationToken ct);
 
     /// <summary>
-    /// Returns all non-terminal requests for the account, ordered by LastBusinessActivityAt DESC.
-    /// Terminal = Closed or Cancelled.
+    /// Returns the bounded candidate set for the default command-center list.
+    /// Always includes active statuses (Received, Scheduled, InProgress, PendingCustomer, Resolved).
+    /// Includes Closed + UnresolvedFeedback attention rows only when
+    /// <paramref name="includeClosedUnresolvedFeedback"/> is true (Owner/Admin only).
+    /// Excludes normal Closed and all Cancelled.
     /// </summary>
-    Task<IReadOnlyList<KeepRequest>> GetOpenRequestsAsync(Guid accountId, CancellationToken ct);
+    Task<IReadOnlyList<KeepRequest>> GetDefaultListRequestsAsync(
+        Guid accountId, bool includeClosedUnresolvedFeedback, CancellationToken ct);
+
+    /// <summary>
+    /// Returns participant summaries keyed by request ID.
+    /// Requests with no active participants are omitted; callers use GetValueOrDefault.
+    /// </summary>
+    Task<Dictionary<Guid, KeepRequestParticipantSummary>> GetParticipantSummariesAsync(
+        IReadOnlyList<Guid> requestIds, Guid currentAccountUserId, CancellationToken ct);
 }
+
+/// <summary>
+/// Aggregated participant metadata for a single request. Reflects only active
+/// (non-detached) participants. CurrentUserParticipationType is null when the
+/// current account user has no active participant row.
+/// </summary>
+public sealed record KeepRequestParticipantSummary(
+    int ResponsibleCount,
+    int WatchingCount,
+    ParticipationType? CurrentUserParticipationType,
+    bool? CurrentUserNotificationsEnabled);

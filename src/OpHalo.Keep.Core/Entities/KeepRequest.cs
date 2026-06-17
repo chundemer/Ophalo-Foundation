@@ -535,6 +535,7 @@ public sealed class KeepRequest : BaseEntity
         string referenceCode,
         string pageToken,
         DateTime nowUtc,
+        int firstResponseTargetMinutes,
         KeepRequestOrigin origin = KeepRequestOrigin.Customer)
     {
         if (accountId == Guid.Empty)
@@ -551,6 +552,8 @@ public sealed class KeepRequest : BaseEntity
             throw new ArgumentException("Reference code is required.", nameof(referenceCode));
         if (string.IsNullOrWhiteSpace(pageToken))
             throw new ArgumentException("Page token is required.", nameof(pageToken));
+        if (firstResponseTargetMinutes <= 0)
+            throw new ArgumentException("First response target minutes must be positive.", nameof(firstResponseTargetMinutes));
         if (!Enum.IsDefined(origin))
             throw new ArgumentException($"Unknown KeepRequestOrigin: {origin}.", nameof(origin));
 
@@ -567,6 +570,9 @@ public sealed class KeepRequest : BaseEntity
             PageToken = pageToken.Trim(),
             Origin = origin,
             LastBusinessActivityAt = nowUtc,
+            FirstResponseDueAtUtc = origin == KeepRequestOrigin.Customer
+                ? nowUtc.AddMinutes(firstResponseTargetMinutes)
+                : null,
             // ADR-098: attention starts at None for B1-α; B2 wires business-waiting behavior.
             AttentionLevel = AttentionLevel.None,
             WaitingDirection = WaitingDirection.None,

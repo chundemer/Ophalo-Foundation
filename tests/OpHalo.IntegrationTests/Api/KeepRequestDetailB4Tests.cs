@@ -145,7 +145,7 @@ public sealed class KeepRequestDetailB4Tests : IClassFixture<KeepApiWebFactory>,
         var activeRequest = KeepRequest.Create(
             _accountId, customer.Id,
             "Jane Smith", "0412345678", "jane@example.com",
-            "Burst pipe in bathroom", "B4ACT001", "b4_active_page_token", now);
+            "Burst pipe in bathroom", "B4ACT001", "b4_active_page_token", now, 60);
         db.Set<KeepRequest>().Add(activeRequest);
         db.Set<KeepRequestEvent>().Add(
             KeepRequestEvent.CreateRequestCreated(activeRequest.Id, _accountId, now));
@@ -167,7 +167,7 @@ public sealed class KeepRequestDetailB4Tests : IClassFixture<KeepApiWebFactory>,
         var closedRequest = KeepRequest.Create(
             _accountId, customer.Id,
             "Jane Smith", "0412345678", null,
-            "Completed job", "B4CLO001", "b4_closed_page_token", now);
+            "Completed job", "B4CLO001", "b4_closed_page_token", now, 60);
 
         var toResolved = closedRequest.ChangeStatus(
             KeepRequestStatus.Resolved, null, graph.Owner.Id, "owner@b4-tests.com", now);

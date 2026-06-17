@@ -102,7 +102,7 @@ public sealed class ChangeKeepRequestStatusTests : IClassFixture<KeepApiWebFacto
         var request = KeepRequest.Create(
             _accountId, customer.Id,
             "Jane Smith", "0412345678", null,
-            "Burst pipe in bathroom", "STATUS001", "token_status_001", now);
+            "Burst pipe in bathroom", "STATUS001", "token_status_001", now, 60);
         db.Set<KeepRequest>().Add(request);
         db.Set<KeepRequestEvent>().Add(
             KeepRequestEvent.CreateRequestCreated(request.Id, _accountId, now));
@@ -111,7 +111,7 @@ public sealed class ChangeKeepRequestStatusTests : IClassFixture<KeepApiWebFacto
         var closedRequest = KeepRequest.Create(
             _accountId, customer.Id,
             "Jane Smith", "0412345678", null,
-            "Already resolved job", "STATUS002", "token_status_002", now);
+            "Already resolved job", "STATUS002", "token_status_002", now, 60);
         var e1 = closedRequest.ChangeStatus(
             KeepRequestStatus.Resolved, null,
             graph.Owner.Id, "owner@status-tests.com", now);
@@ -128,7 +128,7 @@ public sealed class ChangeKeepRequestStatusTests : IClassFixture<KeepApiWebFacto
         var resolvedWithAttention = KeepRequest.Create(
             _accountId, customer.Id,
             "Jane Smith", "0412345678", null,
-            "Long-running job", "STATUS003", "token_status_003", now);
+            "Long-running job", "STATUS003", "token_status_003", now, 60);
         var eResolved = resolvedWithAttention.ChangeStatus(
             KeepRequestStatus.Resolved, null,
             graph.Owner.Id, "owner@status-tests.com", now);

@@ -12,11 +12,14 @@ public class KeepRequestTests
     static KeepRequest NewRequest(
         string description = "Burst pipe in bathroom",
         string referenceCode = "PQRS7842",
-        string pageToken = "tok_abc123") =>
+        string pageToken = "tok_abc123",
+        int firstResponseTargetMinutes = 60,
+        KeepRequestOrigin origin = KeepRequestOrigin.Customer) =>
         KeepRequest.Create(
             AccountId, CustomerId,
             "Jane Smith", "0412345678", null,
-            description, referenceCode, pageToken, Now);
+            description, referenceCode, pageToken, Now,
+            firstResponseTargetMinutes, origin);
 
     // --- Create ---
 
@@ -39,7 +42,7 @@ public class KeepRequestTests
         var request = KeepRequest.Create(
             AccountId, CustomerId,
             "  Jane Smith  ", "  0412345678  ", " jane@example.com ",
-            "  A burst pipe  ", "PQRS7842", "tok_abc", Now);
+            "  A burst pipe  ", "PQRS7842", "tok_abc", Now, 60);
 
         Assert.Equal("Jane Smith", request.CustomerName);
         Assert.Equal("0412345678", request.CustomerPhone);
@@ -57,47 +60,79 @@ public class KeepRequestTests
     [Fact]
     public void Create_requires_non_empty_account_id() =>
         Assert.Throws<ArgumentException>(() =>
-            KeepRequest.Create(Guid.Empty, CustomerId, "Jane", "04123", null, "desc", "REF1", "tok", Now));
+            KeepRequest.Create(Guid.Empty, CustomerId, "Jane", "04123", null, "desc", "REF1", "tok", Now, 60));
 
     [Fact]
     public void Create_requires_non_empty_customer_id() =>
         Assert.Throws<ArgumentException>(() =>
-            KeepRequest.Create(AccountId, Guid.Empty, "Jane", "04123", null, "desc", "REF1", "tok", Now));
+            KeepRequest.Create(AccountId, Guid.Empty, "Jane", "04123", null, "desc", "REF1", "tok", Now, 60));
 
     [Theory]
     [InlineData("")]
     [InlineData("   ")]
     public void Create_requires_customer_name(string name) =>
         Assert.Throws<ArgumentException>(() =>
-            KeepRequest.Create(AccountId, CustomerId, name, "04123", null, "desc", "REF1", "tok", Now));
+            KeepRequest.Create(AccountId, CustomerId, name, "04123", null, "desc", "REF1", "tok", Now, 60));
 
     [Theory]
     [InlineData("")]
     [InlineData("   ")]
     public void Create_requires_customer_phone(string phone) =>
         Assert.Throws<ArgumentException>(() =>
-            KeepRequest.Create(AccountId, CustomerId, "Jane", phone, null, "desc", "REF1", "tok", Now));
+            KeepRequest.Create(AccountId, CustomerId, "Jane", phone, null, "desc", "REF1", "tok", Now, 60));
 
     [Theory]
     [InlineData("")]
     [InlineData("   ")]
     public void Create_requires_description(string desc) =>
         Assert.Throws<ArgumentException>(() =>
-            KeepRequest.Create(AccountId, CustomerId, "Jane", "04123", null, desc, "REF1", "tok", Now));
+            KeepRequest.Create(AccountId, CustomerId, "Jane", "04123", null, desc, "REF1", "tok", Now, 60));
 
     [Theory]
     [InlineData("")]
     [InlineData("   ")]
     public void Create_requires_reference_code(string code) =>
         Assert.Throws<ArgumentException>(() =>
-            KeepRequest.Create(AccountId, CustomerId, "Jane", "04123", null, "desc", code, "tok", Now));
+            KeepRequest.Create(AccountId, CustomerId, "Jane", "04123", null, "desc", code, "tok", Now, 60));
 
     [Theory]
     [InlineData("")]
     [InlineData("   ")]
     public void Create_requires_page_token(string token) =>
         Assert.Throws<ArgumentException>(() =>
-            KeepRequest.Create(AccountId, CustomerId, "Jane", "04123", null, "desc", "REF1", token, Now));
+            KeepRequest.Create(AccountId, CustomerId, "Jane", "04123", null, "desc", "REF1", token, Now, 60));
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    [InlineData(-100)]
+    public void Create_throws_when_first_response_target_minutes_is_not_positive(int minutes) =>
+        Assert.Throws<ArgumentException>(() =>
+            KeepRequest.Create(AccountId, CustomerId, "Jane", "04123", null, "desc", "REF1", "tok", Now, minutes));
+
+    [Fact]
+    public void Create_with_customer_origin_sets_first_response_due_at_utc()
+    {
+        var request = NewRequest(firstResponseTargetMinutes: 90);
+
+        Assert.Equal(Now.AddMinutes(90), request.FirstResponseDueAtUtc);
+    }
+
+    [Fact]
+    public void Create_with_business_origin_sets_first_response_due_at_utc_to_null()
+    {
+        var request = NewRequest(origin: KeepRequestOrigin.Business);
+
+        Assert.Null(request.FirstResponseDueAtUtc);
+    }
+
+    [Fact]
+    public void Create_customer_origin_first_response_due_uses_exact_target_minutes()
+    {
+        var request = NewRequest(firstResponseTargetMinutes: 60);
+
+        Assert.Equal(Now.AddMinutes(60), request.FirstResponseDueAtUtc);
+    }
 
     // --- IsTerminal ---
 

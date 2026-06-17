@@ -87,7 +87,7 @@ public sealed class KeepIntakeApiTests : IClassFixture<KeepApiWebFactory>, IAsyn
         var seededRequest = KeepRequest.Create(
             _accountId, customer.Id,
             "Jane Smith", "0412345678", null,
-            "Burst pipe in bathroom", "PQRS7842", "seed_page_token_abc", now);
+            "Burst pipe in bathroom", "PQRS7842", "seed_page_token_abc", now, 60);
         db.Set<KeepRequest>().Add(seededRequest);
         db.Set<KeepRequestEvent>().Add(
             KeepRequestEvent.CreateRequestCreated(seededRequest.Id, _accountId, now));

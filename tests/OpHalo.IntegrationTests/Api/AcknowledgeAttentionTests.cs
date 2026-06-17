@@ -98,7 +98,7 @@ public sealed class AcknowledgeAttentionTests : IClassFixture<KeepApiWebFactory>
         var attentionRequest = KeepRequest.Create(
             _accountId, customer.Id,
             "Jane Smith", "0412345678", null,
-            "Customer asked for an update", "ATTN001", "token_attn_001", now);
+            "Customer asked for an update", "ATTN001", "token_attn_001", now, 60);
         SeedBusinessWaitingAttention(db, attentionRequest, now.AddMinutes(-30));
         db.Set<KeepRequest>().Add(attentionRequest);
         db.Set<KeepRequestEvent>().Add(
@@ -107,7 +107,7 @@ public sealed class AcknowledgeAttentionTests : IClassFixture<KeepApiWebFactory>
         var noAttentionRequest = KeepRequest.Create(
             _accountId, customer.Id,
             "Jane Smith", "0412345678", null,
-            "Request without active attention", "ATTN002", "token_attn_002", now);
+            "Request without active attention", "ATTN002", "token_attn_002", now, 60);
         db.Set<KeepRequest>().Add(noAttentionRequest);
         db.Set<KeepRequestEvent>().Add(
             KeepRequestEvent.CreateRequestCreated(noAttentionRequest.Id, _accountId, now));
@@ -117,7 +117,7 @@ public sealed class AcknowledgeAttentionTests : IClassFixture<KeepApiWebFactory>
         var terminalWithAttention = KeepRequest.Create(
             _accountId, customer.Id,
             "Jane Smith", "0412345678", null,
-            "Closed job with lingering attention", "ATTN003", "token_attn_003", now);
+            "Closed job with lingering attention", "ATTN003", "token_attn_003", now, 60);
         var eTerm1 = terminalWithAttention.ChangeStatus(
             KeepRequestStatus.Resolved, null,
             graph.Owner.Id, "owner@attention-tests.com", now);

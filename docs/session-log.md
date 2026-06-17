@@ -5,158 +5,121 @@
 
 ---
 
+## Phase 8-B5 Session 1 — COMPLETE
+
+**Pre-work complete**
+**Tests:** 537/537 (299 unit · 14 arch · 224 integration)
+**ADRs in scope:** 164..193
+**Next free ADR:** 194
+**Build logs:** `docs/build-log/038-phase-8-b5-request-list-triage-external-contact-decisions.md` (decisions) · `docs/build-log/039-phase-8-b5-claude-coding-sessions.md` (implementation spec)
+
+---
+
+### What was built
+
+Phase 8-B5: default command-center request list — ranking, attention indicators, quick actions, participation/notification metadata.
+
+**Key design decisions resolved:**
+- D1: `GetDefaultListRequestsAsync(accountId, bool includeClosedUnresolvedFeedback, ct)` — Owner/Admin pass `true`, everyone else `false`
+- D2: Preview text deferred (`null`/`false` in B5)
+- D3: Nested grouped `KeepRequestSummary` records
+- D4: In-memory ranking after bounded candidate set load
+- D5: `GetKeepRequestListResult(IReadOnlyList<KeepRequestSummary>)` — no pagination
+
+**Files changed:**
+
+| File | Change |
+|------|--------|
+| `Keep.Core/Entities/KeepRequest.cs` | Added `firstResponseTargetMinutes` param (position 10, required, `> 0`); sets `FirstResponseDueAtUtc = now + minutes` for Customer origin |
+| `Keep.Application/PublicIntake/IKeepIntakePersistence.cs` | Added `GetResponsePolicyAsync` |
+| `Keep.Infrastructure/Persistence/KeepIntakePersistence.cs` | Implemented `GetResponsePolicyAsync` |
+| `Keep.Application/PublicIntake/CreateKeepPublicIntakeService.cs` | Loads policy; passes `firstResponseTargetMinutes` |
+| `Keep.Application/Requests/KeepRequestSummary.cs` | Full B5 nested shape: `KeepRequestAttentionInfo`, `KeepRequestRankingInfo`, `KeepRequestPreviewInfo`, `KeepRequestActionsInfo`, `KeepQuickAction`, `KeepRequestParticipationInfo`, `KeepRequestNotificationInfo` |
+| `Keep.Application/Requests/IKeepRequestListPersistence.cs` | Renamed `GetOpenRequestsAsync` → `GetDefaultListRequestsAsync(accountId, bool, ct)`; added `GetParticipantSummariesAsync`; added `KeepRequestParticipantSummary` record |
+| `Keep.Application/Requests/GetKeepRequestListService.cs` | Full B5 rewrite: ranking groups 1–8, severity, quick actions, contact actions, participation/notification info, `RequestListComparer`, exhaustive enum maps |
+| `Keep.Infrastructure/Persistence/KeepRequestListPersistence.cs` | Replaced `GetOpenRequestsAsync` with `GetDefaultListRequestsAsync`; added `GetParticipantSummariesAsync` (batch participant query) |
+| `UnitTests/Keep/KeepRequestListServiceTests.cs` | Updated fake (role-aware policy, new persistence interface); updated mapping test with nested assertions; added `Scheduled` theory; added B5 tests (include-closed-feedback by role, Viewer restrictions, OffSeason, overdue group 1, post-close group 3, first-response-pending group 5, ClearsAttention state-awareness, sort order) |
+| `IntegrationTests/Api/KeepRequestListB5Tests.cs` | New file: 8 integration tests covering Owner/Admin vs Operator closed-feedback visibility, Viewer restrictions, Cancelled/Closed exclusion, Resolved inclusion, first-response-pending metadata, post-close row actions |
+| All ~30 `KeepRequest.Create` call sites in tests | Added `firstResponseTargetMinutes` arg (60) |
+
+**Service bugs fixed during B5:**
+- `GetKeepRequestListService.cs` line 84: `userSnapshot.Id` → `userSnapshot.AccountUserId`
+- `ComputeSeverity`: added `firstResponsePending` parameter; returns `"attention"` for first-response-pending (was falling through to `"muted"`)
+
+---
+
+### Ranking summary
+
+| Group | Code | Condition | Secondary sort |
+|-------|------|-----------|---------------|
+| 1 | `overdue_business_waiting` | Business-waiting + NextAttentionAt < now, OR first-response overdue | Asc NextAttentionAt / FirstResponseDueAt |
+| 2 | `priority_business_waiting` | PriorityBand=Priority + WaitingDirection=Business (not overdue, not post-close) | Asc NextAttentionAt |
+| 3 | `post_close_unresolved_feedback` | Closed + UnresolvedFeedback + AttentionLevel≠None | Asc AttentionSinceUtc |
+| 4 | `standard_business_waiting` | WaitingDirection=Business, standard band | Asc NextAttentionAt |
+| 5 | `first_response_pending` | FirstResponseDueAt > now, no first response | Asc FirstResponseDueAt |
+| 6 | `waiting_on_customer` | PendingCustomer | Desc LastBusinessActivityAt |
+| 7 | `resolved_quiet` | Resolved + AttentionLevel=None | Desc LastBusinessActivityAt |
+| 8 | `active` | Everything else active | Desc LastBusinessActivityAt |
+
+---
+
+### Next session: Phase 8-B5 Session 2 — External Contact Logging
+
+**Goal:** Implement authoritative external-contact writes after B5 list affordances.
+
+Decision/deferred refs: ADR-167..172, ADR-180, ADR-191; DEF-018, DEF-031, DEF-032
+
+See `docs/build-log/039-phase-8-b5-claude-coding-sessions.md` Session 2 for scope.
+
+---
+
 ## Phase 8-B4 Service Request Detail Enrichment — COMPLETE
 
 **Tests:** 510/510 (280 unit · 14 arch · 216 integration)
 **ADRs:** 145..163 implemented
-**Build logs:** `docs/build-log/036-phase-8-b4-service-request-detail-enrichment-decisions.md` (decisions) · `docs/build-log/037-phase-8-b4-service-request-detail-enrichment-implementation.md` (implementation)
-
-### Summary of what was built
-
-B4: no-migration read-model enrichment slice for the authenticated service request detail page.
-
-- `ContactActionItem(Type, Available, Target)` — new record in `KeepRequestDetailResult.cs`.
-- `KeepRequestDetailResult` — two new fields: `FeedbackCommentVisible` (bool) and `ContactActions`
-  (IReadOnlyList<ContactActionItem>).
-- `KeepRequestDetailMapper.ToDetailResult` — extended with `AccountUserRole role` + `bool canOperate`.
-  Computes `FeedbackCommentVisible = role is Owner or Admin`. Redacts `FeedbackComment = null` for
-  Operator/Viewer. `BuildContactActions` returns `[]` for non-operate users; otherwise includes `call`
-  when phone exists and `email` when email exists.
-- `EfKeepRequestDetailPersistence.GetParticipantsAsync` — updated AccountUser query to project
-  `User.Name` via `AccountUser.User` navigation (EF LEFT JOIN). `DisplayName = nonblank UserName ?? Email`.
-- `GetKeepRequestDetailService` — passes `userSnapshot.Role` and `canOperate` to mapper.
-- `ChangeKeepRequestStatusService`, `AddBusinessUpdateService`, `AddInternalNoteService`,
-  `AcknowledgeAttentionService` — each passes `userSnapshot.Role` and `canOperate: true` (all gate on operate).
-- `KeepRequestDetailB4Tests` (new file) — 8 integration tests: contact actions, feedback visibility by
-  role, participant display enrichment, unresolved-feedback attention mapping.
-- `KeepCustomerPageTests` — 2 new boundary tests: operator fields not exposed, expired page
-  `newRequestUrl = null`.
-
-**Key files:**
-
-| Layer | File |
-|-------|------|
-| Keep.Application | `Requests/KeepRequestDetailResult.cs` (ContactActionItem + 2 new fields) |
-| Keep.Application | `Requests/KeepRequestDetailMapper.cs` (role+canOperate params, redaction, contact actions) |
-| Keep.Application | `Requests/IKeepRequestDetailPersistence.cs` (doc comments updated) |
-| Keep.Infrastructure | `Persistence/EfKeepRequestDetailPersistence.cs` (User.Name join) |
-| Keep.Application | `Requests/GetKeepRequestDetailService.cs` (pass role + canOperate) |
-| Keep.Application | `Requests/ChangeKeepRequestStatusService.cs` (pass role + true) |
-| Keep.Application | `Requests/AddBusinessUpdateService.cs` (pass role + true) |
-| Keep.Application | `Requests/AddInternalNoteService.cs` (pass role + true) |
-| Keep.Application | `Requests/AcknowledgeAttentionService.cs` (pass role + true) |
-| IntegrationTests | `Api/KeepRequestDetailB4Tests.cs` (new, 8 tests) |
-| IntegrationTests | `Api/KeepCustomerPageTests.cs` (2 new boundary tests) |
+**Build logs:** `docs/build-log/036-phase-8-b4-service-request-detail-enrichment-decisions.md` · `docs/build-log/037-phase-8-b4-service-request-detail-enrichment-implementation.md`
 
 ---
 
 ## Phase 8-B3+ Closed-Request Feedback — COMPLETE
 
-**Tests:** 500/500 (280 unit · 14 arch · 206 integration)
-**ADRs:** 135..144 implemented
-**Build log:** `docs/build-log/035-phase-8-b3-plus-feedback-implementation.md`
-
-### Summary of what was built
-
-Closed-request customer feedback — the resolution loop after a request is marked `Closed`.
-
-- `KeepRequestErrors` — 4 new error codes: `FeedbackResolutionRequired`, `FeedbackCommentTooLong`,
-  `FeedbackUnavailable`, `FeedbackAlreadySubmitted`.
-- `KeepRequest.SubmitFeedback(wasResolved, comment, priorityResponseTargetMinutes, nowUtc)` —
-  domain method. Closed-only, one-time. Negative feedback raises priority `UnresolvedFeedback`
-  business-waiting attention without reopening. Returns non-generic `Result`.
-- `KeepCustomerPageMapper.ComputeAllowedActions` — second param `feedbackAlreadySubmitted`.
-  Closed + no feedback → `["feedback"]`; Closed + feedback submitted → `[]`.
-- `IKeepCustomerWritePersistence.CommitFeedbackAsync(request, ct)` — no event param (ADR-137).
-- `SubmitFeedbackCommand` / `SubmitFeedbackService` — guard → expiry short-circuit → tracked
-  reload → domain method → `CommitFeedbackAsync` → rebuild context inline with `request with`
-  → `GetCustomerVisibleEventsAsync` → `BuildActiveResult`.
-- `EfKeepCustomerWritePersistence.CommitFeedbackAsync` — `SaveChangesAsync` only, no event.
-- `FeedbackBody(bool? WasResolved, string? Comment)` — `WasResolved` is nullable so null
-  deserialization signals missing flag; validated at endpoint layer before service.
-- `Program.cs` — `POST /keep/r/{pageToken}/feedback` route, `HandleFeedback` local function,
-  DI for `SubmitFeedbackService`.
-- `ErrorHttpMapper` — 5 new explicit entries (CustomerMessageTooLong + 4 feedback codes).
-- 13 integration tests per ADR-143.
-- `CustomerMessageTests` test 15 updated: Closed without feedback now returns `["feedback"]`,
-  not `[]` (ADR-139 correction).
-
-**Session-log correction applied:** Session log previously stated "Negative feedback requires
-a comment." ADR-135 is authoritative — comment is optional even when `wasResolved=false`.
-Server does not require it; only UI may strongly prompt.
-
-**No new migration needed** — feedback columns were already present in `Phase8KeepDataModel`.
+**Tests:** 500/500 · ADRs 135..144 · `docs/build-log/035-phase-8-b3-plus-feedback-implementation.md`
 
 ---
 
 ## Phase 8-B3-beta — COMPLETE
 
-**Tests:** 487/487 (280 unit · 14 arch · 193 integration)
-**ADRs:** 118..134 locked (no new ADRs; all locked in build-log/032)
-**Build log:** `docs/build-log/034-phase-8-b3-beta-customer-message-api.md`
-
-### Summary of what was built
-
-B3-beta: customer-submitted messages API layer.
-
-- `KeepCustomerPageMapper` — shared static mapper for read and write services.
-- `GetKeepCustomerPageService` refactored: drops `IClock`, injects
-  `KeepPublicCustomerAccessGuard` + `IKeepRequestDetailPersistence`.
-- `AddCustomerMessageCommand` + `AddCustomerMessageService`.
-- `EfKeepCustomerWritePersistence` — implements `IKeepCustomerWritePersistence`.
-- `CustomerMessageBody` request record.
-- `Program.cs`: `customer-write` rate limit, 6 customer message routes.
-- 16 integration tests per ADR-131.
-
-**AllowedActions (pre-B3+):**
-- Active states → `["message","question","update_request","schedule_change_request","change_or_cancel_request","issue"]`
-- Closed → `["feedback"]` (updated by B3+)
-- Cancelled → `[]`
-- Expired → `null`
+**Tests:** 487/487 · ADRs 118..134
 
 ---
 
 ## Phase 8-B3-alpha — COMPLETE
 
-**Tests:** 471/471 (280 unit · 14 arch · 177 integration)
-**ADRs:** 118..134 locked (decision gate, build-log/032).
-
-B3-alpha: low-level foundations for customer-submitted messages.
+**Tests:** 471/471 · ADRs 118..134 (decision gate)
 
 ---
 
 ## Phase 8-B2-delta — COMPLETE
 
-**Tests:** 471/471 (280 unit · 14 arch · 177 integration)
-**ADRs:** 116..117 implemented (see decision-index.md and build-log/031)
-
-Terminal lifecycle analytics primitives: `TerminatedAtUtc`, `ClearAllAttentionForTerminal`.
+**Tests:** 471/471 · ADRs 116..117
 
 ---
 
 ## Phase 8-B2-gamma — COMPLETE
 
-**Tests:** 468/468 (280 unit · 14 arch · 174 integration)
-**ADRs:** 111..114 implemented.
-
-`POST /keep/requests/{requestId}/attention/acknowledge` + attention-clearing in
-business-update and status-change paths.
+**Tests:** 468/468 · ADRs 111..114
 
 ---
 
 ## Phase 8-B2-beta — COMPLETE
 
-**Tests:** 454/454 (280 unit · 14 arch · 160 integration)
-**ADRs:** 108..110
-
-`POST /keep/requests/{requestId}/business-updates` + `POST /keep/requests/{requestId}/internal-notes`
+**Tests:** 454/454 · ADRs 108..110
 
 ---
 
 ## Phase 8-B2-alpha — COMPLETE
 
-**Status:** 436/436 tests passing.
-`PATCH /keep/requests/{requestId}/status`
+**Tests:** 436/436 · `PATCH /keep/requests/{requestId}/status`
 
 ---
 
@@ -194,14 +157,12 @@ Member management API + integration tests.
 - **Negative feedback on Closed raises attention** — intentional exception to terminal-no-attention posture (ADR-138).
 - **Feedback `WasResolved` is `bool?` at API layer** — null signals missing flag, validated before service. Domain method takes `bool`.
 - **Always rebuild before running tests** — `dotnet test --no-build` can run stale assemblies that mask real failures.
-- **Next free ADR: ADR-164.**
+- **Next free ADR: ADR-194.**
 - **B4 mapper signature:** `ToDetailResult` now takes `AccountUserRole role` and `bool canOperate` — all callers updated; write services pass `canOperate: true`.
 - **Participant `DisplayName`** computed in persistence (two-query approach retained; User.Name projected in the AccountUsers query via EF navigation LEFT JOIN).
-
----
-
-## Next — Phase 8-C (Request List)
-
-B4 is complete. The natural next slice is Phase 8-C: the operator request list with filtering,
-sorting, and the `unresolved_feedback` attention surface for closed requests. ADR-153 locks
-the list behavior; implementation is a new phase. Confirm with Christian before beginning.
+- **`KeepRequestStatus.Scheduled = 7`** — added to `MapStatus` in B5 service rewrite.
+- **`FirstResponseDueAtUtc` gap** — fixed in B5. `KeepRequest.Create` now requires `firstResponseTargetMinutes` (required param, position 10). All call sites updated. `CreateKeepPublicIntakeService` loads policy and passes `policy?.FirstResponseTargetMinutes ?? 60`.
+- **Post-close ranking fix** — `isPostClose` must be checked before priority band in `ComputeRankingGroup`. Post-close rows have `WaitingDirection=Business + Priority`, would otherwise hit group 2 instead of group 3.
+- **`post_customer_update.ClearsAttention`** — state-aware, not static. True only when `WaitingDirection=Business && AttentionLevel != None`.
+- **`ComputeSeverity` first-response-pending** — fixed in B5 completion. Now returns `"attention"` for first-response pending (was falling through to `"muted"`). Method signature takes `bool firstResponsePending` parameter.
+- **Resolved request resolved_quiet ranking** — requires `FirstRespondedAtUtc` to be set (via a status message or `AddBusinessUpdate`). A Resolved request with no first response remains in `first_response_pending` group.

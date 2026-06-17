@@ -44,6 +44,11 @@ public sealed class KeepIntakePersistence(OpHaloDbContext dbContext) : IKeepInta
         dbContext.Set<KeepCustomer>()
             .FirstOrDefaultAsync(c => c.AccountId == accountId && c.PrimaryPhone == primaryPhone, ct);
 
+    public Task<KeepResponsePolicy?> GetResponsePolicyAsync(Guid accountId, CancellationToken ct) =>
+        dbContext.Set<KeepResponsePolicy>()
+            .AsNoTracking()
+            .FirstOrDefaultAsync(p => p.AccountId == accountId, ct);
+
     public Task<bool> PageTokenExistsAsync(string pageToken, CancellationToken ct) =>
         dbContext.Set<KeepRequest>()
             .AsNoTracking()

@@ -282,6 +282,11 @@ public class KeepPublicIntakeServiceTests
             Guid accountId, string primaryPhone, CancellationToken ct) =>
             Task.FromResult(ExistingCustomer);
 
+        public KeepResponsePolicy? ResponsePolicyToReturn { get; set; }
+
+        public Task<KeepResponsePolicy?> GetResponsePolicyAsync(Guid accountId, CancellationToken ct) =>
+            Task.FromResult(ResponsePolicyToReturn);
+
         public Task<bool> PageTokenExistsAsync(string pageToken, CancellationToken ct) =>
             Task.FromResult(false);
 

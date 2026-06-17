@@ -73,6 +73,9 @@ public sealed class CreateKeepPublicIntakeService(
         else
             customer.UpdateContactInfo(command.CustomerName, command.CustomerEmail?.Trim());
 
+        var policy = await persistence.GetResponsePolicyAsync(accountId, ct);
+        var firstResponseTargetMinutes = policy?.FirstResponseTargetMinutes ?? 60;
+
         for (var attempt = 0; attempt < MaxAttempts; attempt++)
         {
             var pageToken = tokenService.GeneratePageToken();
@@ -90,7 +93,8 @@ public sealed class CreateKeepPublicIntakeService(
                 command.Description,
                 referenceCode,
                 pageToken,
-                nowUtc);
+                nowUtc,
+                firstResponseTargetMinutes);
             var @event = KeepRequestEvent.CreateRequestCreated(request.Id, accountId, nowUtc);
 
             var commitResult = await persistence.CommitPublicIntakeAsync(customer, request, @event, ct);

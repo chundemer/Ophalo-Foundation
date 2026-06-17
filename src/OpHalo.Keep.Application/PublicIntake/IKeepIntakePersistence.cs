@@ -32,6 +32,12 @@ public interface IKeepIntakePersistence
     Task<KeepCustomer?> FindCustomerByPrimaryPhoneAsync(
         Guid accountId, string primaryPhone, CancellationToken ct);
 
+    /// <summary>
+    /// Returns the response policy for the account, or null if no policy row exists.
+    /// Callers should fall back to pilot defaults (first=60, standard=240, priority=60 min).
+    /// </summary>
+    Task<KeepResponsePolicy?> GetResponsePolicyAsync(Guid accountId, CancellationToken ct);
+
     Task<bool> PageTokenExistsAsync(string pageToken, CancellationToken ct);
 
     Task<bool> ReferenceCodeExistsAsync(Guid accountId, string referenceCode, CancellationToken ct);
