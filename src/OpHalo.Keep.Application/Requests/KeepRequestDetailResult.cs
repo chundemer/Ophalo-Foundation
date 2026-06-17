@@ -34,6 +34,8 @@ public sealed record KeepRequestDetailResult(
     bool? FeedbackWasResolved,
     string? FeedbackComment,
     DateTime? FeedbackSubmittedAtUtc,
+    bool FeedbackCommentVisible,
+    IReadOnlyList<ContactActionItem> ContactActions,
     IReadOnlyList<KeepRequestParticipantItem> Participants,
     IReadOnlyList<KeepRequestEventItem> Events,
     AvailableActionsMetadata AvailableActions,
@@ -61,10 +63,8 @@ public sealed record ValidationHintsMetadata(
     int AcknowledgeReasonMaxLength,
     IReadOnlyList<string> MessageRequiredForStatuses);
 
-/// <summary>
-/// DisplayName = AccountUser.Email for B1-β; B4 enriches with User.Name when the participant
-/// UI is built and the full name resolution join is added.
-/// </summary>
+public sealed record ContactActionItem(string Type, bool Available, string Target);
+
 public sealed record KeepRequestParticipantItem(
     Guid AccountUserId,
     string DisplayName,

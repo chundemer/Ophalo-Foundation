@@ -155,4 +155,64 @@ public sealed class KeepCustomerPageTests : IClassFixture<KeepApiWebFactory>, IA
         Assert.False(body.TryGetProperty("customerId", out _));
         Assert.False(body.TryGetProperty("customerPhone", out _));
     }
+
+    // =========================================================================
+    // Test 4 — B4 boundary: operator-internal fields must not appear on customer page
+    // =========================================================================
+
+    [Fact]
+    public async Task GetCustomerPage_ValidRequest_DoesNotExposeOperatorInternalFields()
+    {
+        var response = await _client.GetAsync($"/keep/r/{PageToken}");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        // Internal identity fields must not be exposed.
+        Assert.False(body.TryGetProperty("requestId", out _));
+        Assert.False(body.TryGetProperty("pageToken", out _));
+        Assert.False(body.TryGetProperty("customerEmail", out _));
+
+        // Operator-only workflow fields must not be exposed.
+        Assert.False(body.TryGetProperty("contactActions", out _));
+        Assert.False(body.TryGetProperty("participants", out _));
+        Assert.False(body.TryGetProperty("availableActions", out _));
+        Assert.False(body.TryGetProperty("validation", out _));
+
+        // Attention / first-response internals must not be exposed.
+        Assert.False(body.TryGetProperty("attentionLevel", out _));
+        Assert.False(body.TryGetProperty("waitingDirection", out _));
+        Assert.False(body.TryGetProperty("attentionReason", out _));
+        Assert.False(body.TryGetProperty("firstResponseDueAtUtc", out _));
+        Assert.False(body.TryGetProperty("firstRespondedAtUtc", out _));
+
+        // Operator-restricted feedback field must not be exposed.
+        Assert.False(body.TryGetProperty("feedbackComment", out _));
+        Assert.False(body.TryGetProperty("feedbackCommentVisible", out _));
+    }
+
+    // =========================================================================
+    // Test 5 — B4 boundary: expired customer page has NewRequestUrl = null
+    // =========================================================================
+
+    [Fact]
+    public async Task GetCustomerPage_ExpiredRequest_NewRequestUrlIsNull()
+    {
+        await using (var scope = _factory.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+            await db.Database.ExecuteSqlRawAsync(
+                "UPDATE keep_requests SET status = 'Closed', expires_at_utc = @p0 WHERE page_token = @p1",
+                DateTime.UtcNow.AddDays(-1), PageToken);
+        }
+
+        var response = await _client.GetAsync($"/keep/r/{PageToken}");
+
+        Assert.Equal(HttpStatusCode.Gone, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.Equal(JsonValueKind.Null, body.GetProperty("newRequestUrl").ValueKind);
+    }
 }

@@ -5,6 +5,51 @@
 
 ---
 
+## Phase 8-B4 Service Request Detail Enrichment — COMPLETE
+
+**Tests:** 510/510 (280 unit · 14 arch · 216 integration)
+**ADRs:** 145..163 implemented
+**Build logs:** `docs/build-log/036-phase-8-b4-service-request-detail-enrichment-decisions.md` (decisions) · `docs/build-log/037-phase-8-b4-service-request-detail-enrichment-implementation.md` (implementation)
+
+### Summary of what was built
+
+B4: no-migration read-model enrichment slice for the authenticated service request detail page.
+
+- `ContactActionItem(Type, Available, Target)` — new record in `KeepRequestDetailResult.cs`.
+- `KeepRequestDetailResult` — two new fields: `FeedbackCommentVisible` (bool) and `ContactActions`
+  (IReadOnlyList<ContactActionItem>).
+- `KeepRequestDetailMapper.ToDetailResult` — extended with `AccountUserRole role` + `bool canOperate`.
+  Computes `FeedbackCommentVisible = role is Owner or Admin`. Redacts `FeedbackComment = null` for
+  Operator/Viewer. `BuildContactActions` returns `[]` for non-operate users; otherwise includes `call`
+  when phone exists and `email` when email exists.
+- `EfKeepRequestDetailPersistence.GetParticipantsAsync` — updated AccountUser query to project
+  `User.Name` via `AccountUser.User` navigation (EF LEFT JOIN). `DisplayName = nonblank UserName ?? Email`.
+- `GetKeepRequestDetailService` — passes `userSnapshot.Role` and `canOperate` to mapper.
+- `ChangeKeepRequestStatusService`, `AddBusinessUpdateService`, `AddInternalNoteService`,
+  `AcknowledgeAttentionService` — each passes `userSnapshot.Role` and `canOperate: true` (all gate on operate).
+- `KeepRequestDetailB4Tests` (new file) — 8 integration tests: contact actions, feedback visibility by
+  role, participant display enrichment, unresolved-feedback attention mapping.
+- `KeepCustomerPageTests` — 2 new boundary tests: operator fields not exposed, expired page
+  `newRequestUrl = null`.
+
+**Key files:**
+
+| Layer | File |
+|-------|------|
+| Keep.Application | `Requests/KeepRequestDetailResult.cs` (ContactActionItem + 2 new fields) |
+| Keep.Application | `Requests/KeepRequestDetailMapper.cs` (role+canOperate params, redaction, contact actions) |
+| Keep.Application | `Requests/IKeepRequestDetailPersistence.cs` (doc comments updated) |
+| Keep.Infrastructure | `Persistence/EfKeepRequestDetailPersistence.cs` (User.Name join) |
+| Keep.Application | `Requests/GetKeepRequestDetailService.cs` (pass role + canOperate) |
+| Keep.Application | `Requests/ChangeKeepRequestStatusService.cs` (pass role + true) |
+| Keep.Application | `Requests/AddBusinessUpdateService.cs` (pass role + true) |
+| Keep.Application | `Requests/AddInternalNoteService.cs` (pass role + true) |
+| Keep.Application | `Requests/AcknowledgeAttentionService.cs` (pass role + true) |
+| IntegrationTests | `Api/KeepRequestDetailB4Tests.cs` (new, 8 tests) |
+| IntegrationTests | `Api/KeepCustomerPageTests.cs` (2 new boundary tests) |
+
+---
+
 ## Phase 8-B3+ Closed-Request Feedback — COMPLETE
 
 **Tests:** 500/500 (280 unit · 14 arch · 206 integration)
@@ -41,23 +86,6 @@ a comment." ADR-135 is authoritative — comment is optional even when `wasResol
 Server does not require it; only UI may strongly prompt.
 
 **No new migration needed** — feedback columns were already present in `Phase8KeepDataModel`.
-
-**Key files:**
-
-| Layer | File |
-|-------|------|
-| Keep.Core | `Errors/KeepRequestErrors.cs` (4 new codes) |
-| Keep.Core | `Entities/KeepRequest.cs` (`SubmitFeedback` method) |
-| Keep.Application | `Requests/SubmitFeedbackCommand.cs` (new) |
-| Keep.Application | `Requests/SubmitFeedbackService.cs` (new) |
-| Keep.Application | `Requests/IKeepCustomerWritePersistence.cs` (`CommitFeedbackAsync`) |
-| Keep.Application | `Requests/KeepCustomerPageMapper.cs` (`ComputeAllowedActions` updated) |
-| Keep.Infrastructure | `Persistence/EfKeepCustomerWritePersistence.cs` (`CommitFeedbackAsync`) |
-| Api | `Keep/FeedbackRequest.cs` (new) |
-| Api | `Helpers/ErrorHttpMapper.cs` (5 new entries) |
-| Api | `Program.cs` (route + DI + handler) |
-| IntegrationTests | `Api/ClosedRequestFeedbackTests.cs` (new, 13 tests) |
-| IntegrationTests | `Api/CustomerMessageTests.cs` (test 15 updated) |
 
 ---
 
@@ -159,10 +187,6 @@ Member management API + integration tests.
 - **Schema-drop reset** in integration test factory: `DROP SCHEMA public CASCADE` + recreate + `MigrateAsync`.
 - **Migration generation** always: `--startup-project src/OpHalo.Keep.Infrastructure`.
 - **No GitHub remote yet.**
-- **B1-β watch-outs still active for B4:**
-  - `GetParticipantsAsync` returns `DisplayName = AccountUser.Email`. B4 enriches with `User.Name`.
-  - `NewRequestUrl` always `null`. B4 decides.
-  - Customer page events sorted ascending — let frontend reverse if needed.
 - **`Results.Problem` extension shape:** extension dict entries land at the top level of ProblemDetails JSON, not under an `"extensions"` key. Test assertions must use `body.GetProperty("code")`.
 - **External contact logging/capture (ADR-115)** remains pre-go-live/deferred.
 - **`businessName ?? string.Empty`** — persistence returns null if account missing post-auth; never expected in production.
@@ -170,13 +194,14 @@ Member management API + integration tests.
 - **Negative feedback on Closed raises attention** — intentional exception to terminal-no-attention posture (ADR-138).
 - **Feedback `WasResolved` is `bool?` at API layer** — null signals missing flag, validated before service. Domain method takes `bool`.
 - **Always rebuild before running tests** — `dotnet test --no-build` can run stale assemblies that mask real failures.
-- **Next free ADR: ADR-145.**
+- **Next free ADR: ADR-164.**
+- **B4 mapper signature:** `ToDetailResult` now takes `AccountUserRole role` and `bool canOperate` — all callers updated; write services pass `canOperate: true`.
+- **Participant `DisplayName`** computed in persistence (two-query approach retained; User.Name projected in the AccountUsers query via EF navigation LEFT JOIN).
 
 ---
 
-## Next — Phase 8-B4 (operator request detail enrichment) or next queued slice
+## Next — Phase 8-C (Request List)
 
-B3 and B3+ customer-write slices are complete. B4 remains queued unless Christian
-redirects. B4 scope: participant name enrichment (`GetParticipantsAsync` currently
-returns `AccountUser.Email` as `DisplayName`), `NewRequestUrl` decision, and any
-operator-side detail enrichments needed before pilot.
+B4 is complete. The natural next slice is Phase 8-C: the operator request list with filtering,
+sorting, and the `unresolved_feedback` attention surface for closed requests. ADR-153 locks
+the list behavior; implementation is a new phase. Confirm with Christian before beginning.

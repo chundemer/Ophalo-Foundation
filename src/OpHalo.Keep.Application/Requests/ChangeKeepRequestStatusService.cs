@@ -114,6 +114,7 @@ public sealed class ChangeKeepRequestStatusService(
 
         return Result<KeepRequestDetailResult>.Success(
             KeepRequestDetailMapper.ToDetailResult(
-                request, businessName ?? string.Empty, participants, events, availableActions));
+                request, businessName ?? string.Empty, participants, events, availableActions,
+                userSnapshot.Role, canOperate: true));
     }
 }

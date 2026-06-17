@@ -80,7 +80,12 @@ public sealed class EfKeepRequestDetailPersistence(OpHaloDbContext dbContext) : 
         var accountUsers = await dbContext.AccountUsers
             .AsNoTracking()
             .Where(au => accountUserIds.Contains(au.Id))
-            .Select(au => new { au.Id, au.Email, au.Role })
+            .Select(au => new {
+                au.Id,
+                au.Email,
+                au.Role,
+                UserName = au.UserId != null ? au.User!.Name : null
+            })
             .ToListAsync(ct);
 
         var accountUserLookup = accountUsers.ToDictionary(au => au.Id);
@@ -97,7 +102,7 @@ public sealed class EfKeepRequestDetailPersistence(OpHaloDbContext dbContext) : 
                 p.NotificationsEnabled,
                 p.AttachedAtUtc,
                 p.DetachedAtUtc,
-                DisplayName: au.Email,
+                DisplayName: !string.IsNullOrWhiteSpace(au.UserName) ? au.UserName : au.Email,
                 Role: au.Role);
         }).ToList();
     }

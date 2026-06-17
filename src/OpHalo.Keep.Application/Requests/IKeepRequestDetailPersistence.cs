@@ -31,8 +31,8 @@ public interface IKeepRequestDetailPersistence
 
     /// <summary>
     /// Returns all participants for the request (active and detached), joined with AccountUser
-    /// for display name and role. DisplayName = AccountUser.Email for B1-β; B4 enriches with
-    /// User.Name when the participant UI is built.
+    /// for display name and role. DisplayName = nonblank User.Name when the account user has a
+    /// linked user with a name; falls back to AccountUser.Email.
     /// </summary>
     Task<IReadOnlyList<KeepParticipantProjection>> GetParticipantsAsync(Guid requestId, CancellationToken ct);
 
@@ -57,7 +57,7 @@ public interface IKeepRequestDetailPersistence
 
 /// <summary>
 /// Participant data joined with AccountUser for operator display.
-/// DisplayName = AccountUser.Email in B1-β; B4 updates to User.Name.
+/// DisplayName = nonblank User.Name (when linked) else AccountUser.Email.
 /// </summary>
 public sealed record KeepParticipantProjection(
     Guid AccountUserId,

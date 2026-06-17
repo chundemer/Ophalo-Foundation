@@ -24,7 +24,12 @@ internal static class KeepRequestDetailMapper
         string businessName,
         IReadOnlyList<KeepParticipantProjection> participants,
         IReadOnlyList<KeepRequestEvent> events,
-        AvailableActionsMetadata availableActions) => new(
+        AvailableActionsMetadata availableActions,
+        AccountUserRole role,
+        bool canOperate)
+    {
+        var feedbackCommentVisible = role is AccountUserRole.Owner or AccountUserRole.Admin;
+        return new(
         RequestId: request.Id,
         ReferenceCode: request.ReferenceCode,
         Status: MapStatus(request.Status),
@@ -56,12 +61,15 @@ internal static class KeepRequestDetailMapper
         FirstResponderAccountUserId: request.FirstResponderAccountUserId,
         FirstResponseEventId: request.FirstResponseEventId,
         FeedbackWasResolved: request.FeedbackWasResolved,
-        FeedbackComment: request.FeedbackComment,
+        FeedbackComment: feedbackCommentVisible ? request.FeedbackComment : null,
         FeedbackSubmittedAtUtc: request.FeedbackSubmittedAtUtc,
+        FeedbackCommentVisible: feedbackCommentVisible,
+        ContactActions: BuildContactActions(canOperate, request.CustomerPhone, request.CustomerEmail),
         Participants: participants.Select(MapParticipant).ToList(),
         Events: events.Select(MapEvent).ToList(),
         AvailableActions: availableActions,
         Validation: ValidationHints);
+    }
 
     internal static KeepRequestStatus? ParseStatusSlug(string? slug)
     {
@@ -101,6 +109,19 @@ internal static class KeepRequestDetailMapper
 
     internal static bool CanAcknowledgeAttention(bool canOperate, KeepRequest request) =>
         canOperate && request.AttentionLevel != AttentionLevel.None;
+
+    private static IReadOnlyList<ContactActionItem> BuildContactActions(
+        bool canOperate, string phone, string? email)
+    {
+        if (!canOperate) return [];
+
+        var actions = new List<ContactActionItem>();
+        if (!string.IsNullOrWhiteSpace(phone))
+            actions.Add(new ContactActionItem("call", true, phone));
+        if (!string.IsNullOrWhiteSpace(email))
+            actions.Add(new ContactActionItem("email", true, email));
+        return actions;
+    }
 
     internal static string MapStatus(KeepRequestStatus status) => status switch
     {
