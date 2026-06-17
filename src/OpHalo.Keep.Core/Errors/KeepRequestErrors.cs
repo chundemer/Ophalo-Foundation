@@ -68,6 +68,9 @@ public static class KeepRequestErrors
         Error.Create("KeepRequest.FeedbackAlreadySubmitted", "Feedback has already been submitted for this request.");
 
     // External contact logging errors (ADR-207).
+    public static readonly Error ExternalContactInvalidDirection =
+        Error.Create("KeepRequest.ExternalContactInvalidDirection", "Direction must be 'outbound' or 'inbound'.");
+
     public static readonly Error ExternalContactInvalidOutboundChannel =
         Error.Create("KeepRequest.ExternalContactInvalidOutboundChannel", "Outbound external contact supports phone, SMS, and email only.");
 

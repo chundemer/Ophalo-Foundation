@@ -31,6 +31,12 @@ public interface IKeepRequestOperatePersistence
     Task<KeepRequest?> GetRequestForUpdateAsync(Guid requestId, Guid accountId, CancellationToken ct);
 
     /// <summary>
+    /// Returns the response policy for the account, or null if no policy row exists.
+    /// Callers fall back to pilot defaults (standard=240 min).
+    /// </summary>
+    Task<KeepResponsePolicy?> GetResponsePolicyAsync(Guid accountId, CancellationToken ct);
+
+    /// <summary>
     /// Persists the mutated request and, when provided, the new event in a single
     /// SaveChangesAsync. The request must have been loaded via GetRequestForUpdateAsync
     /// on the same DbContext instance.

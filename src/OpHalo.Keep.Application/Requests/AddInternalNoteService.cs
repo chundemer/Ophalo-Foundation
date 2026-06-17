@@ -99,6 +99,7 @@ public sealed class AddInternalNoteService(
             CanSendBusinessUpdate: !request.IsTerminal,
             CanAddInternalNote: true,
             CanAcknowledgeAttention: KeepRequestDetailMapper.CanAcknowledgeAttention(true, request),
+            CanLogExternalContact: !request.IsTerminal,
             AllowedStatuses: !request.IsTerminal
                 ? KeepRequestDetailMapper.ComputeAllowedStatuses(request.Status)
                 : []);

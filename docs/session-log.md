@@ -92,6 +92,37 @@ Phase 8-B5: default command-center request list — ranking, attention indicator
 
 ---
 
+### Session 2B — External Contact API + Detail Timeline — COMPLETE
+
+**Tests:** 355 unit · 14 arch · 240 integration (609 total)
+**ADRs implemented:** 197, 199, 200, 202, 203, 207, 209, 211, 215, 216; new ADR-219, ADR-220
+**Next free ADR:** ADR-221
+
+**Files changed:**
+
+| File | Change |
+|------|--------|
+| `Keep.Core/Errors/KeepRequestErrors.cs` | Added `ExternalContactInvalidDirection` (ADR-207 gap from 2A) |
+| `Keep.Application/Requests/KeepRequestDetailResult.cs` | Added `CanLogExternalContact` to `AvailableActionsMetadata`; added `ExternalContactSummaryMaxLength` to `ValidationHintsMetadata`; added 6 nullable external-contact fields to `KeepRequestEventItem` |
+| `Keep.Application/Requests/KeepRequestDetailMapper.cs` | Added `ExternalContactLogged` to `MapEventType`; updated `MapEvent` to populate external-contact fields; added `MapExternalContactDirection` and `MapExternalContactOutcome`; updated `ValidationHints` static |
+| `Keep.Application/Requests/IKeepRequestOperatePersistence.cs` | Added `GetResponsePolicyAsync(Guid accountId, ct)` (ADR-219) |
+| `Keep.Infrastructure/Persistence/EfKeepRequestOperatePersistence.cs` | Implemented `GetResponsePolicyAsync` |
+| `Keep.Application/Requests/LogExternalContactService.cs` | New: `LogExternalContactCommand` record + `LogExternalContactService`; parses direction/channel/outcome strings; validates inbound constraints before domain; `RequestImplementsAllowedInOffSeason: false` per ADR-209 |
+| `Api/Keep/ExternalContactRequest.cs` | New: `ExternalContactRequestBody` record |
+| `Api/Program.cs` | Registered `LogExternalContactService`; added `POST /keep/requests/{requestId}/external-contact` endpoint |
+| `GetKeepRequestDetailService.cs` + 4 write services | Added `CanLogExternalContact: canOperate && !request.IsTerminal` (or confirmed true equivalents) to all `AvailableActionsMetadata` constructors (ADR-220) |
+| `IntegrationTests/Api/KeepRequestExternalContactApiTests.cs` | New: 14 integration tests — auth (401), Viewer 403, outbound phone spoke (first-response set), outbound phone no-answer (log only), outbound SMS, inbound follow-up (attention raised), unknown request 404, terminal 409, invalid direction/channel/outcome errors, follow-up required/summary required/summary too long, customer page exclusion |
+
+**Design decisions resolved during 2B:**
+- D1 (ADR-219): `GetResponsePolicyAsync` on `IKeepRequestOperatePersistence` — keeps operator-write service self-contained; fallback `policy?.StandardResponseTargetMinutes ?? 240`
+- D2 (ADR-220): `CanLogExternalContact` in `AvailableActionsMetadata` now; rule `canOperate && !request.IsTerminal`; OffSeason tightening deferred to Session 2C
+
+**Known carry-forward:**
+- `CanLogExternalContact` in detail reads from other services does not yet reflect OffSeason (returns `true` for non-terminal requests even in OffSeason). Session 2C should correct all action metadata for OffSeason operating mode.
+- Existing write services continue to use `RequestImplementsAllowedInOffSeason: true` — Session 2C scope per ADR-208/209.
+
+---
+
 ### Session 2 discovery checkpoint — External Contact Logging
 
 **Status:** Decisions ADR-196..218 locked. Ready for implementation in bounded sessions.
@@ -127,7 +158,7 @@ Locked discovery decisions:
 Implementation watch-out:
 
 - Current code allows request writes in OffSeason via `RequestImplementsAllowedInOffSeason=true`.
-  Session 2 and/or the account-mode implementation must align policies/services with ADR-208.
+  Session 2C must align all existing services with ADR-208. Session 2B already sets `false` for `LogExternalContactService`.
 
 See `docs/build-log/038-phase-8-b5-request-list-triage-external-contact-decisions.md` Session 2 checkpoint and `docs/build-log/039-phase-8-b5-claude-coding-sessions.md` Session 2 for implementation scope.
 
@@ -217,7 +248,7 @@ Member management API + integration tests.
 - **Negative feedback on Closed raises attention** — intentional exception to terminal-no-attention posture (ADR-138).
 - **Feedback `WasResolved` is `bool?` at API layer** — null signals missing flag, validated before service. Domain method takes `bool`.
 - **Always rebuild before running tests** — `dotnet test --no-build` can run stale assemblies that mask real failures.
-- **Next free ADR: ADR-219.**
+- **Next free ADR: ADR-221.**
 - **B4 mapper signature:** `ToDetailResult` now takes `AccountUserRole role` and `bool canOperate` — all callers updated; write services pass `canOperate: true`.
 - **Participant `DisplayName`** computed in persistence (two-query approach retained; User.Name projected in the AccountUsers query via EF navigation LEFT JOIN).
 - **`KeepRequestStatus.Scheduled = 7`** — added to `MapStatus` in B5 service rewrite.
@@ -226,3 +257,6 @@ Member management API + integration tests.
 - **`post_customer_update.ClearsAttention`** — state-aware, not static. True only when `WaitingDirection=Business && AttentionLevel != None`.
 - **`ComputeSeverity` first-response-pending** — fixed in B5 completion. Now returns `"attention"` for first-response pending (was falling through to `"muted"`). Method signature takes `bool firstResponsePending` parameter.
 - **Resolved request resolved_quiet ranking** — applies only when neither first-response pending nor first-response overdue checks fire and `AttentionLevel=None`. A Resolved request with an outstanding first-response obligation stays in the first-response ranking path; `FirstRespondedAtUtc` suppresses those checks.
+- **`CanLogExternalContact` OffSeason gap** — Session 2B sets `canOperate && !request.IsTerminal` for all detail responses. Does not yet reflect OffSeason operating mode. Session 2C must correct all action metadata for OffSeason (together with fixing `RequestImplementsAllowedInOffSeason: true` on existing write services).
+- **`ExternalContactInvalidDirection` added in 2B** — was omitted from the 2A error set despite being in ADR-207 scope.
+- **External contact `ExternalContactChannel` in DTO** — `KeepRequestEventItem` exposes both the existing `CommunicationChannel` field (for all applicable event types) and the new `ExternalContactChannel` field (only non-null for external contact events). Both map the same `CommunicationChannel` enum value for contact events; the grouped external-contact fields are for client convenience.

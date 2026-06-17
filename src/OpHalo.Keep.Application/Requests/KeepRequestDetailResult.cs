@@ -50,6 +50,7 @@ public sealed record AvailableActionsMetadata(
     bool CanSendBusinessUpdate,
     bool CanAddInternalNote,
     bool CanAcknowledgeAttention,
+    bool CanLogExternalContact,
     IReadOnlyList<string> AllowedStatuses);
 
 /// <summary>
@@ -61,6 +62,7 @@ public sealed record ValidationHintsMetadata(
     int InternalNoteMaxLength,
     int StatusMessageMaxLength,
     int AcknowledgeReasonMaxLength,
+    int ExternalContactSummaryMaxLength,
     IReadOnlyList<string> MessageRequiredForStatuses);
 
 public sealed record ContactActionItem(string Type, bool Available, string Target);
@@ -79,7 +81,8 @@ public sealed record KeepRequestParticipantItem(
 /// ActorDisplayName is denormalized on KeepRequestEvent — no join required.
 /// StatusAfter is non-null on StatusChanged events. MessageIntent and
 /// CommunicationChannel are non-null on combined StatusChanged+message and
-/// MessageAdded events (D4/D5).
+/// MessageAdded events (D4/D5). ExternalContact* fields are non-null only on
+/// ExternalContactLogged events (ADR-215).
 /// </summary>
 public sealed record KeepRequestEventItem(
     Guid Id,
@@ -92,4 +95,10 @@ public sealed record KeepRequestEventItem(
     string? ActorDisplayName,
     string? StatusAfter,
     string? MessageIntent,
-    string? CommunicationChannel);
+    string? CommunicationChannel,
+    string? ExternalContactDirection,
+    string? ExternalContactChannel,
+    string? ExternalContactOutcome,
+    bool? ExternalContactRequiresFollowUp,
+    bool? ExternalContactSetFirstResponse,
+    bool? ExternalContactClearedAttention);

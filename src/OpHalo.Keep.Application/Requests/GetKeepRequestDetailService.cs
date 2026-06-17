@@ -79,6 +79,7 @@ public sealed class GetKeepRequestDetailService(
             CanSendBusinessUpdate: canOperate && !request.IsTerminal,
             CanAddInternalNote: canOperate,
             CanAcknowledgeAttention: KeepRequestDetailMapper.CanAcknowledgeAttention(canOperate, request),
+            CanLogExternalContact: canOperate && !request.IsTerminal,
             AllowedStatuses: canOperate && !request.IsTerminal
                 ? KeepRequestDetailMapper.ComputeAllowedStatuses(request.Status)
                 : []);

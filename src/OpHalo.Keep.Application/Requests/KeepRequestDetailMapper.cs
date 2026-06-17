@@ -17,6 +17,7 @@ internal static class KeepRequestDetailMapper
         InternalNoteMaxLength: 4000,
         StatusMessageMaxLength: 2000,
         AcknowledgeReasonMaxLength: 500,
+        ExternalContactSummaryMaxLength: 4000,
         MessageRequiredForStatuses: ["pending_customer", "cancelled"]);
 
     internal static KeepRequestDetailResult ToDetailResult(
@@ -144,18 +145,31 @@ internal static class KeepRequestDetailMapper
         p.AttachedAtUtc,
         p.DetachedAtUtc);
 
-    private static KeepRequestEventItem MapEvent(KeepRequestEvent e) => new(
-        e.Id,
-        MapEventType(e.EventType),
-        e.Content,
-        MapVisibility(e.Visibility),
-        e.OccurredAtUtc,
-        MapActorType(e.ActorType),
-        e.ActorAccountUserId,
-        e.ActorDisplayName,
-        e.StatusAfter.HasValue ? MapStatus(e.StatusAfter.Value) : null,
-        e.MessageIntent.HasValue ? MapMessageIntent(e.MessageIntent.Value) : null,
-        e.CommunicationChannel.HasValue ? MapCommunicationChannel(e.CommunicationChannel.Value) : null);
+    private static KeepRequestEventItem MapEvent(KeepRequestEvent e)
+    {
+        var isContact = e.EventType == KeepRequestEventType.ExternalContactLogged;
+        return new(
+            e.Id,
+            MapEventType(e.EventType),
+            e.Content,
+            MapVisibility(e.Visibility),
+            e.OccurredAtUtc,
+            MapActorType(e.ActorType),
+            e.ActorAccountUserId,
+            e.ActorDisplayName,
+            e.StatusAfter.HasValue ? MapStatus(e.StatusAfter.Value) : null,
+            e.MessageIntent.HasValue ? MapMessageIntent(e.MessageIntent.Value) : null,
+            e.CommunicationChannel.HasValue ? MapCommunicationChannel(e.CommunicationChannel.Value) : null,
+            isContact && e.ExternalContactDirection.HasValue
+                ? MapExternalContactDirection(e.ExternalContactDirection.Value) : null,
+            isContact && e.CommunicationChannel.HasValue
+                ? MapCommunicationChannel(e.CommunicationChannel.Value) : null,
+            isContact && e.ExternalContactOutcome.HasValue
+                ? MapExternalContactOutcome(e.ExternalContactOutcome.Value) : null,
+            isContact ? e.ExternalContactRequiresFollowUp : null,
+            isContact ? e.ExternalContactSetFirstResponse : null,
+            isContact ? e.ExternalContactClearedAttention : null);
+    }
 
     private static string MapOrigin(KeepRequestOrigin origin) => origin switch
     {
@@ -225,7 +239,24 @@ internal static class KeepRequestDetailMapper
         KeepRequestEventType.RequestCancelled      => "request_cancelled",
         KeepRequestEventType.InternalNoteAdded     => "internal_note_added",
         KeepRequestEventType.AttentionAcknowledged => "attention_acknowledged",
+        KeepRequestEventType.ExternalContactLogged => "external_contact_logged",
         _ => throw new InvalidOperationException($"Unknown KeepRequestEventType: {type}")
+    };
+
+    private static string MapExternalContactDirection(ExternalContactDirection direction) => direction switch
+    {
+        ExternalContactDirection.Outbound => "outbound",
+        ExternalContactDirection.Inbound  => "inbound",
+        _ => throw new InvalidOperationException($"Unknown ExternalContactDirection: {direction}")
+    };
+
+    private static string MapExternalContactOutcome(ExternalContactOutcome outcome) => outcome switch
+    {
+        ExternalContactOutcome.SpokeWithCustomer => "spoke_with_customer",
+        ExternalContactOutcome.LeftVoicemail     => "left_voicemail",
+        ExternalContactOutcome.NoAnswer          => "no_answer",
+        ExternalContactOutcome.WrongNumber       => "wrong_number",
+        _ => throw new InvalidOperationException($"Unknown ExternalContactOutcome: {outcome}")
     };
 
     private static string MapVisibility(KeepRequestEventVisibility visibility) => visibility switch

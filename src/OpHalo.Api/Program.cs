@@ -81,6 +81,7 @@ builder.Services.AddScoped<ChangeKeepRequestStatusService>();
 builder.Services.AddScoped<AddBusinessUpdateService>();
 builder.Services.AddScoped<AddInternalNoteService>();
 builder.Services.AddScoped<AcknowledgeAttentionService>();
+builder.Services.AddScoped<LogExternalContactService>();
 builder.Services.AddScoped<KeepPublicCustomerAccessGuard>();
 builder.Services.AddScoped<AddCustomerMessageService>();
 builder.Services.AddScoped<SubmitFeedbackService>();
@@ -251,6 +252,20 @@ app.MapPost("/keep/requests/{requestId:guid}/internal-notes", async (
     CancellationToken ct) =>
 {
     var command = new AddInternalNoteCommand(requestId, body.Note);
+    var result = await service.ExecuteAsync(command, ct);
+    return result.IsSuccess ? Results.Ok(result.Value) : ErrorHttpMapper.ToHttpResult(result.Error);
+}).RequireAuthorization();
+
+// Log external contact — authenticated, operator write (Phase 8-B5/Session 2B)
+app.MapPost("/keep/requests/{requestId:guid}/external-contact", async (
+    Guid requestId,
+    ExternalContactRequestBody body,
+    LogExternalContactService service,
+    CancellationToken ct) =>
+{
+    var command = new LogExternalContactCommand(
+        requestId, body.Direction, body.Channel, body.Outcome,
+        body.RequiresBusinessFollowUp, body.Summary);
     var result = await service.ExecuteAsync(command, ct);
     return result.IsSuccess ? Results.Ok(result.Value) : ErrorHttpMapper.ToHttpResult(result.Error);
 }).RequireAuthorization();
