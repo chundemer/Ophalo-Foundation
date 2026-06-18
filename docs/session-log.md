@@ -1,6 +1,6 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-06-17 (Session 2C)
+**Last updated:** 2026-06-17 (Session 2D)
 **Branch:** `main` (no remote yet)
 
 ---
@@ -89,6 +89,37 @@ Phase 8-B5: default command-center request list — ranking, attention indicator
 - Separate `ExternalContactInvalidInboundChannel` and `ExternalContactInvalidOutboundChannel` errors
 - `WaitingDirection.Customer` is not set by any current domain method; the flip branch mirrors `AddCustomerMessage`
 - ADR-215 DTO field `externalContactCountsFirstResponse` should be renamed to `externalContactSetFirstResponse` when timeline DTO is built in 2B
+
+---
+
+### Session 2D — External Contact Completion Gate — COMPLETE
+
+**Tests:** 355 unit · 14 arch · 251 integration (620 total — all green)
+**Next free ADR:** ADR-222
+**No new code written** — verification and docs only.
+
+**Verification findings:**
+
+| Item | Result |
+|------|--------|
+| Full test suite | 620/620 green |
+| External-contact domain unit tests | 36 tests — full outbound/inbound × channel × outcome × first-response × attention effects × event-shape matrix |
+| External-contact integration tests | 16 tests in `KeepRequestExternalContactApiTests.cs` (auth, permission, 4 happy paths, not-found/terminal, 7 validation, customer-page exclusion) |
+| OffSeason external-contact tests | `PostExternalContact_OffSeason_Returns403` + `canLogExternalContact=false` in detail — in `KeepOffSeasonTests.cs` |
+| Migration scope | `20260617224828_AddExternalContactEventFields` — 5 nullable columns on `keep_request_events` only; no extra tables, occurred/source/provenance fields |
+| Deferred work audit | No customer recap, SMS delivery, notifications, telemetry, assignment writes, list previews, undo/revert, or provenance fields pulled in |
+| List behavior | Request list still changes only through `KeepRequest` state fields (`LastBusinessActivityAt`, `LastCustomerActivityAt`, attention fields, `FirstRespondedAtUtc`) |
+| `LogExternalContactService` | Clean: OffSeason blocked via `RequestImplementsAllowedInOffSeason: false` + `decision.IsReadOnly` (ADR-221) |
+
+**Docs updated:**
+- `docs/deferred-topics.md` — DEF-018, DEF-031, DEF-032 marked Implemented (2A-2B); DEF-042 marked Implemented (2C, partial)
+- `docs/session-log.md` — this entry
+
+**Known carry-forward:**
+- Owner/Admin narrow closeout in OffSeason deferred to DEF-042
+- DEF-041: mistake/ignore marker on contact logs
+- DEF-040: compact mobile recent-activity previews
+- DEF-044: external-contact source/provenance
 
 ---
 
