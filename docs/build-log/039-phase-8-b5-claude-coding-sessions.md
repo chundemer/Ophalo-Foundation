@@ -625,41 +625,104 @@ decision index/deferred topics/session log updated
 
 ## Session 4 — Filters, Search, Closed History, Pagination
 
-**Goal:** Add list navigation after the default command-center list is trusted.
+**Goal:** Add backend/foundation list navigation after the default command-center list is trusted.
 
 Decision/deferred refs:
 
 ```text
-ADR-173, ADR-187
-DEF-034
+ADR-173, ADR-187, ADR-237..260
+DEF-017, DEF-029, DEF-034, DEF-035, DEF-045
+docs/build-log/041-phase-8-b5-session-4-filters-search-closed-history-pagination-decisions.md
 ```
 
 Scope:
 
-- Status filters.
-- Search.
-- Closed history browsing.
-- Pagination/caps/cursors where needed.
-- Optional list SSE/realtime only if list invalidation needs it and a separate decision confirms it.
+- Extend `GET /keep/requests` with optional query params.
+- Preserve no-query default command-center behavior.
+- Add named views:
+  - `default`
+  - `assigned_to_me`
+  - `watching`
+  - `unassigned`
+  - `needs_attention`
+  - `feedback_review`
+  - `closed_history`
+  - `cancelled_history`
+  - `all_history`
+- Add limited filters/search:
+  - `status`
+  - `attentionReason`
+  - `assignedAccountUserId`
+  - `q`
+  - `createdFrom` / `createdTo`
+  - `closedFrom` / `closedTo`
+- Add server-side filtering/search/sorting/pagination.
+- Add cursor pagination:
+  - default `limit=50`
+  - max `limit=100`
+  - opaque `cursor`
+  - `pageInfo.limit`
+  - `pageInfo.hasMore`
+  - `pageInfo.nextCursor`
+- Add role-aware operational `viewCounts`:
+  - `default`
+  - `assigned_to_me`
+  - `watching`
+  - `unassigned`
+  - `needs_attention`
+  - `feedback_review`
+- Add `listContext` and row `rowContext` metadata.
+- Add Owner/Admin closed/cancelled/all history views.
+- Add Owner/Admin `feedback_review` view, but only as a read/review queue.
+- Add Operator explicit `unassigned`/available view and narrowly re-enable Operator self-assign for
+  requests visible through that allowed surface.
+- Validate query params explicitly and return `400` for invalid or contradictory combinations.
+- Keep broad terminal history Owner/Admin-only in Session 4.
+- Add narrowly scoped indexes only if implementation requires them.
 
 Out of scope:
 
-- feedback review queue behavior;
-- closeout queue behavior;
-- archive;
+- web/PWA UI;
+- native mobile UI;
+- swipe actions / visual design implementation;
+- client-side state management;
+- list SSE/realtime count invalidation;
+- exact arbitrary totals for search/history/filter queries;
+- broad Operator closed/cancelled history access;
+- Mark feedback reviewed;
+- archive/unarchive/auto-archive;
+- closeout queue / ready-to-close queue / close-and-next;
+- internal/team-memory search;
+- contextual customer/address history summaries;
 - external-contact writes.
 
 Notes:
 
 - Preserve default list behavior from Session 1.
-- Search should not load unbounded event history.
-- Closed history should not reintroduce normal closed rows into the default view.
+- Clients do not fetch all requests and filter locally.
+- Cursor is tied to the exact query shape; changing query params requires a fresh first page.
+- Search trims `q`, treats blank as no search, caps `q` at 200 characters, is case-insensitive, and
+  normalizes phone digits.
+- Date filters use ISO-8601/RFC3339 timestamps; `from` is inclusive and `to` is exclusive.
+- `closed*` filters use `TerminatedAtUtc` for terminal history views.
+- `viewCounts` are request-time snapshots and base operational counts, not query-specific totals.
+- History rows expose only `open_detail`; `feedback_review` rows expose `review_feedback` / focused
+  detail open only.
+
+Recommended implementation split:
+
+```text
+4A — Query contract, validation, response shape, cursor/page primitives
+4B — Named views, server-side filters/search, history visibility, counts, sorting
+4C — Operator unassigned surface + narrow self-assign re-enable, row context/action metadata
+4D — Integration verification, docs, decision index, deferred tracker
+```
 
 ---
 
-## Session 5 — Feedback Review Queue
+## Session 5 — Feedback Review Completion
 
-**Goal:** Make Owner/Admin closed unresolved-feedback review efficient.
+**Goal:** Let Owner/Admin complete post-close unresolved-feedback review.
 
 Decision/deferred refs:
 
@@ -670,7 +733,6 @@ DEF-029, DEF-035
 
 Scope:
 
-- Needs feedback review filter/queue.
 - Detail opens focused on feedback context.
 - Next/previous navigation within queue.
 - Mark feedback reviewed action.
