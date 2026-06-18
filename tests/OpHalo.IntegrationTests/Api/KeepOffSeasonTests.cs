@@ -191,6 +191,43 @@ public sealed class KeepOffSeasonTests : IClassFixture<KeepApiWebFactory>, IAsyn
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
 
+    [Fact]
+    public async Task PutResponsible_OffSeason_Returns403()
+    {
+        var response = await AuthRequest().PutAsJsonAsync(
+            $"/keep/requests/{_requestId}/responsible",
+            new { accountUserId = Guid.NewGuid() });
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task PutWatcher_OffSeason_Returns403()
+    {
+        var response = await AuthRequest().PutAsJsonAsync(
+            $"/keep/requests/{_requestId}/watchers/{Guid.NewGuid()}", new { });
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task PutWatch_OffSeason_Returns403()
+    {
+        var response = await AuthRequest().PutAsJsonAsync(
+            $"/keep/requests/{_requestId}/watch", new { });
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task PutMute_OffSeason_Returns403()
+    {
+        var response = await AuthRequest().PutAsJsonAsync(
+            $"/keep/requests/{_requestId}/mute", new { });
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
     // =========================================================================
     // Customer writes blocked in OffSeason — 409 OffSeasonUnavailable (ADR-221)
     // =========================================================================

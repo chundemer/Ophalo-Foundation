@@ -5,6 +5,68 @@
 
 ---
 
+## Phase 8-B5 Session 3D — Assignment/Watch/Mute Completion Gate — COMPLETE
+
+**Tests:** 702 (396 unit · 14 arch · 292 integration) — all green
+**Next free ADR:** ADR-261
+
+### What was done
+
+Session 3D was a verification and documentation gate for Sessions 3A–3C.
+
+**Verification pass — all clean:**
+- Full test suite: 702/702 pass
+- Migration (`20260618102937_AddParticipationChangedEventFields`): exactly 7 nullable event fields + filtered unique Responsible index; no extra schema changes
+- Customer-page exclusion: `CustomerPage_ExcludesParticipationChangedEvents` test present and passing
+- OffSeason blocking: all 4 write services have `RequestImplementsAllowedInOffSeason: false` and `|| decision.IsReadOnly` in `AuthAsync`; fires before request load or target user ID validation
+- Deferred boundary: no notification delivery/outbox/device tokens, no Operator queue, no list-level clear/watch/mute, no auto stale-participant cleanup in any participation service
+- Endpoints: exactly 9 registered (1 GET candidates + 8 writes); no list-level controls
+- ADR-222..235: all marked `Implemented` in decision index
+
+**Gap closed:**
+OffSeason integration tests for participation endpoints were absent (`KeepOffSeasonTests.cs` covered 5 write services but not any of the 8 participation write endpoints). Added 4 representative tests: `PutResponsible_OffSeason_Returns403`, `PutWatcher_OffSeason_Returns403`, `PutWatch_OffSeason_Returns403`, `PutMute_OffSeason_Returns403`.
+
+**Doc updates:**
+- `DEF-033` updated to `Implemented — Sessions 3A-3D` with full implementation summary
+- This session log
+
+### Files changed
+
+| File | Change |
+|---|---|
+| `IntegrationTests/Api/KeepOffSeasonTests.cs` | +4 OffSeason participation write tests |
+| `docs/deferred-topics.md` | DEF-033 → Implemented |
+| `docs/session-log.md` | Rewritten for 3D |
+
+---
+
+## Phase 8-B5 Session 4 — Filters, Search, Closed History, Pagination — DECISIONS LOCKED
+
+**Status:** Decision gate complete. Ready for bounded implementation sessions.
+**ADRs:** 237..260
+**Next free ADR:** ADR-261
+**Build log:** `docs/build-log/041-phase-8-b5-session-4-filters-search-closed-history-pagination-decisions.md`
+
+### What was decided
+
+Session 4 is a backend/foundation list-navigation slice. It extends `GET /keep/requests` with
+named views, server-side filters/search, cursor pagination, role-aware operational counts,
+closed/cancelled/all history for Owner/Admin, row/list context metadata, and explicit query
+validation while preserving no-query default command-center behavior.
+
+### Deferred from Session 4
+
+- realtime list/count invalidation;
+- exact arbitrary totals for search/history/filter combinations;
+- broad Operator terminal-history access;
+- mark feedback reviewed;
+- archive/unarchive;
+- contextual customer/address history summaries;
+- internal/team-memory search;
+- web/PWA and native mobile UI.
+
+---
+
 ## Phase 8-B5 Session 3C — Participation Read Models, Timeline, List Assignment Metadata — COMPLETE
 
 **Tests:** 698 (396 unit · 14 arch · 288 integration) — all green
@@ -55,33 +117,6 @@ Session 3C completed the participation read-model surface:
 | `Keep.Infrastructure/Persistence/KeepRequestListPersistence.cs` | `GetParticipantSummariesAsync` — account-scoped, effective count, stale logic |
 | `UnitTests/Keep/KeepRequestListServiceTests.cs` | `FakeRequestListPersistence.GetParticipantSummariesAsync` +`accountId` param |
 | `IntegrationTests/Api/KeepRequestParticipationApiTests.cs` | +8 integration tests covering 3C read-model assertions |
-
----
-
-## Phase 8-B5 Session 4 — Filters, Search, Closed History, Pagination — DECISIONS LOCKED
-
-**Status:** Decision gate complete. Ready for bounded implementation sessions.
-**ADRs:** 237..260
-**Next free ADR:** ADR-261
-**Build log:** `docs/build-log/041-phase-8-b5-session-4-filters-search-closed-history-pagination-decisions.md`
-
-### What was decided
-
-Session 4 is a backend/foundation list-navigation slice. It extends `GET /keep/requests` with
-named views, server-side filters/search, cursor pagination, role-aware operational counts,
-closed/cancelled/all history for Owner/Admin, row/list context metadata, and explicit query
-validation while preserving no-query default command-center behavior.
-
-### Deferred from Session 4
-
-- realtime list/count invalidation;
-- exact arbitrary totals for search/history/filter combinations;
-- broad Operator terminal-history access;
-- mark feedback reviewed;
-- archive/unarchive;
-- contextual customer/address history summaries;
-- internal/team-memory search;
-- web/PWA and native mobile UI.
 
 ---
 
@@ -293,7 +328,7 @@ Member management API + integration tests.
 - **`KeepResponsePolicy` defaults** (first=60, standard=240, priority=60 min) apply when no policy row exists for an account; silent fallback by design.
 - **Negative feedback on Closed raises attention** — intentional exception to terminal-no-attention posture (ADR-138).
 - **Feedback `WasResolved` is `bool?` at API layer** — null signals missing flag, validated before service. Domain method takes `bool`.
-- **Always rebuild before running tests** — `dotnet test --no-build` can run stale assemblies that mask real failures.
+- **Always rebuild before running tests** — `dotnet test --no-build` can run stale assemblies that mask real failures. Use `dotnet build --force` if incremental build skips integration test project changes.
 - **Next free ADR: ADR-261.**
 - **B4 mapper signature:** `ToDetailResult` now takes `AccountUserRole role`, `bool canOperate`, `Guid currentUserId` — all callers updated; write services pass `canOperate: true`.
 - **Participant `DisplayName`** computed in persistence (two-query approach retained; User.Name projected in the AccountUsers query via EF navigation LEFT JOIN).
@@ -305,9 +340,11 @@ Member management API + integration tests.
 - **`CanLogExternalContact` OffSeason gap** — Fixed in 2C.
 - **`ExternalContactInvalidDirection` added in 2B** — was omitted from the 2A error set despite being in ADR-207 scope.
 - **External contact `ExternalContactChannel` in DTO** — both `CommunicationChannel` and `ExternalContactChannel` on `KeepRequestEventItem`.
-- **Session 3B: Operator self-assign blocked** — DEF-045; any Operator `PUT /responsible` returns 403 `ParticipationOperatorCannotAssignOther`. Unblock when Unassigned/Available queue exists.
+- **Session 3B: Operator self-assign blocked** — DEF-045; any Operator `PUT /responsible` returns 403 `ParticipationOperatorCannotAssignOther`. Unblock when Unassigned/Available queue exists (Session 4).
 - **Session 3B: `GetActorDisplayNameAsync`** — fixed in 3C to use `User.Name.Trim() ?? Email.Trim()`, matching `GetParticipantTargetAsync` convention.
 - **Session 3C: 4-flag participation metadata** — `CanWatch` (not yet participating), `CanUnwatch` (currently watching), `CanMute` (participating + notifications on), `CanUnmute` (participating + notifications off). All 4 require `!IsTerminal`. `CanAssignResponsible` requires `isOwnerOrAdmin && canWrite && !IsTerminal`.
 - **Minimal API DELETE body** — nullable body parameters on `MapDelete` endpoints require `[FromBody]`; without it the app fails to start at route data source initialization. Fixed on `DELETE /responsible` and `DELETE /watchers/{id}`.
 - **`MapEventType` must be exhaustive** — `ParticipationChanged = 10` was missing; found during 3B testing. Pattern: every new `KeepRequestEventType` value must be added to `MapEventType` before integration tests run against any service that commits that event type.
-- **Session 3D** — cross-slice verification, docs update, and completion gate. Next session.
+- **OffSeason participation write blocking** — all 4 participation write services (`ManageResponsibleService`, `ManageWatcherService`, `SelfWatchService`, `MuteService`) use `RequestImplementsAllowedInOffSeason: false` and `|| decision.IsReadOnly` in `AuthAsync`; fires before request load or target user ID validation. Covered by `KeepOffSeasonTests` from 3D onward.
+- **Session 3D incremental build gap** — `dotnet build -q` may skip the integration test project when `OpHalo.SharedKernel` cache file is unreadable (MSB3492). Use `dotnet build --force` on the integration test project when adding new test files.
+- **Next session: Phase 8-B5 Session 4** — filters, search, closed history, pagination. Decisions locked in ADR-237..260 and `041-phase-8-b5-session-4-filters-search-closed-history-pagination-decisions.md`. Recommended split: 4A (query contract/validation/response shape/cursor primitives) → 4B (named views/filters/search/history/counts/sorting) → 4C (Operator unassigned surface + narrow self-assign re-enable + row context/action metadata) → 4D (integration verification/docs/decision index/deferred tracker).
