@@ -18,6 +18,9 @@ public sealed class AddCustomerMessageService(
 
         var context = guardResult.Value;
 
+        if (context.IsOffSeason)
+            return Result<KeepCustomerPageResult>.Failure(KeepRequestErrors.OffSeasonUnavailable);
+
         // Expired token: return safe tombstone immediately — do not mutate anything.
         if (context.IsExpired)
             return Result<KeepCustomerPageResult>.Success(

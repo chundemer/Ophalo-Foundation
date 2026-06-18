@@ -18,6 +18,9 @@ public sealed class SubmitFeedbackService(
 
         var context = guardResult.Value;
 
+        if (context.IsOffSeason)
+            return Result<KeepCustomerPageResult>.Failure(KeepRequestErrors.OffSeasonUnavailable);
+
         if (context.IsExpired)
             return Result<KeepCustomerPageResult>.Success(
                 KeepCustomerPageMapper.BuildExpiredResult(context));

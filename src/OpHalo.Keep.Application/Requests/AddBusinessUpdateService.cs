@@ -58,11 +58,11 @@ public sealed class AddBusinessUpdateService(
             accountSnapshot.TrialEndsAtUtc,
             accountSnapshot.PastDueGraceEndsAtUtc,
             accountSnapshot.OperatingMode,
-            RequestImplementsAllowedInOffSeason: true,
+            RequestImplementsAllowedInOffSeason: false,
             clock.UtcNow);
 
         var decision = accountAccessPolicy.Evaluate(accessContext);
-        if (decision.IsBlocked)
+        if (decision.IsBlocked || decision.IsReadOnly)
             return Result<KeepRequestDetailResult>.Failure(Forbidden);
 
         if (!featurePolicy.IsEnabled(accountSnapshot.Plan, FeatureKeys.Keep.OperatorQueue))

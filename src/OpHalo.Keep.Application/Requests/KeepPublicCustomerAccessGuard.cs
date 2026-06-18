@@ -1,5 +1,6 @@
 using OpHalo.Foundation.Application.Accounts.Access;
 using OpHalo.Foundation.Application.Accounts.Entitlements;
+using OpHalo.Foundation.Core.Entities.Accounts.Enums;
 using OpHalo.Keep.Core.Errors;
 using OpHalo.SharedKernel.Abstractions;
 using OpHalo.SharedKernel.Results;
@@ -20,8 +21,9 @@ namespace OpHalo.Keep.Application.Requests;
 ///   active/resolved page      → Success with IsExpired = false
 ///
 /// Account access check blocks only IsBlocked (Suspended, Closed, TrialExpired,
-/// PastDueBlocked, Expired, Canceled). IsReadOnly (off-season) is NOT blocked for
-/// customer pages in B3 — off-season posture is deferred per ADR-083.
+/// PastDueBlocked, Expired, Canceled). IsReadOnly (OffSeason) is NOT blocked for
+/// customer page reads — reads remain available in OffSeason per ADR-208. Write services
+/// check context.IsOffSeason and return KeepRequestErrors.OffSeasonUnavailable (ADR-221).
 ///
 /// This service uses IKeepRequestDetailPersistence (non-tracked reads). Write services
 /// must re-fetch the tracked entity via IKeepCustomerWritePersistence.GetRequestForUpdateAsync
@@ -88,6 +90,7 @@ public sealed class KeepPublicCustomerAccessGuard(
             IsExpired: isExpired,
             ExpiresAtUtc: request.ExpiresAtUtc,
             FeedbackWasResolved: request.FeedbackWasResolved,
-            FeedbackSubmittedAtUtc: request.FeedbackSubmittedAtUtc));
+            FeedbackSubmittedAtUtc: request.FeedbackSubmittedAtUtc,
+            IsOffSeason: snapshot.OperatingMode == AccountOperatingMode.OffSeason));
     }
 }

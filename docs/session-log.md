@@ -1,6 +1,6 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-06-17
+**Last updated:** 2026-06-17 (Session 2C)
 **Branch:** `main` (no remote yet)
 
 ---
@@ -89,6 +89,45 @@ Phase 8-B5: default command-center request list — ranking, attention indicator
 - Separate `ExternalContactInvalidInboundChannel` and `ExternalContactInvalidOutboundChannel` errors
 - `WaitingDirection.Customer` is not set by any current domain method; the flip branch mirrors `AddCustomerMessage`
 - ADR-215 DTO field `externalContactCountsFirstResponse` should be renamed to `externalContactSetFirstResponse` when timeline DTO is built in 2B
+
+---
+
+### Session 2C — OffSeason Freeze — COMPLETE
+
+**Tests:** 355 unit · 14 arch · 251 integration (620 total)
+**ADR implemented:** ADR-221
+**Next free ADR:** ADR-222
+
+**Files changed:**
+
+| File | Change |
+|------|--------|
+| `Keep.Core/Errors/KeepRequestErrors.cs` | Added `OffSeasonUnavailable` error (ADR-221) |
+| `Api/Helpers/ErrorHttpMapper.cs` | Added `"KeepRequest.OffSeasonUnavailable"` → 409 |
+| `Keep.Application/Requests/AcknowledgeAttentionService.cs` | `RequestImplementsAllowedInOffSeason: false`; added `|| decision.IsReadOnly` check |
+| `Keep.Application/Requests/AddInternalNoteService.cs` | Same |
+| `Keep.Application/Requests/AddBusinessUpdateService.cs` | Same |
+| `Keep.Application/Requests/ChangeKeepRequestStatusService.cs` | Same |
+| `Keep.Application/Requests/LogExternalContactService.cs` | Added `|| decision.IsReadOnly` (already had `false`; this was the missing piece from 2B) |
+| `Keep.Application/Requests/GetKeepRequestDetailService.cs` | Added `isOffSeason` from snapshot; `canWrite = canOperate && !isOffSeason`; all write-action flags now use `canWrite`; added `using` for `AccountOperatingMode` |
+| `Keep.Application/Requests/KeepPublicCustomerContext.cs` | Added `bool IsOffSeason` |
+| `Keep.Application/Requests/KeepPublicCustomerAccessGuard.cs` | Populates `IsOffSeason` on context; updated comment from ADR-083 to ADR-208; added `using` for `AccountOperatingMode` |
+| `Keep.Application/Requests/AddCustomerMessageService.cs` | Added `context.IsOffSeason` → `OffSeasonUnavailable` check before domain call |
+| `Keep.Application/Requests/SubmitFeedbackService.cs` | Same |
+| `IntegrationTests/Api/KeepOffSeasonTests.cs` | New: 11 tests — read list/detail/customer-page pass in OffSeason; all 5 operator write endpoints return 403; customer message/feedback return 409 OffSeasonUnavailable; public intake returns 422 |
+| `docs/decisions/decision-index.md` | Added ADR-221 |
+
+**Design decisions locked:**
+- D1 (ADR-221): `KeepRequest.OffSeasonUnavailable` → 409 for customer-page writes; `auth.forbidden` → 403 for operator writes; Owner/Admin closeout deferred to DEF-042
+- D2: `canWrite = canOperate && !isOffSeason` applies to all write-action flags in `GetKeepRequestDetailService` (not just `CanLogExternalContact`)
+
+**Key findings during implementation:**
+- `LogExternalContactService` bug fixed: had `RequestImplementsAllowedInOffSeason: false` (set in 2B) but only checked `decision.IsBlocked` — OffSeason slips through because `ReadOnly` is not `Blocked`. Added `|| decision.IsReadOnly` to complete the 2B intent.
+- `EnterOffSeason` requires `CommercialState.Active`. Integration tests transition Trial → PastDue → Active via `MarkPastDue` / `ResolvePastDue` before calling `EnterOffSeason`.
+
+**Known carry-forward:**
+- Owner/Admin narrow closeout action in OffSeason deferred to DEF-042
+- Session 2D: cross-slice verification of full external-contact semantic matrix; deferred-topic audit
 
 ---
 
@@ -248,7 +287,7 @@ Member management API + integration tests.
 - **Negative feedback on Closed raises attention** — intentional exception to terminal-no-attention posture (ADR-138).
 - **Feedback `WasResolved` is `bool?` at API layer** — null signals missing flag, validated before service. Domain method takes `bool`.
 - **Always rebuild before running tests** — `dotnet test --no-build` can run stale assemblies that mask real failures.
-- **Next free ADR: ADR-221.**
+- **Next free ADR: ADR-222.**
 - **B4 mapper signature:** `ToDetailResult` now takes `AccountUserRole role` and `bool canOperate` — all callers updated; write services pass `canOperate: true`.
 - **Participant `DisplayName`** computed in persistence (two-query approach retained; User.Name projected in the AccountUsers query via EF navigation LEFT JOIN).
 - **`KeepRequestStatus.Scheduled = 7`** — added to `MapStatus` in B5 service rewrite.
@@ -257,6 +296,6 @@ Member management API + integration tests.
 - **`post_customer_update.ClearsAttention`** — state-aware, not static. True only when `WaitingDirection=Business && AttentionLevel != None`.
 - **`ComputeSeverity` first-response-pending** — fixed in B5 completion. Now returns `"attention"` for first-response pending (was falling through to `"muted"`). Method signature takes `bool firstResponsePending` parameter.
 - **Resolved request resolved_quiet ranking** — applies only when neither first-response pending nor first-response overdue checks fire and `AttentionLevel=None`. A Resolved request with an outstanding first-response obligation stays in the first-response ranking path; `FirstRespondedAtUtc` suppresses those checks.
-- **`CanLogExternalContact` OffSeason gap** — Session 2B sets `canOperate && !request.IsTerminal` for all detail responses. Does not yet reflect OffSeason operating mode. Session 2C must correct all action metadata for OffSeason (together with fixing `RequestImplementsAllowedInOffSeason: true` on existing write services).
+- **`CanLogExternalContact` OffSeason gap** — Fixed in 2C. `GetKeepRequestDetailService` now uses `canWrite = canOperate && !isOffSeason` for all write-action flags.
 - **`ExternalContactInvalidDirection` added in 2B** — was omitted from the 2A error set despite being in ADR-207 scope.
 - **External contact `ExternalContactChannel` in DTO** — `KeepRequestEventItem` exposes both the existing `CommunicationChannel` field (for all applicable event types) and the new `ExternalContactChannel` field (only non-null for external contact events). Both map the same `CommunicationChannel` enum value for contact events; the grouped external-contact fields are for client convenience.

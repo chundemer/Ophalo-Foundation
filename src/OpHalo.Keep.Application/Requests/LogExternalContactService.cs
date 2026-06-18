@@ -66,7 +66,7 @@ public sealed class LogExternalContactService(
             clock.UtcNow);
 
         var decision = accountAccessPolicy.Evaluate(accessContext);
-        if (decision.IsBlocked)
+        if (decision.IsBlocked || decision.IsReadOnly)
             return Result<KeepRequestDetailResult>.Failure(Forbidden);
 
         if (!featurePolicy.IsEnabled(accountSnapshot.Plan, FeatureKeys.Keep.OperatorQueue))

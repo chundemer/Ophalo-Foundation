@@ -238,7 +238,28 @@ docs/session-log updated with files/tests
 
 ---
 
-## Session 2C — OffSeason Freeze + Public Intake Unavailable
+## Session 2C — OffSeason Freeze + Public Intake Unavailable — COMPLETE
+
+**Tests:** 620 total (355 unit · 14 arch · 251 integration)
+**ADR:** ADR-221
+
+**What was built:**
+- `RequestImplementsAllowedInOffSeason: false` on all 4 operator write services; each also gains `|| decision.IsReadOnly` on the blocked check
+- `LogExternalContactService` (from 2B) also fixed: only had `IsBlocked` check despite `false` flag
+- `GetKeepRequestDetailService`: `canWrite = canOperate && !isOffSeason`; all 5 write-action flags use `canWrite`
+- `KeepPublicCustomerContext`: added `bool IsOffSeason`
+- `KeepPublicCustomerAccessGuard`: populates `IsOffSeason`; comment updated to ADR-208
+- `AddCustomerMessageService` + `SubmitFeedbackService`: check `context.IsOffSeason` → `KeepRequest.OffSeasonUnavailable` → 409
+- `KeepRequestErrors.OffSeasonUnavailable` + `ErrorHttpMapper` 409 entry
+- `KeepOffSeasonTests.cs`: 11 integration tests (reads pass, all writes blocked, customer 409, intake 422)
+
+**Key implementation note:** `EnterOffSeason` requires `CommercialState.Active`. Integration tests transition Trial → PastDue (`MarkPastDue`) → Active (`ResolvePastDue`) before calling `EnterOffSeason`.
+
+**Deferred:** Owner/Admin narrow closeout in OffSeason → DEF-042
+
+---
+
+## Session 2C — OffSeason Freeze + Public Intake Unavailable (spec)
 
 **Goal:** Align Keep write/public-intake behavior with the OffSeason frozen/read-mostly posture.
 

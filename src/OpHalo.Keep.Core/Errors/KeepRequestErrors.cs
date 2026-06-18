@@ -94,4 +94,8 @@ public static class KeepRequestErrors
 
     public static readonly Error ExternalContactSummaryTooLong =
         Error.Create("KeepRequest.ExternalContactSummaryTooLong", "The summary exceeds the maximum allowed length of 4000 characters.");
+
+    // ADR-221: customer-page writes blocked in OffSeason.
+    public static readonly Error OffSeasonUnavailable =
+        Error.Create("KeepRequest.OffSeasonUnavailable", "This business is not accepting updates through OpHalo right now. Please contact them directly.");
 }

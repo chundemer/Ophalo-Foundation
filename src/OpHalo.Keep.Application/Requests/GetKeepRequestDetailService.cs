@@ -2,6 +2,7 @@ using OpHalo.Foundation.Application.Abstractions.Security;
 using OpHalo.Foundation.Application.Accounts.Access;
 using OpHalo.Foundation.Application.Accounts.Authorization;
 using OpHalo.Foundation.Application.Accounts.Entitlements;
+using OpHalo.Foundation.Core.Entities.Accounts.Enums;
 using OpHalo.Keep.Core.Errors;
 using OpHalo.SharedKernel.Abstractions;
 using OpHalo.SharedKernel.Results;
@@ -74,13 +75,18 @@ public sealed class GetKeepRequestDetailService(
         var participants = await persistence.GetParticipantsAsync(request.Id, ct);
         var businessName = await persistence.GetAccountBusinessNameAsync(currentUser.AccountId, ct);
 
+        // OffSeason: reads allowed (RequestImplementsAllowedInOffSeason: true above), but all
+        // write-action affordances must be suppressed — the write services are blocked in OffSeason.
+        var isOffSeason = accountSnapshot.OperatingMode == AccountOperatingMode.OffSeason;
+        var canWrite = canOperate && !isOffSeason;
+
         var availableActions = new AvailableActionsMetadata(
-            CanChangeStatus: canOperate && !request.IsTerminal,
-            CanSendBusinessUpdate: canOperate && !request.IsTerminal,
-            CanAddInternalNote: canOperate,
-            CanAcknowledgeAttention: KeepRequestDetailMapper.CanAcknowledgeAttention(canOperate, request),
-            CanLogExternalContact: canOperate && !request.IsTerminal,
-            AllowedStatuses: canOperate && !request.IsTerminal
+            CanChangeStatus: canWrite && !request.IsTerminal,
+            CanSendBusinessUpdate: canWrite && !request.IsTerminal,
+            CanAddInternalNote: canWrite,
+            CanAcknowledgeAttention: KeepRequestDetailMapper.CanAcknowledgeAttention(canWrite, request),
+            CanLogExternalContact: canWrite && !request.IsTerminal,
+            AllowedStatuses: canWrite && !request.IsTerminal
                 ? KeepRequestDetailMapper.ComputeAllowedStatuses(request.Status)
                 : []);
 

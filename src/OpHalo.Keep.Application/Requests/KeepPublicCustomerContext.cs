@@ -28,4 +28,5 @@ public sealed record KeepPublicCustomerContext(
     bool IsExpired,
     DateTime? ExpiresAtUtc,
     bool? FeedbackWasResolved,
-    DateTime? FeedbackSubmittedAtUtc);
+    DateTime? FeedbackSubmittedAtUtc,
+    bool IsOffSeason);
