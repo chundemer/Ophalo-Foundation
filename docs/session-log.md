@@ -1,7 +1,93 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-06-17 (Session 2D)
+**Last updated:** 2026-06-18 (Session 3A complete)
 **Branch:** `main` (no remote yet)
+
+---
+
+## Phase 8-B5 Session 3A — Domain + Persistence Invariants — COMPLETE
+
+**Tests:** 396 unit · 14 arch · 251 integration (661 total — all green)
+**Next free ADR:** ADR-236 (no new ADRs consumed in 3A)
+**Migration:** `20260618102937_AddParticipationChangedEventFields` — 7 nullable columns on `keep_request_events`; filtered unique index on `keep_request_participants`
+
+**Files changed:**
+
+| File | Change |
+|---|---|
+| `Keep.Core/Entities/Enums/ParticipationAction.cs` | New: 9-value enum (`ResponsibleAssigned`..`Unmuted`) |
+| `Keep.Core/Entities/Enums/ParticipationNotificationIntentKind.cs` | New: `Assignment = 1`, `WatcherAdded = 2` |
+| `Keep.Core/Entities/Enums/KeepRequestEventType.cs` | Added `ParticipationChanged = 10` |
+| `Keep.Core/Entities/KeepRequestParticipant.cs` | Added `Detach`, `Reactivate`, `SetNotificationsEnabled` mutation methods |
+| `Keep.Core/Entities/KeepRequestEvent.cs` | Added 7 participation fields + `CreateParticipationChanged` factory with intent-pairing validation |
+| `Keep.Core/Errors/KeepRequestErrors.cs` | Added `ParticipationNoteTooLong`, `ParticipationMuteRequiresActiveParticipation`, `ParticipationCannotUnwatchResponsible`, `ParticipationResponsibleCannotWatch`, `ParticipationStateCorrupt` |
+| `Keep.Core/Domain/ParticipationChangeOutcome.cs` | New: factory-only outcome record (mirrors `KeepStatusChangeOutcome`) |
+| `Keep.Core/Domain/KeepRequestParticipationService.cs` | New: domain service — 8 methods, participant-set invariant validation |
+| `Keep.Infrastructure/.../KeepRequestEventConfiguration.cs` | EF config for 7 new nullable participation fields |
+| `Keep.Infrastructure/.../KeepRequestParticipantConfiguration.cs` | Filtered unique index for one-active-Responsible per request |
+| `Foundation.Infrastructure/Migrations/20260618102937_AddParticipationChangedEventFields.cs` | Migration |
+| `UnitTests/Keep/KeepRequestParticipationTests.cs` | New: 41 unit tests |
+
+**Design decisions resolved during 3A:**
+
+- D1: Cross-participant invariants (one active Responsible, Responsible/Watching mutual exclusion) live in `KeepRequestParticipationService` (Core domain service), not the application layer. Application service (3B) handles auth, role, OffSeason, and target-user eligibility.
+- D2: `ParticipationAction` as enum (9 values); `ParticipationNotificationIntentKind` as enum (`Assignment`, `WatcherAdded`) — both mapped to stable API strings at the detail mapper boundary (3C).
+- D3: Optional participation notes capped at 4000 characters, matching internal-note convention.
+- D4: `targetDisplayName` is nullable on remove/clear operations (participant rows have no display-name snapshot); the application service in 3B can supply it from the eligible-user lookup.
+- D5: `RemoveWatcher` on a currently-Responsible user fails (not a no-op) — invalid action per ADR-230.
+- D6: `ValidateParticipantSet` in the domain service guards against corrupt participant sets (wrong request/account, multiple active Responsible rows, multiple active rows per user) — returns `ParticipationStateCorrupt` error.
+- D7: EF merged two `HasIndex(x => x.RequestId)` calls into one. Config consolidated to single filtered+unique index named `ix_keep_request_participants_request_id`; general request_id scans covered by existing composite `ix_keep_request_participants_request_user`.
+
+**Known carry-forward:**
+- No API endpoints yet; application services and candidate lookup are Session 3B scope.
+- `targetDisplayName` on clear/remove operations: 3B application service should look up from account-user data and pass it in.
+- Notification intent `includeNotificationIntent` flag: 3B application service passes `true` for Owner/Admin assign/transfer/add-watcher, `false` for Operator self-assign and self-watch.
+
+---
+
+## Phase 8-B5 Session 3 Discovery Checkpoint — Assignment / Watch / Mute
+
+**Pre-work complete**
+**Status:** Decisions ADR-222..235 locked. Ready for bounded implementation sessions.
+**Next free ADR:** ADR-236
+**Build logs:** `docs/build-log/040-phase-8-b5-session-3-assignment-watch-mute-decisions.md` (decisions) · `docs/build-log/039-phase-8-b5-claude-coding-sessions.md` (3A-3D implementation split)
+
+Locked implementation split:
+
+| Session | Goal |
+|---|---|
+| 3A | Domain + persistence invariants for participation changes and `ParticipationChanged` event metadata |
+| 3B | API/application services plus compact eligible participant lookup |
+| 3C | Detail/list read models, internal timeline metadata, list responsible-name/Owner-Admin assignment metadata |
+| 3D | Cross-slice verification, docs, and completion gate |
+
+Key locked decisions:
+
+- Session 3 covers non-terminal assignment, transfer, clear responsible, watch, unwatch, mute, and unmute.
+- Closed unresolved-feedback rows remain review-only; OffSeason blocks participation writes.
+- Owner/Admin can assign, transfer, clear, and manage watchers; Operators can self-watch/unwatch and self-mute/unmute, and can self-assign only an unassigned/effectively unassigned request they can legitimately access.
+- Operators cannot clear themselves as Responsible; Owner/Admin must clear or transfer responsibility.
+- One active participation row per user per request; Responsible and Watching are mutually exclusive.
+- Clear/transfer detaches the previous Responsible and does not auto-watch them.
+- Watch defaults notifications enabled; mute requires active participation and only flips `NotificationsEnabled=false`.
+- Mute/unmute is current-user only in Session 3, but internals should remain future-friendly for delegated controls.
+- Only Active Owner/Admin/Operator users are eligible assignees/watchers. Stale Responsible users are notification-ineligible and effectively unassigned for routing, but not auto-detached.
+- Operator default list hides unassigned requests; an Operator Unassigned/Available queue is deferred.
+- Request detail is the main participation-control surface. Owner/Admin may assign/transfer Responsible from the list; list clear/watch/mute are not in Session 3.
+- List shows responsible person name and may flag stale responsibility for Owner/Admin; full watcher lists stay on detail.
+- Participation changes are internal-only, activity/ranking-neutral, and customer-page excluded.
+- Writes use explicit endpoints, are idempotent, return updated `KeepRequestDetailResult`, and do not duplicate timeline events or notification intent on no-op retries.
+- Optional internal notes are supported for Owner/Admin managed assignment/transfer/clear/add-watcher/remove-watcher actions; self-service watch/mute actions do not expose notes in Session 3.
+- Assignment/watch notification intent is structured event metadata only; no notification delivery/outbox/device work in Session 3.
+- Add/reuse a compact eligible participant lookup, preferably `GET /keep/requests/participant-candidates`.
+
+Open/deferred after Session 3:
+
+- notification delivery, quiet hours, global preferences, device tokens, badge counts;
+- Operator Unassigned/Available queue or filters;
+- Owner/Admin delegated mute/unmute;
+- automatic cleanup of stale participants;
+- list-level clear/watch/mute controls unless future workflow proves a need.
 
 ---
 
@@ -312,13 +398,13 @@ Member management API + integration tests.
 - **Migration generation** always: `--startup-project src/OpHalo.Keep.Infrastructure`.
 - **No GitHub remote yet.**
 - **`Results.Problem` extension shape:** extension dict entries land at the top level of ProblemDetails JSON, not under an `"extensions"` key. Test assertions must use `body.GetProperty("code")`.
-- **External contact logging/capture (ADR-115)** remains pre-go-live/deferred.
+- **External contact logging/capture** implemented in B5 Sessions 2A-2C; remaining adjacent follow-ups are tracked in DEF-040/041/044.
 - **`businessName ?? string.Empty`** — persistence returns null if account missing post-auth; never expected in production.
 - **`KeepResponsePolicy` defaults** (first=60, standard=240, priority=60 min) apply when no policy row exists for an account; silent fallback by design.
 - **Negative feedback on Closed raises attention** — intentional exception to terminal-no-attention posture (ADR-138).
 - **Feedback `WasResolved` is `bool?` at API layer** — null signals missing flag, validated before service. Domain method takes `bool`.
 - **Always rebuild before running tests** — `dotnet test --no-build` can run stale assemblies that mask real failures.
-- **Next free ADR: ADR-222.**
+- **Next free ADR: ADR-236.**
 - **B4 mapper signature:** `ToDetailResult` now takes `AccountUserRole role` and `bool canOperate` — all callers updated; write services pass `canOperate: true`.
 - **Participant `DisplayName`** computed in persistence (two-query approach retained; User.Name projected in the AccountUsers query via EF navigation LEFT JOIN).
 - **`KeepRequestStatus.Scheduled = 7`** — added to `MapStatus` in B5 service rewrite.

@@ -43,10 +43,14 @@ internal sealed class KeepRequestParticipantConfiguration : BaseEntityConfigurat
             .IsUnique()
             .HasDatabaseName("ix_keep_request_participants_request_user");
 
+        // At most one active Responsible per request (ADR-224). Enforced here and in the domain service.
+        // General request_id scans are covered by ix_keep_request_participants_request_user (composite).
+        builder.HasIndex(x => x.RequestId)
+            .IsUnique()
+            .HasFilter("participation_type = 'Responsible' AND detached_at_utc IS NULL")
+            .HasDatabaseName("ix_keep_request_participants_request_id");
+
         builder.HasIndex(x => new { x.AccountId, x.AccountUserId })
             .HasDatabaseName("ix_keep_request_participants_account_user");
-
-        builder.HasIndex(x => x.RequestId)
-            .HasDatabaseName("ix_keep_request_participants_request_id");
     }
 }

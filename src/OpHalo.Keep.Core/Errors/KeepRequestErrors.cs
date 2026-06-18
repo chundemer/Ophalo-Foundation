@@ -98,4 +98,20 @@ public static class KeepRequestErrors
     // ADR-221: customer-page writes blocked in OffSeason.
     public static readonly Error OffSeasonUnavailable =
         Error.Create("KeepRequest.OffSeasonUnavailable", "This business is not accepting updates through OpHalo right now. Please contact them directly.");
+
+    // Participation errors (ADR-222..225).
+    public static readonly Error ParticipationNoteTooLong =
+        Error.Create("KeepRequest.ParticipationNoteTooLong", "The participation note exceeds the maximum allowed length of 4000 characters.");
+
+    public static readonly Error ParticipationMuteRequiresActiveParticipation =
+        Error.Create("KeepRequest.ParticipationMuteRequiresActiveParticipation", "You must be an active participant on this request to mute notifications.");
+
+    public static readonly Error ParticipationCannotUnwatchResponsible =
+        Error.Create("KeepRequest.ParticipationCannotUnwatchResponsible", "You are the Responsible user on this request, not a Watcher. Use the clear-responsible action instead.");
+
+    public static readonly Error ParticipationResponsibleCannotWatch =
+        Error.Create("KeepRequest.ParticipationResponsibleCannotWatch", "The target user is currently Responsible on this request. Clear their responsibility before adding them as a Watcher.");
+
+    public static readonly Error ParticipationStateCorrupt =
+        Error.Create("KeepRequest.ParticipationStateCorrupt", "Participant data is inconsistent and cannot be safely modified.");
 }

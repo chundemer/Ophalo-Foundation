@@ -31,6 +31,17 @@ public sealed class KeepRequestEvent : BaseEntity
     // the timeline can render accurate historical labels without re-deriving from later state.
     public KeepRequestStatus? StatusAfter { get; private set; }
 
+    // Present on ParticipationChanged events only (ADR-234).
+    public ParticipationAction? ParticipationAction { get; private set; }
+    public Guid? ParticipationTargetAccountUserId { get; private set; }
+    public string? ParticipationTargetDisplayName { get; private set; }
+    // Set on ResponsibleTransferred only — the user being replaced.
+    public Guid? ParticipationPreviousResponsibleAccountUserId { get; private set; }
+    public string? ParticipationInternalNote { get; private set; }
+    // Null when no notification intent applies (ADR-233).
+    public ParticipationNotificationIntentKind? ParticipationNotificationIntentKind { get; private set; }
+    public Guid? ParticipationNotificationIntendedRecipientAccountUserId { get; private set; }
+
     // Present on ExternalContactLogged events only (ADR-215/217).
     public ExternalContactDirection? ExternalContactDirection { get; private set; }
     public ExternalContactOutcome? ExternalContactOutcome { get; private set; }
@@ -330,6 +341,77 @@ public sealed class KeepRequestEvent : BaseEntity
             ExternalContactRequiresFollowUp = requiresFollowUp,
             ExternalContactSetFirstResponse = setFirstResponse,
             ExternalContactClearedAttention = clearedAttention
+        };
+    }
+
+    /// <summary>
+    /// Creates a ParticipationChanged event. Always Internal — never customer-visible (ADR-229).
+    ///
+    /// targetAccountUserId semantics by action:
+    ///   ResponsibleAssigned / ResponsibleTransferred → the new Responsible user
+    ///   ResponsibleCleared                          → the Responsible user being cleared
+    ///   WatcherAdded / WatcherRemoved               → the watcher user
+    ///   SelfWatched / SelfUnwatched / Muted / Unmuted → the current user (actor == target)
+    ///
+    /// This covers ADR-234's "newResponsibleAccountUserId when applicable" without a fourth id field.
+    /// targetDisplayName is nullable because remove/clear operations derive the target from the
+    /// existing participant row where no display-name snapshot is stored.
+    ///
+    /// internalNote is optional (max 4000 chars — validated by caller).
+    ///
+    /// Notification intent (ADR-233): both notificationIntentKind and notificationIntendedRecipientAccountUserId
+    /// must be null together, or both non-null together. When non-null the recipient should equal targetAccountUserId.
+    /// </summary>
+    public static KeepRequestEvent CreateParticipationChanged(
+        Guid requestId,
+        Guid accountId,
+        Guid actorAccountUserId,
+        string actorDisplayName,
+        ParticipationAction participationAction,
+        Guid targetAccountUserId,
+        string? targetDisplayName,
+        Guid? previousResponsibleAccountUserId,
+        string? internalNote,
+        ParticipationNotificationIntentKind? notificationIntentKind,
+        Guid? notificationIntendedRecipientAccountUserId,
+        DateTime occurredAtUtc)
+    {
+        if (requestId == Guid.Empty)
+            throw new ArgumentException("Request ID is required.", nameof(requestId));
+        if (accountId == Guid.Empty)
+            throw new ArgumentException("Account ID is required.", nameof(accountId));
+        if (actorAccountUserId == Guid.Empty)
+            throw new ArgumentException("Actor account user ID is required.", nameof(actorAccountUserId));
+        if (string.IsNullOrWhiteSpace(actorDisplayName))
+            throw new ArgumentException("Actor display name is required.", nameof(actorDisplayName));
+        if (!Enum.IsDefined(participationAction))
+            throw new ArgumentException($"Unknown ParticipationAction: {participationAction}.", nameof(participationAction));
+        if (targetAccountUserId == Guid.Empty)
+            throw new ArgumentException("Target account user ID is required.", nameof(targetAccountUserId));
+        if (notificationIntentKind.HasValue && (!notificationIntendedRecipientAccountUserId.HasValue || notificationIntendedRecipientAccountUserId.Value == Guid.Empty))
+            throw new ArgumentException("Notification intent recipient is required when notification intent kind is set.", nameof(notificationIntendedRecipientAccountUserId));
+        if (!notificationIntentKind.HasValue && notificationIntendedRecipientAccountUserId.HasValue)
+            throw new ArgumentException("Notification intent recipient must be null when notification intent kind is not set.", nameof(notificationIntendedRecipientAccountUserId));
+        if (occurredAtUtc == default)
+            throw new ArgumentException("occurredAtUtc must be a real timestamp.", nameof(occurredAtUtc));
+
+        return new KeepRequestEvent
+        {
+            RequestId = requestId,
+            AccountId = accountId,
+            EventType = KeepRequestEventType.ParticipationChanged,
+            Visibility = KeepRequestEventVisibility.Internal,
+            ActorType = ActorType.AccountUser,
+            ActorAccountUserId = actorAccountUserId,
+            ActorDisplayName = actorDisplayName.Trim(),
+            OccurredAtUtc = occurredAtUtc,
+            ParticipationAction = participationAction,
+            ParticipationTargetAccountUserId = targetAccountUserId,
+            ParticipationTargetDisplayName = string.IsNullOrWhiteSpace(targetDisplayName) ? null : targetDisplayName.Trim(),
+            ParticipationPreviousResponsibleAccountUserId = previousResponsibleAccountUserId,
+            ParticipationInternalNote = string.IsNullOrWhiteSpace(internalNote) ? null : internalNote.Trim(),
+            ParticipationNotificationIntentKind = notificationIntentKind,
+            ParticipationNotificationIntendedRecipientAccountUserId = notificationIntendedRecipientAccountUserId
         };
     }
 }

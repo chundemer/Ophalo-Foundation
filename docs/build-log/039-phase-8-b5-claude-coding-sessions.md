@@ -2,8 +2,8 @@
 
 **Date:** 2026-06-17
 **Purpose:** Claude-ready implementation sessions after B5 decisions.
-**Decision source:** `038-phase-8-b5-request-list-triage-external-contact-decisions.md`
-**ADRs covered:** 164..218
+**Decision source:** `038-phase-8-b5-request-list-triage-external-contact-decisions.md` · `040-phase-8-b5-session-3-assignment-watch-mute-decisions.md`
+**ADRs covered:** 164..235
 **Deferred tracker:** `docs/deferred-topics.md`
 
 ---
@@ -353,43 +353,273 @@ decision index/deferred topics/session log updated
 
 ---
 
-## Session 3 — Assignment / Watching / Per-Request Notification Controls
+## Session 3A — Assignment/Watch/Mute Domain + Persistence
 
-**Goal:** Add request routing writes and per-request notification participation controls.
+**Goal:** Add the participation domain behavior, event metadata, persistence support, and invariants
+without adding API endpoints yet.
 
 Decision/deferred refs:
 
 ```text
-ADR-174, ADR-176, ADR-185
+ADR-174, ADR-176, ADR-185, ADR-222..235
 DEF-012, DEF-033
+docs/build-log/040-phase-8-b5-session-3-assignment-watch-mute-decisions.md
 ```
 
 Scope:
 
-- Assign responsible.
-- Transfer responsible.
-- Clear responsible/unassign.
-- Watch/unwatch.
-- Mute/unmute per-request notifications.
-- Enforce zero-or-one active Responsible participant.
-- Keep many Watching participants.
-- Preserve Owner/Admin visibility separate from assignment.
-- Add filtered unique index or equivalent invariant for one active Responsible.
+- Add `ParticipationChanged` event support with structured metadata:
+  - `participationAction`
+  - `targetAccountUserId`
+  - target display-name snapshot if local event patterns support snapshots
+  - previous/new responsible ids where applicable
+  - optional internal note where applicable
+  - notification-intent metadata where applicable
+- Add domain behavior on `KeepRequest` or the existing participation aggregate/service boundary for:
+  - assign responsible
+  - transfer responsible
+  - clear responsible
+  - add watcher
+  - remove watcher
+  - self watch/unwatch if domain-owned
+  - mute/unmute if domain-owned
+- Enforce:
+  - one active Responsible per request
+  - one active participation row per user per request
+  - Responsible and Watching are mutually exclusive
+  - transfer detaches the previous Responsible, does not auto-watch them
+  - clear Responsible detaches, does not auto-watch
+  - watch defaults `NotificationsEnabled = true`
+  - mute requires active participation and only flips `NotificationsEnabled`
+  - idempotent no-ops do not create duplicate events or duplicate notification intent
+- Add EF mapping/migration for any new event fields and filtered unique index/invariant support.
+- Keep existing `KeepRequestParticipant` table/model unless implementation proves a schema gap.
 
 Out of scope:
 
-- notification delivery;
-- quiet hours/global preferences;
-- operator visibility narrowing unless explicitly decided for that session.
+- API endpoints/application services.
+- Request detail/list DTO updates.
+- Notification delivery/outbox/device-token work.
+- Operator Unassigned/Available queue.
+- Automatic cleanup of stale participants.
 
-Tests:
+Required tests:
 
-- new request may remain unassigned;
-- assignment creates one active Responsible;
-- transfer replaces active Responsible;
-- watcher count and current-user participation metadata update;
-- notification enabled state respects participant settings;
-- Viewer remains notification-ineligible.
+- Domain/unit tests for assignment, transfer, clear, watch, unwatch, mute, unmute.
+- One-active-Responsible invariant.
+- One-active-participation-row-per-user invariant.
+- Responsible/Watching mutual exclusion.
+- Clear/transfer does not auto-watch.
+- Watch and assignment default notifications enabled.
+- Mute/unmute preserves participation and does not hide/detach.
+- Idempotent no-ops do not append duplicate events or notification intent.
+- Terminal requests reject participation writes at the domain/service boundary chosen for the slice.
+- Migration/model snapshot inspected for only locked schema/index additions.
+
+Completion gate:
+
+```text
+targeted domain/unit tests pass
+migration inspected
+docs/session-log updated with files/tests
+```
+
+---
+
+## Session 3B — Participation API/Application Services + Candidate Lookup
+
+**Goal:** Expose participation write endpoints and the compact eligible participant lookup.
+
+Decision/deferred refs:
+
+```text
+ADR-222..235
+DEF-012, DEF-033
+docs/build-log/040-phase-8-b5-session-3-assignment-watch-mute-decisions.md
+```
+
+Scope:
+
+- Add explicit endpoints:
+  - `PUT /keep/requests/{requestId}/responsible`
+  - `DELETE /keep/requests/{requestId}/responsible`
+  - `PUT /keep/requests/{requestId}/watchers/{accountUserId}`
+  - `DELETE /keep/requests/{requestId}/watchers/{accountUserId}`
+  - `PUT /keep/requests/{requestId}/watch`
+  - `DELETE /keep/requests/{requestId}/watch`
+  - `PUT /keep/requests/{requestId}/mute`
+  - `DELETE /keep/requests/{requestId}/mute`
+- Add request bodies:
+  - responsible `PUT`: `{ "accountUserId": "...", "note": "optional internal note" }`
+  - responsible `DELETE`: optional `{ "note": "optional internal note" }` for Owner/Admin managed
+    clearing
+  - watcher add/remove routes: optional `{ "note": "optional internal note" }` for Owner/Admin
+    managed watcher changes
+  - self watch/unwatch/mute/unmute routes: no note body in Session 3
+- Add or reuse compact candidate lookup:
+  - preferred: `GET /keep/requests/participant-candidates`
+  - returns `accountUserId`, `displayName`, `role`
+  - returns Active Owner/Admin/Operator only
+  - excludes Viewer, Invited, Suspended, Removed, other accounts, private contact details, and
+    notification preferences.
+- Authorization:
+  - Owner/Admin can assign, transfer, clear, add/remove watchers.
+  - Operators can self-assign only unassigned/effectively unassigned requests they can already
+    access through an allowed surface.
+  - Operators can self-watch/self-unwatch visible non-terminal requests.
+  - Operators can self-mute/self-unmute only when actively Responsible or Watching.
+  - Operators cannot clear themselves as Responsible.
+  - Viewer cannot mutate participation.
+- Validate eligible target users on every write.
+- Apply OffSeason/read-only write blocking consistently with ADR-208/221.
+- Return updated `KeepRequestDetailResult` from all write endpoints.
+
+Out of scope:
+
+- Push/email/in-app notification delivery.
+- Notification delivery/outbox table.
+- Operator Unassigned/Available queue or filters.
+- List-level clear responsible.
+- Owner/Admin delegated mute/unmute for other users.
+
+Required tests:
+
+- Endpoint auth required.
+- Owner/Admin assignment, transfer, clear, add watcher, remove watcher.
+- Owner/Admin list-compatible assignment uses same responsible endpoint.
+- Operator self-assign allowed only for unassigned/effectively unassigned accessible request.
+- Operator cannot assign others, transfer, clear self, or clear others.
+- Operator self-watch/unwatch visible non-terminal request.
+- Responsible user cannot unwatch out of responsibility.
+- Mute/unmute requires active current-user participation.
+- Viewer cannot mutate.
+- Ineligible users cannot be assigned/watched.
+- OffSeason blocks all participation writes.
+- Terminal requests reject participation writes.
+- Candidate lookup returns only eligible users and no private contact details.
+- Idempotent no-ops return detail and do not duplicate timeline/intent.
+
+Completion gate:
+
+```text
+targeted API/application tests pass
+candidate lookup tests pass
+docs/session-log updated with files/tests
+```
+
+---
+
+## Session 3C — Participation Read Models, Timeline, and List Assignment Metadata
+
+**Goal:** Make request detail/list surfaces truthful after participation writes without adding extra
+list controls.
+
+Decision/deferred refs:
+
+```text
+ADR-222..235
+DEF-012, DEF-033
+docs/build-log/040-phase-8-b5-session-3-assignment-watch-mute-decisions.md
+```
+
+Scope:
+
+- Update request detail result to expose:
+  - current responsible user
+  - watchers
+  - current-user participation
+  - current-user notification enabled/muted state
+  - stale responsible indicator for Owner/Admin
+  - participation action availability if consistent with existing detail action metadata style.
+- Update detail timeline DTO to render internal `ParticipationChanged` metadata.
+- Ensure participation events remain internal-only and are excluded from customer-page timelines.
+- Update default list read model to show responsible person name.
+- Keep list watcher display compact:
+  - retain B5 compact metadata if present;
+  - do not add full watcher lists to rows.
+- Add Owner/Admin list assignment metadata if needed by the frontend:
+  - list can show assign/transfer affordance for Owner/Admin only;
+  - no list-level clear responsible;
+  - no list-level watch/unwatch/mute/unmute.
+- Represent stale/ineligible Responsible:
+  - Owner/Admin can see stored responsible name plus stale/ineligible state;
+  - stale Responsible does not count as effective routing or notification eligibility.
+
+Out of scope:
+
+- Frontend implementation unless explicitly requested.
+- List-level clear responsible.
+- Full watcher lists in default rows.
+- Operator Unassigned/Available queue.
+- List SSE/realtime refresh.
+- Customer-visible participation events.
+
+Required tests:
+
+- Detail shows updated responsible, watchers, current-user notification state.
+- Detail shows stale responsible indicator for Owner/Admin.
+- List shows responsible person name.
+- List stays read-only for Operators and does not expose participation write actions.
+- Owner/Admin list metadata allows assignment/transfer only where eligible.
+- Customer page excludes participation events.
+- Participation writes do not update customer/business activity, attention, first response, status, or
+  ranking except through participation metadata.
+
+Completion gate:
+
+```text
+targeted read-model/timeline tests pass
+request-list tests remain green
+customer-page boundary tests remain green
+docs/session-log updated with files/tests
+```
+
+---
+
+## Session 3D — Assignment/Watch/Mute Completion Gate
+
+**Goal:** Verify cross-slice behavior, update docs, and close the Session 3 handoff.
+
+Decision/deferred refs:
+
+```text
+ADR-222..235
+DEF-012, DEF-033
+docs/build-log/040-phase-8-b5-session-3-assignment-watch-mute-decisions.md
+```
+
+Scope:
+
+- Run full participation semantic matrix across domain, API, detail, list, and customer-page
+  boundaries.
+- Verify no deferred work was pulled in:
+  - no notification delivery/outbox/device-token work;
+  - no quiet hours/global preferences;
+  - no Operator Unassigned/Available queue;
+  - no list-level clear/watch/mute controls;
+  - no customer-visible participation timeline;
+  - no automatic stale-participant cleanup.
+- Verify OffSeason/read-only write blocking.
+- Verify migration/model snapshot and full suite if feasible.
+- Update:
+  - `docs/session-log.md`
+  - `docs/deferred-topics.md`
+  - `docs/decisions/decision-index.md`
+
+Required tests:
+
+- Full targeted Session 3 test set passes.
+- Existing request-list suite remains green.
+- Existing request-detail/customer-page tests remain green.
+- Full suite passes if feasible.
+
+Completion gate:
+
+```text
+all targeted tests pass
+full suite pass if feasible
+decision index/deferred topics/session log updated
+```
 
 ---
 

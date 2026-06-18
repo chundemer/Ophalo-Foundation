@@ -78,6 +78,27 @@ internal sealed class KeepRequestEventConfiguration : BaseEntityConfiguration<Ke
             .IsRequired()
             .HasDefaultValue(false);
 
+        // Participation fields — present on ParticipationChanged events only (ADR-234).
+        builder.Property(x => x.ParticipationAction)
+            .HasConversion<string>()
+            .HasMaxLength(50);
+
+        builder.Property(x => x.ParticipationTargetAccountUserId);
+
+        builder.Property(x => x.ParticipationTargetDisplayName)
+            .HasMaxLength(200);
+
+        builder.Property(x => x.ParticipationPreviousResponsibleAccountUserId);
+
+        builder.Property(x => x.ParticipationInternalNote)
+            .HasMaxLength(4000);
+
+        builder.Property(x => x.ParticipationNotificationIntentKind)
+            .HasConversion<string>()
+            .HasMaxLength(50);
+
+        builder.Property(x => x.ParticipationNotificationIntendedRecipientAccountUserId);
+
         builder.HasIndex(x => x.RequestId)
             .HasDatabaseName("ix_keep_request_events_request_id");
 

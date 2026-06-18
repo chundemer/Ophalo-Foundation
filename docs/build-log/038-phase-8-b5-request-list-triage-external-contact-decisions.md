@@ -2,10 +2,10 @@
 
 **Phase:** 8-B5 discovery / pre-implementation gate
 **Date:** 2026-06-17
-**Status:** B5 Session 1 complete. Session 2 external-contact discovery ready for final implementation handoff review.
+**Status:** B5 Session 1 complete. Session 2 external-contact decisions locked/implemented in bounded sessions. Session 3 assignment/watch/mute decisions continue in `040-phase-8-b5-session-3-assignment-watch-mute-decisions.md`.
 **Build log preceding this:** `037-phase-8-b4-service-request-detail-enrichment-implementation.md`
 **ADRs locked:** 164..218
-**Next free ADR:** ADR-219
+**Next free ADR after this log:** ADR-219 (current global next free ADR is tracked in `docs/decisions/decision-index.md`)
 
 ---
 
