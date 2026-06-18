@@ -68,7 +68,10 @@ public sealed record KeepRequestParticipationInfo(
     bool HasResponsible,
     bool IsUnassigned,
     string CurrentUserParticipationType,
-    bool? CurrentUserNotificationsEnabled);
+    bool? CurrentUserNotificationsEnabled,
+    string? ResponsibleDisplayName,
+    bool? ResponsibleIsStale,
+    bool CanAssignFromList);
 
 public sealed record KeepRequestNotificationInfo(
     bool Eligible,

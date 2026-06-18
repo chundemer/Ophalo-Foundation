@@ -81,7 +81,7 @@ public sealed class GetKeepRequestListService(
         {
             var requestIds = requests.Select(r => r.Id).ToList();
             participantSummaries = await persistence.GetParticipantSummariesAsync(
-                requestIds, userSnapshot.AccountUserId, ct);
+                requestIds, userSnapshot.AccountUserId, currentUser.AccountId, ct);
         }
         else
         {
@@ -89,7 +89,7 @@ public sealed class GetKeepRequestListService(
         }
 
         var summaries = requests
-            .Select(r => ToSummary(r, canOperate, isOffSeason, nowUtc,
+            .Select(r => ToSummary(r, canOperate, isOwnerOrAdmin, isOffSeason, nowUtc,
                 participantSummaries.GetValueOrDefault(r.Id)))
             .Order(RequestListComparer.Instance)
             .ToList();
@@ -100,6 +100,7 @@ public sealed class GetKeepRequestListService(
     private static KeepRequestSummary ToSummary(
         KeepRequest r,
         bool canOperate,
+        bool isOwnerOrAdmin,
         bool isOffSeason,
         DateTime nowUtc,
         KeepRequestParticipantSummary? participation)
@@ -170,7 +171,8 @@ public sealed class GetKeepRequestListService(
         var contactActions = BuildContactActions(r, canOperate, isPostClose);
         var actions = new KeepRequestActionsInfo(quickActions, contactActions);
 
-        var participationInfo = BuildParticipationInfo(participation);
+        var canAssignFromList = isOwnerOrAdmin && canOperate && !isOffSeason && !r.IsTerminal;
+        var participationInfo = BuildParticipationInfo(participation, canAssignFromList);
         var notificationInfo = BuildNotificationInfo(canOperate, isOffSeason, participation);
 
         return new KeepRequestSummary(
@@ -322,10 +324,12 @@ public sealed class GetKeepRequestListService(
     }
 
     private static KeepRequestParticipationInfo BuildParticipationInfo(
-        KeepRequestParticipantSummary? participation)
+        KeepRequestParticipantSummary? participation,
+        bool canAssignFromList)
     {
         if (participation is null)
-            return new KeepRequestParticipationInfo(0, 0, false, true, "none", null);
+            return new KeepRequestParticipationInfo(
+                0, 0, false, true, "none", null, null, null, canAssignFromList);
 
         var participationType = participation.CurrentUserParticipationType switch
         {
@@ -334,13 +338,18 @@ public sealed class GetKeepRequestListService(
             _ => "none"
         };
 
+        // ResponsibleCount is the effective eligible count (ADR-226):
+        // HasResponsible and IsUnassigned follow from it directly.
         return new KeepRequestParticipationInfo(
             ResponsibleCount: participation.ResponsibleCount,
             WatchingCount: participation.WatchingCount,
             HasResponsible: participation.ResponsibleCount > 0,
             IsUnassigned: participation.ResponsibleCount == 0,
             CurrentUserParticipationType: participationType,
-            CurrentUserNotificationsEnabled: participation.CurrentUserNotificationsEnabled);
+            CurrentUserNotificationsEnabled: participation.CurrentUserNotificationsEnabled,
+            ResponsibleDisplayName: participation.ResponsibleDisplayName,
+            ResponsibleIsStale: participation.ResponsibleIsStale,
+            CanAssignFromList: canAssignFromList);
     }
 
     private static KeepRequestNotificationInfo BuildNotificationInfo(

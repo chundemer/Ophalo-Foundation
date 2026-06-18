@@ -163,8 +163,6 @@ public sealed class ManageWatcherService(
         return Result<(AccountUserSnapshot, string)>.Success((userSnapshot, actorDisplayName));
     }
 
-    // 3B: builds standard operator detail without participation action metadata.
-    // Session 3C adds participation flags (CanWatch, CanAddWatcher, etc.) to AvailableActionsMetadata.
     private async Task<KeepRequestDetailResult> BuildDetailAsync(
         OpHalo.Keep.Core.Entities.KeepRequest request,
         AccountUserRole role,
@@ -174,19 +172,28 @@ public sealed class ManageWatcherService(
         var participants = await readPersistence.GetParticipantsAsync(request.Id, ct);
         var businessName = await readPersistence.GetAccountBusinessNameAsync(currentUser.AccountId, ct);
 
+        var isOwnerOrAdmin = role is AccountUserRole.Owner or AccountUserRole.Admin;
+        var currentUserRow = participants.FirstOrDefault(
+            p => p.AccountUserId == currentUser.UserId && p.DetachedAtUtc is null);
+
         var availableActions = new AvailableActionsMetadata(
             CanChangeStatus:         !request.IsTerminal,
             CanSendBusinessUpdate:   !request.IsTerminal,
             CanAddInternalNote:      true,
             CanAcknowledgeAttention: KeepRequestDetailMapper.CanAcknowledgeAttention(true, request),
             CanLogExternalContact:   !request.IsTerminal,
+            CanAssignResponsible:    isOwnerOrAdmin && !request.IsTerminal,
+            CanWatch:                !request.IsTerminal && currentUserRow is null,
+            CanUnwatch:              !request.IsTerminal && currentUserRow?.ParticipationType == ParticipationType.Watching,
+            CanMute:                 !request.IsTerminal && currentUserRow is not null && currentUserRow.NotificationsEnabled,
+            CanUnmute:               !request.IsTerminal && currentUserRow is not null && !currentUserRow.NotificationsEnabled,
             AllowedStatuses:         !request.IsTerminal
                 ? KeepRequestDetailMapper.ComputeAllowedStatuses(request.Status)
                 : []);
 
         return KeepRequestDetailMapper.ToDetailResult(
             request, businessName ?? string.Empty, participants, events,
-            availableActions, role, canOperate: true);
+            availableActions, role, canOperate: true, currentUser.UserId);
     }
 
     private static bool IsEligible(ParticipantTargetInfo info) =>

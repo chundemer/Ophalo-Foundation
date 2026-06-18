@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using OpHalo.Foundation.Core.Entities.Accounts.Enums;
 using OpHalo.Foundation.Infrastructure.Persistence;
 using OpHalo.Keep.Application.Abstractions;
 using OpHalo.Keep.Application.Requests;
@@ -62,12 +63,42 @@ public sealed class KeepRequestListPersistence(OpHaloDbContext dbContext) : IKee
             .ToListAsync(ct);
 
     public async Task<Dictionary<Guid, KeepRequestParticipantSummary>> GetParticipantSummariesAsync(
-        IReadOnlyList<Guid> requestIds, Guid currentAccountUserId, CancellationToken ct)
+        IReadOnlyList<Guid> requestIds, Guid currentAccountUserId, Guid accountId, CancellationToken ct)
     {
         var rows = await dbContext.Set<KeepRequestParticipant>()
             .AsNoTracking()
             .Where(p => requestIds.Contains(p.RequestId) && p.DetachedAtUtc == null)
             .ToListAsync(ct);
+
+        // Fetch display name + eligibility for all active responsible users, account-scoped.
+        var responsibleUserIds = rows
+            .Where(p => p.ParticipationType == ParticipationType.Responsible)
+            .Select(p => p.AccountUserId)
+            .ToHashSet();
+
+        Dictionary<Guid, (string DisplayName, bool IsEligible)> responsibleUserInfo = [];
+        if (responsibleUserIds.Count > 0)
+        {
+            var accountUsers = await dbContext.AccountUsers
+                .AsNoTracking()
+                .Where(au => responsibleUserIds.Contains(au.Id) && au.AccountId == accountId)
+                .Select(au => new {
+                    au.Id,
+                    au.Email,
+                    au.Role,
+                    au.MembershipStatus,
+                    UserName = au.UserId != null ? au.User!.Name : null
+                })
+                .ToListAsync(ct);
+
+            responsibleUserInfo = accountUsers.ToDictionary(
+                au => au.Id,
+                au => (
+                    DisplayName: !string.IsNullOrWhiteSpace(au.UserName) ? au.UserName : au.Email,
+                    IsEligible: au.MembershipStatus == MembershipStatus.Active
+                        && au.Role is AccountUserRole.Owner or AccountUserRole.Admin or AccountUserRole.Operator
+                ));
+        }
 
         return rows
             .GroupBy(p => p.RequestId)
@@ -75,13 +106,42 @@ public sealed class KeepRequestListPersistence(OpHaloDbContext dbContext) : IKee
                 g => g.Key,
                 g =>
                 {
-                    var responsibleCount = g.Count(p => p.ParticipationType == ParticipationType.Responsible);
-                    var watchingCount = g.Count(p => p.ParticipationType == ParticipationType.Watching);
-                    var currentUserRow = g.FirstOrDefault(p => p.AccountUserId == currentAccountUserId);
+                    var responsibleRows = g.Where(p => p.ParticipationType == ParticipationType.Responsible).ToList();
+                    var watchingCount   = g.Count(p => p.ParticipationType == ParticipationType.Watching);
+                    var currentUserRow  = g.FirstOrDefault(p => p.AccountUserId == currentAccountUserId);
+
+                    // Multiple active Responsible rows = data integrity violation — treat as stale.
+                    // ResponsibleCount is the effective eligible count; stale/corrupt → 0.
+                    // ResponsibleIsStale signals a stored row exists but is not routing-effective.
+                    var hasSingleStored = responsibleRows.Count == 1;
+                    var responsibleRow  = hasSingleStored ? responsibleRows[0] : null;
+
+                    string? responsibleDisplayName = null;
+                    bool responsibleIsStale        = responsibleRows.Count > 0;  // true until proven eligible
+                    int effectiveResponsibleCount  = 0;
+
+                    if (responsibleRow is not null)
+                    {
+                        if (responsibleUserInfo.TryGetValue(responsibleRow.AccountUserId, out var info))
+                        {
+                            responsibleDisplayName = info.DisplayName;
+                            if (info.IsEligible)
+                            {
+                                responsibleIsStale = false;
+                                effectiveResponsibleCount = 1;
+                            }
+                            // else: ineligible user → remains stale, count stays 0
+                        }
+                        // else: AccountUser missing entirely → stale, count stays 0
+                    }
+
                     return new KeepRequestParticipantSummary(
-                        responsibleCount, watchingCount,
-                        currentUserRow?.ParticipationType,
-                        currentUserRow?.NotificationsEnabled);
+                        ResponsibleCount: effectiveResponsibleCount,
+                        WatchingCount: watchingCount,
+                        CurrentUserParticipationType: currentUserRow?.ParticipationType,
+                        CurrentUserNotificationsEnabled: currentUserRow?.NotificationsEnabled,
+                        ResponsibleDisplayName: responsibleDisplayName,
+                        ResponsibleIsStale: responsibleIsStale);
                 });
     }
 }

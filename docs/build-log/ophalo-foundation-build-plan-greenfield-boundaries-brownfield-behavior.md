@@ -600,6 +600,21 @@ Rules:
 - Do not notify the actor who caused the event.
 - Only users who can view a request may subscribe/watch/mute that request.
 
+Needs discussion before web/mobile UI build:
+
+- Tiny-team accounts may not need visible assignment/watch/mute controls.
+- Preserve the backend participation/routing foundation, but consider a simplified product surface:
+  - 1 active user: hide team-routing controls; everything is implicitly mine/all.
+  - 2 active users: consider simplified Mine/All or Assigned-to controls.
+  - 3+ active users: expose fuller assignment/watch/mute/unassigned surfaces.
+- Decide whether this is automatic by active-user count, configurable as Simple Mode vs Team Mode,
+  or both.
+- Do not silently expand Operator visibility or bypass assigned/watched/unassigned routing rules as
+  a UI simplification; that would affect permissions, notification routing, counts, self-assign
+  eligibility, and future mobile push, and needs its own ADR.
+- Address after Session 4/5+ when web/mobile product surfaces are being shaped.
+- Track as `DEF-052`.
+
 ---
 
 ### 4.15 Mobile-Ready Device and Activity Model

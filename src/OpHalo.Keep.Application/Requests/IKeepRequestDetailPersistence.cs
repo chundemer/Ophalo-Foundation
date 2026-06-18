@@ -58,6 +58,7 @@ public interface IKeepRequestDetailPersistence
 /// <summary>
 /// Participant data joined with AccountUser for operator display.
 /// DisplayName = nonblank User.Name (when linked) else AccountUser.Email.
+/// MembershipStatus is used to detect stale/ineligible participants.
 /// </summary>
 public sealed record KeepParticipantProjection(
     Guid AccountUserId,
@@ -66,7 +67,8 @@ public sealed record KeepParticipantProjection(
     DateTime AttachedAtUtc,
     DateTime? DetachedAtUtc,
     string DisplayName,
-    AccountUserRole Role);
+    AccountUserRole Role,
+    MembershipStatus MembershipStatus);
 
 /// <summary>
 /// The minimal data the customer page service needs to resolve a request by page token.

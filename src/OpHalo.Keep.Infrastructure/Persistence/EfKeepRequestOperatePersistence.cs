@@ -49,12 +49,17 @@ public sealed class EfKeepRequestOperatePersistence(OpHaloDbContext dbContext) :
             entitlements.PastDueGraceEndsAtUtc);
     }
 
-    public async Task<string?> GetActorDisplayNameAsync(Guid accountUserId, CancellationToken ct) =>
-        await dbContext.AccountUsers
+    public async Task<string?> GetActorDisplayNameAsync(Guid accountUserId, CancellationToken ct)
+    {
+        var row = await dbContext.AccountUsers
             .AsNoTracking()
             .Where(u => u.Id == accountUserId)
-            .Select(u => u.Email)
+            .Select(u => new { u.Email, UserName = u.UserId != null ? u.User!.Name : null })
             .FirstOrDefaultAsync(ct);
+
+        if (row is null) return null;
+        return !string.IsNullOrWhiteSpace(row.UserName) ? row.UserName.Trim() : row.Email.Trim();
+    }
 
     public Task<KeepResponsePolicy?> GetResponsePolicyAsync(Guid accountId, CancellationToken ct) =>
         dbContext.Set<KeepResponsePolicy>()

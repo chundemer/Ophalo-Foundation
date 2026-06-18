@@ -84,6 +84,7 @@ public sealed class EfKeepRequestDetailPersistence(OpHaloDbContext dbContext) : 
                 au.Id,
                 au.Email,
                 au.Role,
+                au.MembershipStatus,
                 UserName = au.UserId != null ? au.User!.Name : null
             })
             .ToListAsync(ct);
@@ -103,7 +104,8 @@ public sealed class EfKeepRequestDetailPersistence(OpHaloDbContext dbContext) : 
                 p.AttachedAtUtc,
                 p.DetachedAtUtc,
                 DisplayName: !string.IsNullOrWhiteSpace(au.UserName) ? au.UserName : au.Email,
-                Role: au.Role);
+                Role: au.Role,
+                MembershipStatus: au.MembershipStatus);
         }).ToList();
     }
 

@@ -37,6 +37,7 @@ public sealed record KeepRequestDetailResult(
     bool FeedbackCommentVisible,
     IReadOnlyList<ContactActionItem> ContactActions,
     IReadOnlyList<KeepRequestParticipantItem> Participants,
+    CurrentUserDetailParticipation CurrentUserParticipation,
     IReadOnlyList<KeepRequestEventItem> Events,
     AvailableActionsMetadata AvailableActions,
     ValidationHintsMetadata Validation);
@@ -51,6 +52,11 @@ public sealed record AvailableActionsMetadata(
     bool CanAddInternalNote,
     bool CanAcknowledgeAttention,
     bool CanLogExternalContact,
+    bool CanAssignResponsible,
+    bool CanWatch,
+    bool CanUnwatch,
+    bool CanMute,
+    bool CanUnmute,
     IReadOnlyList<string> AllowedStatuses);
 
 /// <summary>
@@ -67,12 +73,22 @@ public sealed record ValidationHintsMetadata(
 
 public sealed record ContactActionItem(string Type, bool Available, string Target);
 
+/// <summary>
+/// Convenience record exposing only the requesting user's participation state.
+/// ParticipationType is "responsible", "watching", or "none". NotificationsEnabled
+/// is null when the user is not participating.
+/// </summary>
+public sealed record CurrentUserDetailParticipation(
+    string ParticipationType,
+    bool? NotificationsEnabled);
+
 public sealed record KeepRequestParticipantItem(
     Guid AccountUserId,
     string DisplayName,
     string Role,
     string ParticipationType,
     bool NotificationsEnabled,
+    bool IsEligible,
     DateTime AttachedAtUtc,
     DateTime? DetachedAtUtc);
 
@@ -82,7 +98,8 @@ public sealed record KeepRequestParticipantItem(
 /// StatusAfter is non-null on StatusChanged events. MessageIntent and
 /// CommunicationChannel are non-null on combined StatusChanged+message and
 /// MessageAdded events (D4/D5). ExternalContact* fields are non-null only on
-/// ExternalContactLogged events (ADR-215).
+/// ExternalContactLogged events (ADR-215). Participation* fields are non-null
+/// only on ParticipationChanged events (ADR-234).
 /// </summary>
 public sealed record KeepRequestEventItem(
     Guid Id,
@@ -101,4 +118,9 @@ public sealed record KeepRequestEventItem(
     string? ExternalContactOutcome,
     bool? ExternalContactRequiresFollowUp,
     bool? ExternalContactSetFirstResponse,
-    bool? ExternalContactClearedAttention);
+    bool? ExternalContactClearedAttention,
+    string? ParticipationAction,
+    Guid? ParticipationTargetAccountUserId,
+    string? ParticipationTargetDisplayName,
+    Guid? ParticipationPreviousResponsibleAccountUserId,
+    string? ParticipationInternalNote);

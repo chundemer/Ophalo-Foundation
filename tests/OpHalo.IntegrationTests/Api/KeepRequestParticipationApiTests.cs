@@ -60,6 +60,16 @@ public sealed class KeepRequestParticipationApiTests : IClassFixture<KeepApiWebF
     private Guid _muteRequestId;
     private Guid _unmuteRequestId;
 
+    // Session 3C read-model requests
+    private Guid _3cCurrentUserPartRequestId;
+    private Guid _3cOwnerFlagsRequestId;
+    private Guid _3cWatchingRequestId;
+    private Guid _3cEventMetaRequestId;
+    private Guid _3cListRespRequestId;
+    private Guid _3cStaleRequestId;
+    private Guid _3cCustomerPageRequestId;
+    private string _3cCustomerPageToken = string.Empty;
+
     private string _ownerCookie    = string.Empty;
     private string _operatorCookie = string.Empty;
     private string _viewerCookie   = string.Empty;
@@ -209,6 +219,28 @@ public sealed class KeepRequestParticipationApiTests : IClassFixture<KeepApiWebF
             ParticipationType.Watching, notificationsEnabled: true, now);
         mutedParticipant.SetNotificationsEnabled(false);
         db.Set<KeepRequestParticipant>().Add(mutedParticipant);
+
+        await db.SaveChangesAsync();
+
+        // --- Session 3C seeds ---
+        _3cCurrentUserPartRequestId = await SeedRequestAsync(db, _accountId, customer.Id, "3C-CUP", "3c_cup_token", now);
+        _3cOwnerFlagsRequestId      = await SeedRequestAsync(db, _accountId, customer.Id, "3C-OWF", "3c_owf_token", now);
+        _3cWatchingRequestId        = await SeedRequestAsync(db, _accountId, customer.Id, "3C-WTC", "3c_wtc_token", now);
+        _3cEventMetaRequestId       = await SeedRequestAsync(db, _accountId, customer.Id, "3C-EVT", "3c_evt_token", now);
+        _3cListRespRequestId        = await SeedRequestAsync(db, _accountId, customer.Id, "3C-LST", "3c_lst_token", now);
+        _3cStaleRequestId           = await SeedRequestAsync(db, _accountId, customer.Id, "3C-STL", "3c_stl_token", now);
+        _3cCustomerPageRequestId    = await SeedRequestAsync(db, _accountId, customer.Id, "3C-CPG", "3c_cpg_token", now);
+        _3cCustomerPageToken        = "3c_cpg_token";
+
+        // Operator pre-seeded as Watching on _3cWatchingRequestId.
+        db.Set<KeepRequestParticipant>().Add(KeepRequestParticipant.Create(
+            _3cWatchingRequestId, _accountId, _operatorAccountUserId,
+            ParticipationType.Watching, notificationsEnabled: true, now));
+
+        // Stale Responsible: AccountUserId has no corresponding AccountUser → "missing AccountUser → stale".
+        db.Set<KeepRequestParticipant>().Add(KeepRequestParticipant.Create(
+            _3cStaleRequestId, _accountId, Guid.NewGuid(),
+            ParticipationType.Responsible, notificationsEnabled: true, now));
 
         await db.SaveChangesAsync();
 
@@ -653,6 +685,164 @@ public sealed class KeepRequestParticipationApiTests : IClassFixture<KeepApiWebF
 
         Assert.Equal(_operatorAccountUserId.ToString(), watcher.GetProperty("accountUserId").GetString());
         Assert.True(watcher.GetProperty("notificationsEnabled").GetBoolean());
+    }
+
+    // =========================================================================
+    // Session 3C — Read models: currentUserParticipation, availableActions flags,
+    // participants.isEligible, event metadata, list responsibleDisplayName, stale
+    // =========================================================================
+
+    [Fact]
+    public async Task Detail_CurrentUserParticipation_ShowsWatching_AfterSelfWatch()
+    {
+        var response = await AuthRequest(_operatorCookie).PutAsJsonAsync(
+            $"/keep/requests/{_3cCurrentUserPartRequestId}/watch", new { });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        var participation = body.GetProperty("currentUserParticipation");
+
+        Assert.Equal("watching", participation.GetProperty("participationType").GetString());
+        Assert.True(participation.GetProperty("notificationsEnabled").GetBoolean());
+    }
+
+    [Fact]
+    public async Task Detail_AvailableActions_Owner_NotParticipating_CanWatchAndAssign()
+    {
+        var response = await AuthRequest(_ownerCookie).GetAsync(
+            $"/keep/requests/{_3cOwnerFlagsRequestId}");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        var actions = body.GetProperty("availableActions");
+
+        Assert.True(actions.GetProperty("canAssignResponsible").GetBoolean());
+        Assert.True(actions.GetProperty("canWatch").GetBoolean());
+        Assert.False(actions.GetProperty("canUnwatch").GetBoolean());
+        Assert.False(actions.GetProperty("canMute").GetBoolean());
+        Assert.False(actions.GetProperty("canUnmute").GetBoolean());
+    }
+
+    [Fact]
+    public async Task Detail_AvailableActions_WatchingOperator_CanUnwatchAndMute_IsEligibleTrue()
+    {
+        // _3cWatchingRequestId has the Operator pre-seeded as Watching.
+        var response = await AuthRequest(_operatorCookie).GetAsync(
+            $"/keep/requests/{_3cWatchingRequestId}");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        var actions = body.GetProperty("availableActions");
+
+        Assert.False(actions.GetProperty("canWatch").GetBoolean());
+        Assert.True(actions.GetProperty("canUnwatch").GetBoolean());
+        Assert.True(actions.GetProperty("canMute").GetBoolean());
+        Assert.False(actions.GetProperty("canUnmute").GetBoolean());
+
+        // Active Operator participant is eligible.
+        var operatorParticipant = body.GetProperty("participants").EnumerateArray()
+            .Single(p => p.GetProperty("accountUserId").GetString() == _operatorAccountUserId.ToString());
+        Assert.True(operatorParticipant.GetProperty("isEligible").GetBoolean());
+    }
+
+    [Fact]
+    public async Task Detail_AvailableActions_TerminalRequest_AllParticipationFlagsFalse()
+    {
+        var response = await AuthRequest(_ownerCookie).GetAsync(
+            $"/keep/requests/{_terminalRequestId}");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        var actions = body.GetProperty("availableActions");
+
+        Assert.False(actions.GetProperty("canAssignResponsible").GetBoolean());
+        Assert.False(actions.GetProperty("canWatch").GetBoolean());
+        Assert.False(actions.GetProperty("canUnwatch").GetBoolean());
+        Assert.False(actions.GetProperty("canMute").GetBoolean());
+        Assert.False(actions.GetProperty("canUnmute").GetBoolean());
+    }
+
+    [Fact]
+    public async Task Detail_ParticipationEvent_HasMetadataFields_AfterSetResponsible()
+    {
+        var response = await AuthRequest(_ownerCookie).PutAsJsonAsync(
+            $"/keep/requests/{_3cEventMetaRequestId}/responsible",
+            new { accountUserId = _operatorAccountUserId });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        var participationEvent = body.GetProperty("events").EnumerateArray()
+            .Single(e => e.GetProperty("eventType").GetString() == "participation_changed");
+
+        Assert.Equal("responsible_assigned",
+            participationEvent.GetProperty("participationAction").GetString());
+        Assert.Equal(_operatorAccountUserId.ToString(),
+            participationEvent.GetProperty("participationTargetAccountUserId").GetString());
+        Assert.False(string.IsNullOrEmpty(
+            participationEvent.GetProperty("participationTargetDisplayName").GetString()));
+    }
+
+    [Fact]
+    public async Task List_AfterSetResponsible_ShowsResponsibleDisplayName()
+    {
+        var setResponse = await AuthRequest(_ownerCookie).PutAsJsonAsync(
+            $"/keep/requests/{_3cListRespRequestId}/responsible",
+            new { accountUserId = _operatorAccountUserId });
+        Assert.Equal(HttpStatusCode.OK, setResponse.StatusCode);
+
+        var listResponse = await AuthRequest(_ownerCookie).GetAsync("/keep/requests");
+        Assert.Equal(HttpStatusCode.OK, listResponse.StatusCode);
+
+        var body = await listResponse.Content.ReadFromJsonAsync<JsonElement>();
+        var request = body.GetProperty("requests").EnumerateArray()
+            .FirstOrDefault(r => r.GetProperty("id").GetString() == _3cListRespRequestId.ToString());
+
+        Assert.NotEqual(JsonValueKind.Undefined, request.ValueKind);
+        var displayName = request.GetProperty("participation")
+            .GetProperty("responsibleDisplayName").GetString();
+        Assert.False(string.IsNullOrEmpty(displayName));
+    }
+
+    [Fact]
+    public async Task List_StaleResponsible_IsUnassigned_ResponsibleIsStale()
+    {
+        var listResponse = await AuthRequest(_ownerCookie).GetAsync("/keep/requests");
+        Assert.Equal(HttpStatusCode.OK, listResponse.StatusCode);
+
+        var body = await listResponse.Content.ReadFromJsonAsync<JsonElement>();
+        var request = body.GetProperty("requests").EnumerateArray()
+            .FirstOrDefault(r => r.GetProperty("id").GetString() == _3cStaleRequestId.ToString());
+
+        Assert.NotEqual(JsonValueKind.Undefined, request.ValueKind);
+        var participation = request.GetProperty("participation");
+
+        Assert.False(participation.GetProperty("hasResponsible").GetBoolean());
+        Assert.True(participation.GetProperty("isUnassigned").GetBoolean());
+        Assert.True(participation.GetProperty("responsibleIsStale").GetBoolean());
+    }
+
+    [Fact]
+    public async Task CustomerPage_ExcludesParticipationChangedEvents()
+    {
+        // Create a participation event on the request.
+        var watchResponse = await AuthRequest(_operatorCookie).PutAsJsonAsync(
+            $"/keep/requests/{_3cCustomerPageRequestId}/watch", new { });
+        Assert.Equal(HttpStatusCode.OK, watchResponse.StatusCode);
+
+        // Fetch the customer page (no auth required).
+        var pageResponse = await _factory.CreateClient()
+            .GetAsync($"/keep/r/{_3cCustomerPageToken}");
+        Assert.Equal(HttpStatusCode.OK, pageResponse.StatusCode);
+
+        var body = await pageResponse.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.DoesNotContain(
+            body.GetProperty("events").EnumerateArray(),
+            e => e.GetProperty("eventType").GetString() == "participation_changed");
     }
 
     // =========================================================================

@@ -3,6 +3,7 @@ using OpHalo.Foundation.Application.Accounts.Access;
 using OpHalo.Foundation.Application.Accounts.Authorization;
 using OpHalo.Foundation.Application.Accounts.Entitlements;
 using OpHalo.Foundation.Core.Entities.Accounts.Enums;
+using OpHalo.Keep.Core.Entities.Enums;
 using OpHalo.Keep.Core.Errors;
 using OpHalo.SharedKernel.Abstractions;
 using OpHalo.SharedKernel.Results;
@@ -80,19 +81,28 @@ public sealed class GetKeepRequestDetailService(
         var isOffSeason = accountSnapshot.OperatingMode == AccountOperatingMode.OffSeason;
         var canWrite = canOperate && !isOffSeason;
 
+        var isOwnerOrAdmin = userSnapshot.Role is AccountUserRole.Owner or AccountUserRole.Admin;
+        var currentUserRow = participants.FirstOrDefault(
+            p => p.AccountUserId == currentUser.UserId && p.DetachedAtUtc is null);
+
         var availableActions = new AvailableActionsMetadata(
-            CanChangeStatus: canWrite && !request.IsTerminal,
-            CanSendBusinessUpdate: canWrite && !request.IsTerminal,
-            CanAddInternalNote: canWrite,
+            CanChangeStatus:         canWrite && !request.IsTerminal,
+            CanSendBusinessUpdate:   canWrite && !request.IsTerminal,
+            CanAddInternalNote:      canWrite,
             CanAcknowledgeAttention: KeepRequestDetailMapper.CanAcknowledgeAttention(canWrite, request),
-            CanLogExternalContact: canWrite && !request.IsTerminal,
-            AllowedStatuses: canWrite && !request.IsTerminal
+            CanLogExternalContact:   canWrite && !request.IsTerminal,
+            CanAssignResponsible:    isOwnerOrAdmin && canWrite && !request.IsTerminal,
+            CanWatch:                canWrite && !request.IsTerminal && currentUserRow is null,
+            CanUnwatch:              canWrite && !request.IsTerminal && currentUserRow?.ParticipationType == ParticipationType.Watching,
+            CanMute:                 canWrite && !request.IsTerminal && currentUserRow is not null && currentUserRow.NotificationsEnabled,
+            CanUnmute:               canWrite && !request.IsTerminal && currentUserRow is not null && !currentUserRow.NotificationsEnabled,
+            AllowedStatuses:         canWrite && !request.IsTerminal
                 ? KeepRequestDetailMapper.ComputeAllowedStatuses(request.Status)
                 : []);
 
         return Result<KeepRequestDetailResult>.Success(
             KeepRequestDetailMapper.ToDetailResult(
                 request, businessName ?? string.Empty, participants, events, availableActions,
-                userSnapshot.Role, canOperate));
+                userSnapshot.Role, canOperate, currentUser.UserId));
     }
 }

@@ -513,7 +513,7 @@ public class KeepRequestListServiceTests
         }
 
         public Task<Dictionary<Guid, KeepRequestParticipantSummary>> GetParticipantSummariesAsync(
-            IReadOnlyList<Guid> requestIds, Guid currentAccountUserId, CancellationToken ct) =>
+            IReadOnlyList<Guid> requestIds, Guid currentAccountUserId, Guid accountId, CancellationToken ct) =>
             Task.FromResult(new Dictionary<Guid, KeepRequestParticipantSummary>());
     }
 

@@ -5,6 +5,59 @@
 
 ---
 
+## Phase 8-B5 Session 3C — Participation Read Models, Timeline, List Assignment Metadata — COMPLETE
+
+**Tests:** 698 (396 unit · 14 arch · 288 integration) — all green
+**Next free ADR:** ADR-261
+
+### What was built
+
+Session 3C completed the participation read-model surface:
+
+- **`AvailableActionsMetadata`** expanded to 4 participation flags: `CanWatch`, `CanUnwatch`, `CanMute`, `CanUnmute` — with precise semantics replacing the original 2-flag approach (ADR-237 refinement during session: `CanWatch` means "can start watching, not currently participating", `CanUnwatch/Mute/Unmute` are state-specific).
+- **`CurrentUserDetailParticipation`** record on `KeepRequestDetailResult` — `participationType` + `notificationsEnabled` for the requesting user.
+- **`participants[].isEligible`** derived from live membership in the mapper.
+- **`KeepRequestEventItem`** participation event metadata fields: `participationAction`, `participationTargetAccountUserId`, `participationTargetDisplayName`, `participationPreviousResponsibleAccountUserId`, `participationInternalNote`.
+- **`KeepRequestParticipationInfo`** on list summaries: `responsibleDisplayName`, `responsibleIsStale`, `canAssignFromList`.
+- **`GetActorDisplayNameAsync`** fixed to return `User.Name ?? Email` (with `.Trim()`), consistent with `GetParticipantTargetAsync` and `GetParticipantCandidatesAsync`.
+
+### Design decisions locked this session (refinements)
+
+- **`CanWatch`**: `!isTerminal && currentUserRow is null` — "can start watching", false if already participating as anything.
+- **`CanUnwatch`**: `!isTerminal && currentUserRow?.ParticipationType == Watching` — false for Responsible (DELETE /watch cannot clear responsibility).
+- **`CanMute`**: `!isTerminal && currentUserRow is not null && currentUserRow.NotificationsEnabled` — only when participating and currently unmuted.
+- **`CanUnmute`**: `!isTerminal && currentUserRow is not null && !currentUserRow.NotificationsEnabled` — only when participating and currently muted.
+- **`CanAssignResponsible`**: `isOwnerOrAdmin && canWrite && !isTerminal` (unchanged).
+- **`GetActorDisplayNameAsync` trim**: Returns `UserName.Trim()` or `Email.Trim()` for consistency.
+
+### Files changed
+
+| File | Change |
+|---|---|
+| `Keep.Application/Requests/KeepRequestDetailResult.cs` | `AvailableActionsMetadata` +`CanUnwatch`/`CanUnmute`; `CurrentUserDetailParticipation` record; `KeepRequestParticipantItem` +`IsEligible`; `KeepRequestEventItem` +5 participation fields |
+| `Keep.Application/Requests/IKeepRequestDetailPersistence.cs` | `KeepParticipantProjection` +`MembershipStatus` |
+| `Keep.Application/Requests/IKeepRequestListPersistence.cs` | `KeepRequestParticipantSummary` +`ResponsibleDisplayName`/`ResponsibleIsStale`; `GetParticipantSummariesAsync` +`accountId` param |
+| `Keep.Application/Requests/KeepRequestSummary.cs` | `KeepRequestParticipationInfo` +`ResponsibleDisplayName`/`ResponsibleIsStale`/`CanAssignFromList` |
+| `Keep.Application/Requests/KeepRequestDetailMapper.cs` | `ToDetailResult` +`currentUserId`; `MapParticipant` +`IsEligible`; `MapEvent` +participation fields; `MapParticipationAction` added |
+| `Keep.Application/Requests/GetKeepRequestDetailService.cs` | 4-flag AvailableActions; `canWrite` gates; `currentUser.UserId` to mapper |
+| `Keep.Application/Requests/AcknowledgeAttentionService.cs` | 4-flag AvailableActions; `currentUser.UserId` to mapper |
+| `Keep.Application/Requests/ManageResponsibleService.cs` | `BuildDetailAsync` 4-flag AvailableActions |
+| `Keep.Application/Requests/ManageWatcherService.cs` | `BuildDetailAsync` 4-flag AvailableActions |
+| `Keep.Application/Requests/SelfWatchService.cs` | `BuildDetailAsync` 4-flag AvailableActions |
+| `Keep.Application/Requests/MuteService.cs` | `BuildDetailAsync` 4-flag AvailableActions |
+| `Keep.Application/Requests/AddInternalNoteService.cs` | 4-flag AvailableActions; `currentUser.UserId` to mapper |
+| `Keep.Application/Requests/AddBusinessUpdateService.cs` | +using Enums; 4-flag AvailableActions; `currentUser.UserId` to mapper |
+| `Keep.Application/Requests/ChangeKeepRequestStatusService.cs` | +2 usings; 4-flag AvailableActions; `currentUser.UserId` to mapper |
+| `Keep.Application/Requests/LogExternalContactService.cs` | +using Enums; 4-flag AvailableActions; `currentUser.UserId` to mapper |
+| `Keep.Application/Requests/GetKeepRequestListService.cs` | `BuildParticipationInfo` +`responsibleDisplayName`/`responsibleIsStale`/`canAssignFromList`; passes `currentUser.AccountId` to persistence |
+| `Keep.Infrastructure/Persistence/EfKeepRequestDetailPersistence.cs` | Fetches `MembershipStatus` in participant query |
+| `Keep.Infrastructure/Persistence/EfKeepRequestOperatePersistence.cs` | `GetActorDisplayNameAsync` → `User.Name.Trim() ?? Email.Trim()` |
+| `Keep.Infrastructure/Persistence/KeepRequestListPersistence.cs` | `GetParticipantSummariesAsync` — account-scoped, effective count, stale logic |
+| `UnitTests/Keep/KeepRequestListServiceTests.cs` | `FakeRequestListPersistence.GetParticipantSummariesAsync` +`accountId` param |
+| `IntegrationTests/Api/KeepRequestParticipationApiTests.cs` | +8 integration tests covering 3C read-model assertions |
+
+---
+
 ## Phase 8-B5 Session 4 — Filters, Search, Closed History, Pagination — DECISIONS LOCKED
 
 **Status:** Decision gate complete. Ready for bounded implementation sessions.
@@ -63,12 +116,6 @@ Five application-layer services + 9 API endpoints + 29 integration tests coverin
 | `Api/Keep/ParticipationRequest.cs` | New — `SetResponsibleRequestBody`, `ClearResponsibleRequestBody`, `WatcherRequestBody` |
 | `Api/Program.cs` | Registered 5 services; added 9 endpoints; `[FromBody]` fix on 2 DELETE endpoints |
 | `IntegrationTests/Api/KeepRequestParticipationApiTests.cs` | New — 29 integration tests across all 5 services + candidates |
-
-### Carry-forward into 3C
-
-- `GetActorDisplayNameAsync` still returns email only (not `User.Name ?? Email`). Affects event actor display name snapshots. Note for 3C or targeted fix session.
-- `AvailableActionsMetadata` has no participation action flags yet (`CanAssignResponsible`, `CanWatch`, `CanMute`, etc.). Session 3C scope.
-- Detail response from write endpoints shows current participant list and `participation_changed` events, but participation event metadata fields (`action`, `targetAccountUserId`, etc.) are not yet exposed in `KeepRequestEventItem`. Session 3C scope.
 
 ---
 
@@ -248,7 +295,7 @@ Member management API + integration tests.
 - **Feedback `WasResolved` is `bool?` at API layer** — null signals missing flag, validated before service. Domain method takes `bool`.
 - **Always rebuild before running tests** — `dotnet test --no-build` can run stale assemblies that mask real failures.
 - **Next free ADR: ADR-261.**
-- **B4 mapper signature:** `ToDetailResult` now takes `AccountUserRole role` and `bool canOperate` — all callers updated; write services pass `canOperate: true`.
+- **B4 mapper signature:** `ToDetailResult` now takes `AccountUserRole role`, `bool canOperate`, `Guid currentUserId` — all callers updated; write services pass `canOperate: true`.
 - **Participant `DisplayName`** computed in persistence (two-query approach retained; User.Name projected in the AccountUsers query via EF navigation LEFT JOIN).
 - **`KeepRequestStatus.Scheduled = 7`** — added to `MapStatus` in B5 service rewrite.
 - **`FirstResponseDueAtUtc` gap** — fixed in B5. `KeepRequest.Create` now requires `firstResponseTargetMinutes` (required param, position 10). All call sites updated.
@@ -259,8 +306,8 @@ Member management API + integration tests.
 - **`ExternalContactInvalidDirection` added in 2B** — was omitted from the 2A error set despite being in ADR-207 scope.
 - **External contact `ExternalContactChannel` in DTO** — both `CommunicationChannel` and `ExternalContactChannel` on `KeepRequestEventItem`.
 - **Session 3B: Operator self-assign blocked** — DEF-045; any Operator `PUT /responsible` returns 403 `ParticipationOperatorCannotAssignOther`. Unblock when Unassigned/Available queue exists.
-- **Session 3B: `GetActorDisplayNameAsync` still returns email only** — does not use `User.Name ?? Email` convention. Note for 3C or targeted fix session. Does not block 3B.
-- **Session 3B: `AvailableActionsMetadata` lacks participation flags** — `CanAssignResponsible`, `CanWatch`, `CanMute` etc. are 3C scope.
-- **Session 3B: participation event metadata fields not in `KeepRequestEventItem`** — `action`, `targetAccountUserId`, `targetDisplayName` etc. are 3C scope.
+- **Session 3B: `GetActorDisplayNameAsync`** — fixed in 3C to use `User.Name.Trim() ?? Email.Trim()`, matching `GetParticipantTargetAsync` convention.
+- **Session 3C: 4-flag participation metadata** — `CanWatch` (not yet participating), `CanUnwatch` (currently watching), `CanMute` (participating + notifications on), `CanUnmute` (participating + notifications off). All 4 require `!IsTerminal`. `CanAssignResponsible` requires `isOwnerOrAdmin && canWrite && !IsTerminal`.
 - **Minimal API DELETE body** — nullable body parameters on `MapDelete` endpoints require `[FromBody]`; without it the app fails to start at route data source initialization. Fixed on `DELETE /responsible` and `DELETE /watchers/{id}`.
 - **`MapEventType` must be exhaustive** — `ParticipationChanged = 10` was missing; found during 3B testing. Pattern: every new `KeepRequestEventType` value must be added to `MapEventType` before integration tests run against any service that commits that event type.
+- **Session 3D** — cross-slice verification, docs update, and completion gate. Next session.

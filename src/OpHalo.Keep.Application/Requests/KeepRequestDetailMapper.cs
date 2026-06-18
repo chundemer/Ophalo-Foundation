@@ -27,9 +27,17 @@ internal static class KeepRequestDetailMapper
         IReadOnlyList<KeepRequestEvent> events,
         AvailableActionsMetadata availableActions,
         AccountUserRole role,
-        bool canOperate)
+        bool canOperate,
+        Guid currentUserId)
     {
         var feedbackCommentVisible = role is AccountUserRole.Owner or AccountUserRole.Admin;
+
+        var currentUserRow = participants.FirstOrDefault(
+            p => p.AccountUserId == currentUserId && p.DetachedAtUtc is null);
+        var currentUserParticipation = new CurrentUserDetailParticipation(
+            ParticipationType: currentUserRow is null ? "none" : MapParticipationType(currentUserRow.ParticipationType),
+            NotificationsEnabled: currentUserRow?.NotificationsEnabled);
+
         return new(
         RequestId: request.Id,
         ReferenceCode: request.ReferenceCode,
@@ -67,6 +75,7 @@ internal static class KeepRequestDetailMapper
         FeedbackCommentVisible: feedbackCommentVisible,
         ContactActions: BuildContactActions(canOperate, request.CustomerPhone, request.CustomerEmail),
         Participants: participants.Select(MapParticipant).ToList(),
+        CurrentUserParticipation: currentUserParticipation,
         Events: events.Select(MapEvent).ToList(),
         AvailableActions: availableActions,
         Validation: ValidationHints);
@@ -142,12 +151,15 @@ internal static class KeepRequestDetailMapper
         MapRole(p.Role),
         MapParticipationType(p.ParticipationType),
         p.NotificationsEnabled,
+        IsEligible: p.MembershipStatus == MembershipStatus.Active
+            && p.Role is AccountUserRole.Owner or AccountUserRole.Admin or AccountUserRole.Operator,
         p.AttachedAtUtc,
         p.DetachedAtUtc);
 
     private static KeepRequestEventItem MapEvent(KeepRequestEvent e)
     {
-        var isContact = e.EventType == KeepRequestEventType.ExternalContactLogged;
+        var isContact       = e.EventType == KeepRequestEventType.ExternalContactLogged;
+        var isParticipation = e.EventType == KeepRequestEventType.ParticipationChanged;
         return new(
             e.Id,
             MapEventType(e.EventType),
@@ -168,7 +180,13 @@ internal static class KeepRequestDetailMapper
                 ? MapExternalContactOutcome(e.ExternalContactOutcome.Value) : null,
             isContact ? e.ExternalContactRequiresFollowUp : null,
             isContact ? e.ExternalContactSetFirstResponse : null,
-            isContact ? e.ExternalContactClearedAttention : null);
+            isContact ? e.ExternalContactClearedAttention : null,
+            isParticipation && e.ParticipationAction.HasValue
+                ? MapParticipationAction(e.ParticipationAction.Value) : null,
+            isParticipation ? e.ParticipationTargetAccountUserId : null,
+            isParticipation ? e.ParticipationTargetDisplayName : null,
+            isParticipation ? e.ParticipationPreviousResponsibleAccountUserId : null,
+            isParticipation ? e.ParticipationInternalNote : null);
     }
 
     private static string MapOrigin(KeepRequestOrigin origin) => origin switch
@@ -297,5 +315,19 @@ internal static class KeepRequestDetailMapper
         CommunicationChannel.InPerson => "in_person",
         CommunicationChannel.Other    => "other",
         _ => throw new InvalidOperationException($"Unknown CommunicationChannel: {channel}")
+    };
+
+    private static string MapParticipationAction(ParticipationAction action) => action switch
+    {
+        ParticipationAction.ResponsibleAssigned   => "responsible_assigned",
+        ParticipationAction.ResponsibleTransferred => "responsible_transferred",
+        ParticipationAction.ResponsibleCleared    => "responsible_cleared",
+        ParticipationAction.WatcherAdded          => "watcher_added",
+        ParticipationAction.WatcherRemoved        => "watcher_removed",
+        ParticipationAction.SelfWatched           => "self_watched",
+        ParticipationAction.SelfUnwatched         => "self_unwatched",
+        ParticipationAction.Muted                 => "muted",
+        ParticipationAction.Unmuted               => "unmuted",
+        _ => throw new InvalidOperationException($"Unknown ParticipationAction: {action}")
     };
 }

@@ -2,6 +2,8 @@ using OpHalo.Foundation.Application.Abstractions.Security;
 using OpHalo.Foundation.Application.Accounts.Access;
 using OpHalo.Foundation.Application.Accounts.Authorization;
 using OpHalo.Foundation.Application.Accounts.Entitlements;
+using OpHalo.Foundation.Core.Entities.Accounts.Enums;
+using OpHalo.Keep.Core.Entities.Enums;
 using OpHalo.Keep.Core.Errors;
 using OpHalo.SharedKernel.Abstractions;
 using OpHalo.SharedKernel.Results;
@@ -103,19 +105,28 @@ public sealed class ChangeKeepRequestStatusService(
         var businessName = await readPersistence.GetAccountBusinessNameAsync(currentUser.AccountId, ct);
 
         // canOperate is confirmed true (passed the gate above).
+        var isOwnerOrAdmin = userSnapshot.Role is AccountUserRole.Owner or AccountUserRole.Admin;
+        var currentUserRow = participants.FirstOrDefault(
+            p => p.AccountUserId == currentUser.UserId && p.DetachedAtUtc is null);
+
         var availableActions = new AvailableActionsMetadata(
-            CanChangeStatus: !request.IsTerminal,
-            CanSendBusinessUpdate: !request.IsTerminal,
-            CanAddInternalNote: true,
+            CanChangeStatus:         !request.IsTerminal,
+            CanSendBusinessUpdate:   !request.IsTerminal,
+            CanAddInternalNote:      true,
             CanAcknowledgeAttention: KeepRequestDetailMapper.CanAcknowledgeAttention(true, request),
-            CanLogExternalContact: !request.IsTerminal,
-            AllowedStatuses: !request.IsTerminal
+            CanLogExternalContact:   !request.IsTerminal,
+            CanAssignResponsible:    isOwnerOrAdmin && !request.IsTerminal,
+            CanWatch:                !request.IsTerminal && currentUserRow is null,
+            CanUnwatch:              !request.IsTerminal && currentUserRow?.ParticipationType == ParticipationType.Watching,
+            CanMute:                 !request.IsTerminal && currentUserRow is not null && currentUserRow.NotificationsEnabled,
+            CanUnmute:               !request.IsTerminal && currentUserRow is not null && !currentUserRow.NotificationsEnabled,
+            AllowedStatuses:         !request.IsTerminal
                 ? KeepRequestDetailMapper.ComputeAllowedStatuses(request.Status)
                 : []);
 
         return Result<KeepRequestDetailResult>.Success(
             KeepRequestDetailMapper.ToDetailResult(
                 request, businessName ?? string.Empty, participants, events, availableActions,
-                userSnapshot.Role, canOperate: true));
+                userSnapshot.Role, canOperate: true, currentUser.UserId));
     }
 }

@@ -28,18 +28,23 @@ public interface IKeepRequestListPersistence
     /// <summary>
     /// Returns participant summaries keyed by request ID.
     /// Requests with no active participants are omitted; callers use GetValueOrDefault.
+    /// accountId is used to scope the AccountUser eligibility lookup against cross-account data corruption.
     /// </summary>
     Task<Dictionary<Guid, KeepRequestParticipantSummary>> GetParticipantSummariesAsync(
-        IReadOnlyList<Guid> requestIds, Guid currentAccountUserId, CancellationToken ct);
+        IReadOnlyList<Guid> requestIds, Guid currentAccountUserId, Guid accountId, CancellationToken ct);
 }
 
 /// <summary>
 /// Aggregated participant metadata for a single request. Reflects only active
 /// (non-detached) participants. CurrentUserParticipationType is null when the
-/// current account user has no active participant row.
+/// current account user has no active participant row. ResponsibleDisplayName is
+/// null when unassigned; ResponsibleIsStale is true when the responsible user is
+/// no longer Active Owner/Admin/Operator (ADR-226).
 /// </summary>
 public sealed record KeepRequestParticipantSummary(
     int ResponsibleCount,
     int WatchingCount,
     ParticipationType? CurrentUserParticipationType,
-    bool? CurrentUserNotificationsEnabled);
+    bool? CurrentUserNotificationsEnabled,
+    string? ResponsibleDisplayName,
+    bool ResponsibleIsStale);
