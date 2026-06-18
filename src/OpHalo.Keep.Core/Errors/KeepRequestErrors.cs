@@ -114,4 +114,17 @@ public static class KeepRequestErrors
 
     public static readonly Error ParticipationStateCorrupt =
         Error.Create("KeepRequest.ParticipationStateCorrupt", "Participant data is inconsistent and cannot be safely modified.");
+
+    // Application-layer participation authorization errors (ADR-223 / Session 3B).
+    public static readonly Error ParticipationTargetIneligible =
+        Error.Create("KeepRequest.ParticipationTargetIneligible", "The specified user is not an eligible participant. Only active Owner, Admin, and Operator members of this account may be assigned or watched.");
+
+    public static readonly Error ParticipationOperatorCannotAssignOther =
+        Error.Create("KeepRequest.ParticipationOperatorCannotAssignOther", "Operators may not assign responsibility to other users or self-assign. Only Owner or Admin may assign responsibility.");
+
+    public static readonly Error ParticipationOperatorCannotClear =
+        Error.Create("KeepRequest.ParticipationOperatorCannotClear", "Operators may not clear responsibility. Only Owner or Admin may clear a Responsible user.");
+
+    public static readonly Error ParticipationRequestAlreadyAssigned =
+        Error.Create("KeepRequest.ParticipationRequestAlreadyAssigned", "This request is already assigned to an active Responsible user.");
 }

@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using OpHalo.Foundation.Core.Entities.Accounts.Enums;
 using OpHalo.Foundation.Infrastructure.Persistence;
 using OpHalo.Keep.Application.Abstractions;
 using OpHalo.Keep.Application.Requests;
@@ -67,6 +68,73 @@ public sealed class EfKeepRequestOperatePersistence(OpHaloDbContext dbContext) :
 
     public async Task CommitAsync(KeepRequest request, KeepRequestEvent? newEvent, CancellationToken ct)
     {
+        if (newEvent is not null)
+            dbContext.Set<KeepRequestEvent>().Add(newEvent);
+
+        await dbContext.SaveChangesAsync(ct);
+    }
+
+    public Task<List<KeepRequestParticipant>> GetParticipantsForUpdateAsync(
+        Guid requestId, Guid accountId, CancellationToken ct) =>
+        dbContext.Set<KeepRequestParticipant>()
+            .Where(p => p.RequestId == requestId && p.AccountId == accountId)
+            .ToListAsync(ct);
+
+    public async Task<ParticipantTargetInfo?> GetParticipantTargetAsync(
+        Guid accountUserId, Guid accountId, CancellationToken ct)
+    {
+        var row = await dbContext.AccountUsers
+            .AsNoTracking()
+            .Where(au => au.Id == accountUserId && au.AccountId == accountId)
+            .Select(au => new {
+                au.Id,
+                au.Email,
+                au.Role,
+                au.MembershipStatus,
+                UserName = au.UserId != null ? au.User!.Name : null
+            })
+            .FirstOrDefaultAsync(ct);
+
+        if (row is null) return null;
+        var displayName = !string.IsNullOrWhiteSpace(row.UserName) ? row.UserName : row.Email;
+        return new ParticipantTargetInfo(row.Id, displayName, row.Role, row.MembershipStatus);
+    }
+
+    public async Task<IReadOnlyList<ParticipantCandidateRecord>> GetParticipantCandidatesAsync(
+        Guid accountId, CancellationToken ct)
+    {
+        var rows = await dbContext.AccountUsers
+            .AsNoTracking()
+            .Where(au => au.AccountId == accountId
+                && au.MembershipStatus == MembershipStatus.Active
+                && (au.Role == AccountUserRole.Owner
+                    || au.Role == AccountUserRole.Admin
+                    || au.Role == AccountUserRole.Operator))
+            .Select(au => new {
+                au.Id,
+                au.Email,
+                au.Role,
+                UserName = au.UserId != null ? au.User!.Name : null
+            })
+            .ToListAsync(ct);
+
+        return rows
+            .Select(au => new ParticipantCandidateRecord(
+                au.Id,
+                !string.IsNullOrWhiteSpace(au.UserName) ? au.UserName : au.Email,
+                au.Role))
+            .OrderBy(r => r.DisplayName)
+            .ToList();
+    }
+
+    public async Task CommitParticipationAsync(
+        IReadOnlyList<KeepRequestParticipant> newParticipants,
+        KeepRequestEvent? newEvent,
+        CancellationToken ct)
+    {
+        foreach (var p in newParticipants)
+            dbContext.Set<KeepRequestParticipant>().Add(p);
+
         if (newEvent is not null)
             dbContext.Set<KeepRequestEvent>().Add(newEvent);
 

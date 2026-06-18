@@ -214,7 +214,7 @@ internal static class KeepRequestDetailMapper
         _ => throw new InvalidOperationException($"Unknown PriorityBand: {band}")
     };
 
-    private static string MapRole(AccountUserRole role) => role switch
+    internal static string MapRole(AccountUserRole role) => role switch
     {
         AccountUserRole.Owner    => "owner",
         AccountUserRole.Admin    => "admin",
@@ -240,6 +240,7 @@ internal static class KeepRequestDetailMapper
         KeepRequestEventType.InternalNoteAdded     => "internal_note_added",
         KeepRequestEventType.AttentionAcknowledged => "attention_acknowledged",
         KeepRequestEventType.ExternalContactLogged => "external_contact_logged",
+        KeepRequestEventType.ParticipationChanged  => "participation_changed",
         _ => throw new InvalidOperationException($"Unknown KeepRequestEventType: {type}")
     };
 

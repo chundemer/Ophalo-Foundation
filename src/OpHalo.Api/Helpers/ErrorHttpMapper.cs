@@ -91,6 +91,17 @@ public static class ErrorHttpMapper
 
             var c when c == "KeepRequest.OffSeasonUnavailable" => (StatusCodes.Status409Conflict, "Conflict.", null),
 
+            // --- Participation write errors (ADR-222..235 / Session 3B) ---
+            var c when c == "KeepRequest.ParticipationTargetIneligible"           => (StatusCodes.Status422UnprocessableEntity, "Unprocessable entity.", null),
+            var c when c == "KeepRequest.ParticipationOperatorCannotAssignOther"  => (StatusCodes.Status403Forbidden, "Forbidden.", null),
+            var c when c == "KeepRequest.ParticipationOperatorCannotClear"        => (StatusCodes.Status403Forbidden, "Forbidden.", null),
+            var c when c == "KeepRequest.ParticipationRequestAlreadyAssigned"     => (StatusCodes.Status409Conflict, "Conflict.", null),
+            var c when c == "KeepRequest.ParticipationNoteTooLong"                => (StatusCodes.Status400BadRequest, "Bad request.", null),
+            var c when c == "KeepRequest.ParticipationMuteRequiresActiveParticipation" => (StatusCodes.Status409Conflict, "Conflict.", null),
+            var c when c == "KeepRequest.ParticipationCannotUnwatchResponsible"   => (StatusCodes.Status409Conflict, "Conflict.", null),
+            var c when c == "KeepRequest.ParticipationResponsibleCannotWatch"     => (StatusCodes.Status409Conflict, "Conflict.", null),
+            var c when c == "KeepRequest.ParticipationStateCorrupt"               => (StatusCodes.Status409Conflict, "Conflict.", null),
+
             // Explicit match — Invite.SeatLimitReached resolves to 409; no suffix pattern covers it.
             var c when c == "Invite.SeatLimitReached" => (StatusCodes.Status409Conflict, "Conflict.", null),
 

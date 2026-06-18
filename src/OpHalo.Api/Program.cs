@@ -26,6 +26,7 @@ using OpHalo.Foundation.Infrastructure.Services;
 using OpHalo.Keep.Application.PublicIntake;
 using OpHalo.Keep.Application.Requests;
 using OpHalo.Keep.Application.Services;
+using OpHalo.Keep.Core.Domain;
 using OpHalo.Keep.Core.Entities.Enums;
 using OpHalo.Keep.Core.Errors;
 using OpHalo.Keep.Infrastructure.Persistence;
@@ -82,6 +83,12 @@ builder.Services.AddScoped<AddBusinessUpdateService>();
 builder.Services.AddScoped<AddInternalNoteService>();
 builder.Services.AddScoped<AcknowledgeAttentionService>();
 builder.Services.AddScoped<LogExternalContactService>();
+builder.Services.AddScoped<ManageResponsibleService>();
+builder.Services.AddScoped<ManageWatcherService>();
+builder.Services.AddScoped<SelfWatchService>();
+builder.Services.AddScoped<MuteService>();
+builder.Services.AddScoped<GetParticipantCandidatesService>();
+builder.Services.AddScoped<KeepRequestParticipationService>();
 builder.Services.AddScoped<KeepPublicCustomerAccessGuard>();
 builder.Services.AddScoped<AddCustomerMessageService>();
 builder.Services.AddScoped<SubmitFeedbackService>();
@@ -279,6 +286,105 @@ app.MapPost("/keep/requests/{requestId:guid}/attention/acknowledge", async (
 {
     var command = new AcknowledgeAttentionCommand(requestId, body.Reason);
     var result = await service.ExecuteAsync(command, ct);
+    return result.IsSuccess ? Results.Ok(result.Value) : ErrorHttpMapper.ToHttpResult(result.Error);
+}).RequireAuthorization();
+
+// Participant candidates — authenticated, Owner/Admin read (Phase 8-B5/Session 3B, ADR-235)
+app.MapGet("/keep/requests/participant-candidates", async (
+    GetParticipantCandidatesService service,
+    CancellationToken ct) =>
+{
+    var result = await service.ExecuteAsync(ct);
+    return result.IsSuccess ? Results.Ok(result.Value) : ErrorHttpMapper.ToHttpResult(result.Error);
+}).RequireAuthorization();
+
+// Assign/transfer responsible — authenticated, Owner/Admin write (Phase 8-B5/Session 3B, ADR-230)
+app.MapPut("/keep/requests/{requestId:guid}/responsible", async (
+    Guid requestId,
+    SetResponsibleRequestBody body,
+    ManageResponsibleService service,
+    CancellationToken ct) =>
+{
+    var command = new SetResponsibleCommand(requestId, body.AccountUserId, body.Note);
+    var result = await service.SetAsync(command, ct);
+    return result.IsSuccess ? Results.Ok(result.Value) : ErrorHttpMapper.ToHttpResult(result.Error);
+}).RequireAuthorization();
+
+// Clear responsible — authenticated, Owner/Admin write (Phase 8-B5/Session 3B, ADR-230)
+app.MapDelete("/keep/requests/{requestId:guid}/responsible", async (
+    Guid requestId,
+    [FromBody] ClearResponsibleRequestBody? body,
+    ManageResponsibleService service,
+    CancellationToken ct) =>
+{
+    var command = new ClearResponsibleCommand(requestId, body?.Note);
+    var result = await service.ClearAsync(command, ct);
+    return result.IsSuccess ? Results.Ok(result.Value) : ErrorHttpMapper.ToHttpResult(result.Error);
+}).RequireAuthorization();
+
+// Add watcher (managed) — authenticated, Owner/Admin write (Phase 8-B5/Session 3B, ADR-230)
+app.MapPut("/keep/requests/{requestId:guid}/watchers/{accountUserId:guid}", async (
+    Guid requestId,
+    Guid accountUserId,
+    WatcherRequestBody? body,
+    ManageWatcherService service,
+    CancellationToken ct) =>
+{
+    var command = new AddWatcherCommand(requestId, accountUserId, body?.Note);
+    var result = await service.AddAsync(command, ct);
+    return result.IsSuccess ? Results.Ok(result.Value) : ErrorHttpMapper.ToHttpResult(result.Error);
+}).RequireAuthorization();
+
+// Remove watcher (managed) — authenticated, Owner/Admin write (Phase 8-B5/Session 3B, ADR-230)
+app.MapDelete("/keep/requests/{requestId:guid}/watchers/{accountUserId:guid}", async (
+    Guid requestId,
+    Guid accountUserId,
+    [FromBody] WatcherRequestBody? body,
+    ManageWatcherService service,
+    CancellationToken ct) =>
+{
+    var command = new RemoveWatcherCommand(requestId, accountUserId, body?.Note);
+    var result = await service.RemoveAsync(command, ct);
+    return result.IsSuccess ? Results.Ok(result.Value) : ErrorHttpMapper.ToHttpResult(result.Error);
+}).RequireAuthorization();
+
+// Self-watch — authenticated, operator write (Phase 8-B5/Session 3B, ADR-230)
+app.MapPut("/keep/requests/{requestId:guid}/watch", async (
+    Guid requestId,
+    SelfWatchService service,
+    CancellationToken ct) =>
+{
+    var result = await service.WatchAsync(requestId, ct);
+    return result.IsSuccess ? Results.Ok(result.Value) : ErrorHttpMapper.ToHttpResult(result.Error);
+}).RequireAuthorization();
+
+// Self-unwatch — authenticated, operator write (Phase 8-B5/Session 3B, ADR-230)
+app.MapDelete("/keep/requests/{requestId:guid}/watch", async (
+    Guid requestId,
+    SelfWatchService service,
+    CancellationToken ct) =>
+{
+    var result = await service.UnwatchAsync(requestId, ct);
+    return result.IsSuccess ? Results.Ok(result.Value) : ErrorHttpMapper.ToHttpResult(result.Error);
+}).RequireAuthorization();
+
+// Mute — authenticated, operator write (Phase 8-B5/Session 3B, ADR-230)
+app.MapPut("/keep/requests/{requestId:guid}/mute", async (
+    Guid requestId,
+    MuteService service,
+    CancellationToken ct) =>
+{
+    var result = await service.MuteAsync(requestId, ct);
+    return result.IsSuccess ? Results.Ok(result.Value) : ErrorHttpMapper.ToHttpResult(result.Error);
+}).RequireAuthorization();
+
+// Unmute — authenticated, operator write (Phase 8-B5/Session 3B, ADR-230)
+app.MapDelete("/keep/requests/{requestId:guid}/mute", async (
+    Guid requestId,
+    MuteService service,
+    CancellationToken ct) =>
+{
+    var result = await service.UnmuteAsync(requestId, ct);
     return result.IsSuccess ? Results.Ok(result.Value) : ErrorHttpMapper.ToHttpResult(result.Error);
 }).RequireAuthorization();
 

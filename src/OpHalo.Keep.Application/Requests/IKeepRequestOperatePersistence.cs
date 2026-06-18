@@ -1,3 +1,4 @@
+using OpHalo.Foundation.Core.Entities.Accounts.Enums;
 using OpHalo.Keep.Application.Abstractions;
 using OpHalo.Keep.Core.Entities;
 
@@ -42,4 +43,53 @@ public interface IKeepRequestOperatePersistence
     /// on the same DbContext instance.
     /// </summary>
     Task CommitAsync(KeepRequest request, KeepRequestEvent? newEvent, CancellationToken ct);
+
+    // --- Participation write support (Session 3B) ---
+
+    /// <summary>
+    /// Returns all participation rows for the request as tracked entities.
+    /// The persistence implementation saves changes to these rows when CommitParticipationAsync
+    /// is called on the same DbContext instance.
+    /// </summary>
+    Task<List<KeepRequestParticipant>> GetParticipantsForUpdateAsync(Guid requestId, Guid accountId, CancellationToken ct);
+
+    /// <summary>
+    /// Returns compact account-scoped info for a candidate participant, or null if the
+    /// AccountUser does not belong to the account or does not exist.
+    /// Used to validate target eligibility and obtain a display-name snapshot.
+    /// </summary>
+    Task<ParticipantTargetInfo?> GetParticipantTargetAsync(Guid accountUserId, Guid accountId, CancellationToken ct);
+
+    /// <summary>
+    /// Returns all Active Owner/Admin/Operator members of the account ordered by display name.
+    /// Used by the participant-candidates lookup endpoint (ADR-235).
+    /// </summary>
+    Task<IReadOnlyList<ParticipantCandidateRecord>> GetParticipantCandidatesAsync(Guid accountId, CancellationToken ct);
+
+    /// <summary>
+    /// Inserts newParticipants and newEvent (when non-null) and saves all tracked
+    /// participant-row changes (mutations by the domain service) in a single SaveChangesAsync.
+    /// Does not require a KeepRequest — participation writes do not modify request state.
+    /// </summary>
+    Task CommitParticipationAsync(
+        IReadOnlyList<KeepRequestParticipant> newParticipants,
+        KeepRequestEvent? newEvent,
+        CancellationToken ct);
 }
+
+/// <summary>
+/// Account-scoped target user info used to validate eligibility and snapshot display name.
+/// </summary>
+public sealed record ParticipantTargetInfo(
+    Guid AccountUserId,
+    string DisplayName,
+    AccountUserRole Role,
+    MembershipStatus MembershipStatus);
+
+/// <summary>
+/// Compact candidate record returned by GetParticipantCandidatesAsync.
+/// </summary>
+public sealed record ParticipantCandidateRecord(
+    Guid AccountUserId,
+    string DisplayName,
+    AccountUserRole Role);
