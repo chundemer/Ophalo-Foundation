@@ -2,7 +2,7 @@
 
 **Date:** 2026-06-18  
 **Status:** Proposed  
-**Source:** Product/mobile planning discussion, Phase 5A mobile-ready sessions, Phase 8/9 notification posture
+**Source:** Product/mobile planning discussion, Phase 5A mobile-ready sessions, Phase 8 notification posture, Keep V1 lock (ADR-288..292)
 
 ## Context
 
@@ -25,7 +25,8 @@ customer has a personal page and does not feel forgotten.
 ```
 
 PWA/web push is not reliable or consistent enough across all target environments to carry that
-promise by itself. Native mobile push via APNs/FCM belongs in the Phase 9 notification/device work.
+promise by itself. Basic native mobile push via APNs/FCM belongs in the V1 pre-go-live
+notification/device foundation. The heavier notification platform remains later.
 
 Existing backend decisions already prepare for mobile:
 
@@ -33,8 +34,10 @@ Existing backend decisions already prepare for mobile:
 - bearer token first for mobile clients;
 - `SessionClientType.MobileApp`;
 - optional device name and last-seen fields;
-- notification routing state is prepared in Keep but actual delivery, device tokens, retries, quiet
-  hours, badge counts, and outbox/work-engine integration are deferred to Phase 9.
+- notification routing state is prepared in Keep; V1 should add basic device-token registration,
+  minimal push/deep links, and server-derived badge counts;
+- retries, quiet hours, custom preferences, notification rows/outbox/dead-letter, delivery
+  analytics, and work-engine integration remain deferred to the fuller notification platform.
 
 ## Decision
 
@@ -67,12 +70,12 @@ the start.
 - Small local state store such as Zustand only where needed
 - Secure device storage for opaque session tokens
 - Native notification registration through `expo-notifications` or React Native Firebase, selected
-  during Phase 9 implementation after a small spike
+  during the V1 notification/device implementation after a small spike
 
 ## Recommended Backend Notification Shape
 
-Phase 9 should add a durable device/destination model, likely named `NotificationDestination` or
-similar, with fields such as:
+The V1 notification/device slice should add a small durable device model, likely named
+`AccountUserDevice`, `NotificationDestination`, or similar, with fields such as:
 
 - account id;
 - account user id;
@@ -82,7 +85,7 @@ similar, with fields such as:
 - enabled/revoked timestamps;
 - last success/failure timestamps;
 - last failure reason;
-- badge-count support fields if needed.
+- badge-count support fields only if derived counts need cached platform handoff state.
 
 Push payloads should be minimal:
 
@@ -113,8 +116,9 @@ Direct APNs/FCM delivery fits Keep's reliability and cost posture:
 - Push notifications are part of the core product promise, not optional polish.
 - Direct delivery avoids a later migration away from Expo Push Service if scale, privacy, or
   reliability requirements tighten.
-- The backend can own delivery attempts, retries, token invalidation, badge counts, quiet hours,
-  actor exclusion, mute/watch suppression, and notification audit.
+- The backend can own token invalidation, badge counts, actor exclusion, mute/watch suppression, and
+  notification routing. Retries, quiet hours, delivery analytics, and notification audit can deepen
+  later.
 - Native push has no Twilio-style per-message business cost, though it has engineering and platform
   account/setup cost.
 
@@ -152,12 +156,12 @@ to Expo-hosted push transport.
   direct APNs/FCM implementation?
 - Do we need separate app flavors for pilot/staging/production before the first TestFlight build?
 - Should the app be operator-only at first, or allow Owner/Admin fast triage too?
-- What badge-count semantics are most useful: total actionable requests, assigned-to-me count, or
-  urgent/overdue count?
-- Which notification types are in the first mobile slice: new request, assigned to me, customer
-  replied, attention overdue, unresolved feedback, or all of these?
-- Should notification delivery be backed by the Phase 4 work-engine/outbox model immediately, or a
-  narrower Phase 9 delivery table/job first?
+- What V1 badge-count semantics are most useful: total actionable requests, assigned-to-me count,
+  urgent/overdue count, or view-count backed badges?
+- Which notification types are in the first V1 mobile slice: new request, assigned to me, customer
+  replied, attention overdue, unresolved feedback, or a narrower launch set?
+- Should V1 use a simple fail-soft dispatcher first, with the Phase 4 work-engine/outbox model
+  deferred until notification volume/requirements justify it?
 
 ## Implementation Timing
 
@@ -167,6 +171,6 @@ Recommended timing:
 
 1. Finish B5 and post-B5 command-center/list/navigation basics.
 2. Build the minimal web Owner/Admin control center.
-3. During Phase 9, implement notification/device-token foundation.
+3. Before go-live, implement the V1 notification/device foundation: device table, derived badges,
+   minimal push/deep links, and fail-soft delivery.
 4. Build the narrow native operator/admin companion alongside direct APNs/FCM push delivery.
-

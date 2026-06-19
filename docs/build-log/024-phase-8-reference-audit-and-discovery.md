@@ -3,6 +3,10 @@
 **Status:** Complete. All D1–D10 decisions locked (ADR-084..093). B1-α implementation decisions locked in ADR-094..098.
 **Build-log preceding this:** 023-phase-5e-c-api-integration-tests.md
 **Date:** 2026-06-16
+**Current V1 lock:** Notification timing and realtime/list-streaming assumptions from this discovery log
+are superseded by `043-keep-v1-product-scope-and-freshness-lock.md` and ADR-288..292. Basic
+push/badges are V1 pre-go-live; SSE/WebSockets/list streaming are post-v1 unless pilot usage proves
+the freshness matrix insufficient.
 
 ---
 

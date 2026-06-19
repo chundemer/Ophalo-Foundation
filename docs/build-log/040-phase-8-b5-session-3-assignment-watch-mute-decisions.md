@@ -78,12 +78,13 @@ quiet hours
 global notification preferences
 Operator Unassigned/Available queue
 auto-assignment account settings
-list SSE/realtime refresh
+SSE/WebSockets/list streaming
 customer-visible receipts/recaps
 ```
 
 Reason: Session 3 should make routing writable without pulling in list-navigation or notification
-delivery work.
+delivery work. V1 freshness is handled later by refetch-after-write, focus/resume sync,
+pull-to-refresh, active polling, badges, and push/deep links rather than realtime streaming.
 
 ### ADR-223 — Responsible assignment permissions
 

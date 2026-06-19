@@ -2,8 +2,8 @@
 
 **Date:** 2026-06-17
 **Purpose:** Claude-ready implementation sessions after B5 decisions.
-**Decision source:** `038-phase-8-b5-request-list-triage-external-contact-decisions.md` · `040-phase-8-b5-session-3-assignment-watch-mute-decisions.md`
-**ADRs covered:** 164..235
+**Decision source:** `038-phase-8-b5-request-list-triage-external-contact-decisions.md` · `040-phase-8-b5-session-3-assignment-watch-mute-decisions.md` · `043-keep-v1-product-scope-and-freshness-lock.md`
+**ADRs covered:** 164..235, plus V1 carry-forward ADRs 288..292
 **Deferred tracker:** `docs/deferred-topics.md`
 
 ---
@@ -13,6 +13,29 @@
 Each session is intentionally bounded. Do not hand Claude "build B5 and everything after it" as one
 task. Finish and verify one session before starting the next. If a session discovers schema needs
 not described here, pause and update decisions before coding.
+
+Current V1 carry-forward lock:
+
+- basic native push/badges are pre-go-live scope, but full notification preferences/outbox/retries
+  are not;
+- V1 freshness is refetch/polling/focus-resume/push, not SSE/WebSockets;
+- native call/email/text launchers are affordances only; explicit external-contact logs create
+  durable audit/state effects;
+- ready-to-close, stale status check, and spam/test handling are pre-go-live accountability work.
+
+Implementation quality contract for every coding session:
+
+- read the current code first and follow existing service, persistence, mapper, error, DI, endpoint,
+  and test patterns;
+- write production-quality code that preserves locked ADR behavior and fail-closed security posture;
+- keep scope bounded to the named session and explicitly report any needed work that belongs in a
+  later session or deferred topic;
+- add focused unit/integration coverage for new contracts, validation, authorization, and regression
+  risk;
+- run the targeted tests required by the session and the broader suite when feasible;
+- self-review the diff before handoff for bugs, inconsistent naming, untested branches, accidental
+  visibility expansion, unnecessary schema churn, and deferred work accidentally pulled in;
+- report discovered bugs, gaps, decision conflicts, and carry-forward notes in `docs/session-log.md`.
 
 ---
 
@@ -686,7 +709,7 @@ Out of scope:
 - native mobile UI;
 - swipe actions / visual design implementation;
 - client-side state management;
-- list SSE/realtime count invalidation;
+- SSE/WebSockets/list streaming or realtime count invalidation;
 - exact arbitrary totals for search/history/filter queries;
 - broad Operator closed/cancelled history access;
 - Mark feedback reviewed;
@@ -727,30 +750,65 @@ Recommended implementation split:
 Decision/deferred refs:
 
 ```text
-ADR-165, ADR-186, ADR-187
-DEF-029, DEF-035
+ADR-165, ADR-186, ADR-187, ADR-261..286
+DEF-029, DEF-035, DEF-053, DEF-054, DEF-055
+docs/build-log/042-phase-8-b5-session-5-feedback-review-completion-decisions.md
 ```
 
 Scope:
 
-- Detail opens focused on feedback context.
-- Next/previous navigation within queue.
-- Mark feedback reviewed action.
-- Store reviewer/timestamp.
+- Keep feedback one-time and Closed-only for v1.
+- Add Owner/Admin `POST /keep/requests/{requestId}/feedback-review`.
+- Store reviewer/timestamp and optional internal note.
+- Create internal-only request history/timeline event.
+- Clear only current `UnresolvedFeedback` review attention.
+- Remove reviewed items from default post-close follow-up and `feedback_review`.
+- Preserve original feedback and review metadata in detail/history.
+- Add server-computed feedback review aging metadata.
+- Include Owner/Admin review context: customer contact context, responsible person, participant
+  involvement summary, and focused feedback context.
+- Block customer feedback submission and mark-reviewed writes in OffSeason/read-only.
+- Omit `feedback` from customer page `AllowedActions` in OffSeason/read-only.
+- Support context-based next/previous queue navigation and client "mark reviewed and next" without a
+  separate mutation endpoint.
 
 Rules:
 
+- Owner/Admin only.
 - does not reopen request;
 - does not delete feedback;
 - does not hide feedback from detail;
 - does not notify customer;
 - does not count as resolving the customer's issue;
 - clears from default Owner/Admin feedback-review surface.
+- single-shot; already reviewed returns conflict.
+- optional note capped at 2000 chars.
+- positive feedback is stored/history only and never enters the review queue.
 
 Out of scope:
 
+- active complaint/issue workflow changes;
 - customer-visible feedback replies/receipts;
-- analytics/reviews/CSAT.
+- analytics/reviews/CSAT;
+- notification delivery;
+- web/PWA UI;
+- native mobile UI;
+- reopen;
+- formal callback/rework linked requests;
+- bulk review;
+- customer-page-expired/no-feedback check-in reminders;
+- OffSeason activation checklist implementation.
+
+Recommended implementation split:
+
+```text
+5A — Domain, schema, persistence, and aging policy
+5B — Mark-feedback-reviewed service/API/detail contract
+5C — List/customer-page OffSeason and UI-ready metadata integration
+5D — Integration verification, docs, decision index, deferred tracker, self-review
+```
+
+Claude coding prompts are in `042-phase-8-b5-session-5-feedback-review-completion-decisions.md`.
 
 ---
 

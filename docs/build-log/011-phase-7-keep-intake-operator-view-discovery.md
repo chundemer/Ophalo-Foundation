@@ -4,6 +4,9 @@
 **Phase:** 7 - Keep Core Vertical Slice 1: intake to operator view
 **Target repo:** `/Users/christian/saas/ophalo-foundation`
 **Reference repo:** `/Users/christian/application/ophalo` (read-only)
+**Current V1 lock:** Later V1 scope decisions in
+`043-keep-v1-product-scope-and-freshness-lock.md` supersede this discovery log's early notification
+timing questions. Basic push/badges are V1 pre-go-live; the full notification platform remains later.
 
 ---
 

@@ -2,7 +2,7 @@
 
 **Phase:** 8-B5 discovery / pre-implementation gate
 **Date:** 2026-06-17
-**Status:** B5 Session 1 complete. Session 2 external-contact decisions locked/implemented in bounded sessions. Session 3 assignment/watch/mute decisions continue in `040-phase-8-b5-session-3-assignment-watch-mute-decisions.md`.
+**Status:** B5 Session 1 complete. Session 2 external-contact decisions locked/implemented in bounded sessions. Session 3 assignment/watch/mute decisions continue in `040-phase-8-b5-session-3-assignment-watch-mute-decisions.md`. Keep V1 scope/freshness is now locked in `043-keep-v1-product-scope-and-freshness-lock.md`.
 **Build log preceding this:** `037-phase-8-b4-service-request-detail-enrichment-implementation.md`
 **ADRs locked:** 164..218
 **Next free ADR after this log:** ADR-219 (current global next free ADR is tracked in `docs/decisions/decision-index.md`)
@@ -36,11 +36,13 @@ Rules:
 - detail remains the full-history workbench for careful action, internal notes, participant context,
   feedback detail, customer page link, and complex state changes;
 - B5 should not make notifications the primary destination yet;
-- notification delivery remains later, after list routing, assignment/watch, and external-contact
-  semantics are coherent.
+- B5 prepares the list/routing foundation that V1 notifications will target;
+- basic native push/badges are now V1 pre-go-live scope per build-log/043;
+- full notification preferences, quiet hours, retries/outbox, delivery analytics, and channel
+  matrices remain later.
 
-Reason: the list must become the place operators trust before push/email notifications send people
-there.
+Reason: the list must become the place operators trust before push notifications wake people up and
+deep-link them there.
 
 ### ADR-165 — Default list surfaces closed unresolved feedback for Owner/Admin only
 
@@ -290,11 +292,12 @@ filters
 search
 pagination
 closed history browsing
-SSE/list streaming
 archive/history workflows
 ```
 
 Reason: make the default list trustworthy first; then add ways to slice and navigate it.
+SSE/WebSockets/list streaming are not part of V1; the current V1 lock uses the freshness matrix in
+`043-keep-v1-product-scope-and-freshness-lock.md`.
 
 ### ADR-174 — Visibility, participation, and notification state are separate
 
@@ -749,7 +752,7 @@ closed history browsing
 feedback review queue
 next/previous detail navigation for batch review
 pagination
-list SSE/realtime refresh
+client freshness behavior (not SSE/WebSockets)
 ```
 
 B5 must preserve metadata for future filters:
@@ -774,6 +777,8 @@ feedback review queue
 search/status filters
 closed history
 pagination if list volume requires it
+V1 freshness matrix: refetch-after-write, focus/resume sync, pull-to-refresh, active-list polling,
+server-derived counts/badges, and push/deep links. SSE/WebSockets remain deferred by ADR-290.
 ```
 
 ### ADR-188 — Archive is future closeout/history workflow

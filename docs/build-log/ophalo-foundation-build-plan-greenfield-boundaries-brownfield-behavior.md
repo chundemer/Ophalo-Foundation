@@ -741,6 +741,8 @@ Read-only diagnostics:
 - Sessions/devices.
 - Entitlements.
 - Lifecycle/commercial state.
+- Onboarding state and first-use milestones.
+- Account-level usage/adoption summary.
 - Keep requests.
 - Request events/timeline.
 - Notification status.
@@ -1263,6 +1265,7 @@ Read-only first:
 - Users.
 - Sessions/devices.
 - Entitlements.
+- Onboarding state and usage/adoption summary.
 - Keep requests/events.
 - Token status.
 - Work queue/dead-letter.
@@ -1274,6 +1277,20 @@ Writes only with audit:
 - Revoke session.
 - Rotate token.
 - Requeue work.
+
+Internal observability follow-up:
+
+- Founder/internal admins need to know when a business onboards and whether it is using Keep.
+- Add account-level usage summaries and important internal event feeds before pilot scale creates
+  blind spots.
+- Internal mobile alerts may be useful for new-business onboarding, stalled onboarding, unusually
+  inactive pilot accounts, delivery/work failures, and other high-signal product-ops events.
+- Do not implement broad impersonation by default; internal access must be permission-gated and
+  audited.
+- Keep internal alerts metadata-light and avoid sending sensitive customer content.
+- Decide event subscription transport deliberately; do not copy reference polling/signals by
+  default.
+- Track as `DEF-057`.
 
 Exit gate:
 

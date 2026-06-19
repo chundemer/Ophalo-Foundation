@@ -4,6 +4,7 @@
 **Date:** 2026-06-18
 **Status:** Decisions locked. Ready to split into bounded Claude coding sessions.
 **Build log preceding this:** `040-phase-8-b5-session-3-assignment-watch-mute-decisions.md`
+**V1 carry-forward lock:** `043-keep-v1-product-scope-and-freshness-lock.md`
 **ADRs locked:** 237..260
 **Next free ADR:** ADR-261
 
@@ -22,6 +23,8 @@ The key boundary is:
 Session 4 is backend/foundation list navigation.
 It does not implement web/PWA or native mobile UI.
 It does not add archive, mark-feedback-reviewed, close-and-next, or realtime list refresh.
+V1 freshness is handled later by refetch-after-write, focus/resume sync, pull-to-refresh, active
+polling, server-derived counts/badges, and push/deep links. Do not add SSE/WebSockets.
 ```
 
 ---
