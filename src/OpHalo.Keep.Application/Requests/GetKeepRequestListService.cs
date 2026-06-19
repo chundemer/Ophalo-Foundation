@@ -5,6 +5,7 @@ using OpHalo.Foundation.Application.Accounts.Entitlements;
 using OpHalo.Foundation.Core.Entities.Accounts.Enums;
 using OpHalo.Keep.Core.Entities;
 using OpHalo.Keep.Core.Entities.Enums;
+using OpHalo.Keep.Core.Errors;
 using OpHalo.SharedKernel.Abstractions;
 using OpHalo.SharedKernel.Results;
 
@@ -16,15 +17,41 @@ public sealed class GetKeepRequestListService(
     IUserAccessPolicy userAccessPolicy,
     IAccountAccessPolicy accountAccessPolicy,
     IFeatureAccessPolicy featurePolicy,
-    IClock clock)
+    IClock clock,
+    IKeepRequestListCursorProtector cursorProtector)
 {
+    private const int DefaultLimit = 50;
+    private const int MaxLimit = 100;
+
     private static readonly Error Unauthorized =
         Error.Create("auth.unauthorized", "Authentication required.");
 
     private static readonly Error Forbidden =
         Error.Create("auth.forbidden", "You do not have permission to perform this action.");
 
-    public async Task<Result<GetKeepRequestListResult>> ExecuteAsync(CancellationToken ct = default)
+    private static readonly HashSet<string> ValidViews = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "default", "assigned_to_me", "watching", "unassigned",
+        "needs_attention", "feedback_review", "closed_history",
+        "cancelled_history", "all_history"
+    };
+
+    // Active-only views: terminal-status filter would be contradictory (ADR-257).
+    private static readonly HashSet<string> ActiveOnlyViews = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "default", "assigned_to_me", "watching", "unassigned", "needs_attention"
+    };
+
+    private static readonly HashSet<string> TerminalStatusSlugs =
+        new(["closed", "cancelled"], StringComparer.OrdinalIgnoreCase);
+
+    private static readonly HashSet<string> ActiveStatusSlugs =
+        new(["received", "scheduled", "in_progress", "pending_customer", "resolved"],
+            StringComparer.OrdinalIgnoreCase);
+
+    public async Task<Result<GetKeepRequestListResult>> ExecuteAsync(
+        KeepRequestListQuery? query = null,
+        CancellationToken ct = default)
     {
         if (!currentUser.IsAuthenticated)
             return Result<GetKeepRequestListResult>.Failure(Unauthorized);
@@ -62,6 +89,53 @@ public sealed class GetKeepRequestListService(
         if (!featurePolicy.IsEnabled(accountSnapshot.Plan, FeatureKeys.Keep.OperatorQueue))
             return Result<GetKeepRequestListResult>.Failure(Forbidden);
 
+        // --- Query validation (ADR-257/258) ---
+        // Order matters: format errors must surface before the 4A placeholder gates so callers
+        // get specific codes (RequestListInvalidDateFormat, RequestListContradictoryParameters)
+        // rather than the generic not-yet-available codes.
+
+        query ??= new KeepRequestListQuery();
+        var normalizedView = NormalizeView(query.View);
+
+        // 1. Unknown view — must fail before everything else.
+        if (!ValidViews.Contains(normalizedView))
+            return Result<GetKeepRequestListResult>.Failure(KeepRequestErrors.RequestListInvalidView);
+
+        // 2. Date format — validated before the filter gate so that malformed dates return
+        //    RequestListInvalidDateFormat, not RequestListFilterNotYetAvailable (ADR-258).
+        var dateError = ValidateDateFormats(query);
+        if (dateError is not null)
+            return Result<GetKeepRequestListResult>.Failure(dateError);
+
+        // 3. Contradictions — validated before the "not yet available" gates so that
+        //    view+status contradictions are explicit rather than shadowed (ADR-257).
+        var contradictionError = ValidateContradictions(normalizedView, query);
+        if (contradictionError is not null)
+            return Result<GetKeepRequestListResult>.Failure(contradictionError);
+
+        // 4. Filter/search gate (Session 4A — 4B replaces with real execution).
+        if (HasFilters(query))
+            return Result<GetKeepRequestListResult>.Failure(KeepRequestErrors.RequestListFilterNotYetAvailable);
+
+        // 5. View executability gate (Session 4A — 4B replaces with real execution).
+        if (normalizedView != "default")
+            return Result<GetKeepRequestListResult>.Failure(KeepRequestErrors.RequestListViewNotYetAvailable);
+
+        // 6. Limit.
+        var limit = query.Limit ?? DefaultLimit;
+        if (limit < 1 || limit > MaxLimit)
+            return Result<GetKeepRequestListResult>.Failure(KeepRequestErrors.RequestListInvalidLimit);
+
+        // 7. Cursor — fingerprint binds the cursor to the current canonical query shape.
+        var fingerprint = KeepRequestListCursor.ComputeFingerprint(query);
+        KeepRequestListCursorPayload? cursorPayload = null;
+        if (!string.IsNullOrEmpty(query.Cursor))
+        {
+            if (!KeepRequestListCursor.TryDecode(cursorProtector, query.Cursor, fingerprint, out cursorPayload))
+                return Result<GetKeepRequestListResult>.Failure(KeepRequestErrors.RequestListInvalidCursor);
+        }
+
+        // --- Data fetch ---
         var nowUtc = clock.UtcNow;
         var role = userSnapshot.Role;
         var isOwnerOrAdmin = role is AccountUserRole.Owner or AccountUserRole.Admin;
@@ -88,14 +162,182 @@ public sealed class GetKeepRequestListService(
             participantSummaries = [];
         }
 
-        var summaries = requests
+        var allSummaries = requests
             .Select(r => ToSummary(r, canOperate, isOwnerOrAdmin, isOffSeason, nowUtc,
                 participantSummaries.GetValueOrDefault(r.Id)))
             .Order(RequestListComparer.Instance)
             .ToList();
 
-        return Result<GetKeepRequestListResult>.Success(new GetKeepRequestListResult(summaries));
+        // --- Cursor skip ---
+        IReadOnlyList<KeepRequestSummary> sorted = allSummaries;
+        if (cursorPayload is not null)
+        {
+            var startIndex = FindCursorStartIndex(sorted, cursorPayload);
+            sorted = sorted.Skip(startIndex).ToList();
+        }
+
+        // --- limit+1 slice, hasMore, next cursor ---
+        var sliced = sorted.Take(limit + 1).ToList();
+        var hasMore = sliced.Count > limit;
+        var page = sliced.Take(limit).ToList();
+
+        string? nextCursor = null;
+        if (hasMore && page.Count > 0)
+            nextCursor = EncodeCursor(page[^1], fingerprint);
+
+        var pageInfo = new KeepRequestPageInfo(Limit: limit, HasMore: hasMore, NextCursor: nextCursor);
+        var listContext = new KeepRequestListContext(
+            View: "default",
+            IsDefaultCommandCenter: true,
+            IsHistory: false,
+            IsSearch: false);
+
+        return Result<GetKeepRequestListResult>.Success(
+            new GetKeepRequestListResult(page, pageInfo, ViewCounts: null, listContext));
     }
+
+    // --- Validation helpers ---
+
+    private static string NormalizeView(string? view) =>
+        string.IsNullOrWhiteSpace(view) ? "default" : view.Trim().ToLowerInvariant();
+
+    private static Error? ValidateDateFormats(KeepRequestListQuery query)
+    {
+        if (!string.IsNullOrWhiteSpace(query.CreatedFrom) && !IsValidIso8601(query.CreatedFrom))
+            return KeepRequestErrors.RequestListInvalidDateFormat;
+        if (!string.IsNullOrWhiteSpace(query.CreatedTo) && !IsValidIso8601(query.CreatedTo))
+            return KeepRequestErrors.RequestListInvalidDateFormat;
+        if (!string.IsNullOrWhiteSpace(query.ClosedFrom) && !IsValidIso8601(query.ClosedFrom))
+            return KeepRequestErrors.RequestListInvalidDateFormat;
+        if (!string.IsNullOrWhiteSpace(query.ClosedTo) && !IsValidIso8601(query.ClosedTo))
+            return KeepRequestErrors.RequestListInvalidDateFormat;
+        return null;
+    }
+
+    // Must be a full ISO-8601/RFC3339 datetime with explicit UTC (Z) or numeric offset (ADR-258).
+    // Date-only strings ("2026-06-18") are rejected — no 'T' separator.
+    // Unzoned datetimes ("2026-06-18T10:00:00") are rejected — no explicit offset.
+    private static bool IsValidIso8601(string value)
+    {
+        var trimmed = value.Trim();
+
+        if (!DateTimeOffset.TryParse(
+                trimmed,
+                System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.None,
+                out _))
+            return false;
+
+        // Reject date-only values: must contain 'T' (ISO 8601 date/time separator).
+        if (trimmed.IndexOf('T', StringComparison.OrdinalIgnoreCase) < 0)
+            return false;
+
+        // Require explicit UTC or offset marker.
+        return HasExplicitOffset(trimmed);
+    }
+
+    private static bool HasExplicitOffset(string s)
+    {
+        // Z suffix = UTC.
+        if (s.EndsWith("Z", StringComparison.OrdinalIgnoreCase)) return true;
+
+        // ±HH:mm suffix — check last 6 chars, e.g. "+10:00" or "-05:30".
+        if (s.Length < 6) return false;
+        var tail = s[^6..];
+        return (tail[0] == '+' || tail[0] == '-')
+            && char.IsDigit(tail[1]) && char.IsDigit(tail[2])
+            && tail[3] == ':'
+            && char.IsDigit(tail[4]) && char.IsDigit(tail[5]);
+    }
+
+    private static Error? ValidateContradictions(string normalizedView, KeepRequestListQuery query)
+    {
+        var status = query.Status?.Trim().ToLowerInvariant();
+        if (string.IsNullOrEmpty(status)) return null;
+
+        // History views are restricted to their respective terminal statuses.
+        if (normalizedView == "closed_history" && !string.Equals(status, "closed", StringComparison.Ordinal))
+            return KeepRequestErrors.RequestListContradictoryParameters;
+        if (normalizedView == "cancelled_history" && !string.Equals(status, "cancelled", StringComparison.Ordinal))
+            return KeepRequestErrors.RequestListContradictoryParameters;
+        if (normalizedView == "all_history" && ActiveStatusSlugs.Contains(status))
+            return KeepRequestErrors.RequestListContradictoryParameters;
+
+        // Active operational views cannot be combined with terminal statuses.
+        if (ActiveOnlyViews.Contains(normalizedView) && TerminalStatusSlugs.Contains(status))
+            return KeepRequestErrors.RequestListContradictoryParameters;
+
+        return null;
+    }
+
+    // Session 4A: any non-blank filter/search param blocks execution (4B replaces).
+    // Blank Q behaves like no search (ADR-258), so whitespace-only Q is not a filter.
+    private static bool HasFilters(KeepRequestListQuery query) =>
+        !string.IsNullOrWhiteSpace(query.Status) ||
+        !string.IsNullOrWhiteSpace(query.AttentionReason) ||
+        query.AssignedAccountUserId.HasValue ||
+        !string.IsNullOrWhiteSpace(query.Q) ||
+        !string.IsNullOrWhiteSpace(query.CreatedFrom) ||
+        !string.IsNullOrWhiteSpace(query.CreatedTo) ||
+        !string.IsNullOrWhiteSpace(query.ClosedFrom) ||
+        !string.IsNullOrWhiteSpace(query.ClosedTo);
+
+    // --- Cursor helpers ---
+
+    private string EncodeCursor(KeepRequestSummary last, string fingerprint)
+    {
+        var rankingOrder = last.Ranking.RankingOrder;
+        var descending = rankingOrder is 6 or 7 or 8;
+        var tick = GetSecondarySortTick(last);
+        return KeepRequestListCursor.Encode(
+            cursorProtector, fingerprint, last.Id, rankingOrder, tick, descending);
+    }
+
+    private static int FindCursorStartIndex(
+        IReadOnlyList<KeepRequestSummary> sorted,
+        KeepRequestListCursorPayload cursor)
+    {
+        for (var i = 0; i < sorted.Count; i++)
+        {
+            if (IsAfterCursor(sorted[i], cursor))
+                return i;
+        }
+        return sorted.Count;
+    }
+
+    private static bool IsAfterCursor(KeepRequestSummary row, KeepRequestListCursorPayload cursor)
+    {
+        if (row.Ranking.RankingOrder != cursor.RankingOrder)
+            return row.Ranking.RankingOrder > cursor.RankingOrder;
+
+        var cmp = CompareSecondaryTicks(
+            GetSecondarySortTick(row), cursor.SecondaryTick, cursor.SecondaryDescending);
+        if (cmp != 0) return cmp > 0;
+
+        return row.Id.CompareTo(cursor.LastId) > 0;
+    }
+
+    private static long? GetSecondarySortTick(KeepRequestSummary row) =>
+        row.Ranking.RankingOrder switch
+        {
+            1 or 2 or 4 => (row.Attention.NextAttentionAtUtc ?? row.Attention.FirstResponseDueAtUtc)?.Ticks,
+            3            => row.Attention.AttentionSinceUtc?.Ticks,
+            5            => row.Attention.FirstResponseDueAtUtc?.Ticks,
+            _            => (long?)row.LastBusinessActivityAtUtc.Ticks
+        };
+
+    private static int CompareSecondaryTicks(long? rowTick, long? cursorTick, bool descending)
+    {
+        if (rowTick is null && cursorTick is null) return 0;
+        if (rowTick is null) return 1;    // nulls last in both sort directions
+        if (cursorTick is null) return -1;
+        // DESC: higher value appears earlier, so "after cursor" means lower value → reverse compare.
+        return descending
+            ? cursorTick.Value.CompareTo(rowTick.Value)
+            : rowTick.Value.CompareTo(cursorTick.Value);
+    }
+
+    // --- Row mapping (unchanged from Session 3C) ---
 
     private static KeepRequestSummary ToSummary(
         KeepRequest r,

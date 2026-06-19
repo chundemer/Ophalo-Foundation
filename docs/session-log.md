@@ -5,6 +5,99 @@
 
 ---
 
+## Planned Session Queue
+
+These are planned implementation sessions, not completion logs. When a session finishes, replace the
+planned item with a normal completed entry that records exact files changed, tests run, bugs found,
+and carry-forward notes.
+
+**Implementation quality contract for every planned session:**
+
+- read the current code first and follow existing service, persistence, mapper, error, DI, endpoint,
+  and test patterns;
+- write production-quality code that preserves locked ADR behavior and fail-closed security posture;
+- keep scope bounded to the named session and explicitly report any needed work that belongs in a
+  later session or deferred topic;
+- add focused unit/integration coverage for new contracts, validation, authorization, and regression
+  risk;
+- run the targeted tests required by the session and the broader suite when feasible;
+- self-review the diff before handoff for bugs, inconsistent naming, untested branches, accidental
+  visibility expansion, unnecessary schema churn, and deferred work accidentally pulled in;
+- report any discovered bugs, gaps, or decision conflicts in `docs/session-log.md` instead of
+  silently guessing policy.
+
+| Order | Session | Status | Source / Gate |
+|---|---|---|---|
+| 1 | Phase 8-B5 Session 4B — Named Views, Server-Side Filters/Search, History Visibility, Counts, Sorting | Planned | `docs/build-log/041-phase-8-b5-session-4-filters-search-closed-history-pagination-decisions.md` |
+| 2 | Phase 8-B5 Session 4C — Operator Unassigned Surface + Narrow Self-Assign Re-enable, Row Context/Action Metadata | Planned | `docs/build-log/041-phase-8-b5-session-4-filters-search-closed-history-pagination-decisions.md` |
+| 3 | Phase 8-B5 Session 4D — Integration Verification, Docs, Decision Index, Deferred Tracker | Planned | `docs/build-log/041-phase-8-b5-session-4-filters-search-closed-history-pagination-decisions.md` |
+
+---
+
+## Phase 8-B5 Session 4A — Query Contract, Validation, Response Shape, Cursor/Page Primitives — COMPLETE
+
+**Tests:** 765 total (434 unit · 14 arch · 317 integration) — all green
+**Next free ADR:** ADR-288
+
+### What was built
+
+Session 4A implemented the query contract, cursor/page primitives, explicit validation, and response shape for `GET /keep/requests`. The no-query default command-center behavior is preserved; all new query params are optional. Server-side filter/search execution is deferred to 4B.
+
+**12 files written / updated:**
+
+| File | Change |
+|---|---|
+| `Keep.Core/Errors/KeepRequestErrors.cs` | +10 errors: 7 list query errors + `RequestListInvalidAssignedAccountUserId`, `RequestListUnknownParameter`, `RequestListDuplicateParameter` |
+| `Keep.Application/Requests/KeepRequestListQuery.cs` | New — query contract record (View, Status, AttentionReason, AssignedAccountUserId, Q, CreatedFrom, CreatedTo, ClosedFrom, ClosedTo, Limit, Cursor) |
+| `Keep.Application/Requests/IKeepRequestListCursorProtector.cs` | New — `Protect(string) string` + `TryUnprotect(string, out string?) bool` interface |
+| `Keep.Application/Requests/KeepRequestListCursor.cs` | New — `Encode`, `TryDecode`, `ComputeFingerprint` static helpers; `KeepRequestListCursorPayload` record |
+| `Keep.Application/Requests/GetKeepRequestListResult.cs` | Updated — added `KeepRequestPageInfo`, `KeepRequestViewCounts?`, `KeepRequestListContext`; result ctor updated to 4 params |
+| `Keep.Application/Requests/GetKeepRequestListService.cs` | Updated — `IKeepRequestListCursorProtector` as 7th constructor param; `ExecuteAsync(KeepRequestListQuery? query = null, CancellationToken ct = default)`; full validation pipeline + cursor skip + limit+1 slicing |
+| `Keep.Infrastructure/Cursors/HmacKeepRequestListCursorProtector.cs` | New — HMAC-SHA256 with `FixedTimeEquals`; Base64Url encode/decode; reads `Keep:RequestListCursorSigningKey` from config |
+| `Api/Helpers/ErrorHttpMapper.cs` | +10 explicit 400 entries for all new request-list error codes |
+| `Api/Keep/KeepRequestListQueryBinding.cs` | New — case-insensitive key normalization; unknown param, duplicate param, invalid limit, invalid GUID detection |
+| `Api/Program.cs` | Updated `GET /keep/requests` to bind via `KeepRequestListQueryBinding`; lazy DI factory for `IKeepRequestListCursorProtector`; removed duplicate `using OpHalo.Api.Keep` |
+| `IntegrationTests/Api/KeepApiWebFactory.cs` | +`Keep:RequestListCursorSigningKey` in `AddInMemoryCollection` (32-byte all-zeros deterministic key) |
+| `UnitTests/Keep/KeepRequestListServiceTests.cs` | Rewrite — updated `BuildSut` with `FakeCursorProtector`; +tests for all validation paths, pagination, cursor follow, fingerprint equivalence |
+| `IntegrationTests/Api/KeepRequestListQueryApiTests.cs` | New — 25 HTTP tests: auth gate, 200 shape, all 400 codes, pagination, cursor follow, HMAC tamper (sig + payload), view=default equivalence |
+
+### Bugs found and fixed during implementation
+
+Five design issues were caught during review before each file was written:
+
+1. **Date validation shadowed by filter gate** — `createdFrom=banana` was returning `FilterNotYetAvailable` instead of `InvalidDateFormat` because the filter gate ran first. Fixed by inserting `ValidateDateFormats` before the filter gate in the validation pipeline.
+
+2. **Fingerprint divergence for null vs "default" view** — `GET /keep/requests` and `GET /keep/requests?view=default` produced different fingerprints, making cursors invalid across equivalent queries. Fixed in `KeepRequestListCursor.ComputeFingerprint`: `string.IsNullOrWhiteSpace(view) ? "default" : view.Trim().ToLowerInvariant()`.
+
+3. **Contradiction check shadowed by view-executability gate** — `view=closed_history&status=received` returned `ViewNotYetAvailable` before the contradiction check could run. Fixed by inserting `ValidateContradictions` before the view-executability gate.
+
+4. **Too much parsing in Program.cs** — limit parsing, GUID parsing, unknown-param and duplicate-param detection were accumulating in the endpoint handler. Extracted into `KeepRequestListQueryBinding`.
+
+5. **Wrong errors for binder cases** — `assignedAccountUserId=banana` returned `FilterNotYetAvailable`; `?limit=10&limit=20` silently took first; unknown params were silently ignored; case-variant duplicates were not detected. Fixed by adding three new error codes and using a case-insensitive dictionary with `TryAdd`.
+
+6. **Integration test `code` field** — `ProblemBody.Extensions` deserializes as a nested dict, but `code` lands at the top level of ProblemDetails JSON (existing watch-out, ADR-irrelevant). Fixed `GetErrorCodeAsync` to use `JsonElement.GetProperty("code")`.
+
+### Validation order (locked)
+
+`NormalizeView` → unknown view → `ValidateDateFormats` → `ValidateContradictions` → `HasFilters` (4A gate) → view executability (4A gate) → limit range → cursor decode/fingerprint
+
+### Cursor contract (locked)
+
+- Format: `base64url(UTF8(payloadJson)) + "." + base64url(HMAC-SHA256(key, payloadBytes))`
+- Fingerprint: SHA-256 of canonical normalized query JSON (view/status/attentionReason lowercased; null-view = "default"; excludes limit/cursor)
+- Config key: `Keep:RequestListCursorSigningKey` (base64 string; read lazily from `IConfiguration`; fail-hard if missing outside Testing)
+- Unit tests: `FakeCursorProtector` (plain Base64, no HMAC); HMAC integrity covered by integration tests
+
+### listContext (4A default path)
+
+`{ view: "default", isDefaultCommandCenter: true, isHistory: false, isSearch: false }` — named views return view-specific context in 4B.
+
+### viewCounts
+
+`null` in 4A; real count queries wired in 4B.
+
+---
+
 ## Phase 8-B5 Session 3D — Assignment/Watch/Mute Completion Gate — COMPLETE
 
 **Tests:** 702 (396 unit · 14 arch · 292 integration) — all green
@@ -76,7 +169,7 @@ validation while preserving no-query default command-center behavior.
 
 Session 3C completed the participation read-model surface:
 
-- **`AvailableActionsMetadata`** expanded to 4 participation flags: `CanWatch`, `CanUnwatch`, `CanMute`, `CanUnmute` — with precise semantics replacing the original 2-flag approach (ADR-237 refinement during session: `CanWatch` means "can start watching, not currently participating", `CanUnwatch/Mute/Unmute` are state-specific).
+- **`AvailableActionsMetadata`** expanded to 4 participation flags: `CanWatch`, `CanUnwatch`, `CanMute`, `CanUnmute` — with precise semantics replacing the original 2-flag approach (`CanWatch` means "can start watching, not currently participating"; `CanUnwatch/Mute/Unmute` are state-specific).
 - **`CurrentUserDetailParticipation`** record on `KeepRequestDetailResult` — `participationType` + `notificationsEnabled` for the requesting user.
 - **`participants[].isEligible`** derived from live membership in the mapper.
 - **`KeepRequestEventItem`** participation event metadata fields: `participationAction`, `participationTargetAccountUserId`, `participationTargetDisplayName`, `participationPreviousResponsibleAccountUserId`, `participationInternalNote`.
@@ -322,14 +415,14 @@ Member management API + integration tests.
 - **Schema-drop reset** in integration test factory: `DROP SCHEMA public CASCADE` + recreate + `MigrateAsync`.
 - **Migration generation** always: `--startup-project src/OpHalo.Keep.Infrastructure`.
 - **No GitHub remote yet.**
-- **`Results.Problem` extension shape:** extension dict entries land at the top level of ProblemDetails JSON, not under an `"extensions"` key. Test assertions must use `body.GetProperty("code")`.
+- **`Results.Problem` extension shape:** extension dict entries land at the top level of ProblemDetails JSON, not under an `"extensions"` key. Test assertions must use `ReadFromJsonAsync<JsonElement>()` then `.GetProperty("code").GetString()`.
 - **External contact logging/capture** implemented in B5 Sessions 2A-2C.
 - **`businessName ?? string.Empty`** — persistence returns null if account missing post-auth; never expected in production.
 - **`KeepResponsePolicy` defaults** (first=60, standard=240, priority=60 min) apply when no policy row exists for an account; silent fallback by design.
 - **Negative feedback on Closed raises attention** — intentional exception to terminal-no-attention posture (ADR-138).
 - **Feedback `WasResolved` is `bool?` at API layer** — null signals missing flag, validated before service. Domain method takes `bool`.
-- **Always rebuild before running tests** — `dotnet test --no-build` can run stale assemblies that mask real failures. Use `dotnet build --force` if incremental build skips integration test project changes.
-- **Next free ADR: ADR-261.**
+- **Always use `dotnet build --verbosity minimal`** — `dotnet build -q` is passed to MSBuild as `-q` (question build) and fails; `--verbosity minimal` is the correct quiet mode.
+- **Next free ADR: ADR-288.**
 - **B4 mapper signature:** `ToDetailResult` now takes `AccountUserRole role`, `bool canOperate`, `Guid currentUserId` — all callers updated; write services pass `canOperate: true`.
 - **Participant `DisplayName`** computed in persistence (two-query approach retained; User.Name projected in the AccountUsers query via EF navigation LEFT JOIN).
 - **`KeepRequestStatus.Scheduled = 7`** — added to `MapStatus` in B5 service rewrite.
@@ -346,5 +439,8 @@ Member management API + integration tests.
 - **Minimal API DELETE body** — nullable body parameters on `MapDelete` endpoints require `[FromBody]`; without it the app fails to start at route data source initialization. Fixed on `DELETE /responsible` and `DELETE /watchers/{id}`.
 - **`MapEventType` must be exhaustive** — `ParticipationChanged = 10` was missing; found during 3B testing. Pattern: every new `KeepRequestEventType` value must be added to `MapEventType` before integration tests run against any service that commits that event type.
 - **OffSeason participation write blocking** — all 4 participation write services (`ManageResponsibleService`, `ManageWatcherService`, `SelfWatchService`, `MuteService`) use `RequestImplementsAllowedInOffSeason: false` and `|| decision.IsReadOnly` in `AuthAsync`; fires before request load or target user ID validation. Covered by `KeepOffSeasonTests` from 3D onward.
-- **Session 3D incremental build gap** — `dotnet build -q` may skip the integration test project when `OpHalo.SharedKernel` cache file is unreadable (MSB3492). Use `dotnet build --force` on the integration test project when adding new test files.
-- **Next session: Phase 8-B5 Session 4** — filters, search, closed history, pagination. Decisions locked in ADR-237..260 and `041-phase-8-b5-session-4-filters-search-closed-history-pagination-decisions.md`. Recommended split: 4A (query contract/validation/response shape/cursor primitives) → 4B (named views/filters/search/history/counts/sorting) → 4C (Operator unassigned surface + narrow self-assign re-enable + row context/action metadata) → 4D (integration verification/docs/decision index/deferred tracker).
+- **4A validation order** — `NormalizeView` → unknown view → `ValidateDateFormats` → `ValidateContradictions` → `HasFilters` gate → view executability gate → limit range → cursor decode/fingerprint. Order is significant: date and contradiction errors must surface before 4A placeholder gates.
+- **4A cursor fingerprint normalization** — null view and "default" produce identical fingerprints. Cursor from `GET /keep/requests` is reusable with `GET /keep/requests?view=default`.
+- **4A `KeepRequestListQueryBinding`** — static class in `OpHalo.Api.Keep`; handles HTTP structural concerns; `Program.cs` stays thin. ADR-287.
+- **4A HMAC key** — `Keep:RequestListCursorSigningKey` must be present in all environments; test factory uses 32-byte all-zeros key.
+- **Next session: Phase 8-B5 Session 4B** — named views, server-side filters/search, history visibility, view counts, sorting.

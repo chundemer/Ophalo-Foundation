@@ -51,7 +51,10 @@ public sealed class KeepApiWebFactory : WebApplicationFactory<Program>, IAsyncLi
             {
                 ["ConnectionStrings:DefaultConnection"] = _container.GetConnectionString(),
                 ["App:PublicBaseUrl"] = "https://test.ophalo.com",
-                ["App:OperatorBaseUrl"] = "https://app.test.ophalo.com"
+                ["App:OperatorBaseUrl"] = "https://app.test.ophalo.com",
+                // Deterministic 32-byte test key for HmacKeepRequestListCursorProtector.
+                // Must be base64-encoded. 32 zero bytes = 256-bit key, sufficient for HMAC-SHA256.
+                ["Keep:RequestListCursorSigningKey"] = Convert.ToBase64String(new byte[32])
             });
         });
 

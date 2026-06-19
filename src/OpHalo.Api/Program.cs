@@ -5,9 +5,9 @@ using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using OpHalo.Api.Accounts;
+using OpHalo.Api.Keep;
 using OpHalo.Api.Auth;
 using OpHalo.Api.Helpers;
-using OpHalo.Api.Keep;
 using OpHalo.Foundation.Application.Abstractions.Messaging;
 using OpHalo.Foundation.Application.Abstractions.Security;
 using OpHalo.Foundation.Application.Accounts.Access;
@@ -29,6 +29,7 @@ using OpHalo.Keep.Application.Services;
 using OpHalo.Keep.Core.Domain;
 using OpHalo.Keep.Core.Entities.Enums;
 using OpHalo.Keep.Core.Errors;
+using OpHalo.Keep.Infrastructure.Cursors;
 using OpHalo.Keep.Infrastructure.Persistence;
 using OpHalo.SharedKernel.Abstractions;
 
@@ -76,6 +77,17 @@ builder.Services.AddScoped<IKeepRequestOperatePersistence, EfKeepRequestOperateP
 builder.Services.AddScoped<KeepTokenService>();
 builder.Services.AddScoped<CreateKeepPublicIntakeService>();
 builder.Services.AddScoped<GetKeepRequestListService>();
+// Cursor signing key read lazily from IConfiguration so that WebApplicationFactory
+// overrides in ConfigureAppConfiguration are visible at scope-creation time.
+builder.Services.AddScoped<IKeepRequestListCursorProtector>(sp =>
+{
+    var keyBase64 = sp.GetRequiredService<IConfiguration>()["Keep:RequestListCursorSigningKey"];
+    if (string.IsNullOrWhiteSpace(keyBase64))
+        throw new InvalidOperationException(
+            "Keep:RequestListCursorSigningKey is required. " +
+            "Supply it via user secrets, environment variable, or appsettings.");
+    return new HmacKeepRequestListCursorProtector(Convert.FromBase64String(keyBase64));
+});
 builder.Services.AddScoped<GetKeepRequestDetailService>();
 builder.Services.AddScoped<GetKeepCustomerPageService>();
 builder.Services.AddScoped<ChangeKeepRequestStatusService>();
@@ -210,10 +222,17 @@ app.MapPost("/keep/public-intake/token/{publicIntakeToken}", HandlePublicIntake)
 app.MapPost("/continuity/public-intake/token/{publicIntakeToken}", HandlePublicIntake)
    .RequireRateLimiting("public-intake");
 
-// Operator list — requires authenticated session (Phase 5A)
-app.MapGet("/keep/requests", async (GetKeepRequestListService service, CancellationToken ct) =>
+// Operator list — requires authenticated session (Phase 5A, extended Session 4A)
+app.MapGet("/keep/requests", async (
+    HttpRequest request,
+    GetKeepRequestListService service,
+    CancellationToken ct) =>
 {
-    var result = await service.ExecuteAsync(ct);
+    var bind = KeepRequestListQueryBinding.Bind(request.Query);
+    if (!bind.IsSuccess)
+        return ErrorHttpMapper.ToHttpResult(bind.Error);
+
+    var result = await service.ExecuteAsync(bind.Value, ct);
     return result.IsSuccess ? Results.Ok(result.Value) : ErrorHttpMapper.ToHttpResult(result.Error);
 }).RequireAuthorization();
 

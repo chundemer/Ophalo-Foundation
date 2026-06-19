@@ -127,4 +127,36 @@ public static class KeepRequestErrors
 
     public static readonly Error ParticipationRequestAlreadyAssigned =
         Error.Create("KeepRequest.ParticipationRequestAlreadyAssigned", "This request is already assigned to an active Responsible user.");
+
+    // Request list query validation errors (ADR-257/258, Session 4A).
+    public static readonly Error RequestListInvalidView =
+        Error.Create("KeepRequest.RequestListInvalidView", "The specified view is not recognized.");
+
+    public static readonly Error RequestListViewNotYetAvailable =
+        Error.Create("KeepRequest.RequestListViewNotYetAvailable", "This view is not yet available. Use 'default' or omit the view parameter.");
+
+    public static readonly Error RequestListFilterNotYetAvailable =
+        Error.Create("KeepRequest.RequestListFilterNotYetAvailable", "Filter and search parameters are not yet available. Omit status, attentionReason, assignedAccountUserId, q, and date range parameters.");
+
+    public static readonly Error RequestListInvalidLimit =
+        Error.Create("KeepRequest.RequestListInvalidLimit", "The limit must be between 1 and 100.");
+
+    public static readonly Error RequestListInvalidCursor =
+        Error.Create("KeepRequest.RequestListInvalidCursor", "The cursor is invalid, malformed, or does not match the current query.");
+
+    public static readonly Error RequestListInvalidDateFormat =
+        Error.Create("KeepRequest.RequestListInvalidDateFormat", "Dates must be full ISO-8601/RFC3339 timestamps with UTC or an explicit offset.");
+
+    public static readonly Error RequestListContradictoryParameters =
+        Error.Create("KeepRequest.RequestListContradictoryParameters", "The provided query parameters are contradictory and cannot be combined.");
+
+    // Request list binder errors (Session 4A).
+    public static readonly Error RequestListInvalidAssignedAccountUserId =
+        Error.Create("KeepRequest.RequestListInvalidAssignedAccountUserId", "The provided assignedAccountUserId is not a valid identifier.");
+
+    public static readonly Error RequestListUnknownParameter =
+        Error.Create("KeepRequest.RequestListUnknownParameter", "One or more query parameters are not recognized.");
+
+    public static readonly Error RequestListDuplicateParameter =
+        Error.Create("KeepRequest.RequestListDuplicateParameter", "A query parameter was supplied more than once. Each parameter must appear at most once.");
 }
