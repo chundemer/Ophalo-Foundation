@@ -75,13 +75,33 @@ customer page.
 - OffSeason customer page test seeds the closed + negative feedback state using the established
   `ChangeStatus + SubmitFeedback` domain method pattern from `KeepFeedbackReviewApiTests`.
 
-### Next session: Phase 8-B5 Session 5D — Pre-work complete
+---
 
-Integration verification, docs, decision index, and deferred tracker:
-- Full test suite verification against Session 5 boundary (no Session 6 code)
-- ADR-261..286 status update in decision index
-- DEF-074 (concurrency gap) updated if applicable
-- Build-log entry for Session 5
+## Phase 8-B5 Session 5D — Integration Verification, Docs, Decision Index — COMPLETE
+
+**Tests:** 847 total (494 unit · 14 arch · 339 integration) — all green
+**Next free ADR:** ADR-295 (no new ADRs consumed)
+
+### What was done
+
+Session 5D is the completion gate for Sessions 5A–5C.
+
+**Verification pass — all clean:**
+- Full test suite: 847/847 pass
+- All Session 5 artifacts confirmed present: `MarkFeedbackReviewedService`, `POST /keep/requests/{requestId}/feedback-review` endpoint, migration `20260619155507_AddFeedbackReviewFields`, `FeedbackReviewAgeBucket`/`FeedbackReviewDueAtUtc` on list summaries, `Closed + isOffSeason` customer-page guard
+- `feedback_review` view exclusion handled automatically by existing `AttentionLevel != None` filter
+
+**Decision index:** ADR-261..286 updated from `Locked | build-log/042` → `Implemented | Sessions 5A-5C` (26 entries).
+
+**Deferred tracker:** DEF-074 reviewed — no status change. Concurrency gap remains deferred pending cross-cutting OCC slice.
+
+### Files changed
+
+| File | Change |
+|---|---|
+| `docs/decisions/decision-index.md` | ADR-261..286 marked Implemented |
+| `docs/build-log/046-phase-8-b5-session-5d-integration-verification.md` | New |
+| `docs/session-log.md` | Rewritten |
 
 ---
 
@@ -719,4 +739,4 @@ Member management API + integration tests.
 - **5C `FeedbackReviewAgeBucket`/`FeedbackReviewDueAtUtc` on list summaries** — added to `KeepRequestSummary`; null for all non-feedback-review rows; `isPostClose` is the correct gate (Closed + UnresolvedFeedback + attention raised implies unreviewed + negative by domain invariant).
 - **5C OffSeason closed customer page** — `ComputeAllowedActions` `Closed + isOffSeason` case precedes the `feedbackAlreadySubmitted` check. Active-status pages are unchanged.
 - **`feedback_review` view excludes reviewed requests** — `MarkFeedbackReviewed` clears `UnresolvedFeedback` attention; existing `AttentionLevel != None` filter handles exclusion automatically.
-- **Next session: Phase 8-B5 Session 5D** — integration verification, docs, decision index update (ADR-261..286), deferred tracker.
+- **Phase 8-B5 complete.** Next phase TBD from build plan.
