@@ -28,7 +28,41 @@ and carry-forward notes.
 
 | Order | Session | Status | Source / Gate |
 |---|---|---|---|
-| 1 | Phase 8-B5 Session 4D — Integration Verification, Docs, Decision Index, Deferred Tracker | Planned | `docs/build-log/041-phase-8-b5-session-4-filters-search-closed-history-pagination-decisions.md` |
+| 1 | Phase 8-B5 Session 5 — Feedback Review Completion | Planned | `docs/build-log/042-phase-8-b5-session-5-feedback-review-completion-decisions.md` |
+
+---
+
+## Phase 8-B5 Session 4D — Integration Verification, Docs, Decision Index, Deferred Tracker — COMPLETE
+
+**Tests:** 803 total (463 unit · 14 arch · 326 integration) — all green
+**Next free ADR:** ADR-295
+
+### What was done
+
+Session 4D is the completion gate for Sessions 4A–4C.
+
+**Verification pass — all clean:**
+- Full test suite: 803/803 pass
+- No Session 5 code present (`POST feedback-review` endpoint not registered; no `FeedbackReviewedAtUtc`/`FeedbackReviewedByAccountUserId`/`FeedbackReviewNote` fields)
+- `RequestListViewNotYetAvailable` retained in errors + ErrorHttpMapper but never returned by any service path
+- Cursor sentinels `HistorySortSentinel = 0` and `FeedbackReviewSortSentinel = 99` present; no collision with B5 ranking groups (1–8)
+- HMAC key wired in `KeepApiWebFactory` (32-byte all-zeros test key)
+- OffSeason list posture correct: reads open, `isOffSeason` suppresses notification eligibility and `CanSelfAssignFromList`/`CanAssignFromList`
+
+**Decision index:** ADR-237..260 updated from `Locked | build-log/041` → `Implemented | Sessions 4A-4C` (24 entries). ADR-287 was already `Implemented`.
+
+**Deferred tracker:**
+- DEF-034 → `Implemented — Sessions 4A-4C`
+- DEF-045 → `Implemented — Session 4C`
+
+### Files changed
+
+| File | Change |
+|---|---|
+| `docs/decisions/decision-index.md` | ADR-237..260 marked Implemented |
+| `docs/deferred-topics.md` | DEF-034, DEF-045 closed |
+| `docs/build-log/045-phase-8-b5-session-4d-integration-verification.md` | New |
+| `docs/session-log.md` | Rewritten |
 
 ---
 
