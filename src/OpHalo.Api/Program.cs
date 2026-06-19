@@ -99,6 +99,7 @@ builder.Services.AddScoped<ManageResponsibleService>();
 builder.Services.AddScoped<ManageWatcherService>();
 builder.Services.AddScoped<SelfWatchService>();
 builder.Services.AddScoped<MuteService>();
+builder.Services.AddScoped<MarkFeedbackReviewedService>();
 builder.Services.AddScoped<GetParticipantCandidatesService>();
 builder.Services.AddScoped<KeepRequestParticipationService>();
 builder.Services.AddScoped<KeepPublicCustomerAccessGuard>();
@@ -304,6 +305,18 @@ app.MapPost("/keep/requests/{requestId:guid}/attention/acknowledge", async (
     CancellationToken ct) =>
 {
     var command = new AcknowledgeAttentionCommand(requestId, body.Reason);
+    var result = await service.ExecuteAsync(command, ct);
+    return result.IsSuccess ? Results.Ok(result.Value) : ErrorHttpMapper.ToHttpResult(result.Error);
+}).RequireAuthorization();
+
+// Mark feedback reviewed — authenticated, Owner/Admin write (Phase 8-B5/Session 5B, ADR-274)
+app.MapPost("/keep/requests/{requestId:guid}/feedback-review", async (
+    Guid requestId,
+    FeedbackReviewRequestBody body,
+    MarkFeedbackReviewedService service,
+    CancellationToken ct) =>
+{
+    var command = new MarkFeedbackReviewedCommand(requestId, body.Note);
     var result = await service.ExecuteAsync(command, ct);
     return result.IsSuccess ? Results.Ok(result.Value) : ErrorHttpMapper.ToHttpResult(result.Error);
 }).RequireAuthorization();

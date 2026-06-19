@@ -26,44 +26,36 @@ and carry-forward notes.
 - report any discovered bugs, gaps, or decision conflicts in `docs/session-log.md` instead of
   silently guessing policy.
 
-| Order | Session | Status | Source / Gate |
-|---|---|---|---|
-| 1 | Phase 8-B5 Session 5B — Mark-Feedback-Reviewed service/API | **In progress** | `docs/build-log/042-phase-8-b5-session-5-feedback-review-completion-decisions.md` |
+## Phase 8-B5 Session 5B — Mark-Feedback-Reviewed Service/API — COMPLETE
 
-### 5B — What is done (mid-session checkpoint)
+**Tests:** 845 total (494 unit · 14 arch · 337 integration) — all green
+**Next free ADR:** ADR-295 (no new ADRs consumed)
 
-**Confirmed design decisions:**
-- `CanMarkFeedbackReviewed` formula (mapper helper): `isOwnerOrAdmin && canWrite && Status==Closed && FeedbackSubmittedAtUtc.HasValue && FeedbackWasResolved==false && !FeedbackReviewedAtUtc.HasValue && AttentionLevel!=None && AttentionReason==UnresolvedFeedback`
-- `nowUtc = clock.UtcNow` captured once per service execution, reused for AccountAccessContext and ToDetailResult
-- `ToDetailResult` signature extended with final `DateTime nowUtc` param; mapper stays pure
-- `FeedbackReviewNote` Owner/Admin-only (same visibility as `FeedbackComment`)
-- Aging fields (`FeedbackReviewAgeBucket`, `FeedbackReviewDueAtUtc`) null unless unreviewed negative feedback exists
+### What was built
 
-**Files edited — complete:**
+Session 5B wires the domain `MarkFeedbackReviewed` method from 5A into the full application and API stack.
 
 | File | Change |
 |---|---|
-| `Keep.Application/Requests/KeepRequestDetailResult.cs` | `AvailableActionsMetadata` +`CanMarkFeedbackReviewed`; `KeepRequestDetailResult` +5 review fields; `ValidationHintsMetadata` +`FeedbackReviewNoteMaxLength` |
-| `Keep.Application/Requests/KeepRequestDetailMapper.cs` | `+using Domain`; `ToDetailResult` +`nowUtc` param + 5 review fields; `+CanMarkFeedbackReviewed` helper; `+ComputeReviewAgeBucket`; `+ComputeReviewDueAtUtc`; `ValidationHints` +`FeedbackReviewNoteMaxLength: 2000` |
-| `Keep.Application/Requests/GetKeepRequestDetailService.cs` | `nowUtc` captured before `AccountAccessContext`; `CanMarkFeedbackReviewed` in actions; `nowUtc` to `ToDetailResult` |
-| `Keep.Application/Requests/ChangeKeepRequestStatusService.cs` | `nowUtc` before domain call; `CanMarkFeedbackReviewed`; `nowUtc` to `ToDetailResult` |
-| `Keep.Application/Requests/AddBusinessUpdateService.cs` | same pattern |
-| `Keep.Application/Requests/AddInternalNoteService.cs` | same pattern |
-| `Keep.Application/Requests/AcknowledgeAttentionService.cs` | same pattern |
-| `Keep.Application/Requests/LogExternalContactService.cs` | `nowUtc` before outbound/inbound dispatch; both branches use `nowUtc`; `CanMarkFeedbackReviewed`; `nowUtc` to `ToDetailResult` |
-| `Keep.Application/Requests/ManageResponsibleService.cs` | `nowUtc` before each domain call; `BuildDetailAsync` +`DateTime nowUtc` param; `CanMarkFeedbackReviewed`; `nowUtc` to `ToDetailResult` |
-| `Keep.Application/Requests/ManageWatcherService.cs` | same `BuildDetailAsync` pattern |
-| `Keep.Application/Requests/SelfWatchService.cs` | `nowUtc` before each domain call; `BuildDetailAsync` +`DateTime nowUtc`; `CanMarkFeedbackReviewed`; `nowUtc` to `ToDetailResult` |
-| `Keep.Application/Requests/MuteService.cs` | `nowUtc` before `Mute` call; `nowUtc` before `Unmute` call; `BuildDetailAsync` **not yet updated** — interrupted |
+| `Keep.Application/Requests/MuteService.cs` | `BuildDetailAsync` +`DateTime nowUtc` param; `CanMarkFeedbackReviewed`; `nowUtc` to `ToDetailResult` (was interrupted in prior checkpoint) |
+| `Keep.Application/Requests/MarkFeedbackReviewedService.cs` | New — Owner/Admin-only; OffSeason blocked (`RequestImplementsAllowedInOffSeason: false`); `nowUtc` captured once; delegates to `KeepRequest.MarkFeedbackReviewed`; `CommitAsync`; returns updated detail result |
+| `Api/Keep/FeedbackReviewRequest.cs` | New — `FeedbackReviewRequestBody(string? Note)` |
+| `Api/Helpers/ErrorHttpMapper.cs` | +3 entries: `FeedbackReviewUnavailable→409`, `FeedbackAlreadyReviewed→409`, `FeedbackReviewNoteTooLong→400` |
+| `Api/Program.cs` | `AddScoped<MarkFeedbackReviewedService>`; `POST /keep/requests/{requestId}/feedback-review` endpoint |
+| `IntegrationTests/Api/KeepFeedbackReviewApiTests.cs` | New — 10 tests: Owner success (attention cleared, action false), Admin+note, Operator 403, Viewer 403, unauthenticated 401, already-reviewed 409, positive-feedback 409, no-feedback 409, note-too-long 400, customer-page exclusion |
+| `IntegrationTests/Api/KeepOffSeasonTests.cs` | +1 test: `MarkFeedbackReviewed_OffSeason_Returns403` |
 
-**Still remaining for 5B:**
-- `MuteService.BuildDetailAsync` — add `DateTime nowUtc` param, `CanMarkFeedbackReviewed`, pass `nowUtc` to `ToDetailResult`
-- `MarkFeedbackReviewedService.cs` — new application service
-- `FeedbackReviewRequest.cs` — new API body DTO
-- `ErrorHttpMapper.cs` — 3 entries: `FeedbackReviewUnavailable→409`, `FeedbackAlreadyReviewed→409`, `FeedbackReviewNoteTooLong→400`
-- `Program.cs` — DI registration + `POST /keep/requests/{requestId}/feedback-review` endpoint
-- `KeepFeedbackReviewApiTests.cs` — integration tests
-- Build verification + full test run
+### Design decisions confirmed this session
+
+- **Concurrency race deferred (DEF-074):** `GetRequestForUpdateAsync` has no row lock or concurrency token. Two concurrent Owner/Admin requests could both pass the unreviewed guard and commit. In practice the risk for V1 pilot is low; the correct fix (Npgsql `xmin` OCC or EF `RowVersion` on `KeepRequest`) is a cross-cutting infrastructure concern that should be applied to all write paths together. Added to deferred tracker.
+- **OffSeason returns `Forbidden` (not `KeepRequest.ReadOnly`):** ADR-276 lists `KeepRequest.ReadOnly` aspirationally; the entire implemented convention (10+ write services) returns generic `auth.forbidden` for OffSeason/blocked account state. `MarkFeedbackReviewedService` follows the uniform convention. ADR-276 superseded on this point.
+
+### Next session: Phase 8-B5 Session 5C
+
+List/customer-page OffSeason and UI-ready metadata integration:
+- `feedback_review` view/count excludes already-reviewed requests
+- OffSeason customer page GET omits `feedback` from `AllowedActions`
+- OffSeason `POST /keep/r/{pageToken}/feedback` server-side block
 
 ---
 
@@ -670,3 +662,6 @@ Member management API + integration tests.
 - **4C `ParticipationOperatorCannotAssignOther`** — now fires only for `target != self`; self-assign path proceeds.
 - **4C `RequestListViewNotYetAvailable`** — error code retained in `KeepRequestErrors.cs` and `ErrorHttpMapper.cs` but no longer returned by the list service.
 - **Next session: Phase 8-B5 Session 4D** — Integration Verification, Docs, Decision Index, Deferred Tracker.
+- **5B OffSeason returns `Forbidden`** — all Keep write services (including `MarkFeedbackReviewedService`) return generic `auth.forbidden` for OffSeason/blocked account, not `KeepRequest.ReadOnly`. ADR-276's listed error was aspirational; uniform Forbidden convention is the implemented contract.
+- **5B concurrency gap (DEF-074)** — `KeepRequest` has no concurrency token; concurrent feedback reviews could both commit. Domain guard catches sequential duplicate via `FeedbackAlreadyReviewed`; true-race window deferred to cross-cutting OCC slice.
+- **`MarkFeedbackReviewedService` is Owner/Admin only** — role check on `userSnapshot.Role` fires immediately after the user snapshot load, before account snapshot and permission policy checks. This differs from Operator-accessible services where role restrictions are expressed in domain or command guards.

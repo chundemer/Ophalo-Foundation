@@ -295,8 +295,7 @@ Recommended errors:
 
 ```text
 404 KeepRequest.NotFound
-403 KeepRequest.Forbidden
-403 KeepRequest.ReadOnly
+403 auth.forbidden
 409 KeepRequest.FeedbackReviewUnavailable
 409 KeepRequest.FeedbackAlreadyReviewed
 400 KeepRequest.FeedbackReviewNoteTooLong
@@ -306,9 +305,20 @@ Rules:
 
 - invalid business states collapse to `FeedbackReviewUnavailable` except already-reviewed;
 - note length gets a validation-specific error;
-- access/read-only guards follow existing API conventions.
+- access and OffSeason/read-only guards return the existing uniform `403 auth.forbidden` used by
+  Keep operator write services;
+- Session 5 does not introduce a one-off `KeepRequest.ReadOnly` error or retroactively change all
+  existing write services.
 
 Reason: clients need predictable messages without a bespoke error for every invalid state.
+
+Concurrency note:
+
+- the domain `FeedbackAlreadyReviewed` guard prevents sequential duplicate review;
+- `KeepRequest` currently has no optimistic concurrency token or row lock, so simultaneous reviewers
+  can still race between read and commit;
+- Session 5 accepts that low pilot risk and defers cross-cutting Keep write concurrency control to
+  `DEF-074` rather than adding a feedback-review-only persistence exception.
 
 ### ADR-277 — OffSeason blocks customer feedback and review writes
 

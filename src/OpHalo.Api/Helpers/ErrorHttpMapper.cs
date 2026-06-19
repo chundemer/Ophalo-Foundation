@@ -117,6 +117,11 @@ public static class ErrorHttpMapper
             var c when c == "KeepRequest.ParticipationResponsibleCannotWatch"     => (StatusCodes.Status409Conflict, "Conflict.", null),
             var c when c == "KeepRequest.ParticipationStateCorrupt"               => (StatusCodes.Status409Conflict, "Conflict.", null),
 
+            // --- Feedback review errors (ADR-276 / Session 5B) ---
+            var c when c == "KeepRequest.FeedbackReviewUnavailable"              => (StatusCodes.Status409Conflict, "Conflict.", null),
+            var c when c == "KeepRequest.FeedbackAlreadyReviewed"                => (StatusCodes.Status409Conflict, "Conflict.", null),
+            var c when c == "KeepRequest.FeedbackReviewNoteTooLong"              => (StatusCodes.Status400BadRequest, "Bad request.", null),
+
             // Explicit match — Invite.SeatLimitReached resolves to 409; no suffix pattern covers it.
             var c when c == "Invite.SeatLimitReached" => (StatusCodes.Status409Conflict, "Conflict.", null),
 

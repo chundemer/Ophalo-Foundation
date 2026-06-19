@@ -126,6 +126,7 @@ public sealed class MuteService(
     private async Task<KeepRequestDetailResult> BuildDetailAsync(
         OpHalo.Keep.Core.Entities.KeepRequest request,
         AccountUserRole role,
+        DateTime nowUtc,
         CancellationToken ct)
     {
         var events       = await readPersistence.GetAllEventsAsync(request.Id, ct);
@@ -137,22 +138,23 @@ public sealed class MuteService(
             p => p.AccountUserId == currentUser.UserId && p.DetachedAtUtc is null);
 
         var availableActions = new AvailableActionsMetadata(
-            CanChangeStatus:         !request.IsTerminal,
-            CanSendBusinessUpdate:   !request.IsTerminal,
-            CanAddInternalNote:      true,
-            CanAcknowledgeAttention: KeepRequestDetailMapper.CanAcknowledgeAttention(true, request),
-            CanLogExternalContact:   !request.IsTerminal,
-            CanAssignResponsible:    isOwnerOrAdmin && !request.IsTerminal,
-            CanWatch:                !request.IsTerminal && currentUserRow is null,
-            CanUnwatch:              !request.IsTerminal && currentUserRow?.ParticipationType == ParticipationType.Watching,
-            CanMute:                 !request.IsTerminal && currentUserRow is not null && currentUserRow.NotificationsEnabled,
-            CanUnmute:               !request.IsTerminal && currentUserRow is not null && !currentUserRow.NotificationsEnabled,
-            AllowedStatuses:         !request.IsTerminal
+            CanChangeStatus:           !request.IsTerminal,
+            CanSendBusinessUpdate:     !request.IsTerminal,
+            CanAddInternalNote:        true,
+            CanAcknowledgeAttention:   KeepRequestDetailMapper.CanAcknowledgeAttention(true, request),
+            CanLogExternalContact:     !request.IsTerminal,
+            CanAssignResponsible:      isOwnerOrAdmin && !request.IsTerminal,
+            CanWatch:                  !request.IsTerminal && currentUserRow is null,
+            CanUnwatch:                !request.IsTerminal && currentUserRow?.ParticipationType == ParticipationType.Watching,
+            CanMute:                   !request.IsTerminal && currentUserRow is not null && currentUserRow.NotificationsEnabled,
+            CanUnmute:                 !request.IsTerminal && currentUserRow is not null && !currentUserRow.NotificationsEnabled,
+            CanMarkFeedbackReviewed:   KeepRequestDetailMapper.CanMarkFeedbackReviewed(canWrite: true, isOwnerOrAdmin, request),
+            AllowedStatuses:           !request.IsTerminal
                 ? KeepRequestDetailMapper.ComputeAllowedStatuses(request.Status)
                 : []);
 
         return KeepRequestDetailMapper.ToDetailResult(
             request, businessName ?? string.Empty, participants, events,
-            availableActions, role, canOperate: true, currentUser.UserId);
+            availableActions, role, canOperate: true, currentUser.UserId, nowUtc);
     }
 }

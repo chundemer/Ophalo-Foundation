@@ -228,6 +228,16 @@ public sealed class KeepOffSeasonTests : IClassFixture<KeepApiWebFactory>, IAsyn
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
 
+    [Fact]
+    public async Task MarkFeedbackReviewed_OffSeason_Returns403()
+    {
+        // OffSeason check fires before request load — any requestId returns 403.
+        var response = await AuthRequest().PostAsJsonAsync(
+            $"/keep/requests/{_requestId}/feedback-review", new { });
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
     // =========================================================================
     // Customer writes blocked in OffSeason — 409 OffSeasonUnavailable (ADR-221)
     // =========================================================================
