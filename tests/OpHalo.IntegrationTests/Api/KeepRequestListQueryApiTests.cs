@@ -6,6 +6,7 @@ using Microsoft.Extensions.DependencyInjection;
 using OpHalo.Foundation.Application.Accounts.Provisioning;
 using OpHalo.Foundation.Core.Constants;
 using OpHalo.Foundation.Core.Entities.Accounts;
+using OpHalo.Foundation.Core.Entities.Users;
 using OpHalo.Foundation.Core.Entities.Accounts.Enums;
 using OpHalo.Foundation.Core.Helpers;
 using OpHalo.Foundation.Infrastructure.Persistence;
@@ -26,7 +27,8 @@ public sealed class KeepRequestListQueryApiTests : IClassFixture<KeepApiWebFacto
     private readonly KeepApiWebFactory _factory;
     private readonly HttpClient _client;
 
-    private string _ownerCookie = string.Empty;
+    private string _ownerCookie    = string.Empty;
+    private string _operatorCookie = string.Empty;
 
     public KeepRequestListQueryApiTests(KeepApiWebFactory factory)
     {
@@ -91,6 +93,22 @@ public sealed class KeepRequestListQueryApiTests : IClassFixture<KeepApiWebFacto
         await db.SaveChangesAsync();
 
         _ownerCookie = await _factory.SeedSessionAsync(graph.Owner.Id, accountId);
+
+        // Operator for 4C unassigned-view tests
+        var operatorEmail = "operator@4a-query-tests.com";
+        var operatorUser  = User.CreateVerified(operatorEmail, "4A Operator", now);
+        var operatorMember = AccountUser.CreatePendingInvite(
+            accountId, operatorEmail, EmailNormalizer.Normalize(operatorEmail),
+            AccountUserRole.Operator,
+            inviteTokenHash: "operator_4a_query",
+            inviteExpiresAtUtc: now.AddDays(7),
+            nowUtc: now);
+        operatorMember.Activate(operatorUser.Id, now);
+        db.Users.Add(operatorUser);
+        db.AccountUsers.Add(operatorMember);
+        await db.SaveChangesAsync();
+
+        _operatorCookie = await _factory.SeedSessionAsync(operatorMember.Id, accountId);
     }
 
     public Task DisposeAsync() => Task.CompletedTask;
@@ -107,6 +125,13 @@ public sealed class KeepRequestListQueryApiTests : IClassFixture<KeepApiWebFacto
     private async Task<HttpResponseMessage> GetAsync(string path)
     {
         using var req = WithCookie(path);
+        return await _client.SendAsync(req);
+    }
+
+    private async Task<HttpResponseMessage> GetAsAsync(string path, string rawCookie)
+    {
+        using var req = new HttpRequestMessage(HttpMethod.Get, path);
+        req.Headers.Add("Cookie", $"{AuthConstants.CookieName}={rawCookie}");
         return await _client.SendAsync(req);
     }
 
@@ -453,6 +478,28 @@ public sealed class KeepRequestListQueryApiTests : IClassFixture<KeepApiWebFacto
         Assert.Single(page2.Requests);
     }
 
+    // --- Session 4C: Operator unassigned view and rowContext --------------------
+
+    [Fact]
+    public async Task Operator_unassigned_view_returns_200()
+    {
+        var res = await GetAsAsync("/keep/requests?view=unassigned", _operatorCookie);
+        Assert.Equal(HttpStatusCode.OK, res.StatusCode);
+    }
+
+    [Fact]
+    public async Task rowContext_field_present_on_each_row()
+    {
+        var res = await GetAsync("/keep/requests");
+        Assert.Equal(HttpStatusCode.OK, res.StatusCode);
+
+        var body = await res.Content.ReadFromJsonAsync<ListResponseBody>(
+            new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+        Assert.NotNull(body);
+        Assert.NotEmpty(body.Requests);
+        Assert.All(body.Requests, r => Assert.False(string.IsNullOrEmpty(r.RowContext)));
+    }
+
     // --- Response DTOs ----------------------------------------------------------
 
     private sealed record ListResponseBody(
@@ -461,7 +508,7 @@ public sealed class KeepRequestListQueryApiTests : IClassFixture<KeepApiWebFacto
         object? ViewCounts,
         ListContextBody? ListContext);
 
-    private sealed record ListRequestBody(Guid Id);
+    private sealed record ListRequestBody(Guid Id, string? RowContext);
 
     private sealed record PageInfoBody(int Limit, bool HasMore, string? NextCursor);
 

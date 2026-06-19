@@ -139,7 +139,7 @@ public sealed class GetKeepRequestListService(
 
         // --- Query validation pipeline (ADR-257/258) ---
         // Order: unknown view → date format → status slug → attentionReason slug →
-        //        contradictions → view role auth → Operator unassigned gate → limit → cursor.
+        //        contradictions → view role auth → limit → cursor.
         // Individual values are validated before combinations so clients see specific errors.
 
         query ??= new KeepRequestListQuery();
@@ -184,11 +184,7 @@ public sealed class GetKeepRequestListService(
         if (OwnerAdminOnlyViews.Contains(normalizedView) && !isOwnerOrAdmin)
             return Result<GetKeepRequestListResult>.Failure(KeepRequestErrors.RequestListHistoryViewForbidden);
 
-        // 7. Operator unassigned gate (4B — unlocked in 4C with eligibility filtering, ADR-240).
-        if (normalizedView == "unassigned" && !isOwnerOrAdmin)
-            return Result<GetKeepRequestListResult>.Failure(KeepRequestErrors.RequestListViewNotYetAvailable);
-
-        // 8. Limit.
+        // 7. Limit.
         var limit = query.Limit ?? DefaultLimit;
         if (limit < 1 || limit > MaxLimit)
             return Result<GetKeepRequestListResult>.Failure(KeepRequestErrors.RequestListInvalidLimit);
@@ -278,7 +274,7 @@ public sealed class GetKeepRequestListService(
 
             page = historyPageEntities
                 .Select(r => ToSummary(r, canOperate, isOwnerOrAdmin, isOffSeason, nowUtc,
-                    histParticipants.GetValueOrDefault(r.Id)))
+                    histParticipants.GetValueOrDefault(r.Id), normalizedView))
                 .ToList();
         }
         else
@@ -307,7 +303,7 @@ public sealed class GetKeepRequestListService(
 
             var allSummaries = rawRequests
                 .Select(r => ToSummary(r, canOperate, isOwnerOrAdmin, isOffSeason, nowUtc,
-                    participants.GetValueOrDefault(r.Id)))
+                    participants.GetValueOrDefault(r.Id), normalizedView))
                 .Order(comparer)
                 .ToList();
 
@@ -515,7 +511,7 @@ public sealed class GetKeepRequestListService(
             : rowTick.Value.CompareTo(cursorTick.Value);
     }
 
-    // --- Row mapping (unchanged from Session 3C) ---
+    // --- Row mapping ---
 
     private static KeepRequestSummary ToSummary(
         KeepRequest r,
@@ -523,7 +519,8 @@ public sealed class GetKeepRequestListService(
         bool isOwnerOrAdmin,
         bool isOffSeason,
         DateTime nowUtc,
-        KeepRequestParticipantSummary? participation)
+        KeepRequestParticipantSummary? participation,
+        string normalizedView)
     {
         var isPostClose = r.Status == KeepRequestStatus.Closed
             && r.AttentionReason == AttentionReason.UnresolvedFeedback
@@ -590,8 +587,17 @@ public sealed class GetKeepRequestListService(
         var contactActions = BuildContactActions(r, canOperate, isPostClose);
         var actions = new KeepRequestActionsInfo(quickActions, contactActions);
 
+        var isUnassigned = participation is null || participation.ResponsibleCount == 0;
         var canAssignFromList = isOwnerOrAdmin && canOperate && !isOffSeason && !r.IsTerminal;
-        var participationInfo = BuildParticipationInfo(participation, canAssignFromList);
+        var canSelfAssignFromList = normalizedView == "unassigned"
+            && !isOwnerOrAdmin
+            && canOperate
+            && !isOffSeason
+            && !r.IsTerminal
+            && isUnassigned;
+
+        var rowContext = ComputeRowContext(r, isPostClose, firstResponsePending, firstResponseOverdue, canSelfAssignFromList);
+        var participationInfo = BuildParticipationInfo(participation, canAssignFromList, canSelfAssignFromList);
         var notificationInfo = BuildNotificationInfo(canOperate, isOffSeason, participation);
 
         return new KeepRequestSummary(
@@ -609,6 +615,7 @@ public sealed class GetKeepRequestListService(
             UpdatedAtUtc: r.UpdatedAtUtc,
             IsTerminal: r.IsTerminal,
             IsPostCloseFollowUp: isPostClose,
+            RowContext: rowContext,
             Attention: attention,
             Ranking: ranking,
             Preview: preview,
@@ -735,13 +742,31 @@ public sealed class GetKeepRequestListService(
         return actions;
     }
 
+    private static string ComputeRowContext(
+        KeepRequest r,
+        bool isPostClose,
+        bool firstResponsePending,
+        bool firstResponseOverdue,
+        bool canSelfAssignFromList)
+    {
+        if (isPostClose) return "feedback_review";
+        if (r.Status == KeepRequestStatus.Closed) return "closed_history";
+        if (r.Status == KeepRequestStatus.Cancelled) return "cancelled_history";
+        if (r.AttentionLevel != AttentionLevel.None) return "needs_attention";
+        if (firstResponsePending || firstResponseOverdue) return "first_response";
+        if (r.Status == KeepRequestStatus.PendingCustomer) return "waiting_on_customer";
+        if (canSelfAssignFromList) return "unassigned_available";
+        return "active_work";
+    }
+
     private static KeepRequestParticipationInfo BuildParticipationInfo(
         KeepRequestParticipantSummary? participation,
-        bool canAssignFromList)
+        bool canAssignFromList,
+        bool canSelfAssignFromList)
     {
         if (participation is null)
             return new KeepRequestParticipationInfo(
-                0, 0, false, true, "none", null, null, null, canAssignFromList);
+                0, 0, false, true, "none", null, null, null, canAssignFromList, canSelfAssignFromList);
 
         var participationType = participation.CurrentUserParticipationType switch
         {
@@ -759,7 +784,8 @@ public sealed class GetKeepRequestListService(
             CurrentUserNotificationsEnabled: participation.CurrentUserNotificationsEnabled,
             ResponsibleDisplayName: participation.ResponsibleDisplayName,
             ResponsibleIsStale: participation.ResponsibleIsStale,
-            CanAssignFromList: canAssignFromList);
+            CanAssignFromList: canAssignFromList,
+            CanSelfAssignFromList: canSelfAssignFromList);
     }
 
     private static KeepRequestNotificationInfo BuildNotificationInfo(

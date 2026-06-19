@@ -15,6 +15,7 @@ public sealed record KeepRequestSummary(
     DateTime UpdatedAtUtc,
     bool IsTerminal,
     bool IsPostCloseFollowUp,
+    string RowContext,
     KeepRequestAttentionInfo Attention,
     KeepRequestRankingInfo Ranking,
     KeepRequestPreviewInfo Preview,
@@ -71,7 +72,8 @@ public sealed record KeepRequestParticipationInfo(
     bool? CurrentUserNotificationsEnabled,
     string? ResponsibleDisplayName,
     bool? ResponsibleIsStale,
-    bool CanAssignFromList);
+    bool CanAssignFromList,
+    bool CanSelfAssignFromList);
 
 public sealed record KeepRequestNotificationInfo(
     bool Eligible,

@@ -213,13 +213,12 @@ public class KeepRequestListServiceTests
     }
 
     [Fact]
-    public async Task Execute_unassigned_view_not_yet_available_for_operator()
+    public async Task Execute_unassigned_view_returns_200_for_operator()
     {
         var p = HappyPathPersistence(role: AccountUserRole.Operator);
         var sut = BuildSut(p);
         var result = await sut.ExecuteAsync(new KeepRequestListQuery(View: "unassigned"));
-        Assert.False(result.IsSuccess);
-        Assert.Equal("KeepRequest.RequestListViewNotYetAvailable", result.Error.Code);
+        Assert.True(result.IsSuccess);
     }
 
     [Theory]
@@ -915,6 +914,257 @@ public class KeepRequestListServiceTests
         Assert.Single(page2.Value.Requests);
     }
 
+    // --- 4C: row context --------------------------------------------------------
+
+    private static KeepRequestParticipantSummary StubParticipant(
+        int responsibleCount = 0, bool responsibleIsStale = false) =>
+        new(responsibleCount, WatchingCount: 0, null, null,
+            responsibleCount > 0 ? "Some User" : null, responsibleIsStale);
+
+    [Fact]
+    public async Task Execute_rowContext_active_work_for_plain_active_request()
+    {
+        var request = MakeRequest();
+        SetProp(request, nameof(KeepRequest.FirstRespondedAtUtc), Now);
+        SetProp(request, nameof(KeepRequest.WaitingDirection), WaitingDirection.None);
+        SetProp(request, nameof(KeepRequest.AttentionLevel), AttentionLevel.None);
+
+        var p = HappyPathPersistence([request]);
+        var sut = BuildSut(p);
+        var result = await sut.ExecuteAsync();
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal("active_work", result.Value.Requests[0].RowContext);
+    }
+
+    [Fact]
+    public async Task Execute_rowContext_needs_attention_when_attention_level_raised()
+    {
+        var request = MakeRequest();
+        SetProp(request, nameof(KeepRequest.AttentionLevel), AttentionLevel.NeedsAttention);
+        SetProp(request, nameof(KeepRequest.AttentionReason), AttentionReason.CustomerMessage);
+        SetProp(request, nameof(KeepRequest.WaitingDirection), WaitingDirection.Business);
+        SetProp(request, nameof(KeepRequest.FirstRespondedAtUtc), Now);
+
+        var p = HappyPathPersistence([request]);
+        var sut = BuildSut(p);
+        var result = await sut.ExecuteAsync();
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal("needs_attention", result.Value.Requests[0].RowContext);
+    }
+
+    [Fact]
+    public async Task Execute_rowContext_first_response_when_first_response_pending()
+    {
+        // FirstResponseDueAtUtc = Now+60 > Now (FakeClock), so firstResponsePending = true.
+        var request = MakeRequest(firstResponseTargetMinutes: 60);
+        SetProp(request, nameof(KeepRequest.WaitingDirection), WaitingDirection.None);
+        SetProp(request, nameof(KeepRequest.AttentionLevel), AttentionLevel.None);
+
+        var p = HappyPathPersistence([request]);
+        var sut = BuildSut(p);
+        var result = await sut.ExecuteAsync();
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal("first_response", result.Value.Requests[0].RowContext);
+    }
+
+    [Fact]
+    public async Task Execute_rowContext_waiting_on_customer_for_pending_customer_status()
+    {
+        var request = MakeRequest();
+        SetProp(request, nameof(KeepRequest.Status), KeepRequestStatus.PendingCustomer);
+        SetProp(request, nameof(KeepRequest.WaitingDirection), WaitingDirection.Customer);
+        SetProp(request, nameof(KeepRequest.AttentionLevel), AttentionLevel.None);
+        SetProp(request, nameof(KeepRequest.FirstRespondedAtUtc), Now);
+
+        var p = HappyPathPersistence([request]);
+        var sut = BuildSut(p);
+        var result = await sut.ExecuteAsync();
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal("waiting_on_customer", result.Value.Requests[0].RowContext);
+    }
+
+    [Fact]
+    public async Task Execute_rowContext_feedback_review_for_post_close_request()
+    {
+        var request = MakeRequest();
+        SetProp(request, nameof(KeepRequest.Status), KeepRequestStatus.Closed);
+        SetProp(request, nameof(KeepRequest.AttentionLevel), AttentionLevel.Waiting);
+        SetProp(request, nameof(KeepRequest.AttentionReason), AttentionReason.UnresolvedFeedback);
+
+        var p = HappyPathPersistence([request]);
+        var sut = BuildSut(p);
+        var result = await sut.ExecuteAsync();
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal("feedback_review", result.Value.Requests[0].RowContext);
+    }
+
+    [Fact]
+    public async Task Execute_rowContext_closed_history_for_closed_request_in_history_view()
+    {
+        // Uses view=closed_history — the real surface that returns Closed rows (ADR-248).
+        var request = MakeRequest();
+        SetProp(request, nameof(KeepRequest.Status), KeepRequestStatus.Closed);
+        SetProp(request, nameof(KeepRequest.AttentionLevel), AttentionLevel.None);
+
+        var p = HappyPathPersistence([request]);
+        var sut = BuildSut(p);
+        var result = await sut.ExecuteAsync(new KeepRequestListQuery(View: "closed_history"));
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal("closed_history", result.Value.Requests[0].RowContext);
+    }
+
+    [Fact]
+    public async Task Execute_rowContext_cancelled_history_for_cancelled_request_in_history_view()
+    {
+        // Uses view=cancelled_history — the real surface that returns Cancelled rows (ADR-248).
+        var request = MakeRequest();
+        SetProp(request, nameof(KeepRequest.Status), KeepRequestStatus.Cancelled);
+
+        var p = HappyPathPersistence([request]);
+        var sut = BuildSut(p);
+        var result = await sut.ExecuteAsync(new KeepRequestListQuery(View: "cancelled_history"));
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal("cancelled_history", result.Value.Requests[0].RowContext);
+    }
+
+    // --- 4C: CanSelfAssignFromList -------------------------------------------
+
+    [Fact]
+    public async Task Execute_canSelfAssignFromList_true_for_operator_in_unassigned_view_no_responsible()
+    {
+        var request = MakeRequest();
+        SetProp(request, nameof(KeepRequest.FirstRespondedAtUtc), Now);
+        SetProp(request, nameof(KeepRequest.WaitingDirection), WaitingDirection.None);
+        SetProp(request, nameof(KeepRequest.AttentionLevel), AttentionLevel.None);
+
+        // No participant summary → isUnassigned = true
+        var p = HappyPathPersistence([request], role: AccountUserRole.Operator);
+        var sut = BuildSut(p);
+        var result = await sut.ExecuteAsync(new KeepRequestListQuery(View: "unassigned"));
+
+        Assert.True(result.IsSuccess);
+        var summary = result.Value.Requests[0];
+        Assert.Equal("unassigned_available", summary.RowContext);
+        Assert.True(summary.Participation.CanSelfAssignFromList);
+    }
+
+    [Fact]
+    public async Task Execute_canSelfAssignFromList_false_when_active_responsible_present()
+    {
+        var request = MakeRequest();
+        SetProp(request, nameof(KeepRequest.FirstRespondedAtUtc), Now);
+        SetProp(request, nameof(KeepRequest.WaitingDirection), WaitingDirection.None);
+        SetProp(request, nameof(KeepRequest.AttentionLevel), AttentionLevel.None);
+
+        var p = HappyPathPersistence([request], role: AccountUserRole.Operator);
+        p.ParticipantSummaryMap[request.Id] = StubParticipant(responsibleCount: 1);
+        var sut = BuildSut(p);
+        var result = await sut.ExecuteAsync(new KeepRequestListQuery(View: "unassigned"));
+
+        Assert.True(result.IsSuccess);
+        var summary = result.Value.Requests[0];
+        Assert.False(summary.Participation.CanSelfAssignFromList);
+        Assert.NotEqual("unassigned_available", summary.RowContext);
+    }
+
+    [Fact]
+    public async Task Execute_canSelfAssignFromList_false_for_stale_responsible()
+    {
+        // Stale responsible rows have DetachedAtUtc==null, so they count in ResponsibleCount
+        // and are excluded from the unassigned DB view. Even if the fake returns such a row,
+        // ResponsibleCount > 0 makes the request non-self-assignable (D3 decision).
+        var request = MakeRequest();
+        SetProp(request, nameof(KeepRequest.FirstRespondedAtUtc), Now);
+        SetProp(request, nameof(KeepRequest.WaitingDirection), WaitingDirection.None);
+        SetProp(request, nameof(KeepRequest.AttentionLevel), AttentionLevel.None);
+
+        var p = HappyPathPersistence([request], role: AccountUserRole.Operator);
+        p.ParticipantSummaryMap[request.Id] = StubParticipant(responsibleCount: 1, responsibleIsStale: true);
+        var sut = BuildSut(p);
+        var result = await sut.ExecuteAsync(new KeepRequestListQuery(View: "unassigned"));
+
+        Assert.True(result.IsSuccess);
+        Assert.False(result.Value.Requests[0].Participation.CanSelfAssignFromList);
+    }
+
+    [Fact]
+    public async Task Execute_canSelfAssignFromList_false_for_operator_outside_unassigned_view()
+    {
+        // Same Operator, same unassigned request, but view=default — only unassigned view allows claim.
+        var request = MakeRequest();
+        SetProp(request, nameof(KeepRequest.FirstRespondedAtUtc), Now);
+        SetProp(request, nameof(KeepRequest.WaitingDirection), WaitingDirection.None);
+        SetProp(request, nameof(KeepRequest.AttentionLevel), AttentionLevel.None);
+
+        var p = HappyPathPersistence([request], role: AccountUserRole.Operator);
+        var sut = BuildSut(p);
+        var result = await sut.ExecuteAsync();
+
+        Assert.True(result.IsSuccess);
+        Assert.False(result.Value.Requests[0].Participation.CanSelfAssignFromList);
+    }
+
+    [Fact]
+    public async Task Execute_canSelfAssignFromList_false_for_owner_in_unassigned_view()
+    {
+        // Owner/Admin may not self-claim via this affordance (they use full assign).
+        var request = MakeRequest();
+        SetProp(request, nameof(KeepRequest.FirstRespondedAtUtc), Now);
+        SetProp(request, nameof(KeepRequest.WaitingDirection), WaitingDirection.None);
+        SetProp(request, nameof(KeepRequest.AttentionLevel), AttentionLevel.None);
+
+        var p = HappyPathPersistence([request], role: AccountUserRole.Owner);
+        var sut = BuildSut(p);
+        var result = await sut.ExecuteAsync(new KeepRequestListQuery(View: "unassigned"));
+
+        Assert.True(result.IsSuccess);
+        Assert.False(result.Value.Requests[0].Participation.CanSelfAssignFromList);
+    }
+
+    [Fact]
+    public async Task Execute_canSelfAssignFromList_false_in_offseason()
+    {
+        var request = MakeRequest();
+        SetProp(request, nameof(KeepRequest.FirstRespondedAtUtc), Now);
+        SetProp(request, nameof(KeepRequest.WaitingDirection), WaitingDirection.None);
+        SetProp(request, nameof(KeepRequest.AttentionLevel), AttentionLevel.None);
+
+        var p = HappyPathPersistence([request], role: AccountUserRole.Operator);
+        p.AccountSnapshotToReturn = ActiveSnapshot(AccountOperatingMode.OffSeason);
+        var sut = BuildSut(p, posture: AccountAccessPosture.ReadOnly);
+        var result = await sut.ExecuteAsync(new KeepRequestListQuery(View: "unassigned"));
+
+        Assert.True(result.IsSuccess);
+        Assert.False(result.Value.Requests[0].Participation.CanSelfAssignFromList);
+    }
+
+    [Fact]
+    public async Task Execute_rowContext_needs_attention_wins_over_unassigned_available()
+    {
+        // Attention raised: needs_attention; CanSelfAssignFromList still true (separate signal per D1).
+        var request = MakeRequest();
+        SetProp(request, nameof(KeepRequest.AttentionLevel), AttentionLevel.NeedsAttention);
+        SetProp(request, nameof(KeepRequest.AttentionReason), AttentionReason.CustomerMessage);
+        SetProp(request, nameof(KeepRequest.WaitingDirection), WaitingDirection.Business);
+        SetProp(request, nameof(KeepRequest.FirstRespondedAtUtc), Now);
+
+        var p = HappyPathPersistence([request], role: AccountUserRole.Operator);
+        var sut = BuildSut(p);
+        var result = await sut.ExecuteAsync(new KeepRequestListQuery(View: "unassigned"));
+
+        Assert.True(result.IsSuccess);
+        var summary = result.Value.Requests[0];
+        Assert.Equal("needs_attention", summary.RowContext);
+        Assert.True(summary.Participation.CanSelfAssignFromList);
+    }
+
     // --- Fakes ------------------------------------------------------------------
 
     private sealed class FakeCursorProtector : IKeepRequestListCursorProtector
@@ -990,9 +1240,11 @@ public class KeepRequestListServiceTests
             Guid accountId, Guid currentAccountUserId, bool isOwnerOrAdmin, CancellationToken ct) =>
             Task.FromResult(new KeepRequestViewCounts(0, 0, 0, 0, 0, 0));
 
+        public Dictionary<Guid, KeepRequestParticipantSummary> ParticipantSummaryMap { get; set; } = new();
+
         public Task<Dictionary<Guid, KeepRequestParticipantSummary>> GetParticipantSummariesAsync(
             IReadOnlyList<Guid> requestIds, Guid currentAccountUserId, Guid accountId, CancellationToken ct) =>
-            Task.FromResult(new Dictionary<Guid, KeepRequestParticipantSummary>());
+            Task.FromResult(ParticipantSummaryMap);
     }
 
     private sealed class FakeUserAccessPolicy(bool permitted) : IUserAccessPolicy

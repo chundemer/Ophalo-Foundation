@@ -28,8 +28,64 @@ and carry-forward notes.
 
 | Order | Session | Status | Source / Gate |
 |---|---|---|---|
-| 1 | Phase 8-B5 Session 4C — Operator Unassigned Surface + Narrow Self-Assign Re-enable, Row Context/Action Metadata | Planned | `docs/build-log/041-phase-8-b5-session-4-filters-search-closed-history-pagination-decisions.md` |
-| 2 | Phase 8-B5 Session 4D — Integration Verification, Docs, Decision Index, Deferred Tracker | Planned | `docs/build-log/041-phase-8-b5-session-4-filters-search-closed-history-pagination-decisions.md` |
+| 1 | Phase 8-B5 Session 4D — Integration Verification, Docs, Decision Index, Deferred Tracker | Planned | `docs/build-log/041-phase-8-b5-session-4-filters-search-closed-history-pagination-decisions.md` |
+
+---
+
+## Phase 8-B5 Session 4C — Operator Unassigned Surface + Self-Assign Re-enable, Row Context — COMPLETE
+
+**Tests:** 803 total (463 unit · 14 arch · 326 integration) — all green
+**Next free ADR:** ADR-288
+
+### What was built
+
+Session 4C removed the 4B operator gate on `view=unassigned`, replaced the blunt Operator block in
+`ManageResponsibleService.SetAsync` with targeted self-assign logic, added `RowContext` and
+`CanSelfAssignFromList` to the list surface, and opened the unassigned view count to all roles.
+
+| File | Change |
+|---|---|
+| `Keep.Core/Errors/KeepRequestErrors.cs` | `ParticipationOperatorCannotAssignOther` message updated (remove "or self-assign") |
+| `Keep.Application/Requests/KeepRequestSummary.cs` | `+RowContext: string` on `KeepRequestSummary`; `+CanSelfAssignFromList: bool` on `KeepRequestParticipationInfo` |
+| `Keep.Application/Requests/GetKeepRequestListService.cs` | `ToSummary`: adds `isUnassigned`, `canSelfAssignFromList`, `ComputeRowContext` call; `BuildParticipationInfo`: 3rd param `canSelfAssignFromList`; new `ComputeRowContext` static method |
+| `Keep.Application/Requests/ManageResponsibleService.cs` | `SetAsync`: replaced blunt Operator block with `isOperator && target != self → 403`; after loading participants: `isOperator && existingResponsible != self → 409`; self-already-responsible falls through to ADR-230 no-op |
+| `Keep.Infrastructure/Persistence/KeepRequestListPersistence.cs` | `GetViewCountsAsync`: removed `isOwnerOrAdmin ? count : 0` gate; all roles get real unassigned count |
+| `UnitTests/Keep/KeepRequestListServiceTests.cs` | Updated stale test (`not_yet_available_for_operator` → `returns_200_for_operator`); added `ParticipantSummaryMap` to `FakeRequestListPersistence`; +14 new tests (rowContext cases, CanSelfAssignFromList positive/negative, stale responsible, offseason, view boundary) |
+| `IntegrationTests/Api/KeepRequestListQueryApiTests.cs` | Added Operator user seeding + `_operatorCookie`; `GetAsAsync` helper; `Operator_unassigned_view_returns_200`; `rowContext_field_present_on_each_row`; extended `ListRequestBody` with `string? RowContext` |
+| `IntegrationTests/Api/KeepRequestParticipationApiTests.cs` | Updated `SetResponsible_Operator_Returns403_OperatorCannotAssignOther` to target owner (not self); added 3 new request IDs + seeds; 3 new tests: `SelfAssign_UnassignedRequest_Returns200`, `SelfAssign_AlreadyAssigned_Returns409`, `SelfAssign_AlreadyResponsible_IsNoOp_Returns200` |
+
+### Decisions locked this session
+
+**D1 — rowContext priority:**
+```
+feedback_review      → isPostClose (Closed + UnresolvedFeedback + attention raised)
+closed_history       → Closed (not isPostClose)
+cancelled_history    → Cancelled
+needs_attention      → AttentionLevel != None
+first_response       → firstResponsePending || firstResponseOverdue
+waiting_on_customer  → PendingCustomer
+unassigned_available → canSelfAssignFromList (view=unassigned && Operator && !offSeason && !terminal && isUnassigned)
+active_work          → default
+```
+`needs_attention` wins over `unassigned_available` for rowContext; `CanSelfAssignFromList` is still
+true alongside `needs_attention` (claim affordance and urgency signal are separate).
+
+**D2 — Operator self-assign error handling:**
+- Operator assigns another user → 403 `ParticipationOperatorCannotAssignOther`
+- Operator self-assign, no active Responsible → 200 (allowed)
+- Operator self-assign, another active Responsible exists → 409 `ParticipationRequestAlreadyAssigned`
+- Operator self-assign, already self-assigned → no-op 200 (ADR-230)
+
+**D3 — CanSelfAssignFromList:**
+- Formula: `view=="unassigned" && !isOwnerOrAdmin && canOperate && !isOffSeason && !r.IsTerminal && isUnassigned`
+- `isUnassigned = participation is null || participation.ResponsibleCount == 0`
+- Stale Responsible has `DetachedAtUtc == null` → counts in `ResponsibleCount` → NOT self-assignable (also excluded from unassigned DB query, so belt-and-suspenders)
+- Write endpoint recomputes eligibility independently; list flag is UI metadata only
+
+### Watch-outs added this session
+
+- **Stale Responsible not self-assignable** — stale rows have `DetachedAtUtc == null`, so `ResponsibleCount > 0` and `isUnassigned = false`. The unassigned DB view already excludes these requests.
+- **`RequestListViewNotYetAvailable`** error code remains in `KeepRequestErrors.cs` and `ErrorHttpMapper.cs` for future use; no longer returned by the list service (unassigned gate removed in 4C).
 
 ---
 
@@ -59,7 +115,7 @@ Session 4B replaced the two 4A placeholder gates (`HasFilters → FilterNotYetAv
 | `default` | Active | open + Owner/Admin unresolved feedback closed | in-memory B5 ranking |
 | `assigned_to_me` | Active | active + Responsible EXISTS | in-memory B5 ranking |
 | `watching` | Active | active + Watching EXISTS | in-memory B5 ranking |
-| `unassigned` | Active | active + no Responsible | in-memory B5 ranking; Operator gate (4B: `ViewNotYetAvailable`) |
+| `unassigned` | Active | active + no Responsible | in-memory B5 ranking |
 | `needs_attention` | Active | active + `AttentionLevel != None` | in-memory B5 ranking |
 | `feedback_review` | Active | closed + UnresolvedFeedback + attention raised | Owner/Admin only; FeedbackReviewComparer (AttentionSinceUtc ASC) |
 | `closed_history` | History | `TerminatedAtUtc != null && Closed` | DB keyset `TerminatedAtUtc DESC, Id ASC` |
@@ -80,7 +136,7 @@ Key changes from 4A: `HasFilters` gate removed; status/attentionReason slug vali
 ### Role access
 
 - Owner/Admin: all views accessible
-- Operator: `feedback_review`, `closed_history`, `cancelled_history`, `all_history` → 403; `unassigned` → `ViewNotYetAvailable` (4C removes); all other active views → 200
+- Operator: `feedback_review`, `closed_history`, `cancelled_history`, `all_history` → 403; `unassigned` → `ViewNotYetAvailable` (4B); all other active views → 200
 - Viewer: treated as non-admin; same view restrictions as Operator
 
 ### 4B placeholders remaining (for 4C)
@@ -489,7 +545,7 @@ Member management API + integration tests.
 - **`CanLogExternalContact` OffSeason gap** — Fixed in 2C.
 - **`ExternalContactInvalidDirection` added in 2B** — was omitted from the 2A error set despite being in ADR-207 scope.
 - **External contact `ExternalContactChannel` in DTO** — both `CommunicationChannel` and `ExternalContactChannel` on `KeepRequestEventItem`.
-- **Session 3B: Operator self-assign blocked** — DEF-045; any Operator `PUT /responsible` returns 403 `ParticipationOperatorCannotAssignOther`. Unblock when Unassigned/Available queue exists (Session 4).
+- **Session 3B: Operator self-assign blocked** — DEF-045; any Operator `PUT /responsible` returns 403 `ParticipationOperatorCannotAssignOther`. Unblocked in 4C.
 - **Session 3B: `GetActorDisplayNameAsync`** — fixed in 3C to use `User.Name.Trim() ?? Email.Trim()`, matching `GetParticipantTargetAsync` convention.
 - **Session 3C: 4-flag participation metadata** — `CanWatch` (not yet participating), `CanUnwatch` (currently watching), `CanMute` (participating + notifications on), `CanUnmute` (participating + notifications off). All 4 require `!IsTerminal`. `CanAssignResponsible` requires `isOwnerOrAdmin && canWrite && !IsTerminal`.
 - **Minimal API DELETE body** — nullable body parameters on `MapDelete` endpoints require `[FromBody]`; without it the app fails to start at route data source initialization. Fixed on `DELETE /responsible` and `DELETE /watchers/{id}`.
@@ -501,8 +557,13 @@ Member management API + integration tests.
 - **4A HMAC key** — `Keep:RequestListCursorSigningKey` must be present in all environments; test factory uses 32-byte all-zeros key.
 - **4B cursor sentinels** — `HistorySortSentinel = 0` (history keyset cursor), `FeedbackReviewSortSentinel = 99` (feedback_review in-memory cursor). Sentinel values must not collide with B5 ranking groups (1–8).
 - **4B history keyset** — `WHERE TerminatedAtUtc != null` guard on history queries even though terminal records should always have this set (data invariant protection). `ORDER BY TerminatedAtUtc DESC, Id ASC`. Keyset: `WHERE terminated_at < cursorAt OR (terminated_at = cursorAt AND id > cursorId)`.
-- **4B Operator unassigned gate** — `view=unassigned` returns `RequestListViewNotYetAvailable` for Operators in 4B; 4C removes gate and adds eligibility filtering. `GetViewCountsAsync` returns `Unassigned: 0` for Operators in 4B for same reason.
+- **4B Operator unassigned gate removed in 4C** — `view=unassigned` now accessible to Operators; `GetViewCountsAsync` now returns real unassigned count for all roles.
 - **4B `feedback_review` authorization** — `RequestListHistoryViewForbidden → 403` for Operators (not 400). Applied to: `feedback_review`, `closed_history`, `cancelled_history`, `all_history`. These view names are public API contract and drive the explicit 403.
 - **4B `FeedbackComment` visibility** — included in Q search only when `filters.IsOwnerOrAdmin = true` in the EF LINQ predicate. Operator/Viewer Q search does not scan feedback comments.
 - **4B view counts always populated** — `GetViewCountsAsync` is called on every request in 4B; `viewCounts` is no longer null in the response.
-- **Next session: Phase 8-B5 Session 4C** — Operator Unassigned Surface + Narrow Self-Assign Re-enable, Row Context/Action Metadata.
+- **4C `RowContext`** — string field on `KeepRequestSummary`; computed by `ComputeRowContext` in `ToSummary`; priority order: feedback_review → closed_history → cancelled_history → needs_attention → first_response → waiting_on_customer → unassigned_available → active_work.
+- **4C `CanSelfAssignFromList`** — bool on `KeepRequestParticipationInfo`; `view=="unassigned" && !isOwnerOrAdmin && canOperate && !isOffSeason && !r.IsTerminal && isUnassigned`; true alongside `needs_attention` rowContext (separate signals).
+- **4C stale Responsible** — stale rows have `DetachedAtUtc==null`; excluded from unassigned DB view; `ResponsibleCount > 0` → not self-assignable.
+- **4C `ParticipationOperatorCannotAssignOther`** — now fires only for `target != self`; self-assign path proceeds.
+- **4C `RequestListViewNotYetAvailable`** — error code retained in `KeepRequestErrors.cs` and `ErrorHttpMapper.cs` but no longer returned by the list service.
+- **Next session: Phase 8-B5 Session 4D** — Integration Verification, Docs, Decision Index, Deferred Tracker.

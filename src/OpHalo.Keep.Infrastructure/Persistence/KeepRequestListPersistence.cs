@@ -216,14 +216,12 @@ public sealed class KeepRequestListPersistence(OpHaloDbContext dbContext) : IKee
                     && p.ParticipationType == ParticipationType.Watching
                     && p.DetachedAtUtc == null), ct);
 
-        // unassigned: Owner/Admin gets full count; Operators get 0 (view gated until 4C, ADR-240).
-        int unassignedCount = isOwnerOrAdmin
-            ? await activeBase.CountAsync(r =>
-                !dbContext.Set<KeepRequestParticipant>()
-                    .Any(p => p.RequestId == r.Id
-                        && p.ParticipationType == ParticipationType.Responsible
-                        && p.DetachedAtUtc == null), ct)
-            : 0;
+        // unassigned: all roles see the real count now that the view is open to Operators (4C, ADR-240).
+        var unassignedCount = await activeBase.CountAsync(r =>
+            !dbContext.Set<KeepRequestParticipant>()
+                .Any(p => p.RequestId == r.Id
+                    && p.ParticipationType == ParticipationType.Responsible
+                    && p.DetachedAtUtc == null), ct);
 
         // needs_attention: active with raised attention.
         var needsAttentionCount = await activeBase.CountAsync(

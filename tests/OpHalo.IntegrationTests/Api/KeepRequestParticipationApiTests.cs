@@ -60,6 +60,11 @@ public sealed class KeepRequestParticipationApiTests : IClassFixture<KeepApiWebF
     private Guid _muteRequestId;
     private Guid _unmuteRequestId;
 
+    // Session 4C: Operator self-assign
+    private Guid _operatorSelfAssignRequestId;
+    private Guid _operatorSelfAssignAlreadyAssignedRequestId;
+    private Guid _operatorSelfAssignIdempotentRequestId;
+
     // Session 3C read-model requests
     private Guid _3cCurrentUserPartRequestId;
     private Guid _3cOwnerFlagsRequestId;
@@ -244,6 +249,23 @@ public sealed class KeepRequestParticipationApiTests : IClassFixture<KeepApiWebF
 
         await db.SaveChangesAsync();
 
+        // --- Session 4C: Operator self-assign ---
+        _operatorSelfAssignRequestId = await SeedRequestAsync(db, _accountId, customer.Id, "4C-OSA", "4c_osa_token", now);
+        _operatorSelfAssignAlreadyAssignedRequestId = await SeedRequestAsync(db, _accountId, customer.Id, "4C-OAA", "4c_oaa_token", now);
+        _operatorSelfAssignIdempotentRequestId = await SeedRequestAsync(db, _accountId, customer.Id, "4C-OIT", "4c_oit_token", now);
+
+        // Owner pre-seeded as Responsible on _operatorSelfAssignAlreadyAssignedRequestId (so Operator's self-assign returns 409).
+        db.Set<KeepRequestParticipant>().Add(KeepRequestParticipant.Create(
+            _operatorSelfAssignAlreadyAssignedRequestId, _accountId, _ownerAccountUserId,
+            ParticipationType.Responsible, notificationsEnabled: true, now));
+
+        // Operator pre-seeded as Responsible on _operatorSelfAssignIdempotentRequestId (so self-assign is a no-op 200).
+        db.Set<KeepRequestParticipant>().Add(KeepRequestParticipant.Create(
+            _operatorSelfAssignIdempotentRequestId, _accountId, _operatorAccountUserId,
+            ParticipationType.Responsible, notificationsEnabled: true, now));
+
+        await db.SaveChangesAsync();
+
         // --- Sessions ---
         var rawOwner    = await _factory.SeedSessionAsync(graph.Owner.Id, _accountId);
         var rawOperator = await _factory.SeedSessionAsync(operatorMember.Id, _accountId);
@@ -327,9 +349,10 @@ public sealed class KeepRequestParticipationApiTests : IClassFixture<KeepApiWebF
     [Fact]
     public async Task SetResponsible_Operator_Returns403_OperatorCannotAssignOther()
     {
+        // Operator targeting another user (Owner) — forbidden regardless of request state.
         var response = await AuthRequest(_operatorCookie).PutAsJsonAsync(
             $"/keep/requests/{_sharedRequestId}/responsible",
-            new { accountUserId = _operatorAccountUserId });
+            new { accountUserId = _ownerAccountUserId });
 
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
@@ -391,6 +414,42 @@ public sealed class KeepRequestParticipationApiTests : IClassFixture<KeepApiWebF
         Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
         Assert.Equal("KeepRequest.TerminalState", body.GetProperty("code").GetString());
+    }
+
+    // --- Session 4C: Operator self-assign ---
+
+    [Fact]
+    public async Task SetResponsible_Operator_SelfAssign_UnassignedRequest_Returns200()
+    {
+        var response = await AuthRequest(_operatorCookie).PutAsJsonAsync(
+            $"/keep/requests/{_operatorSelfAssignRequestId}/responsible",
+            new { accountUserId = _operatorAccountUserId });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task SetResponsible_Operator_SelfAssign_AlreadyAssigned_Returns409_RequestAlreadyAssigned()
+    {
+        // Owner is pre-seeded as Responsible; Operator self-assign is blocked (D2).
+        var response = await AuthRequest(_operatorCookie).PutAsJsonAsync(
+            $"/keep/requests/{_operatorSelfAssignAlreadyAssignedRequestId}/responsible",
+            new { accountUserId = _operatorAccountUserId });
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("KeepRequest.ParticipationRequestAlreadyAssigned", body.GetProperty("code").GetString());
+    }
+
+    [Fact]
+    public async Task SetResponsible_Operator_SelfAssign_AlreadyResponsible_IsNoOp_Returns200()
+    {
+        // Operator is pre-seeded as Responsible; self-assign is idempotent (ADR-230).
+        var response = await AuthRequest(_operatorCookie).PutAsJsonAsync(
+            $"/keep/requests/{_operatorSelfAssignIdempotentRequestId}/responsible",
+            new { accountUserId = _operatorAccountUserId });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }
 
     // =========================================================================

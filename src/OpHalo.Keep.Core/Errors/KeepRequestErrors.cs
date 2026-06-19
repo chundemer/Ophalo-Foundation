@@ -120,7 +120,7 @@ public static class KeepRequestErrors
         Error.Create("KeepRequest.ParticipationTargetIneligible", "The specified user is not an eligible participant. Only active Owner, Admin, and Operator members of this account may be assigned or watched.");
 
     public static readonly Error ParticipationOperatorCannotAssignOther =
-        Error.Create("KeepRequest.ParticipationOperatorCannotAssignOther", "Operators may not assign responsibility to other users or self-assign. Only Owner or Admin may assign responsibility.");
+        Error.Create("KeepRequest.ParticipationOperatorCannotAssignOther", "Operators may not assign responsibility to other users. Only Owner or Admin may assign responsibility to another user.");
 
     public static readonly Error ParticipationOperatorCannotClear =
         Error.Create("KeepRequest.ParticipationOperatorCannotClear", "Operators may not clear responsibility. Only Owner or Admin may clear a Responsible user.");
