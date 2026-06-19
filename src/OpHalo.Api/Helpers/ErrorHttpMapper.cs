@@ -91,7 +91,7 @@ public static class ErrorHttpMapper
 
             var c when c == "KeepRequest.OffSeasonUnavailable" => (StatusCodes.Status409Conflict, "Conflict.", null),
 
-            // --- Request list query validation errors (ADR-257/258, Session 4A) ---
+            // --- Request list query validation errors (ADR-257/258, Sessions 4A/4B) ---
             var c when c == "KeepRequest.RequestListInvalidView"              => (StatusCodes.Status400BadRequest, "Bad request.", null),
             var c when c == "KeepRequest.RequestListViewNotYetAvailable"      => (StatusCodes.Status400BadRequest, "Bad request.", null),
             var c when c == "KeepRequest.RequestListFilterNotYetAvailable"    => (StatusCodes.Status400BadRequest, "Bad request.", null),
@@ -102,6 +102,9 @@ public static class ErrorHttpMapper
             var c when c == "KeepRequest.RequestListInvalidAssignedAccountUserId" => (StatusCodes.Status400BadRequest, "Bad request.", null),
             var c when c == "KeepRequest.RequestListUnknownParameter"             => (StatusCodes.Status400BadRequest, "Bad request.", null),
             var c when c == "KeepRequest.RequestListDuplicateParameter"           => (StatusCodes.Status400BadRequest, "Bad request.", null),
+            var c when c == "KeepRequest.RequestListInvalidStatus"                => (StatusCodes.Status400BadRequest, "Bad request.", null),
+            var c when c == "KeepRequest.RequestListInvalidAttentionReason"       => (StatusCodes.Status400BadRequest, "Bad request.", null),
+            var c when c == "KeepRequest.RequestListHistoryViewForbidden"         => (StatusCodes.Status403Forbidden, "Forbidden.", null),
 
             // --- Participation write errors (ADR-222..235 / Session 3B) ---
             var c when c == "KeepRequest.ParticipationTargetIneligible"           => (StatusCodes.Status422UnprocessableEntity, "Unprocessable entity.", null),

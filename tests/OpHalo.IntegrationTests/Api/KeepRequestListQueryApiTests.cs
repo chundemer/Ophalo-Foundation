@@ -14,13 +14,13 @@ using OpHalo.Keep.Core.Entities;
 namespace OpHalo.IntegrationTests.Api;
 
 /// <summary>
-/// HTTP integration tests for GET /keep/requests — Session 4A query contract.
+/// HTTP integration tests for GET /keep/requests — Sessions 4A/4B query contract.
 ///
 /// Covers: auth gate, response shape (pageInfo/viewCounts/listContext), all 400 error
-/// codes from query validation and binder, cursor pagination, cursor HMAC tamper
-/// detection. The real HmacKeepRequestListCursorProtector is exercised here;
-/// unit tests use FakeCursorProtector (plain base64) and do not cover HMAC integrity.
-/// </summary>
+/// codes from query validation and binder, named views, filter/search validation,
+/// cursor pagination, cursor HMAC tamper detection. The real HmacKeepRequestListCursorProtector
+/// is exercised here; unit tests use FakeCursorProtector (plain base64) and do not cover HMAC integrity.
+///</summary>
 public sealed class KeepRequestListQueryApiTests : IClassFixture<KeepApiWebFactory>, IAsyncLifetime
 {
     private readonly KeepApiWebFactory _factory;
@@ -158,7 +158,7 @@ public sealed class KeepRequestListQueryApiTests : IClassFixture<KeepApiWebFacto
         Assert.False(body.PageInfo.HasMore); // 3 requests < 50
         Assert.Null(body.PageInfo.NextCursor);
 
-        Assert.Null(body.ViewCounts); // 4A: not yet wired
+        Assert.NotNull(body.ViewCounts);
 
         Assert.NotNull(body.ListContext);
         Assert.Equal("default", body.ListContext.View);
@@ -177,10 +177,17 @@ public sealed class KeepRequestListQueryApiTests : IClassFixture<KeepApiWebFacto
     }
 
     [Fact]
-    public async Task Known_non_default_view_returns_400_ViewNotYetAvailable()
+    public async Task Known_active_view_returns_200_for_owner()
     {
-        var code = await GetErrorCodeAsync("/keep/requests?view=assigned_to_me");
-        Assert.Equal("KeepRequest.RequestListViewNotYetAvailable", code);
+        var res = await GetAsync("/keep/requests?view=assigned_to_me");
+        Assert.Equal(HttpStatusCode.OK, res.StatusCode);
+    }
+
+    [Fact]
+    public async Task History_view_returns_200_for_owner()
+    {
+        var res = await GetAsync("/keep/requests?view=closed_history");
+        Assert.Equal(HttpStatusCode.OK, res.StatusCode);
     }
 
     // --- Date format validation (must surface before filter gate) ---------------
@@ -207,11 +214,17 @@ public sealed class KeepRequestListQueryApiTests : IClassFixture<KeepApiWebFacto
     }
 
     [Fact]
-    public async Task Valid_utc_date_returns_400_FilterNotYetAvailable()
+    public async Task Valid_utc_createdFrom_returns_200()
     {
-        // A correctly formatted date clears the date-format gate and hits the 4A filter gate.
-        var code = await GetErrorCodeAsync("/keep/requests?createdFrom=2026-06-18T00:00:00Z");
-        Assert.Equal("KeepRequest.RequestListFilterNotYetAvailable", code);
+        var res = await GetAsync("/keep/requests?createdFrom=2026-06-18T00:00:00Z");
+        Assert.Equal(HttpStatusCode.OK, res.StatusCode);
+    }
+
+    [Fact]
+    public async Task ClosedFrom_with_non_history_view_returns_400_Contradictory()
+    {
+        var code = await GetErrorCodeAsync("/keep/requests?closedFrom=2026-06-18T00:00:00Z");
+        Assert.Equal("KeepRequest.RequestListContradictoryParameters", code);
     }
 
     // --- Contradiction detection ------------------------------------------------
@@ -230,20 +243,34 @@ public sealed class KeepRequestListQueryApiTests : IClassFixture<KeepApiWebFacto
         Assert.Equal("KeepRequest.RequestListContradictoryParameters", code);
     }
 
-    // --- Filter gate (4A) -------------------------------------------------------
+    // --- Filter/search (4B) -----------------------------------------------------
 
     [Fact]
-    public async Task Status_filter_returns_400_FilterNotYetAvailable()
+    public async Task Valid_status_filter_returns_200()
     {
-        var code = await GetErrorCodeAsync("/keep/requests?status=received");
-        Assert.Equal("KeepRequest.RequestListFilterNotYetAvailable", code);
+        var res = await GetAsync("/keep/requests?status=received");
+        Assert.Equal(HttpStatusCode.OK, res.StatusCode);
     }
 
     [Fact]
-    public async Task Search_q_returns_400_FilterNotYetAvailable()
+    public async Task Invalid_status_filter_returns_400_InvalidStatus()
     {
-        var code = await GetErrorCodeAsync("/keep/requests?q=foo");
-        Assert.Equal("KeepRequest.RequestListFilterNotYetAvailable", code);
+        var code = await GetErrorCodeAsync("/keep/requests?status=garbage");
+        Assert.Equal("KeepRequest.RequestListInvalidStatus", code);
+    }
+
+    [Fact]
+    public async Task Invalid_attentionReason_returns_400_InvalidAttentionReason()
+    {
+        var code = await GetErrorCodeAsync("/keep/requests?attentionReason=not_a_reason");
+        Assert.Equal("KeepRequest.RequestListInvalidAttentionReason", code);
+    }
+
+    [Fact]
+    public async Task Search_q_returns_200()
+    {
+        var res = await GetAsync("/keep/requests?q=pagination");
+        Assert.Equal(HttpStatusCode.OK, res.StatusCode);
     }
 
     // --- Limit validation -------------------------------------------------------

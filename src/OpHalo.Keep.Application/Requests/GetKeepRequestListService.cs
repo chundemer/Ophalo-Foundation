@@ -23,6 +23,11 @@ public sealed class GetKeepRequestListService(
     private const int DefaultLimit = 50;
     private const int MaxLimit = 100;
 
+    // Sentinel RankingOrder values embedded in cursor payloads to identify sort mode.
+    // Neither value collides with real B5 ranking orders (1–8).
+    private const int HistorySortSentinel = 0;
+    private const int FeedbackReviewSortSentinel = 99;
+
     private static readonly Error Unauthorized =
         Error.Create("auth.unauthorized", "Authentication required.");
 
@@ -42,12 +47,55 @@ public sealed class GetKeepRequestListService(
         "default", "assigned_to_me", "watching", "unassigned", "needs_attention"
     };
 
-    private static readonly HashSet<string> TerminalStatusSlugs =
-        new(["closed", "cancelled"], StringComparer.OrdinalIgnoreCase);
+    // History views + feedback_review require Owner/Admin (ADR-248/242).
+    private static readonly HashSet<string> OwnerAdminOnlyViews = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "feedback_review", "closed_history", "cancelled_history", "all_history"
+    };
 
-    private static readonly HashSet<string> ActiveStatusSlugs =
-        new(["received", "scheduled", "in_progress", "pending_customer", "resolved"],
-            StringComparer.OrdinalIgnoreCase);
+    private static readonly Dictionary<string, HistoryViewKind> HistoryViewKinds =
+        new(StringComparer.OrdinalIgnoreCase)
+        {
+            ["closed_history"]    = HistoryViewKind.Closed,
+            ["cancelled_history"] = HistoryViewKind.Cancelled,
+            ["all_history"]       = HistoryViewKind.All
+        };
+
+    private static readonly Dictionary<string, ActiveViewKind> ActiveViewKinds =
+        new(StringComparer.OrdinalIgnoreCase)
+        {
+            ["default"]         = ActiveViewKind.Default,
+            ["assigned_to_me"]  = ActiveViewKind.AssignedToMe,
+            ["watching"]        = ActiveViewKind.Watching,
+            ["unassigned"]      = ActiveViewKind.Unassigned,
+            ["needs_attention"] = ActiveViewKind.NeedsAttention,
+            ["feedback_review"] = ActiveViewKind.FeedbackReview
+        };
+
+    // Slug → enum maps for validation (ADR-257; individual values validated before contradictions).
+    private static readonly Dictionary<string, KeepRequestStatus> StatusSlugs =
+        new(StringComparer.OrdinalIgnoreCase)
+        {
+            ["received"]         = KeepRequestStatus.Received,
+            ["scheduled"]        = KeepRequestStatus.Scheduled,
+            ["in_progress"]      = KeepRequestStatus.InProgress,
+            ["pending_customer"] = KeepRequestStatus.PendingCustomer,
+            ["resolved"]         = KeepRequestStatus.Resolved,
+            ["closed"]           = KeepRequestStatus.Closed,
+            ["cancelled"]        = KeepRequestStatus.Cancelled
+        };
+
+    private static readonly Dictionary<string, AttentionReason> AttentionReasonSlugs =
+        new(StringComparer.OrdinalIgnoreCase)
+        {
+            ["customer_message"]        = AttentionReason.CustomerMessage,
+            ["update_request"]          = AttentionReason.UpdateRequest,
+            ["schedule_change_request"] = AttentionReason.ScheduleChangeRequest,
+            ["change_or_cancel_request"]= AttentionReason.ChangeOrCancelRequest,
+            ["complaint"]               = AttentionReason.Complaint,
+            ["first_response_due"]      = AttentionReason.FirstResponseDue,
+            ["unresolved_feedback"]     = AttentionReason.UnresolvedFeedback
+        };
 
     public async Task<Result<GetKeepRequestListResult>> ExecuteAsync(
         KeepRequestListQuery? query = null,
@@ -71,7 +119,7 @@ public sealed class GetKeepRequestListService(
                 PermissionKeys.Keep.RequestsView))
             return Result<GetKeepRequestListResult>.Failure(Forbidden);
 
-        // This is a read — OffSeason (ReadOnly) does not block it; only Blocked does.
+        // Read is not blocked by OffSeason; only Blocked lifecycle blocks reads.
         var accessContext = new AccountAccessContext(
             accountSnapshot.LifecycleState,
             accountSnapshot.Purpose,
@@ -89,44 +137,63 @@ public sealed class GetKeepRequestListService(
         if (!featurePolicy.IsEnabled(accountSnapshot.Plan, FeatureKeys.Keep.OperatorQueue))
             return Result<GetKeepRequestListResult>.Failure(Forbidden);
 
-        // --- Query validation (ADR-257/258) ---
-        // Order matters: format errors must surface before the 4A placeholder gates so callers
-        // get specific codes (RequestListInvalidDateFormat, RequestListContradictoryParameters)
-        // rather than the generic not-yet-available codes.
+        // --- Query validation pipeline (ADR-257/258) ---
+        // Order: unknown view → date format → status slug → attentionReason slug →
+        //        contradictions → view role auth → Operator unassigned gate → limit → cursor.
+        // Individual values are validated before combinations so clients see specific errors.
 
         query ??= new KeepRequestListQuery();
         var normalizedView = NormalizeView(query.View);
 
-        // 1. Unknown view — must fail before everything else.
+        // 1. Unknown view.
         if (!ValidViews.Contains(normalizedView))
             return Result<GetKeepRequestListResult>.Failure(KeepRequestErrors.RequestListInvalidView);
 
-        // 2. Date format — validated before the filter gate so that malformed dates return
-        //    RequestListInvalidDateFormat, not RequestListFilterNotYetAvailable (ADR-258).
+        // 2. Date format.
         var dateError = ValidateDateFormats(query);
         if (dateError is not null)
             return Result<GetKeepRequestListResult>.Failure(dateError);
 
-        // 3. Contradictions — validated before the "not yet available" gates so that
-        //    view+status contradictions are explicit rather than shadowed (ADR-257).
-        var contradictionError = ValidateContradictions(normalizedView, query);
+        // 3. Status slug — validates individual value before contradiction check.
+        KeepRequestStatus? parsedStatus = null;
+        if (!string.IsNullOrWhiteSpace(query.Status))
+        {
+            if (!StatusSlugs.TryGetValue(query.Status.Trim(), out var st))
+                return Result<GetKeepRequestListResult>.Failure(KeepRequestErrors.RequestListInvalidStatus);
+            parsedStatus = st;
+        }
+
+        // 4. AttentionReason slug — same rationale.
+        AttentionReason? parsedAttentionReason = null;
+        if (!string.IsNullOrWhiteSpace(query.AttentionReason))
+        {
+            if (!AttentionReasonSlugs.TryGetValue(query.AttentionReason.Trim(), out var ar))
+                return Result<GetKeepRequestListResult>.Failure(KeepRequestErrors.RequestListInvalidAttentionReason);
+            parsedAttentionReason = ar;
+        }
+
+        // 5. Contradictions — view+status combinations, closedFrom/closedTo scope.
+        var contradictionError = ValidateContradictions(normalizedView, parsedStatus, query);
         if (contradictionError is not null)
             return Result<GetKeepRequestListResult>.Failure(contradictionError);
 
-        // 4. Filter/search gate (Session 4A — 4B replaces with real execution).
-        if (HasFilters(query))
-            return Result<GetKeepRequestListResult>.Failure(KeepRequestErrors.RequestListFilterNotYetAvailable);
+        // 6. View role authorization (ADR-242/248).
+        var role = userSnapshot.Role;
+        var isOwnerOrAdmin = role is AccountUserRole.Owner or AccountUserRole.Admin;
 
-        // 5. View executability gate (Session 4A — 4B replaces with real execution).
-        if (normalizedView != "default")
+        if (OwnerAdminOnlyViews.Contains(normalizedView) && !isOwnerOrAdmin)
+            return Result<GetKeepRequestListResult>.Failure(KeepRequestErrors.RequestListHistoryViewForbidden);
+
+        // 7. Operator unassigned gate (4B — unlocked in 4C with eligibility filtering, ADR-240).
+        if (normalizedView == "unassigned" && !isOwnerOrAdmin)
             return Result<GetKeepRequestListResult>.Failure(KeepRequestErrors.RequestListViewNotYetAvailable);
 
-        // 6. Limit.
+        // 8. Limit.
         var limit = query.Limit ?? DefaultLimit;
         if (limit < 1 || limit > MaxLimit)
             return Result<GetKeepRequestListResult>.Failure(KeepRequestErrors.RequestListInvalidLimit);
 
-        // 7. Cursor — fingerprint binds the cursor to the current canonical query shape.
+        // 9. Cursor — fingerprint binds the cursor to the current canonical query shape.
         var fingerprint = KeepRequestListCursor.ComputeFingerprint(query);
         KeepRequestListCursorPayload? cursorPayload = null;
         if (!string.IsNullOrEmpty(query.Cursor))
@@ -135,11 +202,37 @@ public sealed class GetKeepRequestListService(
                 return Result<GetKeepRequestListResult>.Failure(KeepRequestErrors.RequestListInvalidCursor);
         }
 
-        // --- Data fetch ---
+        // --- Build filters ---
+        // Dates are already format-validated above; Parse cannot fail here.
+        var now = System.Globalization.CultureInfo.InvariantCulture;
+        DateTimeOffset? createdFrom = null, createdTo = null, closedFrom = null, closedTo = null;
+        if (!string.IsNullOrWhiteSpace(query.CreatedFrom))
+            createdFrom = DateTimeOffset.Parse(query.CreatedFrom.Trim(), now);
+        if (!string.IsNullOrWhiteSpace(query.CreatedTo))
+            createdTo = DateTimeOffset.Parse(query.CreatedTo.Trim(), now);
+        if (!string.IsNullOrWhiteSpace(query.ClosedFrom))
+            closedFrom = DateTimeOffset.Parse(query.ClosedFrom.Trim(), now);
+        if (!string.IsNullOrWhiteSpace(query.ClosedTo))
+            closedTo = DateTimeOffset.Parse(query.ClosedTo.Trim(), now);
+
+        var trimmedQ = string.IsNullOrWhiteSpace(query.Q) ? null : query.Q.Trim();
+        var isSearch = !string.IsNullOrEmpty(trimmedQ);
+
+        var filters = new KeepRequestListFilters(
+            Status: parsedStatus,
+            AttentionReason: parsedAttentionReason,
+            AssignedAccountUserId: query.AssignedAccountUserId,
+            Q: trimmedQ,
+            CreatedFrom: createdFrom,
+            CreatedTo: createdTo,
+            ClosedFrom: closedFrom,
+            ClosedTo: closedTo,
+            IsOwnerOrAdmin: isOwnerOrAdmin);
+
+        // --- Fetch data ---
         var nowUtc = clock.UtcNow;
-        var role = userSnapshot.Role;
-        var isOwnerOrAdmin = role is AccountUserRole.Owner or AccountUserRole.Admin;
         var isOffSeason = accountSnapshot.OperatingMode == AccountOperatingMode.OffSeason;
+        var currentAccountUserId = userSnapshot.AccountUserId;
 
         var canOperate = userAccessPolicy.IsPermitted(
             userSnapshot.Role,
@@ -147,53 +240,117 @@ public sealed class GetKeepRequestListService(
             accountSnapshot.Purpose,
             PermissionKeys.Keep.RequestsOperate);
 
-        var requests = await persistence.GetDefaultListRequestsAsync(
-            currentUser.AccountId, includeClosedUnresolvedFeedback: isOwnerOrAdmin, ct);
+        IReadOnlyList<KeepRequestSummary> page;
+        bool hasMore;
+        IReadOnlyList<KeepRequest> historyPageEntities = [];
+        var isFeedbackReview = normalizedView == "feedback_review";
+        var isHistoryView = HistoryViewKinds.TryGetValue(normalizedView, out var historyViewKind);
 
-        Dictionary<Guid, KeepRequestParticipantSummary> participantSummaries;
-        if (requests.Count > 0)
+        if (isHistoryView)
         {
-            var requestIds = requests.Select(r => r.Id).ToList();
-            participantSummaries = await persistence.GetParticipantSummariesAsync(
-                requestIds, userSnapshot.AccountUserId, currentUser.AccountId, ct);
+            // History path: DB-level sort (TerminatedAtUtc DESC, Id ASC) and keyset cursor.
+            DateTime? histCursorAt = null;
+            Guid? histCursorId = null;
+            if (cursorPayload is not null && cursorPayload.SecondaryTick.HasValue)
+            {
+                histCursorAt = new DateTime(cursorPayload.SecondaryTick.Value, DateTimeKind.Utc);
+                histCursorId = cursorPayload.LastId;
+            }
+
+            var rawHistory = await persistence.GetHistoryRequestsAsync(
+                currentUser.AccountId, historyViewKind, filters,
+                histCursorAt, histCursorId, limit + 1, ct);
+
+            hasMore = rawHistory.Count > limit;
+            historyPageEntities = rawHistory.Take(limit).ToList();
+
+            Dictionary<Guid, KeepRequestParticipantSummary> histParticipants;
+            if (historyPageEntities.Count > 0)
+            {
+                histParticipants = await persistence.GetParticipantSummariesAsync(
+                    historyPageEntities.Select(r => r.Id).ToList(),
+                    currentAccountUserId, currentUser.AccountId, ct);
+            }
+            else
+            {
+                histParticipants = [];
+            }
+
+            page = historyPageEntities
+                .Select(r => ToSummary(r, canOperate, isOwnerOrAdmin, isOffSeason, nowUtc,
+                    histParticipants.GetValueOrDefault(r.Id)))
+                .ToList();
         }
         else
         {
-            participantSummaries = [];
+            // Active-view path: DB filtering → in-memory B5 ranking sort → cursor skip.
+            var activeViewKind = ActiveViewKinds[normalizedView];
+
+            var rawRequests = await persistence.GetActiveViewRequestsAsync(
+                currentUser.AccountId, currentAccountUserId, activeViewKind, filters, ct);
+
+            Dictionary<Guid, KeepRequestParticipantSummary> participants;
+            if (rawRequests.Count > 0)
+            {
+                participants = await persistence.GetParticipantSummariesAsync(
+                    rawRequests.Select(r => r.Id).ToList(),
+                    currentAccountUserId, currentUser.AccountId, ct);
+            }
+            else
+            {
+                participants = [];
+            }
+
+            var comparer = isFeedbackReview
+                ? (IComparer<KeepRequestSummary>)FeedbackReviewComparer.Instance
+                : RequestListComparer.Instance;
+
+            var allSummaries = rawRequests
+                .Select(r => ToSummary(r, canOperate, isOwnerOrAdmin, isOffSeason, nowUtc,
+                    participants.GetValueOrDefault(r.Id)))
+                .Order(comparer)
+                .ToList();
+
+            IReadOnlyList<KeepRequestSummary> sorted = allSummaries;
+            if (cursorPayload is not null)
+            {
+                var startIndex = FindCursorStartIndex(sorted, cursorPayload, isFeedbackReview);
+                sorted = sorted.Skip(startIndex).ToList();
+            }
+
+            var sliced = sorted.Take(limit + 1).ToList();
+            hasMore = sliced.Count > limit;
+            page = sliced.Take(limit).ToList();
         }
 
-        var allSummaries = requests
-            .Select(r => ToSummary(r, canOperate, isOwnerOrAdmin, isOffSeason, nowUtc,
-                participantSummaries.GetValueOrDefault(r.Id)))
-            .Order(RequestListComparer.Instance)
-            .ToList();
-
-        // --- Cursor skip ---
-        IReadOnlyList<KeepRequestSummary> sorted = allSummaries;
-        if (cursorPayload is not null)
-        {
-            var startIndex = FindCursorStartIndex(sorted, cursorPayload);
-            sorted = sorted.Skip(startIndex).ToList();
-        }
-
-        // --- limit+1 slice, hasMore, next cursor ---
-        var sliced = sorted.Take(limit + 1).ToList();
-        var hasMore = sliced.Count > limit;
-        var page = sliced.Take(limit).ToList();
-
+        // --- Next cursor ---
         string? nextCursor = null;
         if (hasMore && page.Count > 0)
-            nextCursor = EncodeCursor(page[^1], fingerprint);
+        {
+            nextCursor = isHistoryView
+                ? KeepRequestListCursor.Encode(
+                    cursorProtector, fingerprint,
+                    historyPageEntities[^1].Id,
+                    HistorySortSentinel,
+                    historyPageEntities[^1].TerminatedAtUtc?.Ticks,
+                    secondaryDescending: true)
+                : EncodeCursorForActiveView(page[^1], fingerprint, isFeedbackReview);
+        }
 
         var pageInfo = new KeepRequestPageInfo(Limit: limit, HasMore: hasMore, NextCursor: nextCursor);
+
+        // --- View counts (ADR-241/259) ---
+        var viewCounts = await persistence.GetViewCountsAsync(
+            currentUser.AccountId, currentAccountUserId, isOwnerOrAdmin, ct);
+
         var listContext = new KeepRequestListContext(
-            View: "default",
-            IsDefaultCommandCenter: true,
-            IsHistory: false,
-            IsSearch: false);
+            View: normalizedView,
+            IsDefaultCommandCenter: normalizedView == "default",
+            IsHistory: isHistoryView,
+            IsSearch: isSearch);
 
         return Result<GetKeepRequestListResult>.Success(
-            new GetKeepRequestListResult(page, pageInfo, ViewCounts: null, listContext));
+            new GetKeepRequestListResult(page, pageInfo, viewCounts, listContext));
     }
 
     // --- Validation helpers ---
@@ -228,20 +385,16 @@ public sealed class GetKeepRequestListService(
                 out _))
             return false;
 
-        // Reject date-only values: must contain 'T' (ISO 8601 date/time separator).
         if (trimmed.IndexOf('T', StringComparison.OrdinalIgnoreCase) < 0)
             return false;
 
-        // Require explicit UTC or offset marker.
         return HasExplicitOffset(trimmed);
     }
 
     private static bool HasExplicitOffset(string s)
     {
-        // Z suffix = UTC.
         if (s.EndsWith("Z", StringComparison.OrdinalIgnoreCase)) return true;
 
-        // ±HH:mm suffix — check last 6 chars, e.g. "+10:00" or "-05:30".
         if (s.Length < 6) return false;
         var tail = s[^6..];
         return (tail[0] == '+' || tail[0] == '-')
@@ -250,69 +403,95 @@ public sealed class GetKeepRequestListService(
             && char.IsDigit(tail[4]) && char.IsDigit(tail[5]);
     }
 
-    private static Error? ValidateContradictions(string normalizedView, KeepRequestListQuery query)
+    private static Error? ValidateContradictions(
+        string normalizedView,
+        KeepRequestStatus? parsedStatus,
+        KeepRequestListQuery query)
     {
-        var status = query.Status?.Trim().ToLowerInvariant();
-        if (string.IsNullOrEmpty(status)) return null;
+        if (parsedStatus.HasValue)
+        {
+            var isTerminal = parsedStatus.Value is KeepRequestStatus.Closed or KeepRequestStatus.Cancelled;
+            var isActive = !isTerminal;
 
-        // History views are restricted to their respective terminal statuses.
-        if (normalizedView == "closed_history" && !string.Equals(status, "closed", StringComparison.Ordinal))
-            return KeepRequestErrors.RequestListContradictoryParameters;
-        if (normalizedView == "cancelled_history" && !string.Equals(status, "cancelled", StringComparison.Ordinal))
-            return KeepRequestErrors.RequestListContradictoryParameters;
-        if (normalizedView == "all_history" && ActiveStatusSlugs.Contains(status))
-            return KeepRequestErrors.RequestListContradictoryParameters;
+            // History views are restricted to their own terminal statuses.
+            if (normalizedView == "closed_history" && parsedStatus.Value != KeepRequestStatus.Closed)
+                return KeepRequestErrors.RequestListContradictoryParameters;
+            if (normalizedView == "cancelled_history" && parsedStatus.Value != KeepRequestStatus.Cancelled)
+                return KeepRequestErrors.RequestListContradictoryParameters;
+            if (normalizedView == "all_history" && isActive)
+                return KeepRequestErrors.RequestListContradictoryParameters;
 
-        // Active operational views cannot be combined with terminal statuses.
-        if (ActiveOnlyViews.Contains(normalizedView) && TerminalStatusSlugs.Contains(status))
+            // feedback_review contains only Closed rows (ADR-242).
+            if (normalizedView == "feedback_review" && parsedStatus.Value != KeepRequestStatus.Closed)
+                return KeepRequestErrors.RequestListContradictoryParameters;
+
+            // Active operational views cannot be combined with terminal statuses (ADR-257).
+            if (ActiveOnlyViews.Contains(normalizedView) && isTerminal)
+                return KeepRequestErrors.RequestListContradictoryParameters;
+        }
+
+        // closedFrom/closedTo filter by TerminatedAtUtc — only meaningful for history views (ADR-258).
+        var hasClosedDate = !string.IsNullOrWhiteSpace(query.ClosedFrom)
+                         || !string.IsNullOrWhiteSpace(query.ClosedTo);
+        if (hasClosedDate && normalizedView is not ("closed_history" or "cancelled_history" or "all_history"))
             return KeepRequestErrors.RequestListContradictoryParameters;
 
         return null;
     }
 
-    // Session 4A: any non-blank filter/search param blocks execution (4B replaces).
-    // Blank Q behaves like no search (ADR-258), so whitespace-only Q is not a filter.
-    private static bool HasFilters(KeepRequestListQuery query) =>
-        !string.IsNullOrWhiteSpace(query.Status) ||
-        !string.IsNullOrWhiteSpace(query.AttentionReason) ||
-        query.AssignedAccountUserId.HasValue ||
-        !string.IsNullOrWhiteSpace(query.Q) ||
-        !string.IsNullOrWhiteSpace(query.CreatedFrom) ||
-        !string.IsNullOrWhiteSpace(query.CreatedTo) ||
-        !string.IsNullOrWhiteSpace(query.ClosedFrom) ||
-        !string.IsNullOrWhiteSpace(query.ClosedTo);
-
     // --- Cursor helpers ---
 
-    private string EncodeCursor(KeepRequestSummary last, string fingerprint)
+    private string EncodeCursorForActiveView(
+        KeepRequestSummary last,
+        string fingerprint,
+        bool isFeedbackReview)
     {
+        // Feedback review sorts by AttentionSinceUtc ASC — use dedicated sentinel so the
+        // cursor secondary tick consistently captures AttentionSinceUtc regardless of ranking order.
+        if (isFeedbackReview)
+            return KeepRequestListCursor.Encode(
+                cursorProtector, fingerprint, last.Id,
+                FeedbackReviewSortSentinel,
+                last.Attention.AttentionSinceUtc?.Ticks,
+                secondaryDescending: false);
+
         var rankingOrder = last.Ranking.RankingOrder;
         var descending = rankingOrder is 6 or 7 or 8;
-        var tick = GetSecondarySortTick(last);
         return KeepRequestListCursor.Encode(
-            cursorProtector, fingerprint, last.Id, rankingOrder, tick, descending);
+            cursorProtector, fingerprint, last.Id, rankingOrder, GetSecondarySortTick(last), descending);
     }
 
     private static int FindCursorStartIndex(
         IReadOnlyList<KeepRequestSummary> sorted,
-        KeepRequestListCursorPayload cursor)
+        KeepRequestListCursorPayload cursor,
+        bool isFeedbackReview)
     {
         for (var i = 0; i < sorted.Count; i++)
         {
-            if (IsAfterCursor(sorted[i], cursor))
+            if (IsAfterCursor(sorted[i], cursor, isFeedbackReview))
                 return i;
         }
         return sorted.Count;
     }
 
-    private static bool IsAfterCursor(KeepRequestSummary row, KeepRequestListCursorPayload cursor)
+    private static bool IsAfterCursor(
+        KeepRequestSummary row,
+        KeepRequestListCursorPayload cursor,
+        bool isFeedbackReview)
     {
+        if (isFeedbackReview)
+        {
+            // feedback_review sort: AttentionSinceUtc ASC, Id ASC.
+            var cmp = CompareSecondaryTicks(row.Attention.AttentionSinceUtc?.Ticks, cursor.SecondaryTick, false);
+            return cmp != 0 ? cmp > 0 : row.Id.CompareTo(cursor.LastId) > 0;
+        }
+
         if (row.Ranking.RankingOrder != cursor.RankingOrder)
             return row.Ranking.RankingOrder > cursor.RankingOrder;
 
-        var cmp = CompareSecondaryTicks(
+        var tickCmp = CompareSecondaryTicks(
             GetSecondarySortTick(row), cursor.SecondaryTick, cursor.SecondaryDescending);
-        if (cmp != 0) return cmp > 0;
+        if (tickCmp != 0) return tickCmp > 0;
 
         return row.Id.CompareTo(cursor.LastId) > 0;
     }
@@ -329,9 +508,8 @@ public sealed class GetKeepRequestListService(
     private static int CompareSecondaryTicks(long? rowTick, long? cursorTick, bool descending)
     {
         if (rowTick is null && cursorTick is null) return 0;
-        if (rowTick is null) return 1;    // nulls last in both sort directions
+        if (rowTick is null) return 1;    // nulls last in both directions
         if (cursorTick is null) return -1;
-        // DESC: higher value appears earlier, so "after cursor" means lower value → reverse compare.
         return descending
             ? cursorTick.Value.CompareTo(rowTick.Value)
             : rowTick.Value.CompareTo(cursorTick.Value);
@@ -351,7 +529,6 @@ public sealed class GetKeepRequestListService(
             && r.AttentionReason == AttentionReason.UnresolvedFeedback
             && r.AttentionLevel != AttentionLevel.None;
 
-        // Guard: first-response flags must be false for terminal rows.
         var firstResponsePending = !r.IsTerminal
             && r.FirstRespondedAtUtc is null
             && r.FirstResponseDueAtUtc.HasValue
@@ -450,8 +627,6 @@ public sealed class GetKeepRequestListService(
         if (overdueBusinessWaiting || firstResponseOverdue)
             return ("overdue_business_waiting", 1);
 
-        // Check post-close before priority band: post-close rows have WaitingDirection=Business
-        // and PriorityBand=Priority, so they would incorrectly match group 2 without this guard.
         if (isPostClose)
             return ("post_close_unresolved_feedback", 3);
 
@@ -520,8 +695,6 @@ public sealed class GetKeepRequestListService(
         var hasContactMethods = !string.IsNullOrWhiteSpace(r.CustomerPhone)
             || !string.IsNullOrWhiteSpace(r.CustomerEmail);
 
-        // ClearsAttention is state-aware: only true when the request is business-waiting.
-        // For PendingCustomer/quiet-Resolved/active-no-attention, no attention to clear.
         var postCustomerUpdate = new KeepQuickAction(
             "post_customer_update", "Update customer", "customer_visible",
             ClearsAttention: r.WaitingDirection == WaitingDirection.Business && r.AttentionLevel != AttentionLevel.None,
@@ -536,9 +709,6 @@ public sealed class GetKeepRequestListService(
 
         actions.Add(postCustomerUpdate);
 
-        // acknowledge_attention: shown when request has active attention, but NOT when the
-        // attention is specifically a first-response that is overdue with no response yet —
-        // in that case the right action is to respond, not acknowledge.
         var hasAttention = r.AttentionLevel != AttentionLevel.None;
         var isFirstResponseOverdueNoResponse = firstResponseOverdue && r.FirstRespondedAtUtc is null;
 
@@ -580,8 +750,6 @@ public sealed class GetKeepRequestListService(
             _ => "none"
         };
 
-        // ResponsibleCount is the effective eligible count (ADR-226):
-        // HasResponsible and IsUnassigned follow from it directly.
         return new KeepRequestParticipationInfo(
             ResponsibleCount: participation.ResponsibleCount,
             WatchingCount: participation.WatchingCount,
@@ -602,7 +770,6 @@ public sealed class GetKeepRequestListService(
         if (!canOperate)
             return new KeepRequestNotificationInfo(false, false, "viewer");
 
-        // Off-season suppresses request notifications account-wide.
         if (isOffSeason)
             return new KeepRequestNotificationInfo(false, false, "off_season");
 
@@ -617,28 +784,28 @@ public sealed class GetKeepRequestListService(
 
     private static string MapStatus(KeepRequestStatus status) => status switch
     {
-        KeepRequestStatus.Received => "received",
-        KeepRequestStatus.Scheduled => "scheduled",
-        KeepRequestStatus.InProgress => "in_progress",
+        KeepRequestStatus.Received       => "received",
+        KeepRequestStatus.Scheduled      => "scheduled",
+        KeepRequestStatus.InProgress     => "in_progress",
         KeepRequestStatus.PendingCustomer => "pending_customer",
-        KeepRequestStatus.Resolved => "resolved",
-        KeepRequestStatus.Closed => "closed",
-        KeepRequestStatus.Cancelled => "cancelled",
+        KeepRequestStatus.Resolved       => "resolved",
+        KeepRequestStatus.Closed         => "closed",
+        KeepRequestStatus.Cancelled      => "cancelled",
         _ => throw new InvalidOperationException($"Unknown KeepRequestStatus: {status}")
     };
 
     private static string MapAttentionLevel(AttentionLevel level) => level switch
     {
-        AttentionLevel.None => "none",
-        AttentionLevel.Waiting => "waiting",
+        AttentionLevel.None         => "none",
+        AttentionLevel.Waiting      => "waiting",
         AttentionLevel.NeedsAttention => "needs_attention",
-        AttentionLevel.Overdue => "overdue",
+        AttentionLevel.Overdue      => "overdue",
         _ => throw new InvalidOperationException($"Unknown AttentionLevel: {level}")
     };
 
     private static string MapWaitingDirection(WaitingDirection direction) => direction switch
     {
-        WaitingDirection.None => "none",
+        WaitingDirection.None     => "none",
         WaitingDirection.Business => "business",
         WaitingDirection.Customer => "customer",
         _ => throw new InvalidOperationException($"Unknown WaitingDirection: {direction}")
@@ -646,13 +813,13 @@ public sealed class GetKeepRequestListService(
 
     private static string MapAttentionReason(AttentionReason reason) => reason switch
     {
-        AttentionReason.CustomerMessage => "customer_message",
-        AttentionReason.UpdateRequest => "update_request",
+        AttentionReason.CustomerMessage       => "customer_message",
+        AttentionReason.UpdateRequest         => "update_request",
         AttentionReason.ScheduleChangeRequest => "schedule_change_request",
         AttentionReason.ChangeOrCancelRequest => "change_or_cancel_request",
-        AttentionReason.Complaint => "complaint",
-        AttentionReason.FirstResponseDue => "first_response_due",
-        AttentionReason.UnresolvedFeedback => "unresolved_feedback",
+        AttentionReason.Complaint             => "complaint",
+        AttentionReason.FirstResponseDue      => "first_response_due",
+        AttentionReason.UnresolvedFeedback    => "unresolved_feedback",
         _ => throw new InvalidOperationException($"Unknown AttentionReason: {reason}")
     };
 
@@ -675,6 +842,7 @@ public sealed class GetKeepRequestListService(
             false, false, false, "opens_detail_feedback");
     }
 
+    // B5 operational sort: attention-first ranking (ADR-252 default/assigned_to_me/watching/unassigned/needs_attention).
     private sealed class RequestListComparer : IComparer<KeepRequestSummary>
     {
         public static readonly RequestListComparer Instance = new();
@@ -690,18 +858,14 @@ public sealed class GetKeepRequestListService(
 
             int secondaryCmp = x.Ranking.RankingOrder switch
             {
-                // Groups 1, 2, 4: ascending NextAttentionAtUtc (most overdue/urgent first).
                 1 or 2 or 4 => CompareNullableDatesAsc(
                     x.Attention.NextAttentionAtUtc ?? x.Attention.FirstResponseDueAtUtc,
                     y.Attention.NextAttentionAtUtc ?? y.Attention.FirstResponseDueAtUtc),
 
-                // Group 3 (post-close): ascending AttentionSinceUtc (oldest unresolved first).
                 3 => CompareNullableDatesAsc(x.Attention.AttentionSinceUtc, y.Attention.AttentionSinceUtc),
 
-                // Group 5 (first-response pending): ascending FirstResponseDueAtUtc (soonest due first).
                 5 => CompareNullableDatesAsc(x.Attention.FirstResponseDueAtUtc, y.Attention.FirstResponseDueAtUtc),
 
-                // Groups 6, 7, 8: most recently active first (descending LastBusinessActivityAtUtc).
                 _ => y.LastBusinessActivityAtUtc.CompareTo(x.LastBusinessActivityAtUtc)
             };
 
@@ -711,7 +875,31 @@ public sealed class GetKeepRequestListService(
         private static int CompareNullableDatesAsc(DateTime? a, DateTime? b)
         {
             if (a is null && b is null) return 0;
-            if (a is null) return 1;  // nulls last
+            if (a is null) return 1;
+            if (b is null) return -1;
+            return a.Value.CompareTo(b.Value);
+        }
+    }
+
+    // feedback_review sort: oldest unresolved-feedback attention first (ADR-252).
+    private sealed class FeedbackReviewComparer : IComparer<KeepRequestSummary>
+    {
+        public static readonly FeedbackReviewComparer Instance = new();
+
+        public int Compare(KeepRequestSummary? x, KeepRequestSummary? y)
+        {
+            if (ReferenceEquals(x, y)) return 0;
+            if (x is null) return -1;
+            if (y is null) return 1;
+
+            var cmp = CompareNullableDatesAsc(x.Attention.AttentionSinceUtc, y.Attention.AttentionSinceUtc);
+            return cmp != 0 ? cmp : x.Id.CompareTo(y.Id);
+        }
+
+        private static int CompareNullableDatesAsc(DateTime? a, DateTime? b)
+        {
+            if (a is null && b is null) return 0;
+            if (a is null) return 1;
             if (b is null) return -1;
             return a.Value.CompareTo(b.Value);
         }

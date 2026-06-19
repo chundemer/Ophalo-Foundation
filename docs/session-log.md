@@ -1,6 +1,6 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-06-18
+**Last updated:** 2026-06-19
 **Branch:** `main` (no remote yet)
 
 ---
@@ -28,9 +28,65 @@ and carry-forward notes.
 
 | Order | Session | Status | Source / Gate |
 |---|---|---|---|
-| 1 | Phase 8-B5 Session 4B — Named Views, Server-Side Filters/Search, History Visibility, Counts, Sorting | Planned | `docs/build-log/041-phase-8-b5-session-4-filters-search-closed-history-pagination-decisions.md` |
-| 2 | Phase 8-B5 Session 4C — Operator Unassigned Surface + Narrow Self-Assign Re-enable, Row Context/Action Metadata | Planned | `docs/build-log/041-phase-8-b5-session-4-filters-search-closed-history-pagination-decisions.md` |
-| 3 | Phase 8-B5 Session 4D — Integration Verification, Docs, Decision Index, Deferred Tracker | Planned | `docs/build-log/041-phase-8-b5-session-4-filters-search-closed-history-pagination-decisions.md` |
+| 1 | Phase 8-B5 Session 4C — Operator Unassigned Surface + Narrow Self-Assign Re-enable, Row Context/Action Metadata | Planned | `docs/build-log/041-phase-8-b5-session-4-filters-search-closed-history-pagination-decisions.md` |
+| 2 | Phase 8-B5 Session 4D — Integration Verification, Docs, Decision Index, Deferred Tracker | Planned | `docs/build-log/041-phase-8-b5-session-4-filters-search-closed-history-pagination-decisions.md` |
+
+---
+
+## Phase 8-B5 Session 4B — Named Views, Filters/Search, History Visibility, View Counts, Sorting — COMPLETE
+
+**Tests:** 784 total (449 unit · 14 arch · 321 integration) — all green
+**Next free ADR:** ADR-288
+
+### What was built
+
+Session 4B replaced the two 4A placeholder gates (`HasFilters → FilterNotYetAvailable` and `view != default → ViewNotYetAvailable`) with real server-side execution across 7 files.
+
+| File | Change |
+|---|---|
+| `Keep.Core/Errors/KeepRequestErrors.cs` | +3 errors: `RequestListInvalidStatus`, `RequestListInvalidAttentionReason`, `RequestListHistoryViewForbidden` |
+| `Keep.Application/Requests/IKeepRequestListPersistence.cs` | +3 methods: `GetActiveViewRequestsAsync`, `GetHistoryRequestsAsync`, `GetViewCountsAsync`; +3 types: `ActiveViewKind`, `HistoryViewKind`, `KeepRequestListFilters` |
+| `Keep.Application/Requests/GetKeepRequestListService.cs` | Complete rewrite: named view dispatch, status/attentionReason slug validation, contradiction updates (`feedback_review + non-Closed` and `closedFrom/closedTo + non-history`), history keyset pagination, in-memory B5 ranking sort, `FeedbackReviewComparer`, view counts always populated, `IsHistory`/`IsSearch` in list context |
+| `Keep.Infrastructure/Persistence/KeepRequestListPersistence.cs` | Complete rewrite: `GetActiveViewRequestsAsync` (EXISTS subqueries for participant views), `GetHistoryRequestsAsync` (keyset cursor, TerminatedAtUtc guard), `GetViewCountsAsync` (6 sequential counts, role-aware), `ApplyCommonFilters` (q search with FeedbackComment gated by `IsOwnerOrAdmin`) |
+| `Api/Helpers/ErrorHttpMapper.cs` | +3 explicit entries for `RequestListInvalidStatus` (400), `RequestListInvalidAttentionReason` (400), `RequestListHistoryViewForbidden` (403) |
+| `UnitTests/Keep/KeepRequestListServiceTests.cs` | Updated: removed 4A filter gate tests; renamed 4 persistence-contract tests to use `IsOwnerOrAdmin`; changed `Assert.Null(ViewCounts)` to `Assert.NotNull`; added 15 new tests (invalid slug, filter/search pass-through, closedFrom, dispatch routing, list-context flags, view counts) |
+| `IntegrationTests/Api/KeepRequestListQueryApiTests.cs` | Updated: removed 4A placeholder assertions; replaced 5 stale tests with 4B contracts; added 5 new tests (named view 200, history view 200, closedFrom contradictory, invalid status 400, invalid attentionReason 400, q 200) |
+
+### Named view dispatch
+
+| View | Kind | DB filter | Sort |
+|---|---|---|---|
+| `default` | Active | open + Owner/Admin unresolved feedback closed | in-memory B5 ranking |
+| `assigned_to_me` | Active | active + Responsible EXISTS | in-memory B5 ranking |
+| `watching` | Active | active + Watching EXISTS | in-memory B5 ranking |
+| `unassigned` | Active | active + no Responsible | in-memory B5 ranking; Operator gate (4B: `ViewNotYetAvailable`) |
+| `needs_attention` | Active | active + `AttentionLevel != None` | in-memory B5 ranking |
+| `feedback_review` | Active | closed + UnresolvedFeedback + attention raised | Owner/Admin only; FeedbackReviewComparer (AttentionSinceUtc ASC) |
+| `closed_history` | History | `TerminatedAtUtc != null && Closed` | DB keyset `TerminatedAtUtc DESC, Id ASC` |
+| `cancelled_history` | History | `TerminatedAtUtc != null && Cancelled` | DB keyset |
+| `all_history` | History | `TerminatedAtUtc != null && (Closed or Cancelled)` | DB keyset |
+
+### Cursor sentinel values
+
+- `HistorySortSentinel = 0` — marks a history keyset cursor (RankingOrder field)
+- `FeedbackReviewSortSentinel = 99` — marks a feedback_review cursor; SecondaryTick = AttentionSinceUtc ticks
+
+### Validation order (updated, locked)
+
+`NormalizeView` → unknown view → `ValidateDateFormats` → status slug → attentionReason slug → `ValidateContradictions` → view role auth → Operator unassigned gate → limit range → cursor decode/fingerprint
+
+Key changes from 4A: `HasFilters` gate removed; status/attentionReason slug validation inserted before contradictions; history view role auth (`RequestListHistoryViewForbidden → 403`) inserted after contradictions.
+
+### Role access
+
+- Owner/Admin: all views accessible
+- Operator: `feedback_review`, `closed_history`, `cancelled_history`, `all_history` → 403; `unassigned` → `ViewNotYetAvailable` (4C removes); all other active views → 200
+- Viewer: treated as non-admin; same view restrictions as Operator
+
+### 4B placeholders remaining (for 4C)
+
+- Operator `view=unassigned` returns `RequestListViewNotYetAvailable` (4C adds eligibility filtering and removes gate)
+- `GetViewCountsAsync`: Operator unassigned count returns 0 (same gate)
 
 ---
 
@@ -439,8 +495,14 @@ Member management API + integration tests.
 - **Minimal API DELETE body** — nullable body parameters on `MapDelete` endpoints require `[FromBody]`; without it the app fails to start at route data source initialization. Fixed on `DELETE /responsible` and `DELETE /watchers/{id}`.
 - **`MapEventType` must be exhaustive** — `ParticipationChanged = 10` was missing; found during 3B testing. Pattern: every new `KeepRequestEventType` value must be added to `MapEventType` before integration tests run against any service that commits that event type.
 - **OffSeason participation write blocking** — all 4 participation write services (`ManageResponsibleService`, `ManageWatcherService`, `SelfWatchService`, `MuteService`) use `RequestImplementsAllowedInOffSeason: false` and `|| decision.IsReadOnly` in `AuthAsync`; fires before request load or target user ID validation. Covered by `KeepOffSeasonTests` from 3D onward.
-- **4A validation order** — `NormalizeView` → unknown view → `ValidateDateFormats` → `ValidateContradictions` → `HasFilters` gate → view executability gate → limit range → cursor decode/fingerprint. Order is significant: date and contradiction errors must surface before 4A placeholder gates.
+- **4A validation order** — updated in 4B; current locked order: `NormalizeView` → unknown view → `ValidateDateFormats` → status slug → attentionReason slug → `ValidateContradictions` → view role auth → Operator unassigned gate → limit range → cursor decode/fingerprint.
 - **4A cursor fingerprint normalization** — null view and "default" produce identical fingerprints. Cursor from `GET /keep/requests` is reusable with `GET /keep/requests?view=default`.
 - **4A `KeepRequestListQueryBinding`** — static class in `OpHalo.Api.Keep`; handles HTTP structural concerns; `Program.cs` stays thin. ADR-287.
 - **4A HMAC key** — `Keep:RequestListCursorSigningKey` must be present in all environments; test factory uses 32-byte all-zeros key.
-- **Next session: Phase 8-B5 Session 4B** — named views, server-side filters/search, history visibility, view counts, sorting.
+- **4B cursor sentinels** — `HistorySortSentinel = 0` (history keyset cursor), `FeedbackReviewSortSentinel = 99` (feedback_review in-memory cursor). Sentinel values must not collide with B5 ranking groups (1–8).
+- **4B history keyset** — `WHERE TerminatedAtUtc != null` guard on history queries even though terminal records should always have this set (data invariant protection). `ORDER BY TerminatedAtUtc DESC, Id ASC`. Keyset: `WHERE terminated_at < cursorAt OR (terminated_at = cursorAt AND id > cursorId)`.
+- **4B Operator unassigned gate** — `view=unassigned` returns `RequestListViewNotYetAvailable` for Operators in 4B; 4C removes gate and adds eligibility filtering. `GetViewCountsAsync` returns `Unassigned: 0` for Operators in 4B for same reason.
+- **4B `feedback_review` authorization** — `RequestListHistoryViewForbidden → 403` for Operators (not 400). Applied to: `feedback_review`, `closed_history`, `cancelled_history`, `all_history`. These view names are public API contract and drive the explicit 403.
+- **4B `FeedbackComment` visibility** — included in Q search only when `filters.IsOwnerOrAdmin = true` in the EF LINQ predicate. Operator/Viewer Q search does not scan feedback comments.
+- **4B view counts always populated** — `GetViewCountsAsync` is called on every request in 4B; `viewCounts` is no longer null in the response.
+- **Next session: Phase 8-B5 Session 4C** — Operator Unassigned Surface + Narrow Self-Assign Re-enable, Row Context/Action Metadata.

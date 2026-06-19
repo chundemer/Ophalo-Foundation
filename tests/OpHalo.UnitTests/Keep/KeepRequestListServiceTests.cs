@@ -177,16 +177,47 @@ public class KeepRequestListServiceTests
     [Theory]
     [InlineData("assigned_to_me")]
     [InlineData("watching")]
-    [InlineData("unassigned")]
     [InlineData("needs_attention")]
+    [InlineData("unassigned")]
+    public async Task Execute_active_non_default_views_return_success_for_admin(string view)
+    {
+        var sut = BuildSut();
+        var result = await sut.ExecuteAsync(new KeepRequestListQuery(View: view));
+        Assert.True(result.IsSuccess);
+    }
+
+    [Theory]
     [InlineData("feedback_review")]
     [InlineData("closed_history")]
     [InlineData("cancelled_history")]
     [InlineData("all_history")]
-    public async Task Execute_known_non_default_view_returns_RequestListViewNotYetAvailable(string view)
+    public async Task Execute_owner_admin_only_views_return_success_for_admin(string view)
     {
         var sut = BuildSut();
         var result = await sut.ExecuteAsync(new KeepRequestListQuery(View: view));
+        Assert.True(result.IsSuccess);
+    }
+
+    [Theory]
+    [InlineData("feedback_review")]
+    [InlineData("closed_history")]
+    [InlineData("cancelled_history")]
+    [InlineData("all_history")]
+    public async Task Execute_history_and_feedback_views_forbidden_for_operator(string view)
+    {
+        var p = HappyPathPersistence(role: AccountUserRole.Operator);
+        var sut = BuildSut(p);
+        var result = await sut.ExecuteAsync(new KeepRequestListQuery(View: view));
+        Assert.False(result.IsSuccess);
+        Assert.Equal("KeepRequest.RequestListHistoryViewForbidden", result.Error.Code);
+    }
+
+    [Fact]
+    public async Task Execute_unassigned_view_not_yet_available_for_operator()
+    {
+        var p = HappyPathPersistence(role: AccountUserRole.Operator);
+        var sut = BuildSut(p);
+        var result = await sut.ExecuteAsync(new KeepRequestListQuery(View: "unassigned"));
         Assert.False(result.IsSuccess);
         Assert.Equal("KeepRequest.RequestListViewNotYetAvailable", result.Error.Code);
     }
@@ -237,22 +268,21 @@ public class KeepRequestListServiceTests
     }
 
     [Fact]
-    public async Task Execute_valid_utc_date_hits_filter_gate_not_date_error()
+    public async Task Execute_valid_utc_createdFrom_passes_date_validation_and_executes()
     {
-        // A correctly formatted date still hits the 4A filter gate.
         var sut = BuildSut();
         var result = await sut.ExecuteAsync(new KeepRequestListQuery(CreatedFrom: "2026-06-18T00:00:00Z"));
-        Assert.False(result.IsSuccess);
-        Assert.Equal("KeepRequest.RequestListFilterNotYetAvailable", result.Error.Code);
+        Assert.True(result.IsSuccess);
     }
 
     [Fact]
-    public async Task Execute_valid_offset_date_hits_filter_gate_not_date_error()
+    public async Task Execute_closedFrom_with_non_history_view_returns_contradictory()
     {
+        // closedFrom only applies to history views; default view is contradictory (ADR-258).
         var sut = BuildSut();
         var result = await sut.ExecuteAsync(new KeepRequestListQuery(ClosedFrom: "2026-06-18T10:00:00+10:00"));
         Assert.False(result.IsSuccess);
-        Assert.Equal("KeepRequest.RequestListFilterNotYetAvailable", result.Error.Code);
+        Assert.Equal("KeepRequest.RequestListContradictoryParameters", result.Error.Code);
     }
 
     // --- Contradiction detection (must surface before "not yet available") ------
@@ -298,24 +328,76 @@ public class KeepRequestListServiceTests
         Assert.Equal("KeepRequest.RequestListContradictoryParameters", result.Error.Code);
     }
 
-    // --- Filter/search gate (4A) ------------------------------------------------
+    // --- Filter/search validation (4B) -----------------------------------------
 
     [Fact]
-    public async Task Execute_with_status_filter_returns_RequestListFilterNotYetAvailable()
+    public async Task Execute_invalid_status_returns_RequestListInvalidStatus()
     {
         var sut = BuildSut();
-        var result = await sut.ExecuteAsync(new KeepRequestListQuery(Status: "received"));
+        var result = await sut.ExecuteAsync(new KeepRequestListQuery(Status: "garbage_status"));
         Assert.False(result.IsSuccess);
-        Assert.Equal("KeepRequest.RequestListFilterNotYetAvailable", result.Error.Code);
+        Assert.Equal("KeepRequest.RequestListInvalidStatus", result.Error.Code);
     }
 
     [Fact]
-    public async Task Execute_with_search_q_returns_RequestListFilterNotYetAvailable()
+    public async Task Execute_invalid_attentionReason_returns_RequestListInvalidAttentionReason()
     {
         var sut = BuildSut();
-        var result = await sut.ExecuteAsync(new KeepRequestListQuery(Q: "foo"));
+        var result = await sut.ExecuteAsync(new KeepRequestListQuery(AttentionReason: "not_a_reason"));
         Assert.False(result.IsSuccess);
-        Assert.Equal("KeepRequest.RequestListFilterNotYetAvailable", result.Error.Code);
+        Assert.Equal("KeepRequest.RequestListInvalidAttentionReason", result.Error.Code);
+    }
+
+    [Fact]
+    public async Task Execute_invalid_status_returns_error_before_contradiction_check()
+    {
+        // view=closed_history&status=garbage — InvalidStatus, not ContradictoryParameters.
+        var sut = BuildSut();
+        var result = await sut.ExecuteAsync(
+            new KeepRequestListQuery(View: "closed_history", Status: "garbage"));
+        Assert.False(result.IsSuccess);
+        Assert.Equal("KeepRequest.RequestListInvalidStatus", result.Error.Code);
+    }
+
+    [Fact]
+    public async Task Execute_valid_status_filter_passes_and_stored_in_filters()
+    {
+        var p = HappyPathPersistence();
+        var sut = BuildSut(p);
+        var result = await sut.ExecuteAsync(new KeepRequestListQuery(Status: "received"));
+        Assert.True(result.IsSuccess);
+        Assert.Equal(KeepRequestStatus.Received, p.LastActiveFilters?.Status);
+    }
+
+    [Fact]
+    public async Task Execute_valid_attentionReason_filter_passes_and_stored_in_filters()
+    {
+        var p = HappyPathPersistence();
+        var sut = BuildSut(p);
+        var result = await sut.ExecuteAsync(new KeepRequestListQuery(AttentionReason: "complaint"));
+        Assert.True(result.IsSuccess);
+        Assert.Equal(AttentionReason.Complaint, p.LastActiveFilters?.AttentionReason);
+    }
+
+    [Fact]
+    public async Task Execute_search_q_passes_and_stored_in_filters()
+    {
+        var p = HappyPathPersistence();
+        var sut = BuildSut(p);
+        var result = await sut.ExecuteAsync(new KeepRequestListQuery(Q: "plumbing"));
+        Assert.True(result.IsSuccess);
+        Assert.Equal("plumbing", p.LastActiveFilters?.Q);
+    }
+
+    [Fact]
+    public async Task Execute_closedFrom_with_closed_history_passes_and_stored_in_filters()
+    {
+        var p = HappyPathPersistence();
+        var sut = BuildSut(p);
+        var result = await sut.ExecuteAsync(
+            new KeepRequestListQuery(View: "closed_history", ClosedFrom: "2026-01-01T00:00:00Z"));
+        Assert.True(result.IsSuccess);
+        Assert.NotNull(p.LastHistoryFilters?.ClosedFrom);
     }
 
     [Fact]
@@ -401,7 +483,7 @@ public class KeepRequestListServiceTests
         Assert.False(val.PageInfo.HasMore);
         Assert.Null(val.PageInfo.NextCursor);
 
-        Assert.Null(val.ViewCounts); // 4A: counts wired in 4B
+        Assert.NotNull(val.ViewCounts);
 
         Assert.Equal("default", val.ListContext.View);
         Assert.True(val.ListContext.IsDefaultCommandCenter);
@@ -498,47 +580,96 @@ public class KeepRequestListServiceTests
     // --- B5: persistence contract -----------------------------------------------
 
     [Fact]
-    public async Task Execute_passes_include_closed_feedback_true_for_admin()
+    public async Task Execute_passes_isOwnerOrAdmin_true_for_admin()
     {
         var p = HappyPathPersistence(role: AccountUserRole.Admin);
         var sut = BuildSut(p);
 
         await sut.ExecuteAsync();
 
-        Assert.True(p.IncludedClosedUnresolvedFeedback);
+        Assert.True(p.LastActiveFilters?.IsOwnerOrAdmin);
     }
 
     [Fact]
-    public async Task Execute_passes_include_closed_feedback_true_for_owner()
+    public async Task Execute_passes_isOwnerOrAdmin_true_for_owner()
     {
         var p = HappyPathPersistence(role: AccountUserRole.Owner);
         var sut = BuildSut(p);
 
         await sut.ExecuteAsync();
 
-        Assert.True(p.IncludedClosedUnresolvedFeedback);
+        Assert.True(p.LastActiveFilters?.IsOwnerOrAdmin);
     }
 
     [Fact]
-    public async Task Execute_passes_include_closed_feedback_false_for_operator()
+    public async Task Execute_passes_isOwnerOrAdmin_false_for_operator()
     {
         var p = HappyPathPersistence(role: AccountUserRole.Operator);
         var sut = BuildSut(p);
 
         await sut.ExecuteAsync();
 
-        Assert.False(p.IncludedClosedUnresolvedFeedback);
+        Assert.False(p.LastActiveFilters?.IsOwnerOrAdmin ?? true);
     }
 
     [Fact]
-    public async Task Execute_passes_include_closed_feedback_false_for_viewer()
+    public async Task Execute_passes_isOwnerOrAdmin_false_for_viewer()
     {
         var p = HappyPathPersistence(role: AccountUserRole.Viewer);
         var sut = BuildSut(p);
 
         await sut.ExecuteAsync();
 
-        Assert.False(p.IncludedClosedUnresolvedFeedback);
+        Assert.False(p.LastActiveFilters?.IsOwnerOrAdmin ?? true);
+    }
+
+    [Fact]
+    public async Task Execute_view_counts_populated_on_default_query()
+    {
+        var sut = BuildSut();
+        var result = await sut.ExecuteAsync();
+        Assert.True(result.IsSuccess);
+        Assert.NotNull(result.Value.ViewCounts);
+    }
+
+    [Fact]
+    public async Task Execute_history_view_dispatches_to_history_path()
+    {
+        var p = HappyPathPersistence();
+        var sut = BuildSut(p);
+        var result = await sut.ExecuteAsync(new KeepRequestListQuery(View: "closed_history"));
+        Assert.True(result.IsSuccess);
+        Assert.NotNull(p.LastHistoryFilters);
+        Assert.Null(p.LastActiveFilters);
+    }
+
+    [Fact]
+    public async Task Execute_active_view_dispatches_to_active_path()
+    {
+        var p = HappyPathPersistence();
+        var sut = BuildSut(p);
+        var result = await sut.ExecuteAsync(new KeepRequestListQuery(View: "assigned_to_me"));
+        Assert.True(result.IsSuccess);
+        Assert.NotNull(p.LastActiveFilters);
+        Assert.Null(p.LastHistoryFilters);
+    }
+
+    [Fact]
+    public async Task Execute_history_list_context_sets_IsHistory_true()
+    {
+        var sut = BuildSut();
+        var result = await sut.ExecuteAsync(new KeepRequestListQuery(View: "all_history"));
+        Assert.True(result.IsSuccess);
+        Assert.True(result.Value.ListContext.IsHistory);
+    }
+
+    [Fact]
+    public async Task Execute_search_q_sets_IsSearch_true_in_list_context()
+    {
+        var sut = BuildSut();
+        var result = await sut.ExecuteAsync(new KeepRequestListQuery(Q: "leak"));
+        Assert.True(result.IsSuccess);
+        Assert.True(result.Value.ListContext.IsSearch);
     }
 
     // --- B5: Viewer role --------------------------------------------------------
@@ -820,7 +951,12 @@ public class KeepRequestListServiceTests
         public AccountUserSnapshot? UserSnapshotToReturn { get; set; }
         public AccountAccessSnapshot? AccountSnapshotToReturn { get; set; }
         public IReadOnlyList<KeepRequest> RequestsToReturn { get; set; } = [];
-        public bool IncludedClosedUnresolvedFeedback { get; private set; }
+
+        // Tracking for test assertions.
+        public KeepRequestListFilters? LastActiveFilters { get; private set; }
+        public ActiveViewKind LastActiveViewKind { get; private set; }
+        public HistoryViewKind LastHistoryViewKind { get; private set; }
+        public KeepRequestListFilters? LastHistoryFilters { get; private set; }
 
         public Task<AccountUserSnapshot?> GetAccountUserSnapshotAsync(Guid accountUserId, CancellationToken ct) =>
             Task.FromResult(UserSnapshotToReturn);
@@ -829,11 +965,30 @@ public class KeepRequestListServiceTests
             Task.FromResult(AccountSnapshotToReturn);
 
         public Task<IReadOnlyList<KeepRequest>> GetDefaultListRequestsAsync(
-            Guid accountId, bool includeClosedUnresolvedFeedback, CancellationToken ct)
+            Guid accountId, bool includeClosedUnresolvedFeedback, CancellationToken ct) =>
+            Task.FromResult(RequestsToReturn);
+
+        public Task<IReadOnlyList<KeepRequest>> GetActiveViewRequestsAsync(
+            Guid accountId, Guid currentAccountUserId, ActiveViewKind view,
+            KeepRequestListFilters filters, CancellationToken ct)
         {
-            IncludedClosedUnresolvedFeedback = includeClosedUnresolvedFeedback;
+            LastActiveViewKind = view;
+            LastActiveFilters = filters;
             return Task.FromResult(RequestsToReturn);
         }
+
+        public Task<IReadOnlyList<KeepRequest>> GetHistoryRequestsAsync(
+            Guid accountId, HistoryViewKind view, KeepRequestListFilters filters,
+            DateTime? cursorTerminatedAt, Guid? cursorLastId, int fetchCount, CancellationToken ct)
+        {
+            LastHistoryViewKind = view;
+            LastHistoryFilters = filters;
+            return Task.FromResult((IReadOnlyList<KeepRequest>)RequestsToReturn.Take(fetchCount).ToList());
+        }
+
+        public Task<KeepRequestViewCounts> GetViewCountsAsync(
+            Guid accountId, Guid currentAccountUserId, bool isOwnerOrAdmin, CancellationToken ct) =>
+            Task.FromResult(new KeepRequestViewCounts(0, 0, 0, 0, 0, 0));
 
         public Task<Dictionary<Guid, KeepRequestParticipantSummary>> GetParticipantSummariesAsync(
             IReadOnlyList<Guid> requestIds, Guid currentAccountUserId, Guid accountId, CancellationToken ct) =>

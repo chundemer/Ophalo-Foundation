@@ -159,4 +159,14 @@ public static class KeepRequestErrors
 
     public static readonly Error RequestListDuplicateParameter =
         Error.Create("KeepRequest.RequestListDuplicateParameter", "A query parameter was supplied more than once. Each parameter must appear at most once.");
+
+    // Request list filter/view validation errors (Session 4B).
+    public static readonly Error RequestListInvalidStatus =
+        Error.Create("KeepRequest.RequestListInvalidStatus", "The provided status filter value is not recognized.");
+
+    public static readonly Error RequestListInvalidAttentionReason =
+        Error.Create("KeepRequest.RequestListInvalidAttentionReason", "The provided attentionReason filter value is not recognized.");
+
+    public static readonly Error RequestListHistoryViewForbidden =
+        Error.Create("KeepRequest.RequestListHistoryViewForbidden", "This view requires Owner or Admin access.");
 }
