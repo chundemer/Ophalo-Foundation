@@ -26,6 +26,65 @@ and carry-forward notes.
 - report any discovered bugs, gaps, or decision conflicts in `docs/session-log.md` instead of
   silently guessing policy.
 
+## Phase 8-B5 Session 5C — List/Customer-Page OffSeason and UI-Ready Metadata — COMPLETE
+
+**Tests:** 847 total (494 unit · 14 arch · 339 integration) — all green
+**Next free ADR:** ADR-295 (no new ADRs consumed)
+
+### What was built
+
+Session 5C wires aging metadata onto list summaries and enforces the OffSeason posture on the
+customer page.
+
+| File | Change |
+|---|---|
+| `Keep.Application/Requests/KeepRequestSummary.cs` | `+FeedbackReviewAgeBucket: string?` + `+FeedbackReviewDueAtUtc: DateTime?` on `KeepRequestSummary` record |
+| `Keep.Application/Requests/GetKeepRequestListService.cs` | `+using OpHalo.Keep.Core.Domain`; `ToSummary`: computes `feedbackReviewAgeBucket`/`feedbackReviewDueAtUtc` when `isPostClose && r.FeedbackSubmittedAtUtc.HasValue`; populates the two new fields; `+MapFeedbackReviewAgeBucket` private static switch method |
+| `Keep.Application/Requests/KeepCustomerPageMapper.cs` | `BuildActiveResult`: passes `context.IsOffSeason` to `ComputeAllowedActions`; `ComputeAllowedActions`: added `bool isOffSeason` param; `Closed + isOffSeason` case returns `[]` before feedback-submitted guard (ADR-277) |
+| `IntegrationTests/Api/KeepOffSeasonTests.cs` | `+ClosedFeedbackPageToken` const; seeds closed request with unreviewed negative feedback in `InitializeAsync`; `+GetCustomerPage_OffSeason_ClosedWithPendingFeedback_AllowedActionsEmpty` test |
+| `IntegrationTests/Api/KeepFeedbackReviewApiTests.cs` | `+FeedbackReview_ListView_IncludesAgingMetadata` test — verifies all `feedback_review` rows carry `feedbackReviewAgeBucket` (string in `new`/`aging`/`overdue`) and `feedbackReviewDueAtUtc` (datetime string) |
+
+### Already done from earlier sessions (no code needed in 5C)
+
+- **`feedback_review` list/count excludes reviewed requests** — `MarkFeedbackReviewed` clears
+  `UnresolvedFeedback` attention (`AttentionLevel → None`); the existing filter
+  `AttentionLevel != None` already excludes them. Same for `default` Owner/Admin view and
+  `GetViewCountsAsync`.
+- **`POST /keep/r/{pageToken}/feedback` blocked in OffSeason** — already in `SubmitFeedbackService`
+  (`context.IsOffSeason → OffSeasonUnavailable`); tested in 2C/5B.
+- **`CanMarkFeedbackReviewed` false in OffSeason** — `GetKeepRequestDetailService` sets
+  `canWrite = canOperate && !isOffSeason`; the flag propagates through `CanMarkFeedbackReviewed`.
+
+### Design decisions confirmed this session
+
+- **D1 — Aging metadata on list summaries**: `FeedbackReviewAgeBucket` and `FeedbackReviewDueAtUtc`
+  added to `KeepRequestSummary`. Computed from `FeedbackSubmittedAtUtc` using `FeedbackReviewPolicy`.
+  `isPostClose` is the correct gate (Closed + UnresolvedFeedback attention raised implies negative +
+  unreviewed by invariant). Null for all non-feedback-review rows.
+- **D2 — OffSeason closed customer page returns `AllowedActions = []`**: Do not advertise an action
+  the server will reject. `Closed + isOffSeason` case precedes the feedback-submitted check in
+  `ComputeAllowedActions` so it fires regardless of whether feedback has already been submitted.
+  Active-status pages are unchanged (OffSeason scoped to closed pages per ADR-277).
+
+### Self-review findings
+
+- No bugs found.
+- `isPostClose` correctly implies unreviewed + negative by domain invariant — no redundant field
+  checks needed in the aging gate.
+- `MapFeedbackReviewAgeBucket` is exhaustive with a default throw.
+- OffSeason customer page test seeds the closed + negative feedback state using the established
+  `ChangeStatus + SubmitFeedback` domain method pattern from `KeepFeedbackReviewApiTests`.
+
+### Next session: Phase 8-B5 Session 5D — Pre-work complete
+
+Integration verification, docs, decision index, and deferred tracker:
+- Full test suite verification against Session 5 boundary (no Session 6 code)
+- ADR-261..286 status update in decision index
+- DEF-074 (concurrency gap) updated if applicable
+- Build-log entry for Session 5
+
+---
+
 ## Phase 8-B5 Session 5B — Mark-Feedback-Reviewed Service/API — COMPLETE
 
 **Tests:** 845 total (494 unit · 14 arch · 337 integration) — all green
@@ -49,13 +108,6 @@ Session 5B wires the domain `MarkFeedbackReviewed` method from 5A into the full 
 
 - **Concurrency race deferred (DEF-074):** `GetRequestForUpdateAsync` has no row lock or concurrency token. Two concurrent Owner/Admin requests could both pass the unreviewed guard and commit. In practice the risk for V1 pilot is low; the correct fix (Npgsql `xmin` OCC or EF `RowVersion` on `KeepRequest`) is a cross-cutting infrastructure concern that should be applied to all write paths together. Added to deferred tracker.
 - **OffSeason returns `Forbidden` (not `KeepRequest.ReadOnly`):** ADR-276 lists `KeepRequest.ReadOnly` aspirationally; the entire implemented convention (10+ write services) returns generic `auth.forbidden` for OffSeason/blocked account state. `MarkFeedbackReviewedService` follows the uniform convention. ADR-276 superseded on this point.
-
-### Next session: Phase 8-B5 Session 5C
-
-List/customer-page OffSeason and UI-ready metadata integration:
-- `feedback_review` view/count excludes already-reviewed requests
-- OffSeason customer page GET omits `feedback` from `AllowedActions`
-- OffSeason `POST /keep/r/{pageToken}/feedback` server-side block
 
 ---
 
@@ -629,7 +681,7 @@ Member management API + integration tests.
 - **Negative feedback on Closed raises attention** — intentional exception to terminal-no-attention posture (ADR-138).
 - **Feedback `WasResolved` is `bool?` at API layer** — null signals missing flag, validated before service. Domain method takes `bool`.
 - **Always use `dotnet build --verbosity minimal`** — `dotnet build -q` is passed to MSBuild as `-q` (question build) and fails; `--verbosity minimal` is the correct quiet mode.
-- **Next free ADR: ADR-288.**
+- **Next free ADR: ADR-295.**
 - **B4 mapper signature:** `ToDetailResult` now takes `AccountUserRole role`, `bool canOperate`, `Guid currentUserId` — all callers updated; write services pass `canOperate: true`.
 - **Participant `DisplayName`** computed in persistence (two-query approach retained; User.Name projected in the AccountUsers query via EF navigation LEFT JOIN).
 - **`KeepRequestStatus.Scheduled = 7`** — added to `MapStatus` in B5 service rewrite.
@@ -661,7 +713,10 @@ Member management API + integration tests.
 - **4C stale Responsible** — stale rows have `DetachedAtUtc==null`; excluded from unassigned DB view; `ResponsibleCount > 0` → not self-assignable.
 - **4C `ParticipationOperatorCannotAssignOther`** — now fires only for `target != self`; self-assign path proceeds.
 - **4C `RequestListViewNotYetAvailable`** — error code retained in `KeepRequestErrors.cs` and `ErrorHttpMapper.cs` but no longer returned by the list service.
-- **Next session: Phase 8-B5 Session 4D** — Integration Verification, Docs, Decision Index, Deferred Tracker.
 - **5B OffSeason returns `Forbidden`** — all Keep write services (including `MarkFeedbackReviewedService`) return generic `auth.forbidden` for OffSeason/blocked account, not `KeepRequest.ReadOnly`. ADR-276's listed error was aspirational; uniform Forbidden convention is the implemented contract.
 - **5B concurrency gap (DEF-074)** — `KeepRequest` has no concurrency token; concurrent feedback reviews could both commit. Domain guard catches sequential duplicate via `FeedbackAlreadyReviewed`; true-race window deferred to cross-cutting OCC slice.
 - **`MarkFeedbackReviewedService` is Owner/Admin only** — role check on `userSnapshot.Role` fires immediately after the user snapshot load, before account snapshot and permission policy checks. This differs from Operator-accessible services where role restrictions are expressed in domain or command guards.
+- **5C `FeedbackReviewAgeBucket`/`FeedbackReviewDueAtUtc` on list summaries** — added to `KeepRequestSummary`; null for all non-feedback-review rows; `isPostClose` is the correct gate (Closed + UnresolvedFeedback + attention raised implies unreviewed + negative by domain invariant).
+- **5C OffSeason closed customer page** — `ComputeAllowedActions` `Closed + isOffSeason` case precedes the `feedbackAlreadySubmitted` check. Active-status pages are unchanged.
+- **`feedback_review` view excludes reviewed requests** — `MarkFeedbackReviewed` clears `UnresolvedFeedback` attention; existing `AttentionLevel != None` filter handles exclusion automatically.
+- **Next session: Phase 8-B5 Session 5D** — integration verification, docs, decision index update (ADR-261..286), deferred tracker.

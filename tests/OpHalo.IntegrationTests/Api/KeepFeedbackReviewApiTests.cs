@@ -381,6 +381,34 @@ public sealed class KeepFeedbackReviewApiTests : IClassFixture<KeepApiWebFactory
     }
 
     // =========================================================================
+    // List view — aging metadata (5C, ADR-279)
+    // =========================================================================
+
+    [Fact]
+    public async Task FeedbackReview_ListView_IncludesAgingMetadata()
+    {
+        // feedback_review view returns unreviewed negative-feedback rows with server-computed
+        // age bucket and due timestamp on each summary row.
+        var response = await AuthRequest(_ownerCookie).GetAsync("/keep/requests?view=feedback_review");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        var requests = body.GetProperty("requests").EnumerateArray().ToList();
+        Assert.NotEmpty(requests);
+
+        Assert.All(requests, row =>
+        {
+            // ageBucket must be a non-null string from the known set.
+            var bucketProp = row.GetProperty("feedbackReviewAgeBucket");
+            Assert.Equal(JsonValueKind.String, bucketProp.ValueKind);
+            Assert.Contains(bucketProp.GetString(), new[] { "new", "aging", "overdue" });
+
+            // dueAtUtc must be a non-null datetime string.
+            Assert.Equal(JsonValueKind.String, row.GetProperty("feedbackReviewDueAtUtc").ValueKind);
+        });
+    }
+
+    // =========================================================================
     // Helpers
     // =========================================================================
 

@@ -48,7 +48,7 @@ internal static class KeepCustomerPageMapper
                 .Where(e => e.Visibility == KeepRequestEventVisibility.All)
                 .Select(MapEvent)
                 .ToList(),
-            AllowedActions: ComputeAllowedActions(context.Status, context.FeedbackSubmittedAtUtc.HasValue));
+            AllowedActions: ComputeAllowedActions(context.Status, context.FeedbackSubmittedAtUtc.HasValue, context.IsOffSeason));
 
     internal static string MapStatus(KeepRequestStatus status) => status switch
     {
@@ -89,7 +89,7 @@ internal static class KeepCustomerPageMapper
     };
 
     private static IReadOnlyList<string> ComputeAllowedActions(
-        KeepRequestStatus status, bool feedbackAlreadySubmitted) =>
+        KeepRequestStatus status, bool feedbackAlreadySubmitted, bool isOffSeason) =>
         status switch
         {
             KeepRequestStatus.Received
@@ -97,6 +97,8 @@ internal static class KeepCustomerPageMapper
                 or KeepRequestStatus.InProgress
                 or KeepRequestStatus.PendingCustomer
                 or KeepRequestStatus.Resolved => ActiveAllowedActions,
+            // ADR-277: do not advertise an action that will be rejected in OffSeason.
+            KeepRequestStatus.Closed when isOffSeason => Array.Empty<string>(),
             KeepRequestStatus.Closed when !feedbackAlreadySubmitted => ClosedAllowedActions,
             KeepRequestStatus.Closed => Array.Empty<string>(),
             KeepRequestStatus.Cancelled => Array.Empty<string>(),

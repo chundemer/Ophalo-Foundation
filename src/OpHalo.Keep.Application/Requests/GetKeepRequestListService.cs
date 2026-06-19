@@ -3,6 +3,7 @@ using OpHalo.Foundation.Application.Accounts.Access;
 using OpHalo.Foundation.Application.Accounts.Authorization;
 using OpHalo.Foundation.Application.Accounts.Entitlements;
 using OpHalo.Foundation.Core.Entities.Accounts.Enums;
+using OpHalo.Keep.Core.Domain;
 using OpHalo.Keep.Core.Entities;
 using OpHalo.Keep.Core.Entities.Enums;
 using OpHalo.Keep.Core.Errors;
@@ -600,6 +601,15 @@ public sealed class GetKeepRequestListService(
         var participationInfo = BuildParticipationInfo(participation, canAssignFromList, canSelfAssignFromList);
         var notificationInfo = BuildNotificationInfo(canOperate, isOffSeason, participation);
 
+        // Aging metadata: only for unreviewed negative feedback in active review state.
+        // isPostClose already captures Closed + UnresolvedFeedback + attention raised.
+        var feedbackReviewAgeBucket = isPostClose && r.FeedbackSubmittedAtUtc.HasValue
+            ? MapFeedbackReviewAgeBucket(FeedbackReviewPolicy.ComputeAgeBucket(r.FeedbackSubmittedAtUtc.Value, nowUtc))
+            : (string?)null;
+        var feedbackReviewDueAtUtc = isPostClose && r.FeedbackSubmittedAtUtc.HasValue
+            ? FeedbackReviewPolicy.ComputeReviewDueAtUtc(r.FeedbackSubmittedAtUtc.Value)
+            : (DateTime?)null;
+
         return new KeepRequestSummary(
             Id: r.Id,
             ReferenceCode: r.ReferenceCode,
@@ -621,7 +631,9 @@ public sealed class GetKeepRequestListService(
             Preview: preview,
             Actions: actions,
             Participation: participationInfo,
-            CurrentUserNotification: notificationInfo);
+            CurrentUserNotification: notificationInfo,
+            FeedbackReviewAgeBucket: feedbackReviewAgeBucket,
+            FeedbackReviewDueAtUtc: feedbackReviewDueAtUtc);
     }
 
     private static (string group, int order) ComputeRankingGroup(
@@ -847,6 +859,14 @@ public sealed class GetKeepRequestListService(
         AttentionReason.FirstResponseDue      => "first_response_due",
         AttentionReason.UnresolvedFeedback    => "unresolved_feedback",
         _ => throw new InvalidOperationException($"Unknown AttentionReason: {reason}")
+    };
+
+    private static string MapFeedbackReviewAgeBucket(FeedbackReviewAgeBucket bucket) => bucket switch
+    {
+        FeedbackReviewAgeBucket.New     => "new",
+        FeedbackReviewAgeBucket.Aging   => "aging",
+        FeedbackReviewAgeBucket.Overdue => "overdue",
+        _ => throw new InvalidOperationException($"Unknown FeedbackReviewAgeBucket: {bucket}")
     };
 
     private static class QuickActionDefs

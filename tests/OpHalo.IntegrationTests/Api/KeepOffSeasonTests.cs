@@ -8,6 +8,7 @@ using OpHalo.Foundation.Core.Entities.Accounts.Enums;
 using OpHalo.Foundation.Infrastructure.Persistence;
 using OpHalo.Keep.Application.Services;
 using OpHalo.Keep.Core.Entities;
+using OpHalo.Keep.Core.Entities.Enums;
 
 namespace OpHalo.IntegrationTests.Api;
 
@@ -23,6 +24,7 @@ public sealed class KeepOffSeasonTests : IClassFixture<KeepApiWebFactory>, IAsyn
 
     private Guid _requestId;
     private const string PageToken = "os_test_page_token_001";
+    private const string ClosedFeedbackPageToken = "os_test_closed_fb_002";
     private const string IntakeToken = "os_test_intake_token_abc123";
 
     private string _ownerCookie = string.Empty;
@@ -91,6 +93,20 @@ public sealed class KeepOffSeasonTests : IClassFixture<KeepApiWebFactory>, IAsyn
 
         _requestId = request.Id;
 
+        // Seed a closed request with unreviewed negative feedback for the AllowedActions test (ADR-277).
+        var closedRequest = KeepRequest.Create(
+            accountId, customer.Id,
+            "OS Customer", "0400000099", null,
+            "Closed pipe job", "OS-002", ClosedFeedbackPageToken, now, 60);
+        closedRequest.ChangeStatus(KeepRequestStatus.Resolved, null, graph.Owner.Id, "owner@os-tests.com", now);
+        closedRequest.ChangeStatus(KeepRequestStatus.Closed, null, graph.Owner.Id, "owner@os-tests.com", now);
+        var closedFb = closedRequest.SubmitFeedback(wasResolved: false, comment: "Unhappy.", priorityResponseTargetMinutes: 60, nowUtc: now);
+        Assert.True(closedFb.IsSuccess);
+        db.Set<KeepRequest>().Add(closedRequest);
+        db.Set<KeepRequestEvent>().Add(
+            KeepRequestEvent.CreateRequestCreated(closedRequest.Id, accountId, now));
+        await db.SaveChangesAsync();
+
         // Seed public intake link for intake OffSeason test.
         var tokenHash = new KeepTokenService().HashPublicIntakeToken(IntakeToken);
         var link = KeepPublicIntakeLink.Create(accountId, "os-plumbing", tokenHash);
@@ -134,6 +150,19 @@ public sealed class KeepOffSeasonTests : IClassFixture<KeepApiWebFactory>, IAsyn
     {
         var response = await _factory.CreateClient().GetAsync($"/keep/r/{PageToken}");
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task GetCustomerPage_OffSeason_ClosedWithPendingFeedback_AllowedActionsEmpty()
+    {
+        // ADR-277: closed customer pages must not advertise "feedback" in OffSeason — the
+        // submission endpoint rejects it server-side, so the action should be omitted here too.
+        var response = await _factory.CreateClient().GetAsync($"/keep/r/{ClosedFeedbackPageToken}");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        var actions = body.GetProperty("allowedActions").EnumerateArray().ToList();
+        Assert.Empty(actions);
     }
 
     // =========================================================================

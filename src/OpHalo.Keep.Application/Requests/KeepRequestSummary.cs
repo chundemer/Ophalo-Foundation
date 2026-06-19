@@ -21,7 +21,9 @@ public sealed record KeepRequestSummary(
     KeepRequestPreviewInfo Preview,
     KeepRequestActionsInfo Actions,
     KeepRequestParticipationInfo Participation,
-    KeepRequestNotificationInfo CurrentUserNotification);
+    KeepRequestNotificationInfo CurrentUserNotification,
+    string? FeedbackReviewAgeBucket,
+    DateTime? FeedbackReviewDueAtUtc);
 
 public sealed record KeepRequestAttentionInfo(
     string AttentionLevel,
