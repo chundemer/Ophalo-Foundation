@@ -35,6 +35,11 @@ public sealed record KeepRequestDetailResult(
     string? FeedbackComment,
     DateTime? FeedbackSubmittedAtUtc,
     bool FeedbackCommentVisible,
+    DateTime? FeedbackReviewedAtUtc,
+    Guid? FeedbackReviewedByAccountUserId,
+    string? FeedbackReviewNote,
+    string? FeedbackReviewAgeBucket,
+    DateTime? FeedbackReviewDueAtUtc,
     IReadOnlyList<ContactActionItem> ContactActions,
     IReadOnlyList<KeepRequestParticipantItem> Participants,
     CurrentUserDetailParticipation CurrentUserParticipation,
@@ -57,6 +62,7 @@ public sealed record AvailableActionsMetadata(
     bool CanUnwatch,
     bool CanMute,
     bool CanUnmute,
+    bool CanMarkFeedbackReviewed,
     IReadOnlyList<string> AllowedStatuses);
 
 /// <summary>
@@ -69,6 +75,7 @@ public sealed record ValidationHintsMetadata(
     int StatusMessageMaxLength,
     int AcknowledgeReasonMaxLength,
     int ExternalContactSummaryMaxLength,
+    int FeedbackReviewNoteMaxLength,
     IReadOnlyList<string> MessageRequiredForStatuses);
 
 public sealed record ContactActionItem(string Type, bool Available, string Target);

@@ -81,8 +81,9 @@ public sealed class AddInternalNoteService(
         // --- Domain: add internal note ---
         // Domain validates null/blank and length (> 4000 → NoteTooLong). No terminal check (D8).
         // Does not update LastBusinessActivityAt. Does not wire first-response (D1).
+        var nowUtc = clock.UtcNow;
         var noteResult = request.AddInternalNote(
-            command.Note, currentUser.UserId, actorDisplayName, clock.UtcNow);
+            command.Note, currentUser.UserId, actorDisplayName, nowUtc);
 
         if (noteResult.IsFailure)
             return Result<KeepRequestDetailResult>.Failure(noteResult.Error);
@@ -101,23 +102,24 @@ public sealed class AddInternalNoteService(
             p => p.AccountUserId == currentUser.UserId && p.DetachedAtUtc is null);
 
         var availableActions = new AvailableActionsMetadata(
-            CanChangeStatus:         !request.IsTerminal,
-            CanSendBusinessUpdate:   !request.IsTerminal,
-            CanAddInternalNote:      true,
-            CanAcknowledgeAttention: KeepRequestDetailMapper.CanAcknowledgeAttention(true, request),
-            CanLogExternalContact:   !request.IsTerminal,
-            CanAssignResponsible:    isOwnerOrAdmin && !request.IsTerminal,
-            CanWatch:                !request.IsTerminal && currentUserRow is null,
-            CanUnwatch:              !request.IsTerminal && currentUserRow?.ParticipationType == ParticipationType.Watching,
-            CanMute:                 !request.IsTerminal && currentUserRow is not null && currentUserRow.NotificationsEnabled,
-            CanUnmute:               !request.IsTerminal && currentUserRow is not null && !currentUserRow.NotificationsEnabled,
-            AllowedStatuses:         !request.IsTerminal
+            CanChangeStatus:           !request.IsTerminal,
+            CanSendBusinessUpdate:     !request.IsTerminal,
+            CanAddInternalNote:        true,
+            CanAcknowledgeAttention:   KeepRequestDetailMapper.CanAcknowledgeAttention(true, request),
+            CanLogExternalContact:     !request.IsTerminal,
+            CanAssignResponsible:      isOwnerOrAdmin && !request.IsTerminal,
+            CanWatch:                  !request.IsTerminal && currentUserRow is null,
+            CanUnwatch:                !request.IsTerminal && currentUserRow?.ParticipationType == ParticipationType.Watching,
+            CanMute:                   !request.IsTerminal && currentUserRow is not null && currentUserRow.NotificationsEnabled,
+            CanUnmute:                 !request.IsTerminal && currentUserRow is not null && !currentUserRow.NotificationsEnabled,
+            CanMarkFeedbackReviewed:   KeepRequestDetailMapper.CanMarkFeedbackReviewed(canWrite: true, isOwnerOrAdmin, request),
+            AllowedStatuses:           !request.IsTerminal
                 ? KeepRequestDetailMapper.ComputeAllowedStatuses(request.Status)
                 : []);
 
         return Result<KeepRequestDetailResult>.Success(
             KeepRequestDetailMapper.ToDetailResult(
                 request, businessName ?? string.Empty, participants, events, availableActions,
-                userSnapshot.Role, canOperate: true, currentUser.UserId));
+                userSnapshot.Role, canOperate: true, currentUser.UserId, nowUtc));
     }
 }

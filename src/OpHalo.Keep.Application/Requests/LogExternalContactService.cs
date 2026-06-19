@@ -117,13 +117,14 @@ public sealed class LogExternalContactService(
             return Result<KeepRequestDetailResult>.Failure(KeepRequestErrors.NotFound);
 
         // --- Domain mutation ---
+        var nowUtc = clock.UtcNow;
         Result<Core.Entities.KeepRequestEvent> domainResult;
 
         if (direction == ExternalContactDirection.Outbound)
         {
             domainResult = request.LogOutboundExternalContact(
                 channel.Value, outcome, command.RequiresBusinessFollowUp,
-                command.Summary, currentUser.UserId, actorDisplayName, clock.UtcNow);
+                command.Summary, currentUser.UserId, actorDisplayName, nowUtc);
         }
         else
         {
@@ -135,7 +136,7 @@ public sealed class LogExternalContactService(
                 command.RequiresBusinessFollowUp!.Value,
                 command.Summary ?? string.Empty,
                 currentUser.UserId, actorDisplayName,
-                standardMinutes, clock.UtcNow);
+                standardMinutes, nowUtc);
         }
 
         if (domainResult.IsFailure)
@@ -154,24 +155,25 @@ public sealed class LogExternalContactService(
             p => p.AccountUserId == currentUser.UserId && p.DetachedAtUtc is null);
 
         var availableActions = new AvailableActionsMetadata(
-            CanChangeStatus:         !request.IsTerminal,
-            CanSendBusinessUpdate:   !request.IsTerminal,
-            CanAddInternalNote:      true,
-            CanAcknowledgeAttention: KeepRequestDetailMapper.CanAcknowledgeAttention(true, request),
-            CanLogExternalContact:   !request.IsTerminal,
-            CanAssignResponsible:    isOwnerOrAdmin && !request.IsTerminal,
-            CanWatch:                !request.IsTerminal && currentUserRow is null,
-            CanUnwatch:              !request.IsTerminal && currentUserRow?.ParticipationType == ParticipationType.Watching,
-            CanMute:                 !request.IsTerminal && currentUserRow is not null && currentUserRow.NotificationsEnabled,
-            CanUnmute:               !request.IsTerminal && currentUserRow is not null && !currentUserRow.NotificationsEnabled,
-            AllowedStatuses:         !request.IsTerminal
+            CanChangeStatus:           !request.IsTerminal,
+            CanSendBusinessUpdate:     !request.IsTerminal,
+            CanAddInternalNote:        true,
+            CanAcknowledgeAttention:   KeepRequestDetailMapper.CanAcknowledgeAttention(true, request),
+            CanLogExternalContact:     !request.IsTerminal,
+            CanAssignResponsible:      isOwnerOrAdmin && !request.IsTerminal,
+            CanWatch:                  !request.IsTerminal && currentUserRow is null,
+            CanUnwatch:                !request.IsTerminal && currentUserRow?.ParticipationType == ParticipationType.Watching,
+            CanMute:                   !request.IsTerminal && currentUserRow is not null && currentUserRow.NotificationsEnabled,
+            CanUnmute:                 !request.IsTerminal && currentUserRow is not null && !currentUserRow.NotificationsEnabled,
+            CanMarkFeedbackReviewed:   KeepRequestDetailMapper.CanMarkFeedbackReviewed(canWrite: true, isOwnerOrAdmin, request),
+            AllowedStatuses:           !request.IsTerminal
                 ? KeepRequestDetailMapper.ComputeAllowedStatuses(request.Status)
                 : []);
 
         return Result<KeepRequestDetailResult>.Success(
             KeepRequestDetailMapper.ToDetailResult(
                 request, businessName ?? string.Empty, participants, events, availableActions,
-                userSnapshot.Role, canOperate: true, currentUser.UserId));
+                userSnapshot.Role, canOperate: true, currentUser.UserId, nowUtc));
     }
 
     private static ExternalContactDirection? ParseDirection(string? direction) =>

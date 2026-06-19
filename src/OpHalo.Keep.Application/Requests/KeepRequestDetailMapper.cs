@@ -1,4 +1,5 @@
 using OpHalo.Foundation.Core.Entities.Accounts.Enums;
+using OpHalo.Keep.Core.Domain;
 using OpHalo.Keep.Core.Entities;
 using OpHalo.Keep.Core.Entities.Enums;
 
@@ -18,6 +19,7 @@ internal static class KeepRequestDetailMapper
         StatusMessageMaxLength: 2000,
         AcknowledgeReasonMaxLength: 500,
         ExternalContactSummaryMaxLength: 4000,
+        FeedbackReviewNoteMaxLength: 2000,
         MessageRequiredForStatuses: ["pending_customer", "cancelled"]);
 
     internal static KeepRequestDetailResult ToDetailResult(
@@ -28,7 +30,8 @@ internal static class KeepRequestDetailMapper
         AvailableActionsMetadata availableActions,
         AccountUserRole role,
         bool canOperate,
-        Guid currentUserId)
+        Guid currentUserId,
+        DateTime nowUtc)
     {
         var feedbackCommentVisible = role is AccountUserRole.Owner or AccountUserRole.Admin;
 
@@ -73,6 +76,11 @@ internal static class KeepRequestDetailMapper
         FeedbackComment: feedbackCommentVisible ? request.FeedbackComment : null,
         FeedbackSubmittedAtUtc: request.FeedbackSubmittedAtUtc,
         FeedbackCommentVisible: feedbackCommentVisible,
+        FeedbackReviewedAtUtc: request.FeedbackReviewedAtUtc,
+        FeedbackReviewedByAccountUserId: request.FeedbackReviewedByAccountUserId,
+        FeedbackReviewNote: feedbackCommentVisible ? request.FeedbackReviewNote : null,
+        FeedbackReviewAgeBucket: ComputeReviewAgeBucket(request, nowUtc),
+        FeedbackReviewDueAtUtc: ComputeReviewDueAtUtc(request),
         ContactActions: BuildContactActions(canOperate, request.CustomerPhone, request.CustomerEmail),
         Participants: participants.Select(MapParticipant).ToList(),
         CurrentUserParticipation: currentUserParticipation,
@@ -119,6 +127,41 @@ internal static class KeepRequestDetailMapper
 
     internal static bool CanAcknowledgeAttention(bool canOperate, KeepRequest request) =>
         canOperate && request.AttentionLevel != AttentionLevel.None;
+
+    internal static bool CanMarkFeedbackReviewed(bool canWrite, bool isOwnerOrAdmin, KeepRequest request) =>
+        isOwnerOrAdmin && canWrite
+        && request.Status == KeepRequestStatus.Closed
+        && request.FeedbackSubmittedAtUtc.HasValue
+        && request.FeedbackWasResolved == false
+        && !request.FeedbackReviewedAtUtc.HasValue
+        && request.AttentionLevel != AttentionLevel.None
+        && request.AttentionReason == AttentionReason.UnresolvedFeedback;
+
+    private static string? ComputeReviewAgeBucket(KeepRequest request, DateTime nowUtc)
+    {
+        if (!request.FeedbackSubmittedAtUtc.HasValue
+            || request.FeedbackWasResolved != false
+            || request.FeedbackReviewedAtUtc.HasValue)
+            return null;
+
+        return FeedbackReviewPolicy.ComputeAgeBucket(request.FeedbackSubmittedAtUtc.Value, nowUtc) switch
+        {
+            FeedbackReviewAgeBucket.New     => "new",
+            FeedbackReviewAgeBucket.Aging   => "aging",
+            FeedbackReviewAgeBucket.Overdue => "overdue",
+            var b => throw new InvalidOperationException($"Unknown FeedbackReviewAgeBucket: {b}")
+        };
+    }
+
+    private static DateTime? ComputeReviewDueAtUtc(KeepRequest request)
+    {
+        if (!request.FeedbackSubmittedAtUtc.HasValue
+            || request.FeedbackWasResolved != false
+            || request.FeedbackReviewedAtUtc.HasValue)
+            return null;
+
+        return FeedbackReviewPolicy.ComputeReviewDueAtUtc(request.FeedbackSubmittedAtUtc.Value);
+    }
 
     private static IReadOnlyList<ContactActionItem> BuildContactActions(
         bool canOperate, string phone, string? email)

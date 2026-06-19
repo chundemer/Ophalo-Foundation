@@ -40,9 +40,10 @@ public sealed class SelfWatchService(
 
         var participants = await operatePersistence.GetParticipantsForUpdateAsync(requestId, currentUser.AccountId, ct);
 
+        var nowUtc = clock.UtcNow;
         var domainResult = participationService.SelfWatch(
             participants, requestId, currentUser.AccountId,
-            currentUser.UserId, actorDisplayName, clock.UtcNow);
+            currentUser.UserId, actorDisplayName, nowUtc);
 
         if (domainResult.IsFailure)
             return Result<KeepRequestDetailResult>.Failure(domainResult.Error);
@@ -51,7 +52,7 @@ public sealed class SelfWatchService(
         if (!domainResult.Value.IsNoOp)
             await operatePersistence.CommitParticipationAsync(domainResult.Value.NewParticipants, domainResult.Value.Event, ct);
 
-        return Result<KeepRequestDetailResult>.Success(await BuildDetailAsync(request, userSnapshot.Role, ct));
+        return Result<KeepRequestDetailResult>.Success(await BuildDetailAsync(request, userSnapshot.Role, nowUtc, ct));
     }
 
     public async Task<Result<KeepRequestDetailResult>> UnwatchAsync(
@@ -69,9 +70,10 @@ public sealed class SelfWatchService(
 
         var participants = await operatePersistence.GetParticipantsForUpdateAsync(requestId, currentUser.AccountId, ct);
 
+        var nowUtc = clock.UtcNow;
         var domainResult = participationService.SelfUnwatch(
             participants, requestId, currentUser.AccountId,
-            currentUser.UserId, actorDisplayName, clock.UtcNow);
+            currentUser.UserId, actorDisplayName, nowUtc);
 
         if (domainResult.IsFailure)
             return Result<KeepRequestDetailResult>.Failure(domainResult.Error);
@@ -80,7 +82,7 @@ public sealed class SelfWatchService(
         if (!domainResult.Value.IsNoOp)
             await operatePersistence.CommitParticipationAsync(domainResult.Value.NewParticipants, domainResult.Value.Event, ct);
 
-        return Result<KeepRequestDetailResult>.Success(await BuildDetailAsync(request, userSnapshot.Role, ct));
+        return Result<KeepRequestDetailResult>.Success(await BuildDetailAsync(request, userSnapshot.Role, nowUtc, ct));
     }
 
     // --- helpers ---
@@ -122,6 +124,7 @@ public sealed class SelfWatchService(
     private async Task<KeepRequestDetailResult> BuildDetailAsync(
         OpHalo.Keep.Core.Entities.KeepRequest request,
         AccountUserRole role,
+        DateTime nowUtc,
         CancellationToken ct)
     {
         var events       = await readPersistence.GetAllEventsAsync(request.Id, ct);
@@ -133,22 +136,23 @@ public sealed class SelfWatchService(
             p => p.AccountUserId == currentUser.UserId && p.DetachedAtUtc is null);
 
         var availableActions = new AvailableActionsMetadata(
-            CanChangeStatus:         !request.IsTerminal,
-            CanSendBusinessUpdate:   !request.IsTerminal,
-            CanAddInternalNote:      true,
-            CanAcknowledgeAttention: KeepRequestDetailMapper.CanAcknowledgeAttention(true, request),
-            CanLogExternalContact:   !request.IsTerminal,
-            CanAssignResponsible:    isOwnerOrAdmin && !request.IsTerminal,
-            CanWatch:                !request.IsTerminal && currentUserRow is null,
-            CanUnwatch:              !request.IsTerminal && currentUserRow?.ParticipationType == ParticipationType.Watching,
-            CanMute:                 !request.IsTerminal && currentUserRow is not null && currentUserRow.NotificationsEnabled,
-            CanUnmute:               !request.IsTerminal && currentUserRow is not null && !currentUserRow.NotificationsEnabled,
-            AllowedStatuses:         !request.IsTerminal
+            CanChangeStatus:           !request.IsTerminal,
+            CanSendBusinessUpdate:     !request.IsTerminal,
+            CanAddInternalNote:        true,
+            CanAcknowledgeAttention:   KeepRequestDetailMapper.CanAcknowledgeAttention(true, request),
+            CanLogExternalContact:     !request.IsTerminal,
+            CanAssignResponsible:      isOwnerOrAdmin && !request.IsTerminal,
+            CanWatch:                  !request.IsTerminal && currentUserRow is null,
+            CanUnwatch:                !request.IsTerminal && currentUserRow?.ParticipationType == ParticipationType.Watching,
+            CanMute:                   !request.IsTerminal && currentUserRow is not null && currentUserRow.NotificationsEnabled,
+            CanUnmute:                 !request.IsTerminal && currentUserRow is not null && !currentUserRow.NotificationsEnabled,
+            CanMarkFeedbackReviewed:   KeepRequestDetailMapper.CanMarkFeedbackReviewed(canWrite: true, isOwnerOrAdmin, request),
+            AllowedStatuses:           !request.IsTerminal
                 ? KeepRequestDetailMapper.ComputeAllowedStatuses(request.Status)
                 : []);
 
         return KeepRequestDetailMapper.ToDetailResult(
             request, businessName ?? string.Empty, participants, events,
-            availableActions, role, canOperate: true, currentUser.UserId);
+            availableActions, role, canOperate: true, currentUser.UserId, nowUtc);
     }
 }

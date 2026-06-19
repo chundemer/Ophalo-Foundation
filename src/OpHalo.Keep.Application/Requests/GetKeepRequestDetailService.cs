@@ -51,6 +51,8 @@ public sealed class GetKeepRequestDetailService(
             accountSnapshot.Purpose,
             PermissionKeys.Keep.RequestsOperate);
 
+        var nowUtc = clock.UtcNow;
+
         var accessContext = new AccountAccessContext(
             accountSnapshot.LifecycleState,
             accountSnapshot.Purpose,
@@ -59,7 +61,7 @@ public sealed class GetKeepRequestDetailService(
             accountSnapshot.PastDueGraceEndsAtUtc,
             accountSnapshot.OperatingMode,
             RequestImplementsAllowedInOffSeason: true,
-            clock.UtcNow);
+            nowUtc);
 
         var decision = accountAccessPolicy.Evaluate(accessContext);
         if (decision.IsBlocked)
@@ -86,23 +88,24 @@ public sealed class GetKeepRequestDetailService(
             p => p.AccountUserId == currentUser.UserId && p.DetachedAtUtc is null);
 
         var availableActions = new AvailableActionsMetadata(
-            CanChangeStatus:         canWrite && !request.IsTerminal,
-            CanSendBusinessUpdate:   canWrite && !request.IsTerminal,
-            CanAddInternalNote:      canWrite,
-            CanAcknowledgeAttention: KeepRequestDetailMapper.CanAcknowledgeAttention(canWrite, request),
-            CanLogExternalContact:   canWrite && !request.IsTerminal,
-            CanAssignResponsible:    isOwnerOrAdmin && canWrite && !request.IsTerminal,
-            CanWatch:                canWrite && !request.IsTerminal && currentUserRow is null,
-            CanUnwatch:              canWrite && !request.IsTerminal && currentUserRow?.ParticipationType == ParticipationType.Watching,
-            CanMute:                 canWrite && !request.IsTerminal && currentUserRow is not null && currentUserRow.NotificationsEnabled,
-            CanUnmute:               canWrite && !request.IsTerminal && currentUserRow is not null && !currentUserRow.NotificationsEnabled,
-            AllowedStatuses:         canWrite && !request.IsTerminal
+            CanChangeStatus:           canWrite && !request.IsTerminal,
+            CanSendBusinessUpdate:     canWrite && !request.IsTerminal,
+            CanAddInternalNote:        canWrite,
+            CanAcknowledgeAttention:   KeepRequestDetailMapper.CanAcknowledgeAttention(canWrite, request),
+            CanLogExternalContact:     canWrite && !request.IsTerminal,
+            CanAssignResponsible:      isOwnerOrAdmin && canWrite && !request.IsTerminal,
+            CanWatch:                  canWrite && !request.IsTerminal && currentUserRow is null,
+            CanUnwatch:                canWrite && !request.IsTerminal && currentUserRow?.ParticipationType == ParticipationType.Watching,
+            CanMute:                   canWrite && !request.IsTerminal && currentUserRow is not null && currentUserRow.NotificationsEnabled,
+            CanUnmute:                 canWrite && !request.IsTerminal && currentUserRow is not null && !currentUserRow.NotificationsEnabled,
+            CanMarkFeedbackReviewed:   KeepRequestDetailMapper.CanMarkFeedbackReviewed(canWrite, isOwnerOrAdmin, request),
+            AllowedStatuses:           canWrite && !request.IsTerminal
                 ? KeepRequestDetailMapper.ComputeAllowedStatuses(request.Status)
                 : []);
 
         return Result<KeepRequestDetailResult>.Success(
             KeepRequestDetailMapper.ToDetailResult(
                 request, businessName ?? string.Empty, participants, events, availableActions,
-                userSnapshot.Role, canOperate, currentUser.UserId));
+                userSnapshot.Role, canOperate, currentUser.UserId, nowUtc));
     }
 }

@@ -41,9 +41,10 @@ public sealed class MuteService(
         var participants = await operatePersistence.GetParticipantsForUpdateAsync(requestId, currentUser.AccountId, ct);
 
         // Domain validates active participation — returns ParticipationMuteRequiresActiveParticipation if none.
+        var nowUtc = clock.UtcNow;
         var domainResult = participationService.Mute(
             participants, requestId, currentUser.AccountId,
-            currentUser.UserId, actorDisplayName, clock.UtcNow);
+            currentUser.UserId, actorDisplayName, nowUtc);
 
         if (domainResult.IsFailure)
             return Result<KeepRequestDetailResult>.Failure(domainResult.Error);
@@ -52,7 +53,7 @@ public sealed class MuteService(
         if (!domainResult.Value.IsNoOp)
             await operatePersistence.CommitParticipationAsync(domainResult.Value.NewParticipants, domainResult.Value.Event, ct);
 
-        return Result<KeepRequestDetailResult>.Success(await BuildDetailAsync(request, userSnapshot.Role, ct));
+        return Result<KeepRequestDetailResult>.Success(await BuildDetailAsync(request, userSnapshot.Role, nowUtc, ct));
     }
 
     public async Task<Result<KeepRequestDetailResult>> UnmuteAsync(
@@ -71,9 +72,10 @@ public sealed class MuteService(
         var participants = await operatePersistence.GetParticipantsForUpdateAsync(requestId, currentUser.AccountId, ct);
 
         // Domain validates active participation — returns ParticipationMuteRequiresActiveParticipation if none.
+        var nowUtc = clock.UtcNow;
         var domainResult = participationService.Unmute(
             participants, requestId, currentUser.AccountId,
-            currentUser.UserId, actorDisplayName, clock.UtcNow);
+            currentUser.UserId, actorDisplayName, nowUtc);
 
         if (domainResult.IsFailure)
             return Result<KeepRequestDetailResult>.Failure(domainResult.Error);
@@ -82,7 +84,7 @@ public sealed class MuteService(
         if (!domainResult.Value.IsNoOp)
             await operatePersistence.CommitParticipationAsync(domainResult.Value.NewParticipants, domainResult.Value.Event, ct);
 
-        return Result<KeepRequestDetailResult>.Success(await BuildDetailAsync(request, userSnapshot.Role, ct));
+        return Result<KeepRequestDetailResult>.Success(await BuildDetailAsync(request, userSnapshot.Role, nowUtc, ct));
     }
 
     // --- helpers ---

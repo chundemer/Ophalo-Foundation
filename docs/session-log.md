@@ -28,7 +28,76 @@ and carry-forward notes.
 
 | Order | Session | Status | Source / Gate |
 |---|---|---|---|
-| 1 | Phase 8-B5 Session 5 — Feedback Review Completion | Planned | `docs/build-log/042-phase-8-b5-session-5-feedback-review-completion-decisions.md` |
+| 1 | Phase 8-B5 Session 5B — Mark-Feedback-Reviewed service/API | **In progress** | `docs/build-log/042-phase-8-b5-session-5-feedback-review-completion-decisions.md` |
+
+### 5B — What is done (mid-session checkpoint)
+
+**Confirmed design decisions:**
+- `CanMarkFeedbackReviewed` formula (mapper helper): `isOwnerOrAdmin && canWrite && Status==Closed && FeedbackSubmittedAtUtc.HasValue && FeedbackWasResolved==false && !FeedbackReviewedAtUtc.HasValue && AttentionLevel!=None && AttentionReason==UnresolvedFeedback`
+- `nowUtc = clock.UtcNow` captured once per service execution, reused for AccountAccessContext and ToDetailResult
+- `ToDetailResult` signature extended with final `DateTime nowUtc` param; mapper stays pure
+- `FeedbackReviewNote` Owner/Admin-only (same visibility as `FeedbackComment`)
+- Aging fields (`FeedbackReviewAgeBucket`, `FeedbackReviewDueAtUtc`) null unless unreviewed negative feedback exists
+
+**Files edited — complete:**
+
+| File | Change |
+|---|---|
+| `Keep.Application/Requests/KeepRequestDetailResult.cs` | `AvailableActionsMetadata` +`CanMarkFeedbackReviewed`; `KeepRequestDetailResult` +5 review fields; `ValidationHintsMetadata` +`FeedbackReviewNoteMaxLength` |
+| `Keep.Application/Requests/KeepRequestDetailMapper.cs` | `+using Domain`; `ToDetailResult` +`nowUtc` param + 5 review fields; `+CanMarkFeedbackReviewed` helper; `+ComputeReviewAgeBucket`; `+ComputeReviewDueAtUtc`; `ValidationHints` +`FeedbackReviewNoteMaxLength: 2000` |
+| `Keep.Application/Requests/GetKeepRequestDetailService.cs` | `nowUtc` captured before `AccountAccessContext`; `CanMarkFeedbackReviewed` in actions; `nowUtc` to `ToDetailResult` |
+| `Keep.Application/Requests/ChangeKeepRequestStatusService.cs` | `nowUtc` before domain call; `CanMarkFeedbackReviewed`; `nowUtc` to `ToDetailResult` |
+| `Keep.Application/Requests/AddBusinessUpdateService.cs` | same pattern |
+| `Keep.Application/Requests/AddInternalNoteService.cs` | same pattern |
+| `Keep.Application/Requests/AcknowledgeAttentionService.cs` | same pattern |
+| `Keep.Application/Requests/LogExternalContactService.cs` | `nowUtc` before outbound/inbound dispatch; both branches use `nowUtc`; `CanMarkFeedbackReviewed`; `nowUtc` to `ToDetailResult` |
+| `Keep.Application/Requests/ManageResponsibleService.cs` | `nowUtc` before each domain call; `BuildDetailAsync` +`DateTime nowUtc` param; `CanMarkFeedbackReviewed`; `nowUtc` to `ToDetailResult` |
+| `Keep.Application/Requests/ManageWatcherService.cs` | same `BuildDetailAsync` pattern |
+| `Keep.Application/Requests/SelfWatchService.cs` | `nowUtc` before each domain call; `BuildDetailAsync` +`DateTime nowUtc`; `CanMarkFeedbackReviewed`; `nowUtc` to `ToDetailResult` |
+| `Keep.Application/Requests/MuteService.cs` | `nowUtc` before `Mute` call; `nowUtc` before `Unmute` call; `BuildDetailAsync` **not yet updated** — interrupted |
+
+**Still remaining for 5B:**
+- `MuteService.BuildDetailAsync` — add `DateTime nowUtc` param, `CanMarkFeedbackReviewed`, pass `nowUtc` to `ToDetailResult`
+- `MarkFeedbackReviewedService.cs` — new application service
+- `FeedbackReviewRequest.cs` — new API body DTO
+- `ErrorHttpMapper.cs` — 3 entries: `FeedbackReviewUnavailable→409`, `FeedbackAlreadyReviewed→409`, `FeedbackReviewNoteTooLong→400`
+- `Program.cs` — DI registration + `POST /keep/requests/{requestId}/feedback-review` endpoint
+- `KeepFeedbackReviewApiTests.cs` — integration tests
+- Build verification + full test run
+
+---
+
+## Phase 8-B5 Session 5A — Domain, Schema, Migration, Aging Policy — COMPLETE
+
+**Tests:** 834 total (494 unit · 14 arch · 326 integration) — all green
+**Next free ADR:** ADR-295 (no new ADRs consumed)
+**Migration:** `20260619155507_AddFeedbackReviewFields` — three nullable columns on `keep_requests`
+
+### What was built
+
+Session 5A adds the durable foundation for post-close negative-feedback review.
+
+| File | Change |
+|---|---|
+| `Keep.Core/Entities/KeepRequest.cs` | `+MarkFeedbackReviewed(reviewer, note, now)` domain method: eligibility requires Closed + unreviewed negative feedback + active UnresolvedFeedback attention; clears attention with reason `"feedback_reviewed"`; stores reviewer/timestamp/note; returns `FeedbackReviewed` event |
+| `Keep.Core/Entities/KeepRequestEvent.cs` | `+CreateFeedbackReviewed` factory — Visibility=Internal, ActorType=AccountUser, Content=trimmed note or null; no new event-table columns |
+| `Keep.Core/Entities/Enums/KeepRequestEventType.cs` | `+FeedbackReviewed = 11` |
+| `Keep.Core/Entities/Enums/FeedbackReviewAgeBucket.cs` | New — `New`, `Aging`, `Overdue` |
+| `Keep.Core/Domain/FeedbackReviewPolicy.cs` | New — pilot thresholds (new <24h, aging 24–72h, overdue >72h); `ComputeAgeBucket(submittedAtUtc, nowUtc)` and `ComputeReviewDueAtUtc(submittedAtUtc)` |
+| `Keep.Core/Errors/KeepRequestErrors.cs` | `+FeedbackReviewUnavailable`, `+FeedbackAlreadyReviewed`, `+FeedbackReviewNoteTooLong` (ADR-276) |
+| `Keep.Application/Requests/KeepRequestDetailMapper.cs` | `+"feedback_reviewed"` string mapping for `FeedbackReviewed = 11` in `MapEventType` |
+| `Keep.Infrastructure/Configurations/KeepRequestConfiguration.cs` | `+FeedbackReviewedAtUtc` (nullable DateTimeOffset), `+FeedbackReviewedByAccountUserId` (nullable Guid), `+FeedbackReviewNote` (HasMaxLength 2000, nullable) |
+| `Foundation.Infrastructure/Migrations/20260619155507_AddFeedbackReviewFields.cs` | New migration — three nullable columns |
+| `Foundation.Infrastructure/Migrations/OpHaloDbContextModelSnapshot.cs` | Snapshot updated |
+| `UnitTests/Keep/KeepRequestFeedbackReviewTests.cs` | New — 31 unit tests: success paths, all eligibility failures, D1 edge case (attention cleared externally → FeedbackReviewUnavailable), note boundaries, ArgumentException guards, all aging bucket boundaries (exactly 72h = Aging) |
+| `docs/build-log/042-...decisions.md` | 5A pre-implementation gate clarifications appended |
+
+### Decisions confirmed this session (from build-log gate)
+
+- **D1 — Eligibility requires active `UnresolvedFeedback` attention.** If an Owner/Admin first uses `AcknowledgeAttention` on a closed unresolved-feedback request, feedback review returns `FeedbackReviewUnavailable` — the review state was already cleared. Flagged as a pilot interaction to monitor, not fixed by weakening the eligibility rule.
+- **D2 — `FeedbackReviewPolicy` lives in `Keep.Core/Domain/`.** Pure policy; pilot thresholds centralized so account preference settings can replace them later without moving bucket semantics.
+- **D3 — `FeedbackReviewed` event uses `Content` for optional note; no new event-table columns.**
+- **`KeepCustomerPageMapper`** deliberately excludes `FeedbackReviewed` — Internal events are already filtered by `Visibility == All` before `MapEvent` is reached.
 
 ---
 

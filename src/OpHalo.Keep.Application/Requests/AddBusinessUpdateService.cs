@@ -92,11 +92,12 @@ public sealed class AddBusinessUpdateService(
         // setStatus present → combined StatusChanged+message event (D3/D4, 4000-char limit).
         // setStatus absent  → standalone MessageAdded event (D4, 4000-char limit).
         // All validation (null/blank, length, terminal, transition) lives in the domain methods.
+        var nowUtc = clock.UtcNow;
         var updateResult = parsedSetStatus.HasValue
             ? request.AddBusinessUpdateWithStatus(
-                parsedSetStatus.Value, command.Message, currentUser.UserId, actorDisplayName, clock.UtcNow)
+                parsedSetStatus.Value, command.Message, currentUser.UserId, actorDisplayName, nowUtc)
             : request.AddBusinessUpdate(
-                command.Message, currentUser.UserId, actorDisplayName, clock.UtcNow);
+                command.Message, currentUser.UserId, actorDisplayName, nowUtc);
 
         if (updateResult.IsFailure)
             return Result<KeepRequestDetailResult>.Failure(updateResult.Error);
@@ -114,23 +115,24 @@ public sealed class AddBusinessUpdateService(
             p => p.AccountUserId == currentUser.UserId && p.DetachedAtUtc is null);
 
         var availableActions = new AvailableActionsMetadata(
-            CanChangeStatus:         !request.IsTerminal,
-            CanSendBusinessUpdate:   !request.IsTerminal,
-            CanAddInternalNote:      true,
-            CanAcknowledgeAttention: KeepRequestDetailMapper.CanAcknowledgeAttention(true, request),
-            CanLogExternalContact:   !request.IsTerminal,
-            CanAssignResponsible:    isOwnerOrAdmin && !request.IsTerminal,
-            CanWatch:                !request.IsTerminal && currentUserRow is null,
-            CanUnwatch:              !request.IsTerminal && currentUserRow?.ParticipationType == ParticipationType.Watching,
-            CanMute:                 !request.IsTerminal && currentUserRow is not null && currentUserRow.NotificationsEnabled,
-            CanUnmute:               !request.IsTerminal && currentUserRow is not null && !currentUserRow.NotificationsEnabled,
-            AllowedStatuses:         !request.IsTerminal
+            CanChangeStatus:           !request.IsTerminal,
+            CanSendBusinessUpdate:     !request.IsTerminal,
+            CanAddInternalNote:        true,
+            CanAcknowledgeAttention:   KeepRequestDetailMapper.CanAcknowledgeAttention(true, request),
+            CanLogExternalContact:     !request.IsTerminal,
+            CanAssignResponsible:      isOwnerOrAdmin && !request.IsTerminal,
+            CanWatch:                  !request.IsTerminal && currentUserRow is null,
+            CanUnwatch:                !request.IsTerminal && currentUserRow?.ParticipationType == ParticipationType.Watching,
+            CanMute:                   !request.IsTerminal && currentUserRow is not null && currentUserRow.NotificationsEnabled,
+            CanUnmute:                 !request.IsTerminal && currentUserRow is not null && !currentUserRow.NotificationsEnabled,
+            CanMarkFeedbackReviewed:   KeepRequestDetailMapper.CanMarkFeedbackReviewed(canWrite: true, isOwnerOrAdmin, request),
+            AllowedStatuses:           !request.IsTerminal
                 ? KeepRequestDetailMapper.ComputeAllowedStatuses(request.Status)
                 : []);
 
         return Result<KeepRequestDetailResult>.Success(
             KeepRequestDetailMapper.ToDetailResult(
                 request, businessName ?? string.Empty, participants, events, availableActions,
-                userSnapshot.Role, canOperate: true, currentUser.UserId));
+                userSnapshot.Role, canOperate: true, currentUser.UserId, nowUtc));
     }
 }
