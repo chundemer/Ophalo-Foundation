@@ -284,6 +284,44 @@ public sealed class KeepRequestEvent : BaseEntity
     }
 
     /// <summary>
+    /// Creates a FeedbackReviewed event. Always Internal — never customer-visible (ADR-269/283).
+    /// Content holds the optional trimmed review note (D3). No new event columns required.
+    /// Caller is responsible for validating note length before calling this factory.
+    /// </summary>
+    public static KeepRequestEvent CreateFeedbackReviewed(
+        Guid requestId,
+        Guid accountId,
+        Guid actorAccountUserId,
+        string actorDisplayName,
+        string? note,
+        DateTime occurredAtUtc)
+    {
+        if (requestId == Guid.Empty)
+            throw new ArgumentException("Request ID is required.", nameof(requestId));
+        if (accountId == Guid.Empty)
+            throw new ArgumentException("Account ID is required.", nameof(accountId));
+        if (actorAccountUserId == Guid.Empty)
+            throw new ArgumentException("Actor account user ID is required.", nameof(actorAccountUserId));
+        if (string.IsNullOrWhiteSpace(actorDisplayName))
+            throw new ArgumentException("Actor display name is required.", nameof(actorDisplayName));
+        if (occurredAtUtc == default)
+            throw new ArgumentException("occurredAtUtc must be a real timestamp.", nameof(occurredAtUtc));
+
+        return new KeepRequestEvent
+        {
+            RequestId = requestId,
+            AccountId = accountId,
+            EventType = KeepRequestEventType.FeedbackReviewed,
+            Visibility = KeepRequestEventVisibility.Internal,
+            Content = string.IsNullOrWhiteSpace(note) ? null : note.Trim(),
+            ActorType = ActorType.AccountUser,
+            ActorAccountUserId = actorAccountUserId,
+            ActorDisplayName = actorDisplayName.Trim(),
+            OccurredAtUtc = occurredAtUtc
+        };
+    }
+
+    /// <summary>
     /// Creates an ExternalContactLogged event. Always Internal — never customer-visible.
     /// Channel uses the existing CommunicationChannel enum; InApp is rejected (ADR-203 refinement).
     /// Outcome is non-null only for outbound phone. RequiresFollowUp is null when not applicable
@@ -414,4 +452,5 @@ public sealed class KeepRequestEvent : BaseEntity
             ParticipationNotificationIntendedRecipientAccountUserId = notificationIntendedRecipientAccountUserId
         };
     }
+
 }

@@ -6,7 +6,7 @@
 **Build log preceding this:** `041-phase-8-b5-session-4-filters-search-closed-history-pagination-decisions.md`
 **V1 carry-forward lock:** `043-keep-v1-product-scope-and-freshness-lock.md`
 **ADRs locked:** 261..286
-**Next free ADR:** ADR-287
+**Current global next free ADR after Session 4 implementation/V1 locks:** ADR-295
 
 ---
 
@@ -501,6 +501,78 @@ Reason: Session 5 should extend the existing foundation, not introduce a paralle
 5D — Integration verification, docs, deferred tracker, and implementation self-review
 ```
 
+### Recommended build order after Session 4 completion
+
+Session 4D completed with `803/803` tests passing and confirmed no Session 5 code exists yet. Build
+Session 5 in this order:
+
+1. **5A first** because every later slice needs the durable fields, domain invariant, migration,
+   event shape, and aging policy.
+2. **5B second** because it turns the domain foundation into the write path and detail response
+   contract.
+3. **5C third** because list/customer-page behavior depends on the new reviewed state and write
+   action metadata from 5A/5B.
+4. **5D last** as the integration and documentation gate. It should run broad tests, check the
+   Session 5 boundary, update ADR statuses, and record any implementation-discovered issues.
+
+Do not skip the final self-review gate. Claude should explicitly report any bug, inconsistency, or
+surprising codebase pattern it finds, even if it fixes the issue in the same session.
+
+### Session 5A pre-implementation gate clarifications
+
+Claude's 5A pre-flight questions are answered as follows.
+
+**D1 — Eligibility requires active `UnresolvedFeedback` attention.**
+
+Confirmed. Implement the ADR-273 literal eligibility check for `MarkFeedbackReviewed`:
+
+```text
+Status == Closed
+FeedbackSubmittedAtUtc.HasValue
+FeedbackWasResolved == false
+!FeedbackReviewedAtUtc.HasValue
+AttentionLevel != None
+AttentionReason == UnresolvedFeedback
+```
+
+If an Owner/Admin first uses `AcknowledgeAttention` on a closed unresolved-feedback request, feedback
+review should fail as `FeedbackReviewUnavailable` because the active review state has already been
+cleared. This is acceptable for pilot and should be flagged in 5B/5D self-review as an interaction
+to watch, not "fixed" by weakening the Session 5 eligibility rule.
+
+**D2 — Feedback review aging policy lives in Keep.Core.**
+
+Confirmed. Add a pure core policy class such as `FeedbackReviewPolicy` under
+`src/OpHalo.Keep.Core/Domain/` with centralized pilot thresholds and methods:
+
+```text
+New < 24h
+Aging 24h..72h
+Overdue > 72h
+ComputeAgeBucket(submittedAtUtc, nowUtc)
+ComputeReviewDueAtUtc(submittedAtUtc)
+```
+
+Add `FeedbackReviewAgeBucket` under `src/OpHalo.Keep.Core/Entities/Enums/`. Keep this independent
+of Application so future account preference settings can feed the policy without moving the core
+bucket semantics.
+
+**D3 — Feedback reviewed event uses `Content` for the optional note.**
+
+Confirmed. Add `FeedbackReviewed = 11` to `KeepRequestEventType` and add a
+`CreateFeedbackReviewed` factory on `KeepRequestEvent`.
+
+Rules:
+
+- `Visibility = Internal`;
+- `ActorType = AccountUser`;
+- `Content = trimmed note` when a note is present;
+- `Content = null` when no note is provided;
+- no new event-table columns for the review note in 5A;
+- customer-page mappers must never expose this internal event.
+
+This differs from `CreateInternalNote` only in that feedback-review note content is optional.
+
 ### Claude prompt for 5A
 
 ```text
@@ -508,6 +580,7 @@ You are implementing Phase 8-B5 Session 5A in the OpHalo foundation repo.
 
 Before coding, read:
 - docs/build-log/042-phase-8-b5-session-5-feedback-review-completion-decisions.md
+- docs/build-log/045-phase-8-b5-session-4d-integration-verification.md
 - docs/build-log/035-phase-8-b3-plus-feedback-implementation.md
 - docs/build-log/037-phase-8-b4-service-request-detail-enrichment-implementation.md
 - docs/build-log/040-phase-8-b5-session-3-assignment-watch-mute-decisions.md
@@ -525,6 +598,10 @@ Implement only foundation pieces for feedback review:
 - domain method/invariants for marking negative closed feedback reviewed
 - internal-only history event support using existing event style
 - centralized feedback review aging policy/constants/method
+- the 5A pre-implementation gate clarifications in this build log:
+  - active UnresolvedFeedback attention is required for eligibility
+  - FeedbackReviewPolicy lives in Keep.Core/Domain
+  - FeedbackReviewed event uses Content for the optional note and adds no new event columns
 
 Keep code style consistent with the existing application. Do not implement web/native UI,
 notifications, analytics, reopen, or callback/rework.
@@ -540,6 +617,7 @@ You are implementing Phase 8-B5 Session 5B in the OpHalo foundation repo.
 
 Before coding, read:
 - docs/build-log/042-phase-8-b5-session-5-feedback-review-completion-decisions.md
+- docs/build-log/045-phase-8-b5-session-4d-integration-verification.md
 - the Session 5A diff/current code
 - existing services: LogExternalContactService, AcknowledgeAttentionService, ManageResponsibleService,
   GetKeepRequestDetailService
@@ -571,6 +649,7 @@ You are implementing Phase 8-B5 Session 5C in the OpHalo foundation repo.
 
 Before coding, read:
 - docs/build-log/042-phase-8-b5-session-5-feedback-review-completion-decisions.md
+- docs/build-log/045-phase-8-b5-session-4d-integration-verification.md
 - Session 4 list code: GetKeepRequestListService, KeepRequestSummary, GetKeepRequestListResult,
   list persistence/query code
 - customer feedback code: SubmitFeedbackService, KeepCustomerPageMapper, customer-page tests
@@ -601,6 +680,7 @@ You are completing Phase 8-B5 Session 5D verification and docs.
 
 Before editing, read:
 - docs/build-log/042-phase-8-b5-session-5-feedback-review-completion-decisions.md
+- docs/build-log/045-phase-8-b5-session-4d-integration-verification.md
 - docs/decisions/decision-index.md
 - docs/deferred-topics.md
 - docs/build-log/039-phase-8-b5-claude-coding-sessions.md

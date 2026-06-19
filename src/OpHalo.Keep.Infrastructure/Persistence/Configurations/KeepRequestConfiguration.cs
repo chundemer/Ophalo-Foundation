@@ -101,6 +101,12 @@ internal sealed class KeepRequestConfiguration : BaseEntityConfiguration<KeepReq
 
         builder.Property(x => x.FeedbackSubmittedAtUtc);
 
+        // Feedback review fields (ADR-268, Session 5).
+        builder.Property(x => x.FeedbackReviewedAtUtc);
+        builder.Property(x => x.FeedbackReviewedByAccountUserId);
+        builder.Property(x => x.FeedbackReviewNote)
+            .HasMaxLength(2000);
+
         // IsTerminal and IsActive are computed C# properties — no columns.
         builder.Ignore(x => x.IsTerminal);
 

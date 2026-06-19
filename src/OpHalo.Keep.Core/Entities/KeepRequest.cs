@@ -65,6 +65,12 @@ public sealed class KeepRequest : BaseEntity
     public string? FeedbackComment { get; private set; }
     public DateTime? FeedbackSubmittedAtUtc { get; private set; }
 
+    // --- Feedback review fields (ADR-268, Session 5) ---
+
+    public DateTime? FeedbackReviewedAtUtc { get; private set; }
+    public Guid? FeedbackReviewedByAccountUserId { get; private set; }
+    public string? FeedbackReviewNote { get; private set; }
+
     /// <summary>
     /// Moves the request to a new status and optionally attaches a customer-visible message.
     /// Returns a KeepStatusChangeOutcome; IsNoOp is true when the call is a same-status
@@ -454,6 +460,67 @@ public sealed class KeepRequest : BaseEntity
         }
 
         return Result.Success();
+    }
+
+    /// <summary>
+    /// Marks post-close negative feedback as reviewed by an Owner/Admin (ADR-264..267/273).
+    /// Eligible only when: Closed, feedback submitted, wasResolved = false, not already reviewed,
+    /// and current attention is specifically UnresolvedFeedback (ADR-273). If AcknowledgeAttention
+    /// cleared that state first, this returns FeedbackReviewUnavailable (D1 confirmed).
+    /// Clears UnresolvedFeedback attention and stores review metadata + optional note (ADR-267/268).
+    /// Creates an internal-only FeedbackReviewed event (ADR-269). Does not reopen the request,
+    /// change Status, notify the customer, or overwrite original feedback fields (ADR-265).
+    /// Note max length: 2000 characters (ADR-270).
+    /// </summary>
+    public Result<KeepRequestEvent> MarkFeedbackReviewed(
+        string? note,
+        Guid actorAccountUserId,
+        string actorDisplayName,
+        DateTime nowUtc)
+    {
+        if (nowUtc == default)
+            throw new ArgumentException("nowUtc must be a valid UTC timestamp.", nameof(nowUtc));
+        if (actorAccountUserId == Guid.Empty)
+            throw new ArgumentException("Actor account user ID is required.", nameof(actorAccountUserId));
+        if (string.IsNullOrWhiteSpace(actorDisplayName))
+            throw new ArgumentException("Actor display name is required.", nameof(actorDisplayName));
+
+        if (Status != KeepRequestStatus.Closed
+            || !FeedbackSubmittedAtUtc.HasValue
+            || FeedbackWasResolved != false)
+            return Result<KeepRequestEvent>.Failure(KeepRequestErrors.FeedbackReviewUnavailable);
+
+        if (FeedbackReviewedAtUtc.HasValue)
+            return Result<KeepRequestEvent>.Failure(KeepRequestErrors.FeedbackAlreadyReviewed);
+
+        // ADR-273: require active UnresolvedFeedback attention state (D1).
+        if (AttentionLevel == AttentionLevel.None
+            || AttentionReason != Enums.AttentionReason.UnresolvedFeedback)
+            return Result<KeepRequestEvent>.Failure(KeepRequestErrors.FeedbackReviewUnavailable);
+
+        var trimmedNote = string.IsNullOrWhiteSpace(note) ? null : note.Trim();
+        if (trimmedNote?.Length > 2000)
+            return Result<KeepRequestEvent>.Failure(KeepRequestErrors.FeedbackReviewNoteTooLong);
+
+        FeedbackReviewedAtUtc = nowUtc;
+        FeedbackReviewedByAccountUserId = actorAccountUserId;
+        FeedbackReviewNote = trimmedNote;
+
+        // ADR-267: clear only UnresolvedFeedback attention (state already verified above).
+        AttentionLevel = AttentionLevel.None;
+        WaitingDirection = WaitingDirection.None;
+        AttentionReason = null;
+        PriorityBand = PriorityBand.Standard;
+        AttentionSinceUtc = null;
+        NextAttentionAtUtc = null;
+        AttentionClearedAtUtc = nowUtc;
+        AttentionClearedByAccountUserId = actorAccountUserId;
+        AttentionClearReason = "feedback_reviewed";
+
+        var reviewEvent = KeepRequestEvent.CreateFeedbackReviewed(
+            Id, AccountId, actorAccountUserId, actorDisplayName, trimmedNote, nowUtc);
+
+        return Result<KeepRequestEvent>.Success(reviewEvent);
     }
 
     /// <summary>

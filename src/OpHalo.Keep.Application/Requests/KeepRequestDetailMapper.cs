@@ -259,6 +259,7 @@ internal static class KeepRequestDetailMapper
         KeepRequestEventType.AttentionAcknowledged => "attention_acknowledged",
         KeepRequestEventType.ExternalContactLogged => "external_contact_logged",
         KeepRequestEventType.ParticipationChanged  => "participation_changed",
+        KeepRequestEventType.FeedbackReviewed      => "feedback_reviewed",
         _ => throw new InvalidOperationException($"Unknown KeepRequestEventType: {type}")
     };
 

@@ -160,6 +160,16 @@ public static class KeepRequestErrors
     public static readonly Error RequestListDuplicateParameter =
         Error.Create("KeepRequest.RequestListDuplicateParameter", "A query parameter was supplied more than once. Each parameter must appear at most once.");
 
+    // Feedback review errors (ADR-276, Session 5).
+    public static readonly Error FeedbackReviewUnavailable =
+        Error.Create("KeepRequest.FeedbackReviewUnavailable", "Feedback review is not available for this request. The request must be closed with unreviewed negative feedback and an active unresolved-feedback review state.");
+
+    public static readonly Error FeedbackAlreadyReviewed =
+        Error.Create("KeepRequest.FeedbackAlreadyReviewed", "Feedback has already been reviewed for this request.");
+
+    public static readonly Error FeedbackReviewNoteTooLong =
+        Error.Create("KeepRequest.FeedbackReviewNoteTooLong", "The review note exceeds the maximum allowed length of 2000 characters.");
+
     // Request list filter/view validation errors (Session 4B).
     public static readonly Error RequestListInvalidStatus =
         Error.Create("KeepRequest.RequestListInvalidStatus", "The provided status filter value is not recognized.");
