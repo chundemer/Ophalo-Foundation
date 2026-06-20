@@ -30,8 +30,9 @@ public sealed class KeepPersistenceProofTests : IClassFixture<PostgresFixture>, 
 
     // Instance IDs — set during InitializeAsync after seeding real account rows.
     private Guid AccountId { get; set; }
+    private Guid AccountOwnerAccountUserId { get; set; }
     private Guid SecondAccountId { get; set; }
-    private Guid SecondAccountOwnerUserId { get; set; }
+    private Guid SecondAccountOwnerAccountUserId { get; set; }
 
     public async Task InitializeAsync()
     {
@@ -41,11 +42,11 @@ public sealed class KeepPersistenceProofTests : IClassFixture<PostgresFixture>, 
         await ctx.Database.MigrateAsync();
 
         // G1 adds FK constraints from Keep entities → accounts. Seed two real accounts.
-        (AccountId, _) = await SeedAccountAsync(ctx, "Test Business", "owner@test.example.com");
-        (SecondAccountId, SecondAccountOwnerUserId) = await SeedAccountAsync(ctx, "Other Business", "owner2@test.example.com");
+        (AccountId, AccountOwnerAccountUserId) = await SeedAccountAsync(ctx, "Test Business", "owner@test.example.com");
+        (SecondAccountId, SecondAccountOwnerAccountUserId) = await SeedAccountAsync(ctx, "Other Business", "owner2@test.example.com");
     }
 
-    private static async Task<(Guid AccountId, Guid OwnerUserId)> SeedAccountAsync(
+    private static async Task<(Guid AccountId, Guid OwnerAccountUserId)> SeedAccountAsync(
         OpHaloDbContext ctx, string businessName, string email)
     {
         var result = new AccountProvisioningService().CreateVerified(
@@ -75,7 +76,7 @@ public sealed class KeepPersistenceProofTests : IClassFixture<PostgresFixture>, 
         ownerIdEntry.CurrentValue = graph.Owner.Id;
         await ctx.SaveChangesAsync();
 
-        return (graph.Account.Id, graph.Owner.Id);
+        return (graph.Account.Id, graph.Owner.Id); // Owner.Id is AccountUser.Id, not User.Id
     }
 
     public Task DisposeAsync() => Task.CompletedTask;
@@ -414,7 +415,7 @@ public sealed class KeepPersistenceProofTests : IClassFixture<PostgresFixture>, 
         var participant = KeepRequestParticipant.Create(
             requestId: request.Id,
             accountId: SecondAccountId,
-            accountUserId: SecondAccountOwnerUserId,
+            accountUserId: SecondAccountOwnerAccountUserId,
             participationType: ParticipationType.Responsible,
             notificationsEnabled: true,
             attachedAtUtc: Now);
@@ -426,6 +427,7 @@ public sealed class KeepPersistenceProofTests : IClassFixture<PostgresFixture>, 
         var pgEx = ex.InnerException as PostgresException;
         Assert.NotNull(pgEx);
         Assert.Equal("23503", pgEx.SqlState);
+        Assert.Equal("fk_keep_request_participants_keep_requests_account_id_request_", pgEx.ConstraintName);
     }
 
     // -------------------------------------------------------------------------
@@ -452,7 +454,7 @@ public sealed class KeepPersistenceProofTests : IClassFixture<PostgresFixture>, 
         var participant = KeepRequestParticipant.Create(
             requestId: request.Id,
             accountId: AccountId,
-            accountUserId: SecondAccountOwnerUserId,
+            accountUserId: SecondAccountOwnerAccountUserId,
             participationType: ParticipationType.Watching,
             notificationsEnabled: false,
             attachedAtUtc: Now);
@@ -464,6 +466,139 @@ public sealed class KeepPersistenceProofTests : IClassFixture<PostgresFixture>, 
         var pgEx = ex.InnerException as PostgresException;
         Assert.NotNull(pgEx);
         Assert.Equal("23503", pgEx.SqlState);
+        Assert.Equal("fk_keep_request_participants_account_users_account_id_account_", pgEx.ConstraintName);
+    }
+
+    // -------------------------------------------------------------------------
+    // Tests 13–16: FirstResponseEventId FK (fk_keep_requests_first_response_event)
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public async Task FirstResponseEvent_and_request_pointer_commit_in_single_SaveChanges()
+    {
+        // Seed customer + request (customer-origin so ChangeStatus+message triggers first-response).
+        var customer = KeepCustomer.Create(AccountId, "Jane", "0412345620");
+        var request = KeepRequest.CreateFromCustomerIntake(
+            AccountId, customer.Id, "Jane", "0412345620", null,
+            "Description", "FREV01", "tok_frev1", Now, 60);
+
+        await using (var ctx = CreateContext())
+        {
+            ctx.Set<KeepCustomer>().Add(customer);
+            ctx.Set<KeepRequest>().Add(request);
+            await ctx.SaveChangesAsync();
+        }
+
+        // Load request (tracked), call domain method — sets FirstResponseEventId = statusEvent.Id.
+        Guid committedEventId;
+        await using (var ctx = CreateContext())
+        {
+            var loaded = await ctx.Set<KeepRequest>().FindAsync(request.Id);
+            var outcome = loaded!.ChangeStatus(
+                KeepRequestStatus.InProgress,
+                "Now in progress",
+                AccountOwnerAccountUserId,
+                "Test Actor",
+                Now);
+            Assert.True(outcome.IsSuccess);
+            var statusEvent = outcome.Value.StatusChangedEvent!;
+            committedEventId = statusEvent.Id;
+            ctx.Set<KeepRequestEvent>().Add(statusEvent);
+            // EF must INSERT statusEvent first, then UPDATE loaded.FirstResponseEventId.
+            await ctx.SaveChangesAsync();
+        }
+
+        // Verify the pointer was persisted.
+        await using var readCtx = CreateContext();
+        var saved = await readCtx.Set<KeepRequest>().FindAsync(request.Id);
+        Assert.NotNull(saved);
+        Assert.Equal(committedEventId, saved.FirstResponseEventId);
+    }
+
+    [Fact]
+    public async Task FirstResponseEventId_pointing_to_another_requests_event_is_rejected()
+    {
+        // Seed two requests under the same account; save an event for the second request.
+        var c1 = KeepCustomer.Create(AccountId, "Jane", "0412345621");
+        var c2 = KeepCustomer.Create(AccountId, "Bob", "0412345622");
+        var req1 = KeepRequest.CreateFromCustomerIntake(AccountId, c1.Id, "Jane", "0412345621", null, "Desc", "FREV02", "tok_frev2", Now, 60);
+        var req2 = KeepRequest.CreateFromCustomerIntake(AccountId, c2.Id, "Bob", "0412345622", null, "Desc", "FREV03", "tok_frev3", Now, 60);
+        var ev2 = KeepRequestEvent.CreateRequestCreated(req2.Id, AccountId, Now);
+
+        await using (var ctx = CreateContext())
+        {
+            ctx.Set<KeepCustomer>().AddRange(c1, c2);
+            ctx.Set<KeepRequest>().AddRange(req1, req2);
+            ctx.Set<KeepRequestEvent>().Add(ev2);
+            await ctx.SaveChangesAsync();
+        }
+
+        // Attempt: point req1.FirstResponseEventId to ev2 (which belongs to req2, not req1).
+        await using var ctx2 = CreateContext();
+        var loaded = await ctx2.Set<KeepRequest>().FindAsync(req1.Id);
+        ctx2.Entry(loaded!).Property(r => r.FirstResponseEventId).CurrentValue = ev2.Id;
+
+        var ex = await Assert.ThrowsAsync<DbUpdateException>(() => ctx2.SaveChangesAsync());
+        var pgEx = ex.InnerException as PostgresException;
+        Assert.NotNull(pgEx);
+        Assert.Equal("23503", pgEx.SqlState);
+        Assert.Equal("fk_keep_requests_first_response_event", pgEx.ConstraintName);
+    }
+
+    [Fact]
+    public async Task FirstResponseEventId_pointing_to_another_accounts_event_is_rejected()
+    {
+        // Seed req1 under AccountId; seed req2+event under SecondAccountId.
+        var c1 = KeepCustomer.Create(AccountId, "Jane", "0412345623");
+        var req1 = KeepRequest.CreateFromCustomerIntake(AccountId, c1.Id, "Jane", "0412345623", null, "Desc", "FREV04", "tok_frev4", Now, 60);
+        var c2 = KeepCustomer.Create(SecondAccountId, "Bob", "0412345624");
+        var req2 = KeepRequest.CreateFromCustomerIntake(SecondAccountId, c2.Id, "Bob", "0412345624", null, "Desc", "FREV05", "tok_frev5", Now, 60);
+        var ev2 = KeepRequestEvent.CreateRequestCreated(req2.Id, SecondAccountId, Now);
+
+        await using (var ctx = CreateContext())
+        {
+            ctx.Set<KeepCustomer>().AddRange(c1, c2);
+            ctx.Set<KeepRequest>().AddRange(req1, req2);
+            ctx.Set<KeepRequestEvent>().Add(ev2);
+            await ctx.SaveChangesAsync();
+        }
+
+        // Attempt: point req1.FirstResponseEventId to ev2 (AccountId2, wrong account and request).
+        await using var ctx2 = CreateContext();
+        var loaded = await ctx2.Set<KeepRequest>().FindAsync(req1.Id);
+        ctx2.Entry(loaded!).Property(r => r.FirstResponseEventId).CurrentValue = ev2.Id;
+
+        var ex = await Assert.ThrowsAsync<DbUpdateException>(() => ctx2.SaveChangesAsync());
+        var pgEx = ex.InnerException as PostgresException;
+        Assert.NotNull(pgEx);
+        Assert.Equal("23503", pgEx.SqlState);
+        Assert.Equal("fk_keep_requests_first_response_event", pgEx.ConstraintName);
+    }
+
+    [Fact]
+    public async Task FirstResponseEventId_pointing_to_nonexistent_event_is_rejected()
+    {
+        var customer = KeepCustomer.Create(AccountId, "Jane", "0412345625");
+        var request = KeepRequest.CreateFromCustomerIntake(
+            AccountId, customer.Id, "Jane", "0412345625", null,
+            "Desc", "FREV06", "tok_frev6", Now, 60);
+
+        await using (var ctx = CreateContext())
+        {
+            ctx.Set<KeepCustomer>().Add(customer);
+            ctx.Set<KeepRequest>().Add(request);
+            await ctx.SaveChangesAsync();
+        }
+
+        await using var ctx2 = CreateContext();
+        var loaded = await ctx2.Set<KeepRequest>().FindAsync(request.Id);
+        ctx2.Entry(loaded!).Property(r => r.FirstResponseEventId).CurrentValue = Guid.NewGuid();
+
+        var ex = await Assert.ThrowsAsync<DbUpdateException>(() => ctx2.SaveChangesAsync());
+        var pgEx = ex.InnerException as PostgresException;
+        Assert.NotNull(pgEx);
+        Assert.Equal("23503", pgEx.SqlState);
+        Assert.Equal("fk_keep_requests_first_response_event", pgEx.ConstraintName);
     }
 
     // -------------------------------------------------------------------------

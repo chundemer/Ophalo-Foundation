@@ -106,6 +106,11 @@ internal sealed class KeepRequestEventConfiguration : BaseEntityConfiguration<Ke
         builder.HasIndex(x => x.AccountId)
             .HasDatabaseName("ix_keep_request_events_account_id");
 
+        // Alternate key — required so KeepRequest.FirstResponseEventId can use a composite FK
+        // that enforces the event belongs to the same account and the same request.
+        builder.HasAlternateKey(x => new { x.AccountId, x.RequestId, x.Id })
+            .HasName("ak_keep_request_events_account_request_event");
+
         // Composite FK — prevents an event referencing a request from a different account.
         builder.HasOne<KeepRequest>()
             .WithMany()

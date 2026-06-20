@@ -51,8 +51,7 @@ validating or coding Phase 8-B5 Session 6.
   Owner/Admin-only.
 
 **Baseline:** Session 5D recorded 847/847 passing tests (494 unit, 14 architecture, 339 integration).
-G1 raised this to 860 (503 unit, 14 arch, 343 integration).
-G1 completion (participant proof tests) raised this to 862 (503 unit, 14 arch, 345 integration).
+G1 raised this to 866 (503 unit, 14 arch, 349 integration) — includes FirstResponseEventId FK, participant proof tests, and two-phase seed fixes.
 
 **Next free ADR:** ADR-306
 
@@ -62,10 +61,10 @@ discoveries must be recorded and handed forward rather than silently expanding t
 
 ### Gap Session G1 — Keep schema, identity, and creation semantics — COMPLETE
 
-**Tests:** 862 total (503 unit · 14 arch · 345 integration) — all green
+**Tests:** 866 total (503 unit · 14 arch · 349 integration) — all green
 **ADRs:** ADR-301 to ADR-305
 **Exit record:** `docs/build-log/048-gap-g1-keep-account-safe-schema.md`
-**Migration:** `20260619235301_KeepG1AccountSafeSchema`
+**Migrations:** `20260619235301_KeepG1AccountSafeSchema` · `20260620015428_KeepG1FirstResponseEventFK`
 
 **Design decisions (ADR-301–305):**
 - D1 (ADR-301): Composite alternate keys on `KeepCustomer (AccountId, Id)`, `KeepRequest (AccountId, Id)`, `AccountUser (AccountId, Id)` enable account-safe composite FK references
@@ -101,9 +100,7 @@ discoveries must be recorded and handed forward rather than silently expanding t
 | `tests/OpHalo.IntegrationTests/Api/KeepRequestParticipationApiTests.cs` | _viewerAccountUserId field; stale seed uses Viewer not Guid.NewGuid |
 | `src/OpHalo.Foundation.Infrastructure/Migrations/20260619235301_KeepG1AccountSafeSchema.cs` | Generated migration |
 
-**G1 completion (post-commit):** Added `Participant_cannot_reference_request_from_different_account` and `Participant_AccountUser_must_belong_to_same_account` proof tests to `KeepPersistenceProofTests`; `SeedAccountAsync` now returns `(AccountId, OwnerUserId)` tuple so participant tests can reference a real cross-account user. Both composite participant FKs proven against PostgreSQL. Suite raised to 862.
-
-**Deferred:** `KeepRequest.FirstResponseEventId → KeepRequestEvent.Id` FK — circular dependency; document and address when first-response-event assignment is implemented.
+**G1 completion:** `KeepRequest.FirstResponseEventId → KeepRequestEvent.Id` FK implemented via follow-up migration `20260620015428_KeepG1FirstResponseEventFK`. AK `ak_keep_request_events_account_request_event` on KeepRequestEvent (AccountId, RequestId, Id); nullable composite FK `fk_keep_requests_first_response_event` with Restrict. Two-phase persistence required when setting FirstResponseEventId on a new request (production services already load first; affected test seeds split into two SaveChanges). Participant proof tests (Tests 11–12) + FirstResponseEventId proof tests (Tests 13–16) added. Suite: 866 total (503 unit · 14 arch · 349 integration).
 
 ### Gap Session G2 — Public-intake validation and concurrent customer recovery — PLANNED
 
@@ -1072,7 +1069,8 @@ Member management API + integration tests.
 - **Negative feedback on Closed raises attention** — intentional exception to terminal-no-attention posture (ADR-138).
 - **Feedback `WasResolved` is `bool?` at API layer** — null signals missing flag, validated before service. Domain method takes `bool`.
 - **Always use `dotnet build --verbosity minimal`** — `dotnet build -q` is passed to MSBuild as `-q` (question build) and fails; `--verbosity minimal` is the correct quiet mode.
-- **Next free ADR: ADR-301.**
+- **Next free ADR: ADR-306.**
+- **FirstResponseEventId two-phase rule** — setting `FirstResponseEventId` on a brand-new (unsaved) request in the same `SaveChanges` as that request's insert causes an EF `InvalidOperationException` (circular dependency: Request [Added] → Event [Added] → Request [Added]). Production services always load the request first (`[Modified]`), so they are unaffected. Any test seed that creates a request AND immediately transitions it with a message must split into two `SaveChanges` calls.
 - **B4 mapper signature:** `ToDetailResult` now takes `AccountUserRole role`, `bool canOperate`, `Guid currentUserId` — all callers updated; write services pass `canOperate: true`.
 - **Participant `DisplayName`** computed in persistence (two-query approach retained; User.Name projected in the AccountUsers query via EF navigation LEFT JOIN).
 - **`KeepRequestStatus.Scheduled = 7`** — added to `MapStatus` in B5 service rewrite.

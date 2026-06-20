@@ -165,5 +165,18 @@ internal sealed class KeepRequestConfiguration : BaseEntityConfiguration<KeepReq
             .HasPrincipalKey(u => new { u.AccountId, u.Id })
             .OnDelete(DeleteBehavior.Restrict)
             .IsRequired(false);
+
+        // Nullable composite FK — ensures the first-response event belongs to this same
+        // account and this same request. Uses the three-column AK on KeepRequestEvent.
+        // Two-phase persistence is required when setting FirstResponseEventId on a new request:
+        // persist the request first, then commit the event + pointer update in a second SaveChanges.
+        // EF does not break this cycle automatically — both sides must not be [Added] together.
+        builder.HasOne<KeepRequestEvent>()
+            .WithMany()
+            .HasForeignKey(r => new { r.AccountId, r.Id, r.FirstResponseEventId })
+            .HasPrincipalKey(e => new { e.AccountId, e.RequestId, e.Id })
+            .OnDelete(DeleteBehavior.Restrict)
+            .IsRequired(false)
+            .HasConstraintName("fk_keep_requests_first_response_event");
     }
 }

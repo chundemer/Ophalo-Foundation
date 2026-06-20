@@ -130,6 +130,10 @@ public sealed class KeepRequestListB5Tests : IClassFixture<KeepApiWebFactory>, I
         db.Set<KeepRequest>().Add(resolvedRequest);
         db.Set<KeepRequestEvent>().Add(
             KeepRequestEvent.CreateRequestCreated(resolvedRequest.Id, _accountId, now));
+        // Phase 1: persist request before transitioning — ChangeStatus with a message sets
+        // FirstResponseEventId, which requires two-phase persistence (see FK comment in mapping).
+        await db.SaveChangesAsync();
+        // Phase 2: request is now [Unchanged]; ChangeStatus makes it [Modified].
         var resolveOutcome = resolvedRequest.ChangeStatus(
             KeepRequestStatus.Resolved, "Job is complete.", graph.Owner.Id, "B5 Owner", now);
         Assert.True(resolveOutcome.IsSuccess);
@@ -192,6 +196,9 @@ public sealed class KeepRequestListB5Tests : IClassFixture<KeepApiWebFactory>, I
         db.Set<KeepRequest>().Add(cancelledRequest);
         db.Set<KeepRequestEvent>().Add(
             KeepRequestEvent.CreateRequestCreated(cancelledRequest.Id, _accountId, now));
+        // Phase 1: persist request before transitioning (same two-phase requirement as request 2).
+        await db.SaveChangesAsync();
+        // Phase 2: request is now [Unchanged]; ChangeStatus makes it [Modified].
         var toCancel = cancelledRequest.ChangeStatus(
             KeepRequestStatus.Cancelled, "Job cancelled by customer.", graph.Owner.Id, "B5 Owner", now);
         Assert.True(toCancel.IsSuccess);

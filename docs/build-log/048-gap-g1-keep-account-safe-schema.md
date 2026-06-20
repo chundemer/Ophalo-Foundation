@@ -31,7 +31,7 @@ constraint set. The full audit covered:
 | `KeepRequest.FirstResponderAccountUserId` → `AccountUser (AccountId, Id)` | none | Composite FK (nullable), Restrict |
 | `KeepRequest.AttentionClearedByAccountUserId` → `AccountUser (AccountId, Id)` | none | Composite FK (nullable), Restrict |
 | `KeepRequest.FeedbackReviewedByAccountUserId` → `AccountUser (AccountId, Id)` | none | Composite FK (nullable), Restrict |
-| `KeepRequest.FirstResponseEventId` | none | Deferred (circular dependency — see below) |
+| `KeepRequest.FirstResponseEventId` | none | AK `ak_keep_request_events_account_request_event` on KeepRequestEvent (AccountId, RequestId, Id) + nullable composite FK `fk_keep_requests_first_response_event` (Restrict) |
 | `KeepRequestEvent (AccountId, RequestId)` → `KeepRequest (AccountId, Id)` | simple FK on RequestId | Composite FK, Restrict |
 | `KeepRequestEvent.ActorAccountUserId` → `AccountUser (AccountId, Id)` | none | Composite FK (nullable), Restrict |
 | `KeepRequestEvent.ParticipationTargetAccountUserId` | none | Composite FK (nullable), Restrict |
@@ -44,11 +44,21 @@ constraint set. The full audit covered:
 | `KeepResponsePolicy.AccountId` → `accounts` | none | Simple FK, Restrict |
 | `AccountUser (AccountId, Id)` | none | Alternate key (enables composite FK targets from Keep) |
 
-**Deferred:** `KeepRequest.FirstResponseEventId → KeepRequestEvent.Id` was not added in G1 because
-`KeepRequest` and `KeepRequestEvent` have a circular FK relationship (Request references its first
-response event; events reference their request). The EF navigation and FK setup would require
-careful nullable FK ordering. Deferred to a focused follow-up session when the first-response-event
-assignment flow is implemented.
+**FirstResponseEventId FK (follow-up migration `20260620015428_KeepG1FirstResponseEventFK`):**
+`KeepRequest.FirstResponseEventId → KeepRequestEvent.Id` enforces that the first-response event
+belongs to the same account and the same request. Implementation:
+
+- `KeepRequestEvent` gains alternate key `ak_keep_request_events_account_request_event` on
+  `(AccountId, RequestId, Id)` — the three-column principal for the FK.
+- `KeepRequest` maps `(AccountId, Id, FirstResponseEventId)` as a nullable composite FK
+  (`fk_keep_requests_first_response_event`) with `DeleteBehavior.Restrict`.
+- EF Core cannot break the cycle when both entities are `[Added]` in the same `SaveChanges`.
+  Two-phase persistence is required when setting `FirstResponseEventId` on a new request: persist
+  the request (and its RequestCreated event) first, then commit the first-response event plus the
+  pointer update in a second `SaveChanges`. Production application services always load the request
+  before calling domain transitions, so they use `[Modified]+[Added]` — no cycle. Test seeds that
+  created and immediately transitioned a new request were split accordingly.
+- Four PostgreSQL integration tests prove the constraint in `KeepPersistenceProofTests` (Tests 13–16).
 
 ---
 
@@ -91,9 +101,9 @@ Both call a private `CreateCore`. Unit tests updated for both; test helpers upda
 
 ---
 
-## Migration
+## Migrations
 
-Name: `20260619235301_KeepG1AccountSafeSchema`
+**Migration 1:** `20260619235301_KeepG1AccountSafeSchema`
 Project: `src/OpHalo.Foundation.Infrastructure`
 Context: `OpHaloDbContext`
 
@@ -107,6 +117,16 @@ Up operations:
 - Create unique index `ix_keep_customers_account_canonical_phone`
 - Add 14 FK constraints (all Restrict)
 
+**Migration 2:** `20260620015428_KeepG1FirstResponseEventFK`
+Project: `src/OpHalo.Foundation.Infrastructure`
+Context: `OpHaloDbContext`
+
+Up operations:
+- Drop index `ix_keep_request_events_account_id_request_id` (superseded by the AK below)
+- Add unique constraint `ak_keep_request_events_account_request_event` on `(account_id, request_id, id)`
+- Create index `ix_keep_requests_account_id_id_first_response_event_id` on `keep_requests`
+- Add FK `fk_keep_requests_first_response_event` (Restrict, nullable)
+
 ---
 
 ## Test Results
@@ -115,8 +135,8 @@ Up operations:
 |---|---|---|
 | Unit | 494 | 503 (+9 canonical phone, activity semantics, named factory tests) |
 | Architecture | 14 | 14 |
-| Integration | 339 | 343 (+4 new G1 proof tests) |
-| **Total** | **847** | **860** |
+| Integration | 339 | 349 (+10 new G1 proof tests) |
+| **Total** | **847** | **866** |
 
 **G1-specific integration tests (KeepPersistenceProofTests):**
 - `Keep_migration_applies_and_creates_all_tables`
@@ -129,6 +149,12 @@ Up operations:
 - `Revoked_link_allows_new_active_link_for_same_account`
 - `Active_slug_uniqueness_enforced`
 - `Soft_deleted_keep_rows_are_hidden_by_query_filter`
+- `Participant_cannot_reference_request_from_different_account` (23503 + exact constraint name)
+- `Participant_AccountUser_must_belong_to_same_account` (23503 + exact constraint name)
+- `FirstResponseEvent_and_request_pointer_commit_in_single_SaveChanges` (two-phase: load+modify+save)
+- `FirstResponseEventId_pointing_to_another_requests_event_is_rejected` (23503 fk_keep_requests_first_response_event)
+- `FirstResponseEventId_pointing_to_another_accounts_event_is_rejected` (23503)
+- `FirstResponseEventId_pointing_to_nonexistent_event_is_rejected` (23503)
 
 ---
 
@@ -147,6 +173,6 @@ Up operations:
 
 - All 5 decision records (D1–D5) added to decision-index (ADR-301 to ADR-305)
 - Migration generated, Up/Down inspected, model snapshot matches intent
-- 860/860 tests passing (503 unit + 14 arch + 343 integration)
+- 866/866 tests passing (503 unit + 14 arch + 349 integration)
 - No production code shortcuts or rationalized gaps
 - G2 (public-intake validation and concurrent customer recovery) unblocked
