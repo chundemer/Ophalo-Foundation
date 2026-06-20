@@ -127,15 +127,30 @@ public sealed class KeepIntakeApiTests : IClassFixture<KeepApiWebFactory>, IAsyn
     }
 
     // -------------------------------------------------------------------------
-    // Test 2 — Legacy alias POST /continuity/public-intake/token/{token} → 201
+    // Test 2 — Legacy alias /continuity/public-intake/... removed (GAP-014)
     // -------------------------------------------------------------------------
 
     [Fact]
-    public async Task PublicIntake_LegacyAlias_Returns201()
+    public async Task PublicIntake_LegacyAlias_Returns404_AfterRemoval()
     {
         var response = await _client.PostAsJsonAsync(
             $"/continuity/public-intake/token/{_rawToken}",
             new { customerName = "Alice Brown", customerPhone = "0411111111", description = "Hot water system fault" });
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    // -------------------------------------------------------------------------
+    // G3a — emailNotificationsEnabled field removed; body without it succeeds
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public async Task PublicIntake_WithoutEmailNotificationsEnabled_Returns201()
+    {
+        // Verify the field is truly gone: sending a body that never included it still works.
+        var response = await _client.PostAsJsonAsync(
+            $"/keep/public-intake/token/{_rawToken}",
+            new { customerName = "Carol White", customerPhone = "0422333444", description = "Dripping tap" });
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
     }

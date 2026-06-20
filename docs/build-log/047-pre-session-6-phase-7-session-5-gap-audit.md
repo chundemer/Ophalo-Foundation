@@ -76,7 +76,7 @@ Use a bounded Pre-Session 6 Gap Resolution Phase rather than one oversized Claud
 
 ## Gap Decision Log
 
-### Pilot intake-link and abuse posture — locked 2026-06-19
+### Pilot intake-link and abuse posture — locked 2026-06-19; revised 2026-06-20
 
 - Keep automatically provisions one durable public intake link after the business profile/name is
   established during onboarding. Provisioning is presented as part of signup but is performed
@@ -86,18 +86,25 @@ Use a bounded Pre-Session 6 Gap Resolution Phase rather than one oversized Claud
   the current business name is rendered from account data.
 - The link is expected to remain stable for websites, printed materials, QR codes, and old customer
   messages. It is never rotated automatically or as ordinary maintenance.
-- Owner/Admin may temporarily pause intake without changing the URL. OffSeason also makes public
-  intake unavailable without replacing the link.
-- Permanent replacement is an exceptional recovery action for severe targeted abuse or exposure.
-  It invalidates the old URL and must warn that previously shared/printed links need replacement.
+- V1 does not add an ordinary Owner/Admin pause/resume control or `PausedAtUtc`. The distributed link
+  is a customer-acquisition asset and normal operation should continue capturing requests. Existing
+  account/access/OffSeason gates remain system-level exceptions.
+- Permanent replacement is exceptional recovery, not ordinary maintenance or the primary response
+  to targeted public-form abuse. It atomically revokes the old link and creates its successor in one
+  database transaction, returns the new raw URL once, invalidates the old URL, and must warn that
+  previously shared/printed links need replacement.
 - Before pilot, harden trusted-client-IP resolution and prove the existing per-IP `429` behavior.
   Do not persist raw client IP on the normal request record.
 - Before pilot, Owner/Admin can classify requests as distinct `Spam` or `Test` reasons. The request
   remains auditable but leaves operational queues, stops customer-page activity, and is excluded
   from response-time, intake, stale-work, and impact metrics. Operators cannot classify in V1.
-- Expanded anti-abuse controls (honeypot/timing checks, duplicate detection, broader thresholds,
-  adaptive Turnstile, hashed-IP correlation, anomaly alerts, and optional phone verification) are
-  V1.1 discussion items after initial rollout. See updated `DEF-061`.
+- Before pilot, use bounded validation, trusted-IP/rate-limit proof, Spam/Test classification with
+  metrics exclusion, token-safe logs, and a founder/internal emergency response runbook.
+- Expanded controls (honeypot/timing checks, duplicate detection, broader thresholds, adaptive
+  Turnstile, expiring keyed-hash source correlation/blocks, anomaly alerts, and optional phone
+  verification) are post-pilot/V1.1 candidates. Pull them before broad launch only if pilot evidence
+  shows repeated abuse that the pre-pilot controls cannot contain. Do not expose raw customer IPs to
+  businesses. See updated `DEF-061`.
 
 ### Remaining gap decisions — locked 2026-06-19
 
@@ -122,7 +129,7 @@ Use a bounded Pre-Session 6 Gap Resolution Phase rather than one oversized Claud
 
 | ID | Severity | Area | Finding | Required disposition |
 |---|---|---|---|---|
-| GAP-001 | Blocker | Keep setup | No production flow creates, returns, rotates, or revokes an account's public intake link | Implement before pilot/local end-to-end |
+| GAP-001 | Blocker | Keep setup | No production flow provisions, returns status for, or exceptionally replaces an account's durable public intake link | Implement before pilot/local end-to-end |
 | GAP-002 | Blocker | Request intake | No authenticated business/manual request creation exists although pilot docs assume manual entry | Implement bounded business-created intake |
 | GAP-003 | High / security | Row authorization | Operator default/list/detail/write scope is broader than locked responsible/watching/available policy | Correct before Session 6 |
 | GAP-004 | High / integrity | Concurrency | Keep request writes have no optimistic concurrency; stale close/review/update can overwrite newer state | Add entity-wide OCC before Session 6 |
@@ -156,9 +163,10 @@ Use a bounded Pre-Session 6 Gap Resolution Phase rather than one oversized Claud
   exist.
 - Tests manually seed the link.
 - New-account registration explicitly deferred link creation to a later Keep setup flow (`DEF-007`).
-- No authenticated endpoint/service currently lets an Owner create, retrieve setup status, rotate,
-  or revoke the link.
-- Because only the hash is stored, losing the raw link requires rotation; there is no rotation flow.
+- No authenticated endpoint/service currently lets an Owner/Admin ensure the initial link, retrieve
+  setup status, or exceptionally replace it.
+- Because only the hash is stored, losing the raw link requires exceptional replacement; there is
+  no replacement flow.
 
 **Impact**
 
@@ -171,12 +179,13 @@ Add an Owner/Admin Keep intake-link setup contract:
 
 - read setup/status without returning stored raw secrets;
 - create initial link and return the raw token/share URL once;
-- rotate atomically (revoke old, create new, return raw token once);
-- revoke/disable;
+- exceptionally replace atomically in one database transaction (revoke old, create successor,
+  return raw token/share URL once, and roll back to the old link if successor creation fails);
+- no ordinary pause/resume/disable control and no `PausedAtUtc` in V1;
 - stable, normalized slug handling if slug remains in the model;
 - audit actor/time;
-- tests for role, account scope, duplicate/concurrent setup, rotation, old-token rejection, and
-  OffSeason posture.
+- tests for role, account scope, duplicate/concurrent setup, transactional replacement/rollback,
+  old-token rejection, and OffSeason posture.
 
 Do not make Foundation registration depend directly on Keep. A post-registration Keep setup
 service/API preserves bounded-context direction.
@@ -611,7 +620,7 @@ Gate:
 
 Scope:
 
-- GAP-001 Owner/Admin intake-link setup/status/rotate/revoke;
+- GAP-001 Owner/Admin intake-link ensure/status/exceptional transactional replacement;
 - GAP-002 authenticated business-created requests;
 - GAP-014 legacy alias/ignored opt-in cleanup after explicit decision.
 
@@ -620,7 +629,7 @@ Gate:
 - end-to-end account → setup link → public request;
 - end-to-end authenticated manual request with `Origin=Business`;
 - role/account/OffSeason tests;
-- old rotated token rejected;
+- old replaced token rejected and failed replacement preserves the old link;
 - raw token never persisted.
 
 ### Gap C — Shared authorization and concurrency
@@ -691,7 +700,8 @@ Gate:
 ## Final Exit Gate Before Session 6
 
 - [ ] Gap A complete and migration inspected.
-- [ ] Gap B complete; a real account can obtain/share/rotate intake and manually capture a request.
+- [ ] Gap B complete; a real account can obtain/share/exceptionally replace intake and manually
+      capture a request.
 - [ ] Gap C complete; row access and concurrency fail closed.
 - [ ] Gap D complete; feedback review has no alternate clearing path.
 - [ ] Gap E complete except the explicitly post-Session-6 local DB milestone.

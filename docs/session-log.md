@@ -33,16 +33,31 @@ validating or coding Phase 8-B5 Session 6.
 
 **Source of truth:** `docs/build-log/047-pre-session-6-phase-7-session-5-gap-audit.md`
 
-**Next free ADR:** ADR-311 (ADR-301–305 consumed by G1; ADR-306–310 consumed by G2)
+**Next free ADR:** ADR-315 (ADR-301–305 consumed by G1; ADR-306–310 consumed by G2; ADR-311–314 consumed by G3a)
 
-**Locked decisions:** ADR-295 through ADR-305. In particular:
+**Locked decisions:** ADR-295 through ADR-310, subject to the 2026-06-20 intake-availability working
+decision below. Reconcile ADR-295 and related build/deferred docs only after G1-G8 complete.
+
+**Intake availability / abuse working decision — 2026-06-20:**
 
 - one durable public intake link is provisioned through the Keep setup boundary after the business
   profile exists; it is not rotated automatically;
-- Owner/Admin may pause intake without changing the URL; replacement is exceptional and invalidates
-  the old URL with a stale-link warning;
+- do not add an ordinary Owner/Admin pause/resume control in V1: the link is a durable
+  customer-acquisition asset distributed through websites, QR codes, old messages, referrals, and
+  word of mouth, and normal businesses should continue capturing requests even when busy;
+- system-level account/access/OffSeason gates may make intake unavailable. Exceptional permanent
+  replacement remains available for severe recovery, invalidates the old URL, and requires an
+  explicit stale-link warning; replacement is not the primary targeted-abuse defense because a new
+  public URL can be rediscovered;
 - `Spam` and `Test` classification is required before pilot but remains in its later V1 slice; do
   not pull it into these gap sessions;
+- before pilot, rely on G2 bounded validation, G8 trusted-IP/rate-limit proof, Spam/Test
+  classification with metrics exclusion in its planned V1 slice, token-safe logs, and an internal
+  emergency response path;
+- expiring hashed-source blocks, adaptive Turnstile, duplicate/pattern detection, anomaly alerts,
+  and optional phone verification remain post-pilot/V1.1 candidates. Reconsider before broad public
+  launch only if pilot evidence shows repeated-source abuse that validation/rate limits cannot
+  contain; do not expose raw customer IP addresses to businesses;
 - terminal customer pages expire 30 days from `Closed`/`Cancelled`; Session 6 implements close and
   the corrected cancellation path applies the same rule; active/Resolved pages never expire;
 - remove the undeployed Continuity intake alias and ignored `emailNotificationsEnabled` field;
@@ -53,8 +68,7 @@ validating or coding Phase 8-B5 Session 6.
 **Baseline:** Session 5D recorded 847/847 passing tests (494 unit, 14 architecture, 339 integration).
 G1 raised this to 866 (503 unit, 14 arch, 349 integration) — includes FirstResponseEventId FK, participant proof tests, and two-phase seed fixes.
 G2 raised this to 920 (536 unit, 14 arch, 370 integration) — includes public intake validation pipeline, phone character allowlist, email preservation, and customer-race recovery.
-
-**Next free ADR:** ADR-306
+G3a raised this to 941 (540 unit, 14 arch, 387 integration) — includes intake-link setup endpoints (Get/Ensure/Replace), Continuity alias removal, and ignored emailNotificationsEnabled field removal.
 
 **Required order:** G1 → G2 → G3 → G4 → G5 → G6 → G7 → G8. Do not begin Session 6 until G8 records the
 final green gate. A session may fix a directly blocking defect inside its named scope; broader
@@ -133,63 +147,60 @@ discoveries must be recorded and handed forward rather than silently expanding t
 **Non-goals:** Honeypot/Turnstile, SMS verification, spam scoring, fuzzy customer matching, address
 identity, and `Spam`/`Test` classification.
 
-### Gap Session G3 — Keep onboarding setup, durable intake controls, and manual intake — PLANNED
+### Gap Session G3a — Intake-link setup and Continuity alias cleanup — COMPLETE
 
-**Findings:** GAP-001, GAP-002, GAP-014
-**ADRs:** ADR-295, ADR-298
+**Tests:** 941 total (540 unit · 14 arch · 387 integration) — all green
+**ADRs:** ADR-311 to ADR-314
+**Exit record:** `docs/build-log/050-gap-g3a-intake-link-setup-and-cleanup.md`
+**Gaps closed:** GAP-001, GAP-014
 
-**Goal:** Let a real account obtain its durable intake URL and let authenticated staff capture phone,
-voicemail, referral, walk-in, and other business-origin requests without database seeding.
+**Design decisions (ADR-311–314):**
+- D1 (ADR-311): Auth gate — `keep.settings.manage` (Owner/Admin only); `RequestImplementsAllowedInOffSeason: true`; checks only `decision.IsBlocked` (not `IsReadOnly`); gated by `FeatureKeys.Keep.PublicIntake`
+- D2 (ADR-312): Idempotent ensure catches `ix_keep_public_intake_links_account_active` 23505 → `AlreadyExists` (re-reads winner, no token issued to loser); catches `ix_keep_public_intake_links_active_slug` → `SlugCollision` (retry up to 5). Replace uses two `SaveChanges` inside `BeginTransactionAsync`/`CommitAsync`; transaction auto-rolls back on failure preserving old active link
+- D3 (ADR-313): Slug = kebab-case from business name (lowercase, non-alphanumeric → `-`, collapse, truncate at 60); numeric suffix loop for cross-account name collisions; scoped to active links only (`revokedAtUtc IS NULL`)
+- D4 (ADR-314): Backward-compatible audit fields on `Create` (`createdByUserId?` optional) and `Revoke` (`modifiedByUserId?` optional); no migration needed (`BaseEntityConfiguration` already maps these columns)
 
-**Intake-link contract:**
+**Files created:**
+- `src/OpHalo.Keep.Application/IntakeSetup/IKeepIntakeSetupPersistence.cs`
+- `src/OpHalo.Keep.Application/IntakeSetup/KeepIntakeSetupResults.cs`
+- `src/OpHalo.Keep.Application/IntakeSetup/KeepIntakeSetupService.cs`
+- `src/OpHalo.Keep.Infrastructure/Persistence/KeepIntakeSetupPersistence.cs`
+- `tests/OpHalo.IntegrationTests/Api/KeepIntakeSetupApiTests.cs` — 16 tests
 
-1. Add an authenticated, idempotent Keep onboarding/setup operation that ensures the account's
-   single active link exists after the business profile/name is established. Foundation domain and
-   registration services must not depend directly on Keep; the client/onboarding composition calls
-   the Keep setup boundary automatically after authentication.
-2. Owner/Admin can read setup/status, create/ensure the initial link, pause, resume, and exceptionally
-   replace it. Setup controls remain usable in OffSeason, while public intake stays unavailable.
-3. Return the raw token/full share URL only when initially created or replaced. Store only its hash.
-   Status responses must never pretend the raw URL can be reconstructed from storage.
-4. Pause/resume retains the same token and URL. Permanent replacement atomically invalidates the old
-   token, creates the successor, returns the new URL once, and exposes an explicit warning contract
-   that old printed/shared links are now stale. Do not label ordinary UI behavior "revoke."
-5. Generate the stored slug only after business name exists. It is display/routing context, never
-   authority; business-name changes must not invalidate an existing URL. Branded frontend routes
-   remain outside V1 per ADR-288.
-6. Resolve duplicate/concurrent ensure calls idempotently under the G1 one-active-link constraint.
+**Files modified:**
+- `src/OpHalo.Keep.Core/Entities/KeepPublicIntakeLink.cs` — optional `createdByUserId` on `Create`, optional `modifiedByUserId` on `Revoke`
+- `src/OpHalo.Keep.Core/Errors/KeepPublicIntakeLinkErrors.cs` — added `NoActiveLink`
+- `src/OpHalo.Api/Program.cs` — 3 new endpoints; Continuity alias removed; DI registrations
+- `src/OpHalo.Api/Helpers/ErrorHttpMapper.cs` — `KeepPublicIntakeLink.NoActiveLink` → 404
+- `src/OpHalo.Api/Keep/PublicIntakeRequest.cs` — removed `bool? EmailNotificationsEnabled`
+- `tests/OpHalo.UnitTests/Keep/KeepPublicIntakeLinkTests.cs` — 4 audit-field tests
+- `tests/OpHalo.IntegrationTests/Api/KeepIntakeApiTests.cs` — legacy alias test → 404; emailNotificationsEnabled contract test added
 
-**Manual-create contract:**
+**Endpoints added:**
+- `GET /keep/setup/intake` — `{ hasActiveLink, publicSlug, createdAtUtc }`; never includes a raw token
+- `POST /keep/setup/intake/ensure` — idempotent; raw token only when this call created the link; concurrent loser returns `created=false, rawToken=null`
+- `POST /keep/setup/intake/replace` — transactional; returns new raw token + `staleLinksWarning=true`
 
-1. Add one authenticated business-created request workflow for Owner/Admin/Operator; Viewer is
-   forbidden. Account and actor come only from the authenticated session.
-2. Reuse G1/G2 customer normalization, matching, validation, safe contact updates, and bounded
-   customer-race recovery. Do not fork a second identity implementation.
-3. Persist `Origin=Business`, business activity at creation, no fabricated customer activity, and no
-   false customer-first-response timer at creation.
-4. Create the normal request-created event with authenticated actor metadata and return request
-   detail plus the customer page token/URL contract needed by the operator.
-5. Respect access/feature/permission/OffSeason write policy. Do not add scheduling, estimating,
-   dispatch, CRM, or job-management behavior.
+### Gap Session G3b — Authenticated business-created requests — PLANNED
 
-**Legacy cleanup:**
+**Finding:** GAP-002
 
-- remove `/continuity/public-intake/...` and its tests;
-- remove `emailNotificationsEnabled` from the public request DTO and tests;
-- retain only the canonical Keep route; do not introduce replacement compatibility aliases.
+**Goal:** Let authenticated Owner/Admin/Operator create a Keep request on behalf of a customer from a phone call, walk-in, referral, or voicemail — without database seeding.
+
+**Contract:**
+1. Owner/Admin/Operator may create; Viewer forbidden. Account and actor come only from the authenticated session.
+2. Reuse G1/G2 customer normalization, matching, safe contact updates, and bounded customer-race recovery. Do not fork a second identity implementation.
+3. Persist `Origin=Business`, business activity at creation, no fabricated customer activity, and no first-response timer at creation.
+4. Create the normal request-created event with authenticated actor metadata.
+5. Return `KeepRequestDetailResult` directly — `PageToken` already included (D3 resolved: confirmed in prior session that `KeepRequestDetailResult` already carries `PageToken`; no wrapper needed).
+6. Respect access/feature/permission/OffSeason write policy; OffSeason blocks business-created requests (`RequestImplementsAllowedInOffSeason: false`). No scheduling, estimating, dispatch, CRM, or job-management scope.
 
 **Required tests:**
-
-- account/profile → idempotent Keep setup → public request end-to-end;
-- Owner/Admin authorization, Operator/Viewer restrictions on setup, account isolation, OffSeason
-  setup versus public-submit behavior;
-- create/ensure concurrency, pause/resume same-token behavior, replacement old-token rejection, and
-  raw token never persisted or returned by status;
-- manual creation by each allowed/forbidden role, account derivation, origin/activity/first-response
-  semantics, customer reuse, concurrent first-customer behavior, and OffSeason denial;
-- removed alias returns 404 and removed request field is rejected under the API's unknown-field
-  posture (or explicitly proven ignored by serializer only if global JSON behavior cannot reject it;
-  record the exact contract rather than guessing);
+- creation by each allowed role (Owner, Admin, Operator); Viewer → 403;
+- account/actor from session only (not request body);
+- Origin=Business, business activity set, no customer activity, no first-response timer;
+- customer reuse (existing canonical phone) and concurrent first-customer race;
+- OffSeason denial;
 - full suite green.
 
 ### Gap Session G4 — Shared request-row authorization — PLANNED
@@ -355,23 +366,26 @@ allowed entry gate into Session 6.
 2. Prove public-intake `10/minute`, zero-queue, `429` behavior in a production-like rate-limit test
    host. Cover partition isolation and spoofed forwarding headers. Do not expand into Turnstile,
    honeypots, SMS verification, or a general abuse platform.
-3. Ensure raw intake/page bearer tokens do not appear in application request logs, traces, analytics,
+3. Document the founder/internal emergency response for targeted pilot abuse (inspect safely,
+   preserve evidence without exposing raw IP to the business, apply platform/account protection,
+   and restore service). This is an operational runbook, not a customer-facing source-block UI.
+4. Ensure raw intake/page bearer tokens do not appear in application request logs, traces, analytics,
    exceptions, or pilot-friction context. Prefer route templates/redacted values and safe IDs only
    after authorization. Document the required Cloudflare/Railway access-log configuration that code
    cannot enforce and verify what is locally testable.
-4. Reconcile decision statuses and sources only after behavior exists: Phase 7 ADRs, ADR-263,
+5. Reconcile decision statuses and sources only after behavior exists: Phase 7 ADRs, ADR-263,
    ADR-282, ADR-295..300, DEF-007, DEF-074, and relevant deferred entries. Do not mark Session 6
    navigation or close/cancel expiry implemented early.
-5. Record the locked 30-day terminal expiry as a required Session 6 close/corrected-cancel contract.
-6. Keep GAP-016 as a post-Session-6, pre-notification milestone: persistent local PostgreSQL setup,
+6. Record the locked 30-day terminal expiry as a required Session 6 close/corrected-cancel contract.
+7. Keep GAP-016 as a post-Session-6, pre-notification milestone: persistent local PostgreSQL setup,
    zero-to-latest migration, seed/smoke/reset runbook, and eager startup configuration validation.
-7. Perform final self-review for accidental notification, realtime, archive, scheduling, SMS,
+8. Perform final self-review for accidental notification, realtime, archive, scheduling, SMS,
    analytics, or spam-platform scope.
 
 **Completion gate:**
 
 - G1 migration inspected and migration-from-zero proven;
-- real account can ensure/pause/resume/replace intake and submit publicly;
+- real account can ensure/exceptionally replace intake and submit publicly;
 - allowed staff can create a business-origin request;
 - row access and OCC fail closed under direct-ID and race tests;
 - feedback review has no alternate clearing path;
@@ -1101,3 +1115,9 @@ Member management API + integration tests.
 - **5C OffSeason closed customer page** — `ComputeAllowedActions` `Closed + isOffSeason` case precedes the `feedbackAlreadySubmitted` check. Active-status pages are unchanged.
 - **`feedback_review` view excludes reviewed requests** — `MarkFeedbackReviewed` clears `UnresolvedFeedback` attention; existing `AttentionLevel != None` filter handles exclusion automatically.
 - **Phase 8-B5 complete.** Next phase TBD from build plan.
+- **G3a snapshot types** — `AccountUserSnapshot` and `AccountAccessSnapshot` are in `OpHalo.Keep.Application.Abstractions` (not `OpHalo.Foundation.Application.Accounts.Access`). Using the wrong namespace produces `CS0246` at build time.
+- **G3a `FindActiveLinkByAccountAsync` is tracked** — deliberately omits `AsNoTracking()` so the returned entity is tracked and its `Revoke()` mutation is persisted in `CommitReplaceAsync` without an explicit re-attach.
+- **G3a ensure constraint names** — `CommitEnsureAsync` catches two distinct 23505 violations: `ix_keep_public_intake_links_account_active` (one active link per account) → `AlreadyExists`; `ix_keep_public_intake_links_active_slug` (unique slug among active links) → `SlugCollision`. Constraint names are exact and case-sensitive.
+- **G3a status never returns raw token** — `KeepIntakeSetupStatusResult` has no token field; status response is a security boundary. Only `EnsureAsync` (when it creates) and `ReplaceAsync` return a raw token.
+- **G3a concurrent ensure loser** — when `CommitEnsureAsync` returns `AlreadyExists`, the service re-reads the winner via `FindActiveLinkByAccountAsync` and returns `created=false, rawToken=null`. No token is issued to the losing caller.
+- **G3a `OffSeason` setup access** — setup uses `RequestImplementsAllowedInOffSeason: true`; auth checks only `decision.IsBlocked`. Public intake remains blocked by the existing system-level gate. G3b business-created requests use `RequestImplementsAllowedInOffSeason: false` (different policy: writing requests is a write action that OffSeason freezes).

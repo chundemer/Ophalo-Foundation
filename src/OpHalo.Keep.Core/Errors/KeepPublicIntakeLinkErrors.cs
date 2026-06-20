@@ -9,4 +9,7 @@ public static class KeepPublicIntakeLinkErrors
 
     public static readonly Error AlreadyRevoked =
         Error.Create("KeepPublicIntakeLink.AlreadyRevoked", "This intake link has already been revoked.");
+
+    public static readonly Error NoActiveLink =
+        Error.Create("KeepPublicIntakeLink.NoActiveLink", "No active intake link exists for this account.");
 }

@@ -18,19 +18,21 @@ public sealed class KeepPublicIntakeLink : BaseEntity
 
     public bool IsActive => !RevokedAtUtc.HasValue && !IsDeleted;
 
-    public Result Revoke(DateTime nowUtc)
+    public Result Revoke(DateTime nowUtc, Guid? modifiedByUserId = null)
     {
         if (RevokedAtUtc.HasValue)
             return Result.Failure(KeepPublicIntakeLinkErrors.AlreadyRevoked);
 
         RevokedAtUtc = nowUtc;
+        ModifiedByUserId = modifiedByUserId;
         return Result.Success();
     }
 
     public static KeepPublicIntakeLink Create(
         Guid accountId,
         string publicSlug,
-        string tokenHash)
+        string tokenHash,
+        Guid? createdByUserId = null)
     {
         if (accountId == Guid.Empty)
             throw new ArgumentException("Account ID is required.", nameof(accountId));
@@ -43,7 +45,8 @@ public sealed class KeepPublicIntakeLink : BaseEntity
         {
             AccountId = accountId,
             PublicSlug = publicSlug.Trim(),
-            TokenHash = tokenHash
+            TokenHash = tokenHash,
+            CreatedByUserId = createdByUserId
         };
     }
 }

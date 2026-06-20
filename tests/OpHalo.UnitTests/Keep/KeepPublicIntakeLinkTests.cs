@@ -72,6 +72,42 @@ public class KeepPublicIntakeLinkTests
         Assert.Equal(KeepPublicIntakeLinkErrors.AlreadyRevoked.Code, result.Error.Code);
     }
 
+    [Fact]
+    public void Create_sets_created_by_user_id_when_provided()
+    {
+        var actorId = Guid.NewGuid();
+        var link = KeepPublicIntakeLink.Create(AccountId, "acme-plumbing", DefaultHash, actorId);
+
+        Assert.Equal(actorId, link.CreatedByUserId);
+    }
+
+    [Fact]
+    public void Create_leaves_created_by_null_when_not_provided()
+    {
+        var link = KeepPublicIntakeLink.Create(AccountId, "acme-plumbing", DefaultHash);
+
+        Assert.Null(link.CreatedByUserId);
+    }
+
+    [Fact]
+    public void Revoke_sets_modified_by_user_id()
+    {
+        var actorId = Guid.NewGuid();
+        var link = NewLink();
+        link.Revoke(Now, actorId);
+
+        Assert.Equal(actorId, link.ModifiedByUserId);
+    }
+
+    [Fact]
+    public void Revoke_leaves_modified_by_null_when_not_provided()
+    {
+        var link = NewLink();
+        link.Revoke(Now);
+
+        Assert.Null(link.ModifiedByUserId);
+    }
+
     // --- IsActive ---
 
     [Fact]

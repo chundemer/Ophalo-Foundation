@@ -23,6 +23,7 @@ using OpHalo.Foundation.Core.Constants;
 using OpHalo.Foundation.Infrastructure.Persistence;
 using OpHalo.Foundation.Infrastructure.Security;
 using OpHalo.Foundation.Infrastructure.Services;
+using OpHalo.Keep.Application.IntakeSetup;
 using OpHalo.Keep.Application.PublicIntake;
 using OpHalo.Keep.Application.Requests;
 using OpHalo.Keep.Application.Services;
@@ -71,6 +72,8 @@ builder.Services.AddScoped<OpHaloDbContext>(sp =>
 builder.Services.AddSingleton<IClock, OpHalo.Foundation.Infrastructure.Services.SystemClock>();
 
 builder.Services.AddScoped<IKeepIntakePersistence, KeepIntakePersistence>();
+builder.Services.AddScoped<IKeepIntakeSetupPersistence, KeepIntakeSetupPersistence>();
+builder.Services.AddScoped<KeepIntakeSetupService>();
 builder.Services.AddScoped<IKeepRequestListPersistence, KeepRequestListPersistence>();
 builder.Services.AddScoped<IKeepRequestDetailPersistence, EfKeepRequestDetailPersistence>();
 builder.Services.AddScoped<IKeepRequestOperatePersistence, EfKeepRequestOperatePersistence>();
@@ -219,9 +222,24 @@ if (!app.Environment.IsEnvironment("Testing"))
 app.MapPost("/keep/public-intake/token/{publicIntakeToken}", HandlePublicIntake)
    .RequireRateLimiting("public-intake");
 
-// Legacy alias — same handler, same rate limit policy (ADR-051)
-app.MapPost("/continuity/public-intake/token/{publicIntakeToken}", HandlePublicIntake)
-   .RequireRateLimiting("public-intake");
+// Intake setup — authenticated, Owner/Admin only (GAP-001)
+app.MapGet("/keep/setup/intake", async (KeepIntakeSetupService service, CancellationToken ct) =>
+{
+    var result = await service.GetStatusAsync(ct);
+    return result.IsSuccess ? Results.Ok(result.Value) : ErrorHttpMapper.ToHttpResult(result.Error);
+}).RequireAuthorization();
+
+app.MapPost("/keep/setup/intake/ensure", async (KeepIntakeSetupService service, CancellationToken ct) =>
+{
+    var result = await service.EnsureAsync(ct);
+    return result.IsSuccess ? Results.Ok(result.Value) : ErrorHttpMapper.ToHttpResult(result.Error);
+}).RequireAuthorization();
+
+app.MapPost("/keep/setup/intake/replace", async (KeepIntakeSetupService service, CancellationToken ct) =>
+{
+    var result = await service.ReplaceAsync(ct);
+    return result.IsSuccess ? Results.Ok(result.Value) : ErrorHttpMapper.ToHttpResult(result.Error);
+}).RequireAuthorization();
 
 // Operator list — requires authenticated session (Phase 5A, extended Session 4A)
 app.MapGet("/keep/requests", async (
