@@ -10,7 +10,7 @@ public sealed record KeepRequestSummary(
     string? CustomerEmail,
     string Description,
     DateTime? LastCustomerActivityAtUtc,
-    DateTime LastBusinessActivityAtUtc,
+    DateTime? LastBusinessActivityAtUtc,
     DateTime CreatedAtUtc,
     DateTime UpdatedAtUtc,
     bool IsTerminal,

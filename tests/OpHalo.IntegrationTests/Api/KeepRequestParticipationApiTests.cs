@@ -39,6 +39,7 @@ public sealed class KeepRequestParticipationApiTests : IClassFixture<KeepApiWebF
 
     private Guid _ownerAccountUserId;
     private Guid _operatorAccountUserId;
+    private Guid _viewerAccountUserId;
 
     // Shared: used for validation and permission tests (all fail before domain mutation).
     private Guid _sharedRequestId;
@@ -147,6 +148,7 @@ public sealed class KeepRequestParticipationApiTests : IClassFixture<KeepApiWebF
         viewerMember.Activate(viewerUser.Id, now);
         db.Users.Add(viewerUser);
         db.AccountUsers.Add(viewerMember);
+        _viewerAccountUserId = viewerMember.Id;
 
         await db.SaveChangesAsync();
 
@@ -170,7 +172,7 @@ public sealed class KeepRequestParticipationApiTests : IClassFixture<KeepApiWebF
         _unmuteRequestId = await SeedRequestAsync(db, _accountId, customer.Id, "PT-UNM", "pt_unm_token", now);
 
         // Terminal request.
-        var closedRequest = KeepRequest.Create(
+        var closedRequest = KeepRequest.CreateFromCustomerIntake(
             _accountId, customer.Id,
             "John Customer", "0400000001", null,
             "Closed job", "PT-CLO", "pt_clo_token", now, 60);
@@ -242,9 +244,11 @@ public sealed class KeepRequestParticipationApiTests : IClassFixture<KeepApiWebF
             _3cWatchingRequestId, _accountId, _operatorAccountUserId,
             ParticipationType.Watching, notificationsEnabled: true, now));
 
-        // Stale Responsible: AccountUserId has no corresponding AccountUser → "missing AccountUser → stale".
+        // Stale Responsible: Viewer-role AccountUser is ineligible (not Owner/Admin/Operator) → responsibleIsStale=true.
+        // G1 enforces composite FK (AccountId, AccountUserId) → AccountUser, so the user must exist;
+        // staleness is detected by the application when the role is not in the eligible set.
         db.Set<KeepRequestParticipant>().Add(KeepRequestParticipant.Create(
-            _3cStaleRequestId, _accountId, Guid.NewGuid(),
+            _3cStaleRequestId, _accountId, _viewerAccountUserId,
             ParticipationType.Responsible, notificationsEnabled: true, now));
 
         await db.SaveChangesAsync();
@@ -912,7 +916,7 @@ public sealed class KeepRequestParticipationApiTests : IClassFixture<KeepApiWebF
         OpHaloDbContext db, Guid accountId, Guid customerId,
         string referenceCode, string pageToken, DateTime now)
     {
-        var request = KeepRequest.Create(
+        var request = KeepRequest.CreateFromCustomerIntake(
             accountId, customerId,
             "John Customer", "0400000001", null,
             "Test job", referenceCode, pageToken, now, 60);

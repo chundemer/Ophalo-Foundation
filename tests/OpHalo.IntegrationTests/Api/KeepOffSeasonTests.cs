@@ -82,7 +82,7 @@ public sealed class KeepOffSeasonTests : IClassFixture<KeepApiWebFactory>, IAsyn
         db.Set<KeepCustomer>().Add(customer);
         await db.SaveChangesAsync();
 
-        var request = KeepRequest.Create(
+        var request = KeepRequest.CreateFromCustomerIntake(
             accountId, customer.Id,
             "OS Customer", "0400000099", null,
             "Burst pipe", "OS-001", PageToken, now, 60);
@@ -94,7 +94,7 @@ public sealed class KeepOffSeasonTests : IClassFixture<KeepApiWebFactory>, IAsyn
         _requestId = request.Id;
 
         // Seed a closed request with unreviewed negative feedback for the AllowedActions test (ADR-277).
-        var closedRequest = KeepRequest.Create(
+        var closedRequest = KeepRequest.CreateFromCustomerIntake(
             accountId, customer.Id,
             "OS Customer", "0400000099", null,
             "Closed pipe job", "OS-002", ClosedFeedbackPageToken, now, 60);

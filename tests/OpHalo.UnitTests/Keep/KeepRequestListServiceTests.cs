@@ -74,7 +74,7 @@ public class KeepRequestListServiceTests
         string phone = "555-0001",
         string? email = null,
         int firstResponseTargetMinutes = 60) =>
-        KeepRequest.Create(
+        KeepRequest.CreateFromCustomerIntake(
             AccountId, Guid.NewGuid(), "Bob", phone, email, "Desc",
             referenceCode, "tok_" + Guid.NewGuid().ToString("N"), Now, firstResponseTargetMinutes);
 
@@ -506,7 +506,7 @@ public class KeepRequestListServiceTests
     [Fact]
     public async Task Execute_maps_requests_to_summaries()
     {
-        var request = KeepRequest.Create(
+        var request = KeepRequest.CreateFromCustomerIntake(
             AccountId, Guid.NewGuid(), "Alice", "555-9999", null, "Fix sink", "REF00001", "tok1", Now, 60);
 
         var p = HappyPathPersistence([request]);
@@ -562,7 +562,7 @@ public class KeepRequestListServiceTests
     [InlineData(KeepRequestStatus.Cancelled, "cancelled")]
     public async Task Execute_maps_all_status_values(KeepRequestStatus status, string expectedSlug)
     {
-        var request = KeepRequest.Create(
+        var request = KeepRequest.CreateFromCustomerIntake(
             AccountId, Guid.NewGuid(), "Bob", "555-0001", null, "Desc", "REF00002", "tok2", Now, 60);
 
         SetProp(request, nameof(KeepRequest.Status), status);

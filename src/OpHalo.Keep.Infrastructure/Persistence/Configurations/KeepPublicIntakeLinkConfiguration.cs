@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using OpHalo.Foundation.Core.Entities.Accounts;
 using OpHalo.Foundation.Infrastructure.Persistence.Configurations;
 using OpHalo.Keep.Core.Entities;
 
@@ -29,7 +30,6 @@ internal sealed class KeepPublicIntakeLinkConfiguration : BaseEntityConfiguratio
         builder.Ignore(x => x.IsActive);
 
         // Partial unique indexes — only one active slug and one active token hash at a time.
-        // "Active" means not revoked and not soft-deleted.
         builder.HasIndex(x => x.PublicSlug)
             .IsUnique()
             .HasFilter("revoked_at_utc IS NULL AND deleted_at_utc IS NULL")
@@ -39,5 +39,17 @@ internal sealed class KeepPublicIntakeLinkConfiguration : BaseEntityConfiguratio
             .IsUnique()
             .HasFilter("revoked_at_utc IS NULL AND deleted_at_utc IS NULL")
             .HasDatabaseName("ix_keep_public_intake_links_active_token_hash");
+
+        // One active intake link per account (GAP-015/ADR-295).
+        builder.HasIndex(x => x.AccountId)
+            .IsUnique()
+            .HasFilter("revoked_at_utc IS NULL AND deleted_at_utc IS NULL")
+            .HasDatabaseName("ix_keep_public_intake_links_account_active");
+
+        // FK — restricts deletion of an account that owns intake links.
+        builder.HasOne<Account>()
+            .WithMany()
+            .HasForeignKey(x => x.AccountId)
+            .OnDelete(DeleteBehavior.Restrict);
     }
 }

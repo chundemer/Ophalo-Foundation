@@ -15,31 +15,50 @@ public class KeepRequestTests
         string pageToken = "tok_abc123",
         int firstResponseTargetMinutes = 60,
         KeepRequestOrigin origin = KeepRequestOrigin.Customer) =>
-        KeepRequest.Create(
-            AccountId, CustomerId,
-            "Jane Smith", "0412345678", null,
-            description, referenceCode, pageToken, Now,
-            firstResponseTargetMinutes, origin);
+        origin == KeepRequestOrigin.Business
+            ? KeepRequest.CreateByBusiness(
+                AccountId, CustomerId,
+                "Jane Smith", "0412345678", null,
+                description, referenceCode, pageToken, Now)
+            : KeepRequest.CreateFromCustomerIntake(
+                AccountId, CustomerId,
+                "Jane Smith", "0412345678", null,
+                description, referenceCode, pageToken, Now,
+                firstResponseTargetMinutes);
 
     // --- Create ---
 
     [Fact]
-    public void Create_initializes_received_status_and_last_business_activity()
+    public void CreateFromCustomerIntake_sets_customer_activity_and_leaves_business_null()
     {
-        var request = NewRequest();
+        var request = NewRequest(); // Customer origin by default
 
         Assert.Equal(KeepRequestStatus.Received, request.Status);
-        Assert.Equal(Now, request.LastBusinessActivityAt);
+        Assert.Null(request.LastBusinessActivityAt);       // business has not acted yet
+        Assert.Equal(Now, request.LastCustomerActivityAt); // customer submitted → activity
         Assert.Null(request.TerminatedAtUtc);
         Assert.Null(request.ExpiresAtUtc);
-        Assert.Null(request.LastCustomerActivityAt);
+        Assert.Null(request.CurrentStatusText);
+    }
+
+    [Fact]
+    public void CreateByBusiness_sets_business_activity_and_leaves_customer_null()
+    {
+        var request = NewRequest(origin: KeepRequestOrigin.Business);
+
+        Assert.Equal(KeepRequestStatus.Received, request.Status);
+        Assert.Equal(Now, request.LastBusinessActivityAt); // business created → activity
+        Assert.Null(request.LastCustomerActivityAt);       // customer has not acted yet
+        Assert.Null(request.FirstResponseDueAtUtc);        // no timer on business-origin
+        Assert.Null(request.TerminatedAtUtc);
+        Assert.Null(request.ExpiresAtUtc);
         Assert.Null(request.CurrentStatusText);
     }
 
     [Fact]
     public void Create_stores_trimmed_fields()
     {
-        var request = KeepRequest.Create(
+        var request = KeepRequest.CreateFromCustomerIntake(
             AccountId, CustomerId,
             "  Jane Smith  ", "  0412345678  ", " jane@example.com ",
             "  A burst pipe  ", "PQRS7842", "tok_abc", Now, 60);
@@ -60,47 +79,47 @@ public class KeepRequestTests
     [Fact]
     public void Create_requires_non_empty_account_id() =>
         Assert.Throws<ArgumentException>(() =>
-            KeepRequest.Create(Guid.Empty, CustomerId, "Jane", "04123", null, "desc", "REF1", "tok", Now, 60));
+            KeepRequest.CreateFromCustomerIntake(Guid.Empty, CustomerId, "Jane", "04123", null, "desc", "REF1", "tok", Now, 60));
 
     [Fact]
     public void Create_requires_non_empty_customer_id() =>
         Assert.Throws<ArgumentException>(() =>
-            KeepRequest.Create(AccountId, Guid.Empty, "Jane", "04123", null, "desc", "REF1", "tok", Now, 60));
+            KeepRequest.CreateFromCustomerIntake(AccountId, Guid.Empty, "Jane", "04123", null, "desc", "REF1", "tok", Now, 60));
 
     [Theory]
     [InlineData("")]
     [InlineData("   ")]
     public void Create_requires_customer_name(string name) =>
         Assert.Throws<ArgumentException>(() =>
-            KeepRequest.Create(AccountId, CustomerId, name, "04123", null, "desc", "REF1", "tok", Now, 60));
+            KeepRequest.CreateFromCustomerIntake(AccountId, CustomerId, name, "04123", null, "desc", "REF1", "tok", Now, 60));
 
     [Theory]
     [InlineData("")]
     [InlineData("   ")]
     public void Create_requires_customer_phone(string phone) =>
         Assert.Throws<ArgumentException>(() =>
-            KeepRequest.Create(AccountId, CustomerId, "Jane", phone, null, "desc", "REF1", "tok", Now, 60));
+            KeepRequest.CreateFromCustomerIntake(AccountId, CustomerId, "Jane", phone, null, "desc", "REF1", "tok", Now, 60));
 
     [Theory]
     [InlineData("")]
     [InlineData("   ")]
     public void Create_requires_description(string desc) =>
         Assert.Throws<ArgumentException>(() =>
-            KeepRequest.Create(AccountId, CustomerId, "Jane", "04123", null, desc, "REF1", "tok", Now, 60));
+            KeepRequest.CreateFromCustomerIntake(AccountId, CustomerId, "Jane", "04123", null, desc, "REF1", "tok", Now, 60));
 
     [Theory]
     [InlineData("")]
     [InlineData("   ")]
     public void Create_requires_reference_code(string code) =>
         Assert.Throws<ArgumentException>(() =>
-            KeepRequest.Create(AccountId, CustomerId, "Jane", "04123", null, "desc", code, "tok", Now, 60));
+            KeepRequest.CreateFromCustomerIntake(AccountId, CustomerId, "Jane", "04123", null, "desc", code, "tok", Now, 60));
 
     [Theory]
     [InlineData("")]
     [InlineData("   ")]
     public void Create_requires_page_token(string token) =>
         Assert.Throws<ArgumentException>(() =>
-            KeepRequest.Create(AccountId, CustomerId, "Jane", "04123", null, "desc", "REF1", token, Now, 60));
+            KeepRequest.CreateFromCustomerIntake(AccountId, CustomerId, "Jane", "04123", null, "desc", "REF1", token, Now, 60));
 
     [Theory]
     [InlineData(0)]
@@ -108,7 +127,7 @@ public class KeepRequestTests
     [InlineData(-100)]
     public void Create_throws_when_first_response_target_minutes_is_not_positive(int minutes) =>
         Assert.Throws<ArgumentException>(() =>
-            KeepRequest.Create(AccountId, CustomerId, "Jane", "04123", null, "desc", "REF1", "tok", Now, minutes));
+            KeepRequest.CreateFromCustomerIntake(AccountId, CustomerId, "Jane", "04123", null, "desc", "REF1", "tok", Now, minutes));
 
     [Fact]
     public void Create_with_customer_origin_sets_first_response_due_at_utc()

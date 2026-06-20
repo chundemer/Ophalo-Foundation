@@ -95,7 +95,7 @@ public sealed class AcknowledgeAttentionTests : IClassFixture<KeepApiWebFactory>
         db.Set<KeepCustomer>().Add(customer);
         await db.SaveChangesAsync();
 
-        var attentionRequest = KeepRequest.Create(
+        var attentionRequest = KeepRequest.CreateFromCustomerIntake(
             _accountId, customer.Id,
             "Jane Smith", "0412345678", null,
             "Customer asked for an update", "ATTN001", "token_attn_001", now, 60);
@@ -104,7 +104,7 @@ public sealed class AcknowledgeAttentionTests : IClassFixture<KeepApiWebFactory>
         db.Set<KeepRequestEvent>().Add(
             KeepRequestEvent.CreateRequestCreated(attentionRequest.Id, _accountId, now));
 
-        var noAttentionRequest = KeepRequest.Create(
+        var noAttentionRequest = KeepRequest.CreateFromCustomerIntake(
             _accountId, customer.Id,
             "Jane Smith", "0412345678", null,
             "Request without active attention", "ATTN002", "token_attn_002", now, 60);
@@ -114,7 +114,7 @@ public sealed class AcknowledgeAttentionTests : IClassFixture<KeepApiWebFactory>
 
         // Terminal request with attention seeded after closure — simulates a legacy cleanup
         // scenario where AcknowledgeAttention must still work on a terminal request.
-        var terminalWithAttention = KeepRequest.Create(
+        var terminalWithAttention = KeepRequest.CreateFromCustomerIntake(
             _accountId, customer.Id,
             "Jane Smith", "0412345678", null,
             "Closed job with lingering attention", "ATTN003", "token_attn_003", now, 60);

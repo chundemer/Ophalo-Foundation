@@ -14,16 +14,15 @@ public class KeepRequestExternalContactTests
     const int StandardMinutes = 240;
 
     static KeepRequest NewCustomerRequest(int firstResponseTargetMinutes = 60) =>
-        KeepRequest.Create(AccountId, CustomerId,
+        KeepRequest.CreateFromCustomerIntake(AccountId, CustomerId,
             "John Customer", "0412345678", null,
             "Fix the hot water system", "ABCD1234", "tok_abc", Now,
-            firstResponseTargetMinutes, KeepRequestOrigin.Customer);
+            firstResponseTargetMinutes);
 
     static KeepRequest NewBusinessRequest() =>
-        KeepRequest.Create(AccountId, CustomerId,
+        KeepRequest.CreateByBusiness(AccountId, CustomerId,
             "John Customer", "0412345678", null,
-            "Fix the hot water system", "ABCD1234", "tok_abc", Now,
-            60, KeepRequestOrigin.Business);
+            "Fix the hot water system", "ABCD1234", "tok_abc", Now);
 
     // Raise standard business-waiting attention on the request.
     static void RaiseBusinessWaiting(KeepRequest request, DateTime? since = null)

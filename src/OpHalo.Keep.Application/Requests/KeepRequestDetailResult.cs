@@ -15,7 +15,7 @@ public sealed record KeepRequestDetailResult(
     string PageToken,
     DateTime? ExpiresAtUtc,
     DateTime CreatedAtUtc,
-    DateTime LastBusinessActivityAt,
+    DateTime? LastBusinessActivityAt,
     DateTime? LastCustomerActivityAt,
     DateTime? TerminatedAtUtc,
     string AttentionLevel,

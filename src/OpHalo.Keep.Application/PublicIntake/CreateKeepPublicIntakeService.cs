@@ -2,6 +2,7 @@ using OpHalo.Foundation.Application.Accounts.Access;
 using OpHalo.Foundation.Application.Accounts.Entitlements;
 using OpHalo.Keep.Application.Abstractions;
 using OpHalo.Keep.Application.Services;
+using OpHalo.Keep.Core.Domain;
 using OpHalo.Keep.Core.Entities;
 using OpHalo.Keep.Core.Errors;
 using OpHalo.SharedKernel.Abstractions;
@@ -67,7 +68,8 @@ public sealed class CreateKeepPublicIntakeService(
             return Result<CreateKeepPublicIntakeResult>.Failure(Unavailable);
 
         var primaryPhone = command.CustomerPhone.Trim();
-        var customer = await persistence.FindCustomerByPrimaryPhoneAsync(accountId, primaryPhone, ct);
+        var canonicalPhone = PhoneNormalizer.Normalize(primaryPhone);
+        var customer = await persistence.FindCustomerByCanonicalPhoneAsync(accountId, canonicalPhone, ct);
         if (customer is null)
             customer = KeepCustomer.Create(accountId, command.CustomerName, primaryPhone, command.CustomerEmail?.Trim());
         else
@@ -84,7 +86,7 @@ public sealed class CreateKeepPublicIntakeService(
             if (await persistence.PageTokenExistsAsync(pageToken, ct)) continue;
             if (await persistence.ReferenceCodeExistsAsync(accountId, referenceCode, ct)) continue;
 
-            var request = KeepRequest.Create(
+            var request = KeepRequest.CreateFromCustomerIntake(
                 accountId,
                 customer.Id,
                 command.CustomerName,

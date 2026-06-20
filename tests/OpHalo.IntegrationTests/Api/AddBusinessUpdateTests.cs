@@ -92,7 +92,7 @@ public sealed class AddBusinessUpdateTests : IClassFixture<KeepApiWebFactory>, I
         await db.SaveChangesAsync();
 
         // Primary request — Received, customer origin.
-        var request = KeepRequest.Create(
+        var request = KeepRequest.CreateFromCustomerIntake(
             _accountId, customer.Id,
             "Jane Smith", "0412345678", null,
             "Burst pipe in bathroom", "BIZUPD001", "token_bizupd_001", now, 60);
@@ -101,7 +101,7 @@ public sealed class AddBusinessUpdateTests : IClassFixture<KeepApiWebFactory>, I
             KeepRequestEvent.CreateRequestCreated(request.Id, _accountId, now));
 
         // Closed request — for terminal state test.
-        var closedRequest = KeepRequest.Create(
+        var closedRequest = KeepRequest.CreateFromCustomerIntake(
             _accountId, customer.Id,
             "Jane Smith", "0412345678", null,
             "Already resolved job", "BIZUPD002", "token_bizupd_002", now, 60);
@@ -380,7 +380,7 @@ public sealed class AddBusinessUpdateTests : IClassFixture<KeepApiWebFactory>, I
             var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
             var customer = KeepCustomer.Create(_accountId, "First Response Customer", "0411111111");
             db.Set<KeepCustomer>().Add(customer);
-            var req = KeepRequest.Create(
+            var req = KeepRequest.CreateFromCustomerIntake(
                 _accountId, customer.Id,
                 "First Response Customer", "0411111111", null,
                 "First response test request", "BIZFR001", "token_bizfr_001",

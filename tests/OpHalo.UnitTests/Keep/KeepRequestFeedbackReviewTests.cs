@@ -18,7 +18,7 @@ public class KeepRequestFeedbackReviewTests
     static KeepRequest EligibleRequest(DateTime? submittedAt = null)
     {
         var now = submittedAt ?? BaseTime;
-        var r = KeepRequest.Create(AccountId, CustomerId, "Alice", "555-0001", null, "Desc", "REF001",
+        var r = KeepRequest.CreateFromCustomerIntake(AccountId, CustomerId, "Alice", "555-0001", null, "Desc", "REF001",
             "tok_" + Guid.NewGuid().ToString("N"), now.AddHours(-48), 60);
         r.ChangeStatus(KeepRequestStatus.Resolved, null, ActorId, ActorName, now.AddHours(-24));
         r.ChangeStatus(KeepRequestStatus.Closed, null, ActorId, ActorName, now.AddHours(-20));
@@ -148,7 +148,7 @@ public class KeepRequestFeedbackReviewTests
     [Fact]
     public void MarkFeedbackReviewed_non_Closed_status_returns_unavailable()
     {
-        var r = KeepRequest.Create(AccountId, CustomerId, "Alice", "555-0001", null, "Desc", "REF002",
+        var r = KeepRequest.CreateFromCustomerIntake(AccountId, CustomerId, "Alice", "555-0001", null, "Desc", "REF002",
             "tok_" + Guid.NewGuid().ToString("N"), BaseTime, 60);
         // Status = Received, no feedback, no attention
         var result = r.MarkFeedbackReviewed(note: null, ActorId, ActorName, BaseTime);
@@ -160,7 +160,7 @@ public class KeepRequestFeedbackReviewTests
     [Fact]
     public void MarkFeedbackReviewed_Cancelled_returns_unavailable()
     {
-        var r = KeepRequest.Create(AccountId, CustomerId, "Alice", "555-0001", null, "Desc", "REF003",
+        var r = KeepRequest.CreateFromCustomerIntake(AccountId, CustomerId, "Alice", "555-0001", null, "Desc", "REF003",
             "tok_" + Guid.NewGuid().ToString("N"), BaseTime, 60);
         r.ChangeStatus(KeepRequestStatus.Cancelled, "Cancelling.", ActorId, ActorName, BaseTime);
 
@@ -174,7 +174,7 @@ public class KeepRequestFeedbackReviewTests
     public void MarkFeedbackReviewed_no_feedback_submitted_returns_unavailable()
     {
         // Closed but no feedback submitted
-        var r = KeepRequest.Create(AccountId, CustomerId, "Alice", "555-0001", null, "Desc", "REF004",
+        var r = KeepRequest.CreateFromCustomerIntake(AccountId, CustomerId, "Alice", "555-0001", null, "Desc", "REF004",
             "tok_" + Guid.NewGuid().ToString("N"), BaseTime.AddHours(-48), 60);
         r.ChangeStatus(KeepRequestStatus.Resolved, null, ActorId, ActorName, BaseTime.AddHours(-24));
         r.ChangeStatus(KeepRequestStatus.Closed, null, ActorId, ActorName, BaseTime.AddHours(-20));
@@ -188,7 +188,7 @@ public class KeepRequestFeedbackReviewTests
     [Fact]
     public void MarkFeedbackReviewed_positive_feedback_returns_unavailable()
     {
-        var r = KeepRequest.Create(AccountId, CustomerId, "Alice", "555-0001", null, "Desc", "REF005",
+        var r = KeepRequest.CreateFromCustomerIntake(AccountId, CustomerId, "Alice", "555-0001", null, "Desc", "REF005",
             "tok_" + Guid.NewGuid().ToString("N"), BaseTime.AddHours(-48), 60);
         r.ChangeStatus(KeepRequestStatus.Resolved, null, ActorId, ActorName, BaseTime.AddHours(-24));
         r.ChangeStatus(KeepRequestStatus.Closed, null, ActorId, ActorName, BaseTime.AddHours(-20));

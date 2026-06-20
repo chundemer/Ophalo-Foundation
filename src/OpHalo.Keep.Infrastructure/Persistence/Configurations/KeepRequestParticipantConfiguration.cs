@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using OpHalo.Foundation.Core.Entities.Accounts;
 using OpHalo.Foundation.Infrastructure.Persistence.Configurations;
 using OpHalo.Keep.Core.Entities;
 using OpHalo.Keep.Core.Entities.Enums;
@@ -52,5 +53,19 @@ internal sealed class KeepRequestParticipantConfiguration : BaseEntityConfigurat
 
         builder.HasIndex(x => new { x.AccountId, x.AccountUserId })
             .HasDatabaseName("ix_keep_request_participants_account_user");
+
+        // Composite FK — prevents a participant referencing a request from a different account.
+        builder.HasOne<KeepRequest>()
+            .WithMany()
+            .HasForeignKey(x => new { x.AccountId, x.RequestId })
+            .HasPrincipalKey(r => new { r.AccountId, r.Id })
+            .OnDelete(DeleteBehavior.Restrict);
+
+        // Composite AccountUser FK — prevents a participant referencing a user from a different account.
+        builder.HasOne<AccountUser>()
+            .WithMany()
+            .HasForeignKey(x => new { x.AccountId, x.AccountUserId })
+            .HasPrincipalKey(u => new { u.AccountId, u.Id })
+            .OnDelete(DeleteBehavior.Restrict);
     }
 }

@@ -67,7 +67,7 @@ public sealed class KeepCustomerPageTests : IClassFixture<KeepApiWebFactory>, IA
         db.Set<KeepCustomer>().Add(customer);
         await db.SaveChangesAsync();
 
-        var request = KeepRequest.Create(
+        var request = KeepRequest.CreateFromCustomerIntake(
             graph.Account.Id, customer.Id,
             "Jane Smith", "0412345678", null,
             "Burst pipe in bathroom", "PQRS7842", PageToken, now, 60);

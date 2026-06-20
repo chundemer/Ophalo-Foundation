@@ -80,7 +80,7 @@ public sealed class KeepRequestListQueryApiTests : IClassFixture<KeepApiWebFacto
         // Seed 3 open requests so pagination tests (limit=2) have two pages
         for (var i = 1; i <= 3; i++)
         {
-            var req = KeepRequest.Create(
+            var req = KeepRequest.CreateFromCustomerIntake(
                 accountId, customer.Id,
                 "Cursor Test Customer", "0400000001", null,
                 $"Pagination request {i}", $"4A-PAG-{i:D3}",

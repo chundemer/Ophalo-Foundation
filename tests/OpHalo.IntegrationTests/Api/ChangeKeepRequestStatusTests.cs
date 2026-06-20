@@ -99,7 +99,7 @@ public sealed class ChangeKeepRequestStatusTests : IClassFixture<KeepApiWebFacto
         await db.SaveChangesAsync();
 
         // Primary request — stays at Received for most tests.
-        var request = KeepRequest.Create(
+        var request = KeepRequest.CreateFromCustomerIntake(
             _accountId, customer.Id,
             "Jane Smith", "0412345678", null,
             "Burst pipe in bathroom", "STATUS001", "token_status_001", now, 60);
@@ -108,7 +108,7 @@ public sealed class ChangeKeepRequestStatusTests : IClassFixture<KeepApiWebFacto
             KeepRequestEvent.CreateRequestCreated(request.Id, _accountId, now));
 
         // Closed request — for terminal state test.
-        var closedRequest = KeepRequest.Create(
+        var closedRequest = KeepRequest.CreateFromCustomerIntake(
             _accountId, customer.Id,
             "Jane Smith", "0412345678", null,
             "Already resolved job", "STATUS002", "token_status_002", now, 60);
@@ -125,7 +125,7 @@ public sealed class ChangeKeepRequestStatusTests : IClassFixture<KeepApiWebFacto
         if (e2.IsSuccess && e2.Value.StatusChangedEvent is not null) db.Set<KeepRequestEvent>().Add(e2.Value.StatusChangedEvent);
 
         // Resolved request with active business-waiting attention — for B2-delta terminal tests.
-        var resolvedWithAttention = KeepRequest.Create(
+        var resolvedWithAttention = KeepRequest.CreateFromCustomerIntake(
             _accountId, customer.Id,
             "Jane Smith", "0412345678", null,
             "Long-running job", "STATUS003", "token_status_003", now, 60);

@@ -25,12 +25,12 @@ public interface IKeepIntakePersistence
         Guid accountId, CancellationToken ct);
 
     /// <summary>
-    /// Returns the tracked customer for (accountId, primaryPhone), or null
+    /// Returns the tracked customer for (accountId, canonicalPhone), or null
     /// if no customer exists yet. Tracked (not AsNoTracking) so a subsequent
     /// UpdateContactInfo call is persisted by CommitPublicIntakeAsync.
     /// </summary>
-    Task<KeepCustomer?> FindCustomerByPrimaryPhoneAsync(
-        Guid accountId, string primaryPhone, CancellationToken ct);
+    Task<KeepCustomer?> FindCustomerByCanonicalPhoneAsync(
+        Guid accountId, string canonicalPhone, CancellationToken ct);
 
     /// <summary>
     /// Returns the response policy for the account, or null if no policy row exists.

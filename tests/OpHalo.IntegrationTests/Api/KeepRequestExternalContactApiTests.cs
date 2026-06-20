@@ -140,7 +140,7 @@ public sealed class KeepRequestExternalContactApiTests : IClassFixture<KeepApiWe
             db, _accountId, customer.Id, "EC-PGE", _customerPageToken, now);
 
         // Closed (terminal) request.
-        var closedRequest = KeepRequest.Create(
+        var closedRequest = KeepRequest.CreateFromCustomerIntake(
             _accountId, customer.Id,
             "John Customer", "0400000001", null,
             "Completed job", "EC-CLO", "ec_closed_token", now, 60);
@@ -503,7 +503,7 @@ public sealed class KeepRequestExternalContactApiTests : IClassFixture<KeepApiWe
         OpHaloDbContext db, Guid accountId, Guid customerId,
         string referenceCode, string pageToken, DateTime now)
     {
-        var request = KeepRequest.Create(
+        var request = KeepRequest.CreateFromCustomerIntake(
             accountId, customerId,
             "John Customer", "0400000001", null,
             "Test job", referenceCode, pageToken, now, 60);

@@ -499,7 +499,7 @@ public sealed class GetKeepRequestListService(
             1 or 2 or 4 => (row.Attention.NextAttentionAtUtc ?? row.Attention.FirstResponseDueAtUtc)?.Ticks,
             3            => row.Attention.AttentionSinceUtc?.Ticks,
             5            => row.Attention.FirstResponseDueAtUtc?.Ticks,
-            _            => (long?)row.LastBusinessActivityAtUtc.Ticks
+            _            => (long?)(row.LastBusinessActivityAtUtc ?? row.LastCustomerActivityAtUtc ?? row.CreatedAtUtc).Ticks
         };
 
     private static int CompareSecondaryTicks(long? rowTick, long? cursorTick, bool descending)
@@ -912,7 +912,8 @@ public sealed class GetKeepRequestListService(
 
                 5 => CompareNullableDatesAsc(x.Attention.FirstResponseDueAtUtc, y.Attention.FirstResponseDueAtUtc),
 
-                _ => y.LastBusinessActivityAtUtc.CompareTo(x.LastBusinessActivityAtUtc)
+                _ => (y.LastBusinessActivityAtUtc ?? y.LastCustomerActivityAtUtc ?? y.CreatedAtUtc)
+                        .CompareTo(x.LastBusinessActivityAtUtc ?? x.LastCustomerActivityAtUtc ?? x.CreatedAtUtc)
             };
 
             return secondaryCmp != 0 ? secondaryCmp : x.Id.CompareTo(y.Id);

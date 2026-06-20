@@ -112,7 +112,7 @@ public sealed class KeepRequestListB5Tests : IClassFixture<KeepApiWebFactory>, I
         await db.SaveChangesAsync();
 
         // --- 1. Received request (active, first-response pending) ---
-        var receivedRequest = KeepRequest.Create(
+        var receivedRequest = KeepRequest.CreateFromCustomerIntake(
             _accountId, customer.Id,
             "Jane Smith", "0412345678", "jane@example.com",
             "Fix leak", "B5-RCV-001", "b5_rcv_page_token", now, 60);
@@ -123,7 +123,7 @@ public sealed class KeepRequestListB5Tests : IClassFixture<KeepApiWebFactory>, I
         _receivedRequestId = receivedRequest.Id;
 
         // --- 2. Resolved request (included, ranked as resolved_quiet) ---
-        var resolvedRequest = KeepRequest.Create(
+        var resolvedRequest = KeepRequest.CreateFromCustomerIntake(
             _accountId, customer.Id,
             "Jane Smith", "0412345678", null,
             "Complete job", "B5-RSV-001", "b5_rsv_page_token", now, 60);
@@ -138,7 +138,7 @@ public sealed class KeepRequestListB5Tests : IClassFixture<KeepApiWebFactory>, I
         await db.SaveChangesAsync();
 
         // --- 3. Closed (normal, no attention — excluded from default list) ---
-        var closedNormalRequest = KeepRequest.Create(
+        var closedNormalRequest = KeepRequest.CreateFromCustomerIntake(
             _accountId, customer.Id,
             "Jane Smith", "0412345678", null,
             "Done job", "B5-CLN-001", "b5_cln_page_token", now, 60);
@@ -158,7 +158,7 @@ public sealed class KeepRequestListB5Tests : IClassFixture<KeepApiWebFactory>, I
         await db.SaveChangesAsync();
 
         // --- 4. Closed with unresolved feedback (Owner/Admin only) ---
-        var closedUnresolvedRequest = KeepRequest.Create(
+        var closedUnresolvedRequest = KeepRequest.CreateFromCustomerIntake(
             _accountId, customer.Id,
             "Jane Smith", "0412345678", null,
             "Another job", "B5-CLU-001", "b5_clu_page_token", now, 60);
@@ -185,7 +185,7 @@ public sealed class KeepRequestListB5Tests : IClassFixture<KeepApiWebFactory>, I
         _closedUnresolvedRequestId = closedUnresolvedRequest.Id;
 
         // --- 5. Cancelled request (excluded from default list) ---
-        var cancelledRequest = KeepRequest.Create(
+        var cancelledRequest = KeepRequest.CreateFromCustomerIntake(
             _accountId, customer.Id,
             "Jane Smith", "0412345678", null,
             "Cancelled job", "B5-CAN-001", "b5_can_page_token", now, 60);

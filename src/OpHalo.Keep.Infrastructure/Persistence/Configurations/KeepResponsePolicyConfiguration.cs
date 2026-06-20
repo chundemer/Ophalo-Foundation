@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using OpHalo.Foundation.Core.Entities.Accounts;
 using OpHalo.Foundation.Infrastructure.Persistence.Configurations;
 using OpHalo.Keep.Core.Entities;
 
@@ -29,5 +30,11 @@ internal sealed class KeepResponsePolicyConfiguration : BaseEntityConfiguration<
         builder.HasIndex(x => x.AccountId)
             .IsUnique()
             .HasDatabaseName("ix_keep_response_policies_account_id");
+
+        // FK — restricts deletion of an account that has a response policy.
+        builder.HasOne<Account>()
+            .WithMany()
+            .HasForeignKey(x => x.AccountId)
+            .OnDelete(DeleteBehavior.Restrict);
     }
 }

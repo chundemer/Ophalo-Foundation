@@ -97,6 +97,14 @@ internal sealed class AccountUserConfiguration : BaseEntityConfiguration<Account
             .HasDatabaseName("ix_account_users_invite_token_hash");
 
         // -----------------------------------------------------------------------
+        // Alternate key — supports composite FKs from Keep entities that must
+        // reference (AccountId, AccountUserId) to prevent cross-account user refs.
+        // -----------------------------------------------------------------------
+
+        builder.HasAlternateKey(x => new { x.AccountId, x.Id })
+            .HasName("ak_account_users_account_id");
+
+        // -----------------------------------------------------------------------
         // Relationships
         // -----------------------------------------------------------------------
 

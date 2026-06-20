@@ -70,7 +70,7 @@ public sealed class KeepRequestDetailTests : IClassFixture<KeepApiWebFactory>, I
         db.Set<KeepCustomer>().Add(customer);
         await db.SaveChangesAsync();
 
-        var request = KeepRequest.Create(
+        var request = KeepRequest.CreateFromCustomerIntake(
             _accountId, customer.Id,
             "Jane Smith", "0412345678", null,
             "Burst pipe in bathroom", "PQRS7842", "seed_page_token_detail", now, 60);

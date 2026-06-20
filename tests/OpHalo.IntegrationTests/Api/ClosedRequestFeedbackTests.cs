@@ -85,7 +85,7 @@ public sealed class ClosedRequestFeedbackTests : IClassFixture<KeepApiWebFactory
         db.Set<KeepCustomer>().Add(customer);
         await db.SaveChangesAsync();
 
-        var request = KeepRequest.Create(
+        var request = KeepRequest.CreateFromCustomerIntake(
             graph.Account.Id, customer.Id,
             "Jane Smith", "0412345678", null,
             "Burst pipe in bathroom", "FB001", PageToken, now, 60);

@@ -34,7 +34,7 @@ public sealed class KeepRequest : BaseEntity
     // Lifecycle timestamps.
     public DateTime? ExpiresAtUtc { get; private set; }
     public DateTime? TerminatedAtUtc { get; private set; }      // ADR-096: covers Closed and Cancelled
-    public DateTime LastBusinessActivityAt { get; private set; }
+    public DateTime? LastBusinessActivityAt { get; private set; }
     public DateTime? LastCustomerActivityAt { get; private set; }
 
     public bool IsTerminal =>
@@ -795,8 +795,51 @@ public sealed class KeepRequest : BaseEntity
             _ => false
         };
 
-    // ADR-095: origin optional, defaults to Customer (current public intake path).
-    public static KeepRequest Create(
+    /// <summary>
+    /// Creates a request submitted by a customer through public intake.
+    /// Sets LastCustomerActivityAt = nowUtc; LastBusinessActivityAt is null until the business acts.
+    /// Wires FirstResponseDueAtUtc from the account's response policy.
+    /// </summary>
+    public static KeepRequest CreateFromCustomerIntake(
+        Guid accountId,
+        Guid customerId,
+        string customerName,
+        string customerPhone,
+        string? customerEmail,
+        string description,
+        string referenceCode,
+        string pageToken,
+        DateTime nowUtc,
+        int firstResponseTargetMinutes)
+    {
+        if (firstResponseTargetMinutes <= 0)
+            throw new ArgumentException("First response target minutes must be positive.", nameof(firstResponseTargetMinutes));
+
+        return CreateCore(accountId, customerId, customerName, customerPhone, customerEmail,
+            description, referenceCode, pageToken, nowUtc, firstResponseTargetMinutes,
+            KeepRequestOrigin.Customer);
+    }
+
+    /// <summary>
+    /// Creates a request entered by authenticated business staff (phone, voicemail, walk-in, etc.).
+    /// Sets LastBusinessActivityAt = nowUtc; LastCustomerActivityAt is null.
+    /// No first-response timer — business-created requests do not start the customer-contact clock.
+    /// </summary>
+    public static KeepRequest CreateByBusiness(
+        Guid accountId,
+        Guid customerId,
+        string customerName,
+        string customerPhone,
+        string? customerEmail,
+        string description,
+        string referenceCode,
+        string pageToken,
+        DateTime nowUtc) =>
+        CreateCore(accountId, customerId, customerName, customerPhone, customerEmail,
+            description, referenceCode, pageToken, nowUtc, firstResponseTargetMinutes: 0,
+            KeepRequestOrigin.Business);
+
+    private static KeepRequest CreateCore(
         Guid accountId,
         Guid customerId,
         string customerName,
@@ -807,7 +850,7 @@ public sealed class KeepRequest : BaseEntity
         string pageToken,
         DateTime nowUtc,
         int firstResponseTargetMinutes,
-        KeepRequestOrigin origin = KeepRequestOrigin.Customer)
+        KeepRequestOrigin origin)
     {
         if (accountId == Guid.Empty)
             throw new ArgumentException("Account ID is required.", nameof(accountId));
@@ -823,10 +866,6 @@ public sealed class KeepRequest : BaseEntity
             throw new ArgumentException("Reference code is required.", nameof(referenceCode));
         if (string.IsNullOrWhiteSpace(pageToken))
             throw new ArgumentException("Page token is required.", nameof(pageToken));
-        if (firstResponseTargetMinutes <= 0)
-            throw new ArgumentException("First response target minutes must be positive.", nameof(firstResponseTargetMinutes));
-        if (!Enum.IsDefined(origin))
-            throw new ArgumentException($"Unknown KeepRequestOrigin: {origin}.", nameof(origin));
 
         return new KeepRequest
         {
@@ -840,11 +879,11 @@ public sealed class KeepRequest : BaseEntity
             ReferenceCode = referenceCode.Trim(),
             PageToken = pageToken.Trim(),
             Origin = origin,
-            LastBusinessActivityAt = nowUtc,
+            LastCustomerActivityAt = origin == KeepRequestOrigin.Customer ? nowUtc : null,
+            LastBusinessActivityAt = origin == KeepRequestOrigin.Business ? nowUtc : null,
             FirstResponseDueAtUtc = origin == KeepRequestOrigin.Customer
                 ? nowUtc.AddMinutes(firstResponseTargetMinutes)
                 : null,
-            // ADR-098: attention starts at None for B1-α; B2 wires business-waiting behavior.
             AttentionLevel = AttentionLevel.None,
             WaitingDirection = WaitingDirection.None,
             PriorityBand = PriorityBand.Standard

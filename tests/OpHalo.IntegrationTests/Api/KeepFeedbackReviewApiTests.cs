@@ -135,7 +135,7 @@ public sealed class KeepFeedbackReviewApiTests : IClassFixture<KeepApiWebFactory
         // Helper: create a closed request with negative feedback (unreviewed unless noted).
         KeepRequest MakeClosedNegative(string refCode, string pageToken)
         {
-            var r = KeepRequest.Create(
+            var r = KeepRequest.CreateFromCustomerIntake(
                 _accountId, customer.Id,
                 "Test Customer", "0400000001", null,
                 "Test job", refCode, pageToken, now, 60);
@@ -189,7 +189,7 @@ public sealed class KeepFeedbackReviewApiTests : IClassFixture<KeepApiWebFactory
         _noteTooLongRequestId = noteTooLong.Id;
 
         // Positive feedback: FeedbackReviewUnavailable.
-        var positiveR = KeepRequest.Create(
+        var positiveR = KeepRequest.CreateFromCustomerIntake(
             _accountId, customer.Id,
             "Test Customer", "0400000001", null,
             "Positive job", "FRX-POS", "frx_pos_page", now, 60);
@@ -203,7 +203,7 @@ public sealed class KeepFeedbackReviewApiTests : IClassFixture<KeepApiWebFactory
         _positiveFeedbackRequestId = positiveR.Id;
 
         // No feedback: closed, no feedback submitted.
-        var noFeedback = KeepRequest.Create(
+        var noFeedback = KeepRequest.CreateFromCustomerIntake(
             _accountId, customer.Id,
             "Test Customer", "0400000001", null,
             "No feedback job", "FRX-NF", "frx_nf_page", now, 60);

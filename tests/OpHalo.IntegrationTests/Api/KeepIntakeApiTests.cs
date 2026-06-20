@@ -84,7 +84,7 @@ public sealed class KeepIntakeApiTests : IClassFixture<KeepApiWebFactory>, IAsyn
         db.Set<KeepCustomer>().Add(customer);
         await db.SaveChangesAsync();
 
-        var seededRequest = KeepRequest.Create(
+        var seededRequest = KeepRequest.CreateFromCustomerIntake(
             _accountId, customer.Id,
             "Jane Smith", "0412345678", null,
             "Burst pipe in bathroom", "PQRS7842", "seed_page_token_abc", now, 60);

@@ -39,10 +39,10 @@ public sealed class KeepIntakePersistence(OpHaloDbContext dbContext) : IKeepInta
             entitlements.PastDueGraceEndsAtUtc);
     }
 
-    public Task<KeepCustomer?> FindCustomerByPrimaryPhoneAsync(
-        Guid accountId, string primaryPhone, CancellationToken ct) =>
+    public Task<KeepCustomer?> FindCustomerByCanonicalPhoneAsync(
+        Guid accountId, string canonicalPhone, CancellationToken ct) =>
         dbContext.Set<KeepCustomer>()
-            .FirstOrDefaultAsync(c => c.AccountId == accountId && c.PrimaryPhone == primaryPhone, ct);
+            .FirstOrDefaultAsync(c => c.AccountId == accountId && c.CanonicalPhone == canonicalPhone, ct);
 
     public Task<KeepResponsePolicy?> GetResponsePolicyAsync(Guid accountId, CancellationToken ct) =>
         dbContext.Set<KeepResponsePolicy>()

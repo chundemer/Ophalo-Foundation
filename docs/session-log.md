@@ -26,6 +26,374 @@ and carry-forward notes.
 - report any discovered bugs, gaps, or decision conflicts in `docs/session-log.md` instead of
   silently guessing policy.
 
+## Pre-Session 6 Gap Resolution — IN PROGRESS
+
+**Purpose:** Correct Build Log 047's security, integrity, workflow, and pilot-readiness gaps before
+validating or coding Phase 8-B5 Session 6.
+
+**Source of truth:** `docs/build-log/047-pre-session-6-phase-7-session-5-gap-audit.md`
+
+**Next free ADR:** ADR-306 (ADR-301–305 consumed by G1)
+
+**Locked decisions:** ADR-295 through ADR-305. In particular:
+
+- one durable public intake link is provisioned through the Keep setup boundary after the business
+  profile exists; it is not rotated automatically;
+- Owner/Admin may pause intake without changing the URL; replacement is exceptional and invalidates
+  the old URL with a stale-link warning;
+- `Spam` and `Test` classification is required before pilot but remains in its later V1 slice; do
+  not pull it into these gap sessions;
+- terminal customer pages expire 30 days from `Closed`/`Cancelled`; Session 6 implements close and
+  the corrected cancellation path applies the same rule; active/Resolved pages never expire;
+- remove the undeployed Continuity intake alias and ignored `emailNotificationsEnabled` field;
+- Keep relationships use account-safe foreign keys with restricted deletion;
+- positive feedback comments follow request-row visibility; negative comments remain
+  Owner/Admin-only.
+
+**Baseline:** Session 5D recorded 847/847 passing tests (494 unit, 14 architecture, 339 integration).
+G1 raised this to 860 (503 unit, 14 arch, 343 integration).
+
+**Next free ADR:** ADR-306
+
+**Required order:** G1 → G2 → G3 → G4 → G5 → G6 → G7 → G8. Do not begin Session 6 until G8 records the
+final green gate. A session may fix a directly blocking defect inside its named scope; broader
+discoveries must be recorded and handed forward rather than silently expanding the session.
+
+### Gap Session G1 — Keep schema, identity, and creation semantics — COMPLETE
+
+**Tests:** 860 total (503 unit · 14 arch · 343 integration) — all green
+**ADRs:** ADR-301 to ADR-305
+**Exit record:** `docs/build-log/048-gap-g1-keep-account-safe-schema.md`
+**Migration:** `20260619235301_KeepG1AccountSafeSchema`
+
+**Design decisions (ADR-301–305):**
+- D1 (ADR-301): Composite alternate keys on `KeepCustomer (AccountId, Id)`, `KeepRequest (AccountId, Id)`, `AccountUser (AccountId, Id)` enable account-safe composite FK references
+- D2 (ADR-302): Composite AccountUser FKs (nullable, Restrict) on KeepRequest (3 user cols), KeepRequestEvent (4 user cols), KeepRequestParticipant (AccountUserId). "Stale participant" now uses an ineligible-role (Viewer) AccountUser, not a missing one
+- D3 (ADR-303): `LastBusinessActivityAt` is nullable; customer-origin sets customer activity, business-origin is inverse; ranking fallback `LastBusinessActivityAt ?? LastCustomerActivityAt ?? CreatedAtUtc`
+- D4 (ADR-304): `PhoneNormalizer.Normalize` strips non-ASCII digits, 7–15 digit bounds enforced; stores `PrimaryPhone` (display) + `CanonicalPhone` (identity); unique index on `(AccountId, CanonicalPhone)`
+- D5 (ADR-305): `KeepRequest.Create` removed; replaced by `CreateFromCustomerIntake` (10 params) and `CreateByBusiness` (9 params, no first-response timer)
+
+**Files changed:**
+
+| File | Change |
+|---|---|
+| `src/OpHalo.Keep.Core/Domain/PhoneNormalizer.cs` | New — Normalize + IsValidLength |
+| `src/OpHalo.Keep.Core/Entities/KeepCustomer.cs` | CanonicalPhone field + domain guard |
+| `src/OpHalo.Keep.Core/Entities/KeepRequest.cs` | Named factories, nullable LastBusinessActivityAt |
+| `src/OpHalo.Foundation.Infrastructure/.../AccountUserConfiguration.cs` | HasAlternateKey (AccountId, Id) |
+| `src/OpHalo.Keep.Infrastructure/.../KeepPublicIntakeLinkConfiguration.cs` | FK to accounts, partial unique active index |
+| `src/OpHalo.Keep.Infrastructure/.../KeepCustomerConfiguration.cs` | FK, AK, CanonicalPhone (max 15), renamed unique index |
+| `src/OpHalo.Keep.Infrastructure/.../KeepRequestConfiguration.cs` | FK to accounts, composite FK to KeepCustomer, AK, nullable activity, AccountUser FKs |
+| `src/OpHalo.Keep.Infrastructure/.../KeepRequestEventConfiguration.cs` | Composite FK to KeepRequest, 4× AccountUser FKs |
+| `src/OpHalo.Keep.Infrastructure/.../KeepRequestParticipantConfiguration.cs` | Composite FK to KeepRequest, composite AccountUser FK |
+| `src/OpHalo.Keep.Infrastructure/.../KeepResponsePolicyConfiguration.cs` | FK to accounts |
+| `src/OpHalo.Keep.Application/PublicIntake/IKeepIntakePersistence.cs` | Renamed to `FindCustomerByCanonicalPhoneAsync` |
+| `src/OpHalo.Keep.Infrastructure/Persistence/KeepIntakePersistence.cs` | Renamed + queries on CanonicalPhone |
+| `src/OpHalo.Keep.Application/PublicIntake/CreateKeepPublicIntakeService.cs` | PhoneNormalizer before lookup; CreateFromCustomerIntake |
+| `src/OpHalo.Keep.Application/Requests/KeepRequestSummary.cs` | LastBusinessActivityAtUtc → DateTime? |
+| `src/OpHalo.Keep.Application/Requests/KeepRequestDetailResult.cs` | LastBusinessActivityAt → DateTime? |
+| `src/OpHalo.Keep.Application/Requests/GetKeepRequestListService.cs` | Ranking fallback for sort + cursor |
+| All integration/unit test files | KeepRequest.Create → CreateFromCustomerIntake / CreateByBusiness; stale participant seed fixed |
+| `tests/OpHalo.UnitTests/Keep/KeepCustomerTests.cs` | 9 new canonical phone + length tests |
+| `tests/OpHalo.UnitTests/Keep/KeepRequestTests.cs` | Updated helper; new origin-aware activity tests |
+| `tests/OpHalo.IntegrationTests/Persistence/KeepPersistenceProofTests.cs` | Rewritten with two-phase account seed; 10 proof tests |
+| `tests/OpHalo.IntegrationTests/Api/KeepRequestParticipationApiTests.cs` | _viewerAccountUserId field; stale seed uses Viewer not Guid.NewGuid |
+| `src/OpHalo.Foundation.Infrastructure/Migrations/20260619235301_KeepG1AccountSafeSchema.cs` | Generated migration |
+
+**Deferred:** `KeepRequest.FirstResponseEventId → KeepRequestEvent.Id` FK — circular dependency; document and address when first-response-event assignment is implemented.
+
+### Gap Session G2 — Public-intake validation and concurrent customer recovery — PLANNED
+
+**Findings:** GAP-007, GAP-008, GAP-009; completes application usage of GAP-006/GAP-010
+
+**Goal:** Ensure malformed or concurrent public submissions never become avoidable 500s or damage
+known customer data.
+
+**Implementation scope:**
+
+1. Add stable application/API validation for trimmed required fields, storage maxima (name 200,
+   phone 50 submitted characters unless the G1 model deliberately narrows it, email 320,
+   description 4000), canonical phone digit bounds, and email syntax when supplied.
+2. Validation errors return explicit `400` responses without revealing account/token state and
+   without database mutation. Public gate failures retain their collapsed unavailable contract.
+3. Preserve an existing customer email when a later anonymous submission omits/blank-submits email.
+   Replace only with a nonblank valid email. Anonymous omission is never a clear-email command.
+4. Handle the named canonical-customer unique violation separately from page-token/reference-code
+   collisions: roll back the failed transaction, clear failed tracked state, re-read the winning
+   customer, apply safe contact-update rules, and retry request/event persistence with a small
+   explicit bound.
+5. Never auto-retry user intent after an unrelated database failure. Do not weaken the unique index
+   or serialize all intake globally.
+6. Ensure customer-origin creation writes correct activity semantics from G1.
+
+**Required tests:**
+
+- HTTP matrix for blank/whitespace values, every maximum and maximum+1, malformed optional email,
+  conservative phone failures, no-mutation failures, and collapsed invalid-token behavior;
+- repeat intake preserves known email when omitted and updates it when a valid nonblank replacement
+  is supplied;
+- equivalent formatted phones reuse one customer;
+- two genuinely concurrent submissions for a previously unseen canonical phone both succeed as
+  separate requests attached to one customer against PostgreSQL;
+- regression tests distinguish customer-identity, page-token, and reference-code unique violations;
+- full suite green.
+
+**Non-goals:** Honeypot/Turnstile, SMS verification, spam scoring, fuzzy customer matching, address
+identity, and `Spam`/`Test` classification.
+
+### Gap Session G3 — Keep onboarding setup, durable intake controls, and manual intake — PLANNED
+
+**Findings:** GAP-001, GAP-002, GAP-014
+**ADRs:** ADR-295, ADR-298
+
+**Goal:** Let a real account obtain its durable intake URL and let authenticated staff capture phone,
+voicemail, referral, walk-in, and other business-origin requests without database seeding.
+
+**Intake-link contract:**
+
+1. Add an authenticated, idempotent Keep onboarding/setup operation that ensures the account's
+   single active link exists after the business profile/name is established. Foundation domain and
+   registration services must not depend directly on Keep; the client/onboarding composition calls
+   the Keep setup boundary automatically after authentication.
+2. Owner/Admin can read setup/status, create/ensure the initial link, pause, resume, and exceptionally
+   replace it. Setup controls remain usable in OffSeason, while public intake stays unavailable.
+3. Return the raw token/full share URL only when initially created or replaced. Store only its hash.
+   Status responses must never pretend the raw URL can be reconstructed from storage.
+4. Pause/resume retains the same token and URL. Permanent replacement atomically invalidates the old
+   token, creates the successor, returns the new URL once, and exposes an explicit warning contract
+   that old printed/shared links are now stale. Do not label ordinary UI behavior "revoke."
+5. Generate the stored slug only after business name exists. It is display/routing context, never
+   authority; business-name changes must not invalidate an existing URL. Branded frontend routes
+   remain outside V1 per ADR-288.
+6. Resolve duplicate/concurrent ensure calls idempotently under the G1 one-active-link constraint.
+
+**Manual-create contract:**
+
+1. Add one authenticated business-created request workflow for Owner/Admin/Operator; Viewer is
+   forbidden. Account and actor come only from the authenticated session.
+2. Reuse G1/G2 customer normalization, matching, validation, safe contact updates, and bounded
+   customer-race recovery. Do not fork a second identity implementation.
+3. Persist `Origin=Business`, business activity at creation, no fabricated customer activity, and no
+   false customer-first-response timer at creation.
+4. Create the normal request-created event with authenticated actor metadata and return request
+   detail plus the customer page token/URL contract needed by the operator.
+5. Respect access/feature/permission/OffSeason write policy. Do not add scheduling, estimating,
+   dispatch, CRM, or job-management behavior.
+
+**Legacy cleanup:**
+
+- remove `/continuity/public-intake/...` and its tests;
+- remove `emailNotificationsEnabled` from the public request DTO and tests;
+- retain only the canonical Keep route; do not introduce replacement compatibility aliases.
+
+**Required tests:**
+
+- account/profile → idempotent Keep setup → public request end-to-end;
+- Owner/Admin authorization, Operator/Viewer restrictions on setup, account isolation, OffSeason
+  setup versus public-submit behavior;
+- create/ensure concurrency, pause/resume same-token behavior, replacement old-token rejection, and
+  raw token never persisted or returned by status;
+- manual creation by each allowed/forbidden role, account derivation, origin/activity/first-response
+  semantics, customer reuse, concurrent first-customer behavior, and OffSeason denial;
+- removed alias returns 404 and removed request field is rejected under the API's unknown-field
+  posture (or explicitly proven ignored by serializer only if global JSON behavior cannot reject it;
+  record the exact contract rather than guessing);
+- full suite green.
+
+### Gap Session G4 — Shared request-row authorization — PLANNED
+
+**Finding:** GAP-003
+
+**Goal:** Make one server-authoritative row policy govern lists, counts, detail, and every request
+write before Session 6 adds more queues and destructive actions.
+
+**Locked policy:**
+
+- Owner/Admin: account-wide access under normal account/feature/permission gates;
+- Operator: active Responsible, active Watching, or intentionally eligible unassigned/Available
+  request only;
+- Viewer: preserve the already locked explicit read-only policy; do not accidentally grant writes;
+- cross-account and same-account-but-invisible direct IDs fail closed as Not Found;
+- action-specific rules may be narrower than row visibility, but never broader.
+
+**Implementation scope:**
+
+1. Introduce one shared request-row access policy/projection used by persistence/application paths
+   for default/list views, counts, detail, and all existing writes.
+2. Treat stale/detached/ineligible participation consistently with the established Session 3/4
+   routing rules. Do not make stale participation a hidden authorization grant.
+3. Preserve intentional Available discovery and self-assignment behavior without turning all
+   unassigned rows into unrestricted mutation targets.
+4. Keep account identifiers server-derived and prevent existence leakage through direct IDs.
+5. Recompute all action metadata through the same policy; clients must not receive actions that the
+   endpoint will reject.
+
+**Required tests:**
+
+- direct-ID HTTP tests—not list-only tests—for another Operator's assigned request, watching,
+  responsible, eligible unassigned, stale participant, detached participant, cross-account, and
+  Viewer cases;
+- every existing request mutation is covered at least once for invisible-row denial;
+- list rows, view counts, detail availability, and action flags agree for the same fixtures;
+- Owner/Admin account-wide behavior remains intact;
+- full suite green.
+
+**Exit record:** Name the single policy entry point and enumerate every read/write service migrated
+to it. Any service left outside it blocks G4 completion.
+
+### Gap Session G5 — Entity-wide KeepRequest optimistic concurrency — PLANNED
+
+**Finding:** GAP-004; closes DEF-074 after implementation
+
+**Goal:** Prevent stale business actions from overwriting newer customer/business state, especially
+before Session 6 close/cancel/review actions.
+
+**Implementation scope:**
+
+1. Add one database-managed optimistic concurrency token to `KeepRequest` (prefer PostgreSQL `xmin`
+   if supported cleanly by the repository's pinned EF/Npgsql versions; otherwise use one explicit
+   equivalent consistently). Do not build a feedback-only concurrency patch.
+2. Expose an opaque `version` on list/detail results wherever consequential actions are offered.
+   The external contract must not expose provider-specific implementation details.
+3. Require an expected version for destructive/final state-changing commands and define the shared
+   command contract that Session 6 close/cancel will use. Bring existing consequential writes into
+   the same pattern where stale user intent can overwrite state; document any deliberately excluded
+   append-only operation.
+4. Map `DbUpdateConcurrencyException` to stable `409 RequestChanged`. Never automatically retry user
+   intent. Return enough safe information for a client to refetch; preserving an unsent client draft
+   remains frontend work.
+5. Ensure customer writes participate in the same entity token so activity arriving after an
+   operator view invalidates a stale consequential command.
+
+**Required tests:**
+
+- EF/persistence proof that two loaded copies cannot both update successfully;
+- HTTP stale-version tests for representative business writes and customer-activity-versus-business
+  action races;
+- stable 409 code/shape tests and no unintended secondary events on conflict;
+- sequential valid writes return a new opaque version;
+- current sequential duplicate feedback-review semantics remain distinct from true concurrency
+  conflict;
+- full suite green.
+
+**Non-goals:** Automatic merge/retry, distributed locks, event sourcing, client draft UI, or a
+provider-specific version field in the public API.
+
+### Gap Session G6 — Cancelled customer-page expiry correction — PLANNED
+
+**Finding:** GAP-011
+**ADR:** ADR-297
+
+**Goal:** Ensure the existing cancellation path starts the locked customer-page retention window,
+without pulling Session 6 closeout behavior forward.
+
+**Implementation scope:**
+
+1. When the business transitions a request to `Cancelled`, atomically set
+   `ExpiresAtUtc = nowUtc + 30 days` alongside `TerminatedAtUtc`, terminal attention cleanup, and the
+   existing cancellation event.
+2. Cancellation must use the G4 row policy and G5 expected-version contract. A stale cancellation
+   returns `409 RequestChanged` without changing status, expiry, attention, or history.
+3. Keep the existing required customer-visible cancellation message and terminal customer-page
+   read-only behavior. The page remains safely readable until expiry, then returns the established
+   `410` tombstone context.
+4. Do not implement Session 6's dedicated close command, ready-to-close queue, close-and-next,
+   navigation, or closeout warnings here. Session 6 must apply the same 30-day rule when its close
+   path is implemented and must validate whether terminal commands move out of the generic status
+   endpoint as part of its already locked ADR-089 contract.
+5. `Spam`/`Test` immediate customer-page disablement remains in the later V1 classification slice,
+   not this correction.
+
+**Required tests:**
+
+- cancellation sets expiry exactly 30 days from the injected/test clock and persists it with the
+  terminal state/event;
+- the cancelled page is readable but has no write actions before expiry and returns safe `410`
+  context at expiry;
+- stale-version cancellation has no side effects;
+- non-terminal transitions do not set expiry and active/Resolved pages ignore stale populated
+  expiry defensively per ADR-120;
+- full suite green.
+
+### Gap Session G7 — Feedback review hardening — PLANNED
+
+**Findings:** GAP-017, GAP-018, GAP-020; GAP-019 is carried to Session 6 navigation
+**ADR:** ADR-300; reaffirms ADR-263
+
+**Goal:** Remove the alternate feedback-clearing path, support structured recovery contact, and make
+feedback visibility match policy.
+
+**Implementation scope:**
+
+1. Domain-level generic acknowledgement must reject active `UnresolvedFeedback`; action metadata
+   must hide acknowledgement in that state. `Mark feedback reviewed` remains the only review
+   completion path.
+2. Allow Owner/Admin external-contact logs only on `Closed` requests with unreviewed negative
+   feedback and active `UnresolvedFeedback`. The log is internal-only, does not reopen/change status,
+   count first response, clear attention, mark reviewed, notify the customer, or become customer-page
+   history. All other terminal external-contact cases, including Cancelled, remain blocked.
+3. Positive feedback comments are visible to any authenticated user who passes the G4 row policy.
+   Full negative comments remain Owner/Admin-only; Operator/Viewer receive only already-approved safe
+   boolean/timestamp metadata.
+4. Correct ADR-282's status/source language now: navigation was not delivered in Session 5. Do not
+   create another mutation endpoint. Session 6 must include `feedback_review` in its shared stateless
+   next/previous context alongside closeout/status-check contexts.
+
+**Required tests:**
+
+- domain and HTTP regression tests proving generic acknowledgement cannot clear unresolved feedback;
+- action metadata matrix for acknowledgement and mark-reviewed;
+- external-contact role/state/effect matrix, including customer-page and timeline non-exposure;
+- Owner/Admin/Operator/Viewer positive-versus-negative comment visibility under G4 row access;
+- OffSeason behavior remains read-only/forbidden as previously locked;
+- full suite green.
+
+### Gap Session G8 — Edge hardening, ledger reconciliation, and completion gate — PLANNED
+
+**Findings:** GAP-012, GAP-013, GAP-021; records GAP-011/GAP-016 carry-forward
+
+**Goal:** Prove the public edge and documentation are safe and accurate, then establish the only
+allowed entry gate into Session 6.
+
+**Implementation scope:**
+
+1. Configure forwarded-header/client-IP handling for the actual Cloudflare → Railway/application
+   chain. Trust forwarding headers only from configured trusted proxies/networks; untrusted peers
+   fall back to the connection address and cannot choose limiter partitions.
+2. Prove public-intake `10/minute`, zero-queue, `429` behavior in a production-like rate-limit test
+   host. Cover partition isolation and spoofed forwarding headers. Do not expand into Turnstile,
+   honeypots, SMS verification, or a general abuse platform.
+3. Ensure raw intake/page bearer tokens do not appear in application request logs, traces, analytics,
+   exceptions, or pilot-friction context. Prefer route templates/redacted values and safe IDs only
+   after authorization. Document the required Cloudflare/Railway access-log configuration that code
+   cannot enforce and verify what is locally testable.
+4. Reconcile decision statuses and sources only after behavior exists: Phase 7 ADRs, ADR-263,
+   ADR-282, ADR-295..300, DEF-007, DEF-074, and relevant deferred entries. Do not mark Session 6
+   navigation or close/cancel expiry implemented early.
+5. Record the locked 30-day terminal expiry as a required Session 6 close/corrected-cancel contract.
+6. Keep GAP-016 as a post-Session-6, pre-notification milestone: persistent local PostgreSQL setup,
+   zero-to-latest migration, seed/smoke/reset runbook, and eager startup configuration validation.
+7. Perform final self-review for accidental notification, realtime, archive, scheduling, SMS,
+   analytics, or spam-platform scope.
+
+**Completion gate:**
+
+- G1 migration inspected and migration-from-zero proven;
+- real account can ensure/pause/resume/replace intake and submit publicly;
+- allowed staff can create a business-origin request;
+- row access and OCC fail closed under direct-ID and race tests;
+- feedback review has no alternate clearing path;
+- trusted IP/429 and application token-redaction behavior are proven;
+- `dotnet build --verbosity minimal`, unit, architecture, integration, and full `dotnet test` pass;
+- exact final counts, commands, files, migration names, discovered fixes, and remaining external
+  deployment checks are recorded here;
+- G6 cancellation expiry behavior is proven and Session 6 retains close-path ownership;
+- only then mark the gap phase complete and begin a fresh validation of the Session 6 plan against
+  the corrected code/contracts.
+
+**Explicitly not part of G8:** implementing Session 6, local persistent DB milestone GAP-016,
+notifications/push, frontend UI, `Spam`/`Test` classification, or V1.1 anti-abuse controls.
+
 ## Phase 8-B5 Session 5C — List/Customer-Page OffSeason and UI-Ready Metadata — COMPLETE
 
 **Tests:** 847 total (494 unit · 14 arch · 339 integration) — all green
@@ -701,7 +1069,7 @@ Member management API + integration tests.
 - **Negative feedback on Closed raises attention** — intentional exception to terminal-no-attention posture (ADR-138).
 - **Feedback `WasResolved` is `bool?` at API layer** — null signals missing flag, validated before service. Domain method takes `bool`.
 - **Always use `dotnet build --verbosity minimal`** — `dotnet build -q` is passed to MSBuild as `-q` (question build) and fails; `--verbosity minimal` is the correct quiet mode.
-- **Next free ADR: ADR-295.**
+- **Next free ADR: ADR-301.**
 - **B4 mapper signature:** `ToDetailResult` now takes `AccountUserRole role`, `bool canOperate`, `Guid currentUserId` — all callers updated; write services pass `canOperate: true`.
 - **Participant `DisplayName`** computed in persistence (two-query approach retained; User.Name projected in the AccountUsers query via EF navigation LEFT JOIN).
 - **`KeepRequestStatus.Scheduled = 7`** — added to `MapStatus` in B5 service rewrite.

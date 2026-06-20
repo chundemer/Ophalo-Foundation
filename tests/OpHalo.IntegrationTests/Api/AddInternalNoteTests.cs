@@ -91,7 +91,7 @@ public sealed class AddInternalNoteTests : IClassFixture<KeepApiWebFactory>, IAs
         await db.SaveChangesAsync();
 
         // Primary request — active (Received).
-        var request = KeepRequest.Create(
+        var request = KeepRequest.CreateFromCustomerIntake(
             _accountId, customer.Id,
             "Jane Smith", "0412345678", null,
             "Burst pipe in bathroom", "NOTE001", "token_note_001", now, 60);
@@ -100,7 +100,7 @@ public sealed class AddInternalNoteTests : IClassFixture<KeepApiWebFactory>, IAs
             KeepRequestEvent.CreateRequestCreated(request.Id, _accountId, now));
 
         // Closed request — for D8 test (notes allowed after terminal).
-        var closedRequest = KeepRequest.Create(
+        var closedRequest = KeepRequest.CreateFromCustomerIntake(
             _accountId, customer.Id,
             "Jane Smith", "0412345678", null,
             "Already resolved job", "NOTE002", "token_note_002", now, 60);

@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using OpHalo.Foundation.Core.Entities.Accounts;
 using OpHalo.Foundation.Infrastructure.Persistence.Configurations;
 using OpHalo.Keep.Core.Entities;
 
@@ -104,5 +105,42 @@ internal sealed class KeepRequestEventConfiguration : BaseEntityConfiguration<Ke
 
         builder.HasIndex(x => x.AccountId)
             .HasDatabaseName("ix_keep_request_events_account_id");
+
+        // Composite FK — prevents an event referencing a request from a different account.
+        builder.HasOne<KeepRequest>()
+            .WithMany()
+            .HasForeignKey(x => new { x.AccountId, x.RequestId })
+            .HasPrincipalKey(r => new { r.AccountId, r.Id })
+            .OnDelete(DeleteBehavior.Restrict);
+
+        // Nullable composite AccountUser FKs — prevent actor/participant references from
+        // crossing account boundaries. Null values satisfy the constraint automatically.
+        builder.HasOne<AccountUser>()
+            .WithMany()
+            .HasForeignKey(x => new { x.AccountId, x.ActorAccountUserId })
+            .HasPrincipalKey(u => new { u.AccountId, u.Id })
+            .OnDelete(DeleteBehavior.Restrict)
+            .IsRequired(false);
+
+        builder.HasOne<AccountUser>()
+            .WithMany()
+            .HasForeignKey(x => new { x.AccountId, x.ParticipationTargetAccountUserId })
+            .HasPrincipalKey(u => new { u.AccountId, u.Id })
+            .OnDelete(DeleteBehavior.Restrict)
+            .IsRequired(false);
+
+        builder.HasOne<AccountUser>()
+            .WithMany()
+            .HasForeignKey(x => new { x.AccountId, x.ParticipationPreviousResponsibleAccountUserId })
+            .HasPrincipalKey(u => new { u.AccountId, u.Id })
+            .OnDelete(DeleteBehavior.Restrict)
+            .IsRequired(false);
+
+        builder.HasOne<AccountUser>()
+            .WithMany()
+            .HasForeignKey(x => new { x.AccountId, x.ParticipationNotificationIntendedRecipientAccountUserId })
+            .HasPrincipalKey(u => new { u.AccountId, u.Id })
+            .OnDelete(DeleteBehavior.Restrict)
+            .IsRequired(false);
     }
 }

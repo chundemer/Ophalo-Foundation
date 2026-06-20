@@ -142,7 +142,7 @@ public sealed class KeepRequestDetailB4Tests : IClassFixture<KeepApiWebFactory>,
         db.Set<KeepCustomer>().Add(customer);
         await db.SaveChangesAsync();
 
-        var activeRequest = KeepRequest.Create(
+        var activeRequest = KeepRequest.CreateFromCustomerIntake(
             _accountId, customer.Id,
             "Jane Smith", "0412345678", "jane@example.com",
             "Burst pipe in bathroom", "B4ACT001", "b4_active_page_token", now, 60);
@@ -164,7 +164,7 @@ public sealed class KeepRequestDetailB4Tests : IClassFixture<KeepApiWebFactory>,
         _activeRequestId = activeRequest.Id;
 
         // --- Closed request: negative feedback → unresolved_feedback attention ---
-        var closedRequest = KeepRequest.Create(
+        var closedRequest = KeepRequest.CreateFromCustomerIntake(
             _accountId, customer.Id,
             "Jane Smith", "0412345678", null,
             "Completed job", "B4CLO001", "b4_closed_page_token", now, 60);

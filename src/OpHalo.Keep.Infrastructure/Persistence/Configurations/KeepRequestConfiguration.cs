@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using OpHalo.Foundation.Core.Entities.Accounts;
 using OpHalo.Foundation.Infrastructure.Persistence.Configurations;
 using OpHalo.Keep.Core.Entities;
 using OpHalo.Keep.Core.Entities.Enums;
@@ -56,7 +57,7 @@ internal sealed class KeepRequestConfiguration : BaseEntityConfiguration<KeepReq
 
         builder.Property(x => x.ExpiresAtUtc);
         builder.Property(x => x.TerminatedAtUtc);       // ADR-096: renamed from ClosedAtUtc
-        builder.Property(x => x.LastBusinessActivityAt).IsRequired();
+        builder.Property(x => x.LastBusinessActivityAt); // nullable — null until the business first acts
         builder.Property(x => x.LastCustomerActivityAt);
 
         // First-response fields (D7/ADR-090).
@@ -107,7 +108,7 @@ internal sealed class KeepRequestConfiguration : BaseEntityConfiguration<KeepReq
         builder.Property(x => x.FeedbackReviewNote)
             .HasMaxLength(2000);
 
-        // IsTerminal and IsActive are computed C# properties — no columns.
+        // IsTerminal is a computed C# property — no column.
         builder.Ignore(x => x.IsTerminal);
 
         builder.HasIndex(x => x.PageToken)
@@ -123,5 +124,46 @@ internal sealed class KeepRequestConfiguration : BaseEntityConfiguration<KeepReq
 
         builder.HasIndex(x => new { x.AccountId, x.AttentionLevel, x.AttentionSinceUtc })
             .HasDatabaseName("ix_keep_requests_account_attention");
+
+        // Alternate key — allows KeepRequestEvent and KeepRequestParticipant to hold composite
+        // (AccountId, RequestId) FKs that prevent cross-account event/participant references.
+        builder.HasAlternateKey(x => new { x.AccountId, x.Id })
+            .HasName("ak_keep_requests_account_id");
+
+        // FK — restricts deletion of an account that has requests.
+        builder.HasOne<Account>()
+            .WithMany()
+            .HasForeignKey(x => x.AccountId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        // Composite FK — prevents a request referencing a customer from a different account.
+        builder.HasOne<KeepCustomer>()
+            .WithMany()
+            .HasForeignKey(x => new { x.AccountId, x.KeepCustomerId })
+            .HasPrincipalKey(c => new { c.AccountId, c.Id })
+            .OnDelete(DeleteBehavior.Restrict);
+
+        // Nullable composite AccountUser FKs — prevent metadata from referencing users
+        // outside the request's own account. Null values pass the constraint automatically.
+        builder.HasOne<AccountUser>()
+            .WithMany()
+            .HasForeignKey(x => new { x.AccountId, x.FirstResponderAccountUserId })
+            .HasPrincipalKey(u => new { u.AccountId, u.Id })
+            .OnDelete(DeleteBehavior.Restrict)
+            .IsRequired(false);
+
+        builder.HasOne<AccountUser>()
+            .WithMany()
+            .HasForeignKey(x => new { x.AccountId, x.AttentionClearedByAccountUserId })
+            .HasPrincipalKey(u => new { u.AccountId, u.Id })
+            .OnDelete(DeleteBehavior.Restrict)
+            .IsRequired(false);
+
+        builder.HasOne<AccountUser>()
+            .WithMany()
+            .HasForeignKey(x => new { x.AccountId, x.FeedbackReviewedByAccountUserId })
+            .HasPrincipalKey(u => new { u.AccountId, u.Id })
+            .OnDelete(DeleteBehavior.Restrict)
+            .IsRequired(false);
     }
 }

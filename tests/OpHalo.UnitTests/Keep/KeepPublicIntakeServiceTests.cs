@@ -278,8 +278,8 @@ public class KeepPublicIntakeServiceTests
             Guid accountId, CancellationToken ct) =>
             Task.FromResult(AccountSnapshotToReturn);
 
-        public Task<KeepCustomer?> FindCustomerByPrimaryPhoneAsync(
-            Guid accountId, string primaryPhone, CancellationToken ct) =>
+        public Task<KeepCustomer?> FindCustomerByCanonicalPhoneAsync(
+            Guid accountId, string canonicalPhone, CancellationToken ct) =>
             Task.FromResult(ExistingCustomer);
 
         public KeepResponsePolicy? ResponsePolicyToReturn { get; set; }
