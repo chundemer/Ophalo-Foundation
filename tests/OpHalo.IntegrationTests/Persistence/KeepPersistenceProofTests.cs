@@ -4,6 +4,7 @@ using OpHalo.Foundation.Application.Accounts.Provisioning;
 using OpHalo.Foundation.Core.Entities.Accounts.Enums;
 using OpHalo.Foundation.Infrastructure.Persistence;
 using OpHalo.Keep.Core.Entities;
+using OpHalo.Keep.Core.Entities.Enums;
 
 namespace OpHalo.IntegrationTests.Persistence;
 
@@ -30,6 +31,7 @@ public sealed class KeepPersistenceProofTests : IClassFixture<PostgresFixture>, 
     // Instance IDs — set during InitializeAsync after seeding real account rows.
     private Guid AccountId { get; set; }
     private Guid SecondAccountId { get; set; }
+    private Guid SecondAccountOwnerUserId { get; set; }
 
     public async Task InitializeAsync()
     {
@@ -39,11 +41,12 @@ public sealed class KeepPersistenceProofTests : IClassFixture<PostgresFixture>, 
         await ctx.Database.MigrateAsync();
 
         // G1 adds FK constraints from Keep entities → accounts. Seed two real accounts.
-        AccountId = await SeedAccountAsync(ctx, "Test Business", "owner@test.example.com");
-        SecondAccountId = await SeedAccountAsync(ctx, "Other Business", "owner2@test.example.com");
+        (AccountId, _) = await SeedAccountAsync(ctx, "Test Business", "owner@test.example.com");
+        (SecondAccountId, SecondAccountOwnerUserId) = await SeedAccountAsync(ctx, "Other Business", "owner2@test.example.com");
     }
 
-    private static async Task<Guid> SeedAccountAsync(OpHaloDbContext ctx, string businessName, string email)
+    private static async Task<(Guid AccountId, Guid OwnerUserId)> SeedAccountAsync(
+        OpHaloDbContext ctx, string businessName, string email)
     {
         var result = new AccountProvisioningService().CreateVerified(
             email: email,
@@ -72,7 +75,7 @@ public sealed class KeepPersistenceProofTests : IClassFixture<PostgresFixture>, 
         ownerIdEntry.CurrentValue = graph.Owner.Id;
         await ctx.SaveChangesAsync();
 
-        return graph.Account.Id;
+        return (graph.Account.Id, graph.Owner.Id);
     }
 
     public Task DisposeAsync() => Task.CompletedTask;
@@ -385,6 +388,82 @@ public sealed class KeepPersistenceProofTests : IClassFixture<PostgresFixture>, 
         Assert.NotNull(pgEx);
         Assert.Equal("23505", pgEx.SqlState);
         Assert.Equal("ix_keep_public_intake_links_active_slug", pgEx.ConstraintName);
+    }
+
+    // -------------------------------------------------------------------------
+    // Test 11: Cross-account FK — participant cannot reference request from another account
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public async Task Participant_cannot_reference_request_from_different_account()
+    {
+        var customer = KeepCustomer.Create(AccountId, "Jane", "0412345612");
+        var request = KeepRequest.CreateFromCustomerIntake(
+            AccountId, customer.Id, "Jane", "0412345612", null,
+            "Description", "PREF01", "tok_pref1", Now, 60);
+
+        await using (var ctx = CreateContext())
+        {
+            ctx.Set<KeepCustomer>().Add(customer);
+            ctx.Set<KeepRequest>().Add(request);
+            await ctx.SaveChangesAsync();
+        }
+
+        // Participant AccountId = SecondAccountId but RequestId is owned by AccountId.
+        // The composite FK (AccountId, RequestId) → KeepRequest(AccountId, Id) must reject this.
+        var participant = KeepRequestParticipant.Create(
+            requestId: request.Id,
+            accountId: SecondAccountId,
+            accountUserId: SecondAccountOwnerUserId,
+            participationType: ParticipationType.Responsible,
+            notificationsEnabled: true,
+            attachedAtUtc: Now);
+
+        await using var ctx2 = CreateContext();
+        ctx2.Set<KeepRequestParticipant>().Add(participant);
+
+        var ex = await Assert.ThrowsAsync<DbUpdateException>(() => ctx2.SaveChangesAsync());
+        var pgEx = ex.InnerException as PostgresException;
+        Assert.NotNull(pgEx);
+        Assert.Equal("23503", pgEx.SqlState);
+    }
+
+    // -------------------------------------------------------------------------
+    // Test 12: Cross-account FK — participant AccountUser must belong to the same account
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public async Task Participant_AccountUser_must_belong_to_same_account()
+    {
+        var customer = KeepCustomer.Create(AccountId, "Jane", "0412345613");
+        var request = KeepRequest.CreateFromCustomerIntake(
+            AccountId, customer.Id, "Jane", "0412345613", null,
+            "Description", "PREF02", "tok_pref2", Now, 60);
+
+        await using (var ctx = CreateContext())
+        {
+            ctx.Set<KeepCustomer>().Add(customer);
+            ctx.Set<KeepRequest>().Add(request);
+            await ctx.SaveChangesAsync();
+        }
+
+        // Participant AccountId = AccountId (correct) but AccountUserId is from SecondAccountId.
+        // The composite FK (AccountId, AccountUserId) → AccountUser(AccountId, Id) must reject this.
+        var participant = KeepRequestParticipant.Create(
+            requestId: request.Id,
+            accountId: AccountId,
+            accountUserId: SecondAccountOwnerUserId,
+            participationType: ParticipationType.Watching,
+            notificationsEnabled: false,
+            attachedAtUtc: Now);
+
+        await using var ctx2 = CreateContext();
+        ctx2.Set<KeepRequestParticipant>().Add(participant);
+
+        var ex = await Assert.ThrowsAsync<DbUpdateException>(() => ctx2.SaveChangesAsync());
+        var pgEx = ex.InnerException as PostgresException;
+        Assert.NotNull(pgEx);
+        Assert.Equal("23503", pgEx.SqlState);
     }
 
     // -------------------------------------------------------------------------

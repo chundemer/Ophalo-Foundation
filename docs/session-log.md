@@ -52,6 +52,7 @@ validating or coding Phase 8-B5 Session 6.
 
 **Baseline:** Session 5D recorded 847/847 passing tests (494 unit, 14 architecture, 339 integration).
 G1 raised this to 860 (503 unit, 14 arch, 343 integration).
+G1 completion (participant proof tests) raised this to 862 (503 unit, 14 arch, 345 integration).
 
 **Next free ADR:** ADR-306
 
@@ -61,7 +62,7 @@ discoveries must be recorded and handed forward rather than silently expanding t
 
 ### Gap Session G1 — Keep schema, identity, and creation semantics — COMPLETE
 
-**Tests:** 860 total (503 unit · 14 arch · 343 integration) — all green
+**Tests:** 862 total (503 unit · 14 arch · 345 integration) — all green
 **ADRs:** ADR-301 to ADR-305
 **Exit record:** `docs/build-log/048-gap-g1-keep-account-safe-schema.md`
 **Migration:** `20260619235301_KeepG1AccountSafeSchema`
@@ -96,9 +97,11 @@ discoveries must be recorded and handed forward rather than silently expanding t
 | All integration/unit test files | KeepRequest.Create → CreateFromCustomerIntake / CreateByBusiness; stale participant seed fixed |
 | `tests/OpHalo.UnitTests/Keep/KeepCustomerTests.cs` | 9 new canonical phone + length tests |
 | `tests/OpHalo.UnitTests/Keep/KeepRequestTests.cs` | Updated helper; new origin-aware activity tests |
-| `tests/OpHalo.IntegrationTests/Persistence/KeepPersistenceProofTests.cs` | Rewritten with two-phase account seed; 10 proof tests |
+| `tests/OpHalo.IntegrationTests/Persistence/KeepPersistenceProofTests.cs` | Rewritten with two-phase account seed; 10 proof tests; +2 participant cross-account proof tests (G1 completion) |
 | `tests/OpHalo.IntegrationTests/Api/KeepRequestParticipationApiTests.cs` | _viewerAccountUserId field; stale seed uses Viewer not Guid.NewGuid |
 | `src/OpHalo.Foundation.Infrastructure/Migrations/20260619235301_KeepG1AccountSafeSchema.cs` | Generated migration |
+
+**G1 completion (post-commit):** Added `Participant_cannot_reference_request_from_different_account` and `Participant_AccountUser_must_belong_to_same_account` proof tests to `KeepPersistenceProofTests`; `SeedAccountAsync` now returns `(AccountId, OwnerUserId)` tuple so participant tests can reference a real cross-account user. Both composite participant FKs proven against PostgreSQL. Suite raised to 862.
 
 **Deferred:** `KeepRequest.FirstResponseEventId → KeepRequestEvent.Id` FK — circular dependency; document and address when first-response-event assignment is implemented.
 
