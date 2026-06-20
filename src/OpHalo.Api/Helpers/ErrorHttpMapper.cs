@@ -56,6 +56,15 @@ public static class ErrorHttpMapper
             // Explicit match — Account.PilotFull resolves to 409, not the default 400.
             var c when c == "Account.PilotFull" => (StatusCodes.Status409Conflict, "Conflict.", null),
 
+            // --- Public intake field validation errors (G2) ---
+            var c when c == "KeepRequest.CustomerNameTooLong"            => (StatusCodes.Status400BadRequest, "Bad request.", null),
+            var c when c == "KeepRequest.CustomerPhoneTooLong"           => (StatusCodes.Status400BadRequest, "Bad request.", null),
+            var c when c == "KeepRequest.CustomerPhoneInvalidCharacters" => (StatusCodes.Status400BadRequest, "Bad request.", null),
+            var c when c == "KeepRequest.CustomerPhoneInvalidFormat"     => (StatusCodes.Status400BadRequest, "Bad request.", null),
+            var c when c == "KeepRequest.CustomerEmailTooLong"           => (StatusCodes.Status400BadRequest, "Bad request.", null),
+            var c when c == "KeepRequest.CustomerEmailInvalid"           => (StatusCodes.Status400BadRequest, "Bad request.", null),
+            var c when c == "KeepRequest.DescriptionTooLong"             => (StatusCodes.Status400BadRequest, "Bad request.", null),
+
             // --- Keep request operator-write codes (explicit where suffix patterns do not cover) ---
             // NotFound → covered by .NotFound suffix; Forbidden → covered by .Forbidden suffix;
             // InvalidStatusTransition → covered by .InvalidStatusTransition suffix.

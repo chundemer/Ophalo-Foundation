@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations;
 using OpHalo.Foundation.Application.Accounts.Access;
 using OpHalo.Foundation.Application.Accounts.Entitlements;
 using OpHalo.Keep.Application.Abstractions;
@@ -19,12 +20,15 @@ public sealed class CreateKeepPublicIntakeService(
 {
     private const int MaxAttempts = 5;
 
+    private static readonly EmailAddressAttribute EmailValidator = new();
+
     private static readonly Error Unavailable =
         Error.Create("keep.public_intake.unavailable", "This intake form is not currently available.");
 
     public async Task<Result<CreateKeepPublicIntakeResult>> ExecuteAsync(
         CreateKeepPublicIntakeCommand command, CancellationToken ct = default)
     {
+        // --- Required field checks ---
         if (string.IsNullOrWhiteSpace(command.CustomerName))
             return Result<CreateKeepPublicIntakeResult>.Failure(KeepRequestErrors.CustomerNameRequired);
         if (string.IsNullOrWhiteSpace(command.CustomerPhone))
@@ -32,8 +36,36 @@ public sealed class CreateKeepPublicIntakeService(
         if (string.IsNullOrWhiteSpace(command.Description))
             return Result<CreateKeepPublicIntakeResult>.Failure(KeepRequestErrors.DescriptionRequired);
 
-        // HashPublicIntakeToken throws ArgumentException on null/whitespace; a blank token must
-        // return the public-safe Unavailable error, not a 500.
+        var trimmedName = command.CustomerName.Trim();
+        var trimmedPhone = command.CustomerPhone.Trim();
+        var trimmedEmail = string.IsNullOrWhiteSpace(command.CustomerEmail)
+            ? null
+            : command.CustomerEmail.Trim();
+        var trimmedDescription = command.Description.Trim();
+
+        // --- Maximum length checks ---
+        if (trimmedName.Length > 200)
+            return Result<CreateKeepPublicIntakeResult>.Failure(KeepRequestErrors.CustomerNameTooLong);
+        if (trimmedPhone.Length > 50)
+            return Result<CreateKeepPublicIntakeResult>.Failure(KeepRequestErrors.CustomerPhoneTooLong);
+        if (trimmedEmail is not null && trimmedEmail.Length > 320)
+            return Result<CreateKeepPublicIntakeResult>.Failure(KeepRequestErrors.CustomerEmailTooLong);
+        if (trimmedDescription.Length > 4000)
+            return Result<CreateKeepPublicIntakeResult>.Failure(KeepRequestErrors.DescriptionTooLong);
+
+        // --- Phone character and digit-count checks ---
+        if (!HasValidPhoneCharacters(trimmedPhone))
+            return Result<CreateKeepPublicIntakeResult>.Failure(KeepRequestErrors.CustomerPhoneInvalidCharacters);
+        var canonicalPhone = PhoneNormalizer.Normalize(trimmedPhone);
+        if (!PhoneNormalizer.IsValidLength(canonicalPhone))
+            return Result<CreateKeepPublicIntakeResult>.Failure(KeepRequestErrors.CustomerPhoneInvalidFormat);
+
+        // --- Email syntax check ---
+        if (trimmedEmail is not null && !EmailValidator.IsValid(trimmedEmail))
+            return Result<CreateKeepPublicIntakeResult>.Failure(KeepRequestErrors.CustomerEmailInvalid);
+
+        // --- Token and account gate (collapses to Unavailable; never exposes validation state) ---
+        // HashPublicIntakeToken throws ArgumentException on null/whitespace; guard first.
         if (string.IsNullOrWhiteSpace(command.PublicIntakeToken))
             return Result<CreateKeepPublicIntakeResult>.Failure(Unavailable);
 
@@ -49,7 +81,6 @@ public sealed class CreateKeepPublicIntakeService(
 
         var nowUtc = clock.UtcNow;
 
-        // Intake is a write — OffSeason (ReadOnly posture) must block it.
         var accessContext = new AccountAccessContext(
             snapshot.LifecycleState,
             snapshot.Purpose,
@@ -67,17 +98,18 @@ public sealed class CreateKeepPublicIntakeService(
         if (!featurePolicy.IsEnabled(snapshot.Plan, FeatureKeys.Keep.PublicIntake))
             return Result<CreateKeepPublicIntakeResult>.Failure(Unavailable);
 
-        var primaryPhone = command.CustomerPhone.Trim();
-        var canonicalPhone = PhoneNormalizer.Normalize(primaryPhone);
-        var customer = await persistence.FindCustomerByCanonicalPhoneAsync(accountId, canonicalPhone, ct);
-        if (customer is null)
-            customer = KeepCustomer.Create(accountId, command.CustomerName, primaryPhone, command.CustomerEmail?.Trim());
-        else
-            customer.UpdateContactInfo(command.CustomerName, command.CustomerEmail?.Trim());
-
         var policy = await persistence.GetResponsePolicyAsync(accountId, ct);
         var firstResponseTargetMinutes = policy?.FirstResponseTargetMinutes ?? 60;
 
+        // Load existing customer or seed a new one. UpdateContactInfo preserves the existing email
+        // when the incoming value is null/blank (anonymous omission is not a clear-email command).
+        var customer = await persistence.FindCustomerByCanonicalPhoneAsync(accountId, canonicalPhone, ct);
+        if (customer is null)
+            customer = KeepCustomer.Create(accountId, trimmedName, trimmedPhone, trimmedEmail);
+        else
+            customer.UpdateContactInfo(trimmedName, trimmedEmail);
+
+        // Retry loop: customer-identity and token collisions share the five-attempt ceiling.
         for (var attempt = 0; attempt < MaxAttempts; attempt++)
         {
             var pageToken = tokenService.GeneratePageToken();
@@ -89,10 +121,10 @@ public sealed class CreateKeepPublicIntakeService(
             var request = KeepRequest.CreateFromCustomerIntake(
                 accountId,
                 customer.Id,
-                command.CustomerName,
-                primaryPhone,
-                command.CustomerEmail?.Trim(),
-                command.Description,
+                trimmedName,
+                trimmedPhone,
+                trimmedEmail,
+                trimmedDescription,
                 referenceCode,
                 pageToken,
                 nowUtc,
@@ -105,8 +137,19 @@ public sealed class CreateKeepPublicIntakeService(
                 case PublicIntakeCommitResult.Committed:
                     return Result<CreateKeepPublicIntakeResult>.Success(
                         new CreateKeepPublicIntakeResult(request.Id, referenceCode, pageToken));
+
                 case PublicIntakeCommitResult.UniqueTokenCollision:
                     continue;
+
+                case PublicIntakeCommitResult.CustomerCanonicalPhoneCollision:
+                    // A concurrent submission won the customer insert. Re-read the winning customer,
+                    // apply safe contact-update rules, and retry request/event persistence.
+                    customer = await persistence.FindCustomerByCanonicalPhoneAsync(accountId, canonicalPhone, ct)
+                        ?? throw new InvalidOperationException(
+                            "Expected a customer after canonical-phone collision but none was found.");
+                    customer.UpdateContactInfo(trimmedName, trimmedEmail);
+                    continue;
+
                 default:
                     throw new InvalidOperationException(
                         $"Unexpected PublicIntakeCommitResult value: {commitResult}");
@@ -115,5 +158,21 @@ public sealed class CreateKeepPublicIntakeService(
 
         throw new InvalidOperationException(
             $"Failed to commit public intake after {MaxAttempts} attempts.");
+    }
+
+    // + is only permitted as the leading character (international prefix); all other positions
+    // accept digits, spaces, and common dial-pad formatting characters.
+    private static bool HasValidPhoneCharacters(string trimmedPhone)
+    {
+        for (var i = 0; i < trimmedPhone.Length; i++)
+        {
+            var c = trimmedPhone[i];
+            if (char.IsAsciiDigit(c) || c is ' ' or '-' or '(' or ')' or '.')
+                continue;
+            if (c == '+' && i == 0)
+                continue;
+            return false;
+        }
+        return true;
     }
 }

@@ -28,7 +28,10 @@ public sealed class KeepCustomer : BaseEntity
             throw new ArgumentException("Customer name is required.", nameof(name));
 
         Name = name.Trim();
-        Email = email?.Trim();
+        // Anonymous omission is never a clear-email command: preserve existing email when the
+        // new submission omits or blanks it; replace only when a nonblank value is supplied.
+        if (!string.IsNullOrWhiteSpace(email))
+            Email = email.Trim();
     }
 
     public static KeepCustomer Create(

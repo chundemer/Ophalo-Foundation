@@ -271,6 +271,350 @@ public sealed class KeepIntakeApiTests : IClassFixture<KeepApiWebFactory>, IAsyn
     }
 
     // -------------------------------------------------------------------------
+    // G2: Maximum-length validation — name
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public async Task PublicIntake_NameAtMaximumLength_Returns201()
+    {
+        var response = await _client.PostAsJsonAsync(
+            $"/keep/public-intake/token/{_rawToken}",
+            new { customerName = new string('A', 200), customerPhone = "0411222001", description = "Desc" });
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task PublicIntake_NameExceedsMaximum_Returns400()
+    {
+        var response = await _client.PostAsJsonAsync(
+            $"/keep/public-intake/token/{_rawToken}",
+            new { customerName = new string('A', 201), customerPhone = "0411222002", description = "Desc" });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var body = await GetErrorCodeAsync(response);
+        Assert.Equal("KeepRequest.CustomerNameTooLong", body);
+    }
+
+    // -------------------------------------------------------------------------
+    // G2: Maximum-length validation — phone
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public async Task PublicIntake_PhoneExceedsMaximum_Returns400()
+    {
+        var response = await _client.PostAsJsonAsync(
+            $"/keep/public-intake/token/{_rawToken}",
+            new { customerName = "Bob", customerPhone = new string('1', 51), description = "Desc" });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var body = await GetErrorCodeAsync(response);
+        Assert.Equal("KeepRequest.CustomerPhoneTooLong", body);
+    }
+
+    // -------------------------------------------------------------------------
+    // G2: Maximum-length validation — email
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public async Task PublicIntake_EmailExceedsMaximum_Returns400()
+    {
+        var longEmail = new string('a', 315) + "@x.com"; // 321 chars > 320
+        var response = await _client.PostAsJsonAsync(
+            $"/keep/public-intake/token/{_rawToken}",
+            new { customerName = "Bob", customerPhone = "0411222003", customerEmail = longEmail, description = "Desc" });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var body = await GetErrorCodeAsync(response);
+        Assert.Equal("KeepRequest.CustomerEmailTooLong", body);
+    }
+
+    // -------------------------------------------------------------------------
+    // G2: Maximum-length validation — description
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public async Task PublicIntake_DescriptionAtMaximumLength_Returns201()
+    {
+        var response = await _client.PostAsJsonAsync(
+            $"/keep/public-intake/token/{_rawToken}",
+            new { customerName = "Bob", customerPhone = "0411222004", description = new string('X', 4000) });
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task PublicIntake_DescriptionExceedsMaximum_Returns400()
+    {
+        var response = await _client.PostAsJsonAsync(
+            $"/keep/public-intake/token/{_rawToken}",
+            new { customerName = "Bob", customerPhone = "0411222005", description = new string('X', 4001) });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var body = await GetErrorCodeAsync(response);
+        Assert.Equal("KeepRequest.DescriptionTooLong", body);
+    }
+
+    // -------------------------------------------------------------------------
+    // G2: Phone character validation
+    // -------------------------------------------------------------------------
+
+    [Theory]
+    [InlineData("555abc1234", "KeepRequest.CustomerPhoneInvalidCharacters")]
+    [InlineData("555+1234",   "KeepRequest.CustomerPhoneInvalidCharacters")] // + not at position 0
+    [InlineData("++5551234",  "KeepRequest.CustomerPhoneInvalidCharacters")] // repeated +
+    [InlineData("555#1234",   "KeepRequest.CustomerPhoneInvalidCharacters")] // unsupported symbol
+    public async Task PublicIntake_PhoneInvalidCharacters_Returns400(string phone, string expectedCode)
+    {
+        var response = await _client.PostAsJsonAsync(
+            $"/keep/public-intake/token/{_rawToken}",
+            new { customerName = "Bob", customerPhone = phone, description = "Desc" });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var code = await GetErrorCodeAsync(response);
+        Assert.Equal(expectedCode, code);
+    }
+
+    [Fact]
+    public async Task PublicIntake_PhoneWithLeadingPlus_Returns201()
+    {
+        var response = await _client.PostAsJsonAsync(
+            $"/keep/public-intake/token/{_rawToken}",
+            new { customerName = "Bob", customerPhone = "+61 412 222 010", description = "Desc" });
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+    }
+
+    // -------------------------------------------------------------------------
+    // G2: Phone digit-count validation
+    // -------------------------------------------------------------------------
+
+    [Theory]
+    [InlineData("123456")]          // 6 digits — below minimum
+    [InlineData("1234567890123456")] // 16 digits — above maximum
+    public async Task PublicIntake_PhoneDigitCountOutOfRange_Returns400(string phone)
+    {
+        var response = await _client.PostAsJsonAsync(
+            $"/keep/public-intake/token/{_rawToken}",
+            new { customerName = "Bob", customerPhone = phone, description = "Desc" });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var code = await GetErrorCodeAsync(response);
+        Assert.Equal("KeepRequest.CustomerPhoneInvalidFormat", code);
+    }
+
+    // -------------------------------------------------------------------------
+    // G2: Email syntax validation
+    // -------------------------------------------------------------------------
+
+    [Theory]
+    [InlineData("notanemail")]
+    [InlineData("missing@")]
+    [InlineData("@nodomain")]
+    public async Task PublicIntake_MalformedEmail_Returns400(string email)
+    {
+        var response = await _client.PostAsJsonAsync(
+            $"/keep/public-intake/token/{_rawToken}",
+            new { customerName = "Bob", customerPhone = "0411222020", customerEmail = email, description = "Desc" });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var code = await GetErrorCodeAsync(response);
+        Assert.Equal("KeepRequest.CustomerEmailInvalid", code);
+    }
+
+    // -------------------------------------------------------------------------
+    // G2: No database mutation on validation failure
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public async Task PublicIntake_ValidationFailure_CausesNoDatabaseMutation()
+    {
+        await using var scope = _factory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+
+        var requestsBefore = await db.Set<KeepRequest>().IgnoreQueryFilters().CountAsync();
+        var customersBefore = await db.Set<KeepCustomer>().IgnoreQueryFilters().CountAsync();
+
+        // Name too long — validation fires before any DB access
+        var response = await _client.PostAsJsonAsync(
+            $"/keep/public-intake/token/{_rawToken}",
+            new { customerName = new string('A', 201), customerPhone = "0411222030", description = "Desc" });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+
+        await using var scope2 = _factory.CreateScope();
+        var db2 = scope2.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+        Assert.Equal(requestsBefore, await db2.Set<KeepRequest>().IgnoreQueryFilters().CountAsync());
+        Assert.Equal(customersBefore, await db2.Set<KeepCustomer>().IgnoreQueryFilters().CountAsync());
+    }
+
+    // -------------------------------------------------------------------------
+    // G2: Repeat-intake email preservation
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public async Task PublicIntake_RepeatIntake_PreservesExistingEmail_WhenOmitted()
+    {
+        const string phone = "0411222040";
+        const string canonicalPhone = "0411222040";
+
+        // First submission — establishes customer with email
+        var first = await _client.PostAsJsonAsync(
+            $"/keep/public-intake/token/{_rawToken}",
+            new { customerName = "Jane", customerPhone = phone, customerEmail = "jane@example.com", description = "First" });
+        Assert.Equal(HttpStatusCode.Created, first.StatusCode);
+
+        // Second submission — omits email
+        var second = await _client.PostAsJsonAsync(
+            $"/keep/public-intake/token/{_rawToken}",
+            new { customerName = "Jane Updated", customerPhone = phone, description = "Second" });
+        Assert.Equal(HttpStatusCode.Created, second.StatusCode);
+
+        // Customer email must be preserved
+        await using var scope = _factory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+        var customer = await db.Set<KeepCustomer>()
+            .IgnoreQueryFilters()
+            .SingleAsync(c => c.AccountId == _accountId && c.CanonicalPhone == canonicalPhone);
+
+        Assert.Equal("jane@example.com", customer.Email);
+        Assert.Equal("Jane Updated", customer.Name); // name always updates
+    }
+
+    [Fact]
+    public async Task PublicIntake_RepeatIntake_UpdatesEmail_WhenNonblankEmailSupplied()
+    {
+        const string phone = "0411222041";
+        const string canonicalPhone = "0411222041";
+
+        var first = await _client.PostAsJsonAsync(
+            $"/keep/public-intake/token/{_rawToken}",
+            new { customerName = "Bob", customerPhone = phone, customerEmail = "old@example.com", description = "First" });
+        Assert.Equal(HttpStatusCode.Created, first.StatusCode);
+
+        var second = await _client.PostAsJsonAsync(
+            $"/keep/public-intake/token/{_rawToken}",
+            new { customerName = "Bob", customerPhone = phone, customerEmail = "new@example.com", description = "Second" });
+        Assert.Equal(HttpStatusCode.Created, second.StatusCode);
+
+        await using var scope = _factory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+        var customer = await db.Set<KeepCustomer>()
+            .IgnoreQueryFilters()
+            .SingleAsync(c => c.AccountId == _accountId && c.CanonicalPhone == canonicalPhone);
+
+        Assert.Equal("new@example.com", customer.Email);
+    }
+
+    // -------------------------------------------------------------------------
+    // G2: Equivalent formatted phones reuse one customer
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public async Task PublicIntake_EquivalentFormattedPhones_ReuseOneCustomer()
+    {
+        // "0412-345-050" and "0412 345 050" both normalise to "0412345050"
+        const string canonicalPhone = "0412345050";
+
+        var first = await _client.PostAsJsonAsync(
+            $"/keep/public-intake/token/{_rawToken}",
+            new { customerName = "Alice", customerPhone = "0412-345-050", description = "First request" });
+        Assert.Equal(HttpStatusCode.Created, first.StatusCode);
+
+        var second = await _client.PostAsJsonAsync(
+            $"/keep/public-intake/token/{_rawToken}",
+            new { customerName = "Alice", customerPhone = "0412 345 050", description = "Second request" });
+        Assert.Equal(HttpStatusCode.Created, second.StatusCode);
+
+        await using var scope = _factory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+
+        var customers = await db.Set<KeepCustomer>()
+            .IgnoreQueryFilters()
+            .Where(c => c.AccountId == _accountId && c.CanonicalPhone == canonicalPhone)
+            .ToListAsync();
+        Assert.Single(customers); // exactly one customer for this canonical phone
+
+        var requests = await db.Set<KeepRequest>()
+            .IgnoreQueryFilters()
+            .Where(r => r.AccountId == _accountId && r.CustomerPhone == "0412-345-050"
+                     || r.AccountId == _accountId && r.CustomerPhone == "0412 345 050")
+            .ToListAsync();
+        Assert.Equal(2, requests.Count);
+    }
+
+    // -------------------------------------------------------------------------
+    // G2: Concurrent first submissions — race recovery
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public async Task PublicIntake_TwoConcurrentFirstSubmissions_BothSucceed_OneCustomer()
+    {
+        const string phone = "0411222099";
+        const string canonicalPhone = "0411222099";
+
+        // Fire both requests simultaneously against a phone that no other test uses.
+        var barrier = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var client1 = _factory.CreateClient();
+        var client2 = _factory.CreateClient();
+
+        var task1 = Task.Run(async () =>
+        {
+            await barrier.Task;
+            return await client1.PostAsJsonAsync(
+                $"/keep/public-intake/token/{_rawToken}",
+                new { customerName = "Concurrent A", customerPhone = phone, description = "Request A" });
+        });
+        var task2 = Task.Run(async () =>
+        {
+            await barrier.Task;
+            return await client2.PostAsJsonAsync(
+                $"/keep/public-intake/token/{_rawToken}",
+                new { customerName = "Concurrent B", customerPhone = phone, description = "Request B" });
+        });
+
+        barrier.SetResult(true);
+        var responses = await Task.WhenAll(task1, task2);
+
+        Assert.All(responses, r => Assert.Equal(HttpStatusCode.Created, r.StatusCode));
+
+        await using var scope = _factory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+
+        // Exactly one customer for this canonical phone
+        var customers = await db.Set<KeepCustomer>()
+            .IgnoreQueryFilters()
+            .Where(c => c.AccountId == _accountId && c.CanonicalPhone == canonicalPhone)
+            .ToListAsync();
+        Assert.Single(customers);
+
+        // Exactly two requests attached to that customer
+        var customerRequests = await db.Set<KeepRequest>()
+            .IgnoreQueryFilters()
+            .Where(r => r.AccountId == _accountId && r.KeepCustomerId == customers[0].Id)
+            .ToListAsync();
+        Assert.Equal(2, customerRequests.Count);
+
+        // Exactly two request-created events
+        var requestIds = customerRequests.Select(r => r.Id).ToList();
+        var events = await db.Set<KeepRequestEvent>()
+            .IgnoreQueryFilters()
+            .Where(e => requestIds.Contains(e.RequestId))
+            .ToListAsync();
+        Assert.Equal(2, events.Count);
+    }
+
+    // -------------------------------------------------------------------------
+    // Helpers
+    // -------------------------------------------------------------------------
+
+    private static async Task<string?> GetErrorCodeAsync(HttpResponseMessage response)
+    {
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        return body.TryGetProperty("code", out var code) ? code.GetString() : null;
+    }
+
+    // -------------------------------------------------------------------------
     // Response shapes
     // -------------------------------------------------------------------------
 

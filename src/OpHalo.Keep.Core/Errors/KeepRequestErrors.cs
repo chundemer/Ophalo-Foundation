@@ -13,11 +13,32 @@ public static class KeepRequestErrors
     public static readonly Error CustomerNameRequired =
         Error.Create("KeepRequest.CustomerNameRequired", "Customer name is required.");
 
+    public static readonly Error CustomerNameTooLong =
+        Error.Create("KeepRequest.CustomerNameTooLong", "Customer name must not exceed 200 characters.");
+
     public static readonly Error CustomerPhoneRequired =
         Error.Create("KeepRequest.CustomerPhoneRequired", "Customer phone is required.");
 
+    public static readonly Error CustomerPhoneTooLong =
+        Error.Create("KeepRequest.CustomerPhoneTooLong", "Customer phone must not exceed 50 characters.");
+
+    public static readonly Error CustomerPhoneInvalidCharacters =
+        Error.Create("KeepRequest.CustomerPhoneInvalidCharacters", "Customer phone contains unsupported characters. Digits, spaces, and the characters +, -, (, ), and . are allowed.");
+
+    public static readonly Error CustomerPhoneInvalidFormat =
+        Error.Create("KeepRequest.CustomerPhoneInvalidFormat", "Customer phone must contain between 7 and 15 digits.");
+
+    public static readonly Error CustomerEmailTooLong =
+        Error.Create("KeepRequest.CustomerEmailTooLong", "Customer email must not exceed 320 characters.");
+
+    public static readonly Error CustomerEmailInvalid =
+        Error.Create("KeepRequest.CustomerEmailInvalid", "Customer email is not a valid email address.");
+
     public static readonly Error DescriptionRequired =
         Error.Create("KeepRequest.DescriptionRequired", "Description is required.");
+
+    public static readonly Error DescriptionTooLong =
+        Error.Create("KeepRequest.DescriptionTooLong", "Description must not exceed 4000 characters.");
 
     public static readonly Error InvalidStatus =
         Error.Create("KeepRequest.InvalidStatus", "The provided status is not valid.");

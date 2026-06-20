@@ -90,5 +90,19 @@ public sealed class KeepIntakePersistence(OpHaloDbContext dbContext) : IKeepInta
 
             return PublicIntakeCommitResult.UniqueTokenCollision;
         }
+        catch (DbUpdateException ex) when (
+            ex.InnerException is PostgresException pg
+            && pg.SqlState == "23505"
+            && pg.ConstraintName == "ix_keep_customers_account_canonical_phone")
+        {
+            // A concurrent submission inserted the same customer first. Detach all failed
+            // entities so the caller can re-read the winning customer and retry.
+            dbContext.Entry(request).State = EntityState.Detached;
+            dbContext.Entry(requestEvent).State = EntityState.Detached;
+            if (customerIsNew)
+                dbContext.Entry(customer).State = EntityState.Detached;
+
+            return PublicIntakeCommitResult.CustomerCanonicalPhoneCollision;
+        }
     }
 }

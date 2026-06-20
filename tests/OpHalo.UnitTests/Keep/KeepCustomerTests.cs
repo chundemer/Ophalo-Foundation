@@ -93,11 +93,45 @@ public class KeepCustomerTests
     }
 
     [Fact]
-    public void UpdateContactInfo_clears_email_when_null()
+    public void UpdateContactInfo_replaces_email_with_nonblank_value()
+    {
+        var customer = KeepCustomer.Create(AccountId, "Jane", "0412345678", "old@example.com");
+        customer.UpdateContactInfo("Jane", "new@example.com");
+        Assert.Equal("new@example.com", customer.Email);
+    }
+
+    [Fact]
+    public void UpdateContactInfo_preserves_existing_email_when_new_email_is_null()
     {
         var customer = KeepCustomer.Create(AccountId, "Jane", "0412345678", "jane@example.com");
         customer.UpdateContactInfo("Jane", null);
+        Assert.Equal("jane@example.com", customer.Email);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void UpdateContactInfo_preserves_existing_email_when_new_email_is_blank(string blankEmail)
+    {
+        var customer = KeepCustomer.Create(AccountId, "Jane", "0412345678", "jane@example.com");
+        customer.UpdateContactInfo("Jane", blankEmail);
+        Assert.Equal("jane@example.com", customer.Email);
+    }
+
+    [Fact]
+    public void UpdateContactInfo_leaves_email_null_when_no_prior_email_and_null_passed()
+    {
+        var customer = KeepCustomer.Create(AccountId, "Jane", "0412345678");
+        customer.UpdateContactInfo("Jane", null);
         Assert.Null(customer.Email);
+    }
+
+    [Fact]
+    public void UpdateContactInfo_sets_email_when_previously_null_and_nonblank_passed()
+    {
+        var customer = KeepCustomer.Create(AccountId, "Jane", "0412345678");
+        customer.UpdateContactInfo("Jane", "first@example.com");
+        Assert.Equal("first@example.com", customer.Email);
     }
 
     [Theory]

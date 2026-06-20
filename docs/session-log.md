@@ -1,6 +1,6 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-06-19
+**Last updated:** 2026-06-20
 **Branch:** `main` (no remote yet)
 
 ---
@@ -33,7 +33,7 @@ validating or coding Phase 8-B5 Session 6.
 
 **Source of truth:** `docs/build-log/047-pre-session-6-phase-7-session-5-gap-audit.md`
 
-**Next free ADR:** ADR-306 (ADR-301–305 consumed by G1)
+**Next free ADR:** ADR-311 (ADR-301–305 consumed by G1; ADR-306–310 consumed by G2)
 
 **Locked decisions:** ADR-295 through ADR-305. In particular:
 
@@ -52,6 +52,7 @@ validating or coding Phase 8-B5 Session 6.
 
 **Baseline:** Session 5D recorded 847/847 passing tests (494 unit, 14 architecture, 339 integration).
 G1 raised this to 866 (503 unit, 14 arch, 349 integration) — includes FirstResponseEventId FK, participant proof tests, and two-phase seed fixes.
+G2 raised this to 920 (536 unit, 14 arch, 370 integration) — includes public intake validation pipeline, phone character allowlist, email preservation, and customer-race recovery.
 
 **Next free ADR:** ADR-306
 
@@ -102,41 +103,32 @@ discoveries must be recorded and handed forward rather than silently expanding t
 
 **G1 completion:** `KeepRequest.FirstResponseEventId → KeepRequestEvent.Id` FK implemented via follow-up migration `20260620015428_KeepG1FirstResponseEventFK`. AK `ak_keep_request_events_account_request_event` on KeepRequestEvent (AccountId, RequestId, Id); nullable composite FK `fk_keep_requests_first_response_event` with Restrict. Two-phase persistence required when setting FirstResponseEventId on a new request (production services already load first; affected test seeds split into two SaveChanges). Participant proof tests (Tests 11–12) + FirstResponseEventId proof tests (Tests 13–16) added. Suite: 866 total (503 unit · 14 arch · 349 integration).
 
-### Gap Session G2 — Public-intake validation and concurrent customer recovery — PLANNED
+### Gap Session G2 — Public-intake validation and concurrent customer recovery — COMPLETE
 
-**Findings:** GAP-007, GAP-008, GAP-009; completes application usage of GAP-006/GAP-010
+**Tests:** 920 total (536 unit · 14 arch · 370 integration) — all green
+**ADRs:** ADR-306 to ADR-310
+**Exit record:** `docs/build-log/049-gap-g2-public-intake-validation-and-race-recovery.md`
 
-**Goal:** Ensure malformed or concurrent public submissions never become avoidable 500s or damage
-known customer data.
+**Design decisions (ADR-306–310):**
+- D1 (ADR-306): Ordered validation pipeline — required → max lengths → phone chars → phone format → email syntax → token lookup; fail-fast; no DB mutation on any validation failure; errors never expose token/account state
+- D2 (ADR-307): Phone character allowlist — digits, space, `-`, `(`, `)`, `.` anywhere; `+` only at position 0; two distinct errors: `CustomerPhoneInvalidCharacters` (bad chars) and `CustomerPhoneInvalidFormat` (digit count)
+- D3 (ADR-308): `UpdateContactInfo` email preservation — nonblank incoming email replaces; null/blank preserves existing; applies on repeat-intake and post-collision re-read
+- D4 (ADR-309): `CustomerCanonicalPhoneCollision` committed result — detach all failed entities, re-read winning customer, apply safe contact update, retry; customer and token collisions share `MaxAttempts = 5` ceiling; unrelated DB failures propagate
+- D5 (ADR-310): `EmailAddressAttribute` (not `MailAddress`) for email syntax validation
 
-**Implementation scope:**
+**Files changed:**
 
-1. Add stable application/API validation for trimmed required fields, storage maxima (name 200,
-   phone 50 submitted characters unless the G1 model deliberately narrows it, email 320,
-   description 4000), canonical phone digit bounds, and email syntax when supplied.
-2. Validation errors return explicit `400` responses without revealing account/token state and
-   without database mutation. Public gate failures retain their collapsed unavailable contract.
-3. Preserve an existing customer email when a later anonymous submission omits/blank-submits email.
-   Replace only with a nonblank valid email. Anonymous omission is never a clear-email command.
-4. Handle the named canonical-customer unique violation separately from page-token/reference-code
-   collisions: roll back the failed transaction, clear failed tracked state, re-read the winning
-   customer, apply safe contact-update rules, and retry request/event persistence with a small
-   explicit bound.
-5. Never auto-retry user intent after an unrelated database failure. Do not weaken the unique index
-   or serialize all intake globally.
-6. Ensure customer-origin creation writes correct activity semantics from G1.
-
-**Required tests:**
-
-- HTTP matrix for blank/whitespace values, every maximum and maximum+1, malformed optional email,
-  conservative phone failures, no-mutation failures, and collapsed invalid-token behavior;
-- repeat intake preserves known email when omitted and updates it when a valid nonblank replacement
-  is supplied;
-- equivalent formatted phones reuse one customer;
-- two genuinely concurrent submissions for a previously unseen canonical phone both succeed as
-  separate requests attached to one customer against PostgreSQL;
-- regression tests distinguish customer-identity, page-token, and reference-code unique violations;
-- full suite green.
+| File | Change |
+|---|---|
+| `Keep.Core/Errors/KeepRequestErrors.cs` | +7 validation errors |
+| `Keep.Core/Entities/KeepCustomer.cs` | `UpdateContactInfo` email preservation fix |
+| `Keep.Application/PublicIntake/PublicIntakeCommitResult.cs` | `+CustomerCanonicalPhoneCollision = 3` |
+| `Keep.Application/PublicIntake/CreateKeepPublicIntakeService.cs` | Full validation + `HasValidPhoneCharacters` (+first-only) + race recovery |
+| `Keep.Infrastructure/Persistence/KeepIntakePersistence.cs` | Catch `ix_keep_customers_account_canonical_phone` → `CustomerCanonicalPhoneCollision` |
+| `Api/Helpers/ErrorHttpMapper.cs` | +7 explicit 400 entries |
+| `UnitTests/Keep/KeepCustomerTests.cs` | Replaced stale `clears_email_when_null` test; +5 email preservation tests |
+| `UnitTests/Keep/KeepPublicIntakeServiceTests.cs` | +18 unit tests (validation, phone chars/format, email, preservation, race recovery) |
+| `IntegrationTests/Api/KeepIntakeApiTests.cs` | +21 HTTP tests (max boundaries, phone chars, email, no-mutation, email preservation, phone equivalence, concurrent race) |
 
 **Non-goals:** Honeypot/Turnstile, SMS verification, spam scoring, fuzzy customer matching, address
 identity, and `Spam`/`Test` classification.
