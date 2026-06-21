@@ -150,7 +150,7 @@ public sealed class KeepRequestDetailB4Tests : IClassFixture<KeepApiWebFactory>,
         db.Set<KeepRequestEvent>().Add(
             KeepRequestEvent.CreateRequestCreated(activeRequest.Id, _accountId, now));
 
-        // Participants: owner (has User.Name) + invited member (no User).
+        // Participants: owner (has User.Name) + invited member (no User) + operator (for G4a MyWork access).
         db.Set<KeepRequestParticipant>().Add(
             KeepRequestParticipant.Create(
                 activeRequest.Id, _accountId, graph.Owner.Id,
@@ -159,6 +159,10 @@ public sealed class KeepRequestDetailB4Tests : IClassFixture<KeepApiWebFactory>,
             KeepRequestParticipant.Create(
                 activeRequest.Id, _accountId, invitedMember.Id,
                 ParticipationType.Watching, notificationsEnabled: false, now));
+        db.Set<KeepRequestParticipant>().Add(
+            KeepRequestParticipant.Create(
+                activeRequest.Id, _accountId, operatorMember.Id,
+                ParticipationType.Watching, notificationsEnabled: true, now));
 
         await db.SaveChangesAsync();
         _activeRequestId = activeRequest.Id;
@@ -188,6 +192,12 @@ public sealed class KeepRequestDetailB4Tests : IClassFixture<KeepApiWebFactory>,
             db.Set<KeepRequestEvent>().Add(toResolved.Value.StatusChangedEvent);
         if (toClosed.IsSuccess && toClosed.Value.StatusChangedEvent is not null)
             db.Set<KeepRequestEvent>().Add(toClosed.Value.StatusChangedEvent);
+
+        // Operator needs participation to access the closed request (G4a MyWork scope).
+        db.Set<KeepRequestParticipant>().Add(
+            KeepRequestParticipant.Create(
+                closedRequest.Id, _accountId, operatorMember.Id,
+                ParticipationType.Watching, notificationsEnabled: true, now));
 
         await db.SaveChangesAsync();
         _closedRequestId = closedRequest.Id;
@@ -335,16 +345,18 @@ public sealed class KeepRequestDetailB4Tests : IClassFixture<KeepApiWebFactory>,
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
         var participants = body.GetProperty("participants").EnumerateArray().ToList();
 
-        Assert.Equal(2, participants.Count);
+        // 3 participants: Owner (Responsible), Invited member (Watching), Operator (Watching).
+        Assert.Equal(3, participants.Count);
 
         // Responsible participant is the Owner (User.Name = "B4 Owner").
         var responsible = participants.Single(
             p => p.GetProperty("participationType").GetString() == "responsible");
         Assert.Equal("B4 Owner", responsible.GetProperty("displayName").GetString());
 
-        // Watching participant is the Invited member (no User — falls back to email).
-        var watching = participants.Single(
-            p => p.GetProperty("participationType").GetString() == "watching");
+        // Invited watching participant has no linked User — falls back to email.
+        var watching = participants.First(
+            p => p.GetProperty("participationType").GetString() == "watching" &&
+                 p.GetProperty("displayName").GetString() == _invitedParticipantEmail);
         Assert.Equal(_invitedParticipantEmail, watching.GetProperty("displayName").GetString());
     }
 

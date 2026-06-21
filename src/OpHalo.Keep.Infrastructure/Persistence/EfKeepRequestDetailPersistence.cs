@@ -50,10 +50,17 @@ public sealed class EfKeepRequestDetailPersistence(OpHaloDbContext dbContext) : 
     }
 
     public async Task<KeepRequest?> GetRequestAsync(
-        Guid requestId, Guid accountId, CancellationToken ct) =>
-        await dbContext.Set<KeepRequest>()
-            .AsNoTracking()
-            .FirstOrDefaultAsync(r => r.Id == requestId && r.AccountId == accountId, ct);
+        Guid requestId,
+        Guid accountId,
+        Guid currentAccountUserId,
+        KeepRequestVisibilityScope scope,
+        CancellationToken ct)
+    {
+        var scopedQuery = KeepRequestRowQueryFactory.Apply(
+            dbContext.Set<KeepRequest>().AsNoTracking(),
+            scope, accountId, currentAccountUserId, dbContext);
+        return await scopedQuery.FirstOrDefaultAsync(r => r.Id == requestId, ct);
+    }
 
     public async Task<IReadOnlyList<KeepRequestEvent>> GetAllEventsAsync(
         Guid requestId, CancellationToken ct) =>

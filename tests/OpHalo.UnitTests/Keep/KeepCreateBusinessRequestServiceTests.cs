@@ -359,7 +359,7 @@ public class KeepCreateBusinessRequestServiceTests
 
         public Task<AccountUserSnapshot?> GetAccountUserSnapshotAsync(Guid u, CancellationToken ct) => throw new NotImplementedException();
         public Task<AccountAccessSnapshot?> GetAccountAccessSnapshotAsync(Guid a, CancellationToken ct) => throw new NotImplementedException();
-        public Task<KeepRequest?> GetRequestAsync(Guid r, Guid a, CancellationToken ct) => throw new NotImplementedException();
+        public Task<KeepRequest?> GetRequestAsync(Guid r, Guid a, Guid u, KeepRequestVisibilityScope s, CancellationToken ct) => throw new NotImplementedException();
         public Task<KeepRequestPageLookup?> GetRequestByPageTokenAsync(string t, CancellationToken ct) => throw new NotImplementedException();
         public Task<IReadOnlyList<KeepRequestEvent>> GetCustomerVisibleEventsAsync(Guid r, CancellationToken ct) => throw new NotImplementedException();
     }

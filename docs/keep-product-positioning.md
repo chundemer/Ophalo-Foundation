@@ -48,6 +48,56 @@ Keep turns scattered communication into a visible loop:
 request -> acknowledgement -> ownership -> updates -> resolution -> feedback -> closeout
 ```
 
+## Product Surfaces and Intended Users
+
+Keep has two authenticated work surfaces with deliberately different jobs. They use the same API,
+account model, request state, and server-authoritative authorization rules; the client surface never
+decides what a user may see or do.
+
+### PWA — Owner/Admin command center
+
+The PWA is primarily for Owners and Admins managing the business-wide customer promise. It provides:
+
+- all-account work, attention, Available/unassigned, closeout, feedback, and history visibility;
+- dispatch, assignment, routing, and workload oversight;
+- manual/business request creation;
+- intake-link, member, account, and operational settings;
+- account-wide totals, response posture, and trustworthy operational review.
+
+Viewer is a trusted account-wide read-only role on this surface. Viewer supports partners, managers,
+consultants, auditors, or others who need oversight without operational or administrative writes.
+The product must clearly disclose the breadth of Viewer access when the role is granted.
+
+### Native mobile — Operator field workspace
+
+The native mobile app is primarily for Operators working on the road. It should stay narrow, fast,
+and interruption-tolerant. It provides:
+
+- My Work for requests where the Operator is Responsible or Watching;
+- a prominent privacy-limited Available surface for discovering and explicitly claiming/watching
+  eligible unassigned work;
+- customer contact actions, updates, internal notes, status changes, attention handling, and
+  participation controls allowed for that Operator;
+- native phone, email, and Messages launchers plus explicit contact logging;
+- resume synchronization, badges, push, and deep links for urgent actionable work.
+
+Launching an external phone or messaging app records local intent, not a completed communication.
+When the Operator returns, Keep should request confirmation without blocking unrelated work or
+writing a false server-side audit event.
+
+The surface split is:
+
+```text
+PWA    -> manage the whole business and close the loop
+Mobile -> handle the work in front of the Operator
+```
+
+This is a product and UX boundary, not a security shortcut. Owners/Admins and Operators remain
+subject to the same server-side account, row-visibility, and action policies regardless of client.
+
+Public intake and customer request pages remain separate anonymous customer surfaces. They are not
+PWA or Operator-mobile workspaces and expose only their intentionally limited public contracts.
+
 ## What Keep Is Not
 
 Keep should not become a full field-service operating system.

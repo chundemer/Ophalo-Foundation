@@ -19,10 +19,16 @@ public interface IKeepRequestDetailPersistence
     Task<AccountAccessSnapshot?> GetAccountAccessSnapshotAsync(Guid accountId, CancellationToken ct);
 
     /// <summary>
-    /// Returns the request if it belongs to the given account; null if not found or cross-account.
-    /// Cross-account and not-found are intentionally indistinguishable at this layer.
+    /// Returns the request if it belongs to the given account and passes the visibility scope;
+    /// null if not found, cross-account, or the caller lacks row access.
+    /// Not-found and unauthorized are intentionally indistinguishable at this layer.
     /// </summary>
-    Task<KeepRequest?> GetRequestAsync(Guid requestId, Guid accountId, CancellationToken ct);
+    Task<KeepRequest?> GetRequestAsync(
+        Guid requestId,
+        Guid accountId,
+        Guid currentAccountUserId,
+        KeepRequestVisibilityScope scope,
+        CancellationToken ct);
 
     /// <summary>
     /// Returns all events for the request, ordered chronologically (ascending OccurredAtUtc).

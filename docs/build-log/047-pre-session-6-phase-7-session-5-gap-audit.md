@@ -131,7 +131,7 @@ Use a bounded Pre-Session 6 Gap Resolution Phase rather than one oversized Claud
 |---|---|---|---|---|
 | GAP-001 | Blocker | Keep setup | No production flow provisions, returns status for, or exceptionally replaces an account's durable public intake link | Implement before pilot/local end-to-end |
 | GAP-002 | Blocker | Request intake | No authenticated business/manual request creation exists although pilot docs assume manual entry | Implement bounded business-created intake |
-| GAP-003 | High / security | Row authorization | Operator default/list/detail/write scope is broader than locked responsible/watching/available policy | Correct before Session 6 |
+| GAP-003 | High / security | Row authorization | Operator default/list/detail/write scope is broader than locked participating-work plus privacy-limited Available policy | Correct before Session 6 |
 | GAP-004 | High / integrity | Concurrency | Keep request writes have no optimistic concurrency; stale close/review/update can overwrite newer state | Add entity-wide OCC before Session 6 |
 | GAP-005 | High / integrity | Schema | Keep tables carry account/request/customer IDs without relational foreign keys | Locked: add account-safe FKs with restricted deletion |
 | GAP-006 | High / identity | Customer matching | Customer identity uses trimmed raw phone rather than normalized phone | Add canonical phone identity before real data |
@@ -141,7 +141,7 @@ Use a bounded Pre-Session 6 Gap Resolution Phase rather than one oversized Claud
 | GAP-010 | Medium / semantics | Activity fields | Customer-created intake sets business activity but no customer activity | Correct origin/activity semantics before stale policy |
 | GAP-011 | Medium / lifecycle | Customer-page expiry | Expiry is enforced when populated, but no normal workflow ever sets `ExpiresAtUtc` | Locked: 30 days from close/cancel; immediate for Spam/Test |
 | GAP-012 | High / edge security | Rate limiting | Trusted-proxy headers are accepted without code-enforced proxy trust and 429 behavior is untested | Harden before staging |
-| GAP-013 | Medium / secret handling | Bearer URLs | Public intake/page bearer tokens may appear in ordinary request-path logs | Add path/token redaction posture before staging |
+| GAP-013 | High / secret handling | Bearer URLs/storage | Public intake/page bearer tokens may appear in ordinary request-path logs; customer page tokens are also stored retrievably so authorized staff can re-share links | Add path/token redaction and explicitly resolve at-rest protection versus re-share before staging |
 | GAP-014 | Medium / contract | Legacy surface | Undeployed app still exposes Continuity alias and ignored email opt-in as legacy contracts | Locked: remove both before frontend |
 | GAP-015 | Medium / link integrity | Intake link model | Model comment claims one active link per account, but schema enforces only slug/hash uniqueness | Locked: one durable active link per account |
 | GAP-016 | Medium / operations | Runtime database | Connection validation is lazy and no persistent local full-stack database runbook exists | Complete after gap phase, before notifications |
@@ -234,15 +234,34 @@ contract. Session 6 role-aware queues would inherit the flaw.
 
 **Required fix**
 
-Create one shared request-row access policy used by lists, counts, detail, and writes:
+Create explicit shared request-row and action policies used by lists, counts, detail, metadata, and
+writes (2026-06-21 clarification; ADR-319–323):
 
 - Owner/Admin: account-wide;
-- Operator: active Responsible, active Watching, or eligible unassigned request;
-- Viewer: preserve explicit read-only policy;
+- Viewer: trusted account-wide read-only, with no write affordances and existing sensitive-field
+  redaction preserved;
+- Operator Default/Needs Attention: active eligible Responsible or Watching participation only;
+- Operator Available: separate privacy-limited summary for active eligible effectively-unassigned
+  work under dedicated `GET /keep/requests/available`; no normal full detail until an explicit
+  audited self-assign/watch. Customer name is included for field recognition; phone/email, full
+  description, internal history, page token/link, feedback, participation, and notification details
+  are withheld;
+- reads never silently change participation or ownership;
+- stale/detached/ineligible participation grants no access; unknown roles fail closed;
 - cross-account/invisible rows return Not Found;
-- destructive actions may be narrower (for example, cancellation requires Responsible).
+- action permission remains separate and may be narrower than row visibility;
+- Application services select named scopes explicitly; Infrastructure uses one shared composable EF
+  query/predicate implementation rather than copied `EXISTS` logic or an implicit global filter.
 
-Add direct-ID HTTP tests, not only list tests.
+Named scopes are capability-oriented (`AccountWide`, `MyWork`, `ParticipationEntry`), not role-
+named. `ParticipationEntry` is limited to audited Operator self-assign/watch transitions. Shared
+action rules live in a standalone Application policy, not the detail mapper. Implementation is split
+into bounded migrations; the old account-only tracked loader is obsolete until all callers move and
+is then removed.
+
+Add direct-ID HTTP tests, not only list tests, plus Available-summary field-redaction and no-read-
+side-effect tests. This clarification reaffirms ADR-227/240 and supersedes the abandoned broad
+`MyWorkOrAvailable` full-detail/default-list proposal.
 
 ### GAP-004 — Keep request writes lack optimistic concurrency
 
@@ -636,14 +655,16 @@ Gate:
 
 Scope:
 
-- GAP-003 one shared request-row policy;
+- GAP-003 shared explicit row-scope and action policies, with Operator MyWork separated from a
+  privacy-limited Available summary;
 - GAP-004 entity-wide optimistic concurrency and stable 409;
 - direct-ID and true-race tests.
 
 Gate:
 
 - Operators cannot read/write another Operator's assigned request;
-- watching and intentional unassigned access behave exactly as locked;
+- watching, self-assignment, privacy-limited Available discovery, and full-detail transition behave
+  exactly as locked without GET side effects;
 - stale writes cannot overwrite newer customer state;
 - full suite green.
 

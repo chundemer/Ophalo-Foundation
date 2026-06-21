@@ -70,7 +70,23 @@ public sealed class GetKeepRequestDetailService(
         if (!featurePolicy.IsEnabled(accountSnapshot.Plan, FeatureKeys.Keep.OperatorQueue))
             return Result<KeepRequestDetailResult>.Failure(Forbidden);
 
-        var request = await persistence.GetRequestAsync(requestId, currentUser.AccountId, ct);
+        KeepRequestVisibilityScope scope;
+        switch (userSnapshot.Role)
+        {
+            case AccountUserRole.Owner:
+            case AccountUserRole.Admin:
+            case AccountUserRole.Viewer:
+                scope = KeepRequestVisibilityScope.AccountWide;
+                break;
+            case AccountUserRole.Operator:
+                scope = KeepRequestVisibilityScope.MyWork;
+                break;
+            default:
+                return Result<KeepRequestDetailResult>.Failure(Forbidden);
+        }
+
+        var request = await persistence.GetRequestAsync(
+            requestId, currentUser.AccountId, currentUser.UserId, scope, ct);
         if (request is null)
             return Result<KeepRequestDetailResult>.Failure(KeepRequestErrors.NotFound);
 
