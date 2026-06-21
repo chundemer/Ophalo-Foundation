@@ -111,8 +111,16 @@ public sealed class LogExternalContactService(
                 return Result<KeepRequestDetailResult>.Failure(KeepRequestErrors.ExternalContactOutcomeNotAllowed);
         }
 
+        // --- Row authorization scope ---
+        if (userSnapshot.Role is not (AccountUserRole.Owner or AccountUserRole.Admin or AccountUserRole.Operator))
+            return Result<KeepRequestDetailResult>.Failure(Forbidden);
+        var scope = userSnapshot.Role is AccountUserRole.Owner or AccountUserRole.Admin
+            ? KeepRequestVisibilityScope.AccountWide
+            : KeepRequestVisibilityScope.MyWork;
+
         // --- Load request ---
-        var request = await operatePersistence.GetRequestForUpdateAsync(command.RequestId, currentUser.AccountId, ct);
+        var request = await operatePersistence.GetVisibleRequestForUpdateAsync(
+            command.RequestId, currentUser.AccountId, currentUser.UserId, scope, ct);
         if (request is null)
             return Result<KeepRequestDetailResult>.Failure(KeepRequestErrors.NotFound);
 

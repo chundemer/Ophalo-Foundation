@@ -66,6 +66,16 @@ public sealed class EfKeepRequestOperatePersistence(OpHaloDbContext dbContext) :
             .AsNoTracking()
             .FirstOrDefaultAsync(p => p.AccountId == accountId, ct);
 
+    public async Task<KeepRequest?> GetVisibleRequestForUpdateAsync(
+        Guid requestId, Guid accountId, Guid currentAccountUserId,
+        KeepRequestVisibilityScope scope, CancellationToken ct)
+    {
+        var baseQuery = dbContext.Set<KeepRequest>();
+        var scoped = KeepRequestRowQueryFactory.Apply(baseQuery, scope, accountId, currentAccountUserId, dbContext);
+        return await scoped.FirstOrDefaultAsync(r => r.Id == requestId, ct);
+    }
+
+    [Obsolete("Use GetVisibleRequestForUpdateAsync. Removed after all callers migrate in G4c.")]
     public async Task<KeepRequest?> GetRequestForUpdateAsync(
         Guid requestId, Guid accountId, CancellationToken ct) =>
         await dbContext.Set<KeepRequest>()

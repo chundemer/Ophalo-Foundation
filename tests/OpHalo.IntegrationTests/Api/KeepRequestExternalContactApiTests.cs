@@ -129,6 +129,13 @@ public sealed class KeepRequestExternalContactApiTests : IClassFixture<KeepApiWe
         _noAnswerRequestId = await SeedRequestAsync(
             db, _accountId, customer.Id, "EC-NOA", "ec_noa_token", now);
 
+        // Operator needs active participation so G4b MyWork scope grants mutation access.
+        db.Set<KeepRequestParticipant>().Add(
+            KeepRequestParticipant.Create(
+                _noAnswerRequestId, _accountId, operatorMember.Id,
+                ParticipationType.Responsible, notificationsEnabled: true, now));
+        await db.SaveChangesAsync();
+
         _smsRequestId = await SeedRequestAsync(
             db, _accountId, customer.Id, "EC-SMS", "ec_sms_token", now);
 

@@ -1,10 +1,10 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-06-21 (G4a complete)
+**Last updated:** 2026-06-21 (G4b complete; G4c pre-work pending)
 **Branch:** `main` (no remote yet)
-**Current baseline:** G4a complete at 995 tests (568 unit · 14 architecture · 413 integration)
+**Current baseline:** G4b complete at 1004 tests (568 unit · 14 architecture · 422 integration)
 **Next free ADR:** ADR-326
-**Pre-work complete: none** — G4b requires a fresh pre-implementation gate.
+**Pre-work not complete** — G4c requires a fresh pre-implementation gate before any code is written.
 
 ---
 
@@ -48,6 +48,13 @@ For every implementation slice:
 - **G4a complete — 995 tests.** KeepRequestVisibilityScope, KeepRequestRowQueryFactory,
   detail-row authorization for GetKeepRequestDetailService (AccountWide/MyWork). ADR-319–325
   locked (pre-work); 10 direct-ID row-auth integration tests. commit e57522a.
+- **G4b complete — 1004 tests.** GetVisibleRequestForUpdateAsync added to
+  IKeepRequestOperatePersistence/EfKeepRequestOperatePersistence; old GetRequestForUpdateAsync
+  marked [Obsolete] on both interface and implementation. AcknowledgeAttentionService,
+  AddBusinessUpdateService, AddInternalNoteService, ChangeKeepRequestStatusService,
+  LogExternalContactService all migrated (Owner/Admin → AccountWide, Operator → MyWork,
+  unknown role → 403). ExternalContact Operator test updated with Responsible participation.
+  9 new G4b mutation-row-auth integration tests. G4c callers emit [Obsolete] warnings.
 
 Historical Phase 8-B1 through B5 Session 5 completion detail is intentionally omitted here. Use
 build logs 025–046 and ADR-084–294 when needed; do not reload those histories for G4 unless a
@@ -212,22 +219,9 @@ Expected files (verify names/signatures before writing):
 
 Gate: targeted tests, architecture tests, build, and full suite; report exact counts. No migration.
 
-#### G4b — Consequential Operator mutation-load migration
+#### G4b — Consequential Operator mutation-load migration — COMPLETE (1004 tests)
 
-**Pre-work not complete. Claude must present a targeted gate after G4a commits.**
-
-Introduce a scope-required visible tracked-load method while retaining the old loader as obsolete.
-Migrate the standard Operator-capable services in one bounded slice:
-
-- `AcknowledgeAttentionService`
-- `AddBusinessUpdateService`
-- `AddInternalNoteService`
-- `ChangeKeepRequestStatusService`
-- `LogExternalContactService`
-
-All use `AccountWide` for Owner/Admin and `MyWork` for Operator. Include invisible-row denial for
-each endpoint and representative Responsible/Watching success. Begin `KeepRequestActionPolicy`
-only if the gate can keep the slice bounded; otherwise leave metadata unchanged until G4e.
+Committed. See completed gap references above for detail.
 
 #### G4c — Participation/admin mutation-load migration and old-loader removal
 

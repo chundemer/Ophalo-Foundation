@@ -26,9 +26,19 @@ public interface IKeepRequestOperatePersistence
     Task<string?> GetActorDisplayNameAsync(Guid accountUserId, CancellationToken ct);
 
     /// <summary>
+    /// Returns a tracked KeepRequest for mutation, applying row-authorization scope before
+    /// filtering to the requested ID. Null if not found, cross-account, or invisible under scope.
+    /// All cases are intentionally indistinguishable at this layer.
+    /// </summary>
+    Task<KeepRequest?> GetVisibleRequestForUpdateAsync(
+        Guid requestId, Guid accountId, Guid currentAccountUserId,
+        KeepRequestVisibilityScope scope, CancellationToken ct);
+
+    /// <summary>
     /// Returns a tracked KeepRequest for mutation. Null if not found or cross-account.
     /// Cross-account and not-found are intentionally indistinguishable at this layer.
     /// </summary>
+    [Obsolete("Use GetVisibleRequestForUpdateAsync. Removed after all callers migrate in G4c.")]
     Task<KeepRequest?> GetRequestForUpdateAsync(Guid requestId, Guid accountId, CancellationToken ct);
 
     /// <summary>
