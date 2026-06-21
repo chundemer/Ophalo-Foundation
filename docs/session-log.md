@@ -1,11 +1,10 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-06-21 (G4 policy locked; G4a pre-work complete)
+**Last updated:** 2026-06-21 (G4a complete)
 **Branch:** `main` (no remote yet)
-**Current baseline:** G3b complete at 986 tests (568 unit · 14 architecture · 404 integration)
+**Current baseline:** G4a complete at 995 tests (568 unit · 14 architecture · 413 integration)
 **Next free ADR:** ADR-326
-**Pre-work complete: G4a only** — implement only the bounded G4a scope below; G4b–G4e each
-require a fresh pre-implementation gate after the preceding slice commits.
+**Pre-work complete: none** — G4b requires a fresh pre-implementation gate.
 
 ---
 
@@ -46,6 +45,9 @@ For every implementation slice:
   public-contract cleanup. ADR-311–314; build-log/050.
 - **G3b complete — 986 tests.** Authenticated business-created requests, shared validation and
   intake commit helper, authenticated creation actor. ADR-315–318; build-log/051.
+- **G4a complete — 995 tests.** KeepRequestVisibilityScope, KeepRequestRowQueryFactory,
+  detail-row authorization for GetKeepRequestDetailService (AccountWide/MyWork). ADR-319–325
+  locked (pre-work); 10 direct-ID row-auth integration tests. commit e57522a.
 
 Historical Phase 8-B1 through B5 Session 5 completion detail is intentionally omitted here. Use
 build logs 025–046 and ADR-084–294 when needed; do not reload those histories for G4 unless a
@@ -184,10 +186,7 @@ Owner/Admin-only action. G7 later blocks the generic acknowledgement path specif
 G4 is complete only after every slice is committed, all old loaders/helpers have zero callers, the
 exit inventory names every migrated path, and the full suite is green.
 
-#### G4a — Policy/query foundation and detail-row authorization
-
-**Pre-work complete. Claude may implement this slice after restating the exact file list and
-confirming current signatures; no product decision remains open for G4a.**
+#### G4a — Policy/query foundation and detail-row authorization — COMPLETE (commit e57522a, 995 tests)
 
 Scope:
 
