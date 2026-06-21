@@ -73,6 +73,7 @@ public sealed class KeepRequestParticipationApiTests : IClassFixture<KeepApiWebF
     private Guid _g4cStaleResponsibleEntryRequestId;
     private Guid _g4cInvisibleUnwatchRequestId;
     private Guid _g4cDetailDeniedRequestId;
+    private Guid _g4cWatchingWithOtherResponsibleRequestId;
 
     // Session 3C read-model requests
     private Guid _3cCurrentUserPartRequestId;
@@ -290,6 +291,17 @@ public sealed class KeepRequestParticipationApiTests : IClassFixture<KeepApiWebF
         db.Set<KeepRequestParticipant>().Add(KeepRequestParticipant.Create(
             _g4cStaleResponsibleEntryRequestId, _accountId, _viewerAccountUserId,
             ParticipationType.Responsible, notificationsEnabled: true, now));
+
+        // _g4cWatchingWithOtherResponsibleRequestId: Operator is Watching (MyWork access) AND
+        // Owner is Responsible. Operator self-assign must return 409 — not steal the assignment.
+        _g4cWatchingWithOtherResponsibleRequestId = await SeedRequestAsync(db, _accountId, customer.Id, "4C-WOR", "4c_wor_token", now);
+        db.Set<KeepRequestParticipant>().Add(KeepRequestParticipant.Create(
+            _g4cWatchingWithOtherResponsibleRequestId, _accountId, _operatorAccountUserId,
+            ParticipationType.Watching, notificationsEnabled: true, now));
+        db.Set<KeepRequestParticipant>().Add(KeepRequestParticipant.Create(
+            _g4cWatchingWithOtherResponsibleRequestId, _accountId, _ownerAccountUserId,
+            ParticipationType.Responsible, notificationsEnabled: true, now));
+        await db.SaveChangesAsync();
 
         // _g4cTerminalAvailableRequestId: closed, no Operator participation.
         var terminalG4c = KeepRequest.CreateFromCustomerIntake(
@@ -1094,6 +1106,34 @@ public sealed class KeepRequestParticipationApiTests : IClassFixture<KeepApiWebF
         var events = body.GetProperty("events").EnumerateArray().ToList();
         Assert.DoesNotContain(events, e =>
             e.GetProperty("eventType").GetString() == "participation_changed");
+    }
+
+    [Fact]
+    public async Task G4c_WatchingOperator_OtherResponsibleExists_SelfAssign_Returns409_ResponsibleUnchanged()
+    {
+        // Operator is Watching → MyWork grants row access. Owner is Responsible.
+        // Self-assign must be blocked (409) with no participation or audit side effects.
+        var denied = await AuthRequest(_operatorCookie).PutAsJsonAsync(
+            $"/keep/requests/{_g4cWatchingWithOtherResponsibleRequestId}/responsible",
+            new { accountUserId = _operatorAccountUserId });
+
+        Assert.Equal(HttpStatusCode.Conflict, denied.StatusCode);
+        var errorBody = await denied.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("KeepRequest.ParticipationRequestAlreadyAssigned", errorBody.GetProperty("code").GetString());
+
+        // Owner reads detail — Responsible is still the Owner; no participation_changed event.
+        var detail = await AuthRequest(_ownerCookie).GetAsync(
+            $"/keep/requests/{_g4cWatchingWithOtherResponsibleRequestId}");
+        Assert.Equal(HttpStatusCode.OK, detail.StatusCode);
+
+        var body = await detail.Content.ReadFromJsonAsync<JsonElement>();
+        var participants = body.GetProperty("participants").EnumerateArray().ToList();
+        var responsible = participants.Single(p =>
+            p.GetProperty("participationType").GetString() == "responsible" &&
+            p.GetProperty("detachedAtUtc").ValueKind == JsonValueKind.Null);
+        Assert.Equal(_ownerAccountUserId.ToString(), responsible.GetProperty("accountUserId").GetString());
+        Assert.DoesNotContain(body.GetProperty("events").EnumerateArray(),
+            e => e.GetProperty("eventType").GetString() == "participation_changed");
     }
 
     // =========================================================================

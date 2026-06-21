@@ -45,8 +45,10 @@ public sealed class ManageResponsibleService(
         if (userSnapshot.Role == AccountUserRole.Operator && command.TargetAccountUserId != currentUser.UserId)
             return Result<KeepRequestDetailResult>.Failure(KeepRequestErrors.ParticipationOperatorCannotAssignOther);
 
-        // Scope: Owner/Admin see all account work; Operator uses ParticipationEntry so an already-
-        // assigned request (another eligible Responsible) is indistinguishable from not-found (404).
+        // Scope: Owner/Admin see all account work; Operator uses ParticipationEntry (MyWork ∪ Available).
+        // A non-participating Operator gets 404 for an assigned request via the Available branch's
+        // effectively-unassigned filter. A Watching Operator reaches an assigned request via MyWork;
+        // the post-participant-load check below blocks that case.
         KeepRequestVisibilityScope scope;
         if (userSnapshot.Role is AccountUserRole.Owner or AccountUserRole.Admin)
             scope = KeepRequestVisibilityScope.AccountWide;
@@ -67,6 +69,22 @@ public sealed class ManageResponsibleService(
             return Result<KeepRequestDetailResult>.Failure(KeepRequestErrors.ParticipationTargetIneligible);
 
         var participants = await operatePersistence.GetParticipantsForUpdateAsync(command.RequestId, currentUser.AccountId, ct);
+
+        // A Watching Operator reaches here via MyWork even when another user holds Responsibility.
+        // Block only when that Responsible is still eligible; stale/ineligible does not block.
+        // Idempotent self-assign (this Operator is already Responsible) passes through.
+        if (userSnapshot.Role == AccountUserRole.Operator)
+        {
+            var existingResponsible = participants.FirstOrDefault(
+                p => p.IsActive && p.ParticipationType == ParticipationType.Responsible);
+            if (existingResponsible is not null && existingResponsible.AccountUserId != currentUser.UserId)
+            {
+                var existingResponsibleInfo = await operatePersistence.GetParticipantTargetAsync(
+                    existingResponsible.AccountUserId, currentUser.AccountId, ct);
+                if (existingResponsibleInfo is not null && IsEligible(existingResponsibleInfo))
+                    return Result<KeepRequestDetailResult>.Failure(KeepRequestErrors.ParticipationRequestAlreadyAssigned);
+            }
+        }
 
         var nowUtc = clock.UtcNow;
         var domainResult = participationService.SetResponsible(
