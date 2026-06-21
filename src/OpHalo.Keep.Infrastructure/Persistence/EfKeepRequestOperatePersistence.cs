@@ -75,12 +75,6 @@ public sealed class EfKeepRequestOperatePersistence(OpHaloDbContext dbContext) :
         return await scoped.FirstOrDefaultAsync(r => r.Id == requestId, ct);
     }
 
-    [Obsolete("Use GetVisibleRequestForUpdateAsync. Removed after all callers migrate in G4c.")]
-    public async Task<KeepRequest?> GetRequestForUpdateAsync(
-        Guid requestId, Guid accountId, CancellationToken ct) =>
-        await dbContext.Set<KeepRequest>()
-            .FirstOrDefaultAsync(r => r.Id == requestId && r.AccountId == accountId, ct);
-
     public async Task CommitAsync(KeepRequest request, KeepRequestEvent? newEvent, CancellationToken ct)
     {
         if (newEvent is not null)

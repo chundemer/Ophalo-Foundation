@@ -79,8 +79,10 @@ public sealed class MarkFeedbackReviewedService(
         if (actorDisplayName is null)
             return Result<KeepRequestDetailResult>.Failure(Forbidden);
 
-        // --- Load request for mutation ---
-        var request = await operatePersistence.GetRequestForUpdateAsync(command.RequestId, currentUser.AccountId, ct);
+        // --- Load request for mutation (Owner/Admin only reach this point) ---
+        var request = await operatePersistence.GetVisibleRequestForUpdateAsync(
+            command.RequestId, currentUser.AccountId, currentUser.UserId,
+            KeepRequestVisibilityScope.AccountWide, ct);
         if (request is null)
             return Result<KeepRequestDetailResult>.Failure(KeepRequestErrors.NotFound);
 

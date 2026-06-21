@@ -35,13 +35,6 @@ public interface IKeepRequestOperatePersistence
         KeepRequestVisibilityScope scope, CancellationToken ct);
 
     /// <summary>
-    /// Returns a tracked KeepRequest for mutation. Null if not found or cross-account.
-    /// Cross-account and not-found are intentionally indistinguishable at this layer.
-    /// </summary>
-    [Obsolete("Use GetVisibleRequestForUpdateAsync. Removed after all callers migrate in G4c.")]
-    Task<KeepRequest?> GetRequestForUpdateAsync(Guid requestId, Guid accountId, CancellationToken ct);
-
-    /// <summary>
     /// Returns the response policy for the account, or null if no policy row exists.
     /// Callers fall back to pilot defaults (standard=240 min).
     /// </summary>
@@ -49,7 +42,7 @@ public interface IKeepRequestOperatePersistence
 
     /// <summary>
     /// Persists the mutated request and, when provided, the new event in a single
-    /// SaveChangesAsync. The request must have been loaded via GetRequestForUpdateAsync
+    /// SaveChangesAsync. The request must have been loaded via GetVisibleRequestForUpdateAsync
     /// on the same DbContext instance.
     /// </summary>
     Task CommitAsync(KeepRequest request, KeepRequestEvent? newEvent, CancellationToken ct);

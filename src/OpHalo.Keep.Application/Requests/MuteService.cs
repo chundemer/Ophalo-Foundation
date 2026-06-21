@@ -32,7 +32,18 @@ public sealed class MuteService(
         if (authResult.IsFailure) return Result<KeepRequestDetailResult>.Failure(authResult.Error);
         var (userSnapshot, actorDisplayName) = authResult.Value;
 
-        var request = await operatePersistence.GetRequestForUpdateAsync(requestId, currentUser.AccountId, ct);
+        // Owner/Admin: AccountWide. Operator: MyWork (no participation → 404, not 409).
+        // Unknown/future role fails closed.
+        KeepRequestVisibilityScope muteScope;
+        if (userSnapshot.Role is AccountUserRole.Owner or AccountUserRole.Admin)
+            muteScope = KeepRequestVisibilityScope.AccountWide;
+        else if (userSnapshot.Role == AccountUserRole.Operator)
+            muteScope = KeepRequestVisibilityScope.MyWork;
+        else
+            return Result<KeepRequestDetailResult>.Failure(Forbidden);
+
+        var request = await operatePersistence.GetVisibleRequestForUpdateAsync(
+            requestId, currentUser.AccountId, currentUser.UserId, muteScope, ct);
         if (request is null)
             return Result<KeepRequestDetailResult>.Failure(KeepRequestErrors.NotFound);
         if (request.IsTerminal)
@@ -40,7 +51,6 @@ public sealed class MuteService(
 
         var participants = await operatePersistence.GetParticipantsForUpdateAsync(requestId, currentUser.AccountId, ct);
 
-        // Domain validates active participation — returns ParticipationMuteRequiresActiveParticipation if none.
         var nowUtc = clock.UtcNow;
         var domainResult = participationService.Mute(
             participants, requestId, currentUser.AccountId,
@@ -63,7 +73,18 @@ public sealed class MuteService(
         if (authResult.IsFailure) return Result<KeepRequestDetailResult>.Failure(authResult.Error);
         var (userSnapshot, actorDisplayName) = authResult.Value;
 
-        var request = await operatePersistence.GetRequestForUpdateAsync(requestId, currentUser.AccountId, ct);
+        // Owner/Admin: AccountWide. Operator: MyWork (no participation → 404, not 409).
+        // Unknown/future role fails closed.
+        KeepRequestVisibilityScope unmuteScope;
+        if (userSnapshot.Role is AccountUserRole.Owner or AccountUserRole.Admin)
+            unmuteScope = KeepRequestVisibilityScope.AccountWide;
+        else if (userSnapshot.Role == AccountUserRole.Operator)
+            unmuteScope = KeepRequestVisibilityScope.MyWork;
+        else
+            return Result<KeepRequestDetailResult>.Failure(Forbidden);
+
+        var request = await operatePersistence.GetVisibleRequestForUpdateAsync(
+            requestId, currentUser.AccountId, currentUser.UserId, unmuteScope, ct);
         if (request is null)
             return Result<KeepRequestDetailResult>.Failure(KeepRequestErrors.NotFound);
         if (request.IsTerminal)
@@ -71,7 +92,6 @@ public sealed class MuteService(
 
         var participants = await operatePersistence.GetParticipantsForUpdateAsync(requestId, currentUser.AccountId, ct);
 
-        // Domain validates active participation — returns ParticipationMuteRequiresActiveParticipation if none.
         var nowUtc = clock.UtcNow;
         var domainResult = participationService.Unmute(
             participants, requestId, currentUser.AccountId,

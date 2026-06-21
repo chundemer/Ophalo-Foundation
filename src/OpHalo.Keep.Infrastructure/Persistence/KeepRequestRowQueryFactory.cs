@@ -27,12 +27,67 @@ internal static class KeepRequestRowQueryFactory
                 ApplyMyWork(baseQuery, accountId, currentAccountUserId, dbContext),
 
             KeepRequestVisibilityScope.ParticipationEntry =>
-                throw new InvalidOperationException(
-                    "ParticipationEntry scope is reserved for G4c (ManageResponsible.Set / SelfWatch)."),
+                ApplyParticipationEntry(baseQuery, accountId, currentAccountUserId, dbContext),
 
             _ => throw new InvalidOperationException(
                 $"Unhandled KeepRequestVisibilityScope: {scope}")
         };
+
+    /// <summary>
+    /// Union of MyWork (already a Responsible/Watching participant) and Available
+    /// (active non-terminal, no active eligible Responsible, current user is eligible).
+    /// Used for Operator self-assign and self-watch so idempotent re-entry stays 200
+    /// while a request owned by another eligible Responsible returns 404 (ADR-325).
+    /// </summary>
+    private static IQueryable<KeepRequest> ApplyParticipationEntry(
+        IQueryable<KeepRequest> query,
+        Guid accountId,
+        Guid currentAccountUserId,
+        OpHaloDbContext dbContext)
+    {
+        var myWork   = ApplyMyWork(query, accountId, currentAccountUserId, dbContext);
+        var available = ApplyAvailable(query, accountId, currentAccountUserId, dbContext);
+        return myWork.Union(available);
+    }
+
+    /// <summary>
+    /// Available branch: active non-terminal requests with no active eligible Responsible,
+    /// visible only to active eligible same-account members (ADR-325).
+    /// Detached, removed, suspended, invited, Viewer, and unknown-role Responsible rows
+    /// do not count as blocking. Watching rows never prevent availability.
+    /// </summary>
+    private static IQueryable<KeepRequest> ApplyAvailable(
+        IQueryable<KeepRequest> query,
+        Guid accountId,
+        Guid currentAccountUserId,
+        OpHaloDbContext dbContext)
+    {
+        return query
+            .Where(r => r.AccountId == accountId)
+            .Where(r =>
+                r.Status != KeepRequestStatus.Closed &&
+                r.Status != KeepRequestStatus.Cancelled &&
+                !(from p in dbContext.Set<KeepRequestParticipant>()
+                  join au in dbContext.AccountUsers on p.AccountUserId equals au.Id
+                  where p.RequestId == r.Id &&
+                        p.AccountId == accountId &&
+                        p.DetachedAtUtc == null &&
+                        p.ParticipationType == ParticipationType.Responsible &&
+                        au.AccountId == p.AccountId &&
+                        au.MembershipStatus == MembershipStatus.Active &&
+                        (au.Role == AccountUserRole.Owner ||
+                         au.Role == AccountUserRole.Admin ||
+                         au.Role == AccountUserRole.Operator)
+                  select p).Any() &&
+                (from au in dbContext.AccountUsers
+                 where au.Id == currentAccountUserId &&
+                       au.AccountId == accountId &&
+                       au.MembershipStatus == MembershipStatus.Active &&
+                       (au.Role == AccountUserRole.Owner ||
+                        au.Role == AccountUserRole.Admin ||
+                        au.Role == AccountUserRole.Operator)
+                 select au).Any());
+    }
 
     private static IQueryable<KeepRequest> ApplyMyWork(
         IQueryable<KeepRequest> query,

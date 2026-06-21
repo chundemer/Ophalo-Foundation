@@ -66,6 +66,14 @@ public sealed class KeepRequestParticipationApiTests : IClassFixture<KeepApiWebF
     private Guid _operatorSelfAssignAlreadyAssignedRequestId;
     private Guid _operatorSelfAssignIdempotentRequestId;
 
+    // G4c: ParticipationEntry scope and Available-entry tests
+    private Guid _g4cAvailableSelfAssignAuditRequestId;
+    private Guid _g4cAvailableSelfWatchAuditRequestId;
+    private Guid _g4cTerminalAvailableRequestId;
+    private Guid _g4cStaleResponsibleEntryRequestId;
+    private Guid _g4cInvisibleUnwatchRequestId;
+    private Guid _g4cDetailDeniedRequestId;
+
     // Session 3C read-model requests
     private Guid _3cCurrentUserPartRequestId;
     private Guid _3cOwnerFlagsRequestId;
@@ -258,7 +266,7 @@ public sealed class KeepRequestParticipationApiTests : IClassFixture<KeepApiWebF
         _operatorSelfAssignAlreadyAssignedRequestId = await SeedRequestAsync(db, _accountId, customer.Id, "4C-OAA", "4c_oaa_token", now);
         _operatorSelfAssignIdempotentRequestId = await SeedRequestAsync(db, _accountId, customer.Id, "4C-OIT", "4c_oit_token", now);
 
-        // Owner pre-seeded as Responsible on _operatorSelfAssignAlreadyAssignedRequestId (so Operator's self-assign returns 409).
+        // Owner pre-seeded as Responsible on _operatorSelfAssignAlreadyAssignedRequestId (so Operator's self-assign returns 404).
         db.Set<KeepRequestParticipant>().Add(KeepRequestParticipant.Create(
             _operatorSelfAssignAlreadyAssignedRequestId, _accountId, _ownerAccountUserId,
             ParticipationType.Responsible, notificationsEnabled: true, now));
@@ -269,6 +277,31 @@ public sealed class KeepRequestParticipationApiTests : IClassFixture<KeepApiWebF
             ParticipationType.Responsible, notificationsEnabled: true, now));
 
         await db.SaveChangesAsync();
+
+        // --- G4c seeds ---
+        _g4cAvailableSelfAssignAuditRequestId = await SeedRequestAsync(db, _accountId, customer.Id, "4C-ASA", "4c_asa_token", now);
+        _g4cAvailableSelfWatchAuditRequestId  = await SeedRequestAsync(db, _accountId, customer.Id, "4C-ASW", "4c_asw_token", now);
+        _g4cInvisibleUnwatchRequestId         = await SeedRequestAsync(db, _accountId, customer.Id, "4C-IUW", "4c_iuw_token", now);
+        _g4cDetailDeniedRequestId             = await SeedRequestAsync(db, _accountId, customer.Id, "4C-DDN", "4c_ddn_token", now);
+        _g4cStaleResponsibleEntryRequestId    = await SeedRequestAsync(db, _accountId, customer.Id, "4C-SRE", "4c_sre_token", now);
+
+        // _g4cStaleResponsibleEntryRequestId: Viewer is seeded as Responsible — stale/ineligible,
+        // so the Available branch should still admit an Operator self-assign.
+        db.Set<KeepRequestParticipant>().Add(KeepRequestParticipant.Create(
+            _g4cStaleResponsibleEntryRequestId, _accountId, _viewerAccountUserId,
+            ParticipationType.Responsible, notificationsEnabled: true, now));
+
+        // _g4cTerminalAvailableRequestId: closed, no Operator participation.
+        var terminalG4c = KeepRequest.CreateFromCustomerIntake(
+            _accountId, customer.Id,
+            "John Customer", "0400000001", null,
+            "Closed G4c", "4C-TAV", "4c_tav_token", now, 60);
+        terminalG4c.ChangeStatus(KeepRequestStatus.Resolved, null, graph.Owner.Id, "owner@part-tests.com", now);
+        terminalG4c.ChangeStatus(KeepRequestStatus.Closed,   null, graph.Owner.Id, "owner@part-tests.com", now);
+        db.Set<KeepRequest>().Add(terminalG4c);
+        db.Set<KeepRequestEvent>().Add(KeepRequestEvent.CreateRequestCreated(terminalG4c.Id, _accountId, now));
+        await db.SaveChangesAsync();
+        _g4cTerminalAvailableRequestId = terminalG4c.Id;
 
         // --- Sessions ---
         var rawOwner    = await _factory.SeedSessionAsync(graph.Owner.Id, _accountId);
@@ -433,16 +466,17 @@ public sealed class KeepRequestParticipationApiTests : IClassFixture<KeepApiWebF
     }
 
     [Fact]
-    public async Task SetResponsible_Operator_SelfAssign_AlreadyAssigned_Returns409_RequestAlreadyAssigned()
+    public async Task SetResponsible_Operator_SelfAssign_AlreadyAssignedToAnother_ReturnsNotFound()
     {
-        // Owner is pre-seeded as Responsible; Operator self-assign is blocked (D2).
+        // Owner is pre-seeded as Responsible. ParticipationEntry Available branch is blocked
+        // (active eligible Responsible exists) and Operator has no MyWork participation → 404.
         var response = await AuthRequest(_operatorCookie).PutAsJsonAsync(
             $"/keep/requests/{_operatorSelfAssignAlreadyAssignedRequestId}/responsible",
             new { accountUserId = _operatorAccountUserId });
 
-        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
-        Assert.Equal("KeepRequest.ParticipationRequestAlreadyAssigned", body.GetProperty("code").GetString());
+        Assert.Equal("KeepRequest.NotFound", body.GetProperty("code").GetString());
     }
 
     [Fact]
@@ -696,15 +730,15 @@ public sealed class KeepRequestParticipationApiTests : IClassFixture<KeepApiWebF
     }
 
     [Fact]
-    public async Task Mute_Operator_NoParticipation_Returns409_MuteRequiresActiveParticipation()
+    public async Task Mute_Operator_NoParticipation_ReturnsNotFound()
     {
+        // Operator has no MyWork participation on _sharedRequestId → row auth returns null → 404.
         var response = await AuthRequest(_operatorCookie).PutAsJsonAsync(
             $"/keep/requests/{_sharedRequestId}/mute", new { });
 
-        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
-        Assert.Equal("KeepRequest.ParticipationMuteRequiresActiveParticipation",
-            body.GetProperty("code").GetString());
+        Assert.Equal("KeepRequest.NotFound", body.GetProperty("code").GetString());
     }
 
     [Fact]
@@ -906,6 +940,160 @@ public sealed class KeepRequestParticipationApiTests : IClassFixture<KeepApiWebF
         Assert.DoesNotContain(
             body.GetProperty("events").EnumerateArray(),
             e => e.GetProperty("eventType").GetString() == "participation_changed");
+    }
+
+    // =========================================================================
+    // G4c — ParticipationEntry scope, Available entry, invisible-mutation 404
+    // =========================================================================
+
+    [Fact]
+    public async Task G4c_AvailableSelfAssign_PersistsParticipationAndEvent()
+    {
+        // Unassigned, non-terminal → Available branch admits Operator self-assign.
+        var response = await AuthRequest(_operatorCookie).PutAsJsonAsync(
+            $"/keep/requests/{_g4cAvailableSelfAssignAuditRequestId}/responsible",
+            new { accountUserId = _operatorAccountUserId });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        var participants = body.GetProperty("participants").EnumerateArray().ToList();
+        var responsible = participants.Single(p =>
+            p.GetProperty("participationType").GetString() == "responsible" &&
+            p.GetProperty("detachedAtUtc").ValueKind == JsonValueKind.Null);
+        Assert.Equal(_operatorAccountUserId.ToString(), responsible.GetProperty("accountUserId").GetString());
+
+        var participationEvent = body.GetProperty("events").EnumerateArray()
+            .SingleOrDefault(e => e.GetProperty("eventType").GetString() == "participation_changed");
+        Assert.NotEqual(default, participationEvent);
+        Assert.Equal("responsible_assigned",
+            participationEvent.GetProperty("participationAction").GetString());
+        Assert.Equal(_operatorAccountUserId.ToString(),
+            participationEvent.GetProperty("participationTargetAccountUserId").GetString());
+    }
+
+    [Fact]
+    public async Task G4c_AvailableSelfWatch_PersistsParticipationAndEvent()
+    {
+        // Unassigned, non-terminal → Available branch admits Operator self-watch.
+        var response = await AuthRequest(_operatorCookie).PutAsJsonAsync(
+            $"/keep/requests/{_g4cAvailableSelfWatchAuditRequestId}/watch", new { });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        var participants = body.GetProperty("participants").EnumerateArray().ToList();
+        var watcher = participants.Single(p =>
+            p.GetProperty("participationType").GetString() == "watching" &&
+            p.GetProperty("detachedAtUtc").ValueKind == JsonValueKind.Null);
+        Assert.Equal(_operatorAccountUserId.ToString(), watcher.GetProperty("accountUserId").GetString());
+
+        var participationEvent = body.GetProperty("events").EnumerateArray()
+            .SingleOrDefault(e => e.GetProperty("eventType").GetString() == "participation_changed");
+        Assert.NotEqual(default, participationEvent);
+        Assert.Equal("self_watched",
+            participationEvent.GetProperty("participationAction").GetString());
+    }
+
+    [Fact]
+    public async Task G4c_AssignedToAnotherEligibleResponsible_NoParticipantOrEventSideEffect()
+    {
+        // Owner is Responsible on _operatorSelfAssignAlreadyAssignedRequestId.
+        // Operator self-assign → ParticipationEntry blocks → 404, no side effects.
+        var denied = await AuthRequest(_operatorCookie).PutAsJsonAsync(
+            $"/keep/requests/{_operatorSelfAssignAlreadyAssignedRequestId}/responsible",
+            new { accountUserId = _operatorAccountUserId });
+        Assert.Equal(HttpStatusCode.NotFound, denied.StatusCode);
+
+        // Owner reads detail — only the Owner's Responsible row, no participation_changed events.
+        var detail = await AuthRequest(_ownerCookie).GetAsync(
+            $"/keep/requests/{_operatorSelfAssignAlreadyAssignedRequestId}");
+        Assert.Equal(HttpStatusCode.OK, detail.StatusCode);
+
+        var body = await detail.Content.ReadFromJsonAsync<JsonElement>();
+        var participants = body.GetProperty("participants").EnumerateArray().ToList();
+        Assert.DoesNotContain(participants, p =>
+            p.GetProperty("accountUserId").GetString() == _operatorAccountUserId.ToString());
+        Assert.DoesNotContain(body.GetProperty("events").EnumerateArray(),
+            e => e.GetProperty("eventType").GetString() == "participation_changed");
+    }
+
+    [Fact]
+    public async Task G4c_TerminalAvailableRequest_SelfAssign_ReturnsNotFound()
+    {
+        // _g4cTerminalAvailableRequestId is closed with no Operator participation.
+        // Available branch requires non-terminal → blocked → 404.
+        var response = await AuthRequest(_operatorCookie).PutAsJsonAsync(
+            $"/keep/requests/{_g4cTerminalAvailableRequestId}/responsible",
+            new { accountUserId = _operatorAccountUserId });
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("KeepRequest.NotFound", body.GetProperty("code").GetString());
+    }
+
+    [Fact]
+    public async Task G4c_TerminalAvailableRequest_SelfWatch_ReturnsNotFound()
+    {
+        // _g4cTerminalAvailableRequestId is closed with no Operator participation.
+        var response = await AuthRequest(_operatorCookie).PutAsJsonAsync(
+            $"/keep/requests/{_g4cTerminalAvailableRequestId}/watch", new { });
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("KeepRequest.NotFound", body.GetProperty("code").GetString());
+    }
+
+    [Fact]
+    public async Task G4c_StaleResponsible_DoesNotBlockAvailableEntry()
+    {
+        // _g4cStaleResponsibleEntryRequestId has a Viewer-role Responsible (stale/ineligible).
+        // The Available branch ignores it → Operator self-assign succeeds.
+        var response = await AuthRequest(_operatorCookie).PutAsJsonAsync(
+            $"/keep/requests/{_g4cStaleResponsibleEntryRequestId}/responsible",
+            new { accountUserId = _operatorAccountUserId });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        var participants = body.GetProperty("participants").EnumerateArray().ToList();
+        var responsible = participants.Single(p =>
+            p.GetProperty("participationType").GetString() == "responsible" &&
+            p.GetProperty("detachedAtUtc").ValueKind == JsonValueKind.Null);
+        Assert.Equal(_operatorAccountUserId.ToString(), responsible.GetProperty("accountUserId").GetString());
+    }
+
+    [Fact]
+    public async Task G4c_Unwatch_Operator_NoParticipation_ReturnsNotFound()
+    {
+        // Operator has no participation on _g4cInvisibleUnwatchRequestId → MyWork → null → 404.
+        var response = await AuthRequest(_operatorCookie).SendAsync(
+            new HttpRequestMessage(HttpMethod.Delete,
+                $"/keep/requests/{_g4cInvisibleUnwatchRequestId}/watch"));
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("KeepRequest.NotFound", body.GetProperty("code").GetString());
+    }
+
+    [Fact]
+    public async Task G4c_Detail_Denied_CreatesNoParticipationOrEventSideEffect()
+    {
+        // Operator has no participation on _g4cDetailDeniedRequestId → GET returns 404.
+        var denied = await AuthRequest(_operatorCookie).GetAsync(
+            $"/keep/requests/{_g4cDetailDeniedRequestId}");
+        Assert.Equal(HttpStatusCode.NotFound, denied.StatusCode);
+
+        // Owner reads detail — no participant rows for Operator, no events beyond request_created.
+        var detail = await AuthRequest(_ownerCookie).GetAsync(
+            $"/keep/requests/{_g4cDetailDeniedRequestId}");
+        Assert.Equal(HttpStatusCode.OK, detail.StatusCode);
+
+        var body = await detail.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Empty(body.GetProperty("participants").EnumerateArray());
+        var events = body.GetProperty("events").EnumerateArray().ToList();
+        Assert.DoesNotContain(events, e =>
+            e.GetProperty("eventType").GetString() == "participation_changed");
     }
 
     // =========================================================================

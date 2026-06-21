@@ -32,7 +32,18 @@ public sealed class SelfWatchService(
         if (authResult.IsFailure) return Result<KeepRequestDetailResult>.Failure(authResult.Error);
         var (userSnapshot, actorDisplayName) = authResult.Value;
 
-        var request = await operatePersistence.GetRequestForUpdateAsync(requestId, currentUser.AccountId, ct);
+        // Owner/Admin: AccountWide. Operator: ParticipationEntry (MyWork ∪ Available) so
+        // self-watch on Available requests is permitted; unknown/future role fails closed.
+        KeepRequestVisibilityScope watchScope;
+        if (userSnapshot.Role is AccountUserRole.Owner or AccountUserRole.Admin)
+            watchScope = KeepRequestVisibilityScope.AccountWide;
+        else if (userSnapshot.Role == AccountUserRole.Operator)
+            watchScope = KeepRequestVisibilityScope.ParticipationEntry;
+        else
+            return Result<KeepRequestDetailResult>.Failure(Forbidden);
+
+        var request = await operatePersistence.GetVisibleRequestForUpdateAsync(
+            requestId, currentUser.AccountId, currentUser.UserId, watchScope, ct);
         if (request is null)
             return Result<KeepRequestDetailResult>.Failure(KeepRequestErrors.NotFound);
         if (request.IsTerminal)
@@ -62,7 +73,18 @@ public sealed class SelfWatchService(
         if (authResult.IsFailure) return Result<KeepRequestDetailResult>.Failure(authResult.Error);
         var (userSnapshot, actorDisplayName) = authResult.Value;
 
-        var request = await operatePersistence.GetRequestForUpdateAsync(requestId, currentUser.AccountId, ct);
+        // Owner/Admin: AccountWide. Operator: MyWork (must already be participating;
+        // no participation → 404). Unknown/future role fails closed.
+        KeepRequestVisibilityScope unwatchScope;
+        if (userSnapshot.Role is AccountUserRole.Owner or AccountUserRole.Admin)
+            unwatchScope = KeepRequestVisibilityScope.AccountWide;
+        else if (userSnapshot.Role == AccountUserRole.Operator)
+            unwatchScope = KeepRequestVisibilityScope.MyWork;
+        else
+            return Result<KeepRequestDetailResult>.Failure(Forbidden);
+
+        var request = await operatePersistence.GetVisibleRequestForUpdateAsync(
+            requestId, currentUser.AccountId, currentUser.UserId, unwatchScope, ct);
         if (request is null)
             return Result<KeepRequestDetailResult>.Failure(KeepRequestErrors.NotFound);
         if (request.IsTerminal)

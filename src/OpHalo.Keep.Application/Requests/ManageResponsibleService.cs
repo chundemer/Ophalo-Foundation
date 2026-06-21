@@ -41,13 +41,22 @@ public sealed class ManageResponsibleService(
         if (authResult.IsFailure) return Result<KeepRequestDetailResult>.Failure(authResult.Error);
         var (userSnapshot, actorDisplayName) = authResult.Value;
 
-        var isOperator = userSnapshot.Role is not (AccountUserRole.Owner or AccountUserRole.Admin);
-
-        // Operators may only self-assign; assigning another user is forbidden (ADR-223/D2).
-        if (isOperator && command.TargetAccountUserId != currentUser.UserId)
+        // Operators may only self-assign; assigning another user is forbidden before row load (ADR-223/D2).
+        if (userSnapshot.Role == AccountUserRole.Operator && command.TargetAccountUserId != currentUser.UserId)
             return Result<KeepRequestDetailResult>.Failure(KeepRequestErrors.ParticipationOperatorCannotAssignOther);
 
-        var request = await operatePersistence.GetRequestForUpdateAsync(command.RequestId, currentUser.AccountId, ct);
+        // Scope: Owner/Admin see all account work; Operator uses ParticipationEntry so an already-
+        // assigned request (another eligible Responsible) is indistinguishable from not-found (404).
+        KeepRequestVisibilityScope scope;
+        if (userSnapshot.Role is AccountUserRole.Owner or AccountUserRole.Admin)
+            scope = KeepRequestVisibilityScope.AccountWide;
+        else if (userSnapshot.Role == AccountUserRole.Operator)
+            scope = KeepRequestVisibilityScope.ParticipationEntry;
+        else
+            return Result<KeepRequestDetailResult>.Failure(Forbidden);
+
+        var request = await operatePersistence.GetVisibleRequestForUpdateAsync(
+            command.RequestId, currentUser.AccountId, currentUser.UserId, scope, ct);
         if (request is null)
             return Result<KeepRequestDetailResult>.Failure(KeepRequestErrors.NotFound);
         if (request.IsTerminal)
@@ -58,16 +67,6 @@ public sealed class ManageResponsibleService(
             return Result<KeepRequestDetailResult>.Failure(KeepRequestErrors.ParticipationTargetIneligible);
 
         var participants = await operatePersistence.GetParticipantsForUpdateAsync(command.RequestId, currentUser.AccountId, ct);
-
-        // Operator self-assign blocked when another user is already the active Responsible (D2).
-        if (isOperator)
-        {
-            var existingResponsible = participants.FirstOrDefault(
-                p => p.IsActive && p.ParticipationType == ParticipationType.Responsible);
-            if (existingResponsible is not null && existingResponsible.AccountUserId != currentUser.UserId)
-                return Result<KeepRequestDetailResult>.Failure(KeepRequestErrors.ParticipationRequestAlreadyAssigned);
-            // If self is already Responsible → falls through to domain service no-op (ADR-230)
-        }
 
         var nowUtc = clock.UtcNow;
         var domainResult = participationService.SetResponsible(
@@ -93,11 +92,13 @@ public sealed class ManageResponsibleService(
         if (authResult.IsFailure) return Result<KeepRequestDetailResult>.Failure(authResult.Error);
         var (userSnapshot, actorDisplayName) = authResult.Value;
 
-        // ADR-223: Operators cannot clear responsibility.
+        // ADR-223: Operators cannot clear responsibility — blocked before row load.
         if (userSnapshot.Role is not (AccountUserRole.Owner or AccountUserRole.Admin))
             return Result<KeepRequestDetailResult>.Failure(KeepRequestErrors.ParticipationOperatorCannotClear);
 
-        var request = await operatePersistence.GetRequestForUpdateAsync(command.RequestId, currentUser.AccountId, ct);
+        var request = await operatePersistence.GetVisibleRequestForUpdateAsync(
+            command.RequestId, currentUser.AccountId, currentUser.UserId,
+            KeepRequestVisibilityScope.AccountWide, ct);
         if (request is null)
             return Result<KeepRequestDetailResult>.Failure(KeepRequestErrors.NotFound);
         if (request.IsTerminal)

@@ -1,10 +1,10 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-06-21 (G4b complete; G4c pre-work pending)
+**Last updated:** 2026-06-21 (G4c complete)
 **Branch:** `main` (no remote yet)
-**Current baseline:** G4b complete at 1004 tests (568 unit · 14 architecture · 422 integration)
+**Current baseline:** G4c complete at 1012 tests (568 unit · 14 architecture · 430 integration)
 **Next free ADR:** ADR-326
-**Pre-work not complete** — G4c requires a fresh pre-implementation gate before any code is written.
+**Pre-work not complete** — G4d requires a fresh pre-implementation gate before any code is written.
 
 ---
 
@@ -55,6 +55,15 @@ For every implementation slice:
   LogExternalContactService all migrated (Owner/Admin → AccountWide, Operator → MyWork,
   unknown role → 403). ExternalContact Operator test updated with Responsible participation.
   9 new G4b mutation-row-auth integration tests. G4c callers emit [Obsolete] warnings.
+- **G4c complete — 1012 tests.** ParticipationEntry implemented in KeepRequestRowQueryFactory as
+  ApplyMyWork.Union(ApplyAvailable) — no predicate duplication. ManageResponsibleService (Set:
+  AccountWide/ParticipationEntry, Clear: AccountWide), ManageWatcherService (AccountWide),
+  MarkFeedbackReviewedService (AccountWide), MuteService (AccountWide/MyWork), SelfWatchService
+  (Watch: AccountWide/ParticipationEntry, Unwatch: AccountWide/MyWork) all migrated; every
+  role-to-scope selection explicit with unknown-role 403 failsafe. Obsolete
+  GetRequestForUpdateAsync removed from interface, EF implementation, and create-business-request
+  fake. 8 new G4c integration tests; 2 existing tests updated (409→404 for Operator
+  invisible-mute and Operator self-assign to another eligible Responsible's request).
 
 Historical Phase 8-B1 through B5 Session 5 completion detail is intentionally omitted here. Use
 build logs 025–046 and ADR-084–294 when needed; do not reload those histories for G4 unless a
@@ -223,9 +232,7 @@ Gate: targeted tests, architecture tests, build, and full suite; report exact co
 
 Committed. See completed gap references above for detail.
 
-#### G4c — Participation/admin mutation-load migration and old-loader removal
-
-**Pre-work not complete. Claude must present a targeted gate after G4b commits.**
+#### G4c — Participation/admin mutation-load migration and old-loader removal — COMPLETE (1012 tests)
 
 Migrate:
 
@@ -240,6 +247,58 @@ self-assign/watch, the event/participation audit is persisted, normal invisible 
 `404`, and GET/detail denial has no participation side effect. Remove the obsolete account-only
 tracked loader after proving zero callers. Include `CreateBusinessRequestService` later in action-
 metadata migration; it has no existing-row authorization load.
+
+Locked implementation gate:
+
+- implement `ParticipationEntry` in `KeepRequestRowQueryFactory` as the union-in-policy of:
+  active eligible Responsible/Watching participation by the current same-account user (`MyWork`),
+  or an active non-terminal request with no active eligible Responsible; the Available branch also
+  requires the current AccountUser to be an active same-account Owner/Admin/Operator;
+- an active Responsible prevents Available entry only when its joined same-account AccountUser is
+  currently Active and Owner/Admin/Operator. Detached, removed, suspended, invited, Viewer, missing,
+  and unknown-role Responsible rows do not prevent effective availability. Watching rows do not
+  prevent availability;
+- `ManageResponsible.Set`: Owner/Admin use `AccountWide`; Operator may target only self and uses
+  `ParticipationEntry`. Operator self-assign to another eligible user's assigned request is `404`;
+  already-Responsible self-assign remains an idempotent `200` through the participating branch;
+- `ManageResponsible.Clear`, managed watcher add/remove, and feedback review remain forbidden to
+  Operator before row load and use `AccountWide` for Owner/Admin;
+- `Mute/Unmute`: Owner/Admin use `AccountWide`; Operator uses `MyWork`. An Operator with no active
+  eligible participation receives `404`, not the former participation-domain `409`;
+- `SelfWatch.Watch`: Owner/Admin use `AccountWide`; Operator uses `ParticipationEntry`.
+  `SelfWatch.Unwatch`: Owner/Admin use `AccountWide`; Operator uses `MyWork`;
+- every role-to-scope selection is explicit and unknown/future roles fail closed with `403`;
+- parent row authorization must occur before loading participant rows, target detail, events, or
+  other related request data. Preserve current account, membership, feature, OffSeason, terminal,
+  domain, idempotency, commit, audit-event, response, and action-metadata behavior otherwise;
+- remove the obsolete account-only `IKeepRequestOperatePersistence.GetRequestForUpdateAsync` from
+  the interface and EF implementation after all five services migrate; update its commit XML and
+  remove the obsolete member from the create-business-request fake. Customer-write persistence is
+  a separate public-token-guarded contract and is unchanged;
+- extend `KeepRequestParticipationApiTests` to prove Available self-assign and self-watch persist
+  active participation plus `participation_changed` audit events; assigned-to-another and terminal
+  entry return `404` with no participant/event side effect; a stale/ineligible Responsible does not
+  block entry; normal invisible mute and unwatch return `404`; existing Responsible/Watching
+  mute/unmute/unwatch and Owner/Admin paths remain successful; denied GET/detail access creates no
+  participation or event side effect.
+
+Exact files:
+
+- `src/OpHalo.Keep.Infrastructure/Persistence/KeepRequestRowQueryFactory.cs`
+- `src/OpHalo.Keep.Application/Requests/IKeepRequestOperatePersistence.cs`
+- `src/OpHalo.Keep.Infrastructure/Persistence/EfKeepRequestOperatePersistence.cs`
+- `src/OpHalo.Keep.Application/Requests/ManageResponsibleService.cs`
+- `src/OpHalo.Keep.Application/Requests/ManageWatcherService.cs`
+- `src/OpHalo.Keep.Application/Requests/MarkFeedbackReviewedService.cs`
+- `src/OpHalo.Keep.Application/Requests/MuteService.cs`
+- `src/OpHalo.Keep.Application/Requests/SelfWatchService.cs`
+- `tests/OpHalo.UnitTests/Keep/KeepCreateBusinessRequestServiceTests.cs`
+- `tests/OpHalo.IntegrationTests/Api/KeepRequestParticipationApiTests.cs`
+
+Gate: prove zero callers/references to the obsolete operate loader, then run participation API
+tests, feedback-review API tests, OffSeason tests, unit tests, architecture tests, build, and full
+suite; report exact counts. No migration. Do not modify lists, counts, Available DTO/routes,
+customer-write loaders, action metadata, or `KeepRequestActionPolicy`.
 
 #### G4d — My Work lists/counts and dedicated Available surface
 

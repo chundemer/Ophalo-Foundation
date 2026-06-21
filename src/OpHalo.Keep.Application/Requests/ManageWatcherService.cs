@@ -42,10 +42,13 @@ public sealed class ManageWatcherService(
         if (authResult.IsFailure) return Result<KeepRequestDetailResult>.Failure(authResult.Error);
         var (userSnapshot, actorDisplayName) = authResult.Value;
 
+        // Operator and unknown roles are blocked before row load; only Owner/Admin proceed.
         if (userSnapshot.Role is not (AccountUserRole.Owner or AccountUserRole.Admin))
             return Result<KeepRequestDetailResult>.Failure(Forbidden);
 
-        var request = await operatePersistence.GetRequestForUpdateAsync(command.RequestId, currentUser.AccountId, ct);
+        var request = await operatePersistence.GetVisibleRequestForUpdateAsync(
+            command.RequestId, currentUser.AccountId, currentUser.UserId,
+            KeepRequestVisibilityScope.AccountWide, ct);
         if (request is null)
             return Result<KeepRequestDetailResult>.Failure(KeepRequestErrors.NotFound);
         if (request.IsTerminal)
@@ -81,10 +84,13 @@ public sealed class ManageWatcherService(
         if (authResult.IsFailure) return Result<KeepRequestDetailResult>.Failure(authResult.Error);
         var (userSnapshot, actorDisplayName) = authResult.Value;
 
+        // Operator and unknown roles are blocked before row load; only Owner/Admin proceed.
         if (userSnapshot.Role is not (AccountUserRole.Owner or AccountUserRole.Admin))
             return Result<KeepRequestDetailResult>.Failure(Forbidden);
 
-        var request = await operatePersistence.GetRequestForUpdateAsync(command.RequestId, currentUser.AccountId, ct);
+        var request = await operatePersistence.GetVisibleRequestForUpdateAsync(
+            command.RequestId, currentUser.AccountId, currentUser.UserId,
+            KeepRequestVisibilityScope.AccountWide, ct);
         if (request is null)
             return Result<KeepRequestDetailResult>.Failure(KeepRequestErrors.NotFound);
         if (request.IsTerminal)
