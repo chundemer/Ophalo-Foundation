@@ -56,7 +56,7 @@ internal static class KeepRequestRowQueryFactory
     /// Detached, removed, suspended, invited, Viewer, and unknown-role Responsible rows
     /// do not count as blocking. Watching rows never prevent availability.
     /// </summary>
-    private static IQueryable<KeepRequest> ApplyAvailable(
+    internal static IQueryable<KeepRequest> ApplyAvailable(
         IQueryable<KeepRequest> query,
         Guid accountId,
         Guid currentAccountUserId,

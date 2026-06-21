@@ -81,6 +81,14 @@ and interruption-tolerant. It provides:
 - native phone, email, and Messages launchers plus explicit contact logging;
 - resume synchronization, badges, push, and deep links for urgent actionable work.
 
+The Available queue should optimize for a quick operational choice, not prolonged browsing. Its
+API defaults to 20 privacy-limited rows and permits at most 50 through cursor pagination. A client
+may request fewer rows for a compact mobile screen or more for a wider Operator workspace; the
+backend does not infer authorization or page size from device type. The route performs a narrow
+`limit + 1` keyset query, does not compute an exact total, and should be refreshed deliberately
+rather than aggressively polled. The broader authenticated request-list contract keeps its separate
+50-default/100-maximum behavior.
+
 Launching an external phone or messaging app records local intent, not a completed communication.
 When the Operator returns, Keep should request confirmation without blocking unrelated work or
 writing a false server-side audit event.

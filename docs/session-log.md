@@ -1,10 +1,10 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-06-21 (G4c corrective committed)
+**Last updated:** 2026-06-21 (G4d complete — 1060 tests; G4e requires fresh pre-implementation gate)
 **Branch:** `main` (no remote yet)
-**Current baseline:** 1013 tests (568 unit · 14 architecture · 431 integration)
+**Current baseline:** 1060 tests (573 unit · 14 architecture · 473 integration)
 **Next free ADR:** ADR-326
-**Pre-work not complete** — G4d requires a fresh pre-implementation gate before any code is written.
+**Pre-work complete: none** — G4e requires a fresh pre-implementation gate before any code is written.
 
 ---
 
@@ -70,6 +70,21 @@ For every implementation slice:
   eligible Responsible. Check verifies eligibility of the existing Responsible (stale/ineligible
   does not block). Regression test: Operator Watching + Owner Responsible → 409, no side
   effects. commit 1534f0c.
+- **G4d complete — 1060 tests.** GetKeepRequestListService scope selection: Owner/Admin/Viewer →
+  AccountWide, Operator → MyWork, unknown → 403; view=unassigned is Owner/Admin-only (Operator
+  receives 403). GetAvailableKeepRequestsService (new): Operator-only, cursor-paginated Available
+  summary with privacy-limited contract. KeepAvailableRequestQueryBinding (new): strict query
+  binding rejecting unknown parameters. KeepRequestListPersistence: GetAvailableAsync with DB
+  161-char prefix projection and DescriptionWasTruncated flag. KeepRequestErrors:
+  RequestListUnknownParameter added, InvalidLimit message neutralized. Program.cs:
+  GET /keep/requests/available registered. Unit tests: 5 stale Operator-unassigned affordance
+  tests removed, 5 scope-selection tests added. Integration: KeepRequestListQueryApiTests updated
+  (5 new + 1 replaced), KeepRequestAvailableApiTests (38 tests: role gates, exact field-set,
+  excluded-field absence, terminal/non-terminal boundaries, Watching non-blocking, detached
+  Responsible, Resolved inclusion, OffSeason suppression, preview at 159/160/161 scalars and
+  whitespace/emoji, pagination, cursor tamper/cross-user/duplicate-parameter, limit/binder
+  validation, Available count == viewCounts.unassigned, unavailable detail 404, no-side-effect
+  proof with participant/event/request checks). build-log/052.
 
 Historical Phase 8-B1 through B5 Session 5 completion detail is intentionally omitted here. Use
 build logs 025–046 and ADR-084–294 when needed; do not reload those histories for G4 unless a
@@ -140,7 +155,7 @@ Each Available item contains:
 - `NextAttentionAtUtc`
 - `PriorityBand`
 - `AttentionLevel`
-- bounded server-generated `DescriptionPreview`
+- bounded server-generated `DescriptionPreview` (up to 159 Unicode scalars + `…` when truncated)
 - `CanSelfAssign`
 - `CanWatch`
 
@@ -153,13 +168,6 @@ Explicitly excluded until participation:
 - feedback details;
 - full participation and notification information;
 - normal detail/list action sets.
-
-Customer name and a bounded preview are a deliberate usability/privacy balance. Free-form preview
-text may contain incidental customer detail; the G4d gate must propose an exact maximum and safe
-server-side truncation behavior before coding that DTO.
-
-Full detail requires an explicit audited self-assign or watch. Reads never silently assign, watch,
-or otherwise change ownership. Available-summary access is not general mutation authority.
 
 ### Locked policy architecture
 
@@ -210,59 +218,11 @@ exit inventory names every migrated path, and the full suite is green.
 
 #### G4a — Policy/query foundation and detail-row authorization — COMPLETE (commit e57522a, 995 tests)
 
-Scope:
-
-- add `KeepRequestVisibilityScope` with exactly `AccountWide`, `MyWork`, and
-  `ParticipationEntry`;
-- add shared `KeepRequestRowQueryFactory` with explicit exhaustive scope handling;
-- change detail persistence lookup to require a selected scope and current AccountUser ID;
-- map Owner/Admin/Viewer detail reads to `AccountWide`, Operator detail reads to `MyWork`;
-- preserve account, membership, feature, OffSeason-read, and field-redaction gates;
-- authorize the request before loading events/participants/business detail;
-- add direct-ID tests for Owner/Admin, Viewer, Operator Responsible, Operator Watching, same-account
-  invisible, stale/ineligible, detached, unknown ID, and cross-account cases;
-- do not modify lists, counts, mutation loads, Available DTO/route, or action metadata in G4a.
-
-Expected files (verify names/signatures before writing):
-
-- new `Keep.Application/Requests/KeepRequestVisibilityScope.cs`
-- new `Keep.Infrastructure/Persistence/KeepRequestRowQueryFactory.cs`
-- `Keep.Application/Requests/IKeepRequestDetailPersistence.cs`
-- `Keep.Infrastructure/Persistence/EfKeepRequestDetailPersistence.cs`
-- `Keep.Application/Requests/GetKeepRequestDetailService.cs`
-- new `tests/OpHalo.IntegrationTests/Api/KeepRequestDetailRowAuthApiTests.cs`
-
-Gate: targeted tests, architecture tests, build, and full suite; report exact counts. No migration.
-
 #### G4b — Consequential Operator mutation-load migration — COMPLETE (1004 tests)
-
-Committed. See completed gap references above for detail.
 
 #### G4c — Participation/admin mutation-load migration and old-loader removal — COMPLETE (commit e82ebae, 1012 tests)
 
-Committed. See completed gap references above for detail.
-
-#### G4d — My Work lists/counts and dedicated Available surface
-
-**Pre-work not complete. Claude must present a targeted gate after G4c commits.**
-
-Scope:
-
-- Default and Needs Attention use `MyWork` for Operator and `AccountWide` for Owner/Admin/Viewer;
-- default/Needs Attention counts use the same scopes as their rows;
-- available count means active eligible effectively-unassigned work for Operator;
-- add dedicated Available DTO/route with the locked fields and exclusions above;
-- keep `view=unassigned` Owner/Admin full-summary behavior;
-- preserve deterministic ordering and define pagination/response wrapper in the gate before code;
-- prove no related sensitive projection is loaded for Available output;
-- test list/count/detail agreement, field absence, active/terminal boundaries, stale Responsible
-  treatment, and no GET side effects.
-
-Open implementation details for the G4d gate only:
-
-- exact `DescriptionPreview` maximum/truncation semantics;
-- Available response wrapper, limit/cursor contract, and deterministic cursor sort;
-- whether Owner/Admin may call the Available-summary route in addition to their full Unassigned view.
+#### G4d — My Work lists/counts and dedicated Available surface — COMPLETE (1048 tests, build-log/052)
 
 #### G4e — Shared action-policy migration and completion gate
 

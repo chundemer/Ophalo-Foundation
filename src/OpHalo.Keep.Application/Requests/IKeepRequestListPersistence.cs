@@ -24,6 +24,7 @@ public interface IKeepRequestListPersistence
 
     /// <summary>
     /// Returns all rows matching the named active view + additional filters (ADR-239/250).
+    /// Infrastructure applies <paramref name="scope"/> as the base predicate before view filters.
     /// Returned set is unsorted; callers apply in-memory B5 ranking sort.
     /// </summary>
     Task<IReadOnlyList<KeepRequest>> GetActiveViewRequestsAsync(
@@ -31,6 +32,7 @@ public interface IKeepRequestListPersistence
         Guid currentAccountUserId,
         ActiveViewKind view,
         KeepRequestListFilters filters,
+        KeepRequestVisibilityScope scope,
         CancellationToken ct);
 
     /// <summary>
@@ -48,14 +50,30 @@ public interface IKeepRequestListPersistence
         CancellationToken ct);
 
     /// <summary>
-    /// Returns role-aware operational view counts (ADR-241/259).
+    /// Returns role-aware operational view counts (ADR-241/259, G4d).
     /// Counts are base view counts; they do not reflect the current q/status/date filters.
-    /// Operator unassigned count returns 0 in Session 4B (gated until 4C eligibility filtering).
+    /// Default/NeedsAttention counts are scoped by <paramref name="scope"/>.
+    /// Unassigned: AccountWide+isOwnerOrAdmin → effective-unassignment count;
+    ///             MyWork (Operator) → Available count; Viewer → 0.
     /// </summary>
     Task<KeepRequestViewCounts> GetViewCountsAsync(
         Guid accountId,
         Guid currentAccountUserId,
         bool isOwnerOrAdmin,
+        KeepRequestVisibilityScope scope,
+        CancellationToken ct);
+
+    /// <summary>
+    /// Returns up to <paramref name="fetchCount"/> Available items in CreatedAtUtc ASC, Id ASC order,
+    /// starting after the supplied keyset cursor. Available = non-terminal, no active eligible
+    /// Responsible, current user is active eligible. Projects only bounded fields (G4d ADR-325).
+    /// </summary>
+    Task<IReadOnlyList<KeepRequestAvailableRow>> GetAvailableRequestsAsync(
+        Guid accountId,
+        Guid currentAccountUserId,
+        int fetchCount,
+        DateTime? cursorCreatedAtUtc,
+        Guid? cursorRequestId,
         CancellationToken ct);
 
     /// <summary>
@@ -117,3 +135,21 @@ public sealed record KeepRequestParticipantSummary(
     bool? CurrentUserNotificationsEnabled,
     string? ResponsibleDisplayName,
     bool ResponsibleIsStale);
+
+/// <summary>
+/// Narrow projection returned by GetAvailableRequestsAsync. Contains only the locked
+/// Available fields plus a bounded description prefix for preview construction.
+/// No customer contact, events, feedback, page token, or participation data (G4d).
+/// </summary>
+public sealed record KeepRequestAvailableRow(
+    Guid RequestId,
+    string ReferenceCode,
+    string CustomerName,
+    KeepRequestStatus Status,
+    DateTime CreatedAtUtc,
+    DateTime? AttentionSinceUtc,
+    DateTime? NextAttentionAtUtc,
+    PriorityBand PriorityBand,
+    AttentionLevel AttentionLevel,
+    string RawDescriptionPrefix,
+    bool DescriptionWasTruncated);

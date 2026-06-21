@@ -160,7 +160,7 @@ public static class KeepRequestErrors
         Error.Create("KeepRequest.RequestListFilterNotYetAvailable", "Filter and search parameters are not yet available. Omit status, attentionReason, assignedAccountUserId, q, and date range parameters.");
 
     public static readonly Error RequestListInvalidLimit =
-        Error.Create("KeepRequest.RequestListInvalidLimit", "The limit must be between 1 and 100.");
+        Error.Create("KeepRequest.RequestListInvalidLimit", "The limit is outside the allowed range.");
 
     public static readonly Error RequestListInvalidCursor =
         Error.Create("KeepRequest.RequestListInvalidCursor", "The cursor is invalid, malformed, or does not match the current query.");

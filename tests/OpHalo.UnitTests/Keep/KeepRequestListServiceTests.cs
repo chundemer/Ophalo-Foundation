@@ -203,7 +203,8 @@ public class KeepRequestListServiceTests
     [InlineData("closed_history")]
     [InlineData("cancelled_history")]
     [InlineData("all_history")]
-    public async Task Execute_history_and_feedback_views_forbidden_for_operator(string view)
+    [InlineData("unassigned")]  // G4d: Operator uses dedicated Available route, not unassigned view.
+    public async Task Execute_owner_admin_only_views_forbidden_for_operator(string view)
     {
         var p = HappyPathPersistence(role: AccountUserRole.Operator);
         var sut = BuildSut(p);
@@ -212,13 +213,19 @@ public class KeepRequestListServiceTests
         Assert.Equal("KeepRequest.RequestListHistoryViewForbidden", result.Error.Code);
     }
 
-    [Fact]
-    public async Task Execute_unassigned_view_returns_200_for_operator()
+    [Theory]
+    [InlineData("feedback_review")]
+    [InlineData("closed_history")]
+    [InlineData("cancelled_history")]
+    [InlineData("all_history")]
+    [InlineData("unassigned")]  // G4d: Viewer gets 0 for unassigned count; full-summary view is forbidden.
+    public async Task Execute_owner_admin_only_views_forbidden_for_viewer(string view)
     {
-        var p = HappyPathPersistence(role: AccountUserRole.Operator);
+        var p = HappyPathPersistence(role: AccountUserRole.Viewer);
         var sut = BuildSut(p);
-        var result = await sut.ExecuteAsync(new KeepRequestListQuery(View: "unassigned"));
-        Assert.True(result.IsSuccess);
+        var result = await sut.ExecuteAsync(new KeepRequestListQuery(View: view));
+        Assert.False(result.IsSuccess);
+        Assert.Equal("KeepRequest.RequestListHistoryViewForbidden", result.Error.Code);
     }
 
     [Theory]
@@ -1037,64 +1044,6 @@ public class KeepRequestListServiceTests
     // --- 4C: CanSelfAssignFromList -------------------------------------------
 
     [Fact]
-    public async Task Execute_canSelfAssignFromList_true_for_operator_in_unassigned_view_no_responsible()
-    {
-        var request = MakeRequest();
-        SetProp(request, nameof(KeepRequest.FirstRespondedAtUtc), Now);
-        SetProp(request, nameof(KeepRequest.WaitingDirection), WaitingDirection.None);
-        SetProp(request, nameof(KeepRequest.AttentionLevel), AttentionLevel.None);
-
-        // No participant summary → isUnassigned = true
-        var p = HappyPathPersistence([request], role: AccountUserRole.Operator);
-        var sut = BuildSut(p);
-        var result = await sut.ExecuteAsync(new KeepRequestListQuery(View: "unassigned"));
-
-        Assert.True(result.IsSuccess);
-        var summary = result.Value.Requests[0];
-        Assert.Equal("unassigned_available", summary.RowContext);
-        Assert.True(summary.Participation.CanSelfAssignFromList);
-    }
-
-    [Fact]
-    public async Task Execute_canSelfAssignFromList_false_when_active_responsible_present()
-    {
-        var request = MakeRequest();
-        SetProp(request, nameof(KeepRequest.FirstRespondedAtUtc), Now);
-        SetProp(request, nameof(KeepRequest.WaitingDirection), WaitingDirection.None);
-        SetProp(request, nameof(KeepRequest.AttentionLevel), AttentionLevel.None);
-
-        var p = HappyPathPersistence([request], role: AccountUserRole.Operator);
-        p.ParticipantSummaryMap[request.Id] = StubParticipant(responsibleCount: 1);
-        var sut = BuildSut(p);
-        var result = await sut.ExecuteAsync(new KeepRequestListQuery(View: "unassigned"));
-
-        Assert.True(result.IsSuccess);
-        var summary = result.Value.Requests[0];
-        Assert.False(summary.Participation.CanSelfAssignFromList);
-        Assert.NotEqual("unassigned_available", summary.RowContext);
-    }
-
-    [Fact]
-    public async Task Execute_canSelfAssignFromList_false_for_stale_responsible()
-    {
-        // Stale responsible rows have DetachedAtUtc==null, so they count in ResponsibleCount
-        // and are excluded from the unassigned DB view. Even if the fake returns such a row,
-        // ResponsibleCount > 0 makes the request non-self-assignable (D3 decision).
-        var request = MakeRequest();
-        SetProp(request, nameof(KeepRequest.FirstRespondedAtUtc), Now);
-        SetProp(request, nameof(KeepRequest.WaitingDirection), WaitingDirection.None);
-        SetProp(request, nameof(KeepRequest.AttentionLevel), AttentionLevel.None);
-
-        var p = HappyPathPersistence([request], role: AccountUserRole.Operator);
-        p.ParticipantSummaryMap[request.Id] = StubParticipant(responsibleCount: 1, responsibleIsStale: true);
-        var sut = BuildSut(p);
-        var result = await sut.ExecuteAsync(new KeepRequestListQuery(View: "unassigned"));
-
-        Assert.True(result.IsSuccess);
-        Assert.False(result.Value.Requests[0].Participation.CanSelfAssignFromList);
-    }
-
-    [Fact]
     public async Task Execute_canSelfAssignFromList_false_for_operator_outside_unassigned_view()
     {
         // Same Operator, same unassigned request, but view=default — only unassigned view allows claim.
@@ -1128,41 +1077,56 @@ public class KeepRequestListServiceTests
         Assert.False(result.Value.Requests[0].Participation.CanSelfAssignFromList);
     }
 
+    // --- G4d: scope selection -----------------------------------------------
+
     [Fact]
-    public async Task Execute_canSelfAssignFromList_false_in_offseason()
+    public async Task Execute_scope_AccountWide_propagated_for_owner()
     {
-        var request = MakeRequest();
-        SetProp(request, nameof(KeepRequest.FirstRespondedAtUtc), Now);
-        SetProp(request, nameof(KeepRequest.WaitingDirection), WaitingDirection.None);
-        SetProp(request, nameof(KeepRequest.AttentionLevel), AttentionLevel.None);
-
-        var p = HappyPathPersistence([request], role: AccountUserRole.Operator);
-        p.AccountSnapshotToReturn = ActiveSnapshot(AccountOperatingMode.OffSeason);
-        var sut = BuildSut(p, posture: AccountAccessPosture.ReadOnly);
-        var result = await sut.ExecuteAsync(new KeepRequestListQuery(View: "unassigned"));
-
-        Assert.True(result.IsSuccess);
-        Assert.False(result.Value.Requests[0].Participation.CanSelfAssignFromList);
+        var p = HappyPathPersistence(role: AccountUserRole.Owner);
+        var sut = BuildSut(p);
+        await sut.ExecuteAsync();
+        Assert.Equal(KeepRequestVisibilityScope.AccountWide, p.LastActiveScope);
+        Assert.Equal(KeepRequestVisibilityScope.AccountWide, p.LastViewCountsScope);
     }
 
     [Fact]
-    public async Task Execute_rowContext_needs_attention_wins_over_unassigned_available()
+    public async Task Execute_scope_AccountWide_propagated_for_admin()
     {
-        // Attention raised: needs_attention; CanSelfAssignFromList still true (separate signal per D1).
-        var request = MakeRequest();
-        SetProp(request, nameof(KeepRequest.AttentionLevel), AttentionLevel.NeedsAttention);
-        SetProp(request, nameof(KeepRequest.AttentionReason), AttentionReason.CustomerMessage);
-        SetProp(request, nameof(KeepRequest.WaitingDirection), WaitingDirection.Business);
-        SetProp(request, nameof(KeepRequest.FirstRespondedAtUtc), Now);
-
-        var p = HappyPathPersistence([request], role: AccountUserRole.Operator);
+        var p = HappyPathPersistence(role: AccountUserRole.Admin);
         var sut = BuildSut(p);
-        var result = await sut.ExecuteAsync(new KeepRequestListQuery(View: "unassigned"));
+        await sut.ExecuteAsync();
+        Assert.Equal(KeepRequestVisibilityScope.AccountWide, p.LastActiveScope);
+        Assert.Equal(KeepRequestVisibilityScope.AccountWide, p.LastViewCountsScope);
+    }
 
-        Assert.True(result.IsSuccess);
-        var summary = result.Value.Requests[0];
-        Assert.Equal("needs_attention", summary.RowContext);
-        Assert.True(summary.Participation.CanSelfAssignFromList);
+    [Fact]
+    public async Task Execute_scope_AccountWide_propagated_for_viewer()
+    {
+        var p = HappyPathPersistence(role: AccountUserRole.Viewer);
+        var sut = BuildSut(p);
+        await sut.ExecuteAsync();
+        Assert.Equal(KeepRequestVisibilityScope.AccountWide, p.LastActiveScope);
+        Assert.Equal(KeepRequestVisibilityScope.AccountWide, p.LastViewCountsScope);
+    }
+
+    [Fact]
+    public async Task Execute_scope_MyWork_propagated_for_operator()
+    {
+        var p = HappyPathPersistence(role: AccountUserRole.Operator);
+        var sut = BuildSut(p);
+        await sut.ExecuteAsync();
+        Assert.Equal(KeepRequestVisibilityScope.MyWork, p.LastActiveScope);
+        Assert.Equal(KeepRequestVisibilityScope.MyWork, p.LastViewCountsScope);
+    }
+
+    [Fact]
+    public async Task Execute_unknown_role_returns_forbidden()
+    {
+        var p = HappyPathPersistence(role: (AccountUserRole)99);
+        var sut = BuildSut(p);
+        var result = await sut.ExecuteAsync();
+        Assert.False(result.IsSuccess);
+        Assert.Equal("auth.forbidden", result.Error.Code);
     }
 
     // --- Fakes ------------------------------------------------------------------
@@ -1205,8 +1169,10 @@ public class KeepRequestListServiceTests
         // Tracking for test assertions.
         public KeepRequestListFilters? LastActiveFilters { get; private set; }
         public ActiveViewKind LastActiveViewKind { get; private set; }
+        public KeepRequestVisibilityScope LastActiveScope { get; private set; }
         public HistoryViewKind LastHistoryViewKind { get; private set; }
         public KeepRequestListFilters? LastHistoryFilters { get; private set; }
+        public KeepRequestVisibilityScope LastViewCountsScope { get; private set; }
 
         public Task<AccountUserSnapshot?> GetAccountUserSnapshotAsync(Guid accountUserId, CancellationToken ct) =>
             Task.FromResult(UserSnapshotToReturn);
@@ -1220,10 +1186,11 @@ public class KeepRequestListServiceTests
 
         public Task<IReadOnlyList<KeepRequest>> GetActiveViewRequestsAsync(
             Guid accountId, Guid currentAccountUserId, ActiveViewKind view,
-            KeepRequestListFilters filters, CancellationToken ct)
+            KeepRequestListFilters filters, KeepRequestVisibilityScope scope, CancellationToken ct)
         {
             LastActiveViewKind = view;
             LastActiveFilters = filters;
+            LastActiveScope = scope;
             return Task.FromResult(RequestsToReturn);
         }
 
@@ -1237,8 +1204,17 @@ public class KeepRequestListServiceTests
         }
 
         public Task<KeepRequestViewCounts> GetViewCountsAsync(
-            Guid accountId, Guid currentAccountUserId, bool isOwnerOrAdmin, CancellationToken ct) =>
-            Task.FromResult(new KeepRequestViewCounts(0, 0, 0, 0, 0, 0));
+            Guid accountId, Guid currentAccountUserId, bool isOwnerOrAdmin,
+            KeepRequestVisibilityScope scope, CancellationToken ct)
+        {
+            LastViewCountsScope = scope;
+            return Task.FromResult(new KeepRequestViewCounts(0, 0, 0, 0, 0, 0));
+        }
+
+        public Task<IReadOnlyList<KeepRequestAvailableRow>> GetAvailableRequestsAsync(
+            Guid accountId, Guid currentAccountUserId, int fetchCount,
+            DateTime? cursorCreatedAtUtc, Guid? cursorRequestId, CancellationToken ct) =>
+            Task.FromResult<IReadOnlyList<KeepRequestAvailableRow>>([]);
 
         public Dictionary<Guid, KeepRequestParticipantSummary> ParticipantSummaryMap { get; set; } = new();
 

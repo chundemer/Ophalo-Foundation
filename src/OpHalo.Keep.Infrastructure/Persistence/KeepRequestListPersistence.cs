@@ -68,21 +68,23 @@ public sealed class KeepRequestListPersistence(OpHaloDbContext dbContext) : IKee
         Guid currentAccountUserId,
         ActiveViewKind view,
         KeepRequestListFilters filters,
+        KeepRequestVisibilityScope scope,
         CancellationToken ct)
     {
-        var baseSet = dbContext.Set<KeepRequest>().AsNoTracking();
+        var scopedBase = KeepRequestRowQueryFactory.Apply(
+            dbContext.Set<KeepRequest>().AsNoTracking(), scope, accountId, currentAccountUserId, dbContext);
 
         IQueryable<KeepRequest> query = view switch
         {
-            ActiveViewKind.Default => baseSet.Where(r => r.AccountId == accountId
-                && (r.Status != KeepRequestStatus.Closed && r.Status != KeepRequestStatus.Cancelled
-                    || (filters.IsOwnerOrAdmin
-                        && r.Status == KeepRequestStatus.Closed
-                        && r.AttentionReason == AttentionReason.UnresolvedFeedback
-                        && r.AttentionLevel != AttentionLevel.None))),
+            ActiveViewKind.Default => scopedBase.Where(r =>
+                r.Status != KeepRequestStatus.Closed && r.Status != KeepRequestStatus.Cancelled
+                || (filters.IsOwnerOrAdmin
+                    && r.Status == KeepRequestStatus.Closed
+                    && r.AttentionReason == AttentionReason.UnresolvedFeedback
+                    && r.AttentionLevel != AttentionLevel.None)),
 
-            ActiveViewKind.AssignedToMe => baseSet.Where(r => r.AccountId == accountId
-                && r.Status != KeepRequestStatus.Closed
+            ActiveViewKind.AssignedToMe => scopedBase.Where(r =>
+                r.Status != KeepRequestStatus.Closed
                 && r.Status != KeepRequestStatus.Cancelled
                 && dbContext.Set<KeepRequestParticipant>()
                     .Any(p => p.RequestId == r.Id
@@ -90,8 +92,8 @@ public sealed class KeepRequestListPersistence(OpHaloDbContext dbContext) : IKee
                         && p.ParticipationType == ParticipationType.Responsible
                         && p.DetachedAtUtc == null)),
 
-            ActiveViewKind.Watching => baseSet.Where(r => r.AccountId == accountId
-                && r.Status != KeepRequestStatus.Closed
+            ActiveViewKind.Watching => scopedBase.Where(r =>
+                r.Status != KeepRequestStatus.Closed
                 && r.Status != KeepRequestStatus.Cancelled
                 && dbContext.Set<KeepRequestParticipant>()
                     .Any(p => p.RequestId == r.Id
@@ -99,21 +101,19 @@ public sealed class KeepRequestListPersistence(OpHaloDbContext dbContext) : IKee
                         && p.ParticipationType == ParticipationType.Watching
                         && p.DetachedAtUtc == null)),
 
-            ActiveViewKind.Unassigned => baseSet.Where(r => r.AccountId == accountId
-                && r.Status != KeepRequestStatus.Closed
-                && r.Status != KeepRequestStatus.Cancelled
-                && !dbContext.Set<KeepRequestParticipant>()
-                    .Any(p => p.RequestId == r.Id
-                        && p.ParticipationType == ParticipationType.Responsible
-                        && p.DetachedAtUtc == null)),
+            // Unassigned: effective unassignment — no active eligible Responsible (G4d).
+            // Only Owner/Admin reaches this view (service blocks Operator/Viewer). ApplyAvailable
+            // already includes non-terminal and current-user-eligibility (Owner/Admin always satisfies it).
+            ActiveViewKind.Unassigned => KeepRequestRowQueryFactory.ApplyAvailable(
+                dbContext.Set<KeepRequest>().AsNoTracking(), accountId, currentAccountUserId, dbContext),
 
-            ActiveViewKind.NeedsAttention => baseSet.Where(r => r.AccountId == accountId
-                && r.Status != KeepRequestStatus.Closed
+            ActiveViewKind.NeedsAttention => scopedBase.Where(r =>
+                r.Status != KeepRequestStatus.Closed
                 && r.Status != KeepRequestStatus.Cancelled
                 && r.AttentionLevel != AttentionLevel.None),
 
-            ActiveViewKind.FeedbackReview => baseSet.Where(r => r.AccountId == accountId
-                && r.Status == KeepRequestStatus.Closed
+            ActiveViewKind.FeedbackReview => scopedBase.Where(r =>
+                r.Status == KeepRequestStatus.Closed
                 && r.AttentionReason == AttentionReason.UnresolvedFeedback
                 && r.AttentionLevel != AttentionLevel.None),
 
@@ -175,59 +175,60 @@ public sealed class KeepRequestListPersistence(OpHaloDbContext dbContext) : IKee
         Guid accountId,
         Guid currentAccountUserId,
         bool isOwnerOrAdmin,
+        KeepRequestVisibilityScope scope,
         CancellationToken ct)
     {
-        var activeBase = dbContext.Set<KeepRequest>()
-            .AsNoTracking()
-            .Where(r => r.AccountId == accountId
-                && r.Status != KeepRequestStatus.Closed
-                && r.Status != KeepRequestStatus.Cancelled);
+        var baseSet = dbContext.Set<KeepRequest>().AsNoTracking();
+        var scopedBase = KeepRequestRowQueryFactory.Apply(
+            baseSet, scope, accountId, currentAccountUserId, dbContext);
 
-        // default: active + Owner/Admin closed unresolved feedback (ADR-238/241).
-        int defaultCount;
-        if (isOwnerOrAdmin)
-        {
-            defaultCount = await dbContext.Set<KeepRequest>()
-                .AsNoTracking()
-                .CountAsync(r => r.AccountId == accountId
-                    && (r.Status != KeepRequestStatus.Closed && r.Status != KeepRequestStatus.Cancelled
-                        || (r.Status == KeepRequestStatus.Closed
-                            && r.AttentionReason == AttentionReason.UnresolvedFeedback
-                            && r.AttentionLevel != AttentionLevel.None)), ct);
-        }
-        else
-        {
-            defaultCount = await activeBase.CountAsync(ct);
-        }
+        // Non-terminal scoped base for counts that exclude terminal rows.
+        var scopedActive = scopedBase.Where(r =>
+            r.Status != KeepRequestStatus.Closed && r.Status != KeepRequestStatus.Cancelled);
 
-        // assigned_to_me: active where current user is Responsible.
-        var assignedToMeCount = await activeBase.CountAsync(r =>
+        // Default: same filter as Default view rows — guarantees row/count composition (G4d).
+        var defaultCount = await scopedBase.CountAsync(r =>
+            r.Status != KeepRequestStatus.Closed && r.Status != KeepRequestStatus.Cancelled
+            || (isOwnerOrAdmin
+                && r.Status == KeepRequestStatus.Closed
+                && r.AttentionReason == AttentionReason.UnresolvedFeedback
+                && r.AttentionLevel != AttentionLevel.None), ct);
+
+        // assigned_to_me: scoped active where current user is Responsible.
+        var assignedToMeCount = await scopedActive.CountAsync(r =>
             dbContext.Set<KeepRequestParticipant>()
                 .Any(p => p.RequestId == r.Id
                     && p.AccountUserId == currentAccountUserId
                     && p.ParticipationType == ParticipationType.Responsible
                     && p.DetachedAtUtc == null), ct);
 
-        // watching: active where current user is Watching.
-        var watchingCount = await activeBase.CountAsync(r =>
+        // watching: scoped active where current user is Watching.
+        var watchingCount = await scopedActive.CountAsync(r =>
             dbContext.Set<KeepRequestParticipant>()
                 .Any(p => p.RequestId == r.Id
                     && p.AccountUserId == currentAccountUserId
                     && p.ParticipationType == ParticipationType.Watching
                     && p.DetachedAtUtc == null), ct);
 
-        // unassigned: all roles see the real count now that the view is open to Operators (4C, ADR-240).
-        var unassignedCount = await activeBase.CountAsync(r =>
-            !dbContext.Set<KeepRequestParticipant>()
-                .Any(p => p.RequestId == r.Id
-                    && p.ParticipationType == ParticipationType.Responsible
-                    && p.DetachedAtUtc == null), ct);
+        // Unassigned: Owner/Admin and Operator both use the Available predicate (effective
+        // unassignment — no active eligible Responsible); Viewer gets 0 (G4d).
+        int unassignedCount;
+        if (isOwnerOrAdmin || scope == KeepRequestVisibilityScope.MyWork)
+        {
+            unassignedCount = await KeepRequestRowQueryFactory
+                .ApplyAvailable(baseSet, accountId, currentAccountUserId, dbContext)
+                .CountAsync(ct);
+        }
+        else
+        {
+            unassignedCount = 0;
+        }
 
-        // needs_attention: active with raised attention.
-        var needsAttentionCount = await activeBase.CountAsync(
+        // needs_attention: scoped active with raised attention.
+        var needsAttentionCount = await scopedActive.CountAsync(
             r => r.AttentionLevel != AttentionLevel.None, ct);
 
-        // feedback_review: closed unresolved feedback (Owner/Admin only, ADR-241/242).
+        // feedback_review: AccountWide closed unresolved feedback (Owner/Admin only, ADR-241/242).
         int feedbackReviewCount = isOwnerOrAdmin
             ? await dbContext.Set<KeepRequest>()
                 .AsNoTracking()
@@ -244,6 +245,48 @@ public sealed class KeepRequestListPersistence(OpHaloDbContext dbContext) : IKee
             Unassigned: unassignedCount,
             NeedsAttention: needsAttentionCount,
             FeedbackReview: feedbackReviewCount);
+    }
+
+    public async Task<IReadOnlyList<KeepRequestAvailableRow>> GetAvailableRequestsAsync(
+        Guid accountId,
+        Guid currentAccountUserId,
+        int fetchCount,
+        DateTime? cursorCreatedAtUtc,
+        Guid? cursorRequestId,
+        CancellationToken ct)
+    {
+        var query = KeepRequestRowQueryFactory.ApplyAvailable(
+            dbContext.Set<KeepRequest>().AsNoTracking(), accountId, currentAccountUserId, dbContext);
+
+        // Keyset cursor: CreatedAtUtc ASC, Id ASC (oldest Available first).
+        if (cursorCreatedAtUtc.HasValue && cursorRequestId.HasValue)
+        {
+            var cursorAt = cursorCreatedAtUtc.Value;
+            var cursorId = cursorRequestId.Value;
+            query = query.Where(r =>
+                r.CreatedAtUtc > cursorAt
+                || (r.CreatedAtUtc == cursorAt && r.Id > cursorId));
+        }
+
+        // Project only the locked Available fields plus a bounded description prefix (G4d).
+        // No customer contact, events, participants, feedback, page token, or full entities loaded.
+        return await query
+            .OrderBy(r => r.CreatedAtUtc)
+            .ThenBy(r => r.Id)
+            .Take(fetchCount)
+            .Select(r => new KeepRequestAvailableRow(
+                r.Id,
+                r.ReferenceCode,
+                r.CustomerName,
+                r.Status,
+                r.CreatedAtUtc,
+                r.AttentionSinceUtc,
+                r.NextAttentionAtUtc,
+                r.PriorityBand,
+                r.AttentionLevel,
+                r.Description.Length > 160 ? r.Description.Substring(0, 161) : r.Description,
+                r.Description.Length > 160))
+            .ToListAsync(ct);
     }
 
     public async Task<Dictionary<Guid, KeepRequestParticipantSummary>> GetParticipantSummariesAsync(

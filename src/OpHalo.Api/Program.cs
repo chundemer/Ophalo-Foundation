@@ -82,6 +82,7 @@ builder.Services.AddScoped<IKeepRequestOperatePersistence, EfKeepRequestOperateP
 builder.Services.AddScoped<KeepTokenService>();
 builder.Services.AddScoped<CreateKeepPublicIntakeService>();
 builder.Services.AddScoped<GetKeepRequestListService>();
+builder.Services.AddScoped<GetAvailableKeepRequestsService>();
 // Cursor signing key read lazily from IConfiguration so that WebApplicationFactory
 // overrides in ConfigureAppConfiguration are visible at scope-creation time.
 builder.Services.AddScoped<IKeepRequestListCursorProtector>(sp =>
@@ -269,6 +270,20 @@ app.MapPost("/keep/requests", async (
     return result.IsSuccess
         ? Results.Created($"/keep/requests/{result.Value.RequestId}", result.Value)
         : ErrorHttpMapper.ToHttpResult(result.Error);
+}).RequireAuthorization();
+
+// Available queue — Operator-only dedicated surface (G4d)
+app.MapGet("/keep/requests/available", async (
+    HttpRequest request,
+    GetAvailableKeepRequestsService service,
+    CancellationToken ct) =>
+{
+    var bind = KeepAvailableRequestQueryBinding.Bind(request.Query);
+    if (!bind.IsSuccess)
+        return ErrorHttpMapper.ToHttpResult(bind.Error);
+
+    var result = await service.ExecuteAsync(bind.Value, ct);
+    return result.IsSuccess ? Results.Ok(result.Value) : ErrorHttpMapper.ToHttpResult(result.Error);
 }).RequireAuthorization();
 
 // Operator request detail — authenticated, scoped to caller's account (Phase 8-B1-β)

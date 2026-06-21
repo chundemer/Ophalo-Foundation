@@ -48,10 +48,11 @@ public sealed class GetKeepRequestListService(
         "default", "assigned_to_me", "watching", "unassigned", "needs_attention"
     };
 
-    // History views + feedback_review require Owner/Admin (ADR-248/242).
+    // History views, feedback_review, and unassigned require Owner/Admin (ADR-248/242, G4d).
+    // Operator uses the dedicated Available route; Viewer receives 403 for unassigned.
     private static readonly HashSet<string> OwnerAdminOnlyViews = new(StringComparer.OrdinalIgnoreCase)
     {
-        "feedback_review", "closed_history", "cancelled_history", "all_history"
+        "feedback_review", "closed_history", "cancelled_history", "all_history", "unassigned"
     };
 
     private static readonly Dictionary<string, HistoryViewKind> HistoryViewKinds =
@@ -178,9 +179,19 @@ public sealed class GetKeepRequestListService(
         if (contradictionError is not null)
             return Result<GetKeepRequestListResult>.Failure(contradictionError);
 
-        // 6. View role authorization (ADR-242/248).
+        // 6. View role authorization (ADR-242/248, G4d).
         var role = userSnapshot.Role;
         var isOwnerOrAdmin = role is AccountUserRole.Owner or AccountUserRole.Admin;
+
+        // Explicit role → scope (G4d). Unknown/future roles fail closed — never use role != Operator
+        // as account-wide authorization.
+        KeepRequestVisibilityScope scope;
+        if (role is AccountUserRole.Owner or AccountUserRole.Admin or AccountUserRole.Viewer)
+            scope = KeepRequestVisibilityScope.AccountWide;
+        else if (role is AccountUserRole.Operator)
+            scope = KeepRequestVisibilityScope.MyWork;
+        else
+            return Result<GetKeepRequestListResult>.Failure(Forbidden);
 
         if (OwnerAdminOnlyViews.Contains(normalizedView) && !isOwnerOrAdmin)
             return Result<GetKeepRequestListResult>.Failure(KeepRequestErrors.RequestListHistoryViewForbidden);
@@ -284,7 +295,7 @@ public sealed class GetKeepRequestListService(
             var activeViewKind = ActiveViewKinds[normalizedView];
 
             var rawRequests = await persistence.GetActiveViewRequestsAsync(
-                currentUser.AccountId, currentAccountUserId, activeViewKind, filters, ct);
+                currentUser.AccountId, currentAccountUserId, activeViewKind, filters, scope, ct);
 
             Dictionary<Guid, KeepRequestParticipantSummary> participants;
             if (rawRequests.Count > 0)
@@ -338,7 +349,7 @@ public sealed class GetKeepRequestListService(
 
         // --- View counts (ADR-241/259) ---
         var viewCounts = await persistence.GetViewCountsAsync(
-            currentUser.AccountId, currentAccountUserId, isOwnerOrAdmin, ct);
+            currentUser.AccountId, currentAccountUserId, isOwnerOrAdmin, scope, ct);
 
         var listContext = new KeepRequestListContext(
             View: normalizedView,

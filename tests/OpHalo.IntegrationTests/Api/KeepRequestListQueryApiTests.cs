@@ -29,6 +29,7 @@ public sealed class KeepRequestListQueryApiTests : IClassFixture<KeepApiWebFacto
 
     private string _ownerCookie    = string.Empty;
     private string _operatorCookie = string.Empty;
+    private string _viewerCookie   = string.Empty;
 
     public KeepRequestListQueryApiTests(KeepApiWebFactory factory)
     {
@@ -109,6 +110,21 @@ public sealed class KeepRequestListQueryApiTests : IClassFixture<KeepApiWebFacto
         await db.SaveChangesAsync();
 
         _operatorCookie = await _factory.SeedSessionAsync(operatorMember.Id, accountId);
+
+        var viewerEmail = "viewer@4a-query-tests.com";
+        var viewerUser  = User.CreateVerified(viewerEmail, "4A Viewer", now);
+        var viewerMember = AccountUser.CreatePendingInvite(
+            accountId, viewerEmail, EmailNormalizer.Normalize(viewerEmail),
+            AccountUserRole.Viewer,
+            inviteTokenHash: "viewer_4a_query",
+            inviteExpiresAtUtc: now.AddDays(7),
+            nowUtc: now);
+        viewerMember.Activate(viewerUser.Id, now);
+        db.Users.Add(viewerUser);
+        db.AccountUsers.Add(viewerMember);
+        await db.SaveChangesAsync();
+
+        _viewerCookie = await _factory.SeedSessionAsync(viewerMember.Id, accountId);
     }
 
     public Task DisposeAsync() => Task.CompletedTask;
@@ -478,14 +494,7 @@ public sealed class KeepRequestListQueryApiTests : IClassFixture<KeepApiWebFacto
         Assert.Single(page2.Requests);
     }
 
-    // --- Session 4C: Operator unassigned view and rowContext --------------------
-
-    [Fact]
-    public async Task Operator_unassigned_view_returns_200()
-    {
-        var res = await GetAsAsync("/keep/requests?view=unassigned", _operatorCookie);
-        Assert.Equal(HttpStatusCode.OK, res.StatusCode);
-    }
+    // --- Session 4C: rowContext -------------------------------------------------
 
     [Fact]
     public async Task rowContext_field_present_on_each_row()
@@ -500,17 +509,83 @@ public sealed class KeepRequestListQueryApiTests : IClassFixture<KeepApiWebFacto
         Assert.All(body.Requests, r => Assert.False(string.IsNullOrEmpty(r.RowContext)));
     }
 
+    // --- G4d: role-scoped views and Available count -----------------------------
+
+    [Fact]
+    public async Task Operator_unassigned_view_returns_403()
+    {
+        var res = await GetAsAsync("/keep/requests?view=unassigned", _operatorCookie);
+        Assert.Equal(HttpStatusCode.Forbidden, res.StatusCode);
+        var body = await res.Content.ReadFromJsonAsync<JsonElement>();
+        body.TryGetProperty("code", out var code);
+        Assert.Equal("KeepRequest.RequestListHistoryViewForbidden", code.GetString());
+    }
+
+    [Fact]
+    public async Task Viewer_unassigned_view_returns_403()
+    {
+        var res = await GetAsAsync("/keep/requests?view=unassigned", _viewerCookie);
+        Assert.Equal(HttpStatusCode.Forbidden, res.StatusCode);
+        var body = await res.Content.ReadFromJsonAsync<JsonElement>();
+        body.TryGetProperty("code", out var code);
+        Assert.Equal("KeepRequest.RequestListHistoryViewForbidden", code.GetString());
+    }
+
+    [Fact]
+    public async Task Owner_unassigned_view_returns_200()
+    {
+        var res = await GetAsync("/keep/requests?view=unassigned");
+        Assert.Equal(HttpStatusCode.OK, res.StatusCode);
+    }
+
+    [Fact]
+    public async Task Operator_default_list_scoped_to_MyWork_returns_no_unassigned_requests()
+    {
+        // Seeded requests have no participants — Operator is not in MyWork for any of them.
+        // Owner sees all 3; Operator sees 0.
+        var ownerRes  = await GetAsync("/keep/requests?view=default");
+        var ownerBody = await ownerRes.Content.ReadFromJsonAsync<ListResponseBody>(
+            new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+        Assert.Equal(3, ownerBody!.Requests.Count);
+
+        var opRes  = await GetAsAsync("/keep/requests?view=default", _operatorCookie);
+        var opBody = await opRes.Content.ReadFromJsonAsync<ListResponseBody>(
+            new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+        Assert.Equal(HttpStatusCode.OK, opRes.StatusCode);
+        Assert.Empty(opBody!.Requests);
+    }
+
+    [Fact]
+    public async Task Operator_viewCounts_unassigned_reflects_Available_count()
+    {
+        // Seeded requests are non-terminal, no Responsible, and Operator is eligible →
+        // Available count = 3. Owner/Admin also use ApplyAvailable so unassigned = 3 for both.
+        var opRes  = await GetAsAsync("/keep/requests", _operatorCookie);
+        Assert.Equal(HttpStatusCode.OK, opRes.StatusCode);
+        var opBody = await opRes.Content.ReadFromJsonAsync<ListResponseBody>(
+            new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+        Assert.Equal(3, opBody!.ViewCounts!.Unassigned);
+    }
+
     // --- Response DTOs ----------------------------------------------------------
 
     private sealed record ListResponseBody(
         List<ListRequestBody> Requests,
         PageInfoBody PageInfo,
-        object? ViewCounts,
+        ViewCountsBody? ViewCounts,
         ListContextBody? ListContext);
 
     private sealed record ListRequestBody(Guid Id, string? RowContext);
 
     private sealed record PageInfoBody(int Limit, bool HasMore, string? NextCursor);
+
+    private sealed record ViewCountsBody(
+        int Default,
+        int AssignedToMe,
+        int Watching,
+        int Unassigned,
+        int NeedsAttention,
+        int FeedbackReview);
 
     private sealed record ListContextBody(
         string View,
