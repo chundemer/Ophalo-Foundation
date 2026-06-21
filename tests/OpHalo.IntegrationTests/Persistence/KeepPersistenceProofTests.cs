@@ -628,4 +628,174 @@ public sealed class KeepPersistenceProofTests : IClassFixture<PostgresFixture>, 
         Assert.Null(await readCtx.Set<KeepCustomer>().FirstOrDefaultAsync(c => c.Id == customer.Id));
         Assert.True(await readCtx.Set<KeepCustomer>().IgnoreQueryFilters().AnyAsync(c => c.Id == customer.Id));
     }
+
+    // -------------------------------------------------------------------------
+    // G3b persistence commit proof — KeepIntakeCommitHelper via KeepBusinessRequestPersistence
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public async Task BusinessCommit_named_page_token_collision_returns_UniqueTokenCollision_and_tracker_is_clean()
+    {
+        // Arrange: seed a request that owns the token.
+        var existingCustomer = KeepCustomer.Create(AccountId, "Existing", "0400111001");
+        const string conflictingToken = "biz-tok-collision-test-001";
+
+        await using (var ctx = CreateContext())
+        {
+            var r = KeepRequest.CreateByBusiness(
+                AccountId, existingCustomer.Id, "Existing", "0400111001", null,
+                "Prior request", "BIZREF001", conflictingToken, Now);
+            ctx.Set<KeepCustomer>().Add(existingCustomer);
+            ctx.Set<KeepRequest>().Add(r);
+            ctx.Set<KeepRequestEvent>().Add(KeepRequestEvent.CreateRequestCreated(r.Id, AccountId, AccountOwnerAccountUserId, "Owner", Now));
+            await ctx.SaveChangesAsync();
+        }
+
+        // Act: try to commit a new request with the same page token.
+        await using var bizCtx = CreateContext();
+        var sut = new OpHalo.Keep.Infrastructure.Persistence.KeepBusinessRequestPersistence(bizCtx);
+
+        var newCustomer = KeepCustomer.Create(AccountId, "Jane", "0400111002");
+        var newRequest = KeepRequest.CreateByBusiness(
+            AccountId, newCustomer.Id, "Jane", "0400111002", null,
+            "New request", "BIZREF002", conflictingToken, Now);
+        var newEvent = KeepRequestEvent.CreateRequestCreated(newRequest.Id, AccountId, AccountOwnerAccountUserId, "Owner", Now);
+
+        var result = await sut.CommitBusinessRequestAsync(newCustomer, newRequest, newEvent, CancellationToken.None);
+
+        // Assert outcome and tracker clean-up (so a retry can reuse the same context).
+        Assert.Equal(OpHalo.Keep.Application.Requests.BusinessRequestCommitResult.UniqueTokenCollision, result);
+        Assert.Equal(EntityState.Detached, bizCtx.Entry(newRequest).State);
+        Assert.Equal(EntityState.Detached, bizCtx.Entry(newEvent).State);
+        Assert.Equal(EntityState.Detached, bizCtx.Entry(newCustomer).State);
+    }
+
+    [Fact]
+    public async Task BusinessCommit_named_reference_code_collision_returns_UniqueTokenCollision()
+    {
+        var existingCustomer = KeepCustomer.Create(AccountId, "Existing", "0400111003");
+        const string conflictingRef = "SAME-BIZ-REF";
+
+        await using (var ctx = CreateContext())
+        {
+            var r = KeepRequest.CreateByBusiness(
+                AccountId, existingCustomer.Id, "Existing", "0400111003", null,
+                "Prior request", conflictingRef, "biz-tok-ref-001", Now);
+            ctx.Set<KeepCustomer>().Add(existingCustomer);
+            ctx.Set<KeepRequest>().Add(r);
+            ctx.Set<KeepRequestEvent>().Add(KeepRequestEvent.CreateRequestCreated(r.Id, AccountId, AccountOwnerAccountUserId, "Owner", Now));
+            await ctx.SaveChangesAsync();
+        }
+
+        await using var bizCtx = CreateContext();
+        var sut = new OpHalo.Keep.Infrastructure.Persistence.KeepBusinessRequestPersistence(bizCtx);
+
+        var newCustomer = KeepCustomer.Create(AccountId, "Jane", "0400111004");
+        var newRequest = KeepRequest.CreateByBusiness(
+            AccountId, newCustomer.Id, "Jane", "0400111004", null,
+            "Collision request", conflictingRef, "biz-tok-ref-002", Now);
+        var newEvent = KeepRequestEvent.CreateRequestCreated(newRequest.Id, AccountId, AccountOwnerAccountUserId, "Owner", Now);
+
+        var result = await sut.CommitBusinessRequestAsync(newCustomer, newRequest, newEvent, CancellationToken.None);
+
+        Assert.Equal(OpHalo.Keep.Application.Requests.BusinessRequestCommitResult.UniqueTokenCollision, result);
+    }
+
+    [Fact]
+    public async Task BusinessCommit_canonical_phone_collision_returns_CustomerCanonicalPhoneCollision()
+    {
+        // Seed the winning customer first so the constraint is in place.
+        var winningCustomer = KeepCustomer.Create(AccountId, "Winning Jane", "0400111005");
+
+        await using (var ctx = CreateContext())
+        {
+            ctx.Set<KeepCustomer>().Add(winningCustomer);
+            await ctx.SaveChangesAsync();
+        }
+
+        await using var bizCtx = CreateContext();
+        var sut = new OpHalo.Keep.Infrastructure.Persistence.KeepBusinessRequestPersistence(bizCtx);
+
+        // Different KeepCustomer entity, same canonical phone — simulates race.
+        var racingCustomer = KeepCustomer.Create(AccountId, "Racing Jane", "04001 1100 5"); // same digits
+        var request = KeepRequest.CreateByBusiness(
+            AccountId, racingCustomer.Id, "Racing Jane", "04001 1100 5", null,
+            "Race request", "BIZRACE001", "biz-tok-race-001", Now);
+        var ev = KeepRequestEvent.CreateRequestCreated(request.Id, AccountId, AccountOwnerAccountUserId, "Owner", Now);
+
+        var result = await sut.CommitBusinessRequestAsync(racingCustomer, request, ev, CancellationToken.None);
+
+        Assert.Equal(OpHalo.Keep.Application.Requests.BusinessRequestCommitResult.CustomerCanonicalPhoneCollision, result);
+        Assert.Equal(EntityState.Detached, bizCtx.Entry(request).State);
+        Assert.Equal(EntityState.Detached, bizCtx.Entry(ev).State);
+        Assert.Equal(EntityState.Detached, bizCtx.Entry(racingCustomer).State);
+    }
+
+    [Fact]
+    public async Task BusinessCommit_unrelated_constraint_violation_propagates()
+    {
+        // Use a cross-account FK violation (23503) — not caught by the helper.
+        await using var bizCtx = CreateContext();
+        var sut = new OpHalo.Keep.Infrastructure.Persistence.KeepBusinessRequestPersistence(bizCtx);
+
+        var unknownCustomerId = Guid.NewGuid(); // no row for this customer
+        var fakeCustomer = KeepCustomer.Create(AccountId, "Ghost", "0400111006");
+        // Manually set customer as tracked but with an ID that doesn't match the request's customerId.
+        // Instead, create a request referencing a non-existent customer from a different account.
+        var requestWithBadCustomer = KeepRequest.CreateByBusiness(
+            AccountId, unknownCustomerId, "Ghost", "0400111006", null,
+            "Bad request", "BIZBAD001", "biz-tok-bad-001", Now);
+        var ev = KeepRequestEvent.CreateRequestCreated(requestWithBadCustomer.Id, AccountId, AccountOwnerAccountUserId, "Owner", Now);
+
+        // CommitAsync adds the customer entity; skip that by attaching a tracked version.
+        // The request references an unknown customerId — EF will attempt to insert and hit FK 23503.
+        // Pass a customer whose EF-tracked state is Detached so the helper treats it as new,
+        // but give it a different Id so the FK still violates.
+        var ex = await Assert.ThrowsAsync<DbUpdateException>(
+            () => sut.CommitBusinessRequestAsync(fakeCustomer, requestWithBadCustomer, ev, CancellationToken.None));
+
+        var pgEx = ex.InnerException as Npgsql.NpgsqlException;
+        Assert.NotNull(pgEx);
+    }
+
+    [Fact]
+    public async Task BusinessCommit_tracker_is_clean_after_phone_collision_allowing_retry()
+    {
+        // Seed winning customer.
+        var winner = KeepCustomer.Create(AccountId, "Winner", "0400111007");
+        await using (var ctx = CreateContext())
+        {
+            ctx.Set<KeepCustomer>().Add(winner);
+            await ctx.SaveChangesAsync();
+        }
+
+        await using var bizCtx = CreateContext();
+        var sut = new OpHalo.Keep.Infrastructure.Persistence.KeepBusinessRequestPersistence(bizCtx);
+
+        // Attempt 1: phone collision.
+        var racer = KeepCustomer.Create(AccountId, "Racer", "04001 1100 7");
+        var r1 = KeepRequest.CreateByBusiness(AccountId, racer.Id, "Racer", "04001 1100 7", null, "Desc", "RETRY001", "biz-tok-retry-001", Now);
+        var e1 = KeepRequestEvent.CreateRequestCreated(r1.Id, AccountId, AccountOwnerAccountUserId, "Owner", Now);
+        var outcome1 = await sut.CommitBusinessRequestAsync(racer, r1, e1, CancellationToken.None);
+        Assert.Equal(OpHalo.Keep.Application.Requests.BusinessRequestCommitResult.CustomerCanonicalPhoneCollision, outcome1);
+
+        // Attempt 2 after recovery: reuse the winning customer — should commit.
+        var winnerRefresh = await bizCtx.Set<KeepCustomer>()
+            .FirstAsync(c => c.AccountId == AccountId && c.CanonicalPhone == winner.CanonicalPhone);
+        var r2 = KeepRequest.CreateByBusiness(AccountId, winnerRefresh.Id, "Winner", "0400111007", null, "Retry desc", "RETRY002", "biz-tok-retry-002", Now);
+        var e2 = KeepRequestEvent.CreateRequestCreated(r2.Id, AccountId, AccountOwnerAccountUserId, "Owner", Now);
+        var outcome2 = await sut.CommitBusinessRequestAsync(winnerRefresh, r2, e2, CancellationToken.None);
+        Assert.Equal(OpHalo.Keep.Application.Requests.BusinessRequestCommitResult.Committed, outcome2);
+
+        // Confirm DB state: one customer, one committed request.
+        await using var readCtx = CreateContext();
+        var customers = await readCtx.Set<KeepCustomer>()
+            .Where(c => c.AccountId == AccountId && c.CanonicalPhone == winner.CanonicalPhone)
+            .ToListAsync();
+        Assert.Single(customers);
+        var requests = await readCtx.Set<KeepRequest>()
+            .Where(r => r.AccountId == AccountId && r.KeepCustomerId == customers[0].Id)
+            .ToListAsync();
+        Assert.Single(requests);
+    }
 }

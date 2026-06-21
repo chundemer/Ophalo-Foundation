@@ -73,6 +73,8 @@ builder.Services.AddSingleton<IClock, OpHalo.Foundation.Infrastructure.Services.
 
 builder.Services.AddScoped<IKeepIntakePersistence, KeepIntakePersistence>();
 builder.Services.AddScoped<IKeepIntakeSetupPersistence, KeepIntakeSetupPersistence>();
+builder.Services.AddScoped<IKeepBusinessRequestPersistence, KeepBusinessRequestPersistence>();
+builder.Services.AddScoped<CreateBusinessRequestService>();
 builder.Services.AddScoped<KeepIntakeSetupService>();
 builder.Services.AddScoped<IKeepRequestListPersistence, KeepRequestListPersistence>();
 builder.Services.AddScoped<IKeepRequestDetailPersistence, EfKeepRequestDetailPersistence>();
@@ -253,6 +255,20 @@ app.MapGet("/keep/requests", async (
 
     var result = await service.ExecuteAsync(bind.Value, ct);
     return result.IsSuccess ? Results.Ok(result.Value) : ErrorHttpMapper.ToHttpResult(result.Error);
+}).RequireAuthorization();
+
+// Business-created request — authenticated, Owner/Admin/Operator (G3b)
+app.MapPost("/keep/requests", async (
+    CreateBusinessRequestBody body,
+    CreateBusinessRequestService service,
+    CancellationToken ct) =>
+{
+    var command = new CreateBusinessRequestCommand(
+        body.CustomerName, body.CustomerPhone, body.CustomerEmail, body.Description);
+    var result = await service.ExecuteAsync(command, ct);
+    return result.IsSuccess
+        ? Results.Created($"/keep/requests/{result.Value.RequestId}", result.Value)
+        : ErrorHttpMapper.ToHttpResult(result.Error);
 }).RequireAuthorization();
 
 // Operator request detail — authenticated, scoped to caller's account (Phase 8-B1-β)

@@ -57,7 +57,10 @@ public static class ErrorHttpMapper
             // Explicit match — Account.PilotFull resolves to 409, not the default 400.
             var c when c == "Account.PilotFull" => (StatusCodes.Status409Conflict, "Conflict.", null),
 
-            // --- Public intake field validation errors (G2) ---
+            // --- Shared request-creation validation errors (G2/G3b) ---
+            var c when c == "KeepRequest.CustomerNameRequired"           => (StatusCodes.Status400BadRequest, "Bad request.", null),
+            var c when c == "KeepRequest.CustomerPhoneRequired"          => (StatusCodes.Status400BadRequest, "Bad request.", null),
+            var c when c == "KeepRequest.DescriptionRequired"            => (StatusCodes.Status400BadRequest, "Bad request.", null),
             var c when c == "KeepRequest.CustomerNameTooLong"            => (StatusCodes.Status400BadRequest, "Bad request.", null),
             var c when c == "KeepRequest.CustomerPhoneTooLong"           => (StatusCodes.Status400BadRequest, "Bad request.", null),
             var c when c == "KeepRequest.CustomerPhoneInvalidCharacters" => (StatusCodes.Status400BadRequest, "Bad request.", null),

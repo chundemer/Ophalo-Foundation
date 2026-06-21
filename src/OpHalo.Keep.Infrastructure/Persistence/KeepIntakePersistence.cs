@@ -1,5 +1,4 @@
 using Microsoft.EntityFrameworkCore;
-using Npgsql;
 using OpHalo.Foundation.Infrastructure.Persistence;
 using OpHalo.Keep.Application.Abstractions;
 using OpHalo.Keep.Application.PublicIntake;
@@ -62,47 +61,13 @@ public sealed class KeepIntakePersistence(OpHaloDbContext dbContext) : IKeepInta
     public async Task<PublicIntakeCommitResult> CommitPublicIntakeAsync(
         KeepCustomer customer, KeepRequest request, KeepRequestEvent requestEvent, CancellationToken ct)
     {
-        // Capture state before adding — existing tracked customers must not be detached on collision.
-        var customerIsNew = dbContext.Entry(customer).State == EntityState.Detached;
-
-        if (customerIsNew)
-            dbContext.Set<KeepCustomer>().Add(customer);
-
-        dbContext.Set<KeepRequest>().Add(request);
-        dbContext.Set<KeepRequestEvent>().Add(requestEvent);
-
-        try
+        var outcome = await KeepIntakeCommitHelper.CommitAsync(dbContext, customer, request, requestEvent, ct);
+        return outcome switch
         {
-            await dbContext.SaveChangesAsync(ct);
-            return PublicIntakeCommitResult.Committed;
-        }
-        catch (DbUpdateException ex) when (
-            ex.InnerException is PostgresException pg
-            && pg.SqlState == "23505"
-            && pg.ConstraintName is
-                "ix_keep_requests_page_token" or
-                "ix_keep_requests_account_reference_code")
-        {
-            dbContext.Entry(request).State = EntityState.Detached;
-            dbContext.Entry(requestEvent).State = EntityState.Detached;
-            if (customerIsNew)
-                dbContext.Entry(customer).State = EntityState.Detached;
-
-            return PublicIntakeCommitResult.UniqueTokenCollision;
-        }
-        catch (DbUpdateException ex) when (
-            ex.InnerException is PostgresException pg
-            && pg.SqlState == "23505"
-            && pg.ConstraintName == "ix_keep_customers_account_canonical_phone")
-        {
-            // A concurrent submission inserted the same customer first. Detach all failed
-            // entities so the caller can re-read the winning customer and retry.
-            dbContext.Entry(request).State = EntityState.Detached;
-            dbContext.Entry(requestEvent).State = EntityState.Detached;
-            if (customerIsNew)
-                dbContext.Entry(customer).State = EntityState.Detached;
-
-            return PublicIntakeCommitResult.CustomerCanonicalPhoneCollision;
-        }
+            IntakeCommitOutcome.Committed                       => PublicIntakeCommitResult.Committed,
+            IntakeCommitOutcome.UniqueTokenCollision            => PublicIntakeCommitResult.UniqueTokenCollision,
+            IntakeCommitOutcome.CustomerCanonicalPhoneCollision => PublicIntakeCommitResult.CustomerCanonicalPhoneCollision,
+            _ => throw new InvalidOperationException($"Unexpected IntakeCommitOutcome: {outcome}")
+        };
     }
 }

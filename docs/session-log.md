@@ -1,6 +1,6 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-06-20
+**Last updated:** 2026-06-20 (G3b complete)
 **Branch:** `main` (no remote yet)
 
 ---
@@ -33,7 +33,7 @@ validating or coding Phase 8-B5 Session 6.
 
 **Source of truth:** `docs/build-log/047-pre-session-6-phase-7-session-5-gap-audit.md`
 
-**Next free ADR:** ADR-315 (ADR-301–305 consumed by G1; ADR-306–310 consumed by G2; ADR-311–314 consumed by G3a)
+**Next free ADR:** ADR-319 (ADR-301–305 consumed by G1; ADR-306–310 consumed by G2; ADR-311–314 consumed by G3a; ADR-315–318 consumed by G3b)
 
 **Locked decisions:** ADR-295 through ADR-310, subject to the 2026-06-20 intake-availability working
 decision below. Reconcile ADR-295 and related build/deferred docs only after G1-G8 complete.
@@ -69,6 +69,7 @@ decision below. Reconcile ADR-295 and related build/deferred docs only after G1-
 G1 raised this to 866 (503 unit, 14 arch, 349 integration) — includes FirstResponseEventId FK, participant proof tests, and two-phase seed fixes.
 G2 raised this to 920 (536 unit, 14 arch, 370 integration) — includes public intake validation pipeline, phone character allowlist, email preservation, and customer-race recovery.
 G3a raised this to 941 (540 unit, 14 arch, 387 integration) — includes intake-link setup endpoints (Get/Ensure/Replace), Continuity alias removal, and ignored emailNotificationsEnabled field removal.
+G3b raised this to 986 (568 unit, 14 arch, 404 integration) — includes POST /keep/requests endpoint, shared validation pipeline, KeepIntakeCommitHelper, and 13 HTTP + 5 persistence proof tests.
 
 **Required order:** G1 → G2 → G3 → G4 → G5 → G6 → G7 → G8. Do not begin Session 6 until G8 records the
 final green gate. A session may fix a directly blocking defect inside its named scope; broader
@@ -181,27 +182,44 @@ identity, and `Spam`/`Test` classification.
 - `POST /keep/setup/intake/ensure` — idempotent; raw token only when this call created the link; concurrent loser returns `created=false, rawToken=null`
 - `POST /keep/setup/intake/replace` — transactional; returns new raw token + `staleLinksWarning=true`
 
-### Gap Session G3b — Authenticated business-created requests — PLANNED
+### Gap Session G3b — Authenticated business-created requests — COMPLETE
 
-**Finding:** GAP-002
+**Tests:** 986 total (568 unit · 14 arch · 404 integration) — all green
+**ADRs:** ADR-315 to ADR-318
+**Exit record:** `docs/build-log/051-gap-g3b-business-created-requests.md`
+**Gap closed:** GAP-002
 
-**Goal:** Let authenticated Owner/Admin/Operator create a Keep request on behalf of a customer from a phone call, walk-in, referral, or voicemail — without database seeding.
+**Design decisions (ADR-315–318):**
+- D1 (ADR-315): Two-interface pattern — `IKeepRequestOperatePersistence` for auth snapshots + actor lookup; `IKeepBusinessRequestPersistence` for customer ops + commit; shared via `KeepIntakeCommitHelper`
+- D2 (ADR-316): `POST /keep/requests`, return 201 Created with `KeepRequestDetailResult` directly
+- D3 (ADR-317): Viewer rejection immediately after userSnapshot load; normal permission/access stack for Owner/Admin/Operator
+- D4 (ADR-318): OffSeason blocks via `decision.IsBlocked || decision.IsReadOnly`; `RequestImplementsAllowedInOffSeason: false`; feature key `FeatureKeys.Keep.OperatorQueue`; actor event uses 5-param `CreateRequestCreated` (Visibility=System, ActorType=AccountUser, actorAccountUserId+actorDisplayName from session)
 
-**Contract:**
-1. Owner/Admin/Operator may create; Viewer forbidden. Account and actor come only from the authenticated session.
-2. Reuse G1/G2 customer normalization, matching, safe contact updates, and bounded customer-race recovery. Do not fork a second identity implementation.
-3. Persist `Origin=Business`, business activity at creation, no fabricated customer activity, and no first-response timer at creation.
-4. Create the normal request-created event with authenticated actor metadata.
-5. Return `KeepRequestDetailResult` directly — `PageToken` already included (D3 resolved: confirmed in prior session that `KeepRequestDetailResult` already carries `PageToken`; no wrapper needed).
-6. Respect access/feature/permission/OffSeason write policy; OffSeason blocks business-created requests (`RequestImplementsAllowedInOffSeason: false`). No scheduling, estimating, dispatch, CRM, or job-management scope.
+**Bugs found and fixed:**
+- `r.CustomerId` → `r.KeepCustomerId` in persistence proof tests
+- Proof tests were using `Guid.NewGuid()` as actor ID, violating the G1 composite FK on `KeepRequestEvent.ActorAccountUserId`; replaced with `AccountOwnerAccountUserId` throughout
 
-**Required tests:**
-- creation by each allowed role (Owner, Admin, Operator); Viewer → 403;
-- account/actor from session only (not request body);
-- Origin=Business, business activity set, no customer activity, no first-response timer;
-- customer reuse (existing canonical phone) and concurrent first-customer race;
-- OffSeason denial;
-- full suite green.
+**Files created:**
+- `src/OpHalo.Keep.Application/Validation/KeepRequestInputValidator.cs`
+- `src/OpHalo.Keep.Application/Requests/CreateBusinessRequestCommand.cs`
+- `src/OpHalo.Keep.Application/Requests/BusinessRequestCommitResult.cs`
+- `src/OpHalo.Keep.Application/Requests/IKeepBusinessRequestPersistence.cs`
+- `src/OpHalo.Keep.Application/Requests/CreateBusinessRequestService.cs`
+- `src/OpHalo.Keep.Infrastructure/Persistence/KeepIntakeCommitHelper.cs`
+- `src/OpHalo.Keep.Infrastructure/Persistence/KeepBusinessRequestPersistence.cs`
+- `src/OpHalo.Api/Keep/CreateBusinessRequestBody.cs`
+- `tests/OpHalo.UnitTests/Keep/KeepCreateBusinessRequestServiceTests.cs` (21 unit tests)
+- `tests/OpHalo.IntegrationTests/Api/KeepBusinessRequestApiTests.cs` (13 HTTP tests)
+
+**Files modified:**
+- `Keep.Core/Entities/KeepRequestEvent.cs` — 5-param `CreateRequestCreated` overload
+- `Keep.Application/PublicIntake/CreateKeepPublicIntakeService.cs` — delegates to shared validator
+- `Keep.Infrastructure/Persistence/KeepIntakePersistence.cs` — delegates to `KeepIntakeCommitHelper`
+- `Api/Helpers/ErrorHttpMapper.cs` — +3 validation error entries
+- `Api/Program.cs` — DI + endpoint
+- `tests/OpHalo.IntegrationTests/Persistence/KeepPersistenceProofTests.cs` — 5 G3b proof tests + fixes
+
+**Baseline entering G3b:** 941 tests (540 unit · 14 arch · 387 integration)
 
 ### Gap Session G4 — Shared request-row authorization — PLANNED
 

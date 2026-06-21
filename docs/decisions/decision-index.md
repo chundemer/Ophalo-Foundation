@@ -358,4 +358,9 @@ decision. This file is authoritative for the new project.
 | ADR-313 | _(Gap-G3a-D3)_ Slug generation is kebab-case from business name (lowercase, non-alphanumeric → `-`, collapse, truncate at 60); numeric suffix loop resolves collisions; `SlugExistsAsync` scopes to active slugs matching the unique index filter, so revoked slugs can be reused | Implemented | build-log/050 |
 | ADR-314 | _(Gap-G3a-D4)_ `KeepPublicIntakeLink.Create` and `.Revoke` gain optional `createdByUserId` / `modifiedByUserId` params (backward-compatible; all existing callers compile unchanged). No migration needed — `BaseEntityConfiguration` already maps `CreatedByUserId` and `ModifiedByUserId` | Implemented | build-log/050 |
 
-_Next free ID: **ADR-315**._
+| ADR-315 | _(Gap-G3b-D1)_ Two-interface pattern for business-request creation: `IKeepRequestOperatePersistence` provides auth snapshots and actor lookup; `IKeepBusinessRequestPersistence` provides customer find, token existence checks, and commit — separated so the commit path is not coupled to the operate path and `KeepIntakeCommitHelper` can be shared with the public intake path | Implemented | build-log/051 |
+| ADR-316 | _(Gap-G3b-D2)_ `POST /keep/requests` creates a business-origin request; returns `201 Created` with `KeepRequestDetailResult` (no wrapper). Location header: `/keep/requests/{requestId}` | Implemented | build-log/051 |
+| ADR-317 | _(Gap-G3b-D3)_ Viewer role is rejected immediately after userSnapshot load (before account/feature/OffSeason checks); Owner/Admin/Operator proceed through the standard permission/access/feature stack | Implemented | build-log/051 |
+| ADR-318 | _(Gap-G3b-D4)_ Business-created requests use `RequestImplementsAllowedInOffSeason: false` and check `decision.IsBlocked || decision.IsReadOnly` — OffSeason blocks write intent. Feature gate: `FeatureKeys.Keep.OperatorQueue`. Actor event uses 5-param `KeepRequestEvent.CreateRequestCreated` with `Visibility=System`, `ActorType=AccountUser`, and the authenticated `AccountUserId`/display name | Implemented | build-log/051 |
+
+_Next free ID: **ADR-319**._

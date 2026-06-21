@@ -197,4 +197,51 @@ public class KeepRequestTests
     public void CreateRequestCreated_requires_non_empty_account_id() =>
         Assert.Throws<ArgumentException>(() =>
             KeepRequestEvent.CreateRequestCreated(Guid.NewGuid(), Guid.Empty, Now));
+
+    // --- CreateRequestCreated (authenticated actor overload) ---
+
+    private static readonly Guid ActorId = Guid.NewGuid();
+
+    [Fact]
+    public void CreateRequestCreated_actor_overload_requires_non_empty_request_id() =>
+        Assert.Throws<ArgumentException>(() =>
+            KeepRequestEvent.CreateRequestCreated(Guid.Empty, AccountId, ActorId, "Jane", Now));
+
+    [Fact]
+    public void CreateRequestCreated_actor_overload_requires_non_empty_account_id() =>
+        Assert.Throws<ArgumentException>(() =>
+            KeepRequestEvent.CreateRequestCreated(Guid.NewGuid(), Guid.Empty, ActorId, "Jane", Now));
+
+    [Fact]
+    public void CreateRequestCreated_actor_overload_requires_non_empty_actor_id() =>
+        Assert.Throws<ArgumentException>(() =>
+            KeepRequestEvent.CreateRequestCreated(Guid.NewGuid(), AccountId, Guid.Empty, "Jane", Now));
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void CreateRequestCreated_actor_overload_requires_non_blank_display_name(string name) =>
+        Assert.Throws<ArgumentException>(() =>
+            KeepRequestEvent.CreateRequestCreated(Guid.NewGuid(), AccountId, ActorId, name, Now));
+
+    [Fact]
+    public void CreateRequestCreated_actor_overload_requires_non_default_timestamp() =>
+        Assert.Throws<ArgumentException>(() =>
+            KeepRequestEvent.CreateRequestCreated(Guid.NewGuid(), AccountId, ActorId, "Jane", default));
+
+    [Fact]
+    public void CreateRequestCreated_actor_overload_sets_fields_and_trims_display_name()
+    {
+        var requestId = Guid.NewGuid();
+        var ev = KeepRequestEvent.CreateRequestCreated(requestId, AccountId, ActorId, "  Jane Doe  ", Now);
+
+        Assert.Equal(requestId, ev.RequestId);
+        Assert.Equal(AccountId, ev.AccountId);
+        Assert.Equal(KeepRequestEventType.RequestCreated, ev.EventType);
+        Assert.Equal(KeepRequestEventVisibility.System, ev.Visibility);
+        Assert.Equal(ActorType.AccountUser, ev.ActorType);
+        Assert.Equal(ActorId, ev.ActorAccountUserId);
+        Assert.Equal("Jane Doe", ev.ActorDisplayName);
+        Assert.Equal(Now, ev.OccurredAtUtc);
+    }
 }
