@@ -1,8 +1,8 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-06-21 (G4c complete)
+**Last updated:** 2026-06-21 (G4c corrective committed)
 **Branch:** `main` (no remote yet)
-**Current baseline:** G4c complete at 1012 tests (568 unit · 14 architecture · 430 integration)
+**Current baseline:** 1013 tests (568 unit · 14 architecture · 431 integration)
 **Next free ADR:** ADR-326
 **Pre-work not complete** — G4d requires a fresh pre-implementation gate before any code is written.
 
@@ -64,6 +64,12 @@ For every implementation slice:
   GetRequestForUpdateAsync removed from interface, EF implementation, and create-business-request
   fake. 8 new G4c integration tests; 2 existing tests updated (409→404 for Operator
   invisible-mute and Operator self-assign to another eligible Responsible's request).
+- **G4c corrective — 1013 tests.** Restored Operator already-assigned guard in
+  ManageResponsibleService.SetAsync. A Watching Operator reaches an assigned request via the
+  MyWork branch of ParticipationEntry; without the guard they could self-assign over an active
+  eligible Responsible. Check verifies eligibility of the existing Responsible (stale/ineligible
+  does not block). Regression test: Operator Watching + Owner Responsible → 409, no side
+  effects. commit 1534f0c.
 
 Historical Phase 8-B1 through B5 Session 5 completion detail is intentionally omitted here. Use
 build logs 025–046 and ADR-084–294 when needed; do not reload those histories for G4 unless a
