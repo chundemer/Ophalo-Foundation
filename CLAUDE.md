@@ -1,160 +1,100 @@
 # OpHalo Foundation — Claude Code Instructions
 
-_These rules apply to every session without exception._
+These rules apply to every session. Keep responses concise and protect the context window.
 
-This is the **OpHalo Foundation rebuild**: "greenfield boundaries, brownfield
-behavior." A clean repo whose structure is new, but whose *behavior* is ported
-from the current deployed system. Do not drag the old architecture forward
-unchanged; do not rewrite working behavior for cleanliness. Move, rename, adapt,
-verify — redesign only when the old implementation blocks the foundation.
+## Authority
 
-- **Authoritative build plan:** `/Users/christian/Downloads/ophalo-foundation-build-plan-greenfield-boundaries-brownfield-behavior.md` (14 phases).
-- **Reference (legacy) app:** `/Users/christian/application/ophalo`, aliased read-only as `_reference/` in this repo. It is the behavior reference/fallback until parity. Never edit it.
+Repository documents are authoritative. Use them in this order:
 
----
+1. `docs/session-log.md` for current scope, baseline, and the next approved batch.
+2. Named entries in `docs/decisions/decision-index.md` for locked decisions.
+3. Named `docs/build-log/` entries for completed implementation history.
+4. Architecture tests for enforced dependency boundaries.
 
-## Session Protocol
+Do not treat external files, the legacy/reference application, or legacy decisions as authoritative.
+Read `_reference/` or external build plans only when Christian or the current repository brief
+explicitly requests them. Never edit `_reference/`.
 
-### Session Start — Two Tiers
+## Context-Budget Rules
 
-**Tier 1 — Discovery session** (new phase/domain, pre-work not done):
-1. Read `docs/session-log.md`
-2. Read `docs/decisions/decision-index.md` and the latest `docs/build-log/` entries
-3. Ask Christian what we are working on today
-4. Read only the build-plan phase for that work — nothing else
-5. Read the specific reference source under `_reference/src/...` needed to understand current behavior
-6. State scope before generating anything — files affected, layers touched
+- Search first with `rg` or `rg --files`; inspect only the matching symbols and nearby code.
+- Never read a source or documentation file over 250 lines in full unless Christian explicitly asks.
+- Prefer narrow `sed` ranges, normally no more than 80–120 lines per read.
+- For `session-log.md`, read the header and the named current-work section only.
+- For `decision-index.md`, extract only the ADR numbers named by the task; never read the full file.
+- For large services, read only the methods being changed plus directly called signatures and failure
+  paths. Do not read a whole service merely to understand one mapper or action builder.
+- Do not reread unchanged material already established in the current session.
+- Do not paste complete files, long diffs, or test logs into chat. Report changed files, findings,
+  concise outcomes, and exact test counts.
+- Keep command output bounded with targeted paths, filters, and minimal verbosity.
+- A correction from review should trigger a targeted patch and focused test, not rediscovery of the
+  entire feature.
 
-**Tier 2 — Implementation session** (session-log header says `Pre-work complete`):
-1. Read `docs/session-log.md` only — it holds the confirmed facts
-2. Ask Christian what we are working on today
-3. Verify specific facts with targeted reads (a signature, an import) — do not re-read whole files
-4. State scope and open design decisions — wait for confirmation before writing any file (see Pre-Implementation Gate)
+## Session and Scope Protocol
 
-**How to tell which tier:** the session log header says `Pre-work complete` for Tier 2. If absent, default to Tier 1.
+If the session-log header marks the requested batch `Pre-work complete`, treat it as an
+implementation session. Read only that batch and verify specific signatures before coding.
 
-### Session End — Every Session
-1. Rewrite `docs/session-log.md` entirely (do not append) — completed, next, blockers
-2. Mark next session `Pre-work complete` only when the implementation target is fully confirmed
-3. Commit; Christian approves before closing
+If pre-work is not complete, inspect the smallest relevant repository surface, identify decisions,
+and stop for confirmation before implementation.
 
-### Session Size Rule
-Keep sessions well within the context limit. If a task touches more than ~8–10 files or spans more than one layer, **split into multiple sessions before writing code**, and state the split to Christian first. Start a new session after a commit.
+Before the first edit, state:
 
----
+1. exact files to create or modify;
+2. architectural layers touched;
+3. unresolved decisions, or explicitly state that none remain.
 
-## Authoritative vs Pending
+Do not reopen locked decisions silently. If implementation reveals a real contradiction or missing
+contract, stop and surface it.
 
-**Authoritative for this build:** the **build plan**, `docs/decisions/decision-index.md`
-(this project's own decision ledger), the `docs/build-log/` entries, and the
-**architecture tests**. Add a one-liner to the decision index the moment a decision
-is made.
+Keep a batch within roughly 8–10 files and one coherent concern. A very large file or broad test
+matrix may justify a smaller batch. Start a fresh Claude session after an approved commit instead of
+carrying discovery, review rounds, and the next batch in one context window.
 
-**⚠️ Pending validation — do NOT load:** the *legacy* `decision-index.md`,
-`docs/reference/decisions/**`, and `coding-rules.md` from the reference app are not
-yet validated and are deliberately excluded. They remain readable under
-`_reference/docs/` for historical reference only, after validation.
+## Implementation Rules
 
----
+- Preserve existing user changes and unrelated dirty-worktree content.
+- Confirm every external method signature and relevant failure behavior before calling it.
+- Do not invent types, methods, namespaces, or error contracts without checking that they exist.
+- Owned-enum switches must be exhaustive and fail explicitly for unknown values unless a locked
+  policy requires deny-all behavior.
+- Preserve established guard ordering, stable errors, row authorization, and fail-closed behavior.
+- Domain methods remain authoritative for domain validation; application metadata is advisory.
+- Do not broaden scope into adjacent gaps, frontend work, migrations, or cleanup.
 
-## Quality Over Speed — Non-Negotiable
+## Verification
 
-This rebuild exists because the reference app accumulated shortcuts that compounded into structural debt. Every session must hold this boundary: **a correct foundation built slowly is the goal; fast code that compromises the foundation is not an acceptable trade.**
+- During implementation, run the smallest focused tests that exercise the changed behavior.
+- Run broader unit/architecture/integration suites only at the batch completion gate or when a
+  cross-cutting change warrants them.
+- Use `--no-restore` and minimal verbosity when dependencies are already available.
+- Summarize failures; do not paste repeated stack traces after the root cause is known.
+- Before handoff, run `git diff --check`, inspect the final changed-file list, and self-review for
+  policy drift, authorization expansion, direct-ID gaps, and missing regression tests.
 
-- If a design decision is not already locked in the ADRs, surface it as a question — do not resolve it silently and write code.
-- If something feels like a shortcut or a rationalization ("the tests don't prevent it", "the reference app does it this way", "we can clean it up later"), treat that feeling as a flag, not a green light. Stop and ask.
-- Delivery pressure does not override architecture. The cost of a bad abstraction in the foundation compounds across every phase that follows.
+## Git and Documentation
 
----
+- Do not commit until Christian explicitly approves the reviewed diff.
+- Update documentation surgically; do not rewrite an entire large document when one section changed.
+- Record locked decisions in `docs/decisions/decision-index.md` and implementation history in the
+  appropriate build log when the current batch requires it.
+- Keep `docs/session-log.md` as the current execution brief: completed state, exact next batch,
+  blockers, and verified test counts. Do not duplicate historical detail already preserved elsewhere.
 
-## Pre-Implementation Gate — Mandatory Before Writing Any File
+## Architecture Boundaries
 
-After reading and stating scope, and **before writing the first file**, explicitly list:
-
-1. **Files to create or modify** — names and layers.
-2. **Open design decisions** — any architectural choice the implementation will resolve that is not already in the ADRs or the session-log confirmed facts. Each must be stated and confirmed by Christian before code is written.
-
-If a design decision surfaces mid-implementation, stop, surface it, and wait for confirmation. Do not rationalize past it.
-
-## Writing Code — Cross-Reference Before Every External Call
-
-Before writing any file that calls existing code (domain factories, service methods, policy interfaces), do one explicit pass:
-
-> For every external method this file will call, verify the method's signature and failure modes against the already-read source — argument guards, throw conditions, what null means.
-
-This is not optional when in execution mode. The planning phase builds a mental model; that model drifts. The cross-reference step corrects drift before it becomes a bug in a written file.
-
-Specifically: if a method throws on null/whitespace input, the caller must guard before calling it. If a switch covers an owned enum, it must be exhaustive with a `default` throw.
-
----
-
-## How We Work
-
-- Be concise — short, direct, no preamble, no trailing fluff.
-- Role: senior .NET architect — explain the WHY, flag issues and missing contracts before writing a file.
-- Do not invent abstractions, namespaces, or factory methods. Confirm a symbol exists (targeted read) before calling it.
-- **Commands:** Claude may run read-only inspection and `dotnet build` / `dotnet test` directly to keep work verified. Christian runs interactive / auth / deploy / migration commands himself (`dotnet ef`, `gcloud`, `npm run dev`, deploys) — suggest them with a leading `!` when needed. _(Adaptation from the reference app's "no CLI" rule — confirm if you'd prefer the stricter version.)_
-- Permission prompts can be reduced for a session with **Shift+Tab** (auto-accept edits); Shift+Tab again to revert.
-
----
-
-## Architecture Boundaries — Enforced by Tests
-
-`tests/OpHalo.ArchitectureTests` must stay green. Rules (build plan §8):
 - Foundation must not reference Keep; Keep may reference Foundation.
-- SharedKernel holds Result/Error/IClock-style primitives only — no business concepts (no CurrentUser, email, DbContext, Account, entitlements, notifications, Keep).
-- Application must not depend on Infrastructure. Core must not depend on Application or Infrastructure.
-- One API host (`OpHalo.Api`). No `Signal.*`, `Continuity.*`, `Platform.*`, or separate `Auth` projects.
+- SharedKernel contains only shared primitives, not product or identity concepts.
+- Application must not depend on Infrastructure.
+- Core must not depend on Application or Infrastructure.
+- Use the single `OpHalo.Api` host; do not reintroduce legacy `Signal`, `Continuity`, or `Platform`
+  projects or namespaces.
 - Product-specific user settings attach to `AccountUser`, never a duplicate identity.
 
----
+## Commands
 
-## Project Structure
+Claude may run targeted read-only inspection, builds, and tests. Christian runs interactive,
+authenticated, deployment, and migration commands such as `dotnet ef`, cloud CLIs, and deploys.
 
-```
-src/
-  OpHalo.Api/  OpHalo.Worker/                     (hosts / composition roots)
-  OpHalo.Foundation.Core/.Application/.Infrastructure/
-  OpHalo.Keep.Core/.Application/.Infrastructure/
-  OpHalo.SharedKernel/
-tests/
-  OpHalo.ArchitectureTests/  OpHalo.UnitTests/  OpHalo.IntegrationTests/
-docs/  (architecture, build-log, decisions, deployment)
-web/   (ophalo-app, ophalo-web — placeholders; not yet scaffolded)
-```
-
-Canonical types ported so far:
-- `OpHalo.SharedKernel.Results.Result` / `Result<T>` / `Error`
-- `OpHalo.SharedKernel.Abstractions.IClock`
-- `OpHalo.Foundation.Application.Abstractions.Security.ICurrentUser`
-- `OpHalo.Foundation.Application.Abstractions.Messaging.IEmailSender`
-
----
-
-## Naming Constraint
-
-- **GitHub repo:** `ophalo-foundation` (the legacy repo already owns `ophalo`).
-- **Internal solution/namespaces:** stay `OpHalo.slnx` / `OpHalo.*`. Do **not** rename to `OpHalo.Foundation.*` — that collides with the internal Foundation architecture layer.
-
----
-
-## Documentation Maintenance — Mandatory
-
-- Every phase ends with a `docs/build-log/NNN-*.md` entry (preserved / moved / renamed / adapted / redesigned / why / tests / exit gate / risks) shipped with the code.
-- Every decision gets a one-line entry in `docs/decisions/decision-index.md` (full ADR only when it needs more than a line).
-- Every session ends with a rewritten, approved `docs/session-log.md`.
-
----
-
-## Web — Two Apps (when scaffolded)
-
-| App | Path | Purpose |
-|---|---|---|
-| `ophalo-web` | `web/ophalo-web` | Marketing / auth / public customer surfaces |
-| `ophalo-app` | `web/ophalo-app` | Operator / account / admin app (admin shell under `app/admin`) |
-
-Both target the single `OpHalo.Api` base URL. Always confirm which app a frontend task belongs to.
-
----
-
-_OpHalo — ophalo.com — Quiet Intelligence. Clear Decisions._
+_OpHalo — Quiet Intelligence. Clear Decisions._
