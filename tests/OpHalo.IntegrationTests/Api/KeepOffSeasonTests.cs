@@ -289,9 +289,10 @@ public sealed class KeepOffSeasonTests : IClassFixture<KeepApiWebFactory>, IAsyn
     [Fact]
     public async Task SubmitFeedback_OffSeason_Returns409WithOffSeasonUnavailable()
     {
-        var response = await _factory.CreateClient().PostAsJsonAsync(
-            $"/keep/r/{PageToken}/feedback",
-            new { wasResolved = true });
+        var req = new HttpRequestMessage(HttpMethod.Post, $"/keep/r/{PageToken}/feedback");
+        req.Headers.Add("X-Keep-Request-Version", _requestVersion.ToString("D"));
+        req.Content = JsonContent.Create(new { wasResolved = true });
+        var response = await _factory.CreateClient().SendAsync(req);
 
         // OffSeason check fires before domain feedback-unavailable check.
         Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);

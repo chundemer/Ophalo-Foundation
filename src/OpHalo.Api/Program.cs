@@ -588,8 +588,8 @@ app.MapPost("/keep/r/{pageToken}/issue",
     .RequireRateLimiting("customer-write");
 
 app.MapPost("/keep/r/{pageToken}/feedback",
-    (string pageToken, FeedbackBody body, SubmitFeedbackService service, CancellationToken ct) =>
-        HandleFeedback(pageToken, body, service, ct))
+    (string pageToken, FeedbackBody body, HttpRequest httpRequest, SubmitFeedbackService service, CancellationToken ct) =>
+        HandleFeedback(pageToken, body, httpRequest, service, ct))
     .RequireRateLimiting("customer-write");
 
 app.MapAuthEndpoints();
@@ -648,13 +648,18 @@ static async Task<IResult> HandleCustomerMessage(
 static async Task<IResult> HandleFeedback(
     string pageToken,
     FeedbackBody body,
+    HttpRequest httpRequest,
     SubmitFeedbackService service,
     CancellationToken ct)
 {
+    var versionResult = KeepRequestVersionHeader.Parse(httpRequest.Headers);
+    if (!versionResult.IsSuccess)
+        return ErrorHttpMapper.ToHttpResult(versionResult.Error);
+
     if (body.WasResolved is null)
         return ErrorHttpMapper.ToHttpResult(KeepRequestErrors.FeedbackResolutionRequired);
 
-    var command = new SubmitFeedbackCommand(pageToken, body.WasResolved.Value, body.Comment);
+    var command = new SubmitFeedbackCommand(pageToken, body.WasResolved.Value, body.Comment, versionResult.Value);
     var result = await service.ExecuteAsync(command, ct);
     if (!result.IsSuccess)
         return ErrorHttpMapper.ToHttpResult(result.Error);

@@ -29,6 +29,9 @@ public sealed class SubmitFeedbackService(
         if (request is null)
             return Result<KeepCustomerPageResult>.Failure(KeepRequestErrors.NotFound);
 
+        if (request.ConcurrencyVersion != command.ExpectedVersion)
+            return Result<KeepCustomerPageResult>.Failure(KeepRequestErrors.RequestChanged);
+
         var policy = await persistence.GetResponsePolicyAsync(context.AccountId, ct);
         var priority = policy?.PriorityResponseTargetMinutes ?? 60;
 
@@ -36,12 +39,22 @@ public sealed class SubmitFeedbackService(
         if (!domainResult.IsSuccess)
             return Result<KeepCustomerPageResult>.Failure(domainResult.Error);
 
-        await persistence.CommitFeedbackAsync(request, ct);
+        var commitResult = await persistence.CommitFeedbackAsync(request, ct);
+        switch (commitResult)
+        {
+            case KeepRequestCommitResult.Committed:
+                break;
+            case KeepRequestCommitResult.Conflict:
+                return Result<KeepCustomerPageResult>.Failure(KeepRequestErrors.RequestChanged);
+            default:
+                throw new ArgumentOutOfRangeException(nameof(commitResult));
+        }
 
         var events = await persistence.GetCustomerVisibleEventsAsync(context.RequestId, ct);
 
         var updatedContext = context with
         {
+            Version = request.ConcurrencyVersion,
             FeedbackWasResolved = request.FeedbackWasResolved,
             FeedbackSubmittedAtUtc = request.FeedbackSubmittedAtUtc
         };

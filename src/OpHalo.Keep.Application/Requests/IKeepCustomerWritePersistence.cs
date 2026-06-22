@@ -40,9 +40,12 @@ public interface IKeepCustomerWritePersistence
     /// <summary>
     /// Saves the mutated request after feedback submission. No event is created (ADR-137:
     /// feedback is stored as request-level fields only).
+    /// Rotates <see cref="KeepRequest.ConcurrencyVersion"/> immediately before SaveChangesAsync.
+    /// Returns <see cref="KeepRequestCommitResult.Committed"/> on success or
+    /// <see cref="KeepRequestCommitResult.Conflict"/> when a concurrent writer won the race.
     /// The request must have been loaded via GetRequestForUpdateAsync on the same DbContext.
     /// </summary>
-    Task CommitFeedbackAsync(KeepRequest request, CancellationToken ct);
+    Task<KeepRequestCommitResult> CommitFeedbackAsync(KeepRequest request, CancellationToken ct);
 
     /// <summary>
     /// Returns all Visibility = All events for the request after commit, ordered

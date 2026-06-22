@@ -1,10 +1,10 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-06-22 (G5d-1 implementation complete; G5d-2 next)
+**Last updated:** 2026-06-22 (G5d-2 complete; G5d-3 next)
 **Branch:** `main` (no remote yet)
-**Current baseline:** 1178 tests (619 unit · 14 architecture · 545 integration).
+**Current baseline:** 1181 tests (619 unit · 14 architecture · 548 integration).
 **Next free ADR:** ADR-336
-**Next batch: G5d-2 — feedback concurrency — requires discovery.**
+**Next batch: G5d-3 — operator/customer race, full regression, build log, completion docs — REQUIRES DISCOVERY.**
 
 ---
 
@@ -530,10 +530,11 @@ Goal: prevent stale business intent from overwriting newer customer/business sta
      participation-commit overload, participation concurrency race test. 1169 tests
      (619 unit · 14 architecture · 536 integration).
 4. **G5d — Customer writes and completion:** split into independently compiling vertical slices:
-   - **G5d-1 (complete):** customer-message route family. 1178 tests (619 unit · 14 arch · 545 integration).
-   - **G5d-2:** feedback route.
-   - **G5d-3:** operator/customer cross-path race, full regression, build log, decision-status and
-     completion documentation.
+   - **G5d-1 (complete, `bb8010e`):** customer-message route family. 1178 tests
+     (619 unit · 14 architecture · 545 integration).
+   - **G5d-2 (complete):** feedback route. 1181 tests (619 unit · 14 architecture · 548 integration).
+   - **G5d-3 (requires discovery):** operator/customer cross-path race, full regression, build log,
+     decision-status and completion documentation.
 
 Each batch must compile and pass focused tests independently, with targeted discovery and a fresh
 file-level gate before coding. G5 is complete only after all four batches pass. No automatic merge,
@@ -590,15 +591,25 @@ updated; 10 new checks (6-alias missing-header theory, malformed-header, stale-v
 sequential stale-reuse, version-rotation proof in success test). OffSeason test sends version header.
 Full suite: 1178 passed (619 unit · 14 architecture · 545 integration).
 
-### G5d remaining slices
+Commit: `bb8010e`.
 
-- **G5d-2:** `/feedback` only. Apply the same header/guard/load/compare/typed-commit pattern to
-  `SubmitFeedbackCommand`, `SubmitFeedbackService`, `CommitFeedbackAsync`,
-  `ClosedRequestFeedbackTests`, and its OffSeason caller. Successful mapping must copy the rotated
-  version along with feedback fields into `updatedContext`.
-- **G5d-3:** add the focused operator-versus-customer two-context first-writer-wins proof with full
-  losing-side-effect rollback assertions; run the full regression suite; write build-log/056; mark
-  ADR-330–335 and G5 implemented; prepare G6 as next. No source refactor belongs in completion work.
+### G5d-2 — Customer-feedback concurrency — COMPLETE
+
+`X-Keep-Request-Version` header parsed at the API edge inside `HandleFeedback`; `HttpRequest`
+injected into the route and handler. `SubmitFeedbackCommand` carries `Guid ExpectedVersion`.
+`SubmitFeedbackService` compares after tracked load and before response-policy lookup; handles
+`Committed`/`Conflict` exhaustively; extends `updatedContext` with `Version = request.ConcurrencyVersion`.
+`IKeepCustomerWritePersistence.CommitFeedbackAsync` changed from `Task` to `Task<KeepRequestCommitResult>`;
+`EfKeepCustomerWritePersistence.CommitFeedbackAsync` rotates via `RotateConcurrencyVersion()` before
+`SaveChangesAsync` and catches only `DbUpdateConcurrencyException`. ClosedRequestFeedbackTests:
+`_requestVersion` field; `PostFeedback` helper; all 13 existing POSTs updated; 3 new checks
+(missing-header 400, malformed-header 400, stale+over-limit-comment 409 no-side-effect proof).
+OffSeason test sends version header. Full suite: 1181 passed (619 unit · 14 architecture · 548 integration).
+
+### G5d-3 — Remaining completion slice — REQUIRES DISCOVERY
+
+Scope: operator-versus-customer two-context first-writer-wins race proof, full regression suite,
+build-log/056, ADR-330–335 and G5 status updates, G6 as next. No source refactor.
 
 ## G6 — Cancelled Customer-Page Expiry Correction — PLANNED
 

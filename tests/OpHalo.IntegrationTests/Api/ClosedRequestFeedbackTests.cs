@@ -16,7 +16,7 @@ namespace OpHalo.IntegrationTests.Api;
 ///
 /// Coverage (ADR-143):
 /// 1. Closed unexpired request returns AllowedActions=["feedback"] before feedback.
-/// 2. Feedback on closed request succeeds and returns updated customer page.
+/// 2. Feedback on closed request succeeds, returns updated customer page, and rotates version.
 /// 3. Positive feedback stores fields and does not create attention.
 /// 4. Negative feedback stores fields and creates priority UnresolvedFeedback attention.
 /// 5. Duplicate feedback returns 409 KeepRequest.FeedbackAlreadySubmitted.
@@ -28,6 +28,9 @@ namespace OpHalo.IntegrationTests.Api;
 /// 11. Comment over 2000 chars returns 400 KeepRequest.FeedbackCommentTooLong.
 /// 12. Feedback response exposes no internal IDs or attention internals on the customer page.
 /// 13. After feedback, AllowedActions=[].
+/// G5d-2: missing version header returns 400 ExpectedVersionRequired.
+/// G5d-2: malformed version header returns 400 ExpectedVersionInvalid.
+/// G5d-2: stale version wins over domain error; no side effects.
 /// </summary>
 public sealed class ClosedRequestFeedbackTests : IClassFixture<KeepApiWebFactory>, IAsyncLifetime
 {
@@ -39,6 +42,7 @@ public sealed class ClosedRequestFeedbackTests : IClassFixture<KeepApiWebFactory
     private Guid _accountId;
     private Guid _requestId;
     private string _referenceCode = string.Empty;
+    private Guid _requestVersion;
 
     public ClosedRequestFeedbackTests(KeepApiWebFactory factory)
     {
@@ -96,6 +100,7 @@ public sealed class ClosedRequestFeedbackTests : IClassFixture<KeepApiWebFactory
 
         _requestId = request.Id;
         _referenceCode = request.ReferenceCode;
+        _requestVersion = request.ConcurrencyVersion;
 
         // Put the request in Closed state for most tests.
         await db.Database.ExecuteSqlRawAsync(
@@ -126,15 +131,13 @@ public sealed class ClosedRequestFeedbackTests : IClassFixture<KeepApiWebFactory
     }
 
     // =========================================================================
-    // Test 2 — Feedback succeeds and returns updated customer page
+    // Test 2 — Feedback succeeds, returns updated customer page, and rotates version
     // =========================================================================
 
     [Fact]
     public async Task PostFeedback_ValidPositiveFeedback_Returns200WithUpdatedPage()
     {
-        var response = await _client.PostAsJsonAsync(
-            $"/keep/r/{PageToken}/feedback",
-            new { wasResolved = true, comment = "All fixed, thank you." });
+        var response = await PostFeedback(new { wasResolved = true, comment = "All fixed, thank you." }, _requestVersion);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
@@ -146,6 +149,21 @@ public sealed class ClosedRequestFeedbackTests : IClassFixture<KeepApiWebFactory
         Assert.True(body.GetProperty("isTerminal").GetBoolean());
         Assert.True(body.GetProperty("feedbackWasResolved").GetBoolean());
         Assert.NotEqual(JsonValueKind.Null, body.GetProperty("feedbackSubmittedAtUtc").ValueKind);
+
+        // G5d-2: response version must be rotated (differs from submitted, equals persisted).
+        Assert.True(Guid.TryParseExact(body.GetProperty("version").GetString(), "D", out var responseVersion));
+        Assert.NotEqual(Guid.Empty, responseVersion);
+        Assert.NotEqual(_requestVersion, responseVersion);
+
+        await using var scope = _factory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+        var persisted = await db.Set<KeepRequest>().AsNoTracking().FirstAsync(r => r.Id == _requestId);
+        Assert.Equal(persisted.ConcurrencyVersion, responseVersion);
+
+        // Feedback creates no timeline event (ADR-137).
+        var eventCount = await db.Set<KeepRequestEvent>().AsNoTracking()
+            .CountAsync(e => e.RequestId == _requestId);
+        Assert.Equal(1, eventCount);
     }
 
     // =========================================================================
@@ -155,9 +173,7 @@ public sealed class ClosedRequestFeedbackTests : IClassFixture<KeepApiWebFactory
     [Fact]
     public async Task PostFeedback_PositiveFeedback_StoresFieldsAndNoAttention()
     {
-        var response = await _client.PostAsJsonAsync(
-            $"/keep/r/{PageToken}/feedback",
-            new { wasResolved = true });
+        var response = await PostFeedback(new { wasResolved = true }, _requestVersion);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
@@ -182,9 +198,7 @@ public sealed class ClosedRequestFeedbackTests : IClassFixture<KeepApiWebFactory
     [Fact]
     public async Task PostFeedback_NegativeFeedback_StoresFieldsAndCreatesPriorityAttention()
     {
-        var response = await _client.PostAsJsonAsync(
-            $"/keep/r/{PageToken}/feedback",
-            new { wasResolved = false, comment = "The leak is still happening." });
+        var response = await PostFeedback(new { wasResolved = false, comment = "The leak is still happening." }, _requestVersion);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
@@ -214,19 +228,26 @@ public sealed class ClosedRequestFeedbackTests : IClassFixture<KeepApiWebFactory
     [Fact]
     public async Task PostFeedback_DuplicateFeedback_Returns409FeedbackAlreadySubmitted()
     {
-        var first = await _client.PostAsJsonAsync(
-            $"/keep/r/{PageToken}/feedback",
-            new { wasResolved = true });
+        var first = await PostFeedback(new { wasResolved = true }, _requestVersion);
         Assert.Equal(HttpStatusCode.OK, first.StatusCode);
 
-        var second = await _client.PostAsJsonAsync(
-            $"/keep/r/{PageToken}/feedback",
-            new { wasResolved = false });
+        // Parse the rotated version from the first success response and use it for the second
+        // call so the expected result is FeedbackAlreadySubmitted, not a stale-version conflict.
+        var firstBody = await first.Content.ReadFromJsonAsync<JsonElement>();
+        var rotatedVersion = Guid.ParseExact(firstBody.GetProperty("version").GetString()!, "D");
+
+        var second = await PostFeedback(new { wasResolved = false }, rotatedVersion);
 
         Assert.Equal(HttpStatusCode.Conflict, second.StatusCode);
 
         var body = await second.Content.ReadFromJsonAsync<JsonElement>();
         Assert.Equal("KeepRequest.FeedbackAlreadySubmitted", body.GetProperty("code").GetString());
+
+        // Failed duplicate must not rotate beyond the first response version.
+        await using var scope = _factory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+        var persisted = await db.Set<KeepRequest>().AsNoTracking().FirstAsync(r => r.Id == _requestId);
+        Assert.Equal(rotatedVersion, persisted.ConcurrencyVersion);
     }
 
     // =========================================================================
@@ -244,9 +265,7 @@ public sealed class ClosedRequestFeedbackTests : IClassFixture<KeepApiWebFactory
                 _requestId);
         }
 
-        var response = await _client.PostAsJsonAsync(
-            $"/keep/r/{PageToken}/feedback",
-            new { wasResolved = true });
+        var response = await PostFeedback(new { wasResolved = true }, _requestVersion);
 
         Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
 
@@ -269,9 +288,7 @@ public sealed class ClosedRequestFeedbackTests : IClassFixture<KeepApiWebFactory
                 _requestId);
         }
 
-        var response = await _client.PostAsJsonAsync(
-            $"/keep/r/{PageToken}/feedback",
-            new { wasResolved = true });
+        var response = await PostFeedback(new { wasResolved = true }, _requestVersion);
 
         Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
 
@@ -294,9 +311,7 @@ public sealed class ClosedRequestFeedbackTests : IClassFixture<KeepApiWebFactory
                 _requestId);
         }
 
-        var response = await _client.PostAsJsonAsync(
-            $"/keep/r/{PageToken}/feedback",
-            new { wasResolved = true });
+        var response = await PostFeedback(new { wasResolved = true }, _requestVersion);
 
         Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
 
@@ -319,9 +334,7 @@ public sealed class ClosedRequestFeedbackTests : IClassFixture<KeepApiWebFactory
                 DateTime.UtcNow.AddDays(-1), _requestId);
         }
 
-        var response = await _client.PostAsJsonAsync(
-            $"/keep/r/{PageToken}/feedback",
-            new { wasResolved = true });
+        var response = await PostFeedback(new { wasResolved = true }, _requestVersion);
 
         Assert.Equal(HttpStatusCode.Gone, response.StatusCode);
 
@@ -340,9 +353,7 @@ public sealed class ClosedRequestFeedbackTests : IClassFixture<KeepApiWebFactory
     [Fact]
     public async Task PostFeedback_MissingWasResolved_Returns400FeedbackResolutionRequired()
     {
-        var response = await _client.PostAsJsonAsync(
-            $"/keep/r/{PageToken}/feedback",
-            new { comment = "Some comment but no resolution flag." });
+        var response = await PostFeedback(new { comment = "Some comment but no resolution flag." }, _requestVersion);
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
 
@@ -357,9 +368,7 @@ public sealed class ClosedRequestFeedbackTests : IClassFixture<KeepApiWebFactory
     [Fact]
     public async Task PostFeedback_CommentOverLimit_Returns400FeedbackCommentTooLong()
     {
-        var response = await _client.PostAsJsonAsync(
-            $"/keep/r/{PageToken}/feedback",
-            new { wasResolved = false, comment = new string('x', 2001) });
+        var response = await PostFeedback(new { wasResolved = false, comment = new string('x', 2001) }, _requestVersion);
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
 
@@ -374,9 +383,7 @@ public sealed class ClosedRequestFeedbackTests : IClassFixture<KeepApiWebFactory
     [Fact]
     public async Task PostFeedback_Success_ResponseExposesNoInternalIds()
     {
-        var response = await _client.PostAsJsonAsync(
-            $"/keep/r/{PageToken}/feedback",
-            new { wasResolved = true });
+        var response = await PostFeedback(new { wasResolved = true }, _requestVersion);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
@@ -401,9 +408,7 @@ public sealed class ClosedRequestFeedbackTests : IClassFixture<KeepApiWebFactory
     [Fact]
     public async Task PostFeedback_AfterSubmission_AllowedActionsEmpty()
     {
-        var feedbackResponse = await _client.PostAsJsonAsync(
-            $"/keep/r/{PageToken}/feedback",
-            new { wasResolved = true });
+        var feedbackResponse = await PostFeedback(new { wasResolved = true }, _requestVersion);
         Assert.Equal(HttpStatusCode.OK, feedbackResponse.StatusCode);
 
         var feedbackBody = await feedbackResponse.Content.ReadFromJsonAsync<JsonElement>();
@@ -416,5 +421,88 @@ public sealed class ClosedRequestFeedbackTests : IClassFixture<KeepApiWebFactory
         var getBody = await getResponse.Content.ReadFromJsonAsync<JsonElement>();
         var actionsOnGet = getBody.GetProperty("allowedActions").EnumerateArray().ToList();
         Assert.Empty(actionsOnGet);
+    }
+
+    // =========================================================================
+    // G5d-2 — Missing version header returns 400 ExpectedVersionRequired
+    // =========================================================================
+
+    [Fact]
+    public async Task PostFeedback_MissingVersionHeader_Returns400ExpectedVersionRequired()
+    {
+        var response = await PostFeedback(new { wasResolved = true, comment = "All good." }, version: null);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("KeepRequest.ExpectedVersionRequired", body.GetProperty("code").GetString());
+    }
+
+    // =========================================================================
+    // G5d-2 — Malformed version header returns 400 ExpectedVersionInvalid
+    // =========================================================================
+
+    [Fact]
+    public async Task PostFeedback_MalformedVersionHeader_Returns400ExpectedVersionInvalid()
+    {
+        var req = new HttpRequestMessage(HttpMethod.Post, $"/keep/r/{PageToken}/feedback");
+        req.Headers.Add("X-Keep-Request-Version", "not-a-guid");
+        req.Content = JsonContent.Create(new { wasResolved = true });
+        var response = await _client.SendAsync(req);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("KeepRequest.ExpectedVersionInvalid", body.GetProperty("code").GetString());
+    }
+
+    // =========================================================================
+    // G5d-2 — Stale version wins over domain error; no side effects
+    // =========================================================================
+
+    [Fact]
+    public async Task PostFeedback_StaleVersion_Returns409RequestChangedBeforeDomainValidation()
+    {
+        // Over-limit comment proves stale-version check fires before FeedbackCommentTooLong.
+        var response = await PostFeedback(
+            new { wasResolved = false, comment = new string('x', 2001) },
+            Guid.NewGuid());
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("KeepRequest.RequestChanged", body.GetProperty("code").GetString());
+        Assert.False(body.TryGetProperty("version", out _));
+
+        // No side effects: version, feedback fields, and attention unchanged.
+        await using var scope = _factory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+        var persisted = await db.Set<KeepRequest>().AsNoTracking().FirstAsync(r => r.Id == _requestId);
+        Assert.Equal(_requestVersion, persisted.ConcurrencyVersion);
+        Assert.Null(persisted.FeedbackSubmittedAtUtc);
+        Assert.Null(persisted.FeedbackComment);
+        Assert.Null(persisted.FeedbackWasResolved);
+        Assert.Equal(AttentionLevel.None, persisted.AttentionLevel);
+        Assert.Equal(WaitingDirection.None, persisted.WaitingDirection);
+        Assert.Null(persisted.AttentionReason);
+        Assert.Null(persisted.AttentionSinceUtc);
+        Assert.Null(persisted.NextAttentionAtUtc);
+
+        var eventCount = await db.Set<KeepRequestEvent>().AsNoTracking()
+            .CountAsync(e => e.RequestId == _requestId);
+        Assert.Equal(1, eventCount);
+    }
+
+    // =========================================================================
+    // Helpers
+    // =========================================================================
+
+    private async Task<HttpResponseMessage> PostFeedback(object body, Guid? version)
+    {
+        var req = new HttpRequestMessage(HttpMethod.Post, $"/keep/r/{PageToken}/feedback");
+        if (version.HasValue)
+            req.Headers.Add("X-Keep-Request-Version", version.Value.ToString("D"));
+        req.Content = JsonContent.Create(body);
+        return await _client.SendAsync(req);
     }
 }
