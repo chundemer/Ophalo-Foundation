@@ -80,7 +80,7 @@ Four independently compiling slices:
 All participation routes rotate atomically; idempotent no-ops preserve the version; missing/stale
 tokens return the correct 400/409 errors with no side effects.
 
-## G5d — Customer writes, cross-path race, and completion (commits bb8010e / 3fb154f / G5d-3)
+## G5d — Customer writes, cross-path race, and completion (commits bb8010e / 3fb154f / 0a9d570)
 
 - **G5d-1:** Customer-message route family (six aliases). `IKeepCustomerWritePersistence.CommitAsync`
   changed to return `Task<KeepRequestCommitResult>`; EF implementation rotates via
@@ -147,4 +147,4 @@ API route-versioning implementation, or unrelated refactor included in G5.
 | `9c2df85` | G5c-4: mute/unmute, legacy overload removal, participation race |
 | `bb8010e` | G5d-1: customer-message concurrency |
 | `3fb154f` | G5d-2: customer-feedback concurrency |
-| G5d-3 pending review | Cross-path race, build-log/056, ADR-330–335 implemented, session-log G6 |
+| `0a9d570` | G5d-3: cross-path race, build-log/056, ADR-330–335 implemented, session-log G6 |
