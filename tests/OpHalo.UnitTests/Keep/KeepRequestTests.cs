@@ -153,6 +153,35 @@ public class KeepRequestTests
         Assert.Equal(Now.AddMinutes(60), request.FirstResponseDueAtUtc);
     }
 
+    // --- ChangeStatus: Cancelled expiry ---
+
+    [Fact]
+    public void ChangeStatus_Cancelled_sets_Status_TerminatedAtUtc_and_ExpiresAtUtc()
+    {
+        var request = NewRequest();
+        var result = request.ChangeStatus(
+            KeepRequestStatus.Cancelled, "Cancelled by customer", ActorId, "Jane", Now);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(KeepRequestStatus.Cancelled, request.Status);
+        Assert.Equal(Now, request.TerminatedAtUtc);
+        Assert.Equal(Now.AddDays(30), request.ExpiresAtUtc);
+        Assert.Equal(KeepRequestStatus.Cancelled, result.Value.StatusChangedEvent!.StatusAfter);
+    }
+
+    [Fact]
+    public void ChangeStatus_Cancelled_missing_message_leaves_status_termination_and_expiry_unchanged()
+    {
+        var request = NewRequest();
+        var result = request.ChangeStatus(
+            KeepRequestStatus.Cancelled, null, ActorId, "Jane", Now);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(KeepRequestStatus.Received, request.Status);
+        Assert.Null(request.TerminatedAtUtc);
+        Assert.Null(request.ExpiresAtUtc);
+    }
+
     // --- IsTerminal ---
 
     [Theory]

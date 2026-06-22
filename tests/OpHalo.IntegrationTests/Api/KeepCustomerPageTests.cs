@@ -256,4 +256,33 @@ public sealed class KeepCustomerPageTests : IClassFixture<KeepApiWebFactory>, IA
         // The tombstone must not disclose concurrency state (ADR-333).
         Assert.Equal(JsonValueKind.Null, body.GetProperty("version").ValueKind);
     }
+
+    // =========================================================================
+    // G6: Defensive ADR-120 boundary — past expires_at_utc on non-terminal
+    //     requests must not expire the customer page.
+    // =========================================================================
+
+    [Theory]
+    [InlineData("Received")]
+    [InlineData("Resolved")]
+    public async Task GetCustomerPage_PastExpiryOnNonTerminalRequest_Returns200NotExpired(string status)
+    {
+        await using (var scope = _factory.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+            await db.Database.ExecuteSqlRawAsync(
+                "UPDATE keep_requests SET status = @p0, expires_at_utc = @p1 WHERE page_token = @p2",
+                status, DateTime.UtcNow.AddDays(-1), PageToken);
+        }
+
+        var response = await _client.GetAsync($"/keep/r/{PageToken}");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.False(body.GetProperty("isExpired").GetBoolean());
+        Assert.Equal(status.ToLowerInvariant(), body.GetProperty("status").GetString());
+        // Version must still be exposed (not the tombstone shape).
+        Assert.True(Guid.TryParseExact(body.GetProperty("version").GetString(), "D", out _));
+    }
 }

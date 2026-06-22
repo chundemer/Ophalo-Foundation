@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using OpHalo.Foundation.Application.Accounts.Provisioning;
 using OpHalo.Foundation.Core.Constants;
@@ -550,6 +551,111 @@ public sealed class ChangeKeepRequestStatusTests : IClassFixture<KeepApiWebFacto
         var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
         var persisted = await db.Set<KeepRequest>().FindAsync(_requestId);
         Assert.Equal(returnedVersion, persisted!.ConcurrencyVersion);
+    }
+
+    // =========================================================================
+    // G6 — Cancellation sets ExpiresAtUtc; customer page reflects lifecycle
+    // =========================================================================
+
+    [Fact]
+    public async Task ChangeStatus_Cancelled_SetsExpiresAtUtcAndCustomerPageLifecycle()
+    {
+        var response = await AuthRequest(_ownerCookie, _requestVersion).PatchAsJsonAsync(
+            $"/keep/requests/{_requestId}/status",
+            new { status = "cancelled", message = "Cancelled by customer request." });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("cancelled", body.GetProperty("status").GetString());
+        Assert.True(Guid.TryParseExact(body.GetProperty("version").GetString(), "D", out var returnedVersion));
+        Assert.NotEqual(Guid.Empty, returnedVersion);
+        Assert.NotEqual(_requestVersion, returnedVersion);
+        Assert.Equal(JsonValueKind.String, body.GetProperty("terminatedAtUtc").ValueKind);
+        Assert.Equal(JsonValueKind.String, body.GetProperty("expiresAtUtc").ValueKind);
+
+        // Verify DB: expiresAtUtc == terminatedAtUtc + 30 days exactly, version matches,
+        // exactly one StatusChanged event targeting Cancelled.
+        DateTime persistedExpiry;
+        await using (var scope = _factory.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+            var persisted = await db.Set<KeepRequest>().FindAsync(_requestId);
+            Assert.NotNull(persisted);
+            Assert.Equal(returnedVersion, persisted!.ConcurrencyVersion);
+            Assert.NotNull(persisted.TerminatedAtUtc);
+            Assert.NotNull(persisted.ExpiresAtUtc);
+            Assert.Equal(persisted.TerminatedAtUtc!.Value.AddDays(30), persisted.ExpiresAtUtc!.Value);
+            persistedExpiry = persisted.ExpiresAtUtc.Value;
+
+            var statusEvents = await db.Set<KeepRequestEvent>()
+                .Where(e => e.RequestId == _requestId &&
+                             e.EventType == KeepRequestEventType.StatusChanged)
+                .ToListAsync();
+            Assert.Single(statusEvents);
+            Assert.Equal(KeepRequestStatus.Cancelled, statusEvents[0].StatusAfter);
+        }
+
+        // Customer page: immediately after cancellation — 200, cancelled status, no write actions,
+        // expiresAtUtc matches the persisted value.
+        var pageResponse = await _client.GetAsync("/keep/r/token_status_001");
+        Assert.Equal(HttpStatusCode.OK, pageResponse.StatusCode);
+
+        var page = await pageResponse.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("cancelled", page.GetProperty("status").GetString());
+        Assert.True(page.GetProperty("isTerminal").GetBoolean());
+        var allowedActions = page.GetProperty("allowedActions").EnumerateArray().ToList();
+        Assert.Empty(allowedActions);
+        Assert.Equal(persistedExpiry, page.GetProperty("expiresAtUtc").GetDateTime());
+
+        // Move persisted expiry into the past; customer page must return 410 tombstone.
+        await using (var scope2 = _factory.CreateScope())
+        {
+            var db = scope2.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+            await db.Database.ExecuteSqlRawAsync(
+                "UPDATE keep_requests SET expires_at_utc = @p0 WHERE id = @p1",
+                DateTime.UtcNow.AddDays(-1), _requestId);
+        }
+
+        var expiredPageResponse = await _client.GetAsync("/keep/r/token_status_001");
+        Assert.Equal(HttpStatusCode.Gone, expiredPageResponse.StatusCode);
+
+        var expiredBody = await expiredPageResponse.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.True(expiredBody.GetProperty("isExpired").GetBoolean());
+        Assert.Equal(JsonValueKind.Null, expiredBody.GetProperty("status").ValueKind);
+        Assert.Equal(JsonValueKind.Null, expiredBody.GetProperty("description").ValueKind);
+        Assert.Equal(JsonValueKind.Null, expiredBody.GetProperty("events").ValueKind);
+        Assert.Equal(JsonValueKind.Null, expiredBody.GetProperty("version").ValueKind);
+    }
+
+    [Fact]
+    public async Task ChangeStatus_StaleVersion_Cancelled_Returns409WithNoSideEffects()
+    {
+        var staleVersion = Guid.NewGuid();
+        var response = await AuthRequest(_ownerCookie, staleVersion).PatchAsJsonAsync(
+            $"/keep/requests/{_requestId}/status",
+            new { status = "cancelled", message = "Cancelled by customer request." });
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("KeepRequest.RequestChanged", body.GetProperty("code").GetString());
+
+        await using var scope = _factory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+        var persisted = await db.Set<KeepRequest>().FindAsync(_requestId);
+        Assert.NotNull(persisted);
+        Assert.Equal(KeepRequestStatus.Received, persisted!.Status);
+        Assert.Null(persisted.TerminatedAtUtc);
+        Assert.Null(persisted.ExpiresAtUtc);
+        Assert.Equal(_requestVersion, persisted.ConcurrencyVersion);
+        Assert.Equal(AttentionLevel.None, persisted.AttentionLevel);
+        Assert.Equal(WaitingDirection.None, persisted.WaitingDirection);
+        Assert.Null(persisted.AttentionReason);
+
+        var eventCount = await db.Set<KeepRequestEvent>()
+            .CountAsync(e => e.RequestId == _requestId &&
+                             e.EventType == KeepRequestEventType.StatusChanged);
+        Assert.Equal(0, eventCount);
     }
 
     private static void SeedBusinessWaitingAttention(OpHaloDbContext db, KeepRequest request, DateTime sinceUtc)
