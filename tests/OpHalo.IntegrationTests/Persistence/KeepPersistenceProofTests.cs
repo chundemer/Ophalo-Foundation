@@ -868,4 +868,103 @@ public sealed class KeepPersistenceProofTests : IClassFixture<PostgresFixture>, 
         Assert.Single(events, e => e.Content == "First note");
         Assert.DoesNotContain(events, e => e.Content == "Losing note");
     }
+
+    [Fact]
+    public async Task ParticipationCommit_FirstWriterWins_ParticipantAndEventRolledBack()
+    {
+        // Seed one request, one RequestCreated event, and one active Watching participant.
+        Guid requestId;
+        Guid seedVersion;
+        Guid participantId;
+
+        await using (var seedCtx = CreateContext())
+        {
+            var customer = KeepCustomer.Create(AccountId, "Race Customer", "0499777001");
+            seedCtx.Set<KeepCustomer>().Add(customer);
+            await seedCtx.SaveChangesAsync();
+
+            var request = KeepRequest.CreateFromCustomerIntake(
+                AccountId, customer.Id,
+                "Race Customer", "0499777001", null,
+                "Participation race job", "PRACE001", "prace-tok-001", Now, 60);
+            seedCtx.Set<KeepRequest>().Add(request);
+            seedCtx.Set<KeepRequestEvent>().Add(
+                KeepRequestEvent.CreateRequestCreated(request.Id, AccountId, AccountOwnerAccountUserId, "Owner", Now));
+
+            var participant = KeepRequestParticipant.Create(
+                request.Id, AccountId, AccountOwnerAccountUserId,
+                ParticipationType.Watching, notificationsEnabled: true, Now);
+            seedCtx.Set<KeepRequestParticipant>().Add(participant);
+            await seedCtx.SaveChangesAsync();
+
+            requestId     = request.Id;
+            seedVersion   = request.ConcurrencyVersion;
+            participantId = participant.Id;
+        }
+
+        // Load the same request and participant into two independent contexts.
+        await using var ctx1 = CreateContext();
+        await using var ctx2 = CreateContext();
+
+        var req1 = await ctx1.Set<KeepRequest>().SingleAsync(r => r.Id == requestId);
+        var req2 = await ctx2.Set<KeepRequest>().SingleAsync(r => r.Id == requestId);
+
+        Assert.Equal(seedVersion, req1.ConcurrencyVersion);
+        Assert.Equal(seedVersion, req2.ConcurrencyVersion);
+
+        // Winner: mute the participant (set NotificationsEnabled=false), emit Muted event.
+        var trackedParticipant1 = await ctx1.Set<KeepRequestParticipant>().SingleAsync(p => p.Id == participantId);
+        trackedParticipant1.SetNotificationsEnabled(false);
+        var winnerEvent = KeepRequestEvent.CreateParticipationChanged(
+            requestId, AccountId,
+            actorAccountUserId: AccountOwnerAccountUserId, actorDisplayName: "Owner",
+            participationAction: ParticipationAction.Muted,
+            targetAccountUserId: AccountOwnerAccountUserId, targetDisplayName: "Owner",
+            previousResponsibleAccountUserId: null, internalNote: null,
+            notificationIntentKind: null, notificationIntendedRecipientAccountUserId: null,
+            occurredAtUtc: Now);
+
+        // Loser: call Detach() so EF tracks a real participant-row mutation to roll back.
+        var trackedParticipant2 = await ctx2.Set<KeepRequestParticipant>().SingleAsync(p => p.Id == participantId);
+        trackedParticipant2.Detach(Now.AddSeconds(1));
+        var loserEvent = KeepRequestEvent.CreateParticipationChanged(
+            requestId, AccountId,
+            actorAccountUserId: AccountOwnerAccountUserId, actorDisplayName: "Owner",
+            participationAction: ParticipationAction.SelfUnwatched,
+            targetAccountUserId: AccountOwnerAccountUserId, targetDisplayName: "Owner",
+            previousResponsibleAccountUserId: null, internalNote: null,
+            notificationIntentKind: null, notificationIntendedRecipientAccountUserId: null,
+            occurredAtUtc: Now);
+
+        var sut1 = new OpHalo.Keep.Infrastructure.Persistence.EfKeepRequestOperatePersistence(ctx1);
+        var result1 = await sut1.CommitParticipationAsync(
+            req1, new List<KeepRequestParticipant>(), winnerEvent, CancellationToken.None);
+        Assert.Equal(OpHalo.Keep.Application.Requests.KeepRequestCommitResult.Committed, result1);
+
+        var winningVersion = req1.ConcurrencyVersion;
+        Assert.NotEqual(seedVersion, winningVersion);
+
+        var sut2 = new OpHalo.Keep.Infrastructure.Persistence.EfKeepRequestOperatePersistence(ctx2);
+        var result2 = await sut2.CommitParticipationAsync(
+            req2, new List<KeepRequestParticipant>(), loserEvent, CancellationToken.None);
+        Assert.Equal(OpHalo.Keep.Application.Requests.KeepRequestCommitResult.Conflict, result2);
+
+        // Verify: request version equals the winner; participant is still Watching with
+        // NotificationsEnabled=false; winner Muted event exists; losing SelfUnwatched event does not.
+        await using var verifyCtx = CreateContext();
+        var persistedRequest = await verifyCtx.Set<KeepRequest>().SingleAsync(r => r.Id == requestId);
+        Assert.Equal(winningVersion, persistedRequest.ConcurrencyVersion);
+
+        var persistedParticipant = await verifyCtx.Set<KeepRequestParticipant>()
+            .SingleAsync(p => p.Id == participantId);
+        Assert.Null(persistedParticipant.DetachedAtUtc);
+        Assert.Equal(ParticipationType.Watching, persistedParticipant.ParticipationType);
+        Assert.False(persistedParticipant.NotificationsEnabled);
+
+        var persistedEvents = await verifyCtx.Set<KeepRequestEvent>()
+            .Where(e => e.RequestId == requestId)
+            .ToListAsync();
+        Assert.Contains(persistedEvents, e => e.Id == winnerEvent.Id);
+        Assert.DoesNotContain(persistedEvents, e => e.Id == loserEvent.Id);
+    }
 }

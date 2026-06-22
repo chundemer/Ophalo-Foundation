@@ -80,6 +80,10 @@ public sealed class KeepRequestParticipationApiTests : IClassFixture<KeepApiWebF
     private Guid _g5c3SelfWatchVersionStaleId;
     private Guid _g5c3SelfUnwatchVersionStaleId;
 
+    // G5c-4: mute/unmute stale-version test requests
+    private Guid _g5c4MuteVersionStaleId;
+    private Guid _g5c4UnmuteVersionStaleId;
+
     // G4c: ParticipationEntry scope and Available-entry tests
     private Guid _g4cAvailableSelfAssignAuditRequestId;
     private Guid _g4cAvailableSelfWatchAuditRequestId;
@@ -345,6 +349,19 @@ public sealed class KeepRequestParticipationApiTests : IClassFixture<KeepApiWebF
         db.Set<KeepRequestParticipant>().Add(KeepRequestParticipant.Create(
             _g5c3SelfUnwatchVersionStaleId, _accountId, _operatorAccountUserId,
             ParticipationType.Watching, notificationsEnabled: true, now));
+        await db.SaveChangesAsync();
+
+        // --- G5c-4 seeds ---
+        _g5c4MuteVersionStaleId   = await SeedRequestAsync(db, _accountId, customer.Id, "5C-MVS", "5c_mvs_token", now);
+        _g5c4UnmuteVersionStaleId = await SeedRequestAsync(db, _accountId, customer.Id, "5C-UVS", "5c_uvs_token", now);
+
+        // Both stale IDs need Operator Watching so MyWork scope admits them for the version check.
+        db.Set<KeepRequestParticipant>().Add(KeepRequestParticipant.Create(
+            _g5c4MuteVersionStaleId, _accountId, _operatorAccountUserId,
+            ParticipationType.Watching, notificationsEnabled: true, now));
+        db.Set<KeepRequestParticipant>().Add(KeepRequestParticipant.Create(
+            _g5c4UnmuteVersionStaleId, _accountId, _operatorAccountUserId,
+            ParticipationType.Watching, notificationsEnabled: false, now));
         await db.SaveChangesAsync();
 
         var versionRows = await db.Set<KeepRequest>().AsNoTracking()
@@ -863,8 +880,7 @@ public sealed class KeepRequestParticipationApiTests : IClassFixture<KeepApiWebF
     [Fact]
     public async Task Mute_Viewer_Returns403()
     {
-        var response = await AuthRequest(_viewerCookie).PutAsJsonAsync(
-            $"/keep/requests/{_sharedRequestId}/mute", new { });
+        var response = await PutMuteAsync(_viewerCookie, _sharedRequestId, VersionOf(_sharedRequestId));
 
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
@@ -873,8 +889,7 @@ public sealed class KeepRequestParticipationApiTests : IClassFixture<KeepApiWebF
     public async Task Mute_Operator_NoParticipation_ReturnsNotFound()
     {
         // Operator has no MyWork participation on _sharedRequestId → row auth returns null → 404.
-        var response = await AuthRequest(_operatorCookie).PutAsJsonAsync(
-            $"/keep/requests/{_sharedRequestId}/mute", new { });
+        var response = await PutMuteAsync(_operatorCookie, _sharedRequestId, VersionOf(_sharedRequestId));
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
@@ -885,8 +900,8 @@ public sealed class KeepRequestParticipationApiTests : IClassFixture<KeepApiWebF
     public async Task Mute_Operator_AfterWatch_Returns200_NotificationsDisabled()
     {
         // _muteRequestId has the Operator pre-seeded as Watching (notificationsEnabled=true).
-        var response = await AuthRequest(_operatorCookie).PutAsJsonAsync(
-            $"/keep/requests/{_muteRequestId}/mute", new { });
+        var submittedVersion = VersionOf(_muteRequestId);
+        var response = await PutMuteAsync(_operatorCookie, _muteRequestId, submittedVersion);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
@@ -905,6 +920,16 @@ public sealed class KeepRequestParticipationApiTests : IClassFixture<KeepApiWebF
         Assert.True(actions.GetProperty("canUnwatch").GetBoolean());
         Assert.False(actions.GetProperty("canMute").GetBoolean());
         Assert.True(actions.GetProperty("canUnmute").GetBoolean());
+
+        Assert.NotEqual(submittedVersion.ToString("D"), body.GetProperty("version").GetString());
+        await using var scope = _factory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+        var persistedVersion = await db.Set<KeepRequest>().AsNoTracking()
+            .Where(r => r.Id == _muteRequestId)
+            .Select(r => r.ConcurrencyVersion)
+            .SingleAsync();
+        Assert.NotEqual(submittedVersion, persistedVersion);
+        Assert.Equal(persistedVersion.ToString("D"), body.GetProperty("version").GetString());
     }
 
     // =========================================================================
@@ -915,9 +940,8 @@ public sealed class KeepRequestParticipationApiTests : IClassFixture<KeepApiWebF
     public async Task Unmute_Operator_AfterMute_Returns200_NotificationsEnabled()
     {
         // _unmuteRequestId has the Operator pre-seeded as Watching and muted.
-        var response = await AuthRequest(_operatorCookie).SendAsync(
-            new HttpRequestMessage(HttpMethod.Delete,
-                $"/keep/requests/{_unmuteRequestId}/mute"));
+        var submittedVersion = VersionOf(_unmuteRequestId);
+        var response = await DeleteMuteAsync(_operatorCookie, _unmuteRequestId, submittedVersion);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
@@ -929,6 +953,147 @@ public sealed class KeepRequestParticipationApiTests : IClassFixture<KeepApiWebF
 
         Assert.Equal(_operatorAccountUserId.ToString(), watcher.GetProperty("accountUserId").GetString());
         Assert.True(watcher.GetProperty("notificationsEnabled").GetBoolean());
+
+        Assert.NotEqual(submittedVersion.ToString("D"), body.GetProperty("version").GetString());
+        await using var scope = _factory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+        var persistedVersion = await db.Set<KeepRequest>().AsNoTracking()
+            .Where(r => r.Id == _unmuteRequestId)
+            .Select(r => r.ConcurrencyVersion)
+            .SingleAsync();
+        Assert.NotEqual(submittedVersion, persistedVersion);
+        Assert.Equal(persistedVersion.ToString("D"), body.GetProperty("version").GetString());
+    }
+
+    [Fact]
+    public async Task Mute_MissingVersionHeader_Returns400_ExpectedVersionRequired()
+    {
+        var response = await AuthRequest(_operatorCookie).PutAsJsonAsync(
+            $"/keep/requests/{_muteRequestId}/mute", new { });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("KeepRequest.ExpectedVersionRequired", body.GetProperty("code").GetString());
+    }
+
+    [Fact]
+    public async Task Unmute_MissingVersionHeader_Returns400_ExpectedVersionRequired()
+    {
+        var response = await AuthRequest(_operatorCookie).SendAsync(
+            new HttpRequestMessage(HttpMethod.Delete,
+                $"/keep/requests/{_unmuteRequestId}/mute"));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("KeepRequest.ExpectedVersionRequired", body.GetProperty("code").GetString());
+    }
+
+    [Fact]
+    public async Task Mute_NoOp_AlreadyMuted_Returns200_UnchangedVersion()
+    {
+        // _unmuteRequestId has the Operator pre-seeded as Watching and muted (NotificationsEnabled=false).
+        var submittedVersion = VersionOf(_unmuteRequestId);
+        var response = await PutMuteAsync(_operatorCookie, _unmuteRequestId, submittedVersion);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(submittedVersion.ToString("D"), body.GetProperty("version").GetString());
+
+        var activeWatchers = body.GetProperty("participants").EnumerateArray()
+            .Where(p => p.GetProperty("participationType").GetString() == "watching"
+                     && p.GetProperty("detachedAtUtc").ValueKind == JsonValueKind.Null)
+            .ToList();
+        Assert.Single(activeWatchers);
+        Assert.Equal(_operatorAccountUserId.ToString(), activeWatchers[0].GetProperty("accountUserId").GetString());
+        Assert.False(activeWatchers[0].GetProperty("notificationsEnabled").GetBoolean());
+        Assert.DoesNotContain(body.GetProperty("events").EnumerateArray(),
+            e => e.GetProperty("eventType").GetString() == "participation_changed");
+
+        await using var scope = _factory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+        var persistedVersion = await db.Set<KeepRequest>().AsNoTracking()
+            .Where(r => r.Id == _unmuteRequestId)
+            .Select(r => r.ConcurrencyVersion)
+            .SingleAsync();
+        Assert.Equal(submittedVersion, persistedVersion);
+    }
+
+    [Fact]
+    public async Task Unmute_NoOp_AlreadyUnmuted_Returns200_UnchangedVersion()
+    {
+        // _muteRequestId has the Operator pre-seeded as Watching (NotificationsEnabled=true); unmuting is a no-op.
+        var submittedVersion = VersionOf(_muteRequestId);
+        var response = await DeleteMuteAsync(_operatorCookie, _muteRequestId, submittedVersion);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(submittedVersion.ToString("D"), body.GetProperty("version").GetString());
+
+        var activeWatchers = body.GetProperty("participants").EnumerateArray()
+            .Where(p => p.GetProperty("participationType").GetString() == "watching"
+                     && p.GetProperty("detachedAtUtc").ValueKind == JsonValueKind.Null)
+            .ToList();
+        Assert.Single(activeWatchers);
+        Assert.Equal(_operatorAccountUserId.ToString(), activeWatchers[0].GetProperty("accountUserId").GetString());
+        Assert.True(activeWatchers[0].GetProperty("notificationsEnabled").GetBoolean());
+        Assert.DoesNotContain(body.GetProperty("events").EnumerateArray(),
+            e => e.GetProperty("eventType").GetString() == "participation_changed");
+
+        await using var scope = _factory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+        var persistedVersion = await db.Set<KeepRequest>().AsNoTracking()
+            .Where(r => r.Id == _muteRequestId)
+            .Select(r => r.ConcurrencyVersion)
+            .SingleAsync();
+        Assert.Equal(submittedVersion, persistedVersion);
+    }
+
+    [Fact]
+    public async Task Mute_StaleVersion_Returns409_NoSideEffects()
+    {
+        // _g5c4MuteVersionStaleId has Operator Watching (MyWork visible); stale version fires 409.
+        var response = await PutMuteAsync(_operatorCookie, _g5c4MuteVersionStaleId, Guid.NewGuid());
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("KeepRequest.RequestChanged", body.GetProperty("code").GetString());
+
+        var detail = await AuthRequest(_ownerCookie).GetAsync($"/keep/requests/{_g5c4MuteVersionStaleId}");
+        Assert.Equal(HttpStatusCode.OK, detail.StatusCode);
+        var detailBody = await detail.Content.ReadFromJsonAsync<JsonElement>();
+        var activeWatchers = detailBody.GetProperty("participants").EnumerateArray()
+            .Where(p => p.GetProperty("participationType").GetString() == "watching"
+                     && p.GetProperty("detachedAtUtc").ValueKind == JsonValueKind.Null)
+            .ToList();
+        Assert.Single(activeWatchers);
+        Assert.True(activeWatchers[0].GetProperty("notificationsEnabled").GetBoolean());
+        Assert.DoesNotContain(detailBody.GetProperty("events").EnumerateArray(),
+            e => e.GetProperty("eventType").GetString() == "participation_changed");
+        Assert.Equal(VersionOf(_g5c4MuteVersionStaleId).ToString("D"), detailBody.GetProperty("version").GetString());
+    }
+
+    [Fact]
+    public async Task Unmute_StaleVersion_Returns409_NoSideEffects()
+    {
+        // _g5c4UnmuteVersionStaleId has Operator Watching and muted (MyWork visible); stale version fires 409.
+        var response = await DeleteMuteAsync(_operatorCookie, _g5c4UnmuteVersionStaleId, Guid.NewGuid());
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("KeepRequest.RequestChanged", body.GetProperty("code").GetString());
+
+        var detail = await AuthRequest(_ownerCookie).GetAsync($"/keep/requests/{_g5c4UnmuteVersionStaleId}");
+        Assert.Equal(HttpStatusCode.OK, detail.StatusCode);
+        var detailBody = await detail.Content.ReadFromJsonAsync<JsonElement>();
+        var activeWatchers = detailBody.GetProperty("participants").EnumerateArray()
+            .Where(p => p.GetProperty("participationType").GetString() == "watching"
+                     && p.GetProperty("detachedAtUtc").ValueKind == JsonValueKind.Null)
+            .ToList();
+        Assert.Single(activeWatchers);
+        Assert.False(activeWatchers[0].GetProperty("notificationsEnabled").GetBoolean());
+        Assert.DoesNotContain(detailBody.GetProperty("events").EnumerateArray(),
+            e => e.GetProperty("eventType").GetString() == "participation_changed");
+        Assert.Equal(VersionOf(_g5c4UnmuteVersionStaleId).ToString("D"), detailBody.GetProperty("version").GetString());
     }
 
     // =========================================================================
@@ -1593,6 +1758,23 @@ public sealed class KeepRequestParticipationApiTests : IClassFixture<KeepApiWebF
     private Task<HttpResponseMessage> DeleteSelfWatchAsync(string cookie, Guid requestId, Guid version)
     {
         var msg = new HttpRequestMessage(HttpMethod.Delete, $"/keep/requests/{requestId}/watch");
+        msg.Headers.Add("X-Keep-Request-Version", version.ToString("D"));
+        return AuthRequest(cookie).SendAsync(msg);
+    }
+
+    private Task<HttpResponseMessage> PutMuteAsync(string cookie, Guid requestId, Guid version)
+    {
+        var msg = new HttpRequestMessage(HttpMethod.Put, $"/keep/requests/{requestId}/mute")
+        {
+            Content = JsonContent.Create(new { })
+        };
+        msg.Headers.Add("X-Keep-Request-Version", version.ToString("D"));
+        return AuthRequest(cookie).SendAsync(msg);
+    }
+
+    private Task<HttpResponseMessage> DeleteMuteAsync(string cookie, Guid requestId, Guid version)
+    {
+        var msg = new HttpRequestMessage(HttpMethod.Delete, $"/keep/requests/{requestId}/mute");
         msg.Headers.Add("X-Keep-Request-Version", version.ToString("D"));
         return AuthRequest(cookie).SendAsync(msg);
     }

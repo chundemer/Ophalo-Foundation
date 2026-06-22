@@ -73,16 +73,6 @@ public interface IKeepRequestOperatePersistence
     Task<IReadOnlyList<ParticipantCandidateRecord>> GetParticipantCandidatesAsync(Guid accountId, CancellationToken ct);
 
     /// <summary>
-    /// Inserts newParticipants and newEvent (when non-null) and saves all tracked
-    /// participant-row changes (mutations by the domain service) in a single SaveChangesAsync.
-    /// Does not require a KeepRequest — participation writes do not modify request state.
-    /// </summary>
-    Task CommitParticipationAsync(
-        IReadOnlyList<KeepRequestParticipant> newParticipants,
-        KeepRequestEvent? newEvent,
-        CancellationToken ct);
-
-    /// <summary>
     /// Versioned participation commit (G5c/ADR-333). Inserts newParticipants and newEvent (when
     /// non-null), rotates <paramref name="request"/>'s ConcurrencyVersion immediately before
     /// SaveChangesAsync, and returns <see cref="KeepRequestCommitResult.Committed"/> on success

@@ -146,20 +146,6 @@ public sealed class EfKeepRequestOperatePersistence(OpHaloDbContext dbContext) :
             .ToList();
     }
 
-    public async Task CommitParticipationAsync(
-        IReadOnlyList<KeepRequestParticipant> newParticipants,
-        KeepRequestEvent? newEvent,
-        CancellationToken ct)
-    {
-        foreach (var p in newParticipants)
-            dbContext.Set<KeepRequestParticipant>().Add(p);
-
-        if (newEvent is not null)
-            dbContext.Set<KeepRequestEvent>().Add(newEvent);
-
-        await dbContext.SaveChangesAsync(ct);
-    }
-
     public async Task<KeepRequestCommitResult> CommitParticipationAsync(
         KeepRequest request,
         IReadOnlyList<KeepRequestParticipant> newParticipants,

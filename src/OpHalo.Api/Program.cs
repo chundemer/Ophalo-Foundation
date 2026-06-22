@@ -512,20 +512,30 @@ app.MapDelete("/keep/requests/{requestId:guid}/watch", async (
 // Mute — authenticated, operator write (Phase 8-B5/Session 3B, ADR-230)
 app.MapPut("/keep/requests/{requestId:guid}/mute", async (
     Guid requestId,
+    HttpRequest httpRequest,
     MuteService service,
     CancellationToken ct) =>
 {
-    var result = await service.MuteAsync(requestId, ct);
+    var versionResult = KeepRequestVersionHeader.Parse(httpRequest.Headers);
+    if (!versionResult.IsSuccess)
+        return ErrorHttpMapper.ToHttpResult(versionResult.Error);
+
+    var result = await service.MuteAsync(requestId, versionResult.Value, ct);
     return result.IsSuccess ? Results.Ok(result.Value) : ErrorHttpMapper.ToHttpResult(result.Error);
 }).RequireAuthorization();
 
 // Unmute — authenticated, operator write (Phase 8-B5/Session 3B, ADR-230)
 app.MapDelete("/keep/requests/{requestId:guid}/mute", async (
     Guid requestId,
+    HttpRequest httpRequest,
     MuteService service,
     CancellationToken ct) =>
 {
-    var result = await service.UnmuteAsync(requestId, ct);
+    var versionResult = KeepRequestVersionHeader.Parse(httpRequest.Headers);
+    if (!versionResult.IsSuccess)
+        return ErrorHttpMapper.ToHttpResult(versionResult.Error);
+
+    var result = await service.UnmuteAsync(requestId, versionResult.Value, ct);
     return result.IsSuccess ? Results.Ok(result.Value) : ErrorHttpMapper.ToHttpResult(result.Error);
 }).RequireAuthorization();
 
