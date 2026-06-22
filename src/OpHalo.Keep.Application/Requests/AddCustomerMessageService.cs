@@ -30,6 +30,10 @@ public sealed class AddCustomerMessageService(
         if (request is null)
             return Result<KeepCustomerPageResult>.Failure(KeepRequestErrors.NotFound);
 
+        // --- Expected-version check (G5d-1/ADR-333) ---
+        if (request.ConcurrencyVersion != command.ExpectedVersion)
+            return Result<KeepCustomerPageResult>.Failure(KeepRequestErrors.RequestChanged);
+
         var policy = await persistence.GetResponsePolicyAsync(context.AccountId, ct);
         var firstResponse = policy?.FirstResponseTargetMinutes ?? 60;
         var standard     = policy?.StandardResponseTargetMinutes ?? 240;
@@ -40,11 +44,20 @@ public sealed class AddCustomerMessageService(
         if (!domainResult.IsSuccess)
             return Result<KeepCustomerPageResult>.Failure(domainResult.Error);
 
-        await persistence.CommitAsync(request, domainResult.Value, ct);
+        var commitResult = await persistence.CommitAsync(request, domainResult.Value, ct);
+        switch (commitResult)
+        {
+            case KeepRequestCommitResult.Committed:
+                break;
+            case KeepRequestCommitResult.Conflict:
+                return Result<KeepCustomerPageResult>.Failure(KeepRequestErrors.RequestChanged);
+            default:
+                throw new ArgumentOutOfRangeException(nameof(commitResult));
+        }
 
         var events = await persistence.GetCustomerVisibleEventsAsync(context.RequestId, ct);
 
         return Result<KeepCustomerPageResult>.Success(
-            KeepCustomerPageMapper.BuildActiveResult(context, events));
+            KeepCustomerPageMapper.BuildActiveResult(context with { Version = request.ConcurrencyVersion }, events));
     }
 }

@@ -62,12 +62,15 @@ Do not reopen locked decisions silently. If implementation reveals a real contra
 contract, stop and surface the specific evidence. Do not label ordinary signature confirmation as
 "discovery."
 
-Hard batch-size gate: no Claude implementation session may exceed three mutation routes, eight
-production files, or twelve total changed files including tests, fakes, and documentation. Count
-the actual caller/test fan-out before approval. A coherent cross-cutting concern does not override
-these limits; split it into independently compiling vertical slices. A very large file or broad test
-matrix requires a smaller slice. Start a fresh Claude session after an approved commit instead of
-carrying discovery, review rounds, and the next batch in one context window.
+Hard batch-size gate: no Claude implementation session may exceed three independent mutation
+handler families, eight production files, or twelve total changed files including tests, fakes, and
+documentation. Exact route aliases count as one family only when they delegate to the same handler
+and service with no alias-specific behavior; enumerate every alias and cover the family with a
+parameterized contract test. Count the actual caller/test fan-out before approval. A coherent
+cross-cutting concern does not override these limits; split it into independently compiling vertical
+slices. A very large file or broad test matrix requires a smaller slice. Start a fresh Claude session
+after an approved commit instead of carrying discovery, review rounds, and the next batch in one
+context window.
 
 ## Implementation Rules
 

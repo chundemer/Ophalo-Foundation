@@ -1,10 +1,10 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-06-22 (G5c-4 implemented; G5d pre-work needed)
+**Last updated:** 2026-06-22 (G5d-1 implementation complete; G5d-2 next)
 **Branch:** `main` (no remote yet)
-**Current baseline:** 1169 tests (619 unit · 14 architecture · 536 integration).
+**Current baseline:** 1178 tests (619 unit · 14 architecture · 545 integration).
 **Next free ADR:** ADR-336
-**Next batch: G5d — customer writes and G5 completion — PRE-WORK INCOMPLETE.**
+**Next batch: G5d-2 — feedback concurrency — requires discovery.**
 
 ---
 
@@ -23,8 +23,9 @@ For every implementation slice:
 - inspect current signatures and failure modes before calling existing code;
 - always present the file-level gate before writing; when pre-work is complete it is a mechanical
   caller/signature gate, while incomplete pre-work also requires design decisions and approval;
-- enforce the hard slice gate: at most 3 mutation routes, 8 production files, and 12 total changed
-  files including tests/fakes/docs; coherent cross-cutting scope never overrides the limits;
+- enforce the hard slice gate: at most 3 independent mutation handler families, 8 production files,
+  and 12 total changed files including tests/fakes/docs; exact aliases sharing one handler/service
+  count as one family only when all aliases are enumerated and parameterized-contract tested;
 - preserve fail-closed account, row, action, and public-token behavior;
 - add focused authorization/regression tests and run the proportionate broader suite;
 - self-review for policy drift, accidental visibility expansion, untested direct-ID paths, stale
@@ -525,10 +526,14 @@ Goal: prevent stale business intent from overwriting newer customer/business sta
      (619 unit · 14 architecture · 523 integration).
    - **G5c-3 (complete, `19099e3`):** self-watch/unwatch; 1162 tests
      (619 unit · 14 architecture · 529 integration).
-   - **G5c-4 (complete):** mute/unmute, removed the zero-caller legacy participation-commit overload,
-     participation concurrency race test. 1169 tests (619 unit · 14 architecture · 536 integration).
-4. **G5d — Customer writes and completion:** customer messages/feedback, cross-path race tests, full
-   regression suite, build log, and completion documentation.
+   - **G5c-4 (complete, `9c2df85`):** mute/unmute, removed the zero-caller legacy
+     participation-commit overload, participation concurrency race test. 1169 tests
+     (619 unit · 14 architecture · 536 integration).
+4. **G5d — Customer writes and completion:** split into independently compiling vertical slices:
+   - **G5d-1 (complete):** customer-message route family. 1178 tests (619 unit · 14 arch · 545 integration).
+   - **G5d-2:** feedback route.
+   - **G5d-3:** operator/customer cross-path race, full regression, build log, decision-status and
+     completion documentation.
 
 Each batch must compile and pass focused tests independently, with targeted discovery and a fresh
 file-level gate before coding. G5 is complete only after all four batches pass. No automatic merge,
@@ -568,132 +573,32 @@ Legacy unversioned participation-commit overload removed from interface, EF impl
 unit-test fake. Participation concurrency race test added to KeepPersistenceProofTests:
 first-writer-wins with independent contexts, mute win/unwatch loss, full side-effect rollback proof.
 Missing/stale, success, no-op, role/domain, OffSeason, and 404 tests verified.
-Commit: pending Christian approval. Full suite: 1169 passed (619 unit · 14 architecture · 536 integration).
+Commit: `9c2df85`. Full suite: 1169 passed
+(619 unit · 14 architecture · 536 integration).
 
-### G5c-4 handoff — FOR REFERENCE
+### G5d-1 — Customer-message concurrency — COMPLETE
 
-This is the final two-route participation slice:
+`X-Keep-Request-Version` header parsed at the API edge inside `HandleCustomerMessage`; all six aliases
+pass `HttpRequest` to the shared handler. `AddCustomerMessageCommand` carries `Guid ExpectedVersion`.
+`AddCustomerMessageService` compares after tracked load, handles `Committed`/`Conflict` exhaustively,
+and copies the rotated `request.ConcurrencyVersion` into the customer context before building the
+response. `IKeepCustomerWritePersistence.CommitAsync` returns `Task<KeepRequestCommitResult>`;
+`EfKeepCustomerWritePersistence.CommitAsync` rotates via `RotateConcurrencyVersion()` before
+`SaveChangesAsync` and catches only `DbUpdateConcurrencyException`. `CommitFeedbackAsync` unchanged.
+CustomerMessageTests: `_requestVersion` field; `PostCustomerMessage` helper; all 14 existing POSTs
+updated; 10 new checks (6-alias missing-header theory, malformed-header, stale-version no-side-effect,
+sequential stale-reuse, version-rotation proof in success test). OffSeason test sends version header.
+Full suite: 1178 passed (619 unit · 14 architecture · 545 integration).
 
-- PUT /keep/requests/{requestId}/mute (MuteService.MuteAsync)
-- DELETE /keep/requests/{requestId}/mute (MuteService.UnmuteAsync)
+### G5d remaining slices
 
-No decisions remain. Reuse ADR-330–335, KeepRequestVersionHeader, KeepRequestCommitResult, and the
-versioned CommitParticipationAsync(request, newParticipants, event, ct). This slice also removes the
-temporary legacy unversioned participation-commit overload after the two mute callers migrate.
-
-Exact production files and changes:
-
-1. src/OpHalo.Api/Program.cs — inspect only the mute and unmute handlers. Add HttpRequest, parse the
-   existing version header, map parser failure, and pass the typed Guid into the service method.
-2. src/OpHalo.Keep.Application/Requests/MuteService.cs — preserve the existing scalar shape by
-   changing methods to MuteAsync(Guid requestId, Guid expectedVersion, CancellationToken ct) and
-   UnmuteAsync(Guid requestId, Guid expectedVersion, CancellationToken ct). Preserve explicit scope:
-   Owner/Admin AccountWide; Operator MyWork; unknown/future roles fail closed. Compare version after
-   visible tracked row load and before terminal, participant, or domain checks. Non-no-op paths use
-   the versioned participation commit and an exhaustive result switch (Committed; Conflict maps to
-   RequestChanged; default throws). No-op paths skip commit.
-3. src/OpHalo.Keep.Application/Requests/IKeepRequestOperatePersistence.cs — after all mute callers
-   migrate, remove only the legacy Task CommitParticipationAsync(newParticipants, event, ct)
-   declaration and its stale XML. Retain and clarify the request-bearing typed-result method as the
-   sole participation commit contract.
-4. src/OpHalo.Keep.Infrastructure/Persistence/EfKeepRequestOperatePersistence.cs — remove only the
-   legacy unversioned implementation. Do not alter the established versioned implementation unless
-   a concrete defect is found.
-
-Compile-impact cleanup:
-
-- tests/OpHalo.UnitTests/Keep/KeepCreateBusinessRequestServiceTests.cs — remove only the strict fake's
-  legacy unversioned CommitParticipationAsync stub. Retain the request-bearing typed-result stub
-  throwing NotImplementedException.
-- Before editing and again before handoff, rg CommitParticipationAsync across src/tests. After mute
-  migration, no call or declaration may remain with the old three-argument shape.
-
-Exact API test callers found during pre-work:
-
-- tests/OpHalo.IntegrationTests/Api/KeepRequestParticipationApiTests.cs — do not read in full.
-  Inspect the mute/unmute block around current lines 860–940, mute seed IDs/participant rows around
-  lines 190–250, the existing _requestVersions capture, and helper area near the end.
-- tests/OpHalo.IntegrationTests/Api/KeepOffSeasonTests.cs — only PutMute_OffSeason_Returns403 and its
-  existing version-aware AuthRequest helper.
-- No other test file calls the mute routes. Confirm once with targeted rg.
-
-Locked behavior and ordering:
-
-- Framework authentication and existing account/feature/OffSeason/role gates remain authoritative.
-  Authenticated Viewer failures send a valid header and remain 403.
-- MyWork/AccountWide row scope runs before version comparison. An Operator with no participation
-  remains 404 even when the supplied GUID is stale; no current version is disclosed.
-- Visible stale requests return 409 RequestChanged before terminal, participant, or domain checks,
-  with no participant/event/version side effect.
-- Mute and unmute success rotate exactly once; response version differs from submitted and equals a
-  fresh persisted-row read. Existing NotificationsEnabled and available-action assertions remain.
-- Mute when already muted and unmute when already enabled are no-ops: current header required, 200,
-  unchanged response/persisted version, exactly one unchanged active participation row, no
-  participation event, and no commit.
-- Save-time conflict returns 409 without response building, retry, merge, or replacement-version
-  disclosure.
-- Do not refactor handler parsing, AuthAsync, BuildDetailAsync, action metadata, or notification
-  semantics. Do not touch customer-write concurrency; that is G5d.
-
-Focused API coverage in existing fixtures:
-
-- Both routes: missing header maps to ExpectedVersionRequired; valid stale version on a visible
-  MyWork row maps to RequestChanged with version, participant state, and event count unchanged.
-- Existing Viewer/no-participation/domain tests send a syntactically valid version and preserve
-  their established 403/404/error results. PutMute_OffSeason_Returns403 sends _requestVersion.
-- Update existing Mute_Operator_AfterWatch and Unmute_Operator_AfterMute success tests to assert
-  response/persisted version rotation while retaining notification/action assertions.
-- Add mute no-op using _unmuteRequestId (already notifications-disabled) and unmute no-op using
-  _muteRequestId (already notifications-enabled). Per-test reset makes reuse safe. Assert unchanged
-  response/persisted version, one unchanged active Operator watcher, and no participation event.
-- Reuse _requestVersions and add narrow PutMuteAsync/DeleteMuteAsync header helpers. Do not add seed
-  return types, a new fixture, malformed-header duplication, or ordering assumptions.
-
-Final participation concurrency proof:
-
-- Extend tests/OpHalo.IntegrationTests/Persistence/KeepPersistenceProofTests.cs with one focused
-  two-DbContext test using its existing PostgreSQL fixture and account IDs.
-- Seed one customer, request, RequestCreated event, and one active Watching participant for
-  AccountOwnerAccountUserId with NotificationsEnabled=true.
-- Load the same request and participant into two independent contexts; both must observe the same
-  seed request version and enabled notification state.
-- In the winning context set its tracked participant NotificationsEnabled=false and create a
-  distinct ParticipationChanged/Muted event. In the losing context detach its tracked participant
-  and create a distinct ParticipationChanged/SelfUnwatched event. Retain both event IDs. The
-  intentionally different row mutations make rollback observable.
-- Call the request-bearing CommitParticipationAsync with an empty new-participant list and each
-  context's distinct event. First returns Committed and rotates; second returns Conflict.
-- In a fresh context prove: request version equals the winner; participant is still active Watching
-  with NotificationsEnabled=false (the losing detach did not leak); winner Muted event exists;
-  losing SelfUnwatched event does not. This specifically proves the implicit SaveChanges transaction
-  rolls back participant/event changes even if EF executes them before detecting the request-version
-  conflict.
-- Do not reuse identical participant inserts, which could turn the proof into a unique-index race,
-  and do not duplicate G5b's event-only race.
-
-Expected changed files:
-
-Production (4):
-- src/OpHalo.Api/Program.cs
-- src/OpHalo.Keep.Application/Requests/MuteService.cs
-- src/OpHalo.Keep.Application/Requests/IKeepRequestOperatePersistence.cs
-- src/OpHalo.Keep.Infrastructure/Persistence/EfKeepRequestOperatePersistence.cs
-
-Tests (4):
-- tests/OpHalo.IntegrationTests/Api/KeepRequestParticipationApiTests.cs
-- tests/OpHalo.IntegrationTests/Api/KeepOffSeasonTests.cs
-- tests/OpHalo.IntegrationTests/Persistence/KeepPersistenceProofTests.cs
-- tests/OpHalo.UnitTests/Keep/KeepCreateBusinessRequestServiceTests.cs
-
-Documentation (1): docs/session-log.md. No new files, migration, Core, mapper, or error changes.
-Total expected files: 9; routes: 2. This is within the hard batch gate.
-
-Mechanical preflight output must contain only: confirmed nine files, two scalar service signatures,
-all mute route callers, zero unexpected legacy-overload callers, the race-test construction above,
-focused commands, and concrete drift. If none exists, state no decisions remain and stop for
-approval. After implementation run the participation API fixture, OffSeason fixture, persistence
-proof fixture, unit and architecture suites, then the full suite and git diff --check. Do not commit
-before review.
+- **G5d-2:** `/feedback` only. Apply the same header/guard/load/compare/typed-commit pattern to
+  `SubmitFeedbackCommand`, `SubmitFeedbackService`, `CommitFeedbackAsync`,
+  `ClosedRequestFeedbackTests`, and its OffSeason caller. Successful mapping must copy the rotated
+  version along with feedback fields into `updatedContext`.
+- **G5d-3:** add the focused operator-versus-customer two-context first-writer-wins proof with full
+  losing-side-effect rollback assertions; run the full regression suite; write build-log/056; mark
+  ADR-330–335 and G5 implemented; prepare G6 as next. No source refactor belongs in completion work.
 
 ## G6 — Cancelled Customer-Page Expiry Correction — PLANNED
 

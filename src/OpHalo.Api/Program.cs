@@ -558,33 +558,33 @@ app.MapGet("/keep/r/{pageToken}", async (
 
 // Customer message routes — anonymous, one route per intent, rate limited (Phase 8-B3-beta, ADR-129..131)
 app.MapPost("/keep/r/{pageToken}/message",
-    (string pageToken, CustomerMessageBody body, AddCustomerMessageService service, CancellationToken ct) =>
-        HandleCustomerMessage(pageToken, MessageIntent.GeneralMessage, body.Message, service, ct))
+    (string pageToken, CustomerMessageBody body, HttpRequest httpRequest, AddCustomerMessageService service, CancellationToken ct) =>
+        HandleCustomerMessage(pageToken, MessageIntent.GeneralMessage, body.Message, httpRequest, service, ct))
     .RequireRateLimiting("customer-write");
 
 app.MapPost("/keep/r/{pageToken}/question",
-    (string pageToken, CustomerMessageBody body, AddCustomerMessageService service, CancellationToken ct) =>
-        HandleCustomerMessage(pageToken, MessageIntent.Question, body.Message, service, ct))
+    (string pageToken, CustomerMessageBody body, HttpRequest httpRequest, AddCustomerMessageService service, CancellationToken ct) =>
+        HandleCustomerMessage(pageToken, MessageIntent.Question, body.Message, httpRequest, service, ct))
     .RequireRateLimiting("customer-write");
 
 app.MapPost("/keep/r/{pageToken}/update_request",
-    (string pageToken, CustomerMessageBody body, AddCustomerMessageService service, CancellationToken ct) =>
-        HandleCustomerMessage(pageToken, MessageIntent.UpdateRequest, body.Message, service, ct))
+    (string pageToken, CustomerMessageBody body, HttpRequest httpRequest, AddCustomerMessageService service, CancellationToken ct) =>
+        HandleCustomerMessage(pageToken, MessageIntent.UpdateRequest, body.Message, httpRequest, service, ct))
     .RequireRateLimiting("customer-write");
 
 app.MapPost("/keep/r/{pageToken}/schedule_change_request",
-    (string pageToken, CustomerMessageBody body, AddCustomerMessageService service, CancellationToken ct) =>
-        HandleCustomerMessage(pageToken, MessageIntent.ScheduleChangeRequest, body.Message, service, ct))
+    (string pageToken, CustomerMessageBody body, HttpRequest httpRequest, AddCustomerMessageService service, CancellationToken ct) =>
+        HandleCustomerMessage(pageToken, MessageIntent.ScheduleChangeRequest, body.Message, httpRequest, service, ct))
     .RequireRateLimiting("customer-write");
 
 app.MapPost("/keep/r/{pageToken}/change_or_cancel_request",
-    (string pageToken, CustomerMessageBody body, AddCustomerMessageService service, CancellationToken ct) =>
-        HandleCustomerMessage(pageToken, MessageIntent.ChangeOrCancelRequest, body.Message, service, ct))
+    (string pageToken, CustomerMessageBody body, HttpRequest httpRequest, AddCustomerMessageService service, CancellationToken ct) =>
+        HandleCustomerMessage(pageToken, MessageIntent.ChangeOrCancelRequest, body.Message, httpRequest, service, ct))
     .RequireRateLimiting("customer-write");
 
 app.MapPost("/keep/r/{pageToken}/issue",
-    (string pageToken, CustomerMessageBody body, AddCustomerMessageService service, CancellationToken ct) =>
-        HandleCustomerMessage(pageToken, MessageIntent.Complaint, body.Message, service, ct))
+    (string pageToken, CustomerMessageBody body, HttpRequest httpRequest, AddCustomerMessageService service, CancellationToken ct) =>
+        HandleCustomerMessage(pageToken, MessageIntent.Complaint, body.Message, httpRequest, service, ct))
     .RequireRateLimiting("customer-write");
 
 app.MapPost("/keep/r/{pageToken}/feedback",
@@ -626,10 +626,15 @@ static async Task<IResult> HandleCustomerMessage(
     string pageToken,
     MessageIntent intent,
     string message,
+    HttpRequest httpRequest,
     AddCustomerMessageService service,
     CancellationToken ct)
 {
-    var command = new AddCustomerMessageCommand(pageToken, intent, message);
+    var versionResult = KeepRequestVersionHeader.Parse(httpRequest.Headers);
+    if (!versionResult.IsSuccess)
+        return ErrorHttpMapper.ToHttpResult(versionResult.Error);
+
+    var command = new AddCustomerMessageCommand(pageToken, intent, message, versionResult.Value);
     var result = await service.ExecuteAsync(command, ct);
     if (!result.IsSuccess)
         return ErrorHttpMapper.ToHttpResult(result.Error);

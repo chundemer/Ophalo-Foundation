@@ -5,4 +5,5 @@ namespace OpHalo.Keep.Application.Requests;
 public sealed record AddCustomerMessageCommand(
     string PageToken,
     MessageIntent Intent,
-    string Message);
+    string Message,
+    Guid ExpectedVersion);

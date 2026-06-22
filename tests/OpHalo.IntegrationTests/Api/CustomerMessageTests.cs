@@ -41,6 +41,7 @@ public sealed class CustomerMessageTests : IClassFixture<KeepApiWebFactory>, IAs
 
     private Guid _accountId;
     private Guid _requestId;
+    private Guid _requestVersion;
     private string _referenceCode = string.Empty;
 
     public CustomerMessageTests(KeepApiWebFactory factory)
@@ -99,6 +100,16 @@ public sealed class CustomerMessageTests : IClassFixture<KeepApiWebFactory>, IAs
 
         _requestId = request.Id;
         _referenceCode = request.ReferenceCode;
+        _requestVersion = request.ConcurrencyVersion;
+    }
+
+    private Task<HttpResponseMessage> PostCustomerMessage(string route, string message, Guid? version = null)
+    {
+        var req = new HttpRequestMessage(HttpMethod.Post, $"/keep/r/{PageToken}/{route}");
+        if (version.HasValue)
+            req.Headers.Add("X-Keep-Request-Version", version.Value.ToString("D"));
+        req.Content = JsonContent.Create(new { message });
+        return _client.SendAsync(req);
     }
 
     public Task DisposeAsync() => Task.CompletedTask;
@@ -110,9 +121,10 @@ public sealed class CustomerMessageTests : IClassFixture<KeepApiWebFactory>, IAs
     [Fact]
     public async Task PostMessage_UnknownPageToken_Returns404()
     {
-        var response = await _client.PostAsJsonAsync(
-            "/keep/r/no_such_token_xyz/message",
-            new { message = "Hello?" });
+        var req = new HttpRequestMessage(HttpMethod.Post, "/keep/r/no_such_token_xyz/message");
+        req.Headers.Add("X-Keep-Request-Version", Guid.NewGuid().ToString("D"));
+        req.Content = JsonContent.Create(new { message = "Hello?" });
+        var response = await _client.SendAsync(req);
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
@@ -132,9 +144,7 @@ public sealed class CustomerMessageTests : IClassFixture<KeepApiWebFactory>, IAs
                 _accountId);
         }
 
-        var response = await _client.PostAsJsonAsync(
-            $"/keep/r/{PageToken}/message",
-            new { message = "Hello?" });
+        var response = await PostCustomerMessage("message", "Hello?", _requestVersion);
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
 
@@ -163,9 +173,7 @@ public sealed class CustomerMessageTests : IClassFixture<KeepApiWebFactory>, IAs
                 DateTime.UtcNow.AddDays(-1), PageToken);
         }
 
-        var response = await _client.PostAsJsonAsync(
-            $"/keep/r/{PageToken}/message",
-            new { message = "Is this still open?" });
+        var response = await PostCustomerMessage("message", "Is this still open?", _requestVersion);
 
         Assert.Equal(HttpStatusCode.Gone, response.StatusCode);
 
@@ -196,9 +204,7 @@ public sealed class CustomerMessageTests : IClassFixture<KeepApiWebFactory>, IAs
     [Fact]
     public async Task PostMessage_BlankMessage_Returns400MessageRequired()
     {
-        var response = await _client.PostAsJsonAsync(
-            $"/keep/r/{PageToken}/message",
-            new { message = "   " });
+        var response = await PostCustomerMessage("message", "   ", _requestVersion);
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
 
@@ -213,9 +219,7 @@ public sealed class CustomerMessageTests : IClassFixture<KeepApiWebFactory>, IAs
     [Fact]
     public async Task PostMessage_OverLimitMessage_Returns400CustomerMessageTooLong()
     {
-        var response = await _client.PostAsJsonAsync(
-            $"/keep/r/{PageToken}/message",
-            new { message = new string('x', 4001) });
+        var response = await PostCustomerMessage("message", new string('x', 4001), _requestVersion);
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
 
@@ -230,9 +234,7 @@ public sealed class CustomerMessageTests : IClassFixture<KeepApiWebFactory>, IAs
     [Fact]
     public async Task PostMessage_ValidMessage_Returns200WithCustomerTimelineEvent()
     {
-        var response = await _client.PostAsJsonAsync(
-            $"/keep/r/{PageToken}/message",
-            new { message = "Any update on my request?" });
+        var response = await PostCustomerMessage("message", "Any update on my request?", _requestVersion);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
@@ -248,6 +250,14 @@ public sealed class CustomerMessageTests : IClassFixture<KeepApiWebFactory>, IAs
         Assert.Equal("message_added", events[0].GetProperty("eventType").GetString());
         Assert.Equal("Any update on my request?", events[0].GetProperty("content").GetString());
         Assert.Equal("customer", events[0].GetProperty("actorLabel").GetString());
+
+        // Version must rotate — response version differs from submitted version and matches DB.
+        var responseVersion = Guid.Parse(body.GetProperty("version").GetString()!);
+        Assert.NotEqual(_requestVersion, responseVersion);
+        await using var scope = _factory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+        var r = await db.Set<KeepRequest>().AsNoTracking().FirstAsync(x => x.Id == _requestId);
+        Assert.Equal(responseVersion, r.ConcurrencyVersion);
     }
 
     // =========================================================================
@@ -257,9 +267,7 @@ public sealed class CustomerMessageTests : IClassFixture<KeepApiWebFactory>, IAs
     [Fact]
     public async Task PostIssue_ValidMessage_Returns200AndSetsComplaintPriorityAttention()
     {
-        var response = await _client.PostAsJsonAsync(
-            $"/keep/r/{PageToken}/issue",
-            new { message = "This is urgent — the leak is getting worse." });
+        var response = await PostCustomerMessage("issue", "This is urgent — the leak is getting worse.", _requestVersion);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
@@ -283,10 +291,10 @@ public sealed class CustomerMessageTests : IClassFixture<KeepApiWebFactory>, IAs
     [Fact]
     public async Task PostMessage_RepeatedStandardMessage_PreservesOldestAttentionSinceUtc()
     {
-        var first = await _client.PostAsJsonAsync(
-            $"/keep/r/{PageToken}/message",
-            new { message = "First message." });
+        var first = await PostCustomerMessage("message", "First message.", _requestVersion);
         Assert.Equal(HttpStatusCode.OK, first.StatusCode);
+        var firstBody = await first.Content.ReadFromJsonAsync<JsonElement>();
+        var firstVersion = Guid.Parse(firstBody.GetProperty("version").GetString()!);
 
         DateTime attentionSinceAfterFirst;
         await using (var scope = _factory.CreateScope())
@@ -297,9 +305,7 @@ public sealed class CustomerMessageTests : IClassFixture<KeepApiWebFactory>, IAs
             attentionSinceAfterFirst = r.AttentionSinceUtc!.Value;
         }
 
-        var second = await _client.PostAsJsonAsync(
-            $"/keep/r/{PageToken}/message",
-            new { message = "Second message." });
+        var second = await PostCustomerMessage("message", "Second message.", firstVersion);
         Assert.Equal(HttpStatusCode.OK, second.StatusCode);
 
         await using (var scope = _factory.CreateScope())
@@ -320,10 +326,10 @@ public sealed class CustomerMessageTests : IClassFixture<KeepApiWebFactory>, IAs
     [Fact]
     public async Task PostIssue_AfterStandardMessage_UpgradesPriorityButPreservesAttentionSinceUtc()
     {
-        var first = await _client.PostAsJsonAsync(
-            $"/keep/r/{PageToken}/message",
-            new { message = "Just checking in." });
+        var first = await PostCustomerMessage("message", "Just checking in.", _requestVersion);
         Assert.Equal(HttpStatusCode.OK, first.StatusCode);
+        var firstBody = await first.Content.ReadFromJsonAsync<JsonElement>();
+        var firstVersion = Guid.Parse(firstBody.GetProperty("version").GetString()!);
 
         DateTime attentionSinceAfterFirst;
         await using (var scope = _factory.CreateScope())
@@ -334,9 +340,7 @@ public sealed class CustomerMessageTests : IClassFixture<KeepApiWebFactory>, IAs
             attentionSinceAfterFirst = r.AttentionSinceUtc!.Value;
         }
 
-        var second = await _client.PostAsJsonAsync(
-            $"/keep/r/{PageToken}/issue",
-            new { message = "Now it's urgent — please escalate." });
+        var second = await PostCustomerMessage("issue", "Now it's urgent — please escalate.", firstVersion);
         Assert.Equal(HttpStatusCode.OK, second.StatusCode);
 
         await using (var scope = _factory.CreateScope())
@@ -375,9 +379,7 @@ public sealed class CustomerMessageTests : IClassFixture<KeepApiWebFactory>, IAs
             await db.SaveChangesAsync();
         }
 
-        var response = await _client.PostAsJsonAsync(
-            $"/keep/r/{PageToken}/message",
-            new { message = "Hi, I'm responding now." });
+        var response = await PostCustomerMessage("message", "Hi, I'm responding now.", _requestVersion);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
         await using (var scope = _factory.CreateScope())
@@ -407,9 +409,7 @@ public sealed class CustomerMessageTests : IClassFixture<KeepApiWebFactory>, IAs
                 _requestId);
         }
 
-        var response = await _client.PostAsJsonAsync(
-            $"/keep/r/{PageToken}/message",
-            new { message = "Thank you, but I have a follow-up question." });
+        var response = await PostCustomerMessage("message", "Thank you, but I have a follow-up question.", _requestVersion);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
@@ -432,9 +432,7 @@ public sealed class CustomerMessageTests : IClassFixture<KeepApiWebFactory>, IAs
                 _requestId);
         }
 
-        var response = await _client.PostAsJsonAsync(
-            $"/keep/r/{PageToken}/message",
-            new { message = "Can I reopen this?" });
+        var response = await PostCustomerMessage("message", "Can I reopen this?", _requestVersion);
 
         Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
 
@@ -457,9 +455,7 @@ public sealed class CustomerMessageTests : IClassFixture<KeepApiWebFactory>, IAs
                 _requestId);
         }
 
-        var response = await _client.PostAsJsonAsync(
-            $"/keep/r/{PageToken}/message",
-            new { message = "I changed my mind." });
+        var response = await PostCustomerMessage("message", "I changed my mind.", _requestVersion);
 
         Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
 
@@ -474,9 +470,7 @@ public sealed class CustomerMessageTests : IClassFixture<KeepApiWebFactory>, IAs
     [Fact]
     public async Task PostMessage_SuccessResponse_ExposesNoInternalFields()
     {
-        var response = await _client.PostAsJsonAsync(
-            $"/keep/r/{PageToken}/message",
-            new { message = "Just a standard enquiry." });
+        var response = await PostCustomerMessage("message", "Just a standard enquiry.", _requestVersion);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
@@ -601,5 +595,86 @@ public sealed class CustomerMessageTests : IClassFixture<KeepApiWebFactory>, IAs
         Assert.Contains("message", actions);
         Assert.Contains("issue", actions);
         Assert.Equal(6, actions.Length);
+    }
+
+    // =========================================================================
+    // G5d-1 — Concurrency: missing/malformed/stale header and sequential reuse
+    // =========================================================================
+
+    [Theory]
+    [InlineData("message")]
+    [InlineData("question")]
+    [InlineData("update_request")]
+    [InlineData("schedule_change_request")]
+    [InlineData("change_or_cancel_request")]
+    [InlineData("issue")]
+    public async Task PostCustomerMessage_MissingVersionHeader_Returns400ExpectedVersionRequired(string route)
+    {
+        var response = await PostCustomerMessage(route, "Test message", version: null);
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("KeepRequest.ExpectedVersionRequired", body.GetProperty("code").GetString());
+    }
+
+    [Fact]
+    public async Task PostMessage_MalformedVersionHeader_Returns400ExpectedVersionInvalid()
+    {
+        var req = new HttpRequestMessage(HttpMethod.Post, $"/keep/r/{PageToken}/message");
+        req.Headers.Add("X-Keep-Request-Version", "not-a-guid");
+        req.Content = JsonContent.Create(new { message = "Hello?" });
+        var response = await _client.SendAsync(req);
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("KeepRequest.ExpectedVersionInvalid", body.GetProperty("code").GetString());
+    }
+
+    [Fact]
+    public async Task PostMessage_StaleVersionHeader_Returns409RequestChangedWithNoSideEffects()
+    {
+        var staleVersion = Guid.NewGuid(); // Valid format, wrong value.
+        var response = await PostCustomerMessage("message", "Stale attempt", version: staleVersion);
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("KeepRequest.RequestChanged", body.GetProperty("code").GetString());
+        Assert.False(body.TryGetProperty("version", out _));
+
+        await using var scope = _factory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+        var eventCount = await db.Set<KeepRequestEvent>().CountAsync(e => e.RequestId == _requestId);
+        Assert.Equal(1, eventCount);
+        var r = await db.Set<KeepRequest>().AsNoTracking().FirstAsync(x => x.Id == _requestId);
+        Assert.Equal(_requestVersion, r.ConcurrencyVersion);
+    }
+
+    [Fact]
+    public async Task PostMessage_StaleVersionReuse_SecondWriteRejectedWithNoEvent()
+    {
+        // First write succeeds and rotates the version.
+        var firstResponse = await PostCustomerMessage("message", "First message", version: _requestVersion);
+        Assert.Equal(HttpStatusCode.OK, firstResponse.StatusCode);
+        var firstBody = await firstResponse.Content.ReadFromJsonAsync<JsonElement>();
+        var firstVersion = Guid.Parse(firstBody.GetProperty("version").GetString()!);
+
+        // Second write reuses the original (now-stale) version.
+        var secondResponse = await PostCustomerMessage("message", "Second attempt", version: _requestVersion);
+        Assert.Equal(HttpStatusCode.Conflict, secondResponse.StatusCode);
+        var errorBody = await secondResponse.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("KeepRequest.RequestChanged", errorBody.GetProperty("code").GetString());
+
+        await using var scope = _factory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+
+        // Only two events: RequestCreated + one MessageAdded. No event from the rejected write.
+        var eventCount = await db.Set<KeepRequestEvent>().CountAsync(e => e.RequestId == _requestId);
+        Assert.Equal(2, eventCount);
+
+        // Persisted version equals the first response's version — not rotated again by the rejected write.
+        var r = await db.Set<KeepRequest>().AsNoTracking().FirstAsync(x => x.Id == _requestId);
+        Assert.Equal(firstVersion, r.ConcurrencyVersion);
+
+        // Request state reflects only the first message: customer-waiting attention was set.
+        Assert.NotNull(r.AttentionSinceUtc);
+        Assert.Equal(AttentionLevel.Waiting, r.AttentionLevel);
+        Assert.Equal(WaitingDirection.Business, r.WaitingDirection);
     }
 }

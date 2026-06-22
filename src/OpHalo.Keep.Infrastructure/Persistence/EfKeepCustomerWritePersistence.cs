@@ -17,10 +17,19 @@ public sealed class EfKeepCustomerWritePersistence(OpHaloDbContext dbContext) : 
             .AsNoTracking()
             .FirstOrDefaultAsync(p => p.AccountId == accountId, ct);
 
-    public async Task CommitAsync(KeepRequest request, KeepRequestEvent newEvent, CancellationToken ct)
+    public async Task<KeepRequestCommitResult> CommitAsync(KeepRequest request, KeepRequestEvent newEvent, CancellationToken ct)
     {
         dbContext.Set<KeepRequestEvent>().Add(newEvent);
-        await dbContext.SaveChangesAsync(ct);
+        request.RotateConcurrencyVersion();
+        try
+        {
+            await dbContext.SaveChangesAsync(ct);
+            return KeepRequestCommitResult.Committed;
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return KeepRequestCommitResult.Conflict;
+        }
     }
 
     public async Task CommitFeedbackAsync(KeepRequest request, CancellationToken ct) =>

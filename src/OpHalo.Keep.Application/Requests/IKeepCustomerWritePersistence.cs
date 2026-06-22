@@ -30,9 +30,12 @@ public interface IKeepCustomerWritePersistence
 
     /// <summary>
     /// Saves the mutated request and the new event atomically in a single SaveChangesAsync.
+    /// Rotates <see cref="KeepRequest.ConcurrencyVersion"/> immediately before SaveChangesAsync.
+    /// Returns <see cref="KeepRequestCommitResult.Committed"/> on success or
+    /// <see cref="KeepRequestCommitResult.Conflict"/> when a concurrent writer won the race.
     /// The request must have been loaded via GetRequestForUpdateAsync on the same DbContext.
     /// </summary>
-    Task CommitAsync(KeepRequest request, KeepRequestEvent newEvent, CancellationToken ct);
+    Task<KeepRequestCommitResult> CommitAsync(KeepRequest request, KeepRequestEvent newEvent, CancellationToken ct);
 
     /// <summary>
     /// Saves the mutated request after feedback submission. No event is created (ADR-137:
