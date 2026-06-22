@@ -967,4 +967,98 @@ public sealed class KeepPersistenceProofTests : IClassFixture<PostgresFixture>, 
         Assert.Contains(persistedEvents, e => e.Id == winnerEvent.Id);
         Assert.DoesNotContain(persistedEvents, e => e.Id == loserEvent.Id);
     }
+
+    // =========================================================================
+    // G5d — Operator/customer cross-path race
+    // =========================================================================
+
+    [Fact]
+    public async Task OperatorAndCustomerRace_OperatorWins_CustomerEventAndStateRolledBack()
+    {
+        // Seed one customer-origin request in Received state with its RequestCreated event.
+        Guid requestId;
+        Guid seedVersion;
+        Guid requestCreatedEventId;
+
+        await using (var seedCtx = CreateContext())
+        {
+            var customer = KeepCustomer.Create(AccountId, "Race Customer", "0499666001");
+            seedCtx.Set<KeepCustomer>().Add(customer);
+            await seedCtx.SaveChangesAsync();
+
+            var request = KeepRequest.CreateFromCustomerIntake(
+                AccountId, customer.Id,
+                "Race Customer", "0499666001", null,
+                "Cross-path race job", "XRACE001", "xrace-tok-001", Now, 60);
+            var createdEvent = KeepRequestEvent.CreateRequestCreated(request.Id, AccountId, Now);
+            seedCtx.Set<KeepRequest>().Add(request);
+            seedCtx.Set<KeepRequestEvent>().Add(createdEvent);
+            await seedCtx.SaveChangesAsync();
+
+            requestId            = request.Id;
+            seedVersion          = request.ConcurrencyVersion;
+            requestCreatedEventId = createdEvent.Id;
+        }
+
+        // Load the same request into two independent contexts.
+        await using var ctx1 = CreateContext();
+        await using var ctx2 = CreateContext();
+
+        var req1 = await ctx1.Set<KeepRequest>().SingleAsync(r => r.Id == requestId);
+        var req2 = await ctx2.Set<KeepRequest>().SingleAsync(r => r.Id == requestId);
+
+        Assert.Equal(seedVersion, req1.ConcurrencyVersion);
+        Assert.Equal(seedVersion, req2.ConcurrencyVersion);
+
+        // Winning operator path: business update on context 1.
+        var winnerResult = req1.AddBusinessUpdate(
+            "Operator winning update", AccountOwnerAccountUserId, "Owner", Now.AddMinutes(1));
+        Assert.True(winnerResult.IsSuccess);
+        var winnerEvent = winnerResult.Value!;
+
+        var sut1 = new OpHalo.Keep.Infrastructure.Persistence.EfKeepRequestOperatePersistence(ctx1);
+        var commitResult1 = await sut1.CommitAsync(req1, winnerEvent, CancellationToken.None);
+        Assert.Equal(OpHalo.Keep.Application.Requests.KeepRequestCommitResult.Committed, commitResult1);
+
+        var winnerVersion = req1.ConcurrencyVersion;
+        Assert.NotEqual(seedVersion, winnerVersion);
+
+        // Losing customer path: customer message on context 2.
+        var loserResult = req2.AddCustomerMessage(
+            MessageIntent.GeneralMessage, "Customer losing message", 60, 240, 60, Now.AddMinutes(2));
+        Assert.True(loserResult.IsSuccess);
+        var loserEvent = loserResult.Value!;
+
+        var sut2 = new OpHalo.Keep.Infrastructure.Persistence.EfKeepCustomerWritePersistence(ctx2);
+        var commitResult2 = await sut2.CommitAsync(req2, loserEvent, CancellationToken.None);
+        Assert.Equal(OpHalo.Keep.Application.Requests.KeepRequestCommitResult.Conflict, commitResult2);
+
+        // Fresh-context assertions: request state matches the operator winner only.
+        await using var verifyCtx = CreateContext();
+        var persisted = await verifyCtx.Set<KeepRequest>().SingleAsync(r => r.Id == requestId);
+
+        Assert.Equal(winnerVersion, persisted.ConcurrencyVersion);
+        Assert.Equal(Now.AddMinutes(1), persisted.LastBusinessActivityAt);
+        Assert.Equal(Now.AddMinutes(1), persisted.FirstRespondedAtUtc);
+        Assert.Equal(AccountOwnerAccountUserId, persisted.FirstResponderAccountUserId);
+        Assert.Equal(winnerEvent.Id, persisted.FirstResponseEventId);
+
+        // Losing customer mutation rolled back: LastCustomerActivityAt stays at intake seed.
+        Assert.Equal(Now, persisted.LastCustomerActivityAt);
+
+        // Attention reflects the winning business response, not the losing customer message.
+        Assert.Equal(AttentionLevel.None, persisted.AttentionLevel);
+        Assert.Equal(WaitingDirection.None, persisted.WaitingDirection);
+        Assert.Null(persisted.AttentionReason);
+        Assert.Null(persisted.AttentionSinceUtc);
+        Assert.Null(persisted.NextAttentionAtUtc);
+
+        // Event rollback: RequestCreated + winner event exist; loser event does not.
+        var persistedEvents = await verifyCtx.Set<KeepRequestEvent>()
+            .Where(e => e.RequestId == requestId)
+            .ToListAsync();
+        Assert.Contains(persistedEvents, e => e.Id == requestCreatedEventId);
+        Assert.Contains(persistedEvents, e => e.Id == winnerEvent.Id);
+        Assert.DoesNotContain(persistedEvents, e => e.Id == loserEvent.Id);
+    }
 }

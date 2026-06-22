@@ -1,10 +1,10 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-06-22 (G5d-2 complete; G5d-3 next)
+**Last updated:** 2026-06-22 (G5d-3 pending approval; G5/G5d complete)
 **Branch:** `main` (no remote yet)
-**Current baseline:** 1181 tests (619 unit · 14 architecture · 548 integration).
+**Current baseline:** 1182 tests (619 unit · 14 architecture · 549 integration).
 **Next free ADR:** ADR-336
-**Next batch: G5d-3 — operator/customer race, full regression, build log, completion docs — REQUIRES DISCOVERY.**
+**Next batch: G6 — Cancelled Customer-Page Expiry Correction — PRE-WORK REQUIRED.**
 
 ---
 
@@ -422,7 +422,7 @@ integration, and full-suite verification with exact counts.
 
 ---
 
-## G5 — Entity-Wide KeepRequest Optimistic Concurrency — DECISIONS LOCKED
+## G5 — Entity-Wide KeepRequest Optimistic Concurrency — COMPLETE
 
 **Finding:** GAP-004
 
@@ -532,9 +532,10 @@ Goal: prevent stale business intent from overwriting newer customer/business sta
 4. **G5d — Customer writes and completion:** split into independently compiling vertical slices:
    - **G5d-1 (complete, `bb8010e`):** customer-message route family. 1178 tests
      (619 unit · 14 architecture · 545 integration).
-   - **G5d-2 (complete):** feedback route. 1181 tests (619 unit · 14 architecture · 548 integration).
-   - **G5d-3 (requires discovery):** operator/customer cross-path race, full regression, build log,
-     decision-status and completion documentation.
+   - **G5d-2 (complete, `3fb154f`):** feedback route. 1181 tests
+     (619 unit · 14 architecture · 548 integration).
+   - **G5d-3 (complete, pending commit approval):** operator/customer cross-path race, build-log/056,
+     ADR-330–335 reconciled. 1182 tests (619 unit · 14 architecture · 549 integration).
 
 Each batch must compile and pass focused tests independently, with targeted discovery and a fresh
 file-level gate before coding. G5 is complete only after all four batches pass. No automatic merge,
@@ -606,12 +607,15 @@ injected into the route and handler. `SubmitFeedbackCommand` carries `Guid Expec
 (missing-header 400, malformed-header 400, stale+over-limit-comment 409 no-side-effect proof).
 OffSeason test sends version header. Full suite: 1181 passed (619 unit · 14 architecture · 548 integration).
 
-### G5d-3 — Remaining completion slice — REQUIRES DISCOVERY
+Commit: `3fb154f`.
 
-Scope: operator-versus-customer two-context first-writer-wins race proof, full regression suite,
-build-log/056, ADR-330–335 and G5 status updates, G6 as next. No source refactor.
+### G5d-3 — Cross-path race and G5 completion — COMPLETE (pending commit approval)
 
-## G6 — Cancelled Customer-Page Expiry Correction — PLANNED
+One `OperatorAndCustomerRace_OperatorWins_CustomerEventAndStateRolledBack` test added to
+`KeepPersistenceProofTests`; `docs/build-log/056` created; ADR-330–335 reconciled to `Implemented`;
+session-log updated. No production source changes. Full suite: 1182 tests (619 · 14 · 549).
+
+## G6 — Cancelled Customer-Page Expiry Correction — PRE-WORK REQUIRED
 
 **Finding:** GAP-011 · **Decision:** ADR-297
 
