@@ -1,10 +1,10 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-06-22 (G6 complete; G7 next)
+**Last updated:** 2026-06-22 (G7a implemented; pending commit approval)
 **Branch:** `main` (no remote yet)
-**Current baseline:** 1188 tests (621 unit · 14 architecture · 553 integration).
+**Current baseline:** 1190 tests (622 unit · 14 architecture · 554 integration).
 **Next free ADR:** ADR-336
-**Next batch: G7 — Feedback Review Hardening — PRE-WORK REQUIRED.**
+**Next batch: G7b — Owner/Admin outbound external-contact exception for Closed unresolved-feedback review state — PRE-WORK REQUIRED.**
 
 ---
 
@@ -133,7 +133,7 @@ Authoritative detail: ADR-330–335 and build-log/056.
 ## G6 — Cancelled Customer-Page Expiry Correction — COMPLETE
 
 **Finding:** GAP-011 · **Decision:** ADR-297 (implemented in part)
-**Commit:** pending approval
+**Commit:** `c120702`
 
 - `KeepRequest.ChangeStatus` sets `ExpiresAtUtc = nowUtc.AddDays(30)` on Cancelled transitions
   via a named `CancelledPageRetentionDays = 30` constant. Closed expiry deferred to Session 6.
@@ -143,19 +143,52 @@ Authoritative detail: ADR-330–335 and build-log/056.
   2 integration customer-page (ADR-120 defensive non-terminal theory).
 - Full suite: 1188 tests (621 unit · 14 architecture · 553 integration). build-log/057.
 
-## G7 — Feedback Review Hardening — PLANNED
+## G7 — Feedback Review Hardening — IN PROGRESS
 
 **Findings:** GAP-017, GAP-018, GAP-020 · **Decision:** ADR-300 reaffirms ADR-263
 
-- Generic acknowledgement rejects active `UnresolvedFeedback`; metadata hides that action.
-- Mark feedback reviewed remains the only review-completion path.
-- Owner/Admin may log internal-only external contact on Closed requests only while unreviewed
-  negative feedback and active UnresolvedFeedback are present; it does not reopen, notify, count
-  first response, clear attention, or mark reviewed. Cancelled remains blocked.
-- Positive comments follow G4 row visibility; full negative comments remain Owner/Admin-only.
-- Correct ADR-282 status/source; Session 6 still owns feedback navigation.
-- Test domain/HTTP bypass prevention, action matrix, contact effects/non-exposure, role comment
-  visibility, and OffSeason behavior.
+G7 is split into three independently compiling sessions:
+
+- **G7a (complete; pending approval):** block generic acknowledgement of `UnresolvedFeedback` and
+  remove its action affordance.
+- **G7b (pre-work required after G7a):** Owner/Admin outbound external-contact exception for exact
+  Closed unresolved-feedback review state, including shared policy and list/detail affordance parity.
+- **G7c (pre-work required after G7b):** positive-comment visibility correction, ADR/deferred-ledger
+  reconciliation, build-log/058, full regression, and G7 completion.
+
+### Locked G7-wide boundaries
+
+- Mark feedback reviewed remains the only operation that completes unresolved-feedback review.
+- The generic acknowledgement exception uses a dedicated 409
+  `KeepRequest.AttentionRequiresFeedbackReview`; it must not masquerade as `AttentionNotRaised`.
+- The G7b contact exception is outbound-only, matching the gap audit's direct-follow-up posture and
+  DEF-064's exact candidate. It supports existing Phone/SMS/Email validation and remains an internal
+  `ExternalContactLogged` event. Only Owner/Admin may use it, and only while the request is Closed
+  with submitted negative, unreviewed feedback and active `UnresolvedFeedback` attention.
+- Closed feedback follow-up updates factual `LastBusinessActivityAt`, but does not reopen/change
+  status, count/set first response, clear/replace attention, mark feedback reviewed, notify the
+  customer, or expose a customer-visible event. All other Closed cases and every Cancelled case
+  retain `TerminalState`; Operator direct attempts remain forbidden.
+- G7b must centralize the exact active-review predicate in Core so domain, service, and shared action
+  policy cannot drift. List/detail affordances consume the shared policy; hard-coded terminal or
+  post-close suppression must not hide the newly valid Owner/Admin contact action.
+- Positive feedback comments are visible to every authenticated role that passes G4 row access.
+  Negative comments remain Owner/Admin-only; Operator/Viewer retain safe feedback boolean/timestamp
+  metadata. `FeedbackCommentVisible` continues to distinguish absent-but-readable from redacted.
+  Feedback review notes remain Owner/Admin-only regardless of positive-comment visibility.
+- ADR-282 is not implemented: navigation belongs to Session 6. G7c corrects its status/source but
+  adds no navigation DTO, route, service, or second mutation command.
+
+### G7a — Generic acknowledgement hardening — COMPLETE (pending commit approval)
+
+- `KeepRequestErrors`: added `AttentionRequiresFeedbackReview` (code `KeepRequest.AttentionRequiresFeedbackReview`).
+- `KeepRequest.AcknowledgeAttention`: rejects `AttentionReason.UnresolvedFeedback` with new error before any mutation.
+- `KeepRequestActionPolicy`: `CanAcknowledgeAttention` excludes `UnresolvedFeedback` attention reason.
+- `ErrorHttpMapper`: new error mapped to 409 Conflict.
+- Unit tests: replaced stale ack-clears-feedback test with blocked-path + state-unchanged + MarkFeedbackReviewed-still-succeeds proof; split ADR-111 terminal test to separate UnresolvedFeedback (false) from other reasons (true).
+- Integration: added G7a seed (Closed + negative feedback) and `AcknowledgeAttention_UnresolvedFeedbackAttention_Returns409AndLeavesStateUnchanged` (version/attention/events unchanged, affordances correct).
+- Full suite: 1190 tests (622 unit · 14 architecture · 554 integration). Build clean. `git diff --check` clean.
+- Commit: pending approval.
 
 ## G8 — Edge Hardening, Ledger Reconciliation, Completion Gate — PLANNED
 

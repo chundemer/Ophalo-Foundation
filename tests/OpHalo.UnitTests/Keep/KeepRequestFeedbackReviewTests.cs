@@ -201,17 +201,29 @@ public class KeepRequestFeedbackReviewTests
     }
 
     [Fact]
-    public void MarkFeedbackReviewed_attention_cleared_externally_returns_unavailable()
+    public void AcknowledgeAttention_on_UnresolvedFeedback_returns_AttentionRequiresFeedbackReview()
     {
-        // D1: if AcknowledgeAttention ran first, MarkFeedbackReviewed returns unavailable.
+        // G7a/ADR-300: generic acknowledgement must not clear UnresolvedFeedback attention.
+        // Prove the error is returned and all state is unchanged, then MarkFeedbackReviewed still succeeds.
         var r = EligibleRequest();
-        r.AcknowledgeAttention("Handled separately.", ActorId, ActorName, BaseTime.AddMinutes(-5));
-        Assert.Equal(AttentionLevel.None, r.AttentionLevel);
+        var preFeedbackReviewedAt = r.FeedbackReviewedAtUtc;
+        var preFeedbackReviewedBy = r.FeedbackReviewedByAccountUserId;
+        var preAttentionLevel = r.AttentionLevel;
+        var preAttentionReason = r.AttentionReason;
 
-        var result = r.MarkFeedbackReviewed(note: null, ActorId, ActorName, BaseTime);
+        var ackResult = r.AcknowledgeAttention("Handled separately.", ActorId, ActorName, BaseTime.AddMinutes(-5));
 
-        Assert.False(result.IsSuccess);
-        Assert.Equal(KeepRequestErrors.FeedbackReviewUnavailable.Code, result.Error!.Code);
+        Assert.False(ackResult.IsSuccess);
+        Assert.Equal(KeepRequestErrors.AttentionRequiresFeedbackReview.Code, ackResult.Error!.Code);
+        Assert.Equal(preAttentionLevel, r.AttentionLevel);
+        Assert.Equal(preAttentionReason, r.AttentionReason);
+        Assert.Equal(preFeedbackReviewedAt, r.FeedbackReviewedAtUtc);
+        Assert.Equal(preFeedbackReviewedBy, r.FeedbackReviewedByAccountUserId);
+
+        // MarkFeedbackReviewed must still succeed on the unchanged request.
+        var reviewResult = r.MarkFeedbackReviewed(note: null, ActorId, ActorName, BaseTime);
+        Assert.True(reviewResult.IsSuccess);
+        Assert.Equal(KeepRequestEventType.FeedbackReviewed, reviewResult.Value!.EventType);
     }
 
     [Fact]

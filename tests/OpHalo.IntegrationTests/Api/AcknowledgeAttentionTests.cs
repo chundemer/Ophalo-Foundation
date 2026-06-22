@@ -35,6 +35,8 @@ public sealed class AcknowledgeAttentionTests : IClassFixture<KeepApiWebFactory>
     private Guid _noAttentionRequestVersion;
     private Guid _terminalWithAttentionRequestId;   // Closed terminal with attention seeded post-close (legacy cleanup scenario)
     private Guid _terminalWithAttentionRequestVersion;
+    private Guid _feedbackAttentionRequestId;        // Closed with UnresolvedFeedback attention (G7a hardening)
+    private Guid _feedbackAttentionRequestVersion;
     private string _ownerCookie = string.Empty;
     private string _viewerCookie = string.Empty;
 
@@ -138,6 +140,26 @@ public sealed class AcknowledgeAttentionTests : IClassFixture<KeepApiWebFactory>
         if (eTerm2.IsSuccess && eTerm2.Value.StatusChangedEvent is not null)
             db.Set<KeepRequestEvent>().Add(eTerm2.Value.StatusChangedEvent);
 
+        // G7a: Closed request with UnresolvedFeedback attention — generic ack must be blocked.
+        var feedbackAttention = KeepRequest.CreateFromCustomerIntake(
+            _accountId, customer.Id,
+            "Jane Smith", "0412345678", null,
+            "Feedback follow-up request", "ATTN004", "token_attn_004", now.AddHours(-72), 60);
+        var eFb1 = feedbackAttention.ChangeStatus(
+            KeepRequestStatus.Resolved, null,
+            graph.Owner.Id, "owner@attention-tests.com", now.AddHours(-48));
+        var eFb2 = feedbackAttention.ChangeStatus(
+            KeepRequestStatus.Closed, null,
+            graph.Owner.Id, "owner@attention-tests.com", now.AddHours(-40));
+        feedbackAttention.SubmitFeedback(wasResolved: false, comment: "Issue not fixed.", priorityResponseTargetMinutes: 60, now.AddHours(-30));
+        db.Set<KeepRequest>().Add(feedbackAttention);
+        db.Set<KeepRequestEvent>().Add(
+            KeepRequestEvent.CreateRequestCreated(feedbackAttention.Id, _accountId, now.AddHours(-72)));
+        if (eFb1.IsSuccess && eFb1.Value.StatusChangedEvent is not null)
+            db.Set<KeepRequestEvent>().Add(eFb1.Value.StatusChangedEvent);
+        if (eFb2.IsSuccess && eFb2.Value.StatusChangedEvent is not null)
+            db.Set<KeepRequestEvent>().Add(eFb2.Value.StatusChangedEvent);
+
         await db.SaveChangesAsync();
 
         _attentionRequestId = attentionRequest.Id;
@@ -146,6 +168,8 @@ public sealed class AcknowledgeAttentionTests : IClassFixture<KeepApiWebFactory>
         _noAttentionRequestVersion = noAttentionRequest.ConcurrencyVersion;
         _terminalWithAttentionRequestId = terminalWithAttention.Id;
         _terminalWithAttentionRequestVersion = terminalWithAttention.ConcurrencyVersion;
+        _feedbackAttentionRequestId = feedbackAttention.Id;
+        _feedbackAttentionRequestVersion = feedbackAttention.ConcurrencyVersion;
 
         var rawOwner = await _factory.SeedSessionAsync(graph.Owner.Id, _accountId);
         _ownerCookie = $"{AuthConstants.CookieName}={rawOwner}";
@@ -266,6 +290,73 @@ public sealed class AcknowledgeAttentionTests : IClassFixture<KeepApiWebFactory>
 
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
         Assert.Equal("KeepRequest.AttentionNotRaised", body.GetProperty("code").GetString());
+    }
+
+    [Fact]
+    public async Task AcknowledgeAttention_UnresolvedFeedbackAttention_Returns409AndLeavesStateUnchanged()
+    {
+        // G7a/ADR-300: generic ack must be blocked when attention reason is UnresolvedFeedback.
+        var response = await AuthRequest(_ownerCookie, _feedbackAttentionRequestVersion).PostAsJsonAsync(
+            $"/keep/requests/{_feedbackAttentionRequestId}/attention/acknowledge",
+            new { reason = "I reviewed this already." });
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("KeepRequest.AttentionRequiresFeedbackReview", body.GetProperty("code").GetString());
+        Assert.False(body.TryGetProperty("version", out _)); // error body must not expose a version
+
+        // Verify DB state is fully unchanged.
+        await using var scope = _factory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+        var stored = await db.Set<KeepRequest>().FindAsync(_feedbackAttentionRequestId);
+        Assert.NotNull(stored);
+
+        // Version not rotated.
+        Assert.Equal(_feedbackAttentionRequestVersion, stored.ConcurrencyVersion);
+
+        // All attention fields unchanged.
+        Assert.Equal(AttentionLevel.Waiting, stored.AttentionLevel);
+        Assert.Equal(WaitingDirection.Business, stored.WaitingDirection);
+        Assert.Equal(AttentionReason.UnresolvedFeedback, stored.AttentionReason);
+        Assert.True(stored.AttentionSinceUtc.HasValue);
+        Assert.True(stored.NextAttentionAtUtc.HasValue);
+        Assert.False(stored.AttentionClearedAtUtc.HasValue);
+        Assert.False(stored.AttentionClearedByAccountUserId.HasValue);
+        Assert.Null(stored.AttentionClearReason);
+
+        // Original feedback fields unchanged.
+        Assert.Equal(false, stored.FeedbackWasResolved);
+        Assert.Equal("Issue not fixed.", stored.FeedbackComment);
+        Assert.True(stored.FeedbackSubmittedAtUtc.HasValue);
+        Assert.False(stored.FeedbackReviewedAtUtc.HasValue);
+        Assert.False(stored.FeedbackReviewedByAccountUserId.HasValue);
+
+        // No AttentionAcknowledged event created.
+        var events = db.Set<KeepRequestEvent>()
+            .Where(e => e.RequestId == _feedbackAttentionRequestId)
+            .ToList();
+        Assert.Equal(3, events.Count); // created + resolved + closed only
+        Assert.DoesNotContain(events, e => e.EventType == KeepRequestEventType.AttentionAcknowledged);
+
+        // Detail affordances must reflect the blocked path.
+        var detail = await AuthRequest(_ownerCookie).GetAsync($"/keep/requests/{_feedbackAttentionRequestId}");
+        Assert.Equal(HttpStatusCode.OK, detail.StatusCode);
+        var actions = (await detail.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("availableActions");
+        Assert.False(actions.GetProperty("canAcknowledgeAttention").GetBoolean());
+        Assert.True(actions.GetProperty("canMarkFeedbackReviewed").GetBoolean());
+    }
+
+    [Fact]
+    public async Task AcknowledgeAttention_UnresolvedFeedbackAttention_StaleVersion_Returns409_RequestChanged()
+    {
+        // RequestChanged (version check) must win before the new domain error.
+        var response = await AuthRequest(_ownerCookie, Guid.NewGuid()).PostAsJsonAsync(
+            $"/keep/requests/{_feedbackAttentionRequestId}/attention/acknowledge",
+            new { reason = "I reviewed this already." });
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("KeepRequest.RequestChanged", body.GetProperty("code").GetString());
     }
 
     [Fact]

@@ -224,10 +224,21 @@ public class KeepRequestActionPolicyTests
     }
 
     [Fact]
-    public void Terminal_with_attention_still_allows_acknowledge_attention_ADR111()
+    public void Terminal_UnresolvedFeedback_attention_disables_acknowledge_attention_G7a()
     {
-        // ADR-111: terminal attention cleanup remains available even on Closed/Cancelled.
+        // G7a/ADR-300: UnresolvedFeedback must be resolved via MarkFeedbackReviewed, not generic ack.
         var r = MakeClosed(withNegativeFeedback: true);  // SubmitFeedback sets UnresolvedFeedback attention
+        var d = KeepRequestActionPolicy.Evaluate(r, OwnerWrite());
+        Assert.False(d.CanAcknowledgeAttention);
+        Assert.True(d.CanMarkFeedbackReviewed);
+    }
+
+    [Fact]
+    public void Terminal_non_UnresolvedFeedback_attention_still_allows_acknowledge_attention_ADR111()
+    {
+        // ADR-111: terminal attention cleanup for other reasons remains available.
+        var r = MakeClosed();
+        WithAttention(r, AttentionLevel.NeedsAttention, AttentionReason.CustomerMessage);
         Assert.True(KeepRequestActionPolicy.Evaluate(r, OwnerWrite()).CanAcknowledgeAttention);
     }
 

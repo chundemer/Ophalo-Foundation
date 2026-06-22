@@ -90,7 +90,9 @@ public static class ErrorHttpMapper
 
             var c when c == "KeepRequest.AttentionReasonTooLong" => (StatusCodes.Status400BadRequest, "Bad request.", null),
 
-            var c when c == "KeepRequest.AttentionNotRaised" => (StatusCodes.Status409Conflict, "Conflict.", null),
+            var c when c == "KeepRequest.AttentionNotRaised"               => (StatusCodes.Status409Conflict, "Conflict.", null),
+
+            var c when c == "KeepRequest.AttentionRequiresFeedbackReview"  => (StatusCodes.Status409Conflict, "Conflict.", null),
 
             var c when c == "KeepRequest.CustomerMessageTooLong" => (StatusCodes.Status400BadRequest, "Bad request.", null),
 

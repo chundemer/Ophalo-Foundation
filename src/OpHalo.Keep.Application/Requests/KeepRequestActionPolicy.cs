@@ -53,7 +53,8 @@ public static class KeepRequestActionPolicy
         var isOwnerAdmin  = actor.Role is AccountUserRole.Owner or AccountUserRole.Admin;
         var isOperator    = actor.Role is AccountUserRole.Operator;
         var isNonTerminal = !request.IsTerminal;
-        var hasAttention  = request.AttentionLevel != AttentionLevel.None;
+        var hasAttention  = request.AttentionLevel != AttentionLevel.None
+                         && request.AttentionReason != AttentionReason.UnresolvedFeedback;
         var participation = actor.ActiveParticipation;
         var notifEnabled  = actor.NotificationsEnabled;
 

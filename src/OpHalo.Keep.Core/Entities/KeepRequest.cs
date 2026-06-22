@@ -296,6 +296,7 @@ public sealed class KeepRequest : BaseEntity
     /// <summary>
     /// Acknowledges active attention without customer communication. Creates an internal
     /// AttentionAcknowledged event and does not count as first response (D5/B2-gamma).
+    /// UnresolvedFeedback attention is excluded; it must be resolved via MarkFeedbackReviewed (G7a/ADR-300).
     /// </summary>
     public Result<KeepRequestEvent> AcknowledgeAttention(
         string reason,
@@ -316,6 +317,10 @@ public sealed class KeepRequest : BaseEntity
 
         if (AttentionLevel == AttentionLevel.None)
             return Result<KeepRequestEvent>.Failure(KeepRequestErrors.AttentionNotRaised);
+
+        // G7a/ADR-300: UnresolvedFeedback must be resolved via MarkFeedbackReviewed, not generic ack.
+        if (AttentionReason == Enums.AttentionReason.UnresolvedFeedback)
+            return Result<KeepRequestEvent>.Failure(KeepRequestErrors.AttentionRequiresFeedbackReview);
 
         AttentionLevel = AttentionLevel.None;
         WaitingDirection = WaitingDirection.None;
