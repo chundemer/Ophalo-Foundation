@@ -5,7 +5,6 @@ using OpHalo.Foundation.Application.Accounts.Entitlements;
 using OpHalo.Foundation.Core.Entities.Accounts.Enums;
 using OpHalo.Keep.Application.Abstractions;
 using OpHalo.Keep.Core.Domain;
-using OpHalo.Keep.Core.Entities.Enums;
 using OpHalo.Keep.Core.Errors;
 using OpHalo.SharedKernel.Abstractions;
 using OpHalo.SharedKernel.Results;
@@ -153,25 +152,16 @@ public sealed class SelfWatchService(
         var participants = await readPersistence.GetParticipantsAsync(request.Id, ct);
         var businessName = await readPersistence.GetAccountBusinessNameAsync(currentUser.AccountId, ct);
 
-        var isOwnerOrAdmin = role is AccountUserRole.Owner or AccountUserRole.Admin;
+        // CanWrite=true: OffSeason/blocked already rejected in AuthAsync (IsReadOnly/IsBlocked gate).
         var currentUserRow = participants.FirstOrDefault(
             p => p.AccountUserId == currentUser.UserId && p.DetachedAtUtc is null);
-
-        var availableActions = new AvailableActionsMetadata(
-            CanChangeStatus:           !request.IsTerminal,
-            CanSendBusinessUpdate:     !request.IsTerminal,
-            CanAddInternalNote:        true,
-            CanAcknowledgeAttention:   KeepRequestDetailMapper.CanAcknowledgeAttention(true, request),
-            CanLogExternalContact:     !request.IsTerminal,
-            CanAssignResponsible:      isOwnerOrAdmin && !request.IsTerminal,
-            CanWatch:                  !request.IsTerminal && currentUserRow is null,
-            CanUnwatch:                !request.IsTerminal && currentUserRow?.ParticipationType == ParticipationType.Watching,
-            CanMute:                   !request.IsTerminal && currentUserRow is not null && currentUserRow.NotificationsEnabled,
-            CanUnmute:                 !request.IsTerminal && currentUserRow is not null && !currentUserRow.NotificationsEnabled,
-            CanMarkFeedbackReviewed:   KeepRequestDetailMapper.CanMarkFeedbackReviewed(canWrite: true, isOwnerOrAdmin, request),
-            AllowedStatuses:           !request.IsTerminal
-                ? KeepRequestDetailMapper.ComputeAllowedStatuses(request.Status)
-                : []);
+        var actorContext = new KeepRequestActionContext(
+            Role:                 role,
+            CanWrite:             true,
+            ActiveParticipation:  currentUserRow?.ParticipationType,
+            NotificationsEnabled: currentUserRow is not null ? currentUserRow.NotificationsEnabled : null);
+        var actionDecision   = KeepRequestActionPolicy.Evaluate(request, actorContext);
+        var availableActions = KeepRequestDetailMapper.ToAvailableActionsMetadata(actionDecision);
 
         return KeepRequestDetailMapper.ToDetailResult(
             request, businessName ?? string.Empty, participants, events,

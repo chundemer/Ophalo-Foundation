@@ -285,7 +285,16 @@ public sealed class KeepRequestListPersistence(OpHaloDbContext dbContext) : IKee
                 r.PriorityBand,
                 r.AttentionLevel,
                 r.Description.Length > 160 ? r.Description.Substring(0, 161) : r.Description,
-                r.Description.Length > 160))
+                r.Description.Length > 160,
+                // Internal-only: is the current user already an active Watcher on this row?
+                // On Available rows the current user is never the eligible Responsible, so this
+                // fully determines the policy CanWatch condition without exposing participation.
+                dbContext.Set<KeepRequestParticipant>().Any(p =>
+                    p.RequestId == r.Id &&
+                    p.AccountUserId == currentAccountUserId &&
+                    p.AccountId == accountId &&
+                    p.DetachedAtUtc == null &&
+                    p.ParticipationType == ParticipationType.Watching)))
             .ToListAsync(ct);
     }
 

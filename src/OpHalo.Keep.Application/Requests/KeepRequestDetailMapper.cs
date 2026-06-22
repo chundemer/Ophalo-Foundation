@@ -127,36 +127,6 @@ internal static class KeepRequestDetailMapper
         };
     }
 
-    internal static IReadOnlyList<string> ComputeAllowedStatuses(KeepRequestStatus current) =>
-        current switch
-        {
-            KeepRequestStatus.Received
-            or KeepRequestStatus.Scheduled
-            or KeepRequestStatus.InProgress
-            or KeepRequestStatus.PendingCustomer =>
-                ["scheduled", "in_progress", "pending_customer", "resolved", "cancelled"],
-
-            KeepRequestStatus.Resolved =>
-                ["in_progress", "pending_customer", "closed", "cancelled"],
-
-            KeepRequestStatus.Closed or KeepRequestStatus.Cancelled =>
-                [],
-
-            _ => throw new InvalidOperationException($"Unknown KeepRequestStatus: {current}")
-        };
-
-    internal static bool CanAcknowledgeAttention(bool canOperate, KeepRequest request) =>
-        canOperate && request.AttentionLevel != AttentionLevel.None;
-
-    internal static bool CanMarkFeedbackReviewed(bool canWrite, bool isOwnerOrAdmin, KeepRequest request) =>
-        isOwnerOrAdmin && canWrite
-        && request.Status == KeepRequestStatus.Closed
-        && request.FeedbackSubmittedAtUtc.HasValue
-        && request.FeedbackWasResolved == false
-        && !request.FeedbackReviewedAtUtc.HasValue
-        && request.AttentionLevel != AttentionLevel.None
-        && request.AttentionReason == AttentionReason.UnresolvedFeedback;
-
     private static string? ComputeReviewAgeBucket(KeepRequest request, DateTime nowUtc)
     {
         if (!request.FeedbackSubmittedAtUtc.HasValue

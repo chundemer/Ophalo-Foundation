@@ -1,10 +1,11 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-06-21 (G4e-1 committed as 74f26a8; G4e-2 complete)
+**Last updated:** 2026-06-21 (G4e-3 complete; G4/G4e closed; G5 is the next fresh gate)
 **Branch:** `main` (no remote yet)
-**Current baseline:** 1107 tests (619 unit · 14 architecture · 474 integration)
+**Current baseline:** 1109 tests (619 unit · 14 architecture · 476 integration)
 **Next free ADR:** ADR-330
-**Next batch: G4e-3** — participation, feedback, and completion. Present the file-level gate before coding.
+**Next batch: G5 — entity-wide KeepRequest optimistic concurrency.** Fresh pre-implementation gate
+required (not yet pre-worked); inspect the smallest relevant surface and stop for confirmation.
 
 ---
 
@@ -90,6 +91,18 @@ For every implementation slice:
   list, and business-create responses. Corrected list quick/contact actions to consume the shared
   decision, including OffSeason and feedback-review suppression. ADR-326–329; build-log/053;
   commit 74f26a8.
+- **G4e-2 complete — 1107 tests.** Status-change, business-update, internal-note, acknowledgement,
+  and external-contact services derive `AvailableActionsMetadata` from the shared policy evaluated
+  post-mutation. No coarse pre-mutation rejection; guard ordering, terminal/no-op behavior, and
+  endpoint errors preserved. build-log/054; commit f4e2d28.
+- **G4e-3 complete — 1109 tests. G4/G4e CLOSED.** Migrated the final five mutation services
+  (responsible, watcher, self-watch, mute, feedback-review) to the shared policy post-mutation.
+  Removed superseded mapper helpers (`ComputeAllowedStatuses`, `CanAcknowledgeAttention`,
+  `CanMarkFeedbackReviewed`) after proving zero callers; corrected the stale
+  `KeepRequestActionDecision` XML claim. Review correction: Available list now gates per-row
+  `CanWatch` on an internal SQL `CurrentUserIsWatching` flag so an already-Watching Operator is
+  denied the watch affordance (policy parity; ADR-328 updated). Zero `new AvailableActionsMetadata`
+  outside the central mapper. build-log/055.
 
 Historical Phase 8-B1 through B5 Session 5 completion detail is intentionally omitted here. Use
 build logs 025–046 and ADR-084–294 when needed; do not reload those histories for G4 unless a
@@ -97,7 +110,7 @@ specific signature or locked behavior requires a targeted read.
 
 ---
 
-## G4 — Shared Request-Row and Action Authorization — IN PROGRESS
+## G4 — Shared Request-Row and Action Authorization — COMPLETE
 
 **Finding:** GAP-003
 **Decisions:** ADR-319–325
@@ -231,7 +244,7 @@ exit inventory names every migrated path, and the full suite is green.
 
 #### G4e — Shared action-policy migration and completion gate
 
-**Pre-work complete 2026-06-21. G4e-1 committed (74f26a8); G4e-2 complete; G4e-3 next (file-level gate required). ADR-326–329.**
+**COMPLETE 2026-06-21. G4e-1 (74f26a8) · G4e-2 (f4e2d28) · G4e-3 (build-log/055). ADR-326–329. G4/G4e closed.**
 
 The policy is a pure, deterministic, O(1) Application-layer policy with no EF, current-user,
 HTTP, network, or clock dependency. It accepts a request plus this actor context:
@@ -341,9 +354,54 @@ covers nonsense, abusive, inappropriate, accidental, or otherwise non-operationa
    capability rejection added; domain guard ordering, terminal same-status/no-op behavior, validation
    precedence, and endpoint errors preserved. New regression: terminal-transition response metadata
    reflects resulting Closed state (isolated seed; asserts a real status_changed event).
-3. **G4e-3 — participation, feedback, and completion — NEXT (file-level gate required before
-   coding):** migrate responsible, watcher, self-watch, mute, and feedback-review services; remove
-   old helpers after zero callers; complete the G4 path inventory and full verification.
+3. **G4e-3 — participation, feedback, and completion — COMPLETE (1109 tests, build-log/055):**
+   responsible, watcher, self-watch, mute, and feedback-review response metadata migrated to the
+   shared policy post-mutation; the three superseded mapper helpers removed after zero-caller proof;
+   `KeepRequestActionDecision` XML corrected. G4 path/action inventory recorded in build-log/055;
+   zero `new AvailableActionsMetadata` outside the central mapper. **G4/G4e closed.**
+
+##### G4e-3 file-level implementation gate — APPROVED
+
+No product or architecture decisions remain open for this batch. ADR-326–329 and the clarified
+ADR-328 boundary apply:
+
+- preserve every existing authentication, account, feature, role, row-scope, terminal, target,
+  idempotency, and domain guard in its current order with its current stable error;
+- do not replace pre-row role checks or target-specific service/domain rules with coarse action-policy
+  booleans and do not add a new generic 403 path;
+- after a successful participation/feedback mutation or valid no-op, use the already reloaded
+  participant projection and resulting request state to construct `KeepRequestActionContext` with
+  `CanWrite=true`, evaluate `KeepRequestActionPolicy`, and map through
+  `KeepRequestDetailMapper.ToAvailableActionsMetadata`;
+- retain `CanSelfAssignResponsible`, `CanClearResponsible`, and `CanManageWatchers` as coarse shared
+  policy vocabulary. They do not replace row-before-load or target-specific execution checks and do
+  not expand the current `AvailableActionsMetadata` contract;
+- after all five callers migrate, remove `ComputeAllowedStatuses`, `CanAcknowledgeAttention`, and
+  `CanMarkFeedbackReviewed` from `KeepRequestDetailMapper` only after proving zero callers;
+- remove imports made unused by deleting the inline metadata formulas; make no unrelated cleanup.
+
+Exact files for the bounded batch:
+
+1. `src/OpHalo.Keep.Application/Requests/ManageResponsibleService.cs`
+2. `src/OpHalo.Keep.Application/Requests/ManageWatcherService.cs`
+3. `src/OpHalo.Keep.Application/Requests/SelfWatchService.cs`
+4. `src/OpHalo.Keep.Application/Requests/MuteService.cs`
+5. `src/OpHalo.Keep.Application/Requests/MarkFeedbackReviewedService.cs`
+6. `src/OpHalo.Keep.Application/Requests/KeepRequestDetailMapper.cs`
+7. `src/OpHalo.Keep.Application/Requests/KeepRequestActionDecision.cs` — correct the stale XML
+   claim that internal-only capabilities are consumed as mutation execution gates
+8. `tests/OpHalo.IntegrationTests/Api/KeepRequestParticipationApiTests.cs` — add post-mutation
+   action-metadata assertions to isolated existing self-watch and mute success paths
+9. `docs/build-log/055-gap-g4e-shared-action-policy-completion.md` — record G4e-3 and the complete
+   G4 path/action inventory, zero-caller proof, corrections, and exact verification
+10. `docs/session-log.md` — mark G4/G4e complete, record exact counts/commit state, and make G5 the
+    next fresh pre-implementation gate
+
+Existing `KeepFeedbackReviewApiTests` already prove post-review
+`canMarkFeedbackReviewed=false`; do not add duplicate coverage unless implementation reveals a real
+gap. Final checks must show zero direct `new AvailableActionsMetadata` construction outside the one
+central mapper and zero callers of the three removed helpers, followed by build, unit, architecture,
+integration, and full-suite verification with exact counts.
 
 ##### Final verification gate
 

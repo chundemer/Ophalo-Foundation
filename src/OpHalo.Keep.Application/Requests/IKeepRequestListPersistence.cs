@@ -139,7 +139,12 @@ public sealed record KeepRequestParticipantSummary(
 /// <summary>
 /// Narrow projection returned by GetAvailableRequestsAsync. Contains only the locked
 /// Available fields plus a bounded description prefix for preview construction.
-/// No customer contact, events, feedback, page token, or participation data (G4d).
+/// No customer contact, events, feedback, page token, or participation data is exposed (G4d).
+/// CurrentUserIsWatching is an internal SQL-computed flag (never surfaced in the API contract)
+/// used only to align the per-row CanWatch affordance with the shared action policy: an Available
+/// row the current user is already Watching must report CanWatch=false (G4e-3 correction). On an
+/// Available row the current user is never the eligible Responsible, so this flag fully captures
+/// the policy's "no current participation" condition for CanWatch.
 /// </summary>
 public sealed record KeepRequestAvailableRow(
     Guid RequestId,
@@ -152,4 +157,5 @@ public sealed record KeepRequestAvailableRow(
     PriorityBand PriorityBand,
     AttentionLevel AttentionLevel,
     string RawDescriptionPrefix,
-    bool DescriptionWasTruncated);
+    bool DescriptionWasTruncated,
+    bool CurrentUserIsWatching);

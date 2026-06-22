@@ -7,8 +7,10 @@ namespace OpHalo.Keep.Application.Requests;
 /// Use <see cref="KeepRequestActionPolicy.DenyAll"/> for the canonical deny-all singleton.
 /// AllowedStatuses contains enum-valued actual transitions and excludes the current status.
 /// Same-status command semantics remain domain-authoritative and do not use this list as a gate.
-/// Internal capabilities (SelfAssign, ClearResponsible, ManageWatchers) do not expand the
-/// current AvailableActionsMetadata contract; they are consumed by mutation services in G4e-2/3.
+/// Internal capabilities (SelfAssign, ClearResponsible, ManageWatchers) are advisory shared
+/// policy vocabulary; they are not consumed as mutation execution gates and do not expand the
+/// current AvailableActionsMetadata contract. Row-before-load and target-specific service/domain
+/// checks remain authoritative for execution.
 /// </summary>
 public sealed record KeepRequestActionDecision(
     bool CanChangeStatus,

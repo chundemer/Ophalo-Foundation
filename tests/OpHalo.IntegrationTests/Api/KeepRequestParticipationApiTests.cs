@@ -690,6 +690,13 @@ public sealed class KeepRequestParticipationApiTests : IClassFixture<KeepApiWebF
 
         Assert.Equal(_operatorAccountUserId.ToString(), watcher.GetProperty("accountUserId").GetString());
         Assert.True(watcher.GetProperty("notificationsEnabled").GetBoolean());
+
+        // G4e-3: post-mutation action metadata reflects the resulting Watching/notifications-on state.
+        var actions = body.GetProperty("availableActions");
+        Assert.False(actions.GetProperty("canWatch").GetBoolean());
+        Assert.True(actions.GetProperty("canUnwatch").GetBoolean());
+        Assert.True(actions.GetProperty("canMute").GetBoolean());
+        Assert.False(actions.GetProperty("canUnmute").GetBoolean());
     }
 
     // =========================================================================
@@ -770,6 +777,13 @@ public sealed class KeepRequestParticipationApiTests : IClassFixture<KeepApiWebF
 
         Assert.Equal(_operatorAccountUserId.ToString(), watcher.GetProperty("accountUserId").GetString());
         Assert.False(watcher.GetProperty("notificationsEnabled").GetBoolean());
+
+        // G4e-3: post-mutation action metadata reflects the resulting Watching/notifications-off state.
+        var actions = body.GetProperty("availableActions");
+        Assert.False(actions.GetProperty("canWatch").GetBoolean());
+        Assert.True(actions.GetProperty("canUnwatch").GetBoolean());
+        Assert.False(actions.GetProperty("canMute").GetBoolean());
+        Assert.True(actions.GetProperty("canUnmute").GetBoolean());
     }
 
     // =========================================================================

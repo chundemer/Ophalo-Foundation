@@ -48,6 +48,7 @@ public sealed class KeepRequestAvailableApiTests : IClassFixture<KeepApiWebFacto
     private Guid _withWatcherId       = Guid.Empty;
     private Guid _detachedRespId      = Guid.Empty;
     private Guid _resolvedId          = Guid.Empty;
+    private Guid _operatorWatchingId  = Guid.Empty;
 
     private static readonly JsonSerializerOptions JsonOpts =
         new() { PropertyNameCaseInsensitive = true };
@@ -207,6 +208,19 @@ public sealed class KeepRequestAvailableApiTests : IClassFixture<KeepApiWebFacto
             withWatcher.Id, accountId, eligRespMember.Id,
             ParticipationType.Watching, notificationsEnabled: false, now));
         _withWatcherId = withWatcher.Id;
+
+        // Request 12b: the operator under test is the Watcher, no Responsible → still Available
+        // (Watching never blocks; operator is eligible). CanWatch must be false because the
+        // current user already participates — matching KeepRequestActionPolicy (G4e-3).
+        var operatorWatching = KeepRequest.CreateFromCustomerIntake(
+            accountId, customer.Id, "Avail Customer", "0400100001", null,
+            "Operator already watching job", "AVL-012B", "avail_tok_012b", now.AddSeconds(-18), 60);
+        db.Set<KeepRequest>().Add(operatorWatching);
+        db.Set<KeepRequestEvent>().Add(KeepRequestEvent.CreateRequestCreated(operatorWatching.Id, accountId, now));
+        db.Set<KeepRequestParticipant>().Add(KeepRequestParticipant.Create(
+            operatorWatching.Id, accountId, opMember.Id,
+            ParticipationType.Watching, notificationsEnabled: true, now));
+        _operatorWatchingId = operatorWatching.Id;
 
         // Request 13: detached Responsible (DetachedAtUtc set) → predicate requires DetachedAtUtc==null → still Available
         var withDetached = KeepRequest.CreateFromCustomerIntake(
@@ -747,6 +761,30 @@ public sealed class KeepRequestAvailableApiTests : IClassFixture<KeepApiWebFacto
         var res  = await GetAvailableAsync();
         var body = await ReadBodyAsync(res);
         Assert.Contains(body.Requests, r => r.RequestId == _withWatcherId);
+    }
+
+    [Fact]
+    public async Task Operator_already_watching_row_is_available_but_canWatch_is_false()
+    {
+        // Watching does not block availability; the row appears. But the current user already
+        // participates, so CanWatch=false (policy parity) while CanSelfAssign stays true.
+        var res  = await GetAvailableAsync();
+        var body = await ReadBodyAsync(res);
+        var item = body.Requests.Single(r => r.RequestId == _operatorWatchingId);
+        Assert.False(item.CanWatch);
+        Assert.True(item.CanSelfAssign);
+    }
+
+    [Fact]
+    public async Task Row_watched_by_another_user_has_canWatch_true_for_current_operator()
+    {
+        // _withWatcherId is watched by a different operator; the current user is a non-participant,
+        // so CanWatch=true.
+        var res  = await GetAvailableAsync();
+        var body = await ReadBodyAsync(res);
+        var item = body.Requests.Single(r => r.RequestId == _withWatcherId);
+        Assert.True(item.CanWatch);
+        Assert.True(item.CanSelfAssign);
     }
 
     [Fact]

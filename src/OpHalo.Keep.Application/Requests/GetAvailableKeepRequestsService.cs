@@ -112,8 +112,11 @@ public sealed class GetAvailableKeepRequestsService(
             accountSnapshot.Purpose,
             PermissionKeys.Keep.RequestsOperate);
 
-        var canSelfAssign = canOperate && !isOffSeason;
-        var canWatch = canOperate && !isOffSeason;
+        // Equivalent coarse policy primitive: ApplyAvailable guarantees non-terminal rows on which
+        // the current eligible user is never the Responsible, so CanSelfAssign reduces to canWrite.
+        // CanWatch additionally honours the policy's "no current participation" condition: a row the
+        // user already Watches reports CanWatch=false, matching KeepRequestActionPolicy (G4e-3).
+        var canWrite = canOperate && !isOffSeason;
 
         var items = page
             .Select(r => new KeepRequestAvailableItem(
@@ -127,8 +130,8 @@ public sealed class GetAvailableKeepRequestsService(
                 PriorityBand:       MapPriorityBand(r.PriorityBand),
                 AttentionLevel:     MapAttentionLevel(r.AttentionLevel),
                 DescriptionPreview: BuildDescriptionPreview(r.RawDescriptionPrefix, r.DescriptionWasTruncated),
-                CanSelfAssign:      canSelfAssign,
-                CanWatch:           canWatch))
+                CanSelfAssign:      canWrite,
+                CanWatch:           canWrite && !r.CurrentUserIsWatching))
             .ToList();
 
         string? nextCursor = null;
