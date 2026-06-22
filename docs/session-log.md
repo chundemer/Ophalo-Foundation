@@ -188,7 +188,7 @@ G7 is split into three independently compiling sessions:
 - Unit tests: replaced stale ack-clears-feedback test with blocked-path + state-unchanged + MarkFeedbackReviewed-still-succeeds proof; split ADR-111 terminal test to separate UnresolvedFeedback (false) from other reasons (true).
 - Integration: added G7a seed (Closed + negative feedback) and `AcknowledgeAttention_UnresolvedFeedbackAttention_Returns409AndLeavesStateUnchanged` (version/attention/events unchanged, affordances correct).
 - Full suite: 1190 tests (622 unit · 14 architecture · 554 integration). Build clean. `git diff --check` clean.
-- Commit: pending approval.
+- Commit: `a9e87bd`.
 
 ## G8 — Edge Hardening, Ledger Reconciliation, Completion Gate — PLANNED
 
