@@ -235,7 +235,7 @@ public sealed class KeepOffSeasonTests : IClassFixture<KeepApiWebFactory>, IAsyn
     [Fact]
     public async Task PutWatcher_OffSeason_Returns403()
     {
-        var response = await AuthRequest().PutAsJsonAsync(
+        var response = await AuthRequest(_requestVersion).PutAsJsonAsync(
             $"/keep/requests/{_requestId}/watchers/{Guid.NewGuid()}", new { });
 
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);

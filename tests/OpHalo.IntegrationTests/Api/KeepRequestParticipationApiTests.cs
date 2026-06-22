@@ -72,6 +72,10 @@ public sealed class KeepRequestParticipationApiTests : IClassFixture<KeepApiWebF
     private Guid _g5c1SetVersionStaleId;
     private Guid _g5c1ClearVersionStaleId;
 
+    // G5c-2: managed watcher stale-version test requests
+    private Guid _g5c2AddWatcherVersionStaleId;
+    private Guid _g5c2RemoveWatcherVersionStaleId;
+
     // G4c: ParticipationEntry scope and Available-entry tests
     private Guid _g4cAvailableSelfAssignAuditRequestId;
     private Guid _g4cAvailableSelfWatchAuditRequestId;
@@ -324,6 +328,10 @@ public sealed class KeepRequestParticipationApiTests : IClassFixture<KeepApiWebF
         // --- G5c-1 seeds ---
         _g5c1SetVersionStaleId   = await SeedRequestAsync(db, _accountId, customer.Id, "5C-SVS", "5c_svs_token", now);
         _g5c1ClearVersionStaleId = await SeedRequestAsync(db, _accountId, customer.Id, "5C-CVS", "5c_cvs_token", now);
+
+        // --- G5c-2 seeds ---
+        _g5c2AddWatcherVersionStaleId    = await SeedRequestAsync(db, _accountId, customer.Id, "5C-AWS", "5c_aws_token", now);
+        _g5c2RemoveWatcherVersionStaleId = await SeedRequestAsync(db, _accountId, customer.Id, "5C-RWS", "5c_rws_token", now);
 
         var versionRows = await db.Set<KeepRequest>().AsNoTracking()
             .Where(r => r.AccountId == _accountId)
@@ -590,19 +598,42 @@ public sealed class KeepRequestParticipationApiTests : IClassFixture<KeepApiWebF
     [Fact]
     public async Task AddWatcher_Operator_Returns403()
     {
-        var response = await AuthRequest(_operatorCookie).PutAsJsonAsync(
-            $"/keep/requests/{_sharedRequestId}/watchers/{_ownerAccountUserId}",
-            new { });
+        var response = await PutWatcherAsync(_operatorCookie, _sharedRequestId, _ownerAccountUserId,
+            new { }, VersionOf(_sharedRequestId));
 
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
 
     [Fact]
+    public async Task RemoveWatcher_NotWatching_Returns200_NoSideEffects()
+    {
+        // _addWatcherRequestId has no pre-seeded watcher. Safe regardless of test order:
+        // InitializeAsync resets and reseeds the database before every test.
+        var submittedVersion = VersionOf(_addWatcherRequestId);
+        var response = await DeleteWatcherAsync(_ownerCookie, _addWatcherRequestId,
+            _operatorAccountUserId, null, submittedVersion);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(submittedVersion.ToString("D"), body.GetProperty("version").GetString());
+        Assert.DoesNotContain(body.GetProperty("events").EnumerateArray(),
+            e => e.GetProperty("eventType").GetString() == "participation_changed");
+        Assert.DoesNotContain(body.GetProperty("participants").EnumerateArray(), p =>
+            p.GetProperty("accountUserId").GetString() == _operatorAccountUserId.ToString()
+            && p.GetProperty("participationType").GetString() == "watching"
+            && p.GetProperty("detachedAtUtc").ValueKind == JsonValueKind.Null);
+
+        var fresh = await AuthRequest(_ownerCookie).GetAsync($"/keep/requests/{_addWatcherRequestId}");
+        var freshBody = await fresh.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(submittedVersion.ToString("D"), freshBody.GetProperty("version").GetString());
+    }
+
+    [Fact]
     public async Task AddWatcher_Owner_Adds_Returns200_WithWatcherParticipant()
     {
-        var response = await AuthRequest(_ownerCookie).PutAsJsonAsync(
-            $"/keep/requests/{_addWatcherRequestId}/watchers/{_operatorAccountUserId}",
-            new { note = "Adding for visibility." });
+        var submittedVersion = VersionOf(_addWatcherRequestId);
+        var response = await PutWatcherAsync(_ownerCookie, _addWatcherRequestId, _operatorAccountUserId,
+            new { note = "Adding for visibility." }, submittedVersion);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
@@ -614,14 +645,20 @@ public sealed class KeepRequestParticipationApiTests : IClassFixture<KeepApiWebF
         Assert.Equal(_operatorAccountUserId.ToString(), watcher.GetProperty("accountUserId").GetString());
         Assert.True(watcher.GetProperty("notificationsEnabled").GetBoolean());
         Assert.Equal(JsonValueKind.Null, watcher.GetProperty("detachedAtUtc").ValueKind);
+
+        var returnedVersion = body.GetProperty("version").GetString();
+        Assert.NotEqual(submittedVersion.ToString("D"), returnedVersion);
+
+        var fresh = await AuthRequest(_ownerCookie).GetAsync($"/keep/requests/{_addWatcherRequestId}");
+        var freshBody = await fresh.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(returnedVersion, freshBody.GetProperty("version").GetString());
     }
 
     [Fact]
     public async Task AddWatcher_IneligibleTarget_Returns422_TargetIneligible()
     {
-        var response = await AuthRequest(_ownerCookie).PutAsJsonAsync(
-            $"/keep/requests/{_sharedRequestId}/watchers/{Guid.NewGuid()}",
-            new { });
+        var response = await PutWatcherAsync(_ownerCookie, _sharedRequestId, Guid.NewGuid(),
+            new { }, VersionOf(_sharedRequestId));
 
         Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
@@ -632,9 +669,8 @@ public sealed class KeepRequestParticipationApiTests : IClassFixture<KeepApiWebF
     public async Task AddWatcher_Responsible_Returns409_ResponsibleCannotWatch()
     {
         // _addWatcherResponsibleConflictRequestId has the Operator pre-seeded as Responsible.
-        var response = await AuthRequest(_ownerCookie).PutAsJsonAsync(
-            $"/keep/requests/{_addWatcherResponsibleConflictRequestId}/watchers/{_operatorAccountUserId}",
-            new { });
+        var response = await PutWatcherAsync(_ownerCookie, _addWatcherResponsibleConflictRequestId,
+            _operatorAccountUserId, new { }, VersionOf(_addWatcherResponsibleConflictRequestId));
 
         Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
@@ -648,20 +684,45 @@ public sealed class KeepRequestParticipationApiTests : IClassFixture<KeepApiWebF
     [Fact]
     public async Task RemoveWatcher_Operator_Returns403()
     {
-        var response = await AuthRequest(_operatorCookie).SendAsync(
-            new HttpRequestMessage(HttpMethod.Delete,
-                $"/keep/requests/{_sharedRequestId}/watchers/{_ownerAccountUserId}"));
+        var response = await DeleteWatcherAsync(_operatorCookie, _sharedRequestId, _ownerAccountUserId,
+            null, VersionOf(_sharedRequestId));
 
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task AddWatcher_AlreadyWatching_Returns200_NoSideEffects()
+    {
+        // _removeWatcherRequestId has the Operator pre-seeded as Watching; add is a no-op.
+        // Safe regardless of test order: InitializeAsync resets and reseeds the database before every test.
+        var submittedVersion = VersionOf(_removeWatcherRequestId);
+        var response = await PutWatcherAsync(_ownerCookie, _removeWatcherRequestId,
+            _operatorAccountUserId, null, submittedVersion);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(submittedVersion.ToString("D"), body.GetProperty("version").GetString());
+        Assert.DoesNotContain(body.GetProperty("events").EnumerateArray(),
+            e => e.GetProperty("eventType").GetString() == "participation_changed");
+        var activeWatchers = body.GetProperty("participants").EnumerateArray()
+            .Where(p => p.GetProperty("participationType").GetString() == "watching"
+                     && p.GetProperty("detachedAtUtc").ValueKind == JsonValueKind.Null)
+            .ToList();
+        Assert.Single(activeWatchers);
+        Assert.Equal(_operatorAccountUserId.ToString(), activeWatchers[0].GetProperty("accountUserId").GetString());
+
+        var fresh = await AuthRequest(_ownerCookie).GetAsync($"/keep/requests/{_removeWatcherRequestId}");
+        var freshBody = await fresh.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(submittedVersion.ToString("D"), freshBody.GetProperty("version").GetString());
     }
 
     [Fact]
     public async Task RemoveWatcher_Owner_Removes_Returns200()
     {
         // _removeWatcherRequestId has the Operator pre-seeded as Watching.
-        var response = await AuthRequest(_ownerCookie).SendAsync(
-            new HttpRequestMessage(HttpMethod.Delete,
-                $"/keep/requests/{_removeWatcherRequestId}/watchers/{_operatorAccountUserId}"));
+        var submittedVersion = VersionOf(_removeWatcherRequestId);
+        var response = await DeleteWatcherAsync(_ownerCookie, _removeWatcherRequestId,
+            _operatorAccountUserId, null, submittedVersion);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
@@ -672,15 +733,21 @@ public sealed class KeepRequestParticipationApiTests : IClassFixture<KeepApiWebF
         Assert.DoesNotContain(participants, p =>
             p.GetProperty("participationType").GetString() == "watching"
             && p.GetProperty("detachedAtUtc").ValueKind == JsonValueKind.Null);
+
+        var returnedVersion = body.GetProperty("version").GetString();
+        Assert.NotEqual(submittedVersion.ToString("D"), returnedVersion);
+
+        var fresh = await AuthRequest(_ownerCookie).GetAsync($"/keep/requests/{_removeWatcherRequestId}");
+        var freshBody = await fresh.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(returnedVersion, freshBody.GetProperty("version").GetString());
     }
 
     [Fact]
     public async Task RemoveWatcher_Responsible_Returns409_CannotUnwatchResponsible()
     {
         // _removeWatcherResponsibleConflictRequestId has the Operator pre-seeded as Responsible.
-        var response = await AuthRequest(_ownerCookie).SendAsync(
-            new HttpRequestMessage(HttpMethod.Delete,
-                $"/keep/requests/{_removeWatcherResponsibleConflictRequestId}/watchers/{_operatorAccountUserId}"));
+        var response = await DeleteWatcherAsync(_ownerCookie, _removeWatcherResponsibleConflictRequestId,
+            _operatorAccountUserId, null, VersionOf(_removeWatcherResponsibleConflictRequestId));
 
         Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
@@ -1233,6 +1300,72 @@ public sealed class KeepRequestParticipationApiTests : IClassFixture<KeepApiWebF
     }
 
     // =========================================================================
+    // G5c-2 — managed watcher expected-version enforcement
+    // =========================================================================
+
+    [Fact]
+    public async Task AddWatcher_MissingVersionHeader_Returns400_ExpectedVersionRequired()
+    {
+        var response = await AuthRequest(_ownerCookie).PutAsJsonAsync(
+            $"/keep/requests/{_sharedRequestId}/watchers/{_operatorAccountUserId}",
+            new { });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("KeepRequest.ExpectedVersionRequired", body.GetProperty("code").GetString());
+    }
+
+    [Fact]
+    public async Task RemoveWatcher_MissingVersionHeader_Returns400_ExpectedVersionRequired()
+    {
+        var response = await AuthRequest(_ownerCookie).SendAsync(
+            new HttpRequestMessage(HttpMethod.Delete,
+                $"/keep/requests/{_sharedRequestId}/watchers/{_operatorAccountUserId}"));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("KeepRequest.ExpectedVersionRequired", body.GetProperty("code").GetString());
+    }
+
+    [Fact]
+    public async Task AddWatcher_StaleVersion_Returns409_NoSideEffects()
+    {
+        var response = await PutWatcherAsync(_ownerCookie, _g5c2AddWatcherVersionStaleId,
+            _operatorAccountUserId, new { }, Guid.NewGuid());
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("KeepRequest.RequestChanged", body.GetProperty("code").GetString());
+
+        var detail = await AuthRequest(_ownerCookie).GetAsync($"/keep/requests/{_g5c2AddWatcherVersionStaleId}");
+        Assert.Equal(HttpStatusCode.OK, detail.StatusCode);
+        var detailBody = await detail.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Empty(detailBody.GetProperty("participants").EnumerateArray());
+        Assert.DoesNotContain(detailBody.GetProperty("events").EnumerateArray(),
+            e => e.GetProperty("eventType").GetString() == "participation_changed");
+        Assert.Equal(VersionOf(_g5c2AddWatcherVersionStaleId).ToString("D"), detailBody.GetProperty("version").GetString());
+    }
+
+    [Fact]
+    public async Task RemoveWatcher_StaleVersion_Returns409_NoSideEffects()
+    {
+        var response = await DeleteWatcherAsync(_ownerCookie, _g5c2RemoveWatcherVersionStaleId,
+            _operatorAccountUserId, null, Guid.NewGuid());
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("KeepRequest.RequestChanged", body.GetProperty("code").GetString());
+
+        var detail = await AuthRequest(_ownerCookie).GetAsync($"/keep/requests/{_g5c2RemoveWatcherVersionStaleId}");
+        Assert.Equal(HttpStatusCode.OK, detail.StatusCode);
+        var detailBody = await detail.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Empty(detailBody.GetProperty("participants").EnumerateArray());
+        Assert.DoesNotContain(detailBody.GetProperty("events").EnumerateArray(),
+            e => e.GetProperty("eventType").GetString() == "participation_changed");
+        Assert.Equal(VersionOf(_g5c2RemoveWatcherVersionStaleId).ToString("D"), detailBody.GetProperty("version").GetString());
+    }
+
+    // =========================================================================
     // Helpers
     // =========================================================================
 
@@ -1271,6 +1404,24 @@ public sealed class KeepRequestParticipationApiTests : IClassFixture<KeepApiWebF
     private Task<HttpResponseMessage> DeleteResponsibleAsync(string cookie, Guid requestId, object? body, Guid version)
     {
         var msg = new HttpRequestMessage(HttpMethod.Delete, $"/keep/requests/{requestId}/responsible");
+        if (body != null)
+            msg.Content = JsonContent.Create(body);
+        msg.Headers.Add("X-Keep-Request-Version", version.ToString("D"));
+        return AuthRequest(cookie).SendAsync(msg);
+    }
+
+    private Task<HttpResponseMessage> PutWatcherAsync(string cookie, Guid requestId, Guid targetUserId, object? body, Guid version)
+    {
+        var msg = new HttpRequestMessage(HttpMethod.Put, $"/keep/requests/{requestId}/watchers/{targetUserId}");
+        if (body != null)
+            msg.Content = JsonContent.Create(body);
+        msg.Headers.Add("X-Keep-Request-Version", version.ToString("D"));
+        return AuthRequest(cookie).SendAsync(msg);
+    }
+
+    private Task<HttpResponseMessage> DeleteWatcherAsync(string cookie, Guid requestId, Guid targetUserId, object? body, Guid version)
+    {
+        var msg = new HttpRequestMessage(HttpMethod.Delete, $"/keep/requests/{requestId}/watchers/{targetUserId}");
         if (body != null)
             msg.Content = JsonContent.Create(body);
         msg.Headers.Add("X-Keep-Request-Version", version.ToString("D"));

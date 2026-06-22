@@ -447,11 +447,16 @@ app.MapDelete("/keep/requests/{requestId:guid}/responsible", async (
 app.MapPut("/keep/requests/{requestId:guid}/watchers/{accountUserId:guid}", async (
     Guid requestId,
     Guid accountUserId,
+    HttpRequest httpRequest,
     WatcherRequestBody? body,
     ManageWatcherService service,
     CancellationToken ct) =>
 {
-    var command = new AddWatcherCommand(requestId, accountUserId, body?.Note);
+    var versionResult = KeepRequestVersionHeader.Parse(httpRequest.Headers);
+    if (!versionResult.IsSuccess)
+        return ErrorHttpMapper.ToHttpResult(versionResult.Error);
+
+    var command = new AddWatcherCommand(requestId, accountUserId, body?.Note, versionResult.Value);
     var result = await service.AddAsync(command, ct);
     return result.IsSuccess ? Results.Ok(result.Value) : ErrorHttpMapper.ToHttpResult(result.Error);
 }).RequireAuthorization();
@@ -460,11 +465,16 @@ app.MapPut("/keep/requests/{requestId:guid}/watchers/{accountUserId:guid}", asyn
 app.MapDelete("/keep/requests/{requestId:guid}/watchers/{accountUserId:guid}", async (
     Guid requestId,
     Guid accountUserId,
+    HttpRequest httpRequest,
     [FromBody] WatcherRequestBody? body,
     ManageWatcherService service,
     CancellationToken ct) =>
 {
-    var command = new RemoveWatcherCommand(requestId, accountUserId, body?.Note);
+    var versionResult = KeepRequestVersionHeader.Parse(httpRequest.Headers);
+    if (!versionResult.IsSuccess)
+        return ErrorHttpMapper.ToHttpResult(versionResult.Error);
+
+    var command = new RemoveWatcherCommand(requestId, accountUserId, body?.Note, versionResult.Value);
     var result = await service.RemoveAsync(command, ct);
     return result.IsSuccess ? Results.Ok(result.Value) : ErrorHttpMapper.ToHttpResult(result.Error);
 }).RequireAuthorization();

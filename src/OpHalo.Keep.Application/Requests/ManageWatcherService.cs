@@ -14,12 +14,14 @@ namespace OpHalo.Keep.Application.Requests;
 public sealed record AddWatcherCommand(
     Guid RequestId,
     Guid TargetAccountUserId,
-    string? Note);
+    string? Note,
+    Guid ExpectedVersion);
 
 public sealed record RemoveWatcherCommand(
     Guid RequestId,
     Guid TargetAccountUserId,
-    string? Note);
+    string? Note,
+    Guid ExpectedVersion);
 
 public sealed class ManageWatcherService(
     IKeepRequestOperatePersistence operatePersistence,
@@ -50,6 +52,10 @@ public sealed class ManageWatcherService(
             KeepRequestVisibilityScope.AccountWide, ct);
         if (request is null)
             return Result<KeepRequestDetailResult>.Failure(KeepRequestErrors.NotFound);
+
+        if (request.ConcurrencyVersion != command.ExpectedVersion)
+            return Result<KeepRequestDetailResult>.Failure(KeepRequestErrors.RequestChanged);
+
         if (request.IsTerminal)
             return Result<KeepRequestDetailResult>.Failure(KeepRequestErrors.TerminalState);
 
@@ -71,7 +77,19 @@ public sealed class ManageWatcherService(
 
         // ADR-230: no-op (target already watching) returns detail without side effects.
         if (!domainResult.Value.IsNoOp)
-            await operatePersistence.CommitParticipationAsync(domainResult.Value.NewParticipants, domainResult.Value.Event, ct);
+        {
+            var commitResult = await operatePersistence.CommitParticipationAsync(
+                request, domainResult.Value.NewParticipants, domainResult.Value.Event, ct);
+            switch (commitResult)
+            {
+                case KeepRequestCommitResult.Committed:
+                    break;
+                case KeepRequestCommitResult.Conflict:
+                    return Result<KeepRequestDetailResult>.Failure(KeepRequestErrors.RequestChanged);
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(commitResult));
+            }
+        }
 
         return Result<KeepRequestDetailResult>.Success(await BuildDetailAsync(request, userSnapshot.Role, nowUtc, ct));
     }
@@ -92,6 +110,10 @@ public sealed class ManageWatcherService(
             KeepRequestVisibilityScope.AccountWide, ct);
         if (request is null)
             return Result<KeepRequestDetailResult>.Failure(KeepRequestErrors.NotFound);
+
+        if (request.ConcurrencyVersion != command.ExpectedVersion)
+            return Result<KeepRequestDetailResult>.Failure(KeepRequestErrors.RequestChanged);
+
         if (request.IsTerminal)
             return Result<KeepRequestDetailResult>.Failure(KeepRequestErrors.TerminalState);
 
@@ -129,7 +151,19 @@ public sealed class ManageWatcherService(
 
         // ADR-230: no-op (target not watching) returns detail without side effects.
         if (!domainResult.Value.IsNoOp)
-            await operatePersistence.CommitParticipationAsync(domainResult.Value.NewParticipants, domainResult.Value.Event, ct);
+        {
+            var commitResult = await operatePersistence.CommitParticipationAsync(
+                request, domainResult.Value.NewParticipants, domainResult.Value.Event, ct);
+            switch (commitResult)
+            {
+                case KeepRequestCommitResult.Committed:
+                    break;
+                case KeepRequestCommitResult.Conflict:
+                    return Result<KeepRequestDetailResult>.Failure(KeepRequestErrors.RequestChanged);
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(commitResult));
+            }
+        }
 
         return Result<KeepRequestDetailResult>.Success(await BuildDetailAsync(request, userSnapshot.Role, nowUtc, ct));
     }
