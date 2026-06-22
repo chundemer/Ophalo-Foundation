@@ -412,11 +412,16 @@ app.MapGet("/keep/requests/participant-candidates", async (
 // Assign/transfer responsible — authenticated, Owner/Admin write (Phase 8-B5/Session 3B, ADR-230)
 app.MapPut("/keep/requests/{requestId:guid}/responsible", async (
     Guid requestId,
+    HttpRequest httpRequest,
     SetResponsibleRequestBody body,
     ManageResponsibleService service,
     CancellationToken ct) =>
 {
-    var command = new SetResponsibleCommand(requestId, body.AccountUserId, body.Note);
+    var versionResult = KeepRequestVersionHeader.Parse(httpRequest.Headers);
+    if (!versionResult.IsSuccess)
+        return ErrorHttpMapper.ToHttpResult(versionResult.Error);
+
+    var command = new SetResponsibleCommand(requestId, body.AccountUserId, body.Note, versionResult.Value);
     var result = await service.SetAsync(command, ct);
     return result.IsSuccess ? Results.Ok(result.Value) : ErrorHttpMapper.ToHttpResult(result.Error);
 }).RequireAuthorization();
@@ -424,11 +429,16 @@ app.MapPut("/keep/requests/{requestId:guid}/responsible", async (
 // Clear responsible — authenticated, Owner/Admin write (Phase 8-B5/Session 3B, ADR-230)
 app.MapDelete("/keep/requests/{requestId:guid}/responsible", async (
     Guid requestId,
+    HttpRequest httpRequest,
     [FromBody] ClearResponsibleRequestBody? body,
     ManageResponsibleService service,
     CancellationToken ct) =>
 {
-    var command = new ClearResponsibleCommand(requestId, body?.Note);
+    var versionResult = KeepRequestVersionHeader.Parse(httpRequest.Headers);
+    if (!versionResult.IsSuccess)
+        return ErrorHttpMapper.ToHttpResult(versionResult.Error);
+
+    var command = new ClearResponsibleCommand(requestId, body?.Note, versionResult.Value);
     var result = await service.ClearAsync(command, ct);
     return result.IsSuccess ? Results.Ok(result.Value) : ErrorHttpMapper.ToHttpResult(result.Error);
 }).RequireAuthorization();

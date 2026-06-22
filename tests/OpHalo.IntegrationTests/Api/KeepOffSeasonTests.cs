@@ -225,7 +225,7 @@ public sealed class KeepOffSeasonTests : IClassFixture<KeepApiWebFactory>, IAsyn
     [Fact]
     public async Task PutResponsible_OffSeason_Returns403()
     {
-        var response = await AuthRequest().PutAsJsonAsync(
+        var response = await AuthRequest(_requestVersion).PutAsJsonAsync(
             $"/keep/requests/{_requestId}/responsible",
             new { accountUserId = Guid.NewGuid() });
 

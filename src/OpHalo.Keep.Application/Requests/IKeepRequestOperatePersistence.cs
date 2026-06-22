@@ -81,6 +81,20 @@ public interface IKeepRequestOperatePersistence
         IReadOnlyList<KeepRequestParticipant> newParticipants,
         KeepRequestEvent? newEvent,
         CancellationToken ct);
+
+    /// <summary>
+    /// Versioned participation commit (G5c/ADR-333). Inserts newParticipants and newEvent (when
+    /// non-null), rotates <paramref name="request"/>'s ConcurrencyVersion immediately before
+    /// SaveChangesAsync, and returns <see cref="KeepRequestCommitResult.Committed"/> on success
+    /// or <see cref="KeepRequestCommitResult.Conflict"/> on DbUpdateConcurrencyException.
+    /// The request must have been loaded via GetVisibleRequestForUpdateAsync on the same
+    /// DbContext instance. All other exceptions propagate.
+    /// </summary>
+    Task<KeepRequestCommitResult> CommitParticipationAsync(
+        KeepRequest request,
+        IReadOnlyList<KeepRequestParticipant> newParticipants,
+        KeepRequestEvent? newEvent,
+        CancellationToken ct);
 }
 
 /// <summary>

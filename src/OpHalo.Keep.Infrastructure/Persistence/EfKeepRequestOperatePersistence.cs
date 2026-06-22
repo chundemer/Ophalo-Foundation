@@ -159,4 +159,29 @@ public sealed class EfKeepRequestOperatePersistence(OpHaloDbContext dbContext) :
 
         await dbContext.SaveChangesAsync(ct);
     }
+
+    public async Task<KeepRequestCommitResult> CommitParticipationAsync(
+        KeepRequest request,
+        IReadOnlyList<KeepRequestParticipant> newParticipants,
+        KeepRequestEvent? newEvent,
+        CancellationToken ct)
+    {
+        foreach (var p in newParticipants)
+            dbContext.Set<KeepRequestParticipant>().Add(p);
+
+        if (newEvent is not null)
+            dbContext.Set<KeepRequestEvent>().Add(newEvent);
+
+        request.RotateConcurrencyVersion();
+
+        try
+        {
+            await dbContext.SaveChangesAsync(ct);
+            return KeepRequestCommitResult.Committed;
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return KeepRequestCommitResult.Conflict;
+        }
+    }
 }

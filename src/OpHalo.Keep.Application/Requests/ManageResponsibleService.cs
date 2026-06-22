@@ -15,11 +15,13 @@ namespace OpHalo.Keep.Application.Requests;
 public sealed record SetResponsibleCommand(
     Guid RequestId,
     Guid TargetAccountUserId,
-    string? Note);
+    string? Note,
+    Guid ExpectedVersion);
 
 public sealed record ClearResponsibleCommand(
     Guid RequestId,
-    string? Note);
+    string? Note,
+    Guid ExpectedVersion);
 
 public sealed class ManageResponsibleService(
     IKeepRequestOperatePersistence operatePersistence,
@@ -61,6 +63,10 @@ public sealed class ManageResponsibleService(
             command.RequestId, currentUser.AccountId, currentUser.UserId, scope, ct);
         if (request is null)
             return Result<KeepRequestDetailResult>.Failure(KeepRequestErrors.NotFound);
+
+        if (request.ConcurrencyVersion != command.ExpectedVersion)
+            return Result<KeepRequestDetailResult>.Failure(KeepRequestErrors.RequestChanged);
+
         if (request.IsTerminal)
             return Result<KeepRequestDetailResult>.Failure(KeepRequestErrors.TerminalState);
 
@@ -96,9 +102,21 @@ public sealed class ManageResponsibleService(
         if (domainResult.IsFailure)
             return Result<KeepRequestDetailResult>.Failure(domainResult.Error);
 
-        // ADR-230: no-op writes return detail but create no side effects.
+        // ADR-230: no-op writes return detail but create no side effects (version unchanged, no commit).
         if (!domainResult.Value.IsNoOp)
-            await operatePersistence.CommitParticipationAsync(domainResult.Value.NewParticipants, domainResult.Value.Event, ct);
+        {
+            var commitResult = await operatePersistence.CommitParticipationAsync(
+                request, domainResult.Value.NewParticipants, domainResult.Value.Event, ct);
+            switch (commitResult)
+            {
+                case KeepRequestCommitResult.Committed:
+                    break;
+                case KeepRequestCommitResult.Conflict:
+                    return Result<KeepRequestDetailResult>.Failure(KeepRequestErrors.RequestChanged);
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(commitResult));
+            }
+        }
 
         return Result<KeepRequestDetailResult>.Success(await BuildDetailAsync(request, userSnapshot.Role, nowUtc, ct));
     }
@@ -119,6 +137,10 @@ public sealed class ManageResponsibleService(
             KeepRequestVisibilityScope.AccountWide, ct);
         if (request is null)
             return Result<KeepRequestDetailResult>.Failure(KeepRequestErrors.NotFound);
+
+        if (request.ConcurrencyVersion != command.ExpectedVersion)
+            return Result<KeepRequestDetailResult>.Failure(KeepRequestErrors.RequestChanged);
+
         if (request.IsTerminal)
             return Result<KeepRequestDetailResult>.Failure(KeepRequestErrors.TerminalState);
 
@@ -142,9 +164,21 @@ public sealed class ManageResponsibleService(
         if (domainResult.IsFailure)
             return Result<KeepRequestDetailResult>.Failure(domainResult.Error);
 
-        // ADR-230: no-op (nothing to clear) returns detail without side effects.
+        // ADR-230: no-op (nothing to clear) returns detail without side effects (version unchanged, no commit).
         if (!domainResult.Value.IsNoOp)
-            await operatePersistence.CommitParticipationAsync(domainResult.Value.NewParticipants, domainResult.Value.Event, ct);
+        {
+            var commitResult = await operatePersistence.CommitParticipationAsync(
+                request, domainResult.Value.NewParticipants, domainResult.Value.Event, ct);
+            switch (commitResult)
+            {
+                case KeepRequestCommitResult.Committed:
+                    break;
+                case KeepRequestCommitResult.Conflict:
+                    return Result<KeepRequestDetailResult>.Failure(KeepRequestErrors.RequestChanged);
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(commitResult));
+            }
+        }
 
         return Result<KeepRequestDetailResult>.Success(await BuildDetailAsync(request, userSnapshot.Role, nowUtc, ct));
     }

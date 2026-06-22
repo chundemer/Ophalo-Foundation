@@ -1,12 +1,11 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-06-22 (G5b committed; G5c pre-work is next)
+**Last updated:** 2026-06-22 (G5c-1 complete — 1150 tests)
 **Branch:** `main` (no remote yet)
-**Current baseline:** 1109 tests (619 unit · 14 architecture · 476 integration); G5b focused gate:
-136 integration (9 fixtures) · 619 unit · 14 architecture · 15 G5a regressions — all passed.
-Full-suite re-run and new integration baseline to be established at G5c/G5d completion.
+**Current baseline:** 1150 tests (619 unit · 14 architecture · 517 integration). Full-suite
+re-run baseline to be established at G5c/G5d completion.
 **Next free ADR:** ADR-336
-**Next batch: G5c — Participation mutations — PRE-WORK REQUIRED.** Discovery needed before implementation.
+**Next batch: G5c-2 — managed watcher add/remove concurrency.**
 
 ---
 
@@ -25,7 +24,8 @@ For every implementation slice:
 - inspect current signatures and failure modes before calling existing code;
 - always present the file-level gate before writing; when pre-work is complete it is a mechanical
   caller/signature gate, while incomplete pre-work also requires design decisions and approval;
-- keep the slice within roughly 8–10 files and one coherent concern;
+- enforce the hard slice gate: at most 3 mutation routes, 8 production files, and 12 total changed
+  files including tests/fakes/docs; coherent cross-cutting scope never overrides the limits;
 - preserve fail-closed account, row, action, and public-token behavior;
 - add focused authorization/regression tests and run the proportionate broader suite;
 - self-review for policy drift, accidental visibility expansion, untested direct-ID paths, stale
@@ -519,8 +519,13 @@ Goal: prevent stale business intent from overwriting newer customer/business sta
    (9 fixtures) · 619 unit · 14 architecture · 15 G5a regressions — all passed. One typo fix
    (`KeepRequestEvent.KeepRequestId` → `RequestId` in race test); `CommitAsync` XML doc updated.
    `RotateConcurrencyVersion()` added to `KeepRequest`; `KeepRequestCommitResult` enum introduced.
-3. **G5c — Participation mutations:** responsible, managed watchers, self-watch, and mute/unmute
-   enforcement with atomic request-version rotation.
+3. **G5c — Participation mutations:** split by the hard session-size gate; each slice has two routes.
+   - **G5c-1 (next):** responsible set/clear; introduce the final versioned participation-commit
+     overload while retaining the legacy overload for unmigrated G5c callers.
+   - **G5c-2:** managed watcher add/remove.
+   - **G5c-3:** self-watch/unwatch.
+   - **G5c-4:** mute/unmute, remove the zero-caller legacy participation-commit overload, and run
+     participation concurrency completion/race tests.
 4. **G5d — Customer writes and completion:** customer messages/feedback, cross-path race tests, full
    regression suite, build log, and completion documentation.
 
@@ -529,6 +534,48 @@ file-level gate before coding. G5 is complete only after all four batches pass. 
 distributed lock, event sourcing, or frontend draft recovery is included.
 
 ### G5b — COMPLETE
+
+### G5c-1 — COMPLETE (1150 tests: 619 unit · 14 architecture · 517 integration)
+
+This is a two-route vertical slice only:
+
+- `PUT /keep/requests/{requestId}/responsible` (`ManageResponsibleService.SetAsync`)
+- `DELETE /keep/requests/{requestId}/responsible` (`ManageResponsibleService.ClearAsync`)
+
+#### Production changes — DONE (builds clean, 0 errors, 0 warnings)
+
+1. **`src/OpHalo.Api/Program.cs`** — both responsible handlers now receive `HttpRequest httpRequest`,
+   call `KeepRequestVersionHeader.Parse(httpRequest.Headers)`, early-return on failure, and pass
+   `versionResult.Value` as `ExpectedVersion` into the command. Pattern matches G5b handlers exactly.
+2. **`src/OpHalo.Keep.Application/Requests/ManageResponsibleService.cs`** — `Guid ExpectedVersion`
+   added to both `SetResponsibleCommand` and `ClearResponsibleCommand`. Both `SetAsync` and
+   `ClearAsync` compare `request.ConcurrencyVersion != command.ExpectedVersion` after row load and
+   before terminal check, returning `KeepRequestErrors.RequestChanged` on mismatch. No-op paths
+   skip commit entirely (version unchanged). Non-no-op paths use the new versioned overload and map
+   `KeepRequestCommitResult.Conflict` → `KeepRequestErrors.RequestChanged`.
+3. **`src/OpHalo.Keep.Application/Requests/IKeepRequestOperatePersistence.cs`** — legacy
+   `Task CommitParticipationAsync(newParticipants, event, ct)` retained for G5c-2–4 callers. New
+   versioned overload added:
+   `Task<KeepRequestCommitResult> CommitParticipationAsync(KeepRequest request, newParticipants, event, ct)`.
+4. **`src/OpHalo.Keep.Infrastructure/Persistence/EfKeepRequestOperatePersistence.cs`** — new
+   overload implemented: adds participants/event, calls `request.RotateConcurrencyVersion()`, saves,
+   returns `Committed` or catches `DbUpdateConcurrencyException` → `Conflict`. Legacy overload
+   byte-for-byte unchanged.
+5. **`tests/OpHalo.UnitTests/Keep/KeepCreateBusinessRequestServiceTests.cs`** — `FakeOperatePersistence`
+   implements new overload stub (`throw new NotImplementedException()`); unit build passes.
+
+#### Integration tests — COMPLETE
+
+`KeepRequestParticipationApiTests.cs`: `_requestVersions` dictionary captures all seeded versions;
+`PutResponsibleAsync`/`DeleteResponsibleAsync`/`VersionOf` helpers added; all responsible test calls
+updated (403/scope-404 pass `Guid.NewGuid()`, row-visible calls pass `VersionOf`); rotation asserted
+on both success paths; no-op version-unchanged asserted on both no-op paths; 4 new tests:
+`SetResponsible_MissingVersionHeader_Returns400_ExpectedVersionRequired`,
+`DeleteResponsible_MissingVersionHeader_Returns400_ExpectedVersionRequired`,
+`SetResponsible_StaleVersion_Returns409_NoSideEffects`,
+`DeleteResponsible_StaleVersion_Returns409_NoSideEffects`.
+`KeepOffSeasonTests.cs`: `PutResponsible_OffSeason_Returns403` passes `_requestVersion`.
+Full suite: 1150 tests (619 unit · 14 architecture · 517 integration) — all passed.
 
 ## G6 — Cancelled Customer-Page Expiry Correction — PLANNED
 

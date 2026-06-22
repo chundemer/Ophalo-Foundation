@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using OpHalo.Foundation.Application.Accounts.Provisioning;
 using OpHalo.Foundation.Core.Constants;
@@ -65,6 +66,11 @@ public sealed class KeepRequestParticipationApiTests : IClassFixture<KeepApiWebF
     private Guid _operatorSelfAssignRequestId;
     private Guid _operatorSelfAssignAlreadyAssignedRequestId;
     private Guid _operatorSelfAssignIdempotentRequestId;
+
+    // G5c-1: version tracking and stale-version test requests
+    private Dictionary<Guid, Guid> _requestVersions = [];
+    private Guid _g5c1SetVersionStaleId;
+    private Guid _g5c1ClearVersionStaleId;
 
     // G4c: ParticipationEntry scope and Available-entry tests
     private Guid _g4cAvailableSelfAssignAuditRequestId;
@@ -315,6 +321,15 @@ public sealed class KeepRequestParticipationApiTests : IClassFixture<KeepApiWebF
         await db.SaveChangesAsync();
         _g4cTerminalAvailableRequestId = terminalG4c.Id;
 
+        // --- G5c-1 seeds ---
+        _g5c1SetVersionStaleId   = await SeedRequestAsync(db, _accountId, customer.Id, "5C-SVS", "5c_svs_token", now);
+        _g5c1ClearVersionStaleId = await SeedRequestAsync(db, _accountId, customer.Id, "5C-CVS", "5c_cvs_token", now);
+
+        var versionRows = await db.Set<KeepRequest>().AsNoTracking()
+            .Where(r => r.AccountId == _accountId)
+            .Select(r => new { r.Id, r.ConcurrencyVersion }).ToListAsync();
+        _requestVersions = versionRows.ToDictionary(r => r.Id, r => r.ConcurrencyVersion);
+
         // --- Sessions ---
         var rawOwner    = await _factory.SeedSessionAsync(graph.Owner.Id, _accountId);
         var rawOperator = await _factory.SeedSessionAsync(operatorMember.Id, _accountId);
@@ -388,9 +403,8 @@ public sealed class KeepRequestParticipationApiTests : IClassFixture<KeepApiWebF
     [Fact]
     public async Task SetResponsible_Viewer_Returns403()
     {
-        var response = await AuthRequest(_viewerCookie).PutAsJsonAsync(
-            $"/keep/requests/{_sharedRequestId}/responsible",
-            new { accountUserId = _operatorAccountUserId });
+        var response = await PutResponsibleAsync(_viewerCookie, _sharedRequestId,
+            new { accountUserId = _operatorAccountUserId }, Guid.NewGuid());
 
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
@@ -399,9 +413,8 @@ public sealed class KeepRequestParticipationApiTests : IClassFixture<KeepApiWebF
     public async Task SetResponsible_Operator_Returns403_OperatorCannotAssignOther()
     {
         // Operator targeting another user (Owner) — forbidden regardless of request state.
-        var response = await AuthRequest(_operatorCookie).PutAsJsonAsync(
-            $"/keep/requests/{_sharedRequestId}/responsible",
-            new { accountUserId = _ownerAccountUserId });
+        var response = await PutResponsibleAsync(_operatorCookie, _sharedRequestId,
+            new { accountUserId = _ownerAccountUserId }, Guid.NewGuid());
 
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
@@ -411,9 +424,10 @@ public sealed class KeepRequestParticipationApiTests : IClassFixture<KeepApiWebF
     [Fact]
     public async Task SetResponsible_Owner_Assigns_Returns200_WithResponsibleParticipant()
     {
-        var response = await AuthRequest(_ownerCookie).PutAsJsonAsync(
-            $"/keep/requests/{_setResponsibleRequestId}/responsible",
-            new { accountUserId = _operatorAccountUserId, note = "Assigning for follow-up." });
+        var submittedVersion = VersionOf(_setResponsibleRequestId);
+        var response = await PutResponsibleAsync(_ownerCookie, _setResponsibleRequestId,
+            new { accountUserId = _operatorAccountUserId, note = "Assigning for follow-up." },
+            submittedVersion);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
@@ -427,14 +441,22 @@ public sealed class KeepRequestParticipationApiTests : IClassFixture<KeepApiWebF
         Assert.Equal(_operatorAccountUserId.ToString(), responsible.GetProperty("accountUserId").GetString());
         Assert.True(responsible.GetProperty("notificationsEnabled").GetBoolean());
         Assert.Equal(JsonValueKind.Null, responsible.GetProperty("detachedAtUtc").ValueKind);
+
+        await using var scope = _factory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+        var persistedVersion = await db.Set<KeepRequest>().AsNoTracking()
+            .Where(r => r.Id == _setResponsibleRequestId)
+            .Select(r => r.ConcurrencyVersion)
+            .SingleAsync();
+        Assert.NotEqual(submittedVersion, persistedVersion);
+        Assert.Equal(persistedVersion.ToString("D"), body.GetProperty("version").GetString());
     }
 
     [Fact]
     public async Task SetResponsible_IneligibleTarget_Returns422_TargetIneligible()
     {
-        var response = await AuthRequest(_ownerCookie).PutAsJsonAsync(
-            $"/keep/requests/{_sharedRequestId}/responsible",
-            new { accountUserId = Guid.NewGuid() });
+        var response = await PutResponsibleAsync(_ownerCookie, _sharedRequestId,
+            new { accountUserId = Guid.NewGuid() }, VersionOf(_sharedRequestId));
 
         Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
@@ -444,9 +466,8 @@ public sealed class KeepRequestParticipationApiTests : IClassFixture<KeepApiWebF
     [Fact]
     public async Task SetResponsible_NotFound_Returns404()
     {
-        var response = await AuthRequest(_ownerCookie).PutAsJsonAsync(
-            $"/keep/requests/{Guid.NewGuid()}/responsible",
-            new { accountUserId = _operatorAccountUserId });
+        var response = await PutResponsibleAsync(_ownerCookie, Guid.NewGuid(),
+            new { accountUserId = _operatorAccountUserId }, Guid.NewGuid());
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
@@ -456,9 +477,8 @@ public sealed class KeepRequestParticipationApiTests : IClassFixture<KeepApiWebF
     [Fact]
     public async Task SetResponsible_TerminalRequest_Returns409_TerminalState()
     {
-        var response = await AuthRequest(_ownerCookie).PutAsJsonAsync(
-            $"/keep/requests/{_terminalRequestId}/responsible",
-            new { accountUserId = _operatorAccountUserId });
+        var response = await PutResponsibleAsync(_ownerCookie, _terminalRequestId,
+            new { accountUserId = _operatorAccountUserId }, VersionOf(_terminalRequestId));
 
         Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
@@ -470,9 +490,8 @@ public sealed class KeepRequestParticipationApiTests : IClassFixture<KeepApiWebF
     [Fact]
     public async Task SetResponsible_Operator_SelfAssign_UnassignedRequest_Returns200()
     {
-        var response = await AuthRequest(_operatorCookie).PutAsJsonAsync(
-            $"/keep/requests/{_operatorSelfAssignRequestId}/responsible",
-            new { accountUserId = _operatorAccountUserId });
+        var response = await PutResponsibleAsync(_operatorCookie, _operatorSelfAssignRequestId,
+            new { accountUserId = _operatorAccountUserId }, VersionOf(_operatorSelfAssignRequestId));
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }
@@ -482,9 +501,8 @@ public sealed class KeepRequestParticipationApiTests : IClassFixture<KeepApiWebF
     {
         // Owner is pre-seeded as Responsible. ParticipationEntry Available branch is blocked
         // (active eligible Responsible exists) and Operator has no MyWork participation → 404.
-        var response = await AuthRequest(_operatorCookie).PutAsJsonAsync(
-            $"/keep/requests/{_operatorSelfAssignAlreadyAssignedRequestId}/responsible",
-            new { accountUserId = _operatorAccountUserId });
+        var response = await PutResponsibleAsync(_operatorCookie, _operatorSelfAssignAlreadyAssignedRequestId,
+            new { accountUserId = _operatorAccountUserId }, Guid.NewGuid());
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
@@ -495,11 +513,13 @@ public sealed class KeepRequestParticipationApiTests : IClassFixture<KeepApiWebF
     public async Task SetResponsible_Operator_SelfAssign_AlreadyResponsible_IsNoOp_Returns200()
     {
         // Operator is pre-seeded as Responsible; self-assign is idempotent (ADR-230).
-        var response = await AuthRequest(_operatorCookie).PutAsJsonAsync(
-            $"/keep/requests/{_operatorSelfAssignIdempotentRequestId}/responsible",
-            new { accountUserId = _operatorAccountUserId });
+        var submittedVersion = VersionOf(_operatorSelfAssignIdempotentRequestId);
+        var response = await PutResponsibleAsync(_operatorCookie, _operatorSelfAssignIdempotentRequestId,
+            new { accountUserId = _operatorAccountUserId }, submittedVersion);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(submittedVersion.ToString("D"), body.GetProperty("version").GetString());
     }
 
     // =========================================================================
@@ -509,9 +529,7 @@ public sealed class KeepRequestParticipationApiTests : IClassFixture<KeepApiWebF
     [Fact]
     public async Task ClearResponsible_Operator_Returns403_OperatorCannotClear()
     {
-        var response = await AuthRequest(_operatorCookie).SendAsync(
-            new HttpRequestMessage(HttpMethod.Delete,
-                $"/keep/requests/{_sharedRequestId}/responsible"));
+        var response = await DeleteResponsibleAsync(_operatorCookie, _sharedRequestId, null, Guid.NewGuid());
 
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
@@ -522,12 +540,9 @@ public sealed class KeepRequestParticipationApiTests : IClassFixture<KeepApiWebF
     public async Task ClearResponsible_Owner_ClearsExistingResponsible_Returns200()
     {
         // _clearResponsibleRequestId has the Operator pre-seeded as Responsible.
-        var response = await AuthRequest(_ownerCookie).SendAsync(
-            new HttpRequestMessage(HttpMethod.Delete,
-                $"/keep/requests/{_clearResponsibleRequestId}/responsible")
-            {
-                Content = JsonContent.Create(new { note = "Unassigning." })
-            });
+        var submittedVersion = VersionOf(_clearResponsibleRequestId);
+        var response = await DeleteResponsibleAsync(_ownerCookie, _clearResponsibleRequestId,
+            new { note = "Unassigning." }, submittedVersion);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
@@ -538,15 +553,23 @@ public sealed class KeepRequestParticipationApiTests : IClassFixture<KeepApiWebF
         Assert.DoesNotContain(participants, p =>
             p.GetProperty("participationType").GetString() == "responsible"
             && p.GetProperty("detachedAtUtc").ValueKind == JsonValueKind.Null);
+
+        await using var scope = _factory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+        var persistedVersion = await db.Set<KeepRequest>().AsNoTracking()
+            .Where(r => r.Id == _clearResponsibleRequestId)
+            .Select(r => r.ConcurrencyVersion)
+            .SingleAsync();
+        Assert.NotEqual(submittedVersion, persistedVersion);
+        Assert.Equal(persistedVersion.ToString("D"), body.GetProperty("version").GetString());
     }
 
     [Fact]
     public async Task ClearResponsible_NoResponsible_IsNoOp_Returns200()
     {
         // _clearNoResponsibleRequestId has no participants — clearing is a no-op.
-        var response = await AuthRequest(_ownerCookie).SendAsync(
-            new HttpRequestMessage(HttpMethod.Delete,
-                $"/keep/requests/{_clearNoResponsibleRequestId}/responsible"));
+        var submittedVersion = VersionOf(_clearNoResponsibleRequestId);
+        var response = await DeleteResponsibleAsync(_ownerCookie, _clearNoResponsibleRequestId, null, submittedVersion);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
@@ -556,6 +579,8 @@ public sealed class KeepRequestParticipationApiTests : IClassFixture<KeepApiWebF
         var events = body.GetProperty("events").EnumerateArray().ToList();
         Assert.DoesNotContain(events, e =>
             e.GetProperty("eventType").GetString() == "participation_changed");
+
+        Assert.Equal(submittedVersion.ToString("D"), body.GetProperty("version").GetString());
     }
 
     // =========================================================================
@@ -892,9 +917,8 @@ public sealed class KeepRequestParticipationApiTests : IClassFixture<KeepApiWebF
     [Fact]
     public async Task Detail_ParticipationEvent_HasMetadataFields_AfterSetResponsible()
     {
-        var response = await AuthRequest(_ownerCookie).PutAsJsonAsync(
-            $"/keep/requests/{_3cEventMetaRequestId}/responsible",
-            new { accountUserId = _operatorAccountUserId });
+        var response = await PutResponsibleAsync(_ownerCookie, _3cEventMetaRequestId,
+            new { accountUserId = _operatorAccountUserId }, VersionOf(_3cEventMetaRequestId));
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
@@ -913,9 +937,8 @@ public sealed class KeepRequestParticipationApiTests : IClassFixture<KeepApiWebF
     [Fact]
     public async Task List_AfterSetResponsible_ShowsResponsibleDisplayName()
     {
-        var setResponse = await AuthRequest(_ownerCookie).PutAsJsonAsync(
-            $"/keep/requests/{_3cListRespRequestId}/responsible",
-            new { accountUserId = _operatorAccountUserId });
+        var setResponse = await PutResponsibleAsync(_ownerCookie, _3cListRespRequestId,
+            new { accountUserId = _operatorAccountUserId }, VersionOf(_3cListRespRequestId));
         Assert.Equal(HttpStatusCode.OK, setResponse.StatusCode);
 
         var listResponse = await AuthRequest(_ownerCookie).GetAsync("/keep/requests");
@@ -976,9 +999,8 @@ public sealed class KeepRequestParticipationApiTests : IClassFixture<KeepApiWebF
     public async Task G4c_AvailableSelfAssign_PersistsParticipationAndEvent()
     {
         // Unassigned, non-terminal → Available branch admits Operator self-assign.
-        var response = await AuthRequest(_operatorCookie).PutAsJsonAsync(
-            $"/keep/requests/{_g4cAvailableSelfAssignAuditRequestId}/responsible",
-            new { accountUserId = _operatorAccountUserId });
+        var response = await PutResponsibleAsync(_operatorCookie, _g4cAvailableSelfAssignAuditRequestId,
+            new { accountUserId = _operatorAccountUserId }, VersionOf(_g4cAvailableSelfAssignAuditRequestId));
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
@@ -1026,9 +1048,8 @@ public sealed class KeepRequestParticipationApiTests : IClassFixture<KeepApiWebF
     {
         // Owner is Responsible on _operatorSelfAssignAlreadyAssignedRequestId.
         // Operator self-assign → ParticipationEntry blocks → 404, no side effects.
-        var denied = await AuthRequest(_operatorCookie).PutAsJsonAsync(
-            $"/keep/requests/{_operatorSelfAssignAlreadyAssignedRequestId}/responsible",
-            new { accountUserId = _operatorAccountUserId });
+        var denied = await PutResponsibleAsync(_operatorCookie, _operatorSelfAssignAlreadyAssignedRequestId,
+            new { accountUserId = _operatorAccountUserId }, Guid.NewGuid());
         Assert.Equal(HttpStatusCode.NotFound, denied.StatusCode);
 
         // Owner reads detail — only the Owner's Responsible row, no participation_changed events.
@@ -1049,9 +1070,8 @@ public sealed class KeepRequestParticipationApiTests : IClassFixture<KeepApiWebF
     {
         // _g4cTerminalAvailableRequestId is closed with no Operator participation.
         // Available branch requires non-terminal → blocked → 404.
-        var response = await AuthRequest(_operatorCookie).PutAsJsonAsync(
-            $"/keep/requests/{_g4cTerminalAvailableRequestId}/responsible",
-            new { accountUserId = _operatorAccountUserId });
+        var response = await PutResponsibleAsync(_operatorCookie, _g4cTerminalAvailableRequestId,
+            new { accountUserId = _operatorAccountUserId }, Guid.NewGuid());
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
@@ -1075,9 +1095,8 @@ public sealed class KeepRequestParticipationApiTests : IClassFixture<KeepApiWebF
     {
         // _g4cStaleResponsibleEntryRequestId has a Viewer-role Responsible (stale/ineligible).
         // The Available branch ignores it → Operator self-assign succeeds.
-        var response = await AuthRequest(_operatorCookie).PutAsJsonAsync(
-            $"/keep/requests/{_g4cStaleResponsibleEntryRequestId}/responsible",
-            new { accountUserId = _operatorAccountUserId });
+        var response = await PutResponsibleAsync(_operatorCookie, _g4cStaleResponsibleEntryRequestId,
+            new { accountUserId = _operatorAccountUserId }, VersionOf(_g4cStaleResponsibleEntryRequestId));
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
@@ -1127,9 +1146,8 @@ public sealed class KeepRequestParticipationApiTests : IClassFixture<KeepApiWebF
     {
         // Operator is Watching → MyWork grants row access. Owner is Responsible.
         // Self-assign must be blocked (409) with no participation or audit side effects.
-        var denied = await AuthRequest(_operatorCookie).PutAsJsonAsync(
-            $"/keep/requests/{_g4cWatchingWithOtherResponsibleRequestId}/responsible",
-            new { accountUserId = _operatorAccountUserId });
+        var denied = await PutResponsibleAsync(_operatorCookie, _g4cWatchingWithOtherResponsibleRequestId,
+            new { accountUserId = _operatorAccountUserId }, VersionOf(_g4cWatchingWithOtherResponsibleRequestId));
 
         Assert.Equal(HttpStatusCode.Conflict, denied.StatusCode);
         var errorBody = await denied.Content.ReadFromJsonAsync<JsonElement>();
@@ -1148,6 +1166,70 @@ public sealed class KeepRequestParticipationApiTests : IClassFixture<KeepApiWebF
         Assert.Equal(_ownerAccountUserId.ToString(), responsible.GetProperty("accountUserId").GetString());
         Assert.DoesNotContain(body.GetProperty("events").EnumerateArray(),
             e => e.GetProperty("eventType").GetString() == "participation_changed");
+    }
+
+    // =========================================================================
+    // G5c-1 — responsible expected-version enforcement
+    // =========================================================================
+
+    [Fact]
+    public async Task SetResponsible_MissingVersionHeader_Returns400_ExpectedVersionRequired()
+    {
+        var response = await AuthRequest(_ownerCookie).PutAsJsonAsync(
+            $"/keep/requests/{_sharedRequestId}/responsible",
+            new { accountUserId = _operatorAccountUserId });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("KeepRequest.ExpectedVersionRequired", body.GetProperty("code").GetString());
+    }
+
+    [Fact]
+    public async Task DeleteResponsible_MissingVersionHeader_Returns400_ExpectedVersionRequired()
+    {
+        var response = await AuthRequest(_ownerCookie).SendAsync(
+            new HttpRequestMessage(HttpMethod.Delete, $"/keep/requests/{_sharedRequestId}/responsible"));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("KeepRequest.ExpectedVersionRequired", body.GetProperty("code").GetString());
+    }
+
+    [Fact]
+    public async Task SetResponsible_StaleVersion_Returns409_NoSideEffects()
+    {
+        var response = await PutResponsibleAsync(_ownerCookie, _g5c1SetVersionStaleId,
+            new { accountUserId = _operatorAccountUserId }, Guid.NewGuid());
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("KeepRequest.RequestChanged", body.GetProperty("code").GetString());
+
+        var detail = await AuthRequest(_ownerCookie).GetAsync($"/keep/requests/{_g5c1SetVersionStaleId}");
+        Assert.Equal(HttpStatusCode.OK, detail.StatusCode);
+        var detailBody = await detail.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Empty(detailBody.GetProperty("participants").EnumerateArray());
+        Assert.DoesNotContain(detailBody.GetProperty("events").EnumerateArray(),
+            e => e.GetProperty("eventType").GetString() == "participation_changed");
+        Assert.Equal(VersionOf(_g5c1SetVersionStaleId).ToString("D"), detailBody.GetProperty("version").GetString());
+    }
+
+    [Fact]
+    public async Task DeleteResponsible_StaleVersion_Returns409_NoSideEffects()
+    {
+        var response = await DeleteResponsibleAsync(_ownerCookie, _g5c1ClearVersionStaleId, null, Guid.NewGuid());
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("KeepRequest.RequestChanged", body.GetProperty("code").GetString());
+
+        var detail = await AuthRequest(_ownerCookie).GetAsync($"/keep/requests/{_g5c1ClearVersionStaleId}");
+        Assert.Equal(HttpStatusCode.OK, detail.StatusCode);
+        var detailBody = await detail.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Empty(detailBody.GetProperty("participants").EnumerateArray());
+        Assert.DoesNotContain(detailBody.GetProperty("events").EnumerateArray(),
+            e => e.GetProperty("eventType").GetString() == "participation_changed");
+        Assert.Equal(VersionOf(_g5c1ClearVersionStaleId).ToString("D"), detailBody.GetProperty("version").GetString());
     }
 
     // =========================================================================
@@ -1175,4 +1257,25 @@ public sealed class KeepRequestParticipationApiTests : IClassFixture<KeepApiWebF
         client.DefaultRequestHeaders.Add("Cookie", cookie);
         return client;
     }
+
+    private Task<HttpResponseMessage> PutResponsibleAsync(string cookie, Guid requestId, object body, Guid version)
+    {
+        var msg = new HttpRequestMessage(HttpMethod.Put, $"/keep/requests/{requestId}/responsible")
+        {
+            Content = JsonContent.Create(body)
+        };
+        msg.Headers.Add("X-Keep-Request-Version", version.ToString("D"));
+        return AuthRequest(cookie).SendAsync(msg);
+    }
+
+    private Task<HttpResponseMessage> DeleteResponsibleAsync(string cookie, Guid requestId, object? body, Guid version)
+    {
+        var msg = new HttpRequestMessage(HttpMethod.Delete, $"/keep/requests/{requestId}/responsible");
+        if (body != null)
+            msg.Content = JsonContent.Create(body);
+        msg.Headers.Add("X-Keep-Request-Version", version.ToString("D"));
+        return AuthRequest(cookie).SendAsync(msg);
+    }
+
+    private Guid VersionOf(Guid id) => _requestVersions[id];
 }
