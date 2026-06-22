@@ -25,7 +25,7 @@ public sealed class SelfWatchService(
     private static readonly Error Forbidden    = Error.Create("auth.forbidden", "You do not have permission to perform this action.");
 
     public async Task<Result<KeepRequestDetailResult>> WatchAsync(
-        Guid requestId, CancellationToken ct = default)
+        Guid requestId, Guid expectedVersion, CancellationToken ct = default)
     {
         var authResult = await AuthAsync(ct);
         if (authResult.IsFailure) return Result<KeepRequestDetailResult>.Failure(authResult.Error);
@@ -45,6 +45,10 @@ public sealed class SelfWatchService(
             requestId, currentUser.AccountId, currentUser.UserId, watchScope, ct);
         if (request is null)
             return Result<KeepRequestDetailResult>.Failure(KeepRequestErrors.NotFound);
+
+        if (request.ConcurrencyVersion != expectedVersion)
+            return Result<KeepRequestDetailResult>.Failure(KeepRequestErrors.RequestChanged);
+
         if (request.IsTerminal)
             return Result<KeepRequestDetailResult>.Failure(KeepRequestErrors.TerminalState);
 
@@ -60,13 +64,25 @@ public sealed class SelfWatchService(
 
         // ADR-230: no-op (already watching) returns detail without side effects.
         if (!domainResult.Value.IsNoOp)
-            await operatePersistence.CommitParticipationAsync(domainResult.Value.NewParticipants, domainResult.Value.Event, ct);
+        {
+            var commitResult = await operatePersistence.CommitParticipationAsync(
+                request, domainResult.Value.NewParticipants, domainResult.Value.Event, ct);
+            switch (commitResult)
+            {
+                case KeepRequestCommitResult.Committed:
+                    break;
+                case KeepRequestCommitResult.Conflict:
+                    return Result<KeepRequestDetailResult>.Failure(KeepRequestErrors.RequestChanged);
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(commitResult));
+            }
+        }
 
         return Result<KeepRequestDetailResult>.Success(await BuildDetailAsync(request, userSnapshot.Role, nowUtc, ct));
     }
 
     public async Task<Result<KeepRequestDetailResult>> UnwatchAsync(
-        Guid requestId, CancellationToken ct = default)
+        Guid requestId, Guid expectedVersion, CancellationToken ct = default)
     {
         var authResult = await AuthAsync(ct);
         if (authResult.IsFailure) return Result<KeepRequestDetailResult>.Failure(authResult.Error);
@@ -86,6 +102,10 @@ public sealed class SelfWatchService(
             requestId, currentUser.AccountId, currentUser.UserId, unwatchScope, ct);
         if (request is null)
             return Result<KeepRequestDetailResult>.Failure(KeepRequestErrors.NotFound);
+
+        if (request.ConcurrencyVersion != expectedVersion)
+            return Result<KeepRequestDetailResult>.Failure(KeepRequestErrors.RequestChanged);
+
         if (request.IsTerminal)
             return Result<KeepRequestDetailResult>.Failure(KeepRequestErrors.TerminalState);
 
@@ -101,7 +121,19 @@ public sealed class SelfWatchService(
 
         // ADR-230: no-op (not watching) returns detail without side effects.
         if (!domainResult.Value.IsNoOp)
-            await operatePersistence.CommitParticipationAsync(domainResult.Value.NewParticipants, domainResult.Value.Event, ct);
+        {
+            var commitResult = await operatePersistence.CommitParticipationAsync(
+                request, domainResult.Value.NewParticipants, domainResult.Value.Event, ct);
+            switch (commitResult)
+            {
+                case KeepRequestCommitResult.Committed:
+                    break;
+                case KeepRequestCommitResult.Conflict:
+                    return Result<KeepRequestDetailResult>.Failure(KeepRequestErrors.RequestChanged);
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(commitResult));
+            }
+        }
 
         return Result<KeepRequestDetailResult>.Success(await BuildDetailAsync(request, userSnapshot.Role, nowUtc, ct));
     }

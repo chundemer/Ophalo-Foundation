@@ -482,20 +482,30 @@ app.MapDelete("/keep/requests/{requestId:guid}/watchers/{accountUserId:guid}", a
 // Self-watch — authenticated, operator write (Phase 8-B5/Session 3B, ADR-230)
 app.MapPut("/keep/requests/{requestId:guid}/watch", async (
     Guid requestId,
+    HttpRequest httpRequest,
     SelfWatchService service,
     CancellationToken ct) =>
 {
-    var result = await service.WatchAsync(requestId, ct);
+    var versionResult = KeepRequestVersionHeader.Parse(httpRequest.Headers);
+    if (!versionResult.IsSuccess)
+        return ErrorHttpMapper.ToHttpResult(versionResult.Error);
+
+    var result = await service.WatchAsync(requestId, versionResult.Value, ct);
     return result.IsSuccess ? Results.Ok(result.Value) : ErrorHttpMapper.ToHttpResult(result.Error);
 }).RequireAuthorization();
 
 // Self-unwatch — authenticated, operator write (Phase 8-B5/Session 3B, ADR-230)
 app.MapDelete("/keep/requests/{requestId:guid}/watch", async (
     Guid requestId,
+    HttpRequest httpRequest,
     SelfWatchService service,
     CancellationToken ct) =>
 {
-    var result = await service.UnwatchAsync(requestId, ct);
+    var versionResult = KeepRequestVersionHeader.Parse(httpRequest.Headers);
+    if (!versionResult.IsSuccess)
+        return ErrorHttpMapper.ToHttpResult(versionResult.Error);
+
+    var result = await service.UnwatchAsync(requestId, versionResult.Value, ct);
     return result.IsSuccess ? Results.Ok(result.Value) : ErrorHttpMapper.ToHttpResult(result.Error);
 }).RequireAuthorization();
 

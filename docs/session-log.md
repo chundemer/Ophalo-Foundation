@@ -1,10 +1,10 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-06-22 (G5c-2 implemented; awaiting commit)
+**Last updated:** 2026-06-22 (G5c-3 implemented; awaiting commit approval)
 **Branch:** `main` (no remote yet)
-**Current baseline:** 1156 tests (619 unit · 14 architecture · 523 integration).
+**Current baseline:** 1162 tests (619 unit · 14 architecture · 529 integration).
 **Next free ADR:** ADR-336
-**Next batch: G5c-3 — self-watch/unwatch concurrency.**
+**Next batch: G5c-4 — mute/unmute concurrency; remove legacy unversioned participation overload.**
 
 ---
 
@@ -521,8 +521,9 @@ Goal: prevent stale business intent from overwriting newer customer/business sta
 3. **G5c — Participation mutations:** split by the hard session-size gate; each slice has two routes.
    - **G5c-1 (complete, `ab6399b`):** responsible set/clear; introduced the final versioned
      participation-commit overload while retaining the legacy overload for unmigrated G5c callers.
-   - **G5c-2 (awaiting commit):** managed watcher add/remove; 1156 tests (619 unit · 14 arch · 523 integration).
-   - **G5c-3:** self-watch/unwatch.
+   - **G5c-2 (complete, `4998aab`):** managed watcher add/remove; 1156 tests
+     (619 unit · 14 architecture · 523 integration).
+   - **G5c-3 (next):** self-watch/unwatch.
    - **G5c-4:** mute/unmute, remove the zero-caller legacy participation-commit overload, and run
      participation concurrency completion/race tests.
 4. **G5d — Customer writes and completion:** customer messages/feedback, cross-path race tests, full
@@ -654,6 +655,103 @@ fixtures/callers, exact command signature changes, reuse of the existing version
 focused commands, and any concrete drift. If no drift exists, state no decisions remain and stop for
 approval. Expected slice size: two production files, two integration fixtures, and this session-log
 update—well within the hard batch gate.
+
+G5c-2 completion: both managed-watcher routes require/compare the expected version, use the
+versioned participation commit with exhaustive conflict handling, rotate on actual writes, and
+preserve the token on no-op. Missing/stale, success, and add/remove no-op tests verify response and
+persisted versions plus participant/event side effects. Full suite: 1156 passed.
+
+### G5c-3 Claude handoff — PRE-WORK COMPLETE; mechanical preflight only
+
+This is a two-route vertical slice only:
+
+- `PUT /keep/requests/{requestId}/watch` (`SelfWatchService.WatchAsync`)
+- `DELETE /keep/requests/{requestId}/watch` (`SelfWatchService.UnwatchAsync`)
+
+No decisions remain. Reuse ADR-330–335, `KeepRequestVersionHeader`, `KeepRequestCommitResult`, and
+the versioned `CommitParticipationAsync(request, newParticipants, event, ct)` overload. Do not add
+command records merely to carry one scalar; preserve the existing service shape by changing methods
+to `WatchAsync(Guid requestId, Guid expectedVersion, CancellationToken ct)` and
+`UnwatchAsync(Guid requestId, Guid expectedVersion, CancellationToken ct)`.
+
+Exact production files and changes:
+
+1. `src/OpHalo.Api/Program.cs` — inspect only the self-watch and self-unwatch handlers. Add
+   `HttpRequest`, parse `X-Keep-Request-Version` with the existing helper, map parser failure, and
+   pass the typed version into the corresponding service method.
+2. `src/OpHalo.Keep.Application/Requests/SelfWatchService.cs` — add the scalar expected-version
+   parameter to both methods. Preserve the explicit role/scope behavior exactly:
+   - Watch: Owner/Admin `AccountWide`; Operator `ParticipationEntry` (`MyWork ∪ Available`).
+   - Unwatch: Owner/Admin `AccountWide`; Operator `MyWork`.
+   After visible tracked row load, compare version before terminal, participant, or domain checks.
+   Non-no-op paths use the existing versioned participation overload and an exhaustive commit-result
+   switch (`Committed`, `Conflict` → `RequestChanged`, default throw); no-op paths skip commit.
+
+No interface, Infrastructure, Core, mapper, migration, unit-fake, managed-watcher, responsible, or
+mute change belongs in G5c-3. The legacy unversioned participation overload remains for mute/unmute
+until G5c-4 removes it.
+
+Exact callers found during pre-work:
+
+- Production: only the two handlers in `src/OpHalo.Api/Program.cs` call `WatchAsync`/`UnwatchAsync`.
+- `tests/OpHalo.IntegrationTests/Api/KeepRequestParticipationApiTests.cs` — do not read in full.
+  Inspect only:
+  - primary self-watch block around lines 757–828;
+  - self-watch-related existing tests near lines 900–930, 1035–1060, 1090–1112, 1148–1158, and
+    1178–1189;
+  - seed IDs/participant rows around lines 180–235 and G4c IDs around lines 292–325;
+  - existing `_requestVersions` capture and helper area near the end.
+- `tests/OpHalo.IntegrationTests/Api/KeepOffSeasonTests.cs` — only
+  `PutWatch_OffSeason_Returns403` and its existing version-aware `AuthRequest` helper.
+
+No other test file calls the self-watch routes. Confirm once with targeted `rg`.
+
+Locked ordering and behavior:
+
+- Framework authentication and existing account/feature/OffSeason/role gates remain authoritative.
+  Authenticated Viewer/role failures receive a syntactically valid header and remain 403.
+- Row scope executes before expected-version comparison. An Operator unable to enter via
+  ParticipationEntry/MyWork remains 404 even with a stale candidate version; no row existence or
+  current version is disclosed.
+- Version mismatch on a visible row precedes terminal, participant, and domain checks and returns
+  409 `KeepRequest.RequestChanged` with no side effects.
+- Successful self-watch/unwatch rotates exactly once; response version differs from submitted and
+  equals a fresh persisted-row read.
+- Self-watch when already Watching and Owner/Admin self-unwatch when not Watching are valid no-ops:
+  current version required, 200, unchanged response/persisted version, no duplicate/detached
+  participant change, no participation event, and no commit.
+- Responsible users remain unable to unwatch with the existing stable domain error when the version
+  is current.
+- Save-time conflict returns 409 without response building, retry, merge, or version disclosure.
+  G5c-4 owns the final participation race harness.
+- Do not refactor handler parsing, `AuthAsync`, `BuildDetailAsync`, or the earlier display-name
+  behavior while migrating concurrency.
+
+Focused coverage in existing fixtures:
+
+- Both routes: missing header → `ExpectedVersionRequired`; valid stale version on a visible row →
+  `RequestChanged` with persisted version, participant rows, and event count unchanged.
+- Existing authenticated role/domain/404 tests send a valid GUID header and preserve their existing
+  outcomes. `PutWatch_OffSeason_Returns403` sends `_requestVersion` and remains 403.
+- Update the existing Operator self-watch and self-unwatch success tests to prove response/persisted
+  version rotation while retaining participant/action/event assertions.
+- Add self-watch no-op using `_selfUnwatchRequestId` (Operator is already Watching at seed): exactly
+  one active watcher remains, no event, unchanged version.
+- Add self-unwatch no-op using Owner/Admin on `_selfWatchRequestId` (no Owner watcher at seed): no
+  watcher row is created/detached, no event, unchanged version. Operator no-participation is not a
+  no-op—it remains the established MyWork 404.
+- Update every existing self-watch route call listed above with the matching `VersionOf(requestId)`
+  or any valid GUID where row scope intentionally returns 404 before comparison.
+- Do not duplicate malformed-header tests, persistence-race tests, or earlier concurrency matrices.
+
+Reuse `_requestVersions`. Add narrow `PutSelfWatchAsync`/`DeleteSelfWatchAsync` helpers that attach
+the header; do not change seed return types or create a new fixture. xUnit declaration order is not
+an isolation mechanism—each test relies on `InitializeAsync`/`ResetDatabaseAsync` reseeding.
+
+Mechanical preflight output must contain only: confirmed two production files, two test fixtures,
+the two scalar service signatures, the enumerated route callers, focused commands, and concrete
+drift. If none exists, state no decisions remain and stop for approval. Expected slice size: two
+production files, two integration fixtures, and this session-log update.
 
 ## G6 — Cancelled Customer-Page Expiry Correction — PLANNED
 

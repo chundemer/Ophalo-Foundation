@@ -76,6 +76,10 @@ public sealed class KeepRequestParticipationApiTests : IClassFixture<KeepApiWebF
     private Guid _g5c2AddWatcherVersionStaleId;
     private Guid _g5c2RemoveWatcherVersionStaleId;
 
+    // G5c-3: self-watch/unwatch stale-version test requests
+    private Guid _g5c3SelfWatchVersionStaleId;
+    private Guid _g5c3SelfUnwatchVersionStaleId;
+
     // G4c: ParticipationEntry scope and Available-entry tests
     private Guid _g4cAvailableSelfAssignAuditRequestId;
     private Guid _g4cAvailableSelfWatchAuditRequestId;
@@ -332,6 +336,16 @@ public sealed class KeepRequestParticipationApiTests : IClassFixture<KeepApiWebF
         // --- G5c-2 seeds ---
         _g5c2AddWatcherVersionStaleId    = await SeedRequestAsync(db, _accountId, customer.Id, "5C-AWS", "5c_aws_token", now);
         _g5c2RemoveWatcherVersionStaleId = await SeedRequestAsync(db, _accountId, customer.Id, "5C-RWS", "5c_rws_token", now);
+
+        // --- G5c-3 seeds ---
+        _g5c3SelfWatchVersionStaleId   = await SeedRequestAsync(db, _accountId, customer.Id, "5C-SWS", "5c_sws_token", now);
+        _g5c3SelfUnwatchVersionStaleId = await SeedRequestAsync(db, _accountId, customer.Id, "5C-SUS", "5c_sus_token", now);
+
+        // _g5c3SelfUnwatchVersionStaleId: Operator is Watching so MyWork scope admits it.
+        db.Set<KeepRequestParticipant>().Add(KeepRequestParticipant.Create(
+            _g5c3SelfUnwatchVersionStaleId, _accountId, _operatorAccountUserId,
+            ParticipationType.Watching, notificationsEnabled: true, now));
+        await db.SaveChangesAsync();
 
         var versionRows = await db.Set<KeepRequest>().AsNoTracking()
             .Where(r => r.AccountId == _accountId)
@@ -761,8 +775,7 @@ public sealed class KeepRequestParticipationApiTests : IClassFixture<KeepApiWebF
     [Fact]
     public async Task SelfWatch_Viewer_Returns403()
     {
-        var response = await AuthRequest(_viewerCookie).PutAsJsonAsync(
-            $"/keep/requests/{_sharedRequestId}/watch", new { });
+        var response = await PutSelfWatchAsync(_viewerCookie, _sharedRequestId, Guid.NewGuid());
 
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
@@ -770,8 +783,8 @@ public sealed class KeepRequestParticipationApiTests : IClassFixture<KeepApiWebF
     [Fact]
     public async Task SelfWatch_Operator_Returns200_SelfWatching()
     {
-        var response = await AuthRequest(_operatorCookie).PutAsJsonAsync(
-            $"/keep/requests/{_selfWatchRequestId}/watch", new { });
+        var submittedVersion = VersionOf(_selfWatchRequestId);
+        var response = await PutSelfWatchAsync(_operatorCookie, _selfWatchRequestId, submittedVersion);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
@@ -789,6 +802,15 @@ public sealed class KeepRequestParticipationApiTests : IClassFixture<KeepApiWebF
         Assert.True(actions.GetProperty("canUnwatch").GetBoolean());
         Assert.True(actions.GetProperty("canMute").GetBoolean());
         Assert.False(actions.GetProperty("canUnmute").GetBoolean());
+
+        await using var scope = _factory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+        var persistedVersion = await db.Set<KeepRequest>().AsNoTracking()
+            .Where(r => r.Id == _selfWatchRequestId)
+            .Select(r => r.ConcurrencyVersion)
+            .SingleAsync();
+        Assert.NotEqual(submittedVersion, persistedVersion);
+        Assert.Equal(persistedVersion.ToString("D"), body.GetProperty("version").GetString());
     }
 
     // =========================================================================
@@ -799,9 +821,8 @@ public sealed class KeepRequestParticipationApiTests : IClassFixture<KeepApiWebF
     public async Task SelfUnwatch_Operator_AfterWatch_Returns200()
     {
         // _selfUnwatchRequestId has the Operator pre-seeded as Watching.
-        var response = await AuthRequest(_operatorCookie).SendAsync(
-            new HttpRequestMessage(HttpMethod.Delete,
-                $"/keep/requests/{_selfUnwatchRequestId}/watch"));
+        var submittedVersion = VersionOf(_selfUnwatchRequestId);
+        var response = await DeleteSelfWatchAsync(_operatorCookie, _selfUnwatchRequestId, submittedVersion);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
@@ -812,15 +833,23 @@ public sealed class KeepRequestParticipationApiTests : IClassFixture<KeepApiWebF
         Assert.DoesNotContain(participants, p =>
             p.GetProperty("participationType").GetString() == "watching"
             && p.GetProperty("detachedAtUtc").ValueKind == JsonValueKind.Null);
+
+        await using var scope = _factory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+        var persistedVersion = await db.Set<KeepRequest>().AsNoTracking()
+            .Where(r => r.Id == _selfUnwatchRequestId)
+            .Select(r => r.ConcurrencyVersion)
+            .SingleAsync();
+        Assert.NotEqual(submittedVersion, persistedVersion);
+        Assert.Equal(persistedVersion.ToString("D"), body.GetProperty("version").GetString());
     }
 
     [Fact]
     public async Task SelfUnwatch_WhenResponsible_Returns409_CannotUnwatchResponsible()
     {
         // _selfUnwatchResponsibleConflictRequestId has the Operator pre-seeded as Responsible.
-        var response = await AuthRequest(_operatorCookie).SendAsync(
-            new HttpRequestMessage(HttpMethod.Delete,
-                $"/keep/requests/{_selfUnwatchResponsibleConflictRequestId}/watch"));
+        var response = await DeleteSelfWatchAsync(_operatorCookie, _selfUnwatchResponsibleConflictRequestId,
+            VersionOf(_selfUnwatchResponsibleConflictRequestId));
 
         Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
@@ -910,8 +939,8 @@ public sealed class KeepRequestParticipationApiTests : IClassFixture<KeepApiWebF
     [Fact]
     public async Task Detail_CurrentUserParticipation_ShowsWatching_AfterSelfWatch()
     {
-        var response = await AuthRequest(_operatorCookie).PutAsJsonAsync(
-            $"/keep/requests/{_3cCurrentUserPartRequestId}/watch", new { });
+        var response = await PutSelfWatchAsync(_operatorCookie, _3cCurrentUserPartRequestId,
+            VersionOf(_3cCurrentUserPartRequestId));
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
@@ -1043,8 +1072,8 @@ public sealed class KeepRequestParticipationApiTests : IClassFixture<KeepApiWebF
     public async Task CustomerPage_ExcludesParticipationChangedEvents()
     {
         // Create a participation event on the request.
-        var watchResponse = await AuthRequest(_operatorCookie).PutAsJsonAsync(
-            $"/keep/requests/{_3cCustomerPageRequestId}/watch", new { });
+        var watchResponse = await PutSelfWatchAsync(_operatorCookie, _3cCustomerPageRequestId,
+            VersionOf(_3cCustomerPageRequestId));
         Assert.Equal(HttpStatusCode.OK, watchResponse.StatusCode);
 
         // Fetch the customer page (no auth required).
@@ -1091,8 +1120,8 @@ public sealed class KeepRequestParticipationApiTests : IClassFixture<KeepApiWebF
     public async Task G4c_AvailableSelfWatch_PersistsParticipationAndEvent()
     {
         // Unassigned, non-terminal → Available branch admits Operator self-watch.
-        var response = await AuthRequest(_operatorCookie).PutAsJsonAsync(
-            $"/keep/requests/{_g4cAvailableSelfWatchAuditRequestId}/watch", new { });
+        var response = await PutSelfWatchAsync(_operatorCookie, _g4cAvailableSelfWatchAuditRequestId,
+            VersionOf(_g4cAvailableSelfWatchAuditRequestId));
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
@@ -1149,8 +1178,8 @@ public sealed class KeepRequestParticipationApiTests : IClassFixture<KeepApiWebF
     public async Task G4c_TerminalAvailableRequest_SelfWatch_ReturnsNotFound()
     {
         // _g4cTerminalAvailableRequestId is closed with no Operator participation.
-        var response = await AuthRequest(_operatorCookie).PutAsJsonAsync(
-            $"/keep/requests/{_g4cTerminalAvailableRequestId}/watch", new { });
+        // Row scope returns 404 before version check; any GUID suffices.
+        var response = await PutSelfWatchAsync(_operatorCookie, _g4cTerminalAvailableRequestId, Guid.NewGuid());
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
@@ -1179,9 +1208,8 @@ public sealed class KeepRequestParticipationApiTests : IClassFixture<KeepApiWebF
     public async Task G4c_Unwatch_Operator_NoParticipation_ReturnsNotFound()
     {
         // Operator has no participation on _g4cInvisibleUnwatchRequestId → MyWork → null → 404.
-        var response = await AuthRequest(_operatorCookie).SendAsync(
-            new HttpRequestMessage(HttpMethod.Delete,
-                $"/keep/requests/{_g4cInvisibleUnwatchRequestId}/watch"));
+        // Row scope returns 404 before version check; any GUID suffices.
+        var response = await DeleteSelfWatchAsync(_operatorCookie, _g4cInvisibleUnwatchRequestId, Guid.NewGuid());
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
@@ -1366,6 +1394,130 @@ public sealed class KeepRequestParticipationApiTests : IClassFixture<KeepApiWebF
     }
 
     // =========================================================================
+    // G5c-3 — self-watch/unwatch expected-version enforcement
+    // =========================================================================
+
+    [Fact]
+    public async Task SelfWatch_MissingVersionHeader_Returns400_ExpectedVersionRequired()
+    {
+        var response = await AuthRequest(_operatorCookie).PutAsJsonAsync(
+            $"/keep/requests/{_sharedRequestId}/watch", new { });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("KeepRequest.ExpectedVersionRequired", body.GetProperty("code").GetString());
+    }
+
+    [Fact]
+    public async Task SelfUnwatch_MissingVersionHeader_Returns400_ExpectedVersionRequired()
+    {
+        var response = await AuthRequest(_operatorCookie).SendAsync(
+            new HttpRequestMessage(HttpMethod.Delete,
+                $"/keep/requests/{_sharedRequestId}/watch"));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("KeepRequest.ExpectedVersionRequired", body.GetProperty("code").GetString());
+    }
+
+    [Fact]
+    public async Task SelfWatch_StaleVersion_Returns409_NoSideEffects()
+    {
+        // _g5c3SelfWatchVersionStaleId is unassigned; Operator sees it via Available branch.
+        var response = await PutSelfWatchAsync(_operatorCookie, _g5c3SelfWatchVersionStaleId, Guid.NewGuid());
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("KeepRequest.RequestChanged", body.GetProperty("code").GetString());
+
+        var detail = await AuthRequest(_ownerCookie).GetAsync($"/keep/requests/{_g5c3SelfWatchVersionStaleId}");
+        Assert.Equal(HttpStatusCode.OK, detail.StatusCode);
+        var detailBody = await detail.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Empty(detailBody.GetProperty("participants").EnumerateArray());
+        Assert.DoesNotContain(detailBody.GetProperty("events").EnumerateArray(),
+            e => e.GetProperty("eventType").GetString() == "participation_changed");
+        Assert.Equal(VersionOf(_g5c3SelfWatchVersionStaleId).ToString("D"), detailBody.GetProperty("version").GetString());
+    }
+
+    [Fact]
+    public async Task SelfUnwatch_StaleVersion_Returns409_NoSideEffects()
+    {
+        // _g5c3SelfUnwatchVersionStaleId has Operator pre-seeded as Watching (MyWork visible).
+        var response = await DeleteSelfWatchAsync(_operatorCookie, _g5c3SelfUnwatchVersionStaleId, Guid.NewGuid());
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("KeepRequest.RequestChanged", body.GetProperty("code").GetString());
+
+        var detail = await AuthRequest(_ownerCookie).GetAsync($"/keep/requests/{_g5c3SelfUnwatchVersionStaleId}");
+        Assert.Equal(HttpStatusCode.OK, detail.StatusCode);
+        var detailBody = await detail.Content.ReadFromJsonAsync<JsonElement>();
+        var activeWatchers = detailBody.GetProperty("participants").EnumerateArray()
+            .Where(p => p.GetProperty("participationType").GetString() == "watching"
+                     && p.GetProperty("detachedAtUtc").ValueKind == JsonValueKind.Null)
+            .ToList();
+        Assert.Single(activeWatchers);
+        Assert.DoesNotContain(detailBody.GetProperty("events").EnumerateArray(),
+            e => e.GetProperty("eventType").GetString() == "participation_changed");
+        Assert.Equal(VersionOf(_g5c3SelfUnwatchVersionStaleId).ToString("D"), detailBody.GetProperty("version").GetString());
+    }
+
+    [Fact]
+    public async Task SelfWatch_NoOp_AlreadyWatching_Returns200_UnchangedVersion()
+    {
+        // _selfUnwatchRequestId has Operator pre-seeded as Watching; self-watch is a no-op.
+        var submittedVersion = VersionOf(_selfUnwatchRequestId);
+        var response = await PutSelfWatchAsync(_operatorCookie, _selfUnwatchRequestId, submittedVersion);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(submittedVersion.ToString("D"), body.GetProperty("version").GetString());
+
+        var activeWatchers = body.GetProperty("participants").EnumerateArray()
+            .Where(p => p.GetProperty("participationType").GetString() == "watching"
+                     && p.GetProperty("detachedAtUtc").ValueKind == JsonValueKind.Null)
+            .ToList();
+        Assert.Single(activeWatchers);
+        Assert.Equal(_operatorAccountUserId.ToString(), activeWatchers[0].GetProperty("accountUserId").GetString());
+        Assert.DoesNotContain(body.GetProperty("events").EnumerateArray(),
+            e => e.GetProperty("eventType").GetString() == "participation_changed");
+
+        await using var scope = _factory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+        var persistedVersion = await db.Set<KeepRequest>().AsNoTracking()
+            .Where(r => r.Id == _selfUnwatchRequestId)
+            .Select(r => r.ConcurrencyVersion)
+            .SingleAsync();
+        Assert.Equal(submittedVersion, persistedVersion);
+    }
+
+    [Fact]
+    public async Task SelfUnwatch_NoOp_OwnerNotWatching_Returns200_UnchangedVersion()
+    {
+        // _selfWatchRequestId has no Owner watcher at seed; Owner self-unwatch is a no-op.
+        var submittedVersion = VersionOf(_selfWatchRequestId);
+        var response = await DeleteSelfWatchAsync(_ownerCookie, _selfWatchRequestId, submittedVersion);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(submittedVersion.ToString("D"), body.GetProperty("version").GetString());
+
+        Assert.DoesNotContain(body.GetProperty("participants").EnumerateArray(),
+            p => p.GetProperty("participationType").GetString() == "watching"
+              && p.GetProperty("detachedAtUtc").ValueKind == JsonValueKind.Null);
+        Assert.DoesNotContain(body.GetProperty("events").EnumerateArray(),
+            e => e.GetProperty("eventType").GetString() == "participation_changed");
+
+        await using var scope = _factory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+        var persistedVersion = await db.Set<KeepRequest>().AsNoTracking()
+            .Where(r => r.Id == _selfWatchRequestId)
+            .Select(r => r.ConcurrencyVersion)
+            .SingleAsync();
+        Assert.Equal(submittedVersion, persistedVersion);
+    }
+
+    // =========================================================================
     // Helpers
     // =========================================================================
 
@@ -1424,6 +1576,23 @@ public sealed class KeepRequestParticipationApiTests : IClassFixture<KeepApiWebF
         var msg = new HttpRequestMessage(HttpMethod.Delete, $"/keep/requests/{requestId}/watchers/{targetUserId}");
         if (body != null)
             msg.Content = JsonContent.Create(body);
+        msg.Headers.Add("X-Keep-Request-Version", version.ToString("D"));
+        return AuthRequest(cookie).SendAsync(msg);
+    }
+
+    private Task<HttpResponseMessage> PutSelfWatchAsync(string cookie, Guid requestId, Guid version)
+    {
+        var msg = new HttpRequestMessage(HttpMethod.Put, $"/keep/requests/{requestId}/watch")
+        {
+            Content = JsonContent.Create(new { })
+        };
+        msg.Headers.Add("X-Keep-Request-Version", version.ToString("D"));
+        return AuthRequest(cookie).SendAsync(msg);
+    }
+
+    private Task<HttpResponseMessage> DeleteSelfWatchAsync(string cookie, Guid requestId, Guid version)
+    {
+        var msg = new HttpRequestMessage(HttpMethod.Delete, $"/keep/requests/{requestId}/watch");
         msg.Headers.Add("X-Keep-Request-Version", version.ToString("D"));
         return AuthRequest(cookie).SendAsync(msg);
     }
