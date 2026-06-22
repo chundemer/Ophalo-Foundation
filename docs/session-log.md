@@ -1,11 +1,14 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-06-21 (G4e-3 complete; G4/G4e closed; G5 is the next fresh gate)
+**Last updated:** 2026-06-22 (G5a-1 foundation complete; G5a-2 read-surface exposure is next)
 **Branch:** `main` (no remote yet)
-**Current baseline:** 1109 tests (619 unit · 14 architecture · 476 integration)
-**Next free ADR:** ADR-330
-**Next batch: G5 — entity-wide KeepRequest optimistic concurrency.** Fresh pre-implementation gate
-required (not yet pre-worked); inspect the smallest relevant surface and stop for confirmation.
+**Current baseline:** 1109 tests (619 unit · 14 architecture · 476 integration); G5a-1 added 15 focused
+integration tests (14 parser · 1 migration backfill), not yet rolled into a full-suite baseline.
+**Next free ADR:** ADR-336
+**Next batch: G5a-2 — read-surface `version` exposure.** Authenticated detail, standard list,
+Available rows, business-created detail, and the customer page expose the opaque `version`; the
+expired customer-page tombstone returns null. Decisions are locked (ADR-330–334); perform targeted
+discovery, present the file-level gate, and stop before coding.
 
 ---
 
@@ -417,25 +420,102 @@ integration, and full-suite verification with exact counts.
 
 ---
 
-## G5 — Entity-Wide KeepRequest Optimistic Concurrency — PLANNED
+## G5 — Entity-Wide KeepRequest Optimistic Concurrency — DECISIONS LOCKED
 
 **Finding:** GAP-004
 
 Goal: prevent stale business intent from overwriting newer customer/business state.
 
-Locked direction:
+### Locked contract and model
 
-- application-managed opaque concurrency version; do not expose PostgreSQL `xmin`;
-- every relevant `KeepRequest` mutation changes the token;
-- consequential commands require expected version;
-- `DbUpdateConcurrencyException` maps to stable `409 KeepRequest.RequestChanged`;
-- never automatically retry user intent; client refetches;
-- customer writes participate in the same token;
-- append-only exclusions must be explicitly justified;
-- test two-copy races, customer-versus-business races, no secondary event on conflict, and new
-  version after valid sequential writes.
+- `KeepRequest.ConcurrencyVersion` is a required application-managed PostgreSQL `uuid`, represented
+  in .NET as `Guid`. New requests receive `Guid.NewGuid()`; the API exposes the opaque value as
+  `version`. Clients compare and return it but never interpret ordering or meaning. Do not use
+  PostgreSQL `xmin`, timestamps, incrementing integers, database-generated row versions, triggers,
+  or a database default.
+- The migration adds the column nullable, gives every existing row its own nonempty
+  `gen_random_uuid()`, then makes it non-null. EF maps it with `IsConcurrencyToken()` and
+  `ValueGeneratedNever()`. No index is required.
+- The request row, its timeline events, and its participants form one concurrency aggregate. Every
+  successful non-no-op write rotates the request version: status and lifecycle changes, business
+  updates, notes, attention acknowledgement, external contact, customer messages, feedback
+  submission/review, responsible/watcher/self-watch changes, and mute/unmute. Event-only and
+  participation-only writes update the tracked request in the same atomic commit. There are no
+  current append-only exclusions.
+- Reads, failed writes, and valid idempotent no-ops do not rotate the version. Creates require no
+  expected-version header and return their initially generated version.
 
-No automatic merge, distributed lock, event sourcing, or frontend draft recovery in G5.
+### Locked API and error behavior
+
+- Existing-request mutations require exactly one `X-Keep-Request-Version` header. A dedicated API
+  helper trims surrounding whitespace and accepts only the GUID `D` shape; blank, malformed,
+  `Guid.Empty`, duplicate/comma-combined, wildcard, quoted, or braced values fail closed. Missing
+  returns `400 KeepRequest.ExpectedVersionRequired`; invalid returns
+  `400 KeepRequest.ExpectedVersionInvalid`. Application/Core remain unaware of HTTP headers.
+- Authenticated detail, standard list rows, Available rows, business-created detail, the customer
+  page, and every successful mutation response expose `version`. A changing write returns the new
+  version; a no-op returns the unchanged version. Conflict/error responses do not disclose the
+  current version. Projections carry `Guid`; API serialization owns the wire representation, and no
+  extra query is made solely to retrieve it.
+- Authenticated ordering is auth → account/user/feature/OffSeason → role/row visibility → expected
+  version comparison → domain validation/mutation → commit. Invisible and cross-account requests
+  remain 404 rather than leaking a 409. Customer ordering is public token/account/expiry/OffSeason
+  guard → tracked request load → expected version comparison → domain mutation → commit.
+- A valid stale token or an EF race maps to `409 KeepRequest.RequestChanged` with message
+  `The request changed. Refresh and try again.` The response exposes no current version, actor, or
+  state details. Version mismatch occurs before domain validation only after row access succeeds;
+  current-version requests retain existing domain error contracts.
+
+### Locked enforcement and persistence behavior
+
+- Application compares the expected version after authorized tracked load. Persistence rotates the
+  version immediately before its atomic `SaveChangesAsync`; the original EF concurrency value stays
+  in the update predicate. Participation and customer commit methods receive the tracked request so
+  they cannot save aggregate changes without rotating it.
+- Persistence catches only `DbUpdateConcurrencyException` and returns a small typed commit outcome:
+  `Committed` or `Conflict`. Application maps `Conflict` to `KeepRequest.RequestChanged`; unrelated
+  database failures continue to propagate. No-op paths do not call commit.
+- A conflict produces no request/event/participant/audit side effects and no usable replacement
+  token. Never automatically retry, reload-and-reapply, merge, or lock user intent. The client must
+  refetch and make a new decision.
+- Header parsing is explicit in every existing-request mutation handler rather than hidden in
+  middleware, endpoint filters, or `HttpContext.Items`. Existing authorization middleware still
+  runs first, and CORS must permit `X-Keep-Request-Version`.
+
+### Required verification
+
+- Prove missing and every invalid header shape return the named 400 errors; a current version
+  succeeds and rotates; a valid stale version returns the stable 409 without side effects.
+- Prove invisible/cross-account requests remain 404 before comparison, current-version domain
+  validation remains unchanged, and idempotent no-ops retain the same version.
+- Use separate DbContexts to prove first-writer-wins races, including operator-versus-customer and
+  participation-versus-request writes. Prove the losing operation appends no secondary event or
+  participant/audit change.
+- Verify every designated read/mutation surface returns the correct version and test both a new
+  database migration and unique, nonempty backfill of existing rows.
+
+### Bounded implementation batches
+
+1. **G5a — Foundation:** entity/version initialization, EF mapping and migration, errors, strict
+   header parser, version response/projection exposure, and focused tests. Split into two reviewable
+   sub-batches:
+   - **G5a-1 (complete):** `KeepRequest.ConcurrencyVersion` + factory init, EF concurrency-token
+     mapping, `KeepG5ConcurrencyVersion` migration (nullable → `gen_random_uuid()` backfill →
+     non-null), `ExpectedVersionRequired`/`ExpectedVersionInvalid`/`RequestChanged` errors + HTTP
+     mapping, strict `X-Keep-Request-Version` parser (defined, unwired), 15 focused tests. No
+     rotation and no mutation-route header enforcement yet.
+   - **G5a-2 (next):** read-surface `version` exposure across authenticated detail, list, Available,
+     business-created detail, and the customer page (null on the expired tombstone).
+2. **G5b — Operational mutations:** status, updates, notes, contacts, attention, and feedback-review
+   expected-version enforcement and commit handling.
+3. **G5c — Participation mutations:** responsible, managed watchers, self-watch, and mute/unmute
+   enforcement with atomic request-version rotation.
+4. **G5d — Customer writes and completion:** customer messages/feedback, cross-path race tests, full
+   regression suite, build log, and completion documentation.
+
+Each batch must compile and pass focused tests independently, with targeted discovery and a fresh
+file-level gate before coding. G5 is complete only after all four batches pass. No automatic merge,
+distributed lock, event sourcing, or frontend draft recovery is included.
 
 ## G6 — Cancelled Customer-Page Expiry Correction — PLANNED
 

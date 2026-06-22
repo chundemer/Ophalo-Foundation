@@ -104,6 +104,13 @@ public static class ErrorHttpMapper
 
             var c when c == "KeepRequest.OffSeasonUnavailable" => (StatusCodes.Status409Conflict, "Conflict.", null),
 
+            // --- Optimistic concurrency (G5/ADR-332/334) ---
+            // Header parsing failures are 400; a stale token / EF race is a 409. Conflict
+            // behavior is wired by G5b–d; the mapping is defined here in G5a.
+            var c when c == "KeepRequest.ExpectedVersionRequired" => (StatusCodes.Status400BadRequest, "Bad request.", null),
+            var c when c == "KeepRequest.ExpectedVersionInvalid"  => (StatusCodes.Status400BadRequest, "Bad request.", null),
+            var c when c == "KeepRequest.RequestChanged"          => (StatusCodes.Status409Conflict, "Conflict.", null),
+
             // --- Request list query validation errors (ADR-257/258, Sessions 4A/4B) ---
             var c when c == "KeepRequest.RequestListInvalidView"              => (StatusCodes.Status400BadRequest, "Bad request.", null),
             var c when c == "KeepRequest.RequestListViewNotYetAvailable"      => (StatusCodes.Status400BadRequest, "Bad request.", null),

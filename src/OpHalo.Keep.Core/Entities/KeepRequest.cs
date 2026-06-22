@@ -71,6 +71,13 @@ public sealed class KeepRequest : BaseEntity
     public Guid? FeedbackReviewedByAccountUserId { get; private set; }
     public string? FeedbackReviewNote { get; private set; }
 
+    // --- Optimistic concurrency (G5/ADR-330) ---
+
+    // Application-managed opaque concurrency token for the request aggregate (row, events,
+    // participants). New rows receive a random GUID; the API exposes it as `version`. Clients
+    // compare and return it but never interpret ordering. Rotation/enforcement arrives in G5b–d.
+    public Guid ConcurrencyVersion { get; private set; }
+
     /// <summary>
     /// Moves the request to a new status and optionally attaches a customer-visible message.
     /// Returns a KeepStatusChangeOutcome; IsNoOp is true when the call is a same-status
@@ -886,7 +893,8 @@ public sealed class KeepRequest : BaseEntity
                 : null,
             AttentionLevel = AttentionLevel.None,
             WaitingDirection = WaitingDirection.None,
-            PriorityBand = PriorityBand.Standard
+            PriorityBand = PriorityBand.Standard,
+            ConcurrencyVersion = Guid.NewGuid()
         };
     }
 }

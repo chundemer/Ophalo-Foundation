@@ -200,4 +200,15 @@ public static class KeepRequestErrors
 
     public static readonly Error RequestListHistoryViewForbidden =
         Error.Create("KeepRequest.RequestListHistoryViewForbidden", "This view requires Owner or Admin access.");
+
+    // Optimistic concurrency (G5/ADR-330–334). Header enforcement and conflict behavior
+    // are wired by G5b–d; the constants are defined here as the shared foundation.
+    public static readonly Error ExpectedVersionRequired =
+        Error.Create("KeepRequest.ExpectedVersionRequired", "An expected request version is required.");
+
+    public static readonly Error ExpectedVersionInvalid =
+        Error.Create("KeepRequest.ExpectedVersionInvalid", "The expected request version is not a valid version value.");
+
+    public static readonly Error RequestChanged =
+        Error.Create("KeepRequest.RequestChanged", "The request changed. Refresh and try again.");
 }

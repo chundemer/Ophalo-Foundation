@@ -108,6 +108,15 @@ internal sealed class KeepRequestConfiguration : BaseEntityConfiguration<KeepReq
         builder.Property(x => x.FeedbackReviewNote)
             .HasMaxLength(2000);
 
+        // Optimistic concurrency (G5/ADR-330). Application-managed opaque uuid token:
+        // never database-generated, no default, no trigger, no index. EF includes it in
+        // the UPDATE predicate so a stale write maps to DbUpdateConcurrencyException.
+        builder.Property(x => x.ConcurrencyVersion)
+            .HasColumnType("uuid")
+            .IsRequired()
+            .IsConcurrencyToken()
+            .ValueGeneratedNever();
+
         // IsTerminal is a computed C# property — no column.
         builder.Ignore(x => x.IsTerminal);
 
