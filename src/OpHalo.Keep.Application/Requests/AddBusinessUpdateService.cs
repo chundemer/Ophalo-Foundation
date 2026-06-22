@@ -13,7 +13,8 @@ namespace OpHalo.Keep.Application.Requests;
 public sealed record AddBusinessUpdateCommand(
     Guid RequestId,
     string Message,
-    string? SetStatus);
+    string? SetStatus,
+    Guid ExpectedVersion);
 
 public sealed class AddBusinessUpdateService(
     IKeepRequestOperatePersistence operatePersistence,
@@ -69,15 +70,6 @@ public sealed class AddBusinessUpdateService(
         if (!featurePolicy.IsEnabled(accountSnapshot.Plan, FeatureKeys.Keep.OperatorQueue))
             return Result<KeepRequestDetailResult>.Failure(Forbidden);
 
-        // --- Parse optional setStatus ---
-        KeepRequestStatus? parsedSetStatus = null;
-        if (command.SetStatus is not null)
-        {
-            parsedSetStatus = KeepRequestDetailMapper.ParseStatusSlug(command.SetStatus);
-            if (parsedSetStatus is null)
-                return Result<KeepRequestDetailResult>.Failure(KeepRequestErrors.InvalidStatus);
-        }
-
         // --- Actor display name (denormalized onto the event) ---
         var actorDisplayName = await operatePersistence.GetActorDisplayNameAsync(currentUser.UserId, ct);
         if (actorDisplayName is null)
@@ -96,6 +88,19 @@ public sealed class AddBusinessUpdateService(
         if (request is null)
             return Result<KeepRequestDetailResult>.Failure(KeepRequestErrors.NotFound);
 
+        // --- Expected-version check (G5b/ADR-333) ---
+        if (request.ConcurrencyVersion != command.ExpectedVersion)
+            return Result<KeepRequestDetailResult>.Failure(KeepRequestErrors.RequestChanged);
+
+        // --- Parse optional setStatus (after row load so stale requests return 409, not 400) ---
+        KeepRequestStatus? parsedSetStatus = null;
+        if (command.SetStatus is not null)
+        {
+            parsedSetStatus = KeepRequestDetailMapper.ParseStatusSlug(command.SetStatus);
+            if (parsedSetStatus is null)
+                return Result<KeepRequestDetailResult>.Failure(KeepRequestErrors.InvalidStatus);
+        }
+
         // --- Domain: apply business update ---
         // setStatus present → combined StatusChanged+message event (D3/D4, 4000-char limit).
         // setStatus absent  → standalone MessageAdded event (D4, 4000-char limit).
@@ -110,7 +115,16 @@ public sealed class AddBusinessUpdateService(
         if (updateResult.IsFailure)
             return Result<KeepRequestDetailResult>.Failure(updateResult.Error);
 
-        await operatePersistence.CommitAsync(request, updateResult.Value, ct);
+        var commitResult = await operatePersistence.CommitAsync(request, updateResult.Value, ct);
+        switch (commitResult)
+        {
+            case KeepRequestCommitResult.Committed:
+                break;
+            case KeepRequestCommitResult.Conflict:
+                return Result<KeepRequestDetailResult>.Failure(KeepRequestErrors.RequestChanged);
+            default:
+                throw new ArgumentOutOfRangeException(nameof(commitResult));
+        }
 
         // --- Load read data for the response ---
         var events = await readPersistence.GetAllEventsAsync(request.Id, ct);

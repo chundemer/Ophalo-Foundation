@@ -798,4 +798,74 @@ public sealed class KeepPersistenceProofTests : IClassFixture<PostgresFixture>, 
             .ToListAsync();
         Assert.Single(requests);
     }
+
+    // =========================================================================
+    // G5b — Optimistic-concurrency race via two DbContexts
+    // =========================================================================
+
+    [Fact]
+    public async Task OperatePersistence_ConcurrentCommits_FirstWins_SecondReturnsConflict()
+    {
+        // Seed a request using the test infrastructure directly.
+        var customer = KeepCustomer.Create(AccountId, "Race Customer", "0499888001");
+        Guid requestId;
+        Guid seedVersion;
+
+        await using (var seedCtx = CreateContext())
+        {
+            seedCtx.Set<KeepCustomer>().Add(customer);
+            await seedCtx.SaveChangesAsync();
+
+            var request = KeepRequest.CreateFromCustomerIntake(
+                AccountId, customer.Id,
+                "Race Customer", "0499888001", null,
+                "Concurrency race job", "RACE001", "race-tok-001", Now, 60);
+            seedCtx.Set<KeepRequest>().Add(request);
+            seedCtx.Set<KeepRequestEvent>().Add(
+                KeepRequestEvent.CreateRequestCreated(request.Id, AccountId, Now));
+            await seedCtx.SaveChangesAsync();
+
+            requestId = request.Id;
+            seedVersion = request.ConcurrencyVersion;
+        }
+
+        // Load the same row into two independent contexts simultaneously.
+        await using var ctx1 = CreateContext();
+        await using var ctx2 = CreateContext();
+
+        var req1 = await ctx1.Set<KeepRequest>().SingleAsync(r => r.Id == requestId);
+        var req2 = await ctx2.Set<KeepRequest>().SingleAsync(r => r.Id == requestId);
+
+        // Both contexts see the same seed version.
+        Assert.Equal(seedVersion, req1.ConcurrencyVersion);
+        Assert.Equal(seedVersion, req2.ConcurrencyVersion);
+
+        // First commit: should succeed.
+        var sut1 = new OpHalo.Keep.Infrastructure.Persistence.EfKeepRequestOperatePersistence(ctx1);
+        var event1 = KeepRequestEvent.CreateInternalNote(
+            requestId, AccountId, AccountOwnerAccountUserId, "owner@test.example.com", "First note", Now);
+        var result1 = await sut1.CommitAsync(req1, event1, CancellationToken.None);
+        Assert.Equal(OpHalo.Keep.Application.Requests.KeepRequestCommitResult.Committed, result1);
+
+        var winningVersion = req1.ConcurrencyVersion;
+        Assert.NotEqual(seedVersion, winningVersion);
+
+        // Second commit: row was already rotated — version mismatch must return Conflict.
+        var sut2 = new OpHalo.Keep.Infrastructure.Persistence.EfKeepRequestOperatePersistence(ctx2);
+        var event2 = KeepRequestEvent.CreateInternalNote(
+            requestId, AccountId, AccountOwnerAccountUserId, "owner@test.example.com", "Losing note", Now);
+        var result2 = await sut2.CommitAsync(req2, event2, CancellationToken.None);
+        Assert.Equal(OpHalo.Keep.Application.Requests.KeepRequestCommitResult.Conflict, result2);
+
+        // Confirm the winning version and event persisted; the losing event did not.
+        await using var verifyCtx = CreateContext();
+        var persisted = await verifyCtx.Set<KeepRequest>().SingleAsync(r => r.Id == requestId);
+        Assert.Equal(winningVersion, persisted.ConcurrencyVersion);
+
+        var events = await verifyCtx.Set<KeepRequestEvent>()
+            .Where(e => e.RequestId == requestId)
+            .ToListAsync();
+        Assert.Single(events, e => e.Content == "First note");
+        Assert.DoesNotContain(events, e => e.Content == "Losing note");
+    }
 }

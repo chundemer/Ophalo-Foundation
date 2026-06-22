@@ -12,7 +12,8 @@ namespace OpHalo.Keep.Application.Requests;
 
 public sealed record AddInternalNoteCommand(
     Guid RequestId,
-    string Note);
+    string Note,
+    Guid ExpectedVersion);
 
 public sealed class AddInternalNoteService(
     IKeepRequestOperatePersistence operatePersistence,
@@ -86,6 +87,10 @@ public sealed class AddInternalNoteService(
         if (request is null)
             return Result<KeepRequestDetailResult>.Failure(KeepRequestErrors.NotFound);
 
+        // --- Expected-version check (G5b/ADR-333) ---
+        if (request.ConcurrencyVersion != command.ExpectedVersion)
+            return Result<KeepRequestDetailResult>.Failure(KeepRequestErrors.RequestChanged);
+
         // --- Domain: add internal note ---
         // Domain validates null/blank and length (> 4000 → NoteTooLong). No terminal check (D8).
         // Does not update LastBusinessActivityAt. Does not wire first-response (D1).
@@ -96,7 +101,16 @@ public sealed class AddInternalNoteService(
         if (noteResult.IsFailure)
             return Result<KeepRequestDetailResult>.Failure(noteResult.Error);
 
-        await operatePersistence.CommitAsync(request, noteResult.Value, ct);
+        var commitResult = await operatePersistence.CommitAsync(request, noteResult.Value, ct);
+        switch (commitResult)
+        {
+            case KeepRequestCommitResult.Committed:
+                break;
+            case KeepRequestCommitResult.Conflict:
+                return Result<KeepRequestDetailResult>.Failure(KeepRequestErrors.RequestChanged);
+            default:
+                throw new ArgumentOutOfRangeException(nameof(commitResult));
+        }
 
         // --- Load read data for the response ---
         var events = await readPersistence.GetAllEventsAsync(request.Id, ct);

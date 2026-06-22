@@ -28,6 +28,8 @@ public sealed class AddInternalNoteTests : IClassFixture<KeepApiWebFactory>, IAs
     private Guid _accountId;
     private Guid _requestId;       // Received status
     private Guid _closedRequestId; // Closed (terminal) status
+    private Guid _requestVersion;
+    private Guid _closedRequestVersion;
     private string _ownerCookie = string.Empty;
     private string _viewerCookie = string.Empty;
 
@@ -120,6 +122,8 @@ public sealed class AddInternalNoteTests : IClassFixture<KeepApiWebFactory>, IAs
 
         _requestId = request.Id;
         _closedRequestId = closedRequest.Id;
+        _requestVersion = request.ConcurrencyVersion;
+        _closedRequestVersion = closedRequest.ConcurrencyVersion;
 
         var rawOwner = await _factory.SeedSessionAsync(graph.Owner.Id, _accountId);
         _ownerCookie = $"{AuthConstants.CookieName}={rawOwner}";
@@ -151,7 +155,7 @@ public sealed class AddInternalNoteTests : IClassFixture<KeepApiWebFactory>, IAs
     [Fact]
     public async Task AddInternalNote_ViewerRole_Returns403()
     {
-        var response = await AuthRequest(_viewerCookie).PostAsJsonAsync(
+        var response = await AuthRequest(_viewerCookie, _requestVersion).PostAsJsonAsync(
             $"/keep/requests/{_requestId}/internal-notes",
             new { note = "Call the customer back." });
 
@@ -165,7 +169,7 @@ public sealed class AddInternalNoteTests : IClassFixture<KeepApiWebFactory>, IAs
     [Fact]
     public async Task AddInternalNote_UnknownRequestId_Returns404()
     {
-        var response = await AuthRequest(_ownerCookie).PostAsJsonAsync(
+        var response = await AuthRequest(_ownerCookie, _requestVersion).PostAsJsonAsync(
             $"/keep/requests/{Guid.NewGuid()}/internal-notes",
             new { note = "Call the customer back." });
 
@@ -212,7 +216,7 @@ public sealed class AddInternalNoteTests : IClassFixture<KeepApiWebFactory>, IAs
         var tokenB = await _factory.SeedSessionAsync(graphB.Owner.Id, graphB.Account.Id);
         var cookieB = $"{AuthConstants.CookieName}={tokenB}";
 
-        var response = await AuthRequest(cookieB).PostAsJsonAsync(
+        var response = await AuthRequest(cookieB, _requestVersion).PostAsJsonAsync(
             $"/keep/requests/{_requestId}/internal-notes",
             new { note = "Wrong-account private note." });
 
@@ -226,7 +230,7 @@ public sealed class AddInternalNoteTests : IClassFixture<KeepApiWebFactory>, IAs
     [Fact]
     public async Task AddInternalNote_MissingNote_Returns400()
     {
-        var response = await AuthRequest(_ownerCookie).PostAsJsonAsync(
+        var response = await AuthRequest(_ownerCookie, _requestVersion).PostAsJsonAsync(
             $"/keep/requests/{_requestId}/internal-notes",
             new { note = "" });
 
@@ -243,7 +247,7 @@ public sealed class AddInternalNoteTests : IClassFixture<KeepApiWebFactory>, IAs
     [Fact]
     public async Task AddInternalNote_NoteTooLong_Returns400()
     {
-        var response = await AuthRequest(_ownerCookie).PostAsJsonAsync(
+        var response = await AuthRequest(_ownerCookie, _requestVersion).PostAsJsonAsync(
             $"/keep/requests/{_requestId}/internal-notes",
             new { note = new string('x', 4001) });
 
@@ -260,7 +264,7 @@ public sealed class AddInternalNoteTests : IClassFixture<KeepApiWebFactory>, IAs
     [Fact]
     public async Task AddInternalNote_ActiveRequest_Returns200WithInternalNoteEvent()
     {
-        var response = await AuthRequest(_ownerCookie).PostAsJsonAsync(
+        var response = await AuthRequest(_ownerCookie, _requestVersion).PostAsJsonAsync(
             $"/keep/requests/{_requestId}/internal-notes",
             new { note = "Customer prefers morning appointments." });
 
@@ -286,7 +290,7 @@ public sealed class AddInternalNoteTests : IClassFixture<KeepApiWebFactory>, IAs
     [Fact]
     public async Task AddInternalNote_ClosedRequest_Returns200WithNoteEvent()
     {
-        var response = await AuthRequest(_ownerCookie).PostAsJsonAsync(
+        var response = await AuthRequest(_ownerCookie, _closedRequestVersion).PostAsJsonAsync(
             $"/keep/requests/{_closedRequestId}/internal-notes",
             new { note = "Post-close follow-up completed." });
 
@@ -315,7 +319,7 @@ public sealed class AddInternalNoteTests : IClassFixture<KeepApiWebFactory>, IAs
     [Fact]
     public async Task AddInternalNote_DoesNotWireFirstResponse()
     {
-        var response = await AuthRequest(_ownerCookie).PostAsJsonAsync(
+        var response = await AuthRequest(_ownerCookie, _requestVersion).PostAsJsonAsync(
             $"/keep/requests/{_requestId}/internal-notes",
             new { note = "Checking internal notes only." });
 
@@ -327,10 +331,40 @@ public sealed class AddInternalNoteTests : IClassFixture<KeepApiWebFactory>, IAs
         Assert.Equal(JsonValueKind.Null, body.GetProperty("firstResponseEventId").ValueKind);
     }
 
-    private HttpClient AuthRequest(string cookie)
+    // =========================================================================
+    // G5b — Version header enforcement
+    // =========================================================================
+
+    [Fact]
+    public async Task AddInternalNote_MissingVersionHeader_Returns400_ExpectedVersionRequired()
+    {
+        var response = await AuthRequest(_ownerCookie).PostAsJsonAsync(
+            $"/keep/requests/{_requestId}/internal-notes",
+            new { note = "test note" });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("KeepRequest.ExpectedVersionRequired", body.GetProperty("code").GetString());
+    }
+
+    [Fact]
+    public async Task AddInternalNote_StaleVersion_Returns409_RequestChanged()
+    {
+        var response = await AuthRequest(_ownerCookie, Guid.NewGuid()).PostAsJsonAsync(
+            $"/keep/requests/{_requestId}/internal-notes",
+            new { note = "test note" });
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("KeepRequest.RequestChanged", body.GetProperty("code").GetString());
+    }
+
+    private HttpClient AuthRequest(string cookie, Guid? version = null)
     {
         var client = _factory.CreateClient();
         client.DefaultRequestHeaders.Add("Cookie", cookie);
+        if (version.HasValue)
+            client.DefaultRequestHeaders.Add("X-Keep-Request-Version", version.Value.ToString("D"));
         return client;
     }
 }

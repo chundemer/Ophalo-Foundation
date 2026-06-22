@@ -42,10 +42,13 @@ public interface IKeepRequestOperatePersistence
 
     /// <summary>
     /// Persists the mutated request and, when provided, the new event in a single
-    /// SaveChangesAsync. The request must have been loaded via GetVisibleRequestForUpdateAsync
-    /// on the same DbContext instance.
+    /// SaveChangesAsync. Rotates ConcurrencyVersion immediately before saving; the pre-rotation
+    /// value remains in the EF concurrency-token predicate. Returns <see cref="KeepRequestCommitResult.Committed"/>
+    /// on success or <see cref="KeepRequestCommitResult.Conflict"/> when a concurrent write wins
+    /// the race (DbUpdateConcurrencyException); all other exceptions propagate. The request must
+    /// have been loaded via GetVisibleRequestForUpdateAsync on the same DbContext instance.
     /// </summary>
-    Task CommitAsync(KeepRequest request, KeepRequestEvent? newEvent, CancellationToken ct);
+    Task<KeepRequestCommitResult> CommitAsync(KeepRequest request, KeepRequestEvent? newEvent, CancellationToken ct);
 
     // --- Participation write support (Session 3B) ---
 

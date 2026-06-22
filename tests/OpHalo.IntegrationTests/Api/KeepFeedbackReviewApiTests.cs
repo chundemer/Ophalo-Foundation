@@ -30,14 +30,21 @@ public sealed class KeepFeedbackReviewApiTests : IClassFixture<KeepApiWebFactory
 
     // Shared: used for role/auth tests that fail before domain mutation.
     private Guid _sharedEligibleRequestId;
+    private Guid _sharedEligibleRequestVersion;
 
     // Isolated: one per mutating happy-path or specific-error test.
     private Guid _ownerSuccessRequestId;
+    private Guid _ownerSuccessRequestVersion;
     private Guid _adminNoteRequestId;
+    private Guid _adminNoteRequestVersion;
     private Guid _alreadyReviewedRequestId;
+    private Guid _alreadyReviewedRequestVersion;
     private Guid _noteTooLongRequestId;
+    private Guid _noteTooLongRequestVersion;
     private Guid _positiveFeedbackRequestId;
+    private Guid _positiveFeedbackRequestVersion;
     private Guid _noFeedbackRequestId;
+    private Guid _noFeedbackRequestVersion;
 
     // Page token on the already-reviewed request for customer-page exclusion test.
     private const string AlreadyReviewedPageToken = "frx_already_reviewed_001";
@@ -152,6 +159,7 @@ public sealed class KeepFeedbackReviewApiTests : IClassFixture<KeepApiWebFactory
         db.Set<KeepRequestEvent>().Add(KeepRequestEvent.CreateRequestCreated(sharedEligible.Id, _accountId, now));
         await db.SaveChangesAsync();
         _sharedEligibleRequestId = sharedEligible.Id;
+        _sharedEligibleRequestVersion = sharedEligible.ConcurrencyVersion;
 
         // Owner success (no note).
         var ownerSuccess = MakeClosedNegative("FRX-OWN", "frx_owner_page");
@@ -159,6 +167,7 @@ public sealed class KeepFeedbackReviewApiTests : IClassFixture<KeepApiWebFactory
         db.Set<KeepRequestEvent>().Add(KeepRequestEvent.CreateRequestCreated(ownerSuccess.Id, _accountId, now));
         await db.SaveChangesAsync();
         _ownerSuccessRequestId = ownerSuccess.Id;
+        _ownerSuccessRequestVersion = ownerSuccess.ConcurrencyVersion;
 
         // Admin with note.
         var adminNote = MakeClosedNegative("FRX-ADM", "frx_admin_page");
@@ -166,6 +175,7 @@ public sealed class KeepFeedbackReviewApiTests : IClassFixture<KeepApiWebFactory
         db.Set<KeepRequestEvent>().Add(KeepRequestEvent.CreateRequestCreated(adminNote.Id, _accountId, now));
         await db.SaveChangesAsync();
         _adminNoteRequestId = adminNote.Id;
+        _adminNoteRequestVersion = adminNote.ConcurrencyVersion;
 
         // Already-reviewed: mark reviewed at seed time, add page token for customer-page test.
         var alreadyReviewed = MakeClosedNegative("FRX-AREX", AlreadyReviewedPageToken);
@@ -180,6 +190,7 @@ public sealed class KeepFeedbackReviewApiTests : IClassFixture<KeepApiWebFactory
         db.Set<KeepRequestEvent>().Add(reviewResult.Value);
         await db.SaveChangesAsync();
         _alreadyReviewedRequestId = alreadyReviewed.Id;
+        _alreadyReviewedRequestVersion = alreadyReviewed.ConcurrencyVersion;
 
         // Note-too-long: eligible, Owner will submit oversized note.
         var noteTooLong = MakeClosedNegative("FRX-NTL", "frx_ntl_page");
@@ -187,6 +198,7 @@ public sealed class KeepFeedbackReviewApiTests : IClassFixture<KeepApiWebFactory
         db.Set<KeepRequestEvent>().Add(KeepRequestEvent.CreateRequestCreated(noteTooLong.Id, _accountId, now));
         await db.SaveChangesAsync();
         _noteTooLongRequestId = noteTooLong.Id;
+        _noteTooLongRequestVersion = noteTooLong.ConcurrencyVersion;
 
         // Positive feedback: FeedbackReviewUnavailable.
         var positiveR = KeepRequest.CreateFromCustomerIntake(
@@ -201,6 +213,7 @@ public sealed class KeepFeedbackReviewApiTests : IClassFixture<KeepApiWebFactory
         db.Set<KeepRequestEvent>().Add(KeepRequestEvent.CreateRequestCreated(positiveR.Id, _accountId, now));
         await db.SaveChangesAsync();
         _positiveFeedbackRequestId = positiveR.Id;
+        _positiveFeedbackRequestVersion = positiveR.ConcurrencyVersion;
 
         // No feedback: closed, no feedback submitted.
         var noFeedback = KeepRequest.CreateFromCustomerIntake(
@@ -213,6 +226,7 @@ public sealed class KeepFeedbackReviewApiTests : IClassFixture<KeepApiWebFactory
         db.Set<KeepRequestEvent>().Add(KeepRequestEvent.CreateRequestCreated(noFeedback.Id, _accountId, now));
         await db.SaveChangesAsync();
         _noFeedbackRequestId = noFeedback.Id;
+        _noFeedbackRequestVersion = noFeedback.ConcurrencyVersion;
 
         // --- Seed sessions ---
         _ownerCookie    = $"{AuthConstants.CookieName}={await _factory.SeedSessionAsync(graph.Owner.Id, _accountId)}";
@@ -230,7 +244,7 @@ public sealed class KeepFeedbackReviewApiTests : IClassFixture<KeepApiWebFactory
     [Fact]
     public async Task MarkFeedbackReviewed_Owner_NoNote_Returns200_WithReviewMetadata()
     {
-        var response = await AuthRequest(_ownerCookie).PostAsJsonAsync(
+        var response = await AuthRequest(_ownerCookie, _ownerSuccessRequestVersion).PostAsJsonAsync(
             $"/keep/requests/{_ownerSuccessRequestId}/feedback-review",
             new { });
 
@@ -260,7 +274,7 @@ public sealed class KeepFeedbackReviewApiTests : IClassFixture<KeepApiWebFactory
     {
         var note = "Called customer — confirmed follow-up scheduled.";
 
-        var response = await AuthRequest(_adminCookie).PostAsJsonAsync(
+        var response = await AuthRequest(_adminCookie, _adminNoteRequestVersion).PostAsJsonAsync(
             $"/keep/requests/{_adminNoteRequestId}/feedback-review",
             new { note });
 
@@ -278,7 +292,7 @@ public sealed class KeepFeedbackReviewApiTests : IClassFixture<KeepApiWebFactory
     [Fact]
     public async Task MarkFeedbackReviewed_Operator_Returns403()
     {
-        var response = await AuthRequest(_operatorCookie).PostAsJsonAsync(
+        var response = await AuthRequest(_operatorCookie, _sharedEligibleRequestVersion).PostAsJsonAsync(
             $"/keep/requests/{_sharedEligibleRequestId}/feedback-review",
             new { });
 
@@ -288,7 +302,7 @@ public sealed class KeepFeedbackReviewApiTests : IClassFixture<KeepApiWebFactory
     [Fact]
     public async Task MarkFeedbackReviewed_Viewer_Returns403()
     {
-        var response = await AuthRequest(_viewerCookie).PostAsJsonAsync(
+        var response = await AuthRequest(_viewerCookie, _sharedEligibleRequestVersion).PostAsJsonAsync(
             $"/keep/requests/{_sharedEligibleRequestId}/feedback-review",
             new { });
 
@@ -312,7 +326,7 @@ public sealed class KeepFeedbackReviewApiTests : IClassFixture<KeepApiWebFactory
     [Fact]
     public async Task MarkFeedbackReviewed_AlreadyReviewed_Returns409_FeedbackAlreadyReviewed()
     {
-        var response = await AuthRequest(_ownerCookie).PostAsJsonAsync(
+        var response = await AuthRequest(_ownerCookie, _alreadyReviewedRequestVersion).PostAsJsonAsync(
             $"/keep/requests/{_alreadyReviewedRequestId}/feedback-review",
             new { });
 
@@ -324,7 +338,7 @@ public sealed class KeepFeedbackReviewApiTests : IClassFixture<KeepApiWebFactory
     [Fact]
     public async Task MarkFeedbackReviewed_PositiveFeedback_Returns409_FeedbackReviewUnavailable()
     {
-        var response = await AuthRequest(_ownerCookie).PostAsJsonAsync(
+        var response = await AuthRequest(_ownerCookie, _positiveFeedbackRequestVersion).PostAsJsonAsync(
             $"/keep/requests/{_positiveFeedbackRequestId}/feedback-review",
             new { });
 
@@ -336,7 +350,7 @@ public sealed class KeepFeedbackReviewApiTests : IClassFixture<KeepApiWebFactory
     [Fact]
     public async Task MarkFeedbackReviewed_ClosedNoFeedback_Returns409_FeedbackReviewUnavailable()
     {
-        var response = await AuthRequest(_ownerCookie).PostAsJsonAsync(
+        var response = await AuthRequest(_ownerCookie, _noFeedbackRequestVersion).PostAsJsonAsync(
             $"/keep/requests/{_noFeedbackRequestId}/feedback-review",
             new { });
 
@@ -350,7 +364,7 @@ public sealed class KeepFeedbackReviewApiTests : IClassFixture<KeepApiWebFactory
     {
         var oversizedNote = new string('x', 2001);
 
-        var response = await AuthRequest(_ownerCookie).PostAsJsonAsync(
+        var response = await AuthRequest(_ownerCookie, _noteTooLongRequestVersion).PostAsJsonAsync(
             $"/keep/requests/{_noteTooLongRequestId}/feedback-review",
             new { note = oversizedNote });
 
@@ -409,13 +423,43 @@ public sealed class KeepFeedbackReviewApiTests : IClassFixture<KeepApiWebFactory
     }
 
     // =========================================================================
+    // G5b — Version header enforcement
+    // =========================================================================
+
+    [Fact]
+    public async Task MarkFeedbackReviewed_MissingVersionHeader_Returns400_ExpectedVersionRequired()
+    {
+        var response = await AuthRequest(_ownerCookie).PostAsJsonAsync(
+            $"/keep/requests/{_sharedEligibleRequestId}/feedback-review",
+            new { });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("KeepRequest.ExpectedVersionRequired", body.GetProperty("code").GetString());
+    }
+
+    [Fact]
+    public async Task MarkFeedbackReviewed_StaleVersion_Returns409_RequestChanged()
+    {
+        var response = await AuthRequest(_ownerCookie, Guid.NewGuid()).PostAsJsonAsync(
+            $"/keep/requests/{_sharedEligibleRequestId}/feedback-review",
+            new { });
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("KeepRequest.RequestChanged", body.GetProperty("code").GetString());
+    }
+
+    // =========================================================================
     // Helpers
     // =========================================================================
 
-    private HttpClient AuthRequest(string cookie)
+    private HttpClient AuthRequest(string cookie, Guid? version = null)
     {
         var client = _factory.CreateClient();
         client.DefaultRequestHeaders.Add("Cookie", cookie);
+        if (version.HasValue)
+            client.DefaultRequestHeaders.Add("X-Keep-Request-Version", version.Value.ToString("D"));
         return client;
     }
 }

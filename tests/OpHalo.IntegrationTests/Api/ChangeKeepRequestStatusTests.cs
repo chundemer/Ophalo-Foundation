@@ -34,6 +34,10 @@ public sealed class ChangeKeepRequestStatusTests : IClassFixture<KeepApiWebFacto
     private Guid _closedRequestId;                  // Closed (terminal) status
     private Guid _resolvedWithAttentionRequestId;   // Resolved with active business-waiting attention
     private Guid _resolvedForMetadataRequestId;     // Resolved, used ONLY by the post-transition metadata test (no shared mutation)
+    private Guid _requestVersion;
+    private Guid _closedRequestVersion;
+    private Guid _resolvedWithAttentionVersion;
+    private Guid _resolvedForMetadataVersion;
     private string _ownerCookie = string.Empty;
     private string _viewerCookie = string.Empty;
 
@@ -164,6 +168,10 @@ public sealed class ChangeKeepRequestStatusTests : IClassFixture<KeepApiWebFacto
         _closedRequestId = closedRequest.Id;
         _resolvedWithAttentionRequestId = resolvedWithAttention.Id;
         _resolvedForMetadataRequestId = resolvedForMetadata.Id;
+        _requestVersion = request.ConcurrencyVersion;
+        _closedRequestVersion = closedRequest.ConcurrencyVersion;
+        _resolvedWithAttentionVersion = resolvedWithAttention.ConcurrencyVersion;
+        _resolvedForMetadataVersion = resolvedForMetadata.ConcurrencyVersion;
 
         var rawOwner = await _factory.SeedSessionAsync(graph.Owner.Id, _accountId);
         _ownerCookie = $"{AuthConstants.CookieName}={rawOwner}";
@@ -195,7 +203,7 @@ public sealed class ChangeKeepRequestStatusTests : IClassFixture<KeepApiWebFacto
     [Fact]
     public async Task ChangeStatus_UnknownRequestId_Returns404()
     {
-        var response = await AuthRequest(_ownerCookie).PatchAsJsonAsync(
+        var response = await AuthRequest(_ownerCookie, _requestVersion).PatchAsJsonAsync(
             $"/keep/requests/{Guid.NewGuid()}/status",
             new { status = "in_progress" });
 
@@ -243,7 +251,7 @@ public sealed class ChangeKeepRequestStatusTests : IClassFixture<KeepApiWebFacto
         var cookieB = $"{AuthConstants.CookieName}={tokenB}";
 
         // Account B tries to change Account A's request
-        var response = await AuthRequest(cookieB).PatchAsJsonAsync(
+        var response = await AuthRequest(cookieB, _requestVersion).PatchAsJsonAsync(
             $"/keep/requests/{_requestId}/status",
             new { status = "in_progress" });
 
@@ -257,7 +265,7 @@ public sealed class ChangeKeepRequestStatusTests : IClassFixture<KeepApiWebFacto
     [Fact]
     public async Task ChangeStatus_ViewerRole_Returns403()
     {
-        var response = await AuthRequest(_viewerCookie).PatchAsJsonAsync(
+        var response = await AuthRequest(_viewerCookie, _requestVersion).PatchAsJsonAsync(
             $"/keep/requests/{_requestId}/status",
             new { status = "in_progress" });
 
@@ -271,7 +279,7 @@ public sealed class ChangeKeepRequestStatusTests : IClassFixture<KeepApiWebFacto
     [Fact]
     public async Task ChangeStatus_ValidTransitionWithMessage_Returns200WithUpdatedDetail()
     {
-        var response = await AuthRequest(_ownerCookie).PatchAsJsonAsync(
+        var response = await AuthRequest(_ownerCookie, _requestVersion).PatchAsJsonAsync(
             $"/keep/requests/{_requestId}/status",
             new { status = "scheduled", message = "We have you scheduled for Thursday morning." });
 
@@ -314,7 +322,7 @@ public sealed class ChangeKeepRequestStatusTests : IClassFixture<KeepApiWebFacto
     [Fact]
     public async Task ChangeStatus_SameStatusNoMessage_Returns200AsNoOp()
     {
-        var response = await AuthRequest(_ownerCookie).PatchAsJsonAsync(
+        var response = await AuthRequest(_ownerCookie, _requestVersion).PatchAsJsonAsync(
             $"/keep/requests/{_requestId}/status",
             new { status = "received" });  // same as current
 
@@ -327,6 +335,10 @@ public sealed class ChangeKeepRequestStatusTests : IClassFixture<KeepApiWebFacto
         var events = body.GetProperty("events").EnumerateArray().ToList();
         Assert.Single(events);
         Assert.Equal("request_created", events[0].GetProperty("eventType").GetString());
+
+        // No-op does not rotate the version.
+        Assert.True(Guid.TryParseExact(body.GetProperty("version").GetString(), "D", out var returnedVersion));
+        Assert.Equal(_requestVersion, returnedVersion);
     }
 
     // =========================================================================
@@ -336,7 +348,7 @@ public sealed class ChangeKeepRequestStatusTests : IClassFixture<KeepApiWebFacto
     [Fact]
     public async Task ChangeStatus_PendingCustomerWithoutMessage_Returns400()
     {
-        var response = await AuthRequest(_ownerCookie).PatchAsJsonAsync(
+        var response = await AuthRequest(_ownerCookie, _requestVersion).PatchAsJsonAsync(
             $"/keep/requests/{_requestId}/status",
             new { status = "pending_customer" });  // no message
 
@@ -353,7 +365,7 @@ public sealed class ChangeKeepRequestStatusTests : IClassFixture<KeepApiWebFacto
     [Fact]
     public async Task ChangeStatus_TerminalRequest_Returns409()
     {
-        var response = await AuthRequest(_ownerCookie).PatchAsJsonAsync(
+        var response = await AuthRequest(_ownerCookie, _closedRequestVersion).PatchAsJsonAsync(
             $"/keep/requests/{_closedRequestId}/status",
             new { status = "in_progress" });
 
@@ -370,7 +382,7 @@ public sealed class ChangeKeepRequestStatusTests : IClassFixture<KeepApiWebFacto
     [Fact]
     public async Task ChangeStatus_DisallowedTransition_Returns422()
     {
-        var response = await AuthRequest(_ownerCookie).PatchAsJsonAsync(
+        var response = await AuthRequest(_ownerCookie, _requestVersion).PatchAsJsonAsync(
             $"/keep/requests/{_requestId}/status",
             new { status = "closed" });  // Received → Closed is not in the allowed set
 
@@ -389,7 +401,7 @@ public sealed class ChangeKeepRequestStatusTests : IClassFixture<KeepApiWebFacto
     [Fact]
     public async Task TerminalTransition_SetsTerminatedAtUtc()
     {
-        var response = await AuthRequest(_ownerCookie).PatchAsJsonAsync(
+        var response = await AuthRequest(_ownerCookie, _resolvedWithAttentionVersion).PatchAsJsonAsync(
             $"/keep/requests/{_resolvedWithAttentionRequestId}/status",
             new { status = "closed" });
 
@@ -408,7 +420,7 @@ public sealed class ChangeKeepRequestStatusTests : IClassFixture<KeepApiWebFacto
     [Fact]
     public async Task TerminalTransition_AutoClearsActiveAttentionWithoutAcknowledgedEvent()
     {
-        var response = await AuthRequest(_ownerCookie).PatchAsJsonAsync(
+        var response = await AuthRequest(_ownerCookie, _resolvedWithAttentionVersion).PatchAsJsonAsync(
             $"/keep/requests/{_resolvedWithAttentionRequestId}/status",
             new { status = "closed" });
 
@@ -441,7 +453,7 @@ public sealed class ChangeKeepRequestStatusTests : IClassFixture<KeepApiWebFacto
     [Fact]
     public async Task TerminalTransition_AvailableActionsReflectResultingTerminalState()
     {
-        var response = await AuthRequest(_ownerCookie).PatchAsJsonAsync(
+        var response = await AuthRequest(_ownerCookie, _resolvedForMetadataVersion).PatchAsJsonAsync(
             $"/keep/requests/{_resolvedForMetadataRequestId}/status",
             new { status = "closed" });
 
@@ -469,6 +481,77 @@ public sealed class ChangeKeepRequestStatusTests : IClassFixture<KeepApiWebFacto
         Assert.Empty(available.GetProperty("allowedStatuses").EnumerateArray());
     }
 
+    // =========================================================================
+    // G5b — Version header enforcement
+    // =========================================================================
+
+    [Fact]
+    public async Task ChangeStatus_MissingVersionHeader_Returns400_ExpectedVersionRequired()
+    {
+        var response = await AuthRequest(_ownerCookie).PatchAsJsonAsync(
+            $"/keep/requests/{_requestId}/status",
+            new { status = "in_progress" });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("KeepRequest.ExpectedVersionRequired", body.GetProperty("code").GetString());
+    }
+
+    [Fact]
+    public async Task ChangeStatus_MalformedVersionHeader_Returns400_ExpectedVersionInvalid()
+    {
+        var client = AuthRequest(_ownerCookie);
+        client.DefaultRequestHeaders.Add("X-Keep-Request-Version", "not-a-guid");
+        var response = await client.PatchAsJsonAsync(
+            $"/keep/requests/{_requestId}/status",
+            new { status = "in_progress" });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("KeepRequest.ExpectedVersionInvalid", body.GetProperty("code").GetString());
+    }
+
+    [Fact]
+    public async Task ChangeStatus_StaleVersion_Returns409_RequestChanged()
+    {
+        var response = await AuthRequest(_ownerCookie, Guid.NewGuid()).PatchAsJsonAsync(
+            $"/keep/requests/{_requestId}/status",
+            new { status = "in_progress" });
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("KeepRequest.RequestChanged", body.GetProperty("code").GetString());
+    }
+
+    [Fact]
+    public async Task ChangeStatus_StaleButInvisible_Returns404_NotRequestChanged()
+    {
+        var response = await AuthRequest(_ownerCookie, Guid.NewGuid()).PatchAsJsonAsync(
+            $"/keep/requests/{Guid.NewGuid()}/status",
+            new { status = "in_progress" });
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task ChangeStatus_ValidVersion_RotatesVersionInResponse()
+    {
+        var response = await AuthRequest(_ownerCookie, _requestVersion).PatchAsJsonAsync(
+            $"/keep/requests/{_requestId}/status",
+            new { status = "in_progress" });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.True(Guid.TryParseExact(body.GetProperty("version").GetString(), "D", out var returnedVersion));
+        Assert.NotEqual(Guid.Empty, returnedVersion);
+        Assert.NotEqual(_requestVersion, returnedVersion);
+
+        await using var scope = _factory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+        var persisted = await db.Set<KeepRequest>().FindAsync(_requestId);
+        Assert.Equal(returnedVersion, persisted!.ConcurrencyVersion);
+    }
+
     private static void SeedBusinessWaitingAttention(OpHaloDbContext db, KeepRequest request, DateTime sinceUtc)
     {
         var entry = db.Entry(request);
@@ -480,10 +563,12 @@ public sealed class ChangeKeepRequestStatusTests : IClassFixture<KeepApiWebFacto
         entry.Property(r => r.NextAttentionAtUtc).CurrentValue = sinceUtc.AddMinutes(15);
     }
 
-    private HttpClient AuthRequest(string cookie)
+    private HttpClient AuthRequest(string cookie, Guid? version = null)
     {
         var client = _factory.CreateClient();
         client.DefaultRequestHeaders.Add("Cookie", cookie);
+        if (version.HasValue)
+            client.DefaultRequestHeaders.Add("X-Keep-Request-Version", version.Value.ToString("D"));
         return client;
     }
 }

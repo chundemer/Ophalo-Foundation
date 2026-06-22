@@ -23,6 +23,7 @@ public sealed class KeepOffSeasonTests : IClassFixture<KeepApiWebFactory>, IAsyn
     private readonly KeepApiWebFactory _factory;
 
     private Guid _requestId;
+    private Guid _requestVersion;
     private const string PageToken = "os_test_page_token_001";
     private const string ClosedFeedbackPageToken = "os_test_closed_fb_002";
     private const string IntakeToken = "os_test_intake_token_abc123";
@@ -92,6 +93,7 @@ public sealed class KeepOffSeasonTests : IClassFixture<KeepApiWebFactory>, IAsyn
         await db.SaveChangesAsync();
 
         _requestId = request.Id;
+        _requestVersion = request.ConcurrencyVersion;
 
         // Seed a closed request with unreviewed negative feedback for the AllowedActions test (ADR-277).
         var closedRequest = KeepRequest.CreateFromCustomerIntake(
@@ -172,7 +174,7 @@ public sealed class KeepOffSeasonTests : IClassFixture<KeepApiWebFactory>, IAsyn
     [Fact]
     public async Task PatchStatus_OffSeason_Returns403()
     {
-        var response = await AuthRequest().PatchAsJsonAsync(
+        var response = await AuthRequest(_requestVersion).PatchAsJsonAsync(
             $"/keep/requests/{_requestId}/status",
             new { status = "in_progress" });
 
@@ -182,7 +184,7 @@ public sealed class KeepOffSeasonTests : IClassFixture<KeepApiWebFactory>, IAsyn
     [Fact]
     public async Task PostBusinessUpdate_OffSeason_Returns403()
     {
-        var response = await AuthRequest().PostAsJsonAsync(
+        var response = await AuthRequest(_requestVersion).PostAsJsonAsync(
             $"/keep/requests/{_requestId}/business-updates",
             new { message = "Update from business" });
 
@@ -192,7 +194,7 @@ public sealed class KeepOffSeasonTests : IClassFixture<KeepApiWebFactory>, IAsyn
     [Fact]
     public async Task PostInternalNote_OffSeason_Returns403()
     {
-        var response = await AuthRequest().PostAsJsonAsync(
+        var response = await AuthRequest(_requestVersion).PostAsJsonAsync(
             $"/keep/requests/{_requestId}/internal-notes",
             new { note = "Internal note" });
 
@@ -202,7 +204,7 @@ public sealed class KeepOffSeasonTests : IClassFixture<KeepApiWebFactory>, IAsyn
     [Fact]
     public async Task PostAcknowledgeAttention_OffSeason_Returns403()
     {
-        var response = await AuthRequest().PostAsJsonAsync(
+        var response = await AuthRequest(_requestVersion).PostAsJsonAsync(
             $"/keep/requests/{_requestId}/attention/acknowledge",
             new { reason = "Acknowledged" });
 
@@ -213,7 +215,7 @@ public sealed class KeepOffSeasonTests : IClassFixture<KeepApiWebFactory>, IAsyn
     [Fact]
     public async Task PostExternalContact_OffSeason_Returns403()
     {
-        var response = await AuthRequest().PostAsJsonAsync(
+        var response = await AuthRequest(_requestVersion).PostAsJsonAsync(
             $"/keep/requests/{_requestId}/external-contact",
             new { direction = "outbound", channel = "phone", outcome = "no_answer" });
 
@@ -261,7 +263,7 @@ public sealed class KeepOffSeasonTests : IClassFixture<KeepApiWebFactory>, IAsyn
     public async Task MarkFeedbackReviewed_OffSeason_Returns403()
     {
         // OffSeason check fires before request load — any requestId returns 403.
-        var response = await AuthRequest().PostAsJsonAsync(
+        var response = await AuthRequest(_requestVersion).PostAsJsonAsync(
             $"/keep/requests/{_requestId}/feedback-review", new { });
 
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
@@ -316,10 +318,12 @@ public sealed class KeepOffSeasonTests : IClassFixture<KeepApiWebFactory>, IAsyn
     // Helpers
     // =========================================================================
 
-    private HttpClient AuthRequest()
+    private HttpClient AuthRequest(Guid? version = null)
     {
         var client = _factory.CreateClient();
         client.DefaultRequestHeaders.Add("Cookie", _ownerCookie);
+        if (version.HasValue)
+            client.DefaultRequestHeaders.Add("X-Keep-Request-Version", version.Value.ToString("D"));
         return client;
     }
 }

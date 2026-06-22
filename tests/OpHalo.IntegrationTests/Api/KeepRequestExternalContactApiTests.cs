@@ -30,16 +30,23 @@ public sealed class KeepRequestExternalContactApiTests : IClassFixture<KeepApiWe
 
     // Shared for validation tests (all return errors before domain mutation — no state accumulation).
     private Guid _validationRequestId;
+    private Guid _validationRequestVersion;
 
     // Per-test request IDs for happy paths that mutate state.
     private Guid _outboundPhoneRequestId;
+    private Guid _outboundPhoneRequestVersion;
     private Guid _noAnswerRequestId;
+    private Guid _noAnswerRequestVersion;
     private Guid _smsRequestId;
+    private Guid _smsRequestVersion;
     private Guid _inboundRequestId;
+    private Guid _inboundRequestVersion;
     private Guid _customerPageRequestId;
+    private Guid _customerPageRequestVersion;
     private string _customerPageToken = string.Empty;
 
     private Guid _closedRequestId;
+    private Guid _closedRequestVersion;
 
     private string _ownerCookie    = string.Empty;
     private string _operatorCookie = string.Empty;
@@ -119,14 +126,14 @@ public sealed class KeepRequestExternalContactApiTests : IClassFixture<KeepApiWe
         await db.SaveChangesAsync();
 
         // Shared request for all validation tests.
-        _validationRequestId = await SeedRequestAsync(
+        (_validationRequestId, _validationRequestVersion) = await SeedRequestAsync(
             db, _accountId, customer.Id, "EC-VAL", "ec_val_token", now);
 
         // Per-test isolated requests for mutating happy-path tests.
-        _outboundPhoneRequestId = await SeedRequestAsync(
+        (_outboundPhoneRequestId, _outboundPhoneRequestVersion) = await SeedRequestAsync(
             db, _accountId, customer.Id, "EC-PHN", "ec_phn_token", now);
 
-        _noAnswerRequestId = await SeedRequestAsync(
+        (_noAnswerRequestId, _noAnswerRequestVersion) = await SeedRequestAsync(
             db, _accountId, customer.Id, "EC-NOA", "ec_noa_token", now);
 
         // Operator needs active participation so G4b MyWork scope grants mutation access.
@@ -136,14 +143,14 @@ public sealed class KeepRequestExternalContactApiTests : IClassFixture<KeepApiWe
                 ParticipationType.Responsible, notificationsEnabled: true, now));
         await db.SaveChangesAsync();
 
-        _smsRequestId = await SeedRequestAsync(
+        (_smsRequestId, _smsRequestVersion) = await SeedRequestAsync(
             db, _accountId, customer.Id, "EC-SMS", "ec_sms_token", now);
 
-        _inboundRequestId = await SeedRequestAsync(
+        (_inboundRequestId, _inboundRequestVersion) = await SeedRequestAsync(
             db, _accountId, customer.Id, "EC-INB", "ec_inb_token", now);
 
         _customerPageToken = "ec_page_token";
-        _customerPageRequestId = await SeedRequestAsync(
+        (_customerPageRequestId, _customerPageRequestVersion) = await SeedRequestAsync(
             db, _accountId, customer.Id, "EC-PGE", _customerPageToken, now);
 
         // Closed (terminal) request.
@@ -158,6 +165,7 @@ public sealed class KeepRequestExternalContactApiTests : IClassFixture<KeepApiWe
             KeepRequestEvent.CreateRequestCreated(closedRequest.Id, _accountId, now));
         await db.SaveChangesAsync();
         _closedRequestId = closedRequest.Id;
+        _closedRequestVersion = closedRequest.ConcurrencyVersion;
 
         // --- Sessions ---
         var rawOwner    = await _factory.SeedSessionAsync(graph.Owner.Id, _accountId);
@@ -193,7 +201,7 @@ public sealed class KeepRequestExternalContactApiTests : IClassFixture<KeepApiWe
     [Fact]
     public async Task PostExternalContact_ViewerRole_Returns403()
     {
-        var response = await AuthRequest(_viewerCookie).PostAsJsonAsync(
+        var response = await AuthRequest(_viewerCookie, _validationRequestVersion).PostAsJsonAsync(
             $"/keep/requests/{_validationRequestId}/external-contact",
             new { direction = "outbound", channel = "phone", outcome = "no_answer" });
 
@@ -207,7 +215,7 @@ public sealed class KeepRequestExternalContactApiTests : IClassFixture<KeepApiWe
     [Fact]
     public async Task PostExternalContact_OutboundPhone_SpokeWithCustomer_SetsFirstResponse()
     {
-        var response = await AuthRequest(_ownerCookie).PostAsJsonAsync(
+        var response = await AuthRequest(_ownerCookie, _outboundPhoneRequestVersion).PostAsJsonAsync(
             $"/keep/requests/{_outboundPhoneRequestId}/external-contact",
             new
             {
@@ -251,7 +259,7 @@ public sealed class KeepRequestExternalContactApiTests : IClassFixture<KeepApiWe
     [Fact]
     public async Task PostExternalContact_OutboundPhone_NoAnswer_LogsOnly_NoFirstResponse()
     {
-        var response = await AuthRequest(_operatorCookie).PostAsJsonAsync(
+        var response = await AuthRequest(_operatorCookie, _noAnswerRequestVersion).PostAsJsonAsync(
             $"/keep/requests/{_noAnswerRequestId}/external-contact",
             new { direction = "outbound", channel = "phone", outcome = "no_answer" });
 
@@ -275,7 +283,7 @@ public sealed class KeepRequestExternalContactApiTests : IClassFixture<KeepApiWe
     [Fact]
     public async Task PostExternalContact_OutboundSms_SetsFirstResponse()
     {
-        var response = await AuthRequest(_ownerCookie).PostAsJsonAsync(
+        var response = await AuthRequest(_ownerCookie, _smsRequestVersion).PostAsJsonAsync(
             $"/keep/requests/{_smsRequestId}/external-contact",
             new
             {
@@ -305,7 +313,7 @@ public sealed class KeepRequestExternalContactApiTests : IClassFixture<KeepApiWe
     [Fact]
     public async Task PostExternalContact_Inbound_RequiresFollowUp_RaisesBusinessWaiting()
     {
-        var response = await AuthRequest(_ownerCookie).PostAsJsonAsync(
+        var response = await AuthRequest(_ownerCookie, _inboundRequestVersion).PostAsJsonAsync(
             $"/keep/requests/{_inboundRequestId}/external-contact",
             new
             {
@@ -342,7 +350,7 @@ public sealed class KeepRequestExternalContactApiTests : IClassFixture<KeepApiWe
     [Fact]
     public async Task PostExternalContact_UnknownRequestId_ReturnsNotFound()
     {
-        var response = await AuthRequest(_ownerCookie).PostAsJsonAsync(
+        var response = await AuthRequest(_ownerCookie, _validationRequestVersion).PostAsJsonAsync(
             $"/keep/requests/{Guid.NewGuid()}/external-contact",
             new { direction = "outbound", channel = "phone", outcome = "no_answer" });
 
@@ -354,7 +362,7 @@ public sealed class KeepRequestExternalContactApiTests : IClassFixture<KeepApiWe
     [Fact]
     public async Task PostExternalContact_TerminalRequest_Returns409()
     {
-        var response = await AuthRequest(_ownerCookie).PostAsJsonAsync(
+        var response = await AuthRequest(_ownerCookie, _closedRequestVersion).PostAsJsonAsync(
             $"/keep/requests/{_closedRequestId}/external-contact",
             new { direction = "outbound", channel = "phone", outcome = "no_answer" });
 
@@ -370,7 +378,7 @@ public sealed class KeepRequestExternalContactApiTests : IClassFixture<KeepApiWe
     [Fact]
     public async Task PostExternalContact_InvalidDirection_Returns400()
     {
-        var response = await AuthRequest(_ownerCookie).PostAsJsonAsync(
+        var response = await AuthRequest(_ownerCookie, _validationRequestVersion).PostAsJsonAsync(
             $"/keep/requests/{_validationRequestId}/external-contact",
             new { direction = "sideways", channel = "phone", outcome = "no_answer" });
 
@@ -383,7 +391,7 @@ public sealed class KeepRequestExternalContactApiTests : IClassFixture<KeepApiWe
     public async Task PostExternalContact_InvalidOutboundChannel_Returns400()
     {
         // in_person is valid for inbound only — domain rejects it for outbound.
-        var response = await AuthRequest(_ownerCookie).PostAsJsonAsync(
+        var response = await AuthRequest(_ownerCookie, _validationRequestVersion).PostAsJsonAsync(
             $"/keep/requests/{_validationRequestId}/external-contact",
             new
             {
@@ -402,7 +410,7 @@ public sealed class KeepRequestExternalContactApiTests : IClassFixture<KeepApiWe
     [Fact]
     public async Task PostExternalContact_OutcomeRequiredForPhone_Returns400()
     {
-        var response = await AuthRequest(_ownerCookie).PostAsJsonAsync(
+        var response = await AuthRequest(_ownerCookie, _validationRequestVersion).PostAsJsonAsync(
             $"/keep/requests/{_validationRequestId}/external-contact",
             new { direction = "outbound", channel = "phone" });
 
@@ -415,7 +423,7 @@ public sealed class KeepRequestExternalContactApiTests : IClassFixture<KeepApiWe
     [Fact]
     public async Task PostExternalContact_OutcomeNotAllowedForInbound_Returns400()
     {
-        var response = await AuthRequest(_ownerCookie).PostAsJsonAsync(
+        var response = await AuthRequest(_ownerCookie, _validationRequestVersion).PostAsJsonAsync(
             $"/keep/requests/{_validationRequestId}/external-contact",
             new
             {
@@ -435,7 +443,7 @@ public sealed class KeepRequestExternalContactApiTests : IClassFixture<KeepApiWe
     [Fact]
     public async Task PostExternalContact_FollowUpRequiredForInbound_Returns400()
     {
-        var response = await AuthRequest(_ownerCookie).PostAsJsonAsync(
+        var response = await AuthRequest(_ownerCookie, _validationRequestVersion).PostAsJsonAsync(
             $"/keep/requests/{_validationRequestId}/external-contact",
             new { direction = "inbound", channel = "phone", summary = "Customer called." });
 
@@ -448,7 +456,7 @@ public sealed class KeepRequestExternalContactApiTests : IClassFixture<KeepApiWe
     [Fact]
     public async Task PostExternalContact_SummaryRequiredForInbound_Returns400()
     {
-        var response = await AuthRequest(_ownerCookie).PostAsJsonAsync(
+        var response = await AuthRequest(_ownerCookie, _validationRequestVersion).PostAsJsonAsync(
             $"/keep/requests/{_validationRequestId}/external-contact",
             new { direction = "inbound", channel = "phone", requiresBusinessFollowUp = false });
 
@@ -461,7 +469,7 @@ public sealed class KeepRequestExternalContactApiTests : IClassFixture<KeepApiWe
     [Fact]
     public async Task PostExternalContact_SummaryTooLong_Returns400()
     {
-        var response = await AuthRequest(_ownerCookie).PostAsJsonAsync(
+        var response = await AuthRequest(_ownerCookie, _validationRequestVersion).PostAsJsonAsync(
             $"/keep/requests/{_validationRequestId}/external-contact",
             new
             {
@@ -485,7 +493,7 @@ public sealed class KeepRequestExternalContactApiTests : IClassFixture<KeepApiWe
     public async Task PostExternalContact_CustomerPageDoesNotIncludeContactEvent()
     {
         // Log a contact event on the customer-page request.
-        var postResponse = await AuthRequest(_ownerCookie).PostAsJsonAsync(
+        var postResponse = await AuthRequest(_ownerCookie, _customerPageRequestVersion).PostAsJsonAsync(
             $"/keep/requests/{_customerPageRequestId}/external-contact",
             new { direction = "outbound", channel = "phone", outcome = "no_answer" });
 
@@ -503,10 +511,38 @@ public sealed class KeepRequestExternalContactApiTests : IClassFixture<KeepApiWe
     }
 
     // =========================================================================
+    // G5b — Version header enforcement
+    // =========================================================================
+
+    [Fact]
+    public async Task PostExternalContact_MissingVersionHeader_Returns400_ExpectedVersionRequired()
+    {
+        var response = await AuthRequest(_ownerCookie).PostAsJsonAsync(
+            $"/keep/requests/{_validationRequestId}/external-contact",
+            new { direction = "outbound", channel = "phone", outcome = "no_answer" });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("KeepRequest.ExpectedVersionRequired", body.GetProperty("code").GetString());
+    }
+
+    [Fact]
+    public async Task PostExternalContact_StaleVersion_Returns409_RequestChanged()
+    {
+        var response = await AuthRequest(_ownerCookie, Guid.NewGuid()).PostAsJsonAsync(
+            $"/keep/requests/{_validationRequestId}/external-contact",
+            new { direction = "outbound", channel = "phone", outcome = "no_answer" });
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("KeepRequest.RequestChanged", body.GetProperty("code").GetString());
+    }
+
+    // =========================================================================
     // Helpers
     // =========================================================================
 
-    private static async Task<Guid> SeedRequestAsync(
+    private static async Task<(Guid Id, Guid Version)> SeedRequestAsync(
         OpHaloDbContext db, Guid accountId, Guid customerId,
         string referenceCode, string pageToken, DateTime now)
     {
@@ -518,13 +554,15 @@ public sealed class KeepRequestExternalContactApiTests : IClassFixture<KeepApiWe
         db.Set<KeepRequestEvent>().Add(
             KeepRequestEvent.CreateRequestCreated(request.Id, accountId, now));
         await db.SaveChangesAsync();
-        return request.Id;
+        return (request.Id, request.ConcurrencyVersion);
     }
 
-    private HttpClient AuthRequest(string cookie)
+    private HttpClient AuthRequest(string cookie, Guid? version = null)
     {
         var client = _factory.CreateClient();
         client.DefaultRequestHeaders.Add("Cookie", cookie);
+        if (version.HasValue)
+            client.DefaultRequestHeaders.Add("X-Keep-Request-Version", version.Value.ToString("D"));
         return client;
     }
 }

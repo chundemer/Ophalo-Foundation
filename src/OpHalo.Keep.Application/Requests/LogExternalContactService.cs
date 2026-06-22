@@ -16,7 +16,8 @@ public sealed record LogExternalContactCommand(
     string Channel,
     string? Outcome,
     bool? RequiresBusinessFollowUp,
-    string? Summary);
+    string? Summary,
+    Guid ExpectedVersion);
 
 public sealed class LogExternalContactService(
     IKeepRequestOperatePersistence operatePersistence,
@@ -77,7 +78,24 @@ public sealed class LogExternalContactService(
         if (actorDisplayName is null)
             return Result<KeepRequestDetailResult>.Failure(Forbidden);
 
-        // --- Parse direction ---
+        // --- Row authorization scope ---
+        if (userSnapshot.Role is not (AccountUserRole.Owner or AccountUserRole.Admin or AccountUserRole.Operator))
+            return Result<KeepRequestDetailResult>.Failure(Forbidden);
+        var scope = userSnapshot.Role is AccountUserRole.Owner or AccountUserRole.Admin
+            ? KeepRequestVisibilityScope.AccountWide
+            : KeepRequestVisibilityScope.MyWork;
+
+        // --- Load request ---
+        var request = await operatePersistence.GetVisibleRequestForUpdateAsync(
+            command.RequestId, currentUser.AccountId, currentUser.UserId, scope, ct);
+        if (request is null)
+            return Result<KeepRequestDetailResult>.Failure(KeepRequestErrors.NotFound);
+
+        // --- Expected-version check (G5b/ADR-333) ---
+        if (request.ConcurrencyVersion != command.ExpectedVersion)
+            return Result<KeepRequestDetailResult>.Failure(KeepRequestErrors.RequestChanged);
+
+        // --- Parse direction (after row load so stale requests return 409, not 400) ---
         var direction = ParseDirection(command.Direction);
         if (direction is null)
             return Result<KeepRequestDetailResult>.Failure(KeepRequestErrors.ExternalContactInvalidDirection);
@@ -111,19 +129,6 @@ public sealed class LogExternalContactService(
                 return Result<KeepRequestDetailResult>.Failure(KeepRequestErrors.ExternalContactOutcomeNotAllowed);
         }
 
-        // --- Row authorization scope ---
-        if (userSnapshot.Role is not (AccountUserRole.Owner or AccountUserRole.Admin or AccountUserRole.Operator))
-            return Result<KeepRequestDetailResult>.Failure(Forbidden);
-        var scope = userSnapshot.Role is AccountUserRole.Owner or AccountUserRole.Admin
-            ? KeepRequestVisibilityScope.AccountWide
-            : KeepRequestVisibilityScope.MyWork;
-
-        // --- Load request ---
-        var request = await operatePersistence.GetVisibleRequestForUpdateAsync(
-            command.RequestId, currentUser.AccountId, currentUser.UserId, scope, ct);
-        if (request is null)
-            return Result<KeepRequestDetailResult>.Failure(KeepRequestErrors.NotFound);
-
         // --- Domain mutation ---
         var nowUtc = clock.UtcNow;
         Result<Core.Entities.KeepRequestEvent> domainResult;
@@ -150,7 +155,16 @@ public sealed class LogExternalContactService(
         if (domainResult.IsFailure)
             return Result<KeepRequestDetailResult>.Failure(domainResult.Error);
 
-        await operatePersistence.CommitAsync(request, domainResult.Value, ct);
+        var commitResult = await operatePersistence.CommitAsync(request, domainResult.Value, ct);
+        switch (commitResult)
+        {
+            case KeepRequestCommitResult.Committed:
+                break;
+            case KeepRequestCommitResult.Conflict:
+                return Result<KeepRequestDetailResult>.Failure(KeepRequestErrors.RequestChanged);
+            default:
+                throw new ArgumentOutOfRangeException(nameof(commitResult));
+        }
 
         // --- Build detail response ---
         var events = await readPersistence.GetAllEventsAsync(request.Id, ct);

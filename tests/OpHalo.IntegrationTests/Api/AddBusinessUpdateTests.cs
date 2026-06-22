@@ -29,6 +29,8 @@ public sealed class AddBusinessUpdateTests : IClassFixture<KeepApiWebFactory>, I
     private Guid _accountId;
     private Guid _requestId;        // Received status — customer origin
     private Guid _closedRequestId;  // Closed (terminal) status
+    private Guid _requestVersion;
+    private Guid _closedRequestVersion;
     private string _ownerCookie = string.Empty;
     private string _viewerCookie = string.Empty;
 
@@ -121,6 +123,8 @@ public sealed class AddBusinessUpdateTests : IClassFixture<KeepApiWebFactory>, I
 
         _requestId = request.Id;
         _closedRequestId = closedRequest.Id;
+        _requestVersion = request.ConcurrencyVersion;
+        _closedRequestVersion = closedRequest.ConcurrencyVersion;
 
         var rawOwner = await _factory.SeedSessionAsync(graph.Owner.Id, _accountId);
         _ownerCookie = $"{AuthConstants.CookieName}={rawOwner}";
@@ -152,7 +156,7 @@ public sealed class AddBusinessUpdateTests : IClassFixture<KeepApiWebFactory>, I
     [Fact]
     public async Task AddBusinessUpdate_ViewerRole_Returns403()
     {
-        var response = await AuthRequest(_viewerCookie).PostAsJsonAsync(
+        var response = await AuthRequest(_viewerCookie, _requestVersion).PostAsJsonAsync(
             $"/keep/requests/{_requestId}/business-updates",
             new { message = "Hello there." });
 
@@ -166,7 +170,7 @@ public sealed class AddBusinessUpdateTests : IClassFixture<KeepApiWebFactory>, I
     [Fact]
     public async Task AddBusinessUpdate_UnknownRequestId_Returns404()
     {
-        var response = await AuthRequest(_ownerCookie).PostAsJsonAsync(
+        var response = await AuthRequest(_ownerCookie, _requestVersion).PostAsJsonAsync(
             $"/keep/requests/{Guid.NewGuid()}/business-updates",
             new { message = "Hello there." });
 
@@ -213,7 +217,7 @@ public sealed class AddBusinessUpdateTests : IClassFixture<KeepApiWebFactory>, I
         var tokenB = await _factory.SeedSessionAsync(graphB.Owner.Id, graphB.Account.Id);
         var cookieB = $"{AuthConstants.CookieName}={tokenB}";
 
-        var response = await AuthRequest(cookieB).PostAsJsonAsync(
+        var response = await AuthRequest(cookieB, _requestVersion).PostAsJsonAsync(
             $"/keep/requests/{_requestId}/business-updates",
             new { message = "Hello from the wrong account." });
 
@@ -227,7 +231,7 @@ public sealed class AddBusinessUpdateTests : IClassFixture<KeepApiWebFactory>, I
     [Fact]
     public async Task AddBusinessUpdate_MissingMessage_Returns400()
     {
-        var response = await AuthRequest(_ownerCookie).PostAsJsonAsync(
+        var response = await AuthRequest(_ownerCookie, _requestVersion).PostAsJsonAsync(
             $"/keep/requests/{_requestId}/business-updates",
             new { message = "" });
 
@@ -244,7 +248,7 @@ public sealed class AddBusinessUpdateTests : IClassFixture<KeepApiWebFactory>, I
     [Fact]
     public async Task AddBusinessUpdate_MessageTooLong_Returns400()
     {
-        var response = await AuthRequest(_ownerCookie).PostAsJsonAsync(
+        var response = await AuthRequest(_ownerCookie, _requestVersion).PostAsJsonAsync(
             $"/keep/requests/{_requestId}/business-updates",
             new { message = new string('x', 4001) });
 
@@ -261,7 +265,7 @@ public sealed class AddBusinessUpdateTests : IClassFixture<KeepApiWebFactory>, I
     [Fact]
     public async Task AddBusinessUpdate_TerminalRequest_Returns409()
     {
-        var response = await AuthRequest(_ownerCookie).PostAsJsonAsync(
+        var response = await AuthRequest(_ownerCookie, _closedRequestVersion).PostAsJsonAsync(
             $"/keep/requests/{_closedRequestId}/business-updates",
             new { message = "Update on your job." });
 
@@ -278,7 +282,7 @@ public sealed class AddBusinessUpdateTests : IClassFixture<KeepApiWebFactory>, I
     [Fact]
     public async Task AddBusinessUpdate_StandaloneMessage_Returns200WithMessageAddedEvent()
     {
-        var response = await AuthRequest(_ownerCookie).PostAsJsonAsync(
+        var response = await AuthRequest(_ownerCookie, _requestVersion).PostAsJsonAsync(
             $"/keep/requests/{_requestId}/business-updates",
             new { message = "We are on our way." });
 
@@ -307,7 +311,7 @@ public sealed class AddBusinessUpdateTests : IClassFixture<KeepApiWebFactory>, I
     [Fact]
     public async Task AddBusinessUpdate_WithSetStatus_Returns200WithStatusChangedEvent()
     {
-        var response = await AuthRequest(_ownerCookie).PostAsJsonAsync(
+        var response = await AuthRequest(_ownerCookie, _requestVersion).PostAsJsonAsync(
             $"/keep/requests/{_requestId}/business-updates",
             new { message = "We have you scheduled for Thursday morning.", setStatus = "scheduled" });
 
@@ -339,7 +343,7 @@ public sealed class AddBusinessUpdateTests : IClassFixture<KeepApiWebFactory>, I
     [Fact]
     public async Task AddBusinessUpdate_InvalidSetStatusTransition_Returns422()
     {
-        var response = await AuthRequest(_ownerCookie).PostAsJsonAsync(
+        var response = await AuthRequest(_ownerCookie, _requestVersion).PostAsJsonAsync(
             $"/keep/requests/{_requestId}/business-updates",
             new { message = "Closing now.", setStatus = "closed" });
 
@@ -356,7 +360,7 @@ public sealed class AddBusinessUpdateTests : IClassFixture<KeepApiWebFactory>, I
     [Fact]
     public async Task AddBusinessUpdate_UnknownSetStatusSlug_Returns400()
     {
-        var response = await AuthRequest(_ownerCookie).PostAsJsonAsync(
+        var response = await AuthRequest(_ownerCookie, _requestVersion).PostAsJsonAsync(
             $"/keep/requests/{_requestId}/business-updates",
             new { message = "Definitely doing a status thing.", setStatus = "teleported" });
 
@@ -375,6 +379,7 @@ public sealed class AddBusinessUpdateTests : IClassFixture<KeepApiWebFactory>, I
     {
         // Fresh request so we know no prior first-response exists.
         Guid freshRequestId;
+        Guid freshRequestVersion;
         await using (var scope = _factory.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
@@ -390,9 +395,10 @@ public sealed class AddBusinessUpdateTests : IClassFixture<KeepApiWebFactory>, I
                 KeepRequestEvent.CreateRequestCreated(req.Id, _accountId, DateTime.UtcNow));
             await db.SaveChangesAsync();
             freshRequestId = req.Id;
+            freshRequestVersion = req.ConcurrencyVersion;
         }
 
-        var response = await AuthRequest(_ownerCookie).PostAsJsonAsync(
+        var response = await AuthRequest(_ownerCookie, freshRequestVersion).PostAsJsonAsync(
             $"/keep/requests/{freshRequestId}/business-updates",
             new { message = "First contact with you!" });
 
@@ -404,10 +410,40 @@ public sealed class AddBusinessUpdateTests : IClassFixture<KeepApiWebFactory>, I
         Assert.Equal(JsonValueKind.String, body.GetProperty("firstResponseEventId").ValueKind);
     }
 
-    private HttpClient AuthRequest(string cookie)
+    // =========================================================================
+    // G5b — Version header enforcement
+    // =========================================================================
+
+    [Fact]
+    public async Task AddBusinessUpdate_MissingVersionHeader_Returns400_ExpectedVersionRequired()
+    {
+        var response = await AuthRequest(_ownerCookie).PostAsJsonAsync(
+            $"/keep/requests/{_requestId}/business-updates",
+            new { message = "Hello." });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("KeepRequest.ExpectedVersionRequired", body.GetProperty("code").GetString());
+    }
+
+    [Fact]
+    public async Task AddBusinessUpdate_StaleVersion_Returns409_RequestChanged()
+    {
+        var response = await AuthRequest(_ownerCookie, Guid.NewGuid()).PostAsJsonAsync(
+            $"/keep/requests/{_requestId}/business-updates",
+            new { message = "Hello." });
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("KeepRequest.RequestChanged", body.GetProperty("code").GetString());
+    }
+
+    private HttpClient AuthRequest(string cookie, Guid? version = null)
     {
         var client = _factory.CreateClient();
         client.DefaultRequestHeaders.Add("Cookie", cookie);
+        if (version.HasValue)
+            client.DefaultRequestHeaders.Add("X-Keep-Request-Version", version.Value.ToString("D"));
         return client;
     }
 }

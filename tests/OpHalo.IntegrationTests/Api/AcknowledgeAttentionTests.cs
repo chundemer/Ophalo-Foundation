@@ -30,8 +30,11 @@ public sealed class AcknowledgeAttentionTests : IClassFixture<KeepApiWebFactory>
     private Guid _accountId;
     private Guid _ownerAccountUserId;
     private Guid _attentionRequestId;
+    private Guid _attentionRequestVersion;
     private Guid _noAttentionRequestId;
+    private Guid _noAttentionRequestVersion;
     private Guid _terminalWithAttentionRequestId;   // Closed terminal with attention seeded post-close (legacy cleanup scenario)
+    private Guid _terminalWithAttentionRequestVersion;
     private string _ownerCookie = string.Empty;
     private string _viewerCookie = string.Empty;
 
@@ -138,8 +141,11 @@ public sealed class AcknowledgeAttentionTests : IClassFixture<KeepApiWebFactory>
         await db.SaveChangesAsync();
 
         _attentionRequestId = attentionRequest.Id;
+        _attentionRequestVersion = attentionRequest.ConcurrencyVersion;
         _noAttentionRequestId = noAttentionRequest.Id;
+        _noAttentionRequestVersion = noAttentionRequest.ConcurrencyVersion;
         _terminalWithAttentionRequestId = terminalWithAttention.Id;
+        _terminalWithAttentionRequestVersion = terminalWithAttention.ConcurrencyVersion;
 
         var rawOwner = await _factory.SeedSessionAsync(graph.Owner.Id, _accountId);
         _ownerCookie = $"{AuthConstants.CookieName}={rawOwner}";
@@ -163,7 +169,7 @@ public sealed class AcknowledgeAttentionTests : IClassFixture<KeepApiWebFactory>
     [Fact]
     public async Task AcknowledgeAttention_ViewerRole_Returns403()
     {
-        var response = await AuthRequest(_viewerCookie).PostAsJsonAsync(
+        var response = await AuthRequest(_viewerCookie, _attentionRequestVersion).PostAsJsonAsync(
             $"/keep/requests/{_attentionRequestId}/attention/acknowledge",
             new { reason = "Handled elsewhere." });
 
@@ -173,7 +179,7 @@ public sealed class AcknowledgeAttentionTests : IClassFixture<KeepApiWebFactory>
     [Fact]
     public async Task AcknowledgeAttention_UnknownRequestId_Returns404()
     {
-        var response = await AuthRequest(_ownerCookie).PostAsJsonAsync(
+        var response = await AuthRequest(_ownerCookie, _attentionRequestVersion).PostAsJsonAsync(
             $"/keep/requests/{Guid.NewGuid()}/attention/acknowledge",
             new { reason = "Handled elsewhere." });
 
@@ -216,7 +222,7 @@ public sealed class AcknowledgeAttentionTests : IClassFixture<KeepApiWebFactory>
         var tokenB = await _factory.SeedSessionAsync(graphB.Owner.Id, graphB.Account.Id);
         var cookieB = $"{AuthConstants.CookieName}={tokenB}";
 
-        var response = await AuthRequest(cookieB).PostAsJsonAsync(
+        var response = await AuthRequest(cookieB, _attentionRequestVersion).PostAsJsonAsync(
             $"/keep/requests/{_attentionRequestId}/attention/acknowledge",
             new { reason = "Wrong-account acknowledge attempt." });
 
@@ -226,7 +232,7 @@ public sealed class AcknowledgeAttentionTests : IClassFixture<KeepApiWebFactory>
     [Fact]
     public async Task AcknowledgeAttention_MissingReason_Returns400()
     {
-        var response = await AuthRequest(_ownerCookie).PostAsJsonAsync(
+        var response = await AuthRequest(_ownerCookie, _attentionRequestVersion).PostAsJsonAsync(
             $"/keep/requests/{_attentionRequestId}/attention/acknowledge",
             new { reason = " " });
 
@@ -239,7 +245,7 @@ public sealed class AcknowledgeAttentionTests : IClassFixture<KeepApiWebFactory>
     [Fact]
     public async Task AcknowledgeAttention_ReasonTooLong_Returns400()
     {
-        var response = await AuthRequest(_ownerCookie).PostAsJsonAsync(
+        var response = await AuthRequest(_ownerCookie, _attentionRequestVersion).PostAsJsonAsync(
             $"/keep/requests/{_attentionRequestId}/attention/acknowledge",
             new { reason = new string('x', 501) });
 
@@ -252,7 +258,7 @@ public sealed class AcknowledgeAttentionTests : IClassFixture<KeepApiWebFactory>
     [Fact]
     public async Task AcknowledgeAttention_NoActiveAttention_Returns409()
     {
-        var response = await AuthRequest(_ownerCookie).PostAsJsonAsync(
+        var response = await AuthRequest(_ownerCookie, _noAttentionRequestVersion).PostAsJsonAsync(
             $"/keep/requests/{_noAttentionRequestId}/attention/acknowledge",
             new { reason = "Nothing active." });
 
@@ -265,7 +271,7 @@ public sealed class AcknowledgeAttentionTests : IClassFixture<KeepApiWebFactory>
     [Fact]
     public async Task AcknowledgeAttention_ActiveAttention_Returns200AndClearsAttention()
     {
-        var response = await AuthRequest(_ownerCookie).PostAsJsonAsync(
+        var response = await AuthRequest(_ownerCookie, _attentionRequestVersion).PostAsJsonAsync(
             $"/keep/requests/{_attentionRequestId}/attention/acknowledge",
             new { reason = "Duplicate ETA request already answered." });
 
@@ -316,7 +322,7 @@ public sealed class AcknowledgeAttentionTests : IClassFixture<KeepApiWebFactory>
     [Fact]
     public async Task BusinessUpdate_ClearsBusinessWaitingAttention()
     {
-        var response = await AuthRequest(_ownerCookie).PostAsJsonAsync(
+        var response = await AuthRequest(_ownerCookie, _attentionRequestVersion).PostAsJsonAsync(
             $"/keep/requests/{_attentionRequestId}/business-updates",
             new { message = "We are checking that ETA now." });
 
@@ -335,7 +341,7 @@ public sealed class AcknowledgeAttentionTests : IClassFixture<KeepApiWebFactory>
     [Fact]
     public async Task SilentStatusChange_DoesNotClearBusinessWaitingAttention()
     {
-        var response = await AuthRequest(_ownerCookie).PatchAsJsonAsync(
+        var response = await AuthRequest(_ownerCookie, _attentionRequestVersion).PatchAsJsonAsync(
             $"/keep/requests/{_attentionRequestId}/status",
             new { status = "in_progress", message = (string?)null });
 
@@ -356,7 +362,7 @@ public sealed class AcknowledgeAttentionTests : IClassFixture<KeepApiWebFactory>
     [Fact]
     public async Task AcknowledgeAttention_TerminalRequestWithActiveAttention_Returns200()
     {
-        var response = await AuthRequest(_ownerCookie).PostAsJsonAsync(
+        var response = await AuthRequest(_ownerCookie, _terminalWithAttentionRequestVersion).PostAsJsonAsync(
             $"/keep/requests/{_terminalWithAttentionRequestId}/attention/acknowledge",
             new { reason = "Missed during closure — cleaning up." });
 
@@ -366,6 +372,34 @@ public sealed class AcknowledgeAttentionTests : IClassFixture<KeepApiWebFactory>
         Assert.Equal("none", body.GetProperty("attentionLevel").GetString());
         Assert.Equal("Missed during closure — cleaning up.", body.GetProperty("attentionClearReason").GetString());
         Assert.False(body.GetProperty("availableActions").GetProperty("canAcknowledgeAttention").GetBoolean());
+    }
+
+    // =========================================================================
+    // G5b — Version header enforcement
+    // =========================================================================
+
+    [Fact]
+    public async Task AcknowledgeAttention_MissingVersionHeader_Returns400_ExpectedVersionRequired()
+    {
+        var response = await AuthRequest(_ownerCookie).PostAsJsonAsync(
+            $"/keep/requests/{_attentionRequestId}/attention/acknowledge",
+            new { reason = "test reason" });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("KeepRequest.ExpectedVersionRequired", body.GetProperty("code").GetString());
+    }
+
+    [Fact]
+    public async Task AcknowledgeAttention_StaleVersion_Returns409_RequestChanged()
+    {
+        var response = await AuthRequest(_ownerCookie, Guid.NewGuid()).PostAsJsonAsync(
+            $"/keep/requests/{_attentionRequestId}/attention/acknowledge",
+            new { reason = "test reason" });
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("KeepRequest.RequestChanged", body.GetProperty("code").GetString());
     }
 
     private static void SeedBusinessWaitingAttention(OpHaloDbContext db, KeepRequest request, DateTime sinceUtc)
@@ -379,10 +413,12 @@ public sealed class AcknowledgeAttentionTests : IClassFixture<KeepApiWebFactory>
         entry.Property(r => r.NextAttentionAtUtc).CurrentValue = sinceUtc.AddMinutes(15);
     }
 
-    private HttpClient AuthRequest(string cookie)
+    private HttpClient AuthRequest(string cookie, Guid? version = null)
     {
         var client = _factory.CreateClient();
         client.DefaultRequestHeaders.Add("Cookie", cookie);
+        if (version.HasValue)
+            client.DefaultRequestHeaders.Add("X-Keep-Request-Version", version.Value.ToString("D"));
         return client;
     }
 }

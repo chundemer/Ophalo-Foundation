@@ -12,7 +12,8 @@ namespace OpHalo.Keep.Application.Requests;
 
 public sealed record AcknowledgeAttentionCommand(
     Guid RequestId,
-    string Reason);
+    string Reason,
+    Guid ExpectedVersion);
 
 public sealed class AcknowledgeAttentionService(
     IKeepRequestOperatePersistence operatePersistence,
@@ -86,6 +87,10 @@ public sealed class AcknowledgeAttentionService(
         if (request is null)
             return Result<KeepRequestDetailResult>.Failure(KeepRequestErrors.NotFound);
 
+        // --- Expected-version check (G5b/ADR-333) ---
+        if (request.ConcurrencyVersion != command.ExpectedVersion)
+            return Result<KeepRequestDetailResult>.Failure(KeepRequestErrors.RequestChanged);
+
         // --- Domain: acknowledge attention ---
         // Reason is required, max 500 chars. Does not update first-response or status.
         var nowUtc = clock.UtcNow;
@@ -95,7 +100,16 @@ public sealed class AcknowledgeAttentionService(
         if (acknowledgeResult.IsFailure)
             return Result<KeepRequestDetailResult>.Failure(acknowledgeResult.Error);
 
-        await operatePersistence.CommitAsync(request, acknowledgeResult.Value, ct);
+        var commitResult = await operatePersistence.CommitAsync(request, acknowledgeResult.Value, ct);
+        switch (commitResult)
+        {
+            case KeepRequestCommitResult.Committed:
+                break;
+            case KeepRequestCommitResult.Conflict:
+                return Result<KeepRequestDetailResult>.Failure(KeepRequestErrors.RequestChanged);
+            default:
+                throw new ArgumentOutOfRangeException(nameof(commitResult));
+        }
 
         // --- Load read data for the response ---
         var events = await readPersistence.GetAllEventsAsync(request.Id, ct);

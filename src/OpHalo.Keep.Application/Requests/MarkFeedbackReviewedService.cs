@@ -11,7 +11,8 @@ namespace OpHalo.Keep.Application.Requests;
 
 public sealed record MarkFeedbackReviewedCommand(
     Guid RequestId,
-    string? Note);
+    string? Note,
+    Guid ExpectedVersion);
 
 public sealed class MarkFeedbackReviewedService(
     IKeepRequestOperatePersistence operatePersistence,
@@ -85,6 +86,10 @@ public sealed class MarkFeedbackReviewedService(
         if (request is null)
             return Result<KeepRequestDetailResult>.Failure(KeepRequestErrors.NotFound);
 
+        // --- Expected-version check (G5b/ADR-333) ---
+        if (request.ConcurrencyVersion != command.ExpectedVersion)
+            return Result<KeepRequestDetailResult>.Failure(KeepRequestErrors.RequestChanged);
+
         // --- Domain: mark feedback reviewed ---
         var domainResult = request.MarkFeedbackReviewed(
             command.Note, currentUser.UserId, actorDisplayName, nowUtc);
@@ -92,7 +97,16 @@ public sealed class MarkFeedbackReviewedService(
         if (domainResult.IsFailure)
             return Result<KeepRequestDetailResult>.Failure(domainResult.Error);
 
-        await operatePersistence.CommitAsync(request, domainResult.Value, ct);
+        var commitResult = await operatePersistence.CommitAsync(request, domainResult.Value, ct);
+        switch (commitResult)
+        {
+            case KeepRequestCommitResult.Committed:
+                break;
+            case KeepRequestCommitResult.Conflict:
+                return Result<KeepRequestDetailResult>.Failure(KeepRequestErrors.RequestChanged);
+            default:
+                throw new ArgumentOutOfRangeException(nameof(commitResult));
+        }
 
         // --- Build response ---
         var events       = await readPersistence.GetAllEventsAsync(request.Id, ct);

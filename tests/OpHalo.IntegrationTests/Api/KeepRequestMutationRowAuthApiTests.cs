@@ -35,11 +35,15 @@ public sealed class KeepRequestMutationRowAuthApiTests : IClassFixture<KeepApiWe
     // Responsible and Watching operators have participation; the invisible operator does not.
     // 404 is returned before domain runs, so no state accumulates.
     private Guid _invisibleRequestId;
+    private Guid _invisibleRequestVersion;
 
     // Isolated per-mutation requests for success cases.
     private Guid _responsibleSuccessId;
+    private Guid _responsibleSuccessVersion;
     private Guid _watchingSuccessId;
+    private Guid _watchingSuccessVersion;
     private Guid _adminSuccessId;
+    private Guid _adminSuccessVersion;
 
     private string _adminCookie        = string.Empty;
     private string _responsibleCookie  = string.Empty;
@@ -152,6 +156,7 @@ public sealed class KeepRequestMutationRowAuthApiTests : IClassFixture<KeepApiWe
                 ParticipationType.Watching, notificationsEnabled: true, now));
         await db.SaveChangesAsync();
         _invisibleRequestId = invisibleRequest.Id;
+        _invisibleRequestVersion = invisibleRequest.ConcurrencyVersion;
 
         // Isolated success request for Responsible Operator (AddInternalNote)
         var responsibleRequest = SeedRequest(accountId, customer.Id, "MRA-RSP", "mra_rsp_token", now);
@@ -164,6 +169,7 @@ public sealed class KeepRequestMutationRowAuthApiTests : IClassFixture<KeepApiWe
                 ParticipationType.Responsible, notificationsEnabled: true, now));
         await db.SaveChangesAsync();
         _responsibleSuccessId = responsibleRequest.Id;
+        _responsibleSuccessVersion = responsibleRequest.ConcurrencyVersion;
 
         // Isolated success request for Watching Operator (AddBusinessUpdate)
         var watchingRequest = SeedRequest(accountId, customer.Id, "MRA-WCH", "mra_wch_token", now);
@@ -176,6 +182,7 @@ public sealed class KeepRequestMutationRowAuthApiTests : IClassFixture<KeepApiWe
                 ParticipationType.Watching, notificationsEnabled: true, now));
         await db.SaveChangesAsync();
         _watchingSuccessId = watchingRequest.Id;
+        _watchingSuccessVersion = watchingRequest.ConcurrencyVersion;
 
         // Isolated success request for Admin account-wide (ChangeKeepRequestStatus)
         var adminRequest = SeedRequest(accountId, customer.Id, "MRA-ADM", "mra_adm_token", now);
@@ -184,6 +191,7 @@ public sealed class KeepRequestMutationRowAuthApiTests : IClassFixture<KeepApiWe
             KeepRequestEvent.CreateRequestCreated(adminRequest.Id, accountId, now));
         await db.SaveChangesAsync();
         _adminSuccessId = adminRequest.Id;
+        _adminSuccessVersion = adminRequest.ConcurrencyVersion;
 
         _adminCookie       = $"{AuthConstants.CookieName}={await _factory.SeedSessionAsync(adminMember.Id, accountId)}";
         _responsibleCookie = $"{AuthConstants.CookieName}={await _factory.SeedSessionAsync(responsibleMember.Id, accountId)}";
@@ -200,7 +208,7 @@ public sealed class KeepRequestMutationRowAuthApiTests : IClassFixture<KeepApiWe
     [Fact]
     public async Task InvisibleOperator_AcknowledgeAttention_Returns404()
     {
-        var response = await AuthRequest(_invisibleCookie).PostAsJsonAsync(
+        var response = await AuthRequest(_invisibleCookie, _invisibleRequestVersion).PostAsJsonAsync(
             $"/keep/requests/{_invisibleRequestId}/attention/acknowledge",
             new { reason = "test reason" });
 
@@ -210,7 +218,7 @@ public sealed class KeepRequestMutationRowAuthApiTests : IClassFixture<KeepApiWe
     [Fact]
     public async Task InvisibleOperator_AddBusinessUpdate_Returns404()
     {
-        var response = await AuthRequest(_invisibleCookie).PostAsJsonAsync(
+        var response = await AuthRequest(_invisibleCookie, _invisibleRequestVersion).PostAsJsonAsync(
             $"/keep/requests/{_invisibleRequestId}/business-updates",
             new { message = "test message" });
 
@@ -220,7 +228,7 @@ public sealed class KeepRequestMutationRowAuthApiTests : IClassFixture<KeepApiWe
     [Fact]
     public async Task InvisibleOperator_AddInternalNote_Returns404()
     {
-        var response = await AuthRequest(_invisibleCookie).PostAsJsonAsync(
+        var response = await AuthRequest(_invisibleCookie, _invisibleRequestVersion).PostAsJsonAsync(
             $"/keep/requests/{_invisibleRequestId}/internal-notes",
             new { note = "test note" });
 
@@ -230,7 +238,7 @@ public sealed class KeepRequestMutationRowAuthApiTests : IClassFixture<KeepApiWe
     [Fact]
     public async Task InvisibleOperator_ChangeStatus_Returns404()
     {
-        var response = await AuthRequest(_invisibleCookie).PatchAsJsonAsync(
+        var response = await AuthRequest(_invisibleCookie, _invisibleRequestVersion).PatchAsJsonAsync(
             $"/keep/requests/{_invisibleRequestId}/status",
             new { status = "in_progress" });
 
@@ -240,7 +248,7 @@ public sealed class KeepRequestMutationRowAuthApiTests : IClassFixture<KeepApiWe
     [Fact]
     public async Task InvisibleOperator_LogExternalContact_Returns404()
     {
-        var response = await AuthRequest(_invisibleCookie).PostAsJsonAsync(
+        var response = await AuthRequest(_invisibleCookie, _invisibleRequestVersion).PostAsJsonAsync(
             $"/keep/requests/{_invisibleRequestId}/external-contact",
             new { direction = "outbound", channel = "phone", outcome = "no_answer" });
 
@@ -254,7 +262,7 @@ public sealed class KeepRequestMutationRowAuthApiTests : IClassFixture<KeepApiWe
     [Fact]
     public async Task OperatorResponsible_AddInternalNote_Returns200()
     {
-        var response = await AuthRequest(_responsibleCookie).PostAsJsonAsync(
+        var response = await AuthRequest(_responsibleCookie, _responsibleSuccessVersion).PostAsJsonAsync(
             $"/keep/requests/{_responsibleSuccessId}/internal-notes",
             new { note = "Responsible operator note." });
 
@@ -268,7 +276,7 @@ public sealed class KeepRequestMutationRowAuthApiTests : IClassFixture<KeepApiWe
     [Fact]
     public async Task OperatorWatching_AddBusinessUpdate_Returns200()
     {
-        var response = await AuthRequest(_watchingCookie).PostAsJsonAsync(
+        var response = await AuthRequest(_watchingCookie, _watchingSuccessVersion).PostAsJsonAsync(
             $"/keep/requests/{_watchingSuccessId}/business-updates",
             new { message = "Watching operator update." });
 
@@ -282,7 +290,7 @@ public sealed class KeepRequestMutationRowAuthApiTests : IClassFixture<KeepApiWe
     [Fact]
     public async Task Admin_ChangeStatus_AccountWide_Returns200()
     {
-        var response = await AuthRequest(_adminCookie).PatchAsJsonAsync(
+        var response = await AuthRequest(_adminCookie, _adminSuccessVersion).PatchAsJsonAsync(
             $"/keep/requests/{_adminSuccessId}/status",
             new { status = "in_progress" });
 
@@ -301,10 +309,12 @@ public sealed class KeepRequestMutationRowAuthApiTests : IClassFixture<KeepApiWe
             "Mut Row Customer", "0422222222", null,
             "Test description", referenceCode, pageToken, now, 60);
 
-    private HttpClient AuthRequest(string cookie)
+    private HttpClient AuthRequest(string cookie, Guid? version = null)
     {
         var client = _factory.CreateClient();
         client.DefaultRequestHeaders.Add("Cookie", cookie);
+        if (version.HasValue)
+            client.DefaultRequestHeaders.Add("X-Keep-Request-Version", version.Value.ToString("D"));
         return client;
     }
 }

@@ -299,11 +299,16 @@ app.MapGet("/keep/requests/{requestId:guid}", async (
 // Change request status — authenticated, operator write (Phase 8-B2-alpha)
 app.MapPatch("/keep/requests/{requestId:guid}/status", async (
     Guid requestId,
+    HttpRequest httpRequest,
     ChangeStatusRequestBody body,
     ChangeKeepRequestStatusService service,
     CancellationToken ct) =>
 {
-    var command = new ChangeKeepRequestStatusCommand(requestId, body.Status, body.Message);
+    var versionResult = KeepRequestVersionHeader.Parse(httpRequest.Headers);
+    if (!versionResult.IsSuccess)
+        return ErrorHttpMapper.ToHttpResult(versionResult.Error);
+
+    var command = new ChangeKeepRequestStatusCommand(requestId, body.Status, body.Message, versionResult.Value);
     var result = await service.ExecuteAsync(command, ct);
     return result.IsSuccess ? Results.Ok(result.Value) : ErrorHttpMapper.ToHttpResult(result.Error);
 }).RequireAuthorization();
@@ -311,11 +316,16 @@ app.MapPatch("/keep/requests/{requestId:guid}/status", async (
 // Add business update — authenticated, operator write (Phase 8-B2-beta)
 app.MapPost("/keep/requests/{requestId:guid}/business-updates", async (
     Guid requestId,
+    HttpRequest httpRequest,
     BusinessUpdateRequestBody body,
     AddBusinessUpdateService service,
     CancellationToken ct) =>
 {
-    var command = new AddBusinessUpdateCommand(requestId, body.Message, body.SetStatus);
+    var versionResult = KeepRequestVersionHeader.Parse(httpRequest.Headers);
+    if (!versionResult.IsSuccess)
+        return ErrorHttpMapper.ToHttpResult(versionResult.Error);
+
+    var command = new AddBusinessUpdateCommand(requestId, body.Message, body.SetStatus, versionResult.Value);
     var result = await service.ExecuteAsync(command, ct);
     return result.IsSuccess ? Results.Ok(result.Value) : ErrorHttpMapper.ToHttpResult(result.Error);
 }).RequireAuthorization();
@@ -323,11 +333,16 @@ app.MapPost("/keep/requests/{requestId:guid}/business-updates", async (
 // Add internal note — authenticated, operator write (Phase 8-B2-beta)
 app.MapPost("/keep/requests/{requestId:guid}/internal-notes", async (
     Guid requestId,
+    HttpRequest httpRequest,
     InternalNoteRequestBody body,
     AddInternalNoteService service,
     CancellationToken ct) =>
 {
-    var command = new AddInternalNoteCommand(requestId, body.Note);
+    var versionResult = KeepRequestVersionHeader.Parse(httpRequest.Headers);
+    if (!versionResult.IsSuccess)
+        return ErrorHttpMapper.ToHttpResult(versionResult.Error);
+
+    var command = new AddInternalNoteCommand(requestId, body.Note, versionResult.Value);
     var result = await service.ExecuteAsync(command, ct);
     return result.IsSuccess ? Results.Ok(result.Value) : ErrorHttpMapper.ToHttpResult(result.Error);
 }).RequireAuthorization();
@@ -335,13 +350,18 @@ app.MapPost("/keep/requests/{requestId:guid}/internal-notes", async (
 // Log external contact — authenticated, operator write (Phase 8-B5/Session 2B)
 app.MapPost("/keep/requests/{requestId:guid}/external-contact", async (
     Guid requestId,
+    HttpRequest httpRequest,
     ExternalContactRequestBody body,
     LogExternalContactService service,
     CancellationToken ct) =>
 {
+    var versionResult = KeepRequestVersionHeader.Parse(httpRequest.Headers);
+    if (!versionResult.IsSuccess)
+        return ErrorHttpMapper.ToHttpResult(versionResult.Error);
+
     var command = new LogExternalContactCommand(
         requestId, body.Direction, body.Channel, body.Outcome,
-        body.RequiresBusinessFollowUp, body.Summary);
+        body.RequiresBusinessFollowUp, body.Summary, versionResult.Value);
     var result = await service.ExecuteAsync(command, ct);
     return result.IsSuccess ? Results.Ok(result.Value) : ErrorHttpMapper.ToHttpResult(result.Error);
 }).RequireAuthorization();
@@ -349,11 +369,16 @@ app.MapPost("/keep/requests/{requestId:guid}/external-contact", async (
 // Acknowledge attention — authenticated, operator write (Phase 8-B2-gamma)
 app.MapPost("/keep/requests/{requestId:guid}/attention/acknowledge", async (
     Guid requestId,
+    HttpRequest httpRequest,
     AcknowledgeAttentionRequestBody body,
     AcknowledgeAttentionService service,
     CancellationToken ct) =>
 {
-    var command = new AcknowledgeAttentionCommand(requestId, body.Reason);
+    var versionResult = KeepRequestVersionHeader.Parse(httpRequest.Headers);
+    if (!versionResult.IsSuccess)
+        return ErrorHttpMapper.ToHttpResult(versionResult.Error);
+
+    var command = new AcknowledgeAttentionCommand(requestId, body.Reason, versionResult.Value);
     var result = await service.ExecuteAsync(command, ct);
     return result.IsSuccess ? Results.Ok(result.Value) : ErrorHttpMapper.ToHttpResult(result.Error);
 }).RequireAuthorization();
@@ -361,11 +386,16 @@ app.MapPost("/keep/requests/{requestId:guid}/attention/acknowledge", async (
 // Mark feedback reviewed — authenticated, Owner/Admin write (Phase 8-B5/Session 5B, ADR-274)
 app.MapPost("/keep/requests/{requestId:guid}/feedback-review", async (
     Guid requestId,
+    HttpRequest httpRequest,
     FeedbackReviewRequestBody body,
     MarkFeedbackReviewedService service,
     CancellationToken ct) =>
 {
-    var command = new MarkFeedbackReviewedCommand(requestId, body.Note);
+    var versionResult = KeepRequestVersionHeader.Parse(httpRequest.Headers);
+    if (!versionResult.IsSuccess)
+        return ErrorHttpMapper.ToHttpResult(versionResult.Error);
+
+    var command = new MarkFeedbackReviewedCommand(requestId, body.Note, versionResult.Value);
     var result = await service.ExecuteAsync(command, ct);
     return result.IsSuccess ? Results.Ok(result.Value) : ErrorHttpMapper.ToHttpResult(result.Error);
 }).RequireAuthorization();

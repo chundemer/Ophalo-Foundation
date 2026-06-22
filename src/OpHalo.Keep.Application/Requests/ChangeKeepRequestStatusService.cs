@@ -13,7 +13,8 @@ namespace OpHalo.Keep.Application.Requests;
 public sealed record ChangeKeepRequestStatusCommand(
     Guid RequestId,
     string Status,
-    string? Message);
+    string? Message,
+    Guid ExpectedVersion);
 
 public sealed class ChangeKeepRequestStatusService(
     IKeepRequestOperatePersistence operatePersistence,
@@ -69,11 +70,6 @@ public sealed class ChangeKeepRequestStatusService(
         if (!featurePolicy.IsEnabled(accountSnapshot.Plan, FeatureKeys.Keep.OperatorQueue))
             return Result<KeepRequestDetailResult>.Failure(Forbidden);
 
-        // --- Parse status slug ---
-        var parsedStatus = KeepRequestDetailMapper.ParseStatusSlug(command.Status);
-        if (parsedStatus is null)
-            return Result<KeepRequestDetailResult>.Failure(KeepRequestErrors.InvalidStatus);
-
         // --- Actor display name (denormalized onto the event) ---
         var actorDisplayName = await operatePersistence.GetActorDisplayNameAsync(currentUser.UserId, ct);
         if (actorDisplayName is null)
@@ -92,6 +88,15 @@ public sealed class ChangeKeepRequestStatusService(
         if (request is null)
             return Result<KeepRequestDetailResult>.Failure(KeepRequestErrors.NotFound);
 
+        // --- Expected-version check (G5b/ADR-333) ---
+        if (request.ConcurrencyVersion != command.ExpectedVersion)
+            return Result<KeepRequestDetailResult>.Failure(KeepRequestErrors.RequestChanged);
+
+        // --- Parse status slug (after row load so stale requests return 409, not 400) ---
+        var parsedStatus = KeepRequestDetailMapper.ParseStatusSlug(command.Status);
+        if (parsedStatus is null)
+            return Result<KeepRequestDetailResult>.Failure(KeepRequestErrors.InvalidStatus);
+
         // --- Domain: apply status change ---
         var nowUtc = clock.UtcNow;
         var changeResult = request.ChangeStatus(
@@ -106,7 +111,18 @@ public sealed class ChangeKeepRequestStatusService(
 
         // Commit only when there is an event to persist (IsNoOp = same-status/no-message).
         if (!changeResult.Value.IsNoOp)
-            await operatePersistence.CommitAsync(request, changeResult.Value.StatusChangedEvent, ct);
+        {
+            var commitResult = await operatePersistence.CommitAsync(request, changeResult.Value.StatusChangedEvent, ct);
+            switch (commitResult)
+            {
+                case KeepRequestCommitResult.Committed:
+                    break;
+                case KeepRequestCommitResult.Conflict:
+                    return Result<KeepRequestDetailResult>.Failure(KeepRequestErrors.RequestChanged);
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(commitResult));
+            }
+        }
 
         // --- Load read data for the response ---
         var events = await readPersistence.GetAllEventsAsync(request.Id, ct);

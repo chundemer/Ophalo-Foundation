@@ -75,8 +75,10 @@ public sealed class KeepRequest : BaseEntity
 
     // Application-managed opaque concurrency token for the request aggregate (row, events,
     // participants). New rows receive a random GUID; the API exposes it as `version`. Clients
-    // compare and return it but never interpret ordering. Rotation/enforcement arrives in G5b–d.
+    // compare and return it but never interpret ordering.
     public Guid ConcurrencyVersion { get; private set; }
+
+    public void RotateConcurrencyVersion() => ConcurrencyVersion = Guid.NewGuid();
 
     /// <summary>
     /// Moves the request to a new status and optionally attaches a customer-visible message.
