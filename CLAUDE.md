@@ -33,8 +33,21 @@ explicitly requests them. Never edit `_reference/`.
 
 ## Session and Scope Protocol
 
-If the session-log header marks the requested batch `Pre-work complete`, treat it as an
-implementation session. Read only that batch and verify specific signatures before coding.
+Use these terms precisely:
+
+- **Discovery** determines code paths, unresolved decisions, architecture, scope, and tests. It is
+  performed only when the session-log says pre-work is incomplete or when implementation exposes a
+  concrete contradiction.
+- **Pre-work complete / implementation-ready** means those questions are already answered in the
+  repository brief. Treat that plan as authoritative; do not rediscover, reconsider, or reread the
+  feature broadly.
+- **Implementation preflight** is mechanical only: use targeted `rg` to confirm the named symbols
+  still exist, enumerate compile-impact constructor/interface/test-helper callers, and report any
+  drift from the brief. It is not a second discovery phase.
+
+If the session-log marks the requested batch `Pre-work complete` or `implementation-ready`, read
+only that batch, perform the mechanical preflight, present the exact file-level gate, and stop when
+the brief requires approval. If no drift exists, do not ask architectural or product questions.
 
 If pre-work is not complete, inspect the smallest relevant repository surface, identify decisions,
 and stop for confirmation before implementation.
@@ -46,7 +59,8 @@ Before the first edit, state:
 3. unresolved decisions, or explicitly state that none remain.
 
 Do not reopen locked decisions silently. If implementation reveals a real contradiction or missing
-contract, stop and surface it.
+contract, stop and surface the specific evidence. Do not label ordinary signature confirmation as
+"discovery."
 
 Keep a batch within roughly 8–10 files and one coherent concern. A very large file or broad test
 matrix may justify a smaller batch. Start a fresh Claude session after an approved commit instead of
