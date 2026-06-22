@@ -13,6 +13,7 @@ public sealed record KeepRequestSummary(
     DateTime? LastBusinessActivityAtUtc,
     DateTime CreatedAtUtc,
     DateTime UpdatedAtUtc,
+    Guid Version,
     bool IsTerminal,
     bool IsPostCloseFollowUp,
     string RowContext,

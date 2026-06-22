@@ -430,6 +430,28 @@ public sealed class KeepBusinessRequestApiTests : IClassFixture<KeepApiWebFactor
     }
 
     // =========================================================================
+    // G5a-2: business-created detail response exposes the concurrency version (ADR-333)
+    // =========================================================================
+
+    [Fact]
+    public async Task CreateBusinessRequest_ResponseContainsNonEmptyVersion()
+    {
+        var response = await AuthRequest(_ownerCookie).PostAsJsonAsync("/keep/requests", new
+        {
+            customerName  = "Version Test Customer",
+            customerPhone = "0400000099",
+            description   = "Version exposure test",
+            origin        = "business"
+        });
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.True(Guid.TryParseExact(body.GetProperty("version").GetString(), "D", out var version));
+        Assert.NotEqual(Guid.Empty, version);
+    }
+
+    // =========================================================================
     // Helpers
     // =========================================================================
 

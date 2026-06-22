@@ -31,9 +31,10 @@ public sealed class KeepRequestListB5Tests : IClassFixture<KeepApiWebFactory>, I
     private string _operatorCookie = string.Empty;
     private string _viewerCookie  = string.Empty;
 
-    // Request IDs for targeted assertions
+    // Request IDs and version for targeted assertions
     private Guid _receivedRequestId;
     private Guid _closedUnresolvedRequestId;
+    private Guid _receivedRequestVersion;
 
     public KeepRequestListB5Tests(KeepApiWebFactory factory)
     {
@@ -121,6 +122,7 @@ public sealed class KeepRequestListB5Tests : IClassFixture<KeepApiWebFactory>, I
             KeepRequestEvent.CreateRequestCreated(receivedRequest.Id, _accountId, now));
         await db.SaveChangesAsync();
         _receivedRequestId = receivedRequest.Id;
+        _receivedRequestVersion = receivedRequest.ConcurrencyVersion;
 
         // --- 2. Resolved request (included, ranked as resolved_quiet) ---
         var resolvedRequest = KeepRequest.CreateFromCustomerIntake(
@@ -342,6 +344,20 @@ public sealed class KeepRequestListB5Tests : IClassFixture<KeepApiWebFactory>, I
         Assert.DoesNotContain(body.Requests, r => r.Id == _closedUnresolvedRequestId);
     }
 
+    // =========================================================================
+    // G5a-2: list rows expose the concurrency version (ADR-333)
+    // =========================================================================
+
+    [Fact]
+    public async Task ListRow_ContainsVersionMatchingSeededEntity()
+    {
+        var body = await GetListAsync(_ownerCookie);
+        var row = body!.Requests.FirstOrDefault(r => r.Id == _receivedRequestId);
+        Assert.NotNull(row);
+        Assert.NotEqual(Guid.Empty, row.Version);
+        Assert.Equal(_receivedRequestVersion, row.Version);
+    }
+
     // --- Response DTOs (B5 nested shape) ---
 
     private sealed record B5RequestListBody(List<B5RequestSummaryBody> Requests);
@@ -349,6 +365,7 @@ public sealed class KeepRequestListB5Tests : IClassFixture<KeepApiWebFactory>, I
     private sealed record B5RequestSummaryBody(
         Guid Id,
         string Status,
+        Guid Version,
         bool IsPostCloseFollowUp,
         B5AttentionBody Attention,
         B5RankingBody Ranking,

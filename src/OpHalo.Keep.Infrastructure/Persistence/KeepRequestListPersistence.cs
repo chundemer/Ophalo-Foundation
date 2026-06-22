@@ -284,6 +284,7 @@ public sealed class KeepRequestListPersistence(OpHaloDbContext dbContext) : IKee
                 r.NextAttentionAtUtc,
                 r.PriorityBand,
                 r.AttentionLevel,
+                r.ConcurrencyVersion,
                 r.Description.Length > 160 ? r.Description.Substring(0, 161) : r.Description,
                 r.Description.Length > 160,
                 // Internal-only: is the current user already an active Watcher on this row?

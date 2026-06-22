@@ -35,6 +35,7 @@ public sealed class KeepRequestAvailableApiTests : IClassFixture<KeepApiWebFacto
     private string _eligRespCookie = string.Empty;
 
     private Guid _availableRequestId  = Guid.Empty;
+    private Guid _availableRequestVersion = Guid.Empty;
     private Guid _withViewerRespId    = Guid.Empty;
     private Guid _withEligibleRespId  = Guid.Empty;
     private Guid _closedRequestId     = Guid.Empty;
@@ -139,6 +140,7 @@ public sealed class KeepRequestAvailableApiTests : IClassFixture<KeepApiWebFacto
         db.Set<KeepRequest>().Add(avail1);
         db.Set<KeepRequestEvent>().Add(KeepRequestEvent.CreateRequestCreated(avail1.Id, accountId, now));
         _availableRequestId = avail1.Id;
+        _availableRequestVersion = avail1.ConcurrencyVersion;
 
         // Request 2: Viewer-role user is Responsible → still Available (Viewer is ineligible Responsible)
         var avail2 = KeepRequest.CreateFromCustomerIntake(
@@ -660,7 +662,7 @@ public sealed class KeepRequestAvailableApiTests : IClassFixture<KeepApiWebFacto
             "requestId", "referenceCode", "customerName", "status",
             "createdAtUtc", "attentionSinceUtc", "nextAttentionAtUtc",
             "priorityBand", "attentionLevel", "descriptionPreview",
-            "canSelfAssign", "canWatch"
+            "version", "canSelfAssign", "canWatch"
         };
         var actual = item.EnumerateObject()
             .Select(p => p.Name)
@@ -839,6 +841,25 @@ public sealed class KeepRequestAvailableApiTests : IClassFixture<KeepApiWebFacto
         Assert.Equal(HttpStatusCode.NotFound, res.StatusCode);
     }
 
+    // =========================================================================
+    // G5a-2: Available rows expose the concurrency version (ADR-333)
+    // =========================================================================
+
+    [Fact]
+    public async Task AvailableRow_ContainsVersionMatchingSeededEntity()
+    {
+        var res  = await GetAvailableAsync();
+        var json = await res.Content.ReadFromJsonAsync<JsonElement>();
+        var rows = json.GetProperty("requests").EnumerateArray().ToList();
+
+        var row = rows.FirstOrDefault(r => r.GetProperty("requestId").GetGuid() == _availableRequestId);
+        Assert.True(row.ValueKind != JsonValueKind.Undefined,
+            $"Expected request {_availableRequestId} to appear in Available queue.");
+        Assert.True(Guid.TryParseExact(row.GetProperty("version").GetString(), "D", out var version));
+        Assert.NotEqual(Guid.Empty, version);
+        Assert.Equal(_availableRequestVersion, version);
+    }
+
     // --- Response DTOs ----------------------------------------------------------
 
     private sealed record AvailableResponseBody(
@@ -856,6 +877,7 @@ public sealed class KeepRequestAvailableApiTests : IClassFixture<KeepApiWebFacto
         string PriorityBand,
         string AttentionLevel,
         string DescriptionPreview,
+        Guid Version,
         bool CanSelfAssign,
         bool CanWatch);
 

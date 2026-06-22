@@ -53,6 +53,7 @@ internal static class KeepRequestDetailMapper
         Description: request.Description,
         CurrentStatusText: request.CurrentStatusText,
         PageToken: request.PageToken,
+        Version: request.ConcurrencyVersion,
         ExpiresAtUtc: request.ExpiresAtUtc,
         CreatedAtUtc: request.CreatedAtUtc,
         LastBusinessActivityAt: request.LastBusinessActivityAt,

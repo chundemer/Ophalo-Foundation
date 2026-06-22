@@ -23,6 +23,7 @@ public sealed class KeepCustomerPageTests : IClassFixture<KeepApiWebFactory>, IA
 
     private const string PageToken = "customer_page_token_test_abc";
     private string _referenceCode = string.Empty;
+    private Guid _seededVersion;
 
     public KeepCustomerPageTests(KeepApiWebFactory factory)
     {
@@ -77,6 +78,7 @@ public sealed class KeepCustomerPageTests : IClassFixture<KeepApiWebFactory>, IA
         await db.SaveChangesAsync();
 
         _referenceCode = request.ReferenceCode;
+        _seededVersion = request.ConcurrencyVersion;
     }
 
     public Task DisposeAsync() => Task.CompletedTask;
@@ -214,5 +216,44 @@ public sealed class KeepCustomerPageTests : IClassFixture<KeepApiWebFactory>, IA
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
 
         Assert.Equal(JsonValueKind.Null, body.GetProperty("newRequestUrl").ValueKind);
+    }
+
+    // =========================================================================
+    // G5a-2: customer page version exposure (ADR-333)
+    // =========================================================================
+
+    [Fact]
+    public async Task GetCustomerPage_ActiveRequest_ExposesVersionMatchingSeededEntity()
+    {
+        var response = await _client.GetAsync($"/keep/r/{PageToken}");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.False(body.GetProperty("isExpired").GetBoolean());
+        Assert.True(Guid.TryParseExact(body.GetProperty("version").GetString(), "D", out var version));
+        Assert.NotEqual(Guid.Empty, version);
+        Assert.Equal(_seededVersion, version);
+    }
+
+    [Fact]
+    public async Task GetCustomerPage_ExpiredTombstone_VersionIsNull()
+    {
+        await using (var scope = _factory.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+            await db.Database.ExecuteSqlRawAsync(
+                "UPDATE keep_requests SET status = 'Closed', expires_at_utc = @p0 WHERE page_token = @p1",
+                DateTime.UtcNow.AddDays(-1), PageToken);
+        }
+
+        var response = await _client.GetAsync($"/keep/r/{PageToken}");
+
+        Assert.Equal(HttpStatusCode.Gone, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.True(body.GetProperty("isExpired").GetBoolean());
+        // The tombstone must not disclose concurrency state (ADR-333).
+        Assert.Equal(JsonValueKind.Null, body.GetProperty("version").ValueKind);
     }
 }

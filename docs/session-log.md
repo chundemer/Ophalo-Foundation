@@ -1,14 +1,13 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-06-22 (G5a-1 foundation complete; G5a-2 read-surface exposure is next)
+**Last updated:** 2026-06-22 (G5a complete; G5b operational-mutation enforcement is next)
 **Branch:** `main` (no remote yet)
-**Current baseline:** 1109 tests (619 unit · 14 architecture · 476 integration); G5a-1 added 15 focused
-integration tests (14 parser · 1 migration backfill), not yet rolled into a full-suite baseline.
+**Current baseline:** 1109 tests (619 unit · 14 architecture · 476 integration); G5a added 121 focused
+integration tests across G5a-1 and G5a-2 — not yet rolled into a full-suite baseline.
 **Next free ADR:** ADR-336
-**Next batch: G5a-2 — read-surface `version` exposure.** Authenticated detail, standard list,
-Available rows, business-created detail, and the customer page expose the opaque `version`; the
-expired customer-page tombstone returns null. Decisions are locked (ADR-330–334); perform targeted
-discovery, present the file-level gate, and stop before coding.
+**Next batch: G5b — operational-mutation expected-version enforcement.** Decisions are locked
+(ADR-330–335); perform targeted discovery of mutation handler signatures, present the exact file-level
+gate, and stop before coding.
 
 ---
 
@@ -503,11 +502,17 @@ Goal: prevent stale business intent from overwriting newer customer/business sta
      mapping, `KeepG5ConcurrencyVersion` migration (nullable → `gen_random_uuid()` backfill →
      non-null), `ExpectedVersionRequired`/`ExpectedVersionInvalid`/`RequestChanged` errors + HTTP
      mapping, strict `X-Keep-Request-Version` parser (defined, unwired), 15 focused tests. No
-     rotation and no mutation-route header enforcement yet.
-   - **G5a-2 (next):** read-surface `version` exposure across authenticated detail, list, Available,
-     business-created detail, and the customer page (null on the expired tombstone).
-2. **G5b — Operational mutations:** status, updates, notes, contacts, attention, and feedback-review
-   expected-version enforcement and commit handling.
+     rotation and no mutation-route header enforcement yet. Committed as `c7435b2`; 38 focused
+     checks passed (14 parser cases + 1 real-PostgreSQL migration upgrade + 23 existing persistence
+     regressions), with clean Api/Infrastructure builds and `git diff --check`.
+   - **G5a-2 (complete):** `version` (Guid) added to `KeepRequestDetailResult`, `KeepRequestSummary`,
+     `KeepRequestAvailableRow/Item`, and `KeepCustomerPageResult/Context`; mapper and guard wired;
+     expired tombstone returns null. `AvailableItemBody` DTO updated; field-set test extended.
+     6 new version-contract `[Fact]`s added to 5 existing fixtures (detail, list, available,
+     business-create, customer page). Standalone 300-line fixture removed per gate instruction.
+     121 focused integration tests pass (15 G5a-1 + 6 G5a-2 version contracts + 100 regression).
+2. **G5b — Operational mutations (next):** status, updates, notes, contacts, attention, and
+   feedback-review expected-version enforcement and commit handling.
 3. **G5c — Participation mutations:** responsible, managed watchers, self-watch, and mute/unmute
    enforcement with atomic request-version rotation.
 4. **G5d — Customer writes and completion:** customer messages/feedback, cross-path race tests, full
@@ -516,6 +521,75 @@ Goal: prevent stale business intent from overwriting newer customer/business sta
 Each batch must compile and pass focused tests independently, with targeted discovery and a fresh
 file-level gate before coding. G5 is complete only after all four batches pass. No automatic merge,
 distributed lock, event sourcing, or frontend draft recovery is included.
+
+### G5a-2 Claude handoff — targeted discovery only, then stop
+
+G5a-1 is committed and authoritative. Do not reopen its token representation, migration, errors,
+or strict header syntax. For G5a-2, inspect only the named declarations/constructor sites below;
+do not read the large list service or integration-test files in full.
+
+Required propagation paths:
+
+1. **Authenticated detail and business-created detail (shared result):**
+   - `src/OpHalo.Keep.Application/Requests/KeepRequestDetailResult.cs` — add non-null `Guid Version`.
+   - `src/OpHalo.Keep.Application/Requests/KeepRequestDetailMapper.cs` — in `ToDetailResult`, map
+     `request.ConcurrencyVersion` directly. `POST /keep/requests` already returns this shared detail
+     result, so do not create a second business-create DTO or query.
+2. **Standard list rows (entity-sourced):**
+   - `src/OpHalo.Keep.Application/Requests/KeepRequestSummary.cs` — add non-null `Guid Version`.
+   - `src/OpHalo.Keep.Application/Requests/GetKeepRequestListService.cs` — inspect only the
+     `ToSummary` method and its constructor call; map `request.ConcurrencyVersion`. Do not alter
+     ranking, cursor, filtering, counts, scopes, or persistence signatures.
+3. **Operator Available rows (narrow SQL projection):**
+   - `src/OpHalo.Keep.Application/Requests/IKeepRequestListPersistence.cs` — add non-null
+     `Guid Version` to `KeepRequestAvailableRow`.
+   - `src/OpHalo.Keep.Infrastructure/Persistence/KeepRequestListPersistence.cs` — inspect only
+     `GetAvailableRequestsAsync` around its final `Select`; project `r.ConcurrencyVersion` in the
+     same query.
+   - `src/OpHalo.Keep.Application/Requests/GetAvailableKeepRequestsService.cs` — inspect only the
+     row-to-item mapping and `KeepRequestAvailableItem`; carry the same non-null `Guid Version`.
+     Preserve the narrow projection and do not load a full entity or add a follow-up query.
+4. **Public customer page:**
+   - `src/OpHalo.Keep.Application/Requests/KeepPublicCustomerContext.cs` — carry the request's
+     non-null concurrency version internally.
+   - `src/OpHalo.Keep.Application/Requests/KeepPublicCustomerAccessGuard.cs` — inspect only the
+     existing request projection/context construction and select `ConcurrencyVersion` there.
+   - `src/OpHalo.Keep.Application/Requests/KeepCustomerPageResult.cs` — expose nullable
+     `Guid? Version` because the same result type represents an active 200 and safe expired 410.
+   - `src/OpHalo.Keep.Application/Requests/KeepCustomerPageMapper.cs` — active results map the
+     context version; expired tombstones explicitly set `Version: null`. Do not expose a version in
+     the 410 body merely because the guard internally loaded one.
+
+Contract and scope guardrails:
+
+- JSON property name is the normal serializer output `version`; keep `Guid` typed through Core,
+  persistence projections, and Application records. Do not pre-format it as a string.
+- All values come from the already-loaded entity/projection. No extra query may exist solely to
+  retrieve a version.
+- Detail-result reuse means existing detail-shaped mutation responses will also serialize the
+  current version. That is expected, but G5a-2 must not rotate it, compare it, or require a header.
+- Do not wire `KeepRequestVersionHeader`, alter mutation command/service signatures, change commit
+  methods, catch concurrency exceptions, or add CORS behavior; those belong to G5b–d.
+- Do not add `version` to the public-intake creation receipt (`requestId`, `referenceCode`,
+  `pageToken`). The customer obtains an actionable version from the active customer-page response.
+- Preserve all existing auth, row scope, safe-tombstone, cursor, action-policy, and serialization
+  behavior.
+
+Focused verification must prove the exact wire contract using existing test fixtures rather than a
+new broad matrix:
+
+- authenticated detail: `tests/OpHalo.IntegrationTests/Api/KeepRequestDetailTests.cs`;
+- business-created detail: `tests/OpHalo.IntegrationTests/Api/KeepBusinessRequestApiTests.cs`;
+- standard list row: `tests/OpHalo.IntegrationTests/Api/KeepRequestListQueryApiTests.cs`;
+- Available row: `tests/OpHalo.IntegrationTests/Api/KeepRequestAvailableApiTests.cs`;
+- active customer page has the persisted nonempty version and expired 410 has JSON `version: null`:
+  `tests/OpHalo.IntegrationTests/Api/KeepCustomerPageTests.cs`.
+
+Before editing, present the exact files and constructor/signature changes discovered, identify any
+test fakes/record constructor callers that must compile, state focused test commands, and stop for
+approval. After implementation, run those focused tests plus affected unit tests, architecture
+tests if project references changed, clean builds, and `git diff --check`; do not claim a new global
+baseline without a full-suite run.
 
 ## G6 — Cancelled Customer-Page Expiry Correction — PLANNED
 

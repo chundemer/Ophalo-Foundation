@@ -13,6 +13,7 @@ public sealed record KeepRequestDetailResult(
     string? CurrentStatusText,
     // PageToken is included so the operator UI can construct a shareable customer link.
     string PageToken,
+    Guid Version,
     DateTime? ExpiresAtUtc,
     DateTime CreatedAtUtc,
     DateTime? LastBusinessActivityAt,

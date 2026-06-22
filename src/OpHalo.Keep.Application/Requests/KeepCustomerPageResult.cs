@@ -21,7 +21,8 @@ public sealed record KeepCustomerPageResult(
     DateTime? FeedbackSubmittedAtUtc,
     DateTime? ExpiresAtUtc,
     IReadOnlyList<KeepCustomerPageEventItem>? Events,
-    IReadOnlyList<string>? AllowedActions);
+    IReadOnlyList<string>? AllowedActions,
+    Guid? Version);
 
 /// <summary>
 /// A single entry in the customer-facing event timeline.

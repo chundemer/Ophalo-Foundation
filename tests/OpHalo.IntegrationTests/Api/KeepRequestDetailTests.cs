@@ -23,6 +23,7 @@ public sealed class KeepRequestDetailTests : IClassFixture<KeepApiWebFactory>, I
 
     private Guid _accountId;
     private Guid _requestId;
+    private Guid _seededVersion;
     private string _ownerCookie = string.Empty;
 
     public KeepRequestDetailTests(KeepApiWebFactory factory)
@@ -80,6 +81,7 @@ public sealed class KeepRequestDetailTests : IClassFixture<KeepApiWebFactory>, I
         await db.SaveChangesAsync();
 
         _requestId = request.Id;
+        _seededVersion = request.ConcurrencyVersion;
 
         var rawToken = await _factory.SeedSessionAsync(graph.Owner.Id, graph.Account.Id);
         _ownerCookie = $"{AuthConstants.CookieName}={rawToken}";
@@ -193,6 +195,23 @@ public sealed class KeepRequestDetailTests : IClassFixture<KeepApiWebFactory>, I
         Assert.Equal("request_created", events[0].GetProperty("eventType").GetString());
         Assert.Equal("system", events[0].GetProperty("actorType").GetString());
         Assert.Equal("system", events[0].GetProperty("visibility").GetString());
+    }
+
+    // =========================================================================
+    // G5a-2: detail response exposes the concurrency version (ADR-333)
+    // =========================================================================
+
+    [Fact]
+    public async Task GetDetail_ResponseContainsVersionMatchingSeededEntity()
+    {
+        var response = await AuthRequest(_ownerCookie).GetAsync($"/keep/requests/{_requestId}");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.True(Guid.TryParseExact(body.GetProperty("version").GetString(), "D", out var version));
+        Assert.NotEqual(Guid.Empty, version);
+        Assert.Equal(_seededVersion, version);
     }
 
     private HttpClient AuthRequest(string cookie)

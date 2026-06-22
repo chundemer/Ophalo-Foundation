@@ -643,6 +643,7 @@ public sealed class GetKeepRequestListService(
             LastBusinessActivityAtUtc: r.LastBusinessActivityAt,
             CreatedAtUtc: r.CreatedAtUtc,
             UpdatedAtUtc: r.UpdatedAtUtc,
+            Version: r.ConcurrencyVersion,
             IsTerminal: r.IsTerminal,
             IsPostCloseFollowUp: isPostClose,
             RowContext: rowContext,

@@ -156,6 +156,7 @@ public sealed record KeepRequestAvailableRow(
     DateTime? NextAttentionAtUtc,
     PriorityBand PriorityBand,
     AttentionLevel AttentionLevel,
+    Guid Version,
     string RawDescriptionPrefix,
     bool DescriptionWasTruncated,
     bool CurrentUserIsWatching);

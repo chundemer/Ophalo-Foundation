@@ -130,6 +130,7 @@ public sealed class GetAvailableKeepRequestsService(
                 PriorityBand:       MapPriorityBand(r.PriorityBand),
                 AttentionLevel:     MapAttentionLevel(r.AttentionLevel),
                 DescriptionPreview: BuildDescriptionPreview(r.RawDescriptionPrefix, r.DescriptionWasTruncated),
+                Version:            r.Version,
                 CanSelfAssign:      canWrite,
                 CanWatch:           canWrite && !r.CurrentUserIsWatching))
             .ToList();
@@ -224,6 +225,7 @@ public sealed record KeepRequestAvailableItem(
     string PriorityBand,
     string AttentionLevel,
     string DescriptionPreview,
+    Guid Version,
     bool CanSelfAssign,
     bool CanWatch);
 

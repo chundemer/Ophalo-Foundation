@@ -26,7 +26,8 @@ internal static class KeepCustomerPageMapper
             FeedbackSubmittedAtUtc: null,
             ExpiresAtUtc: null,
             Events: null,
-            AllowedActions: null);
+            AllowedActions: null,
+            Version: null);
 
     internal static KeepCustomerPageResult BuildActiveResult(
         KeepPublicCustomerContext context,
@@ -48,7 +49,8 @@ internal static class KeepCustomerPageMapper
                 .Where(e => e.Visibility == KeepRequestEventVisibility.All)
                 .Select(MapEvent)
                 .ToList(),
-            AllowedActions: ComputeAllowedActions(context.Status, context.FeedbackSubmittedAtUtc.HasValue, context.IsOffSeason));
+            AllowedActions: ComputeAllowedActions(context.Status, context.FeedbackSubmittedAtUtc.HasValue, context.IsOffSeason),
+            Version: context.Version);
 
     internal static string MapStatus(KeepRequestStatus status) => status switch
     {
