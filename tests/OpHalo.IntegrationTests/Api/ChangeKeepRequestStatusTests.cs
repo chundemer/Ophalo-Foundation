@@ -33,6 +33,7 @@ public sealed class ChangeKeepRequestStatusTests : IClassFixture<KeepApiWebFacto
     private Guid _requestId;                        // Received status
     private Guid _closedRequestId;                  // Closed (terminal) status
     private Guid _resolvedWithAttentionRequestId;   // Resolved with active business-waiting attention
+    private Guid _resolvedForMetadataRequestId;     // Resolved, used ONLY by the post-transition metadata test (no shared mutation)
     private string _ownerCookie = string.Empty;
     private string _viewerCookie = string.Empty;
 
@@ -141,11 +142,28 @@ public sealed class ChangeKeepRequestStatusTests : IClassFixture<KeepApiWebFacto
         if (eResolved.IsSuccess && eResolved.Value.StatusChangedEvent is not null)
             db.Set<KeepRequestEvent>().Add(eResolved.Value.StatusChangedEvent);
 
+        // Resolved request reserved for the post-transition metadata test only. Kept isolated so
+        // no other test mutates it; guarantees the Resolved → Closed transition is a real
+        // transition (not an already-Closed same-status no-op) regardless of xUnit ordering.
+        var resolvedForMetadata = KeepRequest.CreateFromCustomerIntake(
+            _accountId, customer.Id,
+            "Jane Smith", "0412345678", null,
+            "Job awaiting closure", "STATUS004", "token_status_004", now, 60);
+        var eResolvedForMetadata = resolvedForMetadata.ChangeStatus(
+            KeepRequestStatus.Resolved, null,
+            graph.Owner.Id, "owner@status-tests.com", now);
+        db.Set<KeepRequest>().Add(resolvedForMetadata);
+        db.Set<KeepRequestEvent>().Add(
+            KeepRequestEvent.CreateRequestCreated(resolvedForMetadata.Id, _accountId, now));
+        if (eResolvedForMetadata.IsSuccess && eResolvedForMetadata.Value.StatusChangedEvent is not null)
+            db.Set<KeepRequestEvent>().Add(eResolvedForMetadata.Value.StatusChangedEvent);
+
         await db.SaveChangesAsync();
 
         _requestId = request.Id;
         _closedRequestId = closedRequest.Id;
         _resolvedWithAttentionRequestId = resolvedWithAttention.Id;
+        _resolvedForMetadataRequestId = resolvedForMetadata.Id;
 
         var rawOwner = await _factory.SeedSessionAsync(graph.Owner.Id, _accountId);
         _ownerCookie = $"{AuthConstants.CookieName}={rawOwner}";
@@ -413,6 +431,42 @@ public sealed class ChangeKeepRequestStatusTests : IClassFixture<KeepApiWebFacto
         var events = body.GetProperty("events").EnumerateArray().ToList();
         Assert.DoesNotContain(events, e =>
             e.GetProperty("eventType").GetString() == "attention_acknowledged");
+    }
+
+    // =========================================================================
+    // Test 12 — Transition INTO terminal returns post-mutation policy metadata
+    //           evaluated against the resulting (Closed) state (G4e-2 / ADR-328).
+    // =========================================================================
+
+    [Fact]
+    public async Task TerminalTransition_AvailableActionsReflectResultingTerminalState()
+    {
+        var response = await AuthRequest(_ownerCookie).PatchAsJsonAsync(
+            $"/keep/requests/{_resolvedForMetadataRequestId}/status",
+            new { status = "closed" });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("closed", body.GetProperty("status").GetString());
+
+        // Prove this was a real Resolved → Closed transition, not a same-status no-op:
+        // a status_changed event ending at "closed" must be present.
+        var events = body.GetProperty("events").EnumerateArray().ToList();
+        Assert.Contains(events, e =>
+            e.GetProperty("eventType").GetString() == "status_changed" &&
+            e.GetProperty("statusAfter").GetString() == "closed");
+
+        // availableActions are evaluated by the shared policy against the resulting terminal
+        // state — not the pre-mutation Resolved state.
+        var available = body.GetProperty("availableActions");
+        Assert.False(available.GetProperty("canChangeStatus").GetBoolean());
+        Assert.False(available.GetProperty("canSendBusinessUpdate").GetBoolean());
+        Assert.False(available.GetProperty("canLogExternalContact").GetBoolean());
+        // Internal notes remain available on terminal requests (D8).
+        Assert.True(available.GetProperty("canAddInternalNote").GetBoolean());
+        // No onward transitions from a terminal request.
+        Assert.Empty(available.GetProperty("allowedStatuses").EnumerateArray());
     }
 
     private static void SeedBusinessWaitingAttention(OpHaloDbContext db, KeepRequest request, DateTime sinceUtc)

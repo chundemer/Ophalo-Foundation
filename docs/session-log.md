@@ -1,11 +1,10 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-06-21 (G4e-1 corrective complete; pending Christian review and commit before G4e-2)
+**Last updated:** 2026-06-21 (G4e-1 committed as 74f26a8; G4e-2 complete)
 **Branch:** `main` (no remote yet)
-**Current baseline:** 1106 tests (619 unit · 14 architecture · 473 integration)
+**Current baseline:** 1107 tests (619 unit · 14 architecture · 474 integration)
 **Next free ADR:** ADR-330
-**Pre-work complete: G4e-2 only after G4e-1 commit is approved** — do not start G4e-2 until
-Christian has reviewed and committed G4e-1.
+**Next batch: G4e-3** — participation, feedback, and completion. Present the file-level gate before coding.
 
 ---
 
@@ -86,6 +85,11 @@ For every implementation slice:
   whitespace/emoji, pagination, cursor tamper/cross-user/duplicate-parameter, limit/binder
   validation, Available count == viewCounts.unassigned, unavailable detail 404, no-side-effect
   proof with participant/event/request checks). build-log/052.
+- **G4e-1 complete — 1106 tests.** Added the pure shared action policy, canonical deny-all actor
+  context/decision, centralized detail-action metadata mapping, and read-surface adoption in detail,
+  list, and business-create responses. Corrected list quick/contact actions to consume the shared
+  decision, including OffSeason and feedback-review suppression. ADR-326–329; build-log/053;
+  commit 74f26a8.
 
 Historical Phase 8-B1 through B5 Session 5 completion detail is intentionally omitted here. Use
 build logs 025–046 and ADR-084–294 when needed; do not reload those histories for G4 unless a
@@ -223,11 +227,11 @@ exit inventory names every migrated path, and the full suite is green.
 
 #### G4c — Participation/admin mutation-load migration and old-loader removal — COMPLETE (commit e82ebae, 1012 tests)
 
-#### G4d — My Work lists/counts and dedicated Available surface — COMPLETE (1048 tests, build-log/052)
+#### G4d — My Work lists/counts and dedicated Available surface — COMPLETE (1060 tests, build-log/052)
 
 #### G4e — Shared action-policy migration and completion gate
 
-**Pre-work complete 2026-06-21. Implementation not started. ADR-326–329.**
+**Pre-work complete 2026-06-21. G4e-1 committed (74f26a8); G4e-2 complete; G4e-3 next (file-level gate required). ADR-326–329.**
 
 The policy is a pure, deterministic, O(1) Application-layer policy with no EF, current-user,
 HTTP, network, or clock dependency. It accepts a request plus this actor context:
@@ -299,12 +303,17 @@ covers nonsense, abusive, inappropriate, accidental, or otherwise non-operationa
 ##### Consumption and list boundaries
 
 - Existing authentication, feature, operating-mode, role, and row gates retain their established
-  order. Evaluate the action policy after the authorized row and required actor participation facts
-  are loaded, before mutation; preserve each endpoint's stable error contract rather than flattening
-  every false capability to 403.
-- Domain methods remain authoritative for payload, target, transition, no-op, and exact mutation
-  rules. The policy is not a concurrency lock; G5 handles stale concurrent intent.
-- Re-evaluate after successful mutation to construct response metadata from updated state.
+  order.
+- Domain methods remain authoritative for executable mutation eligibility, payload and target
+  validation, transition rules, same-status/no-op semantics, guard ordering, and exact stable errors.
+  G4e-2 must not add a coarse pre-mutation policy-boolean rejection that changes established 409 or
+  validation outcomes to generic 403, or duplicates domain validation in Application.
+- After a successful operational mutation or valid no-op, evaluate `KeepRequestActionPolicy`
+  against the resulting request and actor-participation state, then construct response metadata
+  through the shared mapper. The action decision remains advisory metadata rather than an execution
+  lock; G5 handles stale concurrent intent.
+- Application-only structural gates and target-specific service checks remain explicit where the
+  domain does not own them, but they must preserve established row visibility and error contracts.
 - List customer-update, acknowledgement, feedback-review, assignment, self-assignment,
   notification, and contact affordances consume matching decision properties. `OpenDetail` remains
   row/read authorization. Phone/email presence and first-response-overdue quick-action suppression
@@ -312,7 +321,8 @@ covers nonsense, abusive, inappropriate, accidental, or otherwise non-operationa
 
 ##### Bounded implementation batches
 
-1. **G4e-1 — foundation and read surfaces — COMPLETE (1106 tests, pending commit):**
+1. **G4e-1 — foundation and read surfaces — COMPLETE (commit 74f26a8, 1106 tests,
+   build-log/053):**
    `KeepRequestActionContext`, `KeepRequestActionDecision`, `KeepRequestActionPolicy` added.
    `KeepRequestDetailMapper.ToAvailableActionsMetadata` added (maps decision → 11-field response
    contract). `GetKeepRequestDetailService`, `GetKeepRequestListService`, and
@@ -325,12 +335,15 @@ covers nonsense, abusive, inappropriate, accidental, or otherwise non-operationa
    OffSeason); 1 business-create parity (AvailableActions maps shared decision); 3 detail parity
    (`KeepRequestDetailServiceTests`: AllowedStatuses excludes current status for Received,
    InProgress, Closed). Old mapper helpers retained — still needed by G4e-2/3 mutation callers.
-2. **G4e-2 — operational mutations (gate after G4e-1 review):** migrate status change, business
-   update, internal note, acknowledgement, and external-contact services while preserving guard
-   ordering and endpoint errors.
-3. **G4e-3 — participation, feedback, and completion (gate after G4e-2 review):** migrate
-   responsible, watcher, self-watch, mute, and feedback-review services; remove old helpers after
-   zero callers; complete the G4 path inventory and full verification.
+2. **G4e-2 — operational mutations — COMPLETE (1107 tests, build-log/054):** status
+   change, business update, internal note, acknowledgement, and external-contact services now derive
+   `AvailableActionsMetadata` from the shared policy evaluated post-mutation. No coarse pre-mutation
+   capability rejection added; domain guard ordering, terminal same-status/no-op behavior, validation
+   precedence, and endpoint errors preserved. New regression: terminal-transition response metadata
+   reflects resulting Closed state (isolated seed; asserts a real status_changed event).
+3. **G4e-3 — participation, feedback, and completion — NEXT (file-level gate required before
+   coding):** migrate responsible, watcher, self-watch, mute, and feedback-review services; remove
+   old helpers after zero callers; complete the G4 path inventory and full verification.
 
 ##### Final verification gate
 
