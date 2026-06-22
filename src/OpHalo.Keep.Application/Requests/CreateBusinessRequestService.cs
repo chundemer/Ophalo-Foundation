@@ -6,7 +6,6 @@ using OpHalo.Foundation.Core.Entities.Accounts.Enums;
 using OpHalo.Keep.Application.Services;
 using OpHalo.Keep.Application.Validation;
 using OpHalo.Keep.Core.Entities;
-using OpHalo.Keep.Core.Entities.Enums;
 using OpHalo.Keep.Core.Errors;
 using OpHalo.SharedKernel.Abstractions;
 using OpHalo.SharedKernel.Results;
@@ -45,8 +44,6 @@ public sealed class CreateBusinessRequestService(
 
         if (userSnapshot.Role is AccountUserRole.Viewer)
             return Result<KeepRequestDetailResult>.Failure(Forbidden);
-
-        var isOwnerOrAdmin = userSnapshot.Role is AccountUserRole.Owner or AccountUserRole.Admin;
 
         var accountSnapshot = await operatePersistence.GetAccountAccessSnapshotAsync(currentUser.AccountId, ct);
         if (accountSnapshot is null)
@@ -128,7 +125,7 @@ public sealed class CreateBusinessRequestService(
             {
                 case BusinessRequestCommitResult.Committed:
                     return Result<KeepRequestDetailResult>.Success(
-                        await BuildDetailResultAsync(request, userSnapshot.Role, isOwnerOrAdmin, nowUtc, ct));
+                        await BuildDetailResultAsync(request, userSnapshot.Role, nowUtc, ct));
 
                 case BusinessRequestCommitResult.UniqueTokenCollision:
                     continue;
@@ -152,25 +149,22 @@ public sealed class CreateBusinessRequestService(
     }
 
     private async Task<KeepRequestDetailResult> BuildDetailResultAsync(
-        KeepRequest request, AccountUserRole role, bool isOwnerOrAdmin, DateTime nowUtc, CancellationToken ct)
+        KeepRequest request, AccountUserRole role, DateTime nowUtc, CancellationToken ct)
     {
         var events       = await readPersistence.GetAllEventsAsync(request.Id, ct);
         var participants = await readPersistence.GetParticipantsAsync(request.Id, ct);
         var businessName = await readPersistence.GetAccountBusinessNameAsync(currentUser.AccountId, ct);
 
-        var availableActions = new AvailableActionsMetadata(
-            CanChangeStatus:         true,
-            CanSendBusinessUpdate:   true,
-            CanAddInternalNote:      true,
-            CanAcknowledgeAttention: KeepRequestDetailMapper.CanAcknowledgeAttention(canOperate: true, request),
-            CanLogExternalContact:   true,
-            CanAssignResponsible:    isOwnerOrAdmin,
-            CanWatch:                true,
-            CanUnwatch:              false,
-            CanMute:                 false,
-            CanUnmute:               false,
-            CanMarkFeedbackReviewed: false,
-            AllowedStatuses:         KeepRequestDetailMapper.ComputeAllowedStatuses(request.Status));
+        // OffSeason and Viewer are rejected upstream; canWrite is true at this point.
+        // The creator has no participation yet on the newly committed request.
+        var actorContext = new KeepRequestActionContext(
+            Role:                role,
+            CanWrite:            true,
+            ActiveParticipation: null,
+            NotificationsEnabled: null);
+
+        var actionDecision   = KeepRequestActionPolicy.Evaluate(request, actorContext);
+        var availableActions = KeepRequestDetailMapper.ToAvailableActionsMetadata(actionDecision);
 
         return KeepRequestDetailMapper.ToDetailResult(
             request, businessName ?? string.Empty, participants, events, availableActions,

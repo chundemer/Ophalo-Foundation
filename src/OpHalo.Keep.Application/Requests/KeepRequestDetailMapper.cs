@@ -89,6 +89,26 @@ internal static class KeepRequestDetailMapper
         Validation: ValidationHints);
     }
 
+    /// <summary>
+    /// Converts a shared action decision to the 11-field AvailableActionsMetadata response contract.
+    /// Services must use this method; they must not reconstruct the fields independently (ADR-328).
+    /// AllowedStatuses are mapped to string slugs here; the decision carries enum values internally.
+    /// </summary>
+    internal static AvailableActionsMetadata ToAvailableActionsMetadata(KeepRequestActionDecision decision) =>
+        new(
+            CanChangeStatus:         decision.CanChangeStatus,
+            CanSendBusinessUpdate:   decision.CanSendBusinessUpdate,
+            CanAddInternalNote:      decision.CanAddInternalNote,
+            CanAcknowledgeAttention: decision.CanAcknowledgeAttention,
+            CanLogExternalContact:   decision.CanLogExternalContact,
+            CanAssignResponsible:    decision.CanAssignResponsible,
+            CanWatch:                decision.CanWatch,
+            CanUnwatch:              decision.CanUnwatch,
+            CanMute:                 decision.CanMute,
+            CanUnmute:               decision.CanUnmute,
+            CanMarkFeedbackReviewed: decision.CanMarkFeedbackReviewed,
+            AllowedStatuses:         decision.AllowedStatuses.Select(MapStatus).ToList());
+
     internal static KeepRequestStatus? ParseStatusSlug(string? slug)
     {
         if (string.IsNullOrWhiteSpace(slug))

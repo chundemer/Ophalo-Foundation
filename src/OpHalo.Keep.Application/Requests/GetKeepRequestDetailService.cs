@@ -99,25 +99,19 @@ public sealed class GetKeepRequestDetailService(
         var isOffSeason = accountSnapshot.OperatingMode == AccountOperatingMode.OffSeason;
         var canWrite = canOperate && !isOffSeason;
 
-        var isOwnerOrAdmin = userSnapshot.Role is AccountUserRole.Owner or AccountUserRole.Admin;
         var currentUserRow = participants.FirstOrDefault(
             p => p.AccountUserId == currentUser.UserId && p.DetachedAtUtc is null);
 
-        var availableActions = new AvailableActionsMetadata(
-            CanChangeStatus:           canWrite && !request.IsTerminal,
-            CanSendBusinessUpdate:     canWrite && !request.IsTerminal,
-            CanAddInternalNote:        canWrite,
-            CanAcknowledgeAttention:   KeepRequestDetailMapper.CanAcknowledgeAttention(canWrite, request),
-            CanLogExternalContact:     canWrite && !request.IsTerminal,
-            CanAssignResponsible:      isOwnerOrAdmin && canWrite && !request.IsTerminal,
-            CanWatch:                  canWrite && !request.IsTerminal && currentUserRow is null,
-            CanUnwatch:                canWrite && !request.IsTerminal && currentUserRow?.ParticipationType == ParticipationType.Watching,
-            CanMute:                   canWrite && !request.IsTerminal && currentUserRow is not null && currentUserRow.NotificationsEnabled,
-            CanUnmute:                 canWrite && !request.IsTerminal && currentUserRow is not null && !currentUserRow.NotificationsEnabled,
-            CanMarkFeedbackReviewed:   KeepRequestDetailMapper.CanMarkFeedbackReviewed(canWrite, isOwnerOrAdmin, request),
-            AllowedStatuses:           canWrite && !request.IsTerminal
-                ? KeepRequestDetailMapper.ComputeAllowedStatuses(request.Status)
-                : []);
+        var actorContext = new KeepRequestActionContext(
+            Role:                userSnapshot.Role,
+            CanWrite:            canWrite,
+            ActiveParticipation: currentUserRow?.ParticipationType,
+            NotificationsEnabled: currentUserRow is not null
+                ? currentUserRow.NotificationsEnabled
+                : null);
+
+        var actionDecision   = KeepRequestActionPolicy.Evaluate(request, actorContext);
+        var availableActions = KeepRequestDetailMapper.ToAvailableActionsMetadata(actionDecision);
 
         return Result<KeepRequestDetailResult>.Success(
             KeepRequestDetailMapper.ToDetailResult(

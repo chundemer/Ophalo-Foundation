@@ -248,6 +248,34 @@ public class KeepCreateBusinessRequestServiceTests
         Assert.False(string.IsNullOrWhiteSpace(result.Value.PageToken));
     }
 
+    [Fact]
+    public async Task Execute_detail_result_available_actions_maps_shared_decision_for_Owner()
+    {
+        // Newly created request is Received, non-terminal, no participation.
+        // Owner with write = all capabilities; AllowedStatuses excludes current "received".
+        var sut = BuildSut(role: AccountUserRole.Owner);
+        var result = await sut.ExecuteAsync(ValidCommand());
+
+        Assert.True(result.IsSuccess);
+        var actions = result.Value.AvailableActions;
+
+        Assert.True(actions.CanChangeStatus);
+        Assert.True(actions.CanSendBusinessUpdate);
+        Assert.True(actions.CanAddInternalNote);
+        Assert.True(actions.CanLogExternalContact);
+        Assert.True(actions.CanAssignResponsible);
+        Assert.True(actions.CanWatch);
+        Assert.False(actions.CanMarkFeedbackReviewed);
+
+        // AllowedStatuses: Received → excludes "received", maps to string slugs.
+        Assert.DoesNotContain("received", actions.AllowedStatuses);
+        Assert.Contains("scheduled", actions.AllowedStatuses);
+        Assert.Contains("in_progress", actions.AllowedStatuses);
+        Assert.Contains("pending_customer", actions.AllowedStatuses);
+        Assert.Contains("resolved", actions.AllowedStatuses);
+        Assert.Contains("cancelled", actions.AllowedStatuses);
+    }
+
     // ---------------------------------------------------------------------------
     // Happy path — existing customer reuse
     // ---------------------------------------------------------------------------

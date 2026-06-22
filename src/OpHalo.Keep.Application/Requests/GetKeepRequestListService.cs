@@ -285,7 +285,7 @@ public sealed class GetKeepRequestListService(
             }
 
             page = historyPageEntities
-                .Select(r => ToSummary(r, canOperate, isOwnerOrAdmin, isOffSeason, nowUtc,
+                .Select(r => ToSummary(r, role, canOperate, isOwnerOrAdmin, isOffSeason, nowUtc,
                     histParticipants.GetValueOrDefault(r.Id), normalizedView))
                 .ToList();
         }
@@ -314,7 +314,7 @@ public sealed class GetKeepRequestListService(
                 : RequestListComparer.Instance;
 
             var allSummaries = rawRequests
-                .Select(r => ToSummary(r, canOperate, isOwnerOrAdmin, isOffSeason, nowUtc,
+                .Select(r => ToSummary(r, role, canOperate, isOwnerOrAdmin, isOffSeason, nowUtc,
                     participants.GetValueOrDefault(r.Id), normalizedView))
                 .Order(comparer)
                 .ToList();
@@ -527,6 +527,7 @@ public sealed class GetKeepRequestListService(
 
     private static KeepRequestSummary ToSummary(
         KeepRequest r,
+        AccountUserRole role,
         bool canOperate,
         bool isOwnerOrAdmin,
         bool isOffSeason,
@@ -595,17 +596,25 @@ public sealed class GetKeepRequestListService(
 
         var preview = new KeepRequestPreviewInfo(null, null, false);
 
-        var quickActions = BuildQuickActions(r, canOperate, isPostClose, firstResponseOverdue);
-        var contactActions = BuildContactActions(r, canOperate, isPostClose);
+        // Evaluate action policy per request; list uses the decision for write affordances.
+        // Phone/email presence, first-response-overdue suppression, and row context
+        // remain presentation conditions here (ADR-328).
+        var canWrite = canOperate && !isOffSeason;
+        var actorContext = new KeepRequestActionContext(
+            Role:                role,
+            CanWrite:            canWrite,
+            ActiveParticipation: participation?.CurrentUserParticipationType,
+            NotificationsEnabled: participation?.CurrentUserNotificationsEnabled);
+        var actionDecision = KeepRequestActionPolicy.Evaluate(r, actorContext);
+
+        var quickActions = BuildQuickActions(r, canOperate, isPostClose, firstResponseOverdue, actionDecision);
+        var contactActions = BuildContactActions(r, canOperate, isPostClose, actionDecision);
         var actions = new KeepRequestActionsInfo(quickActions, contactActions);
 
         var isUnassigned = participation is null || participation.ResponsibleCount == 0;
-        var canAssignFromList = isOwnerOrAdmin && canOperate && !isOffSeason && !r.IsTerminal;
+        var canAssignFromList = actionDecision.CanAssignResponsible;
         var canSelfAssignFromList = normalizedView == "unassigned"
-            && !isOwnerOrAdmin
-            && canOperate
-            && !isOffSeason
-            && !r.IsTerminal
+            && actionDecision.CanSelfAssignResponsible
             && isUnassigned;
 
         var rowContext = ComputeRowContext(r, isPostClose, firstResponsePending, firstResponseOverdue, canSelfAssignFromList);
@@ -709,12 +718,18 @@ public sealed class GetKeepRequestListService(
         KeepRequest r,
         bool canOperate,
         bool isPostClose,
-        bool firstResponseOverdue)
+        bool firstResponseOverdue,
+        KeepRequestActionDecision actionDecision)
     {
         var openDetail = QuickActionDefs.OpenDetail;
 
         if (isPostClose)
-            return [openDetail, QuickActionDefs.ReviewFeedback];
+        {
+            // ReviewFeedback gated by policy; suppressed for OffSeason and non-Owner/Admin (ADR-328).
+            return actionDecision.CanMarkFeedbackReviewed
+                ? [openDetail, QuickActionDefs.ReviewFeedback]
+                : [openDetail];
+        }
 
         if (!canOperate)
             return [openDetail];
@@ -722,36 +737,37 @@ public sealed class GetKeepRequestListService(
         if (r.IsTerminal)
             return [openDetail];
 
-        var hasContactMethods = !string.IsNullOrWhiteSpace(r.CustomerPhone)
-            || !string.IsNullOrWhiteSpace(r.CustomerEmail);
-
-        var postCustomerUpdate = new KeepQuickAction(
-            "post_customer_update", "Update customer", "customer_visible",
-            ClearsAttention: r.WaitingDirection == WaitingDirection.Business && r.AttentionLevel != AttentionLevel.None,
-            CountsFirstResponse: false,
-            ChangesStatus: false,
-            EffectSummaryCode: "customer_visible_status_unchanged");
-
         var actions = new List<KeepQuickAction> { openDetail };
 
-        if (hasContactMethods)
+        // CanLogExternalContact gates the contact quick action (ADR-328).
+        var hasContactMethods = !string.IsNullOrWhiteSpace(r.CustomerPhone)
+            || !string.IsNullOrWhiteSpace(r.CustomerEmail);
+        if (hasContactMethods && actionDecision.CanLogExternalContact)
             actions.Add(QuickActionDefs.ContactCustomer);
 
-        actions.Add(postCustomerUpdate);
+        // CanSendBusinessUpdate gates the customer update quick action (ADR-328).
+        if (actionDecision.CanSendBusinessUpdate)
+        {
+            actions.Add(new KeepQuickAction(
+                "post_customer_update", "Update customer", "customer_visible",
+                ClearsAttention: r.WaitingDirection == WaitingDirection.Business && r.AttentionLevel != AttentionLevel.None,
+                CountsFirstResponse: false,
+                ChangesStatus: false,
+                EffectSummaryCode: "customer_visible_status_unchanged"));
+        }
 
-        var hasAttention = r.AttentionLevel != AttentionLevel.None;
+        // Policy-derived; first-response-overdue suppression is a presentation condition (ADR-328).
         var isFirstResponseOverdueNoResponse = firstResponseOverdue && r.FirstRespondedAtUtc is null;
-
-        if (hasAttention && !isFirstResponseOverdueNoResponse)
+        if (actionDecision.CanAcknowledgeAttention && !isFirstResponseOverdueNoResponse)
             actions.Add(QuickActionDefs.AcknowledgeAttention);
 
         return actions;
     }
 
     private static IReadOnlyList<ContactActionItem> BuildContactActions(
-        KeepRequest r, bool canOperate, bool isPostClose)
+        KeepRequest r, bool canOperate, bool isPostClose, KeepRequestActionDecision actionDecision)
     {
-        if (!canOperate || r.IsTerminal || isPostClose)
+        if (!canOperate || r.IsTerminal || isPostClose || !actionDecision.CanLogExternalContact)
             return [];
 
         var actions = new List<ContactActionItem>();

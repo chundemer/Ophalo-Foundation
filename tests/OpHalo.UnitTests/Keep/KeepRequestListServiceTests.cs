@@ -720,6 +720,70 @@ public class KeepRequestListServiceTests
         Assert.Equal("off_season", notification.SuppressionReason);
     }
 
+    [Fact]
+    public async Task Execute_offseason_suppresses_all_write_quick_actions_and_contact_actions()
+    {
+        // OffSeason → canWrite=false → DenyAll → contact_customer and post_customer_update absent.
+        var request = MakeRequest(phone: "555-0001", email: "bob@example.com");
+        var p = HappyPathPersistence([request]);
+        p.AccountSnapshotToReturn = ActiveSnapshot(AccountOperatingMode.OffSeason);
+        var sut = BuildSut(p, posture: AccountAccessPosture.ReadOnly);
+
+        var result = await sut.ExecuteAsync();
+
+        Assert.True(result.IsSuccess);
+        var summary = result.Value.Requests[0];
+        var codes = summary.Actions.QuickActions.Select(a => a.Code).ToList();
+        Assert.Contains("open_detail", codes);
+        Assert.DoesNotContain("contact_customer", codes);
+        Assert.DoesNotContain("post_customer_update", codes);
+        Assert.DoesNotContain("acknowledge_attention", codes);
+        Assert.Empty(summary.Actions.ContactActions);
+    }
+
+    [Fact]
+    public async Task Execute_isPostClose_owner_shows_review_feedback_when_CanMarkFeedbackReviewed()
+    {
+        var request = MakeRequest();
+        SetProp(request, nameof(KeepRequest.Status), KeepRequestStatus.Closed);
+        SetProp(request, nameof(KeepRequest.AttentionLevel), AttentionLevel.Waiting);
+        SetProp(request, nameof(KeepRequest.AttentionReason), AttentionReason.UnresolvedFeedback);
+        SetProp(request, nameof(KeepRequest.FeedbackSubmittedAtUtc), Now.AddHours(-1));
+        SetProp(request, nameof(KeepRequest.FeedbackWasResolved), false);
+
+        var p = HappyPathPersistence([request], role: AccountUserRole.Owner);
+        var sut = BuildSut(p);
+
+        var result = await sut.ExecuteAsync();
+
+        Assert.True(result.IsSuccess);
+        var codes = result.Value.Requests[0].Actions.QuickActions.Select(a => a.Code).ToList();
+        Assert.Contains("open_detail", codes);
+        Assert.Contains("review_feedback", codes);
+    }
+
+    [Fact]
+    public async Task Execute_isPostClose_offseason_suppresses_review_feedback()
+    {
+        var request = MakeRequest();
+        SetProp(request, nameof(KeepRequest.Status), KeepRequestStatus.Closed);
+        SetProp(request, nameof(KeepRequest.AttentionLevel), AttentionLevel.Waiting);
+        SetProp(request, nameof(KeepRequest.AttentionReason), AttentionReason.UnresolvedFeedback);
+        SetProp(request, nameof(KeepRequest.FeedbackSubmittedAtUtc), Now.AddHours(-1));
+        SetProp(request, nameof(KeepRequest.FeedbackWasResolved), false);
+
+        var p = HappyPathPersistence([request], role: AccountUserRole.Owner);
+        p.AccountSnapshotToReturn = ActiveSnapshot(AccountOperatingMode.OffSeason);
+        var sut = BuildSut(p, posture: AccountAccessPosture.ReadOnly);
+
+        var result = await sut.ExecuteAsync();
+
+        Assert.True(result.IsSuccess);
+        var codes = result.Value.Requests[0].Actions.QuickActions.Select(a => a.Code).ToList();
+        Assert.Contains("open_detail", codes);
+        Assert.DoesNotContain("review_feedback", codes);
+    }
+
     // --- B5: ranking groups -----------------------------------------------------
 
     [Fact]

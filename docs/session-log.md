@@ -1,10 +1,11 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-06-21 (G4d complete — 1060 tests; G4e requires fresh pre-implementation gate)
+**Last updated:** 2026-06-21 (G4e-1 corrective complete; pending Christian review and commit before G4e-2)
 **Branch:** `main` (no remote yet)
-**Current baseline:** 1060 tests (573 unit · 14 architecture · 473 integration)
-**Next free ADR:** ADR-326
-**Pre-work complete: none** — G4e requires a fresh pre-implementation gate before any code is written.
+**Current baseline:** 1106 tests (619 unit · 14 architecture · 473 integration)
+**Next free ADR:** ADR-330
+**Pre-work complete: G4e-2 only after G4e-1 commit is approved** — do not start G4e-2 until
+Christian has reviewed and committed G4e-1.
 
 ---
 
@@ -226,16 +227,122 @@ exit inventory names every migrated path, and the full suite is green.
 
 #### G4e — Shared action-policy migration and completion gate
 
-**Pre-work not complete. Split into bounded batches if the gate exceeds 8–10 files.**
+**Pre-work complete 2026-06-21. Implementation not started. ADR-326–329.**
 
-- add/finalize standalone `KeepRequestActionPolicy`;
-- migrate every `AvailableActionsMetadata` constructor and relevant mutation endpoint to the same
-  primitive rules, including detail, all migrated write services, participation services,
-  feedback-review service, and `CreateBusinessRequestService` response construction;
-- remove superseded action helpers from `KeepRequestDetailMapper` after zero callers remain;
-- prove OffSeason, role, row, participation, terminal state, and action metadata agree;
-- enumerate every list/count/detail/write/action path in the G4 exit record;
-- run build, unit, architecture, integration, and full test suite and record exact counts.
+The policy is a pure, deterministic, O(1) Application-layer policy with no EF, current-user,
+HTTP, network, or clock dependency. It accepts a request plus this actor context:
+
+- explicit `AccountUserRole`;
+- `CanWrite`, already derived from operate permission and account operating mode;
+- current active `ParticipationType?`;
+- `NotificationsEnabled?`, meaningful only with active participation.
+
+Unknown/future roles, `CanWrite == false`, and inconsistent actor context return one immutable
+deny-all decision. Viewer is always deny-all even if a caller incorrectly supplies `CanWrite=true`.
+Row authorization remains separate and evaluating this policy never grants row access.
+
+The structured decision owns these primitives:
+
+- change status, send business update, add internal note, acknowledge attention, and log external
+  contact;
+- assign responsible, self-assign responsible, clear responsible, and manage watchers;
+- watch, unwatch, mute, and unmute;
+- mark feedback reviewed;
+- an ordered enum-valued allowed-status list.
+
+One shared Application mapper converts the decision to `AvailableActionsMetadata` and status slugs.
+Services must not reconstruct those 11 response fields independently. Internal-only responsibility
+and watcher-management capabilities do not expand the existing detail response contract. Lists
+consume the decision directly because their quick-action contract differs.
+
+##### Locked action matrix
+
+- Owner/Admin receive generally eligible write capabilities; Operator receives operational and
+  self-participation capabilities; Viewer and unknown roles receive none.
+- Non-terminal Owner/Admin/Operator work may change status, send business updates, log external
+  contact, and—when attention exists—acknowledge attention. Internal notes remain available on
+  terminal requests. Attention cleanup also remains available on terminal requests when active
+  attention exists, preserving ADR-111; G7 later blocks generic acknowledgement specifically for
+  `UnresolvedFeedback`.
+- Owner/Admin may assign or clear responsibility and manage another user's watcher participation on
+  non-terminal requests. Operator may only self-assign. Self-assignment remains subject to row,
+  target-eligibility, effectively-unassigned/idempotency, and active-eligible-existing-responsible
+  guards; the policy boolean is not permission to steal another user's assignment.
+- On non-terminal requests, an actor with no active participation may watch; an active Watcher may
+  unwatch; an active Responsible or Watcher may mute/unmute according to the current notification
+  flag. Responsible and Watching remain mutually exclusive. Missing/inconsistent notification state
+  fails closed.
+- Feedback review requires Owner/Admin, write permission, Closed status, submitted explicitly
+  unresolved feedback, no prior review, and active `UnresolvedFeedback` attention.
+- Closed/Cancelled disable status change, business update, external contact, responsibility,
+  watcher, and notification actions. They do not create a blanket deny-all because internal-note,
+  attention-cleanup, and qualifying feedback-review behavior is deliberate.
+
+`AllowedStatuses` means actual transitions and excludes the current status:
+
+| Current | Allowed targets |
+|---|---|
+| Received | Scheduled, InProgress, PendingCustomer, Resolved, Cancelled |
+| Scheduled | InProgress, PendingCustomer, Resolved, Cancelled |
+| InProgress | Scheduled, PendingCustomer, Resolved, Cancelled |
+| PendingCustomer | Scheduled, InProgress, Resolved, Cancelled |
+| Resolved | InProgress, PendingCustomer, Closed, Cancelled |
+| Closed / Cancelled | none |
+
+Same-status command semantics do not use this list as a rigid gate: no-message remains a successful
+no-op (including terminal), and a same-status message remains permitted on non-terminal work.
+
+Spam/Test remain separate future V1 classifications under DEF-061, not lifecycle statuses and not
+new G4e capabilities. `Test` supports learning, onboarding, employee training, and demos; `Spam`
+covers nonsense, abusive, inappropriate, accidental, or otherwise non-operational public intake.
+
+##### Consumption and list boundaries
+
+- Existing authentication, feature, operating-mode, role, and row gates retain their established
+  order. Evaluate the action policy after the authorized row and required actor participation facts
+  are loaded, before mutation; preserve each endpoint's stable error contract rather than flattening
+  every false capability to 403.
+- Domain methods remain authoritative for payload, target, transition, no-op, and exact mutation
+  rules. The policy is not a concurrency lock; G5 handles stale concurrent intent.
+- Re-evaluate after successful mutation to construct response metadata from updated state.
+- List customer-update, acknowledgement, feedback-review, assignment, self-assignment,
+  notification, and contact affordances consume matching decision properties. `OpenDetail` remains
+  row/read authorization. Phone/email presence and first-response-overdue quick-action suppression
+  remain presentation conditions; ranking, severity, labels, and row context remain list logic.
+
+##### Bounded implementation batches
+
+1. **G4e-1 — foundation and read surfaces — COMPLETE (1106 tests, pending commit):**
+   `KeepRequestActionContext`, `KeepRequestActionDecision`, `KeepRequestActionPolicy` added.
+   `KeepRequestDetailMapper.ToAvailableActionsMetadata` added (maps decision → 11-field response
+   contract). `GetKeepRequestDetailService`, `GetKeepRequestListService`, and
+   `CreateBusinessRequestService` migrated to policy. `BuildQuickActions` and `BuildContactActions`
+   in `GetKeepRequestListService` corrected: `ReviewFeedback` gated on `CanMarkFeedbackReviewed`,
+   `ContactCustomer` and `post_customer_update` gated on `CanLogExternalContact`/`CanSendBusinessUpdate`,
+   `BuildContactActions` updated to accept and check the decision.
+   Unit tests: 46 new — 39 policy matrix (`KeepRequestActionPolicyTests`); 3 list parity
+   (OffSeason suppresses all write actions, isPostClose owner shows/suppresses review_feedback in
+   OffSeason); 1 business-create parity (AvailableActions maps shared decision); 3 detail parity
+   (`KeepRequestDetailServiceTests`: AllowedStatuses excludes current status for Received,
+   InProgress, Closed). Old mapper helpers retained — still needed by G4e-2/3 mutation callers.
+2. **G4e-2 — operational mutations (gate after G4e-1 review):** migrate status change, business
+   update, internal note, acknowledgement, and external-contact services while preserving guard
+   ordering and endpoint errors.
+3. **G4e-3 — participation, feedback, and completion (gate after G4e-2 review):** migrate
+   responsible, watcher, self-watch, mute, and feedback-review services; remove old helpers after
+   zero callers; complete the G4 path inventory and full verification.
+
+##### Final verification gate
+
+- pure policy matrix tests cover role, write state, lifecycle status, attention, feedback,
+  participation, notifications, unknown roles, and inconsistent context;
+- terminal exceptions and ordered status transitions are explicit, while existing same-status
+  command tests remain green;
+- service/API tests prove endpoint and post-mutation metadata agreement, including OffSeason;
+- list tests prove policy-driven actions and presentation-only suppression;
+- zero callers remain for superseded mapper helpers and zero services duplicate
+  `AvailableActionsMetadata` construction;
+- build, unit, architecture, integration, and full suites pass with exact counts recorded.
 
 ---
 
