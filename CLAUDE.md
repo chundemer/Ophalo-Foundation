@@ -86,8 +86,17 @@ context window.
 ## Verification
 
 - During implementation, run the smallest focused tests that exercise the changed behavior.
-- Run broader unit/architecture/integration suites only at the batch completion gate or when a
-  cross-cutting change warrants them.
+- Do not run the full test suite by default in every implementation session. The repository has
+  1,000+ tests; full-suite runs consume session time and context. Use focused tests first, then
+  broaden only when the risk profile requires it.
+- Normal bounded slice verification should prefer:
+  1. `git diff --check`;
+  2. focused unit tests for touched domain/policy/service/list code;
+  3. focused integration tests for touched API fixtures;
+  4. full unit + architecture when affordable.
+- Run the full suite at phase/gap completion gates, before release/deployment, or for high-risk
+  changes such as migrations, row authorization/visibility, concurrency/versioning, broad routing or
+  auth middleware, or shared policy/mapper changes affecting many surfaces.
 - Use `--no-restore` and minimal verbosity when dependencies are already available.
 - Summarize failures; do not paste repeated stack traces after the root cause is known.
 - Before handoff, run `git diff --check`, inspect the final changed-file list, and self-review for
