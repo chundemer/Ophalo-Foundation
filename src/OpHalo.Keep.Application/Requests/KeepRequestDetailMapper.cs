@@ -20,6 +20,9 @@ internal static class KeepRequestDetailMapper
         AcknowledgeReasonMaxLength: 500,
         ExternalContactSummaryMaxLength: 4000,
         FeedbackReviewNoteMaxLength: 2000,
+        FollowUpNoteMaxLength: 500,
+        AllowedFollowUpReasons: ["weather", "parts", "customer_delay",
+            "business_operator_availability", "third_party", "other"],
         MessageRequiredForStatuses: ["pending_customer", "cancelled"]);
 
     internal static KeepRequestDetailResult ToDetailResult(
@@ -61,6 +64,10 @@ internal static class KeepRequestDetailMapper
         LastBusinessActivityAt: request.LastBusinessActivityAt,
         LastCustomerActivityAt: request.LastCustomerActivityAt,
         TerminatedAtUtc: request.TerminatedAtUtc,
+        FollowUpOnDate:   request.FollowUpOnDate,
+        FollowUpOnReason: request.FollowUpReason.HasValue ? MapFollowUpReason(request.FollowUpReason.Value) : null,
+        FollowUpOnNote:   request.FollowUpNote,
+        PlannedForDate:   request.PlannedForDate,
         AttentionLevel: MapAttentionLevel(request.AttentionLevel),
         WaitingDirection: MapWaitingDirection(request.WaitingDirection),
         AttentionReason: request.AttentionReason.HasValue
@@ -110,6 +117,8 @@ internal static class KeepRequestDetailMapper
             CanMute:                 decision.CanMute,
             CanUnmute:               decision.CanUnmute,
             CanMarkFeedbackReviewed: decision.CanMarkFeedbackReviewed,
+            CanSetFollowUpOn:        decision.CanSetFollowUpOn,
+            CanSetPlannedFor:        decision.CanSetPlannedFor,
             AllowedStatuses:         decision.AllowedStatuses.Select(MapStatus).ToList());
 
     internal static KeepRequestStatus? ParseStatusSlug(string? slug)
@@ -168,6 +177,28 @@ internal static class KeepRequestDetailMapper
             actions.Add(new ContactActionItem("email", true, email));
         return actions;
     }
+
+    internal static FollowUpReason? ParseFollowUpReasonSlug(string? slug) => slug?.Trim().ToLowerInvariant() switch
+    {
+        "weather"                        => FollowUpReason.Weather,
+        "parts"                          => FollowUpReason.Parts,
+        "customer_delay"                 => FollowUpReason.CustomerDelay,
+        "business_operator_availability" => FollowUpReason.BusinessOperatorAvailability,
+        "third_party"                    => FollowUpReason.ThirdParty,
+        "other"                          => FollowUpReason.Other,
+        _                                => null
+    };
+
+    private static string MapFollowUpReason(FollowUpReason reason) => reason switch
+    {
+        FollowUpReason.Weather                      => "weather",
+        FollowUpReason.Parts                        => "parts",
+        FollowUpReason.CustomerDelay                => "customer_delay",
+        FollowUpReason.BusinessOperatorAvailability => "business_operator_availability",
+        FollowUpReason.ThirdParty                   => "third_party",
+        FollowUpReason.Other                        => "other",
+        _ => throw new InvalidOperationException($"Unknown FollowUpReason: {reason}")
+    };
 
     internal static string MapStatus(KeepRequestStatus status) => status switch
     {
@@ -296,6 +327,8 @@ internal static class KeepRequestDetailMapper
         KeepRequestEventType.ExternalContactLogged => "external_contact_logged",
         KeepRequestEventType.ParticipationChanged  => "participation_changed",
         KeepRequestEventType.FeedbackReviewed      => "feedback_reviewed",
+        KeepRequestEventType.FollowUpOnChanged     => "follow_up_on_changed",
+        KeepRequestEventType.PlannedForChanged     => "planned_for_changed",
         _ => throw new InvalidOperationException($"Unknown KeepRequestEventType: {type}")
     };
 

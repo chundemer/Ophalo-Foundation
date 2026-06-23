@@ -27,4 +27,6 @@ public sealed record KeepRequestActionDecision(
     bool CanMute,
     bool CanUnmute,
     bool CanMarkFeedbackReviewed,
+    bool CanSetFollowUpOn,
+    bool CanSetPlannedFor,
     IReadOnlyList<KeepRequestStatus> AllowedStatuses);

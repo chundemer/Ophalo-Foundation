@@ -231,4 +231,8 @@ public static class KeepRequestErrors
     // Planned For errors (ADR-338, P6b-1).
     public static readonly Error PlannedForRequiresActiveRequest =
         Error.Create("KeepRequest.PlannedForRequiresActiveRequest", "Planned For can only be set or changed on active requests.");
+
+    // Timing mutation API-edge errors (P6b-2).
+    public static readonly Error InvalidDateFormat =
+        Error.Create("KeepRequest.InvalidDateFormat", "Date must be a valid calendar date in yyyy-MM-dd format.");
 }

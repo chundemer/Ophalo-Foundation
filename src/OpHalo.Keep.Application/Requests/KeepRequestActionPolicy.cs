@@ -27,6 +27,8 @@ public static class KeepRequestActionPolicy
         CanMute:                  false,
         CanUnmute:                false,
         CanMarkFeedbackReviewed:  false,
+        CanSetFollowUpOn:         false,
+        CanSetPlannedFor:         false,
         AllowedStatuses:          []);
 
     public static KeepRequestActionDecision Evaluate(KeepRequest request, KeepRequestActionContext actor)
@@ -67,6 +69,13 @@ public static class KeepRequestActionPolicy
         var canWatch   = isNonTerminal && participation == null;
         var canUnwatch = isNonTerminal && participation == ParticipationType.Watching;
 
+        // Timing mutations: active requests only (Resolved/Closed/Cancelled all rejected by domain).
+        // CanWrite already incorporates OffSeason freeze; Operator row access enforced at service layer.
+        var canSetTiming = actor.CanWrite
+            && request.Status is not (KeepRequestStatus.Resolved
+                                      or KeepRequestStatus.Closed
+                                      or KeepRequestStatus.Cancelled);
+
         return new KeepRequestActionDecision(
             CanChangeStatus:          isNonTerminal,
             CanSendBusinessUpdate:    isNonTerminal,
@@ -82,6 +91,8 @@ public static class KeepRequestActionPolicy
             CanMute:                  canMute,
             CanUnmute:                canUnmute,
             CanMarkFeedbackReviewed:  CanMarkFeedbackReviewedCore(isOwnerAdmin, request),
+            CanSetFollowUpOn:         canSetTiming,
+            CanSetPlannedFor:         canSetTiming,
             AllowedStatuses:          ComputeAllowedStatuses(request.Status));
     }
 

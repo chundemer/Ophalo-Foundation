@@ -139,6 +139,14 @@ public static class ErrorHttpMapper
             var c when c == "KeepRequest.ParticipationResponsibleCannotWatch"     => (StatusCodes.Status409Conflict, "Conflict.", null),
             var c when c == "KeepRequest.ParticipationStateCorrupt"               => (StatusCodes.Status409Conflict, "Conflict.", null),
 
+            // --- Follow Up On / Planned For errors (ADR-337/338 / P6b-2) ---
+            var c when c == "KeepRequest.FollowUpOnRequiresActiveRequest" => (StatusCodes.Status409Conflict, "Conflict.", null),
+            var c when c == "KeepRequest.PlannedForRequiresActiveRequest" => (StatusCodes.Status409Conflict, "Conflict.", null),
+            var c when c == "KeepRequest.FollowUpOnReasonRequired"        => (StatusCodes.Status400BadRequest, "Bad request.", null),
+            var c when c == "KeepRequest.FollowUpOnNoteRequired"          => (StatusCodes.Status400BadRequest, "Bad request.", null),
+            var c when c == "KeepRequest.FollowUpOnNoteTooLong"           => (StatusCodes.Status400BadRequest, "Bad request.", null),
+            var c when c == "KeepRequest.InvalidDateFormat"               => (StatusCodes.Status400BadRequest, "Bad request.", null),
+
             // --- Feedback review errors (ADR-276 / Session 5B) ---
             var c when c == "KeepRequest.FeedbackReviewUnavailable"              => (StatusCodes.Status409Conflict, "Conflict.", null),
             var c when c == "KeepRequest.FeedbackAlreadyReviewed"                => (StatusCodes.Status409Conflict, "Conflict.", null),

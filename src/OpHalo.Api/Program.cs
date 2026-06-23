@@ -113,6 +113,7 @@ builder.Services.AddScoped<ManageWatcherService>();
 builder.Services.AddScoped<SelfWatchService>();
 builder.Services.AddScoped<MuteService>();
 builder.Services.AddScoped<MarkFeedbackReviewedService>();
+builder.Services.AddScoped<ManageRequestTimingService>();
 builder.Services.AddScoped<GetParticipantCandidatesService>();
 builder.Services.AddScoped<KeepRequestParticipationService>();
 builder.Services.AddScoped<KeepPublicCustomerAccessGuard>();
@@ -568,6 +569,76 @@ app.MapDelete("/keep/requests/{requestId:guid}/mute", async (
         return ErrorHttpMapper.ToHttpResult(versionResult.Error);
 
     var result = await service.UnmuteAsync(requestId, versionResult.Value, ct);
+    return result.IsSuccess ? Results.Ok(result.Value) : ErrorHttpMapper.ToHttpResult(result.Error);
+}).RequireAuthorization();
+
+// Follow Up On — authenticated, versioned operator write (P6b-2/ADR-337)
+app.MapPut("/keep/requests/{requestId:guid}/follow-up-on", async (
+    Guid requestId,
+    HttpRequest httpRequest,
+    SetFollowUpOnRequestBody body,
+    ManageRequestTimingService service,
+    CancellationToken ct) =>
+{
+    var versionResult = KeepRequestVersionHeader.Parse(httpRequest.Headers);
+    if (!versionResult.IsSuccess)
+        return ErrorHttpMapper.ToHttpResult(versionResult.Error);
+
+    if (!DateOnly.TryParseExact(body.Date, "yyyy-MM-dd", out var date))
+        return ErrorHttpMapper.ToHttpResult(KeepRequestErrors.InvalidDateFormat);
+
+    var command = new SetFollowUpOnCommand(requestId, date, body.Reason, body.Note, versionResult.Value);
+    var result = await service.SetFollowUpOnAsync(command, ct);
+    return result.IsSuccess ? Results.Ok(result.Value) : ErrorHttpMapper.ToHttpResult(result.Error);
+}).RequireAuthorization();
+
+app.MapDelete("/keep/requests/{requestId:guid}/follow-up-on", async (
+    Guid requestId,
+    HttpRequest httpRequest,
+    ManageRequestTimingService service,
+    CancellationToken ct) =>
+{
+    var versionResult = KeepRequestVersionHeader.Parse(httpRequest.Headers);
+    if (!versionResult.IsSuccess)
+        return ErrorHttpMapper.ToHttpResult(versionResult.Error);
+
+    var command = new ClearFollowUpOnCommand(requestId, versionResult.Value);
+    var result = await service.ClearFollowUpOnAsync(command, ct);
+    return result.IsSuccess ? Results.Ok(result.Value) : ErrorHttpMapper.ToHttpResult(result.Error);
+}).RequireAuthorization();
+
+// Planned For — authenticated, versioned operator write (P6b-2/ADR-338)
+app.MapPut("/keep/requests/{requestId:guid}/planned-for", async (
+    Guid requestId,
+    HttpRequest httpRequest,
+    SetPlannedForRequestBody body,
+    ManageRequestTimingService service,
+    CancellationToken ct) =>
+{
+    var versionResult = KeepRequestVersionHeader.Parse(httpRequest.Headers);
+    if (!versionResult.IsSuccess)
+        return ErrorHttpMapper.ToHttpResult(versionResult.Error);
+
+    if (!DateOnly.TryParseExact(body.Date, "yyyy-MM-dd", out var date))
+        return ErrorHttpMapper.ToHttpResult(KeepRequestErrors.InvalidDateFormat);
+
+    var command = new SetPlannedForCommand(requestId, date, versionResult.Value);
+    var result = await service.SetPlannedForAsync(command, ct);
+    return result.IsSuccess ? Results.Ok(result.Value) : ErrorHttpMapper.ToHttpResult(result.Error);
+}).RequireAuthorization();
+
+app.MapDelete("/keep/requests/{requestId:guid}/planned-for", async (
+    Guid requestId,
+    HttpRequest httpRequest,
+    ManageRequestTimingService service,
+    CancellationToken ct) =>
+{
+    var versionResult = KeepRequestVersionHeader.Parse(httpRequest.Headers);
+    if (!versionResult.IsSuccess)
+        return ErrorHttpMapper.ToHttpResult(versionResult.Error);
+
+    var command = new ClearPlannedForCommand(requestId, versionResult.Value);
+    var result = await service.ClearPlannedForAsync(command, ct);
     return result.IsSuccess ? Results.Ok(result.Value) : ErrorHttpMapper.ToHttpResult(result.Error);
 }).RequireAuthorization();
 

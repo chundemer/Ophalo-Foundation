@@ -19,6 +19,10 @@ public sealed record KeepRequestDetailResult(
     DateTime? LastBusinessActivityAt,
     DateTime? LastCustomerActivityAt,
     DateTime? TerminatedAtUtc,
+    DateOnly? FollowUpOnDate,
+    string? FollowUpOnReason,
+    string? FollowUpOnNote,
+    DateOnly? PlannedForDate,
     string AttentionLevel,
     string WaitingDirection,
     string? AttentionReason,
@@ -64,6 +68,8 @@ public sealed record AvailableActionsMetadata(
     bool CanMute,
     bool CanUnmute,
     bool CanMarkFeedbackReviewed,
+    bool CanSetFollowUpOn,
+    bool CanSetPlannedFor,
     IReadOnlyList<string> AllowedStatuses);
 
 /// <summary>
@@ -77,6 +83,8 @@ public sealed record ValidationHintsMetadata(
     int AcknowledgeReasonMaxLength,
     int ExternalContactSummaryMaxLength,
     int FeedbackReviewNoteMaxLength,
+    int FollowUpNoteMaxLength,
+    IReadOnlyList<string> AllowedFollowUpReasons,
     IReadOnlyList<string> MessageRequiredForStatuses);
 
 public sealed record ContactActionItem(string Type, bool Available, string Target);
