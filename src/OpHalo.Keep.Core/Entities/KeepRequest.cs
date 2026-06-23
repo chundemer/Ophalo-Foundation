@@ -89,6 +89,10 @@ public sealed class KeepRequest : BaseEntity
 
     public DateOnly? PlannedForDate { get; private set; }
 
+    // --- Customer page viewed telemetry (ADR-341, P6c-2) ---
+
+    public DateTime? CustomerPageLastViewedAtUtc { get; private set; }
+
     // --- Optimistic concurrency (G5/ADR-330) ---
 
     // Application-managed opaque concurrency token for the request aggregate (row, events,
@@ -1015,6 +1019,29 @@ public sealed class KeepRequest : BaseEntity
             Id, AccountId, actorAccountUserId, actorDisplayName, date: null, nowUtc);
 
         return Result<KeepRequestEvent>.Success(ev);
+    }
+
+    /// <summary>
+    /// Records a customer page view for adoption/confidence telemetry (ADR-341).
+    /// Debounces writes so rapid refreshes do not spam the database. Returns true when
+    /// CustomerPageLastViewedAtUtc was updated and a persistence write is required;
+    /// returns false when the last view is still within the debounce window.
+    /// Does NOT rotate ConcurrencyVersion — page-view telemetry must not cause
+    /// stale-version conflicts for concurrent operator writes.
+    /// </summary>
+    public bool RecordCustomerPageView(DateTime nowUtc, int debounceMinutes = 5)
+    {
+        if (nowUtc == default)
+            throw new ArgumentException("nowUtc must be a valid UTC timestamp.", nameof(nowUtc));
+        if (debounceMinutes <= 0)
+            throw new ArgumentOutOfRangeException(nameof(debounceMinutes), "Debounce window must be positive.");
+
+        if (CustomerPageLastViewedAtUtc.HasValue
+            && (nowUtc - CustomerPageLastViewedAtUtc.Value).TotalMinutes < debounceMinutes)
+            return false;
+
+        CustomerPageLastViewedAtUtc = nowUtc;
+        return true;
     }
 
     // Enums. prefix required: FollowUpReason instance property shadows the enum type name in static scope.

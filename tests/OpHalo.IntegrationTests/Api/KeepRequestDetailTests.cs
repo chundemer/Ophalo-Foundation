@@ -214,6 +214,53 @@ public sealed class KeepRequestDetailTests : IClassFixture<KeepApiWebFactory>, I
         Assert.Equal(_seededVersion, version);
     }
 
+    // =========================================================================
+    // P6c-2: Staff-facing customer page viewed metadata (ADR-341)
+    // =========================================================================
+
+    [Fact]
+    public async Task GetDetail_NeverViewed_CustomerPageLastViewedAtUtcIsNull()
+    {
+        var response = await AuthRequest(_ownerCookie).GetAsync($"/keep/requests/{_requestId}");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(JsonValueKind.Null, body.GetProperty("customerPageLastViewedAtUtc").ValueKind);
+        Assert.Equal(JsonValueKind.Null, body.GetProperty("customerPageViewedAfterLatestUpdate").ValueKind);
+    }
+
+    [Fact]
+    public async Task GetDetail_AfterPageView_ExposesCustomerPageLastViewedAtUtc()
+    {
+        // Simulate a customer page view via the public endpoint.
+        var pageClient = _factory.CreateClient();
+        await pageClient.GetAsync("/keep/r/seed_page_token_detail");
+
+        var response = await AuthRequest(_ownerCookie).GetAsync($"/keep/requests/{_requestId}");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.NotEqual(JsonValueKind.Null, body.GetProperty("customerPageLastViewedAtUtc").ValueKind);
+    }
+
+    [Fact]
+    public async Task GetDetail_ViewedBeforeAnyBusinessActivity_ViewedAfterLatestUpdateIsNull()
+    {
+        // Customer views (no business activity has been recorded yet — LastBusinessActivityAt is null)
+        var pageClient = _factory.CreateClient();
+        await pageClient.GetAsync("/keep/r/seed_page_token_detail");
+
+        var response = await AuthRequest(_ownerCookie).GetAsync($"/keep/requests/{_requestId}");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        // LastBusinessActivityAt is null — derivation must return null, not true/false
+        Assert.Equal(JsonValueKind.Null, body.GetProperty("customerPageViewedAfterLatestUpdate").ValueKind);
+    }
+
     private HttpClient AuthRequest(string cookie)
     {
         var client = _factory.CreateClient();

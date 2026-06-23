@@ -52,4 +52,12 @@ public interface IKeepCustomerWritePersistence
     /// chronologically. Used to build the updated customer page result returned to the caller.
     /// </summary>
     Task<IReadOnlyList<KeepRequestEvent>> GetCustomerVisibleEventsAsync(Guid requestId, CancellationToken ct);
+
+    /// <summary>
+    /// Persists a page-view telemetry update (ADR-341). Does NOT rotate ConcurrencyVersion —
+    /// page views must not produce stale-version conflicts for concurrent operator writes.
+    /// Silently absorbs DbUpdateConcurrencyException: a concurrent operator write wins and
+    /// the telemetry write is lost; this is acceptable for a best-effort signal.
+    /// </summary>
+    Task CommitPageViewAsync(KeepRequest request, CancellationToken ct);
 }

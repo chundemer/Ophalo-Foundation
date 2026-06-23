@@ -128,6 +128,9 @@ internal sealed class KeepRequestConfiguration : BaseEntityConfiguration<KeepReq
         // Planned For field (ADR-338, P6b-1).
         builder.Property(x => x.PlannedForDate);
 
+        // Customer page viewed telemetry (ADR-341, P6c-2).
+        builder.Property(x => x.CustomerPageLastViewedAtUtc);
+
         // IsTerminal is a computed C# property — no column.
         builder.Ignore(x => x.IsTerminal);
 

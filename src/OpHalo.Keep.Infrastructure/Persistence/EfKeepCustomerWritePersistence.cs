@@ -53,4 +53,17 @@ public sealed class EfKeepCustomerWritePersistence(OpHaloDbContext dbContext) : 
             .Where(e => e.RequestId == requestId && e.Visibility == KeepRequestEventVisibility.All)
             .OrderBy(e => e.OccurredAtUtc)
             .ToListAsync(ct);
+
+    public async Task CommitPageViewAsync(KeepRequest request, CancellationToken ct)
+    {
+        try
+        {
+            await dbContext.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            // A concurrent operator write won the race. Page-view telemetry is best-effort;
+            // losing this write is acceptable — the operator's update is more important.
+        }
+    }
 }

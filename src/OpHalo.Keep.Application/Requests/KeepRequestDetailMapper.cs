@@ -91,6 +91,8 @@ internal static class KeepRequestDetailMapper
         FeedbackReviewNote: reviewNoteVisible ? request.FeedbackReviewNote : null,
         FeedbackReviewAgeBucket: ComputeReviewAgeBucket(request, nowUtc),
         FeedbackReviewDueAtUtc: ComputeReviewDueAtUtc(request),
+        CustomerPageLastViewedAtUtc: request.CustomerPageLastViewedAtUtc,
+        CustomerPageViewedAfterLatestUpdate: ComputeViewedAfterLatestUpdate(request),
         ContactActions: BuildContactActions(availableActions.CanLogExternalContact, request.CustomerPhone, request.CustomerEmail),
         Participants: participants.Select(MapParticipant).ToList(),
         CurrentUserParticipation: currentUserParticipation,
@@ -153,6 +155,13 @@ internal static class KeepRequestDetailMapper
             FeedbackReviewAgeBucket.Overdue => "overdue",
             var b => throw new InvalidOperationException($"Unknown FeedbackReviewAgeBucket: {b}")
         };
+    }
+
+    private static bool? ComputeViewedAfterLatestUpdate(KeepRequest request)
+    {
+        if (!request.CustomerPageLastViewedAtUtc.HasValue) return null;
+        if (!request.LastBusinessActivityAt.HasValue) return null;
+        return request.CustomerPageLastViewedAtUtc.Value > request.LastBusinessActivityAt.Value;
     }
 
     private static DateTime? ComputeReviewDueAtUtc(KeepRequest request)

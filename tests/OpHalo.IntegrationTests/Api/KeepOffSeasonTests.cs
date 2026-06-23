@@ -276,7 +276,7 @@ public sealed class KeepOffSeasonTests : IClassFixture<KeepApiWebFactory>, IAsyn
     [Fact]
     public async Task CustomerMessage_OffSeason_Returns409WithOffSeasonUnavailable()
     {
-        var req = new HttpRequestMessage(HttpMethod.Post, $"/keep/r/{PageToken}/message");
+        var req = new HttpRequestMessage(HttpMethod.Post, $"/keep/r/{PageToken}/question");
         req.Headers.Add("X-Keep-Request-Version", _requestVersion.ToString("D"));
         req.Content = JsonContent.Create(new { message = "Hello, any updates?" });
         var response = await _factory.CreateClient().SendAsync(req);

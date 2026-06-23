@@ -258,6 +258,72 @@ public sealed class KeepCustomerPageTests : IClassFixture<KeepApiWebFactory>, IA
     }
 
     // =========================================================================
+    // P6c-2: Customer page viewed telemetry (ADR-341)
+    // =========================================================================
+
+    [Fact]
+    public async Task GetCustomerPage_FirstVisit_RecordsPageView()
+    {
+        var response = await _client.GetAsync($"/keep/r/{PageToken}");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        await using var scope = _factory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+        var request = await db.Set<KeepRequest>()
+            .AsNoTracking()
+            .FirstAsync(r => r.PageToken == PageToken);
+
+        Assert.NotNull(request.CustomerPageLastViewedAtUtc);
+    }
+
+    [Fact]
+    public async Task GetCustomerPage_SecondVisitWithinDebounceWindow_DoesNotUpdateTimestamp()
+    {
+        // First visit
+        await _client.GetAsync($"/keep/r/{PageToken}");
+
+        DateTime? firstViewedAt;
+        await using (var scope = _factory.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+            var r = await db.Set<KeepRequest>().AsNoTracking().FirstAsync(x => x.PageToken == PageToken);
+            firstViewedAt = r.CustomerPageLastViewedAtUtc;
+        }
+
+        Assert.NotNull(firstViewedAt);
+
+        // Immediate second visit — same second, well within 5-minute debounce
+        await _client.GetAsync($"/keep/r/{PageToken}");
+
+        await using var scope2 = _factory.CreateScope();
+        var db2 = scope2.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+        var r2 = await db2.Set<KeepRequest>().AsNoTracking().FirstAsync(x => x.PageToken == PageToken);
+
+        Assert.Equal(firstViewedAt, r2.CustomerPageLastViewedAtUtc);
+    }
+
+    [Fact]
+    public async Task GetCustomerPage_ExpiredRequest_DoesNotRecordPageView()
+    {
+        await using (var scope = _factory.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+            await db.Database.ExecuteSqlRawAsync(
+                "UPDATE keep_requests SET status = 'Closed', expires_at_utc = @p0 WHERE page_token = @p1",
+                DateTime.UtcNow.AddDays(-1), PageToken);
+        }
+
+        var response = await _client.GetAsync($"/keep/r/{PageToken}");
+        Assert.Equal(HttpStatusCode.Gone, response.StatusCode);
+
+        await using var scope2 = _factory.CreateScope();
+        var db2 = scope2.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+        var r = await db2.Set<KeepRequest>().AsNoTracking().FirstAsync(x => x.PageToken == PageToken);
+
+        Assert.Null(r.CustomerPageLastViewedAtUtc);
+    }
+
+    // =========================================================================
     // G6: Defensive ADR-120 boundary — past expires_at_utc on non-terminal
     //     requests must not expire the customer page.
     // =========================================================================

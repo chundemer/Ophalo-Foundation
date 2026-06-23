@@ -45,6 +45,12 @@ public sealed record KeepRequestDetailResult(
     string? FeedbackReviewNote,
     string? FeedbackReviewAgeBucket,
     DateTime? FeedbackReviewDueAtUtc,
+    // Customer page viewed telemetry (ADR-341, P6c-2).
+    // Null means the customer has never viewed the page.
+    // CustomerPageViewedAfterLatestUpdate is null when never viewed or when there is no
+    // meaningful latest business update to compare against.
+    DateTime? CustomerPageLastViewedAtUtc,
+    bool? CustomerPageViewedAfterLatestUpdate,
     IReadOnlyList<ContactActionItem> ContactActions,
     IReadOnlyList<KeepRequestParticipantItem> Participants,
     CurrentUserDetailParticipation CurrentUserParticipation,
