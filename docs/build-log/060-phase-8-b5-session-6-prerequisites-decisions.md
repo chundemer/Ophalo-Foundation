@@ -479,6 +479,94 @@ Verify:
 - `dotnet test tests/OpHalo.IntegrationTests` — 591 passed (full suite).
 - `dotnet build --no-restore` — succeeded.
 
+### Claude coding sessions for P6c
+
+Use one Claude session per slice below. Each session should read only this build log header,
+ADR-341/342, the Session Protocol in `docs/session-log.md`, and the files named in that slice.
+
+#### P6c-1 — Customer intent menu and route compatibility — COMPLETE
+
+**Commits:** `304cb92` (routes/mapper/enums/domain), `5a5eaa8` (fix: detail/list mapper gaps + regression test).
+
+**Delivered:**
+- `MessageIntent` — added `InformationAdded`, `CallRequested`, `TimingChangeRequested`,
+  `CancellationRequested`. Old values kept for DB backward compat (stored as string).
+- `AttentionReason` — added `CallRequested`, `TimingChangeRequested`, `CancellationRequested`.
+- `KeepRequest.MapIntentToAttention` — new intents map to appropriate reasons and priority bands
+  (`InformationAdded` → `CustomerMessage`/Standard; the other three → new reason/Priority).
+- `KeepCustomerPageMapper.ActiveAllowedActions` — replaced old list with ADR-342 set:
+  `question`, `update_request`, `information_added`, `call_requested`,
+  `timing_change_requested`, `cancellation_requested` (`cancellation_requested` last).
+- `Program.cs` — removed four old routes (`/message`, `/schedule_change_request`,
+  `/change_or_cancel_request`, `/issue`); added four new ones; kept `/question` and `/update_request`.
+- `KeepRequestDetailMapper.MapMessageIntent` and `MapAttentionReason` — extended for all new values.
+- `GetKeepRequestListService.MapAttentionReason` and `AttentionReasonSlugs` — extended for all new
+  attention reason values so list serialization and filtering are consistent.
+- `CustomerMessageTests` — all test routes updated to new slugs; Test 7 replaced with
+  `/call_requested` → `CallRequested` priority attention; concurrency theory data updated.
+- `KeepRequestDetailB4Tests` — regression test: POST `/call_requested` then GET authenticated
+  detail; asserts `attentionReason="call_requested"` and `messageIntent="call_requested"` in timeline.
+
+**Verified:**
+- `dotnet build --no-restore` — succeeded.
+- `CustomerMessageTests` — 25 passed.
+- `KeepRequestDetailB4Tests` — 17 passed (including P6c-1 regression).
+
+#### P6c-2 — Customer-page viewed signal
+
+Goal: add debounced customer-page viewed telemetry and cautious staff-facing metadata per ADR-341.
+
+Read:
+
+- `src/OpHalo.Keep.Application/Requests/KeepPublicCustomerAccessGuard.cs`
+- `src/OpHalo.Keep.Application/Requests/GetKeepCustomerPageService.cs`
+- `src/OpHalo.Keep.Application/Requests/KeepCustomerPageResult.cs`
+- `src/OpHalo.Keep.Application/Requests/KeepCustomerPageMapper.cs`
+- `src/OpHalo.Keep.Application/Requests/IKeepCustomerWritePersistence.cs`
+- `src/OpHalo.Keep.Infrastructure/Persistence/EfKeepCustomerWritePersistence.cs`
+- `src/OpHalo.Keep.Infrastructure/Persistence/Configurations/KeepRequestConfiguration.cs`
+- `src/OpHalo.Keep.Application/Requests/KeepRequestDetailResult.cs`
+- `src/OpHalo.Keep.Application/Requests/KeepRequestDetailMapper.cs`
+- `tests/OpHalo.IntegrationTests/Api/KeepCustomerPageTests.cs`
+- detail/list tests touched by exposing staff-facing metadata.
+
+Implement:
+
+- Durable page-view telemetry with debounce/rate-limit semantics so refreshes do not spam writes.
+- Staff-facing metadata such as last viewed, viewed after latest business update, and never viewed.
+- Metadata must be cautious: no presence/online/read-receipt language.
+- Page views must not raise business attention and must not suppress stale/status-check in this slice.
+
+Do not implement:
+
+- Full signal/projection engine.
+- Needs-status-check logic.
+- Notification delivery.
+- Customer identity portal or access-link management.
+
+Verify:
+
+- Unit/domain tests for debounce and metadata derivation.
+- Customer-page API tests for active/expired/terminal behavior and no internal data leakage.
+- Authenticated detail/list tests only if staff-facing metadata is exposed there.
+- `dotnet build`.
+
+#### P6c-3 — P6c completion gate
+
+Goal: reconcile docs/ledger and move the next batch to P6d only after P6c-1 and P6c-2 are green.
+
+Task:
+
+- Record implemented P6c scope and final test baseline.
+- Mark DEF-030 implemented only after page-view telemetry and metadata are complete.
+- Keep DEF-037 open for P6d.
+- Move session log next batch to P6d.
+
+Verify:
+
+- Focused P6c unit/integration tests.
+- `dotnet build`.
+
 ## Exclusions
 
 Session 6 prerequisites explicitly exclude:
