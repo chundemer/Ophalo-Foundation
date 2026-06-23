@@ -1,10 +1,10 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-06-23 (G8b complete; G8c locked; G8d next)
+**Last updated:** 2026-06-23 (G8 complete — pre-Session-6 gap audit DONE)
 **Branch:** `main` (no remote yet)
-**Current baseline:** 1265 tests (677 unit · 14 architecture · 574 integration).
+**Current baseline:** 1265 tests (677 unit · 14 architecture · 574 integration) — FINAL PRE-SESSION-6 GREEN GATE.
 **Next free ADR:** ADR-337
-**Next batch: G8d — ledger/final completion gate.**
+**Next batch: Phase 8-B5 Session 6.**
 
 ---
 
@@ -176,6 +176,19 @@ Decision: **Option 3 — documented accepted retrievable storage for pilot.**
   risks, including database read exposure and Cloudflare/Railway access-log limitations.
 - Defer stronger page-token at-rest protection to a dedicated future access-link management/security
   slice.
+
+### G8d — Ledger/final completion gate — COMPLETE
+
+**ADR/DEF ledger reconciled (GAP-021):**
+- ADR-052: `Locked` → `Implemented` (token-hash-only authority delivered in Phase 7B)
+- ADR-053: `Locked` → `Deferred — notifications phase`
+- ADR-054: `Locked` → `Implemented` (real Phase 5 auth delivered; build-log/016)
+- ADR-060: source reference updated with G8a trusted-proxy proof (build-log/058)
+- ADR-129: `Locked` → `Implemented` (customer-write partition proven in G8a)
+- DEF-074: `Deferred` → `Implemented — G5 / build-log/056` (entity-wide concurrency delivered)
+- DEF-007: note added that G3 delivered setup endpoint; new-account auto-create still deferred
+
+**Full suite gate:** 1265 tests (677 unit · 14 arch · 574 integration) — all green.
 
 ### G8 exclusions
 
