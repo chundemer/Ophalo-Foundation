@@ -1,10 +1,10 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-06-23 (P6c-2 complete — ready for P6c-3 completion gate)
-**Branch:** `main` tracking `origin/main` (currently 6 local commits ahead)
+**Last updated:** 2026-06-23 (P6c complete — ready for P6d needs-status-check signal model)
+**Branch:** `main` tracking `origin/main`
 **Current baseline:** 1334 tests (722 unit · 14 architecture · 598 integration) — full suite green.
 **Next free ADR:** ADR-345
-**Next batch: P6c-3 — P6c completion gate.**
+**Next batch: P6d-1 — needs-status-check signal foundation.**
 
 ---
 
@@ -39,7 +39,7 @@ For every implementation slice:
 **Build log:** `docs/build-log/060-phase-8-b5-session-6-prerequisites-decisions.md`  
 **Decisions:** ADR-337..ADR-344.
 
-Session 6 proper remains paused. P6b is complete and the active prerequisite is P6c.
+Session 6 proper remains paused. P6b and P6c are complete; the active prerequisite is P6d.
 
 Locked implementation split:
 
@@ -62,49 +62,59 @@ Current handoff:
   (KeepRequest domain field + debounce method, GetKeepCustomerPageService page-view recording,
   IKeepCustomerWritePersistence.CommitPageViewAsync, staff detail metadata, migration, 7 unit + 6 integration tests).
   Also fixed stale KeepOffSeasonTests customer message route from P6c-1 intent split.
-- **Active:** P6c-3 — P6c completion gate.
+- **Completed:** P6c-3 — docs/ledger completion gate. DEF-030 implemented; ADR-341/342 implemented;
+  DEF-037 remains open for P6d.
+- **Active:** P6d-1 — needs-status-check signal foundation.
 
-### P6c-2 Coding Brief
+### P6d-1 Coding Brief
 
 Source decisions:
 
-- ADR-341: customer page viewed is a confidence/adoption signal, not presence or a read receipt.
-- DEF-030 remains open until page viewed telemetry/metadata is implemented.
+- ADR-339: needs-status-check is a policy-driven, signal-extensible human review queue.
+- DEF-037 remains open for P6d until the queue/signal model is implemented.
 
 Read first:
 
-- `docs/build-log/060-phase-8-b5-session-6-prerequisites-decisions.md` sections ADR-341, P6c-2, and Exclusions.
-- `src/OpHalo.Keep.Application/Requests/KeepPublicCustomerAccessGuard.cs`
-- `src/OpHalo.Keep.Application/Requests/GetKeepCustomerPageService.cs`
-- `src/OpHalo.Keep.Application/Requests/KeepCustomerPageResult.cs`
-- `src/OpHalo.Keep.Application/Requests/KeepCustomerPageMapper.cs`
-- `src/OpHalo.Keep.Application/Requests/IKeepCustomerWritePersistence.cs`
-- `src/OpHalo.Keep.Infrastructure/Persistence/EfKeepCustomerWritePersistence.cs`
-- `src/OpHalo.Keep.Infrastructure/Persistence/Configurations/KeepRequestConfiguration.cs`
-- `src/OpHalo.Keep.Application/Requests/KeepRequestDetailResult.cs`
-- `src/OpHalo.Keep.Application/Requests/KeepRequestDetailMapper.cs`
-- `tests/OpHalo.IntegrationTests/Api/KeepCustomerPageTests.cs`
+- `docs/build-log/060-phase-8-b5-session-6-prerequisites-decisions.md` sections ADR-339, P6d, P6d-1, and Exclusions.
+- `src/OpHalo.Keep.Core/Entities/KeepRequest.cs`
+- `src/OpHalo.Keep.Core/Entities/KeepRequestEvent.cs`
+- `src/OpHalo.Keep.Core/Entities/Enums/KeepRequestEventType.cs`
+- `src/OpHalo.Keep.Application/Requests/GetKeepRequestListService.cs`
+- `src/OpHalo.Keep.Application/Requests/IKeepRequestListPersistence.cs`
+- `src/OpHalo.Keep.Infrastructure/Persistence/KeepRequestListPersistence.cs`
+- P6b timing fields and P6c customer-page viewed fields as needed.
 
 Implement:
 
-- Durable page-view telemetry with debounce/rate-limit semantics so refreshes do not spam writes.
-- Staff-facing metadata: last viewed, viewed after latest business update, never viewed.
-- Metadata must be cautious: no presence/online/read-receipt language.
-- Page views must not raise business attention and must not suppress stale/status-check in this slice.
+- Centralized latest-meaningful-activity helper/model for active request review.
+- Signal inputs for created, customer message/intent, business update, external contact, status
+  change, Follow Up On changes, Planned For changes, and customer page viewed.
+- Fail-closed exclusions for active business attention, future Follow Up On, future Planned For,
+  Resolved, Closed, and Cancelled.
 
 Do not implement:
 
-- Full signal/projection engine.
-- Needs-status-check logic.
+- Auto-close, auto-resolve, automatic customer update, or background jobs.
 - Notification delivery.
-- Customer identity portal or access-link management.
+- Broad analytics/reporting or full signal/projection engine.
+- The list/query route if it would exceed the slice gate; keep that for P6d-2.
 
 Verify:
 
-- Unit/domain tests for debounce and metadata derivation.
-- Customer-page API tests for active/expired/terminal behavior and no internal data leakage.
-- Authenticated detail/list tests only if staff-facing metadata is exposed there.
+- Focused unit tests for signal calculation and exclusions.
 - `dotnet build`.
+
+### P6d-2 Preview
+
+- Expose the needs-status-check list/query surface using the P6d-1 signal model.
+- Add account-policy threshold with 5-calendar-day pilot default when unset.
+- Test due/not-due rows, timing suppressors, active attention suppressor, Resolved/terminal
+  exclusions, and role/row visibility.
+
+Do not implement:
+
+- Notification delivery.
+- Customer identity portal or access-link management.
 
 ---
 

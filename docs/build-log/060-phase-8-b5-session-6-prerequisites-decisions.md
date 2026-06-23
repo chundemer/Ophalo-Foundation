@@ -512,59 +512,110 @@ ADR-341/342, the Session Protocol in `docs/session-log.md`, and the files named 
 - `CustomerMessageTests` — 25 passed.
 - `KeepRequestDetailB4Tests` — 17 passed (including P6c-1 regression).
 
-#### P6c-2 — Customer-page viewed signal
+#### P6c-2 — Customer-page viewed signal — COMPLETE
 
-Goal: add debounced customer-page viewed telemetry and cautious staff-facing metadata per ADR-341.
+**Commit:** `beebba2`. **Baseline:** 1334 tests (722 unit · 14 arch · 598 integration).
+
+**Delivered:**
+- `KeepRequest.CustomerPageLastViewedAtUtc` plus `RecordCustomerPageView(nowUtc, debounceMinutes)`.
+- `GetKeepCustomerPageService` records views for all non-expired accessible customer pages.
+- Page-view persistence is best-effort, no version rotation, and silently absorbs concurrency conflicts.
+- Staff detail exposes `CustomerPageLastViewedAtUtc` and `CustomerPageViewedAfterLatestUpdate`.
+- Migration `20260623223950_KeepP6c2CustomerPageViewed` adds nullable
+  `customer_page_last_viewed_at_utc`.
+- Page views do not raise business attention, do not change request status, and do not suppress
+  needs-status-check/stale review in this slice.
+
+**Verified:**
+- `KeepRequestPageViewTests` — 7 passed.
+- Focused integration tests for `KeepCustomerPageTests`, `KeepRequestDetailTests`, and
+  `KeepOffSeasonTests` — 37 passed.
+- `dotnet build -m:1 /nr:false --no-restore` — succeeded with the existing NuGet vulnerability-data
+  warning.
+
+#### P6c-3 — P6c completion gate — COMPLETE
+
+**Status:** P6c complete. Final baseline: 1334 tests (722 unit · 14 architecture · 598 integration).
+
+**Documentation reconciled:**
+- `docs/session-log.md` moved next batch to P6d.
+- DEF-030 marked implemented by P6c-2.
+- DEF-037 remains open for P6d.
+- ADR-341 and ADR-342 marked implemented.
+
+**P6c ledger:**
+- P6c-1: ADR-342 customer intent menu and route compatibility — commits `304cb92`, `5a5eaa8`.
+- P6c-2: ADR-341 customer-page viewed signal — commit `beebba2`.
+- P6c-3: documentation/ledger completion gate.
+
+**Verified for completion gate:**
+- Focused P6c-2 unit/integration tests from the P6c-2 review.
+- `dotnet build -m:1 /nr:false --no-restore`.
+
+### Claude coding sessions for P6d
+
+Use one Claude session per slice below. Each session should read only this build log header,
+ADR-339, the Session Protocol in `docs/session-log.md`, and the files named in that slice.
+
+#### P6d-1 — Needs-status-check signal foundation
+
+Goal: add the reusable, centralized latest-meaningful-activity calculation and policy inputs without
+building the queue route yet.
 
 Read:
 
-- `src/OpHalo.Keep.Application/Requests/KeepPublicCustomerAccessGuard.cs`
-- `src/OpHalo.Keep.Application/Requests/GetKeepCustomerPageService.cs`
-- `src/OpHalo.Keep.Application/Requests/KeepCustomerPageResult.cs`
-- `src/OpHalo.Keep.Application/Requests/KeepCustomerPageMapper.cs`
-- `src/OpHalo.Keep.Application/Requests/IKeepCustomerWritePersistence.cs`
-- `src/OpHalo.Keep.Infrastructure/Persistence/EfKeepCustomerWritePersistence.cs`
-- `src/OpHalo.Keep.Infrastructure/Persistence/Configurations/KeepRequestConfiguration.cs`
-- `src/OpHalo.Keep.Application/Requests/KeepRequestDetailResult.cs`
-- `src/OpHalo.Keep.Application/Requests/KeepRequestDetailMapper.cs`
-- `tests/OpHalo.IntegrationTests/Api/KeepCustomerPageTests.cs`
-- detail/list tests touched by exposing staff-facing metadata.
+- `src/OpHalo.Keep.Core/Entities/KeepRequest.cs`
+- `src/OpHalo.Keep.Core/Entities/KeepRequestEvent.cs`
+- `src/OpHalo.Keep.Core/Entities/Enums/KeepRequestEventType.cs`
+- `src/OpHalo.Keep.Application/Requests/GetKeepRequestListService.cs`
+- `src/OpHalo.Keep.Application/Requests/IKeepRequestListPersistence.cs`
+- `src/OpHalo.Keep.Infrastructure/Persistence/KeepRequestListPersistence.cs`
+- P6b timing files and P6c customer-page viewed fields as needed.
 
 Implement:
 
-- Durable page-view telemetry with debounce/rate-limit semantics so refreshes do not spam writes.
-- Staff-facing metadata such as last viewed, viewed after latest business update, and never viewed.
-- Metadata must be cautious: no presence/online/read-receipt language.
-- Page views must not raise business attention and must not suppress stale/status-check in this slice.
+- A centralized latest-meaningful-activity helper/model for active request review.
+- Inputs for created, customer message/intent, business update, external contact, status change,
+  Follow Up On changes, Planned For changes, and customer page viewed as an extensible signal.
+- Preserve ADR-339 exclusions: no active business attention, no future Follow Up On, no future
+  Planned For, no Resolved, no Closed/Cancelled.
 
 Do not implement:
 
-- Full signal/projection engine.
-- Needs-status-check logic.
+- The `needs_status_check` list route/view if that exceeds the slice gate.
+- Auto-close/auto-resolve/customer update.
 - Notification delivery.
-- Customer identity portal or access-link management.
 
 Verify:
 
-- Unit/domain tests for debounce and metadata derivation.
-- Customer-page API tests for active/expired/terminal behavior and no internal data leakage.
-- Authenticated detail/list tests only if staff-facing metadata is exposed there.
+- Focused unit tests for signal calculation and exclusions.
 - `dotnet build`.
 
-#### P6c-3 — P6c completion gate
+#### P6d-2 — Needs-status-check list/query surface
 
-Goal: reconcile docs/ledger and move the next batch to P6d only after P6c-1 and P6c-2 are green.
+Goal: expose the quiet human-review queue using the P6d-1 signal model.
 
-Task:
+Read:
 
-- Record implemented P6c scope and final test baseline.
-- Mark DEF-030 implemented only after page-view telemetry and metadata are complete.
-- Keep DEF-037 open for P6d.
-- Move session log next batch to P6d.
+- P6d-1 files.
+- `src/OpHalo.Api/Keep/KeepRequestListQueryBinding.cs`
+- list/query integration tests.
+
+Implement:
+
+- Query/view surface for needs-status-check rows.
+- Account-policy threshold with 5-calendar-day pilot default when unset.
+- Tests for due/not-due rows, timing suppressors, active attention suppressor, Resolved/terminal
+  exclusions, and role/row visibility.
+
+Do not implement:
+
+- Automatic customer update or status mutation.
+- Notification delivery.
 
 Verify:
 
-- Focused P6c unit/integration tests.
+- Focused unit and API list tests.
 - `dotnet build`.
 
 ## Exclusions
