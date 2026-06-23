@@ -35,6 +35,8 @@ Keep V1 includes the operational loop required to prevent dropped customer promi
 
 In V1:
 
+- business-first request capture from phone calls, voicemails, texts, emails, walk-ins, referrals,
+  and other customer contact;
 - public intake and customer request pages;
 - authenticated operator/admin request list and detail;
 - deterministic triage views, search, filters, closed/cancelled history, and pagination;
@@ -65,6 +67,11 @@ Out of V1:
 - full helpdesk/ticketing system, CMS, public status page, roadmap portal, or feature-voting board.
 
 Reason: V1 should prove Keep's core accountability loop before broadening into platform depth.
+
+Customer intake is not the only entry point. For pilot, Keep must capture the work the moment the
+business hears about it. The customer page/link is then a helpful collaboration surface the business
+can share, not homework the customer must complete before the request exists. This keeps Keep from
+becoming a secondary inbox for only the customers willing to fill out a form.
 
 ### ADR-289 — Basic push and badges are V1 core; heavy notification infrastructure is later
 
@@ -166,7 +173,8 @@ forces a change:
    deep links, fail-soft dispatcher.
 5. Implement spam/test/garbage intake handling and metrics exclusion.
 6. Implement pilot support surfaces: 1-tap Report Friction and Pilot Updates.
-7. Build web/native UI against server action metadata and freshness matrix.
+7. Build web/native UI against server action metadata and freshness matrix, with prominent
+   business-first request creation before pilot.
 8. Run pilot readiness QA, onboarding playbook, and operator app-switching orientation.
 
 Do not pull in:
@@ -196,6 +204,8 @@ Required carry-forward rules:
 - OffSeason/read-only blocks normal writes and suppresses request notifications;
 - Viewer stays read-only and notification-ineligible by default;
 - Operator default list hides unassigned work, but Available/Unassigned must be prominent in UI;
+- business-created request capture must be prominent in PWA/native UI; public intake/customer page
+  sharing is optional enrichment, not a prerequisite for tracking the work;
 - feedback review remains Owner/Admin-only;
 - ready-to-close excludes active attention and must warn about recent customer activity or unresolved
   feedback;

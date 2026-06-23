@@ -48,6 +48,15 @@ Keep turns scattered communication into a visible loop:
 request -> acknowledgement -> ownership -> updates -> resolution -> feedback -> closeout
 ```
 
+For pilot, the request must be capturable by the business first. If a customer calls, texts, emails,
+leaves a voicemail, walks in, or comes through a referral, Keep should let the business create the
+request immediately with the minimum useful details. The public intake link and customer request page
+are then optional collaboration and confidence surfaces, not a prerequisite for the work to exist.
+
+That distinction protects the core promise: Keep cannot become a secondary inbox for only the
+customers willing to fill out a form. The business hears about the need first; Keep captures it
+first; the customer page helps enrich, update, and close the loop afterward.
+
 ## Product Surfaces and Intended Users
 
 Keep has two authenticated work surfaces with deliberately different jobs. They use the same API,
@@ -61,6 +70,7 @@ The PWA is primarily for Owners and Admins managing the business-wide customer p
 - all-account work, attention, Available/unassigned, closeout, feedback, and history visibility;
 - dispatch, assignment, routing, and workload oversight;
 - manual/business request creation;
+- fast business-first capture from calls, voicemails, texts, emails, walk-ins, and referrals;
 - intake-link, member, account, and operational settings;
 - account-wide totals, response posture, and trustworthy operational review.
 
@@ -78,6 +88,8 @@ and interruption-tolerant. It provides:
   eligible unassigned work;
 - customer contact actions, updates, internal notes, status changes, attention handling, and
   participation controls allowed for that Operator;
+- quick capture for customer needs received in the field, with optional customer-link sharing after
+  the request exists;
 - native phone, email, and Messages launchers plus explicit contact logging;
 - resume synchronization, badges, push, and deep links for urgent actionable work.
 
@@ -260,6 +272,7 @@ follow-up.
 Early impact measurement should focus on behavior and customer-confidence signals:
 
 - requests captured through the intake link;
+- requests captured directly by the business from calls/texts/emails/voicemails/walk-ins/referrals;
 - first response time;
 - percent of customer-created requests responded to within target;
 - requests that became overdue and were later handled;
@@ -365,8 +378,11 @@ they meet a high bar for go-live:
 The locked pilot loop is:
 
 ```text
-intake -> triage -> ownership -> update/contact -> resolve -> close -> feedback review/history
+capture/intake -> triage -> ownership -> update/contact -> resolve -> close -> feedback review/history
 ```
+
+`capture` includes business-created requests. `intake` includes customer-created public form
+submissions. Both must enter the same Keep accountability loop.
 
 Pilot support surfaces are also in scope because they protect pilot learning:
 
