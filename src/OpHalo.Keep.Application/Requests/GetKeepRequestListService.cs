@@ -96,7 +96,10 @@ public sealed class GetKeepRequestListService(
             ["change_or_cancel_request"]= AttentionReason.ChangeOrCancelRequest,
             ["complaint"]               = AttentionReason.Complaint,
             ["first_response_due"]      = AttentionReason.FirstResponseDue,
-            ["unresolved_feedback"]     = AttentionReason.UnresolvedFeedback
+            ["unresolved_feedback"]     = AttentionReason.UnresolvedFeedback,
+            ["call_requested"]          = AttentionReason.CallRequested,
+            ["timing_change_requested"] = AttentionReason.TimingChangeRequested,
+            ["cancellation_requested"]  = AttentionReason.CancellationRequested
         };
 
     public async Task<Result<GetKeepRequestListResult>> ExecuteAsync(
@@ -966,6 +969,9 @@ public sealed class GetKeepRequestListService(
         AttentionReason.Complaint             => "complaint",
         AttentionReason.FirstResponseDue      => "first_response_due",
         AttentionReason.UnresolvedFeedback    => "unresolved_feedback",
+        AttentionReason.CallRequested         => "call_requested",
+        AttentionReason.TimingChangeRequested => "timing_change_requested",
+        AttentionReason.CancellationRequested => "cancellation_requested",
         _ => throw new InvalidOperationException($"Unknown AttentionReason: {reason}")
     };
 

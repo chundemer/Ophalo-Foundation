@@ -522,6 +522,43 @@ public sealed class KeepRequestDetailB4Tests : IClassFixture<KeepApiWebFactory>,
         Assert.Equal(JsonValueKind.Null, body.GetProperty("feedbackReviewNote").ValueKind);
     }
 
+    // =========================================================================
+    // P6c-1 regression — new customer intent event must not throw on detail load
+    // =========================================================================
+
+    [Fact]
+    public async Task GetDetail_AfterNewCustomerIntentAction_MapsIntentAndAttentionReasonWithoutThrowing()
+    {
+        // Get the current version via the anonymous customer page.
+        var anonClient = _factory.CreateClient();
+        var pageResponse = await anonClient.GetAsync("/keep/r/b4_active_page_token");
+        Assert.Equal(HttpStatusCode.OK, pageResponse.StatusCode);
+        var pageBody = await pageResponse.Content.ReadFromJsonAsync<JsonElement>();
+        var version = pageBody.GetProperty("version").GetString()!;
+
+        // Post a new-intent customer action (/call_requested, one of the P6c-1 routes).
+        var req = new HttpRequestMessage(HttpMethod.Post, "/keep/r/b4_active_page_token/call_requested");
+        req.Headers.Add("X-Keep-Request-Version", version);
+        req.Content = JsonContent.Create(new { message = "Please call me back." });
+        var postResponse = await anonClient.SendAsync(req);
+        Assert.Equal(HttpStatusCode.OK, postResponse.StatusCode);
+
+        // Authenticated detail must not throw and must expose the correct intent + attention reason slugs.
+        var detailResponse = await AuthRequest(_ownerCookie).GetAsync($"/keep/requests/{_activeRequestId}");
+        Assert.Equal(HttpStatusCode.OK, detailResponse.StatusCode);
+
+        var body = await detailResponse.Content.ReadFromJsonAsync<JsonElement>();
+
+        // Attention reason must serialize to the new slug (not throw on unknown AttentionReason).
+        Assert.Equal("call_requested", body.GetProperty("attentionReason").GetString());
+
+        // Event timeline must include the message_added event with the correct intent slug.
+        var events = body.GetProperty("events").EnumerateArray().ToList();
+        var msgEvent = events.FirstOrDefault(e => e.GetProperty("eventType").GetString() == "message_added");
+        Assert.NotEqual(default, msgEvent);
+        Assert.Equal("call_requested", msgEvent.GetProperty("messageIntent").GetString());
+    }
+
     private HttpClient AuthRequest(string cookie)
     {
         var client = _factory.CreateClient();

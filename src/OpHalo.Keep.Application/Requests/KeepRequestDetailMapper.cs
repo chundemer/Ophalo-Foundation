@@ -289,6 +289,9 @@ internal static class KeepRequestDetailMapper
         AttentionReason.Complaint             => "complaint",
         AttentionReason.FirstResponseDue      => "first_response_due",
         AttentionReason.UnresolvedFeedback    => "unresolved_feedback",
+        AttentionReason.CallRequested         => "call_requested",
+        AttentionReason.TimingChangeRequested => "timing_change_requested",
+        AttentionReason.CancellationRequested => "cancellation_requested",
         _ => throw new InvalidOperationException($"Unknown AttentionReason: {reason}")
     };
 
@@ -373,6 +376,10 @@ internal static class KeepRequestDetailMapper
         MessageIntent.ChangeOrCancelRequest => "change_or_cancel_request",
         MessageIntent.Complaint             => "complaint",
         MessageIntent.BusinessUpdate        => "business_update",
+        MessageIntent.InformationAdded      => "information_added",
+        MessageIntent.CallRequested         => "call_requested",
+        MessageIntent.TimingChangeRequested => "timing_change_requested",
+        MessageIntent.CancellationRequested => "cancellation_requested",
         _ => throw new InvalidOperationException($"Unknown MessageIntent: {intent}")
     };
 
