@@ -203,11 +203,12 @@ public sealed class ManageRequestTimingService(
         if (actorDisplayName is null)
             return Result<(AccountUserSnapshot, string, KeepRequestVisibilityScope)>.Failure(Forbidden);
 
+        if (userSnapshot.Role is not (AccountUserRole.Owner or AccountUserRole.Admin or AccountUserRole.Operator))
+            return Result<(AccountUserSnapshot, string, KeepRequestVisibilityScope)>.Failure(Forbidden);
+
         var scope = userSnapshot.Role is AccountUserRole.Owner or AccountUserRole.Admin
             ? KeepRequestVisibilityScope.AccountWide
-            : userSnapshot.Role is AccountUserRole.Operator
-                ? KeepRequestVisibilityScope.MyWork
-                : KeepRequestVisibilityScope.AccountWide; // Viewer blocked by permission check above
+            : KeepRequestVisibilityScope.MyWork;
 
         return Result<(AccountUserSnapshot, string, KeepRequestVisibilityScope)>.Success(
             (userSnapshot, actorDisplayName, scope));
