@@ -1,10 +1,10 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-06-23 (G8a complete)
+**Last updated:** 2026-06-23 (G8b complete; G8c locked; G8d next)
 **Branch:** `main` (no remote yet)
-**Current baseline:** 1243 tests (659 unit · 14 architecture · 570 integration).
+**Current baseline:** 1265 tests (677 unit · 14 architecture · 574 integration).
 **Next free ADR:** ADR-337
-**Next batch: G8b — bearer-token-safe logging proof.**
+**Next batch: G8d — ledger/final completion gate.**
 
 ---
 
@@ -129,7 +129,7 @@ the G8 completion gate or Christian explicitly approves it.
 
 ### G8a — Trusted client IP / rate-limiter proof — COMPLETE
 
-**Commit:** pending approval. **Baseline:** 1243 tests (659 unit · 14 arch · 570 integration; +19).
+**Commit:** `e055458`. **Baseline:** 1243 tests (659 unit · 14 arch · 570 integration; +19).
 
 **Delivered:**
 - `src/OpHalo.Api/Helpers/ClientIpResolver.cs` — pure static resolver; normalizes IPv4-mapped IPv6;
@@ -149,28 +149,16 @@ the G8 completion gate or Christian explicitly approves it.
 **Known mild smell (deferred):** `OpHalo.UnitTests` now references `OpHalo.Api` to reach
 `ClientIpResolver`. Prefer moving resolver tests to integration project in a later cleanup.
 
-### G8b draft — Token-safe application logging proof
+### G8b — Token-safe application logging proof — COMPLETE
 
-**Purpose:** fix GAP-013 for application-controlled logs/traces. Public intake tokens and customer
-page tokens are bearer secrets in route segments.
+**Commit:** pending approval. **Baseline:** 1265 tests (677 unit · 14 arch · 574 integration; +22).
 
-**Known current state:**
+- `PublicTokenPathRedactor` — pure static helper; redacts all four public bearer-token path families.
+- `Program.cs` — explicit `AddFilter("Microsoft.AspNetCore.Hosting.Diagnostics", LogLevel.Warning)`.
+- 18 unit tests for redactor; 4 integration log-capture proofs with sentinel tokens.
+- Edge-log residual risk (Cloudflare/Railway) documented in build-log/059; accepted for pilot.
 
-- App does not call `UseHttpLogging` or explicit request logging, but default framework logs and
-  future friction/reporting hooks can still accidentally capture paths.
-- Public routes are `/keep/public-intake/token/{publicIntakeToken}` and `/keep/r/{pageToken}...`.
-- Cloudflare/Railway edge access logs cannot be fully proven by code; document required config and
-  accepted residuals.
-
-**Likely work:**
-
-- Add a small redaction helper/policy for public-token paths.
-- Add an integration/log-capture proof that application logs for public token routes do not contain
-  raw tokens.
-- Document deployment-side access-log expectations in build-log/G8 docs.
-
-**Open G8b decision:** decide whether to suppress framework request-path logs, redact route values,
-or both. Do not build a broad logging platform.
+Authoritative detail: build-log/059.
 
 ### G8c decision — Customer page-token at-rest protection — LOCKED
 

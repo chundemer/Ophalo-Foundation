@@ -37,6 +37,12 @@ using OpHalo.SharedKernel.Abstractions;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Suppress Microsoft.AspNetCore.Hosting.Diagnostics request-path logs below Warning.
+// Those logs can emit raw route paths which may include bearer tokens on public-token routes.
+// appsettings.json already sets "Microsoft.AspNetCore": "Warning" but this code-level filter
+// makes the intent explicit and durable against config changes (GAP-013, G8b).
+builder.Logging.AddFilter("Microsoft.AspNetCore.Hosting.Diagnostics", LogLevel.Warning);
+
 // RFC 7807 ProblemDetails support across all error responses.
 builder.Services.AddProblemDetails();
 builder.Services.AddOpenApi();
