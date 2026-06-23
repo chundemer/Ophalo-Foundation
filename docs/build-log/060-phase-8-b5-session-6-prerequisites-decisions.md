@@ -364,6 +364,32 @@ Verify:
 - Focused integration tests for the new routes.
 - `dotnet build`
 
+#### P6b-2 — COMPLETE
+
+**Commit:** `1030f07`. **Baseline:** 1280 tests (677 unit · 14 arch · 589 integration; +15 integration).
+
+**Delivered:**
+- `src/OpHalo.Keep.Application/Requests/ManageRequestTimingService.cs` — single service,
+  four public methods (SetFollowUpOnAsync / ClearFollowUpOnAsync / SetPlannedForAsync /
+  ClearPlannedForAsync), shared `AuthAsync` helper matching `ManageResponsibleService` pattern.
+  Reason slug parsed internally via `KeepRequestDetailMapper.ParseFollowUpReasonSlug`.
+- `src/OpHalo.Api/Keep/RequestTimingRequests.cs` — `SetFollowUpOnRequestBody(Date, Reason, Note)`,
+  `SetPlannedForRequestBody(Date)`. Date passed as `yyyy-MM-dd` string, parsed at API edge.
+- 4 routes: `PUT/DELETE /keep/requests/{id}/follow-up-on`, `PUT/DELETE /keep/requests/{id}/planned-for`.
+  All versioned; clears use DELETE with no body.
+- `KeepRequestDetailResult` — `FollowUpOnDate`, `FollowUpOnReason`, `FollowUpOnNote`, `PlannedForDate`.
+- `AvailableActionsMetadata` — `CanSetFollowUpOn`, `CanSetPlannedFor`.
+- `ValidationHintsMetadata` — `FollowUpNoteMaxLength: 500`, `AllowedFollowUpReasons` (6 slugs).
+- `KeepRequestActionPolicy` — `canSetTiming` guards Resolved/Closed/Cancelled exactly matching domain.
+- `ErrorHttpMapper` — explicit 409 for `FollowUpOnRequiresActiveRequest`/`PlannedForRequiresActiveRequest`;
+  400 for `FollowUpOnReasonRequired`, `FollowUpOnNoteRequired`, `FollowUpOnNoteTooLong`, `InvalidDateFormat`.
+- `KeepRequestDetailMapper.MapEventType` — added `follow_up_on_changed` / `planned_for_changed`.
+- `KeepRequestErrors` — added `InvalidDateFormat`.
+- `tests/OpHalo.IntegrationTests/Api/RequestTimingTests.cs` — 15 tests: set/clear success,
+  field round-trip, event in timeline, stale 409, missing version 400, malformed version 400,
+  terminal 409, resolved 409, Operator row access 200, Operator no-row 404, Viewer 403, anonymous 401,
+  affordances in response, PlannedFor closed 409.
+
 #### P6b-3 — List scan metadata and stale-suppression inputs
 
 Goal: make Follow Up On and Planned For visible in authenticated request lists and available to the

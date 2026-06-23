@@ -1,10 +1,10 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-06-23 (P6b-1 complete — domain/schema/migration/33 unit tests green)
+**Last updated:** 2026-06-23 (P6b-2 complete — versioned mutations, detail exposure, 15 integration tests green)
 **Branch:** `main` (no remote yet)
-**Current baseline:** 1265 tests (677 unit · 14 architecture · 574 integration) — FINAL PRE-SESSION-6 GREEN GATE.
+**Current baseline:** 1280 tests (677 unit · 14 architecture · 589 integration) — P6b-2 green.
 **Next free ADR:** ADR-345
-**Next batch: Phase 8-B5 Session 6 Prerequisites P6b-2 — versioned operator mutations and detail exposure.**
+**Next batch: Phase 8-B5 Session 6 Prerequisites P6b-3 — list scan metadata and stale-suppression inputs.**
 
 ---
 
