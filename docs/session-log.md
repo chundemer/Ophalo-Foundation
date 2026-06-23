@@ -1,10 +1,10 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-06-23 (P6b-3 complete — list scan metadata and stale-suppression inputs focused green)
+**Last updated:** 2026-06-23 (P6b complete — Follow Up On + Planned For domain/API/detail/list; 1320 tests green)
 **Branch:** `main` (no remote yet)
-**Current baseline:** P6b-3 focused green after P6b-2 baseline 1280; full reconciled count pending P6b-4 completion gate.
+**Current baseline:** 1320 tests (715 unit · 14 architecture · 591 integration) — P6b full suite green.
 **Next free ADR:** ADR-345
-**Next batch: Phase 8-B5 Session 6 Prerequisites P6b-4 — P6b completion gate.**
+**Next batch: Phase 8-B5 Session 6 Prerequisites P6c — customer intent menu + page viewed signal.**
 
 ---
 
@@ -223,23 +223,9 @@ Current handoff:
   and explicit Owner/Admin/Operator role gate in `ManageRequestTimingService.AuthAsync`.
 - **P6b-3 complete:** list scan metadata, labels, and stale-suppression inputs for Follow Up On
   and Planned For; canonical follow-up reason slugs preserved in list output.
-- **Next session:** P6b-4 — P6b completion gate.
-
-P6b-4 Claude brief:
-
-- Reconcile this session log, build-log/060, deferred topics, and ADR/decision index for P6b only.
-- Record implemented scope and final test baseline for P6b-1 through P6b-3.
-- Keep DEF-037 open for P6d and DEF-030 open for P6c.
-- Mark DEF-067 implemented only if the ledger confirms Follow Up On is fully exposed across
-  domain/API/list/detail.
-- Move the next batch to P6c only after the P6b completion gate is green.
-- Verify with the full unit project, focused P6b integration tests, `dotnet build`, and broader
-  suite only if approved or if ledger reconciliation changes shared behavior.
-
-Hard exclusions: archive/unarchive/closeout-reviewed state, auto-close/auto-complete, dispatch or
-calendar scheduling, customer self-scheduling, notification delivery implementation, realtime,
-spam/test classification, broad analytics/reporting, customer identity portals, and link/token
-management.
+- **P6b-4 complete:** documentation reconciled; DEF-067 marked implemented; full suite green at
+  1320 tests (715 unit · 14 arch · 591 integration). Next batch moved to P6c.
+- **Next session:** P6c — customer intent menu + page viewed signal.
 
 ---
 

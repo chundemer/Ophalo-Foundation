@@ -453,31 +453,31 @@ Verify:
 - `dotnet build -m:1 /nr:false --no-restore` — succeeded with the existing NuGet vulnerability-data
   warning in unit tests.
 
-#### P6b-4 — P6b completion gate
+#### P6b-4 — P6b completion gate — COMPLETE
 
-Goal: reconcile docs and run the proportionate suite after P6b-1 through P6b-3 are green.
+**Final P6b baseline:** 1320 tests (715 unit · 14 architecture · 591 integration) — full suite green.
 
-Read:
+**Documentation reconciled:**
+- Session log updated: baseline 1320, next batch moved to P6c.
+- DEF-067 marked implemented (domain/schema, versioned API mutations, detail, list scan metadata).
+- DEF-037 remains open for P6d (needs-status-check queue and suppression logic).
+- DEF-030 remains open for P6c (customer page viewed signal).
+- ADR-337–344 already recorded in decision-index from discovery phase; no new ADRs added.
 
-- `docs/session-log.md`
-- `docs/deferred-topics.md`
-- `docs/decisions/decision-index.md`
-- this build log
+**P6b ledger:**
+- P6b-1: Follow Up On + Planned For domain, schema, events, audit — commit `1abb698`.
+- P6b-2: versioned operator mutations (set/clear Follow Up On, set/clear Planned For), detail
+  exposure, action affordances, validation hints, Owner/Admin/Operator role gate — commit `1030f07`;
+  auth hardening — commit `e570664`.
+- P6b-3: `KeepRequestTimingInfo` in list summary; scan labels; `HasFutureFollowUpOn` /
+  `HasFuturePlannedFor` stale-suppression inputs — commit `7f001a0`.
+- P6b-4: documentation gate.
 
-Task:
-
-- Record implemented scope and final test baseline.
-- Keep DEF-037 open for P6d.
-- Keep DEF-030 open for P6c.
-- Mark DEF-067 implemented only after Follow Up On is fully exposed in domain/API/list/detail.
-- Move the session log next batch to P6c after P6b is complete.
-
-Verify:
-
-- `dotnet test tests/OpHalo.UnitTests/OpHalo.UnitTests.csproj`
-- Focused integration tests touched by P6b.
-- Full suite only if Christian approves or if the slice materially changes shared list/detail
-  behavior beyond the focused coverage.
+**Verified:**
+- `dotnet test tests/OpHalo.UnitTests` — 715 passed.
+- `dotnet test tests/OpHalo.IntegrationTests --filter "KeepRequestListB5Tests|RequestTimingTests"` — 26 passed.
+- `dotnet test tests/OpHalo.IntegrationTests` — 591 passed (full suite).
+- `dotnet build --no-restore` — succeeded.
 
 ## Exclusions
 
