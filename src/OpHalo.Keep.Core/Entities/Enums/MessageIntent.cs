@@ -8,5 +8,9 @@ public enum MessageIntent
     ScheduleChangeRequest = 4,
     ChangeOrCancelRequest = 5,
     Complaint = 6,
-    BusinessUpdate = 7
+    BusinessUpdate = 7,
+    InformationAdded = 8,
+    CallRequested = 9,
+    TimingChangeRequested = 10,
+    CancellationRequested = 11
 }

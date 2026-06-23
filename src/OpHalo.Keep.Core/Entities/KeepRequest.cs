@@ -830,6 +830,10 @@ public sealed class KeepRequest : BaseEntity
             MessageIntent.ScheduleChangeRequest => (Enums.AttentionReason.ScheduleChangeRequest, Enums.PriorityBand.Priority),
             MessageIntent.ChangeOrCancelRequest => (Enums.AttentionReason.ChangeOrCancelRequest, Enums.PriorityBand.Priority),
             MessageIntent.Complaint             => (Enums.AttentionReason.Complaint, Enums.PriorityBand.Priority),
+            MessageIntent.InformationAdded      => (Enums.AttentionReason.CustomerMessage, Enums.PriorityBand.Standard),
+            MessageIntent.CallRequested         => (Enums.AttentionReason.CallRequested, Enums.PriorityBand.Priority),
+            MessageIntent.TimingChangeRequested => (Enums.AttentionReason.TimingChangeRequested, Enums.PriorityBand.Priority),
+            MessageIntent.CancellationRequested => (Enums.AttentionReason.CancellationRequested, Enums.PriorityBand.Priority),
             _ => throw new InvalidOperationException($"MessageIntent {intent} is not a valid customer message intent.")
         };
 

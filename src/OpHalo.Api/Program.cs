@@ -659,12 +659,7 @@ app.MapGet("/keep/r/{pageToken}", async (
         : Results.Ok(page);
 });
 
-// Customer message routes — anonymous, one route per intent, rate limited (Phase 8-B3-beta, ADR-129..131)
-app.MapPost("/keep/r/{pageToken}/message",
-    (string pageToken, CustomerMessageBody body, HttpRequest httpRequest, AddCustomerMessageService service, CancellationToken ct) =>
-        HandleCustomerMessage(pageToken, MessageIntent.GeneralMessage, body.Message, httpRequest, service, ct))
-    .RequireRateLimiting("customer-write");
-
+// Customer message routes — anonymous, one route per intent, rate limited (ADR-129..131, ADR-342)
 app.MapPost("/keep/r/{pageToken}/question",
     (string pageToken, CustomerMessageBody body, HttpRequest httpRequest, AddCustomerMessageService service, CancellationToken ct) =>
         HandleCustomerMessage(pageToken, MessageIntent.Question, body.Message, httpRequest, service, ct))
@@ -675,19 +670,24 @@ app.MapPost("/keep/r/{pageToken}/update_request",
         HandleCustomerMessage(pageToken, MessageIntent.UpdateRequest, body.Message, httpRequest, service, ct))
     .RequireRateLimiting("customer-write");
 
-app.MapPost("/keep/r/{pageToken}/schedule_change_request",
+app.MapPost("/keep/r/{pageToken}/information_added",
     (string pageToken, CustomerMessageBody body, HttpRequest httpRequest, AddCustomerMessageService service, CancellationToken ct) =>
-        HandleCustomerMessage(pageToken, MessageIntent.ScheduleChangeRequest, body.Message, httpRequest, service, ct))
+        HandleCustomerMessage(pageToken, MessageIntent.InformationAdded, body.Message, httpRequest, service, ct))
     .RequireRateLimiting("customer-write");
 
-app.MapPost("/keep/r/{pageToken}/change_or_cancel_request",
+app.MapPost("/keep/r/{pageToken}/call_requested",
     (string pageToken, CustomerMessageBody body, HttpRequest httpRequest, AddCustomerMessageService service, CancellationToken ct) =>
-        HandleCustomerMessage(pageToken, MessageIntent.ChangeOrCancelRequest, body.Message, httpRequest, service, ct))
+        HandleCustomerMessage(pageToken, MessageIntent.CallRequested, body.Message, httpRequest, service, ct))
     .RequireRateLimiting("customer-write");
 
-app.MapPost("/keep/r/{pageToken}/issue",
+app.MapPost("/keep/r/{pageToken}/timing_change_requested",
     (string pageToken, CustomerMessageBody body, HttpRequest httpRequest, AddCustomerMessageService service, CancellationToken ct) =>
-        HandleCustomerMessage(pageToken, MessageIntent.Complaint, body.Message, httpRequest, service, ct))
+        HandleCustomerMessage(pageToken, MessageIntent.TimingChangeRequested, body.Message, httpRequest, service, ct))
+    .RequireRateLimiting("customer-write");
+
+app.MapPost("/keep/r/{pageToken}/cancellation_requested",
+    (string pageToken, CustomerMessageBody body, HttpRequest httpRequest, AddCustomerMessageService service, CancellationToken ct) =>
+        HandleCustomerMessage(pageToken, MessageIntent.CancellationRequested, body.Message, httpRequest, service, ct))
     .RequireRateLimiting("customer-write");
 
 app.MapPost("/keep/r/{pageToken}/feedback",

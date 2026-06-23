@@ -7,8 +7,8 @@ internal static class KeepCustomerPageMapper
 {
     private static readonly IReadOnlyList<string> ActiveAllowedActions =
     [
-        "message", "question", "update_request",
-        "schedule_change_request", "change_or_cancel_request", "issue"
+        "question", "update_request", "information_added",
+        "call_requested", "timing_change_requested", "cancellation_requested"
     ];
 
     private static readonly IReadOnlyList<string> ClosedAllowedActions = ["feedback"];

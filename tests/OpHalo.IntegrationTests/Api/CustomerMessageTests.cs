@@ -12,16 +12,16 @@ using OpHalo.Keep.Core.Entities.Enums;
 namespace OpHalo.IntegrationTests.Api;
 
 /// <summary>
-/// HTTP integration tests for Phase 8-B3-beta: customer-submitted messages.
+/// HTTP integration tests for customer-submitted messages (ADR-131, ADR-342).
 ///
-/// Coverage (ADR-131):
+/// Coverage:
 /// 1. Unknown token → 404
 /// 2. Blocked account via guard → 404 (no mutation)
 /// 3. Expired terminal token → 410 safe context
 /// 4. Missing/blank message → 400 MessageRequired
 /// 5. Over-limit message → 400 CustomerMessageTooLong
-/// 6. Happy path /message → 200 with customer timeline event
-/// 7. /issue → 200, priority Complaint attention
+/// 6. Happy path /question → 200 with customer timeline event
+/// 7. /call_requested → 200, priority CallRequested attention
 /// 8. Repeated standard message preserves oldest AttentionSinceUtc
 /// 9. Later priority message upgrades reason/priority, AttentionSinceUtc preserved
 /// 10. Message while WaitingDirection=Customer flips direction and resets since to now
@@ -173,7 +173,7 @@ public sealed class CustomerMessageTests : IClassFixture<KeepApiWebFactory>, IAs
                 DateTime.UtcNow.AddDays(-1), PageToken);
         }
 
-        var response = await PostCustomerMessage("message", "Is this still open?", _requestVersion);
+        var response = await PostCustomerMessage("question", "Is this still open?", _requestVersion);
 
         Assert.Equal(HttpStatusCode.Gone, response.StatusCode);
 
@@ -204,7 +204,7 @@ public sealed class CustomerMessageTests : IClassFixture<KeepApiWebFactory>, IAs
     [Fact]
     public async Task PostMessage_BlankMessage_Returns400MessageRequired()
     {
-        var response = await PostCustomerMessage("message", "   ", _requestVersion);
+        var response = await PostCustomerMessage("question", "   ", _requestVersion);
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
 
@@ -219,7 +219,7 @@ public sealed class CustomerMessageTests : IClassFixture<KeepApiWebFactory>, IAs
     [Fact]
     public async Task PostMessage_OverLimitMessage_Returns400CustomerMessageTooLong()
     {
-        var response = await PostCustomerMessage("message", new string('x', 4001), _requestVersion);
+        var response = await PostCustomerMessage("question", new string('x', 4001), _requestVersion);
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
 
@@ -228,13 +228,13 @@ public sealed class CustomerMessageTests : IClassFixture<KeepApiWebFactory>, IAs
     }
 
     // =========================================================================
-    // Test 6 — Happy path /message → 200 with customer timeline event
+    // Test 6 — Happy path /question → 200 with customer timeline event
     // =========================================================================
 
     [Fact]
     public async Task PostMessage_ValidMessage_Returns200WithCustomerTimelineEvent()
     {
-        var response = await PostCustomerMessage("message", "Any update on my request?", _requestVersion);
+        var response = await PostCustomerMessage("question", "Any update on my request?", _requestVersion);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
@@ -261,13 +261,13 @@ public sealed class CustomerMessageTests : IClassFixture<KeepApiWebFactory>, IAs
     }
 
     // =========================================================================
-    // Test 7 — /issue → 200, priority Complaint attention in DB
+    // Test 7 — /call_requested → 200, priority CallRequested attention in DB
     // =========================================================================
 
     [Fact]
-    public async Task PostIssue_ValidMessage_Returns200AndSetsComplaintPriorityAttention()
+    public async Task PostCallRequested_ValidMessage_Returns200AndSetsCallRequestedPriorityAttention()
     {
-        var response = await PostCustomerMessage("issue", "This is urgent — the leak is getting worse.", _requestVersion);
+        var response = await PostCustomerMessage("call_requested", "Please call me — the leak is getting worse.", _requestVersion);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
@@ -279,7 +279,7 @@ public sealed class CustomerMessageTests : IClassFixture<KeepApiWebFactory>, IAs
 
         Assert.Equal(AttentionLevel.Waiting, request.AttentionLevel);
         Assert.Equal(WaitingDirection.Business, request.WaitingDirection);
-        Assert.Equal(AttentionReason.Complaint, request.AttentionReason);
+        Assert.Equal(AttentionReason.CallRequested, request.AttentionReason);
         Assert.Equal(PriorityBand.Priority, request.PriorityBand);
         Assert.NotNull(request.AttentionSinceUtc);
     }
@@ -291,7 +291,7 @@ public sealed class CustomerMessageTests : IClassFixture<KeepApiWebFactory>, IAs
     [Fact]
     public async Task PostMessage_RepeatedStandardMessage_PreservesOldestAttentionSinceUtc()
     {
-        var first = await PostCustomerMessage("message", "First message.", _requestVersion);
+        var first = await PostCustomerMessage("question", "First message.", _requestVersion);
         Assert.Equal(HttpStatusCode.OK, first.StatusCode);
         var firstBody = await first.Content.ReadFromJsonAsync<JsonElement>();
         var firstVersion = Guid.Parse(firstBody.GetProperty("version").GetString()!);
@@ -305,7 +305,7 @@ public sealed class CustomerMessageTests : IClassFixture<KeepApiWebFactory>, IAs
             attentionSinceAfterFirst = r.AttentionSinceUtc!.Value;
         }
 
-        var second = await PostCustomerMessage("message", "Second message.", firstVersion);
+        var second = await PostCustomerMessage("question", "Second message.", firstVersion);
         Assert.Equal(HttpStatusCode.OK, second.StatusCode);
 
         await using (var scope = _factory.CreateScope())
@@ -324,9 +324,9 @@ public sealed class CustomerMessageTests : IClassFixture<KeepApiWebFactory>, IAs
     // =========================================================================
 
     [Fact]
-    public async Task PostIssue_AfterStandardMessage_UpgradesPriorityButPreservesAttentionSinceUtc()
+    public async Task PostCallRequested_AfterStandardMessage_UpgradesPriorityButPreservesAttentionSinceUtc()
     {
-        var first = await PostCustomerMessage("message", "Just checking in.", _requestVersion);
+        var first = await PostCustomerMessage("question", "Just checking in.", _requestVersion);
         Assert.Equal(HttpStatusCode.OK, first.StatusCode);
         var firstBody = await first.Content.ReadFromJsonAsync<JsonElement>();
         var firstVersion = Guid.Parse(firstBody.GetProperty("version").GetString()!);
@@ -340,7 +340,7 @@ public sealed class CustomerMessageTests : IClassFixture<KeepApiWebFactory>, IAs
             attentionSinceAfterFirst = r.AttentionSinceUtc!.Value;
         }
 
-        var second = await PostCustomerMessage("issue", "Now it's urgent — please escalate.", firstVersion);
+        var second = await PostCustomerMessage("call_requested", "Now it's urgent — please call me.", firstVersion);
         Assert.Equal(HttpStatusCode.OK, second.StatusCode);
 
         await using (var scope = _factory.CreateScope())
@@ -349,7 +349,7 @@ public sealed class CustomerMessageTests : IClassFixture<KeepApiWebFactory>, IAs
             var r = await db.Set<KeepRequest>().AsNoTracking().FirstAsync(x => x.Id == _requestId);
             // Priority upgraded.
             Assert.Equal(PriorityBand.Priority, r.PriorityBand);
-            Assert.Equal(AttentionReason.Complaint, r.AttentionReason);
+            Assert.Equal(AttentionReason.CallRequested, r.AttentionReason);
             // AttentionSinceUtc preserved from the first message.
             Assert.Equal(attentionSinceAfterFirst, r.AttentionSinceUtc);
         }
@@ -379,7 +379,7 @@ public sealed class CustomerMessageTests : IClassFixture<KeepApiWebFactory>, IAs
             await db.SaveChangesAsync();
         }
 
-        var response = await PostCustomerMessage("message", "Hi, I'm responding now.", _requestVersion);
+        var response = await PostCustomerMessage("question", "Hi, I'm responding now.", _requestVersion);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
         await using (var scope = _factory.CreateScope())
@@ -409,7 +409,7 @@ public sealed class CustomerMessageTests : IClassFixture<KeepApiWebFactory>, IAs
                 _requestId);
         }
 
-        var response = await PostCustomerMessage("message", "Thank you, but I have a follow-up question.", _requestVersion);
+        var response = await PostCustomerMessage("question", "Thank you, but I have a follow-up question.", _requestVersion);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
@@ -432,7 +432,7 @@ public sealed class CustomerMessageTests : IClassFixture<KeepApiWebFactory>, IAs
                 _requestId);
         }
 
-        var response = await PostCustomerMessage("message", "Can I reopen this?", _requestVersion);
+        var response = await PostCustomerMessage("question", "Can I reopen this?", _requestVersion);
 
         Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
 
@@ -455,7 +455,7 @@ public sealed class CustomerMessageTests : IClassFixture<KeepApiWebFactory>, IAs
                 _requestId);
         }
 
-        var response = await PostCustomerMessage("message", "I changed my mind.", _requestVersion);
+        var response = await PostCustomerMessage("question", "I changed my mind.", _requestVersion);
 
         Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
 
@@ -470,7 +470,7 @@ public sealed class CustomerMessageTests : IClassFixture<KeepApiWebFactory>, IAs
     [Fact]
     public async Task PostMessage_SuccessResponse_ExposesNoInternalFields()
     {
-        var response = await PostCustomerMessage("message", "Just a standard enquiry.", _requestVersion);
+        var response = await PostCustomerMessage("question", "Just a standard enquiry.", _requestVersion);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
@@ -501,8 +501,8 @@ public sealed class CustomerMessageTests : IClassFixture<KeepApiWebFactory>, IAs
     {
         var expectedActive = new[]
         {
-            "message", "question", "update_request",
-            "schedule_change_request", "change_or_cancel_request", "issue"
+            "question", "update_request", "information_added",
+            "call_requested", "timing_change_requested", "cancellation_requested"
         };
 
         // Active (Received) — AllowedActions = full list
@@ -589,11 +589,11 @@ public sealed class CustomerMessageTests : IClassFixture<KeepApiWebFactory>, IAs
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
         Assert.Equal("scheduled", body.GetProperty("status").GetString());
 
-        // Scheduled is an active state — AllowedActions should be the full list.
+        // Scheduled is an active state — AllowedActions should be the full ADR-342 list.
         var actions = body.GetProperty("allowedActions").EnumerateArray()
             .Select(e => e.GetString()!).ToArray();
-        Assert.Contains("message", actions);
-        Assert.Contains("issue", actions);
+        Assert.Contains("question", actions);
+        Assert.Contains("call_requested", actions);
         Assert.Equal(6, actions.Length);
     }
 
@@ -602,12 +602,12 @@ public sealed class CustomerMessageTests : IClassFixture<KeepApiWebFactory>, IAs
     // =========================================================================
 
     [Theory]
-    [InlineData("message")]
     [InlineData("question")]
     [InlineData("update_request")]
-    [InlineData("schedule_change_request")]
-    [InlineData("change_or_cancel_request")]
-    [InlineData("issue")]
+    [InlineData("information_added")]
+    [InlineData("call_requested")]
+    [InlineData("timing_change_requested")]
+    [InlineData("cancellation_requested")]
     public async Task PostCustomerMessage_MissingVersionHeader_Returns400ExpectedVersionRequired(string route)
     {
         var response = await PostCustomerMessage(route, "Test message", version: null);
@@ -619,7 +619,7 @@ public sealed class CustomerMessageTests : IClassFixture<KeepApiWebFactory>, IAs
     [Fact]
     public async Task PostMessage_MalformedVersionHeader_Returns400ExpectedVersionInvalid()
     {
-        var req = new HttpRequestMessage(HttpMethod.Post, $"/keep/r/{PageToken}/message");
+        var req = new HttpRequestMessage(HttpMethod.Post, $"/keep/r/{PageToken}/question");
         req.Headers.Add("X-Keep-Request-Version", "not-a-guid");
         req.Content = JsonContent.Create(new { message = "Hello?" });
         var response = await _client.SendAsync(req);
@@ -632,7 +632,7 @@ public sealed class CustomerMessageTests : IClassFixture<KeepApiWebFactory>, IAs
     public async Task PostMessage_StaleVersionHeader_Returns409RequestChangedWithNoSideEffects()
     {
         var staleVersion = Guid.NewGuid(); // Valid format, wrong value.
-        var response = await PostCustomerMessage("message", "Stale attempt", version: staleVersion);
+        var response = await PostCustomerMessage("question", "Stale attempt", version: staleVersion);
         Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
         Assert.Equal("KeepRequest.RequestChanged", body.GetProperty("code").GetString());
@@ -650,13 +650,13 @@ public sealed class CustomerMessageTests : IClassFixture<KeepApiWebFactory>, IAs
     public async Task PostMessage_StaleVersionReuse_SecondWriteRejectedWithNoEvent()
     {
         // First write succeeds and rotates the version.
-        var firstResponse = await PostCustomerMessage("message", "First message", version: _requestVersion);
+        var firstResponse = await PostCustomerMessage("question", "First message", version: _requestVersion);
         Assert.Equal(HttpStatusCode.OK, firstResponse.StatusCode);
         var firstBody = await firstResponse.Content.ReadFromJsonAsync<JsonElement>();
         var firstVersion = Guid.Parse(firstBody.GetProperty("version").GetString()!);
 
         // Second write reuses the original (now-stale) version.
-        var secondResponse = await PostCustomerMessage("message", "Second attempt", version: _requestVersion);
+        var secondResponse = await PostCustomerMessage("question", "Second attempt", version: _requestVersion);
         Assert.Equal(HttpStatusCode.Conflict, secondResponse.StatusCode);
         var errorBody = await secondResponse.Content.ReadFromJsonAsync<JsonElement>();
         Assert.Equal("KeepRequest.RequestChanged", errorBody.GetProperty("code").GetString());

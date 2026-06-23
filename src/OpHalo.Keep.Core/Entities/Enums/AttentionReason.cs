@@ -8,5 +8,8 @@ public enum AttentionReason
     ChangeOrCancelRequest = 4,
     Complaint = 5,
     FirstResponseDue = 6,
-    UnresolvedFeedback = 7
+    UnresolvedFeedback = 7,
+    CallRequested = 8,
+    TimingChangeRequested = 9,
+    CancellationRequested = 10
 }
