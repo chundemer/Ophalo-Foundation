@@ -117,6 +117,15 @@ public sealed class KeepRequestListPersistence(OpHaloDbContext dbContext) : IKee
                 && r.AttentionReason == AttentionReason.UnresolvedFeedback
                 && r.AttentionLevel != AttentionLevel.None),
 
+            // NeedsStatusCheck: candidate rows with no active attention and an active status.
+            // The 5-day due check and FollowUpOn/PlannedFor suppression are applied in-memory
+            // by the service after this fetch (GetNeedsStatusCheckInputs cannot be translated to SQL).
+            ActiveViewKind.NeedsStatusCheck => scopedBase.Where(r =>
+                r.Status != KeepRequestStatus.Resolved
+                && r.Status != KeepRequestStatus.Closed
+                && r.Status != KeepRequestStatus.Cancelled
+                && r.AttentionLevel == AttentionLevel.None),
+
             _ => throw new InvalidOperationException($"Unknown ActiveViewKind: {view}")
         };
 

@@ -25,7 +25,8 @@ public sealed record KeepRequestSummary(
     KeepRequestNotificationInfo CurrentUserNotification,
     string? FeedbackReviewAgeBucket,
     DateTime? FeedbackReviewDueAtUtc,
-    KeepRequestTimingInfo Timing);
+    KeepRequestTimingInfo Timing,
+    KeepRequestStatusCheckInfo StatusCheck);
 
 public sealed record KeepRequestAttentionInfo(
     string AttentionLevel,
@@ -83,6 +84,19 @@ public sealed record KeepRequestNotificationInfo(
     bool Eligible,
     bool Enabled,
     string? SuppressionReason);
+
+/// <summary>
+/// Needs-status-check scan metadata (ADR-339, P6d).
+/// IsDue is true when the row is eligible and LatestMeaningfulActivityAtUtc is at least 5 calendar
+/// days before today. Populated for every row in every view so clients can surface inline indicators
+/// without a separate request.
+/// </summary>
+public sealed record KeepRequestStatusCheckInfo(
+    bool IsDue,
+    DateTime? SinceUtc,
+    DateTime? DueAtUtc,
+    int? AgeDays,
+    string? ExclusionReason);
 
 /// <summary>
 /// Follow Up On and Planned For scan metadata (ADR-337/338).

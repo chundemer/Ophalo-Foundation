@@ -28,6 +28,9 @@ public sealed class GetKeepRequestListService(
     // Neither value collides with real B5 ranking orders (1–8).
     private const int HistorySortSentinel = 0;
     private const int FeedbackReviewSortSentinel = 99;
+    private const int NeedsStatusCheckSortSentinel = 98;
+
+    private const int NeedsStatusCheckThresholdDays = 5;
 
     private static readonly Error Unauthorized =
         Error.Create("auth.unauthorized", "Authentication required.");
@@ -39,13 +42,14 @@ public sealed class GetKeepRequestListService(
     {
         "default", "assigned_to_me", "watching", "unassigned",
         "needs_attention", "feedback_review", "closed_history",
-        "cancelled_history", "all_history"
+        "cancelled_history", "all_history", "needs_status_check"
     };
 
     // Active-only views: terminal-status filter would be contradictory (ADR-257).
     private static readonly HashSet<string> ActiveOnlyViews = new(StringComparer.OrdinalIgnoreCase)
     {
-        "default", "assigned_to_me", "watching", "unassigned", "needs_attention"
+        "default", "assigned_to_me", "watching", "unassigned", "needs_attention",
+        "needs_status_check"
     };
 
     // History views, feedback_review, and unassigned require Owner/Admin (ADR-248/242, G4d).
@@ -66,12 +70,13 @@ public sealed class GetKeepRequestListService(
     private static readonly Dictionary<string, ActiveViewKind> ActiveViewKinds =
         new(StringComparer.OrdinalIgnoreCase)
         {
-            ["default"]         = ActiveViewKind.Default,
-            ["assigned_to_me"]  = ActiveViewKind.AssignedToMe,
-            ["watching"]        = ActiveViewKind.Watching,
-            ["unassigned"]      = ActiveViewKind.Unassigned,
-            ["needs_attention"] = ActiveViewKind.NeedsAttention,
-            ["feedback_review"] = ActiveViewKind.FeedbackReview
+            ["default"]              = ActiveViewKind.Default,
+            ["assigned_to_me"]       = ActiveViewKind.AssignedToMe,
+            ["watching"]             = ActiveViewKind.Watching,
+            ["unassigned"]           = ActiveViewKind.Unassigned,
+            ["needs_attention"]      = ActiveViewKind.NeedsAttention,
+            ["feedback_review"]      = ActiveViewKind.FeedbackReview,
+            ["needs_status_check"]   = ActiveViewKind.NeedsStatusCheck
         };
 
     // Slug → enum maps for validation (ADR-257; individual values validated before contradictions).
@@ -255,6 +260,7 @@ public sealed class GetKeepRequestListService(
         bool hasMore;
         IReadOnlyList<KeepRequest> historyPageEntities = [];
         var isFeedbackReview = normalizedView == "feedback_review";
+        var isNeedsStatusCheck = normalizedView == "needs_status_check";
         var isHistoryView = HistoryViewKinds.TryGetValue(normalizedView, out var historyViewKind);
 
         if (isHistoryView)
@@ -300,6 +306,22 @@ public sealed class GetKeepRequestListService(
             var rawRequests = await persistence.GetActiveViewRequestsAsync(
                 currentUser.AccountId, currentAccountUserId, activeViewKind, filters, scope, ct);
 
+            // NeedsStatusCheck: DB returns candidates; apply full eligibility + 5-day due check in memory.
+            if (isNeedsStatusCheck)
+            {
+                var today = DateOnly.FromDateTime(nowUtc);
+                var threshold = today.AddDays(-NeedsStatusCheckThresholdDays);
+                rawRequests = rawRequests
+                    .Where(r =>
+                    {
+                        var inputs = r.GetNeedsStatusCheckInputs(today);
+                        return inputs.IsEligible
+                            && inputs.LatestMeaningfulActivityAtUtc.HasValue
+                            && DateOnly.FromDateTime(inputs.LatestMeaningfulActivityAtUtc.Value) <= threshold;
+                    })
+                    .ToList();
+            }
+
             Dictionary<Guid, KeepRequestParticipantSummary> participants;
             if (rawRequests.Count > 0)
             {
@@ -314,7 +336,9 @@ public sealed class GetKeepRequestListService(
 
             var comparer = isFeedbackReview
                 ? (IComparer<KeepRequestSummary>)FeedbackReviewComparer.Instance
-                : RequestListComparer.Instance;
+                : isNeedsStatusCheck
+                    ? (IComparer<KeepRequestSummary>)NeedsStatusCheckComparer.Instance
+                    : RequestListComparer.Instance;
 
             var allSummaries = rawRequests
                 .Select(r => ToSummary(r, role, canOperate, isOwnerOrAdmin, isOffSeason, nowUtc,
@@ -325,7 +349,7 @@ public sealed class GetKeepRequestListService(
             IReadOnlyList<KeepRequestSummary> sorted = allSummaries;
             if (cursorPayload is not null)
             {
-                var startIndex = FindCursorStartIndex(sorted, cursorPayload, isFeedbackReview);
+                var startIndex = FindCursorStartIndex(sorted, cursorPayload, isFeedbackReview, isNeedsStatusCheck);
                 sorted = sorted.Skip(startIndex).ToList();
             }
 
@@ -345,7 +369,14 @@ public sealed class GetKeepRequestListService(
                     HistorySortSentinel,
                     historyPageEntities[^1].TerminatedAtUtc?.Ticks,
                     secondaryDescending: true)
-                : EncodeCursorForActiveView(page[^1], fingerprint, isFeedbackReview);
+                : isNeedsStatusCheck
+                    ? KeepRequestListCursor.Encode(
+                        cursorProtector, fingerprint,
+                        page[^1].Id,
+                        NeedsStatusCheckSortSentinel,
+                        page[^1].StatusCheck.SinceUtc?.Ticks,
+                        secondaryDescending: false)
+                    : EncodeCursorForActiveView(page[^1], fingerprint, isFeedbackReview);
         }
 
         var pageInfo = new KeepRequestPageInfo(Limit: limit, HasMore: hasMore, NextCursor: nextCursor);
@@ -475,11 +506,12 @@ public sealed class GetKeepRequestListService(
     private static int FindCursorStartIndex(
         IReadOnlyList<KeepRequestSummary> sorted,
         KeepRequestListCursorPayload cursor,
-        bool isFeedbackReview)
+        bool isFeedbackReview,
+        bool isNeedsStatusCheck)
     {
         for (var i = 0; i < sorted.Count; i++)
         {
-            if (IsAfterCursor(sorted[i], cursor, isFeedbackReview))
+            if (IsAfterCursor(sorted[i], cursor, isFeedbackReview, isNeedsStatusCheck))
                 return i;
         }
         return sorted.Count;
@@ -488,12 +520,20 @@ public sealed class GetKeepRequestListService(
     private static bool IsAfterCursor(
         KeepRequestSummary row,
         KeepRequestListCursorPayload cursor,
-        bool isFeedbackReview)
+        bool isFeedbackReview,
+        bool isNeedsStatusCheck)
     {
         if (isFeedbackReview)
         {
             // feedback_review sort: AttentionSinceUtc ASC, Id ASC.
             var cmp = CompareSecondaryTicks(row.Attention.AttentionSinceUtc?.Ticks, cursor.SecondaryTick, false);
+            return cmp != 0 ? cmp > 0 : row.Id.CompareTo(cursor.LastId) > 0;
+        }
+
+        if (isNeedsStatusCheck)
+        {
+            // needs_status_check sort: SinceUtc ASC, Id ASC (oldest idle first).
+            var cmp = CompareSecondaryTicks(row.StatusCheck.SinceUtc?.Ticks, cursor.SecondaryTick, false);
             return cmp != 0 ? cmp > 0 : row.Id.CompareTo(cursor.LastId) > 0;
         }
 
@@ -632,6 +672,7 @@ public sealed class GetKeepRequestListService(
             : (DateTime?)null;
 
         var timing = BuildTimingInfo(r, nowUtc);
+        var statusCheck = BuildStatusCheckInfo(r, nowUtc);
 
         return new KeepRequestSummary(
             Id: r.Id,
@@ -658,7 +699,8 @@ public sealed class GetKeepRequestListService(
             CurrentUserNotification: notificationInfo,
             FeedbackReviewAgeBucket: feedbackReviewAgeBucket,
             FeedbackReviewDueAtUtc: feedbackReviewDueAtUtc,
-            Timing: timing);
+            Timing: timing,
+            StatusCheck: statusCheck);
     }
 
     private static (string group, int order) ComputeRankingGroup(
@@ -899,6 +941,36 @@ public sealed class GetKeepRequestListService(
             HasFuturePlannedFor: hasFuturePlannedFor);
     }
 
+    private static KeepRequestStatusCheckInfo BuildStatusCheckInfo(KeepRequest r, DateTime nowUtc)
+    {
+        var today = DateOnly.FromDateTime(nowUtc);
+        var inputs = r.GetNeedsStatusCheckInputs(today);
+
+        if (!inputs.IsEligible || !inputs.LatestMeaningfulActivityAtUtc.HasValue)
+        {
+            return new KeepRequestStatusCheckInfo(
+                IsDue: false,
+                SinceUtc: null,
+                DueAtUtc: null,
+                AgeDays: null,
+                ExclusionReason: inputs.ExclusionReason);
+        }
+
+        var sinceUtc = inputs.LatestMeaningfulActivityAtUtc.Value;
+        var sinceDate = DateOnly.FromDateTime(sinceUtc);
+        var dueAtUtc = sinceDate.AddDays(NeedsStatusCheckThresholdDays)
+            .ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
+        var ageDays = today.DayNumber - sinceDate.DayNumber;
+        var isDue = sinceDate <= today.AddDays(-NeedsStatusCheckThresholdDays);
+
+        return new KeepRequestStatusCheckInfo(
+            IsDue: isDue,
+            SinceUtc: sinceUtc,
+            DueAtUtc: dueAtUtc,
+            AgeDays: ageDays,
+            ExclusionReason: null);
+    }
+
     private static string ComputeFutureFollowUpLabel(DateOnly date, FollowUpReason? reason, DateOnly today)
     {
         if (reason.HasValue && reason.Value != FollowUpReason.Other)
@@ -1054,6 +1126,30 @@ public sealed class GetKeepRequestListService(
             if (y is null) return 1;
 
             var cmp = CompareNullableDatesAsc(x.Attention.AttentionSinceUtc, y.Attention.AttentionSinceUtc);
+            return cmp != 0 ? cmp : x.Id.CompareTo(y.Id);
+        }
+
+        private static int CompareNullableDatesAsc(DateTime? a, DateTime? b)
+        {
+            if (a is null && b is null) return 0;
+            if (a is null) return 1;
+            if (b is null) return -1;
+            return a.Value.CompareTo(b.Value);
+        }
+    }
+
+    // needs_status_check sort: oldest idle (SinceUtc ASC) first so longest-waiting rows surface first.
+    private sealed class NeedsStatusCheckComparer : IComparer<KeepRequestSummary>
+    {
+        public static readonly NeedsStatusCheckComparer Instance = new();
+
+        public int Compare(KeepRequestSummary? x, KeepRequestSummary? y)
+        {
+            if (ReferenceEquals(x, y)) return 0;
+            if (x is null) return -1;
+            if (y is null) return 1;
+
+            var cmp = CompareNullableDatesAsc(x.StatusCheck.SinceUtc, y.StatusCheck.SinceUtc);
             return cmp != 0 ? cmp : x.Id.CompareTo(y.Id);
         }
 

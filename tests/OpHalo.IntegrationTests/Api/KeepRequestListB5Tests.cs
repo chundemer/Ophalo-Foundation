@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using OpHalo.Foundation.Application.Accounts.Provisioning;
 using OpHalo.Foundation.Core.Constants;
@@ -36,6 +37,7 @@ public sealed class KeepRequestListB5Tests : IClassFixture<KeepApiWebFactory>, I
     private Guid _closedUnresolvedRequestId;
     private Guid _receivedRequestVersion;
     private Guid _ownerAccountUserId;
+    private Guid _oldIdleRequestId;
 
     public KeepRequestListB5Tests(KeepApiWebFactory factory)
     {
@@ -208,6 +210,25 @@ public sealed class KeepRequestListB5Tests : IClassFixture<KeepApiWebFactory>, I
         if (toCancel.Value.StatusChangedEvent is not null)
             db.Set<KeepRequestEvent>().Add(toCancel.Value.StatusChangedEvent);
         await db.SaveChangesAsync();
+
+        // --- 7. Old idle request (created 10 days ago, no attention, no follow-up) ---
+        // Used by the needs_status_check view tests (P6d-2A).
+        // Note: SaveChangesAsync overrides CreatedAtUtc/UpdatedAtUtc to realNow, so we backdate
+        // via raw SQL after the insert to set CreatedAtUtc and LastCustomerActivityAt to 10 days ago.
+        var oldIdleRequest = KeepRequest.CreateFromCustomerIntake(
+            _accountId, customer.Id,
+            "Jane Smith", "0412345678", null,
+            "Old idle job", "B5-OLD-001", "b5_old_page_token", now, 60);
+        db.Set<KeepRequest>().Add(oldIdleRequest);
+        db.Set<KeepRequestEvent>().Add(
+            KeepRequestEvent.CreateRequestCreated(oldIdleRequest.Id, _accountId, now));
+        await db.SaveChangesAsync();
+        _oldIdleRequestId = oldIdleRequest.Id;
+
+        var tenDaysAgo = now.AddDays(-10);
+        await db.Database.ExecuteSqlRawAsync(
+            "UPDATE keep_requests SET created_at_utc = {0}, last_customer_activity_at = {1} WHERE id = {2}",
+            tenDaysAgo, tenDaysAgo, _oldIdleRequestId);
 
         // --- Sessions ---
         _ownerAccountUserId = graph.Owner.Id;
@@ -416,6 +437,71 @@ public sealed class KeepRequestListB5Tests : IClassFixture<KeepApiWebFactory>, I
         Assert.Equal("Parts", row.Timing.FollowUpOnLabel);
         Assert.Equal("parts", row.Timing.FollowUpOnReason);
     }
+
+    // --- needs_status_check view (P6d-2A) ----------------------------------------
+
+    private async Task<NscListBody?> GetNscListAsync(string cookie)
+    {
+        using var req = WithCookie(HttpMethod.Get, "/keep/requests?view=needs_status_check", cookie);
+        var response = await _client.SendAsync(req);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        return await response.Content.ReadFromJsonAsync<NscListBody>(
+            new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+    }
+
+    [Fact]
+    public async Task NeedsStatusCheck_owner_sees_old_idle_request()
+    {
+        var body = await GetNscListAsync(_ownerCookie);
+        Assert.NotNull(body);
+        var row = body.Requests.SingleOrDefault(r => r.Id == _oldIdleRequestId);
+        Assert.NotNull(row);
+    }
+
+    [Fact]
+    public async Task NeedsStatusCheck_response_includes_status_check_metadata()
+    {
+        var body = await GetNscListAsync(_ownerCookie);
+        Assert.NotNull(body);
+        var row = body.Requests.SingleOrDefault(r => r.Id == _oldIdleRequestId);
+        Assert.NotNull(row);
+        Assert.True(row.StatusCheck.IsDue);
+        Assert.NotNull(row.StatusCheck.SinceUtc);
+        Assert.NotNull(row.StatusCheck.DueAtUtc);
+        Assert.True(row.StatusCheck.AgeDays >= 5);
+        Assert.Null(row.StatusCheck.ExclusionReason);
+    }
+
+    [Fact]
+    public async Task NeedsStatusCheck_operator_sees_no_rows_when_not_responsible()
+    {
+        // Operator has no participation on any request — scope = MyWork returns empty.
+        var body = await GetNscListAsync(_operatorCookie);
+        Assert.NotNull(body);
+        Assert.DoesNotContain(body.Requests, r => r.Id == _oldIdleRequestId);
+    }
+
+    [Fact]
+    public async Task NeedsStatusCheck_recent_request_does_not_appear()
+    {
+        // _receivedRequestId was created with now (0 days old) — should not be due.
+        var body = await GetNscListAsync(_ownerCookie);
+        Assert.NotNull(body);
+        Assert.DoesNotContain(body.Requests, r => r.Id == _receivedRequestId);
+    }
+
+    // --- Response DTOs (NSC shape) ---
+
+    private sealed record NscListBody(List<NscRequestBody> Requests);
+
+    private sealed record NscRequestBody(Guid Id, NscStatusCheckBody StatusCheck);
+
+    private sealed record NscStatusCheckBody(
+        bool IsDue,
+        DateTime? SinceUtc,
+        DateTime? DueAtUtc,
+        int? AgeDays,
+        string? ExclusionReason);
 
     // --- Response DTOs (B5 nested shape) ---
 

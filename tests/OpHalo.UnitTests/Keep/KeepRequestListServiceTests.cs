@@ -1470,6 +1470,146 @@ public class KeepRequestListServiceTests
         Assert.False(timing.HasFuturePlannedFor);
     }
 
+    // --- needs_status_check view (P6d-2A) ----------------------------------------
+
+    private static readonly DateOnly Today = DateOnly.FromDateTime(Now);
+
+    // Creates a request whose latest meaningful activity (CreatedAtUtc / LastCustomerActivityAt)
+    // is exactly daysOld calendar days before Now. No business activity set — CreatedAtUtc dominates.
+    private static KeepRequest MakeDueRequest(int daysOld) =>
+        KeepRequest.CreateFromCustomerIntake(
+            AccountId, Guid.NewGuid(), "Bob", "555-0001", null, "Desc",
+            "REF", "tok_" + Guid.NewGuid().ToString("N"),
+            Now.AddDays(-daysOld), firstResponseTargetMinutes: 60);
+
+    [Fact]
+    public async Task NeedsStatusCheck_due_row_appears_when_activity_is_5_days_old()
+    {
+        var request = MakeDueRequest(daysOld: 5);
+        var sut = BuildSut(HappyPathPersistence([request]));
+
+        var result = await sut.ExecuteAsync(new KeepRequestListQuery(View: "needs_status_check"));
+
+        Assert.True(result.IsSuccess);
+        Assert.Single(result.Value.Requests);
+        Assert.True(result.Value.Requests[0].StatusCheck.IsDue);
+    }
+
+    [Fact]
+    public async Task NeedsStatusCheck_row_not_due_when_activity_is_4_days_old()
+    {
+        var request = MakeDueRequest(daysOld: 4);
+        var sut = BuildSut(HappyPathPersistence([request]));
+
+        var result = await sut.ExecuteAsync(new KeepRequestListQuery(View: "needs_status_check"));
+
+        Assert.True(result.IsSuccess);
+        Assert.Empty(result.Value.Requests);
+    }
+
+    [Fact]
+    public async Task NeedsStatusCheck_future_follow_up_on_suppresses_due_row()
+    {
+        var request = MakeDueRequest(daysOld: 10);
+        SetProp(request, nameof(KeepRequest.FollowUpOnDate), Today.AddDays(3));
+        var sut = BuildSut(HappyPathPersistence([request]));
+
+        var result = await sut.ExecuteAsync(new KeepRequestListQuery(View: "needs_status_check"));
+
+        Assert.True(result.IsSuccess);
+        Assert.Empty(result.Value.Requests);
+    }
+
+    [Fact]
+    public async Task NeedsStatusCheck_future_planned_for_suppresses_due_row()
+    {
+        var request = MakeDueRequest(daysOld: 10);
+        SetProp(request, nameof(KeepRequest.PlannedForDate), Today.AddDays(2));
+        var sut = BuildSut(HappyPathPersistence([request]));
+
+        var result = await sut.ExecuteAsync(new KeepRequestListQuery(View: "needs_status_check"));
+
+        Assert.True(result.IsSuccess);
+        Assert.Empty(result.Value.Requests);
+    }
+
+    [Fact]
+    public async Task NeedsStatusCheck_active_attention_suppresses_due_row()
+    {
+        var request = MakeDueRequest(daysOld: 10);
+        SetProp(request, nameof(KeepRequest.AttentionLevel), AttentionLevel.NeedsAttention);
+        var sut = BuildSut(HappyPathPersistence([request]));
+
+        var result = await sut.ExecuteAsync(new KeepRequestListQuery(View: "needs_status_check"));
+
+        Assert.True(result.IsSuccess);
+        Assert.Empty(result.Value.Requests);
+    }
+
+    [Theory]
+    [InlineData(KeepRequestStatus.Resolved)]
+    [InlineData(KeepRequestStatus.Closed)]
+    [InlineData(KeepRequestStatus.Cancelled)]
+    public async Task NeedsStatusCheck_terminal_or_resolved_status_suppresses(KeepRequestStatus status)
+    {
+        var request = MakeDueRequest(daysOld: 10);
+        SetProp(request, nameof(KeepRequest.Status), status);
+        var sut = BuildSut(HappyPathPersistence([request]));
+
+        var result = await sut.ExecuteAsync(new KeepRequestListQuery(View: "needs_status_check"));
+
+        Assert.True(result.IsSuccess);
+        Assert.Empty(result.Value.Requests);
+    }
+
+    [Fact]
+    public async Task NeedsStatusCheck_status_check_metadata_computes_since_due_age()
+    {
+        var request = MakeDueRequest(daysOld: 7);
+        var sut = BuildSut(HappyPathPersistence([request]));
+
+        var result = await sut.ExecuteAsync(new KeepRequestListQuery(View: "needs_status_check"));
+
+        Assert.True(result.IsSuccess);
+        Assert.Single(result.Value.Requests);
+        var sc = result.Value.Requests[0].StatusCheck;
+        Assert.True(sc.IsDue);
+        Assert.NotNull(sc.SinceUtc);
+        Assert.NotNull(sc.DueAtUtc);
+        Assert.Equal(7, sc.AgeDays);
+        Assert.Null(sc.ExclusionReason);
+        // DueAtUtc should be SinceUtc date + 5 days at midnight UTC.
+        Assert.Equal(DateOnly.FromDateTime(sc.SinceUtc!.Value).AddDays(5).ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc),
+            sc.DueAtUtc!.Value);
+    }
+
+    [Fact]
+    public async Task NeedsStatusCheck_status_check_metadata_on_excluded_row_includes_exclusion_reason()
+    {
+        var request = MakeDueRequest(daysOld: 10);
+        SetProp(request, nameof(KeepRequest.AttentionLevel), AttentionLevel.Waiting);
+        var sut = BuildSut(HappyPathPersistence([request]));
+
+        // Default view so the row appears but is excluded from needs_status_check.
+        var result = await sut.ExecuteAsync(new KeepRequestListQuery(View: "default"));
+
+        Assert.True(result.IsSuccess);
+        var sc = result.Value.Requests[0].StatusCheck;
+        Assert.False(sc.IsDue);
+        Assert.Equal("active_attention", sc.ExclusionReason);
+    }
+
+    [Fact]
+    public async Task NeedsStatusCheck_operator_scope_is_mywork()
+    {
+        var p = HappyPathPersistence(role: AccountUserRole.Operator);
+        var sut = BuildSut(p);
+
+        await sut.ExecuteAsync(new KeepRequestListQuery(View: "needs_status_check"));
+
+        Assert.Equal(KeepRequestVisibilityScope.MyWork, p.LastActiveScope);
+    }
+
     // --- Fakes ------------------------------------------------------------------
 
     private sealed class FakeCursorProtector : IKeepRequestListCursorProtector

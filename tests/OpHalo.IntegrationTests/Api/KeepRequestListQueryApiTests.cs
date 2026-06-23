@@ -567,6 +567,22 @@ public sealed class KeepRequestListQueryApiTests : IClassFixture<KeepApiWebFacto
         Assert.Equal(3, opBody!.ViewCounts!.Unassigned);
     }
 
+    // --- needs_status_check view (P6d-2A) ----------------------------------------
+
+    [Fact]
+    public async Task NeedsStatusCheck_view_returns_200_for_owner()
+    {
+        var res = await GetAsync("/keep/requests?view=needs_status_check");
+        Assert.Equal(HttpStatusCode.OK, res.StatusCode);
+    }
+
+    [Fact]
+    public async Task NeedsStatusCheck_view_with_terminal_status_returns_400_Contradictory()
+    {
+        var code = await GetErrorCodeAsync("/keep/requests?view=needs_status_check&status=closed");
+        Assert.Equal("KeepRequest.RequestListContradictoryParameters", code);
+    }
+
     // --- Response DTOs ----------------------------------------------------------
 
     private sealed record ListResponseBody(

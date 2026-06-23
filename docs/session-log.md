@@ -1,10 +1,10 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-06-23 (P6d-1 complete — needs-status-check signal foundation)
+**Last updated:** 2026-06-23 (P6d-2A complete — needs-status-check list/query surface)
 **Branch:** `main` tracking `origin/main`
-**Current baseline:** 1334 tests (739 unit · 14 architecture · 598 integration — unit count updated; integration not re-run) — full unit suite green.
+**Current baseline:** 1345 tests (750 unit · 14 architecture · 598 integration — integration not re-run) — full unit + architecture suite green.
 **Next free ADR:** ADR-345
-**Next batch: P6d-2 — needs-status-check list/query surface.**
+**Next batch: P6d-3 — DEF-037 completion gate and P6e handoff.**
 
 ---
 
@@ -65,57 +65,7 @@ Current handoff:
 - **Completed:** P6c-3 — docs/ledger completion gate. DEF-030 implemented; ADR-341/342 implemented;
   DEF-037 remains open for P6d.
 - **Completed:** P6d-1 — needs-status-check signal foundation. `KeepRequestNeedsStatusCheckInputs` value object; `GetNeedsStatusCheckInputs(DateOnly today)` domain method; `LastBusinessActivityAt` updated on SetFollowUpOn/ClearFollowUpOn/SetPlannedFor/ClearPlannedFor; 17 unit tests (4 exclusion, 3 suppressor-boundary, 8 signal-max, 2 follow-up/planned activity assertions). 739 unit tests green.
-- **Active:** P6d-2 — needs-status-check list/query surface.
-
-### P6d-1 Coding Brief
-
-Source decisions:
-
-- ADR-339: needs-status-check is a policy-driven, signal-extensible human review queue.
-- DEF-037 remains open for P6d until the queue/signal model is implemented.
-
-Read first:
-
-- `docs/build-log/060-phase-8-b5-session-6-prerequisites-decisions.md` sections ADR-339, P6d, P6d-1, and Exclusions.
-- `src/OpHalo.Keep.Core/Entities/KeepRequest.cs`
-- `src/OpHalo.Keep.Core/Entities/KeepRequestEvent.cs`
-- `src/OpHalo.Keep.Core/Entities/Enums/KeepRequestEventType.cs`
-- `src/OpHalo.Keep.Application/Requests/GetKeepRequestListService.cs`
-- `src/OpHalo.Keep.Application/Requests/IKeepRequestListPersistence.cs`
-- `src/OpHalo.Keep.Infrastructure/Persistence/KeepRequestListPersistence.cs`
-- P6b timing fields and P6c customer-page viewed fields as needed.
-
-Implement:
-
-- Centralized latest-meaningful-activity helper/model for active request review.
-- Signal inputs for created, customer message/intent, business update, external contact, status
-  change, Follow Up On changes, Planned For changes, and customer page viewed.
-- Fail-closed exclusions for active business attention, future Follow Up On, future Planned For,
-  Resolved, Closed, and Cancelled.
-
-Do not implement:
-
-- Auto-close, auto-resolve, automatic customer update, or background jobs.
-- Notification delivery.
-- Broad analytics/reporting or full signal/projection engine.
-- The list/query route if it would exceed the slice gate; keep that for P6d-2.
-
-Verify:
-
-- Focused unit tests for signal calculation and exclusions.
-- `dotnet build`.
-
-### P6d-2 Preview
-
-- Expose the needs-status-check list/query surface using the P6d-1 signal model.
-- Add account-policy threshold with 5-calendar-day pilot default when unset.
-- Test due/not-due rows, timing suppressors, active attention suppressor, Resolved/terminal
-  exclusions, and role/row visibility.
-
-Do not implement:
-
-- Notification delivery.
-- Customer identity portal or access-link management.
+- **Completed:** P6d-2A — needs-status-check list/query surface. `GET /keep/requests?view=needs_status_check`; `KeepRequestStatusCheckInfo` nested record on `KeepRequestSummary` (IsDue, SinceUtc, DueAtUtc, AgeDays, ExclusionReason); `NeedsStatusCheck` ActiveViewKind with DB pre-filter (non-terminal + AttentionLevel==None) + 5-day in-memory due check; `NeedsStatusCheckComparer` (SinceUtc ASC); cursor with sentinel 98; metadata on every row in every view; 11 unit tests + 6 integration tests. DEF-037 closes. 750 unit, 14 arch green.
 
 ---
 
