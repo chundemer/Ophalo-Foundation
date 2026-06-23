@@ -931,6 +931,7 @@ public sealed class KeepRequest : BaseEntity
         FollowUpOnDate = date;
         FollowUpReason = reason;
         FollowUpNote = trimmedNote;
+        LastBusinessActivityAt = nowUtc;
 
         var ev = KeepRequestEvent.CreateFollowUpOnChanged(
             Id, AccountId, actorAccountUserId, actorDisplayName, date, reason, trimmedNote, nowUtc);
@@ -959,6 +960,7 @@ public sealed class KeepRequest : BaseEntity
         FollowUpOnDate = null;
         FollowUpReason = null;
         FollowUpNote = null;
+        LastBusinessActivityAt = nowUtc;
 
         var ev = KeepRequestEvent.CreateFollowUpOnChanged(
             Id, AccountId, actorAccountUserId, actorDisplayName,
@@ -988,6 +990,7 @@ public sealed class KeepRequest : BaseEntity
             return Result<KeepRequestEvent>.Failure(KeepRequestErrors.PlannedForRequiresActiveRequest);
 
         PlannedForDate = date;
+        LastBusinessActivityAt = nowUtc;
 
         var ev = KeepRequestEvent.CreatePlannedForChanged(
             Id, AccountId, actorAccountUserId, actorDisplayName, date, nowUtc);
@@ -1014,6 +1017,7 @@ public sealed class KeepRequest : BaseEntity
             return Result<KeepRequestEvent>.Failure(KeepRequestErrors.PlannedForRequiresActiveRequest);
 
         PlannedForDate = null;
+        LastBusinessActivityAt = nowUtc;
 
         var ev = KeepRequestEvent.CreatePlannedForChanged(
             Id, AccountId, actorAccountUserId, actorDisplayName, date: null, nowUtc);
@@ -1042,6 +1046,36 @@ public sealed class KeepRequest : BaseEntity
 
         CustomerPageLastViewedAtUtc = nowUtc;
         return true;
+    }
+
+    /// <summary>
+    /// Returns needs-status-check eligibility and the latest meaningful activity timestamp
+    /// for this request (ADR-339, P6d-1). Fail-closed: excluded requests return IsEligible = false
+    /// with a slug describing the suppressor.
+    /// </summary>
+    public KeepRequestNeedsStatusCheckInputs GetNeedsStatusCheckInputs(DateOnly today)
+    {
+        if (!IsActive)
+            return new KeepRequestNeedsStatusCheckInputs(false, "not_active", null);
+
+        if (AttentionLevel != AttentionLevel.None)
+            return new KeepRequestNeedsStatusCheckInputs(false, "active_attention", null);
+
+        if (FollowUpOnDate.HasValue && FollowUpOnDate.Value > today)
+            return new KeepRequestNeedsStatusCheckInputs(false, "future_follow_up_on", null);
+
+        if (PlannedForDate.HasValue && PlannedForDate.Value > today)
+            return new KeepRequestNeedsStatusCheckInputs(false, "future_planned_for", null);
+
+        var latest = new[]
+        {
+            (DateTime?)CreatedAtUtc,
+            LastCustomerActivityAt,
+            LastBusinessActivityAt,
+            CustomerPageLastViewedAtUtc
+        }.Max();
+
+        return new KeepRequestNeedsStatusCheckInputs(true, null, latest);
     }
 
     // Enums. prefix required: FollowUpReason instance property shadows the enum type name in static scope.

@@ -60,6 +60,7 @@ public class KeepRequestFollowUpTests
         Assert.Equal(FutureDate, r.FollowUpOnDate);
         Assert.Equal(FollowUpReason.Parts, r.FollowUpReason);
         Assert.Null(r.FollowUpNote);
+        Assert.Equal(Now, r.LastBusinessActivityAt);
 
         var ev = result.Value;
         Assert.Equal(KeepRequestEventType.FollowUpOnChanged, ev.EventType);
@@ -175,6 +176,7 @@ public class KeepRequestFollowUpTests
         Assert.Null(r.FollowUpOnDate);
         Assert.Null(r.FollowUpReason);
         Assert.Null(r.FollowUpNote);
+        Assert.Equal(Now, r.LastBusinessActivityAt);
 
         var ev = result.Value;
         Assert.Equal(KeepRequestEventType.FollowUpOnChanged, ev.EventType);
@@ -208,6 +210,7 @@ public class KeepRequestFollowUpTests
 
         Assert.True(result.IsSuccess);
         Assert.Equal(FutureDate, r.PlannedForDate);
+        Assert.Equal(Now, r.LastBusinessActivityAt);
 
         var ev = result.Value;
         Assert.Equal(KeepRequestEventType.PlannedForChanged, ev.EventType);
@@ -241,6 +244,7 @@ public class KeepRequestFollowUpTests
 
         Assert.True(result.IsSuccess);
         Assert.Null(r.PlannedForDate);
+        Assert.Equal(Now, r.LastBusinessActivityAt);
 
         var ev = result.Value;
         Assert.Equal(KeepRequestEventType.PlannedForChanged, ev.EventType);

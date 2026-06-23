@@ -1,10 +1,10 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-06-23 (P6c complete — ready for P6d needs-status-check signal model)
+**Last updated:** 2026-06-23 (P6d-1 complete — needs-status-check signal foundation)
 **Branch:** `main` tracking `origin/main`
-**Current baseline:** 1334 tests (722 unit · 14 architecture · 598 integration) — full suite green.
+**Current baseline:** 1334 tests (739 unit · 14 architecture · 598 integration — unit count updated; integration not re-run) — full unit suite green.
 **Next free ADR:** ADR-345
-**Next batch: P6d-1 — needs-status-check signal foundation.**
+**Next batch: P6d-2 — needs-status-check list/query surface.**
 
 ---
 
@@ -64,7 +64,8 @@ Current handoff:
   Also fixed stale KeepOffSeasonTests customer message route from P6c-1 intent split.
 - **Completed:** P6c-3 — docs/ledger completion gate. DEF-030 implemented; ADR-341/342 implemented;
   DEF-037 remains open for P6d.
-- **Active:** P6d-1 — needs-status-check signal foundation.
+- **Completed:** P6d-1 — needs-status-check signal foundation. `KeepRequestNeedsStatusCheckInputs` value object; `GetNeedsStatusCheckInputs(DateOnly today)` domain method; `LastBusinessActivityAt` updated on SetFollowUpOn/ClearFollowUpOn/SetPlannedFor/ClearPlannedFor; 17 unit tests (4 exclusion, 3 suppressor-boundary, 8 signal-max, 2 follow-up/planned activity assertions). 739 unit tests green.
+- **Active:** P6d-2 — needs-status-check list/query surface.
 
 ### P6d-1 Coding Brief
 
