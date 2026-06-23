@@ -33,7 +33,9 @@ internal static class KeepRequestDetailMapper
         Guid currentUserId,
         DateTime nowUtc)
     {
-        var feedbackCommentVisible = role is AccountUserRole.Owner or AccountUserRole.Admin;
+        var feedbackCommentVisible = role is AccountUserRole.Owner or AccountUserRole.Admin
+            || request.FeedbackWasResolved == true;
+        var reviewNoteVisible = role is AccountUserRole.Owner or AccountUserRole.Admin;
 
         var currentUserRow = participants.FirstOrDefault(
             p => p.AccountUserId == currentUserId && p.DetachedAtUtc is null);
@@ -79,7 +81,7 @@ internal static class KeepRequestDetailMapper
         FeedbackCommentVisible: feedbackCommentVisible,
         FeedbackReviewedAtUtc: request.FeedbackReviewedAtUtc,
         FeedbackReviewedByAccountUserId: request.FeedbackReviewedByAccountUserId,
-        FeedbackReviewNote: feedbackCommentVisible ? request.FeedbackReviewNote : null,
+        FeedbackReviewNote: reviewNoteVisible ? request.FeedbackReviewNote : null,
         FeedbackReviewAgeBucket: ComputeReviewAgeBucket(request, nowUtc),
         FeedbackReviewDueAtUtc: ComputeReviewDueAtUtc(request),
         ContactActions: BuildContactActions(availableActions.CanLogExternalContact, request.CustomerPhone, request.CustomerEmail),

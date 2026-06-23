@@ -34,6 +34,9 @@ public sealed class KeepRequestDetailB4Tests : IClassFixture<KeepApiWebFactory>,
     // and unresolved-attention mapping tests.
     private Guid _closedRequestId;
 
+    // Closed request — has positive feedback (resolved), used for G7c visibility tests.
+    private Guid _positiveFeedbackRequestId;
+
     private string _ownerCookie   = string.Empty;
     private string _adminCookie   = string.Empty;
     private string _operatorCookie = string.Empty;
@@ -201,6 +204,41 @@ public sealed class KeepRequestDetailB4Tests : IClassFixture<KeepApiWebFactory>,
 
         await db.SaveChangesAsync();
         _closedRequestId = closedRequest.Id;
+
+        // --- Positive-feedback closed request (G7c) ---
+        var posRequest = KeepRequest.CreateFromCustomerIntake(
+            _accountId, customer.Id,
+            "Jane Smith", "0412345678", null,
+            "Happy customer job", "B4POS001", "b4_pos_page_token", now, 60);
+
+        var posToResolved = posRequest.ChangeStatus(
+            KeepRequestStatus.Resolved, null, graph.Owner.Id, "owner@b4-tests.com", now);
+        var posToClosed = posRequest.ChangeStatus(
+            KeepRequestStatus.Closed, null, graph.Owner.Id, "owner@b4-tests.com", now);
+
+        var posFeedback = posRequest.SubmitFeedback(
+            wasResolved: true,
+            comment: "Great service, very happy.",
+            priorityResponseTargetMinutes: 60,
+            nowUtc: now);
+        Assert.True(posFeedback.IsSuccess);
+
+        db.Set<KeepRequest>().Add(posRequest);
+        db.Set<KeepRequestEvent>().Add(
+            KeepRequestEvent.CreateRequestCreated(posRequest.Id, _accountId, now));
+        if (posToResolved.IsSuccess && posToResolved.Value.StatusChangedEvent is not null)
+            db.Set<KeepRequestEvent>().Add(posToResolved.Value.StatusChangedEvent);
+        if (posToClosed.IsSuccess && posToClosed.Value.StatusChangedEvent is not null)
+            db.Set<KeepRequestEvent>().Add(posToClosed.Value.StatusChangedEvent);
+
+        // Operator needs participation to access the positive-feedback closed request.
+        db.Set<KeepRequestParticipant>().Add(
+            KeepRequestParticipant.Create(
+                posRequest.Id, _accountId, operatorMember.Id,
+                ParticipationType.Watching, notificationsEnabled: true, now));
+
+        await db.SaveChangesAsync();
+        _positiveFeedbackRequestId = posRequest.Id;
 
         // --- Seed sessions ---
         var rawOwner    = await _factory.SeedSessionAsync(graph.Owner.Id, _accountId);
@@ -429,6 +467,59 @@ public sealed class KeepRequestDetailB4Tests : IClassFixture<KeepApiWebFactory>,
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
         Assert.False(body.GetProperty("availableActions").GetProperty("canLogExternalContact").GetBoolean());
         Assert.Empty(body.GetProperty("contactActions").EnumerateArray().ToList());
+    }
+
+    // =========================================================================
+    // G7c — Positive feedback visible to Operator/Viewer; review note stays Owner/Admin-only
+    // =========================================================================
+
+    [Fact]
+    public async Task G7c_OwnerRole_PositiveFeedback_SeesCommentAndVisible()
+    {
+        var response = await AuthRequest(_ownerCookie).GetAsync($"/keep/requests/{_positiveFeedbackRequestId}");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("Great service, very happy.", body.GetProperty("feedbackComment").GetString());
+        Assert.True(body.GetProperty("feedbackCommentVisible").GetBoolean());
+        Assert.True(body.GetProperty("feedbackWasResolved").GetBoolean());
+    }
+
+    [Fact]
+    public async Task G7c_AdminRole_PositiveFeedback_SeesCommentAndVisible()
+    {
+        var response = await AuthRequest(_adminCookie).GetAsync($"/keep/requests/{_positiveFeedbackRequestId}");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("Great service, very happy.", body.GetProperty("feedbackComment").GetString());
+        Assert.True(body.GetProperty("feedbackCommentVisible").GetBoolean());
+    }
+
+    [Fact]
+    public async Task G7c_OperatorRole_PositiveFeedback_SeesCommentAndVisible()
+    {
+        var response = await AuthRequest(_operatorCookie).GetAsync($"/keep/requests/{_positiveFeedbackRequestId}");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("Great service, very happy.", body.GetProperty("feedbackComment").GetString());
+        Assert.True(body.GetProperty("feedbackCommentVisible").GetBoolean());
+        Assert.True(body.GetProperty("feedbackWasResolved").GetBoolean());
+        Assert.Equal(JsonValueKind.Null, body.GetProperty("feedbackReviewNote").ValueKind);
+    }
+
+    [Fact]
+    public async Task G7c_ViewerRole_PositiveFeedback_SeesCommentAndVisible()
+    {
+        var response = await AuthRequest(_viewerCookie).GetAsync($"/keep/requests/{_positiveFeedbackRequestId}");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("Great service, very happy.", body.GetProperty("feedbackComment").GetString());
+        Assert.True(body.GetProperty("feedbackCommentVisible").GetBoolean());
+        Assert.True(body.GetProperty("feedbackWasResolved").GetBoolean());
+        Assert.Equal(JsonValueKind.Null, body.GetProperty("feedbackReviewNote").ValueKind);
     }
 
     private HttpClient AuthRequest(string cookie)
