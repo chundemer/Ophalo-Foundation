@@ -40,6 +40,14 @@ public sealed class KeepRequest : BaseEntity
     public bool IsTerminal =>
         Status is KeepRequestStatus.Closed or KeepRequestStatus.Cancelled;
 
+    public bool HasActiveUnresolvedFeedbackReview =>
+        Status == KeepRequestStatus.Closed
+        && FeedbackSubmittedAtUtc.HasValue
+        && FeedbackWasResolved == false
+        && !FeedbackReviewedAtUtc.HasValue
+        && AttentionLevel != AttentionLevel.None
+        && AttentionReason == Enums.AttentionReason.UnresolvedFeedback;
+
     // --- First-response fields (D7/ADR-090) ---
 
     public DateTime? FirstResponseDueAtUtc { get; private set; }
@@ -570,47 +578,9 @@ public sealed class KeepRequest : BaseEntity
         if (IsTerminal)
             return Result<KeepRequestEvent>.Failure(KeepRequestErrors.TerminalState);
 
-        if (channel is not (CommunicationChannel.Phone or CommunicationChannel.Sms or CommunicationChannel.Email))
-            return Result<KeepRequestEvent>.Failure(KeepRequestErrors.ExternalContactInvalidOutboundChannel);
-
-        // Guard undefined outcome before pattern matching — domain returns failure for user-shaped invalid input.
-        if (outcome.HasValue && !Enum.IsDefined(outcome.Value))
-            return Result<KeepRequestEvent>.Failure(KeepRequestErrors.ExternalContactOutcomeNotAllowed);
-
-        if (channel == CommunicationChannel.Phone)
-        {
-            if (!outcome.HasValue)
-                return Result<KeepRequestEvent>.Failure(KeepRequestErrors.ExternalContactOutcomeRequired);
-
-            if (outcome.Value is ExternalContactOutcome.SpokeWithCustomer or ExternalContactOutcome.LeftVoicemail)
-            {
-                if (!requiresBusinessFollowUp.HasValue)
-                    return Result<KeepRequestEvent>.Failure(KeepRequestErrors.ExternalContactFollowUpRequired);
-            }
-            else
-            {
-                // NoAnswer / WrongNumber: follow-up does not apply (ADR-216).
-                if (requiresBusinessFollowUp.HasValue)
-                    return Result<KeepRequestEvent>.Failure(KeepRequestErrors.ExternalContactFollowUpNotAllowed);
-            }
-        }
-        else
-        {
-            // Sms / Email: no outcome, follow-up required, summary required.
-            if (outcome.HasValue)
-                return Result<KeepRequestEvent>.Failure(KeepRequestErrors.ExternalContactOutcomeNotAllowed);
-
-            if (!requiresBusinessFollowUp.HasValue)
-                return Result<KeepRequestEvent>.Failure(KeepRequestErrors.ExternalContactFollowUpRequired);
-        }
-
-        var normalizedSummary = string.IsNullOrWhiteSpace(summary) ? null : summary.Trim();
-
-        if (channel is CommunicationChannel.Sms or CommunicationChannel.Email && normalizedSummary is null)
-            return Result<KeepRequestEvent>.Failure(KeepRequestErrors.ExternalContactSummaryRequired);
-
-        if (normalizedSummary?.Length > 4000)
-            return Result<KeepRequestEvent>.Failure(KeepRequestErrors.ExternalContactSummaryTooLong);
+        var (validationError, normalizedSummary) = ValidateOutboundContact(channel, outcome, requiresBusinessFollowUp, summary);
+        if (validationError is not null)
+            return Result<KeepRequestEvent>.Failure(validationError);
 
         // Effect matrix (ADR-198).
         bool countsFirstResponse = channel == CommunicationChannel.Phone
@@ -744,6 +714,99 @@ public sealed class KeepRequest : BaseEntity
             occurredAtUtc: nowUtc);
 
         return Result<KeepRequestEvent>.Success(contactEvent);
+    }
+
+    /// <summary>
+    /// Logs outbound contact during the exact active unresolved-feedback review state (GAP-018 / G7b).
+    /// Only valid when HasActiveUnresolvedFeedbackReview. Updates LastBusinessActivityAt only;
+    /// does not set first response, clear attention, change status, or affect any review/feedback fields.
+    /// </summary>
+    public Result<KeepRequestEvent> LogClosedFeedbackFollowUpExternalContact(
+        CommunicationChannel channel,
+        ExternalContactOutcome? outcome,
+        bool? requiresBusinessFollowUp,
+        string? summary,
+        Guid actorAccountUserId,
+        string actorDisplayName,
+        DateTime nowUtc)
+    {
+        if (nowUtc == default)
+            throw new ArgumentException("nowUtc must be a valid UTC timestamp.", nameof(nowUtc));
+        if (actorAccountUserId == Guid.Empty)
+            throw new ArgumentException("Actor account user ID is required.", nameof(actorAccountUserId));
+        if (string.IsNullOrWhiteSpace(actorDisplayName))
+            throw new ArgumentException("Actor display name is required.", nameof(actorDisplayName));
+
+        if (!HasActiveUnresolvedFeedbackReview)
+            return Result<KeepRequestEvent>.Failure(KeepRequestErrors.TerminalState);
+
+        var (validationError, normalizedSummary) = ValidateOutboundContact(channel, outcome, requiresBusinessFollowUp, summary);
+        if (validationError is not null)
+            return Result<KeepRequestEvent>.Failure(validationError);
+
+        LastBusinessActivityAt = nowUtc;
+
+        var contactEvent = KeepRequestEvent.CreateExternalContactLogged(
+            Id, AccountId, actorAccountUserId, actorDisplayName.Trim(),
+            ExternalContactDirection.Outbound, channel, outcome,
+            requiresFollowUp: requiresBusinessFollowUp,
+            summary: normalizedSummary,
+            setFirstResponse: false,
+            clearedAttention: false,
+            occurredAtUtc: nowUtc);
+
+        return Result<KeepRequestEvent>.Success(contactEvent);
+    }
+
+    private static (Error? Error, string? NormalizedSummary) ValidateOutboundContact(
+        CommunicationChannel channel,
+        ExternalContactOutcome? outcome,
+        bool? requiresBusinessFollowUp,
+        string? summary)
+    {
+        if (channel is not (CommunicationChannel.Phone or CommunicationChannel.Sms or CommunicationChannel.Email))
+            return (KeepRequestErrors.ExternalContactInvalidOutboundChannel, null);
+
+        // Guard undefined outcome before pattern matching — domain returns failure for user-shaped invalid input.
+        if (outcome.HasValue && !Enum.IsDefined(outcome.Value))
+            return (KeepRequestErrors.ExternalContactOutcomeNotAllowed, null);
+
+        if (channel == CommunicationChannel.Phone)
+        {
+            if (!outcome.HasValue)
+                return (KeepRequestErrors.ExternalContactOutcomeRequired, null);
+
+            if (outcome.Value is ExternalContactOutcome.SpokeWithCustomer or ExternalContactOutcome.LeftVoicemail)
+            {
+                if (!requiresBusinessFollowUp.HasValue)
+                    return (KeepRequestErrors.ExternalContactFollowUpRequired, null);
+            }
+            else
+            {
+                // NoAnswer / WrongNumber: follow-up does not apply (ADR-216).
+                if (requiresBusinessFollowUp.HasValue)
+                    return (KeepRequestErrors.ExternalContactFollowUpNotAllowed, null);
+            }
+        }
+        else
+        {
+            // Sms / Email: no outcome, follow-up required, summary required.
+            if (outcome.HasValue)
+                return (KeepRequestErrors.ExternalContactOutcomeNotAllowed, null);
+
+            if (!requiresBusinessFollowUp.HasValue)
+                return (KeepRequestErrors.ExternalContactFollowUpRequired, null);
+        }
+
+        var normalizedSummary = string.IsNullOrWhiteSpace(summary) ? null : summary.Trim();
+
+        if (channel is CommunicationChannel.Sms or CommunicationChannel.Email && normalizedSummary is null)
+            return (KeepRequestErrors.ExternalContactSummaryRequired, null);
+
+        if (normalizedSummary?.Length > 4000)
+            return (KeepRequestErrors.ExternalContactSummaryTooLong, null);
+
+        return (null, normalizedSummary);
     }
 
     // Enums. prefix required: AttentionReason and PriorityBand instance properties shadow the

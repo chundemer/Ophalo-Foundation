@@ -680,4 +680,168 @@ public class KeepRequestExternalContactTests
         Assert.False(ev.ExternalContactClearedAttention);
         Assert.Equal("Customer spoke in person", ev.Content);
     }
+
+    // -------------------------------------------------------------------
+    // LogClosedFeedbackFollowUpExternalContact — G7b
+    // -------------------------------------------------------------------
+
+    static KeepRequest NewExactReviewStateRequest()
+    {
+        var r = NewCustomerRequest();
+        r.ChangeStatus(KeepRequestStatus.Resolved, null, ActorId, ActorName, Now);
+        r.ChangeStatus(KeepRequestStatus.Closed, null, ActorId, ActorName, Now);
+        r.SubmitFeedback(wasResolved: false, comment: "Not satisfied", priorityResponseTargetMinutes: 60, nowUtc: Now);
+        return r;
+    }
+
+    [Fact]
+    public void FollowUp_success_returns_event_and_updates_activity()
+    {
+        var request = NewExactReviewStateRequest();
+        var before = request.LastBusinessActivityAt;
+
+        var result = request.LogClosedFeedbackFollowUpExternalContact(
+            CommunicationChannel.Phone, ExternalContactOutcome.SpokeWithCustomer,
+            requiresBusinessFollowUp: false, summary: null,
+            ActorId, ActorName, Now.AddHours(1));
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(Now.AddHours(1), request.LastBusinessActivityAt);
+        Assert.NotEqual(before, request.LastBusinessActivityAt);
+    }
+
+    [Fact]
+    public void FollowUp_does_not_set_first_response()
+    {
+        var request = NewExactReviewStateRequest();
+        Assert.Null(request.FirstRespondedAtUtc);
+
+        var result = request.LogClosedFeedbackFollowUpExternalContact(
+            CommunicationChannel.Phone, ExternalContactOutcome.SpokeWithCustomer,
+            requiresBusinessFollowUp: false, summary: null,
+            ActorId, ActorName, Now.AddHours(1));
+
+        Assert.True(result.IsSuccess);
+        var ev = result.Value;
+        Assert.False(ev.ExternalContactSetFirstResponse);
+        Assert.Null(request.FirstRespondedAtUtc);
+        Assert.Null(request.FirstResponderAccountUserId);
+    }
+
+    [Fact]
+    public void FollowUp_does_not_clear_attention()
+    {
+        var request = NewExactReviewStateRequest();
+        Assert.Equal(AttentionLevel.Waiting, request.AttentionLevel);
+        Assert.Equal(AttentionReason.UnresolvedFeedback, request.AttentionReason);
+
+        var result = request.LogClosedFeedbackFollowUpExternalContact(
+            CommunicationChannel.Phone, ExternalContactOutcome.SpokeWithCustomer,
+            requiresBusinessFollowUp: false, summary: null,
+            ActorId, ActorName, Now.AddHours(1));
+
+        Assert.True(result.IsSuccess);
+        var ev = result.Value;
+        Assert.False(ev.ExternalContactClearedAttention);
+        Assert.Equal(AttentionLevel.Waiting, request.AttentionLevel);
+        Assert.Equal(AttentionReason.UnresolvedFeedback, request.AttentionReason);
+    }
+
+    [Fact]
+    public void FollowUp_leaves_status_and_feedback_fields_unchanged()
+    {
+        var request = NewExactReviewStateRequest();
+
+        request.LogClosedFeedbackFollowUpExternalContact(
+            CommunicationChannel.Phone, ExternalContactOutcome.SpokeWithCustomer,
+            requiresBusinessFollowUp: false, summary: null,
+            ActorId, ActorName, Now.AddHours(1));
+
+        Assert.Equal(KeepRequestStatus.Closed, request.Status);
+        Assert.False(request.FeedbackWasResolved);
+        Assert.Null(request.FeedbackReviewedAtUtc);
+        Assert.NotNull(request.FeedbackSubmittedAtUtc);
+    }
+
+    [Fact]
+    public void FollowUp_event_has_correct_direction_and_flags()
+    {
+        var request = NewExactReviewStateRequest();
+
+        var result = request.LogClosedFeedbackFollowUpExternalContact(
+            CommunicationChannel.Sms, outcome: null,
+            requiresBusinessFollowUp: true, summary: "Left a message",
+            ActorId, ActorName, Now.AddHours(1));
+
+        Assert.True(result.IsSuccess);
+        var ev = result.Value;
+        Assert.Equal(ExternalContactDirection.Outbound, ev.ExternalContactDirection);
+        Assert.Equal(CommunicationChannel.Sms, ev.CommunicationChannel);
+        Assert.False(ev.ExternalContactSetFirstResponse);
+        Assert.False(ev.ExternalContactClearedAttention);
+        Assert.Equal("Left a message", ev.Content);
+    }
+
+    [Fact]
+    public void FollowUp_blocked_on_ordinary_closed_no_feedback()
+    {
+        var request = NewCustomerRequest();
+        request.ChangeStatus(KeepRequestStatus.Resolved, null, ActorId, ActorName, Now);
+        request.ChangeStatus(KeepRequestStatus.Closed, null, ActorId, ActorName, Now);
+
+        var result = request.LogClosedFeedbackFollowUpExternalContact(
+            CommunicationChannel.Phone, ExternalContactOutcome.SpokeWithCustomer,
+            requiresBusinessFollowUp: false, summary: null,
+            ActorId, ActorName, Now.AddHours(1));
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(KeepRequestErrors.TerminalState.Code, result.Error.Code);
+    }
+
+    [Fact]
+    public void FollowUp_blocked_on_closed_positive_feedback()
+    {
+        var request = NewCustomerRequest();
+        request.ChangeStatus(KeepRequestStatus.Resolved, null, ActorId, ActorName, Now);
+        request.ChangeStatus(KeepRequestStatus.Closed, null, ActorId, ActorName, Now);
+        request.SubmitFeedback(wasResolved: true, comment: "Great job", priorityResponseTargetMinutes: 60, nowUtc: Now);
+
+        var result = request.LogClosedFeedbackFollowUpExternalContact(
+            CommunicationChannel.Phone, ExternalContactOutcome.SpokeWithCustomer,
+            requiresBusinessFollowUp: false, summary: null,
+            ActorId, ActorName, Now.AddHours(1));
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(KeepRequestErrors.TerminalState.Code, result.Error.Code);
+    }
+
+    [Fact]
+    public void FollowUp_blocked_after_feedback_already_reviewed()
+    {
+        var request = NewExactReviewStateRequest();
+        request.MarkFeedbackReviewed(null, ActorId, ActorName, Now.AddMinutes(10));
+
+        var result = request.LogClosedFeedbackFollowUpExternalContact(
+            CommunicationChannel.Phone, ExternalContactOutcome.SpokeWithCustomer,
+            requiresBusinessFollowUp: false, summary: null,
+            ActorId, ActorName, Now.AddHours(1));
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(KeepRequestErrors.TerminalState.Code, result.Error.Code);
+    }
+
+    [Fact]
+    public void FollowUp_blocked_on_cancelled_request()
+    {
+        var request = NewCustomerRequest();
+        request.ChangeStatus(KeepRequestStatus.Cancelled, null, ActorId, ActorName, Now);
+
+        var result = request.LogClosedFeedbackFollowUpExternalContact(
+            CommunicationChannel.Phone, ExternalContactOutcome.SpokeWithCustomer,
+            requiresBusinessFollowUp: false, summary: null,
+            ActorId, ActorName, Now.AddHours(1));
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(KeepRequestErrors.TerminalState.Code, result.Error.Code);
+    }
 }

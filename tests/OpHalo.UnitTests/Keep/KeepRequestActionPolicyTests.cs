@@ -496,4 +496,67 @@ public class KeepRequestActionPolicyTests
         var d = KeepRequestActionPolicy.Evaluate(MakeReceived(), OwnerWrite());
         Assert.DoesNotContain(KeepRequestStatus.Received, d.AllowedStatuses);
     }
+
+    // -----------------------------------------------------------------------
+    // G7b — CanLogExternalContact for closed unresolved-feedback review state
+    // -----------------------------------------------------------------------
+
+    [Fact]
+    public void G7b_Owner_exact_active_review_can_log_external_contact()
+    {
+        var r = MakeClosed(withNegativeFeedback: true);
+        Assert.True(KeepRequestActionPolicy.Evaluate(r, OwnerWrite()).CanLogExternalContact);
+    }
+
+    [Fact]
+    public void G7b_Admin_exact_active_review_can_log_external_contact()
+    {
+        var r = MakeClosed(withNegativeFeedback: true);
+        Assert.True(KeepRequestActionPolicy.Evaluate(r, AdminWrite()).CanLogExternalContact);
+    }
+
+    [Fact]
+    public void G7b_Operator_exact_active_review_cannot_log_external_contact()
+    {
+        var r = MakeClosed(withNegativeFeedback: true);
+        Assert.False(KeepRequestActionPolicy.Evaluate(r, OperatorWrite()).CanLogExternalContact);
+    }
+
+    [Fact]
+    public void G7b_ordinary_closed_no_feedback_cannot_log_external_contact()
+    {
+        Assert.False(KeepRequestActionPolicy.Evaluate(MakeClosed(), OwnerWrite()).CanLogExternalContact);
+    }
+
+    [Fact]
+    public void G7b_closed_positive_feedback_cannot_log_external_contact()
+    {
+        var r = MakeReceived();
+        r.ChangeStatus(KeepRequestStatus.Resolved, null, ActorId, ActorName, Now.AddHours(-2));
+        r.ChangeStatus(KeepRequestStatus.Closed, null, ActorId, ActorName, Now.AddHours(-1));
+        r.SubmitFeedback(wasResolved: true, comment: "Great", priorityResponseTargetMinutes: 60, Now.AddMinutes(-30));
+        Assert.False(KeepRequestActionPolicy.Evaluate(r, OwnerWrite()).CanLogExternalContact);
+    }
+
+    [Fact]
+    public void G7b_closed_feedback_already_reviewed_cannot_log_external_contact()
+    {
+        var r = MakeClosed(withNegativeFeedback: true);
+        r.MarkFeedbackReviewed(null, ActorId, ActorName, Now.AddMinutes(-10));
+        Assert.False(KeepRequestActionPolicy.Evaluate(r, OwnerWrite()).CanLogExternalContact);
+    }
+
+    [Fact]
+    public void G7b_cancelled_cannot_log_external_contact()
+    {
+        Assert.False(KeepRequestActionPolicy.Evaluate(MakeCancelled(), OwnerWrite()).CanLogExternalContact);
+    }
+
+    [Fact]
+    public void G7b_OffSeason_exact_active_review_cannot_log_external_contact()
+    {
+        var r = MakeClosed(withNegativeFeedback: true);
+        var offSeason = new KeepRequestActionContext(AccountUserRole.Owner, CanWrite: false, null, null);
+        Assert.False(KeepRequestActionPolicy.Evaluate(r, offSeason).CanLogExternalContact);
+    }
 }

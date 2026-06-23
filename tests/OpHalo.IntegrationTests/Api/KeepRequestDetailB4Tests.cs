@@ -380,6 +380,57 @@ public sealed class KeepRequestDetailB4Tests : IClassFixture<KeepApiWebFactory>,
         Assert.Equal("waiting",             body.GetProperty("attentionLevel").GetString());
     }
 
+    // =========================================================================
+    // G7b — Owner/Admin exact active review state exposes contact actions
+    // =========================================================================
+
+    [Fact]
+    public async Task G7b_Owner_ClosedUnresolvedFeedback_HasCanLogExternalContactAndContactActions()
+    {
+        var response = await AuthRequest(_ownerCookie).GetAsync($"/keep/requests/{_closedRequestId}");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.True(body.GetProperty("availableActions").GetProperty("canLogExternalContact").GetBoolean());
+
+        var contact = body.GetProperty("contactActions").EnumerateArray().ToList();
+        Assert.NotEmpty(contact);
+        Assert.Contains(contact, a => a.GetProperty("type").GetString() == "call");
+    }
+
+    [Fact]
+    public async Task G7b_Admin_ClosedUnresolvedFeedback_HasContactActions()
+    {
+        var response = await AuthRequest(_adminCookie).GetAsync($"/keep/requests/{_closedRequestId}");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.True(body.GetProperty("availableActions").GetProperty("canLogExternalContact").GetBoolean());
+        Assert.NotEmpty(body.GetProperty("contactActions").EnumerateArray().ToList());
+    }
+
+    [Fact]
+    public async Task G7b_Operator_ClosedUnresolvedFeedback_HasNoContactActions()
+    {
+        var response = await AuthRequest(_operatorCookie).GetAsync($"/keep/requests/{_closedRequestId}");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.False(body.GetProperty("availableActions").GetProperty("canLogExternalContact").GetBoolean());
+        Assert.Empty(body.GetProperty("contactActions").EnumerateArray().ToList());
+    }
+
+    [Fact]
+    public async Task G7b_Viewer_ClosedUnresolvedFeedback_HasNoContactActions()
+    {
+        var response = await AuthRequest(_viewerCookie).GetAsync($"/keep/requests/{_closedRequestId}");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.False(body.GetProperty("availableActions").GetProperty("canLogExternalContact").GetBoolean());
+        Assert.Empty(body.GetProperty("contactActions").EnumerateArray().ToList());
+    }
+
     private HttpClient AuthRequest(string cookie)
     {
         var client = _factory.CreateClient();

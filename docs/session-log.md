@@ -1,10 +1,10 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-06-22 (G7a implemented; pending commit approval)
+**Last updated:** 2026-06-23 (G7b complete; G7c pre-work required next)
 **Branch:** `main` (no remote yet)
-**Current baseline:** 1190 tests (622 unit · 14 architecture · 554 integration).
+**Current baseline:** 1220 tests (643 unit · 14 architecture · 563 integration).
 **Next free ADR:** ADR-336
-**Next batch: G7b — Owner/Admin outbound external-contact exception for Closed unresolved-feedback review state — PRE-WORK REQUIRED.**
+**Next batch: G7c — positive-comment visibility correction, ADR/deferred-ledger reconciliation, build-log/058, full regression, and G7 completion.**
 
 ---
 
@@ -149,9 +149,9 @@ Authoritative detail: ADR-330–335 and build-log/056.
 
 G7 is split into three independently compiling sessions:
 
-- **G7a (complete; pending approval):** block generic acknowledgement of `UnresolvedFeedback` and
+- **G7a (complete; committed `a9e87bd`):** block generic acknowledgement of `UnresolvedFeedback` and
   remove its action affordance.
-- **G7b (pre-work required after G7a):** Owner/Admin outbound external-contact exception for exact
+- **G7b (complete):** Owner/Admin outbound external-contact exception for exact
   Closed unresolved-feedback review state, including shared policy and list/detail affordance parity.
 - **G7c (pre-work required after G7b):** positive-comment visibility correction, ADR/deferred-ledger
   reconciliation, build-log/058, full regression, and G7 completion.
@@ -179,7 +179,7 @@ G7 is split into three independently compiling sessions:
 - ADR-282 is not implemented: navigation belongs to Session 6. G7c corrects its status/source but
   adds no navigation DTO, route, service, or second mutation command.
 
-### G7a — Generic acknowledgement hardening — COMPLETE (pending commit approval)
+### G7a — Generic acknowledgement hardening — COMPLETE
 
 - `KeepRequestErrors`: added `AttentionRequiresFeedbackReview` (code `KeepRequest.AttentionRequiresFeedbackReview`).
 - `KeepRequest.AcknowledgeAttention`: rejects `AttentionReason.UnresolvedFeedback` with new error before any mutation.
@@ -189,6 +189,168 @@ G7 is split into three independently compiling sessions:
 - Integration: added G7a seed (Closed + negative feedback) and `AcknowledgeAttention_UnresolvedFeedbackAttention_Returns409AndLeavesStateUnchanged` (version/attention/events unchanged, affordances correct).
 - Full suite: 1190 tests (622 unit · 14 architecture · 554 integration). Build clean. `git diff --check` clean.
 - Commit: `a9e87bd`.
+
+### G7b — Closed unresolved-feedback outbound contact exception — COMPLETE
+
+**Purpose:** fix GAP-018 / DEF-064 without reopening general terminal external-contact logging.
+Owner/Admin may log outbound external contact only while a request is in the exact active
+unresolved-feedback review state. This is a review-follow-up affordance, not a reopen path.
+
+**Files to modify:**
+
+1. `src/OpHalo.Keep.Core/Entities/KeepRequest.cs`
+   - Add one centralized O(1) predicate, preferably `public bool HasActiveUnresolvedFeedbackReview`,
+     with the exact rule:
+     - `Status == KeepRequestStatus.Closed`
+     - `FeedbackSubmittedAtUtc.HasValue`
+     - `FeedbackWasResolved == false`
+     - `!FeedbackReviewedAtUtc.HasValue`
+     - `AttentionLevel != AttentionLevel.None`
+     - `AttentionReason == AttentionReason.UnresolvedFeedback`
+   - Add a dedicated outbound-only domain method for the exception, e.g.
+     `LogClosedFeedbackFollowUpExternalContact(...)`.
+   - Reuse/extract existing outbound channel/outcome/summary validation from
+     `LogOutboundExternalContact`; do not loosen normal terminal behavior.
+   - Effects for the exception:
+     - create the same internal `ExternalContactLogged` event shape;
+     - update `LastBusinessActivityAt = nowUtc`;
+     - `ExternalContactSetFirstResponse == false`;
+     - `ExternalContactClearedAttention == false`;
+     - do not change status, `TerminatedAtUtc`, `ExpiresAtUtc`, feedback review fields, attention
+       fields, first-response fields, participants, or customer-visible events.
+   - `LogOutboundExternalContact` and `LogInboundExternalContact` remain terminal-blocked for normal
+     terminal requests. Cancelled always remains blocked.
+
+2. `src/OpHalo.Keep.Application/Requests/KeepRequestActionPolicy.cs`
+   - `CanLogExternalContact` becomes true when either:
+     - request is non-terminal; or
+     - actor is Owner/Admin and `request.HasActiveUnresolvedFeedbackReview`.
+   - Operator remains false for the terminal exception. OffSeason/read-only still returns `DenyAll`
+     before this logic.
+   - `CanSendBusinessUpdate`, status transitions, acknowledgement, participation, watch/mute, and
+     feedback-review policy are otherwise unchanged.
+
+3. `src/OpHalo.Keep.Application/Requests/LogExternalContactService.cs`
+   - Keep current auth, feature, OffSeason, row-auth, version-check, and parse ordering.
+   - After row load/version check and direction/channel/outcome validation:
+     - If `request.HasActiveUnresolvedFeedbackReview` and direction is outbound:
+       - Owner/Admin call the new closed-feedback-follow-up domain method.
+       - Operator returns `auth.forbidden` / 403, even if row-visible through participation.
+     - If direction is inbound, keep the existing terminal-domain path so it returns
+       `KeepRequest.TerminalState` / 409.
+     - All non-exact Closed cases and every Cancelled case keep existing terminal behavior.
+   - Commit remains the existing G5 versioned `CommitAsync` path with the exhaustive switch.
+
+4. `src/OpHalo.Keep.Application/Requests/GetKeepRequestListService.cs`
+   - Replace the local post-close predicate with `request.HasActiveUnresolvedFeedbackReview`.
+   - Remove hard-coded terminal/post-close suppression where it hides a policy-approved Owner/Admin
+     contact action.
+   - For exact post-close rows, Owner/Admin quick actions should include:
+     - `open_detail`
+     - `review_feedback` when `CanMarkFeedbackReviewed`
+     - `contact_customer` when contact methods exist and `CanLogExternalContact`
+   - Contact actions for exact post-close rows should be emitted only when
+     `actionDecision.CanLogExternalContact` is true. OffSeason still suppresses them through
+     `CanWrite=false` in the policy decision.
+   - Do not add `post_customer_update`, `acknowledge_attention`, status, assignment, watch, or mute
+     actions to terminal rows.
+
+5. `src/OpHalo.Keep.Application/Requests/KeepRequestDetailMapper.cs`
+   - Detail `ContactActions` must also respect shared action policy. Use the existing
+     `availableActions.CanLogExternalContact` value rather than only `canOperate`.
+   - Result: Owner/Admin exact review state shows contact launchers; other terminal states and
+     Operator/Viewer do not. `AvailableActions.CanLogExternalContact` remains policy-derived.
+
+**Tests to add/update:**
+
+1. `tests/OpHalo.UnitTests/Keep/KeepRequestExternalContactTests.cs`
+   - Add domain success proof for `LogClosedFeedbackFollowUpExternalContact` on exact
+     Closed + negative/unreviewed + active `UnresolvedFeedback`:
+     - returns `ExternalContactLogged`;
+     - updates `LastBusinessActivityAt`;
+     - does not set first response;
+     - does not clear attention;
+     - leaves status/feedback/review/attention fields unchanged.
+   - Add domain rejection proofs for ordinary Closed, positive feedback, already reviewed, cleared
+     attention, and Cancelled.
+   - Preserve existing tests proving normal `LogOutboundExternalContact` remains terminal-blocked.
+
+2. `tests/OpHalo.UnitTests/Keep/KeepRequestActionPolicyTests.cs`
+   - Add G7b policy tests:
+     - Owner exact active review: `CanLogExternalContact == true`.
+     - Admin exact active review: true.
+     - Operator exact active review: false.
+     - ordinary Closed / positive feedback / already reviewed / cleared attention / Cancelled: false.
+     - OffSeason/read-only context: false via `DenyAll`.
+
+3. `tests/OpHalo.UnitTests/Keep/KeepRequestListServiceTests.cs`
+   - Add/adjust post-close list tests:
+     - Owner exact active review with phone/email gets `review_feedback`, `contact_customer`, and
+       concrete contact actions.
+     - Operator or OffSeason exact active review gets no contact action and no review action.
+     - ordinary Closed history rows still have no contact actions.
+
+4. `tests/OpHalo.IntegrationTests/Api/KeepRequestExternalContactApiTests.cs`
+   - Add exact G7b seeds: Closed + negative feedback + active `UnresolvedFeedback` for Owner/Admin
+     success; a row-visible Operator variant if needed to prove 403 rather than 404.
+   - Add Owner/Admin outbound success test:
+     - sends current `X-Keep-Request-Version`;
+     - receives 200 and rotated version;
+     - response detail has `availableActions.canLogExternalContact == true`;
+     - event timeline contains internal `external_contact_logged` with `externalContactSetFirstResponse=false`
+       and `externalContactClearedAttention=false`;
+     - fresh DB read proves status, feedback review fields, attention fields, first-response fields,
+       and customer-visible page are unchanged except `LastBusinessActivityAt`.
+   - Add Operator exact-state direct attempt returns 403.
+   - Add inbound exact-state attempt returns 409 `KeepRequest.TerminalState`.
+   - Keep/update existing ordinary terminal request test: ordinary Closed still returns 409
+     `KeepRequest.TerminalState`.
+
+5. `tests/OpHalo.IntegrationTests/Api/KeepRequestDetailB4Tests.cs` or the narrow existing detail
+   fixture that owns Closed unresolved-feedback detail coverage.
+   - Assert Owner/Admin exact active review detail has `availableActions.canLogExternalContact == true`
+     and contact launchers.
+   - Assert Operator/Viewer detail does not expose contact launchers for the same terminal review state.
+
+6. `docs/session-log.md`
+   - Mark G7b complete only after tests are green; do not add build-log/058 yet unless G7 is being
+     completed. G7c owns the final G7 ledger/build-log sweep.
+
+**G7b result:**
+
+- `KeepRequest`: `HasActiveUnresolvedFeedbackReview` property (exact 6-field predicate); extracted
+  `ValidateOutboundContact` private helper; new `LogClosedFeedbackFollowUpExternalContact` domain
+  method (outbound-only, `setFirstResponse=false`, `clearedAttention=false`, only updates
+  `LastBusinessActivityAt`). `LogOutboundExternalContact` refactored to use extracted helper.
+- `KeepRequestActionPolicy`: `CanLogExternalContact = isNonTerminal || (isOwnerAdmin && request.HasActiveUnresolvedFeedbackReview)`.
+- `LogExternalContactService`: outbound branch gates on `HasActiveUnresolvedFeedbackReview`; Owner/Admin
+  call new domain method; Operator returns 403; inbound path unchanged (TerminalState).
+- `GetKeepRequestListService`: `isPostClose` replaced with `r.HasActiveUnresolvedFeedbackReview`;
+  `BuildQuickActions` post-close branch adds `contact_customer` when policy approves; `BuildContactActions`
+  guard removes hard-coded `IsTerminal || isPostClose` (policy now owns terminal filtering).
+- `KeepRequestDetailMapper`: `BuildContactActions` uses `availableActions.CanLogExternalContact` instead of `canOperate`.
+- 2 existing list unit tests updated (missing `FeedbackSubmittedAtUtc`/`FeedbackWasResolved` fields on the predicate).
+- 1 existing B5 integration test updated (`Closed_unresolved_feedback_row_exposes_only_review_feedback_and_open_detail` → now includes `contact_customer` and call action for Owner).
+- 30 new tests (12 unit domain/policy/list + 4 EC integration + 4 detail B4 + 1 B5 update).
+- Full suite: **1220 tests (643 unit · 14 architecture · 563 integration).** Build clean. `git diff --check` clean.
+
+**Do not touch in G7b:**
+
+- No new API route, DTO field, command, migration, persistence method, notification, customer-visible
+  event, customer reply/follow-up delivery, status reopen, review completion, or navigation DTO.
+- Do not mark feedback reviewed; only `MarkFeedbackReviewedService` completes review.
+- Do not change positive-feedback comment visibility; G7c owns that.
+- Do not change ADR/deferred statuses or create build-log/058 in this batch unless explicitly asked.
+
+**Verification target:**
+
+- Focused unit/integration suites for the five touched test files.
+- Full unit + architecture.
+- Run focused external-contact/list/detail integration tests.
+- `git diff --check`.
+- Expected count starts from G7a baseline: 1190 tests (622 unit · 14 architecture · 554 integration).
+
+**Open decisions:** none. Product behavior is locked by G7-wide boundaries above.
 
 ## G8 — Edge Hardening, Ledger Reconciliation, Completion Gate — PLANNED
 

@@ -72,7 +72,7 @@ public static class KeepRequestActionPolicy
             CanSendBusinessUpdate:    isNonTerminal,
             CanAddInternalNote:       true,
             CanAcknowledgeAttention:  hasAttention,
-            CanLogExternalContact:    isNonTerminal,
+            CanLogExternalContact:    isNonTerminal || (isOwnerAdmin && request.HasActiveUnresolvedFeedbackReview),
             CanAssignResponsible:     isOwnerAdmin && isNonTerminal,
             CanSelfAssignResponsible: isOperator && isNonTerminal,
             CanClearResponsible:      isOwnerAdmin && isNonTerminal,

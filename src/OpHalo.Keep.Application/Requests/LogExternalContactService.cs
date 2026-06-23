@@ -135,9 +135,23 @@ public sealed class LogExternalContactService(
 
         if (direction == ExternalContactDirection.Outbound)
         {
-            domainResult = request.LogOutboundExternalContact(
-                channel.Value, outcome, command.RequiresBusinessFollowUp,
-                command.Summary, currentUser.UserId, actorDisplayName, nowUtc);
+            if (request.HasActiveUnresolvedFeedbackReview)
+            {
+                // G7b: Owner/Admin may log outbound contact during active unresolved-feedback review.
+                // Operator is forbidden even if row-visible via participation.
+                if (userSnapshot.Role is not (AccountUserRole.Owner or AccountUserRole.Admin))
+                    return Result<KeepRequestDetailResult>.Failure(Forbidden);
+
+                domainResult = request.LogClosedFeedbackFollowUpExternalContact(
+                    channel.Value, outcome, command.RequiresBusinessFollowUp,
+                    command.Summary, currentUser.UserId, actorDisplayName, nowUtc);
+            }
+            else
+            {
+                domainResult = request.LogOutboundExternalContact(
+                    channel.Value, outcome, command.RequiresBusinessFollowUp,
+                    command.Summary, currentUser.UserId, actorDisplayName, nowUtc);
+            }
         }
         else
         {

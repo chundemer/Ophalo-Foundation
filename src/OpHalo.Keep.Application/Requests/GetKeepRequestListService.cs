@@ -535,9 +535,7 @@ public sealed class GetKeepRequestListService(
         KeepRequestParticipantSummary? participation,
         string normalizedView)
     {
-        var isPostClose = r.Status == KeepRequestStatus.Closed
-            && r.AttentionReason == AttentionReason.UnresolvedFeedback
-            && r.AttentionLevel != AttentionLevel.None;
+        var isPostClose = r.HasActiveUnresolvedFeedbackReview;
 
         var firstResponsePending = !r.IsTerminal
             && r.FirstRespondedAtUtc is null
@@ -726,10 +724,15 @@ public sealed class GetKeepRequestListService(
 
         if (isPostClose)
         {
-            // ReviewFeedback gated by policy; suppressed for OffSeason and non-Owner/Admin (ADR-328).
-            return actionDecision.CanMarkFeedbackReviewed
-                ? [openDetail, QuickActionDefs.ReviewFeedback]
-                : [openDetail];
+            // ReviewFeedback and ContactCustomer gated by policy; suppressed for OffSeason and non-Owner/Admin (ADR-328 / G7b).
+            var postCloseActions = new List<KeepQuickAction> { openDetail };
+            if (actionDecision.CanMarkFeedbackReviewed)
+                postCloseActions.Add(QuickActionDefs.ReviewFeedback);
+            var postCloseHasContact = !string.IsNullOrWhiteSpace(r.CustomerPhone)
+                || !string.IsNullOrWhiteSpace(r.CustomerEmail);
+            if (postCloseHasContact && actionDecision.CanLogExternalContact)
+                postCloseActions.Add(QuickActionDefs.ContactCustomer);
+            return postCloseActions;
         }
 
         if (!canOperate)
@@ -768,7 +771,7 @@ public sealed class GetKeepRequestListService(
     private static IReadOnlyList<ContactActionItem> BuildContactActions(
         KeepRequest r, bool canOperate, bool isPostClose, KeepRequestActionDecision actionDecision)
     {
-        if (!canOperate || r.IsTerminal || isPostClose || !actionDecision.CanLogExternalContact)
+        if (!canOperate || !actionDecision.CanLogExternalContact)
             return [];
 
         var actions = new List<ContactActionItem>();

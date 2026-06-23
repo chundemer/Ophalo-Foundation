@@ -300,8 +300,9 @@ public sealed class KeepRequestListB5Tests : IClassFixture<KeepApiWebFactory>, I
     }
 
     [Fact]
-    public async Task Closed_unresolved_feedback_row_exposes_only_review_feedback_and_open_detail()
+    public async Task Closed_unresolved_feedback_row_exposes_review_feedback_and_contact_for_owner()
     {
+        // G7b: Owner in exact active review state gets review_feedback + contact_customer + open_detail.
         var body = await GetListAsync(_ownerCookie);
         Assert.NotNull(body);
 
@@ -310,10 +311,12 @@ public sealed class KeepRequestListB5Tests : IClassFixture<KeepApiWebFactory>, I
 
         Assert.Contains("open_detail", actionCodes);
         Assert.Contains("review_feedback", actionCodes);
-        Assert.DoesNotContain("contact_customer", actionCodes);
+        Assert.Contains("contact_customer", actionCodes);
         Assert.DoesNotContain("post_customer_update", actionCodes);
         Assert.DoesNotContain("acknowledge_attention", actionCodes);
-        Assert.Empty(row.Actions.ContactActions);
+        // Customer has phone but no email — one call contact action.
+        Assert.Single(row.Actions.ContactActions);
+        Assert.Equal("call", row.Actions.ContactActions[0].Type);
     }
 
     [Fact]

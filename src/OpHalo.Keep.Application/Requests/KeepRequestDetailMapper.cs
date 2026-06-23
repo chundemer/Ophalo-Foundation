@@ -82,7 +82,7 @@ internal static class KeepRequestDetailMapper
         FeedbackReviewNote: feedbackCommentVisible ? request.FeedbackReviewNote : null,
         FeedbackReviewAgeBucket: ComputeReviewAgeBucket(request, nowUtc),
         FeedbackReviewDueAtUtc: ComputeReviewDueAtUtc(request),
-        ContactActions: BuildContactActions(canOperate, request.CustomerPhone, request.CustomerEmail),
+        ContactActions: BuildContactActions(availableActions.CanLogExternalContact, request.CustomerPhone, request.CustomerEmail),
         Participants: participants.Select(MapParticipant).ToList(),
         CurrentUserParticipation: currentUserParticipation,
         Events: events.Select(MapEvent).ToList(),
@@ -155,9 +155,9 @@ internal static class KeepRequestDetailMapper
     }
 
     private static IReadOnlyList<ContactActionItem> BuildContactActions(
-        bool canOperate, string phone, string? email)
+        bool canLogExternalContact, string phone, string? email)
     {
-        if (!canOperate) return [];
+        if (!canLogExternalContact) return [];
 
         var actions = new List<ContactActionItem>();
         if (!string.IsNullOrWhiteSpace(phone))

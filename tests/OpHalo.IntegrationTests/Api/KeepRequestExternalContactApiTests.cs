@@ -48,7 +48,16 @@ public sealed class KeepRequestExternalContactApiTests : IClassFixture<KeepApiWe
     private Guid _closedRequestId;
     private Guid _closedRequestVersion;
 
+    // G7b: exact active unresolved-feedback review state (Owner + Admin success; Operator 403)
+    private Guid _g7bRequestId;
+    private Guid _g7bRequestVersion;
+    private string _g7bPageToken = string.Empty;
+    // G7b: Operator row-visible via participation (proves 403 not 404)
+    private Guid _g7bOperatorRequestId;
+    private Guid _g7bOperatorRequestVersion;
+
     private string _ownerCookie    = string.Empty;
+    private string _adminCookie    = string.Empty;
     private string _operatorCookie = string.Empty;
     private string _viewerCookie   = string.Empty;
 
@@ -106,6 +115,19 @@ public sealed class KeepRequestExternalContactApiTests : IClassFixture<KeepApiWe
         db.Users.Add(operatorUser);
         db.AccountUsers.Add(operatorMember);
 
+        // --- Admin ---
+        var adminUser = User.CreateVerified("admin@ec-tests.com", "EC Admin", now);
+        var adminEmail = "admin@ec-tests.com";
+        var adminMember = AccountUser.CreatePendingInvite(
+            _accountId, adminEmail, EmailNormalizer.Normalize(adminEmail),
+            AccountUserRole.Admin,
+            inviteTokenHash: "admin_ec",
+            inviteExpiresAtUtc: now.AddDays(7),
+            nowUtc: now);
+        adminMember.Activate(adminUser.Id, now);
+        db.Users.Add(adminUser);
+        db.AccountUsers.Add(adminMember);
+
         // --- Viewer ---
         var viewerUser = User.CreateVerified("viewer@ec-tests.com", null, now);
         var viewerEmail = "viewer@ec-tests.com";
@@ -153,7 +175,7 @@ public sealed class KeepRequestExternalContactApiTests : IClassFixture<KeepApiWe
         (_customerPageRequestId, _customerPageRequestVersion) = await SeedRequestAsync(
             db, _accountId, customer.Id, "EC-PGE", _customerPageToken, now);
 
-        // Closed (terminal) request.
+        // Closed (terminal) request — ordinary, no feedback.
         var closedRequest = KeepRequest.CreateFromCustomerIntake(
             _accountId, customer.Id,
             "John Customer", "0400000001", null,
@@ -167,12 +189,55 @@ public sealed class KeepRequestExternalContactApiTests : IClassFixture<KeepApiWe
         _closedRequestId = closedRequest.Id;
         _closedRequestVersion = closedRequest.ConcurrencyVersion;
 
+        // G7b: Closed + negative feedback = exact active unresolved-feedback review state.
+        _g7bPageToken = "ec_g7b_token";
+        var g7bRequest = KeepRequest.CreateFromCustomerIntake(
+            _accountId, customer.Id,
+            "John Customer", "0400000001", "john@example.com",
+            "G7b follow-up job", "EC-G7B", _g7bPageToken, now, 60);
+        g7bRequest.ChangeStatus(KeepRequestStatus.Resolved, null, graph.Owner.Id, "owner@ec-tests.com", now);
+        g7bRequest.ChangeStatus(KeepRequestStatus.Closed, null, graph.Owner.Id, "owner@ec-tests.com", now);
+        var g7bFeedback = g7bRequest.SubmitFeedback(
+            wasResolved: false, comment: "Not satisfied",
+            priorityResponseTargetMinutes: 60, nowUtc: now);
+        Assert.True(g7bFeedback.IsSuccess);
+        db.Set<KeepRequest>().Add(g7bRequest);
+        db.Set<KeepRequestEvent>().Add(
+            KeepRequestEvent.CreateRequestCreated(g7bRequest.Id, _accountId, now));
+        await db.SaveChangesAsync();
+        _g7bRequestId = g7bRequest.Id;
+        _g7bRequestVersion = g7bRequest.ConcurrencyVersion;
+
+        // G7b Operator variant: same state but Operator has participation so scope resolves (proves 403 not 404).
+        var g7bOpRequest = KeepRequest.CreateFromCustomerIntake(
+            _accountId, customer.Id,
+            "John Customer", "0400000001", null,
+            "G7b operator job", "EC-G7BO", "ec_g7bo_token", now, 60);
+        g7bOpRequest.ChangeStatus(KeepRequestStatus.Resolved, null, graph.Owner.Id, "owner@ec-tests.com", now);
+        g7bOpRequest.ChangeStatus(KeepRequestStatus.Closed, null, graph.Owner.Id, "owner@ec-tests.com", now);
+        var g7bOpFeedback = g7bOpRequest.SubmitFeedback(
+            wasResolved: false, comment: "Not satisfied",
+            priorityResponseTargetMinutes: 60, nowUtc: now);
+        Assert.True(g7bOpFeedback.IsSuccess);
+        db.Set<KeepRequest>().Add(g7bOpRequest);
+        db.Set<KeepRequestEvent>().Add(
+            KeepRequestEvent.CreateRequestCreated(g7bOpRequest.Id, _accountId, now));
+        db.Set<KeepRequestParticipant>().Add(
+            KeepRequestParticipant.Create(
+                g7bOpRequest.Id, _accountId, operatorMember.Id,
+                ParticipationType.Watching, notificationsEnabled: true, now));
+        await db.SaveChangesAsync();
+        _g7bOperatorRequestId = g7bOpRequest.Id;
+        _g7bOperatorRequestVersion = g7bOpRequest.ConcurrencyVersion;
+
         // --- Sessions ---
         var rawOwner    = await _factory.SeedSessionAsync(graph.Owner.Id, _accountId);
+        var rawAdmin    = await _factory.SeedSessionAsync(adminMember.Id, _accountId);
         var rawOperator = await _factory.SeedSessionAsync(operatorMember.Id, _accountId);
         var rawViewer   = await _factory.SeedSessionAsync(viewerMember.Id, _accountId);
 
         _ownerCookie    = $"{AuthConstants.CookieName}={rawOwner}";
+        _adminCookie    = $"{AuthConstants.CookieName}={rawAdmin}";
         _operatorCookie = $"{AuthConstants.CookieName}={rawOperator}";
         _viewerCookie   = $"{AuthConstants.CookieName}={rawViewer}";
     }
@@ -536,6 +601,96 @@ public sealed class KeepRequestExternalContactApiTests : IClassFixture<KeepApiWe
         Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
         Assert.Equal("KeepRequest.RequestChanged", body.GetProperty("code").GetString());
+    }
+
+    // =========================================================================
+    // G7b — Closed unresolved-feedback outbound contact exception
+    // =========================================================================
+
+    [Fact]
+    public async Task G7b_Owner_OutboundContact_ExactReviewState_Returns200AndRotatesVersion()
+    {
+        var startedAt = DateTime.UtcNow;
+
+        var response = await AuthRequest(_ownerCookie, _g7bRequestVersion).PostAsJsonAsync(
+            $"/keep/requests/{_g7bRequestId}/external-contact",
+            new { direction = "outbound", channel = "phone", outcome = "no_answer" });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        // Version rotated.
+        var newVersion = Guid.Parse(body.GetProperty("version").GetString()!);
+        Assert.NotEqual(_g7bRequestVersion, newVersion);
+
+        // Policy: canLogExternalContact still true on the returned detail.
+        Assert.True(body.GetProperty("availableActions").GetProperty("canLogExternalContact").GetBoolean());
+
+        // Event timeline has the internal external_contact_logged event.
+        var events = body.GetProperty("events").EnumerateArray().ToList();
+        var contactEv = events.FirstOrDefault(e => e.GetProperty("eventType").GetString() == "external_contact_logged");
+        Assert.NotEqual(default, contactEv);
+        Assert.False(contactEv.GetProperty("externalContactSetFirstResponse").GetBoolean());
+        Assert.False(contactEv.GetProperty("externalContactClearedAttention").GetBoolean());
+
+        // DB verify: unchanged fields.
+        await using var scope = _factory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+        var dbReq = await db.Set<KeepRequest>().FindAsync(_g7bRequestId);
+        Assert.NotNull(dbReq);
+        Assert.Equal(KeepRequestStatus.Closed, dbReq.Status);
+        Assert.False(dbReq.FeedbackWasResolved);
+        Assert.Null(dbReq.FeedbackReviewedAtUtc);
+        Assert.Null(dbReq.FeedbackReviewedByAccountUserId);
+        Assert.Equal(AttentionLevel.Waiting, dbReq.AttentionLevel);
+        Assert.Equal(AttentionReason.UnresolvedFeedback, dbReq.AttentionReason);
+        Assert.Equal(WaitingDirection.Business, dbReq.WaitingDirection);
+        Assert.Null(dbReq.FirstRespondedAtUtc);
+        // LastBusinessActivityAt updated to at least the test start time.
+        Assert.NotNull(dbReq.LastBusinessActivityAt);
+        Assert.True(dbReq.LastBusinessActivityAt >= startedAt);
+
+        // Customer page must not surface the internal contact event.
+        var pageResponse = await _factory.CreateClient().GetAsync($"/keep/r/{_g7bPageToken}");
+        Assert.Equal(HttpStatusCode.OK, pageResponse.StatusCode);
+        var pageBody = await pageResponse.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.DoesNotContain(
+            pageBody.GetProperty("events").EnumerateArray(),
+            e => e.GetProperty("eventType").GetString() == "external_contact_logged");
+    }
+
+    [Fact]
+    public async Task G7b_Admin_OutboundContact_ExactReviewState_Returns200()
+    {
+        // Use the Operator-variant request (Admin AccountWide scope sees it).
+        var response = await AuthRequest(_adminCookie, _g7bOperatorRequestVersion).PostAsJsonAsync(
+            $"/keep/requests/{_g7bOperatorRequestId}/external-contact",
+            new { direction = "outbound", channel = "phone", outcome = "no_answer" });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task G7b_Operator_OutboundContact_ExactReviewState_Returns403()
+    {
+        // Operator has participation (row visible via MyWork) but still forbidden for terminal exception.
+        var response = await AuthRequest(_operatorCookie, _g7bOperatorRequestVersion).PostAsJsonAsync(
+            $"/keep/requests/{_g7bOperatorRequestId}/external-contact",
+            new { direction = "outbound", channel = "phone", outcome = "no_answer" });
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task G7b_InboundContact_ExactReviewState_Returns409TerminalState()
+    {
+        var response = await AuthRequest(_ownerCookie, _g7bRequestVersion).PostAsJsonAsync(
+            $"/keep/requests/{_g7bRequestId}/external-contact",
+            new { direction = "inbound", channel = "phone", requiresBusinessFollowUp = true, summary = "Customer called" });
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("KeepRequest.TerminalState", body.GetProperty("code").GetString());
     }
 
     // =========================================================================

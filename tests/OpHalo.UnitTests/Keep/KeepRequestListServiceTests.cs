@@ -814,6 +814,8 @@ public class KeepRequestListServiceTests
         SetProp(request, nameof(KeepRequest.Status), KeepRequestStatus.Closed);
         SetProp(request, nameof(KeepRequest.AttentionLevel), AttentionLevel.Waiting);
         SetProp(request, nameof(KeepRequest.AttentionReason), AttentionReason.UnresolvedFeedback);
+        SetProp(request, nameof(KeepRequest.FeedbackSubmittedAtUtc), Now.AddHours(-1));
+        SetProp(request, nameof(KeepRequest.FeedbackWasResolved), false);
         SetProp(request, nameof(KeepRequest.WaitingDirection), WaitingDirection.Business);
         SetProp(request, nameof(KeepRequest.PriorityBand), PriorityBand.Priority);
         SetProp(request, nameof(KeepRequest.NextAttentionAtUtc), Now.AddMinutes(30));
@@ -899,6 +901,8 @@ public class KeepRequestListServiceTests
         SetProp(r3, nameof(KeepRequest.Status), KeepRequestStatus.Closed);
         SetProp(r3, nameof(KeepRequest.AttentionLevel), AttentionLevel.Waiting);
         SetProp(r3, nameof(KeepRequest.AttentionReason), AttentionReason.UnresolvedFeedback);
+        SetProp(r3, nameof(KeepRequest.FeedbackSubmittedAtUtc), Now.AddHours(-1));
+        SetProp(r3, nameof(KeepRequest.FeedbackWasResolved), false);
         SetProp(r3, nameof(KeepRequest.WaitingDirection), WaitingDirection.Business);
         SetProp(r3, nameof(KeepRequest.PriorityBand), PriorityBand.Priority);
 
@@ -1065,6 +1069,8 @@ public class KeepRequestListServiceTests
         SetProp(request, nameof(KeepRequest.Status), KeepRequestStatus.Closed);
         SetProp(request, nameof(KeepRequest.AttentionLevel), AttentionLevel.Waiting);
         SetProp(request, nameof(KeepRequest.AttentionReason), AttentionReason.UnresolvedFeedback);
+        SetProp(request, nameof(KeepRequest.FeedbackSubmittedAtUtc), Now.AddHours(-1));
+        SetProp(request, nameof(KeepRequest.FeedbackWasResolved), false);
 
         var p = HappyPathPersistence([request]);
         var sut = BuildSut(p);
@@ -1191,6 +1197,92 @@ public class KeepRequestListServiceTests
         var result = await sut.ExecuteAsync();
         Assert.False(result.IsSuccess);
         Assert.Equal("auth.forbidden", result.Error.Code);
+    }
+
+    // --- G7b: post-close contact action affordances ----------------------------
+
+    [Fact]
+    public async Task G7b_isPostClose_owner_with_phone_shows_contact_customer_quick_and_contact_actions()
+    {
+        var request = MakeRequest(phone: "0412345678");
+        SetProp(request, nameof(KeepRequest.Status), KeepRequestStatus.Closed);
+        SetProp(request, nameof(KeepRequest.AttentionLevel), AttentionLevel.Waiting);
+        SetProp(request, nameof(KeepRequest.AttentionReason), AttentionReason.UnresolvedFeedback);
+        SetProp(request, nameof(KeepRequest.FeedbackSubmittedAtUtc), Now.AddHours(-1));
+        SetProp(request, nameof(KeepRequest.FeedbackWasResolved), false);
+
+        var p = HappyPathPersistence([request], role: AccountUserRole.Owner);
+        var sut = BuildSut(p);
+        var result = await sut.ExecuteAsync();
+
+        Assert.True(result.IsSuccess);
+        var row = result.Value.Requests[0];
+        var quickCodes = row.Actions.QuickActions.Select(a => a.Code).ToList();
+        Assert.Contains("open_detail", quickCodes);
+        Assert.Contains("review_feedback", quickCodes);
+        Assert.Contains("contact_customer", quickCodes);
+        Assert.Single(row.Actions.ContactActions);
+        Assert.Equal("call", row.Actions.ContactActions[0].Type);
+    }
+
+    [Fact]
+    public async Task G7b_isPostClose_operator_gets_no_contact_action()
+    {
+        var request = MakeRequest(phone: "0412345678");
+        SetProp(request, nameof(KeepRequest.Status), KeepRequestStatus.Closed);
+        SetProp(request, nameof(KeepRequest.AttentionLevel), AttentionLevel.Waiting);
+        SetProp(request, nameof(KeepRequest.AttentionReason), AttentionReason.UnresolvedFeedback);
+        SetProp(request, nameof(KeepRequest.FeedbackSubmittedAtUtc), Now.AddHours(-1));
+        SetProp(request, nameof(KeepRequest.FeedbackWasResolved), false);
+
+        var p = HappyPathPersistence([request], role: AccountUserRole.Operator);
+        var sut = BuildSut(p);
+        var result = await sut.ExecuteAsync();
+
+        Assert.True(result.IsSuccess);
+        var row = result.Value.Requests[0];
+        var quickCodes = row.Actions.QuickActions.Select(a => a.Code).ToList();
+        Assert.DoesNotContain("contact_customer", quickCodes);
+        Assert.Empty(row.Actions.ContactActions);
+    }
+
+    [Fact]
+    public async Task G7b_isPostClose_offseason_owner_gets_no_contact_action()
+    {
+        var request = MakeRequest(phone: "0412345678");
+        SetProp(request, nameof(KeepRequest.Status), KeepRequestStatus.Closed);
+        SetProp(request, nameof(KeepRequest.AttentionLevel), AttentionLevel.Waiting);
+        SetProp(request, nameof(KeepRequest.AttentionReason), AttentionReason.UnresolvedFeedback);
+        SetProp(request, nameof(KeepRequest.FeedbackSubmittedAtUtc), Now.AddHours(-1));
+        SetProp(request, nameof(KeepRequest.FeedbackWasResolved), false);
+
+        var p = HappyPathPersistence([request], role: AccountUserRole.Owner);
+        p.AccountSnapshotToReturn = ActiveSnapshot(AccountOperatingMode.OffSeason);
+        var sut = BuildSut(p, posture: AccountAccessPosture.ReadOnly);
+        var result = await sut.ExecuteAsync();
+
+        Assert.True(result.IsSuccess);
+        var row = result.Value.Requests[0];
+        var quickCodes = row.Actions.QuickActions.Select(a => a.Code).ToList();
+        Assert.DoesNotContain("contact_customer", quickCodes);
+        Assert.Empty(row.Actions.ContactActions);
+    }
+
+    [Fact]
+    public async Task G7b_ordinary_closed_history_row_has_no_contact_actions()
+    {
+        var request = MakeRequest(phone: "0412345678");
+        SetProp(request, nameof(KeepRequest.Status), KeepRequestStatus.Closed);
+
+        var p = HappyPathPersistence([request], role: AccountUserRole.Owner);
+        var sut = BuildSut(p);
+        var result = await sut.ExecuteAsync();
+
+        Assert.True(result.IsSuccess);
+        var row = result.Value.Requests[0];
+        var quickCodes = row.Actions.QuickActions.Select(a => a.Code).ToList();
+        Assert.DoesNotContain("contact_customer", quickCodes);
+        Assert.Empty(row.Actions.ContactActions);
     }
 
     // --- Fakes ------------------------------------------------------------------
