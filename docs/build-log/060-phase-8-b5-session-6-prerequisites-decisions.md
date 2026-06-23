@@ -366,7 +366,7 @@ Verify:
 
 #### P6b-2 — COMPLETE
 
-**Commit:** `1030f07`. **Baseline:** 1280 tests (677 unit · 14 arch · 589 integration; +15 integration).
+**Commits:** `1030f07`, `e570664` auth hardening. **Baseline:** 1280 tests (677 unit · 14 arch · 589 integration; +15 integration).
 
 **Delivered:**
 - `src/OpHalo.Keep.Application/Requests/ManageRequestTimingService.cs` — single service,
@@ -389,6 +389,9 @@ Verify:
   field round-trip, event in timeline, stale 409, missing version 400, malformed version 400,
   terminal 409, resolved 409, Operator row access 200, Operator no-row 404, Viewer 403, anonymous 401,
   affordances in response, PlannedFor closed 409.
+- Auth hardening follow-up: `ManageRequestTimingService.AuthAsync` now has an explicit
+  Owner/Admin/Operator role gate before deriving row visibility scope, preserving fail-closed behavior
+  for Viewer and future roles.
 
 #### P6b-3 — List scan metadata and stale-suppression inputs
 

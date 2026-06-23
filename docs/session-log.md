@@ -1,8 +1,8 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-06-23 (P6b-2 complete — versioned mutations, detail exposure, 15 integration tests green)
+**Last updated:** 2026-06-23 (P6b-2 complete + auth hardening — versioned mutations, detail exposure, 15 integration tests green)
 **Branch:** `main` (no remote yet)
-**Current baseline:** 1280 tests (677 unit · 14 architecture · 589 integration) — P6b-2 green.
+**Current baseline:** 1280 tests (677 unit · 14 architecture · 589 integration) — P6b-2 green after auth hardening.
 **Next free ADR:** ADR-345
 **Next batch: Phase 8-B5 Session 6 Prerequisites P6b-3 — list scan metadata and stale-suppression inputs.**
 
@@ -215,6 +215,26 @@ Locked implementation split:
   centralized latest-meaningful-activity calculation.
 - **P6e — Notification candidate/badge contract notes:** immediate-attention push candidates,
   badge/list-only categories, and delivery boundary.
+
+Current handoff:
+
+- **P6b-1 complete:** domain/schema foundation for Follow Up On and Planned For.
+- **P6b-2 complete:** versioned mutations, detail exposure, action affordances, validation hints,
+  and explicit Owner/Admin/Operator role gate in `ManageRequestTimingService.AuthAsync`.
+- **Next session:** P6b-3 — list scan metadata and stale-suppression inputs.
+
+P6b-3 Claude brief:
+
+- Read only the named files in build-log/060 P6b-3 plus exact compile-impact callers found by
+  targeted `rg`.
+- Add list/summary metadata for `FollowUpOnDate`, `FollowUpOnReason`, and `PlannedForDate`.
+- Add scan-safe labels for due, overdue, future follow-up/planned dates, and follow-up reasons.
+- Add explicit stale-suppression inputs for P6d to consume when future Follow Up On or future
+  Planned For exists.
+- Preserve existing list row authorization and visibility; do not expand Operator visibility.
+- Do not implement the actual `needs_status_check` queue, account policy thresholds, or latest
+  meaningful activity helper.
+- Verify with focused list unit tests, focused list API tests, and `dotnet build`.
 
 Hard exclusions: archive/unarchive/closeout-reviewed state, auto-close/auto-complete, dispatch or
 calendar scheduling, customer self-scheduling, notification delivery implementation, realtime,
