@@ -79,6 +79,13 @@ internal sealed class KeepRequestEventConfiguration : BaseEntityConfiguration<Ke
             .IsRequired()
             .HasDefaultValue(false);
 
+        // Follow Up On / Planned For fields — present on FollowUpOnChanged / PlannedForChanged events only (ADR-337/338, P6b-1).
+        builder.Property(x => x.FollowUpOnDate);
+        builder.Property(x => x.FollowUpOnReason)
+            .HasConversion<string>()
+            .HasMaxLength(50);
+        builder.Property(x => x.PlannedForDate);
+
         // Participation fields — present on ParticipationChanged events only (ADR-234).
         builder.Property(x => x.ParticipationAction)
             .HasConversion<string>()

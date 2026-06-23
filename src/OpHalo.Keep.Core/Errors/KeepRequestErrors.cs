@@ -214,4 +214,21 @@ public static class KeepRequestErrors
 
     public static readonly Error RequestChanged =
         Error.Create("KeepRequest.RequestChanged", "The request changed. Refresh and try again.");
+
+    // Follow Up On errors (ADR-337, P6b-1).
+    public static readonly Error FollowUpOnRequiresActiveRequest =
+        Error.Create("KeepRequest.FollowUpOnRequiresActiveRequest", "Follow Up On can only be set or changed on active requests.");
+
+    public static readonly Error FollowUpOnReasonRequired =
+        Error.Create("KeepRequest.FollowUpOnReasonRequired", "A reason is required for Follow Up On.");
+
+    public static readonly Error FollowUpOnNoteRequired =
+        Error.Create("KeepRequest.FollowUpOnNoteRequired", "A note is required when the Follow Up reason is 'other'.");
+
+    public static readonly Error FollowUpOnNoteTooLong =
+        Error.Create("KeepRequest.FollowUpOnNoteTooLong", "The Follow Up On note exceeds the maximum allowed length of 500 characters.");
+
+    // Planned For errors (ADR-338, P6b-1).
+    public static readonly Error PlannedForRequiresActiveRequest =
+        Error.Create("KeepRequest.PlannedForRequiresActiveRequest", "Planned For can only be set or changed on active requests.");
 }

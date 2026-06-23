@@ -42,6 +42,13 @@ public sealed class KeepRequestEvent : BaseEntity
     public ParticipationNotificationIntentKind? ParticipationNotificationIntentKind { get; private set; }
     public Guid? ParticipationNotificationIntendedRecipientAccountUserId { get; private set; }
 
+    // Present on FollowUpOnChanged events only (ADR-337, P6b-1).
+    public DateOnly? FollowUpOnDate { get; private set; }
+    public FollowUpReason? FollowUpOnReason { get; private set; }
+
+    // Present on PlannedForChanged events only (ADR-338, P6b-1).
+    public DateOnly? PlannedForDate { get; private set; }
+
     // Present on ExternalContactLogged events only (ADR-215/217).
     public ExternalContactDirection? ExternalContactDirection { get; private set; }
     public ExternalContactOutcome? ExternalContactOutcome { get; private set; }
@@ -410,6 +417,84 @@ public sealed class KeepRequestEvent : BaseEntity
             ExternalContactRequiresFollowUp = requiresFollowUp,
             ExternalContactSetFirstResponse = setFirstResponse,
             ExternalContactClearedAttention = clearedAttention
+        };
+    }
+
+    /// <summary>
+    /// Creates a FollowUpOnChanged event. Always Internal. Null date/reason/note records a clear;
+    /// non-null records a set or change (ADR-337, P6b-1).
+    /// </summary>
+    public static KeepRequestEvent CreateFollowUpOnChanged(
+        Guid requestId,
+        Guid accountId,
+        Guid actorAccountUserId,
+        string actorDisplayName,
+        DateOnly? date,
+        FollowUpReason? reason,
+        string? note,
+        DateTime occurredAtUtc)
+    {
+        if (requestId == Guid.Empty)
+            throw new ArgumentException("Request ID is required.", nameof(requestId));
+        if (accountId == Guid.Empty)
+            throw new ArgumentException("Account ID is required.", nameof(accountId));
+        if (actorAccountUserId == Guid.Empty)
+            throw new ArgumentException("Actor account user ID is required.", nameof(actorAccountUserId));
+        if (string.IsNullOrWhiteSpace(actorDisplayName))
+            throw new ArgumentException("Actor display name is required.", nameof(actorDisplayName));
+        if (occurredAtUtc == default)
+            throw new ArgumentException("occurredAtUtc must be a real timestamp.", nameof(occurredAtUtc));
+
+        return new KeepRequestEvent
+        {
+            RequestId = requestId,
+            AccountId = accountId,
+            EventType = KeepRequestEventType.FollowUpOnChanged,
+            Visibility = KeepRequestEventVisibility.Internal,
+            Content = string.IsNullOrWhiteSpace(note) ? null : note.Trim(),
+            ActorType = ActorType.AccountUser,
+            ActorAccountUserId = actorAccountUserId,
+            ActorDisplayName = actorDisplayName.Trim(),
+            OccurredAtUtc = occurredAtUtc,
+            FollowUpOnDate = date,
+            FollowUpOnReason = reason
+        };
+    }
+
+    /// <summary>
+    /// Creates a PlannedForChanged event. Always Internal. Null date records a clear;
+    /// non-null records a set or change (ADR-338, P6b-1).
+    /// </summary>
+    public static KeepRequestEvent CreatePlannedForChanged(
+        Guid requestId,
+        Guid accountId,
+        Guid actorAccountUserId,
+        string actorDisplayName,
+        DateOnly? date,
+        DateTime occurredAtUtc)
+    {
+        if (requestId == Guid.Empty)
+            throw new ArgumentException("Request ID is required.", nameof(requestId));
+        if (accountId == Guid.Empty)
+            throw new ArgumentException("Account ID is required.", nameof(accountId));
+        if (actorAccountUserId == Guid.Empty)
+            throw new ArgumentException("Actor account user ID is required.", nameof(actorAccountUserId));
+        if (string.IsNullOrWhiteSpace(actorDisplayName))
+            throw new ArgumentException("Actor display name is required.", nameof(actorDisplayName));
+        if (occurredAtUtc == default)
+            throw new ArgumentException("occurredAtUtc must be a real timestamp.", nameof(occurredAtUtc));
+
+        return new KeepRequestEvent
+        {
+            RequestId = requestId,
+            AccountId = accountId,
+            EventType = KeepRequestEventType.PlannedForChanged,
+            Visibility = KeepRequestEventVisibility.Internal,
+            ActorType = ActorType.AccountUser,
+            ActorAccountUserId = actorAccountUserId,
+            ActorDisplayName = actorDisplayName.Trim(),
+            OccurredAtUtc = occurredAtUtc,
+            PlannedForDate = date
         };
     }
 

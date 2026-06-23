@@ -12,5 +12,7 @@ public enum KeepRequestEventType
     AttentionAcknowledged = 8,
     ExternalContactLogged = 9,
     ParticipationChanged = 10,
-    FeedbackReviewed = 11
+    FeedbackReviewed = 11,
+    FollowUpOnChanged = 12,
+    PlannedForChanged = 13
 }

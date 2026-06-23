@@ -1,10 +1,10 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-06-23 (G8 complete — pre-Session-6 gap audit DONE)
+**Last updated:** 2026-06-23 (P6b-1 complete — domain/schema/migration/33 unit tests green)
 **Branch:** `main` (no remote yet)
 **Current baseline:** 1265 tests (677 unit · 14 architecture · 574 integration) — FINAL PRE-SESSION-6 GREEN GATE.
-**Next free ADR:** ADR-337
-**Next batch: Phase 8-B5 Session 6.**
+**Next free ADR:** ADR-345
+**Next batch: Phase 8-B5 Session 6 Prerequisites P6b-2 — versioned operator mutations and detail exposure.**
 
 ---
 
@@ -34,7 +34,7 @@ For every implementation slice:
   documentation, and unrelated scope;
 - commit only after Christian approves the completed diff.
 
-## Pre-Session 6 Gap Resolution — IN PROGRESS
+## Pre-Session 6 Gap Resolution — COMPLETE
 
 **Source of truth:** `docs/build-log/047-pre-session-6-phase-7-session-5-gap-audit.md`
 
@@ -107,7 +107,7 @@ Authoritative detail: ADR-330–335 and build-log/056.
 
 Final G7 baseline: **1224 tests (643 unit · 14 architecture · 567 integration).**
 
-## G8 — Edge Hardening, Token Safety, and Completion Gate — IN PROGRESS
+## G8 — Edge Hardening, Token Safety, and Completion Gate — COMPLETE
 
 **Findings:** GAP-012, GAP-013, GAP-021. GAP-016 remains post-Session-6/pre-notification.
 
@@ -151,7 +151,7 @@ the G8 completion gate or Christian explicitly approves it.
 
 ### G8b — Token-safe application logging proof — COMPLETE
 
-**Commit:** pending approval. **Baseline:** 1265 tests (677 unit · 14 arch · 574 integration; +22).
+**Commit:** `09d5e79`. **Baseline:** 1265 tests (677 unit · 14 arch · 574 integration; +22).
 
 - `PublicTokenPathRedactor` — pure static helper; redacts all four public bearer-token path families.
 - `Program.cs` — explicit `AddFilter("Microsoft.AspNetCore.Hosting.Diagnostics", LogLevel.Warning)`.
@@ -194,6 +194,32 @@ Decision: **Option 3 — documented accepted retrievable storage for pilot.**
 
 G8 explicitly excludes notifications, realtime, frontend UI, Spam/Test implementation, Turnstile,
 SMS verification, adaptive bot challenges, source blocking, and a general abuse platform.
+
+---
+
+## Phase 8-B5 Session 6 Prerequisites — DECISIONS LOCKED
+
+**Build log:** `docs/build-log/060-phase-8-b5-session-6-prerequisites-decisions.md`  
+**Decisions:** ADR-337..ADR-344.
+
+Session 6 proper is paused. The discussion exposed prerequisite workflow semantics that must be
+implemented or explicitly scoped before ready-to-close/stale closeout work is safe.
+
+Locked implementation split:
+
+- **P6b — Follow Up On + Planned For foundation:** active-request date-only follow-up and planned
+  timing context, scan metadata, versioned mutations, and stale-suppression inputs.
+- **P6c — Customer intent menu + page viewed signal:** simplified customer-language intent actions
+  and debounced customer-page usage/confidence metadata.
+- **P6d — Needs-status-check policy/signal model:** account-policy threshold with 5-day default and
+  centralized latest-meaningful-activity calculation.
+- **P6e — Notification candidate/badge contract notes:** immediate-attention push candidates,
+  badge/list-only categories, and delivery boundary.
+
+Hard exclusions: archive/unarchive/closeout-reviewed state, auto-close/auto-complete, dispatch or
+calendar scheduling, customer self-scheduling, notification delivery implementation, realtime,
+spam/test classification, broad analytics/reporting, customer identity portals, and link/token
+management.
 
 ---
 

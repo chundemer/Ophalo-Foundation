@@ -79,6 +79,16 @@ public sealed class KeepRequest : BaseEntity
     public Guid? FeedbackReviewedByAccountUserId { get; private set; }
     public string? FeedbackReviewNote { get; private set; }
 
+    // --- Follow Up On fields (ADR-337, P6b-1) ---
+
+    public DateOnly? FollowUpOnDate { get; private set; }
+    public FollowUpReason? FollowUpReason { get; private set; }
+    public string? FollowUpNote { get; private set; }
+
+    // --- Planned For field (ADR-338, P6b-1) ---
+
+    public DateOnly? PlannedForDate { get; private set; }
+
     // --- Optimistic concurrency (G5/ADR-330) ---
 
     // Application-managed opaque concurrency token for the request aggregate (row, events,
@@ -876,6 +886,138 @@ public sealed class KeepRequest : BaseEntity
 
             _ => false
         };
+
+    /// <summary>
+    /// Sets or changes Follow Up On. Active requests only; Resolved/Closed/Cancelled rejected.
+    /// Reason required; note required when reason is Other; note max 500 characters (ADR-337).
+    /// </summary>
+    public Result<KeepRequestEvent> SetFollowUpOn(
+        DateOnly date,
+        FollowUpReason reason,
+        string? note,
+        Guid actorAccountUserId,
+        string actorDisplayName,
+        DateTime nowUtc)
+    {
+        if (nowUtc == default)
+            throw new ArgumentException("nowUtc must be a valid UTC timestamp.", nameof(nowUtc));
+        if (actorAccountUserId == Guid.Empty)
+            throw new ArgumentException("Actor account user ID is required.", nameof(actorAccountUserId));
+        if (string.IsNullOrWhiteSpace(actorDisplayName))
+            throw new ArgumentException("Actor display name is required.", nameof(actorDisplayName));
+
+        if (!IsActive)
+            return Result<KeepRequestEvent>.Failure(KeepRequestErrors.FollowUpOnRequiresActiveRequest);
+
+        if (!Enum.IsDefined(reason))
+            return Result<KeepRequestEvent>.Failure(KeepRequestErrors.FollowUpOnReasonRequired);
+
+        var trimmedNote = string.IsNullOrWhiteSpace(note) ? null : note.Trim();
+
+        if (reason == Enums.FollowUpReason.Other && trimmedNote is null)
+            return Result<KeepRequestEvent>.Failure(KeepRequestErrors.FollowUpOnNoteRequired);
+
+        if (trimmedNote?.Length > 500)
+            return Result<KeepRequestEvent>.Failure(KeepRequestErrors.FollowUpOnNoteTooLong);
+
+        FollowUpOnDate = date;
+        FollowUpReason = reason;
+        FollowUpNote = trimmedNote;
+
+        var ev = KeepRequestEvent.CreateFollowUpOnChanged(
+            Id, AccountId, actorAccountUserId, actorDisplayName, date, reason, trimmedNote, nowUtc);
+
+        return Result<KeepRequestEvent>.Success(ev);
+    }
+
+    /// <summary>
+    /// Clears Follow Up On. Active requests only (ADR-337).
+    /// </summary>
+    public Result<KeepRequestEvent> ClearFollowUpOn(
+        Guid actorAccountUserId,
+        string actorDisplayName,
+        DateTime nowUtc)
+    {
+        if (nowUtc == default)
+            throw new ArgumentException("nowUtc must be a valid UTC timestamp.", nameof(nowUtc));
+        if (actorAccountUserId == Guid.Empty)
+            throw new ArgumentException("Actor account user ID is required.", nameof(actorAccountUserId));
+        if (string.IsNullOrWhiteSpace(actorDisplayName))
+            throw new ArgumentException("Actor display name is required.", nameof(actorDisplayName));
+
+        if (!IsActive)
+            return Result<KeepRequestEvent>.Failure(KeepRequestErrors.FollowUpOnRequiresActiveRequest);
+
+        FollowUpOnDate = null;
+        FollowUpReason = null;
+        FollowUpNote = null;
+
+        var ev = KeepRequestEvent.CreateFollowUpOnChanged(
+            Id, AccountId, actorAccountUserId, actorDisplayName,
+            date: null, reason: null, note: null, nowUtc);
+
+        return Result<KeepRequestEvent>.Success(ev);
+    }
+
+    /// <summary>
+    /// Sets or changes Planned For. Active requests only; does not notify the customer or
+    /// change lifecycle status (ADR-338).
+    /// </summary>
+    public Result<KeepRequestEvent> SetPlannedFor(
+        DateOnly date,
+        Guid actorAccountUserId,
+        string actorDisplayName,
+        DateTime nowUtc)
+    {
+        if (nowUtc == default)
+            throw new ArgumentException("nowUtc must be a valid UTC timestamp.", nameof(nowUtc));
+        if (actorAccountUserId == Guid.Empty)
+            throw new ArgumentException("Actor account user ID is required.", nameof(actorAccountUserId));
+        if (string.IsNullOrWhiteSpace(actorDisplayName))
+            throw new ArgumentException("Actor display name is required.", nameof(actorDisplayName));
+
+        if (!IsActive)
+            return Result<KeepRequestEvent>.Failure(KeepRequestErrors.PlannedForRequiresActiveRequest);
+
+        PlannedForDate = date;
+
+        var ev = KeepRequestEvent.CreatePlannedForChanged(
+            Id, AccountId, actorAccountUserId, actorDisplayName, date, nowUtc);
+
+        return Result<KeepRequestEvent>.Success(ev);
+    }
+
+    /// <summary>
+    /// Clears Planned For. Active requests only (ADR-338).
+    /// </summary>
+    public Result<KeepRequestEvent> ClearPlannedFor(
+        Guid actorAccountUserId,
+        string actorDisplayName,
+        DateTime nowUtc)
+    {
+        if (nowUtc == default)
+            throw new ArgumentException("nowUtc must be a valid UTC timestamp.", nameof(nowUtc));
+        if (actorAccountUserId == Guid.Empty)
+            throw new ArgumentException("Actor account user ID is required.", nameof(actorAccountUserId));
+        if (string.IsNullOrWhiteSpace(actorDisplayName))
+            throw new ArgumentException("Actor display name is required.", nameof(actorDisplayName));
+
+        if (!IsActive)
+            return Result<KeepRequestEvent>.Failure(KeepRequestErrors.PlannedForRequiresActiveRequest);
+
+        PlannedForDate = null;
+
+        var ev = KeepRequestEvent.CreatePlannedForChanged(
+            Id, AccountId, actorAccountUserId, actorDisplayName, date: null, nowUtc);
+
+        return Result<KeepRequestEvent>.Success(ev);
+    }
+
+    // Enums. prefix required: FollowUpReason instance property shadows the enum type name in static scope.
+    private bool IsActive =>
+        Status is not (KeepRequestStatus.Resolved
+                       or KeepRequestStatus.Closed
+                       or KeepRequestStatus.Cancelled);
 
     /// <summary>
     /// Creates a request submitted by a customer through public intake.

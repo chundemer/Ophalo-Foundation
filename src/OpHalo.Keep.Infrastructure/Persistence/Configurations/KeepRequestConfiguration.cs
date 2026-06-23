@@ -117,6 +117,17 @@ internal sealed class KeepRequestConfiguration : BaseEntityConfiguration<KeepReq
             .IsConcurrencyToken()
             .ValueGeneratedNever();
 
+        // Follow Up On fields (ADR-337, P6b-1).
+        builder.Property(x => x.FollowUpOnDate);
+        builder.Property(x => x.FollowUpReason)
+            .HasConversion<string>()
+            .HasMaxLength(50);
+        builder.Property(x => x.FollowUpNote)
+            .HasMaxLength(500);
+
+        // Planned For field (ADR-338, P6b-1).
+        builder.Property(x => x.PlannedForDate);
+
         // IsTerminal is a computed C# property — no column.
         builder.Ignore(x => x.IsTerminal);
 
