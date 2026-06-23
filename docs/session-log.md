@@ -1,10 +1,10 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-06-23 (G8a pre-work complete; ready for Claude Code)
+**Last updated:** 2026-06-23 (G8a complete)
 **Branch:** `main` (no remote yet)
-**Current baseline:** 1224 tests (643 unit · 14 architecture · 567 integration).
-**Next free ADR:** ADR-336
-**Next batch: G8a — trusted client-IP/rate-limiter proof — READY TO CODE.**
+**Current baseline:** 1243 tests (659 unit · 14 architecture · 570 integration).
+**Next free ADR:** ADR-337
+**Next batch: G8b — bearer-token-safe logging proof.**
 
 ---
 
@@ -27,6 +27,8 @@ For every implementation slice:
   and 12 total changed files including tests/fakes/docs; exact aliases sharing one handler/service
   count as one family only when all aliases are enumerated and parameterized-contract tested;
 - preserve fail-closed account, row, action, and public-token behavior;
+- preserve ADR-336: business-first request capture is a pilot must-have UI path. Public intake and
+  customer pages enrich/collaborate after capture; they are not the gate for work to enter Keep.
 - add focused authorization/regression tests and run the proportionate broader suite;
 - self-review for policy drift, accidental visibility expansion, untested direct-ID paths, stale
   documentation, and unrelated scope;
@@ -46,7 +48,8 @@ For every implementation slice:
 - **G2 complete — 920 tests.** Shared intake validation, safe email preservation, and concurrent
   customer recovery. ADR-306–310; build-log/049.
 - **G3 complete — 986 tests.** Intake-link ensure/status/replacement plus authenticated
-  business-created requests. ADR-311–318; build-logs/050–051.
+  business-created requests. ADR-311–318; build-logs/050–051. ADR-336 later locks this as a pilot
+  UI must-have, not just a backend capability.
 - **G4 complete — 1109 tests.** Row authorization, Available/list visibility, and shared action
   metadata policy. ADR-319–329; build-logs/052–055.
 
@@ -104,7 +107,7 @@ Authoritative detail: ADR-330–335 and build-log/056.
 
 Final G7 baseline: **1224 tests (643 unit · 14 architecture · 567 integration).**
 
-## G8 — Edge Hardening, Token Safety, and Completion Gate — PRE-WORK IN PROGRESS
+## G8 — Edge Hardening, Token Safety, and Completion Gate — IN PROGRESS
 
 **Findings:** GAP-012, GAP-013, GAP-021. GAP-016 remains post-Session-6/pre-notification.
 
@@ -124,56 +127,27 @@ the G8 completion gate or Christian explicitly approves it.
 - **G8d — ledger/final completion gate:** reconcile ADR/deferred statuses, migration-from-zero,
   build, focused/full tests, and final pre-Session-6 green gate.
 
-### G8a — Trusted client IP / rate-limiter proof — READY TO CODE
+### G8a — Trusted client IP / rate-limiter proof — COMPLETE
 
-**Purpose:** fix GAP-012. Untrusted peers must not choose rate-limiter partitions by spoofing
-`CF-Connecting-IP` or `X-Forwarded-For`; public anonymous write routes must prove 10/minute,
-`QueueLimit=0`, and 429 behavior in a production-like host where rate limiting is enabled.
+**Commit:** pending approval. **Baseline:** 1243 tests (659 unit · 14 arch · 570 integration; +19).
 
-**Likely files to create/modify:**
+**Delivered:**
+- `src/OpHalo.Api/Helpers/ClientIpResolver.cs` — pure static resolver; normalizes IPv4-mapped IPv6;
+  trusts only remotes in `Edge:TrustedProxyCidrs`; CF-Connecting-IP → XFF → remote fallback chain.
+- `src/OpHalo.Api/Program.cs` — replaces `GetClientIp` with `ClientIpResolver`; config-driven
+  trusted proxies read lazily from DI `IConfiguration` (not eager `builder.Configuration`) so
+  `WebApplicationFactory` overrides are visible; `RateLimitTesting` environment skips HTTPS redirect
+  but keeps rate limiting enabled; unconditional loopback middleware for TestServer compatibility.
+- `tests/OpHalo.UnitTests/ClientIpResolverTests.cs` — 16 unit tests: trusted/untrusted,
+  CF/XFF/fallback, malformed headers, loopback, private CIDR, IPv4-mapped normalization.
+- `tests/OpHalo.IntegrationTests/Api/RateLimitWebFactory.cs` — `RateLimitWebFactory` (loopback
+  trusted) and `RateLimitNoTrustWebFactory` (no trust) using `RateLimitTesting` environment.
+- `tests/OpHalo.IntegrationTests/Api/RateLimitIntegrationTests.cs` — 3 integration tests: 429 at
+  11th request; partition isolation (different CF IPs → separate buckets); spoof resistance
+  (untrusted remote ignores CF headers, all requests share remote-IP bucket).
 
-1. `src/OpHalo.Api/Program.cs`
-   - Replace local `GetClientIp` trust of `CF-Connecting-IP` / `X-Forwarded-For`.
-   - Add config-driven trusted-proxy behavior. Do not hardcode current Cloudflare IP ranges in code;
-     read trusted proxy/CIDR configuration and document deployment values.
-   - Add/allow a non-`Testing` production-like test environment (for example `RateLimitTesting`) so
-     rate limiting runs under `WebApplicationFactory` while HTTPS redirect remains disabled for
-     test-server requests.
-
-2. New API helper under `src/OpHalo.Api/...` (name/location to confirm in preflight), e.g.
-   `ClientIpResolver`.
-   - Pure, unit-testable resolver for:
-     - remote IP not trusted → ignore forwarded headers and use `RemoteIpAddress`;
-     - trusted remote + `CF-Connecting-IP` valid → use CF value;
-     - trusted remote + no CF + `X-Forwarded-For` valid → use first client IP;
-     - malformed/blank headers → fall back safely;
-     - unknown remote → stable safe partition such as `unknown`.
-
-3. `tests/OpHalo.UnitTests/...` (new focused resolver tests)
-   - Direct tests for trusted vs untrusted remote, CF precedence, XFF fallback, malformed headers,
-     IPv4/IPv6 loopback/private examples, and fail-closed fallback.
-
-4. `tests/OpHalo.IntegrationTests/Api/...` (new production-like rate-limit fixture)
-   - A dedicated `WebApplicationFactory` variant that does **not** use environment `Testing` for
-     rate limiting, but still avoids HTTPS redirect.
-   - Prove public-intake route 11th request in one minute returns 429 with `QueueLimit=0`.
-   - Prove partition isolation: different trusted client IPs or different customer page tokens do
-     not share the same limiter bucket.
-   - Prove spoof resistance: untrusted remote with different `CF-Connecting-IP` / `X-Forwarded-For`
-     values still shares the remote-IP bucket and hits 429.
-
-**Locked G8a decisions:**
-
-- Use configuration key `Edge:TrustedProxyCidrs` for trusted proxy/network CIDRs. Empty/missing
-  config means no forwarded headers are trusted.
-- Do not hardcode Cloudflare IP ranges in code. Deployment supplies Cloudflare/Railway trusted
-  network values; build-log/G8 docs record that code cannot verify external access-log behavior.
-- Use `RateLimitTesting` as the production-like test environment. It should skip HTTPS redirect like
-  `Testing`, but **must keep rate limiting enabled**.
-- Trust loopback only in `RateLimitTesting` so TestServer can simulate a trusted proxy without
-  relaxing production defaults.
-- Keep existing policy names and limits: `public-intake`, `auth`, and `customer-write`; 10 requests
-  per minute; `QueueLimit=0`.
+**Known mild smell (deferred):** `OpHalo.UnitTests` now references `OpHalo.Api` to reach
+`ClientIpResolver`. Prefer moving resolver tests to integration project in a later cleanup.
 
 ### G8b draft — Token-safe application logging proof
 

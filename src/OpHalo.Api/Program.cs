@@ -1,3 +1,4 @@
+using System.Net;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Mvc;
@@ -156,41 +157,61 @@ builder.Services.AddAuthentication(AuthConstants.SessionSchemeName)
 
 builder.Services.AddAuthorization();
 
-// --- Rate Limiting (ADR-060) ---
-// Per-IP fixed-window on all rate-limited routes. CF-Connecting-IP cannot be
-// forged when Railway ingress is Cloudflare-only — a deploy-time constraint (ADR-060).
+// --- Rate Limiting (ADR-060, session-log G8a) ---
+// Per-IP fixed-window on all rate-limited routes. Real client IP is resolved from
+// CF-Connecting-IP or X-Forwarded-For only when the remote is in Edge:TrustedProxyCidrs;
+// untrusted peers cannot choose a partition key via forwarded headers.
+//
+// Trusted proxies are registered as a singleton read from IConfiguration at first use,
+// not from builder.Configuration at startup, so WebApplicationFactory overrides are visible.
+builder.Services.AddSingleton<IReadOnlyList<IPNetwork>>(sp =>
+    sp.GetRequiredService<IConfiguration>()
+        .GetSection("Edge:TrustedProxyCidrs")
+        .GetChildren()
+        .Select(c => c.Value)
+        .Where(v => !string.IsNullOrWhiteSpace(v))
+        .Select(v => IPNetwork.Parse(v!))
+        .ToArray());
+
 builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
 
     options.AddPolicy<string>("public-intake", context =>
-        RateLimitPartition.GetFixedWindowLimiter(
-            GetClientIp(context),
+    {
+        var proxies = context.RequestServices.GetRequiredService<IReadOnlyList<IPNetwork>>();
+        return RateLimitPartition.GetFixedWindowLimiter(
+            ClientIpResolver.Resolve(context, proxies),
             _ => new FixedWindowRateLimiterOptions
             {
                 Window = TimeSpan.FromMinutes(1),
                 PermitLimit = 10,
                 QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
                 QueueLimit = 0,
-            }));
+            });
+    });
 
     options.AddPolicy<string>("auth", context =>
-        RateLimitPartition.GetFixedWindowLimiter(
-            GetClientIp(context),
+    {
+        var proxies = context.RequestServices.GetRequiredService<IReadOnlyList<IPNetwork>>();
+        return RateLimitPartition.GetFixedWindowLimiter(
+            ClientIpResolver.Resolve(context, proxies),
             _ => new FixedWindowRateLimiterOptions
             {
                 Window = TimeSpan.FromMinutes(1),
                 PermitLimit = 10,
                 QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
                 QueueLimit = 0,
-            }));
+            });
+    });
 
     // Composite IP+token partition so shared networks don't penalise multiple customers (ADR-129).
     options.AddPolicy<string>("customer-write", context =>
     {
+        var proxies = context.RequestServices.GetRequiredService<IReadOnlyList<IPNetwork>>();
         var pageToken = context.Request.RouteValues["pageToken"]?.ToString() ?? string.Empty;
         return RateLimitPartition.GetFixedWindowLimiter(
-            GetClientIp(context) + ":" + pageToken,
+            ClientIpResolver.Resolve(context, proxies) + ":" + pageToken,
             _ => new FixedWindowRateLimiterOptions
             {
                 Window = TimeSpan.FromMinutes(1),
@@ -206,16 +227,21 @@ var app = builder.Build();
 if (app.Environment.IsDevelopment())
     app.MapOpenApi();
 
-// WebApplicationFactory sets environment to "Testing" — skip redirect so tests
-// are not chased from http to https by the test server (ADR-058, build-log/014).
-if (!app.Environment.IsEnvironment("Testing"))
+// Skip HTTPS redirect for "Testing" (ADR-058, build-log/014) and "RateLimitTesting"
+// (production-like test host that still needs plain HTTP for the test server).
+if (!app.Environment.IsEnvironment("Testing") && !app.Environment.IsEnvironment("RateLimitTesting"))
     app.UseHttpsRedirection();
+
+// TestServer may supply null or an IPv4-mapped address; force loopback unconditionally so the
+// trusted-proxy check in ClientIpResolver reliably matches 127.0.0.1/32 in rate limit tests.
+if (app.Environment.IsEnvironment("RateLimitTesting"))
+    app.Use(async (ctx, next) => { ctx.Connection.RemoteIpAddress = System.Net.IPAddress.Loopback; await next(ctx); });
 
 app.UseAuthentication();
 app.UseAuthorization();
 
-// WebApplicationFactory sets environment to "Testing" — skip rate limiting so
-// integration tests are not throttled by per-IP limits (ADR-060).
+// "Testing" skips rate limiting so standard integration tests are not throttled (ADR-060).
+// "RateLimitTesting" intentionally keeps rate limiting enabled for G8a proof tests.
 if (!app.Environment.IsEnvironment("Testing"))
     app.UseRateLimiter();
 
@@ -668,26 +694,6 @@ static async Task<IResult> HandleFeedback(
     return page.IsExpired
         ? Results.Json(page, statusCode: StatusCodes.Status410Gone)
         : Results.Ok(page);
-}
-
-// --- Utilities ---
-
-// Resolves the real client IP for per-IP rate limit partitioning (ADR-060).
-static string GetClientIp(HttpContext context)
-{
-    var cfIp = context.Request.Headers["CF-Connecting-IP"].FirstOrDefault();
-    if (!string.IsNullOrWhiteSpace(cfIp))
-        return cfIp;
-
-    var forwarded = context.Request.Headers["X-Forwarded-For"].FirstOrDefault();
-    if (!string.IsNullOrWhiteSpace(forwarded))
-    {
-        var first = forwarded.Split(',')[0].Trim();
-        if (!string.IsNullOrWhiteSpace(first))
-            return first;
-    }
-
-    return context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
 }
 
 // Required for WebApplicationFactory<Program> — exposes the auto-generated Program

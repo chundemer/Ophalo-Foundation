@@ -19,6 +19,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\src\OpHalo.Api\OpHalo.Api.csproj" />
     <ProjectReference Include="..\..\src\OpHalo.SharedKernel\OpHalo.SharedKernel.csproj" />
     <ProjectReference Include="..\..\src\OpHalo.Foundation.Core\OpHalo.Foundation.Core.csproj" />
     <ProjectReference Include="..\..\src\OpHalo.Foundation.Application\OpHalo.Foundation.Application.csproj" />
