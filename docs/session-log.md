@@ -1,10 +1,10 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-06-23 (P6c-1 complete — ready for P6c-2 customer-page viewed signal)
-**Branch:** `main` tracking `origin/main` (currently 5 local commits ahead)
-**Current baseline:** 1320 tests (715 unit · 14 architecture · 591 integration) — P6b full suite green; P6c-1 adds 9 focused integration tests (42 green across CustomerMessageTests + KeepRequestDetailB4Tests).
+**Last updated:** 2026-06-23 (P6c-2 complete — ready for P6c-3 completion gate)
+**Branch:** `main` tracking `origin/main` (currently 6 local commits ahead)
+**Current baseline:** 1334 tests (722 unit · 14 architecture · 598 integration) — full suite green.
 **Next free ADR:** ADR-345
-**Next batch: P6c-2 — customer-page viewed signal.**
+**Next batch: P6c-3 — P6c completion gate.**
 
 ---
 
@@ -58,7 +58,11 @@ Current handoff:
   1320 tests (715 unit · 14 architecture · 591 integration), full suite green.
 - **Completed:** P6c-1 — ADR-342 customer intent menu. Commits `304cb92` (routes/mapper/enum/domain)
   and `5a5eaa8` (fix: detail/list mapper gaps and regression test).
-- **Active:** P6c-2 — customer-page viewed signal.
+- **Completed:** P6c-2 — ADR-341 customer-page viewed signal. Commit `beebba2`
+  (KeepRequest domain field + debounce method, GetKeepCustomerPageService page-view recording,
+  IKeepCustomerWritePersistence.CommitPageViewAsync, staff detail metadata, migration, 7 unit + 6 integration tests).
+  Also fixed stale KeepOffSeasonTests customer message route from P6c-1 intent split.
+- **Active:** P6c-3 — P6c completion gate.
 
 ### P6c-2 Coding Brief
 
