@@ -1,10 +1,10 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-06-23 (G7 complete; G8 pre-work required)
+**Last updated:** 2026-06-23 (G8a pre-work complete; ready for Claude Code)
 **Branch:** `main` (no remote yet)
 **Current baseline:** 1224 tests (643 unit · 14 architecture · 567 integration).
 **Next free ADR:** ADR-336
-**Next batch: G8 — pre-work required. Do not begin implementation until pre-work is complete.**
+**Next batch: G8a — trusted client-IP/rate-limiter proof — READY TO CODE.**
 
 ---
 
@@ -84,10 +84,6 @@ Authoritative detail: ADR-330–335 and build-log/056.
   2 integration customer-page (ADR-120 defensive non-terminal theory).
 - Full suite: 1188 tests (621 unit · 14 architecture · 553 integration). build-log/057.
 
-## G7 — Feedback Review Hardening — IN PROGRESS
-
-**Findings:** GAP-017, GAP-018, GAP-020 · **Decision:** ADR-300 reaffirms ADR-263
-
 ## G7 — Feedback Review Hardening — COMPLETE
 
 **Findings:** GAP-017, GAP-018, GAP-020 · **Decisions:** ADR-300 reaffirms ADR-263; ADR-186 source note updated.
@@ -99,7 +95,7 @@ Authoritative detail: ADR-330–335 and build-log/056.
   only on Closed + active `UnresolvedFeedback`. `HasActiveUnresolvedFeedbackReview` drives domain,
   service, policy, list, and detail affordances coherently. Operator/inbound/ordinary Closed/Cancelled
   remain blocked.
-- **G7c — this batch, baseline 1224.** `KeepRequestDetailMapper` split into `feedbackCommentVisible`
+- **G7c — commit `623ab06`, baseline 1224.** `KeepRequestDetailMapper` split into `feedbackCommentVisible`
   (`Owner|Admin || FeedbackWasResolved == true`) and `reviewNoteVisible` (`Owner|Admin` only).
   Positive comments now visible to Operator/Viewer; `FeedbackReviewNote` remains Owner/Admin-only.
   4 new integration tests in `KeepRequestDetailB4Tests`. Ledger: ADR-263/ADR-300 marked Implemented,
@@ -108,27 +104,121 @@ Authoritative detail: ADR-330–335 and build-log/056.
 
 Final G7 baseline: **1224 tests (643 unit · 14 architecture · 567 integration).**
 
-## G8 — Edge Hardening, Ledger Reconciliation, Completion Gate — PLANNED
+## G8 — Edge Hardening, Token Safety, and Completion Gate — PRE-WORK IN PROGRESS
 
-**Findings:** GAP-012, GAP-013, GAP-021; GAP-016 remains post-Session-6/pre-notification.
+**Findings:** GAP-012, GAP-013, GAP-021. GAP-016 remains post-Session-6/pre-notification.
 
-- Configure trusted forwarded-header/client-IP handling for Cloudflare → Railway/application;
-  untrusted peers cannot choose rate-limiter partitions.
-- Prove public-intake 10/minute, zero-queue, 429, partition isolation, and spoof resistance in a
-  production-like test host.
-- Add founder/internal targeted-abuse runbook without exposing raw customer IPs to businesses.
-- Prove raw intake/page tokens do not enter application logs, traces, analytics, exceptions, or
-  friction reports; document Cloudflare/Railway configuration that code cannot enforce.
-- Decide customer page-token at-rest protection without breaking authorized staff re-sharing.
-  Current detail returns the retrievable token. Explicitly choose and prove hash plus rotation/one-
-  time disclosure, application encryption/key management, or documented accepted retrievable
-  storage; define migration, lookup, recovery, and rotation semantics.
-- Reconcile ADR/deferred statuses only after behavior exists.
-- Run migration-from-zero, build, unit, architecture, integration, and full-suite gates and record
-  exact counts/files/migrations/external deployment checks.
+**Token-budget pilot:** Keep each Claude session to one G8 slice. Claude reads only the header,
+the current G8 slice, and exact named files. Use targeted `rg`/small `sed`; report approximate
+token use after preflight and after first implementation pass. No full suite unless the slice is
+the G8 completion gate or Christian explicitly approves it.
+
+### G8 split
+
+- **G8a — trusted client-IP/rate-limiter proof:** production-like rate-limit test host, trusted
+  proxy/IP resolver, spoofed forwarded-header rejection, 10/minute + zero-queue + partition tests.
+- **G8b — bearer-token-safe logging proof:** application logging/tracing redaction/proof for public
+  intake tokens and customer page tokens; Railway/Cloudflare access-log limits documented.
+- **G8c — customer page-token at-rest decision + implementation, if chosen:** hash-plus-rotation /
+  one-time disclosure, application encryption, or explicitly accepted retrievable storage.
+- **G8d — ledger/final completion gate:** reconcile ADR/deferred statuses, migration-from-zero,
+  build, focused/full tests, and final pre-Session-6 green gate.
+
+### G8a — Trusted client IP / rate-limiter proof — READY TO CODE
+
+**Purpose:** fix GAP-012. Untrusted peers must not choose rate-limiter partitions by spoofing
+`CF-Connecting-IP` or `X-Forwarded-For`; public anonymous write routes must prove 10/minute,
+`QueueLimit=0`, and 429 behavior in a production-like host where rate limiting is enabled.
+
+**Likely files to create/modify:**
+
+1. `src/OpHalo.Api/Program.cs`
+   - Replace local `GetClientIp` trust of `CF-Connecting-IP` / `X-Forwarded-For`.
+   - Add config-driven trusted-proxy behavior. Do not hardcode current Cloudflare IP ranges in code;
+     read trusted proxy/CIDR configuration and document deployment values.
+   - Add/allow a non-`Testing` production-like test environment (for example `RateLimitTesting`) so
+     rate limiting runs under `WebApplicationFactory` while HTTPS redirect remains disabled for
+     test-server requests.
+
+2. New API helper under `src/OpHalo.Api/...` (name/location to confirm in preflight), e.g.
+   `ClientIpResolver`.
+   - Pure, unit-testable resolver for:
+     - remote IP not trusted → ignore forwarded headers and use `RemoteIpAddress`;
+     - trusted remote + `CF-Connecting-IP` valid → use CF value;
+     - trusted remote + no CF + `X-Forwarded-For` valid → use first client IP;
+     - malformed/blank headers → fall back safely;
+     - unknown remote → stable safe partition such as `unknown`.
+
+3. `tests/OpHalo.UnitTests/...` (new focused resolver tests)
+   - Direct tests for trusted vs untrusted remote, CF precedence, XFF fallback, malformed headers,
+     IPv4/IPv6 loopback/private examples, and fail-closed fallback.
+
+4. `tests/OpHalo.IntegrationTests/Api/...` (new production-like rate-limit fixture)
+   - A dedicated `WebApplicationFactory` variant that does **not** use environment `Testing` for
+     rate limiting, but still avoids HTTPS redirect.
+   - Prove public-intake route 11th request in one minute returns 429 with `QueueLimit=0`.
+   - Prove partition isolation: different trusted client IPs or different customer page tokens do
+     not share the same limiter bucket.
+   - Prove spoof resistance: untrusted remote with different `CF-Connecting-IP` / `X-Forwarded-For`
+     values still shares the remote-IP bucket and hits 429.
+
+**Locked G8a decisions:**
+
+- Use configuration key `Edge:TrustedProxyCidrs` for trusted proxy/network CIDRs. Empty/missing
+  config means no forwarded headers are trusted.
+- Do not hardcode Cloudflare IP ranges in code. Deployment supplies Cloudflare/Railway trusted
+  network values; build-log/G8 docs record that code cannot verify external access-log behavior.
+- Use `RateLimitTesting` as the production-like test environment. It should skip HTTPS redirect like
+  `Testing`, but **must keep rate limiting enabled**.
+- Trust loopback only in `RateLimitTesting` so TestServer can simulate a trusted proxy without
+  relaxing production defaults.
+- Keep existing policy names and limits: `public-intake`, `auth`, and `customer-write`; 10 requests
+  per minute; `QueueLimit=0`.
+
+### G8b draft — Token-safe application logging proof
+
+**Purpose:** fix GAP-013 for application-controlled logs/traces. Public intake tokens and customer
+page tokens are bearer secrets in route segments.
+
+**Known current state:**
+
+- App does not call `UseHttpLogging` or explicit request logging, but default framework logs and
+  future friction/reporting hooks can still accidentally capture paths.
+- Public routes are `/keep/public-intake/token/{publicIntakeToken}` and `/keep/r/{pageToken}...`.
+- Cloudflare/Railway edge access logs cannot be fully proven by code; document required config and
+  accepted residuals.
+
+**Likely work:**
+
+- Add a small redaction helper/policy for public-token paths.
+- Add an integration/log-capture proof that application logs for public token routes do not contain
+  raw tokens.
+- Document deployment-side access-log expectations in build-log/G8 docs.
+
+**Open G8b decision:** decide whether to suppress framework request-path logs, redact route values,
+or both. Do not build a broad logging platform.
+
+### G8c decision — Customer page-token at-rest protection — LOCKED
+
+Current state: `KeepRequest.PageToken` is stored retrievably and authenticated detail returns it so
+staff can re-share the customer link. Public intake links already store only `TokenHash`, but page
+tokens are different because they are intentionally re-shareable from staff detail.
+
+Decision: **Option 3 — documented accepted retrievable storage for pilot.**
+
+- Keep raw `KeepRequest.PageToken` storage for now because authenticated staff re-sharing is a
+  locked workflow.
+- Do not add hash-only lookup, one-time disclosure, token rotation, application encryption, key
+  management, or migration in G8.
+- G8 must still prove token-safe application logs/traces/errors and document accepted residual
+  risks, including database read exposure and Cloudflare/Railway access-log limitations.
+- Defer stronger page-token at-rest protection to a dedicated future access-link management/security
+  slice.
+
+### G8 exclusions
 
 G8 explicitly excludes notifications, realtime, frontend UI, Spam/Test implementation, Turnstile,
-SMS verification, and a general abuse platform.
+SMS verification, adaptive bot challenges, source blocking, and a general abuse platform.
 
 ---
 
