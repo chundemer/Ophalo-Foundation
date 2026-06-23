@@ -1285,6 +1285,191 @@ public class KeepRequestListServiceTests
         Assert.Empty(row.Actions.ContactActions);
     }
 
+    // --- Timing info (P6b-3 — ADR-337/338) -------------------------------------
+
+    [Fact]
+    public async Task Timing_is_null_when_no_follow_up_or_planned_for_set()
+    {
+        var request = MakeRequest();
+        var sut = BuildSut(HappyPathPersistence([request]));
+
+        var result = await sut.ExecuteAsync();
+
+        Assert.True(result.IsSuccess);
+        var timing = result.Value.Requests[0].Timing;
+        Assert.Null(timing.FollowUpOnDate);
+        Assert.Null(timing.FollowUpOnReason);
+        Assert.Null(timing.FollowUpOnLabel);
+        Assert.False(timing.HasFutureFollowUpOn);
+        Assert.Null(timing.PlannedForDate);
+        Assert.Null(timing.PlannedForLabel);
+        Assert.False(timing.HasFuturePlannedFor);
+    }
+
+    [Theory]
+    [InlineData(1)] // Weather
+    [InlineData(2)] // Parts
+    [InlineData(3)] // CustomerDelay
+    [InlineData(4)] // BusinessOperatorAvailability
+    [InlineData(5)] // ThirdParty
+    public async Task Timing_future_follow_up_shows_reason_label_and_sets_suppression_flag(int reasonValue)
+    {
+        var request = MakeRequest();
+        // Future = today + 3 days (within same week for day-label fallback, but reason takes priority)
+        var futureDate = DateOnly.FromDateTime(Now).AddDays(3);
+        SetProp(request, nameof(KeepRequest.FollowUpOnDate), futureDate);
+        SetProp(request, nameof(KeepRequest.FollowUpReason), (FollowUpReason)reasonValue);
+        var sut = BuildSut(HappyPathPersistence([request]));
+
+        var result = await sut.ExecuteAsync();
+
+        Assert.True(result.IsSuccess);
+        var timing = result.Value.Requests[0].Timing;
+        Assert.Equal(futureDate, timing.FollowUpOnDate);
+        Assert.True(timing.HasFutureFollowUpOn);
+        Assert.NotNull(timing.FollowUpOnLabel);
+        Assert.NotEqual("Follow-up overdue", timing.FollowUpOnLabel);
+        Assert.NotEqual("Follow up today", timing.FollowUpOnLabel);
+        Assert.DoesNotContain("Follow up", timing.FollowUpOnLabel!);
+    }
+
+    [Fact]
+    public async Task Timing_future_follow_up_business_operator_availability_uses_canonical_reason_slug()
+    {
+        var request = MakeRequest();
+        var futureDate = DateOnly.FromDateTime(Now).AddDays(3);
+        SetProp(request, nameof(KeepRequest.FollowUpOnDate), futureDate);
+        SetProp(request, nameof(KeepRequest.FollowUpReason), FollowUpReason.BusinessOperatorAvailability);
+        var sut = BuildSut(HappyPathPersistence([request]));
+
+        var result = await sut.ExecuteAsync();
+
+        Assert.True(result.IsSuccess);
+        var timing = result.Value.Requests[0].Timing;
+        Assert.Equal("business_operator_availability", timing.FollowUpOnReason);
+        Assert.Equal("Availability", timing.FollowUpOnLabel);
+    }
+
+    [Fact]
+    public async Task Timing_future_follow_up_other_reason_shows_day_label()
+    {
+        var request = MakeRequest();
+        var futureDate = DateOnly.FromDateTime(Now).AddDays(2);
+        SetProp(request, nameof(KeepRequest.FollowUpOnDate), futureDate);
+        SetProp(request, nameof(KeepRequest.FollowUpReason), FollowUpReason.Other);
+        SetProp(request, nameof(KeepRequest.FollowUpNote), "Custom note");
+        var sut = BuildSut(HappyPathPersistence([request]));
+
+        var result = await sut.ExecuteAsync();
+
+        Assert.True(result.IsSuccess);
+        var timing = result.Value.Requests[0].Timing;
+        Assert.True(timing.HasFutureFollowUpOn);
+        Assert.StartsWith("Follow up", timing.FollowUpOnLabel);
+        Assert.Equal("other", timing.FollowUpOnReason);
+        Assert.Equal("Custom note", timing.FollowUpOnNote);
+    }
+
+    [Fact]
+    public async Task Timing_follow_up_today_shows_today_label_and_suppression_false()
+    {
+        var request = MakeRequest();
+        var today = DateOnly.FromDateTime(Now);
+        SetProp(request, nameof(KeepRequest.FollowUpOnDate), today);
+        SetProp(request, nameof(KeepRequest.FollowUpReason), FollowUpReason.Parts);
+        var sut = BuildSut(HappyPathPersistence([request]));
+
+        var result = await sut.ExecuteAsync();
+
+        Assert.True(result.IsSuccess);
+        var timing = result.Value.Requests[0].Timing;
+        Assert.Equal("Follow up today", timing.FollowUpOnLabel);
+        Assert.False(timing.HasFutureFollowUpOn);
+        Assert.Equal("parts", timing.FollowUpOnReason);
+    }
+
+    [Fact]
+    public async Task Timing_follow_up_past_shows_overdue_label_and_suppression_false()
+    {
+        var request = MakeRequest();
+        var pastDate = DateOnly.FromDateTime(Now).AddDays(-2);
+        SetProp(request, nameof(KeepRequest.FollowUpOnDate), pastDate);
+        SetProp(request, nameof(KeepRequest.FollowUpReason), FollowUpReason.Weather);
+        var sut = BuildSut(HappyPathPersistence([request]));
+
+        var result = await sut.ExecuteAsync();
+
+        Assert.True(result.IsSuccess);
+        var timing = result.Value.Requests[0].Timing;
+        Assert.Equal("Follow-up overdue", timing.FollowUpOnLabel);
+        Assert.False(timing.HasFutureFollowUpOn);
+        Assert.Equal("weather", timing.FollowUpOnReason);
+    }
+
+    [Fact]
+    public async Task Timing_planned_for_today_shows_planned_today_label()
+    {
+        var request = MakeRequest();
+        var today = DateOnly.FromDateTime(Now);
+        SetProp(request, nameof(KeepRequest.PlannedForDate), today);
+        var sut = BuildSut(HappyPathPersistence([request]));
+
+        var result = await sut.ExecuteAsync();
+
+        Assert.True(result.IsSuccess);
+        var timing = result.Value.Requests[0].Timing;
+        Assert.Equal("Planned today", timing.PlannedForLabel);
+        Assert.False(timing.HasFuturePlannedFor);
+    }
+
+    [Fact]
+    public async Task Timing_planned_for_tomorrow_shows_planned_tomorrow_label()
+    {
+        var request = MakeRequest();
+        var tomorrow = DateOnly.FromDateTime(Now).AddDays(1);
+        SetProp(request, nameof(KeepRequest.PlannedForDate), tomorrow);
+        var sut = BuildSut(HappyPathPersistence([request]));
+
+        var result = await sut.ExecuteAsync();
+
+        Assert.True(result.IsSuccess);
+        var timing = result.Value.Requests[0].Timing;
+        Assert.Equal("Planned tomorrow", timing.PlannedForLabel);
+        Assert.True(timing.HasFuturePlannedFor);
+    }
+
+    [Fact]
+    public async Task Timing_planned_for_future_shows_day_name_label()
+    {
+        var request = MakeRequest();
+        var futureDate = DateOnly.FromDateTime(Now).AddDays(3);
+        SetProp(request, nameof(KeepRequest.PlannedForDate), futureDate);
+        var sut = BuildSut(HappyPathPersistence([request]));
+
+        var result = await sut.ExecuteAsync();
+
+        Assert.True(result.IsSuccess);
+        var timing = result.Value.Requests[0].Timing;
+        Assert.StartsWith("Planned ", timing.PlannedForLabel);
+        Assert.True(timing.HasFuturePlannedFor);
+    }
+
+    [Fact]
+    public async Task Timing_planned_for_past_shows_planned_date_passed_label()
+    {
+        var request = MakeRequest();
+        var pastDate = DateOnly.FromDateTime(Now).AddDays(-1);
+        SetProp(request, nameof(KeepRequest.PlannedForDate), pastDate);
+        var sut = BuildSut(HappyPathPersistence([request]));
+
+        var result = await sut.ExecuteAsync();
+
+        Assert.True(result.IsSuccess);
+        var timing = result.Value.Requests[0].Timing;
+        Assert.Equal("Planned date passed", timing.PlannedForLabel);
+        Assert.False(timing.HasFuturePlannedFor);
+    }
+
     // --- Fakes ------------------------------------------------------------------
 
     private sealed class FakeCursorProtector : IKeepRequestListCursorProtector

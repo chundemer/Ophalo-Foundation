@@ -24,7 +24,8 @@ public sealed record KeepRequestSummary(
     KeepRequestParticipationInfo Participation,
     KeepRequestNotificationInfo CurrentUserNotification,
     string? FeedbackReviewAgeBucket,
-    DateTime? FeedbackReviewDueAtUtc);
+    DateTime? FeedbackReviewDueAtUtc,
+    KeepRequestTimingInfo Timing);
 
 public sealed record KeepRequestAttentionInfo(
     string AttentionLevel,
@@ -82,3 +83,18 @@ public sealed record KeepRequestNotificationInfo(
     bool Eligible,
     bool Enabled,
     string? SuppressionReason);
+
+/// <summary>
+/// Follow Up On and Planned For scan metadata (ADR-337/338).
+/// HasFutureFollowUpOn and HasFuturePlannedFor are stale-suppression inputs for P6d.
+/// Labels are computed server-side against clock UTC so the client can render without date math.
+/// </summary>
+public sealed record KeepRequestTimingInfo(
+    DateOnly? FollowUpOnDate,
+    string? FollowUpOnReason,
+    string? FollowUpOnNote,
+    string? FollowUpOnLabel,
+    bool HasFutureFollowUpOn,
+    DateOnly? PlannedForDate,
+    string? PlannedForLabel,
+    bool HasFuturePlannedFor);

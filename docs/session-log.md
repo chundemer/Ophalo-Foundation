@@ -1,10 +1,10 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-06-23 (P6b-2 complete + auth hardening — versioned mutations, detail exposure, 15 integration tests green)
+**Last updated:** 2026-06-23 (P6b-3 complete — list scan metadata and stale-suppression inputs focused green)
 **Branch:** `main` (no remote yet)
-**Current baseline:** 1280 tests (677 unit · 14 architecture · 589 integration) — P6b-2 green after auth hardening.
+**Current baseline:** P6b-3 focused green after P6b-2 baseline 1280; full reconciled count pending P6b-4 completion gate.
 **Next free ADR:** ADR-345
-**Next batch: Phase 8-B5 Session 6 Prerequisites P6b-3 — list scan metadata and stale-suppression inputs.**
+**Next batch: Phase 8-B5 Session 6 Prerequisites P6b-4 — P6b completion gate.**
 
 ---
 
@@ -221,20 +221,20 @@ Current handoff:
 - **P6b-1 complete:** domain/schema foundation for Follow Up On and Planned For.
 - **P6b-2 complete:** versioned mutations, detail exposure, action affordances, validation hints,
   and explicit Owner/Admin/Operator role gate in `ManageRequestTimingService.AuthAsync`.
-- **Next session:** P6b-3 — list scan metadata and stale-suppression inputs.
+- **P6b-3 complete:** list scan metadata, labels, and stale-suppression inputs for Follow Up On
+  and Planned For; canonical follow-up reason slugs preserved in list output.
+- **Next session:** P6b-4 — P6b completion gate.
 
-P6b-3 Claude brief:
+P6b-4 Claude brief:
 
-- Read only the named files in build-log/060 P6b-3 plus exact compile-impact callers found by
-  targeted `rg`.
-- Add list/summary metadata for `FollowUpOnDate`, `FollowUpOnReason`, and `PlannedForDate`.
-- Add scan-safe labels for due, overdue, future follow-up/planned dates, and follow-up reasons.
-- Add explicit stale-suppression inputs for P6d to consume when future Follow Up On or future
-  Planned For exists.
-- Preserve existing list row authorization and visibility; do not expand Operator visibility.
-- Do not implement the actual `needs_status_check` queue, account policy thresholds, or latest
-  meaningful activity helper.
-- Verify with focused list unit tests, focused list API tests, and `dotnet build`.
+- Reconcile this session log, build-log/060, deferred topics, and ADR/decision index for P6b only.
+- Record implemented scope and final test baseline for P6b-1 through P6b-3.
+- Keep DEF-037 open for P6d and DEF-030 open for P6c.
+- Mark DEF-067 implemented only if the ledger confirms Follow Up On is fully exposed across
+  domain/API/list/detail.
+- Move the next batch to P6c only after the P6b completion gate is green.
+- Verify with the full unit project, focused P6b integration tests, `dotnet build`, and broader
+  suite only if approved or if ledger reconciliation changes shared behavior.
 
 Hard exclusions: archive/unarchive/closeout-reviewed state, auto-close/auto-complete, dispatch or
 calendar scheduling, customer self-scheduling, notification delivery implementation, realtime,

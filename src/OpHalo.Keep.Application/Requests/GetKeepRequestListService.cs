@@ -628,6 +628,8 @@ public sealed class GetKeepRequestListService(
             ? FeedbackReviewPolicy.ComputeReviewDueAtUtc(r.FeedbackSubmittedAtUtc.Value)
             : (DateTime?)null;
 
+        var timing = BuildTimingInfo(r, nowUtc);
+
         return new KeepRequestSummary(
             Id: r.Id,
             ReferenceCode: r.ReferenceCode,
@@ -652,7 +654,8 @@ public sealed class GetKeepRequestListService(
             Participation: participationInfo,
             CurrentUserNotification: notificationInfo,
             FeedbackReviewAgeBucket: feedbackReviewAgeBucket,
-            FeedbackReviewDueAtUtc: feedbackReviewDueAtUtc);
+            FeedbackReviewDueAtUtc: feedbackReviewDueAtUtc,
+            Timing: timing);
     }
 
     private static (string group, int order) ComputeRankingGroup(
@@ -850,6 +853,80 @@ public sealed class GetKeepRequestListService(
 
         return new KeepRequestNotificationInfo(true, false, "not_participating");
     }
+
+    // --- Timing info (ADR-337/338) ---
+
+    private static KeepRequestTimingInfo BuildTimingInfo(KeepRequest r, DateTime nowUtc)
+    {
+        var today = DateOnly.FromDateTime(nowUtc);
+
+        string? followUpOnLabel = null;
+        var hasFutureFollowUpOn = false;
+
+        if (r.FollowUpOnDate.HasValue)
+        {
+            var d = r.FollowUpOnDate.Value;
+            hasFutureFollowUpOn = d > today;
+            followUpOnLabel = d < today ? "Follow-up overdue"
+                            : d == today ? "Follow up today"
+                            : ComputeFutureFollowUpLabel(d, r.FollowUpReason, today);
+        }
+
+        string? plannedForLabel = null;
+        var hasFuturePlannedFor = false;
+
+        if (r.PlannedForDate.HasValue)
+        {
+            var d = r.PlannedForDate.Value;
+            hasFuturePlannedFor = d > today;
+            plannedForLabel = d < today ? "Planned date passed"
+                            : d == today ? "Planned today"
+                            : d == today.AddDays(1) ? "Planned tomorrow"
+                            : $"Planned {d.ToString("ddd", System.Globalization.CultureInfo.InvariantCulture)}";
+        }
+
+        return new KeepRequestTimingInfo(
+            FollowUpOnDate: r.FollowUpOnDate,
+            FollowUpOnReason: r.FollowUpReason.HasValue ? MapFollowUpReason(r.FollowUpReason.Value) : null,
+            FollowUpOnNote: r.FollowUpNote,
+            FollowUpOnLabel: followUpOnLabel,
+            HasFutureFollowUpOn: hasFutureFollowUpOn,
+            PlannedForDate: r.PlannedForDate,
+            PlannedForLabel: plannedForLabel,
+            HasFuturePlannedFor: hasFuturePlannedFor);
+    }
+
+    private static string ComputeFutureFollowUpLabel(DateOnly date, FollowUpReason? reason, DateOnly today)
+    {
+        if (reason.HasValue && reason.Value != FollowUpReason.Other)
+        {
+            return reason.Value switch
+            {
+                FollowUpReason.Weather                     => "Weather",
+                FollowUpReason.Parts                       => "Parts",
+                FollowUpReason.CustomerDelay               => "Customer delay",
+                FollowUpReason.BusinessOperatorAvailability => "Availability",
+                FollowUpReason.ThirdParty                  => "Third party",
+                _ => throw new InvalidOperationException($"Unknown FollowUpReason: {reason.Value}")
+            };
+        }
+
+        var daysAhead = date.DayNumber - today.DayNumber;
+        return daysAhead <= 6
+            ? $"Follow up {date.ToString("ddd", System.Globalization.CultureInfo.InvariantCulture)}"
+            : $"Follow up {date.ToString("MMM d", System.Globalization.CultureInfo.InvariantCulture)}";
+    }
+
+    private static string MapFollowUpReason(FollowUpReason reason) => reason switch
+    {
+        FollowUpReason.Weather                      => "weather",
+        FollowUpReason.Parts                        => "parts",
+        FollowUpReason.CustomerDelay                => "customer_delay",
+        FollowUpReason.BusinessOperatorAvailability => "business_operator_availability",
+        FollowUpReason.ThirdParty                   => "third_party",
+        FollowUpReason.Other                        => "other",
+        _ => throw new InvalidOperationException($"Unknown FollowUpReason: {reason}")
+    };
 
     private static string MapStatus(KeepRequestStatus status) => status switch
     {

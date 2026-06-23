@@ -35,6 +35,7 @@ public sealed class KeepRequestListB5Tests : IClassFixture<KeepApiWebFactory>, I
     private Guid _receivedRequestId;
     private Guid _closedUnresolvedRequestId;
     private Guid _receivedRequestVersion;
+    private Guid _ownerAccountUserId;
 
     public KeepRequestListB5Tests(KeepApiWebFactory factory)
     {
@@ -209,6 +210,7 @@ public sealed class KeepRequestListB5Tests : IClassFixture<KeepApiWebFactory>, I
         await db.SaveChangesAsync();
 
         // --- Sessions ---
+        _ownerAccountUserId = graph.Owner.Id;
         _ownerCookie    = await _factory.SeedSessionAsync(graph.Owner.Id, _accountId);
         _operatorCookie = await _factory.SeedSessionAsync(operatorMember.Id, _accountId);
         _viewerCookie   = await _factory.SeedSessionAsync(viewerMember.Id, _accountId);
@@ -361,6 +363,60 @@ public sealed class KeepRequestListB5Tests : IClassFixture<KeepApiWebFactory>, I
         Assert.Equal(_receivedRequestVersion, row.Version);
     }
 
+    // =========================================================================
+    // P6b-3: list timing scan metadata (ADR-337/338)
+    // =========================================================================
+
+    [Fact]
+    public async Task ListRow_Timing_is_null_fields_when_no_follow_up_or_planned_for()
+    {
+        var body = await GetListAsync(_ownerCookie);
+        Assert.NotNull(body);
+        // All active seeded requests were created without timing; timing object present but empty.
+        var row = body.Requests.FirstOrDefault(r => r.Id == _receivedRequestId);
+        Assert.NotNull(row);
+        Assert.NotNull(row.Timing);
+        Assert.Null(row.Timing.FollowUpOnDate);
+        Assert.Null(row.Timing.FollowUpOnLabel);
+        Assert.False(row.Timing.HasFutureFollowUpOn);
+        Assert.Null(row.Timing.PlannedForDate);
+        Assert.Null(row.Timing.PlannedForLabel);
+        Assert.False(row.Timing.HasFuturePlannedFor);
+    }
+
+    [Fact]
+    public async Task ListRow_Timing_future_follow_up_on_sets_suppression_and_reason_label()
+    {
+        var now = DateTime.UtcNow;
+        var futureDate = DateOnly.FromDateTime(now).AddDays(5);
+
+        await using var scope = _factory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+        var request = await db.Set<KeepRequest>().FindAsync(_receivedRequestId);
+        Assert.NotNull(request);
+
+        var setResult = request.SetFollowUpOn(
+            futureDate,
+            FollowUpReason.Parts,
+            note: null,
+            _ownerAccountUserId,
+            "Owner",
+            now);
+        Assert.True(setResult.IsSuccess);
+        db.Set<KeepRequestEvent>().Add(setResult.Value);
+        await db.SaveChangesAsync();
+
+        var body = await GetListAsync(_ownerCookie);
+        Assert.NotNull(body);
+        var row = body.Requests.FirstOrDefault(r => r.Id == _receivedRequestId);
+        Assert.NotNull(row);
+        Assert.NotNull(row.Timing);
+        Assert.NotNull(row.Timing.FollowUpOnDate);
+        Assert.True(row.Timing.HasFutureFollowUpOn);
+        Assert.Equal("Parts", row.Timing.FollowUpOnLabel);
+        Assert.Equal("parts", row.Timing.FollowUpOnReason);
+    }
+
     // --- Response DTOs (B5 nested shape) ---
 
     private sealed record B5RequestListBody(List<B5RequestSummaryBody> Requests);
@@ -373,7 +429,8 @@ public sealed class KeepRequestListB5Tests : IClassFixture<KeepApiWebFactory>, I
         B5AttentionBody Attention,
         B5RankingBody Ranking,
         B5ActionsBody Actions,
-        B5NotificationBody CurrentUserNotification);
+        B5NotificationBody CurrentUserNotification,
+        B5TimingBody? Timing);
 
     private sealed record B5AttentionBody(
         string AttentionLevel,
@@ -398,4 +455,14 @@ public sealed class KeepRequestListB5Tests : IClassFixture<KeepApiWebFactory>, I
         bool Eligible,
         bool Enabled,
         string? SuppressionReason);
+
+    private sealed record B5TimingBody(
+        string? FollowUpOnDate,
+        string? FollowUpOnReason,
+        string? FollowUpOnNote,
+        string? FollowUpOnLabel,
+        bool HasFutureFollowUpOn,
+        string? PlannedForDate,
+        string? PlannedForLabel,
+        bool HasFuturePlannedFor);
 }

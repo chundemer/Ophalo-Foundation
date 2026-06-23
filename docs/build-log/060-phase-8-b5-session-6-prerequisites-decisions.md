@@ -429,6 +429,30 @@ Verify:
 - Focused list API tests.
 - `dotnet build`
 
+#### P6b-3 — COMPLETE
+
+**Status:** focused green; final full-suite baseline to be reconciled in P6b-4.
+
+**Delivered:**
+- `KeepRequestSummary` now includes `KeepRequestTimingInfo`.
+- List rows expose `FollowUpOnDate`, `FollowUpOnReason`, `FollowUpOnNote`, `FollowUpOnLabel`,
+  `HasFutureFollowUpOn`, `PlannedForDate`, `PlannedForLabel`, and `HasFuturePlannedFor`.
+- Follow Up On labels cover due today, overdue, future day/date fallback, and reason-first labels
+  such as `Weather`, `Parts`, `Customer delay`, `Availability`, and `Third party`.
+- Planned For labels cover today, tomorrow, future day, and date-passed states.
+- Future Follow Up On / Planned For booleans are explicit stale-suppression inputs for P6d.
+- Canonical reason slug parity with detail metadata is preserved, including
+  `business_operator_availability`.
+- No `needs_status_check` queue, account threshold, or latest-meaningful-activity helper was added.
+
+**Verified:**
+- `dotnet test tests/OpHalo.UnitTests/OpHalo.UnitTests.csproj --filter FullyQualifiedName~KeepRequestListServiceTests -m:1 /nr:false --no-restore`
+  — 121 passed.
+- `dotnet test tests/OpHalo.IntegrationTests/OpHalo.IntegrationTests.csproj --filter FullyQualifiedName~KeepRequestListB5Tests -m:1 /nr:false --no-restore`
+  — 11 passed.
+- `dotnet build -m:1 /nr:false --no-restore` — succeeded with the existing NuGet vulnerability-data
+  warning in unit tests.
+
 #### P6b-4 — P6b completion gate
 
 Goal: reconcile docs and run the proportionate suite after P6b-1 through P6b-3 are green.
