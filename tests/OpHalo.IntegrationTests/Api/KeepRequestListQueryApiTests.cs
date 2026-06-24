@@ -642,11 +642,18 @@ public sealed class KeepRequestListQueryApiTests : IClassFixture<KeepApiWebFacto
         Assert.True(body!.ViewCounts!.ReadyToClose >= 0);
     }
 
-    // --- S7d: Spam/Test terminal exclusion from active views ---
+    // --- S7d: Spam/Test terminal exclusion from active views and counts ---
 
     [Fact]
-    public async Task Spam_request_excluded_from_default_active_view_and_present_in_all_history()
+    public async Task Spam_request_excluded_from_default_active_view_counts_and_present_in_all_history()
     {
+        var opts = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+
+        // Capture baseline view counts before seeding the Spam request.
+        var baselineRes = await GetAsync("/keep/requests");
+        var baselineBody = await baselineRes.Content.ReadFromJsonAsync<ListResponseBody>(opts);
+        var baselineDefaultCount = baselineBody!.ViewCounts!.Default;
+
         // Seed a Spam request directly in the database (no classification endpoint until S7e).
         Guid spamRequestId;
         await using (var scope = _factory.CreateScope())
@@ -676,12 +683,13 @@ public sealed class KeepRequestListQueryApiTests : IClassFixture<KeepApiWebFacto
             spamRequestId = req.Id;
         }
 
-        var opts = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
-
         var defaultRes = await GetAsync("/keep/requests");
         Assert.Equal(HttpStatusCode.OK, defaultRes.StatusCode);
         var defaultBody = await defaultRes.Content.ReadFromJsonAsync<ListResponseBody>(opts);
+
+        // Spam request must not appear in rows or inflate the Default count.
         Assert.DoesNotContain(defaultBody!.Requests, r => r.Id == spamRequestId);
+        Assert.Equal(baselineDefaultCount, defaultBody.ViewCounts!.Default);
 
         var historyRes = await GetAsync("/keep/requests?view=all_history");
         Assert.Equal(HttpStatusCode.OK, historyRes.StatusCode);
@@ -690,8 +698,14 @@ public sealed class KeepRequestListQueryApiTests : IClassFixture<KeepApiWebFacto
     }
 
     [Fact]
-    public async Task Test_request_excluded_from_default_active_view()
+    public async Task Test_request_excluded_from_default_active_view_and_counts()
     {
+        var opts = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+
+        var baselineRes = await GetAsync("/keep/requests");
+        var baselineBody = await baselineRes.Content.ReadFromJsonAsync<ListResponseBody>(opts);
+        var baselineDefaultCount = baselineBody!.ViewCounts!.Default;
+
         // Seed a Test request directly in the database (no classification endpoint until S7e).
         Guid testRequestId;
         await using (var scope = _factory.CreateScope())
@@ -721,12 +735,34 @@ public sealed class KeepRequestListQueryApiTests : IClassFixture<KeepApiWebFacto
             testRequestId = req.Id;
         }
 
-        var opts = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
-
         var defaultRes = await GetAsync("/keep/requests");
         Assert.Equal(HttpStatusCode.OK, defaultRes.StatusCode);
         var defaultBody = await defaultRes.Content.ReadFromJsonAsync<ListResponseBody>(opts);
+
         Assert.DoesNotContain(defaultBody!.Requests, r => r.Id == testRequestId);
+        Assert.Equal(baselineDefaultCount, defaultBody.ViewCounts!.Default);
+    }
+
+    [Fact]
+    public async Task SpamStatus_filter_is_contradictory_on_active_view_and_valid_on_all_history()
+    {
+        // Active-only view + terminal status slug must return 400 Contradictory.
+        var activeCode = await GetErrorCodeAsync("/keep/requests?status=spam");
+        Assert.Equal("KeepRequest.RequestListContradictoryParameters", activeCode);
+
+        // all_history + spam status must be accepted (200).
+        var histRes = await GetAsync("/keep/requests?view=all_history&status=spam");
+        Assert.Equal(HttpStatusCode.OK, histRes.StatusCode);
+    }
+
+    [Fact]
+    public async Task TestStatus_filter_is_contradictory_on_active_view_and_valid_on_all_history()
+    {
+        var activeCode = await GetErrorCodeAsync("/keep/requests?status=test");
+        Assert.Equal("KeepRequest.RequestListContradictoryParameters", activeCode);
+
+        var histRes = await GetAsync("/keep/requests?view=all_history&status=test");
+        Assert.Equal(HttpStatusCode.OK, histRes.StatusCode);
     }
 
     // --- Response DTOs ----------------------------------------------------------

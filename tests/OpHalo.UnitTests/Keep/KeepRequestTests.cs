@@ -233,6 +233,20 @@ public class KeepRequestTests
     [Theory]
     [InlineData(KeepRequestStatus.Spam)]
     [InlineData(KeepRequestStatus.Test)]
+    public void SetFollowUpOn_blocked_on_Spam_and_Test(KeepRequestStatus status)
+    {
+        var request = NewRequest();
+        var statusProp = typeof(KeepRequest).GetProperty("Status")!;
+        statusProp.SetValue(request, status);
+        var result = request.SetFollowUpOn(
+            DateOnly.FromDateTime(Now.AddDays(1)), FollowUpReason.Weather,
+            null, Guid.NewGuid(), "Actor", Now);
+        Assert.False(result.IsSuccess);
+    }
+
+    [Theory]
+    [InlineData(KeepRequestStatus.Spam)]
+    [InlineData(KeepRequestStatus.Test)]
     public void CustomerMessage_blocked_on_Spam_and_Test(KeepRequestStatus status)
     {
         var request = NewRequest();

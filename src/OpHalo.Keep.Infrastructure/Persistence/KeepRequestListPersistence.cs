@@ -214,11 +214,17 @@ public sealed class KeepRequestListPersistence(OpHaloDbContext dbContext) : IKee
 
         // Non-terminal scoped base for counts that exclude terminal rows.
         var scopedActive = scopedBase.Where(r =>
-            r.Status != KeepRequestStatus.Closed && r.Status != KeepRequestStatus.Cancelled);
+            r.Status != KeepRequestStatus.Closed
+            && r.Status != KeepRequestStatus.Cancelled
+            && r.Status != KeepRequestStatus.Spam
+            && r.Status != KeepRequestStatus.Test);
 
         // Default: same filter as Default view rows — guarantees row/count composition (G4d).
         var defaultCount = await scopedBase.CountAsync(r =>
-            r.Status != KeepRequestStatus.Closed && r.Status != KeepRequestStatus.Cancelled
+            (r.Status != KeepRequestStatus.Closed
+                && r.Status != KeepRequestStatus.Cancelled
+                && r.Status != KeepRequestStatus.Spam
+                && r.Status != KeepRequestStatus.Test)
             || (isOwnerOrAdmin
                 && r.Status == KeepRequestStatus.Closed
                 && r.AttentionReason == AttentionReason.UnresolvedFeedback

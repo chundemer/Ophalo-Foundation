@@ -1084,7 +1084,9 @@ public sealed class KeepRequest : BaseEntity
     private bool IsActive =>
         Status is not (KeepRequestStatus.Resolved
                        or KeepRequestStatus.Closed
-                       or KeepRequestStatus.Cancelled);
+                       or KeepRequestStatus.Cancelled
+                       or KeepRequestStatus.Spam
+                       or KeepRequestStatus.Test);
 
     /// <summary>
     /// Creates a request submitted by a customer through public intake.

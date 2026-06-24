@@ -165,8 +165,8 @@ terminal exclusion filters, `all_history` inclusion, customer-write guard, actio
 11. `tests/OpHalo.IntegrationTests/Api/KeepRequestListQueryApiTests.cs` — Spam excluded default + in all_history; Test excluded default
 
 **Note:** Gate preflight missed `GetKeepRequestListService`'s private `MapStatus` (separate from
-`KeepRequestDetailMapper.MapStatus`); discovered and fixed during integration test failure. 9
-production files touched, not 8.
+`KeepRequestDetailMapper.MapStatus`); discovered and fixed during integration test failure. 8
+unique production files — `GetKeepRequestListService.cs` was one file with two method changes.
 
 **Test gate:** 797 unit · 14 arch green. 46 list query integration tests green.
 

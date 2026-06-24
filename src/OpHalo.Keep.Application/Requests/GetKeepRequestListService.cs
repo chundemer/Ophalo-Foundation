@@ -497,7 +497,8 @@ public sealed class GetKeepRequestListService(
     {
         if (parsedStatus.HasValue)
         {
-            var isTerminal = parsedStatus.Value is KeepRequestStatus.Closed or KeepRequestStatus.Cancelled;
+            var isTerminal = parsedStatus.Value is KeepRequestStatus.Closed or KeepRequestStatus.Cancelled
+                                                 or KeepRequestStatus.Spam  or KeepRequestStatus.Test;
             var isActive = !isTerminal;
 
             // History views are restricted to their own terminal statuses.
