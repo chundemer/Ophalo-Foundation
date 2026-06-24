@@ -1610,6 +1610,130 @@ public class KeepRequestListServiceTests
         Assert.Equal(KeepRequestVisibilityScope.MyWork, p.LastActiveScope);
     }
 
+    // --- ready_to_close view (P6f-2) ----------------------------------------------
+
+    private static KeepRequest MakeResolvedRequest()
+    {
+        var r = MakeRequest();
+        SetProp(r, nameof(KeepRequest.Status), KeepRequestStatus.Resolved);
+        return r;
+    }
+
+    [Fact]
+    public async Task ReadyToClose_resolved_clean_row_appears()
+    {
+        var request = MakeResolvedRequest();
+        var sut = BuildSut(HappyPathPersistence([request]));
+
+        var result = await sut.ExecuteAsync(new KeepRequestListQuery(View: "ready_to_close"));
+
+        Assert.True(result.IsSuccess);
+        Assert.Single(result.Value.Requests);
+    }
+
+    [Fact]
+    public async Task ReadyToClose_resolved_with_attention_excluded()
+    {
+        var request = MakeResolvedRequest();
+        SetProp(request, nameof(KeepRequest.AttentionLevel), AttentionLevel.NeedsAttention);
+        var sut = BuildSut(HappyPathPersistence([request]));
+
+        var result = await sut.ExecuteAsync(new KeepRequestListQuery(View: "ready_to_close"));
+
+        Assert.True(result.IsSuccess);
+        Assert.Empty(result.Value.Requests);
+    }
+
+    [Theory]
+    [InlineData(KeepRequestStatus.Received)]
+    [InlineData(KeepRequestStatus.InProgress)]
+    [InlineData(KeepRequestStatus.PendingCustomer)]
+    [InlineData(KeepRequestStatus.Closed)]
+    [InlineData(KeepRequestStatus.Cancelled)]
+    [InlineData(KeepRequestStatus.Scheduled)]
+    public async Task ReadyToClose_non_resolved_status_excluded(KeepRequestStatus status)
+    {
+        var request = MakeRequest();
+        SetProp(request, nameof(KeepRequest.Status), status);
+        var sut = BuildSut(HappyPathPersistence([request]));
+
+        var result = await sut.ExecuteAsync(new KeepRequestListQuery(View: "ready_to_close"));
+
+        Assert.True(result.IsSuccess);
+        Assert.Empty(result.Value.Requests);
+    }
+
+    [Fact]
+    public async Task ReadyToClose_warning_signal_true_when_customer_active_after_business()
+    {
+        var request = MakeResolvedRequest();
+        SetProp(request, nameof(KeepRequest.LastBusinessActivityAt), Now.AddHours(-5));
+        SetProp(request, nameof(KeepRequest.LastCustomerActivityAt), Now.AddHours(-2));
+        var sut = BuildSut(HappyPathPersistence([request]));
+
+        var result = await sut.ExecuteAsync(new KeepRequestListQuery(View: "ready_to_close"));
+
+        Assert.True(result.IsSuccess);
+        Assert.Single(result.Value.Requests);
+        Assert.True(result.Value.Requests[0].ReadyToClose.HasCustomerActivityAfterResolution);
+    }
+
+    [Fact]
+    public async Task ReadyToClose_warning_signal_false_when_business_active_after_customer()
+    {
+        var request = MakeResolvedRequest();
+        SetProp(request, nameof(KeepRequest.LastBusinessActivityAt), Now.AddHours(-1));
+        SetProp(request, nameof(KeepRequest.LastCustomerActivityAt), Now.AddHours(-4));
+        var sut = BuildSut(HappyPathPersistence([request]));
+
+        var result = await sut.ExecuteAsync(new KeepRequestListQuery(View: "ready_to_close"));
+
+        Assert.True(result.IsSuccess);
+        Assert.Single(result.Value.Requests);
+        Assert.False(result.Value.Requests[0].ReadyToClose.HasCustomerActivityAfterResolution);
+    }
+
+    [Fact]
+    public async Task ReadyToClose_warning_signal_populated_on_all_rows_not_just_view()
+    {
+        var request = MakeRequest();
+        SetProp(request, nameof(KeepRequest.LastBusinessActivityAt), Now.AddHours(-5));
+        SetProp(request, nameof(KeepRequest.LastCustomerActivityAt), Now.AddHours(-2));
+        var sut = BuildSut(HappyPathPersistence([request]));
+
+        // default view — row still gets ReadyToCloseInfo populated
+        var result = await sut.ExecuteAsync(new KeepRequestListQuery(View: "default"));
+
+        Assert.True(result.IsSuccess);
+        Assert.Single(result.Value.Requests);
+        Assert.True(result.Value.Requests[0].ReadyToClose.HasCustomerActivityAfterResolution);
+    }
+
+    [Fact]
+    public async Task ReadyToClose_operator_receives_403()
+    {
+        var p = HappyPathPersistence(role: AccountUserRole.Operator);
+        var sut = BuildSut(p);
+
+        var result = await sut.ExecuteAsync(new KeepRequestListQuery(View: "ready_to_close"));
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal("KeepRequest.RequestListHistoryViewForbidden", result.Error!.Code);
+    }
+
+    [Fact]
+    public async Task ReadyToClose_view_count_propagated_from_persistence()
+    {
+        var p = HappyPathPersistence();
+        p.ViewCountsToReturn = new KeepRequestViewCounts(5, 1, 2, 0, 3, 1, 4);
+        var sut = BuildSut(p);
+
+        var result = await sut.ExecuteAsync(new KeepRequestListQuery(View: "default"));
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(4, result.Value.ViewCounts!.ReadyToClose);
+    }
+
     // --- Fakes ------------------------------------------------------------------
 
     private sealed class FakeCursorProtector : IKeepRequestListCursorProtector
@@ -1654,6 +1778,7 @@ public class KeepRequestListServiceTests
         public HistoryViewKind LastHistoryViewKind { get; private set; }
         public KeepRequestListFilters? LastHistoryFilters { get; private set; }
         public KeepRequestVisibilityScope LastViewCountsScope { get; private set; }
+        public KeepRequestViewCounts? ViewCountsToReturn { get; set; }
 
         public Task<AccountUserSnapshot?> GetAccountUserSnapshotAsync(Guid accountUserId, CancellationToken ct) =>
             Task.FromResult(UserSnapshotToReturn);
@@ -1689,7 +1814,7 @@ public class KeepRequestListServiceTests
             KeepRequestVisibilityScope scope, CancellationToken ct)
         {
             LastViewCountsScope = scope;
-            return Task.FromResult(new KeepRequestViewCounts(0, 0, 0, 0, 0, 0));
+            return Task.FromResult(ViewCountsToReturn ?? new KeepRequestViewCounts(0, 0, 0, 0, 0, 0, 0));
         }
 
         public Task<IReadOnlyList<KeepRequestAvailableRow>> GetAvailableRequestsAsync(

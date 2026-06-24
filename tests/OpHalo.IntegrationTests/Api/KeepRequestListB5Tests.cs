@@ -34,10 +34,13 @@ public sealed class KeepRequestListB5Tests : IClassFixture<KeepApiWebFactory>, I
 
     // Request IDs and version for targeted assertions
     private Guid _receivedRequestId;
+    private Guid _resolvedRequestId;
     private Guid _closedUnresolvedRequestId;
     private Guid _receivedRequestVersion;
     private Guid _ownerAccountUserId;
     private Guid _oldIdleRequestId;
+    private Guid _resolvedCleanRequestId;
+    private Guid _resolvedWithCustomerActivityRequestId;
 
     public KeepRequestListB5Tests(KeepApiWebFactory factory)
     {
@@ -145,6 +148,7 @@ public sealed class KeepRequestListB5Tests : IClassFixture<KeepApiWebFactory>, I
         if (resolveOutcome.Value.StatusChangedEvent is not null)
             db.Set<KeepRequestEvent>().Add(resolveOutcome.Value.StatusChangedEvent);
         await db.SaveChangesAsync();
+        _resolvedRequestId = resolvedRequest.Id;
 
         // --- 3. Closed (normal, no attention — excluded from default list) ---
         var closedNormalRequest = KeepRequest.CreateFromCustomerIntake(
@@ -230,6 +234,48 @@ public sealed class KeepRequestListB5Tests : IClassFixture<KeepApiWebFactory>, I
             "UPDATE keep_requests SET created_at_utc = {0}, last_customer_activity_at = {1} WHERE id = {2}",
             tenDaysAgo, tenDaysAgo, _oldIdleRequestId);
 
+        // --- 8. Resolved clean request (ready_to_close, P6f-2) ---
+        var resolvedClean = KeepRequest.CreateFromCustomerIntake(
+            _accountId, customer.Id,
+            "Resolved Customer", "0412345679", null,
+            "Resolved job", "B5-RES-001", "b5_res_page_token", now, 60);
+        db.Set<KeepRequest>().Add(resolvedClean);
+        db.Set<KeepRequestEvent>().Add(
+            KeepRequestEvent.CreateRequestCreated(resolvedClean.Id, _accountId, now));
+        await db.SaveChangesAsync();
+
+        var resolveResult = resolvedClean.ChangeStatus(
+            KeepRequestStatus.Resolved, "Job complete.", graph.Owner.Id, "B5 Owner", now);
+        Assert.True(resolveResult.IsSuccess);
+        if (resolveResult.Value.StatusChangedEvent is not null)
+            db.Set<KeepRequestEvent>().Add(resolveResult.Value.StatusChangedEvent);
+        await db.SaveChangesAsync();
+        _resolvedCleanRequestId = resolvedClean.Id;
+
+        // --- 9. Resolved request with customer activity after resolution (warning signal) ---
+        var resolvedWithActivity = KeepRequest.CreateFromCustomerIntake(
+            _accountId, customer.Id,
+            "Active Customer", "0412345680", null,
+            "Resolved job with activity", "B5-RES-002", "b5_res2_page_token", now, 60);
+        db.Set<KeepRequest>().Add(resolvedWithActivity);
+        db.Set<KeepRequestEvent>().Add(
+            KeepRequestEvent.CreateRequestCreated(resolvedWithActivity.Id, _accountId, now));
+        await db.SaveChangesAsync();
+
+        var resolveResult2 = resolvedWithActivity.ChangeStatus(
+            KeepRequestStatus.Resolved, "Job complete.", graph.Owner.Id, "B5 Owner", now);
+        Assert.True(resolveResult2.IsSuccess);
+        if (resolveResult2.Value.StatusChangedEvent is not null)
+            db.Set<KeepRequestEvent>().Add(resolveResult2.Value.StatusChangedEvent);
+        await db.SaveChangesAsync();
+        _resolvedWithCustomerActivityRequestId = resolvedWithActivity.Id;
+
+        // Backdate business activity to 2 hours ago; set customer activity to 1 hour ago
+        // so LastCustomerActivityAt > LastBusinessActivityAt → warning signal fires.
+        await db.Database.ExecuteSqlRawAsync(
+            "UPDATE keep_requests SET last_business_activity_at = {0}, last_customer_activity_at = {1} WHERE id = {2}",
+            now.AddHours(-2), now.AddHours(-1), _resolvedWithCustomerActivityRequestId);
+
         // --- Sessions ---
         _ownerAccountUserId = graph.Owner.Id;
         _ownerCookie    = await _factory.SeedSessionAsync(graph.Owner.Id, _accountId);
@@ -300,7 +346,7 @@ public sealed class KeepRequestListB5Tests : IClassFixture<KeepApiWebFactory>, I
         var body = await GetListAsync(_ownerCookie);
         Assert.NotNull(body);
 
-        var resolved = body.Requests.SingleOrDefault(r => r.Status == "resolved");
+        var resolved = body.Requests.SingleOrDefault(r => r.Id == _resolvedRequestId);
         Assert.NotNull(resolved);
         Assert.Equal("resolved_quiet", resolved.Ranking.RankingGroup);
         Assert.Equal(7, resolved.Ranking.RankingOrder);
@@ -490,6 +536,53 @@ public sealed class KeepRequestListB5Tests : IClassFixture<KeepApiWebFactory>, I
         Assert.DoesNotContain(body.Requests, r => r.Id == _receivedRequestId);
     }
 
+    // --- ready_to_close view (P6f-2) ----------------------------------------
+
+    private async Task<RtcListBody?> GetRtcListAsync(string cookie)
+    {
+        using var req = WithCookie(HttpMethod.Get, "/keep/requests?view=ready_to_close", cookie);
+        var response = await _client.SendAsync(req);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        return await response.Content.ReadFromJsonAsync<RtcListBody>(
+            new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+    }
+
+    [Fact]
+    public async Task ReadyToClose_owner_sees_resolved_clean_request()
+    {
+        var body = await GetRtcListAsync(_ownerCookie);
+        Assert.NotNull(body);
+        Assert.Contains(body.Requests, r => r.Id == _resolvedCleanRequestId);
+    }
+
+    [Fact]
+    public async Task ReadyToClose_response_includes_ready_to_close_metadata()
+    {
+        var body = await GetRtcListAsync(_ownerCookie);
+        Assert.NotNull(body);
+        var row = body.Requests.SingleOrDefault(r => r.Id == _resolvedCleanRequestId);
+        Assert.NotNull(row);
+        Assert.False(row.ReadyToClose.HasCustomerActivityAfterResolution);
+    }
+
+    [Fact]
+    public async Task ReadyToClose_warning_signal_true_when_customer_active_after_business()
+    {
+        var body = await GetRtcListAsync(_ownerCookie);
+        Assert.NotNull(body);
+        var row = body.Requests.SingleOrDefault(r => r.Id == _resolvedWithCustomerActivityRequestId);
+        Assert.NotNull(row);
+        Assert.True(row.ReadyToClose.HasCustomerActivityAfterResolution);
+    }
+
+    [Fact]
+    public async Task ReadyToClose_received_request_does_not_appear()
+    {
+        var body = await GetRtcListAsync(_ownerCookie);
+        Assert.NotNull(body);
+        Assert.DoesNotContain(body.Requests, r => r.Id == _receivedRequestId);
+    }
+
     // --- Response DTOs (NSC shape) ---
 
     private sealed record NscListBody(List<NscRequestBody> Requests);
@@ -551,4 +644,12 @@ public sealed class KeepRequestListB5Tests : IClassFixture<KeepApiWebFactory>, I
         string? PlannedForDate,
         string? PlannedForLabel,
         bool HasFuturePlannedFor);
+
+    // --- Response DTOs (RTC shape) ---
+
+    private sealed record RtcListBody(List<RtcRequestBody> Requests);
+
+    private sealed record RtcRequestBody(Guid Id, RtcReadyToCloseBody ReadyToClose);
+
+    private sealed record RtcReadyToCloseBody(bool HasCustomerActivityAfterResolution);
 }

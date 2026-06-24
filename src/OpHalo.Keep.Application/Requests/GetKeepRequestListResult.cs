@@ -23,7 +23,8 @@ public sealed record KeepRequestViewCounts(
     int Watching,
     int Unassigned,
     int NeedsAttention,
-    int FeedbackReview);
+    int FeedbackReview,
+    int ReadyToClose);
 
 /// <summary>Describes the query mode in effect for the returned page (ADR-253).</summary>
 public sealed record KeepRequestListContext(

@@ -126,6 +126,13 @@ public sealed class KeepRequestListPersistence(OpHaloDbContext dbContext) : IKee
                 && r.Status != KeepRequestStatus.Cancelled
                 && r.AttentionLevel == AttentionLevel.None),
 
+            // ReadyToClose: candidate rows that are non-terminal with no active attention.
+            // In-memory eligibility narrows to Status==Resolved exactly (matches CanClose gate, ADR-343).
+            ActiveViewKind.ReadyToClose => scopedBase.Where(r =>
+                r.Status != KeepRequestStatus.Closed
+                && r.Status != KeepRequestStatus.Cancelled
+                && r.AttentionLevel == AttentionLevel.None),
+
             _ => throw new InvalidOperationException($"Unknown ActiveViewKind: {view}")
         };
 
@@ -247,13 +254,21 @@ public sealed class KeepRequestListPersistence(OpHaloDbContext dbContext) : IKee
                     && r.AttentionLevel != AttentionLevel.None, ct)
             : 0;
 
+        // ready_to_close: scoped Resolved + AttentionLevel==None (Owner/Admin only, ADR-343/DEF-036).
+        int readyToCloseCount = isOwnerOrAdmin
+            ? await scopedBase.CountAsync(r =>
+                r.Status == KeepRequestStatus.Resolved
+                && r.AttentionLevel == AttentionLevel.None, ct)
+            : 0;
+
         return new KeepRequestViewCounts(
             Default: defaultCount,
             AssignedToMe: assignedToMeCount,
             Watching: watchingCount,
             Unassigned: unassignedCount,
             NeedsAttention: needsAttentionCount,
-            FeedbackReview: feedbackReviewCount);
+            FeedbackReview: feedbackReviewCount,
+            ReadyToClose: readyToCloseCount);
     }
 
     public async Task<IReadOnlyList<KeepRequestAvailableRow>> GetAvailableRequestsAsync(

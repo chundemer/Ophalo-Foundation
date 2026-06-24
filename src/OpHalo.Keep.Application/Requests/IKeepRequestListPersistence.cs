@@ -94,7 +94,8 @@ public enum ActiveViewKind
     Unassigned,
     NeedsAttention,
     FeedbackReview,
-    NeedsStatusCheck
+    NeedsStatusCheck,
+    ReadyToClose
 }
 
 /// <summary>Selects the history view for GetHistoryRequestsAsync (ADR-246).</summary>

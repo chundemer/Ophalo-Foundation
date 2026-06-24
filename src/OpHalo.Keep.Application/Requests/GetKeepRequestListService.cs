@@ -42,21 +42,23 @@ public sealed class GetKeepRequestListService(
     {
         "default", "assigned_to_me", "watching", "unassigned",
         "needs_attention", "feedback_review", "closed_history",
-        "cancelled_history", "all_history", "needs_status_check"
+        "cancelled_history", "all_history", "needs_status_check", "ready_to_close"
     };
 
     // Active-only views: terminal-status filter would be contradictory (ADR-257).
     private static readonly HashSet<string> ActiveOnlyViews = new(StringComparer.OrdinalIgnoreCase)
     {
         "default", "assigned_to_me", "watching", "unassigned", "needs_attention",
-        "needs_status_check"
+        "needs_status_check", "ready_to_close"
     };
 
-    // History views, feedback_review, and unassigned require Owner/Admin (ADR-248/242, G4d).
-    // Operator uses the dedicated Available route; Viewer receives 403 for unassigned.
+    // History views, feedback_review, unassigned, and ready_to_close require Owner/Admin
+    // (ADR-248/242/343, G4d, DEF-036). Operator uses the dedicated Available route; Viewer
+    // receives 403 for unassigned. Close permission is Owner/Admin-only (ADR-343).
     private static readonly HashSet<string> OwnerAdminOnlyViews = new(StringComparer.OrdinalIgnoreCase)
     {
-        "feedback_review", "closed_history", "cancelled_history", "all_history", "unassigned"
+        "feedback_review", "closed_history", "cancelled_history", "all_history", "unassigned",
+        "ready_to_close"
     };
 
     private static readonly Dictionary<string, HistoryViewKind> HistoryViewKinds =
@@ -76,7 +78,8 @@ public sealed class GetKeepRequestListService(
             ["unassigned"]           = ActiveViewKind.Unassigned,
             ["needs_attention"]      = ActiveViewKind.NeedsAttention,
             ["feedback_review"]      = ActiveViewKind.FeedbackReview,
-            ["needs_status_check"]   = ActiveViewKind.NeedsStatusCheck
+            ["needs_status_check"]   = ActiveViewKind.NeedsStatusCheck,
+            ["ready_to_close"]       = ActiveViewKind.ReadyToClose
         };
 
     // Slug → enum maps for validation (ADR-257; individual values validated before contradictions).
@@ -261,6 +264,7 @@ public sealed class GetKeepRequestListService(
         IReadOnlyList<KeepRequest> historyPageEntities = [];
         var isFeedbackReview = normalizedView == "feedback_review";
         var isNeedsStatusCheck = normalizedView == "needs_status_check";
+        var isReadyToClose = normalizedView == "ready_to_close";
         var isHistoryView = HistoryViewKinds.TryGetValue(normalizedView, out var historyViewKind);
 
         if (isHistoryView)
@@ -319,6 +323,16 @@ public sealed class GetKeepRequestListService(
                             && inputs.LatestMeaningfulActivityAtUtc.HasValue
                             && DateOnly.FromDateTime(inputs.LatestMeaningfulActivityAtUtc.Value) <= threshold;
                     })
+                    .ToList();
+            }
+
+            // ReadyToClose: DB returns non-terminal + AttentionLevel==None candidates;
+            // narrow in memory to exact eligibility: Status==Resolved && AttentionLevel==None.
+            if (isReadyToClose)
+            {
+                rawRequests = rawRequests
+                    .Where(r => r.Status == KeepRequestStatus.Resolved
+                             && r.AttentionLevel == AttentionLevel.None)
                     .ToList();
             }
 
@@ -673,6 +687,7 @@ public sealed class GetKeepRequestListService(
 
         var timing = BuildTimingInfo(r, nowUtc);
         var statusCheck = BuildStatusCheckInfo(r, nowUtc);
+        var readyToClose = BuildReadyToCloseInfo(r);
 
         return new KeepRequestSummary(
             Id: r.Id,
@@ -700,7 +715,8 @@ public sealed class GetKeepRequestListService(
             FeedbackReviewAgeBucket: feedbackReviewAgeBucket,
             FeedbackReviewDueAtUtc: feedbackReviewDueAtUtc,
             Timing: timing,
-            StatusCheck: statusCheck);
+            StatusCheck: statusCheck,
+            ReadyToClose: readyToClose);
     }
 
     private static (string group, int order) ComputeRankingGroup(
@@ -969,6 +985,17 @@ public sealed class GetKeepRequestListService(
             DueAtUtc: dueAtUtc,
             AgeDays: ageDays,
             ExclusionReason: null);
+    }
+
+    private static KeepRequestReadyToCloseInfo BuildReadyToCloseInfo(KeepRequest r)
+    {
+        var hasCustomerActivityAfterResolution =
+            r.LastCustomerActivityAt.HasValue
+            && r.LastBusinessActivityAt.HasValue
+            && r.LastCustomerActivityAt.Value > r.LastBusinessActivityAt.Value;
+
+        return new KeepRequestReadyToCloseInfo(
+            HasCustomerActivityAfterResolution: hasCustomerActivityAfterResolution);
     }
 
     private static string ComputeFutureFollowUpLabel(DateOnly date, FollowUpReason? reason, DateOnly today)

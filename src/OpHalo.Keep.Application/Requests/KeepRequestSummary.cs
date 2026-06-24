@@ -26,7 +26,8 @@ public sealed record KeepRequestSummary(
     string? FeedbackReviewAgeBucket,
     DateTime? FeedbackReviewDueAtUtc,
     KeepRequestTimingInfo Timing,
-    KeepRequestStatusCheckInfo StatusCheck);
+    KeepRequestStatusCheckInfo StatusCheck,
+    KeepRequestReadyToCloseInfo ReadyToClose);
 
 public sealed record KeepRequestAttentionInfo(
     string AttentionLevel,
@@ -112,3 +113,12 @@ public sealed record KeepRequestTimingInfo(
     DateOnly? PlannedForDate,
     string? PlannedForLabel,
     bool HasFuturePlannedFor);
+
+/// <summary>
+/// Ready-to-close queue metadata (ADR-343, P6f-2).
+/// HasCustomerActivityAfterResolution is true when LastCustomerActivityAt > LastBusinessActivityAt
+/// on a Resolved row, signalling that the customer replied after the business resolved the request.
+/// Populated for every row in every view so clients can surface close-queue warnings inline.
+/// </summary>
+public sealed record KeepRequestReadyToCloseInfo(
+    bool HasCustomerActivityAfterResolution);

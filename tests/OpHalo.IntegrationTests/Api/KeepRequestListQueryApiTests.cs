@@ -583,6 +583,42 @@ public sealed class KeepRequestListQueryApiTests : IClassFixture<KeepApiWebFacto
         Assert.Equal("KeepRequest.RequestListContradictoryParameters", code);
     }
 
+    // --- ready_to_close view (P6f-2) ----------------------------------------
+
+    [Fact]
+    public async Task ReadyToClose_view_returns_200_for_owner()
+    {
+        var res = await GetAsync("/keep/requests?view=ready_to_close");
+        Assert.Equal(HttpStatusCode.OK, res.StatusCode);
+    }
+
+    [Fact]
+    public async Task ReadyToClose_view_returns_403_for_operator()
+    {
+        var res = await GetAsAsync("/keep/requests?view=ready_to_close", _operatorCookie);
+        var body = await res.Content.ReadFromJsonAsync<JsonElement>();
+        var code = body.TryGetProperty("code", out var c) ? c.GetString() : null;
+        Assert.Equal("KeepRequest.RequestListHistoryViewForbidden", code);
+    }
+
+    [Fact]
+    public async Task ReadyToClose_view_with_terminal_status_returns_400_Contradictory()
+    {
+        var code = await GetErrorCodeAsync("/keep/requests?view=ready_to_close&status=closed");
+        Assert.Equal("KeepRequest.RequestListContradictoryParameters", code);
+    }
+
+    [Fact]
+    public async Task ReadyToClose_view_count_included_in_response()
+    {
+        var res = await GetAsync("/keep/requests");
+        Assert.Equal(HttpStatusCode.OK, res.StatusCode);
+        var body = await res.Content.ReadFromJsonAsync<ListResponseBody>(
+            new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+        Assert.NotNull(body?.ViewCounts);
+        Assert.True(body!.ViewCounts!.ReadyToClose >= 0);
+    }
+
     // --- Response DTOs ----------------------------------------------------------
 
     private sealed record ListResponseBody(
@@ -601,7 +637,8 @@ public sealed class KeepRequestListQueryApiTests : IClassFixture<KeepApiWebFacto
         int Watching,
         int Unassigned,
         int NeedsAttention,
-        int FeedbackReview);
+        int FeedbackReview,
+        int ReadyToClose);
 
     private sealed record ListContextBody(
         string View,

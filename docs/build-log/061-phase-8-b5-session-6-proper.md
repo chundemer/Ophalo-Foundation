@@ -62,32 +62,39 @@ the same constraint regardless of affordance.
 
 ---
 
-## P6f-2 — Ready-to-close queue — PENDING
+## P6f-2 — Ready-to-close queue — COMPLETE
 
-**Scope:**
+**Scope delivered:**
 
-- Add `ReadyToClose` to `ActiveViewKind`.
-- Add `ReadyToClose` count to `KeepRequestViewCounts`.
-- Add `ReadyToCloseInfo` nested record to `KeepRequestSummary` (customer-activity warning signal).
-- `GetKeepRequestListService`: handle `ready_to_close` view — in-memory eligibility is
-  `Status==Resolved && AttentionLevel==None` (matches `CanClose` gate); DB pre-filter is
-  non-terminal + AttentionLevel==None.
-- `KeepRequestListPersistence`: `view=ready_to_close` parameter mapping + DB pre-filter.
-- Customer-activity warning: `ReadyToCloseInfo.HasCustomerActivityAfterResolution` =
-  `LastCustomerActivityAt > LastBusinessActivityAt` when Status==Resolved. Mirrors DEF-063.
+- `ReadyToClose` added to `ActiveViewKind` enum.
+- `ReadyToClose: int` added to `KeepRequestViewCounts`.
+- `KeepRequestReadyToCloseInfo(bool HasCustomerActivityAfterResolution)` added to
+  `KeepRequestSummary`; populated for every row in every view (matches `StatusCheckInfo` precedent).
+- `GetKeepRequestListService`: `ready_to_close` added to `ValidViews`, `ActiveOnlyViews`,
+  `OwnerAdminOnlyViews`, and `ActiveViewKinds`; `isReadyToClose` flag; in-memory filter
+  `Status==Resolved && AttentionLevel==None`; `BuildReadyToCloseInfo` helper.
+- `KeepRequestListPersistence`: `ReadyToClose` DB pre-filter (non-terminal + AttentionLevel==None);
+  `readyToCloseCount` in `GetViewCountsAsync` (Owner/Admin scoped — 0 for Operator).
+- No cursor sentinel needed — ReadyToClose uses standard active-view sort/cursor path.
+- `_resolvedRequestId` tracked in B5 fixture; `Resolved_request_included` test fixed to use ID
+  (was brittle `SingleOrDefault(status == "resolved")`).
 
-**DEF-036 / DEF-063 contract to finalize during this slice:**
-- Queue pre-filter: Resolved + AttentionLevel==None.
-- Warning signal on rows: `LastCustomerActivityAt > LastBusinessActivityAt`.
-- Sort: no special sort required (use standard creation order or attention order).
-- Cursor: new sentinel value (not 97 NeedsAttention or 98 NeedsStatusCheck).
+**DEF-036 / DEF-063 finalized:**
+- Queue pre-filter: Resolved + AttentionLevel==None (DB: non-terminal + no-attention; in-memory: exact).
+- Warning signal: `LastCustomerActivityAt > LastBusinessActivityAt`.
+- Sort: standard (no special comparer).
+- Cursor: no sentinel — standard active-view path.
+- `ready_to_close` is Owner/Admin-only (ADR-343, DEF-036).
 
-**Files (production, ~6):**
-1. `src/OpHalo.Keep.Application/Requests/IKeepRequestListPersistence.cs` — add `ReadyToClose`
-2. `src/OpHalo.Keep.Application/Requests/GetKeepRequestListResult.cs` — add `ReadyToClose` count
-3. `src/OpHalo.Keep.Application/Requests/KeepRequestSummary.cs` — add `ReadyToCloseInfo`
-4. `src/OpHalo.Keep.Application/Requests/GetKeepRequestListService.cs` — ReadyToClose view path
-5. `src/OpHalo.Keep.Infrastructure/Persistence/KeepRequestListPersistence.cs` — param + DB filter
-6. `src/OpHalo.Api/Program.cs` or API layer — `view=ready_to_close` param (if not already handled)
+**Files changed (9):**
+1. `src/OpHalo.Keep.Application/Requests/IKeepRequestListPersistence.cs`
+2. `src/OpHalo.Keep.Application/Requests/GetKeepRequestListResult.cs`
+3. `src/OpHalo.Keep.Application/Requests/KeepRequestSummary.cs`
+4. `src/OpHalo.Keep.Application/Requests/GetKeepRequestListService.cs`
+5. `src/OpHalo.Keep.Infrastructure/Persistence/KeepRequestListPersistence.cs`
+6. `tests/OpHalo.UnitTests/Keep/KeepRequestListServiceTests.cs` (13 unit tests)
+7. `tests/OpHalo.IntegrationTests/Api/KeepRequestListB5Tests.cs` (4 + fixture + 1 fix)
+8. `tests/OpHalo.IntegrationTests/Api/KeepRequestListQueryApiTests.cs` (4 integration tests)
+9. `docs/session-log.md` (pre-existing dirty)
 
-Plus unit tests (~8) and integration test (~3).
+**Test gate:** 773 unit · 14 arch · 612 integration = 1399 total — full suite green.

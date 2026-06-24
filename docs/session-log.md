@@ -1,10 +1,10 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-06-23 (P6f-1 + review fixes complete — close permission enforced end-to-end)
+**Last updated:** 2026-06-24 (P6f-2 complete — P6f-3 next)
 **Branch:** `main` tracking `origin/main`
-**Current baseline:** 1378 tests (760 unit · 14 architecture · 604 integration) — full suite green.
+**Current baseline:** 1399 tests (773 unit · 14 architecture · 612 integration) — full suite green.
 **Next free ADR:** ADR-345
-**Next batch: P6f-2 — ready-to-close queue.**
+**Next batch: P6f-3 — closed-history date shortcuts.**
 
 ---
 
@@ -36,60 +36,79 @@ For every implementation slice:
 
 ## Current Work
 
-**Build log:** `docs/build-log/060-phase-8-b5-session-6-prerequisites-decisions.md`  
-**Decisions:** ADR-337..ADR-344.
+**Current build log:** `docs/build-log/061-phase-8-b5-session-6-proper.md`  
+**Prerequisite build log:** `docs/build-log/060-phase-8-b5-session-6-prerequisites-decisions.md`  
+**Decisions:** ADR-337..ADR-344; next free ADR-345.
 
-Session 6 prerequisites are complete. Session 6 proper can resume after a fresh preflight for
-ready-to-close / closeout hygiene.
-
-Locked implementation split:
-
-- **P6b — Follow Up On + Planned For foundation:** active-request date-only follow-up and planned
-  timing context, scan metadata, versioned mutations, and stale-suppression inputs.
-- **P6c — Customer intent menu + page viewed signal:** simplified customer-language intent actions
-  and debounced customer-page usage/confidence metadata.
-- **P6d — Needs-status-check policy/signal model:** account-policy threshold with 5-day default and
-  centralized latest-meaningful-activity calculation.
-- **P6e — Notification candidate/badge contract notes:** immediate-attention push candidates,
-  badge/list-only categories, and delivery boundary.
+Session 6 prerequisites are complete. Session 6 proper is now active.
 
 Current handoff:
 
-- **Completed:** P6b — Follow Up On + Planned For domain/API/detail/list. Final baseline:
-  1320 tests (715 unit · 14 architecture · 591 integration), full suite green.
-- **Completed:** P6c-1 — ADR-342 customer intent menu. Commits `304cb92` (routes/mapper/enum/domain)
-  and `5a5eaa8` (fix: detail/list mapper gaps and regression test).
-- **Completed:** P6c-2 — ADR-341 customer-page viewed signal. Commit `beebba2`
-  (KeepRequest domain field + debounce method, GetKeepCustomerPageService page-view recording,
-  IKeepCustomerWritePersistence.CommitPageViewAsync, staff detail metadata, migration, 7 unit + 6 integration tests).
-  Also fixed stale KeepOffSeasonTests customer message route from P6c-1 intent split.
-- **Completed:** P6c-3 — docs/ledger completion gate. DEF-030 implemented; ADR-341/342 implemented;
-  DEF-037 remains open for P6d.
-- **Completed:** P6d-1 — needs-status-check signal foundation. `KeepRequestNeedsStatusCheckInputs` value object; `GetNeedsStatusCheckInputs(DateOnly today)` domain method; `LastBusinessActivityAt` updated on SetFollowUpOn/ClearFollowUpOn/SetPlannedFor/ClearPlannedFor; 17 unit tests (4 exclusion, 3 suppressor-boundary, 8 signal-max, 2 follow-up/planned activity assertions). 739 unit tests green.
-- **Completed:** P6d-2A — needs-status-check list/query surface. `GET /keep/requests?view=needs_status_check`; `KeepRequestStatusCheckInfo` nested record on `KeepRequestSummary` (IsDue, SinceUtc, DueAtUtc, AgeDays, ExclusionReason); `NeedsStatusCheck` ActiveViewKind with DB pre-filter (non-terminal + AttentionLevel==None) + 5-day in-memory due check; `NeedsStatusCheckComparer` (SinceUtc ASC); cursor with sentinel 98; metadata on every row in every view; 11 unit tests + 6 integration tests. DEF-037 closes. 750 unit, 14 arch green.
-- **Completed:** P6d-3 — P6d completion gate. ADR-339 marked implemented; DEF-037 closed; build-log/060 updated.
-- **Completed:** P6e — notification candidate/badge contract notes. ADR-340 marked implemented. Staff/operator
-  push and badge boundaries locked: push-worthy candidates, badge/list-only categories, smallest-accountable
-  routing, actor/mute/OffSeason/stale-participant suppression, personal actionable badge scope, post-commit
-  fail-soft delivery boundary, fresh-not-offline client posture, minimal non-sensitive payloads, and customer
-  contact boundary. DEF-012/DEF-021 remain open for notification/device implementation; DEF-022 clarified for
-  native contact launch; DEF-077 added for future temporary personal notification silence.
+- **Completed:** P6b-P6e prerequisites. Follow Up On, Planned For, customer intent menu,
+  customer-page viewed signal, needs-status-check queue, and notification/badge boundaries are complete.
+  See `docs/build-log/060-phase-8-b5-session-6-prerequisites-decisions.md`.
 - **Completed:** P6f-1 — close permission + CanClose affordance + review fixes. `CanClose` field on
   `KeepRequestActionDecision` and `AvailableActionsMetadata`; computed as `isOwnerAdmin && Status==Resolved &&
   AttentionLevel==None` (ADR-343); `AllowedStatuses` consistent with `canClose`; role + attention guards added
-  to `ChangeKeepRequestStatusService` and `AddBusinessUpdateService` (Operator → 403, attention → 409);
-  `ChangeKeepRequestStatusTests` tests 10/11 updated to match new enforcement + clean-resolved fixture added.
-  760 unit · 14 arch · 604 integration — full suite green. See `docs/build-log/061-phase-8-b5-session-6-proper.md`.
+  to `ChangeKeepRequestStatusService` and `AddBusinessUpdateService` (Operator → 403, attention → 409).
+  See `docs/build-log/061-phase-8-b5-session-6-proper.md`.
+- **Completed:** P6f-2 — ready-to-close queue. `ActiveViewKind.ReadyToClose`; `ReadyToClose` count in
+  `KeepRequestViewCounts`; `KeepRequestReadyToCloseInfo(HasCustomerActivityAfterResolution)` on every row;
+  `view=ready_to_close` Owner/Admin-only active view with DB pre-filter (non-terminal + no-attention) and
+  in-memory eligibility (Resolved + no-attention); DEF-036/DEF-063 finalized; `_resolvedRequestId` tracked
+  in B5 fixture; brittle `SingleOrDefault(status==resolved)` test fixed.
+  773 unit · 14 arch · 612 integration — full suite green.
 
-### Session 6 Proper — Next Slice (P6f-2)
+### Next Two Slices
 
-**Build log:** `docs/build-log/061-phase-8-b5-session-6-proper.md`
+Work these one at a time. Do not start P6f-3 until P6f-2 is implemented, reviewed, tested,
+documented, and Christian approves the commit.
 
-Implement the ready-to-close queue before starting. Read:
+#### P6f-2 — Ready-to-close queue
+
+Status: ready to code after the file-level gate.
+
+Read before coding:
 
 - `docs/build-log/061-phase-8-b5-session-6-proper.md` (P6f-2 scope).
 - `docs/deferred-topics.md` DEF-036 and DEF-063 (customer-activity warning contract).
 - Current `GetKeepRequestListService.cs` and `KeepRequestListPersistence.cs` for `NeedsStatusCheck` precedent.
+
+Implementation target:
+
+- Add `view=ready_to_close`, `ActiveViewKind.ReadyToClose`, and a `ReadyToClose` view count.
+- Add `ReadyToCloseInfo` on `KeepRequestSummary`.
+- Eligibility: `Status == Resolved && AttentionLevel == None`, matching `CanClose`.
+- Row warning: `ReadyToCloseInfo.HasCustomerActivityAfterResolution =
+  LastCustomerActivityAt > LastBusinessActivityAt` on Resolved rows.
+- Keep notification/device, archive/unarchive, batch close, close-and-next, and detail navigation out of scope.
+
+Likely files:
+
+- `src/OpHalo.Keep.Application/Requests/IKeepRequestListPersistence.cs`
+- `src/OpHalo.Keep.Application/Requests/GetKeepRequestListResult.cs`
+- `src/OpHalo.Keep.Application/Requests/KeepRequestSummary.cs`
+- `src/OpHalo.Keep.Application/Requests/GetKeepRequestListService.cs`
+- `src/OpHalo.Keep.Infrastructure/Persistence/KeepRequestListPersistence.cs`
+- query/API binding only if the current generic `view` parser is not enough
+- focused unit + integration tests
+
+#### P6f-3 — Closed-history date shortcuts
+
+Status: next after P6f-2.
+
+Read before coding:
+
+- `docs/build-log/061-phase-8-b5-session-6-proper.md`
+- `docs/build-log/039-phase-8-b5-claude-coding-sessions.md` Session 6 outline
+- Current list query binding, validation, cursor fingerprinting, and closed-history filter tests
+
+Implementation target:
+
+- Add API-level shortcuts for closed-history date windows such as closed yesterday / this week.
+- Reuse existing `ClosedFrom` / `ClosedTo` and `TerminatedAtUtc` history filtering.
+- Keep shortcuts limited to history views where closed date filters are already valid.
+- Do not add reporting totals, archive behavior, or closeout navigation in this slice.
 
 ---
 
