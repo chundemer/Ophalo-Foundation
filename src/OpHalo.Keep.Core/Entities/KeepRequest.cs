@@ -33,12 +33,13 @@ public sealed class KeepRequest : BaseEntity
 
     // Lifecycle timestamps.
     public DateTime? ExpiresAtUtc { get; private set; }
-    public DateTime? TerminatedAtUtc { get; private set; }      // ADR-096: covers Closed and Cancelled
+    public DateTime? TerminatedAtUtc { get; private set; }      // ADR-096: covers Closed, Cancelled, Spam, Test
     public DateTime? LastBusinessActivityAt { get; private set; }
     public DateTime? LastCustomerActivityAt { get; private set; }
 
     public bool IsTerminal =>
-        Status is KeepRequestStatus.Closed or KeepRequestStatus.Cancelled;
+        Status is KeepRequestStatus.Closed or KeepRequestStatus.Cancelled
+                or KeepRequestStatus.Spam  or KeepRequestStatus.Test;
 
     public bool HasActiveUnresolvedFeedbackReview =>
         Status == KeepRequestStatus.Closed
@@ -398,8 +399,8 @@ public sealed class KeepRequest : BaseEntity
         if (trimmedMessage.Length > 4000)
             return Result<KeepRequestEvent>.Failure(KeepRequestErrors.CustomerMessageTooLong);
 
-        // Closed and Cancelled block customer writes. Resolved does not (ADR-127).
-        if (Status is KeepRequestStatus.Closed or KeepRequestStatus.Cancelled)
+        // Terminal requests block customer writes. Resolved does not (ADR-127).
+        if (IsTerminal)
             return Result<KeepRequestEvent>.Failure(KeepRequestErrors.TerminalState);
 
         LastCustomerActivityAt = nowUtc;

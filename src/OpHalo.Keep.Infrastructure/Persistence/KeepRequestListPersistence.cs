@@ -56,7 +56,8 @@ public sealed class KeepRequestListPersistence(OpHaloDbContext dbContext) : IKee
         await dbContext.Set<KeepRequest>()
             .AsNoTracking()
             .Where(r => r.AccountId == accountId
-                && ((r.Status != KeepRequestStatus.Closed && r.Status != KeepRequestStatus.Cancelled)
+                && ((r.Status != KeepRequestStatus.Closed && r.Status != KeepRequestStatus.Cancelled
+                        && r.Status != KeepRequestStatus.Spam && r.Status != KeepRequestStatus.Test)
                     || (includeClosedUnresolvedFeedback
                         && r.Status == KeepRequestStatus.Closed
                         && r.AttentionReason == AttentionReason.UnresolvedFeedback
@@ -77,7 +78,8 @@ public sealed class KeepRequestListPersistence(OpHaloDbContext dbContext) : IKee
         IQueryable<KeepRequest> query = view switch
         {
             ActiveViewKind.Default => scopedBase.Where(r =>
-                r.Status != KeepRequestStatus.Closed && r.Status != KeepRequestStatus.Cancelled
+                (r.Status != KeepRequestStatus.Closed && r.Status != KeepRequestStatus.Cancelled
+                    && r.Status != KeepRequestStatus.Spam && r.Status != KeepRequestStatus.Test)
                 || (filters.IsOwnerOrAdmin
                     && r.Status == KeepRequestStatus.Closed
                     && r.AttentionReason == AttentionReason.UnresolvedFeedback
@@ -86,6 +88,8 @@ public sealed class KeepRequestListPersistence(OpHaloDbContext dbContext) : IKee
             ActiveViewKind.AssignedToMe => scopedBase.Where(r =>
                 r.Status != KeepRequestStatus.Closed
                 && r.Status != KeepRequestStatus.Cancelled
+                && r.Status != KeepRequestStatus.Spam
+                && r.Status != KeepRequestStatus.Test
                 && dbContext.Set<KeepRequestParticipant>()
                     .Any(p => p.RequestId == r.Id
                         && p.AccountUserId == currentAccountUserId
@@ -95,6 +99,8 @@ public sealed class KeepRequestListPersistence(OpHaloDbContext dbContext) : IKee
             ActiveViewKind.Watching => scopedBase.Where(r =>
                 r.Status != KeepRequestStatus.Closed
                 && r.Status != KeepRequestStatus.Cancelled
+                && r.Status != KeepRequestStatus.Spam
+                && r.Status != KeepRequestStatus.Test
                 && dbContext.Set<KeepRequestParticipant>()
                     .Any(p => p.RequestId == r.Id
                         && p.AccountUserId == currentAccountUserId
@@ -110,6 +116,8 @@ public sealed class KeepRequestListPersistence(OpHaloDbContext dbContext) : IKee
             ActiveViewKind.NeedsAttention => scopedBase.Where(r =>
                 r.Status != KeepRequestStatus.Closed
                 && r.Status != KeepRequestStatus.Cancelled
+                && r.Status != KeepRequestStatus.Spam
+                && r.Status != KeepRequestStatus.Test
                 && r.AttentionLevel != AttentionLevel.None),
 
             ActiveViewKind.FeedbackReview => scopedBase.Where(r =>
@@ -124,6 +132,8 @@ public sealed class KeepRequestListPersistence(OpHaloDbContext dbContext) : IKee
                 r.Status != KeepRequestStatus.Resolved
                 && r.Status != KeepRequestStatus.Closed
                 && r.Status != KeepRequestStatus.Cancelled
+                && r.Status != KeepRequestStatus.Spam
+                && r.Status != KeepRequestStatus.Test
                 && r.AttentionLevel == AttentionLevel.None),
 
             // ReadyToClose: candidate rows that are non-terminal with no active attention.
@@ -131,6 +141,8 @@ public sealed class KeepRequestListPersistence(OpHaloDbContext dbContext) : IKee
             ActiveViewKind.ReadyToClose => scopedBase.Where(r =>
                 r.Status != KeepRequestStatus.Closed
                 && r.Status != KeepRequestStatus.Cancelled
+                && r.Status != KeepRequestStatus.Spam
+                && r.Status != KeepRequestStatus.Test
                 && r.AttentionLevel == AttentionLevel.None),
 
             _ => throw new InvalidOperationException($"Unknown ActiveViewKind: {view}")
@@ -158,7 +170,9 @@ public sealed class KeepRequestListPersistence(OpHaloDbContext dbContext) : IKee
             HistoryViewKind.Closed    => query.Where(r => r.Status == KeepRequestStatus.Closed),
             HistoryViewKind.Cancelled => query.Where(r => r.Status == KeepRequestStatus.Cancelled),
             HistoryViewKind.All       => query.Where(r => r.Status == KeepRequestStatus.Closed
-                                                       || r.Status == KeepRequestStatus.Cancelled),
+                                                       || r.Status == KeepRequestStatus.Cancelled
+                                                       || r.Status == KeepRequestStatus.Spam
+                                                       || r.Status == KeepRequestStatus.Test),
             _ => throw new InvalidOperationException($"Unknown HistoryViewKind: {view}")
         };
 

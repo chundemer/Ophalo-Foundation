@@ -10,7 +10,9 @@ using OpHalo.Foundation.Core.Entities.Users;
 using OpHalo.Foundation.Core.Entities.Accounts.Enums;
 using OpHalo.Foundation.Core.Helpers;
 using OpHalo.Foundation.Infrastructure.Persistence;
+using Microsoft.EntityFrameworkCore;
 using OpHalo.Keep.Core.Entities;
+using OpHalo.Keep.Core.Entities.Enums;
 
 namespace OpHalo.IntegrationTests.Api;
 
@@ -638,6 +640,93 @@ public sealed class KeepRequestListQueryApiTests : IClassFixture<KeepApiWebFacto
             new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
         Assert.NotNull(body?.ViewCounts);
         Assert.True(body!.ViewCounts!.ReadyToClose >= 0);
+    }
+
+    // --- S7d: Spam/Test terminal exclusion from active views ---
+
+    [Fact]
+    public async Task Spam_request_excluded_from_default_active_view_and_present_in_all_history()
+    {
+        // Seed a Spam request directly in the database (no classification endpoint until S7e).
+        Guid spamRequestId;
+        await using (var scope = _factory.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+            var account = await db.Accounts.FirstAsync();
+            var customer = KeepCustomer.Create(account.Id, "S7d Spam Customer", "0400099901");
+            db.Set<KeepCustomer>().Add(customer);
+            await db.SaveChangesAsync();
+
+            var now = DateTime.UtcNow;
+            var req = KeepRequest.CreateFromCustomerIntake(
+                account.Id, customer.Id,
+                "S7d Spam Customer", "0400099901", null,
+                "S7d spam request", "S7D-SPAM-001",
+                "s7d_spam_tok_001", now, 60);
+
+            typeof(KeepRequest).GetProperty(nameof(KeepRequest.Status))!
+                .SetValue(req, KeepRequestStatus.Spam);
+            typeof(KeepRequest).GetProperty(nameof(KeepRequest.TerminatedAtUtc))!
+                .SetValue(req, now);
+
+            db.Set<KeepRequest>().Add(req);
+            db.Set<KeepRequestEvent>().Add(
+                KeepRequestEvent.CreateRequestCreated(req.Id, account.Id, now));
+            await db.SaveChangesAsync();
+            spamRequestId = req.Id;
+        }
+
+        var opts = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+
+        var defaultRes = await GetAsync("/keep/requests");
+        Assert.Equal(HttpStatusCode.OK, defaultRes.StatusCode);
+        var defaultBody = await defaultRes.Content.ReadFromJsonAsync<ListResponseBody>(opts);
+        Assert.DoesNotContain(defaultBody!.Requests, r => r.Id == spamRequestId);
+
+        var historyRes = await GetAsync("/keep/requests?view=all_history");
+        Assert.Equal(HttpStatusCode.OK, historyRes.StatusCode);
+        var historyBody = await historyRes.Content.ReadFromJsonAsync<ListResponseBody>(opts);
+        Assert.Contains(historyBody!.Requests, r => r.Id == spamRequestId);
+    }
+
+    [Fact]
+    public async Task Test_request_excluded_from_default_active_view()
+    {
+        // Seed a Test request directly in the database (no classification endpoint until S7e).
+        Guid testRequestId;
+        await using (var scope = _factory.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+            var account = await db.Accounts.FirstAsync();
+            var customer = KeepCustomer.Create(account.Id, "S7d Test Customer", "0400099902");
+            db.Set<KeepCustomer>().Add(customer);
+            await db.SaveChangesAsync();
+
+            var now = DateTime.UtcNow;
+            var req = KeepRequest.CreateFromCustomerIntake(
+                account.Id, customer.Id,
+                "S7d Test Customer", "0400099902", null,
+                "S7d test request", "S7D-TEST-001",
+                "s7d_test_tok_001", now, 60);
+
+            typeof(KeepRequest).GetProperty(nameof(KeepRequest.Status))!
+                .SetValue(req, KeepRequestStatus.Test);
+            typeof(KeepRequest).GetProperty(nameof(KeepRequest.TerminatedAtUtc))!
+                .SetValue(req, now);
+
+            db.Set<KeepRequest>().Add(req);
+            db.Set<KeepRequestEvent>().Add(
+                KeepRequestEvent.CreateRequestCreated(req.Id, account.Id, now));
+            await db.SaveChangesAsync();
+            testRequestId = req.Id;
+        }
+
+        var opts = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+
+        var defaultRes = await GetAsync("/keep/requests");
+        Assert.Equal(HttpStatusCode.OK, defaultRes.StatusCode);
+        var defaultBody = await defaultRes.Content.ReadFromJsonAsync<ListResponseBody>(opts);
+        Assert.DoesNotContain(defaultBody!.Requests, r => r.Id == testRequestId);
     }
 
     // --- Response DTOs ----------------------------------------------------------

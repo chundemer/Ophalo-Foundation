@@ -37,6 +37,22 @@ public class KeepRequestActionPolicyTests
         return r;
     }
 
+    static KeepRequest MakeSpam()
+    {
+        var r = MakeReceived();
+        SetProp(r, nameof(KeepRequest.Status), KeepRequestStatus.Spam);
+        SetProp(r, nameof(KeepRequest.TerminatedAtUtc), Now.AddHours(-1));
+        return r;
+    }
+
+    static KeepRequest MakeTest()
+    {
+        var r = MakeReceived();
+        SetProp(r, nameof(KeepRequest.Status), KeepRequestStatus.Test);
+        SetProp(r, nameof(KeepRequest.TerminatedAtUtc), Now.AddHours(-1));
+        return r;
+    }
+
     static KeepRequest WithAttention(KeepRequest r, AttentionLevel level = AttentionLevel.NeedsAttention,
         AttentionReason reason = AttentionReason.CustomerMessage)
     {
@@ -632,5 +648,38 @@ public class KeepRequestActionPolicyTests
             [KeepRequestStatus.InProgress, KeepRequestStatus.PendingCustomer,
              KeepRequestStatus.Cancelled],
             statuses);
+    }
+
+    [Theory]
+    [InlineData(KeepRequestStatus.Spam)]
+    [InlineData(KeepRequestStatus.Test)]
+    public void Terminal_Spam_and_Test_disable_write_capabilities_and_have_no_allowed_statuses(
+        KeepRequestStatus status)
+    {
+        var r = status == KeepRequestStatus.Spam ? MakeSpam() : MakeTest();
+        var d = KeepRequestActionPolicy.Evaluate(r, OwnerWrite());
+
+        Assert.False(d.CanChangeStatus);
+        Assert.False(d.CanSendBusinessUpdate);
+        Assert.False(d.CanLogExternalContact);
+        Assert.False(d.CanAssignResponsible);
+        Assert.False(d.CanClearResponsible);
+        Assert.False(d.CanManageWatchers);
+        Assert.False(d.CanSelfAssignResponsible);
+        Assert.False(d.CanWatch);
+        Assert.False(d.CanUnwatch);
+        Assert.False(d.CanSetFollowUpOn);
+        Assert.False(d.CanSetPlannedFor);
+        Assert.False(d.CanClose);
+        Assert.Empty(d.AllowedStatuses);
+    }
+
+    [Theory]
+    [InlineData(KeepRequestStatus.Spam)]
+    [InlineData(KeepRequestStatus.Test)]
+    public void Terminal_Spam_and_Test_still_allow_internal_note(KeepRequestStatus status)
+    {
+        var r = status == KeepRequestStatus.Spam ? MakeSpam() : MakeTest();
+        Assert.True(KeepRequestActionPolicy.Evaluate(r, OwnerWrite()).CanAddInternalNote);
     }
 }

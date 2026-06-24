@@ -67,6 +67,8 @@ internal static class KeepRequestRowQueryFactory
             .Where(r =>
                 r.Status != KeepRequestStatus.Closed &&
                 r.Status != KeepRequestStatus.Cancelled &&
+                r.Status != KeepRequestStatus.Spam &&
+                r.Status != KeepRequestStatus.Test &&
                 !(from p in dbContext.Set<KeepRequestParticipant>()
                   join au in dbContext.AccountUsers on p.AccountUserId equals au.Id
                   where p.RequestId == r.Id &&

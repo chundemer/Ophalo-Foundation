@@ -1,10 +1,10 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-06-24 (Session 7 S7a+S7a-2 complete; S7b next)
+**Last updated:** 2026-06-24 (S7a–S7d complete; S7e next)
 **Branch:** `main` tracking `origin/main`
-**Current baseline:** 1409 tests (787 unit · 14 architecture · 612 integration) — unit + arch green; integration green on focused suite.
+**Current baseline:** 797 unit · 14 arch green; integration green on focused suite (S7d: 46 list query tests green).
 **Next free ADR:** ADR-351
-**Next batch: Session 7 — pilot safety / deployment hardening decision-build session.**
+**Next batch: S7e — Spam/Test classification command.**
 
 ---
 
@@ -142,16 +142,42 @@ Added `docs/deployment/local-postgres-runbook.md`. Bootstrapped `ophalo_local` i
   Receiver occupies port 5000; API bound to 5092 locally.
 - Guarded reset not exercised this slice (not needed; ADR-345 baseline is verified).
 
+### S7d — Spam/Test terminal-status foundation — COMPLETE
+
+Added `Spam = 8` and `Test = 9` to `KeepRequestStatus`. Updated `IsTerminal`, all active-view
+terminal exclusion filters, `all_history` inclusion, customer-write guard, action policy
+(`canSetTiming`, `ComputeAllowedStatuses`), and four `MapStatus` exhaustive switches
+(`KeepRequestDetailMapper`, `KeepCustomerPageMapper`, `GetKeepRequestListService`,
+`GetKeepRequestListService`'s private summary mapper). Status stored as string via EF
+`HasConversion<string>()` — no migration required.
+
+**Files changed (9 production; 3 test):**
+1. `src/OpHalo.Keep.Core/Entities/Enums/KeepRequestStatus.cs` — Spam=8, Test=9
+2. `src/OpHalo.Keep.Core/Entities/KeepRequest.cs` — IsTerminal; customer-write block via IsTerminal
+3. `src/OpHalo.Keep.Application/Requests/KeepRequestActionPolicy.cs` — canSetTiming; terminal arm
+4. `src/OpHalo.Keep.Application/Requests/KeepRequestDetailMapper.cs` — MapStatus
+5. `src/OpHalo.Keep.Application/Requests/KeepCustomerPageMapper.cs` — MapStatus
+6. `src/OpHalo.Keep.Application/Requests/GetKeepRequestListService.cs` — StatusSlugs + private MapStatus
+7. `src/OpHalo.Keep.Infrastructure/Persistence/KeepRequestListPersistence.cs` — all active filters + all_history
+8. `src/OpHalo.Keep.Infrastructure/Persistence/KeepRequestRowQueryFactory.cs` — ApplyAvailable
+9. `tests/OpHalo.UnitTests/Keep/KeepRequestTests.cs` — IsTerminal×2; customer-write-blocked×2; ChangeStatus-blocked×2
+10. `tests/OpHalo.UnitTests/Keep/KeepRequestActionPolicyTests.cs` — terminal write-disabled×2; internal-note allowed×2
+11. `tests/OpHalo.IntegrationTests/Api/KeepRequestListQueryApiTests.cs` — Spam excluded default + in all_history; Test excluded default
+
+**Note:** Gate preflight missed `GetKeepRequestListService`'s private `MapStatus` (separate from
+`KeepRequestDetailMapper.MapStatus`); discovered and fixed during integration test failure. 9
+production files touched, not 8.
+
+**Test gate:** 797 unit · 14 arch green. 46 list query integration tests green.
+
 ### Session 7 Claude Coding Sessions
 
 - **S7a-2 — Local PostgreSQL bootstrap and verification:** COMPLETE — see above.
-- **S7b — Trusted proxy/client IP plus rate-limit smoke proof:** implement/prove trusted IP handling
-  and focused non-`Testing` rate-limit smoke tests with deterministic `429` assertions.
-- **S7c — Token-safe logging and redaction guardrails:** inventory token-bearing routes and add
-  redaction helpers/middleware/config/tests as needed while preserving safe support diagnostics.
-- **S7d — Spam/Test terminal-status foundation:** add terminal statuses and make read surfaces,
-  terminal helpers, lists/counts, stale/status-check, ready-to-close, and customer-page guards treat
-  them as non-operational.
+- **S7b — Trusted proxy/client IP plus rate-limit smoke proof:** COMPLETE — shipped as G8a
+  (commit `e055458`). `ClientIpResolver`, `RateLimitTesting` host, 3 integration + 16 unit tests.
+- **S7c — Token-safe logging and redaction guardrails:** COMPLETE — shipped as G8b
+  (commit `09d5e79`). `PublicTokenPathRedactor`, Diagnostics AddFilter, 4 integration sentinel proofs.
+- **S7d — Spam/Test terminal-status foundation:** COMPLETE — see below.
 - **S7e — Spam/Test classification command:** add Owner/Admin confirmed classification mutation with
   expected-version handling, optional internal reason, audit event/history, fail-closed auth, and
   customer-page blocking.

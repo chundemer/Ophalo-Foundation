@@ -8,5 +8,7 @@ public enum KeepRequestStatus
     Resolved = 4,
     Closed = 5,
     Cancelled = 6,
-    Scheduled = 7
+    Scheduled = 7,
+    Spam = 8,
+    Test = 9
 }

@@ -219,6 +219,8 @@ public class KeepRequestTests
     [InlineData(KeepRequestStatus.Resolved, false)]
     [InlineData(KeepRequestStatus.Closed, true)]
     [InlineData(KeepRequestStatus.Cancelled, true)]
+    [InlineData(KeepRequestStatus.Spam, true)]
+    [InlineData(KeepRequestStatus.Test, true)]
     public void IsTerminal_reflects_terminal_statuses(KeepRequestStatus status, bool expected)
     {
         // Create a plain instance via reflection to test IsTerminal across all statuses.
@@ -226,6 +228,31 @@ public class KeepRequestTests
         var statusProp = typeof(KeepRequest).GetProperty("Status")!;
         statusProp.SetValue(request, status, System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance, null, null, null);
         Assert.Equal(expected, request.IsTerminal);
+    }
+
+    [Theory]
+    [InlineData(KeepRequestStatus.Spam)]
+    [InlineData(KeepRequestStatus.Test)]
+    public void CustomerMessage_blocked_on_Spam_and_Test(KeepRequestStatus status)
+    {
+        var request = NewRequest();
+        var statusProp = typeof(KeepRequest).GetProperty("Status")!;
+        statusProp.SetValue(request, status);
+        var result = request.AddCustomerMessage(
+            MessageIntent.GeneralMessage, "Hello", 60, 60, 30, Now);
+        Assert.False(result.IsSuccess);
+    }
+
+    [Theory]
+    [InlineData(KeepRequestStatus.Spam)]
+    [InlineData(KeepRequestStatus.Test)]
+    public void ChangeStatus_blocked_on_Spam_and_Test(KeepRequestStatus status)
+    {
+        var request = NewRequest();
+        var statusProp = typeof(KeepRequest).GetProperty("Status")!;
+        statusProp.SetValue(request, status);
+        var result = request.ChangeStatus(KeepRequestStatus.InProgress, null, Guid.NewGuid(), "Actor", Now);
+        Assert.False(result.IsSuccess);
     }
 
     // --- KeepRequestEvent factory ---

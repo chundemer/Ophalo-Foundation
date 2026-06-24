@@ -61,6 +61,8 @@ internal static class KeepCustomerPageMapper
         KeepRequestStatus.Resolved        => "resolved",
         KeepRequestStatus.Closed          => "closed",
         KeepRequestStatus.Cancelled       => "cancelled",
+        KeepRequestStatus.Spam            => "spam",
+        KeepRequestStatus.Test            => "test",
         _ => throw new InvalidOperationException($"Unknown KeepRequestStatus: {status}")
     };
 

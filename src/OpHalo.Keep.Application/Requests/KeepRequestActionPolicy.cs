@@ -70,12 +70,14 @@ public static class KeepRequestActionPolicy
         var canWatch   = isNonTerminal && participation == null;
         var canUnwatch = isNonTerminal && participation == ParticipationType.Watching;
 
-        // Timing mutations: active requests only (Resolved/Closed/Cancelled all rejected by domain).
+        // Timing mutations: active requests only (Resolved and all terminal statuses rejected by domain).
         // CanWrite already incorporates OffSeason freeze; Operator row access enforced at service layer.
         var canSetTiming = actor.CanWrite
             && request.Status is not (KeepRequestStatus.Resolved
                                       or KeepRequestStatus.Closed
-                                      or KeepRequestStatus.Cancelled);
+                                      or KeepRequestStatus.Cancelled
+                                      or KeepRequestStatus.Spam
+                                      or KeepRequestStatus.Test);
 
         // Close: Owner/Admin only (ADR-343); requires Resolved + no active blocking attention.
         // Operator row access and domain checks remain authoritative at execution time.
@@ -145,7 +147,8 @@ public static class KeepRequestActionPolicy
                 [KeepRequestStatus.InProgress, KeepRequestStatus.PendingCustomer,
                  KeepRequestStatus.Cancelled],
 
-            KeepRequestStatus.Closed or KeepRequestStatus.Cancelled =>
+            KeepRequestStatus.Closed or KeepRequestStatus.Cancelled
+            or KeepRequestStatus.Spam or KeepRequestStatus.Test =>
                 [],
 
             _ => throw new InvalidOperationException($"Unknown KeepRequestStatus: {current}")

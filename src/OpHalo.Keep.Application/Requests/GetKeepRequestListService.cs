@@ -97,7 +97,9 @@ public sealed class GetKeepRequestListService(
             ["pending_customer"] = KeepRequestStatus.PendingCustomer,
             ["resolved"]         = KeepRequestStatus.Resolved,
             ["closed"]           = KeepRequestStatus.Closed,
-            ["cancelled"]        = KeepRequestStatus.Cancelled
+            ["cancelled"]        = KeepRequestStatus.Cancelled,
+            ["spam"]             = KeepRequestStatus.Spam,
+            ["test"]             = KeepRequestStatus.Test
         };
 
     private static readonly Dictionary<string, AttentionReason> AttentionReasonSlugs =
@@ -1076,6 +1078,8 @@ public sealed class GetKeepRequestListService(
         KeepRequestStatus.Resolved       => "resolved",
         KeepRequestStatus.Closed         => "closed",
         KeepRequestStatus.Cancelled      => "cancelled",
+        KeepRequestStatus.Spam           => "spam",
+        KeepRequestStatus.Test           => "test",
         _ => throw new InvalidOperationException($"Unknown KeepRequestStatus: {status}")
     };
 
