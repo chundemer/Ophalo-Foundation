@@ -333,6 +333,7 @@ app.MapGet("/keep/requests/{requestId:guid}", async (
 // Change request status — authenticated, operator write (Phase 8-B2-alpha)
 app.MapPatch("/keep/requests/{requestId:guid}/status", async (
     Guid requestId,
+    string? navView,
     HttpRequest httpRequest,
     ChangeStatusRequestBody body,
     ChangeKeepRequestStatusService service,
@@ -342,7 +343,7 @@ app.MapPatch("/keep/requests/{requestId:guid}/status", async (
     if (!versionResult.IsSuccess)
         return ErrorHttpMapper.ToHttpResult(versionResult.Error);
 
-    var command = new ChangeKeepRequestStatusCommand(requestId, body.Status, body.Message, versionResult.Value);
+    var command = new ChangeKeepRequestStatusCommand(requestId, body.Status, body.Message, versionResult.Value, navView);
     var result = await service.ExecuteAsync(command, ct);
     return result.IsSuccess ? Results.Ok(result.Value) : ErrorHttpMapper.ToHttpResult(result.Error);
 }).RequireAuthorization();

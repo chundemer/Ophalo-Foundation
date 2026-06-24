@@ -1,10 +1,10 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-06-24 (P6f-4/P6f-5 handoff ready)
+**Last updated:** 2026-06-24 (P6f-5 complete)
 **Branch:** `main` tracking `origin/main`
-**Current baseline:** 1405 tests (779 unit · 14 architecture · 612 integration) — unit + arch green; integration green on focused suite.
+**Current baseline:** 1409 tests (787 unit · 14 architecture · 612 integration) — unit + arch green; integration green on focused suite.
 **Next free ADR:** ADR-345
-**Next batch: P6f-4 — detail next/previous navigation. Then P6f-5 — close-and-next + Closed page expiry.**
+**Next batch: Session 6 complete — P6f-1 through P6f-5 shipped.**
 
 ---
 
@@ -81,64 +81,28 @@ in the queue. `KeepRequestDetailMapper.ToDetailResult` accepts optional `navigat
 callers unchanged).
 6 new unit tests, 6 new integration tests (`KeepRequestDetailB5Tests`). 785 unit · 14 arch green.
 
-### Next Slice
+#### P6f-5 — Close-and-next + Closed 30-day customer-page expiry — COMPLETE
 
-#### P6f-5 — Close-and-next + Closed 30-day customer-page expiry
+**Expiry fix:** `KeepRequest.ChangeStatus` and `AddBusinessUpdateWithStatus` now set `ExpiresAtUtc = TerminatedAtUtc + 30d`
+for `Closed` (previously only `Cancelled` did). `CancelledPageRetentionDays` renamed to `TerminalPageRetentionDays`.
+`KeepPublicCustomerAccessGuard` unchanged — guard already checks `IsTerminal && ExpiresAtUtc.HasValue`.
 
-Status: ready for preflight.
+**Close-and-next:** `string? navView` added as query param on `PATCH /keep/requests/{requestId}/status`.
+`ChangeKeepRequestStatusCommand` gains `NavView: string?`. In `ChangeKeepRequestStatusService`, after the close guard:
+unknown navView → `RequestDetailInvalidNavView` (400); Operator navView → 403; valid navView fetches
+`GetReadyToCloseNavigationIdsAsync` **before** the domain mutation to snapshot queue order. After close,
+response includes `Navigation(PreviousId: null, NextId: nextFromSnapshot, Position: 0, Total: count−1)`.
+`navView=null` → `Navigation=null` (unchanged behavior for existing callers).
 
-Goal: add context-aware detail navigation for queue workflows without changing request state.
+**Files changed (6):**
+1. `src/OpHalo.Keep.Core/Entities/KeepRequest.cs` — expiry in `ChangeStatus` + `AddBusinessUpdateWithStatus`; constant renamed
+2. `src/OpHalo.Keep.Application/Requests/ChangeKeepRequestStatusService.cs` — `NavView` on command; navView block
+3. `src/OpHalo.Api/Program.cs` — bind `navView` on PATCH endpoint
+4. `tests/OpHalo.UnitTests/Keep/KeepRequestTests.cs` — 2 new expiry tests
+5. `tests/OpHalo.IntegrationTests/Api/ChangeKeepRequestStatusTests.cs` — test 11 gains ExpiresAtUtc assertion; 2 new navView tests; STATUS006 seed
+6. `docs/session-log.md`
 
-Read before coding:
-
-- `docs/build-log/061-phase-8-b5-session-6-proper.md`
-- `docs/build-log/039-phase-8-b5-claude-coding-sessions.md` Session 6 outline
-- current detail read service/result/mapper files
-- current list query/cursor files for existing context naming and view contracts
-
-Implementation direction:
-
-- Add read-only next/previous metadata to request detail when the caller supplies a supported list context.
-- Support at least `ready_to_close`; include other existing owner/admin review contexts only if the file-level
-  gate stays small and the query contract is explicit.
-- Preserve row authorization and role gates. Do not let navigation reveal IDs outside the current user's
-  visible scope.
-- Do not add close mutation behavior, batch close, archive/unarchive, or customer-page expiry here.
-- Prefer reusing existing list query/cursor/view semantics rather than inventing a separate navigation model.
-
-Preflight must answer:
-
-- Which detail query parameter(s) carry context: view, cursor, current request ID, filters, or a compact context token.
-- Whether next/previous is computed by list service reuse or a narrow detail-navigation persistence method.
-- Exact DTO shape and null behavior when no previous/next row exists.
-- Exact file gate before code.
-
-#### P6f-5 — Close-and-next + Closed 30-day customer-page expiry
-
-Status: next after P6f-4.
-
-Goal: make the ready-to-close workflow efficient and finish the normal Closed lifecycle gap.
-
-Read before coding:
-
-- `docs/build-log/061-phase-8-b5-session-6-proper.md`
-- `docs/deferred-topics.md` DEF-036 and DEF-063
-- `src/OpHalo.Keep.Core/Entities/KeepRequest.cs`
-- `ChangeKeepRequestStatusService.cs`, `AddBusinessUpdateService.cs`, detail mapper/result, and customer-page guard/tests
-
-Implementation direction:
-
-- "Close and next" should be an app/API affordance over the existing close/status mutation, not a batch close endpoint.
-- Preserve P6f-1 close gates: Owner/Admin only, `Status==Resolved`, `AttentionLevel==None`, expected version required,
-  row access required, OffSeason write rules unchanged.
-- Return enough metadata for the client to move to the next ready-to-close item after a successful close, using the
-  P6f-4 navigation contract if available.
-- Add/verify normal `Closed` customer-page expiry: when a request transitions to `Closed`, set `ExpiresAtUtc =
-  TerminatedAtUtc + 30 days`, matching the already-implemented Cancelled retention behavior.
-- If the Closed expiry change is small (domain status transition + focused unit/integration/customer-page assertions),
-  include it in P6f-5. If close-and-next plus expiry exceeds the slice gate, split expiry into a tiny P6f-6 before
-  declaring Session 6 complete.
-- Do not add archive/unarchive, closeout-reviewed state, broad analytics/reporting, notification delivery, or batch close.
+**Test gate:** 787 unit · 14 arch green. 27 integration (ChangeKeepRequestStatus + B5 detail) green.
 
 ---
 

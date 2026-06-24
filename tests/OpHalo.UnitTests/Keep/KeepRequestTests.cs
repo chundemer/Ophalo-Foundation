@@ -182,6 +182,34 @@ public class KeepRequestTests
         Assert.Null(request.ExpiresAtUtc);
     }
 
+    // --- ChangeStatus: Closed expiry ---
+
+    [Fact]
+    public void ChangeStatus_Closed_sets_ExpiresAtUtc_30_days_after_termination()
+    {
+        var request = NewRequest();
+        request.ChangeStatus(KeepRequestStatus.Resolved, null, ActorId, "Jane", Now);
+        var result = request.ChangeStatus(KeepRequestStatus.Closed, null, ActorId, "Jane", Now);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(KeepRequestStatus.Closed, request.Status);
+        Assert.Equal(Now, request.TerminatedAtUtc);
+        Assert.Equal(Now.AddDays(30), request.ExpiresAtUtc);
+    }
+
+    [Fact]
+    public void AddBusinessUpdateWithStatus_Closed_sets_ExpiresAtUtc_30_days_after_termination()
+    {
+        var request = NewRequest();
+        request.ChangeStatus(KeepRequestStatus.Resolved, null, ActorId, "Jane", Now);
+        var result = request.AddBusinessUpdateWithStatus(KeepRequestStatus.Closed, "Closing out.", ActorId, "Jane", Now);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(KeepRequestStatus.Closed, request.Status);
+        Assert.Equal(Now, request.TerminatedAtUtc);
+        Assert.Equal(Now.AddDays(30), request.ExpiresAtUtc);
+    }
+
     // --- IsTerminal ---
 
     [Theory]

@@ -14,7 +14,8 @@ public sealed record ChangeKeepRequestStatusCommand(
     Guid RequestId,
     string Status,
     string? Message,
-    Guid ExpectedVersion);
+    Guid ExpectedVersion,
+    string? NavView = null);
 
 public sealed class ChangeKeepRequestStatusService(
     IKeepRequestOperatePersistence operatePersistence,
@@ -107,6 +108,25 @@ public sealed class ChangeKeepRequestStatusService(
                 return Result<KeepRequestDetailResult>.Failure(KeepRequestErrors.CloseBlockedByAttention);
         }
 
+        // --- navView validation + pre-mutation navigation snapshot ---
+        KeepRequestNavigation? navigation = null;
+        if (!string.IsNullOrWhiteSpace(command.NavView))
+        {
+            var normalizedNavView = command.NavView.Trim().ToLowerInvariant();
+            if (normalizedNavView != "ready_to_close")
+                return Result<KeepRequestDetailResult>.Failure(KeepRequestErrors.RequestDetailInvalidNavView);
+            if (!isOwnerAdmin)
+                return Result<KeepRequestDetailResult>.Failure(Forbidden);
+
+            var navIds = await readPersistence.GetReadyToCloseNavigationIdsAsync(currentUser.AccountId, ct);
+            var idx = -1;
+            for (var i = 0; i < navIds.Count; i++)
+                if (navIds[i] == command.RequestId) { idx = i; break; }
+            var nextId = idx >= 0 && idx < navIds.Count - 1 ? navIds[idx + 1] : (Guid?)null;
+            var totalAfter = idx >= 0 ? navIds.Count - 1 : navIds.Count;
+            navigation = new KeepRequestNavigation(PreviousId: null, NextId: nextId, Position: 0, Total: totalAfter);
+        }
+
         // --- Domain: apply status change ---
         var nowUtc = clock.UtcNow;
         var changeResult = request.ChangeStatus(
@@ -153,6 +173,6 @@ public sealed class ChangeKeepRequestStatusService(
         return Result<KeepRequestDetailResult>.Success(
             KeepRequestDetailMapper.ToDetailResult(
                 request, businessName ?? string.Empty, participants, events, availableActions,
-                userSnapshot.Role, canOperate: true, currentUser.UserId, nowUtc));
+                userSnapshot.Role, canOperate: true, currentUser.UserId, nowUtc, navigation));
     }
 }

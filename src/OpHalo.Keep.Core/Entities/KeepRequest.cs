@@ -102,7 +102,7 @@ public sealed class KeepRequest : BaseEntity
 
     public void RotateConcurrencyVersion() => ConcurrencyVersion = Guid.NewGuid();
 
-    private const int CancelledPageRetentionDays = 30;
+    private const int TerminalPageRetentionDays = 30;
 
     /// <summary>
     /// Moves the request to a new status and optionally attaches a customer-visible message.
@@ -158,8 +158,8 @@ public sealed class KeepRequest : BaseEntity
             ClearAllAttentionForTerminal(actorAccountUserId, nowUtc);
         }
 
-        if (newStatus is KeepRequestStatus.Cancelled)
-            ExpiresAtUtc = nowUtc.AddDays(CancelledPageRetentionDays);
+        if (newStatus is KeepRequestStatus.Closed or KeepRequestStatus.Cancelled)
+            ExpiresAtUtc = nowUtc.AddDays(TerminalPageRetentionDays);
 
         var statusEvent = KeepRequestEvent.CreateStatusChanged(
             Id, AccountId, actorAccountUserId, actorDisplayName, newStatus, trimmedMessage, nowUtc);
@@ -263,6 +263,7 @@ public sealed class KeepRequest : BaseEntity
         if (newStatus is KeepRequestStatus.Closed or KeepRequestStatus.Cancelled)
         {
             TerminatedAtUtc = nowUtc;
+            ExpiresAtUtc = nowUtc.AddDays(TerminalPageRetentionDays);
             ClearAllAttentionForTerminal(actorAccountUserId, nowUtc);
         }
 

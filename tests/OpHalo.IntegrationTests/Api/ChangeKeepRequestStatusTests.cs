@@ -36,11 +36,13 @@ public sealed class ChangeKeepRequestStatusTests : IClassFixture<KeepApiWebFacto
     private Guid _resolvedWithAttentionRequestId;   // Resolved with active business-waiting attention — close must be blocked
     private Guid _resolvedForMetadataRequestId;     // Resolved, used ONLY by the post-transition metadata test (no shared mutation)
     private Guid _resolvedCleanRequestId;           // Resolved, no attention — for B2-delta TerminatedAtUtc test
+    private Guid _resolvedForNavRequestId;          // Resolved, no attention — for P6f-5 close-and-next navView test
     private Guid _requestVersion;
     private Guid _closedRequestVersion;
     private Guid _resolvedWithAttentionVersion;
     private Guid _resolvedForMetadataVersion;
     private Guid _resolvedCleanVersion;
+    private Guid _resolvedForNavVersion;
     private string _ownerCookie = string.Empty;
     private string _viewerCookie = string.Empty;
 
@@ -179,6 +181,20 @@ public sealed class ChangeKeepRequestStatusTests : IClassFixture<KeepApiWebFacto
         if (eResolvedClean.IsSuccess && eResolvedClean.Value.StatusChangedEvent is not null)
             db.Set<KeepRequestEvent>().Add(eResolvedClean.Value.StatusChangedEvent);
 
+        // Resolved request with no attention — dedicated to P6f-5 close-and-next navView test.
+        var resolvedForNav = KeepRequest.CreateFromCustomerIntake(
+            _accountId, customer.Id,
+            "Jane Smith", "0412345678", null,
+            "Nav test job", "STATUS006", "token_status_006", now, 60);
+        var eResolvedForNav = resolvedForNav.ChangeStatus(
+            KeepRequestStatus.Resolved, null,
+            graph.Owner.Id, "owner@status-tests.com", now);
+        db.Set<KeepRequest>().Add(resolvedForNav);
+        db.Set<KeepRequestEvent>().Add(
+            KeepRequestEvent.CreateRequestCreated(resolvedForNav.Id, _accountId, now));
+        if (eResolvedForNav.IsSuccess && eResolvedForNav.Value.StatusChangedEvent is not null)
+            db.Set<KeepRequestEvent>().Add(eResolvedForNav.Value.StatusChangedEvent);
+
         await db.SaveChangesAsync();
 
         _requestId = request.Id;
@@ -186,11 +202,13 @@ public sealed class ChangeKeepRequestStatusTests : IClassFixture<KeepApiWebFacto
         _resolvedWithAttentionRequestId = resolvedWithAttention.Id;
         _resolvedForMetadataRequestId = resolvedForMetadata.Id;
         _resolvedCleanRequestId = resolvedClean.Id;
+        _resolvedForNavRequestId = resolvedForNav.Id;
         _requestVersion = request.ConcurrencyVersion;
         _closedRequestVersion = closedRequest.ConcurrencyVersion;
         _resolvedWithAttentionVersion = resolvedWithAttention.ConcurrencyVersion;
         _resolvedForMetadataVersion = resolvedForMetadata.ConcurrencyVersion;
         _resolvedCleanVersion = resolvedClean.ConcurrencyVersion;
+        _resolvedForNavVersion = resolvedForNav.ConcurrencyVersion;
 
         var rawOwner = await _factory.SeedSessionAsync(graph.Owner.Id, _accountId);
         _ownerCookie = $"{AuthConstants.CookieName}={rawOwner}";
@@ -435,7 +453,7 @@ public sealed class ChangeKeepRequestStatusTests : IClassFixture<KeepApiWebFacto
     // =========================================================================
 
     [Fact]
-    public async Task CloseRequest_Resolved_NoAttention_SetsTerminatedAtUtc()
+    public async Task CloseRequest_Resolved_NoAttention_SetsTerminatedAtUtcAndExpiresAtUtc()
     {
         var response = await AuthRequest(_ownerCookie, _resolvedCleanVersion).PatchAsJsonAsync(
             $"/keep/requests/{_resolvedCleanRequestId}/status",
@@ -446,6 +464,13 @@ public sealed class ChangeKeepRequestStatusTests : IClassFixture<KeepApiWebFacto
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
         Assert.Equal("closed", body.GetProperty("status").GetString());
         Assert.Equal(JsonValueKind.String, body.GetProperty("terminatedAtUtc").ValueKind);
+
+        await using var scope = _factory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+        var persisted = await db.Set<KeepRequest>().FindAsync(_resolvedCleanRequestId);
+        Assert.NotNull(persisted!.TerminatedAtUtc);
+        Assert.NotNull(persisted.ExpiresAtUtc);
+        Assert.Equal(persisted.TerminatedAtUtc!.Value.AddDays(30), persisted.ExpiresAtUtc!.Value);
     }
 
     // =========================================================================
@@ -658,6 +683,43 @@ public sealed class ChangeKeepRequestStatusTests : IClassFixture<KeepApiWebFacto
             .CountAsync(e => e.RequestId == _requestId &&
                              e.EventType == KeepRequestEventType.StatusChanged);
         Assert.Equal(0, eventCount);
+    }
+
+    // =========================================================================
+    // P6f-5 — close-and-next: navView=ready_to_close returns Navigation.Position=0
+    // =========================================================================
+
+    [Fact]
+    public async Task CloseRequest_with_navView_ready_to_close_returns_navigation_position_zero()
+    {
+        var response = await AuthRequest(_ownerCookie, _resolvedForNavVersion).PatchAsJsonAsync(
+            $"/keep/requests/{_resolvedForNavRequestId}/status?navView=ready_to_close",
+            new { status = "closed" });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("closed", body.GetProperty("status").GetString());
+
+        var nav = body.GetProperty("navigation");
+        Assert.NotEqual(JsonValueKind.Null, nav.ValueKind);
+        Assert.Equal(0, nav.GetProperty("position").GetInt32());
+    }
+
+    // =========================================================================
+    // P6f-5 — invalid navView → 400 RequestDetailInvalidNavView
+    // =========================================================================
+
+    [Fact]
+    public async Task ChangeStatus_invalid_navView_returns_400()
+    {
+        var response = await AuthRequest(_ownerCookie, _requestVersion).PatchAsJsonAsync(
+            $"/keep/requests/{_requestId}/status?navView=not_valid",
+            new { status = "in_progress" });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("KeepRequest.RequestDetailInvalidNavView", body.GetProperty("code").GetString());
     }
 
     private static void SeedBusinessWaitingAttention(OpHaloDbContext db, KeepRequest request, DateTime sinceUtc)
