@@ -36,13 +36,15 @@ public sealed class ChangeKeepRequestStatusTests : IClassFixture<KeepApiWebFacto
     private Guid _resolvedWithAttentionRequestId;   // Resolved with active business-waiting attention — close must be blocked
     private Guid _resolvedForMetadataRequestId;     // Resolved, used ONLY by the post-transition metadata test (no shared mutation)
     private Guid _resolvedCleanRequestId;           // Resolved, no attention — for B2-delta TerminatedAtUtc test
-    private Guid _resolvedForNavRequestId;          // Resolved, no attention — for P6f-5 close-and-next navView test
+    private Guid _resolvedForNavRequestId;          // Resolved, no attention — "next" item in close-and-next test (P6f-5)
+    private Guid _resolvedForNavCloseId;            // Resolved, no attention — close target in close-and-next test (P6f-5)
     private Guid _requestVersion;
     private Guid _closedRequestVersion;
     private Guid _resolvedWithAttentionVersion;
     private Guid _resolvedForMetadataVersion;
     private Guid _resolvedCleanVersion;
     private Guid _resolvedForNavVersion;
+    private Guid _resolvedForNavCloseVersion;
     private string _ownerCookie = string.Empty;
     private string _viewerCookie = string.Empty;
 
@@ -181,19 +183,34 @@ public sealed class ChangeKeepRequestStatusTests : IClassFixture<KeepApiWebFacto
         if (eResolvedClean.IsSuccess && eResolvedClean.Value.StatusChangedEvent is not null)
             db.Set<KeepRequestEvent>().Add(eResolvedClean.Value.StatusChangedEvent);
 
-        // Resolved request with no attention — dedicated to P6f-5 close-and-next navView test.
+        // P6f-5 nav tests — two dedicated requests with staggered resolution times so their
+        // queue order is deterministic regardless of other seeds (sort: LastBusinessActivityAt DESC).
+        // STATUS006 ("next" item, now+10m) sorts second; STATUS007 (close target, now+20m) first.
         var resolvedForNav = KeepRequest.CreateFromCustomerIntake(
             _accountId, customer.Id,
             "Jane Smith", "0412345678", null,
-            "Nav test job", "STATUS006", "token_status_006", now, 60);
+            "Nav next item", "STATUS006", "token_status_006", now, 60);
         var eResolvedForNav = resolvedForNav.ChangeStatus(
             KeepRequestStatus.Resolved, null,
-            graph.Owner.Id, "owner@status-tests.com", now);
+            graph.Owner.Id, "owner@status-tests.com", now.AddMinutes(10));
         db.Set<KeepRequest>().Add(resolvedForNav);
         db.Set<KeepRequestEvent>().Add(
             KeepRequestEvent.CreateRequestCreated(resolvedForNav.Id, _accountId, now));
         if (eResolvedForNav.IsSuccess && eResolvedForNav.Value.StatusChangedEvent is not null)
             db.Set<KeepRequestEvent>().Add(eResolvedForNav.Value.StatusChangedEvent);
+
+        var resolvedForNavClose = KeepRequest.CreateFromCustomerIntake(
+            _accountId, customer.Id,
+            "Jane Smith", "0412345678", null,
+            "Nav close target", "STATUS007", "token_status_007", now, 60);
+        var eResolvedForNavClose = resolvedForNavClose.ChangeStatus(
+            KeepRequestStatus.Resolved, null,
+            graph.Owner.Id, "owner@status-tests.com", now.AddMinutes(20));
+        db.Set<KeepRequest>().Add(resolvedForNavClose);
+        db.Set<KeepRequestEvent>().Add(
+            KeepRequestEvent.CreateRequestCreated(resolvedForNavClose.Id, _accountId, now));
+        if (eResolvedForNavClose.IsSuccess && eResolvedForNavClose.Value.StatusChangedEvent is not null)
+            db.Set<KeepRequestEvent>().Add(eResolvedForNavClose.Value.StatusChangedEvent);
 
         await db.SaveChangesAsync();
 
@@ -203,12 +220,14 @@ public sealed class ChangeKeepRequestStatusTests : IClassFixture<KeepApiWebFacto
         _resolvedForMetadataRequestId = resolvedForMetadata.Id;
         _resolvedCleanRequestId = resolvedClean.Id;
         _resolvedForNavRequestId = resolvedForNav.Id;
+        _resolvedForNavCloseId = resolvedForNavClose.Id;
         _requestVersion = request.ConcurrencyVersion;
         _closedRequestVersion = closedRequest.ConcurrencyVersion;
         _resolvedWithAttentionVersion = resolvedWithAttention.ConcurrencyVersion;
         _resolvedForMetadataVersion = resolvedForMetadata.ConcurrencyVersion;
         _resolvedCleanVersion = resolvedClean.ConcurrencyVersion;
         _resolvedForNavVersion = resolvedForNav.ConcurrencyVersion;
+        _resolvedForNavCloseVersion = resolvedForNavClose.ConcurrencyVersion;
 
         var rawOwner = await _factory.SeedSessionAsync(graph.Owner.Id, _accountId);
         _ownerCookie = $"{AuthConstants.CookieName}={rawOwner}";
@@ -686,14 +705,14 @@ public sealed class ChangeKeepRequestStatusTests : IClassFixture<KeepApiWebFacto
     }
 
     // =========================================================================
-    // P6f-5 — close-and-next: navView=ready_to_close returns Navigation.Position=0
+    // P6f-5 — close-and-next: STATUS007 (first in queue) closed → nextId = STATUS006 (second)
     // =========================================================================
 
     [Fact]
-    public async Task CloseRequest_with_navView_ready_to_close_returns_navigation_position_zero()
+    public async Task CloseRequest_with_navView_ready_to_close_returns_nextId_and_position_zero()
     {
-        var response = await AuthRequest(_ownerCookie, _resolvedForNavVersion).PatchAsJsonAsync(
-            $"/keep/requests/{_resolvedForNavRequestId}/status?navView=ready_to_close",
+        var response = await AuthRequest(_ownerCookie, _resolvedForNavCloseVersion).PatchAsJsonAsync(
+            $"/keep/requests/{_resolvedForNavCloseId}/status?navView=ready_to_close",
             new { status = "closed" });
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -704,6 +723,8 @@ public sealed class ChangeKeepRequestStatusTests : IClassFixture<KeepApiWebFacto
         var nav = body.GetProperty("navigation");
         Assert.NotEqual(JsonValueKind.Null, nav.ValueKind);
         Assert.Equal(0, nav.GetProperty("position").GetInt32());
+        // STATUS007 (now+20m) sorts first; STATUS006 (now+10m) sorts second — nextId must be STATUS006.
+        Assert.Equal(_resolvedForNavRequestId.ToString(), nav.GetProperty("nextId").GetString());
     }
 
     // =========================================================================
@@ -713,8 +734,24 @@ public sealed class ChangeKeepRequestStatusTests : IClassFixture<KeepApiWebFacto
     [Fact]
     public async Task ChangeStatus_invalid_navView_returns_400()
     {
-        var response = await AuthRequest(_ownerCookie, _requestVersion).PatchAsJsonAsync(
-            $"/keep/requests/{_requestId}/status?navView=not_valid",
+        var response = await AuthRequest(_ownerCookie, _resolvedForNavVersion).PatchAsJsonAsync(
+            $"/keep/requests/{_resolvedForNavRequestId}/status?navView=not_valid",
+            new { status = "closed" });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("KeepRequest.RequestDetailInvalidNavView", body.GetProperty("code").GetString());
+    }
+
+    // =========================================================================
+    // P6f-5 — navView on non-close status → 400 (navView is close-and-next only)
+    // =========================================================================
+
+    [Fact]
+    public async Task ChangeStatus_navView_on_non_close_status_returns_400()
+    {
+        var response = await AuthRequest(_ownerCookie, _resolvedForNavVersion).PatchAsJsonAsync(
+            $"/keep/requests/{_resolvedForNavRequestId}/status?navView=ready_to_close",
             new { status = "in_progress" });
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);

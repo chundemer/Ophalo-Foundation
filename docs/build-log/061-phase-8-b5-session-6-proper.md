@@ -159,3 +159,35 @@ values `yesterday` and `this_week` only; parameter name `closedShortcut`; mutual
     invalid navView 400, Operator 403.
 
 **Test gate:** 785 unit · 14 arch green. 41 detail integration tests green.
+
+---
+
+## P6f-5 review fixes
+
+**Review findings addressed:**
+
+- **Medium (existing Closed rows):** P6f-5 sets `ExpiresAtUtc` only on future Closed transitions. Any
+  Closed rows created before this commit (e.g., earlier test seeds committed to a real database) will
+  retain `ExpiresAtUtc = null` and never expire via the guard. **Assumption recorded:** no real
+  customer-facing Closed rows exist in pilot data at the time of this commit. This is a pre-pilot
+  deployment; if Closed rows exist at migration time a one-off backfill
+  (`UPDATE keep_requests SET expires_at_utc = terminated_at_utc + interval '30 days' WHERE status = 'Closed' AND expires_at_utc IS NULL`)
+  must be run before launch.
+
+- **Low (navView on non-close status):** The navView block now also checks `parsedStatus != Closed`
+  after the unknown-value check and returns `RequestDetailInvalidNavView` (400). navView is strictly
+  close-and-next; supplying it on any other status change is rejected. Integration test added:
+  `ChangeStatus_navView_on_non_close_status_returns_400`.
+
+- **Low (weak close-and-next assertion):** The integration test now uses two staggered ready-to-close
+  seeds — STATUS007 (resolved now+20m, close target, sorts first) and STATUS006 (resolved now+10m,
+  stays in queue, sorts second). After closing STATUS007 the test asserts `nextId == STATUS006.Id`
+  and `position == 0`. Integration test renamed
+  `CloseRequest_with_navView_ready_to_close_returns_nextId_and_position_zero`.
+
+**Files changed (3):**
+1. `src/OpHalo.Keep.Application/Requests/ChangeKeepRequestStatusService.cs` — parsedStatus != Closed gate
+2. `tests/OpHalo.IntegrationTests/Api/ChangeKeepRequestStatusTests.cs` — STATUS007 seed; STATUS006 now+10m; enhanced + new tests
+3. `docs/build-log/061-phase-8-b5-session-6-proper.md`
+
+**Test gate:** 787 unit · 14 arch green. 29 status-change integration tests green.

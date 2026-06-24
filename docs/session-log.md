@@ -1,6 +1,6 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-06-24 (P6f-5 complete)
+**Last updated:** 2026-06-24 (P6f-5 + review fixes complete)
 **Branch:** `main` tracking `origin/main`
 **Current baseline:** 1409 tests (787 unit · 14 architecture · 612 integration) — unit + arch green; integration green on focused suite.
 **Next free ADR:** ADR-345
@@ -103,6 +103,11 @@ response includes `Navigation(PreviousId: null, NextId: nextFromSnapshot, Positi
 6. `docs/session-log.md`
 
 **Test gate:** 787 unit · 14 arch green. 27 integration (ChangeKeepRequestStatus + B5 detail) green.
+
+**Review fixes (commit after):** navView gated to `parsedStatus == Closed`; close-and-next integration
+test enhanced with two-item fixture asserting `nextId`; assumption recorded that no real Closed rows
+exist pre-pilot (backfill SQL noted in build log if needed at launch). 787 unit · 14 arch green;
+22 ChangeKeepRequestStatus integration tests green.
 
 ---
 

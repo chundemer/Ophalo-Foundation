@@ -115,6 +115,8 @@ public sealed class ChangeKeepRequestStatusService(
             var normalizedNavView = command.NavView.Trim().ToLowerInvariant();
             if (normalizedNavView != "ready_to_close")
                 return Result<KeepRequestDetailResult>.Failure(KeepRequestErrors.RequestDetailInvalidNavView);
+            if (parsedStatus != KeepRequestStatus.Closed)
+                return Result<KeepRequestDetailResult>.Failure(KeepRequestErrors.RequestDetailInvalidNavView);
             if (!isOwnerAdmin)
                 return Result<KeepRequestDetailResult>.Failure(Forbidden);
 
