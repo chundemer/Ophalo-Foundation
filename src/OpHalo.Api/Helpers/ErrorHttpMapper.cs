@@ -147,6 +147,11 @@ public static class ErrorHttpMapper
             // --- Detail navigation errors (P6f-4) ---
             var c when c == "KeepRequest.RequestDetailInvalidNavView" => (StatusCodes.Status400BadRequest, "Bad request.", null),
 
+            // --- Spam/Test classification errors (ADR-349/350, S7e) ---
+            var c when c == "KeepRequest.ClassificationRequiresOwnerOrAdmin" => (StatusCodes.Status403Forbidden, "Forbidden.", null),
+            var c when c == "KeepRequest.InvalidClassification"              => (StatusCodes.Status422UnprocessableEntity, "Unprocessable entity.", null),
+            var c when c == "KeepRequest.ClassificationReasonTooLong"        => (StatusCodes.Status400BadRequest, "Bad request.", null),
+
             // --- Follow Up On / Planned For errors (ADR-337/338 / P6b-2) ---
             var c when c == "KeepRequest.FollowUpOnRequiresActiveRequest" => (StatusCodes.Status409Conflict, "Conflict.", null),
             var c when c == "KeepRequest.PlannedForRequiresActiveRequest" => (StatusCodes.Status409Conflict, "Conflict.", null),

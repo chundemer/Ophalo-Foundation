@@ -569,4 +569,46 @@ public sealed class KeepRequestEvent : BaseEntity
         };
     }
 
+    /// <summary>
+    /// Creates a RequestClassified event (ADR-349/350). Always Internal — classification is an
+    /// operator-only action and must not be surfaced on the customer page. StatusAfter records the
+    /// classification target (Spam or Test). Optional reason stored as Content.
+    /// </summary>
+    public static KeepRequestEvent CreateClassified(
+        Guid requestId,
+        Guid accountId,
+        Guid actorAccountUserId,
+        string actorDisplayName,
+        KeepRequestStatus classifiedAs,
+        string? reason,
+        DateTime occurredAtUtc)
+    {
+        if (requestId == Guid.Empty)
+            throw new ArgumentException("Request ID is required.", nameof(requestId));
+        if (accountId == Guid.Empty)
+            throw new ArgumentException("Account ID is required.", nameof(accountId));
+        if (actorAccountUserId == Guid.Empty)
+            throw new ArgumentException("Actor account user ID is required.", nameof(actorAccountUserId));
+        if (string.IsNullOrWhiteSpace(actorDisplayName))
+            throw new ArgumentException("Actor display name is required.", nameof(actorDisplayName));
+        if (classifiedAs is not (KeepRequestStatus.Spam or KeepRequestStatus.Test))
+            throw new ArgumentException($"Classification target must be Spam or Test; got {classifiedAs}.", nameof(classifiedAs));
+        if (occurredAtUtc == default)
+            throw new ArgumentException("occurredAtUtc must be a real timestamp.", nameof(occurredAtUtc));
+
+        return new KeepRequestEvent
+        {
+            RequestId  = requestId,
+            AccountId  = accountId,
+            EventType  = KeepRequestEventType.RequestClassified,
+            Visibility = KeepRequestEventVisibility.Internal,
+            Content    = string.IsNullOrWhiteSpace(reason) ? null : reason.Trim(),
+            ActorType  = ActorType.AccountUser,
+            ActorAccountUserId = actorAccountUserId,
+            ActorDisplayName   = actorDisplayName.Trim(),
+            StatusAfter        = classifiedAs,
+            OccurredAtUtc      = occurredAtUtc
+        };
+    }
+
 }

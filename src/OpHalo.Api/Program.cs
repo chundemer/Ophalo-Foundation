@@ -104,6 +104,7 @@ builder.Services.AddScoped<IKeepRequestListCursorProtector>(sp =>
 builder.Services.AddScoped<GetKeepRequestDetailService>();
 builder.Services.AddScoped<GetKeepCustomerPageService>();
 builder.Services.AddScoped<ChangeKeepRequestStatusService>();
+builder.Services.AddScoped<ClassifyKeepRequestService>();
 builder.Services.AddScoped<AddBusinessUpdateService>();
 builder.Services.AddScoped<AddInternalNoteService>();
 builder.Services.AddScoped<AcknowledgeAttentionService>();
@@ -344,6 +345,23 @@ app.MapPatch("/keep/requests/{requestId:guid}/status", async (
         return ErrorHttpMapper.ToHttpResult(versionResult.Error);
 
     var command = new ChangeKeepRequestStatusCommand(requestId, body.Status, body.Message, versionResult.Value, navView);
+    var result = await service.ExecuteAsync(command, ct);
+    return result.IsSuccess ? Results.Ok(result.Value) : ErrorHttpMapper.ToHttpResult(result.Error);
+}).RequireAuthorization();
+
+// Classify request as Spam or Test — authenticated, Owner/Admin only (ADR-349/350, S7e)
+app.MapPost("/keep/requests/{requestId:guid}/classify", async (
+    Guid requestId,
+    HttpRequest httpRequest,
+    ClassifyRequestBody body,
+    ClassifyKeepRequestService service,
+    CancellationToken ct) =>
+{
+    var versionResult = KeepRequestVersionHeader.Parse(httpRequest.Headers);
+    if (!versionResult.IsSuccess)
+        return ErrorHttpMapper.ToHttpResult(versionResult.Error);
+
+    var command = new ClassifyKeepRequestCommand(requestId, body.TargetStatus, body.Reason, versionResult.Value);
     var result = await service.ExecuteAsync(command, ct);
     return result.IsSuccess ? Results.Ok(result.Value) : ErrorHttpMapper.ToHttpResult(result.Error);
 }).RequireAuthorization();

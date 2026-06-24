@@ -346,6 +346,7 @@ internal static class KeepRequestDetailMapper
         KeepRequestEventType.FeedbackReviewed      => "feedback_reviewed",
         KeepRequestEventType.FollowUpOnChanged     => "follow_up_on_changed",
         KeepRequestEventType.PlannedForChanged     => "planned_for_changed",
+        KeepRequestEventType.RequestClassified     => "request_classified",
         _ => throw new InvalidOperationException($"Unknown KeepRequestEventType: {type}")
     };
 

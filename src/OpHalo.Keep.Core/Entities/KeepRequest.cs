@@ -180,6 +180,44 @@ public sealed class KeepRequest : BaseEntity
     }
 
     /// <summary>
+    /// Classifies a non-terminal request as Spam or Test (ADR-349/350). Owner/Admin only;
+    /// enforced at the service layer. Classification is final — it sets a terminal status,
+    /// stamps TerminatedAtUtc, sets the 30-day customer-page expiry, clears all attention,
+    /// and writes an Internal audit event. Optional reason (≤ 500 chars) is stored on the event.
+    /// </summary>
+    public Result<KeepRequestEvent> Classify(
+        KeepRequestStatus targetStatus,
+        string? reason,
+        Guid actorAccountUserId,
+        string actorDisplayName,
+        DateTime nowUtc)
+    {
+        if (targetStatus is not (KeepRequestStatus.Spam or KeepRequestStatus.Test))
+            return Result<KeepRequestEvent>.Failure(KeepRequestErrors.InvalidClassification);
+
+        if (nowUtc == default)
+            throw new ArgumentException("nowUtc must be a valid UTC timestamp.", nameof(nowUtc));
+
+        if (IsTerminal)
+            return Result<KeepRequestEvent>.Failure(KeepRequestErrors.TerminalState);
+
+        var trimmedReason = string.IsNullOrWhiteSpace(reason) ? null : reason.Trim();
+        if (trimmedReason?.Length > 500)
+            return Result<KeepRequestEvent>.Failure(KeepRequestErrors.ClassificationReasonTooLong);
+
+        Status           = targetStatus;
+        TerminatedAtUtc  = nowUtc;
+        ExpiresAtUtc     = nowUtc.AddDays(TerminalPageRetentionDays);
+        LastBusinessActivityAt = nowUtc;
+        ClearAllAttentionForTerminal(actorAccountUserId, nowUtc);
+
+        var classifiedEvent = KeepRequestEvent.CreateClassified(
+            Id, AccountId, actorAccountUserId, actorDisplayName, targetStatus, trimmedReason, nowUtc);
+
+        return Result<KeepRequestEvent>.Success(classifiedEvent);
+    }
+
+    /// <summary>
     /// Adds a customer-visible business update without changing status. Creates a MessageAdded
     /// event with Visibility=All, MessageIntent=BusinessUpdate, CommunicationChannel=InApp.
     /// Business-update message limit: 4000 characters. Not allowed on terminal requests.

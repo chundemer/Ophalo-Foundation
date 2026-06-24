@@ -1,10 +1,10 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-06-24 (S7a–S7d complete; S7e next)
+**Last updated:** 2026-06-24 (S7a–S7e complete; S7f next)
 **Branch:** `main` tracking `origin/main`
-**Current baseline:** 797 unit · 14 arch green; integration green on focused suite (S7d: 46 list query tests green).
+**Current baseline:** 808 unit · 14 arch green; S7e: 10 classify integration tests green.
 **Next free ADR:** ADR-351
-**Next batch: S7e — Spam/Test classification command.**
+**Next batch: S7f — Final pilot-safety ledger and regression gate.**
 
 ---
 
@@ -151,7 +151,7 @@ terminal exclusion filters, `all_history` inclusion, customer-write guard, actio
 `GetKeepRequestListService`'s private summary mapper). Status stored as string via EF
 `HasConversion<string>()` — no migration required.
 
-**Files changed (9 production; 3 test):**
+**Files changed (8 production; 3 test; 1 docs):**
 1. `src/OpHalo.Keep.Core/Entities/Enums/KeepRequestStatus.cs` — Spam=8, Test=9
 2. `src/OpHalo.Keep.Core/Entities/KeepRequest.cs` — IsTerminal; customer-write block via IsTerminal
 3. `src/OpHalo.Keep.Application/Requests/KeepRequestActionPolicy.cs` — canSetTiming; terminal arm
@@ -165,10 +165,38 @@ terminal exclusion filters, `all_history` inclusion, customer-write guard, actio
 11. `tests/OpHalo.IntegrationTests/Api/KeepRequestListQueryApiTests.cs` — Spam excluded default + in all_history; Test excluded default
 
 **Note:** Gate preflight missed `GetKeepRequestListService`'s private `MapStatus` (separate from
-`KeepRequestDetailMapper.MapStatus`); discovered and fixed during integration test failure. 8
-unique production files — `GetKeepRequestListService.cs` was one file with two method changes.
+`KeepRequestDetailMapper.MapStatus`); discovered and fixed during integration test failure.
+`GetKeepRequestListService.cs` remains one production file with two S7d changes.
 
 **Test gate:** 797 unit · 14 arch green. 46 list query integration tests green.
+
+### S7e — Spam/Test classification command — COMPLETE
+
+`POST /keep/requests/{requestId}/classify` with body `{ targetStatus, reason? }` and version header.
+Owner/Admin only (ADR-349); Operator → 403 (`ClassificationRequiresOwnerOrAdmin`). Loads request
+with AccountWide scope; cross-account → 404. Expected-version check; stale → 409. Slug parse:
+`spam`/`test` only; unknown → 422 (`InvalidClassification`). Domain `Classify` method guards
+IsTerminal (→ 409), validates reason ≤ 500 chars (→ 400), sets `Status`/`TerminatedAtUtc`/
+`ExpiresAtUtc`/`ClearAllAttentionForTerminal`, creates Internal `RequestClassified` event.
+`MapEventType` updated with `request_classified`. Returns full detail result.
+
+**Files changed (8 production + 3 new):**
+1. `src/OpHalo.Keep.Core/Entities/Enums/KeepRequestEventType.cs` — `RequestClassified = 14`
+2. `src/OpHalo.Keep.Core/Entities/KeepRequestEvent.cs` — `CreateClassified` factory
+3. `src/OpHalo.Keep.Core/Entities/KeepRequest.cs` — `Classify` domain method
+4. `src/OpHalo.Keep.Core/Errors/KeepRequestErrors.cs` — 3 new classification errors
+5. `src/OpHalo.Keep.Application/Requests/ClassifyKeepRequestService.cs` — new command + service
+6. `src/OpHalo.Keep.Application/Requests/KeepRequestDetailMapper.cs` — MapEventType
+7. `src/OpHalo.Api/Program.cs` — service registration + endpoint
+8. `src/OpHalo.Api/Helpers/ErrorHttpMapper.cs` — 3 new error mappings
+9. `src/OpHalo.Api/Keep/ClassifyRequest.cs` — new request body record
+10. `tests/OpHalo.UnitTests/Keep/KeepRequestTests.cs` — 11 new Classify domain tests
+11. `tests/OpHalo.IntegrationTests/Api/ClassifyKeepRequestTests.cs` — 10 new integration tests
+
+**Deferred:** `CanClassify` in `KeepRequestActionDecision`/`KeepRequestActionPolicy`/`AvailableActionsMetadata`
+— advisory UI metadata deferred to S7f to stay within production file limit.
+
+**Test gate:** 808 unit · 14 arch green. 10 classify integration tests green.
 
 ### Session 7 Claude Coding Sessions
 
@@ -178,9 +206,7 @@ unique production files — `GetKeepRequestListService.cs` was one file with two
 - **S7c — Token-safe logging and redaction guardrails:** COMPLETE — shipped as G8b
   (commit `09d5e79`). `PublicTokenPathRedactor`, Diagnostics AddFilter, 4 integration sentinel proofs.
 - **S7d — Spam/Test terminal-status foundation:** COMPLETE — see below.
-- **S7e — Spam/Test classification command:** add Owner/Admin confirmed classification mutation with
-  expected-version handling, optional internal reason, audit event/history, fail-closed auth, and
-  customer-page blocking.
+- **S7e — Spam/Test classification command:** COMPLETE — see below.
 - **S7f — Final pilot-safety ledger and regression gate:** update docs/decision index/deferred
   topics, verify DEF-061/DEF-079/DEF-080, run proportionate broader tests, and keep Session 8
   notification/device foundation queued.

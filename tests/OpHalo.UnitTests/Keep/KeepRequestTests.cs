@@ -342,4 +342,80 @@ public class KeepRequestTests
         Assert.Equal("Jane Doe", ev.ActorDisplayName);
         Assert.Equal(Now, ev.OccurredAtUtc);
     }
+
+    // --- Classify ---
+
+    [Theory]
+    [InlineData(KeepRequestStatus.Spam)]
+    [InlineData(KeepRequestStatus.Test)]
+    public void Classify_sets_terminal_state_and_expiry(KeepRequestStatus target)
+    {
+        var request = NewRequest();
+        var result = request.Classify(target, null, ActorId, "Jane", Now);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(target, request.Status);
+        Assert.True(request.IsTerminal);
+        Assert.Equal(Now, request.TerminatedAtUtc);
+        Assert.Equal(Now.AddDays(30), request.ExpiresAtUtc);
+    }
+
+    [Theory]
+    [InlineData(KeepRequestStatus.Spam)]
+    [InlineData(KeepRequestStatus.Test)]
+    public void Classify_creates_RequestClassified_internal_event(KeepRequestStatus target)
+    {
+        var request = NewRequest();
+        var result = request.Classify(target, "test run", ActorId, "Jane", Now);
+
+        Assert.True(result.IsSuccess);
+        var ev = result.Value;
+        Assert.Equal(KeepRequestEventType.RequestClassified, ev.EventType);
+        Assert.Equal(KeepRequestEventVisibility.Internal, ev.Visibility);
+        Assert.Equal(target, ev.StatusAfter);
+        Assert.Equal("test run", ev.Content);
+        Assert.Equal(ActorId, ev.ActorAccountUserId);
+    }
+
+    [Theory]
+    [InlineData(KeepRequestStatus.Spam)]
+    [InlineData(KeepRequestStatus.Test)]
+    public void Classify_rejects_already_terminal_request(KeepRequestStatus target)
+    {
+        var request = NewRequest();
+        var statusProp = typeof(KeepRequest).GetProperty("Status")!;
+        statusProp.SetValue(request, target);
+
+        var result = request.Classify(target, null, ActorId, "Jane", Now);
+        Assert.False(result.IsSuccess);
+        Assert.Equal("KeepRequest.TerminalState", result.Error.Code);
+    }
+
+    [Fact]
+    public void Classify_rejects_invalid_target_status()
+    {
+        var request = NewRequest();
+        var result = request.Classify(KeepRequestStatus.Resolved, null, ActorId, "Jane", Now);
+        Assert.False(result.IsSuccess);
+        Assert.Equal("KeepRequest.InvalidClassification", result.Error.Code);
+    }
+
+    [Fact]
+    public void Classify_rejects_reason_over_500_chars()
+    {
+        var request = NewRequest();
+        var longReason = new string('x', 501);
+        var result = request.Classify(KeepRequestStatus.Spam, longReason, ActorId, "Jane", Now);
+        Assert.False(result.IsSuccess);
+        Assert.Equal("KeepRequest.ClassificationReasonTooLong", result.Error.Code);
+    }
+
+    [Fact]
+    public void Classify_with_null_reason_stores_no_content_on_event()
+    {
+        var request = NewRequest();
+        var result = request.Classify(KeepRequestStatus.Test, null, ActorId, "Jane", Now);
+        Assert.True(result.IsSuccess);
+        Assert.Null(result.Value.Content);
+    }
 }

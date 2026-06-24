@@ -249,4 +249,14 @@ public static class KeepRequestErrors
     // Detail navigation errors (P6f-4).
     public static readonly Error RequestDetailInvalidNavView =
         Error.Create("KeepRequest.RequestDetailInvalidNavView", "The specified navView is not recognized. Supported values are: ready_to_close.");
+
+    // Spam/Test classification errors (ADR-349/350, S7e).
+    public static readonly Error ClassificationRequiresOwnerOrAdmin =
+        Error.Create("KeepRequest.ClassificationRequiresOwnerOrAdmin", "Only an Owner or Admin can classify a request as Spam or Test.");
+
+    public static readonly Error InvalidClassification =
+        Error.Create("KeepRequest.InvalidClassification", "The classification target is not valid. Supported values are: spam, test.");
+
+    public static readonly Error ClassificationReasonTooLong =
+        Error.Create("KeepRequest.ClassificationReasonTooLong", "The classification reason exceeds the maximum allowed length of 500 characters.");
 }
