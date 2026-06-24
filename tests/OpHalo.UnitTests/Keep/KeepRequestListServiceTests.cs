@@ -1694,19 +1694,36 @@ public class KeepRequestListServiceTests
     }
 
     [Fact]
-    public async Task ReadyToClose_warning_signal_populated_on_all_rows_not_just_view()
+    public async Task ReadyToClose_warning_signal_populated_on_resolved_row_in_default_view()
     {
-        var request = MakeRequest();
+        // ReadyToCloseInfo is computed for every row, not just the ready_to_close view.
+        // Only Resolved rows can have HasCustomerActivityAfterResolution == true.
+        var request = MakeResolvedRequest();
         SetProp(request, nameof(KeepRequest.LastBusinessActivityAt), Now.AddHours(-5));
         SetProp(request, nameof(KeepRequest.LastCustomerActivityAt), Now.AddHours(-2));
         var sut = BuildSut(HappyPathPersistence([request]));
 
-        // default view — row still gets ReadyToCloseInfo populated
         var result = await sut.ExecuteAsync(new KeepRequestListQuery(View: "default"));
 
         Assert.True(result.IsSuccess);
         Assert.Single(result.Value.Requests);
         Assert.True(result.Value.Requests[0].ReadyToClose.HasCustomerActivityAfterResolution);
+    }
+
+    [Fact]
+    public async Task ReadyToClose_warning_signal_false_on_non_resolved_row()
+    {
+        // Non-Resolved rows always return false regardless of activity timestamps.
+        var request = MakeRequest();
+        SetProp(request, nameof(KeepRequest.LastBusinessActivityAt), Now.AddHours(-5));
+        SetProp(request, nameof(KeepRequest.LastCustomerActivityAt), Now.AddHours(-2));
+        var sut = BuildSut(HappyPathPersistence([request]));
+
+        var result = await sut.ExecuteAsync(new KeepRequestListQuery(View: "default"));
+
+        Assert.True(result.IsSuccess);
+        Assert.Single(result.Value.Requests);
+        Assert.False(result.Value.Requests[0].ReadyToClose.HasCustomerActivityAfterResolution);
     }
 
     [Fact]

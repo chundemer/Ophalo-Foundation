@@ -59,39 +59,7 @@ Current handoff:
   in B5 fixture; brittle `SingleOrDefault(status==resolved)` test fixed.
   773 unit · 14 arch · 612 integration — full suite green.
 
-### Next Two Slices
-
-Work these one at a time. Do not start P6f-3 until P6f-2 is implemented, reviewed, tested,
-documented, and Christian approves the commit.
-
-#### P6f-2 — Ready-to-close queue
-
-Status: ready to code after the file-level gate.
-
-Read before coding:
-
-- `docs/build-log/061-phase-8-b5-session-6-proper.md` (P6f-2 scope).
-- `docs/deferred-topics.md` DEF-036 and DEF-063 (customer-activity warning contract).
-- Current `GetKeepRequestListService.cs` and `KeepRequestListPersistence.cs` for `NeedsStatusCheck` precedent.
-
-Implementation target:
-
-- Add `view=ready_to_close`, `ActiveViewKind.ReadyToClose`, and a `ReadyToClose` view count.
-- Add `ReadyToCloseInfo` on `KeepRequestSummary`.
-- Eligibility: `Status == Resolved && AttentionLevel == None`, matching `CanClose`.
-- Row warning: `ReadyToCloseInfo.HasCustomerActivityAfterResolution =
-  LastCustomerActivityAt > LastBusinessActivityAt` on Resolved rows.
-- Keep notification/device, archive/unarchive, batch close, close-and-next, and detail navigation out of scope.
-
-Likely files:
-
-- `src/OpHalo.Keep.Application/Requests/IKeepRequestListPersistence.cs`
-- `src/OpHalo.Keep.Application/Requests/GetKeepRequestListResult.cs`
-- `src/OpHalo.Keep.Application/Requests/KeepRequestSummary.cs`
-- `src/OpHalo.Keep.Application/Requests/GetKeepRequestListService.cs`
-- `src/OpHalo.Keep.Infrastructure/Persistence/KeepRequestListPersistence.cs`
-- query/API binding only if the current generic `view` parser is not enough
-- focused unit + integration tests
+### Next Slice
 
 #### P6f-3 — Closed-history date shortcuts
 

@@ -990,7 +990,8 @@ public sealed class GetKeepRequestListService(
     private static KeepRequestReadyToCloseInfo BuildReadyToCloseInfo(KeepRequest r)
     {
         var hasCustomerActivityAfterResolution =
-            r.LastCustomerActivityAt.HasValue
+            r.Status == KeepRequestStatus.Resolved
+            && r.LastCustomerActivityAt.HasValue
             && r.LastBusinessActivityAt.HasValue
             && r.LastCustomerActivityAt.Value > r.LastBusinessActivityAt.Value;
 
