@@ -22,7 +22,7 @@ public static class KeepRequestListQueryBinding
     private static readonly HashSet<string> KnownParams = new(StringComparer.OrdinalIgnoreCase)
     {
         "view", "status", "attentionReason", "assignedAccountUserId",
-        "q", "createdFrom", "createdTo", "closedFrom", "closedTo",
+        "q", "createdFrom", "createdTo", "closedFrom", "closedTo", "closedShortcut",
         "limit", "cursor"
     };
 
@@ -84,6 +84,7 @@ public static class KeepRequestListQueryBinding
             CreatedTo:              Get(normalized, "createdTo"),
             ClosedFrom:             Get(normalized, "closedFrom"),
             ClosedTo:               Get(normalized, "closedTo"),
+            ClosedShortcut:         Get(normalized, "closedShortcut"),
             Limit:                  limit,
             Cursor:                 Get(normalized, "cursor")));
     }

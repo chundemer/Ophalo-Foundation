@@ -268,6 +268,27 @@ public sealed class KeepRequestListQueryApiTests : IClassFixture<KeepApiWebFacto
         Assert.Equal("KeepRequest.RequestListContradictoryParameters", code);
     }
 
+    [Fact]
+    public async Task ClosedShortcut_unknown_value_returns_400_InvalidClosedShortcut()
+    {
+        var code = await GetErrorCodeAsync("/keep/requests?view=closed_history&closedShortcut=last_week");
+        Assert.Equal("KeepRequest.RequestListInvalidClosedShortcut", code);
+    }
+
+    [Fact]
+    public async Task ClosedShortcut_with_non_history_view_returns_400_Contradictory()
+    {
+        var code = await GetErrorCodeAsync("/keep/requests?closedShortcut=yesterday");
+        Assert.Equal("KeepRequest.RequestListContradictoryParameters", code);
+    }
+
+    [Fact]
+    public async Task ClosedShortcut_yesterday_with_closed_history_returns_200()
+    {
+        var res = await GetAsync("/keep/requests?view=closed_history&closedShortcut=yesterday");
+        Assert.Equal(HttpStatusCode.OK, res.StatusCode);
+    }
+
     // --- Contradiction detection ------------------------------------------------
 
     [Fact]

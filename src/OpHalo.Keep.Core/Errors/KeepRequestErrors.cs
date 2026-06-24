@@ -171,6 +171,9 @@ public static class KeepRequestErrors
     public static readonly Error RequestListInvalidDateFormat =
         Error.Create("KeepRequest.RequestListInvalidDateFormat", "Dates must be full ISO-8601/RFC3339 timestamps with UTC or an explicit offset.");
 
+    public static readonly Error RequestListInvalidClosedShortcut =
+        Error.Create("KeepRequest.RequestListInvalidClosedShortcut", "The closedShortcut value is not recognized. Valid values are: yesterday, this_week.");
+
     public static readonly Error RequestListContradictoryParameters =
         Error.Create("KeepRequest.RequestListContradictoryParameters", "The provided query parameters are contradictory and cannot be combined.");
 

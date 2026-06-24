@@ -291,6 +291,37 @@ public class KeepRequestListServiceTests
         Assert.Equal("KeepRequest.RequestListContradictoryParameters", result.Error.Code);
     }
 
+    [Fact]
+    public async Task Execute_unknown_closedShortcut_returns_InvalidClosedShortcut()
+    {
+        var sut = BuildSut();
+        var result = await sut.ExecuteAsync(
+            new KeepRequestListQuery(View: "closed_history", ClosedShortcut: "last_week"));
+        Assert.False(result.IsSuccess);
+        Assert.Equal("KeepRequest.RequestListInvalidClosedShortcut", result.Error.Code);
+    }
+
+    [Fact]
+    public async Task Execute_closedShortcut_with_non_history_view_returns_contradictory()
+    {
+        var sut = BuildSut();
+        var result = await sut.ExecuteAsync(new KeepRequestListQuery(ClosedShortcut: "yesterday"));
+        Assert.False(result.IsSuccess);
+        Assert.Equal("KeepRequest.RequestListContradictoryParameters", result.Error.Code);
+    }
+
+    [Fact]
+    public async Task Execute_closedShortcut_with_explicit_closedFrom_returns_contradictory()
+    {
+        var sut = BuildSut();
+        var result = await sut.ExecuteAsync(new KeepRequestListQuery(
+            View: "closed_history",
+            ClosedShortcut: "yesterday",
+            ClosedFrom: "2026-06-14T00:00:00Z"));
+        Assert.False(result.IsSuccess);
+        Assert.Equal("KeepRequest.RequestListContradictoryParameters", result.Error.Code);
+    }
+
     // --- Contradiction detection (must surface before "not yet available") ------
 
     [Fact]
@@ -404,6 +435,32 @@ public class KeepRequestListServiceTests
             new KeepRequestListQuery(View: "closed_history", ClosedFrom: "2026-01-01T00:00:00Z"));
         Assert.True(result.IsSuccess);
         Assert.NotNull(p.LastHistoryFilters?.ClosedFrom);
+    }
+
+    [Fact]
+    public async Task Execute_closedShortcut_yesterday_resolves_to_yesterday_utc_window()
+    {
+        // Now = 2026-06-15 (Monday). yesterday = [June 14 00:00Z, June 15 00:00Z).
+        var p = HappyPathPersistence();
+        var sut = BuildSut(p);
+        var result = await sut.ExecuteAsync(
+            new KeepRequestListQuery(View: "closed_history", ClosedShortcut: "yesterday"));
+        Assert.True(result.IsSuccess);
+        Assert.Equal(new DateTimeOffset(2026, 6, 14, 0, 0, 0, TimeSpan.Zero), p.LastHistoryFilters?.ClosedFrom);
+        Assert.Equal(new DateTimeOffset(2026, 6, 15, 0, 0, 0, TimeSpan.Zero), p.LastHistoryFilters?.ClosedTo);
+    }
+
+    [Fact]
+    public async Task Execute_closedShortcut_this_week_resolves_to_monday_through_tomorrow_utc()
+    {
+        // Now = 2026-06-15 (Monday). this_week = [June 15 00:00Z, June 16 00:00Z).
+        var p = HappyPathPersistence();
+        var sut = BuildSut(p);
+        var result = await sut.ExecuteAsync(
+            new KeepRequestListQuery(View: "closed_history", ClosedShortcut: "this_week"));
+        Assert.True(result.IsSuccess);
+        Assert.Equal(new DateTimeOffset(2026, 6, 15, 0, 0, 0, TimeSpan.Zero), p.LastHistoryFilters?.ClosedFrom);
+        Assert.Equal(new DateTimeOffset(2026, 6, 16, 0, 0, 0, TimeSpan.Zero), p.LastHistoryFilters?.ClosedTo);
     }
 
     [Fact]

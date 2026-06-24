@@ -98,3 +98,30 @@ the same constraint regardless of affordance.
 9. `docs/session-log.md` (pre-existing dirty)
 
 **Test gate:** 773 unit · 14 arch · 612 integration = 1399 total — full suite green.
+
+---
+
+## P6f-3 — Closed-history date shortcuts — COMPLETE
+
+**Decisions locked (pre-implementation):** UTC-only shortcut resolution (no account timezone, deferred DEF-078);
+values `yesterday` and `this_week` only; parameter name `closedShortcut`; mutually exclusive with explicit
+`closedFrom`/`closedTo`; valid only on history views; unknown value → new specific error.
+
+**Contract:**
+- `closedShortcut=yesterday` → `[UTC midnight yesterday, UTC midnight today)` via `TerminatedAtUtc`
+- `closedShortcut=this_week` → `[UTC Monday 00:00Z, UTC tomorrow 00:00Z)` (ISO week, Monday-start)
+
+**Changes:**
+- `KeepRequestErrors.cs` — `RequestListInvalidClosedShortcut` added.
+- `KeepRequestListQuery.cs` — `ClosedShortcut: string?` field added.
+- `KeepRequestListQueryBinding.cs` — `"closedShortcut"` in `KnownParams`; bound in result.
+- `KeepRequestListCursor.cs` — `closedShortcut` added to `ComputeFingerprint` canonical shape.
+- `GetKeepRequestListService.cs` — `ValidClosedShortcuts` set; step 2b shortcut value validation;
+  `ValidateContradictions` extended (shortcut on non-history view → contradictory; shortcut + explicit
+  date bounds → contradictory); `ResolveClosedShortcut` helper; shortcut resolved to `closedFrom`/`closedTo`
+  in filter-build block after explicit date parsing.
+- `KeepRequestListServiceTests.cs` — 5 new tests (unknown shortcut, non-history view, explicit-date conflict,
+  yesterday resolution, this_week resolution).
+- `KeepRequestListQueryApiTests.cs` — 3 new tests (unknown shortcut 400, non-history 400, yesterday 200).
+
+**Test gate:** 779 unit · 14 arch — unit + arch suite green. Integration focused suite green (44 tests).

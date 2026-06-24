@@ -1,10 +1,10 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-06-24 (P6f-2 complete — P6f-3 next)
+**Last updated:** 2026-06-24 (P6f-3 complete — P6f-4 next)
 **Branch:** `main` tracking `origin/main`
-**Current baseline:** 1399 tests (773 unit · 14 architecture · 612 integration) — full suite green.
+**Current baseline:** 1405 tests (779 unit · 14 architecture · 612 integration) — unit + arch green; integration green on focused suite.
 **Next free ADR:** ADR-345
-**Next batch: P6f-3 — closed-history date shortcuts.**
+**Next batch: P6f-4 — TBD (see Session 6 outline for remaining scope).**
 
 ---
 
@@ -59,24 +59,19 @@ Current handoff:
   in B5 fixture; brittle `SingleOrDefault(status==resolved)` test fixed.
   773 unit · 14 arch · 612 integration — full suite green.
 
+### Completed This Session
+
+#### P6f-3 — Closed-history date shortcuts — COMPLETE
+
+`closedShortcut=yesterday|this_week` added as a UTC-backed query parameter for history views.
+Unknown shortcut → `RequestListInvalidClosedShortcut` (422). Shortcut on non-history view or combined
+with explicit `closedFrom`/`closedTo` → `ContradictoryParameters`. Cursor fingerprint includes the
+shortcut name. Account timezone deferred (DEF-078).
+6 new unit tests, 3 new integration tests. 779 unit · 14 arch — full suite green.
+
 ### Next Slice
 
-#### P6f-3 — Closed-history date shortcuts
-
-Status: next after P6f-2.
-
-Read before coding:
-
-- `docs/build-log/061-phase-8-b5-session-6-proper.md`
-- `docs/build-log/039-phase-8-b5-claude-coding-sessions.md` Session 6 outline
-- Current list query binding, validation, cursor fingerprinting, and closed-history filter tests
-
-Implementation target:
-
-- Add API-level shortcuts for closed-history date windows such as closed yesterday / this week.
-- Reuse existing `ClosedFrom` / `ClosedTo` and `TerminatedAtUtc` history filtering.
-- Keep shortcuts limited to history views where closed date filters are already valid.
-- Do not add reporting totals, archive behavior, or closeout navigation in this slice.
+TBD — see `docs/build-log/039-phase-8-b5-claude-coding-sessions.md` Session 6 for remaining scope (detail next/previous, close-and-next).
 
 ---
 

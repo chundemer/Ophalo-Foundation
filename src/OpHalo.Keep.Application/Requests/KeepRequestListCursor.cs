@@ -90,7 +90,8 @@ public static class KeepRequestListCursor
             createdFrom      = (query.CreatedFrom ?? string.Empty).Trim(),
             createdTo        = (query.CreatedTo ?? string.Empty).Trim(),
             closedFrom       = (query.ClosedFrom ?? string.Empty).Trim(),
-            closedTo         = (query.ClosedTo ?? string.Empty).Trim()
+            closedTo         = (query.ClosedTo ?? string.Empty).Trim(),
+            closedShortcut   = (query.ClosedShortcut ?? string.Empty).Trim().ToLowerInvariant()
         };
         var json = JsonSerializer.Serialize(canonical, FingerprintJsonOptions);
         var hash = SHA256.HashData(Encoding.UTF8.GetBytes(json));

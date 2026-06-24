@@ -61,6 +61,11 @@ public sealed class GetKeepRequestListService(
         "ready_to_close"
     };
 
+    private static readonly HashSet<string> ValidClosedShortcuts = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "yesterday", "this_week"
+    };
+
     private static readonly Dictionary<string, HistoryViewKind> HistoryViewKinds =
         new(StringComparer.OrdinalIgnoreCase)
         {
@@ -167,6 +172,11 @@ public sealed class GetKeepRequestListService(
         if (dateError is not null)
             return Result<GetKeepRequestListResult>.Failure(dateError);
 
+        // 2b. Closed shortcut value — validate before contradiction check.
+        if (!string.IsNullOrWhiteSpace(query.ClosedShortcut)
+            && !ValidClosedShortcuts.Contains(query.ClosedShortcut.Trim().ToLowerInvariant()))
+            return Result<GetKeepRequestListResult>.Failure(KeepRequestErrors.RequestListInvalidClosedShortcut);
+
         // 3. Status slug — validates individual value before contradiction check.
         KeepRequestStatus? parsedStatus = null;
         if (!string.IsNullOrWhiteSpace(query.Status))
@@ -185,7 +195,7 @@ public sealed class GetKeepRequestListService(
             parsedAttentionReason = ar;
         }
 
-        // 5. Contradictions — view+status combinations, closedFrom/closedTo scope.
+        // 5. Contradictions — view+status combinations, closedFrom/closedTo scope, shortcut exclusivity.
         var contradictionError = ValidateContradictions(normalizedView, parsedStatus, query);
         if (contradictionError is not null)
             return Result<GetKeepRequestListResult>.Failure(contradictionError);
@@ -233,6 +243,8 @@ public sealed class GetKeepRequestListService(
             closedFrom = DateTimeOffset.Parse(query.ClosedFrom.Trim(), now);
         if (!string.IsNullOrWhiteSpace(query.ClosedTo))
             closedTo = DateTimeOffset.Parse(query.ClosedTo.Trim(), now);
+        if (!string.IsNullOrWhiteSpace(query.ClosedShortcut))
+            (closedFrom, closedTo) = ResolveClosedShortcut(query.ClosedShortcut.Trim(), clock.UtcNow);
 
         var trimmedQ = string.IsNullOrWhiteSpace(query.Q) ? null : query.Q.Trim();
         var isSearch = !string.IsNullOrEmpty(trimmedQ);
@@ -459,6 +471,23 @@ public sealed class GetKeepRequestListService(
             && char.IsDigit(tail[4]) && char.IsDigit(tail[5]);
     }
 
+    // Resolves a pre-validated shortcut to a UTC [from, to) window using TerminatedAtUtc semantics.
+    // Week starts Monday (ISO); 'to' is exclusive (matches ClosedTo convention from ADR-258).
+    private static (DateTimeOffset From, DateTimeOffset To) ResolveClosedShortcut(string shortcut, DateTime utcNow)
+    {
+        var todayUtc = utcNow.Date;
+        return shortcut.ToLowerInvariant() switch
+        {
+            "yesterday" => (
+                new DateTimeOffset(todayUtc.AddDays(-1), TimeSpan.Zero),
+                new DateTimeOffset(todayUtc, TimeSpan.Zero)),
+            "this_week" => (
+                new DateTimeOffset(todayUtc.AddDays(-(((int)todayUtc.DayOfWeek + 6) % 7)), TimeSpan.Zero),
+                new DateTimeOffset(todayUtc.AddDays(1), TimeSpan.Zero)),
+            _ => throw new InvalidOperationException($"Unrecognised closed shortcut '{shortcut}'.")
+        };
+    }
+
     private static Error? ValidateContradictions(
         string normalizedView,
         KeepRequestStatus? parsedStatus,
@@ -490,6 +519,13 @@ public sealed class GetKeepRequestListService(
         var hasClosedDate = !string.IsNullOrWhiteSpace(query.ClosedFrom)
                          || !string.IsNullOrWhiteSpace(query.ClosedTo);
         if (hasClosedDate && normalizedView is not ("closed_history" or "cancelled_history" or "all_history"))
+            return KeepRequestErrors.RequestListContradictoryParameters;
+
+        // closedShortcut is history-only and mutually exclusive with explicit date bounds.
+        var hasShortcut = !string.IsNullOrWhiteSpace(query.ClosedShortcut);
+        if (hasShortcut && normalizedView is not ("closed_history" or "cancelled_history" or "all_history"))
+            return KeepRequestErrors.RequestListContradictoryParameters;
+        if (hasShortcut && hasClosedDate)
             return KeepRequestErrors.RequestListContradictoryParameters;
 
         return null;

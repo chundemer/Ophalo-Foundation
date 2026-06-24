@@ -15,5 +15,6 @@ public sealed record KeepRequestListQuery(
     string? CreatedTo = null,
     string? ClosedFrom = null,
     string? ClosedTo = null,
+    string? ClosedShortcut = null,
     int? Limit = null,
     string? Cursor = null);
