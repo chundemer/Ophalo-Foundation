@@ -1,10 +1,10 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-06-23 (P6d-2A complete — needs-status-check list/query surface)
+**Last updated:** 2026-06-23 (P6d complete — P6e handoff next)
 **Branch:** `main` tracking `origin/main`
 **Current baseline:** 1345 tests (750 unit · 14 architecture · 598 integration — integration not re-run) — full unit + architecture suite green.
 **Next free ADR:** ADR-345
-**Next batch: P6d-3 — DEF-037 completion gate and P6e handoff.**
+**Next batch: P6e — notification candidate/badge contract notes (documentation only, no delivery implementation).**
 
 ---
 
@@ -66,6 +66,7 @@ Current handoff:
   DEF-037 remains open for P6d.
 - **Completed:** P6d-1 — needs-status-check signal foundation. `KeepRequestNeedsStatusCheckInputs` value object; `GetNeedsStatusCheckInputs(DateOnly today)` domain method; `LastBusinessActivityAt` updated on SetFollowUpOn/ClearFollowUpOn/SetPlannedFor/ClearPlannedFor; 17 unit tests (4 exclusion, 3 suppressor-boundary, 8 signal-max, 2 follow-up/planned activity assertions). 739 unit tests green.
 - **Completed:** P6d-2A — needs-status-check list/query surface. `GET /keep/requests?view=needs_status_check`; `KeepRequestStatusCheckInfo` nested record on `KeepRequestSummary` (IsDue, SinceUtc, DueAtUtc, AgeDays, ExclusionReason); `NeedsStatusCheck` ActiveViewKind with DB pre-filter (non-terminal + AttentionLevel==None) + 5-day in-memory due check; `NeedsStatusCheckComparer` (SinceUtc ASC); cursor with sentinel 98; metadata on every row in every view; 11 unit tests + 6 integration tests. DEF-037 closes. 750 unit, 14 arch green.
+- **Completed:** P6d-3 — P6d completion gate. ADR-339 marked implemented; DEF-037 closed; build-log/060 updated.
 
 ---
 

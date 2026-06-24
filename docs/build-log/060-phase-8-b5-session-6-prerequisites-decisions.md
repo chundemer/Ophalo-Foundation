@@ -557,7 +557,9 @@ ADR-341/342, the Session Protocol in `docs/session-log.md`, and the files named 
 Use one Claude session per slice below. Each session should read only this build log header,
 ADR-339, the Session Protocol in `docs/session-log.md`, and the files named in that slice.
 
-#### P6d-1 — Needs-status-check signal foundation
+#### P6d-1 — Needs-status-check signal foundation — COMPLETE
+
+**Status:** P6d-1 complete. Commit `21d8578`. 739 unit tests green.
 
 Goal: add the reusable, centralized latest-meaningful-activity calculation and policy inputs without
 building the queue route yet.
@@ -591,7 +593,9 @@ Verify:
 - Focused unit tests for signal calculation and exclusions.
 - `dotnet build`.
 
-#### P6d-2 — Needs-status-check list/query surface
+#### P6d-2A — Needs-status-check list/query surface — COMPLETE
+
+**Status:** P6d-2A complete. Commit `440029a`. 750 unit · 14 architecture green. DEF-037 closes.
 
 Goal: expose the quiet human-review queue using the P6d-1 signal model.
 
@@ -617,6 +621,30 @@ Verify:
 
 - Focused unit and API list tests.
 - `dotnet build`.
+
+#### P6d-3 — P6d completion gate — COMPLETE
+
+**Status:** P6d complete. Final baseline: 1345 tests (750 unit · 14 architecture · 598 integration —
+integration not re-run since P6c-3). Full unit + architecture suite green.
+
+**Documentation reconciled:**
+- `docs/session-log.md` moved next batch to P6e.
+- DEF-037 marked implemented by P6d-2A.
+- ADR-339 marked implemented.
+
+**P6d ledger:**
+- P6d-1: `KeepRequestNeedsStatusCheckInputs` value object; `GetNeedsStatusCheckInputs(DateOnly today)`
+  domain method; `LastBusinessActivityAt` updated on Follow Up On / Planned For mutations; 17 unit
+  tests — commit `21d8578`.
+- P6d-2A: `GET /keep/requests?view=needs_status_check`; `KeepRequestStatusCheckInfo` nested record
+  (IsDue, SinceUtc, DueAtUtc, AgeDays, ExclusionReason); `NeedsStatusCheck` ActiveViewKind; DB
+  pre-filter + 5-day in-memory due check; `NeedsStatusCheckComparer` (SinceUtc ASC); cursor sentinel
+  98; metadata on every row in every view; 11 unit tests + 6 integration tests — commit `440029a`.
+- P6d-3: documentation/ledger completion gate.
+
+**Verified for completion gate:**
+- 750 unit tests, 14 architecture tests — all green.
+- `dotnet build --no-restore` — succeeded.
 
 ## Exclusions
 
