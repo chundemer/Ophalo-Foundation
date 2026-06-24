@@ -12,7 +12,7 @@ namespace OpHalo.Keep.Application.Requests;
 
 public sealed record ClassifyKeepRequestCommand(
     Guid RequestId,
-    string TargetStatus,
+    string? TargetStatus,
     string? Reason,
     Guid ExpectedVersion);
 
@@ -91,12 +91,15 @@ public sealed class ClassifyKeepRequestService(
             return Result<KeepRequestDetailResult>.Failure(KeepRequestErrors.RequestChanged);
 
         // --- Parse classification target (after row load so stale requests return 409, not 400) ---
-        var targetStatus = command.TargetStatus.Trim().ToLowerInvariant() switch
-        {
-            "spam" => (KeepRequestStatus?)KeepRequestStatus.Spam,
-            "test" => (KeepRequestStatus?)KeepRequestStatus.Test,
-            _      => null
-        };
+        // Null/blank guard: missing or whitespace-only targetStatus maps to InvalidClassification, not a 500.
+        var targetStatus = string.IsNullOrWhiteSpace(command.TargetStatus)
+            ? null
+            : command.TargetStatus.Trim().ToLowerInvariant() switch
+            {
+                "spam" => (KeepRequestStatus?)KeepRequestStatus.Spam,
+                "test" => (KeepRequestStatus?)KeepRequestStatus.Test,
+                _      => null
+            };
         if (targetStatus is null)
             return Result<KeepRequestDetailResult>.Failure(KeepRequestErrors.InvalidClassification);
 

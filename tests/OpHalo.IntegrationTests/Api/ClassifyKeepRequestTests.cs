@@ -233,15 +233,15 @@ public sealed class ClassifyKeepRequestTests : IClassFixture<KeepApiWebFactory>,
     }
 
     // =========================================================================
-    // Test 4 — Owner classifies as Spam → 200, terminal fields set
+    // Test 4 — Owner classifies as Spam → 200, terminal fields, version rotated, event persisted
     // =========================================================================
 
     [Fact]
-    public async Task Classify_OwnerSpam_Returns200_WithTerminalFields()
+    public async Task Classify_OwnerSpam_Returns200_WithTerminalFields_VersionRotated_EventPersisted()
     {
         var response = await AuthRequest(_ownerCookie, _requestVersion).PostAsJsonAsync(
             $"/keep/requests/{_requestId}/classify",
-            new { targetStatus = "spam" });
+            new { targetStatus = "spam", reason = "obvious junk" });
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
@@ -249,6 +249,19 @@ public sealed class ClassifyKeepRequestTests : IClassFixture<KeepApiWebFactory>,
         Assert.Equal("spam", body.GetProperty("status").GetString());
         Assert.True(body.GetProperty("terminatedAtUtc").GetDateTime() > default(DateTime));
         Assert.True(body.GetProperty("expiresAtUtc").GetDateTime() > default(DateTime));
+
+        // Version must be rotated by the commit.
+        var newVersion = body.GetProperty("version").GetGuid();
+        Assert.NotEqual(_requestVersion, newVersion);
+
+        // RequestClassified event must appear in history as internal with reason as content.
+        var events = body.GetProperty("events").EnumerateArray().ToList();
+        var classified = events.FirstOrDefault(e =>
+            e.GetProperty("eventType").GetString() == "request_classified");
+        Assert.True(classified.ValueKind != JsonValueKind.Undefined, "Expected a request_classified event in response events.");
+        Assert.Equal("internal", classified.GetProperty("visibility").GetString());
+        Assert.Equal("obvious junk", classified.GetProperty("content").GetString());
+        Assert.Equal("spam", classified.GetProperty("statusAfter").GetString());
     }
 
     // =========================================================================
@@ -340,6 +353,34 @@ public sealed class ClassifyKeepRequestTests : IClassFixture<KeepApiWebFactory>,
             new { targetStatus = "spam" });
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    // =========================================================================
+    // Test 11 — Null targetStatus → 422 (must not 500)
+    // =========================================================================
+
+    [Fact]
+    public async Task Classify_NullTargetStatus_Returns422()
+    {
+        var response = await AuthRequest(_ownerCookie, _requestVersion).PostAsJsonAsync(
+            $"/keep/requests/{_requestId}/classify",
+            new { targetStatus = (string?)null });
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+    }
+
+    // =========================================================================
+    // Test 12 — Blank targetStatus → 422 (must not 500)
+    // =========================================================================
+
+    [Fact]
+    public async Task Classify_BlankTargetStatus_Returns422()
+    {
+        var response = await AuthRequest(_ownerCookie, _requestVersion).PostAsJsonAsync(
+            $"/keep/requests/{_requestId}/classify",
+            new { targetStatus = "   " });
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
     }
 
     // =========================================================================
