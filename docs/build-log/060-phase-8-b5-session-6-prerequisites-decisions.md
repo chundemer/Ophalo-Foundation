@@ -1,7 +1,7 @@
 # Build Log 060 — Phase 8-B5 Session 6 Prerequisites Decisions
 
 **Date:** 2026-06-23  
-**Status:** Prerequisite decisions locked; ready for prerequisite implementation slices  
+**Status:** Prerequisite decisions locked; P6b–P6e prerequisite implementation/contract slices complete
 **Baseline:** 1265 tests (677 unit · 14 architecture · 574 integration) from G8d final green gate  
 **ADRs locked here:** ADR-337..ADR-344; next free ADR-345  
 
@@ -83,23 +83,53 @@ Do not copy the reference app's polling-first notification posture.
 
 Rules:
 
-- Push notifications are reserved for immediate or time-sensitive attention.
-- Badges/counts represent actionable backlog.
+- Push notifications are reserved for immediate or time-sensitive routed work that is likely to be
+  missed off-screen.
+- Badges/counts represent personal actionable backlog for the signed-in user.
 - The server-ranked request list remains the main prioritization surface once a user opens Keep.
-- Notification delivery is event/state-driven after durable request state is recorded; delivery is
-  fail-soft and never rolls back the underlying action.
+- Notification candidate generation is downstream of durable request state; domain methods do not send,
+  enqueue, or know about notifications.
+- Request mutations commit first. Application-layer notification candidate generation and delivery are
+  fail-soft and never roll back, retry, or fail the underlying mutation.
 - Foreground freshness may use refetch-after-write, pull-to-refresh, focus/resume sync, and light
   foreground polling if needed.
 - Off-screen awareness uses native push/APNs/FCM and server-derived badges.
 - Push payloads are minimal and deep-link to API-refreshed state.
-- Full notification preference matrices, quiet hours, delivery analytics, and broad notification
-  reporting remain later work.
+- Push payloads must not contain customer name, phone/email, full message text, request description,
+  private/internal notes, feedback comments, page tokens, or sensitive operational details.
+- V1 is fresh, not offline-first: local caching/drafts are allowed for fast resume and compose safety,
+  but mutations require network/server confirmation; no offline write queue, replay, or merge.
+- Full notification preference matrices, quiet hours, delivery analytics, broad notification reporting,
+  outbox/retry/dead-letter, device tables, badge endpoints, APNs/FCM adapters, email/SMS delivery, and
+  transport infrastructure remain later work.
 - Push-worthy by default: new customer request needing first response, customer message/intent
-  needing business response, timing/cancel/issue/call-me intent especially when planned soon, Follow
-  Up On due today for responsible/watching users, negative feedback to Owner/Admin, and assignment
-  or responsibility changed to you when action is expected.
-- Badge/list by default: ready to close, needs status check, planned date passed, future follow-up
-  set, normal internal notes, closed history, and generic list movement.
+  needing business response, `call_requested`, `cancellation_requested`, `timing_change_requested`
+  when time-sensitive/near Planned For or priority attention, Follow Up On due today/overdue for routed
+  users, negative feedback/unresolved feedback review to Owner/Admin, and assignment/transfer to you
+  when action is expected.
+- Badge/list by default: quiet active backlog, needs-status-check rows, future Follow Up On, future
+  Planned For, customer-page viewed confidence metadata, `information_added` unless it changes attention
+  or priority, ready-to-close/closeout backlog unless separately promoted, normal internal notes,
+  closed history, and generic list movement.
+- Push routes to the smallest accountable audience: active eligible Responsible first; if none, active
+  eligible Watchers; if none, Owner/Admin fallback. Operators receive push only for responsible/watching
+  scoped work. Owner/Admin broad visibility does not imply all-request push routing.
+- Assignment/transfer push goes to the newly assigned Responsible user, excludes the actor, and does not
+  notify the previous Responsible merely because responsibility was removed.
+- Suppress push for the actor, Viewer role, inactive/non-active membership, stale/ineligible participants,
+  request-level mute, OffSeason, blocked account/feature posture, non-visible rows, badge/list-only
+  categories, and terminal rows except valid Owner/Admin unresolved-feedback review.
+- Do not suppress urgent new customer activity merely because the request has future Follow Up On or
+  future Planned For. Customer page views never create notification candidates.
+- Native badge count is a personal actionable count for the signed-in user, not an account-wide backlog
+  count and not a durable notification ledger. It may include needs-status-check only when visible/scoped
+  and actionable for that user.
+- P6e covers staff/operator push and badge boundaries only. Customer-facing platform notifications are
+  not automatic: Owner/Admin/Operator choose when to contact the customer through explicit actions.
+  Native phone/SMS/email launch is a convenience and not durable proof; durable state comes from explicit
+  customer-visible updates, external contact logs, and status messages. On app resume after a native
+  phone/SMS/email launch, V1 UI should optionally show a low-friction, dismissible "Log this contact?"
+  prompt, but no event is created unless staff confirms.
 
 ### ADR-341 — Customer page viewed is a pre-pilot confidence signal, not a read receipt
 
@@ -645,6 +675,48 @@ integration not re-run since P6c-3). Full unit + architecture suite green.
 **Verified for completion gate:**
 - 750 unit tests, 14 architecture tests — all green.
 - `dotnet build --no-restore` — succeeded.
+
+#### P6e — Notification candidate/badge contract notes — COMPLETE
+
+**Status:** P6e complete. Documentation/contract slice only; no delivery implementation.
+
+**Locked contract:**
+- Native push is reserved for immediate, routed work likely to be missed off-screen.
+- Push-worthy by default: new customer-created request needing first response; customer message/intent
+  requiring business response; `call_requested`; `cancellation_requested`; time-sensitive
+  `timing_change_requested`; due/overdue Follow Up On for routed users; negative feedback/unresolved
+  feedback review to Owner/Admin; assignment/transfer to you when action is expected.
+- Badge/list-only by default: quiet active backlog; needs-status-check rows; future Follow Up On /
+  Planned For; customer-page viewed metadata; `information_added` unless it changes attention/priority;
+  ready-to-close/closeout backlog unless later promoted; internal notes; closed/cancelled history.
+- Routing uses the smallest accountable audience: active eligible Responsible first, then active eligible
+  Watchers, then Owner/Admin fallback. Operators only receive push for responsible/watching scoped work.
+  Owner/Admin broad visibility does not imply all-request push.
+- Suppression: actor exclusion, Viewer, inactive/non-active members, stale/ineligible participants,
+  request mute, OffSeason, blocked account/feature posture, non-visible rows, badge/list-only categories,
+  and terminal rows except valid Owner/Admin unresolved-feedback review.
+- Badge count is personal actionable work for the signed-in user, server-derived from current state, not
+  a durable badge ledger and not account-wide by default.
+- Delivery boundary: request mutation commits first; application layer may derive notification candidates
+  after successful commit; delivery is fail-soft and outside the transaction. P6e does not choose MediatR,
+  outbox, APNs/FCM, device registration, badge endpoints, or delivery infrastructure.
+- V1 is fresh, not offline-first: local cached list/detail responses, UI preferences, and drafts are OK;
+  mutations require network/server confirmation; no offline write queue/replay/merge.
+- Push payloads are minimal, non-sensitive, and deep-link only. Clients refetch API state after opening.
+- P6e is staff/operator push and badge only. Customer-facing platform notifications are not automatic;
+  customer contact is business-initiated through explicit app actions. Native phone/SMS/email launch is
+  not durable proof; optional UI prompt on return may help staff log the contact.
+- Temporary personal notification silence is deferred.
+
+**Documentation reconciled:**
+- ADR-340 marked implemented.
+- DEF-012 / DEF-021 clarified with P6e contract boundaries while remaining open for implementation.
+- DEF-022 clarified for native contact-launch convenience and explicit external-contact proof.
+- DEF-077 added for future temporary personal notification silence.
+
+**Verified:**
+- `rg` doc sanity check for P6e/ADR-340/DEF-012/DEF-021/notification references.
+- No build required; docs-only changes.
 
 ## Exclusions
 

@@ -76,6 +76,7 @@ public sealed record AvailableActionsMetadata(
     bool CanMarkFeedbackReviewed,
     bool CanSetFollowUpOn,
     bool CanSetPlannedFor,
+    bool CanClose,
     IReadOnlyList<string> AllowedStatuses);
 
 /// <summary>

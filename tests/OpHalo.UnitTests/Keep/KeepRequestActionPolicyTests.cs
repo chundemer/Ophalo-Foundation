@@ -559,4 +559,64 @@ public class KeepRequestActionPolicyTests
         var offSeason = new KeepRequestActionContext(AccountUserRole.Owner, CanWrite: false, null, null);
         Assert.False(KeepRequestActionPolicy.Evaluate(r, offSeason).CanLogExternalContact);
     }
+
+    // CanClose (ADR-343)
+
+    [Fact]
+    public void CanClose_Owner_Resolved_no_attention_is_true()
+    {
+        var r = MakeReceived();
+        r.ChangeStatus(KeepRequestStatus.Resolved, null, ActorId, ActorName, Now.AddHours(-1));
+        Assert.True(KeepRequestActionPolicy.Evaluate(r, OwnerWrite()).CanClose);
+    }
+
+    [Fact]
+    public void CanClose_Admin_Resolved_no_attention_is_true()
+    {
+        var r = MakeReceived();
+        r.ChangeStatus(KeepRequestStatus.Resolved, null, ActorId, ActorName, Now.AddHours(-1));
+        Assert.True(KeepRequestActionPolicy.Evaluate(r, AdminWrite()).CanClose);
+    }
+
+    [Fact]
+    public void CanClose_Operator_Resolved_no_attention_is_false()
+    {
+        var r = MakeReceived();
+        r.ChangeStatus(KeepRequestStatus.Resolved, null, ActorId, ActorName, Now.AddHours(-1));
+        Assert.False(KeepRequestActionPolicy.Evaluate(r, OperatorWrite()).CanClose);
+    }
+
+    [Fact]
+    public void CanClose_Owner_Resolved_with_attention_is_false()
+    {
+        var r = MakeReceived();
+        r.ChangeStatus(KeepRequestStatus.Resolved, null, ActorId, ActorName, Now.AddHours(-1));
+        WithAttention(r);
+        Assert.False(KeepRequestActionPolicy.Evaluate(r, OwnerWrite()).CanClose);
+    }
+
+    [Fact]
+    public void CanClose_Owner_active_request_is_false()
+    {
+        Assert.False(KeepRequestActionPolicy.Evaluate(MakeReceived(), OwnerWrite()).CanClose);
+    }
+
+    [Fact]
+    public void CanClose_Owner_already_closed_is_false()
+    {
+        Assert.False(KeepRequestActionPolicy.Evaluate(MakeClosed(), OwnerWrite()).CanClose);
+    }
+
+    [Fact]
+    public void AllowedStatuses_Resolved_Operator_excludes_Closed()
+    {
+        var r = MakeReceived();
+        r.ChangeStatus(KeepRequestStatus.Resolved, null, ActorId, ActorName, Now.AddHours(-1));
+        var statuses = KeepRequestActionPolicy.Evaluate(r, OperatorWrite()).AllowedStatuses;
+        Assert.DoesNotContain(KeepRequestStatus.Closed, statuses);
+        Assert.Equal(
+            [KeepRequestStatus.InProgress, KeepRequestStatus.PendingCustomer,
+             KeepRequestStatus.Cancelled],
+            statuses);
+    }
 }

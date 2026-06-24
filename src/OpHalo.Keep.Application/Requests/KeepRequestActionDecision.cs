@@ -29,4 +29,5 @@ public sealed record KeepRequestActionDecision(
     bool CanMarkFeedbackReviewed,
     bool CanSetFollowUpOn,
     bool CanSetPlannedFor,
+    bool CanClose,
     IReadOnlyList<KeepRequestStatus> AllowedStatuses);

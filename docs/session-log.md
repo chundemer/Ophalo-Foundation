@@ -1,10 +1,10 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-06-23 (P6d complete — P6e handoff next)
+**Last updated:** 2026-06-23 (P6f-1 complete — close permission + CanClose affordance)
 **Branch:** `main` tracking `origin/main`
-**Current baseline:** 1345 tests (750 unit · 14 architecture · 598 integration — integration not re-run) — full unit + architecture suite green.
+**Current baseline:** 1353 tests (759 unit · 14 architecture · 598 integration — integration not re-run) — full unit + architecture suite green.
 **Next free ADR:** ADR-345
-**Next batch: P6e — notification candidate/badge contract notes (documentation only, no delivery implementation).**
+**Next batch: P6f-2 — ready-to-close queue.**
 
 ---
 
@@ -39,7 +39,8 @@ For every implementation slice:
 **Build log:** `docs/build-log/060-phase-8-b5-session-6-prerequisites-decisions.md`  
 **Decisions:** ADR-337..ADR-344.
 
-Session 6 proper remains paused. P6b and P6c are complete; the active prerequisite is P6d.
+Session 6 prerequisites are complete. Session 6 proper can resume after a fresh preflight for
+ready-to-close / closeout hygiene.
 
 Locked implementation split:
 
@@ -67,6 +68,26 @@ Current handoff:
 - **Completed:** P6d-1 — needs-status-check signal foundation. `KeepRequestNeedsStatusCheckInputs` value object; `GetNeedsStatusCheckInputs(DateOnly today)` domain method; `LastBusinessActivityAt` updated on SetFollowUpOn/ClearFollowUpOn/SetPlannedFor/ClearPlannedFor; 17 unit tests (4 exclusion, 3 suppressor-boundary, 8 signal-max, 2 follow-up/planned activity assertions). 739 unit tests green.
 - **Completed:** P6d-2A — needs-status-check list/query surface. `GET /keep/requests?view=needs_status_check`; `KeepRequestStatusCheckInfo` nested record on `KeepRequestSummary` (IsDue, SinceUtc, DueAtUtc, AgeDays, ExclusionReason); `NeedsStatusCheck` ActiveViewKind with DB pre-filter (non-terminal + AttentionLevel==None) + 5-day in-memory due check; `NeedsStatusCheckComparer` (SinceUtc ASC); cursor with sentinel 98; metadata on every row in every view; 11 unit tests + 6 integration tests. DEF-037 closes. 750 unit, 14 arch green.
 - **Completed:** P6d-3 — P6d completion gate. ADR-339 marked implemented; DEF-037 closed; build-log/060 updated.
+- **Completed:** P6e — notification candidate/badge contract notes. ADR-340 marked implemented. Staff/operator
+  push and badge boundaries locked: push-worthy candidates, badge/list-only categories, smallest-accountable
+  routing, actor/mute/OffSeason/stale-participant suppression, personal actionable badge scope, post-commit
+  fail-soft delivery boundary, fresh-not-offline client posture, minimal non-sensitive payloads, and customer
+  contact boundary. DEF-012/DEF-021 remain open for notification/device implementation; DEF-022 clarified for
+  native contact launch; DEF-077 added for future temporary personal notification silence.
+- **Completed:** P6f-1 — close permission + CanClose affordance. `CanClose` field on `KeepRequestActionDecision`
+  and `AvailableActionsMetadata`; computed as `isOwnerAdmin && Status==Resolved && AttentionLevel==None` (ADR-343);
+  `AllowedStatuses` for Resolved now filters `Closed` for Operators; 9 new unit tests (7 policy + 2 detail service).
+  759 unit, 14 arch green. See `docs/build-log/061-phase-8-b5-session-6-proper.md`.
+
+### Session 6 Proper — Next Slice (P6f-2)
+
+**Build log:** `docs/build-log/061-phase-8-b5-session-6-proper.md`
+
+Implement the ready-to-close queue before starting. Read:
+
+- `docs/build-log/061-phase-8-b5-session-6-proper.md` (P6f-2 scope).
+- `docs/deferred-topics.md` DEF-036 and DEF-063 (customer-activity warning contract).
+- Current `GetKeepRequestListService.cs` and `KeepRequestListPersistence.cs` for `NeedsStatusCheck` precedent.
 
 ---
 

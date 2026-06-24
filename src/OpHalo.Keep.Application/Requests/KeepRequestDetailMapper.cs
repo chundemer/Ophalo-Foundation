@@ -121,6 +121,7 @@ internal static class KeepRequestDetailMapper
             CanMarkFeedbackReviewed: decision.CanMarkFeedbackReviewed,
             CanSetFollowUpOn:        decision.CanSetFollowUpOn,
             CanSetPlannedFor:        decision.CanSetPlannedFor,
+            CanClose:                decision.CanClose,
             AllowedStatuses:         decision.AllowedStatuses.Select(MapStatus).ToList());
 
     internal static KeepRequestStatus? ParseStatusSlug(string? slug)

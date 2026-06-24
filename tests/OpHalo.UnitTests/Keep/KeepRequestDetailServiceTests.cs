@@ -132,6 +132,34 @@ public class KeepRequestDetailServiceTests
     }
 
     // -----------------------------------------------------------------------
+    // CanClose mapping (ADR-343)
+    // -----------------------------------------------------------------------
+
+    [Fact]
+    public async Task Execute_CanClose_true_for_Owner_Resolved_no_attention()
+    {
+        var p = HappyPathPersistence(request: MakeRequest(KeepRequestStatus.Resolved));
+        var sut = BuildSut(p);
+
+        var result = await sut.ExecuteAsync(RequestId);
+
+        Assert.True(result.IsSuccess);
+        Assert.True(result.Value.AvailableActions.CanClose);
+    }
+
+    [Fact]
+    public async Task Execute_CanClose_false_for_non_Resolved_request()
+    {
+        var p = HappyPathPersistence(request: MakeRequest(KeepRequestStatus.Received));
+        var sut = BuildSut(p);
+
+        var result = await sut.ExecuteAsync(RequestId);
+
+        Assert.True(result.IsSuccess);
+        Assert.False(result.Value.AvailableActions.CanClose);
+    }
+
+    // -----------------------------------------------------------------------
     // Fakes
     // -----------------------------------------------------------------------
 

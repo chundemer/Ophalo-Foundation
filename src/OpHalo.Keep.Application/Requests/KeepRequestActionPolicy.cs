@@ -29,6 +29,7 @@ public static class KeepRequestActionPolicy
         CanMarkFeedbackReviewed:  false,
         CanSetFollowUpOn:         false,
         CanSetPlannedFor:         false,
+        CanClose:                 false,
         AllowedStatuses:          []);
 
     public static KeepRequestActionDecision Evaluate(KeepRequest request, KeepRequestActionContext actor)
@@ -76,6 +77,12 @@ public static class KeepRequestActionPolicy
                                       or KeepRequestStatus.Closed
                                       or KeepRequestStatus.Cancelled);
 
+        // Close: Owner/Admin only (ADR-343); requires Resolved + no active blocking attention.
+        // Operator row access and domain checks remain authoritative at execution time.
+        var canClose = isOwnerAdmin
+            && request.Status == KeepRequestStatus.Resolved
+            && request.AttentionLevel == AttentionLevel.None;
+
         return new KeepRequestActionDecision(
             CanChangeStatus:          isNonTerminal,
             CanSendBusinessUpdate:    isNonTerminal,
@@ -93,7 +100,8 @@ public static class KeepRequestActionPolicy
             CanMarkFeedbackReviewed:  CanMarkFeedbackReviewedCore(isOwnerAdmin, request),
             CanSetFollowUpOn:         canSetTiming,
             CanSetPlannedFor:         canSetTiming,
-            AllowedStatuses:          ComputeAllowedStatuses(request.Status));
+            CanClose:                 canClose,
+            AllowedStatuses:          ComputeAllowedStatuses(request.Status, isOwnerAdmin));
     }
 
     private static bool CanMarkFeedbackReviewedCore(bool isOwnerAdmin, KeepRequest request) =>
@@ -106,7 +114,8 @@ public static class KeepRequestActionPolicy
         && request.AttentionReason == AttentionReason.UnresolvedFeedback;
 
     // Actual transitions only; current status excluded. Same-status no-ops remain domain-authoritative.
-    private static IReadOnlyList<KeepRequestStatus> ComputeAllowedStatuses(KeepRequestStatus current) =>
+    // Closed is excluded from Resolved transitions for Operators: close is Owner/Admin only (ADR-343).
+    private static IReadOnlyList<KeepRequestStatus> ComputeAllowedStatuses(KeepRequestStatus current, bool isOwnerAdmin) =>
         current switch
         {
             KeepRequestStatus.Received =>
@@ -126,9 +135,13 @@ public static class KeepRequestActionPolicy
                 [KeepRequestStatus.Scheduled, KeepRequestStatus.InProgress,
                  KeepRequestStatus.Resolved, KeepRequestStatus.Cancelled],
 
-            KeepRequestStatus.Resolved =>
+            KeepRequestStatus.Resolved when isOwnerAdmin =>
                 [KeepRequestStatus.InProgress, KeepRequestStatus.PendingCustomer,
                  KeepRequestStatus.Closed, KeepRequestStatus.Cancelled],
+
+            KeepRequestStatus.Resolved =>
+                [KeepRequestStatus.InProgress, KeepRequestStatus.PendingCustomer,
+                 KeepRequestStatus.Cancelled],
 
             KeepRequestStatus.Closed or KeepRequestStatus.Cancelled =>
                 [],
