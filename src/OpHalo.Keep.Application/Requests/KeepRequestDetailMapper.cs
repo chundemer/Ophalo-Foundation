@@ -34,7 +34,8 @@ internal static class KeepRequestDetailMapper
         AccountUserRole role,
         bool canOperate,
         Guid currentUserId,
-        DateTime nowUtc)
+        DateTime nowUtc,
+        KeepRequestNavigation? navigation = null)
     {
         var feedbackCommentVisible = role is AccountUserRole.Owner or AccountUserRole.Admin
             || request.FeedbackWasResolved == true;
@@ -98,7 +99,8 @@ internal static class KeepRequestDetailMapper
         CurrentUserParticipation: currentUserParticipation,
         Events: events.Select(MapEvent).ToList(),
         AvailableActions: availableActions,
-        Validation: ValidationHints);
+        Validation: ValidationHints,
+        Navigation: navigation);
     }
 
     /// <summary>

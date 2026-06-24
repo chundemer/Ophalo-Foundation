@@ -143,4 +143,23 @@ public sealed class EfKeepRequestDetailPersistence(OpHaloDbContext dbContext) : 
             .Where(e => e.RequestId == requestId && e.Visibility == KeepRequestEventVisibility.All)
             .OrderBy(e => e.OccurredAtUtc)
             .ToListAsync(ct);
+
+    public async Task<IReadOnlyList<Guid>> GetReadyToCloseNavigationIdsAsync(
+        Guid accountId, CancellationToken ct)
+    {
+        var rows = await dbContext.Set<KeepRequest>()
+            .AsNoTracking()
+            .Where(r => r.AccountId == accountId
+                     && r.Status == KeepRequestStatus.Resolved
+                     && r.AttentionLevel == AttentionLevel.None)
+            .Select(r => new { r.Id, r.LastBusinessActivityAt, r.LastCustomerActivityAt, r.CreatedAtUtc })
+            .ToListAsync(ct);
+
+        // Sort matches B5 group-7 (resolved_quiet): coalesced last-activity DESC, Id ASC.
+        return rows
+            .OrderByDescending(r => r.LastBusinessActivityAt ?? r.LastCustomerActivityAt ?? r.CreatedAtUtc)
+            .ThenBy(r => r.Id)
+            .Select(r => r.Id)
+            .ToList();
+    }
 }

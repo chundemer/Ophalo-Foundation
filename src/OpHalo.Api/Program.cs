@@ -322,10 +322,11 @@ app.MapGet("/keep/requests/available", async (
 // Operator request detail — authenticated, scoped to caller's account (Phase 8-B1-β)
 app.MapGet("/keep/requests/{requestId:guid}", async (
     Guid requestId,
+    string? navView,
     GetKeepRequestDetailService service,
     CancellationToken ct) =>
 {
-    var result = await service.ExecuteAsync(requestId, ct);
+    var result = await service.ExecuteAsync(requestId, navView, ct);
     return result.IsSuccess ? Results.Ok(result.Value) : ErrorHttpMapper.ToHttpResult(result.Error);
 }).RequireAuthorization();
 

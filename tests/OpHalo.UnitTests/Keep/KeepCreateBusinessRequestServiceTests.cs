@@ -390,6 +390,7 @@ public class KeepCreateBusinessRequestServiceTests
         public Task<KeepRequest?> GetRequestAsync(Guid r, Guid a, Guid u, KeepRequestVisibilityScope s, CancellationToken ct) => throw new NotImplementedException();
         public Task<KeepRequestPageLookup?> GetRequestByPageTokenAsync(string t, CancellationToken ct) => throw new NotImplementedException();
         public Task<IReadOnlyList<KeepRequestEvent>> GetCustomerVisibleEventsAsync(Guid r, CancellationToken ct) => throw new NotImplementedException();
+        public Task<IReadOnlyList<Guid>> GetReadyToCloseNavigationIdsAsync(Guid accountId, CancellationToken ct) => throw new NotImplementedException();
     }
 
     private sealed class FakeBusinessPersistence : IKeepBusinessRequestPersistence

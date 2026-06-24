@@ -25,7 +25,7 @@ public sealed class GetKeepRequestDetailService(
         Error.Create("auth.forbidden", "You do not have permission to perform this action.");
 
     public async Task<Result<KeepRequestDetailResult>> ExecuteAsync(
-        Guid requestId, CancellationToken ct = default)
+        Guid requestId, string? navView = null, CancellationToken ct = default)
     {
         if (!currentUser.IsAuthenticated)
             return Result<KeepRequestDetailResult>.Failure(Unauthorized);
@@ -70,6 +70,8 @@ public sealed class GetKeepRequestDetailService(
         if (!featurePolicy.IsEnabled(accountSnapshot.Plan, FeatureKeys.Keep.OperatorQueue))
             return Result<KeepRequestDetailResult>.Failure(Forbidden);
 
+        var isOwnerOrAdmin = userSnapshot.Role is AccountUserRole.Owner or AccountUserRole.Admin;
+
         KeepRequestVisibilityScope scope;
         switch (userSnapshot.Role)
         {
@@ -82,6 +84,17 @@ public sealed class GetKeepRequestDetailService(
                 scope = KeepRequestVisibilityScope.MyWork;
                 break;
             default:
+                return Result<KeepRequestDetailResult>.Failure(Forbidden);
+        }
+
+        // navView validation — after role is known; fail fast before request load.
+        string? normalizedNavView = null;
+        if (!string.IsNullOrWhiteSpace(navView))
+        {
+            normalizedNavView = navView.Trim().ToLowerInvariant();
+            if (normalizedNavView != "ready_to_close")
+                return Result<KeepRequestDetailResult>.Failure(KeepRequestErrors.RequestDetailInvalidNavView);
+            if (!isOwnerOrAdmin)
                 return Result<KeepRequestDetailResult>.Failure(Forbidden);
         }
 
@@ -113,9 +126,23 @@ public sealed class GetKeepRequestDetailService(
         var actionDecision   = KeepRequestActionPolicy.Evaluate(request, actorContext);
         var availableActions = KeepRequestDetailMapper.ToAvailableActionsMetadata(actionDecision);
 
+        KeepRequestNavigation? navigation = null;
+        if (normalizedNavView is not null)
+        {
+            var navIds = await persistence.GetReadyToCloseNavigationIdsAsync(currentUser.AccountId, ct);
+            var idx = -1;
+            for (var i = 0; i < navIds.Count; i++)
+                if (navIds[i] == requestId) { idx = i; break; }
+            navigation = new KeepRequestNavigation(
+                PreviousId: idx > 0 ? navIds[idx - 1] : null,
+                NextId: idx >= 0 && idx < navIds.Count - 1 ? navIds[idx + 1] : null,
+                Position: idx >= 0 ? idx + 1 : 0,
+                Total: navIds.Count);
+        }
+
         return Result<KeepRequestDetailResult>.Success(
             KeepRequestDetailMapper.ToDetailResult(
                 request, businessName ?? string.Empty, participants, events, availableActions,
-                userSnapshot.Role, canOperate, currentUser.UserId, nowUtc));
+                userSnapshot.Role, canOperate, currentUser.UserId, nowUtc, navigation));
     }
 }

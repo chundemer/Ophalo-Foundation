@@ -160,6 +160,108 @@ public class KeepRequestDetailServiceTests
     }
 
     // -----------------------------------------------------------------------
+    // Navigation (P6f-4)
+    // -----------------------------------------------------------------------
+
+    [Fact]
+    public async Task Execute_no_navView_returns_null_navigation()
+    {
+        var sut = BuildSut();
+
+        var result = await sut.ExecuteAsync(RequestId, navView: null);
+
+        Assert.True(result.IsSuccess);
+        Assert.Null(result.Value.Navigation);
+    }
+
+    [Fact]
+    public async Task Execute_navView_ready_to_close_middle_item_returns_prev_and_next()
+    {
+        var prev = Guid.NewGuid();
+        var current = RequestId;
+        var next = Guid.NewGuid();
+
+        var p = HappyPathPersistence(request: MakeRequest(KeepRequestStatus.Resolved));
+        p.NavigationIds = [prev, current, next];
+        var sut = BuildSut(p);
+
+        var result = await sut.ExecuteAsync(RequestId, navView: "ready_to_close");
+
+        Assert.True(result.IsSuccess);
+        var nav = result.Value.Navigation;
+        Assert.NotNull(nav);
+        Assert.Equal(prev, nav.PreviousId);
+        Assert.Equal(next, nav.NextId);
+        Assert.Equal(2, nav.Position);
+        Assert.Equal(3, nav.Total);
+    }
+
+    [Fact]
+    public async Task Execute_navView_ready_to_close_first_item_returns_null_prev()
+    {
+        var current = RequestId;
+        var next = Guid.NewGuid();
+
+        var p = HappyPathPersistence(request: MakeRequest(KeepRequestStatus.Resolved));
+        p.NavigationIds = [current, next];
+        var sut = BuildSut(p);
+
+        var result = await sut.ExecuteAsync(RequestId, navView: "ready_to_close");
+
+        Assert.True(result.IsSuccess);
+        var nav = result.Value.Navigation;
+        Assert.NotNull(nav);
+        Assert.Null(nav.PreviousId);
+        Assert.Equal(next, nav.NextId);
+        Assert.Equal(1, nav.Position);
+        Assert.Equal(2, nav.Total);
+    }
+
+    [Fact]
+    public async Task Execute_navView_ready_to_close_request_not_in_queue_returns_position_zero()
+    {
+        var otherId = Guid.NewGuid();
+        var anotherId = Guid.NewGuid();
+
+        var p = HappyPathPersistence(request: MakeRequest(KeepRequestStatus.Received));
+        p.NavigationIds = [otherId, anotherId];
+        var sut = BuildSut(p);
+
+        // RequestId is not in NavigationIds — already left the queue.
+        var result = await sut.ExecuteAsync(RequestId, navView: "ready_to_close");
+
+        Assert.True(result.IsSuccess);
+        var nav = result.Value.Navigation;
+        Assert.NotNull(nav);
+        Assert.Null(nav.PreviousId);
+        Assert.Null(nav.NextId);
+        Assert.Equal(0, nav.Position);
+        Assert.Equal(2, nav.Total);
+    }
+
+    [Fact]
+    public async Task Execute_navView_unknown_value_returns_invalid_nav_view_error()
+    {
+        var sut = BuildSut();
+
+        var result = await sut.ExecuteAsync(RequestId, navView: "not_a_real_view");
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal("KeepRequest.RequestDetailInvalidNavView", result.Error.Code);
+    }
+
+    [Fact]
+    public async Task Execute_navView_ready_to_close_operator_role_returns_forbidden()
+    {
+        var sut = BuildSut(role: AccountUserRole.Operator);
+
+        var result = await sut.ExecuteAsync(RequestId, navView: "ready_to_close");
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal("auth.forbidden", result.Error.Code);
+    }
+
+    // -----------------------------------------------------------------------
     // Fakes
     // -----------------------------------------------------------------------
 
@@ -168,6 +270,7 @@ public class KeepRequestDetailServiceTests
         public AccountUserSnapshot? UserSnapshot { get; set; }
         public AccountAccessSnapshot? AccountSnapshot { get; set; }
         public KeepRequest? Request { get; set; }
+        public IReadOnlyList<Guid> NavigationIds { get; set; } = [];
 
         public Task<AccountUserSnapshot?> GetAccountUserSnapshotAsync(Guid userId, CancellationToken ct) =>
             Task.FromResult(UserSnapshot);
@@ -193,6 +296,9 @@ public class KeepRequestDetailServiceTests
 
         public Task<IReadOnlyList<KeepRequestEvent>> GetCustomerVisibleEventsAsync(Guid requestId, CancellationToken ct) =>
             throw new NotImplementedException();
+
+        public Task<IReadOnlyList<Guid>> GetReadyToCloseNavigationIdsAsync(Guid accountId, CancellationToken ct) =>
+            Task.FromResult(NavigationIds);
     }
 
     private sealed class FakeCurrentUser(Guid userId, Guid accountId) : ICurrentUser

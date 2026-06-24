@@ -59,6 +59,14 @@ public interface IKeepRequestDetailPersistence
     /// Customer page must not include Internal or System events.
     /// </summary>
     Task<IReadOnlyList<KeepRequestEvent>> GetCustomerVisibleEventsAsync(Guid requestId, CancellationToken ct);
+
+    /// <summary>
+    /// Returns request IDs in ready-to-close sort order for the given account: all
+    /// Resolved + AttentionLevel.None rows ordered by coalesced last-activity DESC, Id ASC.
+    /// This matches the B5 group-7 (resolved_quiet) ranking used by the list service.
+    /// Used by the detail service to compute next/previous navigation.
+    /// </summary>
+    Task<IReadOnlyList<Guid>> GetReadyToCloseNavigationIdsAsync(Guid accountId, CancellationToken ct);
 }
 
 /// <summary>

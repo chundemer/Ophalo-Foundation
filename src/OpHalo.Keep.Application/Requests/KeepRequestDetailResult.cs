@@ -56,7 +56,8 @@ public sealed record KeepRequestDetailResult(
     CurrentUserDetailParticipation CurrentUserParticipation,
     IReadOnlyList<KeepRequestEventItem> Events,
     AvailableActionsMetadata AvailableActions,
-    ValidationHintsMetadata Validation);
+    ValidationHintsMetadata Validation,
+    KeepRequestNavigation? Navigation);
 
 /// <summary>
 /// Server-computed UI metadata so the frontend can render action buttons and inline
@@ -147,3 +148,10 @@ public sealed record KeepRequestEventItem(
     string? ParticipationTargetDisplayName,
     Guid? ParticipationPreviousResponsibleAccountUserId,
     string? ParticipationInternalNote);
+
+/// <summary>
+/// Next/previous navigation context returned when the caller supplies a supported navView.
+/// Position is 1-based (1 = first in queue). Position = 0 means the current request is
+/// no longer in the queue (e.g., it has been closed since the list was loaded).
+/// </summary>
+public sealed record KeepRequestNavigation(Guid? PreviousId, Guid? NextId, int Position, int Total);

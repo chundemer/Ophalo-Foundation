@@ -125,3 +125,37 @@ values `yesterday` and `this_week` only; parameter name `closedShortcut`; mutual
 - `KeepRequestListQueryApiTests.cs` — 3 new tests (unknown shortcut 400, non-history 400, yesterday 200).
 
 **Test gate:** 779 unit · 14 arch — unit + arch suite green. Integration focused suite green (44 tests).
+
+---
+
+## P6f-4 — Detail next/previous navigation — COMPLETE
+
+**Design decisions (pre-implementation):**
+- `navView` query param on `GET /keep/requests/{requestId}`. Phase 1 supports only `ready_to_close`.
+- Unknown navView → `RequestDetailInvalidNavView` (400). Operator navView=ready_to_close → 403.
+- All ready-to-close rows are B5 group-7 (resolved_quiet); sort pushed fully to in-process LINQ:
+  coalesced `LastBusinessActivityAt ?? LastCustomerActivityAt ?? CreatedAtUtc DESC`, then `Id ASC`.
+- `KeepRequestNavigation(PreviousId, NextId, Position, Total)`: null when no navView; Position=0
+  when the current request is no longer in the queue.
+
+**Files changed (9 + docs):**
+1. `KeepRequestErrors.cs` — `RequestDetailInvalidNavView` added.
+2. `KeepRequestDetailResult.cs` — `Navigation: KeepRequestNavigation?` field added; `KeepRequestNavigation`
+   record added.
+3. `KeepRequestDetailMapper.cs` — `ToDetailResult` gains optional `navigation` param; `Navigation:` field
+   in result constructor. All 13 existing callers unaffected (default null).
+4. `IKeepRequestDetailPersistence.cs` — `GetReadyToCloseNavigationIdsAsync` added.
+5. `EfKeepRequestDetailPersistence.cs` — implemented: filters `Resolved + AttentionLevel.None` by accountId,
+   sorts in-process (coalesced last-activity DESC, Id ASC), returns `IReadOnlyList<Guid>`.
+6. `GetKeepRequestDetailService.cs` — `navView` param added to `ExecuteAsync`; navView validation + role
+   check after scope computation (fail fast); navigation ID fetch + prev/next computation before result
+   construction.
+7. `Program.cs` — `string? navView` bound from query string on detail endpoint.
+8. `ErrorHttpMapper.cs` — `RequestDetailInvalidNavView` → 400.
+9. `KeepCreateBusinessRequestServiceTests.cs` — `FakeReadPersistence` stub for new interface method.
+10. `KeepRequestDetailServiceTests.cs` — 6 new tests: null nav, middle item, first item, not-in-queue,
+    unknown navView, Operator forbidden.
+11. `KeepRequestDetailB5Tests.cs` (new) — 6 integration tests: middle/first/last items, no-navView null,
+    invalid navView 400, Operator 403.
+
+**Test gate:** 785 unit · 14 arch green. 41 detail integration tests green.

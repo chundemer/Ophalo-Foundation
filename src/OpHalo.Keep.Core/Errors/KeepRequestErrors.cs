@@ -245,4 +245,8 @@ public static class KeepRequestErrors
 
     public static readonly Error CloseBlockedByAttention =
         Error.Create("KeepRequest.CloseBlockedByAttention", "Active attention must be resolved before closing this request.");
+
+    // Detail navigation errors (P6f-4).
+    public static readonly Error RequestDetailInvalidNavView =
+        Error.Create("KeepRequest.RequestDetailInvalidNavView", "The specified navView is not recognized. Supported values are: ready_to_close.");
 }
