@@ -64,10 +64,10 @@ Current handoff:
 #### P6f-3 — Closed-history date shortcuts — COMPLETE
 
 `closedShortcut=yesterday|this_week` added as a UTC-backed query parameter for history views.
-Unknown shortcut → `RequestListInvalidClosedShortcut` (422). Shortcut on non-history view or combined
+Unknown shortcut → `RequestListInvalidClosedShortcut` (400). Shortcut on non-history view or combined
 with explicit `closedFrom`/`closedTo` → `ContradictoryParameters`. Cursor fingerprint includes the
 shortcut name. Account timezone deferred (DEF-078).
-6 new unit tests, 3 new integration tests. 779 unit · 14 arch — full suite green.
+5 new unit tests, 3 new integration tests. 779 unit · 14 arch — full suite green.
 
 ### Next Slice
 

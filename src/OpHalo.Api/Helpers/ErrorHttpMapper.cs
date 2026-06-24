@@ -120,6 +120,7 @@ public static class ErrorHttpMapper
             var c when c == "KeepRequest.RequestListInvalidLimit"             => (StatusCodes.Status400BadRequest, "Bad request.", null),
             var c when c == "KeepRequest.RequestListInvalidCursor"            => (StatusCodes.Status400BadRequest, "Bad request.", null),
             var c when c == "KeepRequest.RequestListInvalidDateFormat"        => (StatusCodes.Status400BadRequest, "Bad request.", null),
+            var c when c == "KeepRequest.RequestListInvalidClosedShortcut"   => (StatusCodes.Status400BadRequest, "Bad request.", null),
             var c when c == "KeepRequest.RequestListContradictoryParameters"       => (StatusCodes.Status400BadRequest, "Bad request.", null),
             var c when c == "KeepRequest.RequestListInvalidAssignedAccountUserId" => (StatusCodes.Status400BadRequest, "Bad request.", null),
             var c when c == "KeepRequest.RequestListUnknownParameter"             => (StatusCodes.Status400BadRequest, "Bad request.", null),
