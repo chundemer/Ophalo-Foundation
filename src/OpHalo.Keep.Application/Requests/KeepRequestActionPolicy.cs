@@ -30,6 +30,7 @@ public static class KeepRequestActionPolicy
         CanSetFollowUpOn:         false,
         CanSetPlannedFor:         false,
         CanClose:                 false,
+        CanClassify:              false,
         AllowedStatuses:          []);
 
     public static KeepRequestActionDecision Evaluate(KeepRequest request, KeepRequestActionContext actor)
@@ -103,6 +104,7 @@ public static class KeepRequestActionPolicy
             CanSetFollowUpOn:         canSetTiming,
             CanSetPlannedFor:         canSetTiming,
             CanClose:                 canClose,
+            CanClassify:              isOwnerAdmin && isNonTerminal,
             AllowedStatuses:          ComputeAllowedStatuses(request.Status, isOwnerAdmin, canClose));
     }
 

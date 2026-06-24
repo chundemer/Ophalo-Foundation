@@ -150,6 +150,8 @@ public class KeepRequestActionPolicyTests
         Assert.False(d.CanMute);
         Assert.False(d.CanUnmute);
         Assert.False(d.CanMarkFeedbackReviewed);
+        Assert.False(d.CanClose);
+        Assert.False(d.CanClassify);
         Assert.Empty(d.AllowedStatuses);
     }
 
@@ -671,6 +673,7 @@ public class KeepRequestActionPolicyTests
         Assert.False(d.CanSetFollowUpOn);
         Assert.False(d.CanSetPlannedFor);
         Assert.False(d.CanClose);
+        Assert.False(d.CanClassify);
         Assert.Empty(d.AllowedStatuses);
     }
 
@@ -681,5 +684,44 @@ public class KeepRequestActionPolicyTests
     {
         var r = status == KeepRequestStatus.Spam ? MakeSpam() : MakeTest();
         Assert.True(KeepRequestActionPolicy.Evaluate(r, OwnerWrite()).CanAddInternalNote);
+    }
+
+    // -----------------------------------------------------------------------
+    // CanClassify (ADR-349)
+    // -----------------------------------------------------------------------
+
+    [Fact]
+    public void CanClassify_Owner_nonterminal_is_true()
+    {
+        Assert.True(KeepRequestActionPolicy.Evaluate(MakeReceived(), OwnerWrite()).CanClassify);
+    }
+
+    [Fact]
+    public void CanClassify_Admin_nonterminal_is_true()
+    {
+        Assert.True(KeepRequestActionPolicy.Evaluate(MakeReceived(), AdminWrite()).CanClassify);
+    }
+
+    [Fact]
+    public void CanClassify_Operator_nonterminal_is_false()
+    {
+        Assert.False(KeepRequestActionPolicy.Evaluate(MakeReceived(), OperatorWrite()).CanClassify);
+    }
+
+    [Theory]
+    [InlineData(KeepRequestStatus.Spam)]
+    [InlineData(KeepRequestStatus.Test)]
+    [InlineData(KeepRequestStatus.Closed)]
+    [InlineData(KeepRequestStatus.Cancelled)]
+    public void CanClassify_Owner_terminal_is_false(KeepRequestStatus status)
+    {
+        var r = status switch
+        {
+            KeepRequestStatus.Spam => MakeSpam(),
+            KeepRequestStatus.Test => MakeTest(),
+            KeepRequestStatus.Closed => MakeClosed(),
+            _ => MakeCancelled()
+        };
+        Assert.False(KeepRequestActionPolicy.Evaluate(r, OwnerWrite()).CanClassify);
     }
 }

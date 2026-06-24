@@ -1,10 +1,10 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-06-24 (S7a–S7e complete; S7f next)
+**Last updated:** 2026-06-24 (S7a–S7f complete; Session 8 next)
 **Branch:** `main` tracking `origin/main`
-**Current baseline:** 808 unit · 14 arch green; S7e: 10 classify integration tests green.
+**Current baseline:** 815 unit · 14 arch green; S7e: 12 classify integration tests green.
 **Next free ADR:** ADR-351
-**Next batch: S7f — Final pilot-safety ledger and regression gate.**
+**Next batch: Session 8 — Notification/device foundation.**
 
 ---
 
@@ -39,7 +39,7 @@ For every implementation slice:
 **Current build log:** `docs/build-log/062-session-7-pilot-safety-decision-build.md`  
 **Completed Session 6 build log:** `docs/build-log/061-phase-8-b5-session-6-proper.md`  
 **Completed Session 6 prerequisite build log:** `docs/build-log/060-phase-8-b5-session-6-prerequisites-decisions.md`  
-**Next implementation:** S7b — trusted proxy/client IP plus rate-limit smoke proof.
+**Next implementation:** Session 8 — Notification/device foundation (DEF-021: device table, token registration/revocation, personal badge count, minimal push payloads, post-commit fail-soft delivery hooks, P6e routing/actor suppression).
 
 Session 6 is complete. P6b-P6f shipped the Follow Up On / Planned For prerequisites,
 customer intent menu, customer-page viewed signal, needs-status-check queue, notification/badge
@@ -173,12 +173,14 @@ terminal exclusion filters, `all_history` inclusion, customer-write guard, actio
 ### S7e — Spam/Test classification command — COMPLETE
 
 `POST /keep/requests/{requestId}/classify` with body `{ targetStatus, reason? }` and version header.
-Owner/Admin only (ADR-349); Operator → 403 (`ClassificationRequiresOwnerOrAdmin`). Loads request
-with AccountWide scope; cross-account → 404. Expected-version check; stale → 409. Slug parse:
-`spam`/`test` only; unknown → 422 (`InvalidClassification`). Domain `Classify` method guards
-IsTerminal (→ 409), validates reason ≤ 500 chars (→ 400), sets `Status`/`TerminatedAtUtc`/
-`ExpiresAtUtc`/`ClearAllAttentionForTerminal`, creates Internal `RequestClassified` event.
-`MapEventType` updated with `request_classified`. Returns full detail result.
+Owner/Admin only (ADR-349); Operator → 403 (`ClassificationRequiresOwnerOrAdmin`). Confirmation is
+UI-enforced before submit; backend treats an authenticated, authorized POST as intentional. Loads
+request with AccountWide scope; cross-account → 404. Expected-version check; stale → 409. Slug
+parse: `spam`/`test` only; unknown/null/blank → 422 (`InvalidClassification`). Domain `Classify`
+method guards IsTerminal (→ 409), validates reason ≤ 500 chars (→ 400), sets
+`Status`/`TerminatedAtUtc`/`ExpiresAtUtc`/`ClearAllAttentionForTerminal`, creates Internal
+`RequestClassified` event. `MapEventType` updated with `request_classified`. Returns full detail
+result.
 
 **Files changed (8 production + 3 new):**
 1. `src/OpHalo.Keep.Core/Entities/Enums/KeepRequestEventType.cs` — `RequestClassified = 14`
@@ -191,12 +193,33 @@ IsTerminal (→ 409), validates reason ≤ 500 chars (→ 400), sets `Status`/`T
 8. `src/OpHalo.Api/Helpers/ErrorHttpMapper.cs` — 3 new error mappings
 9. `src/OpHalo.Api/Keep/ClassifyRequest.cs` — new request body record
 10. `tests/OpHalo.UnitTests/Keep/KeepRequestTests.cs` — 11 new Classify domain tests
-11. `tests/OpHalo.IntegrationTests/Api/ClassifyKeepRequestTests.cs` — 10 new integration tests
+11. `tests/OpHalo.IntegrationTests/Api/ClassifyKeepRequestTests.cs` — 12 new integration tests
 
 **Deferred:** `CanClassify` in `KeepRequestActionDecision`/`KeepRequestActionPolicy`/`AvailableActionsMetadata`
 — advisory UI metadata deferred to S7f to stay within production file limit.
 
-**Test gate:** 808 unit · 14 arch green. 10 classify integration tests green.
+**Review fix:** `ClassifyRequestBody.TargetStatus` is nullable; null/blank target now returns 422
+instead of risking a 500. Spam success test asserts version rotation and persisted internal
+`request_classified` event with reason and `statusAfter`.
+
+**Test gate:** 808 unit · 14 arch green. 12 classify integration tests green.
+
+### S7f — Final pilot-safety ledger and regression gate — COMPLETE
+
+`CanClassify` advisory metadata added to `KeepRequestActionDecision`, `AvailableActionsMetadata`,
+`KeepRequestActionPolicy`, and `KeepRequestDetailMapper.ToAvailableActionsMetadata`. Policy:
+Owner/Admin + non-terminal → true; Operator or terminal → false (ADR-349). ADR-297 marked
+Implemented (Spam/Test customer-page disabling shipped in S7d/S7e). DEF-061 fully reflected in
+ADR-296/ADR-349/ADR-350. DEF-079/DEF-080 (demo seed data) remain deferred as required by ADR-345.
+
+**Files changed (5):**
+1. `src/OpHalo.Keep.Application/Requests/KeepRequestActionDecision.cs` — `CanClassify` field
+2. `src/OpHalo.Keep.Application/Requests/KeepRequestDetailResult.cs` — `CanClassify` in `AvailableActionsMetadata`
+3. `src/OpHalo.Keep.Application/Requests/KeepRequestActionPolicy.cs` — `DenyAll` + `Evaluate`
+4. `src/OpHalo.Keep.Application/Requests/KeepRequestDetailMapper.cs` — `ToAvailableActionsMetadata`
+5. `tests/OpHalo.UnitTests/Keep/KeepRequestActionPolicyTests.cs` — 7 new `CanClassify` assertions/tests
+
+**Test gate:** 815 unit · 14 arch green.
 
 ### Session 7 Claude Coding Sessions
 
@@ -207,9 +230,7 @@ IsTerminal (→ 409), validates reason ≤ 500 chars (→ 400), sets `Status`/`T
   (commit `09d5e79`). `PublicTokenPathRedactor`, Diagnostics AddFilter, 4 integration sentinel proofs.
 - **S7d — Spam/Test terminal-status foundation:** COMPLETE — see below.
 - **S7e — Spam/Test classification command:** COMPLETE — see below.
-- **S7f — Final pilot-safety ledger and regression gate:** update docs/decision index/deferred
-  topics, verify DEF-061/DEF-079/DEF-080, run proportionate broader tests, and keep Session 8
-  notification/device foundation queued.
+- **S7f — Final pilot-safety ledger and regression gate:** COMPLETE — see below.
 
 ### Session 8 Preview
 
@@ -240,8 +261,9 @@ suppression.
 
 - GitHub remote `origin` is configured; push local commits daily when green.
 - Integration tests reset PostgreSQL schema and run migrations.
-- Testing environment intentionally skips runtime rate limiting; S7b must use a production-like host.
-- Deployment requires correct Cloudflare/Railway trusted-proxy and token-redaction configuration.
-- Persistent local PostgreSQL setup/migration/smoke/reset runbook is drafted in
-  `docs/deployment/local-postgres-runbook.md`; S7a-2 must verify it against an actual local database
-  before relying on it for notification work.
+- Testing environment intentionally skips runtime rate limiting; production-like proof exists in
+  `RateLimitTesting` (G8a/S7b).
+- Deployment still requires correct Cloudflare/Railway trusted-proxy and token-redaction
+  configuration even though application-level proofs are complete.
+- Persistent local PostgreSQL setup/migration/smoke runbook is verified against local `ophalo_local`
+  in Docker; guarded reset remains documented but was not exercised.
