@@ -1,7 +1,8 @@
 # Build Log 061 — Phase 8-B5 Session 6 Proper
 
 **Started:** 2026-06-23  
-**Status:** In progress — P6f-1 complete, P6f-2 next.
+**Completed:** 2026-06-24  
+**Status:** Complete — P6f-1 through P6f-5 shipped.
 
 Scope: Ready-to-close queue, close permission/affordance, Closed date filter shortcuts,
 and closeout hygiene. Session 6 proper resumes after prerequisites (P6b–P6e complete).
@@ -161,6 +162,31 @@ values `yesterday` and `this_week` only; parameter name `closedShortcut`; mutual
 **Test gate:** 785 unit · 14 arch green. 41 detail integration tests green.
 
 ---
+
+## P6f-5 — Close-and-next + Closed 30-day customer-page expiry — COMPLETE
+
+**Scope delivered:**
+
+- `KeepRequest.ChangeStatus` and `AddBusinessUpdateWithStatus` now set `ExpiresAtUtc =
+  TerminatedAtUtc + 30 days` for `Closed`, matching `Cancelled`.
+- `CancelledPageRetentionDays` renamed to `TerminalPageRetentionDays`.
+- `PATCH /keep/requests/{requestId}/status` accepts `navView=ready_to_close` for the
+  close-and-next workflow.
+- `ChangeKeepRequestStatusService` snapshots ready-to-close navigation before the close mutation,
+  then returns `KeepRequestNavigation(PreviousId: null, NextId, Position: 0, Total)` in the detail
+  response.
+- `navView` remains optional; existing status-change callers receive `Navigation = null`.
+
+**Files changed:**
+
+1. `src/OpHalo.Keep.Core/Entities/KeepRequest.cs`
+2. `src/OpHalo.Keep.Application/Requests/ChangeKeepRequestStatusService.cs`
+3. `src/OpHalo.Api/Program.cs`
+4. `tests/OpHalo.UnitTests/Keep/KeepRequestTests.cs`
+5. `tests/OpHalo.IntegrationTests/Api/ChangeKeepRequestStatusTests.cs`
+6. `docs/session-log.md`
+
+**Initial test gate:** 787 unit · 14 arch green. 27 focused integration tests green.
 
 ## P6f-5 review fixes
 

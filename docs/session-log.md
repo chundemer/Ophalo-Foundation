@@ -1,10 +1,10 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-06-24 (P6f-5 + review fixes complete)
+**Last updated:** 2026-06-24 (Session 7 S7a+S7a-2 complete; S7b next)
 **Branch:** `main` tracking `origin/main`
 **Current baseline:** 1409 tests (787 unit · 14 architecture · 612 integration) — unit + arch green; integration green on focused suite.
-**Next free ADR:** ADR-345
-**Next batch: Session 6 complete — P6f-1 through P6f-5 shipped.**
+**Next free ADR:** ADR-351
+**Next batch: Session 7 — pilot safety / deployment hardening decision-build session.**
 
 ---
 
@@ -36,30 +36,17 @@ For every implementation slice:
 
 ## Current Work
 
-**Current build log:** `docs/build-log/061-phase-8-b5-session-6-proper.md`  
-**Prerequisite build log:** `docs/build-log/060-phase-8-b5-session-6-prerequisites-decisions.md`  
-**Decisions:** ADR-337..ADR-344; next free ADR-345.
+**Current build log:** `docs/build-log/062-session-7-pilot-safety-decision-build.md`  
+**Completed Session 6 build log:** `docs/build-log/061-phase-8-b5-session-6-proper.md`  
+**Completed Session 6 prerequisite build log:** `docs/build-log/060-phase-8-b5-session-6-prerequisites-decisions.md`  
+**Next implementation:** S7b — trusted proxy/client IP plus rate-limit smoke proof.
 
-Session 6 prerequisites are complete. Session 6 proper is now active.
+Session 6 is complete. P6b-P6f shipped the Follow Up On / Planned For prerequisites,
+customer intent menu, customer-page viewed signal, needs-status-check queue, notification/badge
+boundaries, close permission, ready-to-close queue, closed-history shortcuts, detail navigation,
+close-and-next, and Closed customer-page expiry.
 
-Current handoff:
-
-- **Completed:** P6b-P6e prerequisites. Follow Up On, Planned For, customer intent menu,
-  customer-page viewed signal, needs-status-check queue, and notification/badge boundaries are complete.
-  See `docs/build-log/060-phase-8-b5-session-6-prerequisites-decisions.md`.
-- **Completed:** P6f-1 — close permission + CanClose affordance + review fixes. `CanClose` field on
-  `KeepRequestActionDecision` and `AvailableActionsMetadata`; computed as `isOwnerAdmin && Status==Resolved &&
-  AttentionLevel==None` (ADR-343); `AllowedStatuses` consistent with `canClose`; role + attention guards added
-  to `ChangeKeepRequestStatusService` and `AddBusinessUpdateService` (Operator → 403, attention → 409).
-  See `docs/build-log/061-phase-8-b5-session-6-proper.md`.
-- **Completed:** P6f-2 — ready-to-close queue. `ActiveViewKind.ReadyToClose`; `ReadyToClose` count in
-  `KeepRequestViewCounts`; `KeepRequestReadyToCloseInfo(HasCustomerActivityAfterResolution)` on every row;
-  `view=ready_to_close` Owner/Admin-only active view with DB pre-filter (non-terminal + no-attention) and
-  in-memory eligibility (Resolved + no-attention); DEF-036/DEF-063 finalized; `_resolvedRequestId` tracked
-  in B5 fixture; brittle `SingleOrDefault(status==resolved)` test fixed.
-  773 unit · 14 arch · 612 integration — full suite green.
-
-### Completed This Session
+### Session 6 Completion Summary
 
 #### P6f-3 — Closed-history date shortcuts — COMPLETE
 
@@ -111,12 +98,83 @@ exist pre-pilot (backfill SQL noted in build log if needed at launch). 787 unit 
 
 ---
 
+## Current Work — Session 7 Decision/Build
+
+Session 7 decisions are locked and implementation is split into bounded Claude coding sessions in
+`docs/build-log/062-session-7-pilot-safety-decision-build.md`. Treat each slice as mechanical
+implementation preflight unless code discovery contradicts a locked decision.
+
+### Session 7 Goal
+
+Make the backend safe to operate before notification delivery and pilot rollout.
+
+### Locked Session 7 Decisions
+
+- **ADR-345:** Persistent local PostgreSQL runbook is required before notifications. It must cover
+  migrate, smoke, and safe local reset. Broad demo seed data is excluded from normal setup and
+  deferred behind Demo/InternalTest account classification.
+- **ADR-346:** Rate limiting needs an automated production-like proof outside the normal `Testing`
+  host path, with tiny deterministic thresholds and `429` assertions.
+- **ADR-347:** Trusted client IP must be explicit behind Cloudflare/Railway. Trusted Cloudflare
+  country may be optional internal context only; no broad authenticated access decisions or business
+  user exposure from IP/location.
+- **ADR-348:** Token-bearing flows are secret-safe and supportable. Raw tokens/URLs/credentials do
+  not appear in logs, errors, request logging, or test output; safe diagnostics use route templates,
+  reason codes, entity IDs after lookup, expiry metadata, correlation IDs, and keyed fingerprints.
+- **ADR-349:** Spam/Test classification is pre-notification V1 scope. Owner/Admin only; explicit
+  confirmed action; optional internal reason; preserve audit/history; exclude from operational and
+  impact metrics; no source blocking/adaptive abuse controls yet.
+- **ADR-350:** `Spam` and `Test` are explicit terminal request statuses, not cancellation reasons.
+
+### S7a + S7a-2 — Local PostgreSQL runbook and bootstrap — COMPLETE
+
+Added `docs/deployment/local-postgres-runbook.md`. Bootstrapped `ophalo_local` in Docker PostgreSQL:
+
+- User secrets initialized on `src/OpHalo.Api` (connection string + cursor signing key) and
+  `src/OpHalo.Keep.Infrastructure` (connection string for EF design-time factory). Both projects
+  require the connection string independently — the runbook was updated to make this explicit.
+- All 15 migrations applied via `dotnet ef database update` against `ophalo_local`.
+- API started with `ASPNETCORE_ENVIRONMENT=Development`; smoke check confirmed `422
+  keep.public_intake.unavailable` for the unknown-token intake route — database-backed route
+  executed correctly against an empty database.
+- Runbook corrected: removed duplicate env-var signing key section; added explicit User Secrets Setup
+  section documenting both projects and the `dotnet user-secrets init` prerequisite. macOS AirPlay
+  Receiver occupies port 5000; API bound to 5092 locally.
+- Guarded reset not exercised this slice (not needed; ADR-345 baseline is verified).
+
+### Session 7 Claude Coding Sessions
+
+- **S7a-2 — Local PostgreSQL bootstrap and verification:** COMPLETE — see above.
+- **S7b — Trusted proxy/client IP plus rate-limit smoke proof:** implement/prove trusted IP handling
+  and focused non-`Testing` rate-limit smoke tests with deterministic `429` assertions.
+- **S7c — Token-safe logging and redaction guardrails:** inventory token-bearing routes and add
+  redaction helpers/middleware/config/tests as needed while preserving safe support diagnostics.
+- **S7d — Spam/Test terminal-status foundation:** add terminal statuses and make read surfaces,
+  terminal helpers, lists/counts, stale/status-check, ready-to-close, and customer-page guards treat
+  them as non-operational.
+- **S7e — Spam/Test classification command:** add Owner/Admin confirmed classification mutation with
+  expected-version handling, optional internal reason, audit event/history, fail-closed auth, and
+  customer-page blocking.
+- **S7f — Final pilot-safety ledger and regression gate:** update docs/decision index/deferred
+  topics, verify DEF-061/DEF-079/DEF-080, run proportionate broader tests, and keep Session 8
+  notification/device foundation queued.
+
+### Session 8 Preview
+
+After Session 7 hardening, queue the narrow V1 notification/badge foundation from DEF-021:
+notification-device table, token registration/revocation, server-derived personal badge count,
+minimal non-sensitive push payloads, post-commit fail-soft delivery hooks, and P6e routing/actor
+suppression.
+
+---
+
 ## Active Carry-Forward Boundaries
 
 - One durable public intake link; no ordinary pause/resume. Exceptional replacement is
   transactional and warns about stale links.
 - Public-intake abuse posture before pilot: bounded validation, trusted-IP/rate-limit proof,
-  Spam/Test classification in its planned V1 slice, token-safe logs, and internal emergency path.
+  Spam/Test terminal classification before notifications, token-safe logs, and internal emergency
+  path.
 - Hashed-source blocking, adaptive bot challenges, anomaly detection, and phone verification remain
   post-pilot/V1.1 unless evidence requires earlier work.
 - Terminal customer pages expire 30 days after Closed/Cancelled; active and Resolved do not.
@@ -130,7 +188,8 @@ exist pre-pilot (backfill SQL noted in build log if needed at launch). 787 unit 
 
 - GitHub remote `origin` is configured; push local commits daily when green.
 - Integration tests reset PostgreSQL schema and run migrations.
-- Testing environment intentionally skips runtime rate limiting; G8 must use a production-like host.
+- Testing environment intentionally skips runtime rate limiting; S7b must use a production-like host.
 - Deployment requires correct Cloudflare/Railway trusted-proxy and token-redaction configuration.
-- Persistent local PostgreSQL setup/migration/smoke/reset runbook remains GAP-016 after Session 6 and
-  before notifications.
+- Persistent local PostgreSQL setup/migration/smoke/reset runbook is drafted in
+  `docs/deployment/local-postgres-runbook.md`; S7a-2 must verify it against an actual local database
+  before relying on it for notification work.
