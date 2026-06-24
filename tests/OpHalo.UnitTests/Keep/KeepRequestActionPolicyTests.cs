@@ -619,4 +619,18 @@ public class KeepRequestActionPolicyTests
              KeepRequestStatus.Cancelled],
             statuses);
     }
+
+    [Fact]
+    public void AllowedStatuses_Resolved_OwnerAdmin_with_attention_excludes_Closed()
+    {
+        var r = MakeReceived();
+        r.ChangeStatus(KeepRequestStatus.Resolved, null, ActorId, ActorName, Now.AddHours(-1));
+        WithAttention(r);
+        var statuses = KeepRequestActionPolicy.Evaluate(r, OwnerWrite()).AllowedStatuses;
+        Assert.DoesNotContain(KeepRequestStatus.Closed, statuses);
+        Assert.Equal(
+            [KeepRequestStatus.InProgress, KeepRequestStatus.PendingCustomer,
+             KeepRequestStatus.Cancelled],
+            statuses);
+    }
 }

@@ -97,6 +97,16 @@ public sealed class ChangeKeepRequestStatusService(
         if (parsedStatus is null)
             return Result<KeepRequestDetailResult>.Failure(KeepRequestErrors.InvalidStatus);
 
+        // --- Close permission guard (ADR-343): Owner/Admin only; no active blocking attention ---
+        var isOwnerAdmin = userSnapshot.Role is AccountUserRole.Owner or AccountUserRole.Admin;
+        if (parsedStatus == KeepRequestStatus.Closed)
+        {
+            if (!isOwnerAdmin)
+                return Result<KeepRequestDetailResult>.Failure(KeepRequestErrors.CloseRequiresOwnerOrAdmin);
+            if (request.AttentionLevel != AttentionLevel.None)
+                return Result<KeepRequestDetailResult>.Failure(KeepRequestErrors.CloseBlockedByAttention);
+        }
+
         // --- Domain: apply status change ---
         var nowUtc = clock.UtcNow;
         var changeResult = request.ChangeStatus(

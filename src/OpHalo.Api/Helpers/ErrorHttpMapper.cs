@@ -139,6 +139,10 @@ public static class ErrorHttpMapper
             var c when c == "KeepRequest.ParticipationResponsibleCannotWatch"     => (StatusCodes.Status409Conflict, "Conflict.", null),
             var c when c == "KeepRequest.ParticipationStateCorrupt"               => (StatusCodes.Status409Conflict, "Conflict.", null),
 
+            // --- Close permission errors (ADR-343 / P6f-1) ---
+            var c when c == "KeepRequest.CloseRequiresOwnerOrAdmin" => (StatusCodes.Status403Forbidden, "Forbidden.", null),
+            var c when c == "KeepRequest.CloseBlockedByAttention"   => (StatusCodes.Status409Conflict, "Conflict.", null),
+
             // --- Follow Up On / Planned For errors (ADR-337/338 / P6b-2) ---
             var c when c == "KeepRequest.FollowUpOnRequiresActiveRequest" => (StatusCodes.Status409Conflict, "Conflict.", null),
             var c when c == "KeepRequest.PlannedForRequiresActiveRequest" => (StatusCodes.Status409Conflict, "Conflict.", null),

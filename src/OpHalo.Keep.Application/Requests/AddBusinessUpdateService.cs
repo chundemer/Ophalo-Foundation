@@ -101,6 +101,16 @@ public sealed class AddBusinessUpdateService(
                 return Result<KeepRequestDetailResult>.Failure(KeepRequestErrors.InvalidStatus);
         }
 
+        // --- Close permission guard (ADR-343): Owner/Admin only; no active blocking attention ---
+        var isOwnerAdmin = userSnapshot.Role is AccountUserRole.Owner or AccountUserRole.Admin;
+        if (parsedSetStatus == KeepRequestStatus.Closed)
+        {
+            if (!isOwnerAdmin)
+                return Result<KeepRequestDetailResult>.Failure(KeepRequestErrors.CloseRequiresOwnerOrAdmin);
+            if (request.AttentionLevel != AttentionLevel.None)
+                return Result<KeepRequestDetailResult>.Failure(KeepRequestErrors.CloseBlockedByAttention);
+        }
+
         // --- Domain: apply business update ---
         // setStatus present → combined StatusChanged+message event (D3/D4, 4000-char limit).
         // setStatus absent  → standalone MessageAdded event (D4, 4000-char limit).

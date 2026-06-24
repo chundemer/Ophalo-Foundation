@@ -235,4 +235,11 @@ public static class KeepRequestErrors
     // Timing mutation API-edge errors (P6b-2).
     public static readonly Error InvalidDateFormat =
         Error.Create("KeepRequest.InvalidDateFormat", "Date must be a valid calendar date in yyyy-MM-dd format.");
+
+    // Close permission errors (P6f-1 / ADR-343).
+    public static readonly Error CloseRequiresOwnerOrAdmin =
+        Error.Create("KeepRequest.CloseRequiresOwnerOrAdmin", "Only an Owner or Admin can close a request.");
+
+    public static readonly Error CloseBlockedByAttention =
+        Error.Create("KeepRequest.CloseBlockedByAttention", "Active attention must be resolved before closing this request.");
 }

@@ -33,12 +33,14 @@ public sealed class ChangeKeepRequestStatusTests : IClassFixture<KeepApiWebFacto
     private Guid _ownerAccountUserId;
     private Guid _requestId;                        // Received status
     private Guid _closedRequestId;                  // Closed (terminal) status
-    private Guid _resolvedWithAttentionRequestId;   // Resolved with active business-waiting attention
+    private Guid _resolvedWithAttentionRequestId;   // Resolved with active business-waiting attention — close must be blocked
     private Guid _resolvedForMetadataRequestId;     // Resolved, used ONLY by the post-transition metadata test (no shared mutation)
+    private Guid _resolvedCleanRequestId;           // Resolved, no attention — for B2-delta TerminatedAtUtc test
     private Guid _requestVersion;
     private Guid _closedRequestVersion;
     private Guid _resolvedWithAttentionVersion;
     private Guid _resolvedForMetadataVersion;
+    private Guid _resolvedCleanVersion;
     private string _ownerCookie = string.Empty;
     private string _viewerCookie = string.Empty;
 
@@ -163,16 +165,32 @@ public sealed class ChangeKeepRequestStatusTests : IClassFixture<KeepApiWebFacto
         if (eResolvedForMetadata.IsSuccess && eResolvedForMetadata.Value.StatusChangedEvent is not null)
             db.Set<KeepRequestEvent>().Add(eResolvedForMetadata.Value.StatusChangedEvent);
 
+        // Clean Resolved request with no attention — for B2-delta TerminatedAtUtc test (ADR-343).
+        var resolvedClean = KeepRequest.CreateFromCustomerIntake(
+            _accountId, customer.Id,
+            "Jane Smith", "0412345678", null,
+            "Job ready to close", "STATUS005", "token_status_005", now, 60);
+        var eResolvedClean = resolvedClean.ChangeStatus(
+            KeepRequestStatus.Resolved, null,
+            graph.Owner.Id, "owner@status-tests.com", now);
+        db.Set<KeepRequest>().Add(resolvedClean);
+        db.Set<KeepRequestEvent>().Add(
+            KeepRequestEvent.CreateRequestCreated(resolvedClean.Id, _accountId, now));
+        if (eResolvedClean.IsSuccess && eResolvedClean.Value.StatusChangedEvent is not null)
+            db.Set<KeepRequestEvent>().Add(eResolvedClean.Value.StatusChangedEvent);
+
         await db.SaveChangesAsync();
 
         _requestId = request.Id;
         _closedRequestId = closedRequest.Id;
         _resolvedWithAttentionRequestId = resolvedWithAttention.Id;
         _resolvedForMetadataRequestId = resolvedForMetadata.Id;
+        _resolvedCleanRequestId = resolvedClean.Id;
         _requestVersion = request.ConcurrencyVersion;
         _closedRequestVersion = closedRequest.ConcurrencyVersion;
         _resolvedWithAttentionVersion = resolvedWithAttention.ConcurrencyVersion;
         _resolvedForMetadataVersion = resolvedForMetadata.ConcurrencyVersion;
+        _resolvedCleanVersion = resolvedClean.ConcurrencyVersion;
 
         var rawOwner = await _factory.SeedSessionAsync(graph.Owner.Id, _accountId);
         _ownerCookie = $"{AuthConstants.CookieName}={rawOwner}";
@@ -396,14 +414,31 @@ public sealed class ChangeKeepRequestStatusTests : IClassFixture<KeepApiWebFacto
     }
 
     // =========================================================================
-    // Test 10 — Resolved→Closed sets TerminatedAtUtc (B2-delta)
+    // Test 10 — Resolved + active attention → 409 CloseBlockedByAttention (ADR-343)
     // =========================================================================
 
     [Fact]
-    public async Task TerminalTransition_SetsTerminatedAtUtc()
+    public async Task CloseRequest_Resolved_WithAttention_Returns409()
     {
         var response = await AuthRequest(_ownerCookie, _resolvedWithAttentionVersion).PatchAsJsonAsync(
             $"/keep/requests/{_resolvedWithAttentionRequestId}/status",
+            new { status = "closed" });
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("KeepRequest.CloseBlockedByAttention", body.GetProperty("code").GetString());
+    }
+
+    // =========================================================================
+    // Test 11 — Resolved + no attention → 200, TerminatedAtUtc set (B2-delta / ADR-343)
+    // =========================================================================
+
+    [Fact]
+    public async Task CloseRequest_Resolved_NoAttention_SetsTerminatedAtUtc()
+    {
+        var response = await AuthRequest(_ownerCookie, _resolvedCleanVersion).PatchAsJsonAsync(
+            $"/keep/requests/{_resolvedCleanRequestId}/status",
             new { status = "closed" });
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -411,39 +446,6 @@ public sealed class ChangeKeepRequestStatusTests : IClassFixture<KeepApiWebFacto
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
         Assert.Equal("closed", body.GetProperty("status").GetString());
         Assert.Equal(JsonValueKind.String, body.GetProperty("terminatedAtUtc").ValueKind);
-    }
-
-    // =========================================================================
-    // Test 11 — Terminal transition auto-clears active attention without
-    //           creating an AttentionAcknowledged event (B2-delta)
-    // =========================================================================
-
-    [Fact]
-    public async Task TerminalTransition_AutoClearsActiveAttentionWithoutAcknowledgedEvent()
-    {
-        var response = await AuthRequest(_ownerCookie, _resolvedWithAttentionVersion).PatchAsJsonAsync(
-            $"/keep/requests/{_resolvedWithAttentionRequestId}/status",
-            new { status = "closed" });
-
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-
-        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
-
-        // Attention fields cleared.
-        Assert.Equal("none", body.GetProperty("attentionLevel").GetString());
-        Assert.Equal("none", body.GetProperty("waitingDirection").GetString());
-        Assert.Equal(JsonValueKind.Null, body.GetProperty("attentionReason").ValueKind);
-        Assert.Equal(JsonValueKind.Null, body.GetProperty("attentionSinceUtc").ValueKind);
-        Assert.Equal(JsonValueKind.Null, body.GetProperty("nextAttentionAtUtc").ValueKind);
-        Assert.Equal(JsonValueKind.String, body.GetProperty("attentionClearedAtUtc").ValueKind);
-        Assert.Equal(_ownerAccountUserId, body.GetProperty("attentionClearedByAccountUserId").GetGuid());
-        // Terminal auto-clear does not record a reason (distinct from AcknowledgeAttention).
-        Assert.Equal(JsonValueKind.Null, body.GetProperty("attentionClearReason").ValueKind);
-
-        // No AttentionAcknowledged event — the StatusChanged event is the audit anchor.
-        var events = body.GetProperty("events").EnumerateArray().ToList();
-        Assert.DoesNotContain(events, e =>
-            e.GetProperty("eventType").GetString() == "attention_acknowledged");
     }
 
     // =========================================================================

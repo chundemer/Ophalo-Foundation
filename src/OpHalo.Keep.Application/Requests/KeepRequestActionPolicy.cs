@@ -101,7 +101,7 @@ public static class KeepRequestActionPolicy
             CanSetFollowUpOn:         canSetTiming,
             CanSetPlannedFor:         canSetTiming,
             CanClose:                 canClose,
-            AllowedStatuses:          ComputeAllowedStatuses(request.Status, isOwnerAdmin));
+            AllowedStatuses:          ComputeAllowedStatuses(request.Status, isOwnerAdmin, canClose));
     }
 
     private static bool CanMarkFeedbackReviewedCore(bool isOwnerAdmin, KeepRequest request) =>
@@ -114,8 +114,10 @@ public static class KeepRequestActionPolicy
         && request.AttentionReason == AttentionReason.UnresolvedFeedback;
 
     // Actual transitions only; current status excluded. Same-status no-ops remain domain-authoritative.
-    // Closed is excluded from Resolved transitions for Operators: close is Owner/Admin only (ADR-343).
-    private static IReadOnlyList<KeepRequestStatus> ComputeAllowedStatuses(KeepRequestStatus current, bool isOwnerAdmin) =>
+    // Closed appears only when canClose is true: Operators never see it; Owner/Admin only when
+    // CanClose is true (Resolved + no active blocking attention — ADR-343).
+    private static IReadOnlyList<KeepRequestStatus> ComputeAllowedStatuses(
+        KeepRequestStatus current, bool isOwnerAdmin, bool canClose) =>
         current switch
         {
             KeepRequestStatus.Received =>
@@ -135,7 +137,7 @@ public static class KeepRequestActionPolicy
                 [KeepRequestStatus.Scheduled, KeepRequestStatus.InProgress,
                  KeepRequestStatus.Resolved, KeepRequestStatus.Cancelled],
 
-            KeepRequestStatus.Resolved when isOwnerAdmin =>
+            KeepRequestStatus.Resolved when canClose =>
                 [KeepRequestStatus.InProgress, KeepRequestStatus.PendingCustomer,
                  KeepRequestStatus.Closed, KeepRequestStatus.Cancelled],
 
