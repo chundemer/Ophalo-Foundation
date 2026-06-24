@@ -33,7 +33,7 @@ the same constraint regardless of affordance.
 
 ## P6f-1 — Close permission + CanClose affordance — COMPLETE
 
-**Status:** Complete. Commit pending Christian approval.
+**Status:** Complete. Commits `efacb25` (affordance) + `afe41ed` (review fixes).
 
 **Changes:**
 - `KeepRequestActionDecision.cs` — added `CanClose: bool` field.
@@ -47,7 +47,18 @@ the same constraint regardless of affordance.
 - `KeepRequestDetailServiceTests.cs` — 2 new tests: CanClose true for Owner+Resolved, false for
   non-Resolved.
 
-**Verified:** 759 unit, 14 arch — all green. `dotnet build` succeeded.
+**Review fixes (commit `afe41ed`):**
+- `KeepRequestErrors.cs` — `CloseBlockedByAttention` (409) added alongside `CloseRequiresOwnerOrAdmin` (403).
+- `ErrorHttpMapper.cs` — both new error codes mapped.
+- `ChangeKeepRequestStatusService.cs` + `AddBusinessUpdateService.cs` — attention guard added (Operator → 403,
+  Resolved+attention → 409). ADR-343 enforced end-to-end; domain path is no longer the sole gate.
+- `KeepRequestActionPolicy.cs` — `AllowedStatuses` now driven by `canClose` so `Closed` never appears when
+  `CanClose==false` (attention-present or Operator).
+- `ChangeKeepRequestStatusTests.cs` — tests 10/11 rewritten: `_resolvedWithAttention` expects 409
+  `CloseBlockedByAttention`; new `_resolvedClean` fixture; test 11 → `CloseRequest_Resolved_NoAttention_SetsTerminatedAtUtc`.
+- `KeepRequestActionPolicyTests.cs` — `AllowedStatuses_Resolved_OwnerAdmin_with_attention_excludes_Closed`.
+
+**Verified:** 760 unit · 14 arch · 604 integration — full suite green.
 
 ---
 

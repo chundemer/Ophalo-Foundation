@@ -1,8 +1,8 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-06-23 (P6f-1 complete — close permission + CanClose affordance)
+**Last updated:** 2026-06-23 (P6f-1 + review fixes complete — close permission enforced end-to-end)
 **Branch:** `main` tracking `origin/main`
-**Current baseline:** 1353 tests (759 unit · 14 architecture · 598 integration — integration not re-run) — full unit + architecture suite green.
+**Current baseline:** 1378 tests (760 unit · 14 architecture · 604 integration) — full suite green.
 **Next free ADR:** ADR-345
 **Next batch: P6f-2 — ready-to-close queue.**
 
@@ -74,10 +74,12 @@ Current handoff:
   fail-soft delivery boundary, fresh-not-offline client posture, minimal non-sensitive payloads, and customer
   contact boundary. DEF-012/DEF-021 remain open for notification/device implementation; DEF-022 clarified for
   native contact launch; DEF-077 added for future temporary personal notification silence.
-- **Completed:** P6f-1 — close permission + CanClose affordance. `CanClose` field on `KeepRequestActionDecision`
-  and `AvailableActionsMetadata`; computed as `isOwnerAdmin && Status==Resolved && AttentionLevel==None` (ADR-343);
-  `AllowedStatuses` for Resolved now filters `Closed` for Operators; 9 new unit tests (7 policy + 2 detail service).
-  759 unit, 14 arch green. See `docs/build-log/061-phase-8-b5-session-6-proper.md`.
+- **Completed:** P6f-1 — close permission + CanClose affordance + review fixes. `CanClose` field on
+  `KeepRequestActionDecision` and `AvailableActionsMetadata`; computed as `isOwnerAdmin && Status==Resolved &&
+  AttentionLevel==None` (ADR-343); `AllowedStatuses` consistent with `canClose`; role + attention guards added
+  to `ChangeKeepRequestStatusService` and `AddBusinessUpdateService` (Operator → 403, attention → 409);
+  `ChangeKeepRequestStatusTests` tests 10/11 updated to match new enforcement + clean-resolved fixture added.
+  760 unit · 14 arch · 604 integration — full suite green. See `docs/build-log/061-phase-8-b5-session-6-proper.md`.
 
 ### Session 6 Proper — Next Slice (P6f-2)
 
