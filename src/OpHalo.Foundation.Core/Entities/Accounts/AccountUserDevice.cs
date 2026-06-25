@@ -118,6 +118,8 @@ public sealed class AccountUserDevice
         DeviceName = deviceName;
         Status = AccountUserDeviceStatus.Active;
         RevokedAtUtc = null;
+        LastDeliveryFailureAtUtc = null;
+        LastDeliveryFailureReason = null;
         LastSeenAtUtc = nowUtc;
     }
 
