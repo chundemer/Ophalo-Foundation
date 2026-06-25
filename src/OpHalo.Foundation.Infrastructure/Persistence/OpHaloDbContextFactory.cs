@@ -6,24 +6,26 @@ using OpHalo.Foundation.Infrastructure.Services;
 namespace OpHalo.Foundation.Infrastructure.Persistence;
 
 /// <summary>
-/// Design-time factory for EF Core tooling (dotnet ef migrations). Not used at runtime —
-/// host DI registration is deferred to the auth phase, when the first endpoint consumes
-/// the context. This factory reads its own configuration so migrations need no host wiring.
+/// Design-time factory for EF Core tooling. Creates a Foundation-only model (no Keep
+/// entities). Do NOT use this factory for migrations — it will generate spurious DROP
+/// TABLE statements for all Keep tables.
 ///
-/// Loads configuration in priority order:
-///   appsettings.json → appsettings.{Environment}.json → user secrets → environment variables
+/// CANONICAL MIGRATION COMMAND — always use KeepDesignTimeDbContextFactory instead:
 ///
-/// User secrets are scoped to OpHalo.Foundation.Infrastructure only:
+///   dotnet ef migrations add [Name] \
+///     --project src/OpHalo.Foundation.Infrastructure \
+///     --startup-project src/OpHalo.Keep.Infrastructure \
+///     --context OpHaloDbContext
 ///
-///   dotnet user-secrets init --project src/OpHalo.Foundation.Infrastructure
-///   dotnet user-secrets set "ConnectionStrings:DefaultConnection" "..." --project src/OpHalo.Foundation.Infrastructure
+///   dotnet ef database update \
+///     --project src/OpHalo.Foundation.Infrastructure \
+///     --startup-project src/OpHalo.Keep.Infrastructure \
+///     --context OpHaloDbContext
 ///
-/// Alternatively supply the connection string via environment variable:
-///   ConnectionStrings__DefaultConnection=...
-///
-/// Migration commands (no --startup-project required):
-///   dotnet ef migrations add [Name] --project src/OpHalo.Foundation.Infrastructure --context OpHaloDbContext
-///   dotnet ef database update       --project src/OpHalo.Foundation.Infrastructure --context OpHaloDbContext
+/// Connection string for the Keep startup project:
+///   dotnet user-secrets set "ConnectionStrings:DefaultConnection" "..." \
+///     --project src/OpHalo.Keep.Infrastructure
+/// Or: ConnectionStrings__DefaultConnection=... (environment variable)
 /// </summary>
 public sealed class OpHaloDbContextFactory : IDesignTimeDbContextFactory<OpHaloDbContext>
 {
