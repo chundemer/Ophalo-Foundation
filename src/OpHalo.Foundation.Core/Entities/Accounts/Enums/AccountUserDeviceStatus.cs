@@ -2,7 +2,7 @@ namespace OpHalo.Foundation.Core.Entities.Accounts.Enums;
 
 public enum AccountUserDeviceStatus
 {
-    Active = 0,
-    Revoked = 1,
-    FailedPermanent = 2
+    Active = 1,
+    Revoked = 2,
+    FailedPermanent = 3
 }

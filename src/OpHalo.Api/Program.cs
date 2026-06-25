@@ -16,8 +16,10 @@ using OpHalo.Foundation.Application.Accounts.Authorization;
 using OpHalo.Foundation.Application.Accounts.Entitlements;
 using OpHalo.Foundation.Application.Accounts.Provisioning;
 using OpHalo.Foundation.Application.Auth;
+using OpHalo.Foundation.Application.Devices;
 using OpHalo.Foundation.Application.Members;
 using OpHalo.Foundation.Infrastructure.Auth;
+using OpHalo.Foundation.Infrastructure.Devices;
 using OpHalo.Foundation.Infrastructure.Email;
 using OpHalo.Foundation.Infrastructure.Members;
 using OpHalo.Foundation.Core.Constants;
@@ -139,6 +141,9 @@ builder.Services.AddScoped<AcceptInviteService>();
 builder.Services.AddScoped<IInvitePersistence, EfInvitePersistence>();
 builder.Services.AddScoped<MemberManagementService>();
 builder.Services.AddScoped<IMemberManagementPersistence, EfMemberManagementPersistence>();
+builder.Services.AddScoped<AccountUserDeviceService>();
+builder.Services.AddScoped<IAccountUserDevicePersistence, EfAccountUserDevicePersistence>();
+builder.Services.AddSingleton<IPushTokenFingerprintService, Sha256PushTokenFingerprintService>();
 
 // --- Email ---
 var resendSettings = builder.Configuration.GetSection("Resend").Get<ResendSettings>()
@@ -717,6 +722,7 @@ app.MapPost("/keep/r/{pageToken}/feedback",
 
 app.MapAuthEndpoints();
 app.MapAccountEndpoints();
+app.MapAccountDeviceEndpoints();
 
 app.Run();
 
