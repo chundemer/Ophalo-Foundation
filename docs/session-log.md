@@ -1,10 +1,10 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-06-24 (S7a–S7f complete; Session 8 next)
+**Last updated:** 2026-06-24 (Session 8 pre-work locked; S8a next)
 **Branch:** `main` tracking `origin/main`
 **Current baseline:** 815 unit · 14 arch green; S7e: 12 classify integration tests green.
-**Next free ADR:** ADR-351
-**Next batch: Session 8 — Notification/device foundation.**
+**Next free ADR:** ADR-363
+**Next batch: Session 8 — Notification/device foundation (S8a).**
 
 ---
 
@@ -36,10 +36,18 @@ For every implementation slice:
 
 ## Current Work
 
-**Current build log:** `docs/build-log/062-session-7-pilot-safety-decision-build.md`  
-**Completed Session 6 build log:** `docs/build-log/061-phase-8-b5-session-6-proper.md`  
-**Completed Session 6 prerequisite build log:** `docs/build-log/060-phase-8-b5-session-6-prerequisites-decisions.md`  
-**Next implementation:** Session 8 — Notification/device foundation (DEF-021: device table, token registration/revocation, personal badge count, minimal push payloads, post-commit fail-soft delivery hooks, P6e routing/actor suppression).
+**Current build log:** `docs/build-log/063-session-8-notification-device-foundation.md`
+**Completed Session 7 build log:** `docs/build-log/062-session-7-pilot-safety-decision-build.md`
+**Completed Session 6 build log:** `docs/build-log/061-phase-8-b5-session-6-proper.md`
+**Completed Session 6 prerequisite build log:** `docs/build-log/060-phase-8-b5-session-6-prerequisites-decisions.md`
+**Next implementation:** S8a — Device table + `/me/devices/{appInstallationId}` register/revoke API.
+
+Session 8 pre-work is locked in build-log/063. It builds the narrow V1 notification/device
+foundation: device table, token registration/revocation, personal badge count, push abstraction with
+no-op delivery, minimal non-sensitive payloads, post-commit fail-soft hooks, and P6e routing/actor
+suppression. Real APNs/FCM adapters, notification history/outbox/retry/analytics, full preferences,
+quiet hours, customer SMS/email, Demo/InternalTest classification, and Planned For-aware push
+escalation remain out of the first Session 8 foundation.
 
 Session 6 is complete. P6b-P6f shipped the Follow Up On / Planned For prerequisites,
 customer intent menu, customer-page viewed signal, needs-status-check queue, notification/badge
@@ -232,12 +240,11 @@ ADR-296/ADR-349/ADR-350. DEF-079/DEF-080 (demo seed data) remain deferred as req
 - **S7e — Spam/Test classification command:** COMPLETE — see below.
 - **S7f — Final pilot-safety ledger and regression gate:** COMPLETE — see below.
 
-### Session 8 Preview
+### Session 8 Handoff
 
-After Session 7 hardening, queue the narrow V1 notification/badge foundation from DEF-021:
-notification-device table, token registration/revocation, server-derived personal badge count,
-minimal non-sensitive push payloads, post-commit fail-soft delivery hooks, and P6e routing/actor
-suppression.
+Session 8 pre-work is locked in `docs/build-log/063-session-8-notification-device-foundation.md`.
+Claude should start with S8a and treat each slice as mechanical implementation preflight unless
+current code discovery contradicts a locked ADR.
 
 ---
 
@@ -253,7 +260,9 @@ suppression.
 - Terminal customer pages expire 30 days after Closed/Cancelled; active and Resolved do not.
 - Mobile is the on-the-road Operator surface; PWA is the Owner/Admin operational surface. Backend
   authorization remains identical regardless of client.
-- No platform SMS is sent until consent/compliance posture is reviewed.
+- No platform SMS/email is sent by Keep in V1. Automated customer messaging would require
+  A2P/TCPA/opt-out compliance; native `sms:`, `tel:`, and `mailto:` launchers keep pilot contact
+  operator-initiated on the user's device.
 - Keep remains fresh-not-realtime for V1: refetch after writes, focus/resume sync, pull-to-refresh,
   bounded polling, and later push for urgent off-screen work.
 

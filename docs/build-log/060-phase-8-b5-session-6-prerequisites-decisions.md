@@ -94,6 +94,9 @@ Rules:
 - Foreground freshness may use refetch-after-write, pull-to-refresh, focus/resume sync, and light
   foreground polling if needed.
 - Off-screen awareness uses native push/APNs/FCM and server-derived badges.
+- APNs/FCM push does not carry the heavy customer-messaging compliance burden that backend SMS/email
+  would. It requires standard free Apple/Google developer configuration, with no per-message SMS/email
+  gateway cost in the pilot posture.
 - Push payloads are minimal and deep-link to API-refreshed state.
 - Push payloads must not contain customer name, phone/email, full message text, request description,
   private/internal notes, feedback comments, page tokens, or sensitive operational details.
@@ -130,6 +133,12 @@ Rules:
   customer-visible updates, external contact logs, and status messages. On app resume after a native
   phone/SMS/email launch, V1 UI should optionally show a low-friction, dismissible "Log this contact?"
   prompt, but no event is created unless staff confirms.
+- Automated backend SMS/email to customers remains excluded because it would introduce enterprise
+  messaging compliance and operational burden: A2P 10DLC registration/brand vetting for texts, TCPA and
+  opt-out/consent management for automated texts and emails, gateway cost, and retry/delivery policy.
+  Native `sms:`, `tel:`, and `mailto:` launchers intentionally hand execution to the operator's personal
+  device/client so the pilot uses ordinary peer-to-peer/customer-contact behavior instead of Keep acting
+  as an automated messaging platform.
 
 ### ADR-341 — Customer page viewed is a pre-pilot confidence signal, not a read receipt
 
@@ -706,6 +715,10 @@ integration not re-run since P6c-3). Full unit + architecture suite green.
 - P6e is staff/operator push and badge only. Customer-facing platform notifications are not automatic;
   customer contact is business-initiated through explicit app actions. Native phone/SMS/email launch is
   not durable proof; optional UI prompt on return may help staff log the contact.
+- Compliance distinction: APNs/FCM push requires ordinary Apple/Google developer setup and no
+  per-message platform fee; the heavy compliance trap belongs to automated backend customer SMS/email
+  delivery. Native `sms:`, `tel:`, and `mailto:` launchers keep customer contact on the operator's
+  device/client and avoid A2P 10DLC/TCPA/opt-out infrastructure for the pilot.
 - Temporary personal notification silence is deferred.
 
 **Documentation reconciled:**
