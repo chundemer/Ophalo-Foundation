@@ -143,6 +143,8 @@ builder.Services.AddScoped<MemberManagementService>();
 builder.Services.AddScoped<IMemberManagementPersistence, EfMemberManagementPersistence>();
 builder.Services.AddScoped<AccountUserDeviceService>();
 builder.Services.AddScoped<IAccountUserDevicePersistence, EfAccountUserDevicePersistence>();
+builder.Services.AddScoped<GetBadgeCountService>();
+builder.Services.AddScoped<IKeepBadgePersistence, EfKeepBadgePersistence>();
 builder.Services.AddSingleton<IPushTokenFingerprintService, Sha256PushTokenFingerprintService>();
 
 // --- Email ---
@@ -723,6 +725,7 @@ app.MapPost("/keep/r/{pageToken}/feedback",
 app.MapAuthEndpoints();
 app.MapAccountEndpoints();
 app.MapAccountDeviceEndpoints();
+app.MapBadgeEndpoints();
 
 app.Run();
 
