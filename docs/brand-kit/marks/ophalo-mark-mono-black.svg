@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240.00 240.00" width="240.00" height="240.00" role="img">
+<defs>
+  <clipPath id="gapClip3"><circle cx="138" cy="96" r="24"/></clipPath>
+  <mask id="gap3">
+    <rect x="0" y="0" width="240" height="240" fill="white"/>
+    <g clip-path="url(#gapClip3)">
+      <ellipse cx="148" cy="86" rx="50" ry="19" fill="none" stroke="black" stroke-width="20" transform="rotate(-24 148 86)"/>
+    </g>
+  </mask>
+</defs>
+<ellipse cx="148" cy="86" rx="50" ry="19" fill="none" stroke="#10243E" stroke-width="12" transform="rotate(-24 148 86)"/>
+<path mask="url(#gap3)" fill-rule="evenodd" fill="#10243E" d="M 110 70 A 64 64 0 1 0 110 198 A 64 64 0 1 0 110 70 Z M 110 88 A 38 46 0 1 1 110 180 A 38 46 0 1 1 110 88 Z"/>
+</svg>

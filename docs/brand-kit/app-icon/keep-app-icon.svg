@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="OpHalo Keep">
+  <rect width="512" height="512" rx="114" fill="#10243E"/>
+  <svg x="100" y="96" width="300" height="300" viewBox="0 0 240 240">
+    <path fill-rule="evenodd" fill="#F8F6F1"
+          d="M 116 62 A 66 66 0 1 0 116 194 A 66 66 0 1 0 116 62 Z
+             M 116 84 A 44 44 0 1 1 116 172 A 44 44 0 1 1 116 84 Z"/>
+    <ellipse cx="152" cy="82" rx="46" ry="24" fill="none" stroke="#10243E" stroke-width="24" transform="rotate(-18 152 82)"/>
+    <ellipse cx="152" cy="82" rx="46" ry="24" fill="none" stroke="#168A9A" stroke-width="14" transform="rotate(-18 152 82)"/>
+  </svg>
+</svg>
