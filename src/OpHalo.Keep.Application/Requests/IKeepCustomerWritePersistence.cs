@@ -60,4 +60,20 @@ public interface IKeepCustomerWritePersistence
     /// the telemetry write is lost; this is acceptable for a best-effort signal.
     /// </summary>
     Task CommitPageViewAsync(KeepRequest request, CancellationToken ct);
+
+    // --- Notification routing support (S8d) ---
+
+    /// <summary>
+    /// Returns all participants for the request (active and detached) joined with AccountUser
+    /// for role, membership, and notification-opt-out. Used to build push routing context
+    /// after commit without crossing DbContext scope boundaries.
+    /// </summary>
+    Task<IReadOnlyList<KeepParticipantProjection>> GetParticipantsAsync(Guid requestId, CancellationToken ct);
+
+    /// <summary>
+    /// Returns all Active Owner/Admin members of the account. Used as the Owner/Admin fallback
+    /// list in push routing. Returns only Owner and Admin roles — Operators are excluded because
+    /// they are not Owner/Admin fallback recipients for unresolved-feedback notifications.
+    /// </summary>
+    Task<IReadOnlyList<ParticipantCandidateRecord>> GetActiveOwnerAdminMembersAsync(Guid accountId, CancellationToken ct);
 }

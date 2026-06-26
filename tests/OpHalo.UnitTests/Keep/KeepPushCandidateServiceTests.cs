@@ -54,6 +54,28 @@ public class KeepPushCandidateServiceTests
     }
 
     [Fact]
+    public void Terminal_UnresolvedFeedback_FallbackOwnerAdmin_NotEmpty()
+    {
+        // Closed + UnresolvedFeedback is push-worthy even when the request is terminal (ADR-360).
+        var ctx = Ctx(
+            kind: KeepPushEventKind.UnresolvedFeedback,
+            isTerminal: true,
+            fallback: [Member(UserId1, AccountUserRole.Owner), Member(UserId2, AccountUserRole.Admin)]);
+        Assert.Equal([UserId1, UserId2], _svc.GetCandidates(ctx));
+    }
+
+    [Fact]
+    public void Terminal_NonFeedbackKind_ReturnsEmpty()
+    {
+        // Non-feedback push-worthy events are suppressed on terminal requests.
+        var ctx = Ctx(
+            kind: KeepPushEventKind.CallRequested,
+            isTerminal: true,
+            fallback: [Member(UserId1)]);
+        Assert.Empty(_svc.GetCandidates(ctx));
+    }
+
+    [Fact]
     public void Responsible_Eligible_ReturnsResponsible()
     {
         var ctx = Ctx(participants: [Participant(UserId1, ParticipationType.Responsible)]);

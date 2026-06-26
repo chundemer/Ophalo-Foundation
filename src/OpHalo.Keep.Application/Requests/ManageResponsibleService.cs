@@ -4,6 +4,7 @@ using OpHalo.Foundation.Application.Accounts.Authorization;
 using OpHalo.Foundation.Application.Accounts.Entitlements;
 using OpHalo.Foundation.Core.Entities.Accounts.Enums;
 using OpHalo.Keep.Application.Abstractions;
+using OpHalo.Keep.Application.Notifications;
 using OpHalo.Keep.Core.Domain;
 using OpHalo.Keep.Core.Entities.Enums;
 using OpHalo.Keep.Core.Errors;
@@ -27,6 +28,7 @@ public sealed class ManageResponsibleService(
     IKeepRequestOperatePersistence operatePersistence,
     IKeepRequestDetailPersistence readPersistence,
     KeepRequestParticipationService participationService,
+    IKeepPushNotifier pushNotifier,
     ICurrentUser currentUser,
     IUserAccessPolicy userAccessPolicy,
     IAccountAccessPolicy accountAccessPolicy,
@@ -116,6 +118,31 @@ public sealed class ManageResponsibleService(
                 default:
                     throw new ArgumentOutOfRangeException(nameof(commitResult));
             }
+
+            // Post-commit Assignment push (fail-soft, S8d). IsOffSeason=false: write guard
+            // already blocks OffSeason. Actor exclusion suppresses self-assign notifications.
+            try
+            {
+                var notifParticipants = await readPersistence.GetParticipantsAsync(request.Id, ct);
+                var candidateMembers = await operatePersistence.GetParticipantCandidatesAsync(currentUser.AccountId, ct);
+                // Filter to Owner/Admin only — Operators are not fallback recipients.
+                var fallbackMembers = candidateMembers
+                    .Where(m => m.Role is AccountUserRole.Owner or AccountUserRole.Admin)
+                    .Select(m => new KeepPushMemberInfo(m.AccountUserId, m.Role, MembershipStatus.Active))
+                    .ToList();
+                var pushParticipants = notifParticipants
+                    .Where(p => p.DetachedAtUtc is null)
+                    .Select(p => new KeepPushParticipantInfo(
+                        p.AccountUserId, p.ParticipationType, IsActive: true,
+                        p.NotificationsEnabled, p.Role, p.MembershipStatus))
+                    .ToList();
+                var routingCtx = new KeepPushRoutingContext(
+                    currentUser.AccountId, request.Id, KeepPushEventKind.Assignment,
+                    currentUser.UserId, request.IsTerminal, IsOffSeason: false,
+                    pushParticipants, fallbackMembers);
+                await pushNotifier.SendAsync(routingCtx, ct);
+            }
+            catch { /* fail-soft: push failure must not fail the mutation */ }
         }
 
         return Result<KeepRequestDetailResult>.Success(await BuildDetailAsync(request, userSnapshot.Role, nowUtc, ct));

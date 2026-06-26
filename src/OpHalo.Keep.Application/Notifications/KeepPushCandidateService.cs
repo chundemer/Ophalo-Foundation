@@ -52,7 +52,9 @@ public sealed class KeepPushCandidateService
         if (context.IsOffSeason)
             return [];
 
-        if (context.IsTerminal)
+        // Terminal rows are suppressed except for UnresolvedFeedback, which is push-worthy on
+        // Closed requests (ADR-360: Closed + unresolved feedback review to Owner/Admin).
+        if (context.IsTerminal && context.EventKind != KeepPushEventKind.UnresolvedFeedback)
             return [];
 
         // Step 1: eligible active Responsible, unmuted, non-actor.

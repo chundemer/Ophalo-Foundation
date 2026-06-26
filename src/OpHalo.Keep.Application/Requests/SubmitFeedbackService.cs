@@ -1,3 +1,5 @@
+using OpHalo.Foundation.Core.Entities.Accounts.Enums;
+using OpHalo.Keep.Application.Notifications;
 using OpHalo.Keep.Core.Errors;
 using OpHalo.SharedKernel.Abstractions;
 using OpHalo.SharedKernel.Results;
@@ -7,6 +9,7 @@ namespace OpHalo.Keep.Application.Requests;
 public sealed class SubmitFeedbackService(
     KeepPublicCustomerAccessGuard guard,
     IKeepCustomerWritePersistence persistence,
+    IKeepPushNotifier pushNotifier,
     IClock clock)
 {
     public async Task<Result<KeepCustomerPageResult>> ExecuteAsync(
@@ -48,6 +51,33 @@ public sealed class SubmitFeedbackService(
                 return Result<KeepCustomerPageResult>.Failure(KeepRequestErrors.RequestChanged);
             default:
                 throw new ArgumentOutOfRangeException(nameof(commitResult));
+        }
+
+        // Post-commit UnresolvedFeedback push for Owner/Admin (fail-soft, S8d).
+        // Actor = Guid.Empty: anonymous customer; no actor exclusion applies.
+        // IsOffSeason: SubmitFeedbackService returns early above when context.IsOffSeason.
+        if (!command.WasResolved)
+        {
+            try
+            {
+                var participants = await persistence.GetParticipantsAsync(context.RequestId, ct);
+                var ownerAdminMembers = await persistence.GetActiveOwnerAdminMembersAsync(context.AccountId, ct);
+                var fallbackMembers = ownerAdminMembers
+                    .Select(m => new KeepPushMemberInfo(m.AccountUserId, m.Role, MembershipStatus.Active))
+                    .ToList();
+                var pushParticipants = participants
+                    .Where(p => p.DetachedAtUtc is null)
+                    .Select(p => new KeepPushParticipantInfo(
+                        p.AccountUserId, p.ParticipationType, IsActive: true,
+                        p.NotificationsEnabled, p.Role, p.MembershipStatus))
+                    .ToList();
+                var routingCtx = new KeepPushRoutingContext(
+                    context.AccountId, context.RequestId, KeepPushEventKind.UnresolvedFeedback,
+                    ActorAccountUserId: Guid.Empty, request.IsTerminal, context.IsOffSeason,
+                    pushParticipants, fallbackMembers);
+                await pushNotifier.SendAsync(routingCtx, ct);
+            }
+            catch { /* fail-soft: push failure must not fail the mutation */ }
         }
 
         var events = await persistence.GetCustomerVisibleEventsAsync(context.RequestId, ct);

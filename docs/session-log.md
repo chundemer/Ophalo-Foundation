@@ -1,11 +1,11 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-06-26 (S8b complete; S8c push abstraction next)
+**Last updated:** 2026-06-26 (S8c complete; S8d mutation hooks next)
 **Branch:** `main` tracking `origin/main`
 **Current baseline:** 815 unit · 14 arch green before Session 8; S8a committed in `1fcf933`,
-`4c170ca`, and review fix `2b54640`. S8b committed in `e09258e`.
+`4c170ca`, and review fix `2b54640`. S8b committed in `e09258e`; S8c committed in `2c7b911`.
 **Next free ADR:** ADR-363
-**Next batch:** S8c — Push abstraction, no-op adapter, payload/display mapping, routing foundation.
+**Next batch:** S8d — Limited push-worthy mutation hooks.
 
 ---
 
@@ -39,7 +39,7 @@ For every implementation slice:
 **Pilot readiness working doc:** `docs/pilot-readiness-decision-questions.md`  
 **Post-Session-8 provisional roadmap:** `docs/build-log/ophalo-foundation-build-plan-greenfield-boundaries-brownfield-behavior.md` section 9.1  
 **Completed Session 7 build log:** `docs/build-log/062-session-7-pilot-safety-decision-build.md`  
-**Next implementation:** S8c — Push abstraction and no-op adapter.
+**Next implementation:** S8d — Limited push-worthy mutation hooks.
 
 Session 8 builds the narrow V1 staff notification/device foundation: account-user-scoped device
 records, token registration/revocation, personal badge count, push abstraction with no-op delivery,
@@ -76,13 +76,23 @@ S8b is complete and committed in `e09258e`.
 
 ---
 
+## S8c Status
+
+S8c is complete and committed in `2c7b911`.
+
+- Added push adapter abstraction and no-op delivery.
+- Added non-sensitive payload/display mapping and candidate/routing foundation.
+- S8c details belong in `docs/build-log/063-session-8-notification-device-foundation.md`.
+
+---
+
 ## Session 8 Slice Order
 
 - **S8a:** Device table + `/me/devices/{appInstallationId}` register/revoke API — complete.
 - **S8b:** Server-derived personal OS badge endpoint — complete.
 - **S8c:** Push abstraction, no-op adapter, payload/display mapping, and candidate/routing
-  foundation.
-- **S8d:** Limited push-worthy mutation hooks.
+  foundation — complete.
+- **S8d:** Limited push-worthy mutation hooks — next.
 - **S8e:** Session 8 ledger and regression gate.
 
 ---
