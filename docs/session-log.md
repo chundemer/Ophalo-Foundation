@@ -3,7 +3,7 @@
 **Last updated:** 2026-06-26 (S8b complete; S8c push abstraction next)
 **Branch:** `main` tracking `origin/main`
 **Current baseline:** 815 unit · 14 arch green before Session 8; S8a committed in `1fcf933`,
-`4c170ca`, and review fix `2b54640`. S8b implementation complete, pending commit approval.
+`4c170ca`, and review fix `2b54640`. S8b committed in `e09258e`.
 **Next free ADR:** ADR-363
 **Next batch:** S8c — Push abstraction, no-op adapter, payload/display mapping, routing foundation.
 
@@ -68,88 +68,18 @@ Implementation detail and reconciliation belong in
 
 ## S8b Status
 
-S8b is complete (pending commit approval). 6 files:
-- `src/OpHalo.Keep.Application/Requests/IKeepBadgePersistence.cs`
-- `src/OpHalo.Keep.Application/Requests/GetBadgeCountService.cs`
-- `src/OpHalo.Keep.Infrastructure/Persistence/EfKeepBadgePersistence.cs`
-- `src/OpHalo.Api/Accounts/BadgeEndpoints.cs`
-- `src/OpHalo.Api/Program.cs` (2 registrations + endpoint map)
-- `tests/OpHalo.IntegrationTests/Api/BadgeApiTests.cs` (10 tests, all green)
+S8b is complete and committed in `e09258e`.
 
-Note: Viewer gets MyWork scope (not AccountWide) — divergence from the list service is intentional.
-The badge reflects personal work items; Viewer has no participant rows, so MyWork yields 0 naturally.
-
----
-
-## S8b — Badge Endpoint
-
-**Gate approved 2026-06-25.** Implementation complete.
-
-### Architecture
-
-- Badge service lives in Keep; Foundation cannot reference Keep.
-- Endpoint lives in `OpHalo.Api`.
-- `Foundation.Application` is not touched.
-
-### File-Level Gate
-
-Production:
-
-1. `src/OpHalo.Keep.Application/Requests/IKeepBadgePersistence.cs`
-2. `src/OpHalo.Keep.Application/Requests/GetBadgeCountService.cs`
-3. `src/OpHalo.Keep.Infrastructure/Persistence/EfKeepBadgePersistence.cs`
-4. `src/OpHalo.Api/Accounts/BadgeEndpoints.cs`
-5. `src/OpHalo.Api/Program.cs`
-
-Tests:
-
-1. `tests/OpHalo.IntegrationTests/Api/BadgeApiTests.cs`
-
-### Guard Sequence
-
-`IsAuthenticated` -> 401 · user snapshot null -> 403 · account snapshot null -> 403 ·
-`RequestsView` permission -> 403 · account lifecycle blocked -> 403 · `OperatorQueue` feature ->
-403 · OffSeason -> `{ count: 0, computedAtUtc }` · scoped badge query.
-
-`OperatorQueue` feature failure returns 403, not 0.
-
-### Badge Predicate
-
-- Owner/Admin: `AccountWide` scope, `AttentionLevel != None` and non-terminal status, plus
-  `Closed + UnresolvedFeedback` exception.
-- Operator: `MyWork` scope with the same active-attention predicate, but no Closed/UnresolvedFeedback
-  exception.
-- Viewer: naturally 0 through scoped visibility.
-- Muted participant (`NotificationsEnabled = false`) still counts; mute suppresses push only.
-- Needs-status-check rows with `AttentionLevel == None` do not count.
-
-### Required Tests
-
-- unauthenticated -> 401
-- Owner sees account-wide attention count
-- Admin sees same as Owner
-- Operator sees MyWork count only
-- Viewer gets 0
-- OffSeason returns 0
-- muted participant still counted
-- Cancelled, Spam, and Test excluded
-- Closed + UnresolvedFeedback counted for Owner/Admin, not Operator outside MyWork
-- NeedsStatusCheck excluded
-
-### Completion Gate
-
-```text
-focused badge tests green
-query uses CountAsync (no materialization)
-dotnet build
-```
+- Added `GET /me/badge` personal badge endpoint.
+- Added Keep badge service/persistence and focused integration coverage.
+- S8b details belong in `docs/build-log/063-session-8-notification-device-foundation.md`.
 
 ---
 
 ## Session 8 Slice Order
 
 - **S8a:** Device table + `/me/devices/{appInstallationId}` register/revoke API — complete.
-- **S8b:** Server-derived personal OS badge endpoint — complete (pending commit).
+- **S8b:** Server-derived personal OS badge endpoint — complete.
 - **S8c:** Push abstraction, no-op adapter, payload/display mapping, and candidate/routing
   foundation.
 - **S8d:** Limited push-worthy mutation hooks.

@@ -1376,6 +1376,101 @@ Exit gate:
 
 ---
 
+## 9.1 Post-Session-8 Pilot Readiness Roadmap
+
+This roadmap reflects the 2026-06-25 pilot readiness discussion. It is provisional sequencing for
+the remaining go-live work after Session 8, not a substitute for the per-session ADR/build-log lock.
+Before each session starts, hold a short alignment discussion with Christian to confirm scope,
+product intent, implementation boundary, and whether the session should split into backend and
+client slices.
+
+Session 8 remains the current active implementation plan:
+
+- **S8a** — device table and `/me/devices/{appInstallationId}` register/revoke API.
+- **S8b** — server-derived personal badge endpoint.
+- **S8c** — push abstraction, no-op adapter, payload/display mapping, and candidate/routing
+  foundation.
+- **S8d** — limited push-worthy mutation hooks.
+- **S8e** — ledger and regression gate.
+
+Recommended remaining sessions after S8:
+
+1. **Session 9 — Account Classification And Delivery Eligibility**
+   Replace `AccountEntitlements.IsPilot` with `Production`/`Pilot`/`Demo`/`InternalTest`
+   classification, update `SignupDefaultsSettings`, migrate existing data, and add the delivery/
+   reporting/billing exclusion gates needed before real APNs/FCM, reports, and demo safety. This is
+   primarily backend/model work.
+
+2. **Session 10 — Brand Guide And UI Foundation**
+   Create the V1 product/brand guide before serious PWA/native/customer-page buildout. Lock the
+   practical design system inputs: brand voice, customer-facing language rules, typography, color,
+   spacing, icons, status/attention visual language, form patterns, empty/loading/error states,
+   customer-page trust treatment, and mobile/PWA component conventions. This is not a marketing site
+   project; it is the operating guide that keeps the PWA, native app, and customer pages coherent.
+
+3. **Session 11 — Quick Capture And Needs Share Backend Contract**
+   Implement the server/API foundation for business-created capture: source/channel enum,
+   business-created request command shape, required name/phone/summary/source validation,
+   tracker-share state, explicit share-intent mutation/event, and list/detail `Needs Share`
+   metadata. Keep this backend contract stable enough for both PWA and native app development.
+
+4. **Session 12 — Account Settings And Onboarding**
+   Implement the minimum V1 settings and onboarding completion signals: business display name,
+   customer-facing business phone/email, account timezone, intake controls, member-management
+   handoff, simple response/status-check policy, and onboarding checklist events. Business
+   type/industry presets remain deferred until the separate discussion in `DEF-081`.
+
+5. **Session 13 — PWA App Development: Pilot Workbench**
+   Build the actual PWA experience for pilot use. Scope includes Owner/Admin command center,
+   onboarding/settings, member management, request list/detail, PWA Quick Capture, tracker sharing
+   and `Needs Share`, customer-visible update composer, closeout/feedback review, attention
+   explanations, and operator-capable shared-workbench flows where they naturally fit. This is the
+   first-class desktop/tablet workbench, not just backend integration.
+
+6. **Session 14 — Native App Development: Operator Field App**
+   Build the actual phone-first native operator app. Scope includes My Work, Available, request
+   detail, native Quick Capture, native contact handoff, tracker sharing, customer update action,
+   follow-up/planned-for, mark completed, watch/mute, eligible self-assign, badge refresh, and
+   deep-link handling. Native may run on tablets, but V1 is optimized for phones; tablet/desktop
+   work remains primarily PWA.
+
+7. **Session 15 — Customer Page And Public Intake UX Polish**
+   Apply the brand guide and locked customer-language decisions to customer pages and public intake:
+   lifecycle status plus business-written status text, warm service language, cautious response
+   expectations, customer action labels, expired/tombstone states, business contact fallback, and
+   customer-visible branding minimum. Confirm customer pages expose no internal/operator-only data.
+
+8. **Session 16 — Internal Product-Ops And Weekly Value Report**
+   Add durable internal product-ops events/digest rows and a founder/internal-only weekly value
+   report endpoint/read service that generates copy-pasteable Markdown/text for a given account and
+   reporting period. Do not build Owner/Admin in-app report UI or automated email in the first slice.
+
+9. **Session 17 — Pilot Support And Read-Only Founder Support**
+   Build authenticated Report Friction, Pilot Updates/Help, and bounded read-only founder/support
+   visibility as needed for pilot operations. No anonymous customer OpHalo feedback hook and no
+   production impersonation/run-as.
+
+10. **Session 18 — Notification Real-Delivery Decision**
+   After classification and native bundle posture are known, either implement/test real APNs/FCM
+   delivery with Demo/InternalTest suppression and stable deep links, or explicitly clear the pilot
+   with the no-op posture and train users that real push is not live.
+
+11. **Session 19 — Pilot QA And Go-Live Gate**
+   Run the end-to-end pilot readiness checklist: onboarding, Quick Capture, public intake, tracker
+   sharing, customer page/actions, attention/follow-up/status-check behavior, close/cancel, feedback
+   review, Spam/Test, weekly report generation, internal ops signals, notification posture, support
+   runbooks, and known limitations.
+
+Pre-session alignment checklist:
+
+- Confirm the user/persona promise and exact V1 scope.
+- Confirm backend/API, PWA, native, docs, and runbook boundaries.
+- Confirm what is deliberately deferred and where it is tracked.
+- Confirm the file-level gate and whether the session must split.
+- Confirm tests/QA evidence expected before the session can be marked complete.
+
+---
+
 ## 10. Phase Sizing and Risk Notes
 
 This build is significant. The plan should not hide that.

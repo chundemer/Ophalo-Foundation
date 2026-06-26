@@ -30,6 +30,13 @@ explicitly requests them. Never edit `_reference/`.
 - Keep command output bounded with targeted paths, filters, and minimal verbosity.
 - A correction from review should trigger a targeted patch and focused test, not rediscovery of the
   entire feature.
+- Do not call an advisor/reviewer model by default. Use advisor calls only when the approach is
+  genuinely unclear, high-risk, or Christian asks for one. When an advisor is needed, send a concise
+  problem statement plus relevant snippets only; do not forward the full conversation or broad repo
+  context.
+- Treat `docs/session-log.md` as a lean launch brief. If it grows with historical detail, move that
+  detail to the relevant build log, decision document, or deferred-topic entry and leave only the
+  current scope, next batch, blockers, and verified baseline in the session log.
 
 ## Session and Scope Protocol
 

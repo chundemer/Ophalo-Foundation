@@ -1,11 +1,11 @@
-# Build Log 063 — Session 8 Notification/Device Foundation
+# Build Log 063 — Session 8 Part 1 Notification/Device Foundation
 
 **Started:** 2026-06-24  
-**Status:** Pre-work decisions locked; ready for bounded implementation slices  
+**Status:** S8a/S8b complete; S8c next
 **Next free ADR before this log:** ADR-351  
 
-Session 8 builds the narrow V1 staff notification/device foundation after Session 7 pilot-safety
-hardening. It does not build a full notification platform.
+Session 8 Part 1 builds the narrow V1 staff notification/device foundation after Session 7
+pilot-safety hardening. It does not build a full notification platform.
 
 ---
 
