@@ -1,11 +1,12 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-06-26 (S8c complete; S8d mutation hooks next)
+**Last updated:** 2026-06-26 (Session 8 complete — S8e ledger/regression done)
 **Branch:** `main` tracking `origin/main`
-**Current baseline:** 815 unit · 14 arch green before Session 8; S8a committed in `1fcf933`,
-`4c170ca`, and review fix `2b54640`. S8b committed in `e09258e`; S8c committed in `2c7b911`.
+**Current baseline:** 864 unit · 14 arch · 676 integration = 1,554 total, 0 failures (S8e gate).
+S8a committed in `1fcf933`, `4c170ca`, and review fix `2b54640`. S8b committed in `e09258e`;
+S8c committed in `2c7b911`; S8d committed in `3475737`; S8e docs committed in next commit.
 **Next free ADR:** ADR-363
-**Next batch:** S8d — Limited push-worthy mutation hooks.
+**Next batch:** Real APNs/FCM adapter slice (gated on DEF-079 account classification) or remaining hook coverage.
 
 ---
 
@@ -39,7 +40,7 @@ For every implementation slice:
 **Pilot readiness working doc:** `docs/pilot-readiness-decision-questions.md`  
 **Post-Session-8 provisional roadmap:** `docs/build-log/ophalo-foundation-build-plan-greenfield-boundaries-brownfield-behavior.md` section 9.1  
 **Completed Session 7 build log:** `docs/build-log/062-session-7-pilot-safety-decision-build.md`  
-**Next implementation:** S8d — Limited push-worthy mutation hooks.
+**Next implementation:** Real APNs/FCM adapter slice (gated on DEF-079) or remaining hook coverage.
 
 Session 8 builds the narrow V1 staff notification/device foundation: account-user-scoped device
 records, token registration/revocation, personal badge count, push abstraction with no-op delivery,
@@ -86,14 +87,36 @@ S8c is complete and committed in `2c7b911`.
 
 ---
 
+## S8d Status
+
+S8d is complete and committed in `3475737`.
+
+- Added post-commit push hooks for call/cancel/timing intents, assignment, and unresolved feedback.
+- Preserved fail-soft notification behavior.
+- S8d details belong in `docs/build-log/063-session-8-notification-device-foundation.md`.
+
+---
+
+## S8e Status
+
+S8e is complete.
+
+- DEF-012 and DEF-021 updated to reflect implemented foundation and remaining gated work.
+- DEF-077, DEF-079, DEF-080 confirmed deferred.
+- Decision index confirmed: ADR-351–ADR-362 present; next free ADR-363 correct.
+- Full suite: 864 unit · 14 arch · 676 integration = 1,554 total, 0 failures.
+- Session 8 closed. Session 8 build log: `docs/build-log/063-session-8-notification-device-foundation.md`.
+
+---
+
 ## Session 8 Slice Order
 
 - **S8a:** Device table + `/me/devices/{appInstallationId}` register/revoke API — complete.
 - **S8b:** Server-derived personal OS badge endpoint — complete.
 - **S8c:** Push abstraction, no-op adapter, payload/display mapping, and candidate/routing
   foundation — complete.
-- **S8d:** Limited push-worthy mutation hooks — next.
-- **S8e:** Session 8 ledger and regression gate.
+- **S8d:** Limited push-worthy mutation hooks — complete.
+- **S8e:** Session 8 ledger and regression gate — complete. 864 unit · 14 arch · 676 integration = 1,554 total, 0 failures.
 
 ---
 

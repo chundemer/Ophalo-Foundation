@@ -1,7 +1,8 @@
 # Build Log 063 — Session 8 Part 1 Notification/Device Foundation
 
 **Started:** 2026-06-24  
-**Status:** S8a/S8b complete; S8c next
+**Completed:** 2026-06-26
+**Status:** S8a–S8e complete; Session 8 closed
 **Next free ADR before this log:** ADR-351  
 
 Session 8 Part 1 builds the narrow V1 staff notification/device foundation after Session 7
@@ -525,3 +526,13 @@ decision index next ADR is correct
 focused + broader regression gate green, or reason recorded
 next work points to real-adapter or remaining hook coverage slice
 ```
+
+**Outcome (2026-06-26):**
+
+- DEF-012 updated: V1 foundation (device registration, badge, no-op adapter, hooks) marked
+  implemented; remaining deferred items listed.
+- DEF-021 updated: V1 foundation complete; real APNs/FCM gated on DEF-079 (account classification).
+- DEF-077, DEF-079, DEF-080 confirmed deferred — no change.
+- Decision index confirmed: ADR-351 through ADR-362 all present; next free ID ADR-363 is correct.
+- Full suite: **864 unit · 14 arch · 676 integration = 1,554 total, 0 failures.**
+- Session 8 foundation is ready for the real-adapter slice (gated on DEF-079).
