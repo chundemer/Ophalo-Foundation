@@ -47,4 +47,14 @@ public interface IAccountUserDevicePersistence
         Guid appInstallationId,
         DateTime nowUtc,
         CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Returns all Active devices for the given account users within the account.
+    /// Used by push delivery to enumerate push targets after candidate routing.
+    /// Never expose raw push tokens to callers outside the delivery pipeline.
+    /// </summary>
+    Task<IReadOnlyList<AccountUserDevice>> FindActiveDevicesForDeliveryAsync(
+        Guid accountId,
+        IReadOnlyList<Guid> accountUserIds,
+        CancellationToken cancellationToken);
 }

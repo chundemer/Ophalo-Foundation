@@ -51,6 +51,18 @@ public sealed class EfAccountUserDevicePersistence(OpHaloDbContext db) : IAccoun
         await db.SaveChangesAsync(cancellationToken);
     }
 
+    public async Task<IReadOnlyList<AccountUserDevice>> FindActiveDevicesForDeliveryAsync(
+        Guid accountId,
+        IReadOnlyList<Guid> accountUserIds,
+        CancellationToken cancellationToken) =>
+        await db.AccountUserDevices
+            .AsNoTracking()
+            .Where(d =>
+                d.AccountId == accountId &&
+                accountUserIds.Contains(d.AccountUserId) &&
+                d.Status == AccountUserDeviceStatus.Active)
+            .ToListAsync(cancellationToken);
+
     public async Task RevokeIfExistsAsync(
         Guid accountUserId,
         Guid appInstallationId,

@@ -21,12 +21,15 @@ using OpHalo.Foundation.Application.Members;
 using OpHalo.Foundation.Infrastructure.Auth;
 using OpHalo.Foundation.Infrastructure.Devices;
 using OpHalo.Foundation.Infrastructure.Email;
+using OpHalo.Foundation.Infrastructure.Push;
+using OpHalo.Foundation.Application.Push;
 using OpHalo.Foundation.Infrastructure.Members;
 using OpHalo.Foundation.Core.Constants;
 using OpHalo.Foundation.Infrastructure.Persistence;
 using OpHalo.Foundation.Infrastructure.Security;
 using OpHalo.Foundation.Infrastructure.Services;
 using OpHalo.Keep.Application.IntakeSetup;
+using OpHalo.Keep.Application.Notifications;
 using OpHalo.Keep.Application.PublicIntake;
 using OpHalo.Keep.Application.Requests;
 using OpHalo.Keep.Application.Services;
@@ -146,6 +149,9 @@ builder.Services.AddScoped<IAccountUserDevicePersistence, EfAccountUserDevicePer
 builder.Services.AddScoped<GetBadgeCountService>();
 builder.Services.AddScoped<IKeepBadgePersistence, EfKeepBadgePersistence>();
 builder.Services.AddSingleton<IPushTokenFingerprintService, Sha256PushTokenFingerprintService>();
+builder.Services.AddSingleton<IPushAdapter, NoOpPushAdapter>();
+builder.Services.AddSingleton<KeepPushCandidateService>();
+builder.Services.AddScoped<IKeepPushNotifier, KeepPushNotifier>();
 
 // --- Email ---
 var resendSettings = builder.Configuration.GetSection("Resend").Get<ResendSettings>()
