@@ -524,7 +524,7 @@ public sealed class InviteTests : IClassFixture<KeepApiWebFactory>, IAsyncLifeti
             purpose: AccountPurpose.Business,
             timeZone: "Australia/Sydney",
             plan: AccountPlan.Trial,
-            isPilot: false,
+            classification: AccountClassification.Production,
             nowUtc: now,
             trialEndsAtUtc: now.AddDays(30));
 

@@ -4,6 +4,7 @@ using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using OpHalo.Foundation.Application.Accounts.Provisioning;
+using OpHalo.Foundation.Application.Devices;
 using OpHalo.Foundation.Core.Entities.Accounts;
 using OpHalo.Foundation.Core.Entities.Accounts.Enums;
 using OpHalo.Foundation.Core.Entities.Users;
@@ -49,7 +50,7 @@ public sealed class AccountUserDeviceApiTests : IClassFixture<KeepApiWebFactory>
             purpose: AccountPurpose.Business,
             timeZone: "Australia/Sydney",
             plan: AccountPlan.Trial,
-            isPilot: false,
+            classification: AccountClassification.Production,
             nowUtc: now,
             trialEndsAtUtc: now.AddDays(30));
 
@@ -417,6 +418,32 @@ public sealed class AccountUserDeviceApiTests : IClassFixture<KeepApiWebFactory>
     }
 
     // =========================================================================
+    // Delivery eligibility — account classification gate
+    // =========================================================================
+
+    [Theory]
+    [InlineData(AccountClassification.Production, 1)]
+    [InlineData(AccountClassification.Pilot, 1)]
+    [InlineData(AccountClassification.Demo, 0)]
+    [InlineData(AccountClassification.InternalTest, 0)]
+    public async Task FindActiveDevicesForDelivery_FiltersByAccountClassification(
+        AccountClassification classification,
+        int expectedDeviceCount)
+    {
+        var (accountId, accountUserId) = await SeedDeliveryDeviceAccountAsync(classification);
+
+        await using var scope = _factory.CreateScope();
+        var persistence = scope.ServiceProvider.GetRequiredService<IAccountUserDevicePersistence>();
+
+        var devices = await persistence.FindActiveDevicesForDeliveryAsync(
+            accountId,
+            [accountUserId],
+            CancellationToken.None);
+
+        Assert.Equal(expectedDeviceCount, devices.Count);
+    }
+
+    // =========================================================================
     // Helpers
     // =========================================================================
 
@@ -456,6 +483,48 @@ public sealed class AccountUserDeviceApiTests : IClassFixture<KeepApiWebFactory>
         var enterResult = entitlements.EnterOffSeason();
         Assert.True(enterResult.IsSuccess);
         await db.SaveChangesAsync();
+    }
+
+    private async Task<(Guid AccountId, Guid AccountUserId)> SeedDeliveryDeviceAccountAsync(AccountClassification classification)
+    {
+        var now = DateTime.UtcNow;
+        var user = User.CreateVerified($"delivery-{classification.ToString().ToLowerInvariant()}@device-tests.com", null, now);
+        var account = Account.CreateVerified($"{classification} Delivery Co", AccountPurpose.Business, "Australia/Sydney");
+        var owner = AccountUser.CreateOwner(account.Id, user.Id, user.Email, user.Email);
+        var entitlements = AccountEntitlements.Create(
+            account.Id,
+            AccountPlan.Trial,
+            maxUserSeats: 5,
+            now.AddDays(30),
+            classification);
+        var device = AccountUserDevice.Create(
+            account.Id,
+            owner.Id,
+            Guid.CreateVersion7(),
+            AccountUserDevicePlatform.Ios,
+            $"DELIVERY_GATE_TOKEN_{classification}",
+            $"delivery-gate-fingerprint-{classification}".ToLowerInvariant(),
+            "1234",
+            appVersion: "1.0.0",
+            deviceName: $"{classification} test phone",
+            now);
+
+        await using var scope = _factory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+
+        db.Users.Add(user);
+        db.Accounts.Add(account);
+        db.AccountUsers.Add(owner);
+        db.AccountEntitlements.Add(entitlements);
+        db.AccountUserDevices.Add(device);
+
+        var ownerFk = db.Entry(account).Property(a => a.PrimaryOwnerAccountUserId);
+        ownerFk.CurrentValue = null;
+        await db.SaveChangesAsync();
+        ownerFk.CurrentValue = owner.Id;
+        await db.SaveChangesAsync();
+
+        return (account.Id, owner.Id);
     }
 
     private static async Task AssertCode(HttpResponseMessage response, string expectedCode)

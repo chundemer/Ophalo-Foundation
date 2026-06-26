@@ -148,7 +148,7 @@ public sealed class CapturingEmailSender : IEmailSender
 }
 
 /// <summary>
-/// WebApplicationFactory with IsPilot=true and MaxPilotAccounts=1.
+/// WebApplicationFactory with Classification=Pilot and MaxPilotAccounts=1.
 /// Used by AuthStartPilotCapTests to exercise the pilot capacity gate.
 /// </summary>
 public sealed class PilotCapWebFactory : WebApplicationFactory<Program>, IAsyncLifetime
@@ -167,7 +167,7 @@ public sealed class PilotCapWebFactory : WebApplicationFactory<Program>, IAsyncL
             {
                 ["ConnectionStrings:DefaultConnection"] = _container.GetConnectionString(),
                 ["App:PublicBaseUrl"] = "https://test.ophalo.com",
-                ["SignupDefaults:IsPilot"] = "true",
+                ["SignupDefaults:Classification"] = "Pilot",
                 ["SignupDefaults:TrialDurationDays"] = "30",
                 ["SignupDefaults:MaxPilotAccounts"] = "1"
             });

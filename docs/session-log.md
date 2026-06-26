@@ -1,12 +1,10 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-06-26 (Session 8 complete — S8e ledger/regression done)
+**Last updated:** 2026-06-26 (Session 9 complete; Session 10 next)
 **Branch:** `main` tracking `origin/main`
-**Current baseline:** 864 unit · 14 arch · 676 integration = 1,554 total, 0 failures (S8e gate).
-S8a committed in `1fcf933`, `4c170ca`, and review fix `2b54640`. S8b committed in `e09258e`;
-S8c committed in `2c7b911`; S8d committed in `3475737`; S8e docs committed in next commit.
-**Next free ADR:** ADR-363
-**Next batch:** Real APNs/FCM adapter slice (gated on DEF-079 account classification) or remaining hook coverage.
+**Last green baseline:** 864 unit · 14 arch · 676 integration = 1,554 total, 0 failures
+**Next free ADR:** ADR-367
+**Current session:** Session 10 — Brand Guide And UI Foundation
 
 ---
 
@@ -36,108 +34,100 @@ For every implementation slice:
 
 ## Current Work
 
-**Current build log:** `docs/build-log/063-session-8-notification-device-foundation.md`  
-**Pilot readiness working doc:** `docs/pilot-readiness-decision-questions.md`  
-**Post-Session-8 provisional roadmap:** `docs/build-log/ophalo-foundation-build-plan-greenfield-boundaries-brownfield-behavior.md` section 9.1  
-**Completed Session 7 build log:** `docs/build-log/062-session-7-pilot-safety-decision-build.md`  
-**Next implementation:** Real APNs/FCM adapter slice (gated on DEF-079) or remaining hook coverage.
+**Last completed build log:** `docs/build-log/064-session-9-account-classification-delivery-eligibility.md`
+**Pilot readiness working doc:** `docs/pilot-readiness-decision-questions.md`
+**Foundation roadmap:** `docs/build-log/ophalo-foundation-build-plan-greenfield-boundaries-brownfield-behavior.md` section 9.1
+**Next implementation:** Session 10 — Brand Guide And UI Foundation.
 
-Session 8 builds the narrow V1 staff notification/device foundation: account-user-scoped device
-records, token registration/revocation, personal badge count, push abstraction with no-op delivery,
-non-sensitive payload/display mapping, routed candidate foundation, and limited explicit post-commit
-hooks.
+Session 9 is complete. It replaced `AccountEntitlements.IsPilot` with `AccountClassification` on
+`AccountEntitlements`, updated `SignupDefaultsSettings`, migrated existing data, and added the
+Demo/InternalTest delivery eligibility gate required before real APNs/FCM delivery.
 
-Session 8 does not build real APNs/FCM adapters, notification history/outbox/retry/analytics, full
-notification preferences, quiet hours, backend customer SMS/email, customer-facing platform
-notifications, SSE/WebSockets/realtime, Demo/InternalTest classification, or Planned For-aware push
-escalation.
+Locked Session 9 decisions:
 
----
-
-## S8a Status
-
-S8a is complete. Device registration/revoke foundation was committed in two parts plus review fix:
-
-- `1fcf933`
-- `4c170ca`
-- `2b54640`
-
-Implementation detail and reconciliation belong in
-`docs/build-log/063-session-8-notification-device-foundation.md`.
+- ADR-363 — account classification replaces `AccountEntitlements.IsPilot`.
+- ADR-364 — signup defaults set classification, not a pilot boolean.
+- ADR-365 — pilot cap counts classification `Pilot`.
+- ADR-366 — Demo/InternalTest suppress production push delivery.
 
 ---
 
-## S8b Status
+## Session 9 Closeout
 
-S8b is complete and committed in `e09258e`.
+### S9a — Classification model, provisioning, and migration
 
-- Added `GET /me/badge` personal badge endpoint.
-- Added Keep badge service/persistence and focused integration coverage.
-- S8b details belong in `docs/build-log/063-session-8-notification-device-foundation.md`.
+**Status: complete.**
+
+Code complete and verified:
+
+- `AccountClassification` enum added (`Production=1`, `Pilot=2`, `Demo=3`, `InternalTest=4`).
+- `AccountEntitlements.IsPilot` removed; `Classification` property added (string-persisted).
+- Factories unified: `Create(accountId, plan, seats, trialEnd, classification)` + `CreateInternal` (forces `InternalTest`).
+- `AccountErrors.InternalAccountCannotBePilot` → `ClassificationNotAllowedForPublicSignup`.
+- `SignupDefaultsSettings.IsPilot: bool` → `Classification: AccountClassification` (default `Pilot`).
+- `StartAuthService` + `ExchangeAuthService` pilot-cap checks use `Classification == Pilot`.
+- `IAuthCodePersistence.CountActivePilotAccountsAsync` → `CountPilotClassifiedAccountsAsync`.
+- `EfAuthCodePersistence` count queries on `Classification == Pilot`.
+- `AccountEntitlementsConfiguration` persists `Classification` as `varchar(50)`; `IsPilot` removed.
+- `AccountProvisioningService` signature: `isPilot: bool` → `classification: AccountClassification`.
+- `appsettings.json`: `IsPilot: true` → `Classification: "Pilot"`.
+- EF migration `20260626111822_AccountClassification` inspected: adds `classification`, maps
+  `is_pilot`/internal rows, makes classification required, and drops `is_pilot`.
+
+### S9b — Delivery eligibility gate and docs ledger
+
+**Status: complete.**
+
+- `FindActiveDevicesForDeliveryAsync` is gated by account classification.
+- `Production` and `Pilot` return active delivery devices; `Demo` and `InternalTest` return none.
+- Focused integration coverage proves all four classification cases.
+- Docs and deferred-topic ledger reconciled.
+
+Verification:
+
+```text
+dotnet test tests/OpHalo.IntegrationTests/OpHalo.IntegrationTests.csproj --filter FullyQualifiedName~AccountUserDeviceApiTests
+Passed: 30, Failed: 0
+
+dotnet build
+Succeeded with 2 NU1900 package-vulnerability feed warnings from nuget.org lookup; no compile errors.
+```
 
 ---
 
-## S8c Status
+## Next Session
 
-S8c is complete and committed in `2c7b911`.
+### Session 10 — Brand Guide And UI Foundation
 
-- Added push adapter abstraction and no-op delivery.
-- Added non-sensitive payload/display mapping and candidate/routing foundation.
-- S8c details belong in `docs/build-log/063-session-8-notification-device-foundation.md`.
+Goal: create the practical V1 product/brand guide before serious PWA/native/customer-page buildout.
 
----
+Read:
 
-## S8d Status
+- `docs/pilot-readiness-decision-questions.md`;
+- roadmap section 9.1 in
+  `docs/build-log/ophalo-foundation-build-plan-greenfield-boundaries-brownfield-behavior.md`;
+- relevant product positioning notes in `docs/keep-product-positioning.md`.
 
-S8d is complete and committed in `3475737`.
+Likely outputs:
 
-- Added post-commit push hooks for call/cancel/timing intents, assignment, and unresolved feedback.
-- Preserved fail-soft notification behavior.
-- S8d details belong in `docs/build-log/063-session-8-notification-device-foundation.md`.
+- brand voice and customer-facing language rules;
+- typography, color, spacing, icon, status, and attention visual conventions;
+- form, empty/loading/error, customer-page trust, PWA, and native component guidance;
+- explicit deferred UX/design questions before Quick Capture and app buildout.
 
----
-
-## S8e Status
-
-S8e is complete.
-
-- DEF-012 and DEF-021 updated to reflect implemented foundation and remaining gated work.
-- DEF-077, DEF-079, DEF-080 confirmed deferred.
-- Decision index confirmed: ADR-351–ADR-362 present; next free ADR-363 correct.
-- Full suite: 864 unit · 14 arch · 676 integration = 1,554 total, 0 failures.
-- Session 8 closed. Session 8 build log: `docs/build-log/063-session-8-notification-device-foundation.md`.
-
----
-
-## Session 8 Slice Order
-
-- **S8a:** Device table + `/me/devices/{appInstallationId}` register/revoke API — complete.
-- **S8b:** Server-derived personal OS badge endpoint — complete.
-- **S8c:** Push abstraction, no-op adapter, payload/display mapping, and candidate/routing
-  foundation — complete.
-- **S8d:** Limited push-worthy mutation hooks — complete.
-- **S8e:** Session 8 ledger and regression gate — complete. 864 unit · 14 arch · 676 integration = 1,554 total, 0 failures.
+No code implementation is assumed until Session 10 scope is locked with Christian.
 
 ---
 
 ## Carry-Forward Boundaries
 
-- Real push delivery cannot be enabled until Demo/InternalTest suppression and account
-  classification are implemented.
-- Pilot notification posture must be explicit: either real APNs/FCM is tested end to end with
-  suppression confirmed, or no-op/test adapter posture is documented and users are trained that push
-  is not live yet.
-- Keep sends no backend SMS/email to customers in V1. Native `sms:`, `tel:`, and `mailto:` handoff
+- Real APNs/FCM provider implementation remains future work.
+- Demo scenario packs, demo reset UI, and admin/internal classification management remain deferred.
+- Classification is operational/reporting/safety posture, separate from commercial lifecycle.
+- Public signup cannot create Demo/InternalTest accounts.
+- Production push delivery must stay suppressed for Demo/InternalTest accounts.
+- Keep sends no backend SMS/email to customers in V1; native `sms:`, `tel:`, and `mailto:` handoff
   remains operator-initiated on the user's device.
-- One durable public intake link; no ordinary pause/resume. Exceptional replacement is
-  transactional and warns about stale links.
-- Public-intake abuse posture before pilot: bounded validation, trusted-IP/rate-limit proof,
-  Spam/Test terminal classification before notifications, token-safe logs, and internal emergency
-  path.
-- Terminal customer pages expire 30 days after Closed/Cancelled; active and Resolved do not.
-- Native is the operator quick-action surface; PWA is the Owner/Admin command center/workbench.
-- Keep remains fresh-not-realtime for V1: refetch after writes, focus/resume sync, pull-to-refresh,
-  bounded polling, and later push for urgent off-screen work.
 
 ---
 

@@ -19,9 +19,9 @@ namespace OpHalo.Foundation.Application.Auth;
 /// - Any other state (ambiguous, invited, suspended, removed, existing User without active
 ///   membership) → neutral 200, no code issued (enumeration protection).
 ///
-/// Pilot cap (D3): when IsPilot=true and MaxPilotAccounts is set, check capacity before
-/// issuing a NewAccount code. Pilot-full returns a non-neutral 409 — the caller may
-/// prompt the user to join a waitlist.
+/// Pilot cap (D3): when Classification=Pilot and MaxPilotAccounts is set, check capacity
+/// before issuing a NewAccount code. Pilot-full returns a non-neutral 409 — the caller
+/// may prompt the user to join a waitlist.
 ///
 /// Email delivery (D8): direct IEmailSender, best-effort. Delivery failure must not
 /// change the public response.
@@ -121,10 +121,10 @@ public sealed class StartAuthService(
         SignupDefaultsSettings defaults,
         CancellationToken cancellationToken)
     {
-        // Pilot capacity gate — check before issuing a code.
-        if (defaults.IsPilot && defaults.MaxPilotAccounts.HasValue)
+        // Pilot capacity gate — check before issuing a code (ADR-365).
+        if (defaults.Classification == AccountClassification.Pilot && defaults.MaxPilotAccounts.HasValue)
         {
-            var pilotCount = await persistence.CountActivePilotAccountsAsync(cancellationToken);
+            var pilotCount = await persistence.CountPilotClassifiedAccountsAsync(cancellationToken);
             if (pilotCount >= defaults.MaxPilotAccounts.Value)
                 return Result.Failure(AccountErrors.PilotFull);
         }

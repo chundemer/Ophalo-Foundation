@@ -113,11 +113,11 @@ public sealed class ExchangeAuthService(
             return Result<ExchangeTokenResult>.Failure(AccountErrors.InconsistentState);
         }
 
-        // Re-check pilot capacity before consuming the code.
+        // Re-check pilot capacity before consuming the code (ADR-365).
         var defaults = signupDefaults.Value;
-        if (defaults.IsPilot && defaults.MaxPilotAccounts.HasValue)
+        if (defaults.Classification == AccountClassification.Pilot && defaults.MaxPilotAccounts.HasValue)
         {
-            var pilotCount = await persistence.CountActivePilotAccountsAsync(cancellationToken);
+            var pilotCount = await persistence.CountPilotClassifiedAccountsAsync(cancellationToken);
             if (pilotCount >= defaults.MaxPilotAccounts.Value)
                 return Result<ExchangeTokenResult>.Failure(AccountErrors.PilotFull);
         }
@@ -131,7 +131,7 @@ public sealed class ExchangeAuthService(
             purpose: Core.Entities.Accounts.Enums.AccountPurpose.Business,
             timeZone: code.TimeZoneSnapshot,
             plan: Core.Entities.Accounts.Enums.AccountPlan.Trial,
-            isPilot: defaults.IsPilot,
+            classification: defaults.Classification,
             nowUtc: nowUtc,
             trialEndsAtUtc: trialEndsAtUtc);
 

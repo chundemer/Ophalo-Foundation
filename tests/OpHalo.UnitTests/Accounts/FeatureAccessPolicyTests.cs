@@ -18,7 +18,7 @@ public class FeatureAccessPolicyTests
     static readonly DateTime TrialEnds = new(2026, 7, 14, 12, 0, 0, DateTimeKind.Utc);
 
     static AccountEntitlements Entitlements(AccountPlan plan, int maxUserSeats) =>
-        AccountEntitlements.CreateTrial(AccountId, plan, maxUserSeats, TrialEnds);
+        AccountEntitlements.Create(AccountId, plan, maxUserSeats, TrialEnds, AccountClassification.Production);
 
     // --- Feature surface by plan ---------------------------------------------
 

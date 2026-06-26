@@ -60,7 +60,11 @@ public sealed class EfAccountUserDevicePersistence(OpHaloDbContext db) : IAccoun
             .Where(d =>
                 d.AccountId == accountId &&
                 accountUserIds.Contains(d.AccountUserId) &&
-                d.Status == AccountUserDeviceStatus.Active)
+                d.Status == AccountUserDeviceStatus.Active &&
+                db.AccountEntitlements.Any(e =>
+                    e.AccountId == accountId &&
+                    (e.Classification == AccountClassification.Production ||
+                     e.Classification == AccountClassification.Pilot)))
             .ToListAsync(cancellationToken);
 
     public async Task RevokeIfExistsAsync(

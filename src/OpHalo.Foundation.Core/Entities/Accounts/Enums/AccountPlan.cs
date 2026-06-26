@@ -7,8 +7,8 @@ namespace OpHalo.Foundation.Core.Entities.Accounts.Enums;
 /// (build plan §4.11).
 /// </summary>
 /// <remarks>
-/// Pilot is intentionally NOT a plan — it is a separate cohort flag
-/// (<see cref="AccountEntitlements.IsPilot"/>). A pilot customer can sit on any plan
+/// Pilot is intentionally NOT a plan — it is an account classification
+/// (<see cref="AccountClassification.Pilot"/>). A pilot customer can sit on any plan
 /// while in Trial. Explicit numeric values prevent reorder drift before persistence
 /// exists (ADR-026).
 /// </remarks>

@@ -43,7 +43,7 @@ public sealed class PersistenceProofTests : IClassFixture<PostgresFixture>, IAsy
             purpose: AccountPurpose.Business,
             timeZone: "Australia/Sydney",
             plan: AccountPlan.Trial,
-            isPilot: false,
+            classification: AccountClassification.Production,
             nowUtc: Now,
             trialEndsAtUtc: TrialEnds);
 
@@ -166,11 +166,12 @@ public sealed class PersistenceProofTests : IClassFixture<PostgresFixture>, IAsy
         var graph = ProvisionGraph();
         await PersistGraph(graph);
 
-        var second = AccountEntitlements.CreateTrial(
+        var second = AccountEntitlements.Create(
             accountId: graph.Account.Id,
             plan: AccountPlan.Trial,
             maxUserSeats: 5,
-            trialEndsAtUtc: TrialEnds);
+            trialEndsAtUtc: TrialEnds,
+            classification: AccountClassification.Production);
 
         await using var ctx = _fixture.CreateContext();
         ctx.AccountEntitlements.Add(second);

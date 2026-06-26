@@ -18,7 +18,7 @@ public class AccountEntitlementsTests
     static readonly DateTime TrialEnds = new(2026, 7, 14, 12, 0, 0, DateTimeKind.Utc);
 
     static AccountEntitlements Trial() =>
-        AccountEntitlements.CreateTrial(AccountId, AccountPlan.Starter, maxUserSeats: 5, TrialEnds);
+        AccountEntitlements.Create(AccountId, AccountPlan.Starter, maxUserSeats: 5, TrialEnds, AccountClassification.Production);
 
     static AccountEntitlements Active()
     {
@@ -31,9 +31,9 @@ public class AccountEntitlementsTests
     // --- Factories ---
 
     [Fact]
-    public void CreateTrial_provisions_a_standard_trial()
+    public void Create_Production_provisions_a_standard_trial()
     {
-        var e = AccountEntitlements.CreateTrial(AccountId, AccountPlan.Professional, 10, TrialEnds);
+        var e = AccountEntitlements.Create(AccountId, AccountPlan.Professional, 10, TrialEnds, AccountClassification.Production);
 
         Assert.Equal(AccountId, e.AccountId);
         Assert.Equal(AccountPlan.Professional, e.Plan);
@@ -41,49 +41,49 @@ public class AccountEntitlementsTests
         Assert.Equal(AccountOperatingMode.Standard, e.OperatingMode);
         Assert.Equal(TrialEnds, e.TrialEndsAtUtc);
         Assert.Equal(10, e.MaxUserSeats);
-        Assert.False(e.IsPilot);
+        Assert.Equal(AccountClassification.Production, e.Classification);
         Assert.Null(e.PastDueGraceEndsAtUtc);
     }
 
     [Fact]
-    public void CreatePilot_is_a_trial_with_the_pilot_flag()
+    public void Create_Pilot_sets_pilot_classification()
     {
-        var e = AccountEntitlements.CreatePilot(AccountId, AccountPlan.Starter, 5, TrialEnds);
+        var e = AccountEntitlements.Create(AccountId, AccountPlan.Starter, 5, TrialEnds, AccountClassification.Pilot);
 
-        Assert.True(e.IsPilot);
+        Assert.Equal(AccountClassification.Pilot, e.Classification);
         Assert.Equal(AccountCommercialState.Trial, e.CommercialState);
     }
 
     [Fact]
-    public void CreateInternal_is_active_with_no_trial_window()
+    public void CreateInternal_is_active_with_InternalTest_classification()
     {
         var e = AccountEntitlements.CreateInternal(AccountId, 50);
 
         Assert.Equal(AccountPlan.Internal, e.Plan);
         Assert.Equal(AccountCommercialState.Active, e.CommercialState);
         Assert.Null(e.TrialEndsAtUtc);
-        Assert.False(e.IsPilot);
+        Assert.Equal(AccountClassification.InternalTest, e.Classification);
     }
 
     [Fact]
-    public void CreateTrial_rejects_empty_account_id() =>
+    public void Create_rejects_empty_account_id() =>
         Assert.Throws<ArgumentException>(() =>
-            AccountEntitlements.CreateTrial(Guid.Empty, AccountPlan.Starter, 5, TrialEnds));
+            AccountEntitlements.Create(Guid.Empty, AccountPlan.Starter, 5, TrialEnds, AccountClassification.Production));
 
     [Fact]
-    public void CreateTrial_rejects_negative_seats() =>
+    public void Create_rejects_negative_seats() =>
         Assert.Throws<ArgumentOutOfRangeException>(() =>
-            AccountEntitlements.CreateTrial(AccountId, AccountPlan.Starter, -1, TrialEnds));
+            AccountEntitlements.Create(AccountId, AccountPlan.Starter, -1, TrialEnds, AccountClassification.Production));
 
     [Fact]
-    public void CreateTrial_rejects_non_utc_trial_end() =>
+    public void Create_rejects_non_utc_trial_end() =>
         Assert.Throws<ArgumentException>(() =>
-            AccountEntitlements.CreateTrial(AccountId, AccountPlan.Starter, 5, new DateTime(2026, 7, 14)));
+            AccountEntitlements.Create(AccountId, AccountPlan.Starter, 5, new DateTime(2026, 7, 14), AccountClassification.Production));
 
     [Fact]
-    public void CreateTrial_rejects_undefined_plan() =>
+    public void Create_rejects_undefined_plan() =>
         Assert.Throws<ArgumentException>(() =>
-            AccountEntitlements.CreateTrial(AccountId, (AccountPlan)999, 5, TrialEnds));
+            AccountEntitlements.Create(AccountId, (AccountPlan)999, 5, TrialEnds, AccountClassification.Production));
 
     // --- MarkPastDue ---
 

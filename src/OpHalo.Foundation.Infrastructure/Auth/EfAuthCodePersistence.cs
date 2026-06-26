@@ -149,10 +149,10 @@ public sealed class EfAuthCodePersistence(OpHaloDbContext db) : IAuthCodePersist
         await tx.CommitAsync(cancellationToken);
     }
 
-    public Task<int> CountActivePilotAccountsAsync(CancellationToken cancellationToken) =>
+    public Task<int> CountPilotClassifiedAccountsAsync(CancellationToken cancellationToken) =>
         db.AccountEntitlements
             .AsNoTracking()
-            .Where(e => e.IsPilot)
+            .Where(e => e.Classification == AccountClassification.Pilot)
             .CountAsync(cancellationToken);
 
     public async Task<Result> CommitNewAccountExchangeAsync(

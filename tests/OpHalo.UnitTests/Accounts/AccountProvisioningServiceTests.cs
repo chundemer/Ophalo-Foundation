@@ -27,11 +27,11 @@ public class AccountProvisioningServiceTests
     // --- Happy paths ---------------------------------------------------------
 
     [Fact]
-    public void Business_trial_provisions_full_graph()
+    public void Business_Production_provisions_full_graph()
     {
         var result = Service.CreateVerified(
             Email, "Pat Owner", "Acme Plumbing", AccountPurpose.Business, "America/New_York",
-            AccountPlan.Starter, isPilot: false, Now, TrialEnds);
+            AccountPlan.Starter, classification: AccountClassification.Production, Now, TrialEnds);
 
         Assert.True(result.IsSuccess);
         var graph = result.Value;
@@ -51,27 +51,27 @@ public class AccountProvisioningServiceTests
         Assert.Equal(AccountPlan.Starter, graph.Entitlements.Plan);
         Assert.Equal(AccountCommercialState.Trial, graph.Entitlements.CommercialState);
         Assert.Equal(TrialEnds, graph.Entitlements.TrialEndsAtUtc);
-        Assert.False(graph.Entitlements.IsPilot);
+        Assert.Equal(AccountClassification.Production, graph.Entitlements.Classification);
     }
 
     [Fact]
-    public void Pilot_provisions_pilot_entitlements()
+    public void Business_Pilot_provisions_pilot_entitlements()
     {
         var result = Service.CreateVerified(
             Email, "Pat Owner", "Acme Plumbing", AccountPurpose.Business, "America/New_York",
-            AccountPlan.Professional, isPilot: true, Now, TrialEnds);
+            AccountPlan.Professional, classification: AccountClassification.Pilot, Now, TrialEnds);
 
         Assert.True(result.IsSuccess);
-        Assert.True(result.Value.Entitlements.IsPilot);
+        Assert.Equal(AccountClassification.Pilot, result.Value.Entitlements.Classification);
         Assert.Equal(AccountCommercialState.Trial, result.Value.Entitlements.CommercialState);
     }
 
     [Fact]
-    public void Internal_provisions_internal_account_and_entitlements()
+    public void Internal_provisions_InternalTest_classification_regardless_of_caller_input()
     {
         var result = Service.CreateVerified(
             Email, "Pat Admin", "OpHalo Internal", AccountPurpose.Internal, "UTC",
-            AccountPlan.Internal, isPilot: false, Now, trialEndsAtUtc: null);
+            AccountPlan.Internal, classification: AccountClassification.Production, Now, trialEndsAtUtc: null);
 
         Assert.True(result.IsSuccess);
         var graph = result.Value;
@@ -80,7 +80,7 @@ public class AccountProvisioningServiceTests
         Assert.Equal(AccountPlan.Internal, graph.Entitlements.Plan);
         Assert.Equal(AccountCommercialState.Active, graph.Entitlements.CommercialState);
         Assert.Null(graph.Entitlements.TrialEndsAtUtc);
-        Assert.False(graph.Entitlements.IsPilot);
+        Assert.Equal(AccountClassification.InternalTest, graph.Entitlements.Classification);
         Assert.Equal(AccountUserRole.Owner, graph.Owner.Role);
     }
 
@@ -91,7 +91,7 @@ public class AccountProvisioningServiceTests
     {
         var result = Service.CreateVerified(
             Email, null, "Acme Plumbing", AccountPurpose.Business, "America/New_York",
-            AccountPlan.Starter, isPilot: false, Now, TrialEnds);
+            AccountPlan.Starter, classification: AccountClassification.Production, Now, TrialEnds);
 
         Assert.True(result.IsSuccess);
         Assert.Equal(result.Value.Owner.Id, result.Value.Account.PrimaryOwnerAccountUserId);
@@ -107,7 +107,7 @@ public class AccountProvisioningServiceTests
     {
         var result = Service.CreateVerified(
             Email, null, "Acme Plumbing", AccountPurpose.Business, "America/New_York",
-            plan, isPilot: false, Now, TrialEnds);
+            plan, classification: AccountClassification.Production, Now, TrialEnds);
 
         Assert.True(result.IsSuccess);
         Assert.Equal(PlanSeats(plan), result.Value.Entitlements.MaxUserSeats);
@@ -118,7 +118,7 @@ public class AccountProvisioningServiceTests
     {
         var result = Service.CreateVerified(
             Email, null, "OpHalo Internal", AccountPurpose.Internal, "UTC",
-            AccountPlan.Internal, isPilot: false, Now, trialEndsAtUtc: null);
+            AccountPlan.Internal, classification: AccountClassification.Production, Now, trialEndsAtUtc: null);
 
         Assert.True(result.IsSuccess);
         Assert.Equal(PlanSeats(AccountPlan.Internal), result.Value.Entitlements.MaxUserSeats);
@@ -131,7 +131,7 @@ public class AccountProvisioningServiceTests
     {
         var result = Service.CreateVerified(
             Email, null, "OpHalo Internal", AccountPurpose.Internal, "UTC",
-            AccountPlan.Starter, isPilot: false, Now, trialEndsAtUtc: null);
+            AccountPlan.Starter, classification: AccountClassification.Production, Now, trialEndsAtUtc: null);
 
         Assert.True(result.IsFailure);
         Assert.Equal(AccountErrors.InternalAccountPlanMismatch, result.Error);
@@ -142,21 +142,23 @@ public class AccountProvisioningServiceTests
     {
         var result = Service.CreateVerified(
             Email, null, "Acme Plumbing", AccountPurpose.Business, "America/New_York",
-            AccountPlan.Internal, isPilot: false, Now, TrialEnds);
+            AccountPlan.Internal, classification: AccountClassification.Production, Now, TrialEnds);
 
         Assert.True(result.IsFailure);
         Assert.Equal(AccountErrors.InternalAccountPlanMismatch, result.Error);
     }
 
-    [Fact]
-    public void Internal_account_as_pilot_fails()
+    [Theory]
+    [InlineData(AccountClassification.Demo)]
+    [InlineData(AccountClassification.InternalTest)]
+    public void Public_signup_with_Demo_or_InternalTest_classification_fails(AccountClassification classification)
     {
         var result = Service.CreateVerified(
-            Email, null, "OpHalo Internal", AccountPurpose.Internal, "UTC",
-            AccountPlan.Internal, isPilot: true, Now, trialEndsAtUtc: null);
+            Email, null, "Acme Plumbing", AccountPurpose.Business, "America/New_York",
+            AccountPlan.Starter, classification, Now, TrialEnds);
 
         Assert.True(result.IsFailure);
-        Assert.Equal(AccountErrors.InternalAccountCannotBePilot, result.Error);
+        Assert.Equal(AccountErrors.ClassificationNotAllowedForPublicSignup, result.Error);
     }
 
     [Fact]
@@ -164,7 +166,7 @@ public class AccountProvisioningServiceTests
     {
         var result = Service.CreateVerified(
             Email, null, "OpHalo Internal", AccountPurpose.Internal, "UTC",
-            AccountPlan.Internal, isPilot: false, Now, TrialEnds);
+            AccountPlan.Internal, classification: AccountClassification.Production, Now, TrialEnds);
 
         Assert.True(result.IsFailure);
         Assert.Equal(AccountErrors.InternalAccountAllowsNoTrialWindow, result.Error);
@@ -175,7 +177,7 @@ public class AccountProvisioningServiceTests
     {
         var result = Service.CreateVerified(
             Email, null, "Acme Plumbing", AccountPurpose.Business, "America/New_York",
-            AccountPlan.Starter, isPilot: false, Now, trialEndsAtUtc: null);
+            AccountPlan.Starter, classification: AccountClassification.Production, Now, trialEndsAtUtc: null);
 
         Assert.True(result.IsFailure);
         Assert.Equal(AccountErrors.TrialWindowRequired, result.Error);

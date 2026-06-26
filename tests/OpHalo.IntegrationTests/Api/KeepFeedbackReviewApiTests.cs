@@ -72,7 +72,7 @@ public sealed class KeepFeedbackReviewApiTests : IClassFixture<KeepApiWebFactory
             purpose: AccountPurpose.Business,
             timeZone: "Australia/Sydney",
             plan: AccountPlan.Trial,
-            isPilot: false,
+            classification: AccountClassification.Production,
             nowUtc: now,
             trialEndsAtUtc: now.AddDays(30));
 

@@ -54,7 +54,7 @@ public sealed class AuthStartTests : IClassFixture<KeepApiWebFactory>, IAsyncLif
             purpose: AccountPurpose.Business,
             timeZone: "Australia/Sydney",
             plan: AccountPlan.Trial,
-            isPilot: false,
+            classification: AccountClassification.Production,
             nowUtc: now,
             trialEndsAtUtc: now.AddDays(30));
 
@@ -247,7 +247,7 @@ public sealed class AuthStartTests : IClassFixture<KeepApiWebFactory>, IAsyncLif
     }
 
     [Fact]
-    public async Task Exchange_NewAccountCode_IsPilotTrueCreatedByDefault()
+    public async Task Exchange_NewAccountCode_PilotClassificationCreatedByDefault()
     {
         var code = await IssueNewAccountCodeAsync();
         await _client.PostAsJsonAsync("/auth/exchange", new { code });
@@ -261,7 +261,7 @@ public sealed class AuthStartTests : IClassFixture<KeepApiWebFactory>, IAsyncLif
         var entitlements = db.AccountEntitlements.Where(e => e.AccountId == accountId).FirstOrDefault();
 
         Assert.NotNull(entitlements);
-        Assert.True(entitlements!.IsPilot);
+        Assert.Equal(AccountClassification.Pilot, entitlements!.Classification);
     }
 
     [Fact]
@@ -523,7 +523,7 @@ public sealed class AuthStartTests : IClassFixture<KeepApiWebFactory>, IAsyncLif
 
 /// <summary>
 /// Pilot capacity gate integration tests.
-/// Uses PilotCapWebFactory (IsPilot=true, MaxPilotAccounts=1).
+/// Uses PilotCapWebFactory (Classification=Pilot, MaxPilotAccounts=1).
 /// </summary>
 public sealed class AuthStartPilotCapTests : IClassFixture<PilotCapWebFactory>, IAsyncLifetime
 {
@@ -609,7 +609,7 @@ public sealed class AuthStartPilotCapTests : IClassFixture<PilotCapWebFactory>, 
             purpose: AccountPurpose.Business,
             timeZone: "America/Chicago",
             plan: AccountPlan.Trial,
-            isPilot: true,
+            classification: AccountClassification.Pilot,
             nowUtc: now,
             trialEndsAtUtc: now.AddDays(30));
 

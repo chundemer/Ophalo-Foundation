@@ -65,7 +65,7 @@ public sealed class KeepRequestDetailRowAuthApiTests : IClassFixture<KeepApiWebF
             purpose: AccountPurpose.Business,
             timeZone: "Australia/Sydney",
             plan: AccountPlan.Trial,
-            isPilot: false,
+            classification: AccountClassification.Production,
             nowUtc: now,
             trialEndsAtUtc: now.AddDays(30));
 
@@ -221,7 +221,7 @@ public sealed class KeepRequestDetailRowAuthApiTests : IClassFixture<KeepApiWebF
             purpose: AccountPurpose.Business,
             timeZone: "Australia/Sydney",
             plan: AccountPlan.Trial,
-            isPilot: false,
+            classification: AccountClassification.Production,
             nowUtc: now,
             trialEndsAtUtc: now.AddDays(30));
 

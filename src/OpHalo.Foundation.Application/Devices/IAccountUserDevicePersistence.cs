@@ -49,7 +49,8 @@ public interface IAccountUserDevicePersistence
         CancellationToken cancellationToken);
 
     /// <summary>
-    /// Returns all Active devices for the given account users within the account.
+    /// Returns all Active devices for the given account users within the account, only when the
+    /// account classification is production-delivery eligible.
     /// Used by push delivery to enumerate push targets after candidate routing.
     /// Never expose raw push tokens to callers outside the delivery pipeline.
     /// </summary>

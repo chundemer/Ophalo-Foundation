@@ -92,9 +92,9 @@ public static class AccountErrors
         Error.Create("Account.InternalAccountPlanMismatch",
             "Internal accounts must use the Internal plan, and the Internal plan is reserved for internal accounts.");
 
-    public static readonly Error InternalAccountCannotBePilot =
-        Error.Create("Account.InternalAccountCannotBePilot",
-            "An internal account cannot be enrolled as a pilot.");
+    public static readonly Error ClassificationNotAllowedForPublicSignup =
+        Error.Create("Account.ClassificationNotAllowedForPublicSignup",
+            "Demo and InternalTest classifications cannot be set through public signup.");
 
     public static readonly Error InternalAccountAllowsNoTrialWindow =
         Error.Create("Account.InternalAccountAllowsNoTrialWindow",

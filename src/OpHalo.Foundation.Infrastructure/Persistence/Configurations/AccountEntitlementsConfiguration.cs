@@ -42,7 +42,9 @@ internal sealed class AccountEntitlementsConfiguration : BaseEntityConfiguration
         builder.Property(x => x.MaxUserSeats)
             .IsRequired();
 
-        builder.Property(x => x.IsPilot)
+        builder.Property(x => x.Classification)
+            .HasConversion<string>()
+            .HasMaxLength(50)
             .IsRequired();
 
         // 1:1 with Account. No navigation on this side — the satellite holds only AccountId.

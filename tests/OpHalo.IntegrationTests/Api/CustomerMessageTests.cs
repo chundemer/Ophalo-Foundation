@@ -62,7 +62,7 @@ public sealed class CustomerMessageTests : IClassFixture<KeepApiWebFactory>, IAs
             purpose: AccountPurpose.Business,
             timeZone: "Australia/Sydney",
             plan: AccountPlan.Trial,
-            isPilot: false,
+            classification: AccountClassification.Production,
             nowUtc: now,
             trialEndsAtUtc: now.AddDays(30));
 

@@ -1384,7 +1384,7 @@ Before each session starts, hold a short alignment discussion with Christian to 
 product intent, implementation boundary, and whether the session should split into backend and
 client slices.
 
-Session 8 remains the current active implementation plan:
+Sessions 8 and 9 are complete:
 
 - **S8a** — device table and `/me/devices/{appInstallationId}` register/revoke API.
 - **S8b** — server-derived personal badge endpoint.
@@ -1393,13 +1393,13 @@ Session 8 remains the current active implementation plan:
 - **S8d** — limited push-worthy mutation hooks.
 - **S8e** — ledger and regression gate.
 
-Recommended remaining sessions after S8:
+Recommended remaining sessions after Session 9:
 
-1. **Session 9 — Account Classification And Delivery Eligibility**
+1. **Session 9 — Account Classification And Delivery Eligibility** ✓
    Replace `AccountEntitlements.IsPilot` with `Production`/`Pilot`/`Demo`/`InternalTest`
-   classification, update `SignupDefaultsSettings`, migrate existing data, and add the delivery/
-   reporting/billing exclusion gates needed before real APNs/FCM, reports, and demo safety. This is
-   primarily backend/model work.
+   classification, update `SignupDefaultsSettings`, migrate existing data, and add the delivery
+   eligibility gate needed before real APNs/FCM. This also creates the classification foundation
+   later reports, billing signals, and demo safety can use.
 
 2. **Session 10 — Brand Guide And UI Foundation**
    Create the V1 product/brand guide before serious PWA/native/customer-page buildout. Lock the

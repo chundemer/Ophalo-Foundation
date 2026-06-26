@@ -42,11 +42,10 @@ public sealed class AccountEntitlements : BaseEntity
     public int MaxUserSeats { get; private set; }
 
     /// <summary>
-    /// Cohort marker for accounts enrolled during the OpHalo pilot program. Never used in
-    /// access-policy logic (access is decided by commercial + lifecycle state, ADR-026) —
-    /// a pilot account is simply Trial + this flag.
+    /// Operational and safety posture of this account (ADR-363). Determines production push
+    /// delivery eligibility; never used as an access-policy gate.
     /// </summary>
-    public bool IsPilot { get; private set; }
+    public AccountClassification Classification { get; private set; } = AccountClassification.Production;
 
     private AccountEntitlements()
     {
@@ -170,45 +169,18 @@ public sealed class AccountEntitlements : BaseEntity
     // -------------------------------------------------------------------------
 
     /// <summary>
-    /// Provisions entitlements for a standard trial account: <c>Trial</c> commercial state,
-    /// Standard mode, no pilot flag.
+    /// Provisions entitlements for a new trial account with the given classification (ADR-363).
+    /// Public signup allows only <see cref="AccountClassification.Production"/> and
+    /// <see cref="AccountClassification.Pilot"/> through the provisioning service. Demo/InternalTest
+    /// are reserved for explicit future admin/internal creation flows.
     /// </summary>
-    public static AccountEntitlements CreateTrial(Guid accountId, AccountPlan plan, int maxUserSeats, DateTime trialEndsAtUtc) =>
-        CreateTrialInternal(accountId, plan, maxUserSeats, trialEndsAtUtc, isPilot: false);
-
-    /// <summary>
-    /// Provisions entitlements for a pilot-program account. Pilots are modeled as a trial
-    /// plus the <see cref="IsPilot"/> cohort flag (ADR-026) — the flag never affects access.
-    /// </summary>
-    public static AccountEntitlements CreatePilot(Guid accountId, AccountPlan plan, int maxUserSeats, DateTime trialEndsAtUtc) =>
-        CreateTrialInternal(accountId, plan, maxUserSeats, trialEndsAtUtc, isPilot: true);
-
-    /// <summary>
-    /// Provisions entitlements for an internal OpHalo account. Commercial state is set to
-    /// <c>Active</c>, but the access policy bypasses commercial checks entirely for internal
-    /// accounts (via account purpose), so the value is informational. No trial window.
-    /// </summary>
-    public static AccountEntitlements CreateInternal(Guid accountId, int maxUserSeats)
-    {
-        ValidateProvisioning(accountId, maxUserSeats);
-
-        return new AccountEntitlements
-        {
-            AccountId = accountId,
-            Plan = AccountPlan.Internal,
-            CommercialState = AccountCommercialState.Active,
-            OperatingMode = AccountOperatingMode.Standard,
-            TrialEndsAtUtc = null,
-            MaxUserSeats = maxUserSeats,
-            IsPilot = false
-        };
-    }
-
-    private static AccountEntitlements CreateTrialInternal(Guid accountId, AccountPlan plan, int maxUserSeats, DateTime trialEndsAtUtc, bool isPilot)
+    public static AccountEntitlements Create(Guid accountId, AccountPlan plan, int maxUserSeats, DateTime trialEndsAtUtc, AccountClassification classification)
     {
         ValidateProvisioning(accountId, maxUserSeats);
         if (!Enum.IsDefined(plan))
             throw new ArgumentException("Plan is invalid.", nameof(plan));
+        if (!Enum.IsDefined(classification))
+            throw new ArgumentException("Classification is invalid.", nameof(classification));
         if (trialEndsAtUtc == default)
             throw new ArgumentException("Trial end must not be default.", nameof(trialEndsAtUtc));
         if (trialEndsAtUtc.Kind != DateTimeKind.Utc)
@@ -222,7 +194,28 @@ public sealed class AccountEntitlements : BaseEntity
             OperatingMode = AccountOperatingMode.Standard,
             TrialEndsAtUtc = trialEndsAtUtc,
             MaxUserSeats = maxUserSeats,
-            IsPilot = isPilot
+            Classification = classification
+        };
+    }
+
+    /// <summary>
+    /// Provisions entitlements for an internal OpHalo account. Commercial state is set to
+    /// <c>Active</c>; the access policy bypasses commercial checks for internal accounts.
+    /// Classification is fixed to <see cref="AccountClassification.InternalTest"/> (ADR-363).
+    /// </summary>
+    public static AccountEntitlements CreateInternal(Guid accountId, int maxUserSeats)
+    {
+        ValidateProvisioning(accountId, maxUserSeats);
+
+        return new AccountEntitlements
+        {
+            AccountId = accountId,
+            Plan = AccountPlan.Internal,
+            CommercialState = AccountCommercialState.Active,
+            OperatingMode = AccountOperatingMode.Standard,
+            TrialEndsAtUtc = null,
+            MaxUserSeats = maxUserSeats,
+            Classification = AccountClassification.InternalTest
         };
     }
 

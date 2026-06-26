@@ -56,7 +56,7 @@ public sealed class KeepPersistenceProofTests : IClassFixture<PostgresFixture>, 
             purpose: AccountPurpose.Business,
             timeZone: "UTC",
             plan: AccountPlan.Trial,
-            isPilot: false,
+            classification: AccountClassification.Production,
             nowUtc: Now,
             trialEndsAtUtc: Now.AddDays(30));
 

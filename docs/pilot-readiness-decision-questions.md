@@ -103,13 +103,14 @@ business accounts default to `Pilot`. After pilot, real trial accounts may defau
 while their commercial state remains `Trial`.
 
 The existing `AccountEntitlements.IsPilot` cohort flag is superseded by account classification; do
-not keep both as parallel sources of truth. Migration intent is `IsPilot = true` -> `Pilot` and
-`IsPilot = false` for real accounts -> `Production`. `SignupDefaultsSettings` remains the
-provisioning hook conceptually, but should set classification instead of `IsPilot`.
+not keep both as parallel sources of truth. Session 9 migration maps `IsPilot = true` to `Pilot`,
+`IsPilot = false` for real accounts to `Production`, and internal-purpose accounts to
+`InternalTest`. `SignupDefaultsSettings` now sets classification instead of `IsPilot`.
 
 `Demo` and `InternalTest` accounts are created only through explicit admin/internal action, not
 self-signup. Demo/InternalTest accounts are excluded from pilot metrics, impact reports, billing
-signals, and production notification delivery by default. Demo reset requires an explicit
+signals, and production notification delivery by default; Session 9 enforces production push
+delivery eligibility at device lookup (`Production`/`Pilot` only). Demo reset requires an explicit
 Demo/InternalTest target account, refuses Pilot/Production, preserves users/memberships, clears
 notification device tokens, and replaces only demo business/request data. Role demos use separate
 real demo users per role; run-as/impersonation is deferred. Rich demo scenario packs/reset UI are

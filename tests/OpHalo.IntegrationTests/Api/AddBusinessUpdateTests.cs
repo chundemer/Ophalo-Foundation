@@ -51,7 +51,7 @@ public sealed class AddBusinessUpdateTests : IClassFixture<KeepApiWebFactory>, I
             purpose: AccountPurpose.Business,
             timeZone: "Australia/Sydney",
             plan: AccountPlan.Trial,
-            isPilot: false,
+            classification: AccountClassification.Production,
             nowUtc: now,
             trialEndsAtUtc: now.AddDays(30));
 
@@ -192,7 +192,7 @@ public sealed class AddBusinessUpdateTests : IClassFixture<KeepApiWebFactory>, I
             purpose: AccountPurpose.Business,
             timeZone: "Australia/Sydney",
             plan: AccountPlan.Trial,
-            isPilot: false,
+            classification: AccountClassification.Production,
             nowUtc: now,
             trialEndsAtUtc: now.AddDays(30));
 

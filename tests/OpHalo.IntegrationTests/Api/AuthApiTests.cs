@@ -45,7 +45,7 @@ public sealed class AuthApiTests : IClassFixture<KeepApiWebFactory>, IAsyncLifet
             purpose: AccountPurpose.Business,
             timeZone: "Australia/Sydney",
             plan: AccountPlan.Trial,
-            isPilot: false,
+            classification: AccountClassification.Production,
             nowUtc: now,
             trialEndsAtUtc: now.AddDays(30));
 
@@ -320,7 +320,7 @@ public sealed class AuthApiTests : IClassFixture<KeepApiWebFactory>, IAsyncLifet
             purpose: AccountPurpose.Business,
             timeZone: "Australia/Sydney",
             plan: AccountPlan.Trial,
-            isPilot: false,
+            classification: AccountClassification.Production,
             nowUtc: now,
             trialEndsAtUtc: now.AddDays(30));
 

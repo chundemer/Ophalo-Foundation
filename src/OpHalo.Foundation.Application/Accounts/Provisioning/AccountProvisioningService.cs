@@ -38,9 +38,10 @@ public sealed class AccountProvisioningService
     /// Builds the new-account graph. <paramref name="nowUtc"/> and
     /// <paramref name="trialEndsAtUtc"/> must be UTC; the entity factories enforce this.
     /// For an <see cref="AccountPurpose.Internal"/> account the plan must be
-    /// <see cref="AccountPlan.Internal"/>, <paramref name="isPilot"/> must be false, and
-    /// <paramref name="trialEndsAtUtc"/> must be null. For every other purpose
-    /// <paramref name="trialEndsAtUtc"/> is required.
+    /// <see cref="AccountPlan.Internal"/>, classification is forced to
+    /// <see cref="AccountClassification.InternalTest"/>, and <paramref name="trialEndsAtUtc"/>
+    /// must be null. For every other purpose <paramref name="trialEndsAtUtc"/> is required
+    /// and classification must be <c>Production</c> or <c>Pilot</c> (ADR-364).
     /// </summary>
     public Result<AccountProvisioningResult> CreateVerified(
         string email,
@@ -49,7 +50,7 @@ public sealed class AccountProvisioningService
         AccountPurpose purpose,
         string timeZone,
         AccountPlan plan,
-        bool isPilot,
+        AccountClassification classification,
         DateTime nowUtc,
         DateTime? trialEndsAtUtc)
     {
@@ -60,10 +61,10 @@ public sealed class AccountProvisioningService
         {
             if (plan != AccountPlan.Internal)
                 return Result<AccountProvisioningResult>.Failure(AccountErrors.InternalAccountPlanMismatch);
-            if (isPilot)
-                return Result<AccountProvisioningResult>.Failure(AccountErrors.InternalAccountCannotBePilot);
             if (trialEndsAtUtc is not null)
                 return Result<AccountProvisioningResult>.Failure(AccountErrors.InternalAccountAllowsNoTrialWindow);
+            // Internal accounts are always InternalTest regardless of caller input.
+            classification = AccountClassification.InternalTest;
         }
         else
         {
@@ -71,6 +72,8 @@ public sealed class AccountProvisioningService
                 return Result<AccountProvisioningResult>.Failure(AccountErrors.InternalAccountPlanMismatch);
             if (trialEndsAtUtc is null)
                 return Result<AccountProvisioningResult>.Failure(AccountErrors.TrialWindowRequired);
+            if (classification is AccountClassification.Demo or AccountClassification.InternalTest)
+                return Result<AccountProvisioningResult>.Failure(AccountErrors.ClassificationNotAllowedForPublicSignup);
         }
 
         // Seat allowance is plan-derived, never caller-supplied (ADR-037).
@@ -93,13 +96,9 @@ public sealed class AccountProvisioningService
         if (assign.IsFailure)
             return Result<AccountProvisioningResult>.Failure(assign.Error);
 
-        AccountEntitlements entitlements;
-        if (isInternal)
-            entitlements = AccountEntitlements.CreateInternal(account.Id, maxUserSeats);
-        else if (isPilot)
-            entitlements = AccountEntitlements.CreatePilot(account.Id, plan, maxUserSeats, trialEndsAtUtc!.Value);
-        else
-            entitlements = AccountEntitlements.CreateTrial(account.Id, plan, maxUserSeats, trialEndsAtUtc!.Value);
+        var entitlements = isInternal
+            ? AccountEntitlements.CreateInternal(account.Id, maxUserSeats)
+            : AccountEntitlements.Create(account.Id, plan, maxUserSeats, trialEndsAtUtc!.Value, classification);
 
         return Result<AccountProvisioningResult>.Success(
             new AccountProvisioningResult(user, account, owner, entitlements));
