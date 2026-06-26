@@ -3,7 +3,7 @@
 **Last updated:** 2026-06-26 (Session 9 complete; Session 10 next)
 **Branch:** `main` tracking `origin/main`
 **Last green baseline:** 864 unit · 14 arch · 676 integration = 1,554 total, 0 failures
-**Next free ADR:** ADR-367
+**Next free ADR:** ADR-369
 **Current session:** Session 10 — Brand Guide And UI Foundation
 
 ---
@@ -37,7 +37,25 @@ For every implementation slice:
 **Last completed build log:** `docs/build-log/064-session-9-account-classification-delivery-eligibility.md`
 **Pilot readiness working doc:** `docs/pilot-readiness-decision-questions.md`
 **Foundation roadmap:** `docs/build-log/ophalo-foundation-build-plan-greenfield-boundaries-brownfield-behavior.md` section 9.1
-**Next implementation:** Session 10 — Brand Guide And UI Foundation.
+**Current session:** Session 10 — Brand Guide And UI Foundation (design foundation slice).
+
+**Session 10 progress (locked, docs-only — no app code):**
+
+- ADR-367 — brand architecture: branded house with product accents; differentiation by brand
+  (OpHalo/Keep/future) via accent + personality, not by surface. Keep Web and Keep Mobile are one
+  identity at two densities.
+- ADR-368 — type-and-color lock: Source Serif 4 headlines over Inter body (Poppins = wordmark only);
+  terracotta `#BF6B43` added as `--ophalo-accent`; attention nudged to amber `#C8741A`; gold removed
+  (`--primary` → navy). Contract written into `ux-design-model-v1.md` (new Typography section).
+- UX design system + decisions are now tracked in git (were untracked).
+
+**Deferred to the real frontend build (no foundation frontend exists yet — `web/ophalo-web` is an
+empty placeholder; built Session 13):** wire Source Serif, `--primary`→navy, amber attention,
+`--ophalo-accent` token, serif headings, stronger marketing section contrast, container-width
+rework, `brand-kit/BRAND.md` §5 correction. Tracked in `ux-design-decisions.md` Open Gaps.
+
+**Next decision:** proceed to Session 11 (quick-capture backend contract) per roadmap, or pull
+frontend scaffolding forward and apply the ADR-368 spec into a new `web/ophalo-web`.
 
 Session 9 is complete. It replaced `AccountEntitlements.IsPilot` with `AccountClassification` on
 `AccountEntitlements`, updated `SignupDefaultsSettings`, migrated existing data, and added the
