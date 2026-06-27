@@ -3,7 +3,8 @@
 **Date:** 2026-06-26
 **Branch:** main
 **Baseline:** 864 unit · 14 arch · 676 integration = 1,554 total, 0 failures
-**Next free ADR:** ADR-369
+**Next free ADR before this log:** ADR-369
+**Current ADR after S11 decisions:** ADR-372
 
 ---
 
@@ -68,8 +69,10 @@ Values: `Phone = 1`, `Voicemail = 2`, `Text = 3`, `Email = 4`, `WalkIn = 5`, `Re
 "captured before source tracking existed," not `Other`. `Other` is a valid explicit selection.
 
 `Source` is required at the API for business-created requests. A missing or invalid source value
-returns a validation error (not silently defaulted). `KeepRequestInputValidator` does not own this
-validation — the command validates source presence; the domain factory validates the enum value.
+returns a validation error (not silently defaulted). The public API contract uses lowercase slugs
+(`phone`, `voicemail`, `text`, `email`, `walk_in`, `referral`, `other`). Numeric enum values and
+raw PascalCase enum names are not the preferred API contract. `PublicIntake`/`public_intake` is
+blocked for staff and set only by customer-origin intake.
 
 `Source` is not customer-facing. It is not included in the customer page response.
 
@@ -94,9 +97,12 @@ is stored on the flag itself in V1 (timestamp deferred).
 S11a and S11b are independently compiling vertical slices.
 
 **S11a** adds Source/NeedsShare to the domain, creation contract, and detail response:
-- 8 production files (see gate below)
-- EF migration: add `source` (varchar 50, nullable) and `needs_share` (bool, not null, default true)
-  to `keep_requests`
+- 10 production files (see gate below; approved as the minimal compiling vertical slice because
+  endpoint wiring and HTTP error mapping are required for the API contract)
+- EF migration: add `source` (varchar 50, nullable) and `needs_share` (bool, not null, default false)
+  to `keep_requests`. Current working assumption is no meaningful persisted Keep request data; if a
+  non-empty database matters later, business-origin rows need explicit historical backfill to
+  `needs_share = true`.
 
 **S11b** adds list summary indicators and share intent clearing:
 - `KeepRequestSummary` gets `NeedsShare: bool` and `Source: string?`
@@ -114,34 +120,49 @@ S11a and S11b are independently compiling vertical slices.
 2. Application contract — command + detail result + mapper
 3. API contract — request body
 
-**Production files (8, at the hard gate limit):**
+**Production files (10; gate exception):**
+
+The original gate listed 8 files but missed endpoint wiring and HTTP error mapping. S11a now counts
+10 production files. This remains one narrow vertical slice: domain contract, application contract,
+API request/response wiring, persistence config, and migration.
 
 | # | File | Change |
 |---|---|---|
 | 1 | `src/OpHalo.Keep.Core/Entities/Enums/KeepRequestSource.cs` | NEW — enum Phone/Voicemail/Text/Email/WalkIn/Referral/PublicIntake/Other |
 | 2 | `src/OpHalo.Keep.Core/Entities/KeepRequest.cs` | Add `Source`, `NeedsShare` properties; update `CreateByBusiness` (+ source param), `CreateCore` (source + NeedsShare init); add `ClearNeedsShare()`; `CreateByCustomer` auto-sets PublicIntake + NeedsShare=false via CreateCore |
 | 3 | `src/OpHalo.Keep.Application/Requests/CreateBusinessRequestCommand.cs` | Add `KeepRequestSource Source` |
-| 4 | `src/OpHalo.Keep.Application/Requests/CreateBusinessRequestService.cs` | Validate source not `PublicIntake` (staff cannot set it); pass to `CreateByBusiness` |
+| 4 | `src/OpHalo.Keep.Application/Requests/CreateBusinessRequestService.cs` | Parse API source slugs; reject missing/invalid/public-intake values; pass to `CreateByBusiness` |
 | 5 | `src/OpHalo.Keep.Application/Requests/KeepRequestDetailResult.cs` | Add `string? Source`, `bool NeedsShare` |
 | 6 | `src/OpHalo.Keep.Application/Requests/KeepRequestDetailMapper.cs` | Map `Source` (string slug), `NeedsShare` |
 | 7 | `src/OpHalo.Api/Keep/CreateBusinessRequestBody.cs` | Add `string? Source` |
 | 8 | `src/OpHalo.Keep.Infrastructure/Persistence/Configurations/KeepRequestConfiguration.cs` | Add Source + NeedsShare EF config |
+| 9 | `src/OpHalo.Api/Program.cs` | Pass `body.Source` to command |
+| 10 | `src/OpHalo.Api/Helpers/ErrorHttpMapper.cs` | Map source validation errors to 400 |
 
 **Test files:**
 
 | File | Change |
 |---|---|
-| `tests/OpHalo.UnitTests/Keep/KeepCreateBusinessRequestServiceTests.cs` | Add: Source required; Source=PublicIntake rejected; NeedsShare=true on created request; Source slug in detail response |
+| `tests/OpHalo.UnitTests/Keep/KeepCreateBusinessRequestServiceTests.cs` | Add: Source required; invalid/public-intake source rejected; NeedsShare=true on created request; Source slug in detail response |
 | `tests/OpHalo.IntegrationTests/Api/KeepBusinessRequestApiTests.cs` | Add: Source field in create body; Source + NeedsShare in response |
 
 **Christian runs (not Claude):**
 ```
 dotnet ef migrations add QuickCaptureSourceAndNeedsShare \
-  --project src/OpHalo.Keep.Infrastructure \
-  --startup-project src/OpHalo.Keep.Infrastructure
+  --project src/OpHalo.Foundation.Infrastructure \
+  --startup-project src/OpHalo.Keep.Infrastructure \
+  --context OpHaloDbContext
+
 dotnet ef database update \
-  --startup-project src/OpHalo.Keep.Infrastructure
+  --project src/OpHalo.Foundation.Infrastructure \
+  --startup-project src/OpHalo.Keep.Infrastructure \
+  --context OpHaloDbContext
 ```
+
+Migrations live in `OpHalo.Foundation.Infrastructure`, but Keep model configuration is available
+only through the `KeepDesignTimeDbContextFactory` in `OpHalo.Keep.Infrastructure`. Using
+Foundation.Infrastructure as both project and startup creates a Foundation-only model and triggers
+pending-model-change errors against snapshots that include Keep tables.
 
 ---
 
@@ -164,8 +185,9 @@ WalkIn = 5, Referral = 6, PublicIntake = 7, Other = 8
 - Add `ClearNeedsShare()`: `NeedsShare = false;`
 
 ### `CreateBusinessRequestService.cs` guard
-After input validation, before customer lookup, reject `Source == KeepRequestSource.PublicIntake`
-with a validation error. Source is validated as non-null/valid enum at the command layer too.
+After input validation, before customer lookup, parse the source slug explicitly and reject
+`public_intake`/`PublicIntake` with a validation error. Do not rely on `Enum.TryParse` for the
+public contract because it accepts numeric strings and PascalCase enum names.
 
 ### `CreateBusinessRequestBody.cs`
 `string? Source` — nullable at the API level; service validates it is present and valid.
@@ -182,19 +204,88 @@ builder.Property(x => x.Source)
 
 builder.Property(x => x.NeedsShare)
     .IsRequired()
-    .HasDefaultValue(true);  // migration default for existing rows
+    .HasDefaultValue(false);  // existing rows default false; domain sets business-created true
 ```
+
+Generated migration:
+`src/OpHalo.Foundation.Infrastructure/Migrations/20260627003337_QuickCaptureSourceAndNeedsShare.cs`
 
 ---
 
-## Deferred to S11b
+## Deferred past S11b
 
-- `KeepRequestSummary` `NeedsShare`/`Source` fields
-- `GetKeepRequestListService` summary construction updates
-- `POST /keep/requests/{id}/share-intent` endpoint (command, service, auth, idempotency)
-- `CreateKeepPublicIntakeService` — no change needed (domain factory auto-sets PublicIntake/NeedsShare=false)
 - NeedsShare in ranking/sort
 - Source filter on list/search
+- `CreateKeepPublicIntakeService` — no change needed (domain factory auto-sets PublicIntake/NeedsShare=false)
+
+---
+
+## S11b — Mini-Brief (Pre-build locked 2026-06-26)
+
+**Scope:** List summary indicators + share intent clearing.
+
+### Locked Decisions
+
+| # | Decision | Answer |
+|---|---|---|
+| 1 | Endpoint | `POST /keep/requests/{id}/share-intent` |
+| 2 | Request body | `{ "method": "copy_link" \| "native_share" \| "manual_mark_shared" }` |
+| 3 | Who can call | Owner / Admin / Operator with row visibility and write access; Viewer → 403 |
+| 4 | OffSeason | Blocked → 403 (same gate as other mutation endpoints) |
+| 5 | Idempotent | Yes — if `NeedsShare` already false, return 204 without error or re-write |
+| 6 | What it writes | Clears `NeedsShare = false` on the entity; records a domain event (name: `ShareIntentRecorded`); persists actor + method + timestamp via existing event/audit infrastructure |
+| 7 | Copy link clears | Yes — `method: copy_link` is a valid share intent signal |
+| 8 | List summary fields | Add `NeedsShare: bool` and `Source: string?` to `KeepRequestSummary` |
+| 9 | Ranking / sort | Deferred — `NeedsShare` does not affect sort order in S11b |
+
+### Mutation Families (2)
+
+1. **List summary enrichment** — `KeepRequestSummary` + `GetKeepRequestListService`
+2. **Share intent clearing** — command + service + endpoint + auth + idempotency
+
+### File-Level Gate
+
+**Production files (7):**
+
+| # | File | Change |
+|---|---|---|
+| 1 | `src/OpHalo.Keep.Application/Requests/KeepRequestSummary.cs` | Add `NeedsShare: bool`, `Source: string?` |
+| 2 | `src/OpHalo.Keep.Application/Requests/GetKeepRequestListService.cs` | Map new summary fields |
+| 3 | `src/OpHalo.Keep.Application/Requests/ClearShareIntentCommand.cs` | NEW — `record` with `RequestId`, `ActorId`, `Method` |
+| 4 | `src/OpHalo.Keep.Application/Requests/ClearShareIntentService.cs` | NEW — load request, auth gate (OffSeason/Viewer → error), idempotency check, call `ClearNeedsShare()`, emit `ShareIntentRecorded` |
+| 5 | `src/OpHalo.Keep.Core/Events/ShareIntentRecorded.cs` | NEW — domain event with `RequestId`, `ActorId`, `Method`, `OccurredAt` |
+| 6 | `src/OpHalo.Api/Keep/ShareIntentBody.cs` | NEW — `record` with `string Method` |
+| 7 | `src/OpHalo.Api/Program.cs` | Wire `POST /keep/requests/{id}/share-intent` → `ClearShareIntentService` |
+
+**Test files (3):**
+
+| File | Change |
+|---|---|
+| `tests/OpHalo.UnitTests/Keep/ClearShareIntentServiceTests.cs` | NEW — Viewer blocked; OffSeason blocked; already-cleared idempotent 204; valid call clears + emits event; invalid method → 400 |
+| `tests/OpHalo.UnitTests/Keep/GetKeepRequestListServiceTests.cs` | Add: NeedsShare + Source propagate to summary |
+| `tests/OpHalo.IntegrationTests/Api/KeepBusinessRequestApiTests.cs` | Add: share intent endpoint auth matrix; idempotent call; list response includes NeedsShare/Source |
+
+**Total: 7 production + 3 test = 10 changed files. Within gate.**
+
+### Error Codes
+
+| Code | HTTP | Condition |
+|---|---|---|
+| `keep_request.share_intent.offseason_blocked` | 403 | Account is OffSeason |
+| `keep_request.share_intent.viewer_blocked` | 403 | Actor is Viewer |
+| `keep_request.share_intent.invalid_method` | 400 | Method string not in allowed set |
+
+### Verification (S11b)
+
+```
+dotnet build --no-restore -v q
+dotnet test tests/OpHalo.UnitTests --no-restore -v q \
+  --filter "FullyQualifiedName~ClearShareIntent|FullyQualifiedName~GetKeepRequestList"
+dotnet test tests/OpHalo.IntegrationTests --no-restore -v q \
+  --filter "FullyQualifiedName~KeepBusinessRequestApi"
+dotnet test tests/OpHalo.UnitTests --no-restore -v q
+dotnet test tests/OpHalo.ArchitectureTests --no-restore -v q
+```
 
 ---
 

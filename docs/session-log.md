@@ -1,6 +1,6 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-06-26 (Session 10 complete; Session 11 next)
+**Last updated:** 2026-06-26 (Session 11 S11a complete; S11b next)
 **Branch:** `main` tracking `origin/main`
 **Last green baseline:** 864 unit · 14 arch · 676 integration = 1,554 total, 0 failures
 **Next free ADR:** ADR-372
@@ -35,7 +35,7 @@ For every implementation slice:
 ## Current Work
 
 **Current build log:** `docs/build-log/065-session-11-quick-capture-backend-contract.md`
-**Last completed build log:** `docs/build-log/064-session-9-account-classification-delivery-eligibility.md`
+**Last completed build log:** `docs/build-log/065-session-11-quick-capture-backend-contract.md` (S11a)
 **Pilot readiness working doc:** `docs/pilot-readiness-decision-questions.md`
 **Foundation roadmap:** `docs/build-log/ophalo-foundation-build-plan-greenfield-boundaries-brownfield-behavior.md` section 9.1
 **Current session:** Session 11 — Quick Capture Backend Contract
@@ -45,10 +45,10 @@ For every implementation slice:
 **Session 11 scope:** Authenticated staff can create a Keep request immediately after a customer
 contact, with required source/channel. Two independently compiling slices:
 
-- **S11a** — Source/channel + NeedsShare flag (creation + detail response). 10 production files,
-  EF migration. Locked decisions: ADR-369 (KeepRequestSource enum), ADR-370 (NeedsShare flag),
+- **S11a** — Source/channel + NeedsShare flag (creation + detail response). Complete and committed
+  in `bea0eb0`. Locked decisions: ADR-369 (KeepRequestSource enum), ADR-370 (NeedsShare flag),
   ADR-371 (S11 batch split).
-- **S11b** — List summary indicators + share intent clearing. Deferred.
+- **S11b** — List summary indicators + share intent clearing. Next.
 
 **S11a file-level gate (10 production files):**
 1. `src/OpHalo.Keep.Core/Entities/Enums/KeepRequestSource.cs` — NEW
@@ -62,84 +62,47 @@ contact, with required source/channel. Two independently compiling slices:
 9. `src/OpHalo.Api/Program.cs` — pass body.Source to command
 10. `src/OpHalo.Api/Helpers/ErrorHttpMapper.cs` — 3 source error codes
 
-**Migration (generated, ready to apply):**
+**S11a completion summary:**
+
+- Commit: `bea0eb0` — `S11a: KeepRequestSource + NeedsShare — creation contract and detail response`.
+- Migration generated and applied successfully.
+- Build successful.
+- Verification reported by Christian: `872 unit · 14 arch · 16 integration (KeepBusinessRequestApi) = green`.
+- No commit is needed for S11a code/migration; only this session-log cleanup remains after the commit.
+
+**Migration note:**
+
+Migration file:
+`src/OpHalo.Foundation.Infrastructure/Migrations/20260627003337_QuickCaptureSourceAndNeedsShare.cs`
+
+Generated migration shape:
+- Adds `keep_requests.needs_share` as non-null boolean with `defaultValue: false`.
+- Adds `keep_requests.source` as nullable `varchar(50)`.
+- No historical backfill was added because current working assumption is no meaningful persisted
+  Keep request data. If a non-empty database matters later, business-origin rows would need an
+  explicit `needs_share = true` backfill.
+
+Correct EF commands for this repo layout:
 ```
-dotnet ef database update --startup-project src/OpHalo.Keep.Infrastructure
-```
-Migration file: `20260627003337_QuickCaptureSourceAndNeedsShare`
+dotnet ef migrations add QuickCaptureSourceAndNeedsShare \
+  --project src/OpHalo.Foundation.Infrastructure \
+  --startup-project src/OpHalo.Keep.Infrastructure \
+  --context OpHaloDbContext
 
-**Session 10 (docs-only, complete):**
-- ADR-367 — brand architecture: branded house with product accents.
-- ADR-368 — type-and-color lock: Source Serif 4 / Inter / terracotta / amber / navy.
-- UX design system tracked in git.
-- Frontend wiring deferred to Session 13 (`web/ophalo-web` is empty placeholder).
-
----
-
-## Session 9 Closeout
-
-### S9a — Classification model, provisioning, and migration
-
-**Status: complete.**
-
-Code complete and verified:
-
-- `AccountClassification` enum added (`Production=1`, `Pilot=2`, `Demo=3`, `InternalTest=4`).
-- `AccountEntitlements.IsPilot` removed; `Classification` property added (string-persisted).
-- Factories unified: `Create(accountId, plan, seats, trialEnd, classification)` + `CreateInternal` (forces `InternalTest`).
-- `AccountErrors.InternalAccountCannotBePilot` → `ClassificationNotAllowedForPublicSignup`.
-- `SignupDefaultsSettings.IsPilot: bool` → `Classification: AccountClassification` (default `Pilot`).
-- `StartAuthService` + `ExchangeAuthService` pilot-cap checks use `Classification == Pilot`.
-- `IAuthCodePersistence.CountActivePilotAccountsAsync` → `CountPilotClassifiedAccountsAsync`.
-- `EfAuthCodePersistence` count queries on `Classification == Pilot`.
-- `AccountEntitlementsConfiguration` persists `Classification` as `varchar(50)`; `IsPilot` removed.
-- `AccountProvisioningService` signature: `isPilot: bool` → `classification: AccountClassification`.
-- `appsettings.json`: `IsPilot: true` → `Classification: "Pilot"`.
-- EF migration `20260626111822_AccountClassification` inspected: adds `classification`, maps
-  `is_pilot`/internal rows, makes classification required, and drops `is_pilot`.
-
-### S9b — Delivery eligibility gate and docs ledger
-
-**Status: complete.**
-
-- `FindActiveDevicesForDeliveryAsync` is gated by account classification.
-- `Production` and `Pilot` return active delivery devices; `Demo` and `InternalTest` return none.
-- Focused integration coverage proves all four classification cases.
-- Docs and deferred-topic ledger reconciled.
-
-Verification:
-
-```text
-dotnet test tests/OpHalo.IntegrationTests/OpHalo.IntegrationTests.csproj --filter FullyQualifiedName~AccountUserDeviceApiTests
-Passed: 30, Failed: 0
-
-dotnet build
-Succeeded with 2 NU1900 package-vulnerability feed warnings from nuget.org lookup; no compile errors.
+dotnet ef database update \
+  --project src/OpHalo.Foundation.Infrastructure \
+  --startup-project src/OpHalo.Keep.Infrastructure \
+  --context OpHaloDbContext
 ```
 
----
+Why: migrations live in `OpHalo.Foundation.Infrastructure`, but Keep model configuration is included
+only through `KeepDesignTimeDbContextFactory` in `OpHalo.Keep.Infrastructure`.
 
-## Next Session
+**Next work — S11b:** Pre-build complete (2026-06-26). Mini-brief locked in build log 065 S11b section.
 
-### Session 10 — Brand Guide And UI Foundation
-
-Goal: create the practical V1 product/brand guide before serious PWA/native/customer-page buildout.
-
-Read:
-
-- `docs/pilot-readiness-decision-questions.md`;
-- roadmap section 9.1 in
-  `docs/build-log/ophalo-foundation-build-plan-greenfield-boundaries-brownfield-behavior.md`;
-- relevant product positioning notes in `docs/keep-product-positioning.md`.
-
-Likely outputs:
-
-- brand voice and customer-facing language rules;
-- typography, color, spacing, icon, status, and attention visual conventions;
-- form, empty/loading/error, customer-page trust, PWA, and native component guidance;
-- explicit deferred UX/design questions before Quick Capture and app buildout.
-
-No code implementation is assumed until Session 10 scope is locked with Christian.
+- Surface `NeedsShare`/`Source` on `KeepRequestSummary` + `GetKeepRequestListService`.
+- Add `POST /keep/requests/{id}/share-intent` → `ClearShareIntentService` (body: `{ method }`, OffSeason/Viewer → 403, idempotent, emits `ShareIntentRecorded`).
+- 7 production files, 3 test files, 2 mutation families. Within gate.
 
 ---
 
