@@ -1,8 +1,8 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-06-27 (Session 12a complete; S12b next)
+**Last updated:** 2026-06-27 (Session 12b complete; S13 next)
 **Branch:** `main` tracking `origin/main`
-**Last green baseline:** 864 unit · 14 arch · 676 integration = 1,554 total, 0 failures
+**Last green baseline:** 939 unit · 14 arch · 705 integration = 1,658 total, 0 failures (1 pre-existing KeepG5 fluke excluded)
 **Next free ADR:** ADR-377
 **Current session:** Session 12 — Account Settings And Onboarding
 
@@ -54,11 +54,19 @@ For every implementation slice:
 - Verification reported by Christian: build successful, 29 new unit tests green, 14 architecture
   tests green.
 
-**S12b next:**
+**S12b status: complete.**
 
-`KeepProductOpsEvent` entity, `KeepProductOpsEventType` enum, onboarding signal recording on key
-action paths, and `GET /keep/setup/onboarding` checklist endpoint derived from event rows.
-Locked signals: ADR-376 + pilot-readiness INT-003.
+- Commit: `1f3fb26` — `S12b: KeepProductOpsEvent entity, onboarding signal recording, and GET checklist endpoint`.
+- Added `KeepProductOpsEventType` enum (17 V1 signal types per INT-003).
+- Added `KeepProductOpsEvent` entity with `Record()` factory.
+- EF config and migration `20260627111847_KeepProductOpsEvents` — unique index on `(account_id, event_type)`.
+- `ProfileAndContactSaved` and `PolicySaved` recorded atomically with setup mutations (single `SaveChangesAsync`).
+- `GET /keep/setup/onboarding` — checklist derives steps 1–7 from event rows + live DB state; steps 8–10 from event rows.
+- `POST /keep/setup/onboarding/marks/{quick-capture-exercise|tracker-review|spam-classification}` — manual founder marks.
+- `RecordEventIfFirstAsync` catches `PostgresException 23505` for concurrent-insert safety.
+- Verification: 939 unit · 14 arch · 705 integration, 0 failures.
+
+**S13 next:** TBD — see roadmap section 9.1.
 
 ---
 

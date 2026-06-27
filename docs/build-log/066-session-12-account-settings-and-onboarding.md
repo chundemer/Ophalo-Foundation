@@ -2,7 +2,7 @@
 
 **Date:** 2026-06-27
 **Branch:** main
-**Status:** S12a complete; S12b next
+**Status:** S12a + S12b complete
 **Next free ADR before this log:** ADR-373
 **Current ADR after S12 pre-build decisions:** ADR-377
 
@@ -130,14 +130,61 @@ dotnet ef database update \
 
 ---
 
-## S12b — Next
+## S12b — Complete
 
-Planned scope:
+**Commit:** `1f3fb26` — `S12b: KeepProductOpsEvent entity, onboarding signal recording, and GET checklist endpoint`
 
-- `KeepProductOpsEvent` entity;
-- `KeepProductOpsEventType` enum;
-- durable onboarding/product-ops signals;
-- `GET /keep/setup/onboarding` checklist endpoint derived from event rows.
+### Scope Delivered
 
-Use `docs/pilot-readiness-decision-questions.md` INT-003 and Owner/Admin onboarding checklist
-sections as the product source of truth. Do a short pre-build pass before implementation.
+- `KeepProductOpsEventType` enum — 17 V1 signal types per INT-003; singleton and recurring types distinguished in comments.
+- `KeepProductOpsEvent` entity with `Record(accountId, eventType, occurredAtUtc)` factory.
+- EF configuration (`keep_product_ops_events` table) with unique index on `(account_id, event_type)`.
+- Migration `20260627111847_KeepProductOpsEvents`.
+- `IKeepSetupPersistence.SaveProfileAsync` / `SavePolicyAsync` extended with optional `KeepProductOpsEvent?` parameter — profile/policy and event staged together in one `SaveChangesAsync` (atomicity fix per reviewer).
+- `EfKeepSetupPersistence.StageEventIfFirstAsync` — checks existence then adds entity to context; no separate save.
+- `IKeepProductOpsPersistence` with `RecordEventIfFirstAsync` (standalone save + concurrent-insert catch) and `GetOnboardingDataAsync`.
+- `EfKeepProductOpsPersistence` — catches `PostgresException 23505` in `RecordEventIfFirstAsync`; queries event rows + live Foundation state (intake link, member count, device count, request count) for checklist.
+- `KeepOnboardingService` with `GetChecklistAsync` and `MarkStepCompleteAsync`.
+- Endpoints:
+  - `GET /keep/setup/onboarding`;
+  - `POST /keep/setup/onboarding/marks/quick-capture-exercise`;
+  - `POST /keep/setup/onboarding/marks/tracker-review`;
+  - `POST /keep/setup/onboarding/marks/spam-classification`.
+
+### Checklist Step Derivation
+
+| Step | Source |
+|------|--------|
+| 1–2. Profile & timezone | `ProfileAndContactSaved` event row |
+| 3. Policy | `PolicySaved` event row |
+| 4. Intake active | `KeepPublicIntakeLink` live state |
+| 5. Operator invited | `AccountUser` count (non-Owner, active) |
+| 6. Mobile device | `AccountUserDevice` count for account |
+| 7. First request | `KeepRequest` count for account |
+| 8–10. Manual marks | `QuickCaptureExerciseDone` / `TrackerReviewDone` / `SpamClassificationExplained` event rows |
+
+### Production Files
+
+1. `src/OpHalo.Keep.Core/Entities/Enums/KeepProductOpsEventType.cs`
+2. `src/OpHalo.Keep.Core/Entities/KeepProductOpsEvent.cs`
+3. `src/OpHalo.Keep.Infrastructure/Persistence/Configurations/KeepProductOpsEventConfiguration.cs`
+4. `src/OpHalo.Keep.Application/Setup/IKeepProductOpsPersistence.cs`
+5. `src/OpHalo.Keep.Application/Setup/KeepOnboardingService.cs`
+6. `src/OpHalo.Keep.Infrastructure/Persistence/EfKeepProductOpsPersistence.cs`
+7. `src/OpHalo.Keep.Application/Setup/IKeepSetupPersistence.cs` (modified)
+8. `src/OpHalo.Keep.Application/Setup/KeepSetupService.cs` (modified)
+9. `src/OpHalo.Keep.Infrastructure/Persistence/EfKeepSetupPersistence.cs` (modified)
+10. `src/OpHalo.Api/Program.cs` (modified)
+
+### Tests
+
+- `tests/OpHalo.UnitTests/Keep/KeepProductOpsEventTests.cs`
+- `tests/OpHalo.UnitTests/Keep/KeepOnboardingServiceTests.cs`
+- `tests/OpHalo.IntegrationTests/Api/KeepOnboardingApiTests.cs`
+
+### Verification
+
+```
+939 unit · 14 arch · 705 integration = 1,658 total, 0 failures
+(1 pre-existing KeepG5ConcurrencyVersionMigrationTests fluke excluded — unrelated to S12b)
+```
