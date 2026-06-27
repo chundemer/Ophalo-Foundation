@@ -245,35 +245,43 @@ Generated migration:
 
 ### File-Level Gate
 
-**Production files (7):**
+**Gate exception (approved 2026-06-27):** Pre-build listed 7 production files. Implementation requires 2 additional
+files (`KeepRequestEventType.cs`, `KeepRequestEvent.cs`) to persist `ShareIntentRecorded` as a `KeepRequestEvent`
+row, plus `ErrorHttpMapper.cs` for explicit error code mappings. `Events/ShareIntentRecorded.cs` dropped (no
+separate domain-event pipeline exists). Final count: 9 production + 3 test = 12 changed files — at the hard gate
+boundary but one coherent vertical slice.
+
+**Production files (9):**
 
 | # | File | Change |
 |---|---|---|
 | 1 | `src/OpHalo.Keep.Application/Requests/KeepRequestSummary.cs` | Add `NeedsShare: bool`, `Source: string?` |
 | 2 | `src/OpHalo.Keep.Application/Requests/GetKeepRequestListService.cs` | Map new summary fields |
-| 3 | `src/OpHalo.Keep.Application/Requests/ClearShareIntentCommand.cs` | NEW — `record` with `RequestId`, `ActorId`, `Method` |
-| 4 | `src/OpHalo.Keep.Application/Requests/ClearShareIntentService.cs` | NEW — load request, auth gate (OffSeason/Viewer → error), idempotency check, call `ClearNeedsShare()`, emit `ShareIntentRecorded` |
-| 5 | `src/OpHalo.Keep.Core/Events/ShareIntentRecorded.cs` | NEW — domain event with `RequestId`, `ActorId`, `Method`, `OccurredAt` |
-| 6 | `src/OpHalo.Api/Keep/ShareIntentBody.cs` | NEW — `record` with `string Method` |
-| 7 | `src/OpHalo.Api/Program.cs` | Wire `POST /keep/requests/{id}/share-intent` → `ClearShareIntentService` |
+| 3 | `src/OpHalo.Keep.Core/Entities/Enums/KeepRequestEventType.cs` | Add `ShareIntentRecorded = 15` |
+| 4 | `src/OpHalo.Keep.Core/Entities/KeepRequestEvent.cs` | Add `CreateShareIntentRecorded(...)` factory |
+| 5 | `src/OpHalo.Keep.Application/Requests/ClearShareIntentCommand.cs` | NEW — `record` with `RequestId`, `Method` |
+| 6 | `src/OpHalo.Keep.Application/Requests/ClearShareIntentService.cs` | NEW — auth gate, idempotency, `ClearNeedsShare()`, commit event |
+| 7 | `src/OpHalo.Api/Keep/ShareIntentBody.cs` | NEW — `record` with `string Method` |
+| 8 | `src/OpHalo.Api/Program.cs` | Register `ClearShareIntentService`; wire `POST /keep/requests/{id}/share-intent` |
+| 9 | `src/OpHalo.Api/Helpers/ErrorHttpMapper.cs` | Add 3 share-intent error codes |
 
 **Test files (3):**
 
 | File | Change |
 |---|---|
-| `tests/OpHalo.UnitTests/Keep/ClearShareIntentServiceTests.cs` | NEW — Viewer blocked; OffSeason blocked; already-cleared idempotent 204; valid call clears + emits event; invalid method → 400 |
+| `tests/OpHalo.UnitTests/Keep/ClearShareIntentServiceTests.cs` | NEW — Viewer blocked; OffSeason blocked; already-cleared idempotent; valid call clears + persists event; invalid method → 400 |
 | `tests/OpHalo.UnitTests/Keep/GetKeepRequestListServiceTests.cs` | Add: NeedsShare + Source propagate to summary |
 | `tests/OpHalo.IntegrationTests/Api/KeepBusinessRequestApiTests.cs` | Add: share intent endpoint auth matrix; idempotent call; list response includes NeedsShare/Source |
 
-**Total: 7 production + 3 test = 10 changed files. Within gate.**
+**Total: 9 production + 3 test = 12 changed files. At gate boundary — approved gate exception.**
 
 ### Error Codes
 
 | Code | HTTP | Condition |
 |---|---|---|
-| `keep_request.share_intent.offseason_blocked` | 403 | Account is OffSeason |
-| `keep_request.share_intent.viewer_blocked` | 403 | Actor is Viewer |
-| `keep_request.share_intent.invalid_method` | 400 | Method string not in allowed set |
+| `KeepRequest.ShareIntentOffSeasonBlocked` | 403 | Account is OffSeason |
+| `KeepRequest.ShareIntentViewerBlocked` | 403 | Actor is Viewer |
+| `KeepRequest.ShareIntentInvalidMethod` | 400 | Method string not in allowed set |
 
 ### Verification (S11b)
 

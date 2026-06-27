@@ -755,7 +755,9 @@ public sealed class GetKeepRequestListService(
             FeedbackReviewDueAtUtc: feedbackReviewDueAtUtc,
             Timing: timing,
             StatusCheck: statusCheck,
-            ReadyToClose: readyToClose);
+            ReadyToClose: readyToClose,
+            NeedsShare: r.NeedsShare,
+            Source: MapSource(r.Source));
     }
 
     private static (string group, int order) ComputeRankingGroup(
@@ -1068,6 +1070,20 @@ public sealed class GetKeepRequestListService(
         FollowUpReason.ThirdParty                   => "third_party",
         FollowUpReason.Other                        => "other",
         _ => throw new InvalidOperationException($"Unknown FollowUpReason: {reason}")
+    };
+
+    private static string? MapSource(KeepRequestSource? source) => source switch
+    {
+        null                          => null,
+        KeepRequestSource.Phone        => "phone",
+        KeepRequestSource.Voicemail    => "voicemail",
+        KeepRequestSource.Text         => "text",
+        KeepRequestSource.Email        => "email",
+        KeepRequestSource.WalkIn       => "walk_in",
+        KeepRequestSource.Referral     => "referral",
+        KeepRequestSource.PublicIntake => "public_intake",
+        KeepRequestSource.Other        => "other",
+        _ => throw new InvalidOperationException($"Unknown KeepRequestSource: {source}")
     };
 
     private static string MapStatus(KeepRequestStatus status) => status switch

@@ -508,8 +508,163 @@ public sealed class KeepBusinessRequestApiTests : IClassFixture<KeepApiWebFactor
     }
 
     // =========================================================================
+    // S11b — List response: NeedsShare + Source fields
+    // =========================================================================
+
+    [Fact]
+    public async Task GetRequestList_includes_NeedsShare_and_Source_on_business_created_row()
+    {
+        var createResp = await AuthRequest(_ownerCookie).PostAsJsonAsync("/keep/requests", new
+        {
+            customerName  = "List NeedsShare Test",
+            customerPhone = "0411000095",
+            description   = "Check list fields",
+            source        = "text"
+        });
+        Assert.Equal(HttpStatusCode.Created, createResp.StatusCode);
+
+        var listResp = await AuthRequest(_ownerCookie).GetAsync("/keep/requests?view=default");
+        Assert.Equal(HttpStatusCode.OK, listResp.StatusCode);
+
+        var body = await listResp.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
+        var requests = body.GetProperty("requests");
+        Assert.True(requests.GetArrayLength() >= 1);
+
+        var row = requests.EnumerateArray().First(r =>
+            r.GetProperty("customerPhone").GetString() == "0411000095");
+        Assert.True(row.GetProperty("needsShare").GetBoolean());
+        Assert.Equal("text", row.GetProperty("source").GetString());
+    }
+
+    // =========================================================================
+    // S11b — Share intent: auth matrix
+    // =========================================================================
+
+    [Fact]
+    public async Task ShareIntent_Viewer_Returns403()
+    {
+        var requestId = await CreateRequestAsync("0411000096", "phone");
+
+        var response = await AuthRequest(_viewerCookie).PostAsJsonAsync(
+            $"/keep/requests/{requestId}/share-intent", new { method = "copy_link" });
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        Assert.Equal("KeepRequest.ShareIntentViewerBlocked", await GetErrorCodeAsync(response));
+    }
+
+    [Fact]
+    public async Task ShareIntent_Unauthenticated_Returns401()
+    {
+        var requestId = await CreateRequestAsync("0411000097", "phone");
+
+        var response = await _factory.CreateClient().PostAsJsonAsync(
+            $"/keep/requests/{requestId}/share-intent", new { method = "copy_link" });
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    // Owner and Admin have AccountWide scope so can clear any visible request.
+    // Operators with MyWork scope get 404 (not a participant) — role-block is covered by unit tests.
+    [Theory]
+    [InlineData("owner")]
+    [InlineData("admin")]
+    public async Task ShareIntent_AllowedRoles_Return204(string role)
+    {
+        var cookie = role switch
+        {
+            "owner" => _ownerCookie,
+            "admin" => _adminCookie,
+            _       => throw new ArgumentOutOfRangeException()
+        };
+
+        var requestId = await CreateRequestAsync($"0411000{Math.Abs(role.GetHashCode()) % 900 + 100:D3}", "phone");
+
+        var response = await AuthRequest(cookie).PostAsJsonAsync(
+            $"/keep/requests/{requestId}/share-intent", new { method = "copy_link" });
+
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task ShareIntent_InvalidMethod_Returns400()
+    {
+        var requestId = await CreateRequestAsync("0411000098", "phone");
+
+        var response = await AuthRequest(_ownerCookie).PostAsJsonAsync(
+            $"/keep/requests/{requestId}/share-intent", new { method = "not_a_method" });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal("KeepRequest.ShareIntentInvalidMethod", await GetErrorCodeAsync(response));
+    }
+
+    [Fact]
+    public async Task ShareIntent_idempotent_second_call_returns_204_without_error()
+    {
+        var requestId = await CreateRequestAsync("0411000099", "phone");
+
+        var first = await AuthRequest(_ownerCookie).PostAsJsonAsync(
+            $"/keep/requests/{requestId}/share-intent", new { method = "copy_link" });
+        Assert.Equal(HttpStatusCode.NoContent, first.StatusCode);
+
+        var second = await AuthRequest(_ownerCookie).PostAsJsonAsync(
+            $"/keep/requests/{requestId}/share-intent", new { method = "native_share" });
+        Assert.Equal(HttpStatusCode.NoContent, second.StatusCode);
+    }
+
+    [Fact]
+    public async Task ShareIntent_detail_timeline_contains_share_intent_recorded_event()
+    {
+        var requestId = await CreateRequestAsync("0411000101", "phone");
+
+        var shareResp = await AuthRequest(_ownerCookie).PostAsJsonAsync(
+            $"/keep/requests/{requestId}/share-intent", new { method = "copy_link" });
+        Assert.Equal(HttpStatusCode.NoContent, shareResp.StatusCode);
+
+        var detailResp = await AuthRequest(_ownerCookie).GetAsync($"/keep/requests/{requestId}");
+        Assert.Equal(HttpStatusCode.OK, detailResp.StatusCode);
+
+        var body = await detailResp.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
+        var events = body.GetProperty("events").EnumerateArray().ToList();
+        Assert.Contains(events, e =>
+            e.GetProperty("eventType").GetString() == "share_intent_recorded");
+    }
+
+    [Fact]
+    public async Task ShareIntent_NeedsShare_false_after_successful_clear()
+    {
+        var requestId = await CreateRequestAsync("0411000100", "phone");
+
+        var shareResp = await AuthRequest(_ownerCookie).PostAsJsonAsync(
+            $"/keep/requests/{requestId}/share-intent", new { method = "manual_mark_shared" });
+        Assert.Equal(HttpStatusCode.NoContent, shareResp.StatusCode);
+
+        var listResp = await AuthRequest(_ownerCookie).GetAsync("/keep/requests?view=default");
+        Assert.Equal(HttpStatusCode.OK, listResp.StatusCode);
+
+        var body = await listResp.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
+        var requests = body.GetProperty("requests");
+        var row = requests.EnumerateArray().FirstOrDefault(r =>
+            r.GetProperty("id").GetGuid() == requestId);
+        Assert.False(row.GetProperty("needsShare").GetBoolean());
+    }
+
+    // =========================================================================
     // Helpers
     // =========================================================================
+
+    private async Task<Guid> CreateRequestAsync(string phone, string source, string? cookie = null)
+    {
+        var response = await AuthRequest(cookie ?? _ownerCookie).PostAsJsonAsync("/keep/requests", new
+        {
+            customerName  = $"Test Customer {phone}",
+            customerPhone = phone,
+            description   = "Integration test request",
+            source
+        });
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        return body.GetProperty("requestId").GetGuid();
+    }
 
     private HttpClient AuthRequest(string cookie)
     {

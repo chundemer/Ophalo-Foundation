@@ -120,6 +120,7 @@ builder.Services.AddScoped<SelfWatchService>();
 builder.Services.AddScoped<MuteService>();
 builder.Services.AddScoped<MarkFeedbackReviewedService>();
 builder.Services.AddScoped<ManageRequestTimingService>();
+builder.Services.AddScoped<ClearShareIntentService>();
 builder.Services.AddScoped<GetParticipantCandidatesService>();
 builder.Services.AddScoped<KeepRequestParticipationService>();
 builder.Services.AddScoped<KeepPublicCustomerAccessGuard>();
@@ -377,6 +378,18 @@ app.MapPost("/keep/requests/{requestId:guid}/classify", async (
     var command = new ClassifyKeepRequestCommand(requestId, body.TargetStatus, body.Reason, versionResult.Value);
     var result = await service.ExecuteAsync(command, ct);
     return result.IsSuccess ? Results.Ok(result.Value) : ErrorHttpMapper.ToHttpResult(result.Error);
+}).RequireAuthorization();
+
+// Share intent clearing — authenticated, operator write (S11b)
+app.MapPost("/keep/requests/{requestId:guid}/share-intent", async (
+    Guid requestId,
+    ShareIntentBody body,
+    ClearShareIntentService service,
+    CancellationToken ct) =>
+{
+    var command = new ClearShareIntentCommand(requestId, body.Method);
+    var result = await service.ExecuteAsync(command, ct);
+    return result.IsSuccess ? Results.NoContent() : ErrorHttpMapper.ToHttpResult(result.Error);
 }).RequireAuthorization();
 
 // Add business update — authenticated, operator write (Phase 8-B2-beta)

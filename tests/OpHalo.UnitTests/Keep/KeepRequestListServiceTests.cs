@@ -1808,6 +1808,64 @@ public class KeepRequestListServiceTests
         Assert.Equal(4, result.Value.ViewCounts!.ReadyToClose);
     }
 
+    // --- NeedsShare / Source summary fields (S11b) ----------------------------
+
+    [Fact]
+    public async Task Summary_includes_needs_share_true_for_business_created_request()
+    {
+        var request = KeepRequest.CreateByBusiness(
+            AccountId, Guid.NewGuid(), "Jane", "0499888777", null, "Desc",
+            "REF-S11B", "tok_s11b", Now, KeepRequestSource.Phone);
+        var sut = BuildSut(HappyPathPersistence([request]));
+
+        var result = await sut.ExecuteAsync(new KeepRequestListQuery(View: "default"));
+
+        Assert.True(result.IsSuccess);
+        Assert.Single(result.Value.Requests);
+        Assert.True(result.Value.Requests[0].NeedsShare);
+    }
+
+    [Fact]
+    public async Task Summary_includes_needs_share_false_after_clear()
+    {
+        var request = KeepRequest.CreateByBusiness(
+            AccountId, Guid.NewGuid(), "Jane", "0499888777", null, "Desc",
+            "REF-S11B2", "tok_s11b2", Now, KeepRequestSource.Phone);
+        request.ClearNeedsShare();
+        var sut = BuildSut(HappyPathPersistence([request]));
+
+        var result = await sut.ExecuteAsync(new KeepRequestListQuery(View: "default"));
+
+        Assert.True(result.IsSuccess);
+        Assert.False(result.Value.Requests[0].NeedsShare);
+    }
+
+    [Fact]
+    public async Task Summary_includes_source_slug_when_set()
+    {
+        var request = KeepRequest.CreateByBusiness(
+            AccountId, Guid.NewGuid(), "Jane", "0499888777", null, "Desc",
+            "REF-S11B3", "tok_s11b3", Now, KeepRequestSource.Text);
+        var sut = BuildSut(HappyPathPersistence([request]));
+
+        var result = await sut.ExecuteAsync(new KeepRequestListQuery(View: "default"));
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal("text", result.Value.Requests[0].Source);
+    }
+
+    [Fact]
+    public async Task Summary_source_is_public_intake_for_customer_intake_request()
+    {
+        var request = MakeRequest();
+        var sut = BuildSut(HappyPathPersistence([request]));
+
+        var result = await sut.ExecuteAsync(new KeepRequestListQuery(View: "default"));
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal("public_intake", result.Value.Requests[0].Source);
+    }
+
     // --- Fakes ------------------------------------------------------------------
 
     private sealed class FakeCursorProtector : IKeepRequestListCursorProtector

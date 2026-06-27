@@ -611,4 +611,39 @@ public sealed class KeepRequestEvent : BaseEntity
         };
     }
 
+    public static KeepRequestEvent CreateShareIntentRecorded(
+        Guid requestId,
+        Guid accountId,
+        Guid actorAccountUserId,
+        string actorDisplayName,
+        string method,
+        DateTime occurredAtUtc)
+    {
+        if (requestId == Guid.Empty)
+            throw new ArgumentException("Request ID is required.", nameof(requestId));
+        if (accountId == Guid.Empty)
+            throw new ArgumentException("Account ID is required.", nameof(accountId));
+        if (actorAccountUserId == Guid.Empty)
+            throw new ArgumentException("Actor account user ID is required.", nameof(actorAccountUserId));
+        if (string.IsNullOrWhiteSpace(actorDisplayName))
+            throw new ArgumentException("Actor display name is required.", nameof(actorDisplayName));
+        if (string.IsNullOrWhiteSpace(method))
+            throw new ArgumentException("Method is required.", nameof(method));
+        if (occurredAtUtc == default)
+            throw new ArgumentException("occurredAtUtc must be a real timestamp.", nameof(occurredAtUtc));
+
+        return new KeepRequestEvent
+        {
+            RequestId          = requestId,
+            AccountId          = accountId,
+            EventType          = KeepRequestEventType.ShareIntentRecorded,
+            Visibility         = KeepRequestEventVisibility.Internal,
+            Content            = method,
+            ActorType          = ActorType.AccountUser,
+            ActorAccountUserId = actorAccountUserId,
+            ActorDisplayName   = actorDisplayName.Trim(),
+            OccurredAtUtc      = occurredAtUtc
+        };
+    }
+
 }

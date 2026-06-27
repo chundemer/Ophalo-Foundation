@@ -27,7 +27,9 @@ public sealed record KeepRequestSummary(
     DateTime? FeedbackReviewDueAtUtc,
     KeepRequestTimingInfo Timing,
     KeepRequestStatusCheckInfo StatusCheck,
-    KeepRequestReadyToCloseInfo ReadyToClose);
+    KeepRequestReadyToCloseInfo ReadyToClose,
+    bool NeedsShare,
+    string? Source);
 
 public sealed record KeepRequestAttentionInfo(
     string AttentionLevel,

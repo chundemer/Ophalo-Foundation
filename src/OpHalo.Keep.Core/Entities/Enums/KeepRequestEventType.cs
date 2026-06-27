@@ -15,5 +15,6 @@ public enum KeepRequestEventType
     FeedbackReviewed = 11,
     FollowUpOnChanged = 12,
     PlannedForChanged = 13,
-    RequestClassified = 14
+    RequestClassified = 14,
+    ShareIntentRecorded = 15
 }

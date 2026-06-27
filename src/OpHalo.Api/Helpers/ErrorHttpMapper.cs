@@ -147,6 +147,11 @@ public static class ErrorHttpMapper
             var c when c == "KeepRequest.CloseRequiresOwnerOrAdmin" => (StatusCodes.Status403Forbidden, "Forbidden.", null),
             var c when c == "KeepRequest.CloseBlockedByAttention"   => (StatusCodes.Status409Conflict, "Conflict.", null),
 
+            // --- Share intent errors (S11b) ---
+            var c when c == "KeepRequest.ShareIntentViewerBlocked"    => (StatusCodes.Status403Forbidden, "Forbidden.", null),
+            var c when c == "KeepRequest.ShareIntentOffSeasonBlocked" => (StatusCodes.Status403Forbidden, "Forbidden.", null),
+            var c when c == "KeepRequest.ShareIntentInvalidMethod"    => (StatusCodes.Status400BadRequest, "Bad request.", null),
+
             // --- Detail navigation errors (P6f-4) ---
             var c when c == "KeepRequest.RequestDetailInvalidNavView" => (StatusCodes.Status400BadRequest, "Bad request.", null),
 
