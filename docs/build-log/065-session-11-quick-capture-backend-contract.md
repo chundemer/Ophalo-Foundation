@@ -3,8 +3,9 @@
 **Date:** 2026-06-26
 **Branch:** main
 **Baseline:** 864 unit · 14 arch · 676 integration = 1,554 total, 0 failures
+**Status:** Complete — S11a committed in `bea0eb0`; S11b committed in `e13703c`
 **Next free ADR before this log:** ADR-369
-**Current ADR after S11 decisions:** ADR-372
+**Current ADR after S11 decisions:** ADR-373
 
 ---
 
@@ -107,9 +108,28 @@ S11a and S11b are independently compiling vertical slices.
 **S11b** adds list summary indicators and share intent clearing:
 - `KeepRequestSummary` gets `NeedsShare: bool` and `Source: string?`
 - `GetKeepRequestListService` updated to pass new fields
-- New `POST /keep/requests/{id}/share-intent` endpoint + command + service
-- Decisions deferred: share intent body shape, idempotency contract, whether copy-link needs a
-  backend signal vs. client-only, NeedsShare effect on ranking/sort
+- New `POST /keep/requests/{id}/share-intent` endpoint + command + service.
+- Share intent body, idempotency, copy-link behavior, and event persistence are locked in ADR-372.
+- NeedsShare ranking/sort and Source filtering/search remain deferred.
+
+### ADR-372 — Share intent clearing contract
+
+`POST /keep/requests/{id}/share-intent` records an authenticated staff share intent and clears
+`NeedsShare`. The request body is `{ "method": "copy_link" | "native_share" |
+"manual_mark_shared" }`.
+
+Owner/Admin may clear any account-visible row. Operators may clear rows visible in their `MyWork`
+scope. Viewer is blocked with `KeepRequest.ShareIntentViewerBlocked`; OffSeason/read-only access is
+blocked with `KeepRequest.ShareIntentOffSeasonBlocked`; invalid methods return
+`KeepRequest.ShareIntentInvalidMethod`.
+
+The endpoint is idempotent: if `NeedsShare` is already false, it returns `204 No Content` without
+another write. Successful first clears persist `NeedsShare = false` and an internal
+`ShareIntentRecorded` `KeepRequestEvent` row with actor, method, and timestamp. The event is
+serialized in detail timelines as `share_intent_recorded`.
+
+`NeedsShare` does not affect ranking/sort in S11b. Source filtering/search and NeedsShare ranking
+remain deferred.
 
 ---
 
@@ -220,9 +240,10 @@ Generated migration:
 
 ---
 
-## S11b — Mini-Brief (Pre-build locked 2026-06-26)
+## S11b — Mini-Brief And Completion
 
 **Scope:** List summary indicators + share intent clearing.
+**Status:** Complete, committed in `e13703c`.
 
 ### Locked Decisions
 
@@ -285,6 +306,14 @@ boundary but one coherent vertical slice.
 
 ### Verification (S11b)
 
+Reported green by Christian:
+
+```text
+893 unit · 14 arch · 24 integration = 931 focused suite
+```
+
+Commands used for the focused pass:
+
 ```
 dotnet build --no-restore -v q
 dotnet test tests/OpHalo.UnitTests --no-restore -v q \
@@ -295,9 +324,27 @@ dotnet test tests/OpHalo.UnitTests --no-restore -v q
 dotnet test tests/OpHalo.ArchitectureTests --no-restore -v q
 ```
 
+### S11b Result
+
+- `KeepRequestSummary` now includes `NeedsShare` and `Source`.
+- Request list rows expose `needsShare` and `source`.
+- `POST /keep/requests/{id}/share-intent` accepts `copy_link`, `native_share`, and
+  `manual_mark_shared`.
+- Successful share-intent clears `NeedsShare` and persists `ShareIntentRecorded` as an internal
+  `KeepRequestEvent`.
+- Repeated share-intent calls are idempotent 204s.
+- Viewer and OffSeason/read-only access return explicit 403 error codes.
+- Detail timeline mapping includes `share_intent_recorded`.
+
 ---
 
 ## Verification (S11a)
+
+Reported green by Christian:
+
+```text
+872 unit · 14 arch · 16 integration (KeepBusinessRequestApi)
+```
 
 ```
 dotnet build --no-restore -v q

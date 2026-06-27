@@ -597,6 +597,60 @@ namespace OpHalo.Foundation.Infrastructure.Migrations
                     b.ToTable("users", (string)null);
                 });
 
+            modelBuilder.Entity("OpHalo.Keep.Core.Entities.KeepBusinessProfile", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("AccountId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("account_id");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at_utc");
+
+                    b.Property<Guid?>("CreatedByUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by_user_id");
+
+                    b.Property<string>("CustomerFacingEmail")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("customer_facing_email");
+
+                    b.Property<string>("CustomerFacingPhone")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("customer_facing_phone");
+
+                    b.Property<DateTime?>("DeletedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("deleted_at_utc");
+
+                    b.Property<Guid?>("DeletedByUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("deleted_by_user_id");
+
+                    b.Property<Guid?>("ModifiedByUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("modified_by_user_id");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at_utc");
+
+                    b.HasKey("Id")
+                        .HasName("pk_keep_business_profiles");
+
+                    b.HasIndex("AccountId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_keep_business_profiles_account_id");
+
+                    b.ToTable("keep_business_profiles", (string)null);
+                });
+
             modelBuilder.Entity("OpHalo.Keep.Core.Entities.KeepCustomer", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1320,6 +1374,10 @@ namespace OpHalo.Foundation.Infrastructure.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("standard_response_target_minutes");
 
+                    b.Property<int>("StatusCheckThresholdDays")
+                        .HasColumnType("integer")
+                        .HasColumnName("status_check_threshold_days");
+
                     b.Property<DateTime>("UpdatedAtUtc")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("updated_at_utc");
@@ -1408,6 +1466,16 @@ namespace OpHalo.Foundation.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
                         .HasConstraintName("fk_account_user_devices_account_users_account_id_account_user_");
+                });
+
+            modelBuilder.Entity("OpHalo.Keep.Core.Entities.KeepBusinessProfile", b =>
+                {
+                    b.HasOne("OpHalo.Foundation.Core.Entities.Accounts.Account", null)
+                        .WithMany()
+                        .HasForeignKey("AccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_keep_business_profiles_accounts_account_id");
                 });
 
             modelBuilder.Entity("OpHalo.Keep.Core.Entities.KeepCustomer", b =>
