@@ -4,6 +4,7 @@ using OpHalo.Foundation.Infrastructure.Persistence;
 using OpHalo.Keep.Application.Abstractions;
 using OpHalo.Keep.Application.Setup;
 using OpHalo.Keep.Core.Entities;
+using OpHalo.Keep.Core.Entities.Enums;
 
 namespace OpHalo.Keep.Infrastructure.Persistence;
 
@@ -67,19 +68,31 @@ public sealed class EfKeepSetupPersistence(OpHaloDbContext dbContext) : IKeepSet
         dbContext.Set<KeepResponsePolicy>()
             .FirstOrDefaultAsync(p => p.AccountId == accountId, ct);
 
-    public async Task SaveProfileAsync(Account account, KeepBusinessProfile profile, CancellationToken ct)
+    public async Task SaveProfileAsync(Account account, KeepBusinessProfile profile, KeepProductOpsEvent? opsEvent, CancellationToken ct)
     {
         if (dbContext.Entry(profile).State == EntityState.Detached)
             dbContext.Set<KeepBusinessProfile>().Add(profile);
 
+        await StageEventIfFirstAsync(opsEvent, ct);
         await dbContext.SaveChangesAsync(ct);
     }
 
-    public async Task SavePolicyAsync(KeepResponsePolicy policy, bool isNew, CancellationToken ct)
+    public async Task SavePolicyAsync(KeepResponsePolicy policy, bool isNew, KeepProductOpsEvent? opsEvent, CancellationToken ct)
     {
         if (isNew)
             dbContext.Set<KeepResponsePolicy>().Add(policy);
 
+        await StageEventIfFirstAsync(opsEvent, ct);
         await dbContext.SaveChangesAsync(ct);
+    }
+
+    private async Task StageEventIfFirstAsync(KeepProductOpsEvent? opsEvent, CancellationToken ct)
+    {
+        if (opsEvent is null) return;
+
+        var exists = await dbContext.Set<KeepProductOpsEvent>()
+            .AnyAsync(e => e.AccountId == opsEvent.AccountId && e.EventType == opsEvent.EventType, ct);
+        if (!exists)
+            dbContext.Set<KeepProductOpsEvent>().Add(opsEvent);
     }
 }

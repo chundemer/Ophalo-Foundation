@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using OpHalo.Foundation.Infrastructure.Persistence;
@@ -11,9 +12,11 @@ using OpHalo.Foundation.Infrastructure.Persistence;
 namespace OpHalo.Foundation.Infrastructure.Migrations
 {
     [DbContext(typeof(OpHaloDbContext))]
-    partial class OpHaloDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260627111847_KeepProductOpsEvents")]
+    partial class KeepProductOpsEvents
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder

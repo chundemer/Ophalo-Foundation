@@ -10,6 +10,6 @@ public interface IKeepSetupPersistence
     Task<AccountAccessSnapshot?> GetAccountAccessSnapshotAsync(Guid accountId, CancellationToken ct);
     Task<(Account account, KeepBusinessProfile? profile)> GetProfileDataAsync(Guid accountId, CancellationToken ct);
     Task<KeepResponsePolicy?> GetPolicyAsync(Guid accountId, CancellationToken ct);
-    Task SaveProfileAsync(Account account, KeepBusinessProfile profile, CancellationToken ct);
-    Task SavePolicyAsync(KeepResponsePolicy policy, bool isNew, CancellationToken ct);
+    Task SaveProfileAsync(Account account, KeepBusinessProfile profile, KeepProductOpsEvent? opsEvent, CancellationToken ct);
+    Task SavePolicyAsync(KeepResponsePolicy policy, bool isNew, KeepProductOpsEvent? opsEvent, CancellationToken ct);
 }

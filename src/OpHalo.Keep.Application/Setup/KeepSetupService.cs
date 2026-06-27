@@ -2,6 +2,7 @@ using OpHalo.Foundation.Application.Abstractions.Security;
 using OpHalo.Foundation.Application.Accounts.Access;
 using OpHalo.Foundation.Application.Accounts.Authorization;
 using OpHalo.Keep.Core.Entities;
+using OpHalo.Keep.Core.Entities.Enums;
 using OpHalo.SharedKernel.Abstractions;
 using OpHalo.SharedKernel.Results;
 
@@ -60,7 +61,9 @@ public sealed class KeepSetupService(
         var profile = existingProfile ?? KeepBusinessProfile.Create(currentUser.AccountId);
         profile.UpdateContact(customerFacingPhone, customerFacingEmail);
 
-        await persistence.SaveProfileAsync(account, profile, ct);
+        var profileEvent = KeepProductOpsEvent.Record(
+            currentUser.AccountId, KeepProductOpsEventType.ProfileAndContactSaved, clock.UtcNow);
+        await persistence.SaveProfileAsync(account, profile, profileEvent, ct);
 
         var policy = await persistence.GetPolicyAsync(currentUser.AccountId, ct);
 
@@ -107,7 +110,9 @@ public sealed class KeepSetupService(
             isNew = false;
         }
 
-        await persistence.SavePolicyAsync(policy, isNew, ct);
+        var policyEvent = KeepProductOpsEvent.Record(
+            currentUser.AccountId, KeepProductOpsEventType.PolicySaved, clock.UtcNow);
+        await persistence.SavePolicyAsync(policy, isNew, policyEvent, ct);
 
         var (account, profile) = await persistence.GetProfileDataAsync(currentUser.AccountId, ct);
 
