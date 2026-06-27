@@ -32,6 +32,7 @@ using OpHalo.Keep.Application.IntakeSetup;
 using OpHalo.Keep.Application.Notifications;
 using OpHalo.Keep.Application.PublicIntake;
 using OpHalo.Keep.Application.Requests;
+using OpHalo.Keep.Application.Setup;
 using OpHalo.Keep.Application.Services;
 using OpHalo.Keep.Core.Domain;
 using OpHalo.Keep.Core.Entities.Enums;
@@ -85,6 +86,8 @@ builder.Services.AddSingleton<IClock, OpHalo.Foundation.Infrastructure.Services.
 
 builder.Services.AddScoped<IKeepIntakePersistence, KeepIntakePersistence>();
 builder.Services.AddScoped<IKeepIntakeSetupPersistence, KeepIntakeSetupPersistence>();
+builder.Services.AddScoped<IKeepSetupPersistence, EfKeepSetupPersistence>();
+builder.Services.AddScoped<KeepSetupService>();
 builder.Services.AddScoped<IKeepBusinessRequestPersistence, KeepBusinessRequestPersistence>();
 builder.Services.AddScoped<CreateBusinessRequestService>();
 builder.Services.AddScoped<KeepIntakeSetupService>();
@@ -289,6 +292,28 @@ app.MapPost("/keep/setup/intake/ensure", async (KeepIntakeSetupService service, 
 app.MapPost("/keep/setup/intake/replace", async (KeepIntakeSetupService service, CancellationToken ct) =>
 {
     var result = await service.ReplaceAsync(ct);
+    return result.IsSuccess ? Results.Ok(result.Value) : ErrorHttpMapper.ToHttpResult(result.Error);
+}).RequireAuthorization();
+
+// Business profile + response policy — authenticated, Owner/Admin only (S12a)
+app.MapGet("/keep/setup", async (KeepSetupService service, CancellationToken ct) =>
+{
+    var result = await service.GetSetupAsync(ct);
+    return result.IsSuccess ? Results.Ok(result.Value) : ErrorHttpMapper.ToHttpResult(result.Error);
+}).RequireAuthorization();
+
+app.MapPut("/keep/setup/profile", async (UpdateProfileBody body, KeepSetupService service, CancellationToken ct) =>
+{
+    var result = await service.UpdateProfileAsync(
+        body.BusinessName, body.TimeZone, body.CustomerFacingPhone, body.CustomerFacingEmail, ct);
+    return result.IsSuccess ? Results.Ok(result.Value) : ErrorHttpMapper.ToHttpResult(result.Error);
+}).RequireAuthorization();
+
+app.MapPut("/keep/setup/policy", async (UpdatePolicyBody body, KeepSetupService service, CancellationToken ct) =>
+{
+    var result = await service.UpdatePolicyAsync(
+        body.FirstResponseTargetMinutes, body.StandardResponseTargetMinutes,
+        body.PriorityResponseTargetMinutes, body.StatusCheckThresholdDays, ct);
     return result.IsSuccess ? Results.Ok(result.Value) : ErrorHttpMapper.ToHttpResult(result.Error);
 }).RequireAuthorization();
 

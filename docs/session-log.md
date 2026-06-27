@@ -1,10 +1,10 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-06-26 (Session 11 S11a complete; S11b next)
+**Last updated:** 2026-06-27 (Session 12a implementation complete; migration + commit pending)
 **Branch:** `main` tracking `origin/main`
 **Last green baseline:** 864 unit · 14 arch · 676 integration = 1,554 total, 0 failures
-**Next free ADR:** ADR-372
-**Current session:** Session 11 — Quick Capture Backend Contract
+**Next free ADR:** ADR-377
+**Current session:** Session 12 — Account Settings And Onboarding
 
 ---
 
@@ -35,22 +35,25 @@ For every implementation slice:
 ## Current Work
 
 **Current build log:** `docs/build-log/065-session-11-quick-capture-backend-contract.md`
-**Last completed build log:** `docs/build-log/065-session-11-quick-capture-backend-contract.md` (S11a)
+**Last completed build log:** `docs/build-log/065-session-11-quick-capture-backend-contract.md`
 **Pilot readiness working doc:** `docs/pilot-readiness-decision-questions.md`
 **Foundation roadmap:** `docs/build-log/ophalo-foundation-build-plan-greenfield-boundaries-brownfield-behavior.md` section 9.1
-**Current session:** Session 11 — Quick Capture Backend Contract
+**Current session:** Session 12 — Account Settings And Onboarding
 
-**Pre-work status: complete.** Pre-build pass done 2026-06-26. Build log 065 is the implementation spec.
+**Session 11 status: complete.** S11a and S11b are committed.
 
-**Session 11 scope:** Authenticated staff can create a Keep request immediately after a customer
-contact, with required source/channel. Two independently compiling slices:
+**Session 11 scope delivered:** Authenticated staff can create a Keep request immediately after a
+customer contact, with required source/channel. Staff-created requests start with tracker sharing
+marked needed; list summaries expose `NeedsShare`/`Source`; explicit share-intent actions clear
+`NeedsShare` and persist an internal request event.
 
 - **S11a** — Source/channel + NeedsShare flag (creation + detail response). Complete and committed
   in `bea0eb0`. Locked decisions: ADR-369 (KeepRequestSource enum), ADR-370 (NeedsShare flag),
   ADR-371 (S11 batch split).
-- **S11b** — List summary indicators + share intent clearing. Next.
+- **S11b** — List summary indicators + share intent clearing. Complete and committed in `e13703c`.
+  Locked decision: ADR-372 (share intent clearing contract).
 
-**S11a file-level gate (10 production files):**
+**S11a file-level gate (10 production files, gate exception):**
 1. `src/OpHalo.Keep.Core/Entities/Enums/KeepRequestSource.cs` — NEW
 2. `src/OpHalo.Keep.Core/Entities/KeepRequest.cs` — Source, NeedsShare, CreateByBusiness, CreateCore, ClearNeedsShare
 3. `src/OpHalo.Keep.Application/Requests/CreateBusinessRequestCommand.cs` — add Source
@@ -68,7 +71,6 @@ contact, with required source/channel. Two independently compiling slices:
 - Migration generated and applied successfully.
 - Build successful.
 - Verification reported by Christian: `872 unit · 14 arch · 16 integration (KeepBusinessRequestApi) = green`.
-- No commit is needed for S11a code/migration; only this session-log cleanup remains after the commit.
 
 **Migration note:**
 
@@ -98,11 +100,135 @@ dotnet ef database update \
 Why: migrations live in `OpHalo.Foundation.Infrastructure`, but Keep model configuration is included
 only through `KeepDesignTimeDbContextFactory` in `OpHalo.Keep.Infrastructure`.
 
-**Next work — S11b:** Pre-build complete (2026-06-26). Mini-brief locked in build log 065 S11b section.
+**S11b file-level gate (9 production + 3 test, gate boundary):**
 
-- Surface `NeedsShare`/`Source` on `KeepRequestSummary` + `GetKeepRequestListService`.
-- Add `POST /keep/requests/{id}/share-intent` → `ClearShareIntentService` (body: `{ method }`, OffSeason/Viewer → 403, idempotent, emits `ShareIntentRecorded`).
-- 7 production files, 3 test files, 2 mutation families. Within gate.
+- List summary enrichment: `KeepRequestSummary`, `GetKeepRequestListService`.
+- Share intent clearing: `ClearShareIntentCommand`, `ClearShareIntentService`,
+  `ShareIntentBody`, `Program.cs`, `ErrorHttpMapper.cs`.
+- Event persistence: `KeepRequestEventType.ShareIntentRecorded`, `KeepRequestEvent.CreateShareIntentRecorded(...)`.
+
+**S11b completion summary:**
+
+- Commit: `e13703c` — `S11b: list summary indicators + share intent clearing`.
+- Build successful.
+- Verification reported by Christian: `893 unit · 14 arch · 24 integration = 931 focused suite green`.
+- Share intent endpoint: `POST /keep/requests/{id}/share-intent`.
+- Allowed methods: `copy_link`, `native_share`, `manual_mark_shared`.
+- Idempotent: already-cleared requests return `204` without re-writing.
+- Viewer and OffSeason are blocked with explicit 403 errors.
+
+**S12a status: implementation complete, migration + commit pending.**
+
+**S12a file-level gate (9 production files + 2 test files):**
+1. `src/OpHalo.Keep.Core/Entities/KeepBusinessProfile.cs` — NEW
+2. `src/OpHalo.Keep.Infrastructure/Persistence/Configurations/KeepBusinessProfileConfiguration.cs` — NEW
+3. `src/OpHalo.Keep.Application/Setup/IKeepSetupPersistence.cs` — NEW
+4. `src/OpHalo.Keep.Application/Setup/KeepSetupResults.cs` — NEW
+5. `src/OpHalo.Keep.Application/Setup/KeepSetupService.cs` — NEW
+6. `src/OpHalo.Keep.Infrastructure/Persistence/EfKeepSetupPersistence.cs` — NEW
+7. `src/OpHalo.Keep.Core/Entities/KeepResponsePolicy.cs` — StatusCheckThresholdDays + Update()
+8. `src/OpHalo.Keep.Infrastructure/Persistence/Configurations/KeepResponsePolicyConfiguration.cs` — status_check_threshold_days mapping
+9. `src/OpHalo.Api/Program.cs` — 3 endpoints + 2 DI registrations
+
+**S12a endpoints (final):**
+- `GET /keep/setup` — returns combined businessName, timeZone, customerFacingPhone, customerFacingEmail, responsePolicy
+- `PUT /keep/setup/profile` — updates Account + KeepBusinessProfile; returns combined result
+- `PUT /keep/setup/policy` — upserts KeepResponsePolicy; returns combined result
+
+**S12a pre-commit verification:**
+- Build: 0 errors, 0 warnings
+- Unit tests: 29 new (KeepResponsePolicyTests, KeepBusinessProfileTests) — all green
+- Architecture tests: 14/14 green
+
+**Migration required (run before commit):**
+```
+dotnet ef migrations add KeepSetupBusinessProfileAndPolicyThreshold \
+  --project src/OpHalo.Foundation.Infrastructure \
+  --startup-project src/OpHalo.Keep.Infrastructure \
+  --context OpHaloDbContext
+
+dotnet ef database update \
+  --project src/OpHalo.Foundation.Infrastructure \
+  --startup-project src/OpHalo.Keep.Infrastructure \
+  --context OpHaloDbContext
+```
+
+Migration shape:
+- Adds `keep_business_profiles` table (id, account_id unique, customer_facing_phone, customer_facing_email, base audit columns)
+- Adds `keep_response_policies.status_check_threshold_days` as non-null integer (existing rows will need a default — recommend `DEFAULT 5` in the migration if the table is non-empty)
+
+**Session 12 pre-work: complete. S12a is implementation-ready.**
+
+---
+
+## Session 12 — S12a Mini-Brief
+
+**Pre-work complete.** Locked decisions: ADR-373, ADR-374, ADR-375, ADR-376.
+
+### Scope
+
+Keep business profile + response policy settings API. No S12b (product-ops events) in this session.
+
+### What exists today
+
+- `Account.BusinessName` + `Account.TimeZone` — entity + `UpdateProfile()` domain method; no API endpoint
+- `KeepResponsePolicy` — entity + EF config + DB table; missing `StatusCheckThresholdDays`; no GET/PUT API
+- `KeepPublicIntakeLink` + intake setup API — complete; no changes needed in S12a
+
+### New and changed files
+
+**New:**
+
+1. `src/OpHalo.Keep.Core/Entities/KeepBusinessProfile.cs` — entity: `AccountId`, `CustomerFacingPhone` (nullable), `CustomerFacingEmail` (nullable); `Upsert()` or `UpdateContact()` domain method; factory `Create(accountId)`
+2. `src/OpHalo.Keep.Infrastructure/Persistence/Configurations/KeepBusinessProfileConfiguration.cs` — table `keep_business_profiles`; unique index on `account_id`; nullable phone/email columns
+3. `src/OpHalo.Keep.Application/Setup/KeepSetupService.cs` — application service: `GetProfileAsync`, `UpdateProfileAsync`, `GetPolicyAsync`, `UpsertPolicyAsync`
+4. `src/OpHalo.Keep.Application/Setup/IKeepSetupPersistence.cs` — persistence abstraction
+5. `src/OpHalo.Keep.Application/Setup/KeepSetupResults.cs` — result records: `KeepProfileResult`, `KeepPolicyResult`
+6. `src/OpHalo.Keep.Infrastructure/Persistence/EfKeepSetupPersistence.cs` — EF implementation
+
+**Modified:**
+
+7. `src/OpHalo.Keep.Core/Entities/KeepResponsePolicy.cs` — add `StatusCheckThresholdDays`; add `Update(...)` domain method; adjust `Create()` factory signature
+8. `src/OpHalo.Keep.Infrastructure/Persistence/Configurations/KeepResponsePolicyConfiguration.cs` — add `status_check_threshold_days` column mapping
+9. `src/OpHalo.Api/Program.cs` — 4 new endpoints (see below)
+
+**Migration required** — adds `keep_business_profiles` table and `keep_response_policies.status_check_threshold_days` column.
+
+### API endpoints
+
+```
+GET  /keep/setup/profile   → { businessName, timeZone, customerFacingPhone?, customerFacingEmail? }
+PUT  /keep/setup/profile   → body: { businessName, timeZone, customerFacingPhone?, customerFacingEmail? }
+GET  /keep/setup/policy    → { firstResponseTargetMinutes, standardResponseTargetMinutes,
+                               priorityResponseTargetMinutes, statusCheckThresholdDays }
+                             (returns V1 defaults if no policy row exists yet)
+PUT  /keep/setup/policy    → body: same four fields; upsert semantics
+```
+
+Authorization: Owner/Admin only on all four endpoints.
+
+### Policy V1 defaults (when no row exists)
+
+| Field | Default |
+|---|---|
+| `firstResponseTargetMinutes` | 15 |
+| `standardResponseTargetMinutes` | 240 |
+| `priorityResponseTargetMinutes` | 60 |
+| `statusCheckThresholdDays` | 5 |
+
+### Boundary notes
+
+- Profile GET reads `Account` (name, timezone) + `KeepBusinessProfile` (phone, email). Profile PUT writes to both.
+- `Account.UpdateProfile()` already exists and validates name/timezone; call it from the service.
+- Policy GET returns defaults when no row exists — no error, no 404.
+- No changes to `KeepPublicIntakeLink` or intake endpoints in S12a.
+- Intake link status is already returned by `GET /keep/setup/intake`; profile/policy are separate endpoints.
+
+### S12b (next session after S12a commit)
+
+`KeepProductOpsEvent` entity, `KeepProductOpsEventType` enum, onboarding signal recording on key
+action paths, and `GET /keep/setup/onboarding` checklist endpoint derived from event rows.
+Locked signals: ADR-376 + pilot-readiness INT-003.
 
 ---
 

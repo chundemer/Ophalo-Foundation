@@ -12,6 +12,7 @@ public sealed class KeepResponsePolicy : BaseEntity
     public int FirstResponseTargetMinutes { get; private set; }
     public int StandardResponseTargetMinutes { get; private set; }
     public int PriorityResponseTargetMinutes { get; private set; }
+    public int StatusCheckThresholdDays { get; private set; }
     public bool? BusinessHoursOnly { get; private set; }
 
     public static KeepResponsePolicy Create(
@@ -19,6 +20,7 @@ public sealed class KeepResponsePolicy : BaseEntity
         int firstResponseTargetMinutes,
         int standardResponseTargetMinutes,
         int priorityResponseTargetMinutes,
+        int statusCheckThresholdDays,
         bool? businessHoursOnly = null)
     {
         if (accountId == Guid.Empty)
@@ -29,6 +31,8 @@ public sealed class KeepResponsePolicy : BaseEntity
             throw new ArgumentException("Standard response target must be positive.", nameof(standardResponseTargetMinutes));
         if (priorityResponseTargetMinutes <= 0)
             throw new ArgumentException("Priority response target must be positive.", nameof(priorityResponseTargetMinutes));
+        if (statusCheckThresholdDays <= 0)
+            throw new ArgumentException("Status check threshold must be positive.", nameof(statusCheckThresholdDays));
 
         return new KeepResponsePolicy
         {
@@ -36,7 +40,29 @@ public sealed class KeepResponsePolicy : BaseEntity
             FirstResponseTargetMinutes = firstResponseTargetMinutes,
             StandardResponseTargetMinutes = standardResponseTargetMinutes,
             PriorityResponseTargetMinutes = priorityResponseTargetMinutes,
+            StatusCheckThresholdDays = statusCheckThresholdDays,
             BusinessHoursOnly = businessHoursOnly
         };
+    }
+
+    public void Update(
+        int firstResponseTargetMinutes,
+        int standardResponseTargetMinutes,
+        int priorityResponseTargetMinutes,
+        int statusCheckThresholdDays)
+    {
+        if (firstResponseTargetMinutes <= 0)
+            throw new ArgumentException("First response target must be positive.", nameof(firstResponseTargetMinutes));
+        if (standardResponseTargetMinutes <= 0)
+            throw new ArgumentException("Standard response target must be positive.", nameof(standardResponseTargetMinutes));
+        if (priorityResponseTargetMinutes <= 0)
+            throw new ArgumentException("Priority response target must be positive.", nameof(priorityResponseTargetMinutes));
+        if (statusCheckThresholdDays <= 0)
+            throw new ArgumentException("Status check threshold must be positive.", nameof(statusCheckThresholdDays));
+
+        FirstResponseTargetMinutes = firstResponseTargetMinutes;
+        StandardResponseTargetMinutes = standardResponseTargetMinutes;
+        PriorityResponseTargetMinutes = priorityResponseTargetMinutes;
+        StatusCheckThresholdDays = statusCheckThresholdDays;
     }
 }
