@@ -1,10 +1,10 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-06-26 (Session 9 complete; Session 10 next)
+**Last updated:** 2026-06-26 (Session 10 complete; Session 11 next)
 **Branch:** `main` tracking `origin/main`
 **Last green baseline:** 864 unit · 14 arch · 676 integration = 1,554 total, 0 failures
-**Next free ADR:** ADR-369
-**Current session:** Session 10 — Brand Guide And UI Foundation
+**Next free ADR:** ADR-372
+**Current session:** Session 11 — Quick Capture Backend Contract
 
 ---
 
@@ -34,39 +34,45 @@ For every implementation slice:
 
 ## Current Work
 
+**Current build log:** `docs/build-log/065-session-11-quick-capture-backend-contract.md`
 **Last completed build log:** `docs/build-log/064-session-9-account-classification-delivery-eligibility.md`
 **Pilot readiness working doc:** `docs/pilot-readiness-decision-questions.md`
 **Foundation roadmap:** `docs/build-log/ophalo-foundation-build-plan-greenfield-boundaries-brownfield-behavior.md` section 9.1
-**Current session:** Session 10 — Brand Guide And UI Foundation (design foundation slice).
+**Current session:** Session 11 — Quick Capture Backend Contract
 
-**Session 10 progress (locked, docs-only — no app code):**
+**Pre-work status: complete.** Pre-build pass done 2026-06-26. Build log 065 is the implementation spec.
 
-- ADR-367 — brand architecture: branded house with product accents; differentiation by brand
-  (OpHalo/Keep/future) via accent + personality, not by surface. Keep Web and Keep Mobile are one
-  identity at two densities.
-- ADR-368 — type-and-color lock: Source Serif 4 headlines over Inter body (Poppins = wordmark only);
-  terracotta `#BF6B43` added as `--ophalo-accent`; attention nudged to amber `#C8741A`; gold removed
-  (`--primary` → navy). Contract written into `ux-design-model-v1.md` (new Typography section).
-- UX design system + decisions are now tracked in git (were untracked).
+**Session 11 scope:** Authenticated staff can create a Keep request immediately after a customer
+contact, with required source/channel. Two independently compiling slices:
 
-**Deferred to the real frontend build (no foundation frontend exists yet — `web/ophalo-web` is an
-empty placeholder; built Session 13):** wire Source Serif, `--primary`→navy, amber attention,
-`--ophalo-accent` token, serif headings, stronger marketing section contrast, container-width
-rework, `brand-kit/BRAND.md` §5 correction. Tracked in `ux-design-decisions.md` Open Gaps.
+- **S11a** — Source/channel + NeedsShare flag (creation + detail response). 10 production files,
+  EF migration. Locked decisions: ADR-369 (KeepRequestSource enum), ADR-370 (NeedsShare flag),
+  ADR-371 (S11 batch split).
+- **S11b** — List summary indicators + share intent clearing. Deferred.
 
-**Next decision:** proceed to Session 11 (quick-capture backend contract) per roadmap, or pull
-frontend scaffolding forward and apply the ADR-368 spec into a new `web/ophalo-web`.
+**S11a file-level gate (10 production files):**
+1. `src/OpHalo.Keep.Core/Entities/Enums/KeepRequestSource.cs` — NEW
+2. `src/OpHalo.Keep.Core/Entities/KeepRequest.cs` — Source, NeedsShare, CreateByBusiness, CreateCore, ClearNeedsShare
+3. `src/OpHalo.Keep.Application/Requests/CreateBusinessRequestCommand.cs` — add Source
+4. `src/OpHalo.Keep.Application/Requests/CreateBusinessRequestService.cs` — slug parser; reject public_intake
+5. `src/OpHalo.Keep.Application/Requests/KeepRequestDetailResult.cs` — add Source, NeedsShare
+6. `src/OpHalo.Keep.Application/Requests/KeepRequestDetailMapper.cs` — map Source slug, NeedsShare
+7. `src/OpHalo.Api/Keep/CreateBusinessRequestBody.cs` — add Source
+8. `src/OpHalo.Keep.Infrastructure/Persistence/Configurations/KeepRequestConfiguration.cs` — EF config
+9. `src/OpHalo.Api/Program.cs` — pass body.Source to command
+10. `src/OpHalo.Api/Helpers/ErrorHttpMapper.cs` — 3 source error codes
 
-Session 9 is complete. It replaced `AccountEntitlements.IsPilot` with `AccountClassification` on
-`AccountEntitlements`, updated `SignupDefaultsSettings`, migrated existing data, and added the
-Demo/InternalTest delivery eligibility gate required before real APNs/FCM delivery.
+**Migration (generated, ready to apply):**
+```
+dotnet ef database update --startup-project src/OpHalo.Keep.Infrastructure
+```
+Migration file: `20260627003337_QuickCaptureSourceAndNeedsShare`
 
-Locked Session 9 decisions:
-
-- ADR-363 — account classification replaces `AccountEntitlements.IsPilot`.
-- ADR-364 — signup defaults set classification, not a pilot boolean.
-- ADR-365 — pilot cap counts classification `Pilot`.
-- ADR-366 — Demo/InternalTest suppress production push delivery.
+**Session 10 (docs-only, complete):**
+- ADR-367 — brand architecture: branded house with product accents.
+- ADR-368 — type-and-color lock: Source Serif 4 / Inter / terracotta / amber / navy.
+- UX design system tracked in git.
+- Frontend wiring deferred to Session 13 (`web/ophalo-web` is empty placeholder).
 
 ---
 

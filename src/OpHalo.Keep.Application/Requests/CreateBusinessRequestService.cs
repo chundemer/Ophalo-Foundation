@@ -6,6 +6,7 @@ using OpHalo.Foundation.Core.Entities.Accounts.Enums;
 using OpHalo.Keep.Application.Services;
 using OpHalo.Keep.Application.Validation;
 using OpHalo.Keep.Core.Entities;
+using OpHalo.Keep.Core.Entities.Enums;
 using OpHalo.Keep.Core.Errors;
 using OpHalo.SharedKernel.Abstractions;
 using OpHalo.SharedKernel.Results;
@@ -30,6 +31,15 @@ public sealed class CreateBusinessRequestService(
 
     private static readonly Error Forbidden =
         Error.Create("auth.forbidden", "You do not have permission to perform this action.");
+
+    private static readonly Error SourceRequired =
+        Error.Create("KeepRequest.SourceRequired", "Source is required for business-created requests.");
+
+    private static readonly Error InvalidSource =
+        Error.Create("KeepRequest.InvalidSource", "The provided source is not valid.");
+
+    private static readonly Error SourceCannotBePublicIntake =
+        Error.Create("KeepRequest.SourceCannotBePublicIntake", "Staff cannot select Public Intake as a source.");
 
     public async Task<Result<KeepRequestDetailResult>> ExecuteAsync(
         CreateBusinessRequestCommand command, CancellationToken ct = default)
@@ -82,6 +92,12 @@ public sealed class CreateBusinessRequestService(
 
         var v = validation.Value;
 
+        if (string.IsNullOrWhiteSpace(command.Source))
+            return Result<KeepRequestDetailResult>.Failure(SourceRequired);
+        if (!TryParseSourceSlug(command.Source, out var parsedSource))
+            return Result<KeepRequestDetailResult>.Failure(
+                command.Source == "public_intake" ? SourceCannotBePublicIntake : InvalidSource);
+
         var actorDisplayName = await operatePersistence.GetActorDisplayNameAsync(currentUser.UserId, ct);
         if (actorDisplayName is null)
             return Result<KeepRequestDetailResult>.Failure(Forbidden);
@@ -113,7 +129,8 @@ public sealed class CreateBusinessRequestService(
                 v.TrimmedDescription,
                 referenceCode,
                 pageToken,
-                nowUtc);
+                nowUtc,
+                parsedSource);
 
             var @event = KeepRequestEvent.CreateRequestCreated(
                 request.Id, accountId, currentUser.UserId, actorDisplayName, nowUtc);
@@ -169,5 +186,23 @@ public sealed class CreateBusinessRequestService(
         return KeepRequestDetailMapper.ToDetailResult(
             request, businessName ?? string.Empty, participants, events, availableActions,
             role, canOperate: true, currentUser.UserId, nowUtc);
+    }
+
+    // Accepts only the API slug forms that staff may supply. public_intake is excluded
+    // so the caller can distinguish it from an unknown slug and return the right error.
+    private static bool TryParseSourceSlug(string slug, out KeepRequestSource result)
+    {
+        result = slug switch
+        {
+            "phone"        => KeepRequestSource.Phone,
+            "voicemail"    => KeepRequestSource.Voicemail,
+            "text"         => KeepRequestSource.Text,
+            "email"        => KeepRequestSource.Email,
+            "walk_in"      => KeepRequestSource.WalkIn,
+            "referral"     => KeepRequestSource.Referral,
+            "other"        => KeepRequestSource.Other,
+            _              => (KeepRequestSource)0
+        };
+        return result != (KeepRequestSource)0;
     }
 }

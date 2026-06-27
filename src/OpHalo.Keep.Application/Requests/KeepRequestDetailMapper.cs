@@ -52,6 +52,8 @@ internal static class KeepRequestDetailMapper
         ReferenceCode: request.ReferenceCode,
         Status: MapStatus(request.Status),
         Origin: MapOrigin(request.Origin),
+        Source: MapSource(request.Source),
+        NeedsShare: request.NeedsShare,
         BusinessName: businessName,
         CustomerName: request.CustomerName,
         CustomerPhone: request.CustomerPhone,
@@ -276,6 +278,20 @@ internal static class KeepRequestDetailMapper
         KeepRequestOrigin.Customer => "customer",
         KeepRequestOrigin.Business => "business",
         _ => throw new InvalidOperationException($"Unknown KeepRequestOrigin: {origin}")
+    };
+
+    private static string? MapSource(KeepRequestSource? source) => source switch
+    {
+        KeepRequestSource.Phone        => "phone",
+        KeepRequestSource.Voicemail    => "voicemail",
+        KeepRequestSource.Text         => "text",
+        KeepRequestSource.Email        => "email",
+        KeepRequestSource.WalkIn       => "walk_in",
+        KeepRequestSource.Referral     => "referral",
+        KeepRequestSource.PublicIntake => "public_intake",
+        KeepRequestSource.Other        => "other",
+        null                           => null,
+        _                              => throw new InvalidOperationException($"Unknown KeepRequestSource: {source}")
     };
 
     private static string MapAttentionLevel(AttentionLevel level) => level switch

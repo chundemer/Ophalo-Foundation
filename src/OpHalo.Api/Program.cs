@@ -312,7 +312,7 @@ app.MapPost("/keep/requests", async (
     CancellationToken ct) =>
 {
     var command = new CreateBusinessRequestCommand(
-        body.CustomerName, body.CustomerPhone, body.CustomerEmail, body.Description);
+        body.CustomerName, body.CustomerPhone, body.CustomerEmail, body.Description, body.Source);
     var result = await service.ExecuteAsync(command, ct);
     return result.IsSuccess
         ? Results.Created($"/keep/requests/{result.Value.RequestId}", result.Value)

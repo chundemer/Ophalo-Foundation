@@ -19,7 +19,7 @@ public class KeepRequestTests
             ? KeepRequest.CreateByBusiness(
                 AccountId, CustomerId,
                 "Jane Smith", "0412345678", null,
-                description, referenceCode, pageToken, Now)
+                description, referenceCode, pageToken, Now, KeepRequestSource.Phone)
             : KeepRequest.CreateFromCustomerIntake(
                 AccountId, CustomerId,
                 "Jane Smith", "0412345678", null,

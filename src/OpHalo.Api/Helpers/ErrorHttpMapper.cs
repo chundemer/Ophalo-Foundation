@@ -68,6 +68,9 @@ public static class ErrorHttpMapper
             var c when c == "KeepRequest.CustomerEmailTooLong"           => (StatusCodes.Status400BadRequest, "Bad request.", null),
             var c when c == "KeepRequest.CustomerEmailInvalid"           => (StatusCodes.Status400BadRequest, "Bad request.", null),
             var c when c == "KeepRequest.DescriptionTooLong"             => (StatusCodes.Status400BadRequest, "Bad request.", null),
+            var c when c == "KeepRequest.SourceRequired"              => (StatusCodes.Status400BadRequest, "Bad request.", null),
+            var c when c == "KeepRequest.InvalidSource"               => (StatusCodes.Status400BadRequest, "Bad request.", null),
+            var c when c == "KeepRequest.SourceCannotBePublicIntake"  => (StatusCodes.Status400BadRequest, "Bad request.", null),
 
             // --- Keep request operator-write codes (explicit where suffix patterns do not cover) ---
             // NotFound → covered by .NotFound suffix; Forbidden → covered by .Forbidden suffix;

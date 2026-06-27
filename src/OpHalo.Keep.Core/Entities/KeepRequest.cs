@@ -31,6 +31,11 @@ public sealed class KeepRequest : BaseEntity
     // D7/ADR-090: who originated the request (Customer vs Business).
     public KeepRequestOrigin Origin { get; private set; } = KeepRequestOrigin.Customer;
 
+    // ADR-369: channel through which the request entered Keep (null for pre-S11 rows).
+    public KeepRequestSource? Source { get; private set; }
+    // ADR-370: true when business-created and not yet shared via tracker link.
+    public bool NeedsShare { get; private set; }
+
     // Lifecycle timestamps.
     public DateTime? ExpiresAtUtc { get; private set; }
     public DateTime? TerminatedAtUtc { get; private set; }      // ADR-096: covers Closed, Cancelled, Spam, Test
@@ -1148,7 +1153,7 @@ public sealed class KeepRequest : BaseEntity
 
         return CreateCore(accountId, customerId, customerName, customerPhone, customerEmail,
             description, referenceCode, pageToken, nowUtc, firstResponseTargetMinutes,
-            KeepRequestOrigin.Customer);
+            KeepRequestOrigin.Customer, KeepRequestSource.PublicIntake, needsShare: false);
     }
 
     /// <summary>
@@ -1165,10 +1170,13 @@ public sealed class KeepRequest : BaseEntity
         string description,
         string referenceCode,
         string pageToken,
-        DateTime nowUtc) =>
+        DateTime nowUtc,
+        KeepRequestSource source) =>
         CreateCore(accountId, customerId, customerName, customerPhone, customerEmail,
             description, referenceCode, pageToken, nowUtc, firstResponseTargetMinutes: 0,
-            KeepRequestOrigin.Business);
+            KeepRequestOrigin.Business, source, needsShare: true);
+
+    public void ClearNeedsShare() => NeedsShare = false;
 
     private static KeepRequest CreateCore(
         Guid accountId,
@@ -1181,7 +1189,9 @@ public sealed class KeepRequest : BaseEntity
         string pageToken,
         DateTime nowUtc,
         int firstResponseTargetMinutes,
-        KeepRequestOrigin origin)
+        KeepRequestOrigin origin,
+        KeepRequestSource? source,
+        bool needsShare)
     {
         if (accountId == Guid.Empty)
             throw new ArgumentException("Account ID is required.", nameof(accountId));
@@ -1210,6 +1220,8 @@ public sealed class KeepRequest : BaseEntity
             ReferenceCode = referenceCode.Trim(),
             PageToken = pageToken.Trim(),
             Origin = origin,
+            Source = source,
+            NeedsShare = needsShare,
             LastCustomerActivityAt = origin == KeepRequestOrigin.Customer ? nowUtc : null,
             LastBusinessActivityAt = origin == KeepRequestOrigin.Business ? nowUtc : null,
             FirstResponseDueAtUtc = origin == KeepRequestOrigin.Customer

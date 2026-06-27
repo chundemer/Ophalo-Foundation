@@ -14,7 +14,7 @@ public class KeepRequestPageViewTests
         KeepRequest.CreateByBusiness(
             AccountId, CustomerId,
             "Jane Smith", "0412345678", null,
-            "Burst pipe", "PQRS0001", "tok_abc", Now);
+            "Burst pipe", "PQRS0001", "tok_abc", Now, KeepRequestSource.Phone);
 
     static KeepRequest ClosedRequest()
     {

@@ -5,6 +5,8 @@ public sealed record KeepRequestDetailResult(
     string ReferenceCode,
     string Status,
     string Origin,
+    string? Source,
+    bool NeedsShare,
     string BusinessName,
     string CustomerName,
     string CustomerPhone,

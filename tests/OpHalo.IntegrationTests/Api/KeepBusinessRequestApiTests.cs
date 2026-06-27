@@ -137,7 +137,8 @@ public sealed class KeepBusinessRequestApiTests : IClassFixture<KeepApiWebFactor
         {
             customerName  = "Jane Smith",
             customerPhone = "0411000001",
-            description   = "Burst pipe in bathroom"
+            description   = "Burst pipe in bathroom",
+            source        = "phone"
         });
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
@@ -150,6 +151,10 @@ public sealed class KeepBusinessRequestApiTests : IClassFixture<KeepApiWebFactor
         Assert.Equal("received", body.GetProperty("status").GetString());
         Assert.Equal("business", body.GetProperty("origin").GetString());
         Assert.False(string.IsNullOrWhiteSpace(body.GetProperty("pageToken").GetString()));
+
+        // Source and NeedsShare (S11a)
+        Assert.Equal("phone", body.GetProperty("source").GetString());
+        Assert.True(body.GetProperty("needsShare").GetBoolean());
 
         // The business-created request must have exactly one RequestCreated event
         // with authenticated actor metadata (ADR-318, G3b contract).
@@ -177,7 +182,8 @@ public sealed class KeepBusinessRequestApiTests : IClassFixture<KeepApiWebFactor
         {
             customerName  = "Bob Jones",
             customerPhone = "0411000002",
-            description   = "Hot water fault"
+            description   = "Hot water fault",
+            source        = "phone"
         });
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
@@ -192,7 +198,8 @@ public sealed class KeepBusinessRequestApiTests : IClassFixture<KeepApiWebFactor
         {
             customerName  = "Carol White",
             customerPhone = "0411000003",
-            description   = "Gas heater service"
+            description   = "Gas heater service",
+            source        = "phone"
         });
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
@@ -357,7 +364,8 @@ public sealed class KeepBusinessRequestApiTests : IClassFixture<KeepApiWebFactor
         {
             customerName  = "Jack Reuse",
             customerPhone = "0411000030",
-            description   = "First call"
+            description   = "First call",
+            source        = "phone"
         });
         Assert.Equal(HttpStatusCode.Created, r1.StatusCode);
 
@@ -366,7 +374,8 @@ public sealed class KeepBusinessRequestApiTests : IClassFixture<KeepApiWebFactor
         {
             customerName  = "Jack R.",
             customerPhone = "04 1100 0030",  // equivalent after normalization
-            description   = "Follow-up call"
+            description   = "Follow-up call",
+            source        = "phone"
         });
         Assert.Equal(HttpStatusCode.Created, r2.StatusCode);
 
@@ -398,7 +407,8 @@ public sealed class KeepBusinessRequestApiTests : IClassFixture<KeepApiWebFactor
         {
             customerName  = "Kim Parallel",
             customerPhone = "0411000040",
-            description   = "First parallel request"
+            description   = "First parallel request",
+            source        = "phone"
         });
         Assert.Equal(HttpStatusCode.Created, r1Response.StatusCode);
         var r1Body = await r1Response.Content.ReadFromJsonAsync<JsonElement>();
@@ -407,7 +417,8 @@ public sealed class KeepBusinessRequestApiTests : IClassFixture<KeepApiWebFactor
         {
             customerName  = "Kim Parallel",
             customerPhone = "0411000040",
-            description   = "Second parallel request"
+            description   = "Second parallel request",
+            source        = "phone"
         });
         Assert.Equal(HttpStatusCode.Created, r2Response.StatusCode);
         var r2Body = await r2Response.Content.ReadFromJsonAsync<JsonElement>();
@@ -441,7 +452,7 @@ public sealed class KeepBusinessRequestApiTests : IClassFixture<KeepApiWebFactor
             customerName  = "Version Test Customer",
             customerPhone = "0400000099",
             description   = "Version exposure test",
-            origin        = "business"
+            source        = "phone"
         });
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
@@ -449,6 +460,51 @@ public sealed class KeepBusinessRequestApiTests : IClassFixture<KeepApiWebFactor
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
         Assert.True(Guid.TryParseExact(body.GetProperty("version").GetString(), "D", out var version));
         Assert.NotEqual(Guid.Empty, version);
+    }
+
+    // =========================================================================
+    // Source validation (S11a, ADR-369)
+    // =========================================================================
+
+    [Fact]
+    public async Task CreateBusinessRequest_returns_error_when_source_missing()
+    {
+        var response = await AuthRequest(_ownerCookie).PostAsJsonAsync("/keep/requests", new
+        {
+            customerName  = "Jane Source",
+            customerPhone = "0411000091",
+            description   = "Missing source test"
+        });
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal("KeepRequest.SourceRequired", await GetErrorCodeAsync(response));
+    }
+
+    [Fact]
+    public async Task CreateBusinessRequest_returns_error_when_source_is_invalid()
+    {
+        var response = await AuthRequest(_ownerCookie).PostAsJsonAsync("/keep/requests", new
+        {
+            customerName  = "Jane Source",
+            customerPhone = "0411000092",
+            description   = "Invalid source test",
+            source        = "NotASource"
+        });
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal("KeepRequest.InvalidSource", await GetErrorCodeAsync(response));
+    }
+
+    [Fact]
+    public async Task CreateBusinessRequest_returns_error_when_source_is_PublicIntake()
+    {
+        var response = await AuthRequest(_ownerCookie).PostAsJsonAsync("/keep/requests", new
+        {
+            customerName  = "Jane Source",
+            customerPhone = "0411000093",
+            description   = "PublicIntake source test",
+            source        = "public_intake"
+        });
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal("KeepRequest.SourceCannotBePublicIntake", await GetErrorCodeAsync(response));
     }
 
     // =========================================================================

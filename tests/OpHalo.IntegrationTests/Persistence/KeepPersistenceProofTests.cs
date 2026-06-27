@@ -644,7 +644,7 @@ public sealed class KeepPersistenceProofTests : IClassFixture<PostgresFixture>, 
         {
             var r = KeepRequest.CreateByBusiness(
                 AccountId, existingCustomer.Id, "Existing", "0400111001", null,
-                "Prior request", "BIZREF001", conflictingToken, Now);
+                "Prior request", "BIZREF001", conflictingToken, Now, KeepRequestSource.Phone);
             ctx.Set<KeepCustomer>().Add(existingCustomer);
             ctx.Set<KeepRequest>().Add(r);
             ctx.Set<KeepRequestEvent>().Add(KeepRequestEvent.CreateRequestCreated(r.Id, AccountId, AccountOwnerAccountUserId, "Owner", Now));
@@ -658,7 +658,7 @@ public sealed class KeepPersistenceProofTests : IClassFixture<PostgresFixture>, 
         var newCustomer = KeepCustomer.Create(AccountId, "Jane", "0400111002");
         var newRequest = KeepRequest.CreateByBusiness(
             AccountId, newCustomer.Id, "Jane", "0400111002", null,
-            "New request", "BIZREF002", conflictingToken, Now);
+            "New request", "BIZREF002", conflictingToken, Now, KeepRequestSource.Phone);
         var newEvent = KeepRequestEvent.CreateRequestCreated(newRequest.Id, AccountId, AccountOwnerAccountUserId, "Owner", Now);
 
         var result = await sut.CommitBusinessRequestAsync(newCustomer, newRequest, newEvent, CancellationToken.None);
@@ -680,7 +680,7 @@ public sealed class KeepPersistenceProofTests : IClassFixture<PostgresFixture>, 
         {
             var r = KeepRequest.CreateByBusiness(
                 AccountId, existingCustomer.Id, "Existing", "0400111003", null,
-                "Prior request", conflictingRef, "biz-tok-ref-001", Now);
+                "Prior request", conflictingRef, "biz-tok-ref-001", Now, KeepRequestSource.Phone);
             ctx.Set<KeepCustomer>().Add(existingCustomer);
             ctx.Set<KeepRequest>().Add(r);
             ctx.Set<KeepRequestEvent>().Add(KeepRequestEvent.CreateRequestCreated(r.Id, AccountId, AccountOwnerAccountUserId, "Owner", Now));
@@ -693,7 +693,7 @@ public sealed class KeepPersistenceProofTests : IClassFixture<PostgresFixture>, 
         var newCustomer = KeepCustomer.Create(AccountId, "Jane", "0400111004");
         var newRequest = KeepRequest.CreateByBusiness(
             AccountId, newCustomer.Id, "Jane", "0400111004", null,
-            "Collision request", conflictingRef, "biz-tok-ref-002", Now);
+            "Collision request", conflictingRef, "biz-tok-ref-002", Now, KeepRequestSource.Phone);
         var newEvent = KeepRequestEvent.CreateRequestCreated(newRequest.Id, AccountId, AccountOwnerAccountUserId, "Owner", Now);
 
         var result = await sut.CommitBusinessRequestAsync(newCustomer, newRequest, newEvent, CancellationToken.None);
@@ -720,7 +720,7 @@ public sealed class KeepPersistenceProofTests : IClassFixture<PostgresFixture>, 
         var racingCustomer = KeepCustomer.Create(AccountId, "Racing Jane", "04001 1100 5"); // same digits
         var request = KeepRequest.CreateByBusiness(
             AccountId, racingCustomer.Id, "Racing Jane", "04001 1100 5", null,
-            "Race request", "BIZRACE001", "biz-tok-race-001", Now);
+            "Race request", "BIZRACE001", "biz-tok-race-001", Now, KeepRequestSource.Phone);
         var ev = KeepRequestEvent.CreateRequestCreated(request.Id, AccountId, AccountOwnerAccountUserId, "Owner", Now);
 
         var result = await sut.CommitBusinessRequestAsync(racingCustomer, request, ev, CancellationToken.None);
@@ -744,7 +744,7 @@ public sealed class KeepPersistenceProofTests : IClassFixture<PostgresFixture>, 
         // Instead, create a request referencing a non-existent customer from a different account.
         var requestWithBadCustomer = KeepRequest.CreateByBusiness(
             AccountId, unknownCustomerId, "Ghost", "0400111006", null,
-            "Bad request", "BIZBAD001", "biz-tok-bad-001", Now);
+            "Bad request", "BIZBAD001", "biz-tok-bad-001", Now, KeepRequestSource.Phone);
         var ev = KeepRequestEvent.CreateRequestCreated(requestWithBadCustomer.Id, AccountId, AccountOwnerAccountUserId, "Owner", Now);
 
         // CommitAsync adds the customer entity; skip that by attaching a tracked version.
@@ -774,7 +774,7 @@ public sealed class KeepPersistenceProofTests : IClassFixture<PostgresFixture>, 
 
         // Attempt 1: phone collision.
         var racer = KeepCustomer.Create(AccountId, "Racer", "04001 1100 7");
-        var r1 = KeepRequest.CreateByBusiness(AccountId, racer.Id, "Racer", "04001 1100 7", null, "Desc", "RETRY001", "biz-tok-retry-001", Now);
+        var r1 = KeepRequest.CreateByBusiness(AccountId, racer.Id, "Racer", "04001 1100 7", null, "Desc", "RETRY001", "biz-tok-retry-001", Now, KeepRequestSource.Phone);
         var e1 = KeepRequestEvent.CreateRequestCreated(r1.Id, AccountId, AccountOwnerAccountUserId, "Owner", Now);
         var outcome1 = await sut.CommitBusinessRequestAsync(racer, r1, e1, CancellationToken.None);
         Assert.Equal(OpHalo.Keep.Application.Requests.BusinessRequestCommitResult.CustomerCanonicalPhoneCollision, outcome1);
@@ -782,7 +782,7 @@ public sealed class KeepPersistenceProofTests : IClassFixture<PostgresFixture>, 
         // Attempt 2 after recovery: reuse the winning customer — should commit.
         var winnerRefresh = await bizCtx.Set<KeepCustomer>()
             .FirstAsync(c => c.AccountId == AccountId && c.CanonicalPhone == winner.CanonicalPhone);
-        var r2 = KeepRequest.CreateByBusiness(AccountId, winnerRefresh.Id, "Winner", "0400111007", null, "Retry desc", "RETRY002", "biz-tok-retry-002", Now);
+        var r2 = KeepRequest.CreateByBusiness(AccountId, winnerRefresh.Id, "Winner", "0400111007", null, "Retry desc", "RETRY002", "biz-tok-retry-002", Now, KeepRequestSource.Phone);
         var e2 = KeepRequestEvent.CreateRequestCreated(r2.Id, AccountId, AccountOwnerAccountUserId, "Owner", Now);
         var outcome2 = await sut.CommitBusinessRequestAsync(winnerRefresh, r2, e2, CancellationToken.None);
         Assert.Equal(OpHalo.Keep.Application.Requests.BusinessRequestCommitResult.Committed, outcome2);

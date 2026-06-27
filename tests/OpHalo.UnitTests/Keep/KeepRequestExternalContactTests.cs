@@ -22,7 +22,7 @@ public class KeepRequestExternalContactTests
     static KeepRequest NewBusinessRequest() =>
         KeepRequest.CreateByBusiness(AccountId, CustomerId,
             "John Customer", "0412345678", null,
-            "Fix the hot water system", "ABCD1234", "tok_abc", Now);
+            "Fix the hot water system", "ABCD1234", "tok_abc", Now, KeepRequestSource.Phone);
 
     // Raise standard business-waiting attention on the request.
     static void RaiseBusinessWaiting(KeepRequest request, DateTime? since = null)

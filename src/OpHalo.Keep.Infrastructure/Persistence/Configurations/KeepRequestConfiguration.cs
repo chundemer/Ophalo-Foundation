@@ -201,5 +201,14 @@ internal sealed class KeepRequestConfiguration : BaseEntityConfiguration<KeepReq
             .OnDelete(DeleteBehavior.Restrict)
             .IsRequired(false)
             .HasConstraintName("fk_keep_requests_first_response_event");
+
+        // Source/NeedsShare (ADR-369, ADR-370, S11a).
+        builder.Property(x => x.Source)
+            .HasConversion<string>()
+            .HasMaxLength(50);
+
+        builder.Property(x => x.NeedsShare)
+            .IsRequired()
+            .HasDefaultValue(false);
     }
 }

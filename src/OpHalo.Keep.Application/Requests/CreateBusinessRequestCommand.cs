@@ -4,4 +4,5 @@ public sealed record CreateBusinessRequestCommand(
     string? CustomerName,
     string? CustomerPhone,
     string? CustomerEmail,
-    string? Description);
+    string? Description,
+    string? Source);

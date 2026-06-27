@@ -21,13 +21,13 @@ public class KeepRequestFollowUpTests
             _ => KeepRequest.CreateByBusiness(
                 AccountId, CustomerId,
                 "Jane Smith", "0412345678", null,
-                "Burst pipe", "PQRS0001", "tok_abc", Now)
+                "Burst pipe", "PQRS0001", "tok_abc", Now, KeepRequestSource.Phone)
         };
 
     static KeepRequest ResolvedRequest()
     {
         var r = KeepRequest.CreateByBusiness(AccountId, CustomerId, "Jane", "0412345678", null,
-            "desc", "PQRS0002", "tok_res", Now);
+            "desc", "PQRS0002", "tok_res", Now, KeepRequestSource.Phone);
         r.ChangeStatus(KeepRequestStatus.Resolved, null, ActorId, "Jane", Now);
         return r;
     }
@@ -42,7 +42,7 @@ public class KeepRequestFollowUpTests
     static KeepRequest CancelledRequest()
     {
         var r = KeepRequest.CreateByBusiness(AccountId, CustomerId, "Jane", "0412345678", null,
-            "desc", "PQRS0003", "tok_can", Now);
+            "desc", "PQRS0003", "tok_can", Now, KeepRequestSource.Phone);
         r.ChangeStatus(KeepRequestStatus.Cancelled, "Cancelling.", ActorId, "Jane", Now);
         return r;
     }
@@ -138,7 +138,7 @@ public class KeepRequestFollowUpTests
     public void SetFollowUpOn_on_active_statuses_succeeds(KeepRequestStatus status)
     {
         var r = KeepRequest.CreateByBusiness(AccountId, CustomerId, "Jane", "0412345678", null,
-            "desc", "PQRS0004", "tok_st", Now);
+            "desc", "PQRS0004", "tok_st", Now, KeepRequestSource.Phone);
         if (status != KeepRequestStatus.Received)
             r.ChangeStatus(status, status == KeepRequestStatus.PendingCustomer ? "msg" : null, ActorId, "Jane", Now);
 

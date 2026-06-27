@@ -75,7 +75,7 @@ public class KeepCreateBusinessRequestServiceTests
         null);
 
     private static CreateBusinessRequestCommand ValidCommand() => new(
-        "Jane Doe", "0499 888 777", "jane@example.com", "Fix the boiler");
+        "Jane Doe", "0499 888 777", "jane@example.com", "Fix the boiler", "phone");
 
     // ---------------------------------------------------------------------------
     // Auth — unauthenticated
@@ -173,7 +173,7 @@ public class KeepCreateBusinessRequestServiceTests
     public async Task Execute_returns_error_when_customer_name_blank()
     {
         var sut = BuildSut();
-        var result = await sut.ExecuteAsync(new CreateBusinessRequestCommand("  ", "0499888777", null, "Desc"));
+        var result = await sut.ExecuteAsync(new CreateBusinessRequestCommand("  ", "0499888777", null, "Desc", null));
         Assert.False(result.IsSuccess);
         Assert.Equal("KeepRequest.CustomerNameRequired", result.Error.Code);
     }
@@ -182,7 +182,7 @@ public class KeepCreateBusinessRequestServiceTests
     public async Task Execute_returns_error_when_phone_blank()
     {
         var sut = BuildSut();
-        var result = await sut.ExecuteAsync(new CreateBusinessRequestCommand("Jane", "", null, "Desc"));
+        var result = await sut.ExecuteAsync(new CreateBusinessRequestCommand("Jane", "", null, "Desc", null));
         Assert.False(result.IsSuccess);
         Assert.Equal("KeepRequest.CustomerPhoneRequired", result.Error.Code);
     }
@@ -191,7 +191,7 @@ public class KeepCreateBusinessRequestServiceTests
     public async Task Execute_returns_error_when_description_blank()
     {
         var sut = BuildSut();
-        var result = await sut.ExecuteAsync(new CreateBusinessRequestCommand("Jane", "0499888777", null, ""));
+        var result = await sut.ExecuteAsync(new CreateBusinessRequestCommand("Jane", "0499888777", null, "", null));
         Assert.False(result.IsSuccess);
         Assert.Equal("KeepRequest.DescriptionRequired", result.Error.Code);
     }
@@ -200,7 +200,7 @@ public class KeepCreateBusinessRequestServiceTests
     public async Task Execute_returns_error_for_invalid_phone_characters()
     {
         var sut = BuildSut();
-        var result = await sut.ExecuteAsync(new CreateBusinessRequestCommand("Jane", "049#9888777", null, "Desc"));
+        var result = await sut.ExecuteAsync(new CreateBusinessRequestCommand("Jane", "049#9888777", null, "Desc", null));
         Assert.False(result.IsSuccess);
         Assert.Equal("KeepRequest.CustomerPhoneInvalidCharacters", result.Error.Code);
     }
@@ -209,7 +209,7 @@ public class KeepCreateBusinessRequestServiceTests
     public async Task Execute_returns_error_for_invalid_phone_format()
     {
         var sut = BuildSut();
-        var result = await sut.ExecuteAsync(new CreateBusinessRequestCommand("Jane", "123", null, "Desc"));
+        var result = await sut.ExecuteAsync(new CreateBusinessRequestCommand("Jane", "123", null, "Desc", null));
         Assert.False(result.IsSuccess);
         Assert.Equal("KeepRequest.CustomerPhoneInvalidFormat", result.Error.Code);
     }
@@ -219,7 +219,7 @@ public class KeepCreateBusinessRequestServiceTests
     {
         var sut = BuildSut();
         var result = await sut.ExecuteAsync(
-            new CreateBusinessRequestCommand("Jane", "0499888777", "not-an-email", "Desc"));
+            new CreateBusinessRequestCommand("Jane", "0499888777", "not-an-email", "Desc", null));
         Assert.False(result.IsSuccess);
         Assert.Equal("KeepRequest.CustomerEmailInvalid", result.Error.Code);
     }
@@ -230,7 +230,7 @@ public class KeepCreateBusinessRequestServiceTests
     {
         var operate = HappyOperatePersistence();
         var sut = BuildSut(operate: operate);
-        await sut.ExecuteAsync(new CreateBusinessRequestCommand("", "0499888777", null, "Desc"));
+        await sut.ExecuteAsync(new CreateBusinessRequestCommand("", "0499888777", null, "Desc", null));
         Assert.Equal(0, operate.ActorLookupCount);
     }
 
@@ -332,6 +332,77 @@ public class KeepCreateBusinessRequestServiceTests
         Assert.True(result.IsSuccess);
         Assert.Equal(winningCustomer.Id, business.CommittedCustomer!.Id);
         Assert.Equal(2, business.CommitAttempts);
+    }
+
+    // ---------------------------------------------------------------------------
+    // Source / NeedsShare (S11a, ADR-369, ADR-370)
+    // ---------------------------------------------------------------------------
+
+    [Fact]
+    public async Task Execute_returns_error_when_source_is_missing()
+    {
+        var sut = BuildSut();
+        var result = await sut.ExecuteAsync(new CreateBusinessRequestCommand("Jane", "0499888777", null, "Desc", null));
+        Assert.False(result.IsSuccess);
+        Assert.Equal("KeepRequest.SourceRequired", result.Error.Code);
+    }
+
+    [Fact]
+    public async Task Execute_returns_error_when_source_is_invalid()
+    {
+        var sut = BuildSut();
+        var result = await sut.ExecuteAsync(new CreateBusinessRequestCommand("Jane", "0499888777", null, "Desc", "NotAValidSource"));
+        Assert.False(result.IsSuccess);
+        Assert.Equal("KeepRequest.InvalidSource", result.Error.Code);
+    }
+
+    [Fact]
+    public async Task Execute_returns_error_when_source_is_public_intake_slug()
+    {
+        var sut = BuildSut();
+        var result = await sut.ExecuteAsync(new CreateBusinessRequestCommand("Jane", "0499888777", null, "Desc", "public_intake"));
+        Assert.False(result.IsSuccess);
+        Assert.Equal("KeepRequest.SourceCannotBePublicIntake", result.Error.Code);
+    }
+
+    [Fact]
+    public async Task Execute_returns_invalid_source_for_PascalCase_enum_name()
+    {
+        var sut = BuildSut();
+        var result = await sut.ExecuteAsync(new CreateBusinessRequestCommand("Jane", "0499888777", null, "Desc", "WalkIn"));
+        Assert.False(result.IsSuccess);
+        Assert.Equal("KeepRequest.InvalidSource", result.Error.Code);
+    }
+
+    [Fact]
+    public async Task Execute_returns_invalid_source_for_numeric_string()
+    {
+        var sut = BuildSut();
+        var result = await sut.ExecuteAsync(new CreateBusinessRequestCommand("Jane", "0499888777", null, "Desc", "1"));
+        Assert.False(result.IsSuccess);
+        Assert.Equal("KeepRequest.InvalidSource", result.Error.Code);
+    }
+
+    [Fact]
+    public async Task Execute_sets_NeedsShare_true_on_created_request()
+    {
+        var business = new FakeBusinessPersistence();
+        business.CommitResults.Enqueue(BusinessRequestCommitResult.Committed);
+        var sut = BuildSut(business: business);
+        var result = await sut.ExecuteAsync(ValidCommand());
+
+        Assert.True(result.IsSuccess);
+        Assert.True(result.Value.NeedsShare);
+    }
+
+    [Fact]
+    public async Task Execute_maps_source_slug_to_detail_result()
+    {
+        var sut = BuildSut();
+        var result = await sut.ExecuteAsync(
+            new CreateBusinessRequestCommand("Jane", "0499888777", null, "Desc", "walk_in"));
+        Assert.True(result.IsSuccess);
+        Assert.Equal("walk_in", result.Value.Source);
     }
 
     // ---------------------------------------------------------------------------
