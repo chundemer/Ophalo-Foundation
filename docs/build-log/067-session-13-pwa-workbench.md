@@ -1,7 +1,7 @@
 # Build Log 067 — Session 13 PWA Workbench
 
 **Date:** 2026-06-28  
-**Status:** Pre-work locked; implementation pending  
+**Status:** S13a complete
 **Current ADR after S13 pre-build decisions:** ADR-379
 
 ## Session Intent

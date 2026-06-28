@@ -53,6 +53,23 @@ builder.Logging.AddFilter("Microsoft.AspNetCore.Hosting.Diagnostics", LogLevel.W
 builder.Services.AddProblemDetails();
 builder.Services.AddOpenApi();
 
+// --- CORS ---
+// Explicit origins only — no wildcard. AllowCredentials required for cookie transport.
+// Origins are read lazily via a local variable so the config section is still evaluated
+// at startup (not per-request), but the registration is straightforward.
+var corsOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("ophalo", policy =>
+    {
+        if (corsOrigins.Length > 0)
+            policy.WithOrigins(corsOrigins)
+                  .AllowCredentials()
+                  .AllowAnyMethod()
+                  .AllowAnyHeader();
+    });
+});
+
 // --- Persistence ---
 // Connection string is read lazily from IConfiguration inside the factory so that
 // WebApplicationFactory.ConfigureAppConfiguration overrides are visible at scope-creation
@@ -163,11 +180,21 @@ builder.Services.AddScoped<IKeepPushNotifier, KeepPushNotifier>();
 var resendSettings = builder.Configuration.GetSection("Resend").Get<ResendSettings>()
     ?? new ResendSettings();
 builder.Services.AddSingleton(resendSettings);
-builder.Services.AddHttpClient<IEmailSender, ResendEmailSender>(httpClient =>
+
+// Dev-only console sender: writes magic-link URLs to stderr (not structured logs) so codes
+// never appear in log pipelines. Resend is required in all other environments.
+if (builder.Environment.IsDevelopment() && string.IsNullOrWhiteSpace(resendSettings.ApiKey))
 {
-    httpClient.BaseAddress = new Uri("https://api.resend.com");
-    httpClient.DefaultRequestHeaders.Add("Authorization", $"Bearer {resendSettings.ApiKey}");
-});
+    builder.Services.AddSingleton<IEmailSender, ConsoleEmailSender>();
+}
+else
+{
+    builder.Services.AddHttpClient<IEmailSender, ResendEmailSender>(httpClient =>
+    {
+        httpClient.BaseAddress = new Uri("https://api.resend.com");
+        httpClient.DefaultRequestHeaders.Add("Authorization", $"Bearer {resendSettings.ApiKey}");
+    });
+}
 
 // --- Auth ---
 builder.Services.AddHttpContextAccessor();
@@ -264,6 +291,7 @@ if (!app.Environment.IsEnvironment("Testing") && !app.Environment.IsEnvironment(
 if (app.Environment.IsEnvironment("RateLimitTesting"))
     app.Use(async (ctx, next) => { ctx.Connection.RemoteIpAddress = System.Net.IPAddress.Loopback; await next(ctx); });
 
+app.UseCors("ophalo");
 app.UseAuthentication();
 app.UseAuthorization();
 

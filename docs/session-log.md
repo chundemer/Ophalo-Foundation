@@ -40,48 +40,27 @@ For every implementation slice:
 **Foundation roadmap:** `docs/build-log/ophalo-foundation-build-plan-greenfield-boundaries-brownfield-behavior.md` section 9.1
 **Current session:** Session 13 — PWA Workbench
 
-**S12a status: complete.**
+**Prior session context:** S12a/S12b are complete. Details live in
+`docs/build-log/066-session-12-account-settings-and-onboarding.md`. The S13 app may rely on
+`GET /keep/setup/onboarding` and the setup/onboarding persistence delivered there.
 
-- Commit: `ac635c8` — `S12a: Keep business profile + response policy settings API`.
-- Added `KeepBusinessProfile` as a Keep satellite for customer-facing phone/email.
-- Added `KeepResponsePolicy.StatusCheckThresholdDays`.
-- Added setup endpoints:
-  - `GET /keep/setup`;
-  - `PUT /keep/setup/profile`;
-  - `PUT /keep/setup/policy`.
-- Migration `20260627102717_KeepSetupBusinessProfileAndPolicyThreshold` adds
-  `keep_business_profiles` and `status_check_threshold_days DEFAULT 5`.
-- Verification reported by Christian: build successful, 29 new unit tests green, 14 architecture
-  tests green.
+**S13a status: complete.**
 
-**S12b status: complete.**
+- `web/ophalo-app` scaffolded: Vite + React + TypeScript + Tailwind CSS, pnpm, `pnpm-workspace.yaml`.
+- Self-hosted Inter Variable and Source Serif 4 Variable fonts copied to `public/fonts/` via
+  `scripts/copy-fonts.mjs` (postinstall); preloaded from `index.html`; `@font-face` in `app.css`.
+- Typed fetch client (`src/lib/apiClient.ts`) — `credentials: "include"`, throws `ApiError` on non-2xx.
+- `AuthGuard` component — queries `GET /auth/me`, redirects to `{VITE_PUBLIC_BASE_URL}/auth/signin?return_to=<path>` on 401; `return_to` is path-only (no origin).
+- `Home` page — queries `GET /keep/setup/onboarding`: 200 → checklist, 403 → access-limited, 402 → commercial-block, other → generic error.
+- `AccessLimited` component — shown on 403 for non-Owner/Admin users.
+- Minimal PWA manifest (`public/manifest.webmanifest`).
+- API: CORS added — explicit origins via `Cors:AllowedOrigins`, `AllowCredentials()`, `UseCors` before auth middleware.
+- API: `ConsoleEmailSender` — dev-only fallback when Resend key absent; writes magic-link URL to stderr, not structured logs.
+- API config: `App:AppBaseUrl` and `Cors:AllowedOrigins` added to `appsettings.json`; dev defaults in `appsettings.Development.json`.
+- Runbook: `docs/runbook/local-web-setup.md`.
+- Verification: 939 unit · 14 arch · 705 integration (1 pre-existing KeepG5 fluke), 0 new failures; `pnpm typecheck` clean; `pnpm build` succeeds.
 
-- Commit: `1f3fb26` — `S12b: KeepProductOpsEvent entity, onboarding signal recording, and GET checklist endpoint`.
-- Added `KeepProductOpsEventType` enum (17 V1 signal types per INT-003).
-- Added `KeepProductOpsEvent` entity with `Record()` factory.
-- EF config and migration `20260627111847_KeepProductOpsEvents` — unique index on `(account_id, event_type)`.
-- `ProfileAndContactSaved` and `PolicySaved` recorded atomically with setup mutations (single `SaveChangesAsync`).
-- `GET /keep/setup/onboarding` — checklist derives steps 1–7 from event rows + live DB state; steps 8–10 from event rows.
-- `POST /keep/setup/onboarding/marks/{quick-capture-exercise|tracker-review|spam-classification}` — manual founder marks.
-- `RecordEventIfFirstAsync` catches `PostgresException 23505` for concurrent-insert safety.
-- Verification: 939 unit · 14 arch · 705 integration, 0 failures.
-
-**S13 status: pre-work locked.**
-
-- Build log: `docs/build-log/067-session-13-pwa-workbench.md`.
-- ADR-377 locks the web surface split and Vite React TypeScript app stack.
-- ADR-378 locks durable browser/PWA auth sessions and public/app domain topology.
-- ADR-379 locks the OpHalo web foundation posture and self-hosted Source Serif 4 / Inter assets.
-- S13a scope: standalone `web/ophalo-app` scaffold, authenticated app shell, Owner/Admin
-  onboarding-checklist home, Viewer access-limited state, typed credentialed API client, live
-  `/auth/me` + `/keep/setup/onboarding`, minimal PWA manifest, local setup runbook.
-- S13a integration gates: localhost uses host-only cookies with empty `Auth:CookieDomain`;
-  frontend fetch uses `credentials: "include"`; API CORS uses explicit origins; app auth redirects
-  include a safe `return_to` contract; typed fetch throws on non-2xx; self-hosted fonts are
-  preloaded from app-origin assets.
-- Out of S13a: request list/detail, Quick Capture, member management, sharing, update composer,
-  Operator shell, fake request summaries, placeholder nav for unbuilt workflows, and MSW unless
-  earned by a tested utility/hook.
+**S13b next:** TBD — see roadmap section 9.1 and build-log/067.
 
 ---
 
