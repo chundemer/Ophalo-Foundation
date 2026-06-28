@@ -1,19 +1,19 @@
 namespace OpHalo.Foundation.Core.Constants;
 
 /// <summary>
-/// Session policy constants. These are pilot defaults — revisit post-pilot based on observed
-/// session behavior (mirrors reference ADR-018 intent).
+/// Session policy constants. ADR-378 sets pilot defaults to favor "open and work"
+/// convenience while preserving per-request authorization revalidation.
 /// </summary>
 public static class AuthConstants
 {
     /// <summary>Absolute session lifetime in days. Set once at creation. Never extended.</summary>
-    public const int SessionAbsoluteExpiryDays = 30;
+    public const int SessionAbsoluteExpiryDays = 60;
 
     /// <summary>
     /// Inactivity window in days. Reset on each authenticated request.
     /// Cannot extend past the absolute expiry. Enforced by SessionAuthenticationHandler.
     /// </summary>
-    public const int SessionInactivityWindowDays = 7;
+    public const int SessionInactivityWindowDays = 30;
 
     /// <summary>
     /// Authentication scheme name for the OpHalo server-side session scheme.

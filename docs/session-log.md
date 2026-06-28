@@ -1,10 +1,10 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-06-27 (Session 12b complete; S13 next)
+**Last updated:** 2026-06-28 (Session 13 pre-work locked)
 **Branch:** `main` tracking `origin/main`
 **Last green baseline:** 939 unit · 14 arch · 705 integration = 1,658 total, 0 failures (1 pre-existing KeepG5 fluke excluded)
-**Next free ADR:** ADR-377
-**Current session:** Session 12 — Account Settings And Onboarding
+**Next free ADR:** ADR-380
+**Current session:** Session 13 — PWA Workbench
 
 ---
 
@@ -34,11 +34,11 @@ For every implementation slice:
 
 ## Current Work
 
-**Current build log:** `docs/build-log/066-session-12-account-settings-and-onboarding.md`
-**Last completed build log:** `docs/build-log/066-session-12-account-settings-and-onboarding.md` (S12a)
+**Current build log:** `docs/build-log/067-session-13-pwa-workbench.md`
+**Last completed build log:** `docs/build-log/066-session-12-account-settings-and-onboarding.md` (S12b)
 **Pilot readiness working doc:** `docs/pilot-readiness-decision-questions.md`
 **Foundation roadmap:** `docs/build-log/ophalo-foundation-build-plan-greenfield-boundaries-brownfield-behavior.md` section 9.1
-**Current session:** Session 12 — Account Settings And Onboarding
+**Current session:** Session 13 — PWA Workbench
 
 **S12a status: complete.**
 
@@ -66,7 +66,22 @@ For every implementation slice:
 - `RecordEventIfFirstAsync` catches `PostgresException 23505` for concurrent-insert safety.
 - Verification: 939 unit · 14 arch · 705 integration, 0 failures.
 
-**S13 next:** TBD — see roadmap section 9.1.
+**S13 status: pre-work locked.**
+
+- Build log: `docs/build-log/067-session-13-pwa-workbench.md`.
+- ADR-377 locks the web surface split and Vite React TypeScript app stack.
+- ADR-378 locks durable browser/PWA auth sessions and public/app domain topology.
+- ADR-379 locks the OpHalo web foundation posture and self-hosted Source Serif 4 / Inter assets.
+- S13a scope: standalone `web/ophalo-app` scaffold, authenticated app shell, Owner/Admin
+  onboarding-checklist home, Viewer access-limited state, typed credentialed API client, live
+  `/auth/me` + `/keep/setup/onboarding`, minimal PWA manifest, local setup runbook.
+- S13a integration gates: localhost uses host-only cookies with empty `Auth:CookieDomain`;
+  frontend fetch uses `credentials: "include"`; API CORS uses explicit origins; app auth redirects
+  include a safe `return_to` contract; typed fetch throws on non-2xx; self-hosted fonts are
+  preloaded from app-origin assets.
+- Out of S13a: request list/detail, Quick Capture, member management, sharing, update composer,
+  Operator shell, fake request summaries, placeholder nav for unbuilt workflows, and MSW unless
+  earned by a tested utility/hook.
 
 ---
 

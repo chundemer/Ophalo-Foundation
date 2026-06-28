@@ -92,7 +92,7 @@ These are not product backlog items, but should remain visible before deployment
 | ID | Topic | Origin | Notes |
 |---|---|---|
 | OPS-001 | Resend production secrets | 5D | `Resend:ApiKey` and `Resend:FromAddress` must be set via user secrets or deployment environment. |
-| OPS-002 | Public and operator base URLs | 5B/5D | `App:PublicBaseUrl` must point at the public auth site; `App:OperatorBaseUrl` must point at the operator app. |
+| OPS-002 | Public/app base URL cleanup | 5B/5D; ADR-378 | `App:PublicBaseUrl` must point at the public auth site. Existing `App:OperatorBaseUrl` invite-link usage must be reviewed during S13 and either mapped to the public invite-accept surface or replaced by a clearer `PublicBaseUrl` / `AppBaseUrl` split, with post-auth redirect to the authenticated workbench. |
 | OPS-003 | Migration generation command shape | Session log | Use `--startup-project src/OpHalo.Keep.Infrastructure`; design-time factory needs `ConnectionStrings__DefaultConnection`. |
 | OPS-004 | Test database reset pattern | Session log | Integration factory uses `DROP SCHEMA public CASCADE`, recreate schema, then `MigrateAsync`. |
 | OPS-005 | Testing rate limiter behavior | Session log | `UseRateLimiter` is skipped in `Testing` intentionally. |

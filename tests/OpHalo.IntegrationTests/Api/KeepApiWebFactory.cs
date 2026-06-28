@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using OpHalo.Foundation.Application.Abstractions.Messaging;
+using OpHalo.Foundation.Core.Constants;
 using OpHalo.Foundation.Core.Entities.Accounts;
 using OpHalo.Foundation.Core.Entities.Accounts.Enums;
 using OpHalo.Foundation.Infrastructure.Persistence;
@@ -76,7 +77,8 @@ public sealed class KeepApiWebFactory : WebApplicationFactory<Program>, IAsyncLi
     /// Pass the token as a cookie (<c>ophalo.sid=rawToken</c>) or Bearer header in tests.
     /// </summary>
     /// <param name="overrideCreatedAt">
-    /// Set to a past date to produce a session whose ExpiresAtUtc (createdAt + 30 days)
+    /// Set to a past date to produce a session whose ExpiresAtUtc
+    /// (createdAt + AuthConstants.SessionAbsoluteExpiryDays)
     /// is in the past, simulating an expired session.
     /// </param>
     public async Task<string> SeedSessionAsync(
@@ -88,7 +90,14 @@ public sealed class KeepApiWebFactory : WebApplicationFactory<Program>, IAsyncLi
         var now = overrideCreatedAt ?? DateTime.UtcNow;
         var rawToken = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
         var tokenHash = SessionHasher.HashToken(rawToken);
-        var session = AccountSession.Create(accountId, accountUserId, tokenHash, clientType, null, now, now.AddDays(30));
+        var session = AccountSession.Create(
+            accountId,
+            accountUserId,
+            tokenHash,
+            clientType,
+            null,
+            now,
+            now.AddDays(AuthConstants.SessionAbsoluteExpiryDays));
 
         await using var scope = Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();

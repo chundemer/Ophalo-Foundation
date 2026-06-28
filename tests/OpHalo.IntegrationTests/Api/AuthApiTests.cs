@@ -144,10 +144,10 @@ public sealed class AuthApiTests : IClassFixture<KeepApiWebFactory>, IAsyncLifet
     [Fact]
     public async Task Me_ExpiredSession_Returns401()
     {
-        // overrideCreatedAt = 31 days ago → ExpiresAtUtc = now - 1 day (expired)
+        // SessionAbsoluteExpiryDays + 1 days ago -> expired.
         var rawToken = await _factory.SeedSessionAsync(
             _ownerAccountUserId, _accountId,
-            overrideCreatedAt: DateTime.UtcNow.AddDays(-31));
+            overrideCreatedAt: DateTime.UtcNow.AddDays(-(AuthConstants.SessionAbsoluteExpiryDays + 1)));
 
         using var request = WithCookie(HttpMethod.Get, "/auth/me", rawToken);
         var response = await _client.SendAsync(request);
