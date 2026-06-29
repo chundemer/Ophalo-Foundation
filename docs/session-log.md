@@ -45,7 +45,7 @@ For every implementation slice:
 - `6fc80e1 feat: expose share intent action metadata`
 - `c9bde88 feat: add session 13d-1 request detail read view and share clearing`
 - `88f8759 feat: add session 13d-2 status change workflow`
-- S13d-3 commit pending (operational action rail)
+- `9ac0be9 feat: add session 13d-3 operational action rail`
 
 **Completed Session 13 slices:**
 
