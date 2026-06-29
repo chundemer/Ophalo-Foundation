@@ -73,7 +73,7 @@ Delivered:
 **Intent:** Make business-created request capture fast enough to replace the old habit of keeping
 new work in texts, notes, memory, or a phone call backlog.
 
-**Status: Pre-work complete. Decisions locked 2026-06-28.**
+**Status: Complete. Implemented 2026-06-29.**
 
 #### Locked Decisions
 
@@ -112,6 +112,17 @@ new work in texts, notes, memory, or a phone call backlog.
 - Staff-created requests start with `NeedsShare=true` per ADR-370.
 - Successful 201 satisfies the onboarding event tracker automatically via the response payload
   signature. No separate manual `quick-capture-exercise` mark needed.
+
+**S13b implementation note — shell access preflight deferred**
+
+S13b does not disable the shell `+ New Request` button for Viewers and does not precompute the 402
+warning before the drawer opens. The current role-neutral shell has no reliable source for those
+states: `GET /keep/setup/onboarding` is gated by `Keep.SettingsManage`, so Operators receive 403 even
+though they have `Keep.RequestsOperate`, and it cannot reliably distinguish Viewer/read-only state
+from settings-access denial. Until role/commercial state is available in session claims or a dedicated
+role-neutral access endpoint, the shell entry stays enabled for authenticated users and the drawer
+handles backend-denied states from lookup/create responses: Viewer/OffSeason return 403; commercial
+block returns 402 when emitted by the request endpoint.
 
 **Post-success behavior (viewport-branched)**
 - Desktop/tablet: form clears; drawer stays open; confirmation panel with three actions:

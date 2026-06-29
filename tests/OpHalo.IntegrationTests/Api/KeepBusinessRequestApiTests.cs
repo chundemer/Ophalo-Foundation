@@ -11,6 +11,7 @@ using OpHalo.Foundation.Core.Entities.Users;
 using OpHalo.Foundation.Core.Helpers;
 using OpHalo.Foundation.Infrastructure.Persistence;
 using OpHalo.Keep.Core.Entities;
+using OpHalo.Keep.Core.Entities.Enums;
 
 namespace OpHalo.IntegrationTests.Api;
 
@@ -646,6 +647,90 @@ public sealed class KeepBusinessRequestApiTests : IClassFixture<KeepApiWebFactor
         var row = requests.EnumerateArray().FirstOrDefault(r =>
             r.GetProperty("id").GetGuid() == requestId);
         Assert.False(row.GetProperty("needsShare").GetBoolean());
+    }
+
+    // =========================================================================
+    // GET /keep/requests/lookup — Phone Lookup Gate (S13b)
+    // =========================================================================
+
+    [Fact]
+    public async Task Lookup_NoMatch_Returns200_WithNullCustomerAndEmptyRequests()
+    {
+        var response = await AuthRequest(_ownerCookie).GetAsync("/keep/requests/lookup?phone=0400000001");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
+        Assert.Equal(JsonValueKind.Null, body.GetProperty("customer").ValueKind);
+        Assert.Equal(0, body.GetProperty("activeRequests").GetArrayLength());
+        Assert.False(body.GetProperty("hasMoreActiveRequests").GetBoolean());
+    }
+
+    [Fact]
+    public async Task Lookup_KnownCustomer_TerminalRequestsOnly_Returns200_WithEmptyActiveRequests()
+    {
+        var phone = "0411200001";
+        var requestId = await CreateRequestAsync(phone, "phone");
+        var now = DateTime.UtcNow;
+
+        // Transition to Closed via direct DB so customer is known but has zero active requests.
+        await using var scope = _factory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+        var request = await db.Set<KeepRequest>().FirstAsync(r => r.Id == requestId);
+        var e1 = request.ChangeStatus(KeepRequestStatus.Resolved, null, _ownerAccountUserId, "Owner", now);
+        var e2 = request.ChangeStatus(KeepRequestStatus.Closed, null, _ownerAccountUserId, "Owner", now);
+        if (e1.IsSuccess && e1.Value.StatusChangedEvent is not null) db.Set<KeepRequestEvent>().Add(e1.Value.StatusChangedEvent);
+        if (e2.IsSuccess && e2.Value.StatusChangedEvent is not null) db.Set<KeepRequestEvent>().Add(e2.Value.StatusChangedEvent);
+        await db.SaveChangesAsync();
+
+        var response = await AuthRequest(_ownerCookie).GetAsync($"/keep/requests/lookup?phone={phone}");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
+        Assert.NotEqual(JsonValueKind.Null, body.GetProperty("customer").ValueKind);
+        Assert.Equal($"Test Customer {phone}", body.GetProperty("customer").GetProperty("name").GetString());
+        Assert.Equal(0, body.GetProperty("activeRequests").GetArrayLength());
+        Assert.False(body.GetProperty("hasMoreActiveRequests").GetBoolean());
+    }
+
+    [Fact]
+    public async Task Lookup_KnownCustomer_ActiveRequests_Returns200_WithRequests()
+    {
+        var phone = "0411200002";
+        var requestId = await CreateRequestAsync(phone, "phone");
+
+        var response = await AuthRequest(_ownerCookie).GetAsync($"/keep/requests/lookup?phone={phone}");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
+        var requests = body.GetProperty("activeRequests");
+        Assert.True(requests.GetArrayLength() >= 1);
+
+        var first = requests.EnumerateArray().First();
+        Assert.Equal(requestId, first.GetProperty("requestId").GetGuid());
+        Assert.False(string.IsNullOrEmpty(first.GetProperty("referenceCode").GetString()));
+        Assert.Equal("received", first.GetProperty("status").GetString());
+    }
+
+    [Fact]
+    public async Task Lookup_Viewer_Returns403()
+    {
+        var response = await AuthRequest(_viewerCookie).GetAsync("/keep/requests/lookup?phone=0400000002");
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Lookup_Unauthenticated_Returns401()
+    {
+        var client = _factory.CreateClient();
+        var response = await client.GetAsync("/keep/requests/lookup?phone=0400000003");
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Lookup_InvalidPhone_Returns400()
+    {
+        var response = await AuthRequest(_ownerCookie).GetAsync("/keep/requests/lookup?phone=123");
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
     // =========================================================================

@@ -498,6 +498,10 @@ public class KeepCreateBusinessRequestServiceTests
                 _collisionHappened = true;
             return Task.FromResult(result);
         }
+
+        public Task<IReadOnlyList<KeepRequest>> FindActiveRequestsByCustomerIdAsync(
+            Guid accountId, Guid customerId, int take, CancellationToken ct) =>
+            Task.FromResult<IReadOnlyList<KeepRequest>>(Array.Empty<KeepRequest>());
     }
 
     private sealed class FakeUserAccessPolicy(bool permitted) : IUserAccessPolicy

@@ -1,13 +1,14 @@
-const API_BASE = import.meta.env.VITE_API_BASE_URL;
+const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "";
 
 export class ApiError extends Error {
-  constructor(
-    public readonly status: number,
-    public readonly code: string | undefined,
-    message: string,
-  ) {
-    super(message);
+  status: number;
+  body: unknown;
+
+  constructor(status: number, body: unknown) {
+    super(`API request failed with status ${status}`);
     this.name = "ApiError";
+    this.status = status;
+    this.body = body;
   }
 }
 
@@ -22,17 +23,17 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   });
 
   if (!response.ok) {
-    let code: string | undefined;
+    let body: unknown = null;
     try {
-      const problem = (await response.json()) as Record<string, unknown>;
-      const ext = problem["extensions"] as Record<string, unknown> | undefined;
-      code =
-        (ext?.["code"] as string | undefined) ??
-        (problem["code"] as string | undefined);
+      body = await response.json();
     } catch {
-      // body may be empty or non-JSON; code stays undefined
+      body = await response.text();
     }
-    throw new ApiError(response.status, code, `API ${response.status} ${path}`);
+    throw new ApiError(response.status, body);
+  }
+
+  if (response.status === 204) {
+    return undefined as T;
   }
 
   return response.json() as Promise<T>;
@@ -58,8 +59,58 @@ export interface OnboardingChecklist {
   spamClassificationExplained: boolean;
 }
 
+export interface PhoneLookupCustomer {
+  name: string;
+  phone: string;
+  email: string | null;
+}
+
+export interface PhoneLookupActiveRequest {
+  requestId: string;
+  referenceCode: string;
+  status: string;
+  description: string;
+  lastActivityAtUtc: string | null;
+}
+
+export interface PhoneLookupResult {
+  customer: PhoneLookupCustomer | null;
+  activeRequests: PhoneLookupActiveRequest[];
+  hasMoreActiveRequests: boolean;
+}
+
+export interface CreateRequestBody {
+  customerName: string;
+  customerPhone: string;
+  customerEmail?: string;
+  description: string;
+  source: string;
+}
+
+export interface KeepRequestDetailResult {
+  requestId: string;
+  referenceCode: string;
+  status: string;
+  customerName: string;
+  customerPhone: string;
+  customerEmail: string | null;
+  description: string;
+  pageToken: string;
+  needsShare: boolean;
+  createdAtUtc: string;
+}
+
 export const api = {
   getMe: () => apiFetch<MeResponse>("/auth/me"),
   getOnboardingChecklist: () =>
     apiFetch<OnboardingChecklist>("/keep/setup/onboarding"),
+  lookupRequestByPhone: (phone: string) =>
+    apiFetch<PhoneLookupResult>(
+      `/keep/requests/lookup?phone=${encodeURIComponent(phone)}`,
+    ),
+  createRequest: (body: CreateRequestBody) =>
+    apiFetch<KeepRequestDetailResult>("/keep/requests", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
 };

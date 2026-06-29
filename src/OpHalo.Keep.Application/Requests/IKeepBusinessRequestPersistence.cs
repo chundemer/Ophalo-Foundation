@@ -11,6 +11,14 @@ public interface IKeepBusinessRequestPersistence
     Task<KeepCustomer?> FindCustomerByCanonicalPhoneAsync(
         Guid accountId, string canonicalPhone, CancellationToken ct);
 
+    /// <summary>
+    /// Returns up to <paramref name="take"/> non-terminal requests for the given customer,
+    /// ordered by max(LastBusinessActivityAt, LastCustomerActivityAt) DESC, CreatedAtUtc DESC.
+    /// AsNoTracking — read-only projection for the phone lookup gate.
+    /// </summary>
+    Task<IReadOnlyList<KeepRequest>> FindActiveRequestsByCustomerIdAsync(
+        Guid accountId, Guid customerId, int take, CancellationToken ct);
+
     Task<bool> PageTokenExistsAsync(string pageToken, CancellationToken ct);
 
     Task<bool> ReferenceCodeExistsAsync(Guid accountId, string referenceCode, CancellationToken ct);

@@ -109,6 +109,7 @@ builder.Services.AddScoped<KeepSetupService>();
 builder.Services.AddScoped<KeepOnboardingService>();
 builder.Services.AddScoped<IKeepBusinessRequestPersistence, KeepBusinessRequestPersistence>();
 builder.Services.AddScoped<CreateBusinessRequestService>();
+builder.Services.AddScoped<LookupKeepRequestByPhoneService>();
 builder.Services.AddScoped<KeepIntakeSetupService>();
 builder.Services.AddScoped<IKeepRequestListPersistence, KeepRequestListPersistence>();
 builder.Services.AddScoped<IKeepRequestDetailPersistence, EfKeepRequestDetailPersistence>();
@@ -397,6 +398,16 @@ app.MapPost("/keep/requests", async (
     return result.IsSuccess
         ? Results.Created($"/keep/requests/{result.Value.RequestId}", result.Value)
         : ErrorHttpMapper.ToHttpResult(result.Error);
+}).RequireAuthorization();
+
+// Phone lookup gate — authenticated, mirrors create posture (S13b)
+app.MapGet("/keep/requests/lookup", async (
+    string? phone,
+    LookupKeepRequestByPhoneService service,
+    CancellationToken ct) =>
+{
+    var result = await service.ExecuteAsync(phone, ct);
+    return result.IsSuccess ? Results.Ok(result.Value) : ErrorHttpMapper.ToHttpResult(result.Error);
 }).RequireAuthorization();
 
 // Available queue — Operator-only dedicated surface (G4d)
