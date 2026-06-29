@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ChevronLeft,
   Copy,
@@ -276,6 +276,102 @@ function DesktopShareSection({ requestId, pageToken, canRecordShareIntent, needs
 }
 
 // ---------------------------------------------------------------------------
+// Status change
+// ---------------------------------------------------------------------------
+
+const STATUS_CONFLICT_MESSAGE =
+  "This request has been updated by another team member. Copy your unsaved notes and refresh the workbench to load the latest history.";
+
+interface StatusChangeSectionProps {
+  requestId: string;
+  detail: KeepRequestDetailResult;
+  onDetailUpdated: (updated: KeepRequestDetailResult) => void;
+}
+
+function StatusChangeSection({ requestId, detail, onDetailUpdated }: StatusChangeSectionProps) {
+  const { allowedStatuses } = detail.availableActions;
+  const { messageRequiredForStatuses, statusMessageMaxLength } = detail.validation;
+
+  const [selectedStatus, setSelectedStatus] = useState("");
+  const [message, setMessage] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [conflictDisabled, setConflictDisabled] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  if (allowedStatuses.length === 0) return null;
+
+  const messageRequired = messageRequiredForStatuses.includes(selectedStatus);
+  const canSubmit = selectedStatus !== "" && !isSubmitting && !conflictDisabled &&
+    (!messageRequired || message.trim().length > 0);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!canSubmit) return;
+    setIsSubmitting(true);
+    setError(null);
+    try {
+      const body: { status: string; message?: string } = { status: selectedStatus };
+      if (message.trim()) body.message = message.trim();
+      const updated = await api.patchRequestStatus(requestId, body, detail.version);
+      onDetailUpdated(updated);
+      setSelectedStatus("");
+      setMessage("");
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 409) {
+        setConflictDisabled(true);
+        setError(STATUS_CONFLICT_MESSAGE);
+      } else {
+        setError("Could not update status. Try again.");
+      }
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  return (
+    <div className="rounded-lg border border-slate-100 bg-slate-50 p-4">
+      <p className="text-xs font-semibold text-slate-700 mb-3 uppercase tracking-wide">Change Status</p>
+      {error && (
+        <div className={`mb-3 rounded-md p-3 text-xs ${conflictDisabled ? "bg-amber-50 border border-amber-200 text-amber-800" : "bg-red-50 border border-red-200 text-red-700"}`}>
+          {error}
+        </div>
+      )}
+      <form onSubmit={(e) => void handleSubmit(e)} className="space-y-3">
+        <select
+          value={selectedStatus}
+          onChange={(e) => { setSelectedStatus(e.target.value); setError(null); }}
+          disabled={conflictDisabled}
+          className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-slate-400"
+        >
+          <option value="">Select new status…</option>
+          {allowedStatuses.map((s) => (
+            <option key={s} value={s}>{statusLabel(s)}</option>
+          ))}
+        </select>
+        <div>
+          <textarea
+            value={message}
+            onChange={(e) => setMessage(e.target.value)}
+            maxLength={statusMessageMaxLength}
+            disabled={conflictDisabled}
+            placeholder={messageRequired ? "Message required for this status…" : "Optional message…"}
+            rows={3}
+            className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 resize-none placeholder:text-slate-400 disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-slate-400"
+          />
+        </div>
+        <button
+          type="submit"
+          disabled={!canSubmit}
+          className="w-full rounded-md bg-slate-800 px-3 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-40"
+        >
+          {isSubmitting ? "Updating…" : "Update Status"}
+        </button>
+      </form>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Detail header
 // ---------------------------------------------------------------------------
 
@@ -448,6 +544,7 @@ interface RequestDetailProps {
 
 export function RequestDetail({ requestId, onBack }: RequestDetailProps) {
   const [shareCleared, setShareCleared] = useState(false);
+  const queryClient = useQueryClient();
 
   const { data: detail, isLoading, isError, error } = useQuery({
     queryKey: ["request-detail", requestId],
@@ -459,6 +556,11 @@ export function RequestDetail({ requestId, onBack }: RequestDetailProps) {
 
   function handleShareCleared() {
     setShareCleared(true);
+  }
+
+  function handleDetailUpdated(updated: KeepRequestDetailResult) {
+    queryClient.setQueryData(["request-detail", requestId], updated);
+    setShareCleared(false);
   }
 
   return (
@@ -539,6 +641,11 @@ export function RequestDetail({ requestId, onBack }: RequestDetailProps) {
                   onCleared={handleShareCleared}
                 />
               )}
+              <StatusChangeSection
+                requestId={requestId}
+                detail={detail}
+                onDetailUpdated={handleDetailUpdated}
+              />
               <MetadataSection detail={detail} />
             </div>
           </div>
@@ -551,6 +658,11 @@ export function RequestDetail({ requestId, onBack }: RequestDetailProps) {
               canRecordShareIntent={canShare}
               needsShare={needsShareEffective}
               onCleared={handleShareCleared}
+            />
+            <StatusChangeSection
+              requestId={requestId}
+              detail={detail}
+              onDetailUpdated={handleDetailUpdated}
             />
             <MetadataSection detail={detail} />
           </aside>

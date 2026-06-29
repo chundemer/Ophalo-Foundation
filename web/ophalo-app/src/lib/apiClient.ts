@@ -432,4 +432,14 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ method }),
     }),
+  patchRequestStatus: (
+    requestId: string,
+    body: { status: string; message?: string },
+    version: string,
+  ) =>
+    apiFetch<KeepRequestDetailResult>(`/keep/requests/${requestId}/status`, {
+      method: "PATCH",
+      headers: { "X-Keep-Request-Version": version },
+      body: JSON.stringify(body),
+    }),
 };
