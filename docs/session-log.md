@@ -1,10 +1,10 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-06-28 (Session 13 pre-work locked)
+**Last updated:** 2026-06-28 (S13a complete; S13b next)
 **Branch:** `main` tracking `origin/main`
 **Last green baseline:** 939 unit · 14 arch · 705 integration = 1,658 total, 0 failures (1 pre-existing KeepG5 fluke excluded)
-**Next free ADR:** ADR-380
-**Current session:** Session 13 — PWA Workbench
+**Next free ADR:** ADR-385
+**Current session:** Session 13b — PWA Workbench Next Slice
 
 ---
 
@@ -35,14 +35,15 @@ For every implementation slice:
 ## Current Work
 
 **Current build log:** `docs/build-log/067-session-13-pwa-workbench.md`
-**Last completed build log:** `docs/build-log/066-session-12-account-settings-and-onboarding.md` (S12b)
-**Pilot readiness working doc:** `docs/pilot-readiness-decision-questions.md`
+**Last completed build log:** `docs/build-log/067-session-13-pwa-workbench.md` (S13a)
+**Readiness working doc:** `docs/pilot-readiness-decision-questions.md`
 **Foundation roadmap:** `docs/build-log/ophalo-foundation-build-plan-greenfield-boundaries-brownfield-behavior.md` section 9.1
-**Current session:** Session 13 — PWA Workbench
+**Current session:** Session 13b — PWA Workbench Next Slice
 
-**Prior session context:** S12a/S12b are complete. Details live in
-`docs/build-log/066-session-12-account-settings-and-onboarding.md`. The S13 app may rely on
-`GET /keep/setup/onboarding` and the setup/onboarding persistence delivered there.
+**Prior session context:** S13a is complete. Details live in
+`docs/build-log/067-session-13-pwa-workbench.md`. The next slice may rely on the standalone
+`web/ophalo-app` scaffold, credentialed typed API client, auth guard, onboarding home, local CORS,
+dev console email fallback, self-hosted fonts, and `docs/runbook/local-web-setup.md`.
 
 **S13a status: complete.**
 
@@ -60,7 +61,19 @@ For every implementation slice:
 - Runbook: `docs/runbook/local-web-setup.md`.
 - Verification: 939 unit · 14 arch · 705 integration (1 pre-existing KeepG5 fluke), 0 new failures; `pnpm typecheck` clean; `pnpm build` succeeds.
 
-**S13b next:** TBD — see roadmap section 9.1 and build-log/067.
+**S13b next: decision/preflight needed.**
+
+- Use `docs/build-log/067-session-13-pwa-workbench.md` as the Session 13 umbrella plan. It now
+  breaks Session 13 into proposed coding slices S13a-S13i with scope, live contracts, out-of-scope
+  boundaries, and pre-code questions.
+- Choose one narrow PWA workbench vertical before implementation. Strong candidate: S13b Quick
+  Capture, because `DEF-076` marks business-first request capture UI as a V1 must-have and the
+  backend `POST /keep/requests` contract already exists.
+- Keep S13a foundation boundaries: `ophalo-app` remains a static Vite client over `OpHalo.Api`;
+  fetch remains credentialed and throws typed errors; localhost uses host-only cookies; no fake data
+  or placeholder nav for unbuilt workflows.
+- Before coding S13b, answer the S13b questions in build-log 067 and prepare a file-level gate,
+  role/access behavior, done gate, and screenshot/browser verification target.
 
 ---
 
