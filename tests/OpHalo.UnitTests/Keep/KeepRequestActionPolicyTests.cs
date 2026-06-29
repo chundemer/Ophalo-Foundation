@@ -152,6 +152,7 @@ public class KeepRequestActionPolicyTests
         Assert.False(d.CanMarkFeedbackReviewed);
         Assert.False(d.CanClose);
         Assert.False(d.CanClassify);
+        Assert.False(d.CanRecordShareIntent);
         Assert.Empty(d.AllowedStatuses);
     }
 
@@ -176,6 +177,7 @@ public class KeepRequestActionPolicyTests
         Assert.False(d.CanUnwatch);
         Assert.False(d.CanMute);
         Assert.False(d.CanUnmute);
+        Assert.True(d.CanRecordShareIntent);
     }
 
     [Fact]
@@ -210,6 +212,7 @@ public class KeepRequestActionPolicyTests
         Assert.False(d.CanUnwatch);
         Assert.False(d.CanMute);
         Assert.False(d.CanUnmute);
+        Assert.True(d.CanRecordShareIntent);
     }
 
     // -----------------------------------------------------------------------

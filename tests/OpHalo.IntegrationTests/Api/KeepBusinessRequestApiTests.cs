@@ -174,6 +174,7 @@ public sealed class KeepBusinessRequestApiTests : IClassFixture<KeepApiWebFactor
         Assert.True(actions.GetProperty("canChangeStatus").GetBoolean());
         Assert.True(actions.GetProperty("canSendBusinessUpdate").GetBoolean());
         Assert.True(actions.GetProperty("canAddInternalNote").GetBoolean());
+        Assert.True(actions.GetProperty("canRecordShareIntent").GetBoolean());
     }
 
     [Fact]
@@ -647,6 +648,31 @@ public sealed class KeepBusinessRequestApiTests : IClassFixture<KeepApiWebFactor
         var row = requests.EnumerateArray().FirstOrDefault(r =>
             r.GetProperty("id").GetGuid() == requestId);
         Assert.False(row.GetProperty("needsShare").GetBoolean());
+    }
+
+    // S13d prerequisite — canRecordShareIntent metadata field
+    [Fact]
+    public async Task GetRequestDetail_Owner_canRecordShareIntent_true()
+    {
+        var requestId = await CreateRequestAsync("0411000102", "phone");
+
+        var response = await AuthRequest(_ownerCookie).GetAsync($"/keep/requests/{requestId}");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
+        Assert.True(body.GetProperty("availableActions").GetProperty("canRecordShareIntent").GetBoolean());
+    }
+
+    [Fact]
+    public async Task GetRequestDetail_Viewer_canRecordShareIntent_false()
+    {
+        var requestId = await CreateRequestAsync("0411000103", "phone");
+
+        var response = await AuthRequest(_viewerCookie).GetAsync($"/keep/requests/{requestId}");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
+        Assert.False(body.GetProperty("availableActions").GetProperty("canRecordShareIntent").GetBoolean());
     }
 
     // =========================================================================

@@ -31,6 +31,7 @@ public static class KeepRequestActionPolicy
         CanSetPlannedFor:         false,
         CanClose:                 false,
         CanClassify:              false,
+        CanRecordShareIntent:     false,
         AllowedStatuses:          []);
 
     public static KeepRequestActionDecision Evaluate(KeepRequest request, KeepRequestActionContext actor)
@@ -105,6 +106,7 @@ public static class KeepRequestActionPolicy
             CanSetPlannedFor:         canSetTiming,
             CanClose:                 canClose,
             CanClassify:              isOwnerAdmin && isNonTerminal,
+            CanRecordShareIntent:     true,
             AllowedStatuses:          ComputeAllowedStatuses(request.Status, isOwnerAdmin, canClose));
     }
 

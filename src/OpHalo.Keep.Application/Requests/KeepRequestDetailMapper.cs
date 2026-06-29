@@ -127,6 +127,7 @@ internal static class KeepRequestDetailMapper
             CanSetPlannedFor:        decision.CanSetPlannedFor,
             CanClose:                decision.CanClose,
             CanClassify:             decision.CanClassify,
+            CanRecordShareIntent:    decision.CanRecordShareIntent,
             AllowedStatuses:         decision.AllowedStatuses.Select(MapStatus).ToList());
 
     internal static KeepRequestStatus? ParseStatusSlug(string? slug)

@@ -81,6 +81,7 @@ public sealed record AvailableActionsMetadata(
     bool CanSetPlannedFor,
     bool CanClose,
     bool CanClassify,
+    bool CanRecordShareIntent,
     IReadOnlyList<string> AllowedStatuses);
 
 /// <summary>
