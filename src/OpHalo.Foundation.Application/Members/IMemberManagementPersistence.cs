@@ -38,6 +38,13 @@ public interface IMemberManagementPersistence
     /// The target must have been loaded via GetMemberManagementContextAsync (tracked).
     /// </summary>
     Task CommitAsync(AccountUser target, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Returns the current role for the given AccountUser. Used by GET /auth/me to include
+    /// role in the session identity response without adding it as a long-lived session claim.
+    /// Returns null when the AccountUser is not found.
+    /// </summary>
+    Task<AccountUserRole?> GetAccountUserRoleAsync(Guid accountUserId, CancellationToken ct);
 }
 
 /// <summary>Context for member list operations.</summary>

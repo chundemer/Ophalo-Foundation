@@ -1,7 +1,7 @@
 # Build Log 067 — Session 13 PWA Workbench
 
 **Date:** 2026-06-28  
-**Status:** S13a complete; S13b pending
+**Status:** S13a complete; S13b complete; S13c complete; S13d pending
 **Current ADR after S13 pre-build decisions:** ADR-384
 
 ## Session Intent
@@ -169,7 +169,7 @@ S13b out of scope unless explicitly pulled in:
 **Intent:** Give Owner/Admin and Operators a scan-first view of active work and attention without
 turning Keep into a generic dashboard.
 
-**Status:** Pre-work corrections locked 2026-06-28; implementation pending.
+**Status:** Complete 2026-06-29.
 
 #### Locked Decisions
 

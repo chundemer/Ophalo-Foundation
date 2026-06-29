@@ -1,14 +1,13 @@
-const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "";
+const API_BASE = import.meta.env.VITE_API_BASE_URL;
 
 export class ApiError extends Error {
-  status: number;
-  body: unknown;
-
-  constructor(status: number, body: unknown) {
-    super(`API request failed with status ${status}`);
+  constructor(
+    public readonly status: number,
+    public readonly code: string | undefined,
+    message: string,
+  ) {
+    super(message);
     this.name = "ApiError";
-    this.status = status;
-    this.body = body;
   }
 }
 
@@ -23,27 +22,30 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   });
 
   if (!response.ok) {
-    let body: unknown = null;
+    let code: string | undefined;
     try {
-      body = await response.json();
+      const problem = (await response.json()) as Record<string, unknown>;
+      const ext = problem["extensions"] as Record<string, unknown> | undefined;
+      code =
+        (ext?.["code"] as string | undefined) ??
+        (problem["code"] as string | undefined);
     } catch {
-      body = await response.text();
+      // body may be empty or non-JSON; code stays undefined
     }
-    throw new ApiError(response.status, body);
-  }
-
-  if (response.status === 204) {
-    return undefined as T;
+    throw new ApiError(response.status, code, `API ${response.status} ${path}`);
   }
 
   return response.json() as Promise<T>;
 }
+
+export type AccountRole = "owner" | "admin" | "operator" | "viewer" | "unknown";
 
 export interface MeResponse {
   accountUserId: string;
   accountId: string;
   isAuthenticated: boolean;
   isVerified: boolean;
+  accountRole: AccountRole;
 }
 
 export interface OnboardingChecklist {
@@ -100,6 +102,139 @@ export interface KeepRequestDetailResult {
   createdAtUtc: string;
 }
 
+// --- Request list ---
+
+export interface KeepRequestAttentionInfo {
+  attentionLevel: string;
+  waitingDirection: string;
+  attentionReason: string | null;
+  priorityBand: string;
+  attentionSinceUtc: string | null;
+  nextAttentionAtUtc: string | null;
+  firstResponseDueAtUtc: string | null;
+  firstRespondedAtUtc: string | null;
+  firstResponsePending: boolean;
+  firstResponseOverdue: boolean;
+}
+
+export interface KeepRequestPreviewInfo {
+  previewText: string | null;
+  previewSource: string | null;
+  previewTruncated: boolean;
+}
+
+export interface KeepRequestParticipationInfo {
+  responsibleCount: number;
+  watchingCount: number;
+  hasResponsible: boolean;
+  isUnassigned: boolean;
+  currentUserParticipationType: string;
+  responsibleDisplayName: string | null;
+}
+
+export interface KeepQuickAction {
+  code: string;
+  label: string;
+  visibility: string;
+  clearsAttention: boolean;
+  countsFirstResponse: boolean;
+  changesStatus: boolean;
+  effectSummaryCode: string;
+}
+
+export interface KeepRequestActionsInfo {
+  quickActions: KeepQuickAction[];
+}
+
+export interface KeepRequestSummary {
+  id: string;
+  referenceCode: string;
+  status: string;
+  currentStatusText: string | null;
+  customerName: string;
+  customerPhone: string;
+  customerEmail: string | null;
+  description: string;
+  lastCustomerActivityAtUtc: string | null;
+  lastBusinessActivityAtUtc: string | null;
+  createdAtUtc: string;
+  updatedAtUtc: string;
+  isTerminal: boolean;
+  isPostCloseFollowUp: boolean;
+  needsShare: boolean;
+  attention: KeepRequestAttentionInfo;
+  preview: KeepRequestPreviewInfo;
+  participation: KeepRequestParticipationInfo;
+  actions: KeepRequestActionsInfo;
+}
+
+export interface KeepRequestViewCounts {
+  default: number;
+  assignedToMe: number;
+  watching: number;
+  unassigned: number;
+  needsAttention: number;
+  feedbackReview: number;
+  readyToClose: number;
+}
+
+export interface KeepRequestPageInfo {
+  limit: number;
+  hasMore: boolean;
+  nextCursor: string | null;
+}
+
+export interface KeepRequestListContext {
+  view: string;
+  isDefaultCommandCenter: boolean;
+  isHistory: boolean;
+  isSearch: boolean;
+}
+
+export interface KeepRequestListResult {
+  requests: KeepRequestSummary[];
+  pageInfo: KeepRequestPageInfo;
+  viewCounts: KeepRequestViewCounts | null;
+  listContext: KeepRequestListContext;
+}
+
+export interface KeepRequestAvailableItem {
+  requestId: string;
+  referenceCode: string;
+  customerName: string;
+  status: string;
+  createdAtUtc: string;
+  attentionSinceUtc: string | null;
+  nextAttentionAtUtc: string | null;
+  priorityBand: string;
+  attentionLevel: string;
+  descriptionPreview: string;
+  version: string;
+  canSelfAssign: boolean;
+  canWatch: boolean;
+}
+
+export interface KeepAvailableRequestsResult {
+  requests: KeepRequestAvailableItem[];
+  pageInfo: KeepRequestPageInfo;
+}
+
+export type RequestView =
+  | "default"
+  | "assigned_to_me"
+  | "needs_attention"
+  | "watching"
+  | "ready_to_close"
+  | "feedback_review";
+
+export interface GetRequestsParams {
+  view?: RequestView;
+  status?: string;
+  q?: string;
+  cursor?: string;
+  limit?: number;
+}
+
 export const api = {
   getMe: () => apiFetch<MeResponse>("/auth/me"),
   getOnboardingChecklist: () =>
@@ -113,4 +248,25 @@ export const api = {
       method: "POST",
       body: JSON.stringify(body),
     }),
+  getRequests: (params: GetRequestsParams = {}) => {
+    const qs = new URLSearchParams();
+    if (params.view) qs.set("view", params.view);
+    if (params.status) qs.set("status", params.status);
+    if (params.q) qs.set("q", params.q);
+    if (params.cursor) qs.set("cursor", params.cursor);
+    if (params.limit) qs.set("limit", String(params.limit));
+    const query = qs.toString();
+    return apiFetch<KeepRequestListResult>(
+      `/keep/requests${query ? `?${query}` : ""}`,
+    );
+  },
+  getAvailableRequests: (params: { cursor?: string; limit?: number } = {}) => {
+    const qs = new URLSearchParams();
+    if (params.cursor) qs.set("cursor", params.cursor);
+    if (params.limit) qs.set("limit", String(params.limit));
+    const query = qs.toString();
+    return apiFetch<KeepAvailableRequestsResult>(
+      `/keep/requests/available${query ? `?${query}` : ""}`,
+    );
+  },
 };

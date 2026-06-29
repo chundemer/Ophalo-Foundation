@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Http;
 using OpHalo.Api.Helpers;
 using OpHalo.Foundation.Application.Abstractions.Security;
 using OpHalo.Foundation.Application.Auth;
+using OpHalo.Foundation.Application.Members;
 using OpHalo.Foundation.Core.Constants;
 using OpHalo.Foundation.Core.Entities.Accounts.Enums;
 using OpHalo.Foundation.Infrastructure.Security;
@@ -104,14 +105,30 @@ public static class AuthEndpoints
         return Results.Ok();
     }
 
-    private static IResult Me(ICurrentUser currentUser) =>
-        Results.Ok(new
+    private static async Task<IResult> Me(
+        ICurrentUser currentUser,
+        IMemberManagementPersistence members,
+        CancellationToken ct)
+    {
+        var role = await members.GetAccountUserRoleAsync(currentUser.UserId, ct);
+        var accountRole = role switch
+        {
+            AccountUserRole.Owner    => "owner",
+            AccountUserRole.Admin    => "admin",
+            AccountUserRole.Operator => "operator",
+            AccountUserRole.Viewer   => "viewer",
+            null                     => "unknown",
+            _                        => "unknown"
+        };
+        return Results.Ok(new
         {
             accountUserId = currentUser.UserId,
             accountId = currentUser.AccountId,
             isAuthenticated = currentUser.IsAuthenticated,
-            isVerified = currentUser.IsVerified
+            isVerified = currentUser.IsVerified,
+            accountRole
         });
+    }
 
     private static async Task<IResult> Logout(
         HttpContext httpContext,

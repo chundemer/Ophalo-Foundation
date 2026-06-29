@@ -135,4 +135,14 @@ public sealed class EfMemberManagementPersistence(OpHaloDbContext db) : IMemberM
         await db.SaveChangesAsync(cancellationToken);
         await tx.CommitAsync(cancellationToken);
     }
+
+    public async Task<AccountUserRole?> GetAccountUserRoleAsync(Guid accountUserId, CancellationToken ct)
+    {
+        var row = await db.AccountUsers
+            .AsNoTracking()
+            .Where(au => au.Id == accountUserId)
+            .Select(au => new { au.Role })
+            .FirstOrDefaultAsync(ct);
+        return row?.Role;
+    }
 }

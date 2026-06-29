@@ -6,7 +6,10 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using OpHalo.Foundation.Application.Accounts.Provisioning;
 using OpHalo.Foundation.Core.Constants;
+using OpHalo.Foundation.Core.Entities.Accounts;
 using OpHalo.Foundation.Core.Entities.Accounts.Enums;
+using OpHalo.Foundation.Core.Entities.Users;
+using OpHalo.Foundation.Core.Helpers;
 using OpHalo.Foundation.Infrastructure.Persistence;
 using OpHalo.Foundation.Infrastructure.Security;
 
@@ -25,6 +28,7 @@ public sealed class AuthApiTests : IClassFixture<KeepApiWebFactory>, IAsyncLifet
 
     private Guid _accountId;
     private Guid _ownerAccountUserId;
+    private Guid _operatorAccountUserId;
 
     public AuthApiTests(KeepApiWebFactory factory)
     {
@@ -69,6 +73,23 @@ public sealed class AuthApiTests : IClassFixture<KeepApiWebFactory>, IAsyncLifet
 
         ownerEntry.CurrentValue = graph.Owner.Id;
         await db.SaveChangesAsync();
+
+        var operatorEmail = "operator@auth-api-tests.com";
+        var operatorUser = User.CreateVerified(operatorEmail, "Auth Test Operator", now);
+        var operatorMember = AccountUser.CreatePendingInvite(
+            _accountId, operatorEmail, EmailNormalizer.Normalize(operatorEmail),
+            AccountUserRole.Operator,
+            inviteTokenHash: "operator_invite_hash_auth_tests",
+            inviteExpiresAtUtc: now.AddDays(7),
+            nowUtc: now);
+        operatorMember.Activate(operatorUser.Id, now);
+        _operatorAccountUserId = operatorMember.Id;
+
+        await using var scope2 = _factory.CreateScope();
+        var db2 = scope2.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+        db2.Users.Add(operatorUser);
+        db2.AccountUsers.Add(operatorMember);
+        await db2.SaveChangesAsync();
     }
 
     public Task DisposeAsync() => Task.CompletedTask;
@@ -102,6 +123,36 @@ public sealed class AuthApiTests : IClassFixture<KeepApiWebFactory>, IAsyncLifet
         Assert.Equal(_accountId, body.AccountId);
         Assert.True(body.IsAuthenticated);
         Assert.True(body.IsVerified);
+        Assert.Equal("owner", body.AccountRole);
+    }
+
+    [Fact]
+    public async Task Me_OwnerSession_Returns_OwnerRole()
+    {
+        var rawToken = await _factory.SeedSessionAsync(_ownerAccountUserId, _accountId);
+
+        using var request = WithCookie(HttpMethod.Get, "/auth/me", rawToken);
+        var response = await _client.SendAsync(request);
+
+        var body = await response.Content.ReadFromJsonAsync<MeBody>(
+            new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+        Assert.Equal("owner", body!.AccountRole);
+    }
+
+    [Fact]
+    public async Task Me_OperatorSession_Returns_OperatorRole()
+    {
+        var rawToken = await _factory.SeedSessionAsync(_operatorAccountUserId, _accountId);
+
+        using var request = WithCookie(HttpMethod.Get, "/auth/me", rawToken);
+        var response = await _client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<MeBody>(
+            new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+        Assert.NotNull(body);
+        Assert.Equal(_operatorAccountUserId, body.AccountUserId);
+        Assert.Equal("operator", body.AccountRole);
     }
 
     [Fact]
@@ -353,5 +404,6 @@ public sealed class AuthApiTests : IClassFixture<KeepApiWebFactory>, IAsyncLifet
         Guid AccountUserId,
         Guid AccountId,
         bool IsAuthenticated,
-        bool IsVerified);
+        bool IsVerified,
+        string AccountRole);
 }

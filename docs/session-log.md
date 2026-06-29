@@ -1,10 +1,10 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-06-28 (S13a complete; S13b next)
+**Last updated:** 2026-06-29 (S13c complete; S13d next)
 **Branch:** `main` tracking `origin/main`
-**Last green baseline:** 939 unit · 14 arch · 705 integration = 1,658 total, 0 failures (1 pre-existing KeepG5 fluke excluded)
+**Last green baseline:** 939 unit · 14 arch · 713 integration = 1,666 total, 0 failures (1 pre-existing KeepG5 fluke excluded)
 **Next free ADR:** ADR-385
-**Current session:** Session 13b — PWA Workbench Next Slice
+**Current session:** Session 13c — Command Center Request List
 
 ---
 
@@ -35,45 +35,54 @@ For every implementation slice:
 ## Current Work
 
 **Current build log:** `docs/build-log/067-session-13-pwa-workbench.md`
-**Last completed build log:** `docs/build-log/067-session-13-pwa-workbench.md` (S13a)
+**Last completed build log:** `docs/build-log/067-session-13-pwa-workbench.md` (S13c)
 **Readiness working doc:** `docs/pilot-readiness-decision-questions.md`
 **Foundation roadmap:** `docs/build-log/ophalo-foundation-build-plan-greenfield-boundaries-brownfield-behavior.md` section 9.1
-**Current session:** Session 13b — PWA Workbench Next Slice
+**Current session:** Session 13d — Request Detail Workbench
 
-**Prior session context:** S13a is complete. Details live in
-`docs/build-log/067-session-13-pwa-workbench.md`. The next slice may rely on the standalone
-`web/ophalo-app` scaffold, credentialed typed API client, auth guard, onboarding home, local CORS,
-dev console email fallback, self-hosted fonts, and `docs/runbook/local-web-setup.md`.
+**S13a status: complete.** (details in build-log 067)
 
-**S13a status: complete.**
+**S13b status: complete.**
 
-- `web/ophalo-app` scaffolded: Vite + React + TypeScript + Tailwind CSS, pnpm, `pnpm-workspace.yaml`.
-- Self-hosted Inter Variable and Source Serif 4 Variable fonts copied to `public/fonts/` via
-  `scripts/copy-fonts.mjs` (postinstall); preloaded from `index.html`; `@font-face` in `app.css`.
-- Typed fetch client (`src/lib/apiClient.ts`) — `credentials: "include"`, throws `ApiError` on non-2xx.
-- `AuthGuard` component — queries `GET /auth/me`, redirects to `{VITE_PUBLIC_BASE_URL}/auth/signin?return_to=<path>` on 401; `return_to` is path-only (no origin).
-- `Home` page — queries `GET /keep/setup/onboarding`: 200 → checklist, 403 → access-limited, 402 → commercial-block, other → generic error.
-- `AccessLimited` component — shown on 403 for non-Owner/Admin users.
-- Minimal PWA manifest (`public/manifest.webmanifest`).
-- API: CORS added — explicit origins via `Cors:AllowedOrigins`, `AllowCredentials()`, `UseCors` before auth middleware.
-- API: `ConsoleEmailSender` — dev-only fallback when Resend key absent; writes magic-link URL to stderr, not structured logs.
-- API config: `App:AppBaseUrl` and `Cors:AllowedOrigins` added to `appsettings.json`; dev defaults in `appsettings.Development.json`.
-- Runbook: `docs/runbook/local-web-setup.md`.
-- Verification: 939 unit · 14 arch · 705 integration (1 pre-existing KeepG5 fluke), 0 new failures; `pnpm typecheck` clean; `pnpm build` succeeds.
+- Backend: `GET /keep/requests/lookup?phone={digits}` — authenticated, mirrors create posture (Viewer/OffSeason → 403).
+- `IKeepBusinessRequestPersistence.FindActiveRequestsByCustomerIdAsync` added; returns non-terminal requests
+  ordered by `max(LastBusinessActivityAt, LastCustomerActivityAt) ?? CreatedAtUtc DESC`.
+- `LookupKeepRequestByPhoneService` — full auth stack, phone normalization via `PhoneNormalizer`, customer
+  lookup, active request projection (max 3 + `hasMoreActiveRequests` flag), co-located result types.
+- Frontend: `App.tsx` shell — left sidebar `+ New Request` button (desktop) + sticky FAB (mobile); state
+  hoisted at shell level; `Home.tsx` receives `onStartCapture` callback and shows inline "Try it now" action
+  on the Quick Capture checklist item.
+- `QuickCapture.tsx` — Phone Lookup Gate (digit strip, auto-fire at 10 digits, Contact Picker icon, clipboard
+  affordance) → Lookup Result cards (max 3 active requests, navigate-on-tap) → Capture Form (locked phone,
+  prefilled name/email when known, source picker, description) → Success Panel (Copy Tracker Link at
+  `{VITE_PUBLIC_BASE_URL}/keep/r/{pageToken}`, View Request Workbench, Capture Another). Mobile success
+  navigates to `/keep/requests/{requestId}` via `window.location.href`.
+- Shell-level role/commercial preflight is deferred: current `GET /keep/setup/onboarding` is
+  SettingsManage-gated, so it cannot distinguish Operator from Viewer or reliably surface past-due
+  state for non-settings roles. Quick Capture still handles backend-denied states inside the drawer:
+  Viewer/OffSeason lookup or create returns 403; commercial block returns 402 when emitted by the
+  lookup/create endpoint. Future shell-disabled Viewer buttons and persistent pre-submit 402 banners
+  require role/commercial state from session claims or a dedicated role-neutral access endpoint.
+- `apiClient.ts`: `PhoneLookupResult`, `CreateRequestBody`, `KeepRequestDetailResult` DTOs; `lookupRequestByPhone`,
+  `createRequest` functions.
+- Verification: 29 existing unit tests green; 31 integration tests green (6 new lookup tests); `pnpm typecheck`
+  clean; `pnpm build` succeeds.
 
-**S13b next: decision/preflight needed.**
+**S13c status: complete.**
 
-- Use `docs/build-log/067-session-13-pwa-workbench.md` as the Session 13 umbrella plan. It now
-  breaks Session 13 into proposed coding slices S13a-S13i with scope, live contracts, out-of-scope
-  boundaries, and pre-code questions.
-- Choose one narrow PWA workbench vertical before implementation. Strong candidate: S13b Quick
-  Capture, because `DEF-076` marks business-first request capture UI as a V1 must-have and the
-  backend `POST /keep/requests` contract already exists.
-- Keep S13a foundation boundaries: `ophalo-app` remains a static Vite client over `OpHalo.Api`;
-  fetch remains credentialed and throws typed errors; localhost uses host-only cookies; no fake data
-  or placeholder nav for unbuilt workflows.
-- Before coding S13b, answer the S13b questions in build-log 067 and prepare a file-level gate,
-  role/access behavior, done gate, and screenshot/browser verification target.
+- Backend prerequisite: `GET /auth/me` now returns `accountRole` ("owner" | "admin" | "operator" | "viewer") loaded
+  fresh from DB via `IMemberManagementPersistence.GetAccountUserRoleAsync`.
+- Frontend: role-based tab set (Owner/Admin: 6 tabs; Operator: 4 tabs with "My Promises" label); text search + active
+  status dropdown filter; attention badge rendering (danger/urgent/waiting/neutral exhaustive mapping); `NeedsShare`
+  callout; 30s polling on page 1 / paused on page 2+ with staleness banner + manual Refresh; `viewCounts` from list
+  response drives sidebar tab counts; cursor pagination with Previous/Next; 7 view-specific empty states; row
+  navigation via `window.location.href` (consistent with S13b QuickCapture pattern; S13d wires full routing).
+- New files: `web/ophalo-app/src/pages/Requests.tsx`, `web/ophalo-app/src/components/RequestRow.tsx`.
+- Verification: 939 unit · 14 arch · 713 integration (2 new auth role tests) = 1,666 total, 0 failures;
+  `pnpm typecheck` clean; `pnpm build` succeeds.
+
+**S13d next: pre-work complete per build-log 067.** Use the locked S13d decisions (detail timeline, actions,
+`AvailableActionsMetadata.CanRecordShareIntent`, versioned writes) directly.
 
 ---
 
