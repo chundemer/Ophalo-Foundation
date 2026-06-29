@@ -1,10 +1,10 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-06-29 (S13c complete; S13d next)
+**Last updated:** 2026-06-29 (S13d-1 committed; S13d-2 next)
 **Branch:** `main` tracking `origin/main`
 **Last green baseline:** 939 unit · 14 arch · 713 integration = 1,666 total, 0 failures (1 pre-existing KeepG5 fluke excluded)
 **Next free ADR:** ADR-385
-**Current session:** Session 13c — Command Center Request List
+**Current session:** Session 13d — Request Detail Workbench
 
 ---
 
@@ -40,49 +40,54 @@ For every implementation slice:
 **Foundation roadmap:** `docs/build-log/ophalo-foundation-build-plan-greenfield-boundaries-brownfield-behavior.md` section 9.1
 **Current session:** Session 13d — Request Detail Workbench
 
-**S13a status: complete.** (details in build-log 067)
+**Committed baseline (local, not yet pushed):**
 
-**S13b status: complete.**
+- `6fc80e1 feat: expose share intent action metadata`
+- S13d-1 commit (this session)
 
-- Backend: `GET /keep/requests/lookup?phone={digits}` — authenticated, mirrors create posture (Viewer/OffSeason → 403).
-- `IKeepBusinessRequestPersistence.FindActiveRequestsByCustomerIdAsync` added; returns non-terminal requests
-  ordered by `max(LastBusinessActivityAt, LastCustomerActivityAt) ?? CreatedAtUtc DESC`.
-- `LookupKeepRequestByPhoneService` — full auth stack, phone normalization via `PhoneNormalizer`, customer
-  lookup, active request projection (max 3 + `hasMoreActiveRequests` flag), co-located result types.
-- Frontend: `App.tsx` shell — left sidebar `+ New Request` button (desktop) + sticky FAB (mobile); state
-  hoisted at shell level; `Home.tsx` receives `onStartCapture` callback and shows inline "Try it now" action
-  on the Quick Capture checklist item.
-- `QuickCapture.tsx` — Phone Lookup Gate (digit strip, auto-fire at 10 digits, Contact Picker icon, clipboard
-  affordance) → Lookup Result cards (max 3 active requests, navigate-on-tap) → Capture Form (locked phone,
-  prefilled name/email when known, source picker, description) → Success Panel (Copy Tracker Link at
-  `{VITE_PUBLIC_BASE_URL}/keep/r/{pageToken}`, View Request Workbench, Capture Another). Mobile success
-  navigates to `/keep/requests/{requestId}` via `window.location.href`.
-- Shell-level role/commercial preflight is deferred: current `GET /keep/setup/onboarding` is
-  SettingsManage-gated, so it cannot distinguish Operator from Viewer or reliably surface past-due
-  state for non-settings roles. Quick Capture still handles backend-denied states inside the drawer:
-  Viewer/OffSeason lookup or create returns 403; commercial block returns 402 when emitted by the
-  lookup/create endpoint. Future shell-disabled Viewer buttons and persistent pre-submit 402 banners
-  require role/commercial state from session claims or a dedicated role-neutral access endpoint.
-- `apiClient.ts`: `PhoneLookupResult`, `CreateRequestBody`, `KeepRequestDetailResult` DTOs; `lookupRequestByPhone`,
-  `createRequest` functions.
-- Verification: 29 existing unit tests green; 31 integration tests green (6 new lookup tests); `pnpm typecheck`
-  clean; `pnpm build` succeeds.
+**Completed Session 13 slices:**
 
-**S13c status: complete.**
+- S13a: standalone Vite PWA shell, credentialed typed API client, auth guard, onboarding home,
+  local CORS/dev email fallback, self-hosted fonts, and local web runbook.
+- S13b: Quick Capture drawer, phone lookup gate, create request flow, tracker-link success actions,
+  and the S13b shell-access constraint note. Shell-level Viewer/past-due preflight remains deferred
+  until role/commercial state is exposed through a reliable role-neutral source.
+- S13c: authenticated command-center list, `/auth/me.accountRole`, role-rendered request tabs,
+  search/status filters, attention badges/action prompts, `NeedsShare` callout, cursor pagination,
+  and first-page polling.
+- S13d-1: discriminated union `AppRoute` state nav, clickable rows (`onSelect` prop), `RequestDetail`
+  page with header, unified timeline, read-only metadata, mobile sticky `NeedsShare` banner, desktop
+  rail share section, and `share-intent` clearing (`copy_link`, `native_share`, `manual_mark_shared`).
+  Contact launchers rendered from `detail.contactActions`, not raw field inference.
 
-- Backend prerequisite: `GET /auth/me` now returns `accountRole` ("owner" | "admin" | "operator" | "viewer") loaded
-  fresh from DB via `IMemberManagementPersistence.GetAccountUserRoleAsync`.
-- Frontend: role-based tab set (Owner/Admin: 6 tabs; Operator: 4 tabs with "My Promises" label); text search + active
-  status dropdown filter; attention badge rendering (danger/urgent/waiting/neutral exhaustive mapping); `NeedsShare`
-  callout; 30s polling on page 1 / paused on page 2+ with staleness banner + manual Refresh; `viewCounts` from list
-  response drives sidebar tab counts; cursor pagination with Previous/Next; 7 view-specific empty states; row
-  navigation via `window.location.href` (consistent with S13b QuickCapture pattern; S13d wires full routing).
-- New files: `web/ophalo-app/src/pages/Requests.tsx`, `web/ophalo-app/src/components/RequestRow.tsx`.
-- Verification: 939 unit · 14 arch · 713 integration (2 new auth role tests) = 1,666 total, 0 failures;
-  `pnpm typecheck` clean; `pnpm build` succeeds.
+**S13d locked architecture (all sub-slices):**
 
-**S13d next: pre-work complete per build-log 067.** Use the locked S13d decisions (detail timeline, actions,
-`AvailableActionsMetadata.CanRecordShareIntent`, versioned writes) directly.
+- Detail source of truth: `GET /keep/requests/{requestId}` / `KeepRequestDetailResult`.
+- Timeline: `detail.events` as one chronological feed.
+- Permissions/actions: render from `detail.availableActions`, not client-side role policy.
+- Validation: `detail.validation` for local form limits.
+- Contact buttons: `detail.contactActions` only — never raw phone/email field inference.
+- Share controls: `availableActions.canRecordShareIntent`; call `POST /keep/requests/{requestId}/share-intent`.
+- Versioned writes: send `X-Keep-Request-Version: {detail.version}`; preserve open form input on 409.
+- Out of scope: customer update composer, Follow Up On / Planned For UI, closeout/feedback flows,
+  classification/spam/test UI, settings/member management, reporting, batch closeout.
+
+**S13d-2 — Status Change Workflow** ← next
+
+- Files expected: `web/ophalo-app/src/pages/RequestDetail.tsx`, `web/ophalo-app/src/lib/apiClient.ts`.
+- Add status-change UI using `detail.availableActions.allowedStatuses` and `PATCH /keep/requests/{requestId}/status`.
+- Send `X-Keep-Request-Version: {detail.version}`; replace local detail state with the response body on success.
+- On 409 `KeepRequest.RequestChanged`, preserve form input, disable further submit, show conflict banner:
+  `"This request has been updated by another team member. Copy your unsaved notes and refresh the workbench to load the latest history."`
+- Per-action `isSubmitting` lock; no overlapping writes.
+
+**S13d-3 — Operational Action Rail**
+
+- Add external-contact log, attention acknowledge, and participation controls.
+- Render availability from `detail.availableActions`; validate locally against `detail.validation`.
+- Contact log modal: `direction`, `channel`, `outcome` (outbound only), `requiresBusinessFollowUp` (inbound), `summary`.
+- Contact launchers already rendered in S13d-1; S13d-3 wires the post-launch modal open.
+- Keep each mutation path fail-closed, version-aware where applicable.
 
 ---
 

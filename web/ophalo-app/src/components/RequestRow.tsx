@@ -81,17 +81,14 @@ function StatusPill({ status }: { status: string }) {
 
 interface RequestRowProps {
   row: KeepRequestSummary;
+  onSelect: (requestId: string) => void;
 }
 
-export function RequestRow({ row }: RequestRowProps) {
-  function navigate() {
-    window.location.href = `/keep/requests/${row.id}`;
-  }
-
+export function RequestRow({ row, onSelect }: RequestRowProps) {
   return (
     <button
       type="button"
-      onClick={navigate}
+      onClick={() => onSelect(row.id)}
       className="w-full text-left flex flex-col gap-1.5 rounded-lg border border-slate-200 bg-white px-4 py-3 hover:border-slate-300 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-1 transition-colors"
     >
       <div className="flex items-start justify-between gap-2">
@@ -143,19 +140,16 @@ export function RequestRow({ row }: RequestRowProps) {
 
 interface AvailableRequestRowProps {
   row: KeepRequestAvailableItem;
+  onSelect: (requestId: string) => void;
 }
 
-export function AvailableRequestRow({ row }: AvailableRequestRowProps) {
-  function navigate() {
-    window.location.href = `/keep/requests/${row.requestId}`;
-  }
-
+export function AvailableRequestRow({ row, onSelect }: AvailableRequestRowProps) {
   const tone = attentionBadgeTone(row.attentionLevel === "none" ? null : row.priorityBand);
 
   return (
     <button
       type="button"
-      onClick={navigate}
+      onClick={() => onSelect(row.requestId)}
       className="w-full text-left flex flex-col gap-1.5 rounded-lg border border-slate-200 bg-white px-4 py-3 hover:border-slate-300 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-1 transition-colors"
     >
       <div className="flex items-start justify-between gap-2">

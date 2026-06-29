@@ -4,6 +4,7 @@ import { AuthGuard } from "./components/AuthGuard";
 import { QuickCapture } from "./components/QuickCapture";
 import { Home } from "./pages/Home";
 import { Requests } from "./pages/Requests";
+import { RequestDetail } from "./pages/RequestDetail";
 import { AccessLimited } from "./pages/AccessLimited";
 import { Plus, Inbox } from "lucide-react";
 import { api, type AccountRole, type KeepRequestViewCounts } from "./lib/apiClient";
@@ -15,10 +16,13 @@ import { api, type AccountRole, type KeepRequestViewCounts } from "./lib/apiClie
 // permission-denied. Both flags are props on QuickCapture for a future caller that has a
 // reliable source (e.g. role in session claims, a dedicated access endpoint).
 
-type Page = "home" | "requests";
+type AppRoute =
+  | { page: "home" }
+  | { page: "requests" }
+  | { page: "detail"; requestId: string };
 
 interface NavItem {
-  id: Page;
+  id: "home" | "requests";
   label: string;
   icon: React.ReactNode;
 }
@@ -36,7 +40,7 @@ function getNavItems(role: AccountRole): NavItem[] {
 
 function AppShell() {
   const [captureOpen, setCaptureOpen] = useState(false);
-  const [activePage, setActivePage] = useState<Page>("requests");
+  const [route, setRoute] = useState<AppRoute>({ page: "requests" });
   const [viewCounts, setViewCounts] = useState<KeepRequestViewCounts | null>(null);
   const handleViewCountsUpdate = useCallback(setViewCounts, []);
 
@@ -53,6 +57,17 @@ function AppShell() {
     setCaptureOpen(true);
   }
 
+  function selectRequest(requestId: string) {
+    setRoute({ page: "detail", requestId });
+  }
+
+  function backToRequests() {
+    setRoute({ page: "requests" });
+  }
+
+  const activeNavId: "home" | "requests" =
+    route.page === "home" ? "home" : "requests";
+
   return (
     <div className="flex min-h-screen bg-slate-50">
       {/* Left sidebar — desktop */}
@@ -65,9 +80,9 @@ function AppShell() {
             <button
               key={item.id}
               type="button"
-              onClick={() => setActivePage(item.id)}
+              onClick={() => setRoute({ page: item.id })}
               className={`w-full flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium text-left transition-colors ${
-                activePage === item.id
+                activeNavId === item.id
                   ? "bg-slate-100 text-slate-900"
                   : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
               }`}
@@ -101,31 +116,37 @@ function AppShell() {
 
       {/* Main content */}
       <main className="flex-1 min-w-0 flex flex-col">
-        {activePage === "requests" && role === "unknown" && (
+        {route.page === "requests" && role === "unknown" && (
           <div className="flex flex-1 items-center justify-center">
             <span className="text-slate-400 text-sm">Loading…</span>
           </div>
         )}
-        {activePage === "requests" && role === "viewer" && <AccessLimited />}
-        {activePage === "requests" && role !== "unknown" && role !== "viewer" && (
+        {route.page === "requests" && role === "viewer" && <AccessLimited />}
+        {route.page === "requests" && role !== "unknown" && role !== "viewer" && (
           <Requests
             role={role}
             viewCounts={viewCounts}
             onViewCountsUpdate={handleViewCountsUpdate}
+            onSelectRequest={selectRequest}
           />
         )}
-        {activePage === "home" && <Home onStartCapture={openCapture} />}
+        {route.page === "home" && <Home onStartCapture={openCapture} />}
+        {route.page === "detail" && (
+          <RequestDetail requestId={route.requestId} onBack={backToRequests} />
+        )}
       </main>
 
       {/* Sticky FAB — mobile only */}
-      <button
-        type="button"
-        onClick={openCapture}
-        aria-label="New Request"
-        className="md:hidden fixed bottom-6 right-6 z-30 flex h-14 w-14 items-center justify-center rounded-full bg-slate-900 text-white shadow-lg hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-500 focus:ring-offset-2"
-      >
-        <Plus className="h-6 w-6" />
-      </button>
+      {route.page !== "detail" && (
+        <button
+          type="button"
+          onClick={openCapture}
+          aria-label="New Request"
+          className="md:hidden fixed bottom-6 right-6 z-30 flex h-14 w-14 items-center justify-center rounded-full bg-slate-900 text-white shadow-lg hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-500 focus:ring-offset-2"
+        >
+          <Plus className="h-6 w-6" />
+        </button>
+      )}
 
       {/* Quick Capture modal/drawer */}
       {captureOpen && <QuickCapture onClose={() => setCaptureOpen(false)} />}

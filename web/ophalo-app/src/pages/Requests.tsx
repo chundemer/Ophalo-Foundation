@@ -87,9 +87,10 @@ interface RequestsProps {
   role: AccountRole;
   viewCounts: KeepRequestViewCounts | null;
   onViewCountsUpdate: (counts: KeepRequestViewCounts | null) => void;
+  onSelectRequest: (requestId: string) => void;
 }
 
-export function Requests({ role, viewCounts, onViewCountsUpdate }: RequestsProps) {
+export function Requests({ role, viewCounts, onViewCountsUpdate, onSelectRequest }: RequestsProps) {
   const tabs = getTabsForRole(role);
   const [activeTab, setActiveTab] = useState<TabDef>(tabs[0]);
   const [q, setQ] = useState("");
@@ -293,10 +294,10 @@ export function Requests({ role, viewCounts, onViewCountsUpdate }: RequestsProps
           <div className="space-y-2">
             {isAvailableTab
               ? (availableQuery.data?.requests ?? []).map((row) => (
-                  <AvailableRequestRow key={row.requestId} row={row} />
+                  <AvailableRequestRow key={row.requestId} row={row} onSelect={onSelectRequest} />
                 ))
               : (listQuery.data?.requests ?? []).map((row) => (
-                  <RequestRow key={row.id} row={row} />
+                  <RequestRow key={row.id} row={row} onSelect={onSelectRequest} />
                 ))
             }
           </div>

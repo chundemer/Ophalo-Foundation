@@ -11,6 +11,30 @@ export class ApiError extends Error {
   }
 }
 
+async function apiFetchVoid(path: string, init?: RequestInit): Promise<void> {
+  const response = await fetch(`${API_BASE}${path}`, {
+    ...init,
+    credentials: "include",
+    headers: {
+      "Content-Type": "application/json",
+      ...init?.headers,
+    },
+  });
+  if (!response.ok) {
+    let code: string | undefined;
+    try {
+      const problem = (await response.json()) as Record<string, unknown>;
+      const ext = problem["extensions"] as Record<string, unknown> | undefined;
+      code =
+        (ext?.["code"] as string | undefined) ??
+        (problem["code"] as string | undefined);
+    } catch {
+      // body may be empty or non-JSON; code stays undefined
+    }
+    throw new ApiError(response.status, code, `API ${response.status} ${path}`);
+  }
+}
+
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE}${path}`, {
     ...init,
@@ -89,18 +113,150 @@ export interface CreateRequestBody {
   source: string;
 }
 
+export interface AvailableActionsMetadata {
+  canChangeStatus: boolean;
+  canSendBusinessUpdate: boolean;
+  canAddInternalNote: boolean;
+  canAcknowledgeAttention: boolean;
+  canLogExternalContact: boolean;
+  canAssignResponsible: boolean;
+  canWatch: boolean;
+  canUnwatch: boolean;
+  canMute: boolean;
+  canUnmute: boolean;
+  canMarkFeedbackReviewed: boolean;
+  canSetFollowUpOn: boolean;
+  canSetPlannedFor: boolean;
+  canClose: boolean;
+  canClassify: boolean;
+  canRecordShareIntent: boolean;
+  allowedStatuses: string[];
+}
+
+export interface ValidationHintsMetadata {
+  businessUpdateMaxLength: number;
+  internalNoteMaxLength: number;
+  statusMessageMaxLength: number;
+  acknowledgeReasonMaxLength: number;
+  externalContactSummaryMaxLength: number;
+  feedbackReviewNoteMaxLength: number;
+  followUpNoteMaxLength: number;
+  allowedFollowUpReasons: string[];
+  messageRequiredForStatuses: string[];
+}
+
+export interface ContactActionItem {
+  type: string;
+  available: boolean;
+  target: string;
+}
+
+export interface KeepRequestParticipantItem {
+  accountUserId: string;
+  displayName: string;
+  role: string;
+  participationType: string;
+  notificationsEnabled: boolean;
+  isEligible: boolean;
+  attachedAtUtc: string;
+  detachedAtUtc: string | null;
+}
+
+export interface CurrentUserDetailParticipation {
+  participationType: string;
+  notificationsEnabled: boolean | null;
+}
+
+export interface KeepRequestEventItem {
+  id: string;
+  eventType: string;
+  content: string | null;
+  visibility: string;
+  occurredAtUtc: string;
+  actorType: string;
+  actorAccountUserId: string | null;
+  actorDisplayName: string | null;
+  statusAfter: string | null;
+  messageIntent: string | null;
+  communicationChannel: string | null;
+  externalContactDirection: string | null;
+  externalContactChannel: string | null;
+  externalContactOutcome: string | null;
+  externalContactRequiresFollowUp: boolean | null;
+  externalContactSetFirstResponse: boolean | null;
+  externalContactClearedAttention: boolean | null;
+  participationAction: string | null;
+  participationTargetAccountUserId: string | null;
+  participationTargetDisplayName: string | null;
+  participationPreviousResponsibleAccountUserId: string | null;
+  participationInternalNote: string | null;
+}
+
+export interface KeepRequestNavigation {
+  previousId: string | null;
+  nextId: string | null;
+  position: number;
+  total: number;
+}
+
 export interface KeepRequestDetailResult {
   requestId: string;
   referenceCode: string;
   status: string;
+  origin: string;
+  source: string | null;
+  needsShare: boolean;
+  businessName: string;
   customerName: string;
   customerPhone: string;
   customerEmail: string | null;
   description: string;
+  currentStatusText: string | null;
   pageToken: string;
-  needsShare: boolean;
+  version: string;
+  expiresAtUtc: string | null;
   createdAtUtc: string;
+  lastBusinessActivityAt: string | null;
+  lastCustomerActivityAt: string | null;
+  terminatedAtUtc: string | null;
+  followUpOnDate: string | null;
+  followUpOnReason: string | null;
+  followUpOnNote: string | null;
+  plannedForDate: string | null;
+  attentionLevel: string;
+  waitingDirection: string;
+  attentionReason: string | null;
+  priorityBand: string;
+  attentionSinceUtc: string | null;
+  nextAttentionAtUtc: string | null;
+  attentionClearedAtUtc: string | null;
+  attentionClearedByAccountUserId: string | null;
+  attentionClearReason: string | null;
+  firstResponseDueAtUtc: string | null;
+  firstRespondedAtUtc: string | null;
+  firstResponderAccountUserId: string | null;
+  firstResponseEventId: string | null;
+  feedbackWasResolved: boolean | null;
+  feedbackComment: string | null;
+  feedbackSubmittedAtUtc: string | null;
+  feedbackCommentVisible: boolean;
+  feedbackReviewedAtUtc: string | null;
+  feedbackReviewedByAccountUserId: string | null;
+  feedbackReviewNote: string | null;
+  feedbackReviewAgeBucket: string | null;
+  feedbackReviewDueAtUtc: string | null;
+  customerPageLastViewedAtUtc: string | null;
+  customerPageViewedAfterLatestUpdate: boolean | null;
+  contactActions: ContactActionItem[];
+  participants: KeepRequestParticipantItem[];
+  currentUserParticipation: CurrentUserDetailParticipation;
+  events: KeepRequestEventItem[];
+  availableActions: AvailableActionsMetadata;
+  validation: ValidationHintsMetadata;
+  navigation: KeepRequestNavigation | null;
 }
+
+export type ShareIntentMethod = "copy_link" | "native_share" | "manual_mark_shared";
 
 // --- Request list ---
 
@@ -269,4 +425,11 @@ export const api = {
       `/keep/requests/available${query ? `?${query}` : ""}`,
     );
   },
+  getRequestDetail: (requestId: string) =>
+    apiFetch<KeepRequestDetailResult>(`/keep/requests/${requestId}`),
+  recordShareIntent: (requestId: string, method: ShareIntentMethod) =>
+    apiFetchVoid(`/keep/requests/${requestId}/share-intent`, {
+      method: "POST",
+      body: JSON.stringify({ method }),
+    }),
 };
