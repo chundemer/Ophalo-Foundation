@@ -258,6 +258,14 @@ export interface KeepRequestDetailResult {
 
 export type ShareIntentMethod = "copy_link" | "native_share" | "manual_mark_shared";
 
+export interface LogExternalContactBody {
+  direction: string;
+  channel: string;
+  outcome?: string;
+  requiresBusinessFollowUp?: boolean;
+  summary?: string;
+}
+
 // --- Request list ---
 
 export interface KeepRequestAttentionInfo {
@@ -441,5 +449,37 @@ export const api = {
       method: "PATCH",
       headers: { "X-Keep-Request-Version": version },
       body: JSON.stringify(body),
+    }),
+  logExternalContact: (requestId: string, body: LogExternalContactBody, version: string) =>
+    apiFetch<KeepRequestDetailResult>(`/keep/requests/${requestId}/external-contact`, {
+      method: "POST",
+      headers: { "X-Keep-Request-Version": version },
+      body: JSON.stringify(body),
+    }),
+  acknowledgeAttention: (requestId: string, reason: string, version: string) =>
+    apiFetch<KeepRequestDetailResult>(`/keep/requests/${requestId}/attention/acknowledge`, {
+      method: "POST",
+      headers: { "X-Keep-Request-Version": version },
+      body: JSON.stringify({ reason }),
+    }),
+  selfWatch: (requestId: string, version: string) =>
+    apiFetch<KeepRequestDetailResult>(`/keep/requests/${requestId}/watch`, {
+      method: "PUT",
+      headers: { "X-Keep-Request-Version": version },
+    }),
+  selfUnwatch: (requestId: string, version: string) =>
+    apiFetch<KeepRequestDetailResult>(`/keep/requests/${requestId}/watch`, {
+      method: "DELETE",
+      headers: { "X-Keep-Request-Version": version },
+    }),
+  mute: (requestId: string, version: string) =>
+    apiFetch<KeepRequestDetailResult>(`/keep/requests/${requestId}/mute`, {
+      method: "PUT",
+      headers: { "X-Keep-Request-Version": version },
+    }),
+  unmute: (requestId: string, version: string) =>
+    apiFetch<KeepRequestDetailResult>(`/keep/requests/${requestId}/mute`, {
+      method: "DELETE",
+      headers: { "X-Keep-Request-Version": version },
     }),
 };

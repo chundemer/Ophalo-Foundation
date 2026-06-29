@@ -11,6 +11,7 @@ import {
   Phone,
   Mail,
   User,
+  X,
 } from "lucide-react";
 import {
   api,
@@ -372,14 +373,181 @@ function StatusChangeSection({ requestId, detail, onDetailUpdated }: StatusChang
 }
 
 // ---------------------------------------------------------------------------
+// Log external contact modal
+// ---------------------------------------------------------------------------
+
+interface LogContactModalProps {
+  requestId: string;
+  detail: KeepRequestDetailResult;
+  initialDirection: string;
+  initialChannel: string;
+  onDetailUpdated: (updated: KeepRequestDetailResult) => void;
+  onClose: () => void;
+}
+
+function LogContactModal({ requestId, detail, initialDirection, initialChannel, onDetailUpdated, onClose }: LogContactModalProps) {
+  const [direction, setDirection] = useState(initialDirection);
+  const [channel, setChannel] = useState(initialChannel);
+  const [outcome, setOutcome] = useState("");
+  const [requiresFollowUp, setRequiresFollowUp] = useState(false);
+  const [summary, setSummary] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [conflictDisabled, setConflictDisabled] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const isOutbound = direction === "outbound";
+  const maxSummary = detail.validation.externalContactSummaryMaxLength;
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (isSubmitting || conflictDisabled) return;
+    setIsSubmitting(true);
+    setError(null);
+    try {
+      const body: { direction: string; channel: string; outcome?: string; requiresBusinessFollowUp?: boolean; summary?: string } = { direction, channel };
+      if (isOutbound && outcome) body.outcome = outcome;
+      if (!isOutbound) body.requiresBusinessFollowUp = requiresFollowUp;
+      if (summary.trim()) body.summary = summary.trim();
+      const updated = await api.logExternalContact(requestId, body, detail.version);
+      onDetailUpdated(updated);
+      onClose();
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 409) {
+        setConflictDisabled(true);
+        setError(STATUS_CONFLICT_MESSAGE);
+      } else {
+        setError("Could not save contact log. Try again.");
+      }
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
+      onClick={onClose}
+    >
+      <div
+        className="bg-white rounded-lg shadow-xl w-full max-w-md p-5"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between mb-1">
+          <h2 className="text-sm font-semibold text-slate-900">Log Contact</h2>
+          <button type="button" onClick={onClose} className="text-slate-400 hover:text-slate-600 p-1">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+        <p className="text-xs text-slate-500 mb-4">Save a Keep record of this contact. Opening the phone or email app is a separate action.</p>
+        {error && (
+          <div className={`mb-3 rounded-md p-3 text-xs ${conflictDisabled ? "bg-amber-50 border border-amber-200 text-amber-800" : "bg-red-50 border border-red-200 text-red-700"}`}>
+            {error}
+          </div>
+        )}
+        <form onSubmit={(e) => void handleSubmit(e)} className="space-y-3">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">Direction</label>
+              <select
+                value={direction}
+                onChange={(e) => { setDirection(e.target.value); setOutcome(""); setRequiresFollowUp(false); }}
+                disabled={conflictDisabled}
+                className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-slate-400"
+              >
+                <option value="outbound">Outbound</option>
+                <option value="inbound">Inbound</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">Channel</label>
+              <select
+                value={channel}
+                onChange={(e) => setChannel(e.target.value)}
+                disabled={conflictDisabled}
+                className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-slate-400"
+              >
+                <option value="phone">Phone</option>
+                <option value="sms">SMS</option>
+                <option value="email">Email</option>
+                <option value="in_person">In Person</option>
+                <option value="other">Other</option>
+              </select>
+            </div>
+          </div>
+          {isOutbound && (
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">Outcome (optional)</label>
+              <select
+                value={outcome}
+                onChange={(e) => setOutcome(e.target.value)}
+                disabled={conflictDisabled}
+                className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-slate-400"
+              >
+                <option value="">— not specified —</option>
+                <option value="spoke_with_customer">Spoke with customer</option>
+                <option value="left_voicemail">Left voicemail</option>
+                <option value="no_answer">No answer</option>
+                <option value="wrong_number">Wrong number</option>
+              </select>
+            </div>
+          )}
+          {!isOutbound && (
+            <label className="flex items-center gap-2 text-sm text-slate-700">
+              <input
+                type="checkbox"
+                checked={requiresFollowUp}
+                onChange={(e) => setRequiresFollowUp(e.target.checked)}
+                disabled={conflictDisabled}
+                className="rounded border-slate-300"
+              />
+              Requires business follow-up
+            </label>
+          )}
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-1">Summary (optional)</label>
+            <textarea
+              value={summary}
+              onChange={(e) => setSummary(e.target.value)}
+              maxLength={maxSummary}
+              disabled={conflictDisabled}
+              placeholder="Brief notes about this contact…"
+              rows={3}
+              className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 resize-none placeholder:text-slate-400 disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-slate-400"
+            />
+          </div>
+          <div className="flex gap-2 pt-1">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={isSubmitting}
+              className="flex-1 rounded-md border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 bg-white hover:bg-slate-50 disabled:opacity-60"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={isSubmitting || conflictDisabled}
+              className="flex-1 rounded-md bg-slate-800 px-3 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-40"
+            >
+              {isSubmitting ? "Saving…" : "Save Contact Log"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Detail header
 // ---------------------------------------------------------------------------
 
 interface DetailHeaderProps {
   detail: KeepRequestDetailResult;
+  onContactLaunched?: (direction: string, channel: string) => void;
 }
 
-function DetailHeader({ detail }: DetailHeaderProps) {
+function DetailHeader({ detail, onContactLaunched }: DetailHeaderProps) {
   const hasAttention = detail.attentionLevel !== "none";
 
   return (
@@ -434,6 +602,7 @@ function DetailHeader({ detail }: DetailHeaderProps) {
             <a
               key={action.type}
               href={action.type === "call" ? `tel:${action.target}` : `mailto:${action.target}`}
+              onClick={() => onContactLaunched?.("outbound", action.type === "call" ? "phone" : "email")}
               className="flex items-center gap-1.5 rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
             >
               {action.type === "call"
@@ -534,6 +703,170 @@ function MetadataSection({ detail }: MetadataSectionProps) {
 }
 
 // ---------------------------------------------------------------------------
+// Acknowledge attention
+// ---------------------------------------------------------------------------
+
+interface AcknowledgeAttentionSectionProps {
+  requestId: string;
+  detail: KeepRequestDetailResult;
+  onDetailUpdated: (updated: KeepRequestDetailResult) => void;
+}
+
+function AcknowledgeAttentionSection({ requestId, detail, onDetailUpdated }: AcknowledgeAttentionSectionProps) {
+  const { canAcknowledgeAttention } = detail.availableActions;
+  const { acknowledgeReasonMaxLength } = detail.validation;
+
+  const [reason, setReason] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [conflictDisabled, setConflictDisabled] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  if (!canAcknowledgeAttention) return null;
+
+  const canSubmit = reason.trim().length > 0 && !isSubmitting && !conflictDisabled;
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!canSubmit) return;
+    setIsSubmitting(true);
+    setError(null);
+    try {
+      const updated = await api.acknowledgeAttention(requestId, reason.trim(), detail.version);
+      onDetailUpdated(updated);
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 409) {
+        setConflictDisabled(true);
+        setError(STATUS_CONFLICT_MESSAGE);
+      } else {
+        setError("Could not acknowledge. Try again.");
+      }
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  return (
+    <div className="rounded-lg border border-orange-200 bg-orange-50 p-4">
+      <p className="text-xs font-semibold text-orange-800 mb-3 uppercase tracking-wide">Acknowledge Attention</p>
+      {error && (
+        <div className={`mb-3 rounded-md p-3 text-xs ${conflictDisabled ? "bg-amber-50 border border-amber-200 text-amber-800" : "bg-red-50 border border-red-200 text-red-700"}`}>
+          {error}
+        </div>
+      )}
+      <form onSubmit={(e) => void handleSubmit(e)} className="space-y-3">
+        <div>
+          <label className="block text-xs font-medium text-orange-800 mb-1">Reason (required)</label>
+          <textarea
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            maxLength={acknowledgeReasonMaxLength}
+            disabled={conflictDisabled}
+            placeholder="Describe why attention is being acknowledged…"
+            rows={2}
+            className="w-full rounded-md border border-orange-200 bg-white px-3 py-2 text-sm text-slate-800 resize-none placeholder:text-slate-400 disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-orange-300"
+          />
+        </div>
+        <button
+          type="submit"
+          disabled={!canSubmit}
+          className="w-full rounded-md bg-orange-700 px-3 py-2 text-sm font-medium text-white hover:bg-orange-800 disabled:opacity-40"
+        >
+          {isSubmitting ? "Acknowledging…" : "Acknowledge Attention"}
+        </button>
+      </form>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Participation controls
+// ---------------------------------------------------------------------------
+
+interface ParticipationSectionProps {
+  requestId: string;
+  detail: KeepRequestDetailResult;
+  onDetailUpdated: (updated: KeepRequestDetailResult) => void;
+}
+
+function ParticipationSection({ requestId, detail, onDetailUpdated }: ParticipationSectionProps) {
+  const { canWatch, canUnwatch, canMute, canUnmute } = detail.availableActions;
+
+  const [submitting, setSubmitting] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  if (!canWatch && !canUnwatch && !canMute && !canUnmute) return null;
+
+  async function act(key: string, fn: () => Promise<KeepRequestDetailResult>) {
+    if (submitting) return;
+    setSubmitting(key);
+    setError(null);
+    try {
+      const updated = await fn();
+      onDetailUpdated(updated);
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 409) {
+        setError("Request updated by another team member. Refresh to retry.");
+      } else {
+        setError("Action failed. Try again.");
+      }
+    } finally {
+      setSubmitting(null);
+    }
+  }
+
+  return (
+    <div className="rounded-lg border border-slate-100 bg-slate-50 p-4">
+      <p className="text-xs font-semibold text-slate-700 mb-3 uppercase tracking-wide">Participation</p>
+      {error && (
+        <p className="mb-2 rounded-md p-2 text-xs bg-red-50 border border-red-200 text-red-700">{error}</p>
+      )}
+      <div className="flex flex-col gap-2">
+        {canWatch && (
+          <button
+            type="button"
+            disabled={!!submitting}
+            onClick={() => void act("watch", () => api.selfWatch(requestId, detail.version))}
+            className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 bg-white hover:bg-slate-50 disabled:opacity-60 text-left"
+          >
+            {submitting === "watch" ? "Watching…" : "Watch this request"}
+          </button>
+        )}
+        {canUnwatch && (
+          <button
+            type="button"
+            disabled={!!submitting}
+            onClick={() => void act("unwatch", () => api.selfUnwatch(requestId, detail.version))}
+            className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 bg-white hover:bg-slate-50 disabled:opacity-60 text-left"
+          >
+            {submitting === "unwatch" ? "Unwatching…" : "Stop watching"}
+          </button>
+        )}
+        {canMute && (
+          <button
+            type="button"
+            disabled={!!submitting}
+            onClick={() => void act("mute", () => api.mute(requestId, detail.version))}
+            className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 bg-white hover:bg-slate-50 disabled:opacity-60 text-left"
+          >
+            {submitting === "mute" ? "Muting…" : "Mute notifications"}
+          </button>
+        )}
+        {canUnmute && (
+          <button
+            type="button"
+            disabled={!!submitting}
+            onClick={() => void act("unmute", () => api.unmute(requestId, detail.version))}
+            className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 bg-white hover:bg-slate-50 disabled:opacity-60 text-left"
+          >
+            {submitting === "unmute" ? "Unmuting…" : "Unmute notifications"}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // RequestDetail page
 // ---------------------------------------------------------------------------
 
@@ -544,6 +877,7 @@ interface RequestDetailProps {
 
 export function RequestDetail({ requestId, onBack }: RequestDetailProps) {
   const [shareCleared, setShareCleared] = useState(false);
+  const [contactModal, setContactModal] = useState<{ direction: string; channel: string } | null>(null);
   const queryClient = useQueryClient();
 
   const { data: detail, isLoading, isError, error } = useQuery({
@@ -563,8 +897,24 @@ export function RequestDetail({ requestId, onBack }: RequestDetailProps) {
     setShareCleared(false);
   }
 
+  function handleContactLaunched(direction: string, channel: string) {
+    setContactModal({ direction, channel });
+  }
+
   return (
     <div className="flex flex-col h-full">
+      {/* Log contact modal */}
+      {contactModal && detail && (
+        <LogContactModal
+          requestId={requestId}
+          detail={detail}
+          initialDirection={contactModal.direction}
+          initialChannel={contactModal.channel}
+          onDetailUpdated={handleDetailUpdated}
+          onClose={() => setContactModal(null)}
+        />
+      )}
+
       {/* Mobile NeedsShare banner — sticky, above everything */}
       {detail && needsShareEffective && canShare && (
         <NeedsShareBanner
@@ -614,7 +964,7 @@ export function RequestDetail({ requestId, onBack }: RequestDetailProps) {
         <div className="flex flex-1 min-h-0 overflow-hidden">
           {/* Left / main column */}
           <div className="flex-1 overflow-y-auto px-4 md:px-6 py-5">
-            <DetailHeader detail={detail} />
+            <DetailHeader detail={detail} onContactLaunched={handleContactLaunched} />
 
             {/* Timeline */}
             <div>
@@ -646,6 +996,16 @@ export function RequestDetail({ requestId, onBack }: RequestDetailProps) {
                 detail={detail}
                 onDetailUpdated={handleDetailUpdated}
               />
+              <AcknowledgeAttentionSection
+                requestId={requestId}
+                detail={detail}
+                onDetailUpdated={handleDetailUpdated}
+              />
+              <ParticipationSection
+                requestId={requestId}
+                detail={detail}
+                onDetailUpdated={handleDetailUpdated}
+              />
               <MetadataSection detail={detail} />
             </div>
           </div>
@@ -660,6 +1020,16 @@ export function RequestDetail({ requestId, onBack }: RequestDetailProps) {
               onCleared={handleShareCleared}
             />
             <StatusChangeSection
+              requestId={requestId}
+              detail={detail}
+              onDetailUpdated={handleDetailUpdated}
+            />
+            <AcknowledgeAttentionSection
+              requestId={requestId}
+              detail={detail}
+              onDetailUpdated={handleDetailUpdated}
+            />
+            <ParticipationSection
               requestId={requestId}
               detail={detail}
               onDetailUpdated={handleDetailUpdated}

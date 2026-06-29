@@ -1,10 +1,10 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-06-29 (S13d-1 committed; S13d-2 next)
+**Last updated:** 2026-06-29 (S13d complete; S13f next)
 **Branch:** `main` tracking `origin/main`
 **Last green baseline:** 939 unit · 14 arch · 713 integration = 1,666 total, 0 failures (1 pre-existing KeepG5 fluke excluded)
 **Next free ADR:** ADR-385
-**Current session:** Session 13d — Request Detail Workbench
+**Current session:** Session 13 — PWA Workbench
 
 ---
 
@@ -43,7 +43,9 @@ For every implementation slice:
 **Committed baseline (local, not yet pushed):**
 
 - `6fc80e1 feat: expose share intent action metadata`
-- S13d-1 commit (this session)
+- `c9bde88 feat: add session 13d-1 request detail read view and share clearing`
+- `88f8759 feat: add session 13d-2 status change workflow`
+- S13d-3 commit pending (operational action rail)
 
 **Completed Session 13 slices:**
 
@@ -58,36 +60,42 @@ For every implementation slice:
 - S13d-1: discriminated union `AppRoute` state nav, clickable rows (`onSelect` prop), `RequestDetail`
   page with header, unified timeline, read-only metadata, mobile sticky `NeedsShare` banner, desktop
   rail share section, and `share-intent` clearing (`copy_link`, `native_share`, `manual_mark_shared`).
-  Contact launchers rendered from `detail.contactActions`, not raw field inference.
+  Contact launchers rendered from `detail.contactActions`, not raw field inference. S13e tracker-share
+  scope (canRecordShareIntent, NeedsShare clearing, share method controls) absorbed here.
+- S13d-2: `StatusChangeSection` in desktop rail and mobile stack; `patchRequestStatus` API method;
+  `allowedStatuses` select, message textarea (required per `messageRequiredForStatuses`), per-action
+  `isSubmitting` lock, query-cache replacement on success, 409 conflict banner with form preserved.
+- S13d-3: `LogContactModal` (direction/channel/outcome/requiresFollowUp/summary, 409 conflict safe,
+  reason required gate on acknowledge); `AcknowledgeAttentionSection` (orange rail card, reason textarea
+  required, versioned POST); `ParticipationSection` (watch/unwatch/mute/unmute buttons from
+  `availableActions`, per-action submitting lock); contact launchers wired to open modal on click;
+  6 new `api.*` methods in `apiClient.ts`.
 
-**S13d locked architecture (all sub-slices):**
-
-- Detail source of truth: `GET /keep/requests/{requestId}` / `KeepRequestDetailResult`.
-- Timeline: `detail.events` as one chronological feed.
-- Permissions/actions: render from `detail.availableActions`, not client-side role policy.
-- Validation: `detail.validation` for local form limits.
-- Contact buttons: `detail.contactActions` only — never raw phone/email field inference.
-- Share controls: `availableActions.canRecordShareIntent`; call `POST /keep/requests/{requestId}/share-intent`.
-- Versioned writes: send `X-Keep-Request-Version: {detail.version}`; preserve open form input on 409.
-- Out of scope: customer update composer, Follow Up On / Planned For UI, closeout/feedback flows,
-  classification/spam/test UI, settings/member management, reporting, batch closeout.
-
-**S13d-2 — Status Change Workflow** ← next
+**S13f — Customer Update Composer** ← next
 
 - Files expected: `web/ophalo-app/src/pages/RequestDetail.tsx`, `web/ophalo-app/src/lib/apiClient.ts`.
-- Add status-change UI using `detail.availableActions.allowedStatuses` and `PATCH /keep/requests/{requestId}/status`.
-- Send `X-Keep-Request-Version: {detail.version}`; replace local detail state with the response body on success.
-- On 409 `KeepRequest.RequestChanged`, preserve form input, disable further submit, show conflict banner:
-  `"This request has been updated by another team member. Copy your unsaved notes and refresh the workbench to load the latest history."`
-- Per-action `isSubmitting` lock; no overlapping writes.
+- Add `BusinessUpdateSection` to desktop rail and mobile stack; gate on `canSendBusinessUpdate`.
+- Message textarea: max `validation.businessUpdateMaxLength`; character countdown; block submit over limit.
+- Optional status dropdown: only when `canChangeStatus == true` and `allowedStatuses` has entries after
+  filtering out `closed`, `cancelled`, `spam`, `test`; source from `allowedStatuses` only.
+- Submit: `POST /keep/requests/{requestId}/business-updates` with `X-Keep-Request-Version` header;
+  body `{ message, setStatus? }`. Returns `KeepRequestDetailResult`; adopt on success and clear draft.
+- Side-effect copy (passive only): `Visible on the customer tracker.` + `Status will change to {label}.`
+  if status selected. No attention/SLA/notification predictions.
+- NeedsShare passive reminder near composer when `needsShare == true`: `Tracker link not yet shared
+  with customer.` — no coupling to share-intent, no intercept.
+- 409 recovery: preserve draft + selected status; disable stale submit; show conflict banner with
+  explicit `"Your message is saved here."` copy; do not clear draft until successful send or explicit discard.
+- Button label: `Send update`.
 
-**S13d-3 — Operational Action Rail**
+**Locked architecture (carries forward from S13d):**
 
-- Add external-contact log, attention acknowledge, and participation controls.
-- Render availability from `detail.availableActions`; validate locally against `detail.validation`.
-- Contact log modal: `direction`, `channel`, `outcome` (outbound only), `requiresBusinessFollowUp` (inbound), `summary`.
-- Contact launchers already rendered in S13d-1; S13d-3 wires the post-launch modal open.
-- Keep each mutation path fail-closed, version-aware where applicable.
+- Detail source of truth: `GET /keep/requests/{requestId}` / `KeepRequestDetailResult`.
+- Permissions/actions: render from `detail.availableActions`, not client-side role policy.
+- Validation: `detail.validation` for local form limits.
+- Versioned writes: send `X-Keep-Request-Version: {detail.version}`; preserve open form input on 409.
+- Out of scope: Follow Up On / Planned For UI, closeout/feedback flows, classification/spam/test UI,
+  settings/member management, reporting, batch closeout, template libraries, AI suggestions.
 
 ---
 
