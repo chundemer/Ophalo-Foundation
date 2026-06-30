@@ -867,6 +867,118 @@ function ParticipationSection({ requestId, detail, onDetailUpdated }: Participat
 }
 
 // ---------------------------------------------------------------------------
+// Business update composer
+// ---------------------------------------------------------------------------
+
+const BUSINESS_UPDATE_EXCLUDED_STATUSES = new Set(["closed", "cancelled", "spam", "test"]);
+const BUSINESS_UPDATE_CONFLICT_MESSAGE =
+  "This request was updated. Refresh to see the latest state. Your message is saved here.";
+
+interface BusinessUpdateSectionProps {
+  requestId: string;
+  detail: KeepRequestDetailResult;
+  onDetailUpdated: (updated: KeepRequestDetailResult) => void;
+}
+
+function BusinessUpdateSection({ requestId, detail, onDetailUpdated }: BusinessUpdateSectionProps) {
+  const { canSendBusinessUpdate, canChangeStatus, allowedStatuses } = detail.availableActions;
+  const maxLength = detail.validation.businessUpdateMaxLength;
+
+  const [message, setMessage] = useState("");
+  const [selectedStatus, setSelectedStatus] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [conflictDisabled, setConflictDisabled] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  if (!canSendBusinessUpdate) return null;
+
+  const composerStatuses = allowedStatuses.filter(
+    (s) => !BUSINESS_UPDATE_EXCLUDED_STATUSES.has(s),
+  );
+  const showStatusDropdown = canChangeStatus && composerStatuses.length > 0;
+  const remaining = maxLength - message.length;
+  const overLimit = remaining < 0;
+  const canSubmit = message.trim().length > 0 && !overLimit && !isSubmitting && !conflictDisabled;
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!canSubmit) return;
+    setIsSubmitting(true);
+    setError(null);
+    try {
+      const body: { message: string; setStatus?: string } = { message: message.trim() };
+      if (selectedStatus) body.setStatus = selectedStatus;
+      const updated = await api.postBusinessUpdate(requestId, body, detail.version);
+      onDetailUpdated(updated);
+      setMessage("");
+      setSelectedStatus("");
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 409) {
+        setConflictDisabled(true);
+        setError(BUSINESS_UPDATE_CONFLICT_MESSAGE);
+      } else {
+        setError("Could not send update. Try again.");
+      }
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  return (
+    <div className="rounded-lg border border-slate-100 bg-slate-50 p-4">
+      <p className="text-xs font-semibold text-slate-700 mb-3 uppercase tracking-wide">Send Customer Update</p>
+      {detail.needsShare && (
+        <p className="mb-3 text-xs text-amber-700">Tracker link not yet shared with customer.</p>
+      )}
+      {error && (
+        <div className={`mb-3 rounded-md p-3 text-xs ${conflictDisabled ? "bg-amber-50 border border-amber-200 text-amber-800" : "bg-red-50 border border-red-200 text-red-700"}`}>
+          {error}
+        </div>
+      )}
+      <form onSubmit={(e) => void handleSubmit(e)} className="space-y-3">
+        <div>
+          <textarea
+            value={message}
+            onChange={(e) => { setMessage(e.target.value); if (error && !conflictDisabled) setError(null); }}
+            disabled={conflictDisabled}
+            placeholder="Write an update for the customer…"
+            rows={4}
+            className={`w-full rounded-md border px-3 py-2 text-sm text-slate-800 resize-none placeholder:text-slate-400 disabled:opacity-60 focus:outline-none focus:ring-2 ${overLimit ? "border-red-400 focus:ring-red-400" : "border-slate-300 focus:ring-slate-400"}`}
+          />
+          <p className={`mt-1 text-xs text-right ${overLimit ? "text-red-600 font-medium" : remaining <= 50 ? "text-amber-600" : "text-slate-400"}`}>
+            {overLimit ? `${Math.abs(remaining)} over limit` : `${remaining} remaining`}
+          </p>
+        </div>
+        {showStatusDropdown && (
+          <select
+            value={selectedStatus}
+            onChange={(e) => setSelectedStatus(e.target.value)}
+            disabled={conflictDisabled}
+            className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-slate-400"
+          >
+            <option value="">No status change</option>
+            {composerStatuses.map((s) => (
+              <option key={s} value={s}>{statusLabel(s)}</option>
+            ))}
+          </select>
+        )}
+        <p className="text-xs text-slate-500">
+          Visible on the customer tracker.
+          {selectedStatus && ` Status will change to ${statusLabel(selectedStatus)}.`}
+        </p>
+        <button
+          type="submit"
+          disabled={!canSubmit}
+          className="w-full rounded-md bg-slate-800 px-3 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-40"
+        >
+          {isSubmitting ? "Sending…" : "Send update"}
+        </button>
+      </form>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // RequestDetail page
 // ---------------------------------------------------------------------------
 
@@ -991,6 +1103,11 @@ export function RequestDetail({ requestId, onBack }: RequestDetailProps) {
                   onCleared={handleShareCleared}
                 />
               )}
+              <BusinessUpdateSection
+                requestId={requestId}
+                detail={detail}
+                onDetailUpdated={handleDetailUpdated}
+              />
               <StatusChangeSection
                 requestId={requestId}
                 detail={detail}
@@ -1018,6 +1135,11 @@ export function RequestDetail({ requestId, onBack }: RequestDetailProps) {
               canRecordShareIntent={canShare}
               needsShare={needsShareEffective}
               onCleared={handleShareCleared}
+            />
+            <BusinessUpdateSection
+              requestId={requestId}
+              detail={detail}
+              onDetailUpdated={handleDetailUpdated}
             />
             <StatusChangeSection
               requestId={requestId}

@@ -482,4 +482,14 @@ export const api = {
       method: "DELETE",
       headers: { "X-Keep-Request-Version": version },
     }),
+  postBusinessUpdate: (
+    requestId: string,
+    body: { message: string; setStatus?: string },
+    version: string,
+  ) =>
+    apiFetch<KeepRequestDetailResult>(`/keep/requests/${requestId}/business-updates`, {
+      method: "POST",
+      headers: { "X-Keep-Request-Version": version },
+      body: JSON.stringify(body),
+    }),
 };

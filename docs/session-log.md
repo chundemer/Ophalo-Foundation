@@ -1,10 +1,10 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-06-29 (S13d complete; S13f next)
+**Last updated:** 2026-06-30 (S13d complete; S13f next)
 **Branch:** `main` tracking `origin/main`
 **Last green baseline:** 939 unit · 14 arch · 713 integration = 1,666 total, 0 failures (1 pre-existing KeepG5 fluke excluded)
 **Next free ADR:** ADR-385
-**Current session:** Session 13 — PWA Workbench
+**Current session:** Session 13f — Customer Update Composer
 
 ---
 
@@ -35,10 +35,10 @@ For every implementation slice:
 ## Current Work
 
 **Current build log:** `docs/build-log/067-session-13-pwa-workbench.md`
-**Last completed build log:** `docs/build-log/067-session-13-pwa-workbench.md` (S13c)
+**Last completed build log:** `docs/build-log/067-session-13-pwa-workbench.md` (S13d)
 **Readiness working doc:** `docs/pilot-readiness-decision-questions.md`
 **Foundation roadmap:** `docs/build-log/ophalo-foundation-build-plan-greenfield-boundaries-brownfield-behavior.md` section 9.1
-**Current session:** Session 13d — Request Detail Workbench
+**Current session:** Session 13f — Customer Update Composer
 
 **Committed baseline (local, not yet pushed):**
 
@@ -46,6 +46,7 @@ For every implementation slice:
 - `c9bde88 feat: add session 13d-1 request detail read view and share clearing`
 - `88f8759 feat: add session 13d-2 status change workflow`
 - `9ac0be9 feat: add session 13d-3 operational action rail`
+- `50f4d17 docs: record S13d-3 commit hash in session log`
 
 **Completed Session 13 slices:**
 
@@ -71,7 +72,9 @@ For every implementation slice:
   `availableActions`, per-action submitting lock); contact launchers wired to open modal on click;
   6 new `api.*` methods in `apiClient.ts`.
 
-**S13f — Customer Update Composer** ← next
+**Next Slice — S13f Customer Update Composer**
+
+Pre-work is complete in build-log 067. Treat this as mechanical implementation, not discovery.
 
 - Files expected: `web/ophalo-app/src/pages/RequestDetail.tsx`, `web/ophalo-app/src/lib/apiClient.ts`.
 - Add `BusinessUpdateSection` to desktop rail and mobile stack; gate on `canSendBusinessUpdate`.
@@ -87,6 +90,8 @@ For every implementation slice:
 - 409 recovery: preserve draft + selected status; disable stale submit; show conflict banner with
   explicit `"Your message is saved here."` copy; do not clear draft until successful send or explicit discard.
 - Button label: `Send update`.
+- Keep the slice inside the S13 gate: expected 2 production files, 1 mutation family, 0 test files unless
+  a contract drift requires focused frontend/backend proof.
 
 **Locked architecture (carries forward from S13d):**
 
