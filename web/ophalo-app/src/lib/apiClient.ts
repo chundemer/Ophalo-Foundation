@@ -5,6 +5,7 @@ export class ApiError extends Error {
     public readonly status: number,
     public readonly code: string | undefined,
     message: string,
+    public readonly extensions?: Record<string, unknown>,
   ) {
     super(message);
     this.name = "ApiError";
@@ -22,16 +23,17 @@ async function apiFetchVoid(path: string, init?: RequestInit): Promise<void> {
   });
   if (!response.ok) {
     let code: string | undefined;
+    let extensions: Record<string, unknown> | undefined;
     try {
       const problem = (await response.json()) as Record<string, unknown>;
-      const ext = problem["extensions"] as Record<string, unknown> | undefined;
+      extensions = problem["extensions"] as Record<string, unknown> | undefined;
       code =
-        (ext?.["code"] as string | undefined) ??
+        (extensions?.["code"] as string | undefined) ??
         (problem["code"] as string | undefined);
     } catch {
       // body may be empty or non-JSON; code stays undefined
     }
-    throw new ApiError(response.status, code, `API ${response.status} ${path}`);
+    throw new ApiError(response.status, code, `API ${response.status} ${path}`, extensions);
   }
 }
 
@@ -47,19 +49,48 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
 
   if (!response.ok) {
     let code: string | undefined;
+    let extensions: Record<string, unknown> | undefined;
     try {
       const problem = (await response.json()) as Record<string, unknown>;
-      const ext = problem["extensions"] as Record<string, unknown> | undefined;
+      extensions = problem["extensions"] as Record<string, unknown> | undefined;
       code =
-        (ext?.["code"] as string | undefined) ??
+        (extensions?.["code"] as string | undefined) ??
         (problem["code"] as string | undefined);
     } catch {
       // body may be empty or non-JSON; code stays undefined
     }
-    throw new ApiError(response.status, code, `API ${response.status} ${path}`);
+    throw new ApiError(response.status, code, `API ${response.status} ${path}`, extensions);
   }
 
   return response.json() as Promise<T>;
+}
+
+// For endpoints that return JSON on some paths and empty body on others.
+async function apiFetchMaybeJson<T>(path: string, init?: RequestInit): Promise<T | null> {
+  const response = await fetch(`${API_BASE}${path}`, {
+    ...init,
+    credentials: "include",
+    headers: {
+      "Content-Type": "application/json",
+      ...init?.headers,
+    },
+  });
+  if (!response.ok) {
+    let code: string | undefined;
+    let extensions: Record<string, unknown> | undefined;
+    try {
+      const problem = (await response.json()) as Record<string, unknown>;
+      extensions = problem["extensions"] as Record<string, unknown> | undefined;
+      code =
+        (extensions?.["code"] as string | undefined) ??
+        (problem["code"] as string | undefined);
+    } catch {
+      // body may be empty or non-JSON; code stays undefined
+    }
+    throw new ApiError(response.status, code, `API ${response.status} ${path}`, extensions);
+  }
+  const text = await response.text();
+  return text ? (JSON.parse(text) as T) : null;
 }
 
 export type AccountRole = "owner" | "admin" | "operator" | "viewer" | "unknown";
@@ -121,6 +152,24 @@ export interface MemberItem {
 export interface ListMembersResponse {
   members: MemberItem[];
   seatUsage: SeatUsage;
+}
+
+export interface IntakeStatusResult {
+  hasActiveLink: boolean;
+  publicSlug: string | null;
+  createdAtUtc: string | null;
+}
+
+export interface IntakeEnsureResult {
+  created: boolean;
+  rawToken: string | null;
+  publicSlug: string | null;
+}
+
+export interface IntakeReplaceResult {
+  rawToken: string;
+  publicSlug: string;
+  staleLinksWarning: boolean;
 }
 
 export interface PhoneLookupCustomer {
@@ -555,4 +604,37 @@ export const api = {
     apiFetch<ListMembersResponse>(
       `/accounts/me/members${includeRemoved ? "?includeRemoved=true" : ""}`,
     ),
+  getIntake: () => apiFetch<IntakeStatusResult>("/keep/setup/intake"),
+  ensureIntake: () =>
+    apiFetch<IntakeEnsureResult>("/keep/setup/intake/ensure", { method: "POST" }),
+  replaceIntake: () =>
+    apiFetch<IntakeReplaceResult>("/keep/setup/intake/replace", { method: "POST" }),
+  inviteMember: (email: string, role: string) =>
+    apiFetch<{ status: string }>("/accounts/me/invite", {
+      method: "POST",
+      body: JSON.stringify({ email, role }),
+    }),
+  // Returns { inviteUrl } for manual_share delivery; null for email delivery.
+  resendInvite: (accountUserId: string, delivery: "email" | "manual_share") =>
+    apiFetchMaybeJson<{ inviteUrl: string }>(
+      `/accounts/me/members/${encodeURIComponent(accountUserId)}/resend-invite`,
+      { method: "POST", body: JSON.stringify({ delivery }) },
+    ),
+  changeRole: (accountUserId: string, role: string) =>
+    apiFetchVoid(`/accounts/me/members/${encodeURIComponent(accountUserId)}/role`, {
+      method: "PATCH",
+      body: JSON.stringify({ role }),
+    }),
+  suspendMember: (accountUserId: string) =>
+    apiFetchVoid(`/accounts/me/members/${encodeURIComponent(accountUserId)}/suspend`, {
+      method: "POST",
+    }),
+  reactivateMember: (accountUserId: string) =>
+    apiFetchVoid(`/accounts/me/members/${encodeURIComponent(accountUserId)}/reactivate`, {
+      method: "POST",
+    }),
+  removeMember: (accountUserId: string) =>
+    apiFetchVoid(`/accounts/me/members/${encodeURIComponent(accountUserId)}`, {
+      method: "DELETE",
+    }),
 };

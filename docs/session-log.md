@@ -1,6 +1,6 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-06-30 (S13f complete; S13g next)
+**Last updated:** 2026-06-30 (S13g-2 complete; S13g-3 next)
 **Branch:** `main` tracking `origin/main`
 **Last green baseline:** 939 unit · 14 arch · 713 integration = 1,666 total, 0 failures (1 pre-existing KeepG5 fluke excluded)
 **Next free ADR:** ADR-385
@@ -35,7 +35,7 @@ For every implementation slice:
 ## Current Work
 
 **Current build log:** `docs/build-log/067-session-13-pwa-workbench.md`
-**Last completed build log:** `docs/build-log/067-session-13-pwa-workbench.md` (S13f)
+**Last completed build log:** `docs/build-log/067-session-13-pwa-workbench.md` (S13g-1)
 **Readiness working doc:** `docs/pilot-readiness-decision-questions.md`
 **Foundation roadmap:** `docs/build-log/ophalo-foundation-build-plan-greenfield-boundaries-brownfield-behavior.md` section 9.1
 **Current session:** Session 13g — Member Management And Settings Continuation
@@ -48,6 +48,8 @@ For every implementation slice:
 - `9ac0be9 feat: add session 13d-3 operational action rail`
 - `50f4d17 docs: record S13d-3 commit hash in session log`
 - `702c08f feat: add session 13f customer update composer`
+- `a19c806 feat: add session 13g-1 seat usage + settings shell + company/policy`
+- S13g-2: intake link section (status/ensure/replace) + team section (roster, seat readout, invite, resend, role change, suspend, reactivate, remove, all error codes)
 
 **Completed Session 13 slices:**
 
@@ -76,38 +78,31 @@ For every implementation slice:
   customer-visible message composer gated by `canSendBusinessUpdate`; optional status dropdown from
   filtered `allowedStatuses`; passive NeedsShare reminder; versioned `business-updates` submit; 409
   conflict handling preserves draft + selected status with `"Your message is saved here."` copy.
+- S13g-1: server-authoritative `seatUsage` on `GET /accounts/me/members` (`occupiedSeats`, `maxSeats`,
+  `atLimit`, `limitApplies`); Settings nav/route for Owner/Admin; `Settings.tsx` with Company and
+  Response Policy forms only; setup/profile/policy DTOs and methods in `apiClient.ts`; focused
+  `MemberManagementTests` seat usage assertion. Verified by clean backend compile, frontend tsc,
+  `MemberManagementTests` 32/32, `InviteTests` 26/26, and `git diff --check`.
 
 **Next Slice — S13g Member Management And Settings Continuation**
 
 Pre-work is complete in build-log 067. Treat this as mechanical implementation, not discovery.
 S13g-as-a-whole breaches the mutation-family gate, so use the approved Option B split below.
 
-**S13g-1 — Seat Usage + Settings Shell + Company/Policy**
-
-- Backend prerequisite: add server-authoritative `seatUsage` to `GET /accounts/me/members` response.
-  `ListMembersResponse` currently has only `members`.
-- Expected backend files: `IMemberManagementPersistence.cs`, `EfMemberManagementPersistence.cs`,
-  `MemberManagementService.cs`, plus focused assertions in `MemberManagementTests.cs`.
-- Seat usage fields: `occupiedSeats`, `maxSeats`, `atLimit`, `limitApplies`. Compute from server-side
-  member/entitlement state; do not count visible rows in the browser.
-- Frontend files: `web/ophalo-app/src/App.tsx`, `web/ophalo-app/src/lib/apiClient.ts`,
-  `web/ophalo-app/src/pages/Settings.tsx` (new).
-- Frontend scope: Owner/Admin-only `Settings` nav/route; Settings page with `Company` and
-  `Response Policy` sections only.
-- Company fields: business name, timezone, customer-facing phone, customer-facing email.
-- Policy fields: first response target minutes, standard response target minutes, priority response
-  target minutes, status-check threshold days.
-- Mutation family: Company/Policy only (`PUT /keep/setup/profile`, `PUT /keep/setup/policy`).
-- Defer intake link, team roster/mutations, and onboarding marks to later S13g slices.
-
 **S13g-2 — Intake Link + Team**
 
-- Add intake link status/ensure/replace UI. Replacement requires explicit confirmation.
-- Add Team roster using server `seatUsage` readout.
+- Add Settings sub-sections for Intake Link and Team, reusing the existing Settings route/page from S13g-1.
+- Intake link: status/slug readout, ensure/create active link, replace link with explicit confirmation.
+- Team roster: list members using `GET /accounts/me/members`, show server `seatUsage` readout, optional
+  include-removed toggle if kept within gate.
 - Team mutations: invite team member, resend invite, change role, suspend, reactivate, remove.
 - Invite roles: Admin, Operator, Viewer only; use product labels `Owner`, `Admin`, `Operator`, `Viewer`.
 - Handle seat-limit and member conflict codes inline near the triggering form/row.
 - Manual-share resend is a deliberate fallback only; show raw invite URL once after explicit action.
+- Keep within gate: intake link + team mutation families only. Do not add onboarding manual marks in S13g-2.
+- Deferred polish/follow-up: `Settings.tsx` currently shows generic load failure for 403. With the current
+  state-only nav this is unreachable in normal use because Settings is Owner/Admin nav-only. When URL routing
+  or direct settings URLs exist, render `AccessLimited` for 403 to match standard access-limited handling.
 
 **S13g-3 — Onboarding Settings Section**
 

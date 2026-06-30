@@ -135,7 +135,7 @@ function AppShell() {
           />
         )}
         {route.page === "home" && <Home onStartCapture={openCapture} />}
-        {route.page === "settings" && <Settings />}
+        {route.page === "settings" && <Settings callerRole={role} />}
         {route.page === "detail" && (
           <RequestDetail requestId={route.requestId} onBack={backToRequests} />
         )}
