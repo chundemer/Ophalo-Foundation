@@ -1,6 +1,6 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-06-30 (S13g-2 complete; S13g-3 next)
+**Last updated:** 2026-06-30 (S13g-3 committed; Session 13g complete)
 **Branch:** `main` tracking `origin/main`
 **Last green baseline:** 939 unit · 14 arch · 713 integration = 1,666 total, 0 failures (1 pre-existing KeepG5 fluke excluded)
 **Next free ADR:** ADR-385
@@ -35,7 +35,7 @@ For every implementation slice:
 ## Current Work
 
 **Current build log:** `docs/build-log/067-session-13-pwa-workbench.md`
-**Last completed build log:** `docs/build-log/067-session-13-pwa-workbench.md` (S13g-1)
+**Last completed build log:** `docs/build-log/067-session-13-pwa-workbench.md` (S13g-2)
 **Readiness working doc:** `docs/pilot-readiness-decision-questions.md`
 **Foundation roadmap:** `docs/build-log/ophalo-foundation-build-plan-greenfield-boundaries-brownfield-behavior.md` section 9.1
 **Current session:** Session 13g — Member Management And Settings Continuation
@@ -49,7 +49,8 @@ For every implementation slice:
 - `50f4d17 docs: record S13d-3 commit hash in session log`
 - `702c08f feat: add session 13f customer update composer`
 - `a19c806 feat: add session 13g-1 seat usage + settings shell + company/policy`
-- S13g-2: intake link section (status/ensure/replace) + team section (roster, seat readout, invite, resend, role change, suspend, reactivate, remove, all error codes)
+- `e992844 feat: add session 13g-2 intake link + team settings sections`
+- S13g-3 feat: add session 13g-3 onboarding settings section (hash TBD)
 
 **Completed Session 13 slices:**
 
@@ -83,44 +84,16 @@ For every implementation slice:
   Response Policy forms only; setup/profile/policy DTOs and methods in `apiClient.ts`; focused
   `MemberManagementTests` seat usage assertion. Verified by clean backend compile, frontend tsc,
   `MemberManagementTests` 32/32, `InviteTests` 26/26, and `git diff --check`.
+- S13g-2: Settings Intake Link + Team sections. Added intake status/ensure/replace client methods and UI;
+  `apiFetchMaybeJson` for resend-invite email/manual-share responses; team roster with server `seatUsage`,
+  include-removed toggle, invite form, resend email/manual-share one-time URL display, role change,
+  suspend, reactivate, remove, and inline mapping for the 10 locked invite/member conflict codes.
+  Review corrections are included in the commit: `Settings` receives `callerRole`; Owner promotion appears
+  only for Owner callers; Admin callers do not see owner-management affordances for Owner targets; active
+  members expose direct Remove with explicit confirmation while the backend remains authoritative for
+  self/primary-owner/last-owner/seat-limit constraints.
 
-**Next Slice — S13g Member Management And Settings Continuation**
-
-Pre-work is complete in build-log 067. Treat this as mechanical implementation, not discovery.
-S13g-as-a-whole breaches the mutation-family gate, so use the approved Option B split below.
-
-**S13g-2 — Intake Link + Team**
-
-- Add Settings sub-sections for Intake Link and Team, reusing the existing Settings route/page from S13g-1.
-- Intake link: status/slug readout, ensure/create active link, replace link with explicit confirmation.
-- Team roster: list members using `GET /accounts/me/members`, show server `seatUsage` readout, optional
-  include-removed toggle if kept within gate.
-- Team mutations: invite team member, resend invite, change role, suspend, reactivate, remove.
-- Invite roles: Admin, Operator, Viewer only; use product labels `Owner`, `Admin`, `Operator`, `Viewer`.
-- Handle seat-limit and member conflict codes inline near the triggering form/row.
-- Manual-share resend is a deliberate fallback only; show raw invite URL once after explicit action.
-- Keep within gate: intake link + team mutation families only. Do not add onboarding manual marks in S13g-2.
-- Deferred polish/follow-up: `Settings.tsx` currently shows generic load failure for 403. With the current
-  state-only nav this is unreachable in normal use because Settings is Owner/Admin nav-only. When URL routing
-  or direct settings URLs exist, render `AccessLimited` for 403 to match standard access-limited handling.
-
-**S13g-3 — Onboarding Settings Section**
-
-- Add onboarding checklist readout inside Settings.
-- Manual mark buttons only for quick-capture exercise, tracker review, and spam classification explanation.
-- Do not manually mark `operatorInvited` from invite UI; it derives from an active non-owner member.
-- Keep solo-business posture non-blocking/add-later.
-
-**Locked architecture (carries forward into S13g):**
-
-- One Owner/Admin-only `Settings` nav item, not separate top-level Company/Team nav items.
-- Operators/Viewers do not get editable Settings navigation; direct access should use standard
-  access-limited/403 handling.
-- Use friendly product language: `Settings`, `Team`, `team member`, `Invite team member`.
-- Backend remains authoritative for permissions, owner/self/primary-owner constraints, membership
-  state, seat limits, account state, and invite/manual-share token generation.
-- S13g out of scope: primary-owner transfer, billing/plan management, internal support tooling, and
-  invite accept implementation in `ophalo-app`.
+**Session 13g complete.** Next session TBD.
 
 ---
 

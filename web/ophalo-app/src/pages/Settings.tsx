@@ -985,6 +985,104 @@ function TeamSection({ callerRole }: { callerRole: AccountRole }) {
   );
 }
 
+// ─── Onboarding section ───────────────────────────────────────────────────────
+
+const ONBOARDING_ITEMS: Array<{
+  key: string;
+  label: string;
+  markKey?: string;
+  markFn?: () => Promise<void>;
+}> = [
+  { key: "profileAndContactSaved", label: "Profile & contact saved" },
+  { key: "timezoneSaved", label: "Timezone saved" },
+  { key: "policySaved", label: "Response policy saved" },
+  { key: "intakeLinkActive", label: "Intake link active" },
+  { key: "operatorInvited", label: "Team member invited" },
+  { key: "mobileDeviceRegistered", label: "Mobile device registered" },
+  { key: "firstRequestCreated", label: "First request created" },
+  {
+    key: "quickCaptureExerciseDone",
+    label: "Quick capture exercise",
+    markKey: "qc",
+    markFn: () => api.markQuickCaptureExercise(),
+  },
+  {
+    key: "trackerReviewDone",
+    label: "Tracker review",
+    markKey: "tr",
+    markFn: () => api.markTrackerReview(),
+  },
+  {
+    key: "spamClassificationExplained",
+    label: "Spam classification explained",
+    markKey: "sc",
+    markFn: () => api.markSpamClassification(),
+  },
+];
+
+function OnboardingSection() {
+  const queryClient = useQueryClient();
+
+  const { data: checklist, isLoading, isError } = useQuery({
+    queryKey: ["onboarding"],
+    queryFn: api.getOnboardingChecklist,
+    staleTime: 60 * 1000,
+  });
+
+  const [marking, setMarking] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleMark(markKey: string, markFn: () => Promise<void>) {
+    if (marking) return;
+    setMarking(markKey);
+    setError(null);
+    try {
+      await markFn();
+      await queryClient.invalidateQueries({ queryKey: ["onboarding"] });
+    } catch {
+      setError("Something went wrong. Please try again.");
+    } finally {
+      setMarking(null);
+    }
+  }
+
+  return (
+    <section>
+      <h2 className="text-base font-semibold text-slate-900 mb-4">Onboarding</h2>
+
+      {isLoading && <p className="text-sm text-slate-400">Loading…</p>}
+      {isError && <p className="text-sm text-slate-500">Could not load onboarding checklist.</p>}
+
+      {checklist && (
+        <ul className="space-y-3">
+          {ONBOARDING_ITEMS.map(({ key, label, markKey, markFn }) => {
+            const done = checklist[key as keyof typeof checklist];
+            return (
+              <li key={key} className="flex items-center gap-3 text-sm">
+                <span className={done ? "text-green-600" : "text-slate-300"}>
+                  {done ? "✓" : "○"}
+                </span>
+                <span className={done ? "text-slate-700" : "text-slate-500"}>{label}</span>
+                {markKey && markFn && !done && (
+                  <button
+                    onClick={() => void handleMark(markKey, markFn)}
+                    disabled={marking !== null}
+                    className="ml-auto text-xs text-slate-500 hover:text-slate-900 underline disabled:opacity-50"
+                  >
+                    {marking === markKey ? "Marking…" : "Mark done"}
+                  </button>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+
+      {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
+    </section>
+  );
+}
+
 // ─── Settings page ────────────────────────────────────────────────────────────
 
 export function Settings({ callerRole }: { callerRole: AccountRole }) {
@@ -1021,6 +1119,8 @@ export function Settings({ callerRole }: { callerRole: AccountRole }) {
         <IntakeSection />
         <hr className="border-slate-200" />
         <TeamSection callerRole={callerRole} />
+        <hr className="border-slate-200" />
+        <OnboardingSection />
       </div>
     </div>
   );

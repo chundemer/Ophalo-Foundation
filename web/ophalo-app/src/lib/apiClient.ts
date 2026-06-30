@@ -637,4 +637,10 @@ export const api = {
     apiFetchVoid(`/accounts/me/members/${encodeURIComponent(accountUserId)}`, {
       method: "DELETE",
     }),
+  markQuickCaptureExercise: () =>
+    apiFetchVoid("/keep/setup/onboarding/marks/quick-capture-exercise", { method: "POST" }),
+  markTrackerReview: () =>
+    apiFetchVoid("/keep/setup/onboarding/marks/tracker-review", { method: "POST" }),
+  markSpamClassification: () =>
+    apiFetchVoid("/keep/setup/onboarding/marks/spam-classification", { method: "POST" }),
 };
