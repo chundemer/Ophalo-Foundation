@@ -1,10 +1,10 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-06-30 (S13g-3 committed; Session 13g complete)
+**Last updated:** 2026-06-30 (S13h complete; S13i decision next)
 **Branch:** `main` tracking `origin/main`
 **Last green baseline:** 939 unit · 14 arch · 713 integration = 1,666 total, 0 failures (1 pre-existing KeepG5 fluke excluded)
 **Next free ADR:** ADR-385
-**Current session:** Session 13g — Member Management And Settings Continuation
+**Current session:** Session 13h — Closeout, Feedback Review, And Attention Explanation
 
 ---
 
@@ -35,10 +35,10 @@ For every implementation slice:
 ## Current Work
 
 **Current build log:** `docs/build-log/067-session-13-pwa-workbench.md`
-**Last completed build log:** `docs/build-log/067-session-13-pwa-workbench.md` (S13g-2)
+**Last completed build log:** `docs/build-log/067-session-13-pwa-workbench.md` (S13g-3)
 **Readiness working doc:** `docs/pilot-readiness-decision-questions.md`
 **Foundation roadmap:** `docs/build-log/ophalo-foundation-build-plan-greenfield-boundaries-brownfield-behavior.md` section 9.1
-**Current session:** Session 13g — Member Management And Settings Continuation
+**Current session:** Session 13h — Closeout, Feedback Review, And Attention Explanation
 
 **Committed baseline (local, not yet pushed):**
 
@@ -51,6 +51,7 @@ For every implementation slice:
 - `a19c806 feat: add session 13g-1 seat usage + settings shell + company/policy`
 - `e992844 feat: add session 13g-2 intake link + team settings sections`
 - `0f6add5 feat: add session 13g-3 onboarding settings section`
+- `7f3aa17 docs: record S13g-3 commit hash in session log`
 
 **Completed Session 13 slices:**
 
@@ -92,8 +93,32 @@ For every implementation slice:
   only for Owner callers; Admin callers do not see owner-management affordances for Owner targets; active
   members expose direct Remove with explicit confirmation while the backend remains authoritative for
   self/primary-owner/last-owner/seat-limit constraints.
+- S13g-3: Settings Onboarding section. Added the three manual mark API methods for quick-capture exercise,
+  tracker review, and spam classification; renders the 10-item checklist using shared `["onboarding"]`
+  query state; hides mark buttons once complete; invalidates onboarding after manual marks; keeps
+  `operatorInvited` server-derived only. Verified by clean `git diff --check` and
+  `pnpm -C web/ophalo-app typecheck`.
+- S13h-1: closeout contract verification no-op. Current `Requests.tsx`/`apiClient.ts` already include
+  `ready_to_close` and `feedback_review` list views, and `StatusChangeSection` already submits only
+  backend-provided `allowedStatuses`; `closed` remains server-authoritative through the existing status
+  mutation flow.
+- S13h-2: Feedback Review panel in request detail. Added `api.markFeedbackReviewed` for versioned
+  `POST /keep/requests/{requestId}/feedback-review`; renders `FeedbackReviewSection` in mobile stack and
+  desktop rail when `canMarkFeedbackReviewed && feedbackWasResolved === false && feedbackReviewedAtUtc == null`;
+  shows age badge labels `New` / `Aging` / `Overdue`, visible customer comment when allowed, optional
+  internal note capped by `feedbackReviewNoteMaxLength`, passive "does not reopen" copy, 409 conflict
+  handling, and returned-detail adoption on success.
 
-**Session 13g complete.** Next session TBD.
+**Recommended next session: S13i — Ready-For-Public Hardening Pass**
+
+S13i has open decisions in build-log 067. Treat the first turn as decision/preflight, not immediate coding:
+pick the public-ready route/nav set, unsupported-workflow visibility, desktop/mobile screenshot matrix,
+browser matrix, blocking UX gaps, and runbook/auth/seed-data verification scope.
+
+Next-session alternatives before S13i:
+
+- **Push local commits first** if origin needs the full Session 13 baseline. The local baseline includes
+  S13d through S13h commits that may not all be on `origin/main`.
 
 ---
 

@@ -637,6 +637,12 @@ export const api = {
     apiFetchVoid(`/accounts/me/members/${encodeURIComponent(accountUserId)}`, {
       method: "DELETE",
     }),
+  markFeedbackReviewed: (requestId: string, body: { note?: string | null }, version: string) =>
+    apiFetch<KeepRequestDetailResult>(`/keep/requests/${requestId}/feedback-review`, {
+      method: "POST",
+      body: JSON.stringify(body),
+      headers: { "X-Keep-Request-Version": version },
+    }),
   markQuickCaptureExercise: () =>
     apiFetchVoid("/keep/setup/onboarding/marks/quick-capture-exercise", { method: "POST" }),
   markTrackerReview: () =>

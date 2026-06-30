@@ -779,6 +779,112 @@ function AcknowledgeAttentionSection({ requestId, detail, onDetailUpdated }: Ack
 }
 
 // ---------------------------------------------------------------------------
+// Feedback review
+// ---------------------------------------------------------------------------
+
+interface FeedbackReviewSectionProps {
+  requestId: string;
+  detail: KeepRequestDetailResult;
+  onDetailUpdated: (updated: KeepRequestDetailResult) => void;
+}
+
+function FeedbackReviewSection({ requestId, detail, onDetailUpdated }: FeedbackReviewSectionProps) {
+  const { canMarkFeedbackReviewed } = detail.availableActions;
+  const { feedbackReviewNoteMaxLength } = detail.validation;
+
+  const [note, setNote] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [conflictDisabled, setConflictDisabled] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  if (
+    !canMarkFeedbackReviewed ||
+    detail.feedbackWasResolved !== false ||
+    detail.feedbackReviewedAtUtc != null
+  ) return null;
+
+  const ageBucket = detail.feedbackReviewAgeBucket;
+  const ageLabel =
+    ageBucket === "overdue" ? "Overdue"
+    : ageBucket === "aging" ? "Aging"
+    : ageBucket === "new" ? "New"
+    : null;
+  const ageBadgeClass =
+    ageBucket === "overdue"
+      ? "bg-red-100 text-red-700"
+      : ageBucket === "aging"
+        ? "bg-amber-100 text-amber-700"
+        : "bg-slate-100 text-slate-600";
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (isSubmitting || conflictDisabled) return;
+    setIsSubmitting(true);
+    setError(null);
+    try {
+      const updated = await api.markFeedbackReviewed(
+        requestId,
+        { note: note.trim() || null },
+        detail.version,
+      );
+      onDetailUpdated(updated);
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 409) {
+        setConflictDisabled(true);
+        setError(STATUS_CONFLICT_MESSAGE);
+      } else {
+        setError("Could not mark feedback reviewed. Try again.");
+      }
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  return (
+    <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+      <div className="flex items-center gap-2 mb-3">
+        <p className="text-xs font-semibold text-slate-700 uppercase tracking-wide">Customer left negative feedback</p>
+        {ageLabel && (
+          <span className={`text-xs font-medium px-1.5 py-0.5 rounded ${ageBadgeClass}`}>
+            {ageLabel}
+          </span>
+        )}
+      </div>
+      {detail.feedbackCommentVisible && detail.feedbackComment && (
+        <p className="text-sm text-slate-600 mb-3 italic">&ldquo;{detail.feedbackComment}&rdquo;</p>
+      )}
+      {error && (
+        <div className={`mb-3 rounded-md p-3 text-xs ${conflictDisabled ? "bg-amber-50 border border-amber-200 text-amber-800" : "bg-red-50 border border-red-200 text-red-700"}`}>
+          {error}
+        </div>
+      )}
+      <form onSubmit={(e) => void handleSubmit(e)} className="space-y-3">
+        <div>
+          <label className="block text-xs font-medium text-slate-700 mb-1">Internal note (optional)</label>
+          <textarea
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            maxLength={feedbackReviewNoteMaxLength}
+            disabled={conflictDisabled}
+            placeholder="Add an internal note about this feedback…"
+            rows={2}
+            className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 resize-none placeholder:text-slate-400 disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-slate-400"
+          />
+        </div>
+        <p className="text-xs text-slate-500">Marking as reviewed does not reopen this request.</p>
+        <button
+          type="submit"
+          disabled={isSubmitting || conflictDisabled}
+          className="w-full rounded-md bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-40"
+        >
+          {isSubmitting ? "Marking…" : "Mark reviewed"}
+        </button>
+      </form>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Participation controls
 // ---------------------------------------------------------------------------
 
@@ -1113,6 +1219,11 @@ export function RequestDetail({ requestId, onBack }: RequestDetailProps) {
                 detail={detail}
                 onDetailUpdated={handleDetailUpdated}
               />
+              <FeedbackReviewSection
+                requestId={requestId}
+                detail={detail}
+                onDetailUpdated={handleDetailUpdated}
+              />
               <AcknowledgeAttentionSection
                 requestId={requestId}
                 detail={detail}
@@ -1142,6 +1253,11 @@ export function RequestDetail({ requestId, onBack }: RequestDetailProps) {
               onDetailUpdated={handleDetailUpdated}
             />
             <StatusChangeSection
+              requestId={requestId}
+              detail={detail}
+              onDetailUpdated={handleDetailUpdated}
+            />
+            <FeedbackReviewSection
               requestId={requestId}
               detail={detail}
               onDetailUpdated={handleDetailUpdated}
