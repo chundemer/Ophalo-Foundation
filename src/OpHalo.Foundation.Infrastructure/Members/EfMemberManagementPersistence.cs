@@ -54,7 +54,20 @@ public sealed class EfMemberManagementPersistence(OpHaloDbContext db) : IMemberM
                 r.InviteExpiresAtUtc))
             .ToList();
 
-        return new MemberListContext(account.PrimaryOwnerAccountUserId.Value, members);
+        var entitlements = await db.AccountEntitlements
+            .AsNoTracking()
+            .FirstOrDefaultAsync(e => e.AccountId == accountId, cancellationToken);
+
+        if (entitlements is null)
+            return null;
+
+        var occupiedSeats = await db.AccountUsers
+            .AsNoTracking()
+            .CountAsync(
+                au => au.AccountId == accountId && au.MembershipStatus != MembershipStatus.Removed,
+                cancellationToken);
+
+        return new MemberListContext(account.PrimaryOwnerAccountUserId.Value, members, occupiedSeats, entitlements);
     }
 
     public async Task<MemberManagementContext?> GetMemberManagementContextAsync(

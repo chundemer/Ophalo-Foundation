@@ -50,7 +50,10 @@ public interface IMemberManagementPersistence
 /// <summary>Context for member list operations.</summary>
 public sealed record MemberListContext(
     Guid PrimaryOwnerAccountUserId,
-    IReadOnlyList<MemberListItem> Members);
+    IReadOnlyList<MemberListItem> Members,
+    /// <summary>Active + Invited + Suspended count — excludes Removed.</summary>
+    int OccupiedSeats,
+    AccountEntitlements Entitlements);
 
 /// <summary>One row from the member list query.</summary>
 public sealed record MemberListItem(

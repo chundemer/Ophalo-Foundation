@@ -85,6 +85,44 @@ export interface OnboardingChecklist {
   spamClassificationExplained: boolean;
 }
 
+export interface KeepSetupPolicyResult {
+  firstResponseTargetMinutes: number;
+  standardResponseTargetMinutes: number;
+  priorityResponseTargetMinutes: number;
+  statusCheckThresholdDays: number;
+}
+
+export interface KeepSetupResult {
+  businessName: string;
+  timeZone: string;
+  customerFacingPhone: string | null;
+  customerFacingEmail: string | null;
+  responsePolicy: KeepSetupPolicyResult;
+}
+
+export interface SeatUsage {
+  occupiedSeats: number;
+  maxSeats: number;
+  atLimit: boolean;
+  limitApplies: boolean;
+}
+
+export interface MemberItem {
+  accountUserId: string;
+  email: string;
+  role: string;
+  status: string;
+  isCurrentUser: boolean;
+  isPrimaryOwner: boolean;
+  activatedAtUtc: string | null;
+  inviteExpiresAtUtc: string | null;
+}
+
+export interface ListMembersResponse {
+  members: MemberItem[];
+  seatUsage: SeatUsage;
+}
+
 export interface PhoneLookupCustomer {
   name: string;
   phone: string;
@@ -492,4 +530,29 @@ export const api = {
       headers: { "X-Keep-Request-Version": version },
       body: JSON.stringify(body),
     }),
+  getSetup: () => apiFetch<KeepSetupResult>("/keep/setup"),
+  updateProfile: (body: {
+    businessName: string;
+    timeZone: string;
+    customerFacingPhone: string | null;
+    customerFacingEmail: string | null;
+  }) =>
+    apiFetch<KeepSetupResult>("/keep/setup/profile", {
+      method: "PUT",
+      body: JSON.stringify(body),
+    }),
+  updatePolicy: (body: {
+    firstResponseTargetMinutes: number;
+    standardResponseTargetMinutes: number;
+    priorityResponseTargetMinutes: number;
+    statusCheckThresholdDays: number;
+  }) =>
+    apiFetch<KeepSetupResult>("/keep/setup/policy", {
+      method: "PUT",
+      body: JSON.stringify(body),
+    }),
+  listMembers: (includeRemoved = false) =>
+    apiFetch<ListMembersResponse>(
+      `/accounts/me/members${includeRemoved ? "?includeRemoved=true" : ""}`,
+    ),
 };

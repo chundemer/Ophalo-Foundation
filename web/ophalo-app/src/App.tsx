@@ -6,7 +6,8 @@ import { Home } from "./pages/Home";
 import { Requests } from "./pages/Requests";
 import { RequestDetail } from "./pages/RequestDetail";
 import { AccessLimited } from "./pages/AccessLimited";
-import { Plus, Inbox } from "lucide-react";
+import { Settings } from "./pages/Settings";
+import { Plus, Inbox, Settings as SettingsIcon } from "lucide-react";
 import { api, type AccountRole, type KeepRequestViewCounts } from "./lib/apiClient";
 
 // Shell-level access flags (isReadOnly, isPastDue) are intentionally not derived here.
@@ -19,10 +20,11 @@ import { api, type AccountRole, type KeepRequestViewCounts } from "./lib/apiClie
 type AppRoute =
   | { page: "home" }
   | { page: "requests" }
+  | { page: "settings" }
   | { page: "detail"; requestId: string };
 
 interface NavItem {
-  id: "home" | "requests";
+  id: "home" | "requests" | "settings";
   label: string;
   icon: React.ReactNode;
 }
@@ -31,9 +33,9 @@ function getNavItems(role: AccountRole): NavItem[] {
   const items: NavItem[] = [
     { id: "requests", label: "Requests", icon: <Inbox className="h-4 w-4" /> },
   ];
-  // Home / getting-started is only surfaced for owner/admin (setup is their concern)
   if (role === "owner" || role === "admin") {
     items.push({ id: "home", label: "Getting Started", icon: null });
+    items.push({ id: "settings", label: "Settings", icon: <SettingsIcon className="h-4 w-4" /> });
   }
   return items;
 }
@@ -65,8 +67,10 @@ function AppShell() {
     setRoute({ page: "requests" });
   }
 
-  const activeNavId: "home" | "requests" =
-    route.page === "home" ? "home" : "requests";
+  const activeNavId: "home" | "requests" | "settings" =
+    route.page === "home" ? "home"
+    : route.page === "settings" ? "settings"
+    : "requests";
 
   return (
     <div className="flex min-h-screen bg-slate-50">
@@ -131,6 +135,7 @@ function AppShell() {
           />
         )}
         {route.page === "home" && <Home onStartCapture={openCapture} />}
+        {route.page === "settings" && <Settings />}
         {route.page === "detail" && (
           <RequestDetail requestId={route.requestId} onBack={backToRequests} />
         )}

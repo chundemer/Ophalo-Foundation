@@ -66,7 +66,15 @@ public sealed class MemberManagementService(
                 InviteExpiresAtUtc: m.InviteExpiresAtUtc))
             .ToList();
 
-        return Result<ListMembersResponse>.Success(new ListMembersResponse(members));
+        var maxSeats = featurePolicy.ResolveLimit(context.Entitlements, FeatureLimitKeys.Account.UserLimit);
+        var limitApplies = maxSeats > 0;
+        var seatUsage = new SeatUsage(
+            context.OccupiedSeats,
+            maxSeats,
+            AtLimit: limitApplies && context.OccupiedSeats >= maxSeats,
+            LimitApplies: limitApplies);
+
+        return Result<ListMembersResponse>.Success(new ListMembersResponse(members, seatUsage));
     }
 
     // -------------------------------------------------------------------------
@@ -453,7 +461,13 @@ public sealed record ResendInviteResult(
     /// </summary>
     string? InviteUrl);
 
-public sealed record ListMembersResponse(IReadOnlyList<MemberItem> Members);
+public sealed record ListMembersResponse(IReadOnlyList<MemberItem> Members, SeatUsage SeatUsage);
+
+public sealed record SeatUsage(
+    int OccupiedSeats,
+    int MaxSeats,
+    bool AtLimit,
+    bool LimitApplies);
 
 public sealed record MemberItem(
     Guid AccountUserId,

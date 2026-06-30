@@ -129,7 +129,30 @@ public sealed class MemberManagementTests : IClassFixture<KeepApiWebFactory>, IA
     }
 
     // =========================================================================
-    // Test 5 — Mutations: Viewer and Operator are forbidden
+    // Test 5 — List: seatUsage reflects server-side seat state
+    // =========================================================================
+
+    [Fact]
+    public async Task ListMembers_SeatUsage_ReturnsServerSideValues()
+    {
+        // Trial plan seeds MaxUserSeats = 3 via AccountProvisioningService.
+        var (accountId, _, ownerCookie) = await SeedAccountAsync();
+        await SeedActiveMemberAsync(accountId, "m1@example.com");
+
+        var response = await AuthRequest(ownerCookie).GetAsync("/accounts/me/members");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        var su = body.GetProperty("seatUsage");
+
+        Assert.Equal(2, su.GetProperty("occupiedSeats").GetInt32()); // owner + 1 active
+        Assert.Equal(3, su.GetProperty("maxSeats").GetInt32());      // Trial plan limit
+        Assert.True(su.GetProperty("limitApplies").GetBoolean());
+        Assert.False(su.GetProperty("atLimit").GetBoolean());        // 2 of 3 used
+    }
+
+    // =========================================================================
+    // Test 6 — Mutations: Viewer and Operator are forbidden
     // =========================================================================
 
     [Theory]

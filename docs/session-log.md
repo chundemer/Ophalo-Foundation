@@ -1,10 +1,10 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-06-30 (S13d complete; S13f next)
+**Last updated:** 2026-06-30 (S13f complete; S13g next)
 **Branch:** `main` tracking `origin/main`
 **Last green baseline:** 939 unit · 14 arch · 713 integration = 1,666 total, 0 failures (1 pre-existing KeepG5 fluke excluded)
 **Next free ADR:** ADR-385
-**Current session:** Session 13f — Customer Update Composer
+**Current session:** Session 13g — Member Management And Settings Continuation
 
 ---
 
@@ -35,10 +35,10 @@ For every implementation slice:
 ## Current Work
 
 **Current build log:** `docs/build-log/067-session-13-pwa-workbench.md`
-**Last completed build log:** `docs/build-log/067-session-13-pwa-workbench.md` (S13d)
+**Last completed build log:** `docs/build-log/067-session-13-pwa-workbench.md` (S13f)
 **Readiness working doc:** `docs/pilot-readiness-decision-questions.md`
 **Foundation roadmap:** `docs/build-log/ophalo-foundation-build-plan-greenfield-boundaries-brownfield-behavior.md` section 9.1
-**Current session:** Session 13f — Customer Update Composer
+**Current session:** Session 13g — Member Management And Settings Continuation
 
 **Committed baseline (local, not yet pushed):**
 
@@ -47,6 +47,7 @@ For every implementation slice:
 - `88f8759 feat: add session 13d-2 status change workflow`
 - `9ac0be9 feat: add session 13d-3 operational action rail`
 - `50f4d17 docs: record S13d-3 commit hash in session log`
+- `702c08f feat: add session 13f customer update composer`
 
 **Completed Session 13 slices:**
 
@@ -71,36 +72,60 @@ For every implementation slice:
   required, versioned POST); `ParticipationSection` (watch/unwatch/mute/unmute buttons from
   `availableActions`, per-action submitting lock); contact launchers wired to open modal on click;
   6 new `api.*` methods in `apiClient.ts`.
+- S13f: `BusinessUpdateSection` in the detail rail/mobile stack; `postBusinessUpdate` API method;
+  customer-visible message composer gated by `canSendBusinessUpdate`; optional status dropdown from
+  filtered `allowedStatuses`; passive NeedsShare reminder; versioned `business-updates` submit; 409
+  conflict handling preserves draft + selected status with `"Your message is saved here."` copy.
 
-**Next Slice — S13f Customer Update Composer**
+**Next Slice — S13g Member Management And Settings Continuation**
 
 Pre-work is complete in build-log 067. Treat this as mechanical implementation, not discovery.
+S13g-as-a-whole breaches the mutation-family gate, so use the approved Option B split below.
 
-- Files expected: `web/ophalo-app/src/pages/RequestDetail.tsx`, `web/ophalo-app/src/lib/apiClient.ts`.
-- Add `BusinessUpdateSection` to desktop rail and mobile stack; gate on `canSendBusinessUpdate`.
-- Message textarea: max `validation.businessUpdateMaxLength`; character countdown; block submit over limit.
-- Optional status dropdown: only when `canChangeStatus == true` and `allowedStatuses` has entries after
-  filtering out `closed`, `cancelled`, `spam`, `test`; source from `allowedStatuses` only.
-- Submit: `POST /keep/requests/{requestId}/business-updates` with `X-Keep-Request-Version` header;
-  body `{ message, setStatus? }`. Returns `KeepRequestDetailResult`; adopt on success and clear draft.
-- Side-effect copy (passive only): `Visible on the customer tracker.` + `Status will change to {label}.`
-  if status selected. No attention/SLA/notification predictions.
-- NeedsShare passive reminder near composer when `needsShare == true`: `Tracker link not yet shared
-  with customer.` — no coupling to share-intent, no intercept.
-- 409 recovery: preserve draft + selected status; disable stale submit; show conflict banner with
-  explicit `"Your message is saved here."` copy; do not clear draft until successful send or explicit discard.
-- Button label: `Send update`.
-- Keep the slice inside the S13 gate: expected 2 production files, 1 mutation family, 0 test files unless
-  a contract drift requires focused frontend/backend proof.
+**S13g-1 — Seat Usage + Settings Shell + Company/Policy**
 
-**Locked architecture (carries forward from S13d):**
+- Backend prerequisite: add server-authoritative `seatUsage` to `GET /accounts/me/members` response.
+  `ListMembersResponse` currently has only `members`.
+- Expected backend files: `IMemberManagementPersistence.cs`, `EfMemberManagementPersistence.cs`,
+  `MemberManagementService.cs`, plus focused assertions in `MemberManagementTests.cs`.
+- Seat usage fields: `occupiedSeats`, `maxSeats`, `atLimit`, `limitApplies`. Compute from server-side
+  member/entitlement state; do not count visible rows in the browser.
+- Frontend files: `web/ophalo-app/src/App.tsx`, `web/ophalo-app/src/lib/apiClient.ts`,
+  `web/ophalo-app/src/pages/Settings.tsx` (new).
+- Frontend scope: Owner/Admin-only `Settings` nav/route; Settings page with `Company` and
+  `Response Policy` sections only.
+- Company fields: business name, timezone, customer-facing phone, customer-facing email.
+- Policy fields: first response target minutes, standard response target minutes, priority response
+  target minutes, status-check threshold days.
+- Mutation family: Company/Policy only (`PUT /keep/setup/profile`, `PUT /keep/setup/policy`).
+- Defer intake link, team roster/mutations, and onboarding marks to later S13g slices.
 
-- Detail source of truth: `GET /keep/requests/{requestId}` / `KeepRequestDetailResult`.
-- Permissions/actions: render from `detail.availableActions`, not client-side role policy.
-- Validation: `detail.validation` for local form limits.
-- Versioned writes: send `X-Keep-Request-Version: {detail.version}`; preserve open form input on 409.
-- Out of scope: Follow Up On / Planned For UI, closeout/feedback flows, classification/spam/test UI,
-  settings/member management, reporting, batch closeout, template libraries, AI suggestions.
+**S13g-2 — Intake Link + Team**
+
+- Add intake link status/ensure/replace UI. Replacement requires explicit confirmation.
+- Add Team roster using server `seatUsage` readout.
+- Team mutations: invite team member, resend invite, change role, suspend, reactivate, remove.
+- Invite roles: Admin, Operator, Viewer only; use product labels `Owner`, `Admin`, `Operator`, `Viewer`.
+- Handle seat-limit and member conflict codes inline near the triggering form/row.
+- Manual-share resend is a deliberate fallback only; show raw invite URL once after explicit action.
+
+**S13g-3 — Onboarding Settings Section**
+
+- Add onboarding checklist readout inside Settings.
+- Manual mark buttons only for quick-capture exercise, tracker review, and spam classification explanation.
+- Do not manually mark `operatorInvited` from invite UI; it derives from an active non-owner member.
+- Keep solo-business posture non-blocking/add-later.
+
+**Locked architecture (carries forward into S13g):**
+
+- One Owner/Admin-only `Settings` nav item, not separate top-level Company/Team nav items.
+- Operators/Viewers do not get editable Settings navigation; direct access should use standard
+  access-limited/403 handling.
+- Use friendly product language: `Settings`, `Team`, `team member`, `Invite team member`.
+- Backend remains authoritative for permissions, owner/self/primary-owner constraints, membership
+  state, seat limits, account state, and invite/manual-share token generation.
+- S13g out of scope: primary-owner transfer, billing/plan management, internal support tooling, and
+  invite accept implementation in `ophalo-app`.
 
 ---
 
