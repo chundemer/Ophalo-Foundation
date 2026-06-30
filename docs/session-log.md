@@ -50,7 +50,7 @@ For every implementation slice:
 - `702c08f feat: add session 13f customer update composer`
 - `a19c806 feat: add session 13g-1 seat usage + settings shell + company/policy`
 - `e992844 feat: add session 13g-2 intake link + team settings sections`
-- S13g-3 feat: add session 13g-3 onboarding settings section (hash TBD)
+- `0f6add5 feat: add session 13g-3 onboarding settings section`
 
 **Completed Session 13 slices:**
 
