@@ -1,0 +1,11 @@
+@import "tailwindcss";
+
+@theme {
+  --color-ophalo-navy: #10243e;
+  --color-ophalo-terra: #bf6b43;
+  --color-ophalo-teal: #168a9a;
+  --color-ophalo-canvas: #f8f6f1;
+  --color-ophalo-ink: #172033;
+
+  --font-sans: var(--font-poppins), system-ui, sans-serif;
+}
