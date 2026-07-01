@@ -2,7 +2,7 @@
 
 **Date:** 2026-07-01
 **Session name:** Session 14 OpHalo Web Front Door
-**Status:** S14b complete; S14c sign-in/start auth entry is the next slice
+**Status:** S14c complete; S14d magic-link exchange is the next slice
 **Current ADR after S13:** ADR-384
 
 ## Session Intent
@@ -502,11 +502,11 @@ Delivered scope:
 
 ### S14b — Public Content Shell
 
-**Status:** Complete.
+**Status:** Complete. Committed as `f902f83`.
 
 Intent: build the credible public OpHalo/Keep content shell from the reference website baseline.
 
-Expected scope:
+Delivered scope:
 
 - `/` Keep-led homepage;
 - `/about`;
@@ -516,47 +516,22 @@ Expected scope:
 - Start Pilot and Sign In CTAs;
 - production-ready responsive layout using approved brand assets.
 
-Implementation notes for the next coding slice:
+Implemented files:
 
-- Before building page content, confirm the S14a token/font follow-up is complete:
-  - `web/shared/styles/ophalo-tokens.css` exists as the canonical token reference;
-  - `web/ophalo-web/src/app/globals.css` contains a synced inline copy of those tokens with a
-    Turbopack cross-root CSS import note;
-  - `web/ophalo-web/public/fonts/inter-variable.woff2` exists;
-  - `web/ophalo-web/public/fonts/source-serif-4-variable.woff2` exists;
-  - `ophalo-web` uses Inter for body/UI and Source Serif 4 for headings;
-  - no `next/font/google` usage remains.
-- Replace the temporary placeholder homepage in `src/app/page.tsx`.
-- Add a shared public site shell rather than duplicating header/footer on each page.
-- Keep the header minimal per S14-D20:
-  - OpHalo lockup;
-  - optional restrained About link if space allows;
-  - Sign in;
-  - Try Keep / Join the Pilot primary CTA.
-- Use `next/link`, `next/image`, Lucide icons where useful, and CSS/Tailwind utilities already
-  available in the scaffold.
-- Keep `/start` and `/signin` as links only in S14b; form behavior belongs to S14c.
-- Use static, pilot-safe availability language only.
-- Build product-like visuals from the S13 Keep workbench concepts without copying stale website
-  mockups or introducing fake live data.
-- Keep Privacy and Terms minimal but real enough for pilot traffic; avoid empty placeholder legal
-  routes.
-
-Likely file impact:
-
-- `web/ophalo-web/src/app/page.tsx`
-- `web/ophalo-web/src/app/layout.tsx` if metadata needs to become final for public pages
 - `web/ophalo-web/src/app/globals.css`
-- `web/ophalo-web/package.json` / `pnpm-lock.yaml` if the font follow-up is not already complete
-- `web/ophalo-web/scripts/copy-fonts.mjs` if the font follow-up is not already complete
-- `web/ophalo-web/public/fonts/` if the font follow-up is not already complete
-- `web/shared/styles/ophalo-tokens.css` if the token follow-up is not already complete
-- `web/ophalo-web/src/app/about/page.tsx`
-- `web/ophalo-web/src/app/pilot/page.tsx`
-- `web/ophalo-web/src/app/privacy/page.tsx`
-- `web/ophalo-web/src/app/terms/page.tsx`
-- optional shared components under `web/ophalo-web/src/components/`
-- optional content helpers/constants under `web/ophalo-web/src/lib/`
+- `web/ophalo-web/src/app/layout.tsx`
+- `web/ophalo-web/src/app/(marketing)/layout.tsx`
+- `web/ophalo-web/src/app/(marketing)/page.tsx`
+- `web/ophalo-web/src/app/(marketing)/about/page.tsx`
+- `web/ophalo-web/src/app/(marketing)/pilot/page.tsx`
+- `web/ophalo-web/src/app/(marketing)/privacy/page.tsx`
+- `web/ophalo-web/src/app/(marketing)/terms/page.tsx`
+- `web/ophalo-web/src/app/(marketing)/marketing.css`
+- `web/ophalo-web/src/app/(marketing)/_components/KeepListMockup.tsx`
+- `web/ophalo-web/src/components/layout/nav-link.tsx`
+- `web/ophalo-web/src/components/layout/site-header.tsx`
+- `web/ophalo-web/src/components/layout/site-footer.tsx`
+- `web/ophalo-web/public/brand/ophalo-mark.svg`
 
 S14b done gate:
 
@@ -581,9 +556,11 @@ Out of scope unless pulled in:
 
 ### S14c — Sign In, Start, And Check Email
 
+**Status:** Complete.
+
 Intent: implement the public owner/user auth entry loop.
 
-Expected scope:
+Delivered scope:
 
 - `/signin` -> `POST /auth/signin`;
 - `/start` -> `POST /auth/start`;
@@ -593,7 +570,121 @@ Expected scope:
 - browser time-zone detection and editable IANA time-zone field;
 - local dev support with `ConsoleEmailSender`.
 
+Implemented:
+
+- Added auth-entry routes outside the `(marketing)` route group:
+  - `/signin` in `web/ophalo-web/src/app/signin/page.tsx`;
+  - `/start` in `web/ophalo-web/src/app/start/page.tsx`;
+  - `/auth/check-email` in `web/ophalo-web/src/app/auth/check-email/page.tsx`.
+- Kept `/signin` and `/start` as static client pages with focused auth layout through the root
+  layout only. They do not inherit `SiteHeader`/`SiteFooter`.
+- Kept `/auth/check-email` as a server route that reads `searchParams` for UI-only
+  `?flow=start|signin` copy.
+- Added direct browser JSON `fetch` calls with `credentials: "include"` to `OpHalo.Api`.
+- Added `/start` timezone detection with `Intl.DateTimeFormat().resolvedOptions().timeZone`.
+- Used `Intl.supportedValuesOf("timeZone")` when available, with fallback options covering common
+  US time zones plus UTC.
+- Added auth-form CSS in `web/ophalo-web/src/app/globals.css` under the `auth-*` prefix, matching
+  the existing route-family class convention.
+- Added a development-only check-email hint for `ConsoleEmailSender`.
+- Did not add Next.js API routes, Server Actions, JavaScript cookie handling, or session-token
+  storage.
+
+Live API payloads:
+
+```http
+POST /auth/signin
+```
+
+```json
+{ "email": "owner@example.com" }
+```
+
+```http
+POST /auth/start
+```
+
+```json
+{
+  "email": "owner@example.com",
+  "businessName": "Summit Plumbing",
+  "name": "Jordan Lee",
+  "timeZone": "America/Chicago"
+}
+```
+
+Endpoint definitions are in `src/OpHalo.Api/Auth/AuthEndpoints.cs`:
+
+- `StartBody(string? Email, string? BusinessName, string? Name, string? TimeZone)`
+- `SignInBody(string? Email)`
+- both endpoints return `200 OK` on neutral success;
+- validation errors use problem responses with codes such as `Validation.EmailRequired`,
+  `Validation.BusinessNameRequired`, `Validation.TimeZoneRequired`, and
+  `Validation.TimeZoneInvalid`;
+- `Account.PilotFull` maps through `ErrorHttpMapper` and must render a clear pilot-full state on
+  `/start`;
+- `Account.EmailAlreadyInUse` on `/start` should point the user to `/signin`;
+- `/signin` must keep account-existence copy neutral because the backend intentionally returns
+  neutral `200 OK` for unknown/ineligible emails.
+
+`/start` field rules:
+
+- collect only owner name, work email, business name, and time zone;
+- default time zone from `Intl.DateTimeFormat().resolvedOptions().timeZone`;
+- keep the field editable through valid IANA time zones;
+- prefer `Intl.supportedValuesOf("timeZone")` when available and include a compact fallback list
+  covering common US zones plus UTC;
+- do not submit unless the selected value is a valid option in the client list. The API remains the
+  final validator.
+
+`/auth/check-email` behavior:
+
+- no API call;
+- support `?flow=start|signin` as UI-only copy selection;
+- optionally accept an email query parameter for display, but do not require it and do not treat it
+  as proof of account state;
+- include routes back to `/signin` and `/start` for retry/new flow;
+- local-dev copy may mention that magic links appear in the API console when `ConsoleEmailSender` is
+  active, but keep production-facing copy normal and not implementation-heavy.
+
+File impact:
+
+- `web/ophalo-web/src/app/signin/page.tsx`
+- `web/ophalo-web/src/app/start/page.tsx`
+- `web/ophalo-web/src/app/auth/check-email/page.tsx`
+- `web/ophalo-web/src/app/globals.css`
+
+Verified:
+
+- `/signin` renders, validates email, posts to `POST /auth/signin`, handles validation/network
+  failure, and redirects to `/auth/check-email?flow=signin` after neutral success.
+- `/start` renders, validates the four locked fields, posts to `POST /auth/start`, handles
+  validation/network failure plus `Account.PilotFull` and `Account.EmailAlreadyInUse`, and redirects
+  to `/auth/check-email?flow=start` after neutral success.
+- `/auth/check-email` renders useful flow-specific copy without requiring auth or calling the API.
+- Browser requests include `credentials: "include"` and use `NEXT_PUBLIC_API_BASE_URL`.
+- No raw auth code, session token, or invite token is logged, stored, rendered, or added to app state.
+- `pnpm --filter ophalo-web typecheck` clean.
+- `pnpm --filter ophalo-web build` clean.
+- `git diff --check` clean.
+- Local smoke, when API is running: submit `/start`, confirm the magic-link URL is written by
+  `ConsoleEmailSender`, and confirm the browser lands on `/auth/check-email`.
+- Frontend visual verification required restarting the `ophalo-web` dev server so the new global
+  auth CSS block was included in the served CSS bundle.
+
+Out of scope unless explicitly pulled in:
+
+- `/auth/exchange` implementation;
+- `/invite/accept` implementation;
+- backend invite-link URL changes or `OperatorBaseUrl` retirement;
+- `ophalo-app` unauthenticated redirect changes;
+- public/customer intake;
+- production DNS/deployment verification;
+- `return_to` / deep-link resume.
+
 ### S14d — Magic-Link Exchange And App Handoff
+
+**Status:** Next. Pre-work complete; ready for mechanical implementation preflight and coding.
 
 Intent: replace the dev-only S13 browser exchange helper with the real public web exchange page.
 
@@ -605,6 +696,59 @@ Expected scope:
 - no S14 `return_to`;
 - redirect to `AppBaseUrl`;
 - bounded expired/invalid/consumed/session-failure states.
+
+Implementation contract:
+
+- Add `/auth/exchange?code=...` outside the `(marketing)` route group.
+- Read `code` from the query string in the browser page; do not log or display the raw code.
+- POST directly to `OpHalo.Api` with credentialed browser fetch:
+  - `POST ${NEXT_PUBLIC_API_BASE_URL}/auth/exchange`
+  - body: `{ "code": "...", "clientType": "browser" }`
+- Browser exchange returns `200 OK` with no session token body. The API sets `ophalo.sid` as an
+  HttpOnly cookie through normal browser response handling.
+- Redirect to `NEXT_PUBLIC_APP_BASE_URL` after successful exchange.
+- Do not implement `return_to` in S14d.
+- Do not add Next.js API routes, Server Actions, JavaScript cookie handling, or session-token
+  storage in `ophalo-web`.
+
+Current endpoint definitions are in `src/OpHalo.Api/Auth/AuthEndpoints.cs`:
+
+- `ExchangeBody(string? Code, string? ClientType, string? DeviceName)`
+- missing code returns `Validation.CodeRequired`;
+- omitted/empty `clientType` maps to browser, and `"browser"` is accepted;
+- `"mobile_app"` returns a raw session token in the body and must not be used by `ophalo-web`;
+- invalid client types return `Validation.InvalidClientType`;
+- browser success sets the auth cookie and returns `200 OK`.
+
+Error-state mapping:
+
+- missing `?code=` or `Validation.CodeRequired` -> show missing/invalid link copy with a CTA to
+  `/signin`;
+- `AuthCode.Expired`, `AuthCode.AlreadyConsumed`, `AuthCode.CannotConsumeInvalidated`, and
+  `AuthCode.NotFound` -> collapse to "link is invalid or expired, request a new one";
+- `Account.PilotFull` -> show pilot-full copy;
+- `Account.SessionCreationFailed` -> show retry-oriented sign-in failure copy;
+- network/fetch failure -> show "Something went wrong. Please try again."
+
+Likely file impact:
+
+- `web/ophalo-web/src/app/auth/exchange/page.tsx`
+- optional route-local client component under `web/ophalo-web/src/app/auth/exchange/`
+- optional tiny shared auth/problem helper if S14c's inline pattern becomes meaningfully duplicated
+- `web/ophalo-web/src/app/globals.css` only if existing `auth-*` styles are insufficient
+
+S14d done gate:
+
+- `/auth/exchange` handles missing code without an API call and without leaking raw token values.
+- Valid magic-link code posts to `POST /auth/exchange` with `credentials: "include"` and
+  `clientType: "browser"`.
+- Successful exchange redirects to `NEXT_PUBLIC_APP_BASE_URL`.
+- Invalid/expired/consumed/not-found states collapse to one non-leaky invalid-link state.
+- Pilot-full, session-failure, validation, and network states are intentional.
+- No raw auth code, session token, invite token, or cookie value is logged, stored, or displayed.
+- `pnpm --filter ophalo-web typecheck` clean.
+- `pnpm --filter ophalo-web build` clean.
+- `git diff --check` clean.
 
 ### S14e — Invite Accept And Backend Link Wiring
 

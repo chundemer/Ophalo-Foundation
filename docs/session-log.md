@@ -1,6 +1,6 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-07-01 (S14b complete; S14c sign-in/start auth entry is next)
+**Last updated:** 2026-07-01 (S14c complete; S14d magic-link exchange is next)
 **Branch:** `main` tracking `origin/main`
 **Last green baseline:** 939 unit · 14 arch · 713 integration = 1,666 total, 0 failures (1 pre-existing KeepG5 fluke excluded)
 **Next free ADR:** ADR-385
@@ -39,15 +39,18 @@ For every implementation slice:
 **Readiness working doc:** `docs/pilot-readiness-decision-questions.md`
 **Foundation roadmap:** `docs/build-log/ophalo-foundation-build-plan-greenfield-boundaries-brownfield-behavior.md` section 9.1
 **Current session:** Session 14 — `ophalo-web` public/front-door foundation
-**Current slice:** S14c — Sign In, Start, And Check Email
+**Current slice:** S14d — Magic-Link Exchange And App Handoff
 **Current slice status:** Next in `docs/build-log/068-session-14-ophalo-web-front-door.md`
 
 Session 13 is complete and should be treated as historical context only. Completed Session 13 details
 live in `docs/build-log/067-session-13-pwa-workbench.md`; do not carry Session 13 implementation
 notes forward in this execution brief.
 
-`web/ophalo-web` now has the full public content shell from S14b: homepage, About, Pilot, Privacy,
-Terms, shared SiteHeader/SiteFooter, marketing CSS, and brand assets. S14c adds the auth entry forms.
+`web/ophalo-web` now has the full public content shell (S14b) and auth entry forms (S14c): homepage,
+About, Pilot, Privacy, Terms, shared SiteHeader/SiteFooter, `/signin`, `/start`, and
+`/auth/check-email`. S14c typecheck/build/diff gates are clean, and Christian verified the frontend
+after restarting the dev server so the new global auth CSS was picked up. S14d adds the magic-link
+exchange page and app handoff.
 
 ### S14 Locked Direction
 
@@ -68,42 +71,66 @@ Terms, shared SiteHeader/SiteFooter, marketing CSS, and brand assets. S14c adds 
 - Pilot cap for production launch: `SignupDefaults:MaxPilotAccounts=15`.
 - `OperatorBaseUrl` is fully retired in S14e; invite links move to `{PublicBaseUrl}/invite/accept`.
 
-### S14c Handoff Brief
+### S14d Handoff Brief
 
-Classify S14c as mechanical implementation preflight plus auth entry implementation. Do not
-rediscover the S14 decisions; use targeted checks only.
+Classify S14d as mechanical implementation preflight plus magic-link exchange implementation.
+Pre-work is complete; do not rediscover the S14 decisions. Use targeted checks only.
 
-Intent: implement the public owner/user auth entry loop.
+Intent: replace the dev-only S13 browser exchange helper with the real public web exchange page.
 
 Expected scope:
 
-- `/signin` page with email field → `POST /auth/signin` to `OpHalo.Api`;
-- `/start` page with name + email fields → `POST /auth/start` to `OpHalo.Api`;
-- `/auth/check-email` confirmation page (no API call — static with email context);
-- `Account.PilotFull` error handling on `/start`;
-- neutral sign-in copy (works for both owner and invited user flows);
-- browser time-zone detection and editable IANA time-zone field on `/start`;
-- credentialed browser `fetch` directly to `NEXT_PUBLIC_API_BASE_URL`; no Next.js API routes or
-  Server Actions;
-- local dev support with `ConsoleEmailSender` already wired in `OpHalo.Api`.
+- `/auth/exchange?code=...` page that POSTs to `POST /auth/exchange` on `OpHalo.Api`;
+- credentialed browser `fetch` with `code` from the query string;
+- on success, the API sets `ophalo.sid` cookie through normal browser behavior — no JS cookie
+  handling needed;
+- redirect to `AppBaseUrl` (`NEXT_PUBLIC_APP_BASE_URL`) after successful exchange;
+- bounded error states: expired, invalid/consumed code, session failure;
+- no `return_to` support in S14d.
 
-Out of scope for S14c:
+Live API contract:
 
-- magic-link exchange (`/auth/exchange`);
+- `POST /auth/exchange` body: `{ "code": "...", "clientType": "browser" }`
+- Browser exchange returns `200 OK` with no session token in the response body. The API sets the
+  `ophalo.sid` HttpOnly cookie through the response.
+- Omitted or empty `clientType` also maps to browser, but the frontend may send `"browser"` for
+  clarity.
+- Do not send `deviceName` for browser exchange.
+- Source of truth: `src/OpHalo.Api/Auth/AuthEndpoints.cs`.
+
+Error-state mapping:
+
+- Missing query code or `Validation.CodeRequired` -> show a missing/invalid link state with a CTA
+  back to `/signin`.
+- `AuthCode.Expired`, `AuthCode.AlreadyConsumed`, `AuthCode.CannotConsumeInvalidated`, and
+  `AuthCode.NotFound` -> collapse to one invalid-or-expired link state.
+- `Account.PilotFull` -> show the pilot-full state.
+- `Account.SessionCreationFailed` -> show a retry-oriented sign-in failure state.
+- Network/fetch failure -> show "Something went wrong. Please try again."
+
+Likely S14d file impact:
+
+- `web/ophalo-web/src/app/auth/exchange/page.tsx`
+- optional route-local client component under `web/ophalo-web/src/app/auth/exchange/`
+- optional small shared auth helper if S14c did not already introduce one
+- `web/ophalo-web/src/app/globals.css` only if existing `auth-*` styles are insufficient
+
+S14d expected verification:
+
+- `pnpm --filter ophalo-web typecheck`
+- `pnpm --filter ophalo-web build`
+- `git diff --check`
+- local smoke with API + `ophalo-web`: use a magic link from `/signin` or `/start`, open it in the
+  browser, confirm `/auth/exchange` posts successfully, then redirects to `NEXT_PUBLIC_APP_BASE_URL`
+  (`http://localhost:5173` locally).
+- invalid/missing code state renders without leaking the raw code.
+
+Out of scope for S14d:
+
 - invite accept (`/invite/accept`);
-- public/customer intake page (required later in S14g before public pilot);
-- backend invite-link changes;
-- `ophalo-app` auth redirect changes;
+- `OperatorBaseUrl` retirement (S14e);
+- public/customer intake (S14g);
 - production deployment/DNS work.
-
-S14c expected verification:
-
-- `pnpm --filter ophalo-web typecheck`;
-- `pnpm --filter ophalo-web build`;
-- `git diff --check`;
-- local end-to-end smoke: submit `/start`, confirm magic link appears in `OpHalo.Api` console log;
-- `Account.PilotFull` error renders a clear "pilot is full" message on `/start`;
-- no token/session leakage, no auth proxy layer.
 
 ---
 

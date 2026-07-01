@@ -8,26 +8,28 @@ export default function HomePage() {
       {/* 1. Hero */}
       <section className="mkt-hero">
         <div className="mkt-container">
-          <div className="mkt-hero-grid">
-            <div className="mkt-hero-text">
-              <p className="mkt-eyebrow">Keep · Built for small service businesses</p>
-              <h1 className="mkt-h1">
-                Know which customers are waiting on you — before they wonder if you forgot.
-              </h1>
-              <p className="mkt-subhead">
-                A question goes unanswered. A callback slips. A customer stops hearing
-                from you — and starts wondering if you care. Keep gives every active request
-                a home and shows you who needs a response.
-              </p>
-              <div className="mkt-cta-group">
-                <Link href="/start" className="mkt-btn-primary">Try Keep</Link>
+          <div className="mkt-hero-panel">
+            <div className="mkt-hero-grid">
+              <div className="mkt-hero-text">
+                <p className="mkt-eyebrow">Keep · Built for small service businesses</p>
+                <h1 className="mkt-h1">
+                  Know which customers are waiting on you — before they wonder if you forgot.
+                </h1>
+                <p className="mkt-subhead">
+                  A question goes unanswered. A callback slips. A customer stops hearing
+                  from you — and starts wondering if you care. Keep gives every active request
+                  a home and shows you who needs a response.
+                </p>
+                <div className="mkt-cta-group">
+                  <Link href="/start" className="mkt-btn-primary">Try Keep</Link>
+                </div>
+                <p className="mkt-pilot-note">
+                  Free during the pilot. Availability is limited.
+                </p>
               </div>
-              <p className="mkt-pilot-note">
-                Free during the pilot. Availability is limited.
-              </p>
-            </div>
-            <div className="mkt-hero-visual" aria-hidden="true">
-              <KeepListMockup />
+              <div className="mkt-hero-visual" aria-hidden="true">
+                <KeepListMockup />
+              </div>
             </div>
           </div>
         </div>
@@ -101,11 +103,11 @@ export default function HomePage() {
             CRMs try to run your whole business. Keep does one thing well: it shows you which active
             requests need a response — without replacing your tools or changing how you work.
           </p>
-          <ul className="mkt-bullets">
-            <li>No pipelines</li>
-            <li>No stages</li>
-            <li>No heavy setup</li>
-            <li>Just clear visibility into your active requests</li>
+          <ul className="mkt-highlight-grid">
+            <li><span className="mkt-highlight-mark" aria-hidden="true" />No pipelines</li>
+            <li><span className="mkt-highlight-mark" aria-hidden="true" />No stages</li>
+            <li><span className="mkt-highlight-mark" aria-hidden="true" />No heavy setup</li>
+            <li><span className="mkt-highlight-mark" aria-hidden="true" />Clear visibility into active requests</li>
           </ul>
         </div>
       </section>
@@ -119,11 +121,11 @@ export default function HomePage() {
             into Keep. Keep creates a simple request page for that customer: a place to ask questions, share
             updates, and stay informed. Every active request lives in one place, no matter how it started.
           </p>
-          <ul className="mkt-bullets">
-            <li>No more scattered inbound messages</li>
-            <li>No more missed requests</li>
-            <li>No more &ldquo;Did we ever reply to that?&rdquo;</li>
-            <li>Every active request tracked in Keep</li>
+          <ul className="mkt-highlight-grid mkt-highlight-grid-wide">
+            <li><span className="mkt-highlight-mark" aria-hidden="true" />Scattered inbound messages become one request record</li>
+            <li><span className="mkt-highlight-mark" aria-hidden="true" />Customer questions stop relying on memory</li>
+            <li><span className="mkt-highlight-mark" aria-hidden="true" />Follow-up status stays visible to the business</li>
+            <li><span className="mkt-highlight-mark" aria-hidden="true" />Every active request is tracked in Keep</li>
           </ul>
           <div className="mkt-cp-mockup" aria-hidden="true">
             <div className="mkt-cp-hero">
@@ -157,7 +159,7 @@ export default function HomePage() {
         <div className="mkt-container">
           <h2 className="mkt-h2">One place to see every active request — and who&apos;s waiting on you.</h2>
           <div className="mkt-card-grid">
-            <div className="mkt-feature-card">
+            <div className="mkt-feature-card mkt-feature-card-primary">
               <div className="mkt-card-icon mkt-icon-attention" aria-hidden="true">
                 <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
                   <circle cx="10" cy="10" r="8" />
@@ -207,7 +209,7 @@ export default function HomePage() {
       </section>
 
       {/* 7. How It Works */}
-      <section className="mkt-section-roomy mkt-bg-warm-white" id="how-it-works">
+      <section className="mkt-section-utility mkt-bg-warm-white" id="how-it-works">
         <div className="mkt-container">
           <h2 className="mkt-h2">How Keep works</h2>
           <div className="mkt-steps">

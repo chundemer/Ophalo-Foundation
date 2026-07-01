@@ -10,7 +10,7 @@
 
 /* ─── Layout ────────────────────────────────────────────────────────── */
 .mkt-container {
-  max-width: 760px;
+  max-width: 980px;
   margin-left: auto;
   margin-right: auto;
   padding-left: 24px;
@@ -20,6 +20,14 @@
 .mkt-section          { padding-top: 72px;  padding-bottom: 72px; }
 .mkt-section-roomy    { padding-top: 104px; padding-bottom: 104px; }
 .mkt-section-compact  { padding-top: 56px;  padding-bottom: 56px; }
+.mkt-section-utility  { padding-top: 64px;  padding-bottom: 72px; }
+
+.mkt-section .mkt-container,
+.mkt-section-roomy .mkt-container,
+.mkt-section-compact .mkt-container,
+.mkt-section-utility .mkt-container {
+  max-width: 760px;
+}
 
 .mkt-bg-warm-white { background-color: var(--ophalo-canvas); }
 .mkt-bg-soft-sand  { background-color: var(--mkt-sand); }
@@ -39,17 +47,17 @@
   font-size: clamp(36px, 5.5vw, 56px);
   font-weight: 700;
   line-height: 1.1;
-  letter-spacing: -0.02em;
+  letter-spacing: 0;
   color: var(--ophalo-ink);
   margin-bottom: 20px;
 }
 
 .mkt-h2 {
   font-family: var(--font-serif);
-  font-size: clamp(24px, 3vw, 32px);
+  font-size: clamp(23px, 2.4vw, 27px);
   font-weight: 700;
   line-height: 1.2;
-  letter-spacing: -0.02em;
+  letter-spacing: 0;
   color: var(--ophalo-ink);
   margin-bottom: 16px;
 }
@@ -59,7 +67,7 @@
   font-size: clamp(20px, 2.5vw, 24px);
   font-weight: 700;
   line-height: 1.25;
-  letter-spacing: -0.01em;
+  letter-spacing: 0;
   color: var(--ophalo-ink);
   margin-bottom: 12px;
 }
@@ -139,23 +147,41 @@
 /* ─── Hero ──────────────────────────────────────────────────────────── */
 .mkt-hero {
   background-color: var(--ophalo-canvas);
-  padding-top: 96px;
-  padding-bottom: 72px;
+  padding-top: 64px;
+  padding-bottom: 36px;
+}
+
+.mkt-hero-panel {
+  background-color: var(--ophalo-card);
+  border: 1px solid var(--ophalo-border);
+  border-radius: 18px;
+  box-shadow:
+    0 18px 46px color-mix(in srgb, var(--ophalo-navy) 10%, transparent),
+    0 2px 8px color-mix(in srgb, var(--ophalo-navy) 5%, transparent);
+  padding: 44px;
 }
 
 .mkt-hero-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 40px;
+  gap: 46px;
   align-items: center;
 }
 
 .mkt-hero-grid .mkt-h1 { font-size: clamp(28px, 3.5vw, 40px); }
 
 @media (max-width: 640px) {
+  .mkt-hero {
+    padding-top: 36px;
+    padding-bottom: 24px;
+  }
+  .mkt-hero-panel {
+    border-radius: 14px;
+    padding: 24px 18px 20px;
+  }
   .mkt-hero-grid { grid-template-columns: 1fr; }
   .mkt-hero-visual {
-    margin-top: 40px;
+    margin-top: 18px;
     width: 100%;
     max-width: 430px;
     justify-self: center;
@@ -165,8 +191,8 @@
 /* ─── Product visual strip ──────────────────────────────────────────── */
 .mkt-visual-section {
   background-color: var(--mkt-sand);
-  padding-top: 48px;
-  padding-bottom: 56px;
+  padding-top: 34px;
+  padding-bottom: 44px;
 }
 
 .mkt-visual-strip {
@@ -187,7 +213,7 @@
   background: var(--ophalo-card);
   border: 1px solid var(--ophalo-border);
   border-radius: 12px;
-  padding: 20px;
+  padding: 18px;
   flex: 1;
   box-shadow: 0 1px 4px color-mix(in srgb, var(--ophalo-navy) 5%, transparent);
 }
@@ -196,7 +222,11 @@
   background-color: color-mix(in srgb, var(--ophalo-attention) 5%, var(--ophalo-card));
   border-color: color-mix(in srgb, var(--ophalo-attention) 25%, transparent);
   border-top: 3px solid var(--ophalo-attention);
+  flex: 1.16;
+  padding: 22px;
 }
+
+.mkt-visual-card-closed { flex: 0.9; }
 
 .mkt-visual-card-header {
   display: flex;
@@ -238,36 +268,64 @@
 .mkt-label-active    { background-color: var(--keep-info-bg);        color: var(--keep-info); }
 .mkt-label-closed    { background-color: var(--ophalo-success-bg);   color: var(--ophalo-success); }
 
-/* ─── Bullets ───────────────────────────────────────────────────────── */
-.mkt-bullets {
+/* ─── Highlight grids ───────────────────────────────────────────────── */
+.mkt-highlight-grid {
   list-style: none;
   padding: 0;
-  margin: 20px 0 0;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+  margin: 28px 0 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
 }
 
-.mkt-bullets li {
-  font-size: 18px;
-  line-height: 1.5;
+.mkt-highlight-grid li {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  min-height: 52px;
+  border: 1px solid color-mix(in srgb, var(--ophalo-border) 72%, transparent);
+  border-radius: 10px;
+  background-color: color-mix(in srgb, var(--ophalo-card) 76%, var(--ophalo-canvas));
+  padding: 13px 14px;
+  font-size: 16px;
+  line-height: 1.45;
+  font-weight: 600;
   color: var(--ophalo-ink);
-  padding-left: 20px;
+}
+
+.mkt-highlight-grid-wide li { min-height: 68px; }
+
+.mkt-highlight-mark {
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  border: 1.5px solid var(--keep-accent);
+  color: var(--keep-accent);
+  flex: 0 0 auto;
+  margin-top: 2px;
   position: relative;
 }
 
-.mkt-bullets li::before {
-  content: "—";
+.mkt-highlight-mark::after {
+  content: "";
   position: absolute;
-  left: 0;
-  color: var(--keep-accent);
-  font-weight: 600;
+  left: 5px;
+  top: 3px;
+  width: 5px;
+  height: 8px;
+  border-bottom: 1.5px solid currentColor;
+  border-right: 1.5px solid currentColor;
+  transform: rotate(45deg);
+}
+
+@media (max-width: 600px) {
+  .mkt-highlight-grid { grid-template-columns: 1fr; }
 }
 
 /* ─── Feature cards ─────────────────────────────────────────────────── */
 .mkt-card-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: minmax(0, 1.12fr) minmax(0, 0.88fr);
   gap: 16px;
   margin-top: 32px;
 }
@@ -282,6 +340,14 @@
   border-radius: 12px;
   padding: 24px;
   box-shadow: 0 1px 4px color-mix(in srgb, var(--ophalo-navy) 5%, transparent);
+}
+
+.mkt-feature-card-primary {
+  border-color: color-mix(in srgb, var(--ophalo-attention) 28%, var(--ophalo-border));
+  box-shadow:
+    0 8px 24px color-mix(in srgb, var(--ophalo-navy) 8%, transparent),
+    0 1px 4px color-mix(in srgb, var(--ophalo-navy) 5%, transparent);
+  padding: 30px;
 }
 
 .mkt-card-icon {
@@ -317,7 +383,7 @@
 }
 
 /* ─── How it works (steps) ──────────────────────────────────────────── */
-.mkt-steps { margin-top: 32px; max-width: 560px; }
+.mkt-steps { margin-top: 28px; max-width: 560px; }
 
 .mkt-step { display: flex; gap: 20px; align-items: flex-start; }
 
@@ -329,12 +395,12 @@
 }
 
 .mkt-step-num {
-  width: 36px;
-  height: 36px;
+  width: 30px;
+  height: 30px;
   border-radius: 50%;
   background-color: var(--ophalo-navy);
   color: #ffffff;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 700;
   display: flex;
   align-items: center;
@@ -346,11 +412,11 @@
   width: 1px;
   flex: 1;
   min-height: 28px;
-  background-color: color-mix(in srgb, var(--keep-accent) 35%, transparent);
+  background-color: color-mix(in srgb, var(--ophalo-border) 88%, transparent);
   margin: 6px 0;
 }
 
-.mkt-step-body { padding-bottom: 32px; }
+.mkt-step-body { padding-bottom: 22px; }
 .mkt-step:last-child .mkt-step-body { padding-bottom: 0; }
 
 /* ─── Before / After ────────────────────────────────────────────────── */
@@ -677,7 +743,7 @@
   font-size: 21px;
   font-weight: 700;
   line-height: 1.25;
-  letter-spacing: -0.01em;
+  letter-spacing: 0;
   color: var(--ophalo-ink);
   margin: 4px 0 0;
 }
@@ -890,7 +956,7 @@
   font-size: clamp(22px, 2.6vw, 28px);
   font-weight: 700;
   line-height: 1.25;
-  letter-spacing: -0.01em;
+  letter-spacing: 0;
   color: var(--ophalo-ink);
   margin: 44px 0 14px;
 }
