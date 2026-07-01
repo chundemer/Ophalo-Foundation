@@ -233,7 +233,7 @@ export interface ValidationHintsMetadata {
 }
 
 export interface ContactActionItem {
-  type: string;
+  type: "call" | "email";
   available: boolean;
   target: string;
 }

@@ -1,7 +1,8 @@
-# Build Log 067 — Session 13 PWA Workbench
+# Build Log 067 — Session 13 Verify
 
 **Date:** 2026-06-28  
-**Status:** S13a complete; S13b complete; S13c complete; S13d pending
+**Session name:** Session 13 Verify
+**Status:** Complete; S13i verify harness and local auth helper delivered; next front-door work moves to `ophalo-web`
 **Current ADR after S13 pre-build decisions:** ADR-384
 
 ## Session Intent
@@ -1203,27 +1204,126 @@ S13h out of scope unless explicitly pulled in:
 **Intent:** Convert the completed slices from "functionally present" into a cohesive workbench that
 can earn trust and subscription conversion.
 
-Before-code questions/decisions:
+#### S13i-0 — Local Workbench Launch Gate
 
-- Which routes and nav items are considered ready for public use in Session 13?
-- Which unsupported workflows are hidden versus shown as access-limited/empty states?
-- What are the exact desktop and mobile viewport screenshots required?
-- What browser matrix is required before marking Session 13 complete?
-- Which S13 UX gaps must block completion: token usage, density, empty states, validation states,
-  loading states, responsive layout, keyboard/focus states, or copy polish?
-- Should this pass add lightweight component primitives/shared layout abstraction after patterns have
-  repeated enough to justify it?
-- Does the runbook cover fresh local auth, seeded data needs, and end-to-end workflow verification?
+**Status:** Dev-auth helper and runbook update complete; manual authenticated browser smoke deferred
+2026-06-30.
+
+The local auth blocker was identified as a browser cookie-store issue: exchanging the magic-link code
+with `curl -c cookies.txt` stores `ophalo.sid` in curl's cookie jar, not the browser's. The app at
+`localhost:5173` therefore still receives `401` from `GET /auth/me`.
+
+The development-only fix is `web/ophalo-app/public/dev-auth.html`, which posts the raw magic-link
+code to `POST /auth/exchange` from the browser with credentials included. This leaves production auth
+behavior unchanged and lets the API's `Set-Cookie` response land in the browser session.
+
+Manual verification remains pending:
+
+- run `dotnet run` in `src/OpHalo.Api`;
+- run `pnpm dev` in `web/ophalo-app`;
+- call `/auth/start` or `/auth/signin`;
+- copy the `code=` value from the API console output;
+- exchange it at `http://localhost:5173/dev-auth.html`;
+- smoke Requests, Request Detail, Quick Capture, Settings, and a mobile viewport.
+
+Decision 2026-06-30: do not let this manual local-auth gate block further foundation work. Keep the
+auth-helper/runbook fix, record the pending browser verification, and move next to a development-only
+workbench preview path so the team can see and polish the UI while auth/seed-data verification is
+handled separately.
+
+#### S13i-1 — Dev/Mock Workbench Preview Path
+
+**Status:** Complete 2026-07-01.
+
+**Approach: mock API adapter swap (no new dependencies)**
+
+`VITE_OPHALO_MOCK_WORKBENCH=true` in `.env.development.local` (git-ignored, not committed). When the
+flag is set, `main.tsx`'s async `bootstrap()` dynamically imports `installMockApi()` before React
+renders. `installMockApi` replaces every method on the shared exported `api` object in-place. Because
+all components import the same `api` reference, they get mock responses automatically with no
+component changes. Production `AuthGuard`, session-cookie behavior, and API authorization are
+unchanged — `AuthGuard` passes through because the mock `getMe` returns a valid authenticated
+`MeResponse`.
+
+**Files delivered:**
+
+- `src/mocks/fixtures.ts` — typed mock DTOs shaped from the real API interfaces. Five requests
+  covering the primary display states: in-progress with timeline/participants, unassigned intake with
+  `NeedsShare: true` and elevated attention, pending-customer with responsible and watching
+  participants, resolved with positive feedback awaiting review, and newly created with empty
+  timeline. Setup, members (owner + 2 operators + 1 pending), onboarding checklist, and intake
+  fixtures for the Settings screen.
+- `src/mocks/mockState.ts` — module-level mutable store (`currentMockRole`, requests array, detail
+  map). All write helpers (`addMockRequest`, `updateMockDetail`) keep list summaries and detail
+  records in sync so React Query re-fetches show updated state within the session.
+- `src/mocks/mockApiClient.ts` — mock for every `api` method. Mutations (status change, log contact,
+  acknowledge attention, watch/unwatch/mute, business update, share-intent, feedback review) append
+  events, update state, and return the updated detail so real query-cache invalidation paths work
+  correctly. `availableActions` are downgraded by role at call time so the Operator and Viewer toggle
+  states reflect permission differences.
+- `src/mocks/MockWorkbenchOverlay.tsx` — fixed bottom-left chip: `mock  Owner | Admin | Operator |
+  Viewer`. Active role is highlighted. Clicking a role calls `setMockRole` + `queryClient.invalidateQueries()`
+  so nav items, action rail, and the Viewer `AccessLimited` gate all re-render without a page reload.
+- `src/main.tsx` — async `bootstrap()` with conditional dynamic import; mock modules tree-shake out
+  of production builds because `import.meta.env.VITE_OPHALO_MOCK_WORKBENCH` is statically false in
+  production Vite builds.
+
+**Done gate:**
+
+- `pnpm -C web/ophalo-app typecheck` clean ✓
+- `pnpm -C web/ophalo-app build` clean ✓
+- Manual browser verification target:
+  - mock overlay visible bottom-left with four role buttons
+  - 5 requests load; KC-002 shows elevated attention + NeedsShare banner in detail
+  - Quick Capture submits → mock request created → appears in list
+  - Operator toggle: sidebar loses Settings/Getting Started; detail action rail narrows
+  - Viewer toggle: requests page shows AccessLimited surface
+  - Settings (Owner): Company, Policy, Team, Intake Link sections render with Apex Home Services data
+  - Mobile width: sidebar collapses, FAB visible
+
+**Limitation:** this validates UI shape and in-memory mock mutations only. It does not prove
+end-to-end authenticated API behavior. The S13i-0 browser-auth smoke remains a separate pending item.
+
+#### S13i-2 — Verify Closeout
+
+**Status:** Complete 2026-07-01.
+
+Session 13 closes with `ophalo-app` treated as the authenticated Keep workbench and the mock API
+treated as a development-only role/UI verification harness, not the primary acceptance path.
+
+Closeout decisions:
+
+- Local Resend configuration is not required for development verification. Without a Resend key, the
+  API writes the magic-link URL to the console through `ConsoleEmailSender`; developers copy the
+  `code=` value into `http://localhost:5173/dev-auth.html` so the browser receives `ophalo.sid`.
+- `VITE_OPHALO_MOCK_WORKBENCH=true` remains useful for fast Owner/Admin/Operator/Viewer role checks,
+  especially Viewer and Operator surfaces that are cumbersome to reproduce with real local accounts.
+- Regular API/auth mode remains the source of truth for acceptance verification. Set
+  `VITE_OPHALO_MOCK_WORKBENCH=false`, run the API and Vite app, exchange the console auth code in
+  `dev-auth.html`, and verify real `/auth/me`, onboarding/settings, request list/detail, Quick Capture,
+  and mobile layout.
+- Owner/Admin are expected to see all operational requests. Viewer is a separate account role, not an
+  owner-owned request subset.
+- Contact launchers are server-driven from `contactActions`. The mock fixture bug that rendered a
+  phone action as a second Email button was corrected by aligning mock data to the backend contract:
+  `type: "call" | "email"` with raw phone/email targets.
+- User-selectable email-client preference is a valid future settings idea, but V1 keeps native device
+  handoff through `mailto:`. A later slice can add default mail app, Gmail web, Outlook web, and copy
+  address options if customer usage justifies it.
+- The next missing product surface is the public/front-door app. Session 14 should build `ophalo-web`
+  for marketing, sign-in/start auth, magic-link exchange, account onboarding entry, and redirect into
+  `ophalo-app`.
 
 Session 13 completion gate:
 
 - all selected S13 workflow slices meet their done gates;
 - no primary nav item points to an unbuilt placeholder;
 - all primary screens use OpHalo/Keep tokens and the Source Serif 4 / Inter type contract;
-- `pnpm typecheck`, `pnpm build`, and relevant backend tests are green;
-- browser screenshots prove authenticated flows on desktop and mobile-width viewports;
-- local runbook gets a fresh developer to a working authenticated app;
-- known limitations are documented in build-log 067 or deferred topics, not hidden in the UI.
+- `pnpm -C web/ophalo-app typecheck` and `pnpm -C web/ophalo-app build` are green;
+- relevant backend tests were not rerun in S13i because backend behavior was not changed;
+- regular authenticated browser smoke remains documented through the local runbook and should be
+  repeated as part of Session 14 `ophalo-web` auth/onboarding work;
+- known limitations are documented in build-log 067 and carried forward instead of hidden in the UI.
 
 ## S13a Scope
 

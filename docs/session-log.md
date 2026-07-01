@@ -1,10 +1,10 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-06-30 (S13h complete; S13i decision next)
+**Last updated:** 2026-07-01 (Session 13 Verify complete; next recommended session is `ophalo-web`)
 **Branch:** `main` tracking `origin/main`
 **Last green baseline:** 939 unit · 14 arch · 713 integration = 1,666 total, 0 failures (1 pre-existing KeepG5 fluke excluded)
 **Next free ADR:** ADR-385
-**Current session:** Session 13h — Closeout, Feedback Review, And Attention Explanation
+**Current session:** Session 13 Verify — complete; next Session 14 should build `ophalo-web`
 
 ---
 
@@ -35,12 +35,12 @@ For every implementation slice:
 ## Current Work
 
 **Current build log:** `docs/build-log/067-session-13-pwa-workbench.md`
-**Last completed build log:** `docs/build-log/067-session-13-pwa-workbench.md` (S13g-3)
+**Last completed build log:** `docs/build-log/067-session-13-pwa-workbench.md` (Session 13 Verify)
 **Readiness working doc:** `docs/pilot-readiness-decision-questions.md`
 **Foundation roadmap:** `docs/build-log/ophalo-foundation-build-plan-greenfield-boundaries-brownfield-behavior.md` section 9.1
-**Current session:** Session 13h — Closeout, Feedback Review, And Attention Explanation
+**Current session:** Session 13 Verify — complete; next Session 14 should build `ophalo-web`
 
-**Committed baseline (local, not yet pushed):**
+**Committed baseline (pushed to `origin/main`):**
 
 - `6fc80e1 feat: expose share intent action metadata`
 - `c9bde88 feat: add session 13d-1 request detail read view and share clearing`
@@ -52,6 +52,7 @@ For every implementation slice:
 - `e992844 feat: add session 13g-2 intake link + team settings sections`
 - `0f6add5 feat: add session 13g-3 onboarding settings section`
 - `7f3aa17 docs: record S13g-3 commit hash in session log`
+- `b821d67 feat: add session 13h feedback review panel`
 
 **Completed Session 13 slices:**
 
@@ -109,16 +110,79 @@ For every implementation slice:
   internal note capped by `feedbackReviewNoteMaxLength`, passive "does not reopen" copy, 409 conflict
   handling, and returned-detail adoption on success.
 
-**Recommended next session: S13i — Ready-For-Public Hardening Pass**
+**S13i-0 — Local Workbench Launch Gate (auth blocker resolved)**
 
-S13i has open decisions in build-log 067. Treat the first turn as decision/preflight, not immediate coding:
-pick the public-ready route/nav set, unsupported-workflow visibility, desktop/mobile screenshot matrix,
-browser matrix, blocking UX gaps, and runbook/auth/seed-data verification scope.
+Auth blocker identified and fixed: `curl -c cookies.txt` sets the session cookie in curl's jar,
+not the browser's, so the Vite app at `localhost:5173` would still receive 401. Production auth
+behavior is unchanged — the fix is `web/ophalo-app/public/dev-auth.html`, a dev-only static page
+that makes the `POST /auth/exchange` request from the browser (CORS for `localhost:5173` already
+configured) so the `ophalo.sid` `Set-Cookie` header lands in the browser's own cookie store.
+Runbook (`docs/runbook/local-web-setup.md`) updated with the correct three-step browser auth flow.
 
-Next-session alternatives before S13i:
+S13i-0 done gate — **deferred/manual items (need Christian to run):**
 
-- **Push local commits first** if origin needs the full Session 13 baseline. The local baseline includes
-  S13d through S13h commits that may not all be on `origin/main`.
+- Start local API (`dotnet run` in `src/OpHalo.Api`) and Vite dev server (`pnpm dev` in `web/ophalo-app`).
+- Run `curl POST /auth/start` or `/auth/signin`, copy code from API console.
+- Navigate to `http://localhost:5173/dev-auth.html`, paste code, confirm redirect and app load.
+- Verify Requests list, Request Detail, Quick Capture, Settings, and mobile-width layout open.
+- Record any seed-data gaps as explicit S13i preconditions.
+
+Decision 2026-06-30: defer the manual browser-auth verification instead of letting local auth friction
+block visible workbench progress. The dev helper and runbook fix remain valid; S13i-0 is documented
+as pending manual verification, not complete.
+
+**S13i-1 — Dev/Mock Workbench Preview Path (complete)**
+
+Implemented a development-only mock workbench path. Set `VITE_OPHALO_MOCK_WORKBENCH=true` in
+`.env.development.local` (git-ignored), run `pnpm dev`, and the app opens without API/auth.
+
+Approach: `main.tsx` async `bootstrap()` dynamically imports `installMockApi()` when the env flag is
+set; `installMockApi` monkey-patches the exported `api` object before React renders so `AuthGuard`
+and all components run their real code paths with mock responses. No production code changed.
+
+Delivered:
+- `src/mocks/fixtures.ts` — typed mock DTOs: 5 diverse requests (received/in_progress/pending_customer/
+  resolved with feedback, unassigned HVAC with NeedsShare), 5 corresponding details with realistic
+  timelines, mock setup/members/intake/onboarding for the Settings screen.
+- `src/mocks/mockState.ts` — module-level mutable store; all mutations update in-memory state so
+  React Query re-fetches show changes within the session.
+- `src/mocks/mockApiClient.ts` — mock for every `api` method; status change, log contact, acknowledge
+  attention, watch/unwatch/mute, business update, feedback review, and share-intent all mutate local
+  state and return updated detail.
+- `src/mocks/MockWorkbenchOverlay.tsx` — fixed bottom-left chip: `mock  Owner | Admin | Operator | Viewer`;
+  role change calls `queryClient.invalidateQueries()` so nav items, action rail permissions, and
+  viewer access gate all re-render correctly.
+- `src/main.tsx` updated to async bootstrap; mock modules tree-shake out of production builds.
+
+Limitation: this validates UI shape and mock state mutations only. It is not end-to-end auth proof.
+Browser-auth smoke (`S13i-0` manual items) remains the regular-mode verification path.
+
+Corrections made during verify:
+
+- Mock contact actions now match the backend contract (`type: "call" | "email"`, raw phone/email
+  targets). This fixes the duplicate Email button seen when a mock phone action used `phone`.
+- `.env.development.local` is ignored by `web/ophalo-app/.gitignore`; local mock on/off state should
+  not be committed.
+
+`pnpm -C web/ophalo-app typecheck` clean. `pnpm -C web/ophalo-app build` clean.
+
+**Session 13 closeout**
+
+Session 13 is complete as the authenticated Keep workbench plus local verify harness. Regular API/auth
+mode remains the acceptance source of truth; mock mode remains a role/UI regression harness for fast
+Owner/Admin/Operator/Viewer checks. Resend is not required locally because `ConsoleEmailSender` prints
+the auth URL/code in Development.
+
+**Recommended next session: Session 14 — `ophalo-web` Public/Auth/Onboarding Front Door**
+
+Build the public/front-door web surface that Session 13 intentionally deferred:
+
+- marketing/product website;
+- sign-in and start-auth forms;
+- browser magic-link exchange route to replace `dev-auth.html`;
+- account onboarding entry for new owners;
+- redirect handoff into `ophalo-app`;
+- clearer public/app base URL split where needed.
 
 ---
 

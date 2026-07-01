@@ -84,7 +84,9 @@ pnpm dev
 
 ## Local auth flow
 
-`ophalo-web` (the public auth surface) does not exist yet. Authenticate locally by calling the API directly:
+`ophalo-web` (the public auth surface) does not exist yet. Authenticate locally by calling the API
+directly. The exchange step **must happen from the browser** — a curl-only exchange sets the cookie
+in curl's jar, not the browser's, so the app at `localhost:5173` would still see 401.
 
 ### 1. Start auth (new account) or sign in (existing account)
 
@@ -104,7 +106,7 @@ curl -s -X POST http://localhost:5092/auth/signin \
   -d '{"email":"you@example.com"}'
 ```
 
-### 2. Copy the magic link from API stderr
+### 2. Copy the raw code from API stderr
 
 The API console prints:
 
@@ -116,23 +118,34 @@ URL:     http://localhost:3000/auth/exchange?code=<rawCode>
 ─────────────────────────────────────────────────────────
 ```
 
-### 3. Exchange the code for a session cookie
+Copy the `<rawCode>` value from the `code=` query parameter in that URL.
 
-The exchange endpoint lives on the API, not on `localhost:3000`. Extract the `code` query param and POST:
+### 3. Exchange the code in the browser (browser auth helper)
 
-```bash
-curl -s -c cookies.txt -X POST http://localhost:5092/auth/exchange \
-  -H "Content-Type: application/json" \
-  -d '{"code":"<rawCode>","clientType":"Browser"}'
+With the Vite dev server running, navigate to:
+
+```
+http://localhost:5173/dev-auth.html
 ```
 
-The response sets `ophalo.sid` as a host-only cookie on `localhost:5092`.
+Paste the raw code into the form and click **Exchange & Open App**. The page POSTs to the API
+from the browser so the `ophalo.sid` cookie is stored in the browser's cookie store (not just curl's
+jar), then redirects to `http://localhost:5173`.
 
-### 4. Open the app
+> **Why this page exists:** `ophalo.sid` is `HttpOnly` and `SameSite=Lax`. `curl -c cookies.txt`
+> writes the cookie to a local file — the browser never sees it. The dev auth helper makes the same
+> `POST /auth/exchange` call from within the browser so the response's `Set-Cookie` header lands in
+> the browser's own session.
 
-Navigate to `http://localhost:5173`. The browser includes `ophalo.sid` on credentialed requests to `localhost:5092`. The `AuthGuard` calls `GET /auth/me` — if the session is valid, the home screen loads.
+### 4. Verify the app loads
 
-> **Note on `return_to`:** When the app redirects to `VITE_PUBLIC_BASE_URL/auth/signin?return_to=...`, that URL goes to `localhost:3000` which doesn't exist yet. For S13a dev testing, obtain a fresh session cookie via the curl flow above instead of following the redirect.
+The `AuthGuard` calls `GET /auth/me`. If the session cookie is present and valid, the home screen
+or requests list loads. Owner/Admin accounts see the full nav; Viewer accounts see the access-limited
+state.
+
+> **Note on `return_to`:** When the app redirects to `VITE_PUBLIC_BASE_URL/auth/signin?return_to=...`,
+> the URL targets `localhost:3000` which doesn't exist yet. To re-authenticate, use
+> `http://localhost:5173/dev-auth.html` with a fresh code from the sign-in flow above.
 
 ---
 

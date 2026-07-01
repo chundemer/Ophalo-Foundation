@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Dev Auth — OpHalo</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    body {
+      font-family: ui-monospace, monospace;
+      max-width: 560px;
+      margin: 48px auto;
+      padding: 0 20px;
+      color: #1e293b;
+      background: #f8fafc;
+    }
+    h2 { font-size: 1rem; margin-bottom: 4px; }
+    p { font-size: 0.8rem; color: #64748b; margin: 0 0 20px; }
+    label { display: block; font-size: 0.75rem; font-weight: 600; margin-bottom: 4px; color: #475569; }
+    input {
+      display: block; width: 100%; padding: 8px 10px;
+      border: 1px solid #cbd5e1; border-radius: 4px;
+      font-family: inherit; font-size: 0.85rem;
+      margin-bottom: 14px; background: white;
+    }
+    input:focus { outline: 2px solid #3b82f6; border-color: #3b82f6; }
+    button {
+      width: 100%; padding: 10px; border: none; border-radius: 4px;
+      background: #1e40af; color: white; font-family: inherit;
+      font-size: 0.85rem; cursor: pointer;
+    }
+    button:disabled { opacity: 0.6; cursor: default; }
+    #status { margin-top: 12px; font-size: 0.8rem; min-height: 1.2em; }
+    .err { color: #b91c1c; }
+    .ok  { color: #15803d; }
+  </style>
+</head>
+<body>
+  <!-- DEV-ONLY: This page exists only to exchange a magic-link code from the API
+       console into a browser session cookie. It is not part of the production auth flow. -->
+  <h2>Dev Auth — Exchange Magic-Link Code</h2>
+  <p>
+    Paste the raw code from the API console. This POSTs to the API from the browser so the
+    <code>ophalo.sid</code> cookie is set for this browser session, then redirects to the app.
+  </p>
+
+  <label for="apiUrl">API base URL</label>
+  <input id="apiUrl" value="http://localhost:5092" />
+
+  <label for="code">Magic-link code (from API console output)</label>
+  <input id="code" placeholder="Paste code here…" autocomplete="off" spellcheck="false" />
+
+  <button id="btn" onclick="exchange()">Exchange &amp; Open App</button>
+  <div id="status"></div>
+
+  <script>
+    async function exchange() {
+      const apiUrl = document.getElementById('apiUrl').value.trim().replace(/\/$/, '');
+      const code   = document.getElementById('code').value.trim();
+      const status = document.getElementById('status');
+      const btn    = document.getElementById('btn');
+
+      if (!code) { status.textContent = 'Paste the code first.'; return; }
+
+      status.className = '';
+      status.textContent = 'Exchanging…';
+      btn.disabled = true;
+
+      try {
+        const res = await fetch(`${apiUrl}/auth/exchange`, {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ code, clientType: 'browser' }),
+        });
+
+        if (!res.ok) {
+          const text = await res.text().catch(() => '');
+          status.className = 'err';
+          status.textContent = `Error ${res.status}: ${text || res.statusText}`;
+          btn.disabled = false;
+          return;
+        }
+
+        status.className = 'ok';
+        status.textContent = 'Session created. Redirecting to app…';
+        setTimeout(() => { window.location.href = window.location.origin; }, 400);
+      } catch (e) {
+        status.className = 'err';
+        status.textContent = `Network error: ${e.message}. Is the API running at ${apiUrl}?`;
+        btn.disabled = false;
+      }
+    }
+
+    document.getElementById('code').addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') exchange();
+    });
+  </script>
+</body>
+</html>
