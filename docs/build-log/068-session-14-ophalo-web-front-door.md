@@ -2,7 +2,7 @@
 
 **Date:** 2026-07-01
 **Session name:** Session 14 OpHalo Web Front Door
-**Status:** Pre-implementation decisions locked; implementation not started
+**Status:** S14b complete; S14c sign-in/start auth entry is the next slice
 **Current ADR after S13:** ADR-384
 
 ## Session Intent
@@ -32,6 +32,80 @@ foundation app, with the active UX/brand system and the locked auth/domain topol
 - `docs/pilot-readiness-decision-questions.md`
 - `docs/build-log/067-session-13-pwa-workbench.md`
 - Current reference website content on `ophalo.com`, especially `/` and `/about`
+
+## Implementation Checkpoints
+
+### S14a — Complete
+
+**Commit:** `e785ad1 feat: scaffold ophalo-web public front door (S14a)`
+
+Delivered:
+
+- Created standalone `web/ophalo-web` Next.js App Router scaffold.
+- Pinned exact dependency versions in `web/ophalo-web/package.json`:
+  - Next.js `16.2.9`
+  - React / React DOM `19.2.7`
+  - Tailwind CSS `4.3.2`
+  - TypeScript `6.0.3`
+  - Lucide React `1.23.0`
+  - checked-in React and Node type packages
+- Added Next/Tailwind/TypeScript project config:
+  - `next.config.ts`
+  - `tsconfig.json`
+  - `postcss.config.mjs`
+  - `pnpm-workspace.yaml`
+- Added local environment contract:
+  - `.env.local.example` checked in with local defaults:
+    - `NEXT_PUBLIC_API_BASE_URL=http://localhost:5092`
+    - `NEXT_PUBLIC_APP_BASE_URL=http://localhost:5173`
+  - `.env.local` created locally for immediate dev use and kept gitignored.
+- Added `src/app/globals.css` with Tailwind 4 `@import` / `@theme`, OpHalo brand color tokens,
+  and the Poppins font variable.
+- Added `src/app/layout.tsx` with Poppins via `next/font/google`, canvas background, and ink text.
+- Added `src/app/page.tsx` as the minimal placeholder homepage with the OpHalo lockup.
+- Copied `docs/brand-kit/logos/ophalo-lockup-color.svg` to
+  `web/ophalo-web/public/brand/ophalo-lockup-color.svg`.
+- Generated and tracked `next-env.d.ts` for standalone typecheck.
+- Updated `src/OpHalo.Api/appsettings.Development.json` CORS allowed origins to include
+  `http://localhost:3000`.
+
+Verified:
+
+- `web/ophalo-web` typecheck clean.
+- `web/ophalo-web` production build clean.
+- Build output produced 2 static routes: `/` and `/_not-found`.
+- `git diff --check` clean before commit.
+
+### S14a Follow-Up — UX Token And Font Alignment
+
+**Status:** Complete after `e785ad1`.
+
+Reason: the initial scaffold used the correct brand color values, but it was still too thin for the
+active UX contract. Before S14b content work, `ophalo-web` needs the locked CSS token layer and
+self-hosted Inter / Source Serif 4 font pipeline that ADR-368 and ADR-379 require.
+
+Follow-up scope:
+
+- Create/import the shared `--ophalo-*` and `--keep-*` CSS token source.
+- Keep `web/shared/styles/ophalo-tokens.css` as the canonical token reference, but inline the same
+  token definitions in `web/ophalo-web/src/app/globals.css` because Turbopack dev mode cannot
+  resolve CSS imports that escape the Next.js project root.
+- Replace live Poppins UI usage with Inter body/UI and Source Serif 4 heading availability.
+- Keep Poppins reserved to the outlined logo assets.
+- Add exact-pinned `@fontsource-variable/inter` and `@fontsource-variable/source-serif-4`.
+- Add a `copy-fonts`/`postinstall` step that copies the WOFF2 variable fonts to
+  `web/ophalo-web/public/fonts/`.
+- Keep all font loading self-hosted from the web origin; no third-party font CDN or
+  `next/font/google`.
+
+Verified:
+
+- `pnpm -C web/ophalo-web copy-fonts` copies Inter and Source Serif 4 into
+  `web/ophalo-web/public/fonts/`.
+- `pnpm -C web/ophalo-web typecheck` clean.
+- `pnpm -C web/ophalo-web build` clean.
+- `pnpm -C web/ophalo-web dev` no longer hits the Turbopack cross-root CSS import panic once the
+  token definitions are inlined in `globals.css`.
 
 ## Locked Decisions
 
@@ -84,10 +158,12 @@ Session 14 route scope:
 - `/auth/check-email` — post-submit email confirmation;
 - `/auth/exchange` — browser magic-link exchange;
 - `/invite/accept` — browser invite-token accept landing page;
+- public/customer intake page — customer-facing request submission through existing Keep public
+  intake backend contracts, required before public pilot launch;
 - `/privacy` and `/terms` — minimal real pilot-appropriate pages, not empty placeholders.
 
-Customer tracker, public intake, deeper product pages, broad legal/compliance work, and CMS/content
-systems are deferred unless explicitly pulled into Session 14 by a later decision.
+Customer tracker, deeper product pages, broad legal/compliance work, and CMS/content systems are
+deferred unless explicitly pulled into Session 14 by a later decision.
 
 ### S14-D5 — Public Pilot Start Posture
 
@@ -355,6 +431,21 @@ Do not display a dynamic or manually exact remaining spot count in S14.
 The actual pilot cap is enforced server-side by `/auth/start` and `/auth/exchange` through
 `SignupDefaults:MaxPilotAccounts=15` in production config.
 
+### S14-D23 — Public/Customer Intake Required Before Public Pilot
+
+Public/customer intake is required before public pilot launch and is pulled into Session 14 as a
+later slice. It is not part of S14b's static content-shell implementation and should not be described
+as live in S14b copy unless the intake slice has landed.
+
+The backend already owns the anonymous public intake authority through existing Keep public-intake
+contracts. `ophalo-web` owns the customer-facing browser page that collects the request and submits
+to `OpHalo.Api` without introducing a Next.js API proxy.
+
+S14 public copy can explain the intended product loop, but until the public intake page is complete,
+it should use staff-created language such as "when a request comes in by call, text, email, or
+anywhere else, your team can enter it into Keep" and "you can share the customer page." After S14g,
+copy may state that customers can start requests themselves through the public intake link.
+
 ## Reference Website Carry-Forward
 
 The current public site already validates much of the product positioning. S14 should preserve the
@@ -394,20 +485,24 @@ sufficient to establish routes, layout, assets, and build plumbing.
 
 ### S14a — Architecture, Scaffold, Config, And Shared Public Web Foundation
 
+**Status:** Complete. Committed as `e785ad1`.
+
 Intent: create `web/ophalo-web` as a Next.js + React + TypeScript app and establish the public web
 foundation.
 
-Expected scope:
+Delivered scope:
 
 - Next.js project under `web/ophalo-web`;
 - Tailwind CSS;
-- self-hosted OpHalo fonts/assets;
+- OpHalo font and brand asset wiring;
 - parent OpHalo tokens from the UX/brand contract;
 - env contract for `NEXT_PUBLIC_API_BASE_URL` and `NEXT_PUBLIC_APP_BASE_URL`;
 - checked-in development CORS update for `http://localhost:3000`;
 - baseline typecheck/build.
 
 ### S14b — Public Content Shell
+
+**Status:** Complete.
 
 Intent: build the credible public OpHalo/Keep content shell from the reference website baseline.
 
@@ -421,10 +516,66 @@ Expected scope:
 - Start Pilot and Sign In CTAs;
 - production-ready responsive layout using approved brand assets.
 
+Implementation notes for the next coding slice:
+
+- Before building page content, confirm the S14a token/font follow-up is complete:
+  - `web/shared/styles/ophalo-tokens.css` exists as the canonical token reference;
+  - `web/ophalo-web/src/app/globals.css` contains a synced inline copy of those tokens with a
+    Turbopack cross-root CSS import note;
+  - `web/ophalo-web/public/fonts/inter-variable.woff2` exists;
+  - `web/ophalo-web/public/fonts/source-serif-4-variable.woff2` exists;
+  - `ophalo-web` uses Inter for body/UI and Source Serif 4 for headings;
+  - no `next/font/google` usage remains.
+- Replace the temporary placeholder homepage in `src/app/page.tsx`.
+- Add a shared public site shell rather than duplicating header/footer on each page.
+- Keep the header minimal per S14-D20:
+  - OpHalo lockup;
+  - optional restrained About link if space allows;
+  - Sign in;
+  - Try Keep / Join the Pilot primary CTA.
+- Use `next/link`, `next/image`, Lucide icons where useful, and CSS/Tailwind utilities already
+  available in the scaffold.
+- Keep `/start` and `/signin` as links only in S14b; form behavior belongs to S14c.
+- Use static, pilot-safe availability language only.
+- Build product-like visuals from the S13 Keep workbench concepts without copying stale website
+  mockups or introducing fake live data.
+- Keep Privacy and Terms minimal but real enough for pilot traffic; avoid empty placeholder legal
+  routes.
+
+Likely file impact:
+
+- `web/ophalo-web/src/app/page.tsx`
+- `web/ophalo-web/src/app/layout.tsx` if metadata needs to become final for public pages
+- `web/ophalo-web/src/app/globals.css`
+- `web/ophalo-web/package.json` / `pnpm-lock.yaml` if the font follow-up is not already complete
+- `web/ophalo-web/scripts/copy-fonts.mjs` if the font follow-up is not already complete
+- `web/ophalo-web/public/fonts/` if the font follow-up is not already complete
+- `web/shared/styles/ophalo-tokens.css` if the token follow-up is not already complete
+- `web/ophalo-web/src/app/about/page.tsx`
+- `web/ophalo-web/src/app/pilot/page.tsx`
+- `web/ophalo-web/src/app/privacy/page.tsx`
+- `web/ophalo-web/src/app/terms/page.tsx`
+- optional shared components under `web/ophalo-web/src/components/`
+- optional content helpers/constants under `web/ophalo-web/src/lib/`
+
+S14b done gate:
+
+- `/`, `/about`, `/pilot`, `/privacy`, and `/terms` render without auth or API dependency.
+- Header/footer links point to the locked S14 routes.
+- Primary homepage CTA points to `/start`; sign-in entry points to `/signin`.
+- No "See it in action", exact remaining-spot counts, pricing, support-tier, uptime, roadmap, or
+  general-availability promises.
+- Desktop and mobile responsive checks show no text overlap, broken layout, or clipped CTA labels.
+- Font files are present under `web/ophalo-web/public/fonts/` and served from the app origin.
+- `globals.css` consumes locked `--ophalo-*` / `--keep-*` tokens; no marketing-local brand hex
+  palette or retired teal.
+- `pnpm typecheck` and `pnpm build` clean for `web/ophalo-web`.
+
 Out of scope unless pulled in:
 
 - customer tracker;
-- public intake;
+- public intake implementation details; S14b may mention the future/intended intake path only in
+  non-live, non-promissory language until S14g lands;
 - CMS/content system;
 - broad legal/compliance program.
 
@@ -498,6 +649,37 @@ Expected scope:
   - `SignupDefaults:MaxPilotAccounts=15`;
   - DNS/CDN routing verification for both `ophalo.com` and `www.ophalo.com` after deployment.
 
+### S14g — Public/Customer Intake Page
+
+Intent: deliver the customer-facing request submission page required for public pilot.
+
+Expected scope:
+
+- `ophalo-web` public intake route for active business intake links;
+- customer-facing request form using active UX/brand system and Keep customer-surface rules;
+- browser POST directly to `OpHalo.Api` `POST /keep/public-intake/token/{publicIntakeToken}`;
+- success state that gives the customer the created request/customer page path returned by the API
+  without exposing raw tokens in logs or UI beyond the expected link destination;
+- unavailable state for invalid/revoked/off-season/blocked links using the backend's generic public
+  intake unavailable response;
+- validation/error states matching existing backend validation without leaking account/token state;
+- S14b/S14 marketing copy can then accurately say customers can start requests through a shared
+  intake link.
+
+Likely dependencies:
+
+- existing `GET /keep/setup/intake`, `POST /keep/setup/intake/ensure`, and
+  `POST /keep/setup/intake/replace` account setup flows in `ophalo-app`;
+- existing anonymous public intake endpoint and rate limit policy in `OpHalo.Api`;
+- existing token redaction for public intake paths.
+
+Out of scope unless explicitly pulled in:
+
+- new backend public-intake domain behavior;
+- customer email delivery beyond existing implemented notification behavior;
+- spam/adaptive challenge controls beyond current pre-pilot abuse posture;
+- customer tracker redesign beyond linking to the created customer page.
+
 ## Quality Gates
 
 - `ophalo-web` typecheck and production build are clean.
@@ -515,7 +697,6 @@ Expected scope:
 ## Deferred From Session 14 Unless Explicitly Pulled In
 
 - Customer tracker page (`/keep/r/...`);
-- public intake page;
 - resend invite from `/invite/accept`;
 - identity merge or account-selection UX;
 - validated post-auth `return_to` / deep-link resume;

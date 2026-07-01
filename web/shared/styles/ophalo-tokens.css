@@ -1,0 +1,25 @@
+:root {
+  /* OpHalo parent brand tokens */
+  --ophalo-navy: #10243e;
+  --ophalo-accent: #bf6b43;
+  --ophalo-ink: #172033;
+  --ophalo-canvas: #f8f6f1;
+  --ophalo-card: #ffffff;
+  --ophalo-border: #ddd6c8;
+  --ophalo-muted: #5d6878;
+
+  /* OpHalo shared semantic tokens */
+  --ophalo-attention: #c8741a;
+  --ophalo-attention-bg: #fff2d7;
+  --ophalo-success: #166534;
+  --ophalo-success-bg: #e8f4ed;
+  --ophalo-danger: #b42318;
+  --ophalo-danger-bg: #fee4e2;
+
+  /* Keep product tokens */
+  --keep-accent: #168a9a;
+  --keep-accent-bg: #e5f4f3;
+  --keep-accent-hover: #107a90;
+  --keep-info: #244c95;
+  --keep-info-bg: #eaf1ff;
+}

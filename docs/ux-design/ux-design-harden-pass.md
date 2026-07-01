@@ -280,7 +280,7 @@ Import the shared file at the top (after `@import "tailwindcss"`).
 The import path from `web/ophalo-app/src/app/globals.css` is:
 
 ```css
-@import "../../../../shared/styles/ophalo-tokens.css";
+@import "../../../shared/styles/ophalo-tokens.css";
 ```
 
 Remove the existing `:root` OpHalo block. Add backward-compat aliases for names still used in component files — these are removed surface-by-surface in S4:
@@ -318,13 +318,10 @@ Remove the existing `:root` OpHalo block. Add backward-compat aliases for names 
 
 **Step 3 — Update `web/ophalo-web/src/app/globals.css`**
 
-Import the shared file at the top (after `@import "tailwindcss"`).
-
-The import path from `web/ophalo-web/src/app/globals.css` is:
-
-```css
-@import "../../../../shared/styles/ophalo-tokens.css";
-```
+Keep `web/shared/styles/ophalo-tokens.css` as the canonical token reference, but do not import it
+from `ophalo-web` CSS. Turbopack dev mode does not resolve CSS `@import` paths that escape the
+Next.js project root, so `ophalo-web/src/app/globals.css` must contain a synced inline copy of the
+token definitions with a comment pointing back to the shared source file.
 
 Replace the existing `:root` OpHalo token block. Key corrections:
 

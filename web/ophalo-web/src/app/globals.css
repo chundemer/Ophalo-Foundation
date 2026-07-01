@@ -1,11 +1,223 @@
 @import "tailwindcss";
 
-@theme {
-  --color-ophalo-navy: #10243e;
-  --color-ophalo-terra: #bf6b43;
-  --color-ophalo-teal: #168a9a;
-  --color-ophalo-canvas: #f8f6f1;
-  --color-ophalo-ink: #172033;
+/* OpHalo token definitions — source of truth: web/shared/styles/ophalo-tokens.css
+   Inlined here because Turbopack's dev server cannot resolve CSS @import paths
+   that escape the project root. Keep in sync with the shared file. */
+:root {
+  --ophalo-navy: #10243e;
+  --ophalo-accent: #bf6b43;
+  --ophalo-ink: #172033;
+  --ophalo-canvas: #f8f6f1;
+  --ophalo-card: #ffffff;
+  --ophalo-border: #ddd6c8;
+  --ophalo-muted: #5d6878;
 
-  --font-sans: var(--font-poppins), system-ui, sans-serif;
+  --ophalo-attention: #c8741a;
+  --ophalo-attention-bg: #fff2d7;
+  --ophalo-success: #166534;
+  --ophalo-success-bg: #e8f4ed;
+  --ophalo-danger: #b42318;
+  --ophalo-danger-bg: #fee4e2;
+
+  --keep-accent: #168a9a;
+  --keep-accent-bg: #e5f4f3;
+  --keep-accent-hover: #107a90;
+  --keep-info: #244c95;
+  --keep-info-bg: #eaf1ff;
 }
+
+@font-face {
+  font-family: "Inter Variable";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("/fonts/inter-variable.woff2") format("woff2-variations");
+}
+
+@font-face {
+  font-family: "Source Serif 4 Variable";
+  font-style: normal;
+  font-weight: 200 900;
+  font-display: swap;
+  src: url("/fonts/source-serif-4-variable.woff2") format("woff2-variations");
+}
+
+:root {
+  --background: var(--ophalo-canvas);
+  --foreground: var(--ophalo-ink);
+  --card: var(--ophalo-card);
+  --card-foreground: var(--ophalo-ink);
+  --primary: var(--ophalo-navy);
+  --primary-foreground: #ffffff;
+  --secondary: var(--ophalo-card);
+  --secondary-foreground: var(--ophalo-navy);
+  --muted: color-mix(in srgb, var(--ophalo-canvas) 78%, var(--ophalo-border));
+  --muted-foreground: var(--ophalo-muted);
+  --accent: color-mix(in srgb, var(--ophalo-accent) 14%, var(--ophalo-card));
+  --accent-foreground: var(--ophalo-navy);
+  --destructive: var(--ophalo-danger);
+  --border: var(--ophalo-border);
+  --input: var(--ophalo-border);
+  --ring: var(--keep-accent);
+  --radius: 0.5rem;
+}
+
+@theme {
+  --color-ophalo-navy: var(--ophalo-navy);
+  --color-ophalo-accent: var(--ophalo-accent);
+  --color-ophalo-ink: var(--ophalo-ink);
+  --color-ophalo-canvas: var(--ophalo-canvas);
+  --color-ophalo-card: var(--ophalo-card);
+  --color-ophalo-border: var(--ophalo-border);
+  --color-ophalo-muted: var(--ophalo-muted);
+  --color-ophalo-attention: var(--ophalo-attention);
+  --color-ophalo-attention-bg: var(--ophalo-attention-bg);
+  --color-ophalo-success: var(--ophalo-success);
+  --color-ophalo-success-bg: var(--ophalo-success-bg);
+  --color-ophalo-danger: var(--ophalo-danger);
+  --color-ophalo-danger-bg: var(--ophalo-danger-bg);
+  --color-keep-accent: var(--keep-accent);
+  --color-keep-accent-bg: var(--keep-accent-bg);
+  --color-keep-accent-hover: var(--keep-accent-hover);
+  --color-keep-info: var(--keep-info);
+  --color-keep-info-bg: var(--keep-info-bg);
+
+  --font-sans: "Inter Variable", Inter, system-ui, sans-serif;
+  --font-serif: "Source Serif 4 Variable", "Source Serif 4", Georgia, serif;
+}
+
+html {
+  background: var(--ophalo-canvas);
+  color: var(--ophalo-ink);
+}
+
+body {
+  background: var(--ophalo-canvas);
+  color: var(--ophalo-ink);
+  font-family: "Inter Variable", Inter, system-ui, sans-serif;
+}
+
+/* ─── Site-wide layout ──────────────────────────────────────────────── */
+.container {
+  max-width: 960px;
+  margin-left: auto;
+  margin-right: auto;
+  padding-left: 24px;
+  padding-right: 24px;
+}
+
+/* ─── Site header ───────────────────────────────────────────────────── */
+.site-header {
+  border-bottom: 1px solid color-mix(in srgb, var(--ophalo-navy) 12%, transparent);
+  background: var(--ophalo-canvas);
+}
+
+.site-header .container {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 64px;
+}
+
+.site-header .logo {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+}
+
+.site-logo-lockup {
+  display: block;
+  height: auto;
+}
+
+@media (max-width: 640px) {
+  .site-header .site-logo-lockup { height: 30px; width: auto; }
+  .site-header .site-nav-link { display: none; }
+}
+
+.site-header-right {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+}
+
+.site-header .site-nav-link {
+  font-size: 14px;
+  font-weight: 500;
+  color: color-mix(in srgb, var(--ophalo-navy) 70%, transparent);
+  text-decoration: none;
+}
+
+.site-header .site-nav-link:hover { color: var(--ophalo-navy); }
+
+.site-header .site-nav-link-active {
+  color: var(--ophalo-navy);
+  font-weight: 600;
+}
+
+.site-header .pilot-access {
+  display: inline-block;
+  padding: 10px 20px;
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+  color: #ffffff;
+  background-color: var(--ophalo-navy);
+  border-radius: 8px;
+  text-decoration: none;
+  transition: background-color 0.2s ease;
+}
+
+.site-header .pilot-access:hover {
+  background-color: color-mix(in srgb, var(--ophalo-navy) 86%, #000000);
+}
+
+/* ─── Site footer ───────────────────────────────────────────────────── */
+.site-footer {
+  border-top: 1px solid color-mix(in srgb, var(--ophalo-navy) 12%, transparent);
+  background: var(--ophalo-canvas);
+  padding-top: 48px;
+  padding-bottom: 48px;
+}
+
+.site-footer .container {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.site-footer .footer-logo {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+}
+
+.site-footer .footer-bottom {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+
+.site-footer .footer-copyright {
+  font-size: 13px;
+  color: color-mix(in srgb, var(--ophalo-navy) 55%, transparent);
+}
+
+.site-footer .footer-contact {
+  font-size: 13px;
+  color: color-mix(in srgb, var(--ophalo-navy) 55%, transparent);
+  text-decoration: none;
+}
+
+.site-footer .footer-contact:hover { color: var(--ophalo-navy); }
+
+.site-footer .footer-links { display: flex; gap: 20px; }
+
+.site-footer .footer-links a {
+  font-size: 13px;
+  color: color-mix(in srgb, var(--ophalo-navy) 55%, transparent);
+  text-decoration: none;
+}
+
+.site-footer .footer-links a:hover { color: var(--ophalo-navy); }

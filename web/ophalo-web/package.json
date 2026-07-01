@@ -6,6 +6,8 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "copy-fonts": "node scripts/copy-fonts.mjs",
+    "postinstall": "node scripts/copy-fonts.mjs",
     "start": "next start",
     "typecheck": "tsc --noEmit"
   },
@@ -16,6 +18,8 @@
     "react-dom": "19.2.7"
   },
   "devDependencies": {
+    "@fontsource-variable/inter": "5.2.8",
+    "@fontsource-variable/source-serif-4": "5.2.9",
     "@tailwindcss/postcss": "4.3.2",
     "@types/node": "26.0.1",
     "@types/react": "19.2.17",
