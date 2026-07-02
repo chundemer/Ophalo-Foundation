@@ -1,6 +1,6 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-07-01 (S14c complete; S14d magic-link exchange is next)
+**Last updated:** 2026-07-01 (S14d complete; S14e OperatorBaseUrl retirement is next)
 **Branch:** `main` tracking `origin/main`
 **Last green baseline:** 939 unit · 14 arch · 713 integration = 1,666 total, 0 failures (1 pre-existing KeepG5 fluke excluded)
 **Next free ADR:** ADR-385
@@ -39,18 +39,18 @@ For every implementation slice:
 **Readiness working doc:** `docs/pilot-readiness-decision-questions.md`
 **Foundation roadmap:** `docs/build-log/ophalo-foundation-build-plan-greenfield-boundaries-brownfield-behavior.md` section 9.1
 **Current session:** Session 14 — `ophalo-web` public/front-door foundation
-**Current slice:** S14d — Magic-Link Exchange And App Handoff
+**Current slice:** S14e — OperatorBaseUrl Retirement
 **Current slice status:** Next in `docs/build-log/068-session-14-ophalo-web-front-door.md`
 
 Session 13 is complete and should be treated as historical context only. Completed Session 13 details
 live in `docs/build-log/067-session-13-pwa-workbench.md`; do not carry Session 13 implementation
 notes forward in this execution brief.
 
-`web/ophalo-web` now has the full public content shell (S14b) and auth entry forms (S14c): homepage,
-About, Pilot, Privacy, Terms, shared SiteHeader/SiteFooter, `/signin`, `/start`, and
-`/auth/check-email`. S14c typecheck/build/diff gates are clean, and Christian verified the frontend
-after restarting the dev server so the new global auth CSS was picked up. S14d adds the magic-link
-exchange page and app handoff.
+`web/ophalo-web` now has the full public content shell (S14b), auth entry forms (S14c), and
+magic-link exchange (S14d): homepage, About, Pilot, Privacy, Terms, `/signin`, `/start`,
+`/auth/check-email`, `/auth/exchange`, and `/auth/exchange/error`. S14d uses a direct credentialed
+browser fetch to `OpHalo.Api` with a `useRef` double-fire guard; success redirects via
+`window.location.assign(NEXT_PUBLIC_APP_BASE_URL)`. Typecheck/build/diff gates are clean.
 
 ### S14 Locked Direction
 
