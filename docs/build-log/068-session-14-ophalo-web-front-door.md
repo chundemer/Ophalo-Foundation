@@ -831,7 +831,7 @@ Verified / review status:
 
 ### S14f — App Redirect, Verification, Production Config, And Runbook
 
-**Status:** Next. Pre-work complete; ready for mechanical implementation preflight and coding.
+**Status:** Complete (S14f — 2026-07-02).
 
 Intent: prove the public front door works with the existing backend topology.
 
@@ -901,6 +901,26 @@ S14f done gate:
 - `pnpm --filter ophalo-web build` clean.
 - Proportionate `ophalo-app` check is clean.
 - `git diff --check` clean.
+
+Verified / review status:
+
+- `AuthGuard.tsx` redirects to `{PublicBaseUrl}/signin`; `currentReturnTo` helper and
+  `return_to` param removed.
+- `docs/runbook/local-web-setup.md` rewritten for three-server topology; `dev-auth.html`
+  helper flow replaced by `ophalo-web` public routes.
+- Browser verification: pending Christian smoke run against local three-server stack.
+- Production config checklist (document only; no production changes in this slice):
+
+  | Key | Production value |
+  |-----|-----------------|
+  | `App:PublicBaseUrl` | `https://ophalo.com` |
+  | `App:AppBaseUrl` | `https://app.ophalo.com` |
+  | `Cors:AllowedOrigins` | `["https://ophalo.com","https://www.ophalo.com","https://app.ophalo.com"]` |
+  | `Auth:CookieDomain` | `.ophalo.com` |
+  | `Resend:ApiKey` | set via secret |
+  | `Resend:FromAddress` | confirmed sender address |
+  | `SignupDefaults:MaxPilotAccounts` | `15` |
+  | DNS/CDN | `ophalo.com` + `www.ophalo.com` → `ophalo-web`; `app.ophalo.com` → `ophalo-app`; `api.ophalo.com` → `OpHalo.Api`; verify after deploy |
 
 ### S14g — Public/Customer Intake Page
 

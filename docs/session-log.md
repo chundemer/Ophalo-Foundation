@@ -1,6 +1,6 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-07-02 (S14e complete; S14f app redirect and verification is next)
+**Last updated:** 2026-07-02 (S14f complete; S14g public/customer intake is next)
 **Branch:** `main` tracking `origin/main`
 **Last green baseline:** 939 unit · 14 arch · 713 integration = 1,666 total, 0 failures (1 pre-existing KeepG5 fluke excluded)
 **Next free ADR:** ADR-385
@@ -39,7 +39,7 @@ For every implementation slice:
 **Readiness working doc:** `docs/pilot-readiness-decision-questions.md`
 **Foundation roadmap:** `docs/build-log/ophalo-foundation-build-plan-greenfield-boundaries-brownfield-behavior.md` section 9.1
 **Current session:** Session 14 — `ophalo-web` public/front-door foundation
-**Current slice:** S14f — App Redirect, Verification, Production Config, And Runbook
+**Current slice:** S14g — Public/Customer Intake Page
 **Current slice status:** Next in `docs/build-log/068-session-14-ophalo-web-front-door.md`
 
 Session 13 is complete and should be treated as historical context only. Completed Session 13 details
@@ -73,57 +73,46 @@ exchange and invite accept both use direct credentialed browser fetches to `OpHa
 - `OperatorBaseUrl` is retired from active settings/config/test factories/runbooks; invite links now
   use `{PublicBaseUrl}/invite/accept`.
 
-### S14f Handoff Brief
+### S14g Handoff Brief
 
-Classify S14f as mechanical implementation preflight plus verification/runbook cleanup. Pre-work is
+Classify S14g as mechanical implementation preflight plus public intake page. Pre-work is
 complete; do not rediscover the S14 decisions. Use targeted checks only.
 
-Intent: prove the public front door works with the existing backend topology and route unauthenticated
-`ophalo-app` users to the new public sign-in page.
+S14f delivered: `AuthGuard.tsx` redirects to `{PublicBaseUrl}/signin` with no `return_to`;
+local runbook updated for three-server topology; production config checklist documented in
+`docs/build-log/068-session-14-ophalo-web-front-door.md`; browser verification pending
+Christian smoke run.
+
+Intent: deliver the customer-facing request submission page required for public pilot so that
+S14b copy claiming customers can start requests is accurate.
 
 Expected scope:
 
-- update `ophalo-app` unauthenticated redirect from `{PublicBaseUrl}/auth/signin?return_to=...` to
-  `{PublicBaseUrl}/signin`;
-- do not append `return_to` in S14f;
-- run `ophalo-web` typecheck/build;
-- run relevant API/integration tests for auth exchange, invite accept, and invite-link URL generation;
-- browser-verify the S14 route set at desktop and mobile widths:
-  `/`, `/about`, `/pilot`, `/signin`, `/start`, `/auth/check-email`, `/auth/exchange`,
-  `/invite/accept`, and handoff into `ophalo-app`;
-- update local setup/runbook docs for the three-server local topology;
-- add/confirm production config checklist for public pilot.
+- `ophalo-web` public intake route for active business intake links;
+- customer-facing request form using active UX/brand system and Keep customer-surface rules;
+- browser POST directly to `OpHalo.Api` `POST /keep/public-intake/token/{publicIntakeToken}`;
+- success state that gives the customer the created request/customer page path returned by the API
+  without exposing raw tokens in logs or UI beyond the expected link destination;
+- unavailable state for invalid/revoked/off-season/blocked links using the backend's generic public
+  intake unavailable response;
+- validation/error states matching existing backend validation without leaking account/token state.
 
-Post-S14e review cleanup already applied in the working tree:
+Likely S14g file impact:
 
-- The stale invite-link integration assertion and test name from the retired operator-host posture
-  have been updated to assert the configured `App:PublicBaseUrl` invite accept URL before
-  integration verification.
-
-Likely S14f file impact:
-
-- `web/ophalo-app/src/components/AuthGuard.tsx`
-- `docs/runbook/local-web-setup.md`
-- `docs/deployment/local-postgres-runbook.md` only if the three-server startup/config checklist is
-  incomplete after S14e
+- new `ophalo-web` intake route (path TBD from API contract inspection)
 - `docs/build-log/068-session-14-ophalo-web-front-door.md`
-- possibly `tests/OpHalo.IntegrationTests/Api/InviteTests.cs` for the stale public invite-link
-  assertion described above
+- `docs/session-log.md`
 
-S14f expected verification:
+S14g expected verification:
 
 - `pnpm --filter ophalo-web typecheck`
 - `pnpm --filter ophalo-web build`
-- proportionate `ophalo-app` check for the AuthGuard change
-- relevant API/integration tests for auth exchange, invite accept, and invite-link URL generation
-- browser smoke for public routes and app redirect, using fresh magic/invite links only when needed
 - `git diff --check`
 
-Out of scope for S14f:
+Out of scope for S14g:
 
-- public/customer intake (S14g);
 - customer tracker page (`/keep/r/...`);
-- production deployment/DNS changes, beyond documenting the checklist.
+- production deployment/DNS changes.
 
 ---
 
