@@ -117,12 +117,30 @@ public sealed class KeepG5ConcurrencyVersionMigrationTests
         ctx.Users.Add(graph.User);
         ctx.Accounts.Add(graph.Account);
         ctx.AccountUsers.Add(graph.Owner);
-        ctx.AccountEntitlements.Add(graph.Entitlements);
 
         // Two-phase save for the Account ↔ AccountUser circular FK (ADR-019).
         var ownerIdEntry = ctx.Entry(graph.Account).Property(a => a.PrimaryOwnerAccountUserId);
         ownerIdEntry.CurrentValue = null;
         await ctx.SaveChangesAsync();
+
+        // AccountEntitlements is inserted with raw SQL rather than EF because this test runs
+        // at a schema version that predates AccountClassification (20260626111822), which
+        // replaced is_pilot with classification. The EF model has classification; the partial
+        // schema still has is_pilot.
+        var entId = graph.Entitlements.Id;
+        var accountId = graph.Account.Id;
+        var trialEndsAt = Now.AddDays(30);
+        await ctx.Database.ExecuteSqlInterpolatedAsync($"""
+            INSERT INTO account_entitlements (
+                id, account_id, plan, commercial_state, operating_mode,
+                is_pilot, max_user_seats, trial_ends_at_utc,
+                created_at_utc, updated_at_utc)
+            VALUES (
+                {entId}, {accountId}, 'Trial', 'Trial', 'Standard',
+                false, 3, {trialEndsAt},
+                {Now}, {Now})
+            """);
+
         ownerIdEntry.CurrentValue = graph.Owner.Id;
         await ctx.SaveChangesAsync();
 
