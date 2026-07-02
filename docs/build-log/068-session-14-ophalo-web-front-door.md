@@ -2,7 +2,7 @@
 
 **Date:** 2026-07-01
 **Session name:** Session 14 OpHalo Web Front Door
-**Status:** S14c complete; S14d magic-link exchange is the next slice
+**Status:** S14d complete; S14e invite accept and backend link wiring is the next slice
 **Current ADR after S13:** ADR-384
 
 ## Session Intent
@@ -684,11 +684,12 @@ Out of scope unless explicitly pulled in:
 
 ### S14d — Magic-Link Exchange And App Handoff
 
-**Status:** Next. Pre-work complete; ready for mechanical implementation preflight and coding.
+**Status:** Complete. Committed as `6dc0920`; generated route-types follow-up committed as
+`52a5e9a`.
 
 Intent: replace the dev-only S13 browser exchange helper with the real public web exchange page.
 
-Expected scope:
+Delivered scope:
 
 - `/auth/exchange?code=...`;
 - credentialed browser POST to `POST /auth/exchange`;
@@ -697,21 +698,27 @@ Expected scope:
 - redirect to `AppBaseUrl`;
 - bounded expired/invalid/consumed/session-failure states.
 
-Implementation contract:
+Implemented:
 
-- Add `/auth/exchange?code=...` outside the `(marketing)` route group.
-- Read `code` from the query string in the browser page; do not log or display the raw code.
-- POST directly to `OpHalo.Api` with credentialed browser fetch:
+- Added `/auth/exchange?code=...` outside the `(marketing)` route group:
+  - `web/ophalo-web/src/app/auth/exchange/page.tsx`
+  - `web/ophalo-web/src/app/auth/exchange/ExchangeClient.tsx`
+- Added `/auth/exchange/error` for bounded user-facing error states:
+  - `web/ophalo-web/src/app/auth/exchange/error/page.tsx`
+- Reads `code` from the query string and does not log or display the raw code.
+- Posts directly to `OpHalo.Api` with credentialed browser fetch:
   - `POST ${NEXT_PUBLIC_API_BASE_URL}/auth/exchange`
   - body: `{ "code": "...", "clientType": "browser" }`
 - Browser exchange returns `200 OK` with no session token body. The API sets `ophalo.sid` as an
   HttpOnly cookie through normal browser response handling.
-- Redirect to `NEXT_PUBLIC_APP_BASE_URL` after successful exchange.
-- Do not implement `return_to` in S14d.
-- Do not add Next.js API routes, Server Actions, JavaScript cookie handling, or session-token
+- Redirects to `NEXT_PUBLIC_APP_BASE_URL` after successful exchange.
+- Uses a `useRef` guard so the exchange POST only fires once under React dev/Strict Mode.
+- Does not implement `return_to` in S14d.
+- Does not add Next.js API routes, Server Actions, JavaScript cookie handling, or session-token
   storage in `ophalo-web`.
+- Removed the old proxy-route posture from the S14d implementation path.
 
-Current endpoint definitions are in `src/OpHalo.Api/Auth/AuthEndpoints.cs`:
+Endpoint definitions are in `src/OpHalo.Api/Auth/AuthEndpoints.cs`:
 
 - `ExchangeBody(string? Code, string? ClientType, string? DeviceName)`
 - missing code returns `Validation.CodeRequired`;
@@ -730,14 +737,14 @@ Error-state mapping:
 - `Account.SessionCreationFailed` -> show retry-oriented sign-in failure copy;
 - network/fetch failure -> show "Something went wrong. Please try again."
 
-Likely file impact:
+File impact:
 
 - `web/ophalo-web/src/app/auth/exchange/page.tsx`
-- optional route-local client component under `web/ophalo-web/src/app/auth/exchange/`
-- optional tiny shared auth/problem helper if S14c's inline pattern becomes meaningfully duplicated
-- `web/ophalo-web/src/app/globals.css` only if existing `auth-*` styles are insufficient
+- `web/ophalo-web/src/app/auth/exchange/ExchangeClient.tsx`
+- `web/ophalo-web/src/app/auth/exchange/error/page.tsx`
+- `web/ophalo-web/next-env.d.ts`
 
-S14d done gate:
+Verified:
 
 - `/auth/exchange` handles missing code without an API call and without leaking raw token values.
 - Valid magic-link code posts to `POST /auth/exchange` with `credentials: "include"` and
@@ -749,8 +756,12 @@ S14d done gate:
 - `pnpm --filter ophalo-web typecheck` clean.
 - `pnpm --filter ophalo-web build` clean.
 - `git diff --check` clean.
+- Full successful login smoke was not carried forward in this doc update; use a fresh magic link for
+  any future exchange smoke because prior test links/codes should be treated as exposed or consumed.
 
 ### S14e — Invite Accept And Backend Link Wiring
+
+**Status:** Next. Pre-work complete; ready for mechanical implementation preflight and coding.
 
 Intent: make invited operators/admins/viewers able to join a pilot account from their invite email.
 
@@ -763,6 +774,47 @@ Expected scope:
 - backend invite-link generation moves to `{PublicBaseUrl}/invite/accept?token=...`;
 - fully retire `OperatorBaseUrl` from settings, config, test factories, and runbooks;
 - update invite tests and local setup docs.
+
+Implementation contract:
+
+- Add `/invite/accept?token=...` to `ophalo-web` outside the `(marketing)` route group.
+- Read `token` from the query string; do not log or display the raw token.
+- POST directly to `OpHalo.Api` with credentialed browser fetch:
+  - `POST ${NEXT_PUBLIC_API_BASE_URL}/accounts/invite/accept`
+  - body: `{ "token": "..." }`
+- On success, redirect to `NEXT_PUBLIC_APP_BASE_URL`.
+- Handle missing/invalid/expired/already-active/seat-limit/session-failure/server/network states
+  with bounded copy.
+- Update backend invite URL generation to use `{PublicBaseUrl}/invite/accept?token=...`.
+- Fully retire `OperatorBaseUrl` from `MagicLinkSettings`, checked-in app config, integration test
+  factory config, tests, and runbooks.
+- Do not add Next.js API routes, Server Actions, JavaScript cookie handling, or session-token
+  storage in `ophalo-web`.
+
+Likely file impact:
+
+- `web/ophalo-web/src/app/invite/accept/page.tsx`
+- optional route-local client component under `web/ophalo-web/src/app/invite/accept/`
+- backend invite-link generation in Foundation/Application member invite services
+- `src/OpHalo.Foundation.Application/Auth/MagicLinkSettings.cs`
+- `src/OpHalo.Api/appsettings*.json`
+- integration test factory config and invite-link assertions
+- local setup/runbook docs that still mention `OperatorBaseUrl`
+
+S14e done gate:
+
+- `/invite/accept` handles missing token without an API call and without leaking raw token values.
+- Valid invite token posts to `POST /accounts/invite/accept` with `credentials: "include"`.
+- Successful accept redirects to `NEXT_PUBLIC_APP_BASE_URL`.
+- Invite errors are intentionally mapped: missing token, `Invite.Expired`, `Invite.InvalidToken`,
+  `Invite.AlreadyActive`, `Invite.SeatLimitReached`, `Account.SessionCreationFailed`, generic
+  forbidden/server/network fallback.
+- Invite emails/manual-share links use `{PublicBaseUrl}/invite/accept?token=...`.
+- `OperatorBaseUrl` is removed from active settings/config/tests/runbooks.
+- Relevant API tests are updated/green.
+- `pnpm --filter ophalo-web typecheck` clean.
+- `pnpm --filter ophalo-web build` clean.
+- `git diff --check` clean.
 
 ### S14f — App Redirect, Verification, Production Config, And Runbook
 
@@ -850,3 +902,86 @@ Out of scope unless explicitly pulled in:
 - analytics/event instrumentation beyond existing backend logs;
 - public support/help center;
 - demo video/product tour for "See it in action."
+
+## Pre-S14e Bug And Issue Register
+
+**Captured:** 2026-07-02
+**Session note:** complete 14 part 4
+**Status:** Reference list until Session 14 is complete. Items below are not completion claims.
+
+### Bugs Verified Against Backend Code
+
+1. Share-intent leaves a stale version, causing a guaranteed false `409` on the next action.
+   `POST /share-intent` always rotates `ConcurrencyVersion`
+   (`EfKeepRequestOperatePersistence.CommitAsync` rotates on every commit), but the UI
+   (`RequestDetail.tsx` / `NeedsShareBanner`) only sets a local `shareCleared` flag and keeps using
+   the cached `detail.version`. The core staff flow, capture -> share tracker link -> send update,
+   therefore hits the "updated by another team member" conflict banner every time.
+
+   Fix: after a successful share-intent `204`, invalidate/refetch the request-detail query instead
+   of, or in addition to, the local flag.
+
+2. `ApiError.extensions` is always undefined. ASP.NET Core flattens `ProblemDetails` extensions to
+   top-level JSON, and the integration test asserts `body.GetProperty("suggestedAction")` at the top
+   level. `apiClient.ts` reads `problem["extensions"]`, which never exists. The existing fallback
+   saves most paths, but the `memberErrorMsg` branch for `Member.PreviouslyRemoved` plus
+   `suggestedAction=reactivate|resend_invite` is unreachable, so users always get the generic
+   sentence.
+
+   Fix: in `apiClient.ts`, treat the whole problem object as the extensions source.
+
+3. Quick Capture navigation is broken. `QuickCapture.tsx` navigates with
+   `window.location.href = "/keep/requests/{id}"` for mobile post-success, "View Request Workbench",
+   and tapping an active-request card in the lookup gate. The app has no URL routing; routes are
+   React state in `App.tsx`. All three paths land on the default Requests list after a full reload,
+   or `404` on a static host. The locked S13b behaviors, mobile auto-navigate to detail and card tap
+   to workbench, do not work.
+
+   Fix: pass an `onSelectRequest` callback from `App.tsx` into `QuickCapture`.
+
+4. Exchange client checks a nonexistent error code. `ExchangeClient.tsx` checks
+   `Account.NewAccountEmailAlreadyRegistered`, but the backend emits `Account.EmailAlreadyInUse`
+   from `EfAuthCodePersistence` on the start -> exchange duplicate race. That race collapses to the
+   generic "link is no longer valid" page, and the `account_already_exists` error page is dead code.
+
+   Fix: one-string frontend change to check `Account.EmailAlreadyInUse`.
+
+### Gaps Against Locked Decisions
+
+5. Assign/clear responsible and watcher management are missing entirely. S13d locked scope includes
+   them; the backend has `PUT /responsible` and `PUT|DELETE /watchers/{id}`, and computes
+   `canAssignResponsible` / `canSelfAssignResponsible`. `apiClient.ts` has no methods and
+   `ParticipationSection` only supports watch/mute. Operator "Available Work" is therefore a dead
+   end, and Owner/Admin cannot assign work.
+
+6. Tracker links point at a page that does not exist. Copy/share builds
+   `{PublicBaseUrl}/keep/r/{token}`, but `ophalo-web` has no `/keep/r/` route, and the API
+   `/keep/r/{pageToken}` endpoint is JSON only. Every tracker link a staff member shares today is a
+   `404` for the customer. The URL shape is right for the future page, but the customer tracker page
+   needs to be scheduled before pilot alongside S14g intake, or the share UX misleads.
+
+7. `ophalo-app` `AuthGuard` still redirects to `{PublicBaseUrl}/auth/signin?return_to=...`.
+   `ophalo-web` serves `/signin`, and S14-D21 says no `return_to`. This is the planned S14f item and
+   is a real `404` today.
+
+8. Post-capture "Copy Tracker Link" does not record share intent. S13e says to call share-intent
+   after a successful copy. The `SuccessPanel` copies without recording, so NeedsShare keeps nagging
+   after the operator already shared.
+
+### Minor And Polish
+
+- Homepage heading "Customers can start a request..." violates S14-D23's staff-created language
+  until S14g; the body copy below it is compliant.
+- `dev-auth.html` ships to production because it lives in `public/`, so Vite copies it into every
+  deploy. This adds no new capability, but it is a prototype artifact on a public origin; exclude it
+  from production builds.
+- Browser back does not work anywhere because state routing pushes no history. S13d assumed
+  "standard browser back" for detail -> list; on mobile PWA the back gesture exits the app, and
+  refresh on detail loses the user's place. Decide whether URL routing is a pre-pilot requirement.
+- Settings timezone selector is a 22-zone hardcoded list, Australia-heavy and missing
+  Phoenix/Honolulu/UTC, while `/start` offers the full IANA list. A zone picked at start can show as
+  un-reselectable "(custom)" in Settings. Reuse the `Intl.supportedValuesOf` approach.
+- Manual-share invite URL stays rendered in the roster until unmount, though S13g said show once.
+  Clipboard-copy failures in the share sections are silently swallowed in the `DOMException` branch.
+  Duplicated mobile/desktop mounts of the composer mean a draft typed on one viewport width is not
+  there after resizing.

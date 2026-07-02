@@ -1,6 +1,6 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-07-01 (S14d complete; S14e OperatorBaseUrl retirement is next)
+**Last updated:** 2026-07-02 (S14d complete; S14e invite accept and backend link wiring is next)
 **Branch:** `main` tracking `origin/main`
 **Last green baseline:** 939 unit · 14 arch · 713 integration = 1,666 total, 0 failures (1 pre-existing KeepG5 fluke excluded)
 **Next free ADR:** ADR-385
@@ -39,7 +39,7 @@ For every implementation slice:
 **Readiness working doc:** `docs/pilot-readiness-decision-questions.md`
 **Foundation roadmap:** `docs/build-log/ophalo-foundation-build-plan-greenfield-boundaries-brownfield-behavior.md` section 9.1
 **Current session:** Session 14 — `ophalo-web` public/front-door foundation
-**Current slice:** S14e — OperatorBaseUrl Retirement
+**Current slice:** S14e — Invite Accept And Backend Link Wiring
 **Current slice status:** Next in `docs/build-log/068-session-14-ophalo-web-front-door.md`
 
 Session 13 is complete and should be treated as historical context only. Completed Session 13 details
@@ -71,64 +71,72 @@ browser fetch to `OpHalo.Api` with a `useRef` double-fire guard; success redirec
 - Pilot cap for production launch: `SignupDefaults:MaxPilotAccounts=15`.
 - `OperatorBaseUrl` is fully retired in S14e; invite links move to `{PublicBaseUrl}/invite/accept`.
 
-### S14d Handoff Brief
+### S14e Handoff Brief
 
-Classify S14d as mechanical implementation preflight plus magic-link exchange implementation.
+Classify S14e as mechanical implementation preflight plus invite accept/backend link wiring.
 Pre-work is complete; do not rediscover the S14 decisions. Use targeted checks only.
 
-Intent: replace the dev-only S13 browser exchange helper with the real public web exchange page.
+Intent: make invited operators/admins/viewers able to join a pilot account from their invite email,
+and move invite links from `OperatorBaseUrl` to `PublicBaseUrl`.
 
 Expected scope:
 
-- `/auth/exchange?code=...` page that POSTs to `POST /auth/exchange` on `OpHalo.Api`;
-- credentialed browser `fetch` with `code` from the query string;
-- on success, the API sets `ophalo.sid` cookie through normal browser behavior — no JS cookie
-  handling needed;
-- redirect to `AppBaseUrl` (`NEXT_PUBLIC_APP_BASE_URL`) after successful exchange;
-- bounded error states: expired, invalid/consumed code, session failure;
-- no `return_to` support in S14d.
+- `/invite/accept?token=...` page in `ophalo-web`;
+- credentialed browser POST to `POST /accounts/invite/accept`;
+- success redirect to `NEXT_PUBLIC_APP_BASE_URL`;
+- bounded error states for missing/invalid/expired/already-active/seat-limit/session-failure;
+- backend invite-link generation moves to `{PublicBaseUrl}/invite/accept?token=...`;
+- fully retire `OperatorBaseUrl` from active settings/config/tests/runbooks.
 
 Live API contract:
 
-- `POST /auth/exchange` body: `{ "code": "...", "clientType": "browser" }`
-- Browser exchange returns `200 OK` with no session token in the response body. The API sets the
-  `ophalo.sid` HttpOnly cookie through the response.
-- Omitted or empty `clientType` also maps to browser, but the frontend may send `"browser"` for
-  clarity.
-- Do not send `deviceName` for browser exchange.
-- Source of truth: `src/OpHalo.Api/Auth/AuthEndpoints.cs`.
+- `POST /accounts/invite/accept` body: `{ "token": "..." }`
+- Browser success returns `200 OK`; the API sets `ophalo.sid` through normal browser response
+  handling.
+- Source of truth: `src/OpHalo.Api/Accounts/AccountEndpoints.cs` and invite services in
+  `src/OpHalo.Foundation.Application`.
 
 Error-state mapping:
 
-- Missing query code or `Validation.CodeRequired` -> show a missing/invalid link state with a CTA
-  back to `/signin`.
-- `AuthCode.Expired`, `AuthCode.AlreadyConsumed`, `AuthCode.CannotConsumeInvalidated`, and
-  `AuthCode.NotFound` -> collapse to one invalid-or-expired link state.
-- `Account.PilotFull` -> show the pilot-full state.
-- `Account.SessionCreationFailed` -> show a retry-oriented sign-in failure state.
-- Network/fetch failure -> show "Something went wrong. Please try again."
+- missing `?token=` -> show missing/invalid invite link with a CTA back to `/signin` or public home;
+- `Invite.Expired` -> show expired invite copy;
+- `Invite.InvalidToken` -> show invalid/already-used invite copy without exposing token detail;
+- `Invite.AlreadyActive` -> redirect-oriented/sign-in copy;
+- `Invite.SeatLimitReached` -> team limit reached copy;
+- `Account.SessionCreationFailed` -> accepted-but-sign-in-failed copy with sign-in CTA;
+- generic forbidden/server/network failure -> retry/support-oriented copy.
 
-Likely S14d file impact:
+Backend/config targets:
 
-- `web/ophalo-web/src/app/auth/exchange/page.tsx`
-- optional route-local client component under `web/ophalo-web/src/app/auth/exchange/`
-- optional small shared auth helper if S14c did not already introduce one
-- `web/ophalo-web/src/app/globals.css` only if existing `auth-*` styles are insufficient
+- Replace invite-link generation from `{OperatorBaseUrl}/invite/accept?token=...` to
+  `{PublicBaseUrl}/invite/accept?token=...`.
+- Remove `OperatorBaseUrl` from `MagicLinkSettings`, checked-in app config, integration test
+  factory config, and local runbooks.
+- Update invite-link tests to assert `PublicBaseUrl`.
 
-S14d expected verification:
+Likely S14e file impact:
+
+- `web/ophalo-web/src/app/invite/accept/page.tsx`
+- optional route-local client component under `web/ophalo-web/src/app/invite/accept/`
+- `src/OpHalo.Foundation.Application/Auth/MagicLinkSettings.cs`
+- invite-link generation in `src/OpHalo.Foundation.Application/Auth/SendInviteService.cs`
+- invite-link generation in `src/OpHalo.Foundation.Application/Members/MemberManagementService.cs`
+- checked-in API config files with `OperatorBaseUrl`
+- integration test factory config and invite tests
+- local setup/runbook docs that mention `OperatorBaseUrl`
+
+S14e expected verification:
 
 - `pnpm --filter ophalo-web typecheck`
 - `pnpm --filter ophalo-web build`
+- relevant API/integration tests for invite-link URL generation and invite accept behavior
 - `git diff --check`
-- local smoke with API + `ophalo-web`: use a magic link from `/signin` or `/start`, open it in the
-  browser, confirm `/auth/exchange` posts successfully, then redirects to `NEXT_PUBLIC_APP_BASE_URL`
-  (`http://localhost:5173` locally).
-- invalid/missing code state renders without leaking the raw code.
+- local smoke with API + `ophalo-web`: open `/invite/accept` without a token and confirm bounded
+  missing-token state; use a fresh real invite token only if available and do not paste raw token
+  values into docs/logs.
 
-Out of scope for S14d:
+Out of scope for S14e:
 
-- invite accept (`/invite/accept`);
-- `OperatorBaseUrl` retirement (S14e);
 - public/customer intake (S14g);
 - production deployment/DNS work.
 
