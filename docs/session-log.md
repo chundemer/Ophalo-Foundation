@@ -40,14 +40,33 @@ For every implementation slice:
 **Bug/gap tracker:** `docs/pilot-readiness-bug-tracker.md`
 **Foundation roadmap:** `docs/build-log/ophalo-foundation-build-plan-greenfield-boundaries-brownfield-behavior.md` section 9.1
 **Current session:** Session 16 — Native Mobile App Foundation
-**Current slice:** S16b complete. `mobile/ophalo-mobile/` scaffolded (Expo SDK 57, Expo Router,
-TypeScript); `app.json` set to name "OpHalo Keep", scheme `ophalo`,
-`bundleIdentifier`/`package` `com.ophalo.keep`; `.env.example` committed; `.env.local` gitignored.
-Tabs replaced with product-shaped Requests/Account placeholders; `ExternalLink` typed-route cast
-fixed; template files `two.tsx` and `EditScreenInfo.tsx` deleted. TypeScript clean. Verified:
-launches on iPhone 17 Pro simulator. Next: S16c (auth and secure client foundation). S15 is
-complete; all active pilot-readiness tracker items are resolved. `GAP-004` remains deferred
-navigation hardening.
+**Current slice:** S16c complete. Auth and secure client foundation in place. Next: S16d (backend
+contract changes — clientHint, handoff-code exchange/redeem, nullable pushToken device registration,
+EF migration).
+
+### S16c — Complete
+
+Added `expo-secure-store` (SDK 57). New files: `src/auth/secureStore.ts` (session token +
+`appInstallationId` ops; UUID v4 generated once, never reset by re-auth), `src/api/client.ts`
+(typed fetch wrapper; Bearer injection via SecureStore; dev-only method/path/status log — no token
+material in any log output), `src/auth/AuthContext.tsx` (AuthProvider; bootstrap reads token →
+`GET /auth/me` → setUser or clear; `storeToken` validates via `/auth/me` before writing to
+SecureStore; `logout` never throws — `setUser(null)` guaranteed in `finally`, all API/storage ops
+are best-effort `.catch()`), `app/signin.tsx` (email → `POST /auth/signin` with
+`clientHint: "mobile"`; "Check your email" confirmation; dev-only token paste field for S16c
+verification; errors shown via Alert), `app/auth/callback.tsx` (handles `ophalo://auth/callback?code=`
+deep link; calls `POST /auth/mobile-handoff/redeem`; stores token on success; error screen on
+failure — `redeem` never throws, all paths set phase state).
+
+Modified: `app/_layout.tsx` (AuthProvider wraps navigator; blank view during bootstrap);
+`app/(tabs)/_layout.tsx` (auth guard — `<Redirect href="/signin" />` when no user);
+`app/(tabs)/account.tsx` (role + userId display; Sign out with Alert confirmation).
+
+Error handling contract established: `logout` and `bootstrap` never throw; `storeToken` and
+`redeem` propagate errors to callers which handle them explicitly.
+
+Verification: TypeScript clean (`npx tsc --noEmit`). Manually verified: bearer token stored via dev
+field → `GET /auth/me` succeeds → Requests tab rendered. `git diff --check` clean.
 
 Session 13 is complete and should be treated as historical context only. Completed Session 13 details
 live in `docs/build-log/067-session-13-pwa-workbench.md`; do not carry Session 13 implementation
