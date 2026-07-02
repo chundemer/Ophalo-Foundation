@@ -335,10 +335,10 @@ public sealed class MemberManagementService(
                 return Result<ResendInviteResult>.Failure(MemberErrors.SeatLimitReached);
         }
 
-        if (string.IsNullOrWhiteSpace(settings.Value.OperatorBaseUrl))
+        if (string.IsNullOrWhiteSpace(settings.Value.PublicBaseUrl))
             return Result<ResendInviteResult>.Failure(
                 Error.Create("Account.InconsistentState",
-                    "Invite link cannot be built — OperatorBaseUrl is not configured."));
+                    "Invite link cannot be built — PublicBaseUrl is not configured."));
 
         var rawToken = InviteTokenGenerator.GenerateRawToken();
         var tokenHash = InviteTokenGenerator.HashToken(rawToken);
@@ -356,7 +356,7 @@ public sealed class MemberManagementService(
         await persistence.CommitAsync(target, cancellationToken);
 
         var inviteLink =
-            $"{settings.Value.OperatorBaseUrl}/invite/accept?token={Uri.EscapeDataString(rawToken)}";
+            $"{settings.Value.PublicBaseUrl}/invite/accept?token={Uri.EscapeDataString(rawToken)}";
 
         return deliveryMode switch
         {

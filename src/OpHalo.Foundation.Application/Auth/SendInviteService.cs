@@ -39,7 +39,7 @@ public sealed class SendInviteService(
 
     private static readonly Error ConfigurationError =
         Error.Create("Account.InconsistentState",
-            "Invite link cannot be built — OperatorBaseUrl is not configured.");
+            "Invite link cannot be built — PublicBaseUrl is not configured.");
 
     public async Task<Result<SendInviteResult>> HandleAsync(
         string email,
@@ -56,7 +56,7 @@ public sealed class SendInviteService(
             return Result<SendInviteResult>.Failure(
                 Error.Create("Validation.RoleInvalid", "The specified role is not valid for an invite."));
 
-        if (string.IsNullOrWhiteSpace(settings.Value.OperatorBaseUrl))
+        if (string.IsNullOrWhiteSpace(settings.Value.PublicBaseUrl))
             return Result<SendInviteResult>.Failure(ConfigurationError);
 
         var normalizedEmail = EmailNormalizer.Normalize(email);
@@ -132,7 +132,7 @@ public sealed class SendInviteService(
         // Build and send invite email — best-effort after commit. Delivery failure is logged
         // but does not roll back the invite row (D7). Wrap in try/catch because IEmailSender
         // implementations may throw from the underlying HTTP call, not just return a failed Result.
-        var inviteLink = $"{settings.Value.OperatorBaseUrl}/invite/accept?token={Uri.EscapeDataString(rawToken)}";
+        var inviteLink = $"{settings.Value.PublicBaseUrl}/invite/accept?token={Uri.EscapeDataString(rawToken)}";
 
         try
         {

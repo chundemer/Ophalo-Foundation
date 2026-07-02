@@ -35,8 +35,7 @@ is for .NET/Npgsql; `OPHALO_LOCAL_PSQL_URL` is for `psql`.
 Optional local runtime values (env var fallback if not using user secrets):
 
 ```bash
-export App__PublicBaseUrl='http://localhost:5000'
-export App__OperatorBaseUrl='http://localhost:5000'
+export App__PublicBaseUrl='http://localhost:3000'
 ```
 
 ## User Secrets Setup

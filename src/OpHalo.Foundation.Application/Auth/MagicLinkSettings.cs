@@ -7,5 +7,4 @@ namespace OpHalo.Foundation.Application.Auth;
 public sealed class MagicLinkSettings
 {
     public string PublicBaseUrl { get; init; } = string.Empty;
-    public string OperatorBaseUrl { get; init; } = string.Empty;
 }

@@ -65,7 +65,6 @@ public sealed class TokenSafeLoggingWebFactory : WebApplicationFactory<Program>,
             {
                 ["ConnectionStrings:DefaultConnection"] = _container.GetConnectionString(),
                 ["App:PublicBaseUrl"] = "https://test.ophalo.com",
-                ["App:OperatorBaseUrl"] = "https://app.test.ophalo.com",
                 ["Keep:RequestListCursorSigningKey"] = Convert.ToBase64String(new byte[32]),
             });
         });

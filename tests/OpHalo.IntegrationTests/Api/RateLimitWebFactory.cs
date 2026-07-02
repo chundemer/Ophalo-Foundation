@@ -30,7 +30,6 @@ public sealed class RateLimitWebFactory : WebApplicationFactory<Program>, IAsync
             {
                 ["ConnectionStrings:DefaultConnection"] = _container.GetConnectionString(),
                 ["App:PublicBaseUrl"] = "https://test.ophalo.com",
-                ["App:OperatorBaseUrl"] = "https://app.test.ophalo.com",
                 ["Keep:RequestListCursorSigningKey"] = Convert.ToBase64String(new byte[32]),
                 ["Edge:TrustedProxyCidrs:0"] = "127.0.0.1/32",
                 ["Edge:TrustedProxyCidrs:1"] = "::1/128",
@@ -89,7 +88,6 @@ public sealed class RateLimitNoTrustWebFactory : WebApplicationFactory<Program>,
             {
                 ["ConnectionStrings:DefaultConnection"] = _container.GetConnectionString(),
                 ["App:PublicBaseUrl"] = "https://test.ophalo.com",
-                ["App:OperatorBaseUrl"] = "https://app.test.ophalo.com",
                 ["Keep:RequestListCursorSigningKey"] = Convert.ToBase64String(new byte[32]),
                 // No Edge:TrustedProxyCidrs — forwarded headers from any remote are ignored.
             });
