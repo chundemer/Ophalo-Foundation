@@ -931,13 +931,28 @@ Expected scope:
 - `ophalo-web` public intake route for active business intake links;
 - customer-facing request form using active UX/brand system and Keep customer-surface rules;
 - browser POST directly to `OpHalo.Api` `POST /keep/public-intake/token/{publicIntakeToken}`;
+- no Next.js API route, proxy, or Server Action;
+- request fields: `customerName`, `customerPhone`, optional `customerEmail`, and `description`;
+- browser-friendly field attributes and immediate submit disabling while the request is in flight;
 - success state that gives the customer the created request/customer page path returned by the API
   without exposing raw tokens in logs or UI beyond the expected link destination;
 - unavailable state for invalid/revoked/off-season/blocked links using the backend's generic public
   intake unavailable response;
 - validation/error states matching existing backend validation without leaking account/token state;
+- no third-party scripts, pixels, or external links on token-bearing intake pages unless explicitly
+  approved; if an external link is added, use non-leaky referrer behavior;
 - S14b/S14 marketing copy can then accurately say customers can start requests through a shared
   intake link.
+
+Implementation guardrails:
+
+- Backend success returns `requestId`, `referenceCode`, and `pageToken`.
+- Do not promise a working tracker page unless `/keep/r/{pageToken}` is pulled into the slice.
+- Preserve the backend's generic unavailable posture for invalid/revoked/off-season/blocked/token
+  failure states.
+- Do not add client timestamp, browser locale/language capture, honeypot fields, analytics events,
+  or adaptive challenge controls in S14g unless explicitly pulled forward.
+- Keep customer-facing copy non-internal and avoid implying instant response/SLA behavior.
 
 Likely dependencies:
 
@@ -951,7 +966,10 @@ Out of scope unless explicitly pulled in:
 - new backend public-intake domain behavior;
 - customer email delivery beyond existing implemented notification behavior;
 - spam/adaptive challenge controls beyond current pre-pilot abuse posture;
-- customer tracker redesign beyond linking to the created customer page.
+- customer tracker redesign beyond linking to the created customer page;
+- client timestamp / locale capture;
+- honeypot fields;
+- analytics/event instrumentation beyond existing backend logs.
 
 ## Quality Gates
 

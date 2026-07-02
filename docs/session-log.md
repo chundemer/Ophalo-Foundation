@@ -91,15 +91,34 @@ Expected scope:
 - `ophalo-web` public intake route for active business intake links;
 - customer-facing request form using active UX/brand system and Keep customer-surface rules;
 - browser POST directly to `OpHalo.Api` `POST /keep/public-intake/token/{publicIntakeToken}`;
+- no Next.js API route, proxy, or Server Action;
+- request fields: `customerName`, `customerPhone`, optional `customerEmail`, and `description`;
+- use browser-friendly field attributes (`autoComplete="name"`, phone/email autocomplete, mobile
+  input modes) and disable submission immediately while a request is in flight;
 - success state that gives the customer the created request/customer page path returned by the API
   without exposing raw tokens in logs or UI beyond the expected link destination;
 - unavailable state for invalid/revoked/off-season/blocked links using the backend's generic public
   intake unavailable response;
-- validation/error states matching existing backend validation without leaking account/token state.
+- validation/error states matching existing backend validation without leaking account/token state;
+- no third-party scripts, pixels, or external links on token-bearing intake pages unless explicitly
+  approved; if any external link is added, use non-leaky referrer behavior.
+
+Implementation guardrails:
+
+- Backend success returns `requestId`, `referenceCode`, and `pageToken`; do not promise a working
+  tracker page unless `/keep/r/{pageToken}` is pulled in.
+- Preserve the backend's generic unavailable posture for token/account failures.
+- Do not add client timestamp, browser locale/language capture, honeypot fields, analytics events,
+  or adaptive challenge controls in S14g unless explicitly pulled forward.
+- Keep customer-facing copy non-internal and avoid implying instant response/SLA behavior.
 
 Likely S14g file impact:
 
 - new `ophalo-web` intake route (path TBD from API contract inspection)
+- possible route-local client form component
+- possible `ophalo-web` referrer-policy/header metadata if needed for token-bearing route protection
+- `web/ophalo-web/src/app/(marketing)/page.tsx` or related homepage copy if still using
+  pre-intake staff-created language
 - `docs/build-log/068-session-14-ophalo-web-front-door.md`
 - `docs/session-log.md`
 
@@ -112,6 +131,10 @@ S14g expected verification:
 Out of scope for S14g:
 
 - customer tracker page (`/keep/r/...`);
+- deep linking to a working tracker unless that page is explicitly pulled in;
+- client timestamp / locale capture;
+- honeypot/adaptive spam controls;
+- analytics/event instrumentation beyond existing backend logs;
 - production deployment/DNS changes.
 
 ---
