@@ -2,7 +2,7 @@
 
 **Date:** 2026-07-01
 **Session name:** Session 14 OpHalo Web Front Door
-**Status:** S14e complete; S14f app redirect, verification, production config, and runbook is next
+**Status:** S14g complete (public intake page delivered)
 **Current ADR after S13:** ADR-384
 
 ## Session Intent
@@ -923,6 +923,8 @@ Verified / review status:
   | DNS/CDN | `ophalo.com` + `www.ophalo.com` → `ophalo-web`; `app.ophalo.com` → `ophalo-app`; `api.ophalo.com` → `OpHalo.Api`; verify after deploy |
 
 ### S14g — Public/Customer Intake Page
+
+**Status:** Complete (2026-07-02). `web/ophalo-web/src/app/keep/intake/[token]/page.tsx` and `IntakeForm.tsx` delivered. Typecheck and production build clean.
 
 Intent: deliver the customer-facing request submission page required for public pilot.
 

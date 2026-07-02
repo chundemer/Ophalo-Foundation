@@ -283,7 +283,8 @@ body {
 }
 
 .auth-form-field input,
-.auth-form-field select {
+.auth-form-field select,
+.auth-form-field textarea {
   display: block;
   width: 100%;
   padding: 10px 14px;
@@ -298,11 +299,17 @@ body {
   appearance: none;
 }
 
+.auth-form-field textarea {
+  resize: vertical;
+}
+
 .auth-form-field input:focus,
-.auth-form-field select:focus { border-color: var(--ophalo-navy); }
+.auth-form-field select:focus,
+.auth-form-field textarea:focus { border-color: var(--ophalo-navy); }
 
 .auth-form-field input:disabled,
-.auth-form-field select:disabled { opacity: 0.5; cursor: not-allowed; }
+.auth-form-field select:disabled,
+.auth-form-field textarea:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .auth-error {
   font-size: 14px;
@@ -327,6 +334,11 @@ body {
 
 .auth-submit:hover { opacity: 0.92; }
 .auth-submit:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.auth-reference-code {
+  font-size: 20px;
+  letter-spacing: 0.05em;
+}
 
 .auth-note {
   font-size: 13px;

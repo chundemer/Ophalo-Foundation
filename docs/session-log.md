@@ -1,6 +1,6 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-07-02 (S14f complete; S14g public/customer intake is next)
+**Last updated:** 2026-07-02 (S14g complete; public intake page delivered; Session 14 complete pending commit)
 **Branch:** `main` tracking `origin/main`
 **Last green baseline:** 939 unit · 14 arch · 713 integration = 1,666 total, 0 failures (1 pre-existing KeepG5 fluke excluded)
 **Next free ADR:** ADR-385
@@ -40,7 +40,7 @@ For every implementation slice:
 **Foundation roadmap:** `docs/build-log/ophalo-foundation-build-plan-greenfield-boundaries-brownfield-behavior.md` section 9.1
 **Current session:** Session 14 — `ophalo-web` public/front-door foundation
 **Current slice:** S14g — Public/Customer Intake Page
-**Current slice status:** Next in `docs/build-log/068-session-14-ophalo-web-front-door.md`
+**Current slice status:** Complete. `web/ophalo-web/src/app/keep/intake/[token]/page.tsx` and `IntakeForm.tsx` delivered. Typecheck and production build clean. Pending commit approval.
 
 Session 13 is complete and should be treated as historical context only. Completed Session 13 details
 live in `docs/build-log/067-session-13-pwa-workbench.md`; do not carry Session 13 implementation
@@ -78,10 +78,12 @@ exchange and invite accept both use direct credentialed browser fetches to `OpHa
 Classify S14g as mechanical implementation preflight plus public intake page. Pre-work is
 complete; do not rediscover the S14 decisions. Use targeted checks only.
 
-S14f delivered: `AuthGuard.tsx` redirects to `{PublicBaseUrl}/signin` with no `return_to`;
-local runbook updated for three-server topology; production config checklist documented in
-`docs/build-log/068-session-14-ophalo-web-front-door.md`; browser verification pending
-Christian smoke run.
+S14g delivered: `web/ophalo-web/src/app/keep/intake/[token]/page.tsx` and `IntakeForm.tsx`
+implement the customer-facing request submission form at `/keep/intake/{token}`. Browser POST
+directly to `POST /keep/public-intake/token/{publicIntakeToken}` with no proxy or Server Action.
+Fields: name, phone, optional email, description. Success shows reference code; unavailable state
+handles all generic backend rejection (invalid/revoked/off-season/blocked/feature-disabled).
+Referrer policy `no-referrer` set via metadata. `robots: noindex`. Typecheck and build clean.
 
 Intent: deliver the customer-facing request submission page required for public pilot so that
 S14b copy claiming customers can start requests is accurate.
