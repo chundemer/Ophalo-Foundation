@@ -2,7 +2,7 @@
 
 **Date:** 2026-07-01
 **Session name:** Session 14 OpHalo Web Front Door
-**Status:** S14d complete; S14e invite accept and backend link wiring is the next slice
+**Status:** S14e complete; S14f app redirect, verification, production config, and runbook is next
 **Current ADR after S13:** ADR-384
 
 ## Session Intent
@@ -761,11 +761,12 @@ Verified:
 
 ### S14e — Invite Accept And Backend Link Wiring
 
-**Status:** Next. Pre-work complete; ready for mechanical implementation preflight and coding.
+**Status:** Complete. Committed as `bc7a01e`; post-commit review cleanup updated the stale public
+invite-link test assertion to the S14e `PublicBaseUrl` posture.
 
 Intent: make invited operators/admins/viewers able to join a pilot account from their invite email.
 
-Expected scope:
+Delivered scope:
 
 - `/invite/accept?token=...`;
 - credentialed browser POST to `POST /accounts/invite/accept`;
@@ -775,33 +776,43 @@ Expected scope:
 - fully retire `OperatorBaseUrl` from settings, config, test factories, and runbooks;
 - update invite tests and local setup docs.
 
-Implementation contract:
+Implemented:
 
-- Add `/invite/accept?token=...` to `ophalo-web` outside the `(marketing)` route group.
-- Read `token` from the query string; do not log or display the raw token.
-- POST directly to `OpHalo.Api` with credentialed browser fetch:
+- Added `/invite/accept?token=...` to `ophalo-web` outside the `(marketing)` route group:
+  - `web/ophalo-web/src/app/invite/accept/page.tsx`
+  - `web/ophalo-web/src/app/invite/accept/AcceptClient.tsx`
+- Added `/invite/accept/error` for bounded user-facing error states:
+  - `web/ophalo-web/src/app/invite/accept/error/page.tsx`
+- Reads `token` from the query string and does not log or display the raw token.
+- Posts directly to `OpHalo.Api` with credentialed browser fetch:
   - `POST ${NEXT_PUBLIC_API_BASE_URL}/accounts/invite/accept`
   - body: `{ "token": "..." }`
-- On success, redirect to `NEXT_PUBLIC_APP_BASE_URL`.
-- Handle missing/invalid/expired/already-active/seat-limit/session-failure/server/network states
+- On success, redirects to `NEXT_PUBLIC_APP_BASE_URL`.
+- Uses a `useRef` guard so the accept POST only fires once under React dev/Strict Mode.
+- Handles missing/invalid/expired/already-active/seat-limit/session-failure/server/network states
   with bounded copy.
-- Update backend invite URL generation to use `{PublicBaseUrl}/invite/accept?token=...`.
-- Fully retire `OperatorBaseUrl` from `MagicLinkSettings`, checked-in app config, integration test
+- Updated backend invite URL generation to use `{PublicBaseUrl}/invite/accept?token=...`.
+- Fully retired `OperatorBaseUrl` from `MagicLinkSettings`, checked-in app config, integration test
   factory config, tests, and runbooks.
-- Do not add Next.js API routes, Server Actions, JavaScript cookie handling, or session-token
+- Did not add Next.js API routes, Server Actions, JavaScript cookie handling, or session-token
   storage in `ophalo-web`.
 
-Likely file impact:
+File impact:
 
 - `web/ophalo-web/src/app/invite/accept/page.tsx`
-- optional route-local client component under `web/ophalo-web/src/app/invite/accept/`
-- backend invite-link generation in Foundation/Application member invite services
+- `web/ophalo-web/src/app/invite/accept/AcceptClient.tsx`
+- `web/ophalo-web/src/app/invite/accept/error/page.tsx`
+- `src/OpHalo.Foundation.Application/Auth/SendInviteService.cs`
+- `src/OpHalo.Foundation.Application/Members/MemberManagementService.cs`
 - `src/OpHalo.Foundation.Application/Auth/MagicLinkSettings.cs`
-- `src/OpHalo.Api/appsettings*.json`
-- integration test factory config and invite-link assertions
-- local setup/runbook docs that still mention `OperatorBaseUrl`
+- `src/OpHalo.Api/appsettings.json`
+- `tests/OpHalo.IntegrationTests/Api/KeepApiWebFactory.cs`
+- `tests/OpHalo.IntegrationTests/Api/RateLimitWebFactory.cs`
+- `tests/OpHalo.IntegrationTests/Api/TokenSafeLoggingTests.cs`
+- `tests/OpHalo.IntegrationTests/Api/InviteTests.cs`
+- `docs/deployment/local-postgres-runbook.md`
 
-S14e done gate:
+Verified / review status:
 
 - `/invite/accept` handles missing token without an API call and without leaking raw token values.
 - Valid invite token posts to `POST /accounts/invite/accept` with `credentials: "include"`.
@@ -815,8 +826,12 @@ S14e done gate:
 - `pnpm --filter ophalo-web typecheck` clean.
 - `pnpm --filter ophalo-web build` clean.
 - `git diff --check` clean.
+- Review pass found one stale integration-test assertion/name still using the retired operator host;
+  fixed in post-commit cleanup to assert the configured `App:PublicBaseUrl` invite accept URL.
 
 ### S14f — App Redirect, Verification, Production Config, And Runbook
+
+**Status:** Next. Pre-work complete; ready for mechanical implementation preflight and coding.
 
 Intent: prove the public front door works with the existing backend topology.
 
@@ -844,6 +859,48 @@ Expected scope:
   - Resend settings;
   - `SignupDefaults:MaxPilotAccounts=15`;
   - DNS/CDN routing verification for both `ophalo.com` and `www.ophalo.com` after deployment.
+
+Implementation contract:
+
+- Update `ophalo-app` unauthenticated redirect to `{PublicBaseUrl}/signin`.
+- Do not append or process `return_to` in S14f; validated deep-link resume remains deferred.
+- Preserve `ophalo-app` as the authenticated workbench and `ophalo-web` as the public auth/token
+  landing surface.
+- Keep browser auth/token flows as direct credentialed requests to `OpHalo.Api`; no Next.js auth
+  proxy routes.
+- Verify all S14 public routes render without raw token/session/cookie leakage.
+- Verify browser handoff from public auth/token pages into `ophalo-app`.
+- Update local runbook language that still says `ophalo-web` does not exist or points users to
+  dev-only auth helper flows.
+- Document the production config checklist; do not make production DNS/CDN changes in this slice.
+
+Likely file impact:
+
+- `web/ophalo-app/src/components/AuthGuard.tsx`
+- `docs/runbook/local-web-setup.md`
+- `docs/deployment/local-postgres-runbook.md` if additional local topology cleanup is needed
+- `docs/build-log/068-session-14-ophalo-web-front-door.md`
+- `docs/session-log.md`
+
+S14f done gate:
+
+- `ophalo-app` unauthenticated users are redirected to `{PublicBaseUrl}/signin`.
+- No S14 app redirect appends `return_to`.
+- Public route browser verification covers `/`, `/about`, `/pilot`, `/signin`, `/start`,
+  `/auth/check-email`, `/auth/exchange`, and `/invite/accept`.
+- Handoff into `ophalo-app` is verified after successful browser auth/token exchange when fresh test
+  links are available.
+- Local setup docs describe API + `ophalo-web` + `ophalo-app` startup and no longer depend on
+  dev-only auth helper flows for the normal path.
+- Production config checklist covers `PublicBaseUrl`, `AppBaseUrl`, CORS allowed origins, cookie
+  domain, Resend settings, `SignupDefaults:MaxPilotAccounts=15`, and DNS/CDN verification for both
+  `ophalo.com` and `www.ophalo.com`.
+- Relevant API/integration tests for auth exchange, invite accept, and invite-link URL generation
+  are green.
+- `pnpm --filter ophalo-web typecheck` clean.
+- `pnpm --filter ophalo-web build` clean.
+- Proportionate `ophalo-app` check is clean.
+- `git diff --check` clean.
 
 ### S14g — Public/Customer Intake Page
 

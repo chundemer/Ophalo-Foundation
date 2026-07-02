@@ -145,7 +145,7 @@ public sealed class InviteTests : IClassFixture<KeepApiWebFactory>, IAsyncLifeti
     // =========================================================================
 
     [Fact]
-    public async Task SendInvite_EmailContainsOperatorUrlAndToken()
+    public async Task SendInvite_EmailContainsPublicInviteAcceptUrlAndToken()
     {
         const string inviteeEmail = "invitee@example.com";
         var (_, _, cookie) = await SeedAccountAsync();
@@ -158,7 +158,7 @@ public sealed class InviteTests : IClassFixture<KeepApiWebFactory>, IAsyncLifeti
 
         var link = email.ExtractMagicLink();
         Assert.NotNull(link);
-        Assert.StartsWith("https://app.test.ophalo.com/invite/accept?token=", link);
+        Assert.StartsWith("https://test.ophalo.com/invite/accept?token=", link);
 
         var token = email.ExtractInviteToken();
         Assert.NotNull(token);
