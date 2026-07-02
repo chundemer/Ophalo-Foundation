@@ -1,10 +1,10 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-07-02 (S15a/S15b/S15c complete; all pilot-readiness items resolved)
+**Last updated:** 2026-07-02 (S16b complete; mobile scaffold launches on iOS simulator)
 **Branch:** `main` tracking `origin/main`
 **Last green baseline:** 939 unit · 14 arch · 713 integration = 1,666 total, 0 failures (1 pre-existing KeepG5 fluke excluded)
-**Next free ADR:** ADR-385
-**Current session:** Session 15 — Pilot Readiness Bug And Gap Closure
+**Next free ADR:** ADR-395
+**Current session:** Session 16 — Native Mobile App Foundation
 
 ---
 
@@ -34,13 +34,20 @@ For every implementation slice:
 
 ## Current Work
 
-**Current build log:** `docs/build-log/069-session-15-pilot-readiness.md`
-**Last completed build log:** `docs/build-log/068-session-14-ophalo-web-front-door.md` (Session 14)
+**Current build log:** `docs/build-log/070-session-16-native-mobile-foundation.md`
+**Last completed build log:** `docs/build-log/069-session-15-pilot-readiness.md` (Session 15)
 **Readiness working doc:** `docs/pilot-readiness-decision-questions.md`
 **Bug/gap tracker:** `docs/pilot-readiness-bug-tracker.md`
 **Foundation roadmap:** `docs/build-log/ophalo-foundation-build-plan-greenfield-boundaries-brownfield-behavior.md` section 9.1
-**Current session:** Session 15 — Pilot Readiness Bug And Gap Closure
-**Current slice:** S15c — complete. All active pilot-readiness items in `docs/pilot-readiness-bug-tracker.md` are resolved. `GAP-004` remains deferred. No further pilot-readiness slices remain.
+**Current session:** Session 16 — Native Mobile App Foundation
+**Current slice:** S16b complete. `mobile/ophalo-mobile/` scaffolded (Expo SDK 57, Expo Router,
+TypeScript); `app.json` set to name "OpHalo Keep", scheme `ophalo`,
+`bundleIdentifier`/`package` `com.ophalo.keep`; `.env.example` committed; `.env.local` gitignored.
+Tabs replaced with product-shaped Requests/Account placeholders; `ExternalLink` typed-route cast
+fixed; template files `two.tsx` and `EditScreenInfo.tsx` deleted. TypeScript clean. Verified:
+launches on iPhone 17 Pro simulator. Next: S16c (auth and secure client foundation). S15 is
+complete; all active pilot-readiness tracker items are resolved. `GAP-004` remains deferred
+navigation hardening.
 
 Session 13 is complete and should be treated as historical context only. Completed Session 13 details
 live in `docs/build-log/067-session-13-pwa-workbench.md`; do not carry Session 13 implementation
@@ -52,11 +59,19 @@ front door and browser token pages: homepage, About, Pilot, Privacy, Terms, `/si
 `/invite/accept/error`, and `/keep/intake/{token}`. Completed Session 14 detail lives in
 `docs/build-log/068-session-14-ophalo-web-front-door.md`.
 
+Session 15 is complete and should be treated as historical context. It closed active pilot-readiness
+bugs/gaps in `docs/pilot-readiness-bug-tracker.md`, including the S15c customer tracker page at
+`/keep/r/{pageToken}`. Completed Session 15 detail lives in
+`docs/build-log/069-session-15-pilot-readiness.md`.
+
 ### Current Direction
 
-- Session 15 should close the highest-risk pilot workflow bugs and gaps before new feature expansion.
+- Session 16 should establish the native mobile app foundation before broader product-ops or
+  reporting polish. Mobile and store approval are now the critical path.
 - Use `docs/pilot-readiness-bug-tracker.md` as the live source of bug/gap status.
 - `ophalo-app` remains the authenticated Keep workbench.
+- The native app should be phone-first for operators and may share contracts/patterns with
+  `ophalo-app`, but it is a separate mobile deliverable that must satisfy Apple/Google review.
 - `OpHalo.Api` remains the only authority for auth, sessions, account creation, rate limiting, email,
   authorization, and persistence.
 - Preserve fail-closed account, membership, action-policy, public-token, and concurrency behavior.
@@ -67,6 +82,37 @@ front door and browser token pages: homepage, About, Pilot, Privacy, Terms, `/si
 - Pilot cap for production launch: `SignupDefaults:MaxPilotAccounts=15`.
 - `OperatorBaseUrl` is retired from active settings/config/test factories/runbooks; invite links now
   use `{PublicBaseUrl}/invite/accept`.
+
+### Remaining Sessions
+
+1. **Session 16 — Native Mobile App Foundation**
+   Create the mobile project, lock stack/build posture, configure bundle identifiers/environments,
+   establish auth/session handling, API client conventions, app shell/navigation, secure storage,
+   device registration, badge refresh hooks, and deep-link placeholders.
+2. **Session 17 — Native Operator Field App**
+   Build the phone-first operator workflow: My Work, Available, request detail, native Quick Capture,
+   contact handoff, log contact, customer update, mark completed, self-assign/watch/mute, tracker
+   sharing, refresh/resume behavior, and mobile-safe error states.
+3. **Session 18 — Push Delivery And Deep Links**
+   Decide and implement real APNs/FCM delivery for store-bound builds, or explicitly document a
+   review-safe no-push product posture before any submission. Verify Demo/InternalTest suppression,
+   payloads, badge behavior, and stable deep links end to end.
+4. **Session 19 — Store Submission Readiness**
+   Prepare Apple/Google approval: app names, icons, screenshots, privacy labels, permissions copy,
+   signing/profiles, production environment config, demo credentials/account, TestFlight/internal
+   testing builds, and review notes.
+5. **Session 20 — Weekly Value Report / Founder Ops Readout**
+   Build the founder/internal-only weekly report endpoint/read service that generates copy-pasteable
+   Markdown/text for an account and reporting period. No Owner/Admin report UI or automated email in
+   the first slice.
+6. **Session 21 — Pilot Support Surfaces**
+   Build authenticated Report Friction plus Pilot Updates/Help, with compact context, no client-side
+   webhook secrets, no anonymous customer OpHalo feedback hook, and no production impersonation.
+7. **Session 22 — Pilot QA And Go-Live Gate**
+   Run full web/mobile/API/customer-page/deployment/support verification, including onboarding,
+   Quick Capture, public intake, tracker sharing, attention/follow-up/status-check behavior,
+   close/cancel, feedback review, Spam/Test, weekly reporting, support runbooks, notification posture,
+   store-readiness evidence, and known limitations.
 
 ### S15c — Complete
 

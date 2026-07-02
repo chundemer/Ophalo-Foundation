@@ -1,7 +1,7 @@
 # ADR-236 — Mobile Native App Technology Stack
 
 **Date:** 2026-06-18  
-**Status:** Proposed  
+**Status:** Locked (promoted in S16a / ADR-385)
 **Source:** Product/mobile planning discussion, Phase 5A mobile-ready sessions, Phase 8 notification posture, Keep V1 lock (ADR-288..292)
 
 ## Context

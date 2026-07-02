@@ -1427,39 +1427,58 @@ Recommended remaining sessions after Session 9:
    explanations, and operator-capable shared-workbench flows where they naturally fit. This is the
    first-class desktop/tablet workbench, not just backend integration.
 
-6. **Session 14 — Native App Development: Operator Field App**
-   Build the actual phone-first native operator app. Scope includes My Work, Available, request
-   detail, native Quick Capture, native contact handoff, tracker sharing, customer update action,
-   follow-up/planned-for, mark completed, watch/mute, eligible self-assign, badge refresh, and
-   deep-link handling. Native may run on tablets, but V1 is optimized for phones; tablet/desktop
-   work remains primarily PWA.
+6. **Session 14 — Public Web Front Door** ✓
+   Implemented `ophalo-web` public/auth browser-token surfaces: homepage, About, Pilot, Privacy,
+   Terms, `/signin`, `/start`, `/auth/check-email`, `/auth/exchange`, `/auth/exchange/error`,
+   `/invite/accept`, `/invite/accept/error`, and `/keep/intake/{token}`.
 
-7. **Session 15 — Customer Page And Public Intake UX Polish**
-   Apply the brand guide and locked customer-language decisions to customer pages and public intake:
-   lifecycle status plus business-written status text, warm service language, cautious response
-   expectations, customer action labels, expired/tombstone states, business contact fallback, and
-   customer-visible branding minimum. Confirm customer pages expose no internal/operator-only data.
+7. **Session 15 — Pilot Readiness Bug And Gap Closure** ✓
+   Closed the active pilot-readiness tracker items from S14/S15, including share-intent/version
+   refresh, flattened `ProblemDetails` parsing, Quick Capture navigation, duplicate-email exchange
+   copy, post-capture share intent recording, participation controls, production artifact cleanup,
+   timezone/polish fixes, and the customer tracker page at `/keep/r/{pageToken}`. `GAP-004`
+   browser back/refresh URL routing remains explicitly deferred navigation hardening.
 
-8. **Session 16 — Internal Product-Ops And Weekly Value Report**
-   Add durable internal product-ops events/digest rows and a founder/internal-only weekly value
-   report endpoint/read service that generates copy-pasteable Markdown/text for a given account and
-   reporting period. Do not build Owner/Admin in-app report UI or automated email in the first slice.
+8. **Session 16 — Native Mobile App Foundation**
+   Start the native mobile work that has not yet begun. Create the mobile app project, lock the stack
+   and build posture, configure bundle identifiers/environments, establish auth/session handling,
+   API client conventions, app shell/navigation, secure storage, device registration, badge refresh
+   hooks, and deep-link placeholders. This session puts Apple/Google approval work on the critical
+   path early instead of waiting until the end of pilot prep.
 
-9. **Session 17 — Pilot Support And Read-Only Founder Support**
+9. **Session 17 — Native Operator Field App**
+   Build the actual phone-first operator workflow: My Work, Available, request detail, native Quick
+   Capture, native contact handoff, tracker sharing, customer update action, follow-up/planned-for,
+   mark completed, watch/mute, eligible self-assign, badge refresh, refresh/resume behavior, and
+   mobile-safe error/empty states. Native may run on tablets, but V1 is optimized for phones;
+   tablet/desktop work remains primarily PWA.
+
+10. **Session 18 — Push Delivery And Deep Links**
+   After native foundation and field workflows are in place, either implement/test real APNs/FCM
+   delivery with Demo/InternalTest suppression and stable deep links, or explicitly clear the pilot
+   with the no-op posture and train users that real push is not live.
+
+11. **Session 19 — Store Submission Readiness**
+   Prepare Apple/Google approval: app names, icons, screenshots, privacy labels, permission copy,
+   signing/profiles, production environment config, demo credentials/account, TestFlight/internal
+   testing builds, and review notes. Treat store review lead time as part of the go-live schedule.
+
+12. **Session 20 — Internal Product-Ops And Weekly Value Report**
+   Add the founder/internal-only weekly value report endpoint/read service that generates
+   copy-pasteable Markdown/text for a given account and reporting period. Existing product-ops
+   onboarding events can be reused where appropriate. Do not build Owner/Admin in-app report UI or
+   automated email in the first slice.
+
+13. **Session 21 — Pilot Support And Read-Only Founder Support**
    Build authenticated Report Friction, Pilot Updates/Help, and bounded read-only founder/support
    visibility as needed for pilot operations. No anonymous customer OpHalo feedback hook and no
    production impersonation/run-as.
 
-10. **Session 18 — Notification Real-Delivery Decision**
-   After classification and native bundle posture are known, either implement/test real APNs/FCM
-   delivery with Demo/InternalTest suppression and stable deep links, or explicitly clear the pilot
-   with the no-op posture and train users that real push is not live.
-
-11. **Session 19 — Pilot QA And Go-Live Gate**
+14. **Session 22 — Pilot QA And Go-Live Gate**
    Run the end-to-end pilot readiness checklist: onboarding, Quick Capture, public intake, tracker
    sharing, customer page/actions, attention/follow-up/status-check behavior, close/cancel, feedback
-   review, Spam/Test, weekly report generation, internal ops signals, notification posture, support
-   runbooks, and known limitations.
+   review, Spam/Test, weekly report generation, internal ops signals, notification posture, mobile
+   app/store readiness, support runbooks, deployment topology, and known limitations.
 
 Pre-session alignment checklist:
 
