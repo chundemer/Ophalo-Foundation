@@ -1004,7 +1004,8 @@ Out of scope unless explicitly pulled in:
 
 **Captured:** 2026-07-02
 **Session note:** complete 14 part 4
-**Status:** Reference list until Session 14 is complete. Items below are not completion claims.
+**Status:** Historical source list. Promoted to the live tracker at
+`docs/pilot-readiness-bug-tracker.md` after Session 14 completed.
 
 ### Bugs Verified Against Backend Code
 

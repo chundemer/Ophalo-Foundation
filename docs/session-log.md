@@ -1,10 +1,10 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-07-02 (S14g complete; public intake page delivered; Session 14 complete pending commit)
+**Last updated:** 2026-07-02 (S14 complete; Session 15 pilot-readiness bug/gap closure is next)
 **Branch:** `main` tracking `origin/main`
 **Last green baseline:** 939 unit · 14 arch · 713 integration = 1,666 total, 0 failures (1 pre-existing KeepG5 fluke excluded)
 **Next free ADR:** ADR-385
-**Current session:** Session 14 — `ophalo-web` public/front-door foundation
+**Current session:** Session 15 — Pilot Readiness Bug And Gap Closure
 
 ---
 
@@ -34,37 +34,34 @@ For every implementation slice:
 
 ## Current Work
 
-**Current build log:** `docs/build-log/068-session-14-ophalo-web-front-door.md`
-**Last completed build log:** `docs/build-log/067-session-13-pwa-workbench.md` (Session 13 Verify)
+**Current build log:** TBD — create Session 15 build log before implementation
+**Last completed build log:** `docs/build-log/068-session-14-ophalo-web-front-door.md` (Session 14)
 **Readiness working doc:** `docs/pilot-readiness-decision-questions.md`
+**Bug/gap tracker:** `docs/pilot-readiness-bug-tracker.md`
 **Foundation roadmap:** `docs/build-log/ophalo-foundation-build-plan-greenfield-boundaries-brownfield-behavior.md` section 9.1
-**Current session:** Session 14 — `ophalo-web` public/front-door foundation
-**Current slice:** S14g — Public/Customer Intake Page
-**Current slice status:** Complete. `web/ophalo-web/src/app/keep/intake/[token]/page.tsx` and `IntakeForm.tsx` delivered. Typecheck and production build clean. Pending commit approval.
+**Current session:** Session 15 — Pilot Readiness Bug And Gap Closure
+**Current slice:** S15a — Pilot Loop Bug Triage And First Fix Set
+**Current slice status:** Next. Pre-work complete enough for mechanical preflight; start from
+`docs/pilot-readiness-bug-tracker.md`.
 
 Session 13 is complete and should be treated as historical context only. Completed Session 13 details
 live in `docs/build-log/067-session-13-pwa-workbench.md`; do not carry Session 13 implementation
 notes forward in this execution brief.
 
-`web/ophalo-web` now has the public content shell and browser auth/token landing pages from S14b
-through S14e: homepage, About, Pilot, Privacy, Terms, `/signin`, `/start`, `/auth/check-email`,
-`/auth/exchange`, `/auth/exchange/error`, `/invite/accept`, and `/invite/accept/error`. Magic-link
-exchange and invite accept both use direct credentialed browser fetches to `OpHalo.Api` with
-`useRef` double-fire guards; successful token exchange redirects via
-`window.location.assign(NEXT_PUBLIC_APP_BASE_URL)`.
+Session 14 is complete and should be treated as historical context. `ophalo-web` now owns the public
+front door and browser token pages: homepage, About, Pilot, Privacy, Terms, `/signin`, `/start`,
+`/auth/check-email`, `/auth/exchange`, `/auth/exchange/error`, `/invite/accept`,
+`/invite/accept/error`, and `/keep/intake/{token}`. Completed Session 14 detail lives in
+`docs/build-log/068-session-14-ophalo-web-front-door.md`.
 
-### S14 Locked Direction
+### Current Direction
 
-- `ophalo-web` is the public/front-door surface: homepage, About, Pilot, signin/start auth entry,
-  check-email, magic-link exchange, invite accept, Privacy, and Terms.
+- Session 15 should close the highest-risk pilot workflow bugs and gaps before new feature expansion.
+- Use `docs/pilot-readiness-bug-tracker.md` as the live source of bug/gap status.
 - `ophalo-app` remains the authenticated Keep workbench.
 - `OpHalo.Api` remains the only authority for auth, sessions, account creation, rate limiting, email,
   authorization, and persistence.
-- Public auth calls use credentialed browser fetches directly to `OpHalo.Api`; no Next.js API routes
-  or Server Actions for S14 auth flows.
-- Public/customer intake is required before public pilot launch and is now pulled into Session 14 as
-  a later S14g slice. S14b copy should not imply customer-submitted intake is live until that slice
-  lands.
+- Preserve fail-closed account, membership, action-policy, public-token, and concurrency behavior.
 - Production topology: `ophalo.com`/`www.ophalo.com` -> `ophalo-web`,
   `app.ophalo.com` -> `ophalo-app`, `api.ophalo.com` -> `OpHalo.Api`.
 - Local topology: `ophalo-web` `http://localhost:3000`, `ophalo-app` `http://localhost:5173`,
@@ -73,71 +70,39 @@ exchange and invite accept both use direct credentialed browser fetches to `OpHa
 - `OperatorBaseUrl` is retired from active settings/config/test factories/runbooks; invite links now
   use `{PublicBaseUrl}/invite/accept`.
 
-### S14g Handoff Brief
+### S15a Handoff Brief
 
-Classify S14g as mechanical implementation preflight plus public intake page. Pre-work is
-complete; do not rediscover the S14 decisions. Use targeted checks only.
+Classify S15a as mechanical implementation preflight plus focused bug fixes. Do not rediscover the
+S14 public-front-door decisions. Use targeted checks against the tracker and current code.
 
-S14g delivered: `web/ophalo-web/src/app/keep/intake/[token]/page.tsx` and `IntakeForm.tsx`
-implement the customer-facing request submission form at `/keep/intake/{token}`. Browser POST
-directly to `POST /keep/public-intake/token/{publicIntakeToken}` with no proxy or Server Action.
-Fields: name, phone, optional email, description. Success shows reference code; unavailable state
-handles all generic backend rejection (invalid/revoked/off-season/blocked/feature-disabled).
-Referrer policy `no-referrer` set via metadata. `robots: noindex`. Typecheck and build clean.
+Recommended first fix set:
 
-Intent: deliver the customer-facing request submission page required for public pilot so that
-S14b copy claiming customers can start requests is accurate.
+- `BUG-001` — share-intent stale version / false `409`;
+- `BUG-002` — `ApiError.extensions` flattened ProblemDetails parsing;
+- `BUG-004` — exchange client duplicate-email code mismatch;
+- `BUG-005` — post-capture Copy Tracker Link does not record share intent;
+- verify `GAP-003` — public intake setup exposes a usable customer-facing URL.
 
-Expected scope:
+Keep `GAP-001` assign/responsible/watcher management and `GAP-002` customer tracker page visible as
+larger follow-on slices; they may exceed a small first bug-fix batch.
 
-- `ophalo-web` public intake route for active business intake links;
-- customer-facing request form using active UX/brand system and Keep customer-surface rules;
-- browser POST directly to `OpHalo.Api` `POST /keep/public-intake/token/{publicIntakeToken}`;
-- no Next.js API route, proxy, or Server Action;
-- request fields: `customerName`, `customerPhone`, optional `customerEmail`, and `description`;
-- use browser-friendly field attributes (`autoComplete="name"`, phone/email autocomplete, mobile
-  input modes) and disable submission immediately while a request is in flight;
-- success state that gives the customer the created request/customer page path returned by the API
-  without exposing raw tokens in logs or UI beyond the expected link destination;
-- unavailable state for invalid/revoked/off-season/blocked links using the backend's generic public
-  intake unavailable response;
-- validation/error states matching existing backend validation without leaking account/token state;
-- no third-party scripts, pixels, or external links on token-bearing intake pages unless explicitly
-  approved; if any external link is added, use non-leaky referrer behavior.
+Likely S15a file impact:
 
-Implementation guardrails:
+- `web/ophalo-app/src/lib/apiClient.ts`
+- `web/ophalo-app/src/pages/RequestDetail.tsx`
+- `web/ophalo-app/src/components/NeedsShareBanner.tsx`
+- `web/ophalo-app/src/components/QuickCapture.tsx`
+- `web/ophalo-web/src/app/auth/exchange/ExchangeClient.tsx`
+- `web/ophalo-app/src/pages/Settings.tsx` if `GAP-003` is pulled into S15a
+- `docs/pilot-readiness-bug-tracker.md`
+- new Session 15 build log under `docs/build-log/`
 
-- Backend success returns `requestId`, `referenceCode`, and `pageToken`; do not promise a working
-  tracker page unless `/keep/r/{pageToken}` is pulled in.
-- Preserve the backend's generic unavailable posture for token/account failures.
-- Do not add client timestamp, browser locale/language capture, honeypot fields, analytics events,
-  or adaptive challenge controls in S14g unless explicitly pulled forward.
-- Keep customer-facing copy non-internal and avoid implying instant response/SLA behavior.
+Expected verification:
 
-Likely S14g file impact:
-
-- new `ophalo-web` intake route (path TBD from API contract inspection)
-- possible route-local client form component
-- possible `ophalo-web` referrer-policy/header metadata if needed for token-bearing route protection
-- `web/ophalo-web/src/app/(marketing)/page.tsx` or related homepage copy if still using
-  pre-intake staff-created language
-- `docs/build-log/068-session-14-ophalo-web-front-door.md`
-- `docs/session-log.md`
-
-S14g expected verification:
-
-- `pnpm --filter ophalo-web typecheck`
-- `pnpm --filter ophalo-web build`
-- `git diff --check`
-
-Out of scope for S14g:
-
-- customer tracker page (`/keep/r/...`);
-- deep linking to a working tracker unless that page is explicitly pulled in;
-- client timestamp / locale capture;
-- honeypot/adaptive spam controls;
-- analytics/event instrumentation beyond existing backend logs;
-- production deployment/DNS changes.
+- focused frontend typecheck/build command for each touched app;
+- relevant API/integration tests only if backend behavior changes;
+- `git diff --check`;
+- update `docs/pilot-readiness-bug-tracker.md` statuses as fixes land.
 
 ---
 
