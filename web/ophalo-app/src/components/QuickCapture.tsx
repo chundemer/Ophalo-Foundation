@@ -558,6 +558,7 @@ function CaptureForm({
 // ---------------------------------------------------------------------------
 
 interface SuccessPanelProps {
+  requestId: string;
   referenceCode: string;
   pageToken: string;
   publicBaseUrl: string;
@@ -566,6 +567,7 @@ interface SuccessPanelProps {
 }
 
 function SuccessPanel({
+  requestId,
   referenceCode,
   pageToken,
   publicBaseUrl,
@@ -580,6 +582,7 @@ function SuccessPanel({
       await navigator.clipboard.writeText(trackerUrl);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
+      void api.recordShareIntent(requestId, "copy_link").catch(() => {});
     } catch {
       // clipboard write denied; no-op
     }
@@ -634,11 +637,12 @@ function SuccessPanel({
 
 export interface QuickCaptureProps {
   onClose: () => void;
+  onSelectRequest?: (requestId: string) => void;
   isPastDue?: boolean;
   isReadOnly?: boolean;
 }
 
-export function QuickCapture({ onClose, isPastDue = false, isReadOnly = false }: QuickCaptureProps) {
+export function QuickCapture({ onClose, onSelectRequest, isPastDue = false, isReadOnly = false }: QuickCaptureProps) {
   const publicBaseUrl = import.meta.env.VITE_PUBLIC_BASE_URL as string;
   const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
 
@@ -657,7 +661,12 @@ export function QuickCapture({ onClose, isPastDue = false, isReadOnly = false }:
 
   function handleCaptureSuccess(requestId: string, referenceCode: string, pageToken: string) {
     if (isMobile) {
-      window.location.href = `/keep/requests/${requestId}`;
+      if (onSelectRequest) {
+        onSelectRequest(requestId);
+        onClose();
+      } else {
+        window.location.href = `/keep/requests/${requestId}`;
+      }
       return;
     }
     setStage({ kind: "success", requestId, referenceCode, pageToken });
@@ -668,12 +677,21 @@ export function QuickCapture({ onClose, isPastDue = false, isReadOnly = false }:
   }
 
   function handleViewRequest(requestId: string) {
-    window.location.href = `/keep/requests/${requestId}`;
+    if (onSelectRequest) {
+      onSelectRequest(requestId);
+      onClose();
+    } else {
+      window.location.href = `/keep/requests/${requestId}`;
+    }
   }
 
   function handleNavigateToExisting(requestId: string) {
     onClose();
-    window.location.href = `/keep/requests/${requestId}`;
+    if (onSelectRequest) {
+      onSelectRequest(requestId);
+    } else {
+      window.location.href = `/keep/requests/${requestId}`;
+    }
   }
 
   function handleBack() {
@@ -738,6 +756,7 @@ export function QuickCapture({ onClose, isPastDue = false, isReadOnly = false }:
 
     return (
       <SuccessPanel
+        requestId={stage.requestId}
         referenceCode={stage.referenceCode}
         pageToken={stage.pageToken}
         publicBaseUrl={publicBaseUrl}

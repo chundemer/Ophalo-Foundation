@@ -26,7 +26,7 @@ async function apiFetchVoid(path: string, init?: RequestInit): Promise<void> {
     let extensions: Record<string, unknown> | undefined;
     try {
       const problem = (await response.json()) as Record<string, unknown>;
-      extensions = problem["extensions"] as Record<string, unknown> | undefined;
+      extensions = (problem["extensions"] as Record<string, unknown> | undefined) ?? problem;
       code =
         (extensions?.["code"] as string | undefined) ??
         (problem["code"] as string | undefined);
@@ -52,7 +52,7 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
     let extensions: Record<string, unknown> | undefined;
     try {
       const problem = (await response.json()) as Record<string, unknown>;
-      extensions = problem["extensions"] as Record<string, unknown> | undefined;
+      extensions = (problem["extensions"] as Record<string, unknown> | undefined) ?? problem;
       code =
         (extensions?.["code"] as string | undefined) ??
         (problem["code"] as string | undefined);
@@ -80,7 +80,7 @@ async function apiFetchMaybeJson<T>(path: string, init?: RequestInit): Promise<T
     let extensions: Record<string, unknown> | undefined;
     try {
       const problem = (await response.json()) as Record<string, unknown>;
-      extensions = problem["extensions"] as Record<string, unknown> | undefined;
+      extensions = (problem["extensions"] as Record<string, unknown> | undefined) ?? problem;
       code =
         (extensions?.["code"] as string | undefined) ??
         (problem["code"] as string | undefined);
@@ -549,6 +549,36 @@ export const api = {
       headers: { "X-Keep-Request-Version": version },
       body: JSON.stringify({ reason }),
     }),
+  setResponsible: (requestId: string, accountUserId: string, version: string) =>
+    apiFetch<KeepRequestDetailResult>(`/keep/requests/${requestId}/responsible`, {
+      method: "PUT",
+      headers: { "X-Keep-Request-Version": version },
+      body: JSON.stringify({ accountUserId }),
+    }),
+  clearResponsible: (requestId: string, version: string) =>
+    apiFetch<KeepRequestDetailResult>(`/keep/requests/${requestId}/responsible`, {
+      method: "DELETE",
+      headers: { "X-Keep-Request-Version": version },
+      body: JSON.stringify({}),
+    }),
+  addWatcher: (requestId: string, accountUserId: string, version: string) =>
+    apiFetch<KeepRequestDetailResult>(
+      `/keep/requests/${requestId}/watchers/${encodeURIComponent(accountUserId)}`,
+      {
+        method: "PUT",
+        headers: { "X-Keep-Request-Version": version },
+        body: JSON.stringify({}),
+      },
+    ),
+  removeWatcher: (requestId: string, accountUserId: string, version: string) =>
+    apiFetch<KeepRequestDetailResult>(
+      `/keep/requests/${requestId}/watchers/${encodeURIComponent(accountUserId)}`,
+      {
+        method: "DELETE",
+        headers: { "X-Keep-Request-Version": version },
+        body: JSON.stringify({}),
+      },
+    ),
   selfWatch: (requestId: string, version: string) =>
     apiFetch<KeepRequestDetailResult>(`/keep/requests/${requestId}/watch`, {
       method: "PUT",

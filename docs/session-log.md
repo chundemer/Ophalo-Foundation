@@ -1,6 +1,6 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-07-02 (S14 complete; Session 15 pilot-readiness bug/gap closure is next)
+**Last updated:** 2026-07-02 (S15a/S15b complete; S15c customer tracker page is next)
 **Branch:** `main` tracking `origin/main`
 **Last green baseline:** 939 unit · 14 arch · 713 integration = 1,666 total, 0 failures (1 pre-existing KeepG5 fluke excluded)
 **Next free ADR:** ADR-385
@@ -34,15 +34,15 @@ For every implementation slice:
 
 ## Current Work
 
-**Current build log:** TBD — create Session 15 build log before implementation
+**Current build log:** `docs/build-log/069-session-15-pilot-readiness.md`
 **Last completed build log:** `docs/build-log/068-session-14-ophalo-web-front-door.md` (Session 14)
 **Readiness working doc:** `docs/pilot-readiness-decision-questions.md`
 **Bug/gap tracker:** `docs/pilot-readiness-bug-tracker.md`
 **Foundation roadmap:** `docs/build-log/ophalo-foundation-build-plan-greenfield-boundaries-brownfield-behavior.md` section 9.1
 **Current session:** Session 15 — Pilot Readiness Bug And Gap Closure
-**Current slice:** S15a — Pilot Loop Bug Triage And First Fix Set
-**Current slice status:** Next. Pre-work complete enough for mechanical preflight; start from
-`docs/pilot-readiness-bug-tracker.md`.
+**Current slice:** S15c — GAP-002 Customer Tracker Page
+**Current slice status:** Next. This is the only remaining active pilot-readiness implementation
+item in `docs/pilot-readiness-bug-tracker.md`; `GAP-004` remains deferred.
 
 Session 13 is complete and should be treated as historical context only. Completed Session 13 details
 live in `docs/build-log/067-session-13-pwa-workbench.md`; do not carry Session 13 implementation
@@ -70,39 +70,44 @@ front door and browser token pages: homepage, About, Pilot, Privacy, Terms, `/si
 - `OperatorBaseUrl` is retired from active settings/config/test factories/runbooks; invite links now
   use `{PublicBaseUrl}/invite/accept`.
 
-### S15a Handoff Brief
+### S15c Handoff Brief
 
-Classify S15a as mechanical implementation preflight plus focused bug fixes. Do not rediscover the
-S14 public-front-door decisions. Use targeted checks against the tracker and current code.
+Classify S15c as mechanical implementation preflight plus customer tracker page. Do not rediscover
+the S14 public-front-door decisions or the S15a/S15b bug fixes. Use targeted checks against the
+existing customer-page API contract and current `ophalo-web` route patterns.
 
-Recommended first fix set:
+Intent: make staff-shared tracker links work for customers. Staff/share flows already build
+`{PublicBaseUrl}/keep/r/{pageToken}`; today that route 404s in `ophalo-web` even though
+`OpHalo.Api` exposes JSON at `GET /keep/r/{pageToken}`.
 
-- `BUG-001` — share-intent stale version / false `409`;
-- `BUG-002` — `ApiError.extensions` flattened ProblemDetails parsing;
-- `BUG-004` — exchange client duplicate-email code mismatch;
-- `BUG-005` — post-capture Copy Tracker Link does not record share intent;
-- verify `GAP-003` — public intake setup exposes a usable customer-facing URL.
+Expected scope:
 
-Keep `GAP-001` assign/responsible/watcher management and `GAP-002` customer tracker page visible as
-larger follow-on slices; they may exceed a small first bug-fix batch.
+- add an `ophalo-web` route for `/keep/r/{pageToken}`;
+- read `pageToken` from the route without logging or displaying the raw token as copyable text;
+- browser-fetch `GET ${NEXT_PUBLIC_API_BASE_URL}/keep/r/{pageToken}`;
+- render a customer-facing tracker page using active Keep customer-surface rules;
+- handle unavailable/expired/invalid/cancelled/closed states according to existing backend response
+  shape and customer-page decisions;
+- avoid third-party scripts, pixels, and external links on the token-bearing page unless explicitly
+  approved;
+- preserve referrer/token leakage protections for the token-bearing route.
 
-Likely S15a file impact:
+Likely S15c file impact:
 
-- `web/ophalo-app/src/lib/apiClient.ts`
-- `web/ophalo-app/src/pages/RequestDetail.tsx`
-- `web/ophalo-app/src/components/NeedsShareBanner.tsx`
-- `web/ophalo-app/src/components/QuickCapture.tsx`
-- `web/ophalo-web/src/app/auth/exchange/ExchangeClient.tsx`
-- `web/ophalo-app/src/pages/Settings.tsx` if `GAP-003` is pulled into S15a
+- new `web/ophalo-web/src/app/keep/r/[pageToken]/page.tsx`
+- optional route-local client component under `web/ophalo-web/src/app/keep/r/[pageToken]/`
+- `web/ophalo-web/src/app/globals.css` only if existing auth/customer styles are insufficient
+- `docs/build-log/069-session-15-pilot-readiness.md`
 - `docs/pilot-readiness-bug-tracker.md`
-- new Session 15 build log under `docs/build-log/`
+- `docs/session-log.md`
 
 Expected verification:
 
-- focused frontend typecheck/build command for each touched app;
-- relevant API/integration tests only if backend behavior changes;
-- `git diff --check`;
-- update `docs/pilot-readiness-bug-tracker.md` statuses as fixes land.
+- `pnpm -C web/ophalo-web typecheck`
+- `pnpm -C web/ophalo-web build`
+- route smoke for missing/invalid token state and a valid seeded page token when available
+- `git diff --check`
+- mark `GAP-002` resolved in `docs/pilot-readiness-bug-tracker.md` only after the page works.
 
 ---
 

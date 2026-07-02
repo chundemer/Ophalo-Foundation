@@ -3,9 +3,13 @@
 **Created:** 2026-07-02
 **Purpose:** Live tracker for pilot-blocking or pilot-relevant bugs/gaps discovered during Session 14.
 **Source:** Promoted from the Pre-S14e bug register in `docs/build-log/068-session-14-ophalo-web-front-door.md`.
+**Current active item:** GAP-002 — Customer tracker page `/keep/r/{pageToken}`.
 
 This document is the current working tracker. Historical discovery notes stay in the build logs, but
 triage, status, and next-session ordering should happen here.
+
+As of S15b, all active pilot-readiness bugs/gaps in this tracker are resolved except GAP-002.
+GAP-004 remains explicitly deferred and is not the current implementation task.
 
 ## Status Legend
 
@@ -18,7 +22,7 @@ triage, status, and next-session ordering should happen here.
 
 ### BUG-001 — Share-intent leaves stale detail version
 
-**Status:** Open
+**Status:** Resolved in S15a
 **Severity:** P1
 **Area:** `ophalo-app` request detail / Keep backend concurrency
 
@@ -30,7 +34,7 @@ or instead of the local flag.
 
 ### BUG-002 — `ApiError.extensions` parsing misses flattened ProblemDetails fields
 
-**Status:** Open
+**Status:** Resolved in S15a
 **Severity:** P1
 **Area:** `ophalo-app` API client / member management errors
 
@@ -43,7 +47,7 @@ while preserving the existing fallback behavior.
 
 ### BUG-003 — Quick Capture navigation uses nonexistent URL routing
 
-**Status:** Open
+**Status:** Resolved in S15b
 **Severity:** P1
 **Area:** `ophalo-app` Quick Capture / app navigation
 
@@ -56,7 +60,7 @@ Expected fix: pass an `onSelectRequest` callback from `App.tsx` into `QuickCaptu
 
 ### BUG-004 — Magic-link exchange checks obsolete duplicate-email error code
 
-**Status:** Open
+**Status:** Resolved in S15a
 **Severity:** P2
 **Area:** `ophalo-web` magic-link exchange
 
@@ -68,7 +72,7 @@ Expected fix: check `Account.EmailAlreadyInUse`.
 
 ### BUG-005 — Post-capture Copy Tracker Link does not record share intent
 
-**Status:** Open
+**Status:** Resolved in S15a
 **Severity:** P1
 **Area:** `ophalo-app` Quick Capture / tracker sharing
 
@@ -82,7 +86,7 @@ state as needed.
 
 ### GAP-001 — Assign/clear responsible and watcher management missing
 
-**Status:** Open
+**Status:** Resolved in S15b
 **Severity:** P1
 **Area:** `ophalo-app` participation controls
 
@@ -95,7 +99,7 @@ Consequence: Operator "Available Work" is a dead end, and Owner/Admin cannot ass
 
 ### GAP-002 — Customer tracker page `/keep/r/{pageToken}` is missing
 
-**Status:** Open
+**Status:** Open — current S15c focus
 **Severity:** P1
 **Area:** `ophalo-web` customer tracker
 
@@ -104,9 +108,13 @@ tracker route. The API endpoint `/keep/r/{pageToken}` is JSON only.
 
 Consequence: tracker links shared with customers 404 until the page exists.
 
+Expected fix: add an `ophalo-web` customer tracker route at `/keep/r/{pageToken}` that fetches the
+existing API JSON from `GET /keep/r/{pageToken}` and renders a customer-facing status/tracker page
+without leaking the raw page token.
+
 ### GAP-003 — Public intake link setup does not appear to expose the usable S14g URL
 
-**Status:** Open
+**Status:** Resolved in S15a
 **Severity:** P1
 **Area:** `ophalo-app` Settings / public intake setup
 
@@ -150,7 +158,7 @@ so the claim is now backed by a route.
 
 ### POL-001 — `dev-auth.html` ships in production bundle
 
-**Status:** Open
+**Status:** Resolved in S15b
 **Severity:** P2
 **Area:** `ophalo-app` production artifact cleanup
 
@@ -161,7 +169,7 @@ Expected fix: exclude it from production builds or remove it after local runbook
 
 ### POL-002 — Settings timezone selector is hardcoded and incomplete
 
-**Status:** Open
+**Status:** Resolved in S15b
 **Severity:** P3
 **Area:** `ophalo-app` Settings
 
@@ -173,7 +181,7 @@ Expected fix: reuse the `Intl.supportedValuesOf` approach.
 
 ### POL-003 — Manual-share invite URL and clipboard-copy polish
 
-**Status:** Open
+**Status:** Resolved in S15b
 **Severity:** P3
 **Area:** `ophalo-app` Settings / share sections
 
@@ -182,7 +190,7 @@ failures in share sections are silently swallowed in the `DOMException` branch.
 
 ### POL-004 — Composer draft is split across duplicated mobile/desktop mounts
 
-**Status:** Open
+**Status:** Resolved in S15b
 **Severity:** P3
 **Area:** `ophalo-app` request detail composer
 

@@ -31,7 +31,7 @@ export function NeedsShareBanner({ requestId, pageToken, onCleared }: NeedsShare
         // user cancelled native share — don't record intent
       } else if (e instanceof ApiError) {
         setError("Could not record share. Try again.");
-      } else if (!(e instanceof DOMException)) {
+      } else {
         setError("Could not complete share. Try again.");
       }
     } finally {

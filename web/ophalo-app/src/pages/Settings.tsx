@@ -11,30 +11,14 @@ import {
 
 // ─── Timezone selector ───────────────────────────────────────────────────────
 
-const COMMON_TIMEZONES = [
-  "Australia/Sydney",
-  "Australia/Melbourne",
-  "Australia/Brisbane",
-  "Australia/Perth",
-  "Australia/Adelaide",
-  "Australia/Darwin",
-  "Australia/Hobart",
-  "Pacific/Auckland",
-  "America/New_York",
-  "America/Chicago",
-  "America/Denver",
-  "America/Los_Angeles",
-  "America/Toronto",
-  "America/Vancouver",
-  "Europe/London",
-  "Europe/Paris",
-  "Europe/Berlin",
-  "Europe/Amsterdam",
-  "Asia/Singapore",
-  "Asia/Tokyo",
-  "Asia/Hong_Kong",
-  "Asia/Dubai",
-];
+const ALL_TIMEZONES: string[] = (() => {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return [...(Intl as any).supportedValuesOf("timeZone") as string[]].sort();
+  } catch {
+    return ["UTC"];
+  }
+})();
 
 // ─── Company section ─────────────────────────────────────────────────────────
 
@@ -86,7 +70,7 @@ function CompanySection({ setup }: CompanySectionProps) {
     }
   }
 
-  const knownTz = COMMON_TIMEZONES.includes(timeZone);
+  const knownTz = ALL_TIMEZONES.includes(timeZone);
 
   return (
     <section>
@@ -119,7 +103,7 @@ function CompanySection({ setup }: CompanySectionProps) {
                 {timeZone} (custom)
               </option>
             )}
-            {COMMON_TIMEZONES.map((tz) => (
+            {ALL_TIMEZONES.map((tz) => (
               <option key={tz} value={tz}>
                 {tz}
               </option>
@@ -357,6 +341,7 @@ function memberErrorMsg(code: string | undefined, extensions?: Record<string, un
 // ─── Intake link section ──────────────────────────────────────────────────────
 
 function IntakeSection() {
+  const publicBaseUrl = import.meta.env.VITE_PUBLIC_BASE_URL as string;
   const queryClient = useQueryClient();
   const { data: intake, isLoading } = useQuery({
     queryKey: ["intake"],
@@ -368,10 +353,13 @@ function IntakeSection() {
   const [replacing, setReplacing] = useState(false);
   const [confirmReplace, setConfirmReplace] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [newIntakeUrl, setNewIntakeUrl] = useState<string | null>(null);
+  const [urlCopied, setUrlCopied] = useState(false);
 
   async function handleEnsure() {
     setEnsuring(true);
     setError(null);
+    setNewIntakeUrl(null);
     try {
       const result = await api.ensureIntake();
       queryClient.setQueryData<IntakeStatusResult>(["intake"], {
@@ -379,6 +367,9 @@ function IntakeSection() {
         publicSlug: result.publicSlug,
         createdAtUtc: null,
       });
+      if (result.rawToken) {
+        setNewIntakeUrl(`${publicBaseUrl}/keep/intake/${result.rawToken}`);
+      }
     } catch {
       setError("Something went wrong. Please try again.");
     } finally {
@@ -390,6 +381,7 @@ function IntakeSection() {
     setReplacing(true);
     setError(null);
     setConfirmReplace(false);
+    setNewIntakeUrl(null);
     try {
       const result = await api.replaceIntake();
       queryClient.setQueryData<IntakeStatusResult>(["intake"], {
@@ -397,6 +389,7 @@ function IntakeSection() {
         publicSlug: result.publicSlug,
         createdAtUtc: null,
       });
+      setNewIntakeUrl(`${publicBaseUrl}/keep/intake/${result.rawToken}`);
     } catch {
       setError("Something went wrong. Please try again.");
     } finally {
@@ -404,15 +397,38 @@ function IntakeSection() {
     }
   }
 
+  async function handleCopyIntakeUrl() {
+    if (!newIntakeUrl) return;
+    try {
+      await navigator.clipboard.writeText(newIntakeUrl);
+      setUrlCopied(true);
+      setTimeout(() => setUrlCopied(false), 2000);
+    } catch {
+      // clipboard denied; no-op
+    }
+  }
+
   return (
     <section>
       <h2 className="text-base font-semibold text-slate-900 mb-4">Intake link</h2>
       {isLoading && <p className="text-sm text-slate-400">Loading…</p>}
+      {newIntakeUrl && (
+        <div className="mb-4 rounded-md border border-emerald-200 bg-emerald-50 p-3 space-y-2">
+          <p className="text-xs font-medium text-emerald-800">Intake link ready — copy and share with customers. This URL is shown once.</p>
+          <p className="text-xs font-mono text-emerald-900 break-all">{newIntakeUrl}</p>
+          <button
+            onClick={() => void handleCopyIntakeUrl()}
+            className="rounded-md bg-emerald-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-600"
+          >
+            {urlCopied ? "Copied!" : "Copy intake link"}
+          </button>
+        </div>
+      )}
       {intake && !intake.hasActiveLink && (
         <div className="space-y-3">
           <p className="text-sm text-slate-600">No active intake link. Create one to allow customers to submit requests.</p>
           <button
-            onClick={handleEnsure}
+            onClick={() => void handleEnsure()}
             disabled={ensuring}
             className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-50"
           >
@@ -440,7 +456,7 @@ function IntakeSection() {
               </p>
               <div className="flex gap-3">
                 <button
-                  onClick={handleReplace}
+                  onClick={() => void handleReplace()}
                   disabled={replacing}
                   className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-50"
                 >
@@ -823,9 +839,19 @@ function MemberRow({ member, callerRole, onRefresh }: MemberRowProps) {
       {rowError && <p className="mt-1.5 text-xs text-red-600">{rowError}</p>}
       {manualShareUrl && (
         <div className="mt-2 rounded-md bg-amber-50 border border-amber-200 p-2">
-          <p className="text-xs text-amber-800 mb-1">
-            Use this only if the invite email was not received. Anyone with this link can accept the invite.
-          </p>
+          <div className="flex items-start justify-between gap-2">
+            <p className="text-xs text-amber-800 mb-1">
+              Use this only if the invite email was not received. Anyone with this link can accept the invite.
+            </p>
+            <button
+              type="button"
+              onClick={() => setManualShareUrl(null)}
+              className="text-amber-600 hover:text-amber-900 shrink-0"
+              aria-label="Dismiss"
+            >
+              ×
+            </button>
+          </div>
           <p className="text-xs font-mono text-amber-900 break-all">{manualShareUrl}</p>
         </div>
       )}

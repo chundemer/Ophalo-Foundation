@@ -58,7 +58,7 @@ export default function ExchangeClient({ code }: { code: string }) {
             window.location.assign("/auth/exchange/error?reason=pilot_full");
             return;
           }
-          if (errorCode === "Account.NewAccountEmailAlreadyRegistered") {
+          if (errorCode === "Account.EmailAlreadyInUse") {
             window.location.assign(
               "/auth/exchange/error?reason=account_already_exists",
             );

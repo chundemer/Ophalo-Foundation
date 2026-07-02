@@ -154,7 +154,12 @@ function AppShell() {
       )}
 
       {/* Quick Capture modal/drawer */}
-      {captureOpen && <QuickCapture onClose={() => setCaptureOpen(false)} />}
+      {captureOpen && (
+        <QuickCapture
+          onClose={() => setCaptureOpen(false)}
+          onSelectRequest={(id) => { selectRequest(id); setCaptureOpen(false); }}
+        />
+      )}
     </div>
   );
 }

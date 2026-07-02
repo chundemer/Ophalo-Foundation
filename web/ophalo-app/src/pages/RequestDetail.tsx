@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ChevronLeft,
@@ -895,12 +895,38 @@ interface ParticipationSectionProps {
 }
 
 function ParticipationSection({ requestId, detail, onDetailUpdated }: ParticipationSectionProps) {
-  const { canWatch, canUnwatch, canMute, canUnmute } = detail.availableActions;
+  const { canWatch, canUnwatch, canMute, canUnmute, canAssignResponsible } = detail.availableActions;
 
   const [submitting, setSubmitting] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [assignUserId, setAssignUserId] = useState("");
+  const [addWatcherUserId, setAddWatcherUserId] = useState("");
 
-  if (!canWatch && !canUnwatch && !canMute && !canUnmute) return null;
+  const { data: membersData } = useQuery({
+    queryKey: ["members"],
+    queryFn: () => api.listMembers(),
+    enabled: canAssignResponsible,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const activeMembers = useMemo(
+    () => membersData?.members.filter((m) => m.status === "active") ?? [],
+    [membersData],
+  );
+
+  const responsible = detail.participants.find(
+    (p) => p.participationType === "responsible" && !p.detachedAtUtc,
+  );
+  const watchers = detail.participants.filter(
+    (p) => p.participationType === "watching" && !p.detachedAtUtc,
+  );
+  const watcherIds = useMemo(() => new Set(watchers.map((w) => w.accountUserId)), [watchers]);
+  const assignableMembers = activeMembers.filter(
+    (m) => m.accountUserId !== responsible?.accountUserId,
+  );
+  const addableWatchers = activeMembers.filter((m) => !watcherIds.has(m.accountUserId));
+
+  if (!canWatch && !canUnwatch && !canMute && !canUnmute && !canAssignResponsible) return null;
 
   async function act(key: string, fn: () => Promise<KeepRequestDetailResult>) {
     if (submitting) return;
@@ -926,6 +952,108 @@ function ParticipationSection({ requestId, detail, onDetailUpdated }: Participat
       {error && (
         <p className="mb-2 rounded-md p-2 text-xs bg-red-50 border border-red-200 text-red-700">{error}</p>
       )}
+
+      {/* Admin: responsible assignment */}
+      {canAssignResponsible && (
+        <div className="mb-3">
+          <p className="text-xs text-slate-500 mb-1.5">Responsible</p>
+          {responsible ? (
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-sm text-slate-700">{responsible.displayName}</span>
+              <button
+                type="button"
+                disabled={!!submitting}
+                onClick={() => void act("clear-responsible", () => api.clearResponsible(requestId, detail.version))}
+                className="text-xs text-slate-500 underline hover:text-slate-900 disabled:opacity-50"
+              >
+                {submitting === "clear-responsible" ? "Clearing…" : "Clear"}
+              </button>
+            </div>
+          ) : (
+            <div className="flex gap-2">
+              <select
+                value={assignUserId}
+                onChange={(e) => setAssignUserId(e.target.value)}
+                disabled={!!submitting}
+                className="flex-1 min-w-0 rounded-md border border-slate-300 bg-white px-2 py-1.5 text-xs text-slate-800 disabled:opacity-60 focus:outline-none focus:ring-1 focus:ring-slate-400"
+              >
+                <option value="">Select member…</option>
+                {assignableMembers.map((m) => (
+                  <option key={m.accountUserId} value={m.accountUserId}>{m.email}</option>
+                ))}
+              </select>
+              <button
+                type="button"
+                disabled={!assignUserId || !!submitting}
+                onClick={() => {
+                  if (!assignUserId) return;
+                  void act("assign-responsible", () =>
+                    api.setResponsible(requestId, assignUserId, detail.version),
+                  ).then(() => setAssignUserId(""));
+                }}
+                className="rounded-md bg-slate-900 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-slate-700 disabled:opacity-50"
+              >
+                {submitting === "assign-responsible" ? "Assigning…" : "Assign"}
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Admin: watcher management */}
+      {canAssignResponsible && (
+        <div className="mb-3">
+          <p className="text-xs text-slate-500 mb-1.5">Watchers</p>
+          {watchers.length === 0 && <p className="text-xs text-slate-400 mb-1.5">No watchers</p>}
+          {watchers.map((w) => (
+            <div key={w.accountUserId} className="flex items-center justify-between gap-2 mb-1">
+              <span className="text-xs text-slate-700">{w.displayName}</span>
+              <button
+                type="button"
+                disabled={!!submitting}
+                onClick={() =>
+                  void act(`remove-watcher-${w.accountUserId}`, () =>
+                    api.removeWatcher(requestId, w.accountUserId, detail.version),
+                  )
+                }
+                className="text-xs text-slate-500 underline hover:text-slate-900 disabled:opacity-50"
+              >
+                {submitting === `remove-watcher-${w.accountUserId}` ? "Removing…" : "Remove"}
+              </button>
+            </div>
+          ))}
+          {addableWatchers.length > 0 && (
+            <div className="flex gap-2 mt-1.5">
+              <select
+                value={addWatcherUserId}
+                onChange={(e) => setAddWatcherUserId(e.target.value)}
+                disabled={!!submitting}
+                className="flex-1 min-w-0 rounded-md border border-slate-300 bg-white px-2 py-1.5 text-xs text-slate-800 disabled:opacity-60 focus:outline-none focus:ring-1 focus:ring-slate-400"
+              >
+                <option value="">Add watcher…</option>
+                {addableWatchers.map((m) => (
+                  <option key={m.accountUserId} value={m.accountUserId}>{m.email}</option>
+                ))}
+              </select>
+              <button
+                type="button"
+                disabled={!addWatcherUserId || !!submitting}
+                onClick={() => {
+                  if (!addWatcherUserId) return;
+                  void act("add-watcher", () =>
+                    api.addWatcher(requestId, addWatcherUserId, detail.version),
+                  ).then(() => setAddWatcherUserId(""));
+                }}
+                className="rounded-md bg-slate-900 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-slate-700 disabled:opacity-50"
+              >
+                {submitting === "add-watcher" ? "Adding…" : "Add"}
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Self: watch/mute controls */}
       <div className="flex flex-col gap-2">
         {canWatch && (
           <button
@@ -984,14 +1112,20 @@ interface BusinessUpdateSectionProps {
   requestId: string;
   detail: KeepRequestDetailResult;
   onDetailUpdated: (updated: KeepRequestDetailResult) => void;
+  draft: string;
+  onDraftChange: (v: string) => void;
+  draftStatus: string;
+  onDraftStatusChange: (v: string) => void;
 }
 
-function BusinessUpdateSection({ requestId, detail, onDetailUpdated }: BusinessUpdateSectionProps) {
+function BusinessUpdateSection({ requestId, detail, onDetailUpdated, draft, onDraftChange, draftStatus, onDraftStatusChange }: BusinessUpdateSectionProps) {
   const { canSendBusinessUpdate, canChangeStatus, allowedStatuses } = detail.availableActions;
   const maxLength = detail.validation.businessUpdateMaxLength;
 
-  const [message, setMessage] = useState("");
-  const [selectedStatus, setSelectedStatus] = useState("");
+  const message = draft;
+  const setMessage = onDraftChange;
+  const selectedStatus = draftStatus;
+  const setSelectedStatus = onDraftStatusChange;
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [conflictDisabled, setConflictDisabled] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -1096,6 +1230,8 @@ interface RequestDetailProps {
 export function RequestDetail({ requestId, onBack }: RequestDetailProps) {
   const [shareCleared, setShareCleared] = useState(false);
   const [contactModal, setContactModal] = useState<{ direction: string; channel: string } | null>(null);
+  const [businessUpdateDraft, setBusinessUpdateDraft] = useState("");
+  const [businessUpdateDraftStatus, setBusinessUpdateDraftStatus] = useState("");
   const queryClient = useQueryClient();
 
   const { data: detail, isLoading, isError, error } = useQuery({
@@ -1108,6 +1244,7 @@ export function RequestDetail({ requestId, onBack }: RequestDetailProps) {
 
   function handleShareCleared() {
     setShareCleared(true);
+    void queryClient.invalidateQueries({ queryKey: ["request-detail", requestId] });
   }
 
   function handleDetailUpdated(updated: KeepRequestDetailResult) {
@@ -1213,6 +1350,10 @@ export function RequestDetail({ requestId, onBack }: RequestDetailProps) {
                 requestId={requestId}
                 detail={detail}
                 onDetailUpdated={handleDetailUpdated}
+                draft={businessUpdateDraft}
+                onDraftChange={setBusinessUpdateDraft}
+                draftStatus={businessUpdateDraftStatus}
+                onDraftStatusChange={setBusinessUpdateDraftStatus}
               />
               <StatusChangeSection
                 requestId={requestId}
@@ -1251,6 +1392,10 @@ export function RequestDetail({ requestId, onBack }: RequestDetailProps) {
               requestId={requestId}
               detail={detail}
               onDetailUpdated={handleDetailUpdated}
+              draft={businessUpdateDraft}
+              onDraftChange={setBusinessUpdateDraft}
+              draftStatus={businessUpdateDraftStatus}
+              onDraftStatusChange={setBusinessUpdateDraftStatus}
             />
             <StatusChangeSection
               requestId={requestId}
