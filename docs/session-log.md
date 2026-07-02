@@ -1,6 +1,6 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-07-02 (S15a/S15b complete; S15c customer tracker page is next)
+**Last updated:** 2026-07-02 (S15a/S15b/S15c complete; all pilot-readiness items resolved)
 **Branch:** `main` tracking `origin/main`
 **Last green baseline:** 939 unit · 14 arch · 713 integration = 1,666 total, 0 failures (1 pre-existing KeepG5 fluke excluded)
 **Next free ADR:** ADR-385
@@ -40,9 +40,7 @@ For every implementation slice:
 **Bug/gap tracker:** `docs/pilot-readiness-bug-tracker.md`
 **Foundation roadmap:** `docs/build-log/ophalo-foundation-build-plan-greenfield-boundaries-brownfield-behavior.md` section 9.1
 **Current session:** Session 15 — Pilot Readiness Bug And Gap Closure
-**Current slice:** S15c — GAP-002 Customer Tracker Page
-**Current slice status:** Next. This is the only remaining active pilot-readiness implementation
-item in `docs/pilot-readiness-bug-tracker.md`; `GAP-004` remains deferred.
+**Current slice:** S15c — complete. All active pilot-readiness items in `docs/pilot-readiness-bug-tracker.md` are resolved. `GAP-004` remains deferred. No further pilot-readiness slices remain.
 
 Session 13 is complete and should be treated as historical context only. Completed Session 13 details
 live in `docs/build-log/067-session-13-pwa-workbench.md`; do not carry Session 13 implementation
@@ -70,44 +68,16 @@ front door and browser token pages: homepage, About, Pilot, Privacy, Terms, `/si
 - `OperatorBaseUrl` is retired from active settings/config/test factories/runbooks; invite links now
   use `{PublicBaseUrl}/invite/accept`.
 
-### S15c Handoff Brief
+### S15c — Complete
 
-Classify S15c as mechanical implementation preflight plus customer tracker page. Do not rediscover
-the S14 public-front-door decisions or the S15a/S15b bug fixes. Use targeted checks against the
-existing customer-page API contract and current `ophalo-web` route patterns.
+Added `web/ophalo-web/src/app/keep/r/[pageToken]/page.tsx` (server component). Fetches
+`GET /keep/r/{pageToken}` with `cache: "no-store"` and renders three states: unavailable (404/error),
+expired (410), active (200 — status, description, event timeline). Token never rendered as copyable
+text. Metadata: `robots noindex/nofollow`, `referrer no-referrer`. Added minimal tracker CSS to
+`globals.css`. Customer message/feedback submission forms deferred to a future slice.
 
-Intent: make staff-shared tracker links work for customers. Staff/share flows already build
-`{PublicBaseUrl}/keep/r/{pageToken}`; today that route 404s in `ophalo-web` even though
-`OpHalo.Api` exposes JSON at `GET /keep/r/{pageToken}`.
-
-Expected scope:
-
-- add an `ophalo-web` route for `/keep/r/{pageToken}`;
-- read `pageToken` from the route without logging or displaying the raw token as copyable text;
-- browser-fetch `GET ${NEXT_PUBLIC_API_BASE_URL}/keep/r/{pageToken}`;
-- render a customer-facing tracker page using active Keep customer-surface rules;
-- handle unavailable/expired/invalid/cancelled/closed states according to existing backend response
-  shape and customer-page decisions;
-- avoid third-party scripts, pixels, and external links on the token-bearing page unless explicitly
-  approved;
-- preserve referrer/token leakage protections for the token-bearing route.
-
-Likely S15c file impact:
-
-- new `web/ophalo-web/src/app/keep/r/[pageToken]/page.tsx`
-- optional route-local client component under `web/ophalo-web/src/app/keep/r/[pageToken]/`
-- `web/ophalo-web/src/app/globals.css` only if existing auth/customer styles are insufficient
-- `docs/build-log/069-session-15-pilot-readiness.md`
-- `docs/pilot-readiness-bug-tracker.md`
-- `docs/session-log.md`
-
-Expected verification:
-
-- `pnpm -C web/ophalo-web typecheck`
-- `pnpm -C web/ophalo-web build`
-- route smoke for missing/invalid token state and a valid seeded page token when available
-- `git diff --check`
-- mark `GAP-002` resolved in `docs/pilot-readiness-bug-tracker.md` only after the page works.
+Verification: `pnpm -C web/ophalo-web typecheck` clean; `pnpm -C web/ophalo-web build` emits
+`ƒ /keep/r/[pageToken]`, 0 errors.
 
 ---
 

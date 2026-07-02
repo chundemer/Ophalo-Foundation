@@ -3,13 +3,13 @@
 **Created:** 2026-07-02
 **Purpose:** Live tracker for pilot-blocking or pilot-relevant bugs/gaps discovered during Session 14.
 **Source:** Promoted from the Pre-S14e bug register in `docs/build-log/068-session-14-ophalo-web-front-door.md`.
-**Current active item:** GAP-002 — Customer tracker page `/keep/r/{pageToken}`.
+**Current active item:** None — all pilot-readiness items resolved. GAP-004 remains explicitly deferred.
 
 This document is the current working tracker. Historical discovery notes stay in the build logs, but
 triage, status, and next-session ordering should happen here.
 
-As of S15b, all active pilot-readiness bugs/gaps in this tracker are resolved except GAP-002.
-GAP-004 remains explicitly deferred and is not the current implementation task.
+As of S15c, all active pilot-readiness bugs/gaps in this tracker are resolved.
+GAP-004 remains explicitly deferred and is not a current implementation task.
 
 ## Status Legend
 
@@ -99,7 +99,7 @@ Consequence: Operator "Available Work" is a dead end, and Owner/Admin cannot ass
 
 ### GAP-002 — Customer tracker page `/keep/r/{pageToken}` is missing
 
-**Status:** Open — current S15c focus
+**Status:** Resolved in S15c
 **Severity:** P1
 **Area:** `ophalo-web` customer tracker
 

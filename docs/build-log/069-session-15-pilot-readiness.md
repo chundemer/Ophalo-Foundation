@@ -109,8 +109,7 @@ Replaced the 22-entry hardcoded `COMMON_TIMEZONES` array with `Intl.supportedVal
 
 ## S15c — GAP-002: Customer Tracker Page
 
-**Slice status:** Next. This is the only remaining active pilot-readiness implementation item in
-`docs/pilot-readiness-bug-tracker.md`; `GAP-004` remains deferred.
+**Slice status:** Complete.
 
 ### Intent
 
@@ -139,10 +138,32 @@ exposes customer-page JSON at `GET /keep/r/{pageToken}`.
 - `docs/pilot-readiness-bug-tracker.md`
 - `docs/session-log.md`
 
+### Implementation
+
+Server component only (no client component needed for read-only slice). `fetchPage` fetches
+`GET /keep/r/{pageToken}` with `cache: "no-store"` and maps to one of three render states:
+
+- **unavailable** (404, network error, or missing env): "This link is not available."
+- **expired** (410): businessName + referenceCode + expired message.
+- **active** (200): businessName, referenceCode, status label + currentStatusText, description,
+  event timeline. `pageToken` is never rendered as copyable text.
+
+Status labels map all seven status strings. Event timeline renders with actor ("You" / "Business")
+and falls back to a label when `content` is null. Metadata sets `robots: noindex/nofollow` and
+`referrer: no-referrer`. Added `.auth-page h2`, `.tracker-events`, `.tracker-event`,
+`.tracker-event-meta`, `.tracker-event-content` to `globals.css`.
+
+Scope decision: customer message/feedback submission forms deferred to a future slice. Read-only
+tracker resolves GAP-002.
+
+### Changed files
+
+- `web/ophalo-web/src/app/keep/r/[pageToken]/page.tsx` (new)
+- `web/ophalo-web/src/app/globals.css` (minimal tracker styles + `.auth-page h2`)
+
 ### Verification
 
-- `pnpm -C web/ophalo-web typecheck`
-- `pnpm -C web/ophalo-web build`
-- route smoke for missing/invalid token state and a valid seeded page token when available
-- `git diff --check`
-- mark `GAP-002` resolved in `docs/pilot-readiness-bug-tracker.md` only after the page works.
+- `pnpm -C web/ophalo-web typecheck` — clean
+- `pnpm -C web/ophalo-web build` — `/keep/r/[pageToken]` emitted as dynamic (ƒ), 0 errors
+- `git diff --check` — clean
+- `GAP-002` marked resolved in `docs/pilot-readiness-bug-tracker.md`

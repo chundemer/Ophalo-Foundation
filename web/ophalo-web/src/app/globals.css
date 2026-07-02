@@ -239,6 +239,14 @@ body {
   margin-bottom: 12px;
 }
 
+.auth-page h2 {
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  margin-top: 32px;
+  margin-bottom: 16px;
+}
+
 .auth-page p {
   font-size: 16px;
   line-height: 1.6;
@@ -359,4 +367,29 @@ body {
   background: var(--ophalo-attention-bg);
   color: var(--ophalo-attention);
   border-radius: 6px;
+}
+
+.tracker-events {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.tracker-event {
+  border-left: 2px solid color-mix(in srgb, var(--ophalo-navy) 20%, transparent);
+  padding: 4px 0 4px 16px;
+  margin-bottom: 20px;
+}
+
+.tracker-event-meta {
+  font-size: 13px;
+  color: color-mix(in srgb, var(--ophalo-navy) 50%, transparent);
+  margin-bottom: 4px;
+}
+
+.tracker-event-content {
+  font-size: 15px;
+  color: color-mix(in srgb, var(--ophalo-navy) 80%, transparent);
+  line-height: 1.5;
+  margin: 0;
 }
