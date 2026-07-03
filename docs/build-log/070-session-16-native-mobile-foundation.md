@@ -1,9 +1,9 @@
 # Build Log 070 — Session 16: Native Mobile App Foundation
 
 **Started:** 2026-07-02
-**Status:** S16b complete (scaffold verified on iOS simulator); S16c–S16e planned
+**Status:** S16d complete (backend mobile auth/device contracts committed); S16e planned
 **Next free ADR before this log:** ADR-385
-**Next free ADR after this log:** ADR-395
+**Next free ADR after this log:** ADR-396
 
 ---
 
@@ -62,6 +62,84 @@ one-time handoff code, renders sterile "Device Authorized — Open Keep Mobile A
 device upsert call after auth, `GET /me/badge` TanStack polling on foreground/resume. **Done when:**
 full browser-to-app auth handoff works locally on simulator, device upsert succeeds, badge polling
 returns a count.
+
+---
+
+## Completed Slices
+
+### S16b — Mobile Project Scaffold
+
+Created `mobile/ophalo-mobile/` as an Expo Router + TypeScript project. Locked app identity in
+`app.json`: display name `OpHalo Keep`, scheme `ophalo`, iOS bundle ID and Android application ID
+`com.ophalo.keep`. Added `.env.example` with `EXPO_PUBLIC_API_URL` and `EXPO_PUBLIC_WEB_URL`.
+Verified the scaffold launches on iOS simulator and TypeScript is clean.
+
+### S16c — Auth and Secure Client Foundation
+
+Added `expo-secure-store`, token storage, durable `appInstallationId` generation, typed API client
+with Bearer injection, auth bootstrap via `GET /auth/me`, sign-in screen with
+`clientHint: "mobile"`, deep-link callback route for `ophalo://auth/callback?code=...`, and
+best-effort logout. Token-safe logging posture: API debug logging may include method/path/status
+only, never authorization header material.
+
+Verification: `npx tsc --noEmit` clean in `mobile/ophalo-mobile`; manual dev-token bootstrap
+verified `GET /auth/me` and authenticated shell rendering.
+
+### S16d — Backend Mobile Auth and Device Contracts
+
+Committed backend contract changes for native mobile auth and device registration:
+- `POST /auth/signin` accepts optional `clientHint: "mobile"` and appends `&from=mobile` to the
+  emailed magic-link exchange URL.
+- `POST /auth/exchange` with `clientType: "mobile_app"` returns a 10-minute one-time
+  `{ handoffCode, expiresAtUtc }` instead of a raw bearer session token.
+- `POST /auth/mobile-handoff/redeem` validates and atomically consumes the handoff code, creates a
+  `SessionClientType.MobileApp` session, and returns `{ sessionToken, expiresAtUtc }` directly to
+  the native app.
+- `PUT /me/devices/{appInstallationId}` accepts omitted/null `pushToken`; null-token devices remain
+  Active but push-ineligible with null token fingerprint/last-four, and token rebinding is skipped
+  when no token exists.
+
+Schema: Christian generated migration `S16dMobileHandoffAndNullableDeviceToken`, adding
+`mobile_handoff_codes` and making `account_user_devices.push_token`,
+`push_token_fingerprint`, and `token_last_four` nullable.
+
+Verification recorded in commit `80a33a0`: 53 focused integration tests passed across auth magic
+link, mobile handoff, and device registration.
+
+---
+
+## S16d Implementation Notes
+
+S16d is backend-only. It must not touch `ophalo-web` or mobile UI files; those are S16e.
+
+Implemented mutation families:
+- Mobile sign-in hint and exchange behavior: `clientHint: "mobile"` on `/auth/signin`,
+  `&from=mobile` magic links, and mobile `/auth/exchange` returning `{ handoffCode, expiresAtUtc }`
+  instead of `{ sessionToken, expiresAtUtc }`.
+- Mobile handoff-code creation/redeem: 10-minute one-time code, hash-only storage, atomic consume,
+  same generic invalid-or-expired response for expired/consumed/unknown codes, and
+  `SessionClientType.MobileApp` session creation on redeem.
+- Nullable device token registration: omitted/null `pushToken` accepted, null derived fields, no
+  token-rebinding revocation when no token exists, and push-ineligible handling for null-token rows.
+
+Completed schema work:
+- nullable `AccountUserDevices.PushToken`;
+- nullable token-derived columns `PushTokenFingerprint` and `TokenLastFour`;
+- new `mobile_handoff_codes` table/entity with hash, expiry, consumed timestamp, and safe
+  account/user context for redemption.
+
+Migration: Christian generated `S16dMobileHandoffAndNullableDeviceToken`.
+
+Completed test posture:
+- update existing `clientType: "mobile_app"` exchange tests to expect `handoffCode`;
+- add redemption success, expired, consumed, unknown, and concurrent redemption tests;
+- add nullable-push-token registration tests and response/raw-token redaction assertions;
+- run focused auth/device integration tests.
+
+Post-review tightening before S16e: mobile V1 sign-in remains existing-member only. New account
+creation and invite acceptance stay web/PWA-owned; `clientType: "mobile_app"` must not provision an
+`EntryContext.NewAccount` code. Add/keep focused tests for that boundary and for
+`clientHint: "mobile"` producing `from=mobile` in the emailed link.
 
 ---
 
@@ -133,6 +211,8 @@ Sign-in flow:
     SecureStore.
 
 `POST /auth/start` (new account) is not modified — new account creation is browser-only in V1.
+`POST /auth/exchange` with `clientType: "mobile_app"` must not provision an `EntryContext.NewAccount`
+code; the code must remain usable by the browser signup exchange path.
 
 ### ADR-390 — Mobile auth handoff page is sterile; one-time code delivered via click-bound scheme
 
@@ -210,6 +290,24 @@ Devices with no push token are registered as Active but push-ineligible; S18 upd
 
 Device name and device model are not sent — no extra collection beyond what ADR-355/356 established
 as minimum fields.
+
+### ADR-395 — Account creation and invite acceptance remain web-owned in V1
+
+New account creation and invite acceptance remain owned by the web/PWA experience for V1. The native
+app sign-in surface is for existing members only. This keeps mobile onboarding scope small, avoids
+premature native signup/invite UX commitments before pilot customer usage, and reduces app-store
+review surface while the product workflow is still being learned.
+
+Recommended V1 flow:
+- New owners create the account on web/PWA, then install/open the native app and sign in as an
+  existing member.
+- Invited members accept the invite on web/PWA. A later slice may add a deliberate post-success
+  web-to-app handoff so they do not need a second email sign-in, but native invite acceptance is not
+  part of S16.
+
+Backend boundary: generic mobile exchange must not silently create accounts from new-account auth
+codes. If a future mobile onboarding flow is desired, it should be designed as an explicit product
+surface and contract rather than falling out of the sign-in handoff path.
 
 ---
 

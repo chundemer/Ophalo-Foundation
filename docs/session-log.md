@@ -1,9 +1,9 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-07-02 (S16b complete; mobile scaffold launches on iOS simulator)
+**Last updated:** 2026-07-03 (S16d complete; S16e next)
 **Branch:** `main` tracking `origin/main`
 **Last green baseline:** 939 unit · 14 arch · 713 integration = 1,666 total, 0 failures (1 pre-existing KeepG5 fluke excluded)
-**Next free ADR:** ADR-395
+**Next free ADR:** ADR-396
 **Current session:** Session 16 — Native Mobile App Foundation
 
 ---
@@ -40,9 +40,8 @@ For every implementation slice:
 **Bug/gap tracker:** `docs/pilot-readiness-bug-tracker.md`
 **Foundation roadmap:** `docs/build-log/ophalo-foundation-build-plan-greenfield-boundaries-brownfield-behavior.md` section 9.1
 **Current session:** Session 16 — Native Mobile App Foundation
-**Current slice:** S16c complete. Auth and secure client foundation in place. Next: S16d (backend
-contract changes — clientHint, handoff-code exchange/redeem, nullable pushToken device registration,
-EF migration).
+**Current slice:** S16d is complete. Next: S16d follow-up tightening, then S16e (web/mobile handoff
+surface, device upsert, badge hooks).
 
 ### S16c — Complete
 
@@ -67,6 +66,35 @@ Error handling contract established: `logout` and `bootstrap` never throw; `stor
 
 Verification: TypeScript clean (`npx tsc --noEmit`). Manually verified: bearer token stored via dev
 field → `GET /auth/me` succeeds → Requests tab rendered. `git diff --check` clean.
+
+### S16d — Complete
+
+Committed backend mobile auth and device contracts in `80a33a0`.
+
+Implemented:
+- `POST /auth/signin` accepts optional `clientHint: "mobile"` and issues magic links with
+  `&from=mobile`.
+- `POST /auth/exchange` with `clientType: "mobile_app"` consumes the magic-link code and returns a
+  10-minute one-time `{ handoffCode, expiresAtUtc }`, never a raw bearer token.
+- `POST /auth/mobile-handoff/redeem` consumes the handoff code atomically and returns
+  `{ sessionToken, expiresAtUtc }` for a `SessionClientType.MobileApp` session.
+- `PUT /me/devices/{appInstallationId}` accepts omitted/null `pushToken`; null-token devices are
+  Active but push-ineligible, with null fingerprint/last-four and no token-rebinding revocation.
+
+Schema: Christian generated migration `S16dMobileHandoffAndNullableDeviceToken`.
+
+Verification recorded in commit: 53 focused integration tests passed across auth magic link, mobile
+handoff, and device registration.
+
+### S16d Follow-Up Tightening — Next
+
+Before S16e, patch the reviewed contract gap:
+- Native V1 sign-in remains existing-member only.
+- New account creation and invite acceptance remain web/PWA-owned in V1 (ADR-395).
+- `POST /auth/exchange` with `clientType: "mobile_app"` must not provision
+  `EntryContext.NewAccount` codes; the code should remain usable by the browser signup path.
+- Add/keep focused tests for that boundary and for `clientHint: "mobile"` producing `from=mobile` in
+  the emailed link.
 
 Session 13 is complete and should be treated as historical context only. Completed Session 13 details
 live in `docs/build-log/067-session-13-pwa-workbench.md`; do not carry Session 13 implementation
@@ -132,19 +160,6 @@ bugs/gaps in `docs/pilot-readiness-bug-tracker.md`, including the S15c customer 
    Quick Capture, public intake, tracker sharing, attention/follow-up/status-check behavior,
    close/cancel, feedback review, Spam/Test, weekly reporting, support runbooks, notification posture,
    store-readiness evidence, and known limitations.
-
-### S15c — Complete
-
-Added `web/ophalo-web/src/app/keep/r/[pageToken]/page.tsx` (server component). Fetches
-`GET /keep/r/{pageToken}` with `cache: "no-store"` and renders three states: unavailable (404/error),
-expired (410), active (200 — status, description, event timeline). Token never rendered as copyable
-text. Metadata: `robots noindex/nofollow`, `referrer no-referrer`. Added minimal tracker CSS to
-`globals.css`. Customer message/feedback submission forms deferred to a future slice.
-
-Verification: `pnpm -C web/ophalo-web typecheck` clean; `pnpm -C web/ophalo-web build` emits
-`ƒ /keep/r/[pageToken]`, 0 errors.
-
----
 
 ## Carry-Forward Boundaries
 
