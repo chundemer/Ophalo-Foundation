@@ -1,10 +1,10 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-07-02 (S16e implemented; pending manual verification)
+**Last updated:** 2026-07-03 (S16 complete; S17 next)
 **Branch:** `main` tracking `origin/main`
 **Last green baseline:** 939 unit · 14 arch · 713 integration = 1,666 total, 0 failures (1 pre-existing KeepG5 fluke excluded)
 **Next free ADR:** ADR-396
-**Current session:** Session 16 — Native Mobile App Foundation
+**Current session:** Session 17 — Native Operator Field App
 
 ---
 
@@ -98,7 +98,7 @@ Implemented:
 - Focused tests cover the rejected mobile new-account exchange, no graph creation, browser reuse of
   the same code, and `clientHint: "mobile"` producing `from=mobile` in the emailed link.
 
-### S16e — Current
+### S16e — Complete
 
 **Classification:** Mechanical implementation preflight. Decisions are locked in build log 070 and
 ADR-389/390/391/392/393/394/395. Do not rediscover the mobile stack, app identity, custom-scheme
@@ -133,69 +133,14 @@ focused tests/type checks. Present the exact file-level gate before editing.
 - Do not expose raw bearer tokens in browser state, DOM text, custom-scheme URLs, logs, or
   `ophalo-web` response bodies.
 
-**Implementation complete.** Changed files: `web/ophalo-web/src/app/auth/exchange/page.tsx` (added
-`from` param routing), `web/ophalo-web/src/app/auth/exchange/MobileExchangeClient.tsx` (new —
-sterile handoff page, `credentials: "omit"`, tap-only `ophalo://` link),
-`mobile/ophalo-mobile/src/api/client.ts` (added `api.put`),
-`mobile/ophalo-mobile/src/auth/AuthContext.tsx` (best-effort `upsertDevice` after `storeToken` and
-bootstrap), `mobile/ophalo-mobile/src/hooks/useBadge.ts` (new — TanStack Query poll + AppState
-foreground refetch), `mobile/ophalo-mobile/app/_layout.tsx` (QueryClientProvider, focusManager
-wired to AppState), `mobile/ophalo-mobile/app/(tabs)/index.tsx` (badge count display),
-`mobile/ophalo-mobile/package.json` + `package-lock.json` (`@tanstack/react-query@^5.101.2`).
-TypeScript clean on both projects. Pending Christian's manual verification below before commit.
-
-**S16e manual verification steps (do in order):**
-
-*Prerequisites — start all three services:*
-1. Start the API: `dotnet run --project src/OpHalo.Api` (confirm on `http://localhost:5092`)
-2. Start ophalo-web: `cd web/ophalo-web && npm run dev` (confirm on `http://localhost:3000`)
-3. Start the iOS simulator: `cd mobile/ophalo-mobile && npx expo run:ios`
-
-*Step 1 — Confirm `?from=mobile` routing:*
-4. Open `http://localhost:3000/auth/exchange?code=FAKE&from=mobile` in a desktop browser.
-   Expected: "Authorizing device…" then inline error — not a redirect to `/auth/exchange/error`.
-5. Open `http://localhost:3000/auth/exchange?code=FAKE` (no `from`).
-   Expected: "Signing you in…" from the existing ExchangeClient — confirms routing split is clean.
-6. In DevTools → Network, find the `POST /auth/exchange` from step 4. Confirm no `Cookie` header
-   (credentials: "omit" in effect).
-
-*Step 2 — Full mobile sign-in handoff flow:*
-7. In the simulator, go to sign-in screen. Enter email, tap "Send Magic Link".
-8. Watch the API terminal — the magic link URL prints to stderr (no Resend key needed locally).
-   Confirm it contains `&from=mobile`.
-9. Copy the link from the terminal and open it in a desktop browser (Safari or Chrome on your Mac).
-   Expected: "Authorizing device…" → "Device Authorized — Tap the button below to open OpHalo Keep"
-   with one "Open Keep Mobile App" link and fallback copy below it.
-10. Click "Open Keep Mobile App". Simulator should intercept `ophalo://auth/callback?code=...`,
-    show "Signing you in…" briefly, then land on the authenticated Requests screen.
-11. Confirm no raw bearer token appears in the browser URL bar, DOM, or browser history — only the
-    short-lived handoff code.
-
-*Step 3 — Device upsert (sign-in path):*
-12. In the API terminal, find `PUT /me/devices/{appInstallationId}` fired after step 10.
-    Confirm `platform` and `appVersion` present, `pushToken` null/absent.
-    Or query: `SELECT * FROM account_user_devices ORDER BY created_at DESC LIMIT 1`.
-
-*Step 4 — Badge polling and foreground refetch:*
-13. On the Requests screen, watch API logs — `GET /me/badge` should fire within ~5 seconds.
-14. Background the app (press Home), wait ~15 seconds, foreground it.
-    Expected: `GET /me/badge` fires again on return (AppState → focusManager wiring).
-
-*Step 5 — Device upsert (bootstrap path):*
-15. Fully kill the app in the simulator (swipe up to close). Relaunch it.
-    Expected: lands straight on authenticated Requests screen.
-    `PUT /me/devices/{appInstallationId}` appears in API logs on bootstrap — same installId as step 12.
-
-*Step 6 — Error states:*
-16. Re-open the same magic link URL from step 9 in a new tab (already consumed).
-    Expected: inline error state in the browser — not a redirect.
-17. Copy the `ophalo://auth/callback?code=...` URL from step 10 (already redeemed), paste into
-    Safari address bar. Expected: app opens callback screen and shows expired/used error.
-
-*Step 7 — Final diff check:*
-18. `git diff --stat HEAD` — confirm exactly the 9 S16e files.
-19. `cd web/ophalo-web && npx tsc --noEmit` — zero errors.
-20. `cd mobile/ophalo-mobile && npx tsc --noEmit` — zero errors.
+Committed across `b20679e`, `c404652`, `e4d7326`. Key changes: `MobileExchangeClient` (sterile
+handoff page, `credentials: "omit"`, tap-only `ophalo://` link), `page.tsx` routes on `?from=mobile`,
+`api.put` added, `upsertDevice` best-effort after sign-in and bootstrap, TanStack Query installed with
+`QueryClientProvider` and `AppState → focusManager` foreground wiring, `useBadge` polls
+`GET /me/badge` every 60s, `expo-crypto` `randomUUID` replaces `Math.random()` UUID,
+Viewer/unknown role gate at bootstrap and sign-in per ADR-388,
+`docs/mobile-store-submission-checklist.md` created as S19 authority document.
+139 auth/mobile/badge/device integration tests passing. TypeScript clean on both projects.
 
 Session 13 is complete and should be treated as historical context only. Completed Session 13 details
 live in `docs/build-log/067-session-13-pwa-workbench.md`; do not carry Session 13 implementation
@@ -231,12 +176,27 @@ bugs/gaps in `docs/pilot-readiness-bug-tracker.md`, including the S15c customer 
 - `OperatorBaseUrl` is retired from active settings/config/test factories/runbooks; invite links now
   use `{PublicBaseUrl}/invite/accept`.
 
+### S17 — Current (next session)
+
+**Goal:** Build the phone-first operator workflow in `mobile/ophalo-mobile/`: My Work list,
+Available list, request detail, native Quick Capture, contact handoff (`sms:`, `tel:`, `mailto:`),
+log contact, customer update, mark completed, self-assign/watch/mute, tracker sharing, refresh/resume
+behavior, and mobile-safe error states.
+
+**Pre-work:** Decisions are not yet locked. Discovery required at session start — read build log 070
+section on S17 scope and identify any unresolved API contracts or navigation decisions before
+implementation.
+
+**Hard boundaries:**
+- No real APNs/FCM or push-token capture (S18).
+- No store-submission assets or Universal Links (S19).
+- No new backend endpoints without explicit discovery — use existing Keep API contracts.
+
+---
+
 ### Remaining Sessions
 
-1. **Session 16 — Native Mobile App Foundation**
-   Create the mobile project, lock stack/build posture, configure bundle identifiers/environments,
-   establish auth/session handling, API client conventions, app shell/navigation, secure storage,
-   device registration, badge refresh hooks, and deep-link placeholders.
+1. ~~**Session 16 — Native Mobile App Foundation** — Complete~~
 2. **Session 17 — Native Operator Field App**
    Build the phone-first operator workflow: My Work, Available, request detail, native Quick Capture,
    contact handoff, log contact, customer update, mark completed, self-assign/watch/mute, tracker
