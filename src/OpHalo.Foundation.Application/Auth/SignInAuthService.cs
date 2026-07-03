@@ -26,7 +26,7 @@ public sealed class SignInAuthService(
     IOptions<MagicLinkSettings> settings,
     ILogger<SignInAuthService> logger)
 {
-    public async Task<Result> HandleAsync(string email, CancellationToken cancellationToken)
+    public async Task<Result> HandleAsync(string email, string? clientHint, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(settings.Value.PublicBaseUrl))
             return Result.Failure(Error.Create("App.NotConfigured", "PublicBaseUrl is not configured."));
@@ -55,7 +55,10 @@ public sealed class SignInAuthService(
         // Atomic: invalidates prior codes for this AccountUser + persists the new code.
         await persistence.CommitSignInCodeAsync(code, cancellationToken);
 
-        var magicLink = $"{settings.Value.PublicBaseUrl}/auth/exchange?code={rawCode}";
+        var mobileSuffix = string.Equals(clientHint, "mobile", StringComparison.OrdinalIgnoreCase)
+            ? "&from=mobile"
+            : string.Empty;
+        var magicLink = $"{settings.Value.PublicBaseUrl}/auth/exchange?code={rawCode}{mobileSuffix}";
 
         // Best-effort — delivery failure must not change the public response (D4).
         // Non-cancellation provider exceptions are caught so enumeration protection

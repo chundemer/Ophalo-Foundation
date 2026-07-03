@@ -40,17 +40,14 @@ internal sealed class AccountUserDeviceConfiguration : IEntityTypeConfiguration<
         // Sensitive: raw push token is stored but never logged or returned.
         // Max 1024 accommodates APNs (128 hex chars) and FCM (~200+ chars) with headroom.
         builder.Property(x => x.PushToken)
-            .HasMaxLength(1024)
-            .IsRequired();
+            .HasMaxLength(1024);
 
         // SHA-256 hex digest — 64 characters.
         builder.Property(x => x.PushTokenFingerprint)
-            .HasMaxLength(64)
-            .IsRequired();
+            .HasMaxLength(64);
 
         builder.Property(x => x.TokenLastFour)
-            .HasMaxLength(10)
-            .IsRequired();
+            .HasMaxLength(10);
 
         builder.Property(x => x.AppVersion).HasMaxLength(50);
         builder.Property(x => x.DeviceName).HasMaxLength(200);
@@ -77,7 +74,7 @@ internal sealed class AccountUserDeviceConfiguration : IEntityTypeConfiguration<
 
         // Rebinding lookup: find active devices by push token fingerprint.
         builder.HasIndex(x => x.PushTokenFingerprint)
-            .HasFilter("status = 'Active'")
+            .HasFilter("status = 'Active' AND push_token_fingerprint IS NOT NULL")
             .HasDatabaseName("ix_account_user_devices_fingerprint_active");
 
         // -----------------------------------------------------------------------

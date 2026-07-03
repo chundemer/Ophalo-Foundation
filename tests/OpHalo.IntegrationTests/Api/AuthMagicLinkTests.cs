@@ -254,7 +254,7 @@ public sealed class AuthMagicLinkTests : IClassFixture<KeepApiWebFactory>, IAsyn
     // -------------------------------------------------------------------------
 
     [Fact]
-    public async Task Exchange_MobileApp_ReturnsTokenInBodyNoCookie()
+    public async Task Exchange_MobileApp_ReturnsHandoffCodeNoCookie()
     {
         var code = await IssueMagicLinkAsync();
 
@@ -263,20 +263,24 @@ public sealed class AuthMagicLinkTests : IClassFixture<KeepApiWebFactory>, IAsyn
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        // Raw token in body for Bearer transport.
+        // Handoff code in body — NOT a raw session token.
         var body = await response.Content.ReadFromJsonAsync<MobileExchangeBody>(
             new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
         Assert.NotNull(body);
-        Assert.False(string.IsNullOrWhiteSpace(body.SessionToken));
+        Assert.False(string.IsNullOrWhiteSpace(body.HandoffCode));
         Assert.True(body.ExpiresAtUtc > DateTime.UtcNow);
 
         // Must NOT set a browser cookie.
         Assert.False(response.Headers.Contains("Set-Cookie"),
             "Mobile exchange must not set a cookie");
+
+        // Must NOT expose a raw session token in the body.
+        var rawBody = await response.Content.ReadAsStringAsync();
+        Assert.DoesNotContain("sessionToken", rawBody);
     }
 
     [Fact]
-    public async Task Exchange_MobileApp_BearerSessionAllowsMeRequest()
+    public async Task Exchange_MobileApp_HandoffRedeemedForBearerSession()
     {
         var code = await IssueMagicLinkAsync();
 
@@ -284,13 +288,23 @@ public sealed class AuthMagicLinkTests : IClassFixture<KeepApiWebFactory>, IAsyn
             new { code, clientType = "mobile_app" });
         Assert.Equal(HttpStatusCode.OK, exchangeResponse.StatusCode);
 
-        var body = await exchangeResponse.Content.ReadFromJsonAsync<MobileExchangeBody>(
+        var exchangeBody = await exchangeResponse.Content.ReadFromJsonAsync<MobileExchangeBody>(
             new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-        Assert.NotNull(body);
+        Assert.NotNull(exchangeBody);
+
+        // Redeem the handoff code for a bearer session token.
+        var redeemResponse = await _client.PostAsJsonAsync("/auth/mobile-handoff/redeem",
+            new { handoffCode = exchangeBody.HandoffCode });
+        Assert.Equal(HttpStatusCode.OK, redeemResponse.StatusCode);
+
+        var redeemBody = await redeemResponse.Content.ReadFromJsonAsync<MobileRedeemBody>(
+            new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+        Assert.NotNull(redeemBody);
+        Assert.False(string.IsNullOrWhiteSpace(redeemBody.SessionToken));
 
         using var meRequest = new HttpRequestMessage(HttpMethod.Get, "/auth/me");
         meRequest.Headers.Authorization =
-            new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", body.SessionToken);
+            new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", redeemBody.SessionToken);
         var meResponse = await _client.SendAsync(meRequest);
 
         Assert.Equal(HttpStatusCode.OK, meResponse.StatusCode);
@@ -375,6 +389,7 @@ public sealed class AuthMagicLinkTests : IClassFixture<KeepApiWebFactory>, IAsyn
     // -------------------------------------------------------------------------
 
     private sealed record MeBody(Guid AccountUserId, Guid AccountId, bool IsAuthenticated, bool IsVerified);
-    private sealed record MobileExchangeBody(string SessionToken, DateTime ExpiresAtUtc);
+    private sealed record MobileExchangeBody(string HandoffCode, DateTime ExpiresAtUtc);
+    private sealed record MobileRedeemBody(string SessionToken, DateTime ExpiresAtUtc);
     private sealed record ProblemBody(string? Code, string? EntryContext);
 }

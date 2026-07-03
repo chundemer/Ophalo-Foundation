@@ -28,10 +28,10 @@ public static class AccountDeviceEndpoints
         if (!TryParseInstallationId(appInstallationId, out var installId))
             return ErrorHttpMapper.ToHttpResult(AccountUserDeviceErrors.InvalidAppInstallationId);
 
-        if (string.IsNullOrWhiteSpace(body.PushToken))
-            return ValidationProblem("pushToken is required.", "Validation.PushTokenRequired");
+        if (body.PushToken is not null && string.IsNullOrWhiteSpace(body.PushToken))
+            return ValidationProblem("pushToken must be null or non-empty.", "Validation.PushTokenInvalid");
 
-        if (body.PushToken.Length > 1024)
+        if (body.PushToken is not null && body.PushToken.Length > 1024)
             return ValidationProblem("pushToken must not exceed 1024 characters.", "Validation.PushTokenTooLong");
 
         if (body.AppVersion is not null && body.AppVersion.Length > 50)

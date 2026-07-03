@@ -61,6 +61,8 @@ public sealed class EfAccountUserDevicePersistence(OpHaloDbContext db) : IAccoun
                 d.AccountId == accountId &&
                 accountUserIds.Contains(d.AccountUserId) &&
                 d.Status == AccountUserDeviceStatus.Active &&
+                d.PushToken != null &&
+                d.PushTokenFingerprint != null &&
                 db.AccountEntitlements.Any(e =>
                     e.AccountId == accountId &&
                     (e.Classification == AccountClassification.Production ||

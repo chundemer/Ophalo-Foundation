@@ -17,6 +17,7 @@ public static class AuthEndpoints
         group.MapPost("/start", Start);
         group.MapPost("/signin", SignIn);
         group.MapPost("/exchange", Exchange);
+        group.MapPost("/mobile-handoff/redeem", RedeemMobileHandoff);
         group.MapGet("/me", Me).RequireAuthorization();
         group.MapPost("/logout", Logout).RequireAuthorization();
     }
@@ -51,7 +52,7 @@ public static class AuthEndpoints
         if (string.IsNullOrWhiteSpace(body.Email))
             return ValidationProblem("Email is required.", "Validation.EmailRequired");
 
-        var result = await service.HandleAsync(body.Email, ct);
+        var result = await service.HandleAsync(body.Email, body.ClientHint, ct);
 
         if (result.IsFailure)
             return ErrorHttpMapper.ToHttpResult(result.Error);
@@ -90,12 +91,14 @@ public static class AuthEndpoints
             return ErrorHttpMapper.ToHttpResult(exchangeResult.Result.Error);
         }
 
-        var token = exchangeResult.Result.Value;
+        var result = exchangeResult.Result.Value;
 
         // Mobile: return raw token in response body for Bearer transport.
         // Browser: set HttpOnly cookie only — raw token must not appear in the response body.
-        if (clientType == SessionClientType.MobileApp)
-            return Results.Ok(new { sessionToken = token.RawToken, expiresAtUtc = token.ExpiresAtUtc });
+        if (result is ExchangeHandoffCodeResult handoff)
+            return Results.Ok(new { handoffCode = handoff.HandoffCode, expiresAtUtc = handoff.ExpiresAtUtc });
+
+        var token = (ExchangeTokenResult)result;
 
         httpContext.Response.Cookies.Append(
             AuthConstants.CookieName,
@@ -103,6 +106,23 @@ public static class AuthEndpoints
             cookieFactory.ForCreate(token.ExpiresAtUtc));
 
         return Results.Ok();
+    }
+
+    private static async Task<IResult> RedeemMobileHandoff(
+        MobileHandoffRedeemBody body,
+        RedeemMobileHandoffService service,
+        CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(body.HandoffCode))
+            return ValidationProblem("handoffCode is required.", "Validation.HandoffCodeRequired");
+
+        var result = await service.HandleAsync(body.HandoffCode, body.DeviceName, ct);
+
+        if (result.IsFailure)
+            return ErrorHttpMapper.ToHttpResult(result.Error);
+
+        var token = result.Value;
+        return Results.Ok(new { sessionToken = token.RawToken, expiresAtUtc = token.ExpiresAtUtc });
     }
 
     private static async Task<IResult> Me(
@@ -195,5 +215,6 @@ public static class AuthEndpoints
 }
 
 internal sealed record StartBody(string? Email, string? BusinessName, string? Name, string? TimeZone);
-internal sealed record SignInBody(string? Email);
+internal sealed record SignInBody(string? Email, string? ClientHint);
 internal sealed record ExchangeBody(string? Code, string? ClientType, string? DeviceName);
+internal sealed record MobileHandoffRedeemBody(string? HandoffCode, string? DeviceName);

@@ -22,13 +22,13 @@ public sealed class AccountUserDevice
     public AccountUserDeviceStatus Status { get; private set; }
 
     /// <summary>Raw APNs/FCM push token. Never log or return — use Fingerprint/TokenLastFour.</summary>
-    public string PushToken { get; private set; } = null!;
+    public string? PushToken { get; private set; }
 
     /// <summary>SHA-256 lowercase hex digest of the raw push token.</summary>
-    public string PushTokenFingerprint { get; private set; } = null!;
+    public string? PushTokenFingerprint { get; private set; }
 
     /// <summary>Last four characters of the raw push token for safe diagnostic display.</summary>
-    public string TokenLastFour { get; private set; } = null!;
+    public string? TokenLastFour { get; private set; }
 
     public string? AppVersion { get; private set; }
     public string? DeviceName { get; private set; }
@@ -44,9 +44,9 @@ public sealed class AccountUserDevice
         Guid accountUserId,
         Guid appInstallationId,
         AccountUserDevicePlatform platform,
-        string pushToken,
-        string pushTokenFingerprint,
-        string tokenLastFour,
+        string? pushToken,
+        string? pushTokenFingerprint,
+        string? tokenLastFour,
         string? appVersion,
         string? deviceName,
         DateTime nowUtc)
@@ -59,12 +59,14 @@ public sealed class AccountUserDevice
             throw new ArgumentException("AppInstallationId must not be empty.", nameof(appInstallationId));
         if (!Enum.IsDefined(platform))
             throw new ArgumentException("Platform is invalid.", nameof(platform));
-        if (string.IsNullOrWhiteSpace(pushToken))
-            throw new ArgumentException("PushToken is required.", nameof(pushToken));
-        if (string.IsNullOrWhiteSpace(pushTokenFingerprint))
-            throw new ArgumentException("PushTokenFingerprint is required.", nameof(pushTokenFingerprint));
-        if (string.IsNullOrWhiteSpace(tokenLastFour))
-            throw new ArgumentException("TokenLastFour is required.", nameof(tokenLastFour));
+        if (pushToken is not null && string.IsNullOrWhiteSpace(pushToken))
+            throw new ArgumentException("PushToken must be null or non-empty.", nameof(pushToken));
+        if (pushToken is null && (pushTokenFingerprint is not null || tokenLastFour is not null))
+            throw new ArgumentException("Token metadata must be null when PushToken is null.", nameof(pushToken));
+        if (pushToken is not null && string.IsNullOrWhiteSpace(pushTokenFingerprint))
+            throw new ArgumentException("PushTokenFingerprint is required when PushToken is provided.", nameof(pushTokenFingerprint));
+        if (pushToken is not null && string.IsNullOrWhiteSpace(tokenLastFour))
+            throw new ArgumentException("TokenLastFour is required when PushToken is provided.", nameof(tokenLastFour));
         if (nowUtc == default)
             throw new ArgumentException("nowUtc must not be default.", nameof(nowUtc));
         if (nowUtc.Kind != DateTimeKind.Utc)
@@ -93,19 +95,21 @@ public sealed class AccountUserDevice
     /// FailedPermanent — the caller re-registered with a new token and should be Active.
     /// </summary>
     public void UpdateRegistration(
-        string pushToken,
-        string pushTokenFingerprint,
-        string tokenLastFour,
+        string? pushToken,
+        string? pushTokenFingerprint,
+        string? tokenLastFour,
         string? appVersion,
         string? deviceName,
         DateTime nowUtc)
     {
-        if (string.IsNullOrWhiteSpace(pushToken))
-            throw new ArgumentException("PushToken is required.", nameof(pushToken));
-        if (string.IsNullOrWhiteSpace(pushTokenFingerprint))
-            throw new ArgumentException("PushTokenFingerprint is required.", nameof(pushTokenFingerprint));
-        if (string.IsNullOrWhiteSpace(tokenLastFour))
-            throw new ArgumentException("TokenLastFour is required.", nameof(tokenLastFour));
+        if (pushToken is not null && string.IsNullOrWhiteSpace(pushToken))
+            throw new ArgumentException("PushToken must be null or non-empty.", nameof(pushToken));
+        if (pushToken is null && (pushTokenFingerprint is not null || tokenLastFour is not null))
+            throw new ArgumentException("Token metadata must be null when PushToken is null.", nameof(pushToken));
+        if (pushToken is not null && string.IsNullOrWhiteSpace(pushTokenFingerprint))
+            throw new ArgumentException("PushTokenFingerprint is required when PushToken is provided.", nameof(pushTokenFingerprint));
+        if (pushToken is not null && string.IsNullOrWhiteSpace(tokenLastFour))
+            throw new ArgumentException("TokenLastFour is required when PushToken is provided.", nameof(tokenLastFour));
         if (nowUtc == default)
             throw new ArgumentException("nowUtc must not be default.", nameof(nowUtc));
         if (nowUtc.Kind != DateTimeKind.Utc)

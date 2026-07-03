@@ -56,7 +56,7 @@ public sealed class KeepPushNotifier(
             {
                 var message = new PushMessage(
                     Platform: device.Platform,
-                    DeviceToken: device.PushToken,
+                    DeviceToken: device.PushToken!,
                     Title: display.Title,
                     Body: display.Body,
                     EventKind: eventKindString,

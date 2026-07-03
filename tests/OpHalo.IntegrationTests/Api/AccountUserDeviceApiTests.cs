@@ -139,14 +139,33 @@ public sealed class AccountUserDeviceApiTests : IClassFixture<KeepApiWebFactory>
     // =========================================================================
 
     [Fact]
-    public async Task Put_MissingPushToken_Returns400()
+    public async Task Put_NullPushToken_Returns200_WithNullTokenFields()
     {
         var client = AuthRequest(_ownerCookie);
         var response = await client.PutAsJsonAsync($"/me/devices/{InstallId1}",
             new { platform = "ios" });
 
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(InstallId1, body.GetProperty("appInstallationId").GetString(), StringComparer.OrdinalIgnoreCase);
+        Assert.Equal("ios", body.GetProperty("platform").GetString());
+        Assert.Equal("active", body.GetProperty("status").GetString());
+        Assert.True(body.GetProperty("tokenFingerprint").ValueKind == JsonValueKind.Null,
+            "tokenFingerprint must be null for a push-ineligible device");
+        Assert.True(body.GetProperty("tokenLastFour").ValueKind == JsonValueKind.Null,
+            "tokenLastFour must be null for a push-ineligible device");
+    }
+
+    [Fact]
+    public async Task Put_WhitespacePushToken_Returns400()
+    {
+        var client = AuthRequest(_ownerCookie);
+        var response = await client.PutAsJsonAsync($"/me/devices/{InstallId1}",
+            new { platform = "ios", pushToken = "   " });
+
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        await AssertCode(response, "Validation.PushTokenRequired");
+        await AssertCode(response, "Validation.PushTokenInvalid");
     }
 
     [Theory]

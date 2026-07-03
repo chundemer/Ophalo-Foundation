@@ -23,7 +23,7 @@ public sealed class AccountUserDeviceService(
     public async Task<Result<DeviceRegistrationResult>> RegisterAsync(
         Guid appInstallationId,
         AccountUserDevicePlatform platform,
-        string pushToken,
+        string? pushToken,
         string? appVersion,
         string? deviceName,
         CancellationToken cancellationToken)
@@ -31,8 +31,8 @@ public sealed class AccountUserDeviceService(
         if (!currentUser.IsAuthenticated)
             return Result<DeviceRegistrationResult>.Failure(Unauthorized);
 
-        var fingerprint = fingerprintService.Fingerprint(pushToken);
-        var lastFour = fingerprintService.LastFour(pushToken);
+        var fingerprint = pushToken is null ? null : fingerprintService.Fingerprint(pushToken);
+        var lastFour = pushToken is null ? null : fingerprintService.LastFour(pushToken);
         var now = clock.UtcNow;
 
         var existing = await persistence.FindByUserAndInstallAsync(
@@ -41,8 +41,10 @@ public sealed class AccountUserDeviceService(
         if (existing is not null && existing.Platform != platform)
             return Result<DeviceRegistrationResult>.Failure(AccountUserDeviceErrors.PlatformMismatch);
 
-        var othersToRevoke = await persistence.FindActiveByFingerprintExcludingUserAsync(
-            fingerprint, currentUser.UserId, cancellationToken);
+        var othersToRevoke = fingerprint is null
+            ? []
+            : await persistence.FindActiveByFingerprintExcludingUserAsync(
+                fingerprint, currentUser.UserId, cancellationToken);
 
         foreach (var other in othersToRevoke)
             other.Revoke(now);
@@ -97,8 +99,8 @@ public sealed record DeviceRegistrationResult(
     Guid AppInstallationId,
     string Platform,
     string Status,
-    string TokenFingerprint,
-    string TokenLastFour,
+    string? TokenFingerprint,
+    string? TokenLastFour,
     string? AppVersion,
     string? DeviceName,
     DateTime CreatedAtUtc,

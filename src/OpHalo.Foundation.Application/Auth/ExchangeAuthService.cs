@@ -27,6 +27,7 @@ namespace OpHalo.Foundation.Application.Auth;
 /// </summary>
 public sealed class ExchangeAuthService(
     IAuthCodePersistence persistence,
+    IMobileHandoffCodePersistence mobileHandoffPersistence,
     IAccountSessionService sessionService,
     AccountProvisioningService provisioning,
     IClock clock,
@@ -71,13 +72,13 @@ public sealed class ExchangeAuthService(
         };
 
         static ExchangeResult Fail(Error error, EntryContext? context) =>
-            new(Result<ExchangeTokenResult>.Failure(error), context);
+            new(Result<ExchangeSuccessResult>.Failure(error), context);
 
-        static ExchangeResult Wrap(Result<ExchangeTokenResult> result) =>
+        static ExchangeResult Wrap(Result<ExchangeSuccessResult> result) =>
             new(result, null);
     }
 
-    private async Task<Result<ExchangeTokenResult>> HandleExistingMemberAsync(
+    private async Task<Result<ExchangeSuccessResult>> HandleExistingMemberAsync(
         AccountAuthCode code,
         SessionClientType clientType,
         string? deviceName,
@@ -86,19 +87,23 @@ public sealed class ExchangeAuthService(
     {
         // Guard: ExistingMember codes always have AccountId and TargetAccountUserId.
         if (code.AccountId is null || code.TargetAccountUserId is null)
-            return Result<ExchangeTokenResult>.Failure(AccountErrors.InconsistentState);
+            return Result<ExchangeSuccessResult>.Failure(AccountErrors.InconsistentState);
 
         // Atomic consume — returns false if another concurrent request won the race.
         var consumed = await persistence.ConsumeCodeAsync(code.Id, nowUtc, cancellationToken);
         if (!consumed)
-            return Result<ExchangeTokenResult>.Failure(AccountAuthCodeErrors.AlreadyConsumed);
+            return Result<ExchangeSuccessResult>.Failure(AccountAuthCodeErrors.AlreadyConsumed);
+
+        if (clientType == SessionClientType.MobileApp)
+            return await CreateMobileHandoffAsync(
+                code.AccountId.Value, code.TargetAccountUserId.Value, nowUtc, cancellationToken);
 
         return await CreateSessionAsync(
             code.AccountId.Value, code.TargetAccountUserId.Value,
             clientType, deviceName, code.Id, cancellationToken);
     }
 
-    private async Task<Result<ExchangeTokenResult>> HandleNewAccountAsync(
+    private async Task<Result<ExchangeSuccessResult>> HandleNewAccountAsync(
         AccountAuthCode code,
         SessionClientType clientType,
         string? deviceName,
@@ -110,7 +115,7 @@ public sealed class ExchangeAuthService(
             string.IsNullOrWhiteSpace(code.BusinessNameSnapshot) ||
             string.IsNullOrWhiteSpace(code.TimeZoneSnapshot))
         {
-            return Result<ExchangeTokenResult>.Failure(AccountErrors.InconsistentState);
+            return Result<ExchangeSuccessResult>.Failure(AccountErrors.InconsistentState);
         }
 
         // Re-check pilot capacity before consuming the code (ADR-365).
@@ -119,7 +124,7 @@ public sealed class ExchangeAuthService(
         {
             var pilotCount = await persistence.CountPilotClassifiedAccountsAsync(cancellationToken);
             if (pilotCount >= defaults.MaxPilotAccounts.Value)
-                return Result<ExchangeTokenResult>.Failure(AccountErrors.PilotFull);
+                return Result<ExchangeSuccessResult>.Failure(AccountErrors.PilotFull);
         }
 
         var trialEndsAtUtc = nowUtc.AddDays(defaults.TrialDurationDays);
@@ -136,7 +141,7 @@ public sealed class ExchangeAuthService(
             trialEndsAtUtc: trialEndsAtUtc);
 
         if (provisionResult.IsFailure)
-            return Result<ExchangeTokenResult>.Failure(provisionResult.Error);
+            return Result<ExchangeSuccessResult>.Failure(provisionResult.Error);
 
         var graph = provisionResult.Value;
 
@@ -146,7 +151,11 @@ public sealed class ExchangeAuthService(
             code.Id, graph, nowUtc, cancellationToken);
 
         if (commitResult.IsFailure)
-            return Result<ExchangeTokenResult>.Failure(commitResult.Error);
+            return Result<ExchangeSuccessResult>.Failure(commitResult.Error);
+
+        if (clientType == SessionClientType.MobileApp)
+            return await CreateMobileHandoffAsync(
+                graph.Account.Id, graph.Owner.Id, nowUtc, cancellationToken);
 
         // Session creation is outside the transaction — failure leaves the graph committed.
         return await CreateSessionAsync(
@@ -154,7 +163,7 @@ public sealed class ExchangeAuthService(
             clientType, deviceName, code.Id, cancellationToken);
     }
 
-    private async Task<Result<ExchangeTokenResult>> CreateSessionAsync(
+    private async Task<Result<ExchangeSuccessResult>> CreateSessionAsync(
         Guid accountId,
         Guid accountUserId,
         SessionClientType clientType,
@@ -167,7 +176,7 @@ public sealed class ExchangeAuthService(
             var session = await sessionService.CreateSession(
                 accountId, accountUserId, clientType, deviceName, cancellationToken);
 
-            return Result<ExchangeTokenResult>.Success(
+            return Result<ExchangeSuccessResult>.Success(
                 new ExchangeTokenResult(session.RawToken, session.ExpiresAtUtc));
         }
         catch (OperationCanceledException)
@@ -180,13 +189,40 @@ public sealed class ExchangeAuthService(
                 "Session creation failed after code exchange. AccountId={AccountId} AccountUserId={AccountUserId} AccountAuthCodeId={AccountAuthCodeId}",
                 accountId, accountUserId, codeId);
 
-            return Result<ExchangeTokenResult>.Failure(AccountErrors.SessionCreationFailed);
+            return Result<ExchangeSuccessResult>.Failure(AccountErrors.SessionCreationFailed);
         }
+    }
+
+    private async Task<Result<ExchangeSuccessResult>> CreateMobileHandoffAsync(
+        Guid accountId,
+        Guid accountUserId,
+        DateTime nowUtc,
+        CancellationToken cancellationToken)
+    {
+        var rawCode = MagicLinkCodeGenerator.GenerateRawCode();
+        var codeHash = MagicLinkCodeGenerator.HashCode(rawCode);
+        var expiresAtUtc = nowUtc.AddMinutes(10);
+
+        var handoffCode = MobileHandoffCode.Create(
+            codeHash,
+            accountId,
+            accountUserId,
+            nowUtc,
+            expiresAtUtc);
+
+        await mobileHandoffPersistence.CreateAsync(handoffCode, cancellationToken);
+
+        return Result<ExchangeSuccessResult>.Success(
+            new ExchangeHandoffCodeResult(rawCode, expiresAtUtc));
     }
 }
 
 public sealed record ExchangeResult(
-    Result<ExchangeTokenResult> Result,
+    Result<ExchangeSuccessResult> Result,
     EntryContext? EntryContext);
 
-public sealed record ExchangeTokenResult(string RawToken, DateTime ExpiresAtUtc);
+public abstract record ExchangeSuccessResult(DateTime ExpiresAtUtc);
+public sealed record ExchangeTokenResult(string RawToken, DateTime ExpiresAtUtc)
+    : ExchangeSuccessResult(ExpiresAtUtc);
+public sealed record ExchangeHandoffCodeResult(string HandoffCode, DateTime ExpiresAtUtc)
+    : ExchangeSuccessResult(ExpiresAtUtc);
