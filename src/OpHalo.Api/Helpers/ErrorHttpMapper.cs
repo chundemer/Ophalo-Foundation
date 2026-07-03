@@ -225,6 +225,8 @@ public static class ErrorHttpMapper
             var c when c.EndsWith(".Cancelled") => (StatusCodes.Status409Conflict, "Conflict.", null),
 
             // --- 422 — auth exchange failures (expired, used, superseded) ---
+            var c when c == "AuthCode.MobileNewAccountUnsupported" => (StatusCodes.Status422UnprocessableEntity, "Unprocessable entity.", null),
+
             var c when c.EndsWith(".InvalidToken") => (StatusCodes.Status422UnprocessableEntity, "Unprocessable entity.", null),
 
             var c when c.EndsWith(".Expired") => (StatusCodes.Status422UnprocessableEntity, "Unprocessable entity.", null),

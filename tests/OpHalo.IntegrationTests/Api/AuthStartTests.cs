@@ -286,6 +286,54 @@ public sealed class AuthStartTests : IClassFixture<KeepApiWebFactory>, IAsyncLif
     }
 
     [Fact]
+    public async Task Exchange_NewAccountCode_MobileApp_Returns422()
+    {
+        var code = await IssueNewAccountCodeAsync();
+
+        var response = await _client.PostAsJsonAsync("/auth/exchange",
+            new { code, clientType = "mobile_app" });
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+        var body = await ReadProblemAsync(response);
+        Assert.Equal("AuthCode.MobileNewAccountUnsupported", body.Code);
+    }
+
+    [Fact]
+    public async Task Exchange_NewAccountCode_MobileApp_NoGraphCreated()
+    {
+        var code = await IssueNewAccountCodeAsync();
+
+        var response = await _client.PostAsJsonAsync("/auth/exchange",
+            new { code, clientType = "mobile_app" });
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+
+        await using var scope = _factory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+        var normalizedEmail = EmailNormalizer.Normalize(NewEmail);
+        var userCount = db.Users.Count(u => u.Email == normalizedEmail);
+        Assert.Equal(0, userCount);
+    }
+
+    [Fact]
+    public async Task Exchange_NewAccountCode_MobileApp_CodeRemainsUsableByBrowser()
+    {
+        var code = await IssueNewAccountCodeAsync();
+
+        // Rejected mobile attempt must not consume the code.
+        var mobileResponse = await _client.PostAsJsonAsync("/auth/exchange",
+            new { code, clientType = "mobile_app" });
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, mobileResponse.StatusCode);
+
+        // Browser exchange with the same code must still succeed.
+        var browserResponse = await _client.PostAsJsonAsync("/auth/exchange", new { code });
+        Assert.Equal(HttpStatusCode.OK, browserResponse.StatusCode);
+        var setCookie = browserResponse.Headers.GetValues("Set-Cookie").FirstOrDefault();
+        Assert.NotNull(setCookie);
+        Assert.Contains("ophalo.sid", setCookie);
+    }
+
+    [Fact]
     public async Task Exchange_ConsumedNewAccountCode_Returns422WithEntryContext()
     {
         var code = await IssueNewAccountCodeAsync();

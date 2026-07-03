@@ -22,4 +22,7 @@ public static class AccountAuthCodeErrors
 
     public static readonly Error CannotInvalidateConsumed =
         Error.Create("AuthCode.CannotInvalidateConsumed", "This auth code has already been consumed and cannot be invalidated.");
+
+    public static readonly Error MobileNewAccountUnsupported =
+        Error.Create("AuthCode.MobileNewAccountUnsupported", "Mobile signup is not supported for this auth code.");
 }

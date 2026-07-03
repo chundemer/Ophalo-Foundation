@@ -254,6 +254,36 @@ public sealed class AuthMagicLinkTests : IClassFixture<KeepApiWebFactory>, IAsyn
     // -------------------------------------------------------------------------
 
     [Fact]
+    public async Task SignIn_WithMobileClientHint_MagicLinkContainsFromMobile()
+    {
+        _factory.EmailSender.Clear();
+        var response = await _client.PostAsJsonAsync("/auth/signin",
+            new { email = OwnerEmail, clientHint = "mobile" });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Single(_factory.EmailSender.SentEmails);
+
+        var link = _factory.EmailSender.SentEmails[0].ExtractMagicLink();
+        Assert.NotNull(link);
+        Assert.Contains("from=mobile", link);
+    }
+
+    [Fact]
+    public async Task SignIn_WithoutClientHint_MagicLinkDoesNotContainFromMobile()
+    {
+        _factory.EmailSender.Clear();
+        var response = await _client.PostAsJsonAsync("/auth/signin",
+            new { email = OwnerEmail });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Single(_factory.EmailSender.SentEmails);
+
+        var link = _factory.EmailSender.SentEmails[0].ExtractMagicLink();
+        Assert.NotNull(link);
+        Assert.DoesNotContain("from=mobile", link);
+    }
+
+    [Fact]
     public async Task Exchange_MobileApp_ReturnsHandoffCodeNoCookie()
     {
         var code = await IssueMagicLinkAsync();

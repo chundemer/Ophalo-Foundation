@@ -110,6 +110,9 @@ public sealed class ExchangeAuthService(
         DateTime nowUtc,
         CancellationToken cancellationToken)
     {
+        if (clientType == SessionClientType.MobileApp)
+            return Result<ExchangeSuccessResult>.Failure(AccountAuthCodeErrors.MobileNewAccountUnsupported);
+
         // Guard: NewAccount codes always have snapshots.
         if (string.IsNullOrWhiteSpace(code.DeliveryEmailSnapshot) ||
             string.IsNullOrWhiteSpace(code.BusinessNameSnapshot) ||
