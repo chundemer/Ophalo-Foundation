@@ -1,12 +1,24 @@
+import { QueryClient, QueryClientProvider, focusManager } from '@tanstack/react-query';
 import { useFonts } from 'expo-font';
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
-import { View } from 'react-native';
+import { AppState, AppStateStatus, View } from 'react-native';
 import 'react-native-reanimated';
 
 import { useColorScheme } from '@/components/useColorScheme';
 import { AuthProvider, useAuth } from '@/src/auth/AuthContext';
+
+const queryClient = new QueryClient();
+
+// React Native does not fire browser-style focus events, so wire AppState → focusManager
+// so TanStack Query refetches stale queries when the app returns to the foreground.
+focusManager.setEventListener((handleFocus) => {
+  const subscription = AppState.addEventListener('change', (state: AppStateStatus) => {
+    handleFocus(state === 'active');
+  });
+  return () => subscription.remove();
+});
 
 export { ErrorBoundary } from 'expo-router';
 
@@ -36,9 +48,11 @@ export default function RootLayout() {
   }
 
   return (
-    <AuthProvider>
-      <RootLayoutNav />
-    </AuthProvider>
+    <QueryClientProvider client={queryClient}>
+      <AuthProvider>
+        <RootLayoutNav />
+      </AuthProvider>
+    </QueryClientProvider>
   );
 }
 

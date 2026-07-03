@@ -1,6 +1,18 @@
+import Constants from 'expo-constants';
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import { Platform } from 'react-native';
 import { api } from '../api/client';
 import { clearSessionToken, getAppInstallationId, getSessionToken, setSessionToken } from './secureStore';
+
+async function upsertDevice(): Promise<void> {
+  const installId = await getAppInstallationId().catch(() => null);
+  if (!installId) return;
+  await api.put(`/me/devices/${installId}`, {
+    platform: Platform.OS,
+    appVersion: Constants.expoConfig?.version ?? '1.0.0',
+    pushToken: null,
+  }).catch(() => {});
+}
 
 type MeResponse = {
   accountUserId: string;
@@ -30,6 +42,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (!token) return;
       const me = await api.get<MeResponse>('/auth/me');
       setUser(me);
+      void upsertDevice(); // refresh device record on app launch; best-effort
     } catch {
       await clearSessionToken().catch(() => {});
     } finally {
@@ -45,6 +58,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const me = await api.get<MeResponse>('/auth/me', token);
     await setSessionToken(token);
     setUser(me);
+    void upsertDevice(); // register device on sign-in; best-effort; token now in SecureStore
   }
 
   // logout is guaranteed to clear local state — it never throws.
