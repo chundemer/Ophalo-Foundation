@@ -3,9 +3,10 @@ import { useFonts } from 'expo-font';
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
-import { AppState, AppStateStatus, View } from 'react-native';
+import { AppState, AppStateStatus, StyleSheet, View } from 'react-native';
 import 'react-native-reanimated';
 
+import { Text } from '@/components/Themed';
 import { useColorScheme } from '@/components/useColorScheme';
 import { AuthProvider, useAuth } from '@/src/auth/AuthContext';
 
@@ -58,10 +59,22 @@ export default function RootLayout() {
 
 function RootLayoutNav() {
   const colorScheme = useColorScheme();
-  const { isLoading } = useAuth();
+  const { isLoading, isRoleBlocked } = useAuth();
 
   if (isLoading) {
     return <View style={{ flex: 1 }} />;
+  }
+
+  if (isRoleBlocked) {
+    return (
+      <View style={styles.blocked}>
+        <Text style={styles.blockedTitle}>Access Not Available</Text>
+        <Text style={styles.blockedBody}>
+          OpHalo Keep mobile is not available for your account role.
+          Please contact your account administrator.
+        </Text>
+      </View>
+    );
   }
 
   return (
@@ -75,3 +88,15 @@ function RootLayoutNav() {
     </ThemeProvider>
   );
 }
+
+const styles = StyleSheet.create({
+  blocked: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 32,
+    gap: 12,
+  },
+  blockedTitle: { fontSize: 18, fontWeight: '600' },
+  blockedBody: { fontSize: 15, textAlign: 'center', lineHeight: 22 },
+});

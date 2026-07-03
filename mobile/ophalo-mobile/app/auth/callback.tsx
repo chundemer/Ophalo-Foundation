@@ -41,10 +41,14 @@ export default function AuthCallbackScreen() {
     } catch (err) {
       const isExpiredOrInvalid =
         err instanceof ApiError && (err.status === 400 || err.status === 410);
+      const isRoleBlocked =
+        err instanceof Error && err.message === 'mobile_access_not_available';
       setErrorMessage(
         isExpiredOrInvalid
           ? 'This link has expired or already been used. Please request a new sign-in link.'
-          : 'Sign-in failed. Please try again.',
+          : isRoleBlocked
+            ? 'Mobile access is not available for your account role. Please contact your administrator.'
+            : 'Sign-in failed. Please try again.',
       );
       setPhase('error');
     }

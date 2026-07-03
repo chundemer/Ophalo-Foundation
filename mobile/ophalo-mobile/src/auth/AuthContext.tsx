@@ -22,9 +22,12 @@ type MeResponse = {
   accountRole: string;
 };
 
+const MOBILE_ALLOWED_ROLES = ['owner', 'admin', 'operator'];
+
 type AuthState = {
   user: MeResponse | null;
   isLoading: boolean;
+  isRoleBlocked: boolean;
   storeToken: (token: string) => Promise<void>;
   logout: () => Promise<void>;
 };
@@ -34,6 +37,7 @@ const AuthContext = createContext<AuthState | null>(null);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<MeResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isRoleBlocked, setIsRoleBlocked] = useState(false);
 
   const bootstrap = useCallback(async () => {
     await getAppInstallationId().catch(() => {}); // ensure durable ID exists before any API call
@@ -41,6 +45,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const token = await getSessionToken();
       if (!token) return;
       const me = await api.get<MeResponse>('/auth/me');
+      if (!MOBILE_ALLOWED_ROLES.includes(me.accountRole)) {
+        await clearSessionToken().catch(() => {});
+        setIsRoleBlocked(true);
+        return;
+      }
       setUser(me);
       void upsertDevice(); // refresh device record on app launch; best-effort
     } catch {
@@ -56,6 +65,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   async function storeToken(token: string): Promise<void> {
     const me = await api.get<MeResponse>('/auth/me', token);
+    if (!MOBILE_ALLOWED_ROLES.includes(me.accountRole)) {
+      throw new Error('mobile_access_not_available');
+    }
     await setSessionToken(token);
     setUser(me);
     void upsertDevice(); // register device on sign-in; best-effort; token now in SecureStore
@@ -77,7 +89,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, isLoading, storeToken, logout }}>
+    <AuthContext.Provider value={{ user, isLoading, isRoleBlocked, storeToken, logout }}>
       {children}
     </AuthContext.Provider>
   );

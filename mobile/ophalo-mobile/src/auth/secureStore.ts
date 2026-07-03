@@ -1,3 +1,4 @@
+import * as Crypto from 'expo-crypto';
 import * as SecureStore from 'expo-secure-store';
 
 const SESSION_TOKEN_KEY = 'ophalo_session_token';
@@ -18,14 +19,7 @@ export async function clearSessionToken(): Promise<void> {
 export async function getAppInstallationId(): Promise<string> {
   const existing = await SecureStore.getItemAsync(INSTALLATION_ID_KEY);
   if (existing) return existing;
-  const id = generateUUIDv4();
+  const id = Crypto.randomUUID();
   await SecureStore.setItemAsync(INSTALLATION_ID_KEY, id);
   return id;
-}
-
-function generateUUIDv4(): string {
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
-    const r = (Math.random() * 16) | 0;
-    return (c === 'x' ? r : (r & 0x3) | 0x8).toString(16);
-  });
 }
