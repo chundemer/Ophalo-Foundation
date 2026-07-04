@@ -1,6 +1,6 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-07-04 (S17c complete; S17d next)
+**Last updated:** 2026-07-04 (S17d complete; S17e next)
 **Branch:** `main` tracking `origin/main`
 **Last green baseline:** 939 unit · 14 arch · 713 integration = 1,666 total, 0 failures (1 pre-existing KeepG5 fluke excluded)
 **Next free ADR:** ADR-406
@@ -79,11 +79,11 @@ Treat these as historical context unless a later discovery step finds a concrete
 - `OperatorBaseUrl` is retired from active settings/config/test factories/runbooks; invite links now
   use `{PublicBaseUrl}/invite/accept`.
 
-### S17 — S17c Complete; S17d Active
+### S17 — S17d Complete; S17e Active
 
 **Roadmap label:** Native Operator Field App.
 
-**Status:** S17c complete. S17d is the active slice.
+**Status:** S17d complete. S17e is the active slice.
 
 **S17a findings summary:**
 
@@ -99,6 +99,8 @@ Treat these as historical context unless a later discovery step finds a concrete
 - Public intake gap confirmed: `GET /keep/setup/intake` requires `KeepSettingsManage` (Admin/Owner
   only). S17f ships Quick Capture only. Intake sharing is a separately approved pre-pilot gap slice.
 - `signin.tsx` `__DEV__` paste field removed (S17c complete).
+- My Work (My Promises / Watching) and Available lists wired with real cached queries; intentional loading/error/empty states; pull-to-refresh; `hasMore` indicator. Rows are read-only except detail navigation (S17d complete).
+- Brand guide alignment (canvas color, Keep teal moment, Inter/Source Serif 4 fonts) deferred to a follow-up UX pass before S17j.
 - E2E handoff runbook recorded in build log 071.
 
 **Hard boundaries (unchanged):**
@@ -119,7 +121,7 @@ Treat these as historical context unless a later discovery step finds a concrete
 1. ~~**Session 16 — Native Mobile App Foundation** — Complete~~
 2. **Session 17 — Review-Safe Native Product Foundation**
    Build the review-safe native Keep field workflow in locked slices S17a through S17j. Current
-   active slice is S17d — Lists.
+   active slice is S17e — Request Detail Read Surface.
 3. **Session 18 — Push Delivery And Deep Links**
    Decide and implement real APNs/FCM delivery for store-bound builds, or explicitly document a
    review-safe no-push product posture before any submission. Verify Demo/InternalTest suppression,
