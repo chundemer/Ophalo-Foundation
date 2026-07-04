@@ -1,7 +1,7 @@
 # Build Log 071 — Session 17: Review-Safe Native Product Foundation
 
 **Started:** 2026-07-03
-**Status:** S17g complete; S17h next
+**Status:** S17h complete; S17i next
 **Session name:** s17 discussion, lock in, and final pass
 **Next free ADR before this log:** ADR-396
 **Next free ADR after this log:** ADR-406
@@ -692,6 +692,30 @@ Use local simulator/device workflow as the inner loop and staging/store-bound bu
 ### S17a Table Correction
 
 The S17a endpoint table listed `share-intent` as requiring `X-Keep-Request-Version`. Backend code (`Program.cs` line 476) confirms the handler takes no `HttpRequest` parameter and calls `ClearShareIntentService` directly — no `KeepRequestVersionHeader.Parse()`. **Share-intent requires no version header.** `useClearShareIntent` correctly omits it. External-contact continues to require the version header.
+
+### TypeScript Gate
+
+`npx tsc --noEmit` passes with 0 errors.
+
+---
+
+## S17h Implementation Notes
+
+### Files Changed (1 new hook + 1 modified screen)
+
+**New:**
+- `mobile/ophalo-mobile/src/hooks/useSendBusinessUpdate.ts` — mutation for `POST /keep/requests/{id}/business-updates`. Variables: `{ requestId, version, message, setStatus? }`. Sends `X-Keep-Request-Version` header with current `data.version` via `api.post(..., true, { 'X-Keep-Request-Version': version })`. On success: invalidates `['keepRequestDetail', requestId]`, `['keepRequests']`, `['badge']`. On error (including 409): invalidates `['keepRequestDetail', requestId]` so version and state refresh.
+
+**Modified:**
+- `mobile/ophalo-mobile/app/requests/[id].tsx` — Customer Update composer section added. Rendered only when `availableActions.canSendBusinessUpdate === true`; omitted entirely otherwise. `TextInput` (multiline, 80px min height, disabled while pending). "Send Update" button posts `{ message }`; "Send Update & Mark Completed" button rendered only when `allowedStatuses.includes('resolved')` and posts `{ message, setStatus: 'resolved' }`. Both buttons disabled when `composerText.trim() === ''`, `isSendingUpdate`, or `!isOnline`. Offline notice shown when `!isOnline`. On success: clears `composerText` and `composerError`. On 409 or `ApiError.code === 'KeepRequest.RequestChanged'`: preserves text, shows conflict message. On other 4xx: preserves text, shows generic API error. On network/no-response failure: preserves text, shows retry-safe copy. `canSendBusinessUpdate` removed from `ACTION_LABELS` (now has interactive section). `useNetworkState` and `useSendBusinessUpdate` imported; `TextInput` added to react-native imports.
+
+### Decisions Made
+
+- **`allowedStatuses` case-sensitive:** `allowedStatuses.includes('resolved')` uses exact lowercase slug as returned by backend. No normalization.
+- **Completion is not a one-tap status flip:** requires operator-authored message text; disabled on empty input. `setStatus: 'resolved'` only added when `allowedStatuses.includes('resolved')` and `canSendBusinessUpdate` both true.
+- **Composer omitted entirely when `canSendBusinessUpdate` is false:** no disabled placeholder, no "coming soon" affordance.
+- **badge invalidation on success:** completing a request changes attention state; badge must refresh.
+- **Composer text preserved on all errors:** only cleared on success.
 
 ### TypeScript Gate
 

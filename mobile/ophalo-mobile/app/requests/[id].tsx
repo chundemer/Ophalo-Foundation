@@ -8,6 +8,7 @@ import {
   ScrollView,
   Share,
   StyleSheet,
+  TextInput,
   TouchableOpacity,
 } from 'react-native';
 import { Redirect, Stack, useLocalSearchParams } from 'expo-router';
@@ -24,6 +25,8 @@ import {
 } from '@/src/hooks/useRequestDetail';
 import { useLogExternalContact } from '@/src/hooks/useLogExternalContact';
 import { useClearShareIntent } from '@/src/hooks/useClearShareIntent';
+import { useSendBusinessUpdate } from '@/src/hooks/useSendBusinessUpdate';
+import { useNetworkState } from '@/src/hooks/useNetworkState';
 
 const PUBLIC_BASE_URL = (process.env.EXPO_PUBLIC_PUBLIC_BASE_URL ?? '').replace(/\/$/, '');
 
@@ -40,9 +43,13 @@ export default function RequestDetailScreen() {
     'native_share' | 'manual_mark_shared' | null
   >(null);
   const [shareError, setShareError] = useState<string | null>(null);
+  const [composerText, setComposerText] = useState('');
+  const [composerError, setComposerError] = useState<string | null>(null);
 
   const { mutate: logContact, isPending: isLoggingContact } = useLogExternalContact();
   const { mutate: recordShareIntent, isPending: isRecordingShare } = useClearShareIntent();
+  const { mutate: sendBusinessUpdate, isPending: isSendingUpdate } = useSendBusinessUpdate();
+  const { isOnline } = useNetworkState();
 
   if (!user) return <Redirect href="/signin" />;
 
@@ -166,6 +173,31 @@ export default function RequestDetailScreen() {
     setShareError(null);
   }
 
+  function handleSendUpdate(setStatus?: string) {
+    if (!data || composerText.trim() === '') return;
+    sendBusinessUpdate(
+      { requestId: data.requestId, version: data.version, message: composerText.trim(), setStatus },
+      {
+        onSuccess: () => {
+          setComposerText('');
+          setComposerError(null);
+        },
+        onError: (err) => {
+          if (
+            err instanceof ApiError &&
+            (err.status === 409 || err.code === 'KeepRequest.RequestChanged')
+          ) {
+            setComposerError('Request has changed — details refreshed. Review and try again.');
+          } else if (err instanceof ApiError && err.status >= 400 && err.status < 500) {
+            setComposerError('Could not send update. Please try again.');
+          } else {
+            setComposerError("Couldn't send. Check your connection and try again.");
+          }
+        },
+      },
+    );
+  }
+
   return (
     <>
       <Stack.Screen options={{ title: data.referenceCode }} />
@@ -263,6 +295,52 @@ export default function RequestDetailScreen() {
             >
               <Text style={styles.actionButtonOutlineText}>Mark as shared</Text>
             </TouchableOpacity>
+          </Section>
+        )}
+
+        {data.availableActions.canSendBusinessUpdate && (
+          <Section cardBg={cardBg}>
+            <Text style={styles.sectionLabel}>Customer Update</Text>
+            <TextInput
+              style={[
+                styles.composerInput,
+                { color: colorScheme === 'dark' ? '#FFFFFF' : '#000000' },
+              ]}
+              placeholder="Write a customer-visible update…"
+              placeholderTextColor="rgba(128,128,128,0.6)"
+              multiline
+              value={composerText}
+              onChangeText={setComposerText}
+              editable={!isSendingUpdate}
+            />
+            {composerError && <Text style={styles.composerError}>{composerError}</Text>}
+            {!isOnline && (
+              <Text style={styles.composerOffline}>Offline — updates cannot be sent.</Text>
+            )}
+            <TouchableOpacity
+              style={[
+                styles.actionButton,
+                (composerText.trim() === '' || isSendingUpdate || !isOnline) &&
+                  styles.actionButtonDisabled,
+              ]}
+              onPress={() => handleSendUpdate()}
+              disabled={composerText.trim() === '' || isSendingUpdate || !isOnline}
+            >
+              <Text style={styles.actionButtonText}>Send Update</Text>
+            </TouchableOpacity>
+            {data.availableActions.allowedStatuses.includes('resolved') && (
+              <TouchableOpacity
+                style={[
+                  styles.actionButtonOutline,
+                  (composerText.trim() === '' || isSendingUpdate || !isOnline) &&
+                    styles.actionButtonDisabled,
+                ]}
+                onPress={() => handleSendUpdate('resolved')}
+                disabled={composerText.trim() === '' || isSendingUpdate || !isOnline}
+              >
+                <Text style={styles.actionButtonOutlineText}>Send Update & Mark Completed</Text>
+              </TouchableOpacity>
+            )}
           </Section>
         )}
 
@@ -434,7 +512,6 @@ function EventRow({ event }: { event: EventItem }) {
 
 const ACTION_LABELS: Partial<Record<keyof AvailableActionsDto, string>> = {
   canChangeStatus: 'Change status',
-  canSendBusinessUpdate: 'Send customer update',
   canAddInternalNote: 'Add internal note',
   canAssignResponsible: 'Assign responsible',
   canWatch: 'Watch',
@@ -544,6 +621,18 @@ const styles = StyleSheet.create({
   eventMeta: { fontSize: 12, opacity: 0.5 },
   eventContent: { fontSize: 14, lineHeight: 20, opacity: 0.85, marginTop: 2 },
   eventInternal: { fontSize: 11, opacity: 0.45, fontStyle: 'italic' },
+  composerInput: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(128,128,128,0.35)',
+    borderRadius: 6,
+    padding: 10,
+    fontSize: 15,
+    minHeight: 80,
+    textAlignVertical: 'top',
+    marginBottom: 6,
+  },
+  composerError: { fontSize: 13, color: '#C0392B', marginBottom: 6 },
+  composerOffline: { fontSize: 13, opacity: 0.55, marginBottom: 6 },
   errorText: { fontSize: 16, textAlign: 'center', opacity: 0.7 },
   retryButton: { marginTop: 14, borderRadius: 8, backgroundColor: '#0057D9', paddingHorizontal: 18, paddingVertical: 10 },
   retryText: { color: '#FFFFFF', fontSize: 14, fontWeight: '700' },

@@ -1,6 +1,6 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-07-04 (S17g complete; S17h next)
+**Last updated:** 2026-07-04 (S17h complete; S17i next)
 **Branch:** `main` tracking `origin/main`
 **Last green baseline:** 939 unit · 14 arch · 713 integration = 1,666 total, 0 failures (1 pre-existing KeepG5 fluke excluded)
 **Next free ADR:** ADR-406
@@ -40,7 +40,7 @@ For every implementation slice:
 **Bug/gap tracker:** `docs/pilot-readiness-bug-tracker.md`
 **Foundation roadmap:** `docs/build-log/ophalo-foundation-build-plan-greenfield-boundaries-brownfield-behavior.md` section 9.1
 **Current session:** Session 17 — Review-Safe Native Product Foundation
-**Current slice:** S17h — Customer Update And Mark Completed
+**Current slice:** S17i — Participation And Timing
 
 ### Completed Context
 
@@ -60,9 +60,8 @@ Treat these as historical context unless a later discovery step finds a concrete
 
 - S17 decisions are locked in build log 071 as ADR-396 through ADR-405. Treat the build log and
   decision index as the active S17 authority.
-- S17a preflight is complete. Use the build-log 071 "S17a Preflight Findings" section as the S17b
-  implementation brief for exact endpoint names, response fields, mobile routes, auth behavior,
-  test coverage, conflict contracts, and public-intake gap scope.
+- S17a through S17h are complete. Use build-log 071 as the implementation archive and this session
+  log as the current handoff brief for S17i.
 - New backend endpoints are allowed only after explicit S17a gap evidence and documentation.
 - Use `docs/pilot-readiness-bug-tracker.md` as the live source of bug/gap status.
 - `ophalo-app` remains the authenticated Keep workbench.
@@ -79,11 +78,11 @@ Treat these as historical context unless a later discovery step finds a concrete
 - `OperatorBaseUrl` is retired from active settings/config/test factories/runbooks; invite links now
   use `{PublicBaseUrl}/invite/accept`.
 
-### S17 — S17e Complete; S17f Active
+### S17 — S17h Complete; S17i Active
 
 **Roadmap label:** Native Operator Field App.
 
-**Status:** S17g complete. S17h is the active slice.
+**Status:** S17h complete. S17i is the active slice.
 
 **S17a findings summary:**
 
@@ -97,14 +96,25 @@ Treat these as historical context unless a later discovery step finds a concrete
   `KeepRequest.ParticipationRequestAlreadyAssigned`. All errors are ProblemDetails JSON with `code`
   extension field. Mobile must JSON-parse error bodies to read `code`.
 - Public intake gap confirmed: `GET /keep/setup/intake` requires `KeepSettingsManage` (Admin/Owner
-  only). S17f ships Quick Capture only. Intake sharing is a separately approved pre-pilot gap slice.
+  only). S17f shipped Quick Capture only. Intake sharing is a separately approved pre-pilot gap slice.
 - `signin.tsx` `__DEV__` paste field removed (S17c complete).
 - My Work (My Promises / Watching) and Available lists wired with real cached queries; intentional loading/error/empty states; pull-to-refresh; `hasMore` indicator. Rows are read-only except detail navigation (S17d complete).
 - Request detail read surface: header, description, attention/timing/participation fields, contact affordances and available actions as plain-text metadata, oldest-first event timeline. `useRequestDetail` hook with `enabled: !!id`; `version` retained for S17h/S17i mutations. No write controls, no S17g/h/i leakage (S17e complete).
 - Quick Capture modal: phone input → lookup (`GET /keep/requests/lookup?phone=...`) → auto-fill known customer name/email; description + source picker (7 slugs, `public_intake` excluded); offline blocking via `useNetworkState` (`@react-native-community/netinfo`); `POST /keep/requests` authenticated; post-save `router.replace` to `requests/[id]`. No intake share UI (S17f complete).
 - Contact handoff and tracker share: contact rows tappable via `Linking` (`tel:`/`mailto:`); phone outcome custom sheet (Spoke/Voicemail/No answer/Skip) logs `POST .../external-contact` with `X-Keep-Request-Version`; email requires one-tap confirm; tracker share via native share sheet + explicit post-share confirm before calling `POST .../share-intent` (`native_share`); "Mark as shared" explicit confirm sends `manual_mark_shared`; `pageToken` added to `KeepRequestDetailDto`; `EXPO_PUBLIC_PUBLIC_BASE_URL` documented; share-intent requires no version header (S17a table correction documented). ADR-401 compliant (S17g complete).
+- Customer update and mark completed: composer gated on `canSendBusinessUpdate`; "Send Update" posts `{ message }`; "Send Update & Mark Completed" posts `{ message, setStatus: 'resolved' }` gated on `allowedStatuses.includes('resolved')`; both disabled when message empty/pending/offline; 409/`KeepRequest.RequestChanged` preserves text and shows conflict notice; network failure shows retry-safe copy; badge invalidated on success; composer omitted entirely when `canSendBusinessUpdate` false (S17h complete).
 - Brand guide alignment (canvas color, Keep teal moment, Inter/Source Serif 4 fonts) deferred to a follow-up UX pass before S17j.
 - E2E handoff runbook recorded in build log 071.
+
+**S17i active brief: Participation And Timing**
+
+- Scope is mobile-only unless a concrete contract mismatch is found.
+- Watch/Mute/Unmute: use `PUT/DELETE /keep/requests/{id}/watch` and `PUT/DELETE /keep/requests/{id}/mute` with `X-Keep-Request-Version`. Render based on `canWatch`/`canUnwatch`/`canMute`/`canUnmute` in `availableActions`.
+- Self-assign from Available: `PUT /keep/requests/{id}/responsible` with `X-Keep-Request-Version`. Guard on `canAssignResponsible`. On 409 `KeepRequest.ParticipationRequestAlreadyAssigned`, invalidate/refetch and show conflict message.
+- Follow Up On: `PUT/DELETE /keep/requests/{id}/follow-up-on` with version header. Render when `canSetFollowUpOn`.
+- Planned For: `PUT/DELETE /keep/requests/{id}/planned-for` with version header. Render when `canSetPlannedFor`.
+- Offline behavior follows ADR-403: disable mutation buttons when clearly offline.
+- Do not add S17h business-update controls in S17i; those are already complete.
 
 **Hard boundaries (unchanged):**
 - No real APNs/FCM or push-token capture (S18).
@@ -124,7 +134,7 @@ Treat these as historical context unless a later discovery step finds a concrete
 1. ~~**Session 16 — Native Mobile App Foundation** — Complete~~
 2. **Session 17 — Review-Safe Native Product Foundation**
    Build the review-safe native Keep field workflow in locked slices S17a through S17j. Current
-   active slice is S17h — Customer Update And Mark Completed.
+   active slice is S17i — Participation And Timing.
 3. **Session 18 — Push Delivery And Deep Links**
    Decide and implement real APNs/FCM delivery for store-bound builds, or explicitly document a
    review-safe no-push product posture before any submission. Verify Demo/InternalTest suppression,
