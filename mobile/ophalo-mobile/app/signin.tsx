@@ -9,11 +9,10 @@ import { useAuth } from '@/src/auth/AuthContext';
 type Step = 'input' | 'sent';
 
 export default function SignInScreen() {
-  const { user, storeToken } = useAuth();
+  const { user } = useAuth();
   const [email, setEmail] = useState('');
   const [step, setStep] = useState<Step>('input');
   const [submitting, setSubmitting] = useState(false);
-  const [devToken, setDevToken] = useState('');
 
   if (user) return <Redirect href="/" />;
 
@@ -82,32 +81,6 @@ export default function SignInScreen() {
             ? <ActivityIndicator color="#fff" />
             : <Text style={styles.buttonText}>Send sign-in link</Text>}
         </TouchableOpacity>
-
-        {__DEV__ && (
-          <>
-            <Text style={styles.devLabel}>DEV — paste bearer token</Text>
-            <TextInput
-              style={styles.input}
-              value={devToken}
-              onChangeText={setDevToken}
-              autoCapitalize="none"
-              autoCorrect={false}
-              placeholder="sessionToken"
-            />
-            <TouchableOpacity
-              style={styles.devButton}
-              onPress={() => {
-                const t = devToken.trim();
-                if (!t) return;
-                storeToken(t).catch((err: unknown) => {
-                  Alert.alert('Token rejected', err instanceof Error ? err.message : 'Unknown error');
-                });
-              }}
-            >
-              <Text style={styles.devButtonText}>Store token</Text>
-            </TouchableOpacity>
-          </>
-        )}
       </View>
     </KeyboardAvoidingView>
   );
@@ -164,23 +137,5 @@ const styles = StyleSheet.create({
     color: '#0057D9',
     fontSize: 15,
     marginTop: 8,
-  },
-  devLabel: {
-    marginTop: 32,
-    fontSize: 11,
-    opacity: 0.4,
-    alignSelf: 'stretch',
-  },
-  devButton: {
-    alignSelf: 'stretch',
-    borderWidth: 1,
-    borderColor: '#999',
-    borderRadius: 8,
-    paddingVertical: 12,
-    alignItems: 'center',
-  },
-  devButtonText: {
-    fontSize: 14,
-    opacity: 0.6,
   },
 });

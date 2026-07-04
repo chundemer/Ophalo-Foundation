@@ -1,7 +1,7 @@
 # Build Log 071 — Session 17: Review-Safe Native Product Foundation
 
 **Started:** 2026-07-03
-**Status:** S17b complete; S17c next
+**Status:** S17c complete; S17d next
 **Session name:** s17 discussion, lock in, and final pass
 **Next free ADR before this log:** ADR-396
 **Next free ADR after this log:** ADR-406
@@ -540,6 +540,19 @@ Dev-token paste field in `signin.tsx` may be used as a local dev shortcut until 
 ### TypeScript Gate
 
 `npx tsc --noEmit` passes with 0 errors after the full S17b correction pass.
+
+---
+
+## S17c Implementation Notes
+
+### Files Changed (1 production file)
+
+**Modified:**
+- `mobile/ophalo-mobile/app/signin.tsx` — removed `__DEV__` bearer token paste field: `devToken` state, `{__DEV__ && ...}` JSX block, unused `storeToken` destructure from `useAuth`, and `devLabel`/`devButton`/`devButtonText` styles. Sign-in screen now only offers magic-link email entry. 401 handler was already complete from S17b.
+
+### TypeScript Gate
+
+`npx tsc --noEmit` passes with 0 errors.
 
 ---
 
