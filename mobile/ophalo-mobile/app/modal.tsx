@@ -10,7 +10,9 @@ import {
   useColorScheme,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
-import { router } from 'expo-router';
+import { Redirect, router } from 'expo-router';
+
+import { useAuth } from '@/src/auth/AuthContext';
 
 import { Text, View } from '@/components/Themed';
 import { useNetworkState } from '@/src/hooks/useNetworkState';
@@ -31,6 +33,12 @@ const SOURCE_OPTIONS: { label: string; value: string }[] = [
 ];
 
 export default function CaptureModal() {
+  const { user } = useAuth();
+  if (!user) return <Redirect href="/signin" />;
+  return <CaptureModalContent />;
+}
+
+function CaptureModalContent() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const { isOnline } = useNetworkState();
