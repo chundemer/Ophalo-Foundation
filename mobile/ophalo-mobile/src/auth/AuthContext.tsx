@@ -1,7 +1,8 @@
+import { useQueryClient } from '@tanstack/react-query';
 import Constants from 'expo-constants';
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { Platform } from 'react-native';
-import { api } from '../api/client';
+import { api, setOn401Handler } from '../api/client';
 import { clearSessionToken, getAppInstallationId, getSessionToken, setSessionToken } from './secureStore';
 
 async function upsertDevice(): Promise<void> {
@@ -35,9 +36,19 @@ type AuthState = {
 const AuthContext = createContext<AuthState | null>(null);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const queryClient = useQueryClient();
   const [user, setUser] = useState<MeResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isRoleBlocked, setIsRoleBlocked] = useState(false);
+
+  useEffect(() => {
+    setOn401Handler(() => {
+      void clearSessionToken().catch(() => {});
+      setUser(null);
+      queryClient.clear();
+    });
+    return () => { setOn401Handler(null); };
+  }, [queryClient]);
 
   const bootstrap = useCallback(async () => {
     await getAppInstallationId().catch(() => {}); // ensure durable ID exists before any API call
@@ -85,6 +96,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       await clearSessionToken().catch(() => {});
     } finally {
       setUser(null);
+      queryClient.clear();
     }
   }
 

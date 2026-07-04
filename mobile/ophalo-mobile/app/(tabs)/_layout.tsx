@@ -1,5 +1,6 @@
+import { router, Redirect, Tabs } from 'expo-router';
+import { TouchableOpacity } from 'react-native';
 import { SymbolView } from 'expo-symbols';
-import { Redirect, Tabs } from 'expo-router';
 
 import Colors from '@/constants/Colors';
 import { useColorScheme } from '@/components/useColorScheme';
@@ -21,13 +22,49 @@ export default function TabLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Requests',
+          title: 'My Work',
           tabBarIcon: ({ color }) => (
             <SymbolView
-              name={{ ios: 'list.bullet', android: 'list', web: 'list' }}
+              name={{ ios: 'checklist', android: 'checklist', web: 'checklist' }}
               tintColor={color}
               size={28}
             />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="available"
+        options={{
+          title: 'Available',
+          tabBarIcon: ({ color }) => (
+            <SymbolView
+              name={{ ios: 'tray', android: 'inbox', web: 'inbox' }}
+              tintColor={color}
+              size={28}
+            />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="capture"
+        options={{
+          title: 'Capture',
+          tabBarIcon: ({ color }) => (
+            <SymbolView
+              name={{ ios: 'plus.circle.fill', android: 'add_circle', web: 'add_circle' }}
+              tintColor={color}
+              size={28}
+            />
+          ),
+          tabBarButton: (props) => (
+            <TouchableOpacity
+              style={props.style}
+              onPress={() => router.push('/modal')}
+              accessibilityLabel="Quick Capture"
+              accessibilityRole="button"
+            >
+              {props.children}
+            </TouchableOpacity>
           ),
         }}
       />

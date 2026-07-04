@@ -1,10 +1,10 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-07-03 (S16 complete; S17 next)
+**Last updated:** 2026-07-04 (S17b complete; S17c next)
 **Branch:** `main` tracking `origin/main`
 **Last green baseline:** 939 unit · 14 arch · 713 integration = 1,666 total, 0 failures (1 pre-existing KeepG5 fluke excluded)
-**Next free ADR:** ADR-396
-**Current session:** Session 17 — Native Operator Field App
+**Next free ADR:** ADR-406
+**Current session:** Session 17 — Review-Safe Native Product Foundation
 
 ---
 
@@ -34,137 +34,40 @@ For every implementation slice:
 
 ## Current Work
 
-**Current build log:** `docs/build-log/070-session-16-native-mobile-foundation.md`
-**Last completed build log:** `docs/build-log/069-session-15-pilot-readiness.md` (Session 15)
+**Current build log:** `docs/build-log/071-session-17-review-safe-native-product-foundation.md`
+**Last completed build log:** `docs/build-log/070-session-16-native-mobile-foundation.md` (Session 16)
 **Readiness working doc:** `docs/pilot-readiness-decision-questions.md`
 **Bug/gap tracker:** `docs/pilot-readiness-bug-tracker.md`
 **Foundation roadmap:** `docs/build-log/ophalo-foundation-build-plan-greenfield-boundaries-brownfield-behavior.md` section 9.1
-**Current session:** Session 16 — Native Mobile App Foundation
-**Current slice:** S16e — Web Handoff and Mobile Device/Badge Hooks.
+**Current session:** Session 17 — Review-Safe Native Product Foundation
+**Current slice:** S17c — Auth Cleanup And Role Gate
 
-### S16c — Complete
+### Completed Context
 
-Added `expo-secure-store` (SDK 57). New files: `src/auth/secureStore.ts` (session token +
-`appInstallationId` ops; UUID v4 generated once, never reset by re-auth), `src/api/client.ts`
-(typed fetch wrapper; Bearer injection via SecureStore; dev-only method/path/status log — no token
-material in any log output), `src/auth/AuthContext.tsx` (AuthProvider; bootstrap reads token →
-`GET /auth/me` → setUser or clear; `storeToken` validates via `/auth/me` before writing to
-SecureStore; `logout` never throws — `setUser(null)` guaranteed in `finally`, all API/storage ops
-are best-effort `.catch()`), `app/signin.tsx` (email → `POST /auth/signin` with
-`clientHint: "mobile"`; "Check your email" confirmation; dev-only token paste field for S16c
-verification; errors shown via Alert), `app/auth/callback.tsx` (handles `ophalo://auth/callback?code=`
-deep link; calls `POST /auth/mobile-handoff/redeem`; stores token on success; error screen on
-failure — `redeem` never throws, all paths set phase state).
+Completed implementation details live in the build logs and should not be repeated here:
 
-Modified: `app/_layout.tsx` (AuthProvider wraps navigator; blank view during bootstrap);
-`app/(tabs)/_layout.tsx` (auth guard — `<Redirect href="/signin" />` when no user);
-`app/(tabs)/account.tsx` (role + userId display; Sign out with Alert confirmation).
+- Session 13 — PWA workbench: `docs/build-log/067-session-13-pwa-workbench.md`
+- Session 14 — web front door: `docs/build-log/068-session-14-ophalo-web-front-door.md`
+- Session 15 — pilot readiness: `docs/build-log/069-session-15-pilot-readiness.md`
+- Session 16 — native mobile foundation: `docs/build-log/070-session-16-native-mobile-foundation.md`
 
-Error handling contract established: `logout` and `bootstrap` never throw; `storeToken` and
-`redeem` propagate errors to callers which handle them explicitly.
-
-Verification: TypeScript clean (`npx tsc --noEmit`). Manually verified: bearer token stored via dev
-field → `GET /auth/me` succeeds → Requests tab rendered. `git diff --check` clean.
-
-### S16d — Complete
-
-Committed backend mobile auth and device contracts in `80a33a0`.
-
-Implemented:
-- `POST /auth/signin` accepts optional `clientHint: "mobile"` and issues magic links with
-  `&from=mobile`.
-- `POST /auth/exchange` with `clientType: "mobile_app"` consumes the magic-link code and returns a
-  10-minute one-time `{ handoffCode, expiresAtUtc }`, never a raw bearer token.
-- `POST /auth/mobile-handoff/redeem` consumes the handoff code atomically and returns
-  `{ sessionToken, expiresAtUtc }` for a `SessionClientType.MobileApp` session.
-- `PUT /me/devices/{appInstallationId}` accepts omitted/null `pushToken`; null-token devices are
-  Active but push-ineligible, with null fingerprint/last-four and no token-rebinding revocation.
-
-Schema: Christian generated migration `S16dMobileHandoffAndNullableDeviceToken`.
-
-Verification recorded in commit: 53 focused integration tests passed across auth magic link, mobile
-handoff, and device registration.
-
-### S16d Follow-Up Tightening — Complete
-
-Committed in `2639cc6`.
-
-Implemented:
-- Native V1 sign-in remains existing-member only.
-- New account creation and invite acceptance remain web/PWA-owned in V1 (ADR-395).
-- `POST /auth/exchange` with `clientType: "mobile_app"` returns
-  `AuthCode.MobileNewAccountUnsupported` for `EntryContext.NewAccount` codes before provisioning or
-  consuming the code.
-- Focused tests cover the rejected mobile new-account exchange, no graph creation, browser reuse of
-  the same code, and `clientHint: "mobile"` producing `from=mobile` in the emailed link.
-
-### S16e — Complete
-
-**Classification:** Mechanical implementation preflight. Decisions are locked in build log 070 and
-ADR-389/390/391/392/393/394/395. Do not rediscover the mobile stack, app identity, custom-scheme
-posture, existing-member-only mobile sign-in, web-owned signup/invite acceptance, or S16/S17/S18/S19
-split.
-
-**Goal:** Complete the web-to-native auth handoff and initial mobile authenticated hooks:
-- `ophalo-web` `/auth/exchange` detects `?from=mobile` and renders a sterile mobile handoff client
-  instead of the normal browser exchange client.
-- `MobileExchangeClient` calls the API `/auth/exchange` with `{ code, clientType: "mobile_app" }`
-  and no browser credentials, receives `{ handoffCode, expiresAtUtc }`, and never renders or stores a
-  raw bearer session token.
-- The mobile handoff page exposes a user-clicked `ophalo://auth/callback?code={handoffCode}` action.
-  No auto-open on page load, no third-party scripts, no analytics, no external store/TestFlight links.
-- Mobile callback redeems the handoff code through the existing
-  `POST /auth/mobile-handoff/redeem` path, stores the returned bearer token, and reaches the
-  authenticated shell.
-- After auth, the mobile app upserts `PUT /me/devices/{appInstallationId}` with `platform`,
-  `appVersion`, and omitted/null `pushToken`.
-- Mobile adds `GET /me/badge` refresh/polling hooks for foreground/resume behavior.
-
-**Expected files/areas:** `web/ophalo-web/src/app/auth/exchange/*` or nearby auth-exchange client
-files, mobile auth callback/context or post-auth bootstrap files, mobile API/device/badge hooks, and
-focused tests/type checks. Present the exact file-level gate before editing.
-
-**Hard boundaries:**
-- No native signup and no native invite acceptance in S16e.
-- No `POST /auth/start` or invite-accept mobile UX changes.
-- No real APNs/FCM provider or push-token capture; that remains S18.
-- No store-submission assets, EAS profiles, app icons/screenshots, Universal Links/App Links, or
-  Apple/Google domain-association work; those remain S19.
-- Do not expose raw bearer tokens in browser state, DOM text, custom-scheme URLs, logs, or
-  `ophalo-web` response bodies.
-
-Committed across `b20679e`, `c404652`, `e4d7326`. Key changes: `MobileExchangeClient` (sterile
-handoff page, `credentials: "omit"`, tap-only `ophalo://` link), `page.tsx` routes on `?from=mobile`,
-`api.put` added, `upsertDevice` best-effort after sign-in and bootstrap, TanStack Query installed with
-`QueryClientProvider` and `AppState → focusManager` foreground wiring, `useBadge` polls
-`GET /me/badge` every 60s, `expo-crypto` `randomUUID` replaces `Math.random()` UUID,
-Viewer/unknown role gate at bootstrap and sign-in per ADR-388,
-`docs/mobile-store-submission-checklist.md` created as S19 authority document.
-139 auth/mobile/badge/device integration tests passing. TypeScript clean on both projects.
-
-Session 13 is complete and should be treated as historical context only. Completed Session 13 details
-live in `docs/build-log/067-session-13-pwa-workbench.md`; do not carry Session 13 implementation
-notes forward in this execution brief.
-
-Session 14 is complete and should be treated as historical context. `ophalo-web` now owns the public
-front door and browser token pages: homepage, About, Pilot, Privacy, Terms, `/signin`, `/start`,
-`/auth/check-email`, `/auth/exchange`, `/auth/exchange/error`, `/invite/accept`,
-`/invite/accept/error`, and `/keep/intake/{token}`. Completed Session 14 detail lives in
-`docs/build-log/068-session-14-ophalo-web-front-door.md`.
-
-Session 15 is complete and should be treated as historical context. It closed active pilot-readiness
-bugs/gaps in `docs/pilot-readiness-bug-tracker.md`, including the S15c customer tracker page at
-`/keep/r/{pageToken}`. Completed Session 15 detail lives in
-`docs/build-log/069-session-15-pilot-readiness.md`.
+Session 16 completed the native mobile foundation, including the Expo app shell, secure token and
+installation storage, mobile magic-link handoff, nullable push-token device registration, badge hook,
+viewer/unknown mobile role gate, crypto UUID generation, and the S19 store-submission checklist.
+Treat these as historical context unless a later discovery step finds a concrete gap.
 
 ### Current Direction
 
-- Session 16 should establish the native mobile app foundation before broader product-ops or
-  reporting polish. Mobile and store approval are now the critical path.
+- S17 decisions are locked in build log 071 as ADR-396 through ADR-405. Treat the build log and
+  decision index as the active S17 authority.
+- S17a preflight is complete. Use the build-log 071 "S17a Preflight Findings" section as the S17b
+  implementation brief for exact endpoint names, response fields, mobile routes, auth behavior,
+  test coverage, conflict contracts, and public-intake gap scope.
+- New backend endpoints are allowed only after explicit S17a gap evidence and documentation.
 - Use `docs/pilot-readiness-bug-tracker.md` as the live source of bug/gap status.
 - `ophalo-app` remains the authenticated Keep workbench.
-- The native app should be phone-first for operators and may share contracts/patterns with
-  `ophalo-app`, but it is a separate mobile deliverable that must satisfy Apple/Google review.
+- `mobile/ophalo-mobile` is a separate native deliverable and must remain aligned with Apple/Google
+  review posture captured in `docs/mobile-store-submission-checklist.md`.
 - `OpHalo.Api` remains the only authority for auth, sessions, account creation, rate limiting, email,
   authorization, and persistence.
 - Preserve fail-closed account, membership, action-policy, public-token, and concurrency behavior.
@@ -176,31 +79,47 @@ bugs/gaps in `docs/pilot-readiness-bug-tracker.md`, including the S15c customer 
 - `OperatorBaseUrl` is retired from active settings/config/test factories/runbooks; invite links now
   use `{PublicBaseUrl}/invite/accept`.
 
-### S17 — Current (next session)
+### S17 — S17b Complete; S17c Active
 
-**Goal:** Build the phone-first operator workflow in `mobile/ophalo-mobile/`: My Work list,
-Available list, request detail, native Quick Capture, contact handoff (`sms:`, `tel:`, `mailto:`),
-log contact, customer update, mark completed, self-assign/watch/mute, tracker sharing, refresh/resume
-behavior, and mobile-safe error states.
+**Roadmap label:** Native Operator Field App.
 
-**Pre-work:** Decisions are not yet locked. Discovery required at session start — read build log 070
-section on S17 scope and identify any unresolved API contracts or navigation decisions before
-implementation.
+**Status:** S17b complete (including correction pass). S17c is the active slice.
 
-**Hard boundaries:**
+**S17a findings summary:**
+
+- All S17 API endpoints confirmed in `OpHalo.Api`: lists (`view=assigned_to_me`, `view=watching`),
+  `/keep/requests/available`, lookup, create, detail (with `AvailableActions`, `CurrentUserParticipation`,
+  `Version`, `PageToken`, `NeedsShare`), business-updates, status, external-contact, share-intent,
+  watch/unwatch, mute/unmute, responsible, follow-up-on, planned-for.
+- `X-Keep-Request-Version` conflict contract confirmed: missing header → 400
+  `KeepRequest.ExpectedVersionRequired`; invalid → 400 `KeepRequest.ExpectedVersionInvalid`; stale
+  race → 409 `KeepRequest.RequestChanged`; already-claimed → 409
+  `KeepRequest.ParticipationRequestAlreadyAssigned`. All errors are ProblemDetails JSON with `code`
+  extension field. Mobile must JSON-parse error bodies to read `code`.
+- Public intake gap confirmed: `GET /keep/setup/intake` requires `KeepSettingsManage` (Admin/Owner
+  only). S17f ships Quick Capture only. Intake sharing is a separately approved pre-pilot gap slice.
+- `signin.tsx` `__DEV__` paste field confirmed (lines 86–110); S17c removes it.
+- E2E handoff runbook recorded in build log 071.
+
+**Hard boundaries (unchanged):**
 - No real APNs/FCM or push-token capture (S18).
 - No store-submission assets or Universal Links (S19).
-- No new backend endpoints without explicit discovery — use existing Keep API contracts.
+- No demo mode, local-only reviewer bypass, or production-visible dev auth.
+- No native account creation or invite acceptance.
+- `Request Account Deletion` is config-gated by `EXPO_PUBLIC_ACCOUNT_DELETION_URL`: if missing,
+  empty, invalid, non-HTTPS, or not an approved OpHalo deletion route, omit the UI row entirely.
+- Support is config-gated by `EXPO_PUBLIC_SUPPORT_URL` unless a known existing support route is
+  provided; do not link to an unverified `/support` route.
+- Slice dependencies locked: S17b/S17c before S17d; S17e before S17f/S17g/S17h/S17i.
 
 ---
 
 ### Remaining Sessions
 
 1. ~~**Session 16 — Native Mobile App Foundation** — Complete~~
-2. **Session 17 — Native Operator Field App**
-   Build the phone-first operator workflow: My Work, Available, request detail, native Quick Capture,
-   contact handoff, log contact, customer update, mark completed, self-assign/watch/mute, tracker
-   sharing, refresh/resume behavior, and mobile-safe error states.
+2. **Session 17 — Review-Safe Native Product Foundation**
+   Build the review-safe native Keep field workflow in locked slices S17a through S17j. Current
+   active slice is S17b — App Infrastructure And Navigation correction pass.
 3. **Session 18 — Push Delivery And Deep Links**
    Decide and implement real APNs/FCM delivery for store-bound builds, or explicitly document a
    review-safe no-push product posture before any submission. Verify Demo/InternalTest suppression,

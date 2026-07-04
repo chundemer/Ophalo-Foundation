@@ -3,13 +3,23 @@ import { getSessionToken } from '../auth/secureStore';
 const API_URL = (process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:5092').replace(/\/$/, '');
 
 export class ApiError extends Error {
+  public readonly code?: string;
+
   constructor(
     public readonly status: number,
     message: string,
+    code?: string,
   ) {
     super(message);
     this.name = 'ApiError';
+    this.code = code;
   }
+}
+
+let on401Handler: (() => void) | null = null;
+
+export function setOn401Handler(handler: (() => void) | null): void {
+  on401Handler = handler;
 }
 
 async function request<T>(
@@ -34,7 +44,13 @@ async function request<T>(
 
   if (!response.ok) {
     const body = await response.text().catch(() => '');
-    throw new ApiError(response.status, body || response.statusText);
+    let code: string | undefined;
+    try {
+      const parsed = JSON.parse(body) as { code?: string };
+      if (typeof parsed.code === 'string') code = parsed.code;
+    } catch { /* not JSON */ }
+    if (authenticated && response.status === 401) on401Handler?.();
+    throw new ApiError(response.status, body || response.statusText, code);
   }
 
   const text = await response.text();
@@ -45,21 +61,31 @@ export const api = {
   get<T>(path: string, bearerToken?: string): Promise<T> {
     return request<T>(path, { method: 'GET', bearerToken });
   },
-  post<T>(path: string, body?: unknown, authenticated = false): Promise<T> {
+  post<T>(path: string, body?: unknown, authenticated = false, extraHeaders?: Record<string, string>): Promise<T> {
     return request<T>(path, {
       method: 'POST',
       body: body !== undefined ? JSON.stringify(body) : undefined,
       authenticated,
+      headers: extraHeaders,
     });
   },
-  put<T>(path: string, body?: unknown): Promise<T> {
+  patch<T>(path: string, body?: unknown, extraHeaders?: Record<string, string>): Promise<T> {
+    return request<T>(path, {
+      method: 'PATCH',
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+      authenticated: true,
+      headers: extraHeaders,
+    });
+  },
+  put<T>(path: string, body?: unknown, extraHeaders?: Record<string, string>): Promise<T> {
     return request<T>(path, {
       method: 'PUT',
       body: body !== undefined ? JSON.stringify(body) : undefined,
       authenticated: true,
+      headers: extraHeaders,
     });
   },
-  delete<T>(path: string): Promise<T> {
-    return request<T>(path, { method: 'DELETE' });
+  delete<T>(path: string, extraHeaders?: Record<string, string>): Promise<T> {
+    return request<T>(path, { method: 'DELETE', headers: extraHeaders });
   },
 };
