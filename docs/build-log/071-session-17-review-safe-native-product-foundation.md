@@ -1,7 +1,7 @@
 # Build Log 071 — Session 17: Review-Safe Native Product Foundation
 
 **Started:** 2026-07-03
-**Status:** S17h complete; S17i next
+**Status:** S17i complete; S17j next
 **Session name:** s17 discussion, lock in, and final pass
 **Next free ADR before this log:** ADR-396
 **Next free ADR after this log:** ADR-406
@@ -720,3 +720,32 @@ The S17a endpoint table listed `share-intent` as requiring `X-Keep-Request-Versi
 ### TypeScript Gate
 
 `npx tsc --noEmit` passes with 0 errors.
+
+---
+
+## S17i Implementation Notes
+
+### Files Changed (5 new hooks + 2 modified screens)
+
+**New:**
+- `mobile/ophalo-mobile/src/hooks/useWatchRequest.ts` — exports `useWatchRequest` and `useUnwatchRequest`. `PUT`/`DELETE /keep/requests/{id}/watch` with `X-Keep-Request-Version` header; no body. On success: invalidates `['keepRequestDetail', requestId]`, `['keepRequests']`, `['badge']`. On error: invalidates `['keepRequestDetail', requestId]`.
+- `mobile/ophalo-mobile/src/hooks/useMuteRequest.ts` — exports `useMuteRequest` and `useUnmuteRequest`. Same pattern against `PUT`/`DELETE /keep/requests/{id}/mute`.
+- `mobile/ophalo-mobile/src/hooks/useAssignResponsible.ts` — `PUT /keep/requests/{id}/responsible` with body `{ accountUserId }` and version header. Identity source: `user.accountUserId` from `useAuth`. Same invalidation pattern. Used from both the detail screen and the Available list row.
+- `mobile/ophalo-mobile/src/hooks/useFollowUpOn.ts` — exports `useSetFollowUpOn` and `useClearFollowUpOn`. Set: `PUT` with body `{ date }` (YYYY-MM-DD only; `reason` not surfaced); Clear: `DELETE`. Same invalidation.
+- `mobile/ophalo-mobile/src/hooks/usePlannedFor.ts` — exports `useSetPlannedFor` and `useClearPlannedFor`. Same pattern against `/planned-for`.
+
+**Modified:**
+- `mobile/ophalo-mobile/app/requests/[id].tsx` — Participation section: "Assign to me" button rendered when `canAssignResponsible` (primary style, disabled while pending/offline); Watch/Unwatch rendered separately from `canWatch`/`canUnwatch` (outline style); Mute/Unmute from `canMute`/`canUnmute`. Per-action error state (`assignError`, `watchError`, `muteError`). Timing section: now renders when any of `followUpOnDate`, `plannedForDate`, `canSetFollowUpOn`, `canSetPlannedFor` is truthy (previously conditional on dates only). Set controls: `TextInput` placeholder `YYYY-MM-DD` with `keyboardType="numbers-and-punctuation"`, client-side calendar validity check via `isValidDateInput` before send; "Set" buttons disabled when input empty/pending/offline; "Clear" buttons shown only when a date is currently set. Typed input preserved on error; cleared on success only. `ACTION_LABELS` reduced to `canChangeStatus`, `canAddInternalNote`, `canClose` (S17i-owned keys removed). ADR-403 offline guard applied to previously-unguarded sheet mutation buttons: phone outcome options, email log option, share confirm button now include `|| !isOnline`.
+- `mobile/ophalo-mobile/app/(tabs)/available.tsx` — `AvailableRow` converted from pure presentational to hook-bearing component. Each row calls `useAssignResponsible`, `useAuth`, `useNetworkState`, and `useState` independently. "Assign to me" button rendered when `canSelfAssign`; disabled while pending/offline. `KeepRequest.ParticipationRequestAlreadyAssigned` → "Already claimed — refreshed."; 409 `KeepRequest.RequestChanged` → "Request has changed — refreshed."; other errors → "Could not assign." Row navigation tap remains independent.
+
+### Decisions Made
+
+- **Date input is `TextInput` YYYY-MM-DD, not a date picker:** no `@react-native-community/datetimepicker` dependency added; client-side regex + calendar validity check before send. Error copy: "Use YYYY-MM-DD, for example 2026-07-10."
+- **Follow-up `reason` field omitted from mobile PUT body:** `SetFollowUpOnRequestBody.Reason` is optional; mobile sends `{ date }` only.
+- **Self-assign uses `user.accountUserId` from `useAuth`:** the responsible endpoint takes `{ accountUserId }` in the body; mobile passes the signed-in user's own ID.
+- **`AvailableRow` holds its own hook instances:** each row manages its own pending/error state independently; no shared assign state in the parent screen.
+- **Sheet mutation buttons offline-guarded (ADR-403 residual):** phone/email log and share-confirm sheet buttons missed in S17g; corrected here.
+
+### TypeScript Gate
+
+`npx tsc --noEmit` passes with 0 errors. `git diff --check` clean. 7 files changed.
