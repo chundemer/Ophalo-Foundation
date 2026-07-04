@@ -1,6 +1,6 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-07-04 (S17e complete; S17f next)
+**Last updated:** 2026-07-04 (S17f complete; S17g next)
 **Branch:** `main` tracking `origin/main`
 **Last green baseline:** 939 unit · 14 arch · 713 integration = 1,666 total, 0 failures (1 pre-existing KeepG5 fluke excluded)
 **Next free ADR:** ADR-406
@@ -40,7 +40,7 @@ For every implementation slice:
 **Bug/gap tracker:** `docs/pilot-readiness-bug-tracker.md`
 **Foundation roadmap:** `docs/build-log/ophalo-foundation-build-plan-greenfield-boundaries-brownfield-behavior.md` section 9.1
 **Current session:** Session 17 — Review-Safe Native Product Foundation
-**Current slice:** S17f — Quick Capture And Public Intake Share
+**Current slice:** S17g — Contact And Tracker Handoff
 
 ### Completed Context
 
@@ -83,7 +83,7 @@ Treat these as historical context unless a later discovery step finds a concrete
 
 **Roadmap label:** Native Operator Field App.
 
-**Status:** S17e complete. S17f is the active slice.
+**Status:** S17f complete. S17g is the active slice.
 
 **S17a findings summary:**
 
@@ -101,6 +101,7 @@ Treat these as historical context unless a later discovery step finds a concrete
 - `signin.tsx` `__DEV__` paste field removed (S17c complete).
 - My Work (My Promises / Watching) and Available lists wired with real cached queries; intentional loading/error/empty states; pull-to-refresh; `hasMore` indicator. Rows are read-only except detail navigation (S17d complete).
 - Request detail read surface: header, description, attention/timing/participation fields, contact affordances and available actions as plain-text metadata, oldest-first event timeline. `useRequestDetail` hook with `enabled: !!id`; `version` retained for S17h/S17i mutations. No write controls, no S17g/h/i leakage (S17e complete).
+- Quick Capture modal: phone input → lookup (`GET /keep/requests/lookup?phone=...`) → auto-fill known customer name/email; description + source picker (7 slugs, `public_intake` excluded); offline blocking via `useNetworkState` (`@react-native-community/netinfo`); `POST /keep/requests` authenticated; post-save `router.replace` to `requests/[id]`. No intake share UI (S17f complete).
 - Brand guide alignment (canvas color, Keep teal moment, Inter/Source Serif 4 fonts) deferred to a follow-up UX pass before S17j.
 - E2E handoff runbook recorded in build log 071.
 

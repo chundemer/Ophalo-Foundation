@@ -1,7 +1,7 @@
 # Build Log 071 — Session 17: Review-Safe Native Product Foundation
 
 **Started:** 2026-07-03
-**Status:** S17e complete; S17f next
+**Status:** S17f complete; S17g next
 **Session name:** s17 discussion, lock in, and final pass
 **Next free ADR before this log:** ADR-396
 **Next free ADR after this log:** ADR-406
@@ -641,3 +641,28 @@ Use local simulator/device workflow as the inner loop and staging/store-bound bu
 5. S19 store-submission gate:
    - EAS builds, signing, screenshots, reviewer credentials, privacy labels, account deletion URL,
      Universal/App Links, and review notes
+
+---
+
+## S17f Implementation Notes
+
+### Files Changed (3 new hooks/screens + package install)
+
+**New:**
+- `mobile/ophalo-mobile/src/hooks/useNetworkState.ts` — wraps `@react-native-community/netinfo` (installed via `npx expo install`). Subscribes to `NetInfo.addEventListener`; only sets `isOnline: false` when `state.isConnected === false` explicitly; treats null/unknown as online per ADR-403 offline-blocking posture.
+- `mobile/ophalo-mobile/src/hooks/useQuickCapture.ts` — `usePhoneLookup(rawPhone)`: digits-only normalization via `normalizePhoneDigits`; `enabled` when 7–15 digits; query key `['phoneLookup', digits]`; `staleTime: 30s`. `useCreateRequest()`: mutation to `POST /keep/requests` with `authenticated: true`; invalidates `['keepRequests']` on success. `CreatedRequestResult { requestId }` typed for post-save navigation only.
+
+**Modified:**
+- `mobile/ophalo-mobile/app/modal.tsx` — full Quick Capture form replacing S17b shell. Phone input (auto-focused, phone-pad keyboard); lookup result shown as read-only context (known customer name + active request list, not a blocker); auto-fill of name/email via `useEffect` on lookup result; clearing auto-filled fields on phone change. Customer name, email (optional), description (multiline), source picker (7 chips: phone/voicemail/text/email/walk_in/referral/other — `public_intake` excluded). Offline banner + Save disabled when `isOnline === false`; form state preserved. Error banner for create failures. Post-save: `router.replace({ pathname: '/requests/[id]', params: { id: created.requestId } })` — replaces modal in stack, back returns to tabs. Cancel via `router.back()`.
+
+### Decisions Made
+
+- **No intake share UI:** S17f ships Quick Capture only. Intake sharing remains a separately approved pre-pilot gap slice.
+- **NetInfo permission posture:** `@react-native-community/netinfo` added. No runtime permission prompt expected (connectivity detection is passive on iOS/Android). Android manifest output should be verified at S17j or store gate if "zero platform permissions" is interpreted literally.
+- **Offline blocking:** Save disabled when `isConnected === false`; form state preserved. Unknown/null connectivity treated as online.
+- **Auto-fill:** `useEffect` on `[lookup, lookupApplied]`; fills once per lookup result; clears on phone change.
+- **Post-save navigation:** `router.replace` to detail route — back returns to authenticated tab stack.
+
+### TypeScript Gate
+
+`npx tsc --noEmit` passes with 0 errors.
