@@ -1,7 +1,7 @@
 # Build Log 071 — Session 17: Review-Safe Native Product Foundation
 
 **Started:** 2026-07-03
-**Status:** S17f complete; S17g next
+**Status:** S17g complete; S17h next
 **Session name:** s17 discussion, lock in, and final pass
 **Next free ADR before this log:** ADR-396
 **Next free ADR after this log:** ADR-406
@@ -662,6 +662,36 @@ Use local simulator/device workflow as the inner loop and staging/store-bound bu
 - **Offline blocking:** Save disabled when `isConnected === false`; form state preserved. Unknown/null connectivity treated as online.
 - **Auto-fill:** `useEffect` on `[lookup, lookupApplied]`; fills once per lookup result; clears on phone change.
 - **Post-save navigation:** `router.replace` to detail route — back returns to authenticated tab stack.
+
+### TypeScript Gate
+
+`npx tsc --noEmit` passes with 0 errors.
+
+---
+
+## S17g Implementation Notes
+
+### Files Changed (2 new hooks + 2 modified files + .env.example)
+
+**New:**
+- `mobile/ophalo-mobile/src/hooks/useLogExternalContact.ts` — mutation for `POST /keep/requests/{id}/external-contact`. Variables: `{ requestId, version, direction, channel, outcome? }`. Sends `X-Keep-Request-Version` header with current `data.version`. On success: invalidates `['keepRequestDetail', requestId]`, `['keepRequests']`, `['badge']`. On error (including 409): invalidates `['keepRequestDetail', requestId]` so version and state refresh.
+- `mobile/ophalo-mobile/src/hooks/useClearShareIntent.ts` — mutation for `POST /keep/requests/{id}/share-intent`. Variables: `{ requestId, method }` where method is `'copy_link' | 'native_share' | 'manual_mark_shared'`. No version header (see S17a table correction below). On success: invalidates `['keepRequestDetail', requestId]`, `['keepRequests']`, `['badge']`. On error: invalidates detail query.
+
+**Modified:**
+- `mobile/ophalo-mobile/src/hooks/useRequestDetail.ts` — `pageToken: string` added to `KeepRequestDetailDto`; stale S17e comment on `version` removed.
+- `mobile/ophalo-mobile/app/requests/[id].tsx` — Contact section rows replaced with tappable `TouchableOpacity` rows (label + target + chevron). Phone tap: `Linking.canOpenURL` → `Linking.openURL('tel:...')` → on success sets `contactPending`; failure (unsupported or throw) does not prompt. Phone outcome sheet (custom `Modal`, fade animation, dark-mode aware `cardBg`): Spoke with customer / Left voicemail / No answer / Skip; first three call `logContact` mutation with outcome; Skip dismisses with no mutation. Email tap: same Linking pattern → email confirm sheet: "Log as email sent" / Skip. Share section shown when `canShare` (`trackerUrl` non-null + `needsShare` + `canRecordShareIntent`): "Share via…" opens `Share.share()` → `result.action === Share.sharedAction` → sets `shareConfirmMethod('native_share')` for post-share confirm; "Mark as shared" button sets `shareConfirmMethod('manual_mark_shared')`. Share confirm sheet: "Yes, mark as shared" calls `recordShareIntent`; Cancel dismisses. 409 errors surface a human-readable message in the active sheet and auto-refresh via invalidation. Mutation buttons disabled (`opacity: 0.45`) while pending. `ACTION_LABELS` entries for `canLogExternalContact` and `canRecordShareIntent` removed (now interactive sections). `PUBLIC_BASE_URL` normalized with trailing-slash strip.
+- `mobile/ophalo-mobile/.env.example` — `EXPO_PUBLIC_PUBLIC_BASE_URL=https://ophalo.com` added.
+
+### Decisions Made
+
+- **Phone outcomes:** custom bottom sheet (`Modal` + `Pressable` overlay), not `Alert.alert`. Spoke/Voicemail/No answer/Skip. Skip sends nothing.
+- **Email logging:** one-tap "Log as email sent" confirm; no outcome picker (outcome unknowable at send time).
+- **Share intent (ADR-401):** opening the OS share composer alone does not record intent. Only explicit post-share or manual confirmation calls `POST .../share-intent`.
+- **badge invalidation:** `useLogExternalContact` and `useClearShareIntent` both invalidate `['badge']` on success.
+
+### S17a Table Correction
+
+The S17a endpoint table listed `share-intent` as requiring `X-Keep-Request-Version`. Backend code (`Program.cs` line 476) confirms the handler takes no `HttpRequest` parameter and calls `ClearShareIntentService` directly — no `KeepRequestVersionHeader.Parse()`. **Share-intent requires no version header.** `useClearShareIntent` correctly omits it. External-contact continues to require the version header.
 
 ### TypeScript Gate
 

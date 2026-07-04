@@ -1,6 +1,6 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-07-04 (S17f complete; S17g next)
+**Last updated:** 2026-07-04 (S17g complete; S17h next)
 **Branch:** `main` tracking `origin/main`
 **Last green baseline:** 939 unit · 14 arch · 713 integration = 1,666 total, 0 failures (1 pre-existing KeepG5 fluke excluded)
 **Next free ADR:** ADR-406
@@ -40,7 +40,7 @@ For every implementation slice:
 **Bug/gap tracker:** `docs/pilot-readiness-bug-tracker.md`
 **Foundation roadmap:** `docs/build-log/ophalo-foundation-build-plan-greenfield-boundaries-brownfield-behavior.md` section 9.1
 **Current session:** Session 17 — Review-Safe Native Product Foundation
-**Current slice:** S17g — Contact And Tracker Handoff
+**Current slice:** S17h — Customer Update And Mark Completed
 
 ### Completed Context
 
@@ -83,7 +83,7 @@ Treat these as historical context unless a later discovery step finds a concrete
 
 **Roadmap label:** Native Operator Field App.
 
-**Status:** S17f complete. S17g is the active slice.
+**Status:** S17g complete. S17h is the active slice.
 
 **S17a findings summary:**
 
@@ -102,6 +102,7 @@ Treat these as historical context unless a later discovery step finds a concrete
 - My Work (My Promises / Watching) and Available lists wired with real cached queries; intentional loading/error/empty states; pull-to-refresh; `hasMore` indicator. Rows are read-only except detail navigation (S17d complete).
 - Request detail read surface: header, description, attention/timing/participation fields, contact affordances and available actions as plain-text metadata, oldest-first event timeline. `useRequestDetail` hook with `enabled: !!id`; `version` retained for S17h/S17i mutations. No write controls, no S17g/h/i leakage (S17e complete).
 - Quick Capture modal: phone input → lookup (`GET /keep/requests/lookup?phone=...`) → auto-fill known customer name/email; description + source picker (7 slugs, `public_intake` excluded); offline blocking via `useNetworkState` (`@react-native-community/netinfo`); `POST /keep/requests` authenticated; post-save `router.replace` to `requests/[id]`. No intake share UI (S17f complete).
+- Contact handoff and tracker share: contact rows tappable via `Linking` (`tel:`/`mailto:`); phone outcome custom sheet (Spoke/Voicemail/No answer/Skip) logs `POST .../external-contact` with `X-Keep-Request-Version`; email requires one-tap confirm; tracker share via native share sheet + explicit post-share confirm before calling `POST .../share-intent` (`native_share`); "Mark as shared" explicit confirm sends `manual_mark_shared`; `pageToken` added to `KeepRequestDetailDto`; `EXPO_PUBLIC_PUBLIC_BASE_URL` documented; share-intent requires no version header (S17a table correction documented). ADR-401 compliant (S17g complete).
 - Brand guide alignment (canvas color, Keep teal moment, Inter/Source Serif 4 fonts) deferred to a follow-up UX pass before S17j.
 - E2E handoff runbook recorded in build log 071.
 
@@ -123,7 +124,7 @@ Treat these as historical context unless a later discovery step finds a concrete
 1. ~~**Session 16 — Native Mobile App Foundation** — Complete~~
 2. **Session 17 — Review-Safe Native Product Foundation**
    Build the review-safe native Keep field workflow in locked slices S17a through S17j. Current
-   active slice is S17f — Quick Capture And Public Intake Share.
+   active slice is S17h — Customer Update And Mark Completed.
 3. **Session 18 — Push Delivery And Deep Links**
    Decide and implement real APNs/FCM delivery for store-bound builds, or explicitly document a
    review-safe no-push product posture before any submission. Verify Demo/InternalTest suppression,
