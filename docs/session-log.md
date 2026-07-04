@@ -1,6 +1,6 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-07-04 (S17i complete; S17j next)
+**Last updated:** 2026-07-04 (S17j complete; Session 17 done)
 **Branch:** `main` tracking `origin/main`
 **Last green baseline:** 939 unit · 14 arch · 713 integration = 1,666 total, 0 failures (1 pre-existing KeepG5 fluke excluded)
 **Next free ADR:** ADR-406
@@ -40,7 +40,7 @@ For every implementation slice:
 **Bug/gap tracker:** `docs/pilot-readiness-bug-tracker.md`
 **Foundation roadmap:** `docs/build-log/ophalo-foundation-build-plan-greenfield-boundaries-brownfield-behavior.md` section 9.1
 **Current session:** Session 17 — Review-Safe Native Product Foundation
-**Current slice:** S17j — Review-Safe Final Pass
+**Current slice:** S17j — Complete
 
 ### Completed Context
 
@@ -78,11 +78,11 @@ Treat these as historical context unless a later discovery step finds a concrete
 - `OperatorBaseUrl` is retired from active settings/config/test factories/runbooks; invite links now
   use `{PublicBaseUrl}/invite/accept`.
 
-### S17 — S17i Complete; S17j Active
+### S17 — Complete
 
 **Roadmap label:** Native Operator Field App.
 
-**Status:** S17i complete. S17j is the active slice.
+**Status:** All slices S17a–S17j complete. Session 17 done.
 
 **S17a findings summary:**
 

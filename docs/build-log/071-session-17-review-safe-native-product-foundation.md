@@ -1,7 +1,7 @@
 # Build Log 071 — Session 17: Review-Safe Native Product Foundation
 
 **Started:** 2026-07-03
-**Status:** S17i complete; S17j next
+**Status:** S17j complete; Session 17 done
 **Session name:** s17 discussion, lock in, and final pass
 **Next free ADR before this log:** ADR-396
 **Next free ADR after this log:** ADR-406
@@ -749,3 +749,28 @@ The S17a endpoint table listed `share-intent` as requiring `X-Keep-Request-Versi
 ### TypeScript Gate
 
 `npx tsc --noEmit` passes with 0 errors. `git diff --check` clean. 7 files changed.
+
+---
+
+## S17j Implementation Notes
+
+### Files Changed (1 production file)
+
+**Modified:**
+- `mobile/ophalo-mobile/app/modal.tsx` — auth guard added. `CaptureModal` (default export) checks `user` via `useAuth`; redirects to `/signin` when unauthenticated. Form/query/mutation logic moved into `CaptureModalContent`. Root Stack routes do not inherit the tab auth redirect (ADR-400); this closes the gap.
+
+### Gap Closed
+
+`modal.tsx` is registered in the root Stack as `modal`. Without a guard, `ophalo://modal` deep links could render Quick Capture for an unauthenticated caller, exposing authenticated API calls. Fixed per the wrapper pattern so hooks never mount before auth is confirmed.
+
+### Android Permission Note
+
+No `android/` directory in the repo (managed Expo workflow). Android manifest is generated at EAS build or `npx expo prebuild`. `@react-native-community/netinfo` adds `ACCESS_NETWORK_STATE` and `CHANGE_NETWORK_STATE` — these are install-time, not runtime, permissions (not in the Contacts/Location/Camera class). Final manifest verification is deferred to the EAS/prebuild gate in S19.
+
+### Brand Alignment
+
+Deferred to a separate polish slice. `src/constants/brand.ts`, Inter/Source Serif 4 fonts, and canvas/card color separation remain out of scope.
+
+### TypeScript Gate
+
+`npx tsc --noEmit` passes with 0 errors. `git diff --check` clean. 1 file changed.
