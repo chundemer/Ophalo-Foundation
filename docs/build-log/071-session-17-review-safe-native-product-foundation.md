@@ -1,7 +1,7 @@
 # Build Log 071 — Session 17: Review-Safe Native Product Foundation
 
 **Started:** 2026-07-03
-**Status:** S17d complete; S17e next
+**Status:** S17e complete; S17f next
 **Session name:** s17 discussion, lock in, and final pass
 **Next free ADR before this log:** ADR-396
 **Next free ADR after this log:** ADR-406
@@ -594,6 +594,30 @@ The mobile screens do not yet follow `docs/ux-design/ux-design-model-v1.md`. Con
 - **Retry button:** `#0057D9` is not a brand token; should be `--keep-accent` or `--ophalo-navy`.
 
 Recommended fix: dedicated UX alignment pass before S17j that adds a `src/constants/brand.ts` token file, fixes canvas/card two-tone separation, installs fonts via `expo-google-fonts`, and applies a single teal moment per screen. Do not mix into S17e–S17i behavior slices.
+
+---
+
+## S17e Implementation Notes
+
+### Files Changed (2 production files)
+
+**New:**
+- `mobile/ophalo-mobile/src/hooks/useRequestDetail.ts` — `useRequestDetail(id)` for `GET /keep/requests/{id}`. Types: `KeepRequestDetailDto` (requestId, referenceCode, status, currentStatusText, needsShare, customerName, customerPhone, customerEmail, description, version, attentionLevel, attentionReason, priorityBand, waitingDirection, followUpOnDate, followUpOnReason, plannedForDate, contactActions, participants, currentUserParticipation, events, availableActions), `AvailableActionsDto`, `EventItem`, `ParticipantItem`, `CurrentUserParticipationDto`, `ContactActionItem`. `enabled: !!id` — does not fetch when id is absent. `staleTime: 30s`, `refetchInterval: 60s`. Query key `['keepRequestDetail', id]`. `version` retained in DTO for future mutation use (S17h/S17i); not used in S17e.
+
+**Modified:**
+- `mobile/ophalo-mobile/app/requests/[id].tsx` — full read-only detail screen replacing the S17b stub. `Stack.Screen title` updates to `referenceCode` once data loads. Sections: header (customerName, referenceCode, status pill, currentStatusText, priorityBand if not Normal, needsShare), description, attention (attentionLevel/attentionReason/waitingDirection — only when attentionLevel is not None), timing (followUpOnDate/followUpOnReason/plannedForDate — conditional), participation (currentUserParticipation + active responsible from participants), contact affordances (available ContactActions as text FieldRows — type + target, not tappable), available actions (plain text labels for true booleans in AvailableActionsDto — not button-shaped), timeline (EventRows oldest-first, matching backend ordering; actor, normalized eventType, statusAfter, content, visibility=Internal label). Loading/error/empty states intentional. Pull-to-refresh via `RefreshControl`. Auth guard (`useAuth` + `<Redirect href="/signin">`) retained from S17b stub.
+
+### Decisions Made
+
+- **Event ordering:** API delivers oldest-first (`OrderBy(e => e.OccurredAtUtc)` confirmed). No local reordering applied.
+- **ContactActions display:** Text `FieldRow` (label + value) only — not tappable. OS handoff (tel:/sms:/mailto:) deferred to S17g.
+- **AvailableActions display:** Plain `Text` labels from `ACTION_LABELS` map for true booleans — no disabled buttons, no button-shaped rows. Section titled "Actions".
+- **Responsible display:** Active participant with `participationType === 'responsible'` and `detachedAtUtc === null` resolved client-side from participants array.
+- **No S17g/S17h/S17i controls:** No `Linking`, `Share`, mutation hooks, or write-path imports anywhere in S17e files.
+
+### TypeScript Gate
+
+`npx tsc --noEmit` passes with 0 errors.
 
 ---
 
