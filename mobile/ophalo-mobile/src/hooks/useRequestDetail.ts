@@ -65,8 +65,8 @@ export type KeepRequestDetailDto = {
   customerPhone: string;
   customerEmail: string | null;
   description: string;
-  // Retained for mutation use in later slices (S17h/S17i); not used in S17e.
   version: string;
+  pageToken: string;
   attentionLevel: string;
   attentionReason: string | null;
   priorityBand: string;

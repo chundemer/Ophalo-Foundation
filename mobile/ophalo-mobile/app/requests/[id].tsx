@@ -1,15 +1,31 @@
-import { ActivityIndicator, RefreshControl, ScrollView, StyleSheet, TouchableOpacity } from 'react-native';
+import { useState } from 'react';
+import {
+  ActivityIndicator,
+  Linking,
+  Modal,
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  Share,
+  StyleSheet,
+  TouchableOpacity,
+} from 'react-native';
 import { Redirect, Stack, useLocalSearchParams } from 'expo-router';
 
 import { Text, View } from '@/components/Themed';
 import { useColorScheme } from '@/components/useColorScheme';
 import { useAuth } from '@/src/auth/AuthContext';
+import { ApiError } from '@/src/api/client';
 import {
   AvailableActionsDto,
+  ContactActionItem,
   EventItem,
-  KeepRequestDetailDto,
   useRequestDetail,
 } from '@/src/hooks/useRequestDetail';
+import { useLogExternalContact } from '@/src/hooks/useLogExternalContact';
+import { useClearShareIntent } from '@/src/hooks/useClearShareIntent';
+
+const PUBLIC_BASE_URL = (process.env.EXPO_PUBLIC_PUBLIC_BASE_URL ?? '').replace(/\/$/, '');
 
 export default function RequestDetailScreen() {
   const { user } = useAuth();
@@ -17,6 +33,16 @@ export default function RequestDetailScreen() {
   const colorScheme = useColorScheme();
   const cardBg = colorScheme === 'dark' ? '#1C1C1E' : '#FFFFFF';
   const { data, isLoading, isError, refetch, isRefetching } = useRequestDetail(id);
+
+  const [contactPending, setContactPending] = useState<ContactActionItem | null>(null);
+  const [contactError, setContactError] = useState<string | null>(null);
+  const [shareConfirmMethod, setShareConfirmMethod] = useState<
+    'native_share' | 'manual_mark_shared' | null
+  >(null);
+  const [shareError, setShareError] = useState<string | null>(null);
+
+  const { mutate: logContact, isPending: isLoggingContact } = useLogExternalContact();
+  const { mutate: recordShareIntent, isPending: isRecordingShare } = useClearShareIntent();
 
   if (!user) return <Redirect href="/signin" />;
 
@@ -50,6 +76,95 @@ export default function RequestDetailScreen() {
     (p) => p.participationType === 'responsible' && p.detachedAtUtc === null,
   );
   const availableLabels = resolveAvailableActionLabels(data.availableActions);
+
+  const trackerUrl =
+    PUBLIC_BASE_URL && data.pageToken
+      ? `${PUBLIC_BASE_URL}/keep/r/${data.pageToken}`
+      : null;
+  const canShare =
+    !!trackerUrl && data.needsShare && data.availableActions.canRecordShareIntent;
+
+  async function handleContactTap(action: ContactActionItem) {
+    const url =
+      action.type === 'call'
+        ? `tel:${action.target.replace(/\s/g, '')}`
+        : `mailto:${action.target.trim()}`;
+    try {
+      const supported = await Linking.canOpenURL(url);
+      if (!supported) return;
+      await Linking.openURL(url);
+      setContactError(null);
+      setContactPending(action);
+    } catch {
+      // URL could not be opened — do not show log prompt
+    }
+  }
+
+  function handleContactLog(outcome?: string) {
+    if (!contactPending || !data) return;
+    const channel = contactPending.type === 'call' ? 'phone' : 'email';
+    logContact(
+      { requestId: data.requestId, version: data.version, direction: 'outbound', channel, outcome },
+      {
+        onSuccess: () => {
+          setContactPending(null);
+          setContactError(null);
+        },
+        onError: (err) => {
+          setContactError(
+            err instanceof ApiError && err.status === 409
+              ? 'Request has changed — details refreshed.'
+              : 'Could not log contact. Please try again.',
+          );
+        },
+      },
+    );
+  }
+
+  async function handleNativeShare() {
+    if (!trackerUrl) return;
+    try {
+      const result = await Share.share({ message: trackerUrl, url: trackerUrl });
+      if (result.action === Share.sharedAction) {
+        setShareError(null);
+        setShareConfirmMethod('native_share');
+      }
+    } catch {
+      // user cancelled or system error — do not prompt
+    }
+  }
+
+  function handleConfirmShare() {
+    if (!shareConfirmMethod || !data) return;
+    recordShareIntent(
+      { requestId: data.requestId, method: shareConfirmMethod },
+      {
+        onSuccess: () => {
+          setShareConfirmMethod(null);
+          setShareError(null);
+        },
+        onError: (err) => {
+          setShareError(
+            err instanceof ApiError && err.status === 409
+              ? 'Request has changed — details refreshed.'
+              : 'Could not record share. Please try again.',
+          );
+        },
+      },
+    );
+  }
+
+  function dismissContactSheet() {
+    if (isLoggingContact) return;
+    setContactPending(null);
+    setContactError(null);
+  }
+
+  function dismissShareSheet() {
+    if (isRecordingShare) return;
+    setShareConfirmMethod(null);
+    setShareError(null);
+  }
 
   return (
     <>
@@ -118,8 +233,36 @@ export default function RequestDetailScreen() {
             {data.contactActions
               .filter((c) => c.available)
               .map((c, i) => (
-                <FieldRow key={i} label={normalizeLabel(c.type)} value={c.target} />
+                <TouchableOpacity
+                  key={i}
+                  style={styles.contactRow}
+                  onPress={() => void handleContactTap(c)}
+                >
+                  <Text style={styles.fieldLabel}>{normalizeLabel(c.type)}</Text>
+                  <Text style={styles.contactTarget}>{c.target}</Text>
+                  <Text style={styles.contactChevron}>›</Text>
+                </TouchableOpacity>
               ))}
+          </Section>
+        )}
+
+        {canShare && (
+          <Section cardBg={cardBg}>
+            <Text style={styles.sectionLabel}>Tracker</Text>
+            <TouchableOpacity
+              style={[styles.actionButton, isRecordingShare && styles.actionButtonDisabled]}
+              onPress={() => void handleNativeShare()}
+              disabled={isRecordingShare}
+            >
+              <Text style={styles.actionButtonText}>Share via…</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.actionButtonOutline, isRecordingShare && styles.actionButtonDisabled]}
+              onPress={() => setShareConfirmMethod('manual_mark_shared')}
+              disabled={isRecordingShare}
+            >
+              <Text style={styles.actionButtonOutlineText}>Mark as shared</Text>
+            </TouchableOpacity>
           </Section>
         )}
 
@@ -146,9 +289,112 @@ export default function RequestDetailScreen() {
           ))}
         </Section>
       </ScrollView>
+
+      {/* Phone outcome sheet */}
+      <Modal
+        transparent
+        visible={contactPending?.type === 'call'}
+        animationType="fade"
+        onRequestClose={dismissContactSheet}
+      >
+        <Pressable style={styles.sheetOverlay} onPress={dismissContactSheet}>
+          <Pressable style={[styles.sheetContainer, { backgroundColor: cardBg }]}>
+            <Text style={styles.sheetTitle}>How did the call go?</Text>
+            {contactError && <Text style={styles.sheetError}>{contactError}</Text>}
+            {PHONE_OUTCOMES.map(({ label, value }) => (
+              <TouchableOpacity
+                key={value}
+                style={[styles.sheetOption, isLoggingContact && styles.sheetOptionDisabled]}
+                onPress={() => handleContactLog(value)}
+                disabled={isLoggingContact}
+              >
+                <Text style={styles.sheetOptionText}>{label}</Text>
+              </TouchableOpacity>
+            ))}
+            <TouchableOpacity
+              style={styles.sheetSkip}
+              onPress={dismissContactSheet}
+              disabled={isLoggingContact}
+            >
+              <Text style={styles.sheetSkipText}>Skip</Text>
+            </TouchableOpacity>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* Email confirm sheet */}
+      <Modal
+        transparent
+        visible={contactPending?.type === 'email'}
+        animationType="fade"
+        onRequestClose={dismissContactSheet}
+      >
+        <Pressable style={styles.sheetOverlay} onPress={dismissContactSheet}>
+          <Pressable style={[styles.sheetContainer, { backgroundColor: cardBg }]}>
+            <Text style={styles.sheetTitle}>Log email sent?</Text>
+            {contactPending && (
+              <Text style={styles.sheetSubtitle}>{contactPending.target}</Text>
+            )}
+            {contactError && <Text style={styles.sheetError}>{contactError}</Text>}
+            <TouchableOpacity
+              style={[styles.sheetOption, isLoggingContact && styles.sheetOptionDisabled]}
+              onPress={() => handleContactLog()}
+              disabled={isLoggingContact}
+            >
+              <Text style={styles.sheetOptionText}>Log as email sent</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.sheetSkip}
+              onPress={dismissContactSheet}
+              disabled={isLoggingContact}
+            >
+              <Text style={styles.sheetSkipText}>Skip</Text>
+            </TouchableOpacity>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* Share confirm sheet */}
+      <Modal
+        transparent
+        visible={shareConfirmMethod !== null}
+        animationType="fade"
+        onRequestClose={dismissShareSheet}
+      >
+        <Pressable style={styles.sheetOverlay} onPress={dismissShareSheet}>
+          <Pressable style={[styles.sheetContainer, { backgroundColor: cardBg }]}>
+            <Text style={styles.sheetTitle}>
+              {shareConfirmMethod === 'native_share'
+                ? 'Did you share the tracker link?'
+                : 'Mark tracker as shared?'}
+            </Text>
+            {shareError && <Text style={styles.sheetError}>{shareError}</Text>}
+            <TouchableOpacity
+              style={[styles.sheetOption, isRecordingShare && styles.sheetOptionDisabled]}
+              onPress={handleConfirmShare}
+              disabled={isRecordingShare}
+            >
+              <Text style={styles.sheetOptionText}>Yes, mark as shared</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.sheetSkip}
+              onPress={dismissShareSheet}
+              disabled={isRecordingShare}
+            >
+              <Text style={styles.sheetSkipText}>Cancel</Text>
+            </TouchableOpacity>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </>
   );
 }
+
+const PHONE_OUTCOMES = [
+  { label: 'Spoke with customer', value: 'spoke_with_customer' },
+  { label: 'Left voicemail', value: 'left_voicemail' },
+  { label: 'No answer', value: 'no_answer' },
+] as const;
 
 function Section({ children, cardBg }: { children: React.ReactNode; cardBg: string }) {
   return <View style={[styles.section, { backgroundColor: cardBg }]}>{children}</View>;
@@ -190,14 +436,12 @@ const ACTION_LABELS: Partial<Record<keyof AvailableActionsDto, string>> = {
   canChangeStatus: 'Change status',
   canSendBusinessUpdate: 'Send customer update',
   canAddInternalNote: 'Add internal note',
-  canLogExternalContact: 'Log external contact',
   canAssignResponsible: 'Assign responsible',
   canWatch: 'Watch',
   canUnwatch: 'Unwatch',
   canMute: 'Mute notifications',
   canUnmute: 'Unmute notifications',
   canClose: 'Close',
-  canRecordShareIntent: 'Record share intent',
   canSetFollowUpOn: 'Set follow-up date',
   canSetPlannedFor: 'Set planned-for date',
 };
@@ -266,6 +510,31 @@ const styles = StyleSheet.create({
   fieldRow: { flexDirection: 'row', gap: 8, backgroundColor: 'transparent' },
   fieldLabel: { fontSize: 13, opacity: 0.5, minWidth: 90 },
   fieldValue: { flex: 1, fontSize: 13, fontWeight: '600' },
+  contactRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 6,
+    gap: 8,
+  },
+  contactTarget: { flex: 1, fontSize: 13, fontWeight: '600' },
+  contactChevron: { fontSize: 18, opacity: 0.4 },
+  actionButton: {
+    borderRadius: 8,
+    backgroundColor: '#174A8B',
+    paddingVertical: 11,
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  actionButtonText: { color: '#FFFFFF', fontSize: 14, fontWeight: '700' },
+  actionButtonOutline: {
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#174A8B',
+    paddingVertical: 10,
+    alignItems: 'center',
+  },
+  actionButtonOutlineText: { color: '#174A8B', fontSize: 14, fontWeight: '600' },
+  actionButtonDisabled: { opacity: 0.45 },
   actionLabel: { fontSize: 14, opacity: 0.8, paddingVertical: 2 },
   emptyText: { fontSize: 14, opacity: 0.5 },
   eventRow: { gap: 3, paddingTop: 10, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: 'rgba(128,128,128,0.2)' },
@@ -278,4 +547,29 @@ const styles = StyleSheet.create({
   errorText: { fontSize: 16, textAlign: 'center', opacity: 0.7 },
   retryButton: { marginTop: 14, borderRadius: 8, backgroundColor: '#0057D9', paddingHorizontal: 18, paddingVertical: 10 },
   retryText: { color: '#FFFFFF', fontSize: 14, fontWeight: '700' },
+  sheetOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    justifyContent: 'flex-end',
+  },
+  sheetContainer: {
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 36,
+    gap: 0,
+  },
+  sheetTitle: { fontSize: 17, fontWeight: '700', marginBottom: 16 },
+  sheetSubtitle: { fontSize: 13, opacity: 0.6, marginBottom: 12, marginTop: -8 },
+  sheetError: { fontSize: 13, color: '#C0392B', marginBottom: 10 },
+  sheetOption: {
+    paddingVertical: 15,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'rgba(128,128,128,0.25)',
+  },
+  sheetOptionDisabled: { opacity: 0.45 },
+  sheetOptionText: { fontSize: 16 },
+  sheetSkip: { paddingVertical: 14, alignItems: 'center', marginTop: 4 },
+  sheetSkipText: { fontSize: 15, opacity: 0.5 },
 });
