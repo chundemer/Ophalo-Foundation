@@ -26,6 +26,11 @@ import {
 import { useLogExternalContact } from '@/src/hooks/useLogExternalContact';
 import { useClearShareIntent } from '@/src/hooks/useClearShareIntent';
 import { useSendBusinessUpdate } from '@/src/hooks/useSendBusinessUpdate';
+import { useWatchRequest, useUnwatchRequest } from '@/src/hooks/useWatchRequest';
+import { useMuteRequest, useUnmuteRequest } from '@/src/hooks/useMuteRequest';
+import { useAssignResponsible } from '@/src/hooks/useAssignResponsible';
+import { useSetFollowUpOn, useClearFollowUpOn } from '@/src/hooks/useFollowUpOn';
+import { useSetPlannedFor, useClearPlannedFor } from '@/src/hooks/usePlannedFor';
 import { useNetworkState } from '@/src/hooks/useNetworkState';
 
 const PUBLIC_BASE_URL = (process.env.EXPO_PUBLIC_PUBLIC_BASE_URL ?? '').replace(/\/$/, '');
@@ -45,10 +50,26 @@ export default function RequestDetailScreen() {
   const [shareError, setShareError] = useState<string | null>(null);
   const [composerText, setComposerText] = useState('');
   const [composerError, setComposerError] = useState<string | null>(null);
+  const [assignError, setAssignError] = useState<string | null>(null);
+  const [watchError, setWatchError] = useState<string | null>(null);
+  const [muteError, setMuteError] = useState<string | null>(null);
+  const [followUpInput, setFollowUpInput] = useState('');
+  const [followUpError, setFollowUpError] = useState<string | null>(null);
+  const [plannedForInput, setPlannedForInput] = useState('');
+  const [plannedForError, setPlannedForError] = useState<string | null>(null);
 
   const { mutate: logContact, isPending: isLoggingContact } = useLogExternalContact();
   const { mutate: recordShareIntent, isPending: isRecordingShare } = useClearShareIntent();
   const { mutate: sendBusinessUpdate, isPending: isSendingUpdate } = useSendBusinessUpdate();
+  const { mutate: watchRequest, isPending: isWatching } = useWatchRequest();
+  const { mutate: unwatchRequest, isPending: isUnwatching } = useUnwatchRequest();
+  const { mutate: muteRequest, isPending: isMuting } = useMuteRequest();
+  const { mutate: unmuteRequest, isPending: isUnmuting } = useUnmuteRequest();
+  const { mutate: assignResponsible, isPending: isAssigning } = useAssignResponsible();
+  const { mutate: setFollowUpOn, isPending: isSettingFollowUp } = useSetFollowUpOn();
+  const { mutate: clearFollowUpOn, isPending: isClearingFollowUp } = useClearFollowUpOn();
+  const { mutate: setPlannedFor, isPending: isSettingPlannedFor } = useSetPlannedFor();
+  const { mutate: clearPlannedFor, isPending: isClearingPlannedFor } = useClearPlannedFor();
   const { isOnline } = useNetworkState();
 
   if (!user) return <Redirect href="/signin" />;
@@ -198,6 +219,180 @@ export default function RequestDetailScreen() {
     );
   }
 
+  function handleWatch() {
+    if (!data) return;
+    watchRequest(
+      { requestId: data.requestId, version: data.version },
+      {
+        onSuccess: () => setWatchError(null),
+        onError: (err) => {
+          setWatchError(
+            err instanceof ApiError && err.status === 409
+              ? 'Request has changed — details refreshed.'
+              : 'Could not complete. Please try again.',
+          );
+        },
+      },
+    );
+  }
+
+  function handleUnwatch() {
+    if (!data) return;
+    unwatchRequest(
+      { requestId: data.requestId, version: data.version },
+      {
+        onSuccess: () => setWatchError(null),
+        onError: (err) => {
+          setWatchError(
+            err instanceof ApiError && err.status === 409
+              ? 'Request has changed — details refreshed.'
+              : 'Could not complete. Please try again.',
+          );
+        },
+      },
+    );
+  }
+
+  function handleMute() {
+    if (!data) return;
+    muteRequest(
+      { requestId: data.requestId, version: data.version },
+      {
+        onSuccess: () => setMuteError(null),
+        onError: (err) => {
+          setMuteError(
+            err instanceof ApiError && err.status === 409
+              ? 'Request has changed — details refreshed.'
+              : 'Could not complete. Please try again.',
+          );
+        },
+      },
+    );
+  }
+
+  function handleUnmute() {
+    if (!data) return;
+    unmuteRequest(
+      { requestId: data.requestId, version: data.version },
+      {
+        onSuccess: () => setMuteError(null),
+        onError: (err) => {
+          setMuteError(
+            err instanceof ApiError && err.status === 409
+              ? 'Request has changed — details refreshed.'
+              : 'Could not complete. Please try again.',
+          );
+        },
+      },
+    );
+  }
+
+  function handleAssignSelf() {
+    if (!data || !user) return;
+    assignResponsible(
+      { requestId: data.requestId, version: data.version, accountUserId: user.accountUserId },
+      {
+        onSuccess: () => setAssignError(null),
+        onError: (err) => {
+          if (
+            err instanceof ApiError &&
+            err.code === 'KeepRequest.ParticipationRequestAlreadyAssigned'
+          ) {
+            setAssignError('Already claimed — details refreshed.');
+          } else if (err instanceof ApiError && err.status === 409) {
+            setAssignError('Request has changed — details refreshed.');
+          } else {
+            setAssignError('Could not assign. Please try again.');
+          }
+        },
+      },
+    );
+  }
+
+  function handleSetFollowUp() {
+    if (!data) return;
+    const trimmed = followUpInput.trim();
+    if (!isValidDateInput(trimmed)) {
+      setFollowUpError('Use YYYY-MM-DD, for example 2026-07-10.');
+      return;
+    }
+    setFollowUpOn(
+      { requestId: data.requestId, version: data.version, date: trimmed },
+      {
+        onSuccess: () => {
+          setFollowUpInput('');
+          setFollowUpError(null);
+        },
+        onError: (err) => {
+          setFollowUpError(
+            err instanceof ApiError && err.status === 409
+              ? 'Request has changed — details refreshed.'
+              : 'Could not set follow-up. Please try again.',
+          );
+        },
+      },
+    );
+  }
+
+  function handleClearFollowUp() {
+    if (!data) return;
+    clearFollowUpOn(
+      { requestId: data.requestId, version: data.version },
+      {
+        onSuccess: () => setFollowUpError(null),
+        onError: (err) => {
+          setFollowUpError(
+            err instanceof ApiError && err.status === 409
+              ? 'Request has changed — details refreshed.'
+              : 'Could not clear follow-up. Please try again.',
+          );
+        },
+      },
+    );
+  }
+
+  function handleSetPlannedFor() {
+    if (!data) return;
+    const trimmed = plannedForInput.trim();
+    if (!isValidDateInput(trimmed)) {
+      setPlannedForError('Use YYYY-MM-DD, for example 2026-07-10.');
+      return;
+    }
+    setPlannedFor(
+      { requestId: data.requestId, version: data.version, date: trimmed },
+      {
+        onSuccess: () => {
+          setPlannedForInput('');
+          setPlannedForError(null);
+        },
+        onError: (err) => {
+          setPlannedForError(
+            err instanceof ApiError && err.status === 409
+              ? 'Request has changed — details refreshed.'
+              : 'Could not set planned-for date. Please try again.',
+          );
+        },
+      },
+    );
+  }
+
+  function handleClearPlannedFor() {
+    if (!data) return;
+    clearPlannedFor(
+      { requestId: data.requestId, version: data.version },
+      {
+        onSuccess: () => setPlannedForError(null),
+        onError: (err) => {
+          setPlannedForError(
+            err instanceof ApiError && err.status === 409
+              ? 'Request has changed — details refreshed.'
+              : 'Could not clear planned-for date. Please try again.',
+          );
+        },
+      },
+    );
+  }
+
   return (
     <>
       <Stack.Screen options={{ title: data.referenceCode }} />
@@ -234,7 +429,10 @@ export default function RequestDetailScreen() {
           </Section>
         )}
 
-        {(data.followUpOnDate || data.plannedForDate) && (
+        {(data.followUpOnDate ||
+          data.plannedForDate ||
+          data.availableActions.canSetFollowUpOn ||
+          data.availableActions.canSetPlannedFor) && (
           <Section cardBg={cardBg}>
             <Text style={styles.sectionLabel}>Timing</Text>
             {data.followUpOnDate && (
@@ -247,8 +445,96 @@ export default function RequestDetailScreen() {
                 }
               />
             )}
+            {data.availableActions.canSetFollowUpOn && (
+              <>
+                {data.followUpOnDate && (
+                  <TouchableOpacity
+                    style={[
+                      styles.actionButtonOutline,
+                      (isClearingFollowUp || !isOnline) && styles.actionButtonDisabled,
+                    ]}
+                    onPress={handleClearFollowUp}
+                    disabled={isClearingFollowUp || !isOnline}
+                  >
+                    <Text style={styles.actionButtonOutlineText}>Clear follow-up</Text>
+                  </TouchableOpacity>
+                )}
+                <TextInput
+                  style={[
+                    styles.timingInput,
+                    { color: colorScheme === 'dark' ? '#FFFFFF' : '#000000' },
+                  ]}
+                  placeholder="YYYY-MM-DD"
+                  placeholderTextColor="rgba(128,128,128,0.6)"
+                  value={followUpInput}
+                  onChangeText={(t) => {
+                    setFollowUpInput(t);
+                    setFollowUpError(null);
+                  }}
+                  editable={!isSettingFollowUp}
+                  autoCapitalize="none"
+                  keyboardType="numbers-and-punctuation"
+                />
+                {followUpError && <Text style={styles.actionError}>{followUpError}</Text>}
+                <TouchableOpacity
+                  style={[
+                    styles.actionButton,
+                    (followUpInput.trim() === '' || isSettingFollowUp || !isOnline) &&
+                      styles.actionButtonDisabled,
+                  ]}
+                  onPress={handleSetFollowUp}
+                  disabled={followUpInput.trim() === '' || isSettingFollowUp || !isOnline}
+                >
+                  <Text style={styles.actionButtonText}>Set follow-up</Text>
+                </TouchableOpacity>
+              </>
+            )}
             {data.plannedForDate && (
               <FieldRow label="Planned for" value={formatDateOnly(data.plannedForDate)} />
+            )}
+            {data.availableActions.canSetPlannedFor && (
+              <>
+                {data.plannedForDate && (
+                  <TouchableOpacity
+                    style={[
+                      styles.actionButtonOutline,
+                      (isClearingPlannedFor || !isOnline) && styles.actionButtonDisabled,
+                    ]}
+                    onPress={handleClearPlannedFor}
+                    disabled={isClearingPlannedFor || !isOnline}
+                  >
+                    <Text style={styles.actionButtonOutlineText}>Clear planned-for</Text>
+                  </TouchableOpacity>
+                )}
+                <TextInput
+                  style={[
+                    styles.timingInput,
+                    { color: colorScheme === 'dark' ? '#FFFFFF' : '#000000' },
+                  ]}
+                  placeholder="YYYY-MM-DD"
+                  placeholderTextColor="rgba(128,128,128,0.6)"
+                  value={plannedForInput}
+                  onChangeText={(t) => {
+                    setPlannedForInput(t);
+                    setPlannedForError(null);
+                  }}
+                  editable={!isSettingPlannedFor}
+                  autoCapitalize="none"
+                  keyboardType="numbers-and-punctuation"
+                />
+                {plannedForError && <Text style={styles.actionError}>{plannedForError}</Text>}
+                <TouchableOpacity
+                  style={[
+                    styles.actionButton,
+                    (plannedForInput.trim() === '' || isSettingPlannedFor || !isOnline) &&
+                      styles.actionButtonDisabled,
+                  ]}
+                  onPress={handleSetPlannedFor}
+                  disabled={plannedForInput.trim() === '' || isSettingPlannedFor || !isOnline}
+                >
+                  <Text style={styles.actionButtonText}>Set planned-for</Text>
+                </TouchableOpacity>
+              </>
             )}
           </Section>
         )}
@@ -257,6 +543,69 @@ export default function RequestDetailScreen() {
           <Text style={styles.sectionLabel}>Participation</Text>
           <FieldRow label="You" value={normalizeLabel(data.currentUserParticipation.participationType)} />
           {responsible && <FieldRow label="Responsible" value={responsible.displayName} />}
+          {data.availableActions.canAssignResponsible && (
+            <TouchableOpacity
+              style={[
+                styles.actionButton,
+                (isAssigning || !isOnline) && styles.actionButtonDisabled,
+              ]}
+              onPress={handleAssignSelf}
+              disabled={isAssigning || !isOnline}
+            >
+              <Text style={styles.actionButtonText}>Assign to me</Text>
+            </TouchableOpacity>
+          )}
+          {assignError && <Text style={styles.actionError}>{assignError}</Text>}
+          {data.availableActions.canWatch && (
+            <TouchableOpacity
+              style={[
+                styles.actionButtonOutline,
+                (isWatching || !isOnline) && styles.actionButtonDisabled,
+              ]}
+              onPress={handleWatch}
+              disabled={isWatching || !isOnline}
+            >
+              <Text style={styles.actionButtonOutlineText}>Watch</Text>
+            </TouchableOpacity>
+          )}
+          {data.availableActions.canUnwatch && (
+            <TouchableOpacity
+              style={[
+                styles.actionButtonOutline,
+                (isUnwatching || !isOnline) && styles.actionButtonDisabled,
+              ]}
+              onPress={handleUnwatch}
+              disabled={isUnwatching || !isOnline}
+            >
+              <Text style={styles.actionButtonOutlineText}>Unwatch</Text>
+            </TouchableOpacity>
+          )}
+          {watchError && <Text style={styles.actionError}>{watchError}</Text>}
+          {data.availableActions.canMute && (
+            <TouchableOpacity
+              style={[
+                styles.actionButtonOutline,
+                (isMuting || !isOnline) && styles.actionButtonDisabled,
+              ]}
+              onPress={handleMute}
+              disabled={isMuting || !isOnline}
+            >
+              <Text style={styles.actionButtonOutlineText}>Mute notifications</Text>
+            </TouchableOpacity>
+          )}
+          {data.availableActions.canUnmute && (
+            <TouchableOpacity
+              style={[
+                styles.actionButtonOutline,
+                (isUnmuting || !isOnline) && styles.actionButtonDisabled,
+              ]}
+              onPress={handleUnmute}
+              disabled={isUnmuting || !isOnline}
+            >
+              <Text style={styles.actionButtonOutlineText}>Unmute notifications</Text>
+            </TouchableOpacity>
+          )}
+          {muteError && <Text style={styles.actionError}>{muteError}</Text>}
         </Section>
 
         {data.contactActions.some((c) => c.available) && (
@@ -382,9 +731,9 @@ export default function RequestDetailScreen() {
             {PHONE_OUTCOMES.map(({ label, value }) => (
               <TouchableOpacity
                 key={value}
-                style={[styles.sheetOption, isLoggingContact && styles.sheetOptionDisabled]}
+                style={[styles.sheetOption, (isLoggingContact || !isOnline) && styles.sheetOptionDisabled]}
                 onPress={() => handleContactLog(value)}
-                disabled={isLoggingContact}
+                disabled={isLoggingContact || !isOnline}
               >
                 <Text style={styles.sheetOptionText}>{label}</Text>
               </TouchableOpacity>
@@ -415,9 +764,9 @@ export default function RequestDetailScreen() {
             )}
             {contactError && <Text style={styles.sheetError}>{contactError}</Text>}
             <TouchableOpacity
-              style={[styles.sheetOption, isLoggingContact && styles.sheetOptionDisabled]}
+              style={[styles.sheetOption, (isLoggingContact || !isOnline) && styles.sheetOptionDisabled]}
               onPress={() => handleContactLog()}
-              disabled={isLoggingContact}
+              disabled={isLoggingContact || !isOnline}
             >
               <Text style={styles.sheetOptionText}>Log as email sent</Text>
             </TouchableOpacity>
@@ -448,9 +797,9 @@ export default function RequestDetailScreen() {
             </Text>
             {shareError && <Text style={styles.sheetError}>{shareError}</Text>}
             <TouchableOpacity
-              style={[styles.sheetOption, isRecordingShare && styles.sheetOptionDisabled]}
+              style={[styles.sheetOption, (isRecordingShare || !isOnline) && styles.sheetOptionDisabled]}
               onPress={handleConfirmShare}
-              disabled={isRecordingShare}
+              disabled={isRecordingShare || !isOnline}
             >
               <Text style={styles.sheetOptionText}>Yes, mark as shared</Text>
             </TouchableOpacity>
@@ -513,14 +862,7 @@ function EventRow({ event }: { event: EventItem }) {
 const ACTION_LABELS: Partial<Record<keyof AvailableActionsDto, string>> = {
   canChangeStatus: 'Change status',
   canAddInternalNote: 'Add internal note',
-  canAssignResponsible: 'Assign responsible',
-  canWatch: 'Watch',
-  canUnwatch: 'Unwatch',
-  canMute: 'Mute notifications',
-  canUnmute: 'Unmute notifications',
   canClose: 'Close',
-  canSetFollowUpOn: 'Set follow-up date',
-  canSetPlannedFor: 'Set planned-for date',
 };
 
 function resolveAvailableActionLabels(actions: AvailableActionsDto): string[] {
@@ -549,6 +891,13 @@ function formatEventTime(iso: string): string {
   return d.toLocaleDateString([], { month: 'short', day: 'numeric' }) +
     ' ' +
     d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+}
+
+function isValidDateInput(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const [y, m, d] = value.split('-').map(Number);
+  const dt = new Date(y, m - 1, d);
+  return dt.getFullYear() === y && dt.getMonth() === m - 1 && dt.getDate() === d;
 }
 
 const styles = StyleSheet.create({
@@ -613,6 +962,15 @@ const styles = StyleSheet.create({
   actionButtonOutlineText: { color: '#174A8B', fontSize: 14, fontWeight: '600' },
   actionButtonDisabled: { opacity: 0.45 },
   actionLabel: { fontSize: 14, opacity: 0.8, paddingVertical: 2 },
+  actionError: { fontSize: 13, color: '#C0392B', marginTop: 2 },
+  timingInput: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(128,128,128,0.35)',
+    borderRadius: 6,
+    padding: 8,
+    fontSize: 14,
+    marginTop: 4,
+  },
   emptyText: { fontSize: 14, opacity: 0.5 },
   eventRow: { gap: 3, paddingTop: 10, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: 'rgba(128,128,128,0.2)' },
   eventHeader: { flexDirection: 'row', justifyContent: 'space-between', backgroundColor: 'transparent' },

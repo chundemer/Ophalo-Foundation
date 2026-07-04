@@ -1,9 +1,14 @@
-import { router } from 'expo-router';
+import { useState } from 'react';
 import { FlatList, RefreshControl, StyleSheet, TouchableOpacity } from 'react-native';
+import { router } from 'expo-router';
 
 import { Text, View } from '@/components/Themed';
 import { useColorScheme } from '@/components/useColorScheme';
+import { useAuth } from '@/src/auth/AuthContext';
+import { ApiError } from '@/src/api/client';
 import { AvailableRequestItem, useAvailableRequests } from '@/src/hooks/useAvailable';
+import { useAssignResponsible } from '@/src/hooks/useAssignResponsible';
+import { useNetworkState } from '@/src/hooks/useNetworkState';
 
 export default function AvailableScreen() {
   const colorScheme = useColorScheme();
@@ -42,8 +47,35 @@ export default function AvailableScreen() {
 }
 
 function AvailableRow({ item, cardBg }: { item: AvailableRequestItem; cardBg: string }) {
+  const { user } = useAuth();
+  const { isOnline } = useNetworkState();
+  const { mutate: assignResponsible, isPending: isAssigning } = useAssignResponsible();
+  const [assignError, setAssignError] = useState<string | null>(null);
+
   const priority = normalizeLabel(item.priorityBand);
   const status = normalizeLabel(item.status);
+
+  function handleAssignSelf() {
+    if (!user) return;
+    assignResponsible(
+      { requestId: item.requestId, version: item.version, accountUserId: user.accountUserId },
+      {
+        onSuccess: () => setAssignError(null),
+        onError: (err) => {
+          if (
+            err instanceof ApiError &&
+            err.code === 'KeepRequest.ParticipationRequestAlreadyAssigned'
+          ) {
+            setAssignError('Already claimed — refreshed.');
+          } else if (err instanceof ApiError && err.status === 409) {
+            setAssignError('Request has changed — refreshed.');
+          } else {
+            setAssignError('Could not assign. Please try again.');
+          }
+        },
+      },
+    );
+  }
 
   return (
     <TouchableOpacity
@@ -60,6 +92,19 @@ function AvailableRow({ item, cardBg }: { item: AvailableRequestItem; cardBg: st
         <Text style={styles.statusPill}>{status}</Text>
         {priority !== 'Normal' && <Text style={styles.meta}>{priority}</Text>}
       </View>
+      {item.canSelfAssign && (
+        <TouchableOpacity
+          style={[
+            styles.assignButton,
+            (isAssigning || !isOnline) && styles.assignButtonDisabled,
+          ]}
+          onPress={handleAssignSelf}
+          disabled={isAssigning || !isOnline}
+        >
+          <Text style={styles.assignButtonText}>Assign to me</Text>
+        </TouchableOpacity>
+      )}
+      {assignError && <Text style={styles.assignError}>{assignError}</Text>}
     </TouchableOpacity>
   );
 }
@@ -194,6 +239,16 @@ const styles = StyleSheet.create({
     opacity: 0.6,
     fontWeight: '600',
   },
+  assignButton: {
+    marginTop: 10,
+    borderRadius: 8,
+    backgroundColor: '#174A8B',
+    paddingVertical: 9,
+    alignItems: 'center',
+  },
+  assignButtonText: { color: '#FFFFFF', fontSize: 13, fontWeight: '700' },
+  assignButtonDisabled: { opacity: 0.45 },
+  assignError: { fontSize: 12, color: '#C0392B', marginTop: 4 },
   emptyState: {
     flex: 1,
     alignItems: 'center',
