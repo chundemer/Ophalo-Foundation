@@ -946,6 +946,30 @@ Files changed (mobile):
   reason; `DateSheetPicker` extended with `existingReason?`, `reasons?`, `selectedReason` state,
   reason chip row, and `onSave(dateStr, reason?)` signature; reason chip styles added
 
+### Issue: Sharing tracker link on mobile required going through ophalo-app
+
+**Decision (2026-07-05):** Two separate product jobs:
+1. *Tracker link access* — "I need to send/copy this customer's link right now." Low-friction,
+   always available, no side effects.
+2. *NeedsShare resolution* — "This request has not had its tracker link intentionally handed
+   off yet." Explicit, review-safe, records intent via `POST /share-intent`.
+
+**Fix:**
+
+- Added `handleShareTrackerLink()` — fires `Share.share()` only. No `POST /share-intent` call,
+  no state side effects. Available on any open request with a `pageToken` / tracker URL.
+- Contact section now shows whenever `contactActions.some(available) || !!trackerUrl`. A
+  "Tracker link / Share…" row is appended after call/email rows when `trackerUrl` is present.
+  Placement puts it at the moment operators are already in a call/text/email context.
+- NeedsShare section (previously "Tracker"): banner text "Tracker link not yet shared" replaces
+  the section label. "Share via…" renamed to "Share & mark as shared" to make the intent
+  explicit — this path fires the share sheet and on return prompts "Did you share the tracker
+  link? → Yes, mark as shared". "Mark as shared" (direct confirm, no share sheet) retained.
+- `needsShareBannerText` style added (amber/warning tone: `#B45309`).
+
+Files changed (1):
+- `mobile/ophalo-mobile/app/requests/[id].tsx`
+
 ### Issue: DateTimePicker `onChange` deprecation warning
 
 `@react-native-community/datetimepicker` v9.1.0 deprecates `onChange` in favour of three

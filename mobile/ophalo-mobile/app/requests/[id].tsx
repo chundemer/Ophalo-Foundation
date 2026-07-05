@@ -177,6 +177,15 @@ function RequestDetailContent({
     );
   }
 
+  async function handleShareTrackerLink() {
+    if (!trackerUrl) return;
+    try {
+      await Share.share({ message: trackerUrl, url: trackerUrl });
+    } catch {
+      // user cancelled or system error — no action needed
+    }
+  }
+
   async function handleNativeShare() {
     if (!trackerUrl) return;
     try {
@@ -562,7 +571,7 @@ function RequestDetailContent({
           {muteError && <Text style={styles.actionError}>{muteError}</Text>}
         </Section>
 
-        {data.contactActions.some((c) => c.available) && (
+        {(data.contactActions.some((c) => c.available) || !!trackerUrl) && (
           <Section cardBg={cardBg}>
             <Text style={styles.sectionLabel}>Contact</Text>
             {data.contactActions
@@ -578,19 +587,29 @@ function RequestDetailContent({
                   <Text style={styles.contactChevron}>›</Text>
                 </TouchableOpacity>
               ))}
+            {!!trackerUrl && (
+              <TouchableOpacity
+                style={styles.contactRow}
+                onPress={() => void handleShareTrackerLink()}
+              >
+                <Text style={styles.fieldLabel}>Tracker link</Text>
+                <Text style={styles.contactTarget}>Share…</Text>
+                <Text style={styles.contactChevron}>›</Text>
+              </TouchableOpacity>
+            )}
           </Section>
         )}
 
         {canRecordShare && (
           <Section cardBg={cardBg}>
-            <Text style={styles.sectionLabel}>Tracker</Text>
+            <Text style={styles.needsShareBannerText}>Tracker link not yet shared</Text>
             {canShare && (
               <TouchableOpacity
                 style={[styles.actionButton, isRecordingShare && styles.actionButtonDisabled]}
                 onPress={() => void handleNativeShare()}
                 disabled={isRecordingShare}
               >
-                <Text style={styles.actionButtonText}>Share via…</Text>
+                <Text style={styles.actionButtonText}>Share & mark as shared</Text>
               </TouchableOpacity>
             )}
             <TouchableOpacity
@@ -1148,6 +1167,7 @@ const styles = StyleSheet.create({
   },
   actionButtonOutlineText: { color: '#174A8B', fontSize: 14, fontWeight: '600' },
   actionButtonDisabled: { opacity: 0.45 },
+  needsShareBannerText: { fontSize: 13, fontWeight: '600', color: '#B45309', marginBottom: 8 },
   actionLabel: { fontSize: 14, opacity: 0.8, paddingVertical: 2 },
   actionError: { fontSize: 13, color: '#C0392B', marginTop: 2 },
   timingSeparator: {
