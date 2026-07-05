@@ -887,3 +887,61 @@ Helper functions added at module level: `parseLocalDate`, `toDateStr`, `formatFr
 
 `npx tsc --noEmit` passes with one expected error (`Cannot find module '@react-native-community/datetimepicker'`)
 that resolves after `npx expo install @react-native-community/datetimepicker`. All other types clean.
+
+---
+
+## Post-Session Issues (2026-07-05)
+
+### Issue: Follow Up On — "Could not set follow-up. Please try again."
+
+**Root cause:** `SetFollowUpOnRequestBody.Reason` was a non-nullable `string`, and
+`ManageRequestTimingService` returned `FollowUpOnReasonRequired` (400) when reason was absent.
+The S17 decision was that mobile sends only `{ date }` — no reason — because forcing a reason in
+the field adds friction. The backend was built before that product call was locked.
+
+**Fix:** Made reason optional throughout the stack and relaxed the service validation to only
+reject a provided-but-invalid slug (non-empty string that does not match a known `FollowUpReason`
+enum value). A missing reason stores `null` in the DB; a valid slug is accepted as before; an
+unrecognized non-empty slug is still rejected with `FollowUpOnReasonRequired`.
+
+Files changed (server):
+- `src/OpHalo.Api/Keep/RequestTimingRequests.cs` — `string Reason` → `string? Reason`
+- `src/OpHalo.Keep.Application/Requests/ManageRequestTimingService.cs` — command record and
+  conditional slug validation (only when reason non-null)
+- `src/OpHalo.Keep.Core/Entities/KeepRequest.cs` — `SetFollowUpOn` signature `FollowUpReason?`;
+  removed `!Enum.IsDefined` guard (caller guarantees valid values; null is now legal)
+
+Tests added:
+- Unit: `SetFollowUpOn_null_reason_succeeds_and_stores_null`
+- Integration: `SetFollowUpOn_NoReason_Returns200WithNullReason`,
+  `SetFollowUpOn_InvalidReason_Returns400`
+
+**Improved mobile error messages:** The `onError` handler for `handleSetFollowUp` and
+`handleClearFollowUp` now distinguishes `RequestChanged` (version stale), inactive-request 409,
+and connection/unknown errors — replacing the generic "Could not set follow-up. Please try again."
+
+**Optional reason chips added to Follow Up On sheet:** After the date quick-chips, a
+"Reason (optional)" chip row is rendered inside the same bottom sheet. Chips are single-select
+and toggle off on second tap. The selected reason is passed alongside the date on save; if none
+is selected, the date is saved with no reason. Planned For does not show reason chips.
+
+Reason mapping (server slugs → plain-language labels):
+
+| Slug | Label |
+|------|-------|
+| `customer_delay` | Waiting on customer |
+| `parts` | Waiting on parts |
+| `weather` | Weather |
+| `business_operator_availability` | Need to schedule |
+| `third_party` | Third party |
+| `other` | Other |
+
+Note: the user's initial suggestion included `estimate` and `schedule` slugs; these do not exist
+in the `FollowUpReason` enum. Labels were adjusted to map to the actual server contract.
+
+Files changed (mobile):
+- `src/hooks/useFollowUpOn.ts` — `reason?: string` added to `SetFollowUpVars`; included in PUT body
+  (undefined is omitted by `JSON.stringify`, so no-reason sends `{ date }` only)
+- `app/requests/[id].tsx` — `FOLLOW_UP_REASONS` constant; `handleSetFollowUp` accepts optional
+  reason; `DateSheetPicker` extended with `existingReason?`, `reasons?`, `selectedReason` state,
+  reason chip row, and `onSave(dateStr, reason?)` signature; reason chip styles added

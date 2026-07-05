@@ -15,7 +15,7 @@ namespace OpHalo.Keep.Application.Requests;
 public sealed record SetFollowUpOnCommand(
     Guid RequestId,
     DateOnly Date,
-    string Reason,
+    string? Reason,
     string? Note,
     Guid ExpectedVersion);
 
@@ -59,12 +59,16 @@ public sealed class ManageRequestTimingService(
         if (request.ConcurrencyVersion != command.ExpectedVersion)
             return Result<KeepRequestDetailResult>.Failure(KeepRequestErrors.RequestChanged);
 
-        var reason = KeepRequestDetailMapper.ParseFollowUpReasonSlug(command.Reason);
-        if (reason is null)
-            return Result<KeepRequestDetailResult>.Failure(KeepRequestErrors.FollowUpOnReasonRequired);
+        FollowUpReason? reason = null;
+        if (command.Reason is not null)
+        {
+            reason = KeepRequestDetailMapper.ParseFollowUpReasonSlug(command.Reason);
+            if (reason is null)
+                return Result<KeepRequestDetailResult>.Failure(KeepRequestErrors.FollowUpOnReasonRequired);
+        }
 
         var nowUtc = clock.UtcNow;
-        var domainResult = request.SetFollowUpOn(command.Date, reason.Value, command.Note,
+        var domainResult = request.SetFollowUpOn(command.Date, reason, command.Note,
             currentUser.UserId, actorDisplayName, nowUtc);
         if (domainResult.IsFailure)
             return Result<KeepRequestDetailResult>.Failure(domainResult.Error);

@@ -39,6 +39,10 @@ public sealed class RequestTimingTests : IClassFixture<KeepApiWebFactory>, IAsyn
     // Isolated requests for mutating happy-path tests.
     private Guid _setFollowUpOnRequestId;
     private Guid _setFollowUpOnRequestVersion;
+    private Guid _setFollowUpOnNoReasonRequestId;
+    private Guid _setFollowUpOnNoReasonRequestVersion;
+    private Guid _setFollowUpOnInvalidReasonRequestId;
+    private Guid _setFollowUpOnInvalidReasonRequestVersion;
     private Guid _clearFollowUpOnRequestId;
     private Guid _clearFollowUpOnRequestVersion;
     private Guid _setPlannedForRequestId;
@@ -144,6 +148,12 @@ public sealed class RequestTimingTests : IClassFixture<KeepApiWebFactory>, IAsyn
         (_setFollowUpOnRequestId, _setFollowUpOnRequestVersion) = await SeedRequestAsync(
             db, _accountId, customer.Id, "TIM-SFU", "timing_sfu_token", now);
 
+        (_setFollowUpOnNoReasonRequestId, _setFollowUpOnNoReasonRequestVersion) = await SeedRequestAsync(
+            db, _accountId, customer.Id, "TIM-SNR", "timing_snr_token", now);
+
+        (_setFollowUpOnInvalidReasonRequestId, _setFollowUpOnInvalidReasonRequestVersion) = await SeedRequestAsync(
+            db, _accountId, customer.Id, "TIM-SIR", "timing_sir_token", now);
+
         // Clear Follow Up On — pre-seed the date directly via domain (no CommitAsync; version unchanged).
         var clearFuoRequest = KeepRequest.CreateFromCustomerIntake(
             _accountId, customer.Id,
@@ -247,6 +257,31 @@ public sealed class RequestTimingTests : IClassFixture<KeepApiWebFactory>, IAsyn
 
         var events = body.GetProperty("events").EnumerateArray().ToList();
         Assert.Contains(events, e => e.GetProperty("eventType").GetString() == "follow_up_on_changed");
+    }
+
+    [Fact]
+    public async Task SetFollowUpOn_NoReason_Returns200WithNullReason()
+    {
+        var response = await AuthRequest(_ownerCookie, _setFollowUpOnNoReasonRequestVersion).PutAsJsonAsync(
+            $"/keep/requests/{_setFollowUpOnNoReasonRequestId}/follow-up-on",
+            new { date = "2026-07-10" });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("2026-07-10", body.GetProperty("followUpOnDate").GetString());
+        Assert.Equal(JsonValueKind.Null, body.GetProperty("followUpOnReason").ValueKind);
+    }
+
+    [Fact]
+    public async Task SetFollowUpOn_InvalidReason_Returns400()
+    {
+        var response = await AuthRequest(_ownerCookie, _setFollowUpOnInvalidReasonRequestVersion).PutAsJsonAsync(
+            $"/keep/requests/{_setFollowUpOnInvalidReasonRequestId}/follow-up-on",
+            new { date = "2026-07-10", reason = "not_a_valid_reason" });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("KeepRequest.FollowUpOnReasonRequired", body.GetProperty("code").GetString());
     }
 
     // =========================================================================

@@ -946,7 +946,7 @@ public sealed class KeepRequest : BaseEntity
     /// </summary>
     public Result<KeepRequestEvent> SetFollowUpOn(
         DateOnly date,
-        FollowUpReason reason,
+        FollowUpReason? reason,
         string? note,
         Guid actorAccountUserId,
         string actorDisplayName,
@@ -961,9 +961,6 @@ public sealed class KeepRequest : BaseEntity
 
         if (!IsActive)
             return Result<KeepRequestEvent>.Failure(KeepRequestErrors.FollowUpOnRequiresActiveRequest);
-
-        if (!Enum.IsDefined(reason))
-            return Result<KeepRequestEvent>.Failure(KeepRequestErrors.FollowUpOnReasonRequired);
 
         var trimmedNote = string.IsNullOrWhiteSpace(note) ? null : note.Trim();
 

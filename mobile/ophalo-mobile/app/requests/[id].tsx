@@ -37,6 +37,15 @@ import { useNetworkState } from '@/src/hooks/useNetworkState';
 
 const PUBLIC_BASE_URL = (process.env.EXPO_PUBLIC_PUBLIC_BASE_URL ?? '').replace(/\/$/, '');
 
+const FOLLOW_UP_REASONS: { label: string; value: string }[] = [
+  { label: 'Waiting on customer', value: 'customer_delay' },
+  { label: 'Waiting on parts',    value: 'parts' },
+  { label: 'Weather',             value: 'weather' },
+  { label: 'Need to schedule',    value: 'business_operator_availability' },
+  { label: 'Third party',         value: 'third_party' },
+  { label: 'Other',               value: 'other' },
+];
+
 export default function RequestDetailScreen() {
   const { user } = useAuth();
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -328,18 +337,24 @@ function RequestDetailContent({
     );
   }
 
-  function handleSetFollowUp(dateStr: string) {
+  function handleSetFollowUp(dateStr: string, reason?: string) {
     if (!data) return;
     setFollowUpOn(
-      { requestId: data.requestId, version: data.version, date: dateStr },
+      { requestId: data.requestId, version: data.version, date: dateStr, reason },
       {
         onSuccess: () => setFollowUpError(null),
         onError: (err) => {
-          setFollowUpError(
-            err instanceof ApiError && err.status === 409
-              ? 'Request has changed — details refreshed.'
-              : 'Could not set follow-up. Please try again.',
-          );
+          if (err instanceof ApiError) {
+            if (err.code === 'KeepRequest.RequestChanged') {
+              setFollowUpError('Request has changed — refresh and try again.');
+            } else if (err.status === 409) {
+              setFollowUpError('This request is no longer active — a follow-up date cannot be set.');
+            } else {
+              setFollowUpError('Follow-up date could not be saved. Check your connection and try again.');
+            }
+          } else {
+            setFollowUpError('Follow-up date could not be saved. Check your connection and try again.');
+          }
         },
       },
     );
@@ -352,11 +367,13 @@ function RequestDetailContent({
       {
         onSuccess: () => setFollowUpError(null),
         onError: (err) => {
-          setFollowUpError(
-            err instanceof ApiError && err.status === 409
-              ? 'Request has changed — details refreshed.'
-              : 'Could not clear follow-up. Please try again.',
-          );
+          if (err instanceof ApiError && err.code === 'KeepRequest.RequestChanged') {
+            setFollowUpError('Request has changed — refresh and try again.');
+          } else if (err instanceof ApiError && err.status === 409) {
+            setFollowUpError('This request is no longer active — the follow-up date cannot be cleared.');
+          } else {
+            setFollowUpError('Could not clear follow-up date. Check your connection and try again.');
+          }
         },
       },
     );
@@ -443,6 +460,8 @@ function RequestDetailContent({
                 label="Follow up on"
                 subtitle="Remind me to check back or re-engage with this customer."
                 existingDate={data.followUpOnDate}
+                existingReason={data.followUpOnReason}
+                reasons={FOLLOW_UP_REASONS}
                 onSave={handleSetFollowUp}
                 onClear={handleClearFollowUp}
                 isPending={isSettingFollowUp || isClearingFollowUp}
@@ -768,6 +787,8 @@ function DateSheetPicker({
   label,
   subtitle,
   existingDate,
+  existingReason,
+  reasons,
   onSave,
   onClear,
   isPending,
@@ -779,7 +800,9 @@ function DateSheetPicker({
   label: string;
   subtitle?: string;
   existingDate: string | null;
-  onSave: (dateStr: string) => void;
+  existingReason?: string | null;
+  reasons?: { label: string; value: string }[];
+  onSave: (dateStr: string, reason?: string) => void;
   onClear: () => void;
   isPending: boolean;
   isOnline: boolean;
@@ -789,16 +812,18 @@ function DateSheetPicker({
 }) {
   const [sheetVisible, setSheetVisible] = useState(false);
   const [pickerDate, setPickerDate] = useState(new Date());
+  const [selectedReason, setSelectedReason] = useState<string | null>(null);
   const disabled = isPending || !isOnline;
 
   function openSheet() {
     setPickerDate(existingDate ? parseLocalDate(existingDate) : new Date());
+    setSelectedReason(existingReason ?? null);
     setSheetVisible(true);
   }
 
   function handleSave() {
     setSheetVisible(false);
-    onSave(toDateStr(pickerDate));
+    onSave(toDateStr(pickerDate), selectedReason ?? undefined);
   }
 
   function handleClear() {
@@ -810,7 +835,7 @@ function DateSheetPicker({
     const d = new Date();
     d.setDate(d.getDate() + daysFromNow);
     setSheetVisible(false);
-    onSave(toDateStr(d));
+    onSave(toDateStr(d), selectedReason ?? undefined);
   }
 
   const todayDow = new Date().getDay();
@@ -886,6 +911,35 @@ function DateSheetPicker({
                 </TouchableOpacity>
               ))}
             </View>
+
+            {reasons && reasons.length > 0 && (
+              <View style={styles.reasonSection}>
+                <Text style={styles.reasonSectionLabel}>Reason (optional)</Text>
+                <View style={styles.reasonChipRow}>
+                  {reasons.map((r) => {
+                    const isSelected = selectedReason === r.value;
+                    return (
+                      <TouchableOpacity
+                        key={r.value}
+                        style={[
+                          styles.reasonChip,
+                          isSelected && styles.reasonChipSelected,
+                          disabled && styles.pickerChipDisabled,
+                        ]}
+                        onPress={() => setSelectedReason(isSelected ? null : r.value)}
+                        disabled={disabled}
+                        accessibilityRole="checkbox"
+                        accessibilityState={{ checked: isSelected }}
+                      >
+                        <Text style={[styles.reasonChipText, isSelected && styles.reasonChipTextSelected]}>
+                          {r.label}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
+            )}
 
             <DateTimePicker
               mode="date"
@@ -1139,6 +1193,38 @@ const styles = StyleSheet.create({
   },
   pickerChipDisabled: { opacity: 0.4 },
   pickerChipText: { fontSize: 13, color: '#174A8B', fontWeight: '600' },
+  reasonSection: {
+    paddingHorizontal: 16,
+    paddingTop: 4,
+    backgroundColor: 'transparent',
+  },
+  reasonSectionLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    opacity: 0.5,
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+    marginBottom: 8,
+  },
+  reasonChipRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    backgroundColor: 'transparent',
+  },
+  reasonChip: {
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#168A9A',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  reasonChipSelected: {
+    backgroundColor: '#168A9A',
+    borderColor: '#168A9A',
+  },
+  reasonChipText: { fontSize: 13, color: '#168A9A', fontWeight: '500' },
+  reasonChipTextSelected: { color: '#FFFFFF', fontWeight: '600' },
   pickerClearButton: {
     marginHorizontal: 20,
     marginTop: 4,

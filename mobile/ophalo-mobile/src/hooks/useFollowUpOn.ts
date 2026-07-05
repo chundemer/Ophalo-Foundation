@@ -2,16 +2,16 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 import { api } from '../api/client';
 
-type SetFollowUpVars = { requestId: string; version: string; date: string };
+type SetFollowUpVars = { requestId: string; version: string; date: string; reason?: string };
 type ClearFollowUpVars = { requestId: string; version: string };
 
 export function useSetFollowUpOn() {
   const queryClient = useQueryClient();
   return useMutation<unknown, Error, SetFollowUpVars>({
-    mutationFn: ({ requestId, version, date }) =>
+    mutationFn: ({ requestId, version, date, reason }) =>
       api.put(
         `/keep/requests/${requestId}/follow-up-on`,
-        { date },
+        { date, reason },
         { 'X-Keep-Request-Version': version },
       ),
     onSuccess: (_, { requestId }) => {

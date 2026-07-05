@@ -71,6 +71,20 @@ public class KeepRequestFollowUpTests
     }
 
     [Fact]
+    public void SetFollowUpOn_null_reason_succeeds_and_stores_null()
+    {
+        var r = ActiveRequest();
+
+        var result = r.SetFollowUpOn(FutureDate, null, null, ActorId, "Jane", Now);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(FutureDate, r.FollowUpOnDate);
+        Assert.Null(r.FollowUpReason);
+        Assert.Null(r.FollowUpNote);
+        Assert.Null(result.Value.FollowUpOnReason);
+    }
+
+    [Fact]
     public void SetFollowUpOn_other_reason_with_note_succeeds()
     {
         var r = ActiveRequest();
