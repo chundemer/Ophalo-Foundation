@@ -33,6 +33,7 @@ import { useMuteRequest, useUnmuteRequest } from '@/src/hooks/useMuteRequest';
 import { useAssignResponsible } from '@/src/hooks/useAssignResponsible';
 import { useSetFollowUpOn, useClearFollowUpOn } from '@/src/hooks/useFollowUpOn';
 import { useSetPlannedFor, useClearPlannedFor } from '@/src/hooks/usePlannedFor';
+import { useAddInternalNote } from '@/src/hooks/useAddInternalNote';
 import { useNetworkState } from '@/src/hooks/useNetworkState';
 
 const PUBLIC_BASE_URL = (process.env.EXPO_PUBLIC_PUBLIC_BASE_URL ?? '').replace(/\/$/, '');
@@ -74,6 +75,8 @@ function RequestDetailContent({
   const [shareError, setShareError] = useState<string | null>(null);
   const [composerText, setComposerText] = useState('');
   const [composerError, setComposerError] = useState<string | null>(null);
+  const [noteText, setNoteText] = useState('');
+  const [noteError, setNoteError] = useState<string | null>(null);
   const [assignError, setAssignError] = useState<string | null>(null);
   const [watchError, setWatchError] = useState<string | null>(null);
   const [muteError, setMuteError] = useState<string | null>(null);
@@ -92,6 +95,7 @@ function RequestDetailContent({
   const { mutate: clearFollowUpOn, isPending: isClearingFollowUp } = useClearFollowUpOn();
   const { mutate: setPlannedFor, isPending: isSettingPlannedFor } = useSetPlannedFor();
   const { mutate: clearPlannedFor, isPending: isClearingPlannedFor } = useClearPlannedFor();
+  const { mutate: addInternalNote, isPending: isAddingNote } = useAddInternalNote();
   const { isOnline } = useNetworkState();
 
   if (isLoading) {
@@ -123,7 +127,6 @@ function RequestDetailContent({
   const responsible = data.participants.find(
     (p) => p.participationType === 'responsible' && p.detachedAtUtc === null,
   );
-  const availableLabels = resolveAvailableActionLabels(data.availableActions);
 
   const trackerUrl =
     PUBLIC_BASE_URL && data.pageToken
@@ -250,6 +253,31 @@ function RequestDetailContent({
             setComposerError('Could not send update. Please try again.');
           } else {
             setComposerError("Couldn't send. Check your connection and try again.");
+          }
+        },
+      },
+    );
+  }
+
+  function handleAddNote() {
+    if (!data || noteText.trim() === '') return;
+    addInternalNote(
+      { requestId: data.requestId, version: data.version, note: noteText.trim() },
+      {
+        onSuccess: () => {
+          setNoteText('');
+          setNoteError(null);
+        },
+        onError: (err) => {
+          if (
+            err instanceof ApiError &&
+            (err.status === 409 || err.code === 'KeepRequest.RequestChanged')
+          ) {
+            setNoteError('Request has changed — details refreshed. Review and try again.');
+          } else if (err instanceof ApiError && err.status >= 400 && err.status < 500) {
+            setNoteError('Could not save note. Please try again.');
+          } else {
+            setNoteError("Couldn't save. Check your connection and try again.");
           }
         },
       },
@@ -668,14 +696,39 @@ function RequestDetailContent({
           </Section>
         )}
 
-        {availableLabels.length > 0 && (
+        {data.availableActions.canAddInternalNote && (
           <Section cardBg={cardBg}>
-            <Text style={styles.sectionLabel}>Actions</Text>
-            {availableLabels.map((label) => (
-              <Text key={label} style={styles.actionLabel}>
-                {label}
+            <Text style={styles.sectionLabel}>Internal Note</Text>
+            <TextInput
+              style={[
+                styles.composerInput,
+                { color: colorScheme === 'dark' ? '#FFFFFF' : '#000000' },
+              ]}
+              placeholder="Note visible to your team only…"
+              placeholderTextColor="rgba(128,128,128,0.6)"
+              multiline
+              value={noteText}
+              onChangeText={setNoteText}
+              editable={!isAddingNote}
+              maxLength={data.internalNoteMaxLength}
+            />
+            {noteError && <Text style={styles.composerError}>{noteError}</Text>}
+            {!isOnline && (
+              <Text style={styles.composerOffline}>Offline — notes cannot be saved.</Text>
+            )}
+            <TouchableOpacity
+              style={[
+                styles.actionButton,
+                (noteText.trim() === '' || isAddingNote || !isOnline) &&
+                  styles.actionButtonDisabled,
+              ]}
+              onPress={handleAddNote}
+              disabled={noteText.trim() === '' || isAddingNote || !isOnline}
+            >
+              <Text style={styles.actionButtonText}>
+                {isAddingNote ? 'Saving…' : 'Add Note'}
               </Text>
-            ))}
+            </TouchableOpacity>
           </Section>
         )}
 
@@ -1044,18 +1097,6 @@ function EventRow({ event }: { event: EventItem }) {
       )}
     </View>
   );
-}
-
-const ACTION_LABELS: Partial<Record<keyof AvailableActionsDto, string>> = {
-  canChangeStatus: 'Change status',
-  canAddInternalNote: 'Add internal note',
-  canClose: 'Close',
-};
-
-function resolveAvailableActionLabels(actions: AvailableActionsDto): string[] {
-  return (Object.keys(ACTION_LABELS) as Array<keyof AvailableActionsDto>)
-    .filter((key) => actions[key] === true)
-    .map((key) => ACTION_LABELS[key]!);
 }
 
 function normalizeLabel(value: string): string {

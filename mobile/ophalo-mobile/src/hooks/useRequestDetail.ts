@@ -82,6 +82,7 @@ export type KeepRequestDetailDto = {
   currentUserParticipation: CurrentUserParticipationDto;
   events: EventItem[];
   availableActions: AvailableActionsDto;
+  internalNoteMaxLength: number;
 };
 
 export function useRequestDetail(id: string | undefined) {

@@ -970,6 +970,37 @@ Files changed (mobile):
 Files changed (1):
 - `mobile/ophalo-mobile/app/requests/[id].tsx`
 
+### Issue: Owner/admin on mobile had no way to add an internal note
+
+**Decision (2026-07-05):**
+- Wire now: Add internal note — high-value field action ("parts ordered", "gate code is 1234"),
+  internal-only, does not notify the customer, fits mobile well as a small composer.
+- Hide for now: Change status — deferred; mobile already covers the safest path (Send Update &
+  Mark Completed → resolved). Generic status picker introduces product nuance around allowed
+  transitions, customer notification, and lifecycle intent.
+- Hide for now: Close — lifecycle/finalization; easier to misuse on phone; keep web-only for V1.
+- Remove the display-only Actions section entirely — every visible action should be interactive.
+
+**Fix:**
+
+- Created `useAddInternalNote` hook: `POST /keep/requests/{id}/internal-notes` with
+  `{ note }` body and `X-Keep-Request-Version` header. Invalidates `keepRequestDetail` and
+  `keepRequests` on success; refetches detail on error (same pattern as `useSendBusinessUpdate`).
+- Added `internalNoteMaxLength: number` to `KeepRequestDetailDto` (API already returns it).
+- Added `noteText`/`noteError` state and `handleAddNote` handler in `RequestDetailContent`.
+  Error handling mirrors the business-update composer: 409/`RequestChanged` preserves text,
+  4xx shows retry copy, network error shows connection copy.
+- Added "Internal Note" composer section gated on `canAddInternalNote`: multiline `TextInput`
+  with placeholder "Note visible to your team only…", `maxLength` from `data.internalNoteMaxLength`,
+  "Add Note" / "Saving…" button disabled when empty / pending / offline, offline warning line.
+- Removed display-only `ACTION_LABELS` / `resolveAvailableActionLabels` / Actions section
+  entirely — status change and close deferred to a later intentional mobile design pass.
+
+Files changed (3):
+- `mobile/ophalo-mobile/src/hooks/useAddInternalNote.ts` (new)
+- `mobile/ophalo-mobile/src/hooks/useRequestDetail.ts`
+- `mobile/ophalo-mobile/app/requests/[id].tsx`
+
 ### Issue: DateTimePicker `onChange` deprecation warning
 
 `@react-native-community/datetimepicker` v9.1.0 deprecates `onChange` in favour of three
