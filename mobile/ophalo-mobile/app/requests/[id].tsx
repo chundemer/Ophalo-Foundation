@@ -816,7 +816,9 @@ function DateSheetPicker({
   const disabled = isPending || !isOnline;
 
   function openSheet() {
-    setPickerDate(existingDate ? parseLocalDate(existingDate) : new Date());
+    const today = startOfToday();
+    const initial = existingDate ? parseLocalDate(existingDate) : today;
+    setPickerDate(initial >= today ? initial : today);
     setSelectedReason(existingReason ?? null);
     setSheetVisible(true);
   }
@@ -945,7 +947,8 @@ function DateSheetPicker({
               mode="date"
               display="spinner"
               value={pickerDate}
-              onChange={(_event: unknown, date?: Date) => { if (date) setPickerDate(date); }}
+              minimumDate={startOfToday()}
+              onValueChange={(_event, date) => setPickerDate(date)}
             />
 
             {existingDate && (
@@ -1028,6 +1031,12 @@ function formatEventTime(iso: string): string {
   return d.toLocaleDateString([], { month: 'short', day: 'numeric' }) +
     ' ' +
     d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+}
+
+function startOfToday(): Date {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  return d;
 }
 
 function parseLocalDate(dateStr: string): Date {
