@@ -733,15 +733,18 @@ function RequestDetailContent({
         )}
 
         <Section cardBg={cardBg}>
-          <Text style={styles.sectionLabel}>
-            {`Timeline · ${data.events.length} event${data.events.length !== 1 ? 's' : ''}`}
-          </Text>
+          <Text style={styles.sectionLabel}>Activity</Text>
           {data.events.length === 0 && (
-            <Text style={styles.emptyText}>No events recorded.</Text>
+            <Text style={styles.emptyText}>No activity yet.</Text>
           )}
-          {data.events.map((event) => (
+          {[...data.events].reverse().slice(0, MOBILE_EVENT_LIMIT).map((event) => (
             <EventRow key={event.id} event={event} />
           ))}
+          {data.events.length > MOBILE_EVENT_LIMIT && (
+            <Text style={styles.eventOverflowHint}>
+              {`Showing latest ${MOBILE_EVENT_LIMIT} of ${data.events.length} events`}
+            </Text>
+          )}
         </Section>
       </ScrollView>
 
@@ -1048,6 +1051,40 @@ function FieldRow({ label, value }: { label: string; value: string }) {
   );
 }
 
+const MOBILE_EVENT_LIMIT = 5;
+
+const EVENT_TYPE_LABELS: Record<string, string> = {
+  request_created:         'Request created',
+  status_changed:          'Status changed',
+  request_closed:          'Request closed',
+  request_cancelled:       'Request cancelled',
+  internal_note_added:     'Internal note added',
+  attention_acknowledged:  'Attention acknowledged',
+  external_contact_logged: 'External contact',
+  participation_changed:   'Participation updated',
+  feedback_reviewed:       'Feedback reviewed',
+  follow_up_on_changed:    'Follow-up',
+  planned_for_changed:     'Planned date',
+  request_classified:      'Request classified',
+  share_intent_recorded:   'Tracker link shared',
+};
+
+function eventLabel(event: EventItem): string {
+  if (event.eventType === 'message_added') {
+    return event.actorType === 'customer' ? 'Customer message' : 'Customer update sent';
+  }
+  return EVENT_TYPE_LABELS[event.eventType] ?? normalizeLabel(event.eventType);
+}
+
+function eventContactDetail(event: EventItem): string | null {
+  if (event.eventType !== 'external_contact_logged') return null;
+  const dir = event.externalContactDirection === 'inbound' ? 'Inbound' : 'Outbound';
+  const ch = event.externalContactChannel ? normalizeLabel(event.externalContactChannel) : '';
+  const outcome = event.externalContactOutcome ? normalizeLabel(event.externalContactOutcome) : null;
+  const base = ch ? `${dir} ${ch}` : dir;
+  return outcome ? `${base} — ${outcome}` : base;
+}
+
 const FOLLOW_UP_REASON_LABELS: Record<string, string> = {
   weather: 'Weather',
   parts: 'Waiting on parts',
@@ -1074,9 +1111,10 @@ function timingEventDetail(event: EventItem): string | null {
 
 function EventRow({ event }: { event: EventItem }) {
   const actor = event.actorDisplayName ?? normalizeLabel(event.actorType);
-  const label = normalizeLabel(event.eventType);
+  const label = eventLabel(event);
   const ts = formatEventTime(event.occurredAtUtc);
   const timingDetail = timingEventDetail(event);
+  const contactDetail = eventContactDetail(event);
 
   return (
     <View style={styles.eventRow}>
@@ -1088,12 +1126,15 @@ function EventRow({ event }: { event: EventItem }) {
       {timingDetail && (
         <Text style={styles.eventMeta}>{timingDetail}</Text>
       )}
+      {contactDetail && (
+        <Text style={styles.eventMeta}>{contactDetail}</Text>
+      )}
       {event.statusAfter && (
         <Text style={styles.eventMeta}>→ {normalizeLabel(event.statusAfter)}</Text>
       )}
       {event.content && <Text style={styles.eventContent}>{event.content}</Text>}
-      {event.visibility === 'Internal' && (
-        <Text style={styles.eventInternal}>Internal</Text>
+      {event.visibility === 'all' && (
+        <Text style={styles.eventCustomerVisible}>Customer visible</Text>
       )}
     </View>
   );
@@ -1340,7 +1381,8 @@ const styles = StyleSheet.create({
   eventType: { fontSize: 13, opacity: 0.7 },
   eventMeta: { fontSize: 12, opacity: 0.5 },
   eventContent: { fontSize: 14, lineHeight: 20, opacity: 0.85, marginTop: 2 },
-  eventInternal: { fontSize: 11, opacity: 0.45, fontStyle: 'italic' },
+  eventCustomerVisible: { fontSize: 11, color: '#166534', fontWeight: '600', marginTop: 1 },
+  eventOverflowHint: { fontSize: 12, opacity: 0.4, marginTop: 8, textAlign: 'center' },
   composerInput: {
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: 'rgba(128,128,128,0.35)',

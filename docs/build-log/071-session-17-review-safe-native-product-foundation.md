@@ -1001,6 +1001,34 @@ Files changed (3):
 - `mobile/ophalo-mobile/src/hooks/useRequestDetail.ts`
 - `mobile/ophalo-mobile/app/requests/[id].tsx`
 
+### Issue: Mobile activity timeline showed raw event labels and no useful context
+
+**Decision (2026-07-05):** Mobile should show activities as a lightweight field timeline
+(context, not audit log). Rules: human-readable summaries only; internal events visible to
+authenticated staff; customer-visibility boundary preserved; read-only; latest 5 newest-first;
+no paging in this pass; overflow hint when more exist.
+
+**Fix:**
+
+- Added `EVENT_TYPE_LABELS` map covering all 13 event types with plain-language labels.
+  `message_added` is actor-aware: `account_user` → "Customer update sent",
+  `customer` → "Customer message". Timing events keep short header labels ("Follow-up",
+  "Planned date") — detail comes from the existing `timingEventDetail()` below them.
+- Added `eventContactDetail()` for `external_contact_logged` events: renders
+  "Outbound Call — Spoke with customer" style summary from direction/channel/outcome fields.
+- Updated `EventRow`: uses `eventLabel(event)` instead of `normalizeLabel(event.eventType)`;
+  adds `contactDetail` line; replaces "Internal" badge with "Customer visible" badge
+  (`visibility === 'all'` only — staff app assumes internal by default, exception gets flagged).
+- Timeline section: renamed to "Activity"; renders `[...data.events].reverse().slice(0, 5)`
+  (clone before reverse to preserve query data immutability); shows
+  "Showing latest 5 of N events" overflow hint when total exceeds limit; "No activity yet."
+  empty state.
+- Added styles: `eventCustomerVisible` (green, 600 weight), `eventOverflowHint` (centered,
+  muted); removed unused `eventInternal`.
+
+Files changed (1):
+- `mobile/ophalo-mobile/app/requests/[id].tsx`
+
 ### Issue: DateTimePicker `onChange` deprecation warning
 
 `@react-native-community/datetimepicker` v9.1.0 deprecates `onChange` in favour of three
