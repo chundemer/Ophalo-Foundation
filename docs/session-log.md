@@ -3,7 +3,7 @@
 **Last updated:** 2026-07-04 (S17j complete; Session 17 done)
 **Branch:** `main` tracking `origin/main`
 **Last green baseline:** 939 unit · 14 arch · 713 integration = 1,666 total, 0 failures (1 pre-existing KeepG5 fluke excluded)
-**Next free ADR:** ADR-406
+**Next free ADR:** ADR-407
 **Current session:** Session 17 — Review-Safe Native Product Foundation
 
 ---
@@ -167,6 +167,18 @@ Treat these as historical context unless a later discovery step finds a concrete
 - Production push delivery must stay suppressed for Demo/InternalTest accounts.
 - Keep sends no backend SMS/email to customers in V1; native `sms:`, `tel:`, and `mailto:` handoff
   remains operator-initiated on the user's device.
+
+---
+
+## Deferred Decisions
+
+- **Mobile package manager standardisation (S19 candidate):** `mobile/ophalo-mobile` was scaffolded
+  with Expo's default npm and has used `package-lock.json` since S16b. `web/ophalo-app` uses
+  `pnpm@11.9.0`. The monorepo root has no shared workspace lock file. Standardising mobile to pnpm
+  would require deleting `package-lock.json`, adding `"packageManager": "pnpm@x.x.x"` to
+  `mobile/ophalo-mobile/package.json`, regenerating `pnpm-lock.yaml`, and switching `expo install`
+  calls to `pnpm exec expo install`. Low urgency — npm is consistent within the mobile project —
+  but worth aligning before S19 EAS Build configuration introduces CI/CD package-manager assumptions.
 
 ---
 
