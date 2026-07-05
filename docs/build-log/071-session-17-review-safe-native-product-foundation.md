@@ -945,3 +945,29 @@ Files changed (mobile):
 - `app/requests/[id].tsx` — `FOLLOW_UP_REASONS` constant; `handleSetFollowUp` accepts optional
   reason; `DateSheetPicker` extended with `existingReason?`, `reasons?`, `selectedReason` state,
   reason chip row, and `onSave(dateStr, reason?)` signature; reason chip styles added
+
+### Issue: DateTimePicker `onChange` deprecation warning
+
+`@react-native-community/datetimepicker` v9.1.0 deprecates `onChange` in favour of three
+focused callbacks: `onValueChange`, `onDismiss`, and `onNeutralButtonPress`. The warning fired
+on every picker render.
+
+**Fix:** replaced `onChange={(_event, date?) => { if (date) setPickerDate(date); }}` with
+`onValueChange={(_event, date) => setPickerDate(date)}`. The `date` argument is non-optional
+in `onValueChange`, so the nil-guard is no longer needed.
+
+File changed: `mobile/ophalo-mobile/app/requests/[id].tsx`
+
+### Issue: Date picker allowed selecting past dates
+
+The `DateSheetPicker` had no lower bound, so operators and owners could set a Follow Up On or
+Planned For date in the past — meaningless for scheduling and likely a data-entry error.
+
+**Fix:**
+- Added `startOfToday()` helper (midnight local time) at module level.
+- `minimumDate={startOfToday()}` passed to `DateTimePicker` — the native spinner refuses
+  to scroll past today.
+- `openSheet` now clamps the initial picker value to today when the stored date is already
+  in the past, preventing the picker from opening below the minimum.
+
+File changed: `mobile/ophalo-mobile/app/requests/[id].tsx`
