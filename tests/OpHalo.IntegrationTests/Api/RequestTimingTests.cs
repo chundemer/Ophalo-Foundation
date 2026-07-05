@@ -49,6 +49,10 @@ public sealed class RequestTimingTests : IClassFixture<KeepApiWebFactory>, IAsyn
     private Guid _setPlannedForRequestVersion;
     private Guid _clearPlannedForRequestId;
     private Guid _clearPlannedForRequestVersion;
+    private Guid _clearPlannedForNoOpRequestId;
+    private Guid _clearPlannedForNoOpRequestVersion;
+    private Guid _clearFollowUpOnNoOpRequestId;
+    private Guid _clearFollowUpOnNoOpRequestVersion;
 
     // Requests in terminal/resolved states.
     private Guid _resolvedRequestId;
@@ -186,6 +190,13 @@ public sealed class RequestTimingTests : IClassFixture<KeepApiWebFactory>, IAsyn
         await db.SaveChangesAsync();
         _clearPlannedForRequestId      = clearPfRequest.Id;
         _clearPlannedForRequestVersion = clearPfRequest.ConcurrencyVersion;
+
+        // No-op clear requests — no date set, so clearing is already a no-op.
+        (_clearPlannedForNoOpRequestId, _clearPlannedForNoOpRequestVersion) = await SeedRequestAsync(
+            db, _accountId, customer.Id, "TIM-NOP", "timing_nop_token", now);
+
+        (_clearFollowUpOnNoOpRequestId, _clearFollowUpOnNoOpRequestVersion) = await SeedRequestAsync(
+            db, _accountId, customer.Id, "TIM-NOF", "timing_nof_token", now);
 
         // Resolved request.
         var resolvedRequest = KeepRequest.CreateFromCustomerIntake(
@@ -336,6 +347,48 @@ public sealed class RequestTimingTests : IClassFixture<KeepApiWebFactory>, IAsyn
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
 
         Assert.Equal(JsonValueKind.Null, body.GetProperty("plannedForDate").ValueKind);
+    }
+
+    // =========================================================================
+    // No-op clear — already null, no event emitted
+    // =========================================================================
+
+    [Fact]
+    public async Task ClearPlannedFor_WhenAlreadyNull_Returns200WithoutNewEvent()
+    {
+        var before = await AuthRequest(_ownerCookie)
+            .GetAsync($"/keep/requests/{_clearPlannedForNoOpRequestId}");
+        var beforeBody  = await before.Content.ReadFromJsonAsync<JsonElement>();
+        var eventsBefore = beforeBody.GetProperty("events").GetArrayLength();
+
+        var response = await AuthRequest(_ownerCookie, _clearPlannedForNoOpRequestVersion).DeleteAsync(
+            $"/keep/requests/{_clearPlannedForNoOpRequestId}/planned-for");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(JsonValueKind.Null, body.GetProperty("plannedForDate").ValueKind);
+
+        var eventsAfter = body.GetProperty("events").GetArrayLength();
+        Assert.Equal(eventsBefore, eventsAfter);
+    }
+
+    [Fact]
+    public async Task ClearFollowUpOn_WhenAlreadyNull_Returns200WithoutNewEvent()
+    {
+        var before = await AuthRequest(_ownerCookie)
+            .GetAsync($"/keep/requests/{_clearFollowUpOnNoOpRequestId}");
+        var beforeBody   = await before.Content.ReadFromJsonAsync<JsonElement>();
+        var eventsBefore = beforeBody.GetProperty("events").GetArrayLength();
+
+        var response = await AuthRequest(_ownerCookie, _clearFollowUpOnNoOpRequestVersion).DeleteAsync(
+            $"/keep/requests/{_clearFollowUpOnNoOpRequestId}/follow-up-on");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(JsonValueKind.Null, body.GetProperty("followUpOnDate").ValueKind);
+
+        var eventsAfter = body.GetProperty("events").GetArrayLength();
+        Assert.Equal(eventsBefore, eventsAfter);
     }
 
     // =========================================================================

@@ -1115,25 +1115,34 @@ function EventRow({ event }: { event: EventItem }) {
   const ts = formatEventTime(event.occurredAtUtc);
   const timingDetail = timingEventDetail(event);
   const contactDetail = eventContactDetail(event);
+  const isCustomerVisible = event.visibility === 'all';
+
+  // Determine primary content — what the operator most wants to see at a glance.
+  const hasBodyContent =
+    (event.eventType === 'internal_note_added' || event.eventType === 'message_added') &&
+    !!event.content;
+  const primarySummary = timingDetail ?? contactDetail;
+  const statusSummary = event.statusAfter
+    ? `Status changed to ${normalizeLabel(event.statusAfter)}`
+    : null;
 
   return (
     <View style={styles.eventRow}>
-      <View style={styles.eventHeader}>
-        <Text style={styles.eventActor}>{actor}</Text>
-        <Text style={styles.eventMeta}>{ts}</Text>
-      </View>
-      <Text style={styles.eventType}>{label}</Text>
-      {timingDetail && (
-        <Text style={styles.eventMeta}>{timingDetail}</Text>
+      {/* Primary: body text for notes/messages, summary for timing/contact/status, label otherwise */}
+      {hasBodyContent ? (
+        <Text style={styles.eventContent}>{event.content}</Text>
+      ) : primarySummary ? (
+        <Text style={styles.eventType}>{primarySummary}</Text>
+      ) : statusSummary ? (
+        <Text style={styles.eventType}>{statusSummary}</Text>
+      ) : (
+        <Text style={styles.eventType}>{label}</Text>
       )}
-      {contactDetail && (
-        <Text style={styles.eventMeta}>{contactDetail}</Text>
-      )}
-      {event.statusAfter && (
-        <Text style={styles.eventMeta}>→ {normalizeLabel(event.statusAfter)}</Text>
-      )}
-      {event.content && <Text style={styles.eventContent}>{event.content}</Text>}
-      {event.visibility === 'all' && (
+      {/* Footer: event kind · actor · timestamp */}
+      <Text style={styles.eventMeta}>
+        {hasBodyContent || primarySummary || statusSummary ? `${label} · ` : ''}{actor} · {ts}
+      </Text>
+      {isCustomerVisible && (
         <Text style={styles.eventCustomerVisible}>Customer visible</Text>
       )}
     </View>

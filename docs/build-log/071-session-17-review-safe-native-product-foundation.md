@@ -1029,6 +1029,47 @@ no paging in this pass; overflow hint when more exist.
 Files changed (1):
 - `mobile/ophalo-mobile/app/requests/[id].tsx`
 
+### Issue: Mobile activity rows were event-type-first, not content-first; timing clears emitted duplicate events
+
+**Decision (2026-07-05):**
+- Mobile Activity should be content-first: note body and message text as primary, event kind
+  demoted to footer metadata. "Internal note added" label tells the operator nothing — the
+  note body does.
+- `ClearPlannedFor` / `ClearFollowUpOn` should be no-ops when the field is already null.
+  The guard belongs in `ManageRequestTimingService` (service orchestration layer), not the
+  domain method — domain contract `Result<KeepRequestEvent>` stays unchanged, meaning "when
+  called it emits a real event." Guard placed after version validation so stale clients still
+  get a conflict error; inactive-request behavior is preserved (inactive + non-null date still
+  reaches the domain method and returns its existing failure).
+
+**Part A — Backend no-op guard:**
+
+- `ManageRequestTimingService.ClearFollowUpOnAsync`: if `request.FollowUpOnDate is null`,
+  return `BuildDetailAsync` result without calling domain method or `CommitAsync`.
+- `ManageRequestTimingService.ClearPlannedForAsync`: same guard on `request.PlannedForDate`.
+- Integration tests added to `RequestTimingTests`:
+  - `ClearPlannedFor_WhenAlreadyNull_Returns200WithoutNewEvent` — asserts event count unchanged
+  - `ClearFollowUpOn_WhenAlreadyNull_Returns200WithoutNewEvent` — same
+
+**Part B — Content-first EventRow:**
+
+Layout: primary content → footer (`event kind · actor · timestamp`) → Customer visible badge.
+
+| Event | Primary | Footer label |
+|-------|---------|--------------|
+| `internal_note_added` | note body | "Internal note added" |
+| `message_added` (business) | message body | "Customer update sent" |
+| `message_added` (customer) | message body | "Customer message" |
+| `follow_up_on_changed` / `planned_for_changed` | timing summary | "Follow-up" / "Planned date" |
+| `external_contact_logged` | "Outbound Call — Spoke with customer" style | "External contact" |
+| `status_changed` | "Status changed to In Progress" | "Status changed" |
+| All others | type label (no footer prefix) | actor · timestamp only |
+
+Files changed (3):
+- `src/OpHalo.Keep.Application/Requests/ManageRequestTimingService.cs`
+- `tests/OpHalo.IntegrationTests/Api/RequestTimingTests.cs`
+- `mobile/ophalo-mobile/app/requests/[id].tsx`
+
 ### Issue: DateTimePicker `onChange` deprecation warning
 
 `@react-native-community/datetimepicker` v9.1.0 deprecates `onChange` in favour of three

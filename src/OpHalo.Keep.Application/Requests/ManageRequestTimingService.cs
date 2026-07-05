@@ -99,6 +99,11 @@ public sealed class ManageRequestTimingService(
             return Result<KeepRequestDetailResult>.Failure(KeepRequestErrors.RequestChanged);
 
         var nowUtc = clock.UtcNow;
+
+        if (request.FollowUpOnDate is null)
+            return Result<KeepRequestDetailResult>.Success(
+                await BuildDetailAsync(request, userSnapshot.Role, nowUtc, ct));
+
         var domainResult = request.ClearFollowUpOn(currentUser.UserId, actorDisplayName, nowUtc);
         if (domainResult.IsFailure)
             return Result<KeepRequestDetailResult>.Failure(domainResult.Error);
@@ -159,6 +164,11 @@ public sealed class ManageRequestTimingService(
             return Result<KeepRequestDetailResult>.Failure(KeepRequestErrors.RequestChanged);
 
         var nowUtc = clock.UtcNow;
+
+        if (request.PlannedForDate is null)
+            return Result<KeepRequestDetailResult>.Success(
+                await BuildDetailAsync(request, userSnapshot.Role, nowUtc, ct));
+
         var domainResult = request.ClearPlannedFor(currentUser.UserId, actorDisplayName, nowUtc);
         if (domainResult.IsFailure)
             return Result<KeepRequestDetailResult>.Failure(domainResult.Error);
