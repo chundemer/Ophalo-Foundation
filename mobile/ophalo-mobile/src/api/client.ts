@@ -61,12 +61,19 @@ export const api = {
   get<T>(path: string, bearerToken?: string): Promise<T> {
     return request<T>(path, { method: 'GET', bearerToken });
   },
-  post<T>(path: string, body?: unknown, authenticated = false, extraHeaders?: Record<string, string>): Promise<T> {
+  post<T>(
+    path: string,
+    body?: unknown,
+    authenticated = false,
+    extraHeaders?: Record<string, string>,
+    bearerToken?: string | null,
+  ): Promise<T> {
     return request<T>(path, {
       method: 'POST',
       body: body !== undefined ? JSON.stringify(body) : undefined,
       authenticated,
       headers: extraHeaders,
+      bearerToken: bearerToken ?? undefined,
     });
   },
   patch<T>(path: string, body?: unknown, extraHeaders?: Record<string, string>): Promise<T> {
@@ -85,7 +92,15 @@ export const api = {
       headers: extraHeaders,
     });
   },
-  delete<T>(path: string, extraHeaders?: Record<string, string>): Promise<T> {
-    return request<T>(path, { method: 'DELETE', headers: extraHeaders });
+  delete<T>(
+    path: string,
+    extraHeaders?: Record<string, string>,
+    bearerToken?: string | null,
+  ): Promise<T> {
+    return request<T>(path, {
+      method: 'DELETE',
+      headers: extraHeaders,
+      bearerToken: bearerToken ?? undefined,
+    });
   },
 };

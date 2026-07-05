@@ -11,9 +11,10 @@ import { useAssignResponsible } from '@/src/hooks/useAssignResponsible';
 import { useNetworkState } from '@/src/hooks/useNetworkState';
 
 export default function AvailableScreen() {
+  const { user } = useAuth();
   const colorScheme = useColorScheme();
   const cardBg = colorScheme === 'dark' ? '#1C1C1E' : '#FFFFFF';
-  const query = useAvailableRequests();
+  const query = useAvailableRequests(user?.accountRole);
   const requests = query.data?.requests ?? [];
 
   return (

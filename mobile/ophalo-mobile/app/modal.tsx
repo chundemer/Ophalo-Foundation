@@ -13,6 +13,7 @@ import { StatusBar } from 'expo-status-bar';
 import { Redirect, router } from 'expo-router';
 
 import { useAuth } from '@/src/auth/AuthContext';
+import { ApiError } from '@/src/api/client';
 
 import { Text, View } from '@/components/Themed';
 import { useNetworkState } from '@/src/hooks/useNetworkState';
@@ -91,8 +92,11 @@ function CaptureModalContent() {
       });
       router.replace({ pathname: '/requests/[id]', params: { id: result.requestId } });
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Something went wrong. Please try again.';
-      setCreateError(msg);
+      if (err instanceof ApiError && err.status >= 400 && err.status < 500) {
+        setCreateError('Could not save this request. Check the fields and try again.');
+      } else {
+        setCreateError("Couldn't save. Check your connection and try again.");
+      }
     }
   }
 

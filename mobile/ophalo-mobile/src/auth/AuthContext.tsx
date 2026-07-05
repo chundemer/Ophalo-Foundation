@@ -2,7 +2,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import Constants from 'expo-constants';
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { Platform } from 'react-native';
-import { api, setOn401Handler } from '../api/client';
+import { api, ApiError, setOn401Handler } from '../api/client';
 import { clearSessionToken, getAppInstallationId, getSessionToken, setSessionToken } from './secureStore';
 
 async function upsertDevice(): Promise<void> {
@@ -31,6 +31,7 @@ type AuthState = {
   isRoleBlocked: boolean;
   storeToken: (token: string) => Promise<void>;
   logout: () => Promise<void>;
+  clearRoleBlocked: () => void;
 };
 
 const AuthContext = createContext<AuthState | null>(null);
@@ -61,10 +62,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setIsRoleBlocked(true);
         return;
       }
+      setIsRoleBlocked(false);
       setUser(me);
       void upsertDevice(); // refresh device record on app launch; best-effort
-    } catch {
-      await clearSessionToken().catch(() => {});
+    } catch (err) {
+      if (err instanceof ApiError && (err.status === 401 || err.status === 403)) {
+        await clearSessionToken().catch(() => {});
+      }
+      setUser(null);
     } finally {
       setIsLoading(false);
     }
@@ -80,6 +85,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       throw new Error('mobile_access_not_available');
     }
     await setSessionToken(token);
+    setIsRoleBlocked(false);
     setUser(me);
     void upsertDevice(); // register device on sign-in; best-effort; token now in SecureStore
   }
@@ -87,21 +93,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // logout is guaranteed to clear local state — it never throws.
   // API cleanup (device revocation, session revocation) is best-effort.
   async function logout(): Promise<void> {
-    try {
-      const installId = await getAppInstallationId().catch(() => null);
+    const token = await getSessionToken().catch(() => null);
+    const installId = await getAppInstallationId().catch(() => null);
+    await clearSessionToken().catch(() => {});
+    setUser(null);
+    setIsRoleBlocked(false);
+    queryClient.clear();
+
+    void (async () => {
       if (installId) {
-        await api.delete(`/me/devices/${installId}`).catch(() => {});
+        await api.delete(`/me/devices/${installId}`, undefined, token).catch(() => {});
       }
-      await api.post('/auth/logout', undefined, true).catch(() => {});
-      await clearSessionToken().catch(() => {});
-    } finally {
-      setUser(null);
-      queryClient.clear();
-    }
+      await api.post('/auth/logout', undefined, true, undefined, token).catch(() => {});
+    })();
+  }
+
+  function clearRoleBlocked(): void {
+    setIsRoleBlocked(false);
   }
 
   return (
-    <AuthContext.Provider value={{ user, isLoading, isRoleBlocked, storeToken, logout }}>
+    <AuthContext.Provider
+      value={{ user, isLoading, isRoleBlocked, storeToken, logout, clearRoleBlocked }}
+    >
       {children}
     </AuthContext.Provider>
   );

@@ -9,7 +9,14 @@
     "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.ophalo.keep"
+      "bundleIdentifier": "com.ophalo.keep",
+      "infoPlist": {
+        "LSApplicationQueriesSchemes": [
+          "tel",
+          "telprompt",
+          "mailto"
+        ]
+      }
     },
     "android": {
       "package": "com.ophalo.keep",
@@ -36,7 +43,8 @@
           "backgroundColor": "#ffffff"
         }
       ],
-      "expo-secure-store"
+      "expo-secure-store",
+      "@react-native-community/datetimepicker"
     ],
     "experiments": {
       "typedRoutes": true

@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 
 import { api } from '../api/client';
 
-export type MyWorkView = 'assigned_to_me' | 'watching';
+export type MyWorkView = 'assigned_to_me' | 'watching' | 'unassigned';
 
 export type KeepRequestSummary = {
   id: string;
@@ -13,11 +13,14 @@ export type KeepRequestSummary = {
   description: string;
   createdAtUtc: string;
   updatedAtUtc: string;
+  version: string;
   needsShare: boolean;
   attention: {
     attentionLevel: string;
     priorityBand: string;
     attentionReason?: string | null;
+    attentionSinceUtc?: string | null;
+    nextAttentionAtUtc?: string | null;
   };
   preview: {
     previewText?: string | null;
@@ -27,6 +30,7 @@ export type KeepRequestSummary = {
   participation: {
     responsibleDisplayName?: string | null;
     currentUserParticipationType: string;
+    canSelfAssignFromList?: boolean;
   };
   timing: {
     followUpOnLabel?: string | null;
