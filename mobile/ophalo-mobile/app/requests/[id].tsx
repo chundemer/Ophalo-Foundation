@@ -38,6 +38,19 @@ const PUBLIC_BASE_URL = (process.env.EXPO_PUBLIC_PUBLIC_BASE_URL ?? '').replace(
 export default function RequestDetailScreen() {
   const { user } = useAuth();
   const { id } = useLocalSearchParams<{ id: string }>();
+
+  if (!user) return <Redirect href="/signin" />;
+
+  return <RequestDetailContent id={id} userAccountUserId={user.accountUserId} />;
+}
+
+function RequestDetailContent({
+  id,
+  userAccountUserId,
+}: {
+  id: string;
+  userAccountUserId: string;
+}) {
   const colorScheme = useColorScheme();
   const cardBg = colorScheme === 'dark' ? '#1C1C1E' : '#FFFFFF';
   const { data, isLoading, isError, refetch, isRefetching } = useRequestDetail(id);
@@ -71,8 +84,6 @@ export default function RequestDetailScreen() {
   const { mutate: setPlannedFor, isPending: isSettingPlannedFor } = useSetPlannedFor();
   const { mutate: clearPlannedFor, isPending: isClearingPlannedFor } = useClearPlannedFor();
   const { isOnline } = useNetworkState();
-
-  if (!user) return <Redirect href="/signin" />;
 
   if (isLoading) {
     return (
@@ -109,8 +120,8 @@ export default function RequestDetailScreen() {
     PUBLIC_BASE_URL && data.pageToken
       ? `${PUBLIC_BASE_URL}/keep/r/${data.pageToken}`
       : null;
-  const canShare =
-    !!trackerUrl && data.needsShare && data.availableActions.canRecordShareIntent;
+  const canRecordShare = data.needsShare && data.availableActions.canRecordShareIntent;
+  const canShare = !!trackerUrl && canRecordShare;
 
   async function handleContactTap(action: ContactActionItem) {
     const url =
@@ -119,12 +130,20 @@ export default function RequestDetailScreen() {
         : `mailto:${action.target.trim()}`;
     try {
       const supported = await Linking.canOpenURL(url);
-      if (!supported) return;
+      if (!supported) {
+        setContactError(
+          action.type === 'call'
+            ? "Calling isn't available on this device."
+            : "Email isn't available on this device.",
+        );
+        return;
+      }
       await Linking.openURL(url);
       setContactError(null);
       setContactPending(action);
     } catch {
       // URL could not be opened — do not show log prompt
+      setContactError('Could not open this contact action on this device.');
     }
   }
 
@@ -288,9 +307,9 @@ export default function RequestDetailScreen() {
   }
 
   function handleAssignSelf() {
-    if (!data || !user) return;
+    if (!data) return;
     assignResponsible(
-      { requestId: data.requestId, version: data.version, accountUserId: user.accountUserId },
+      { requestId: data.requestId, version: data.version, accountUserId: userAccountUserId },
       {
         onSuccess: () => setAssignError(null),
         onError: (err) => {
@@ -418,7 +437,7 @@ export default function RequestDetailScreen() {
           <Text style={styles.bodyText}>{data.description}</Text>
         </Section>
 
-        {(data.attentionLevel !== 'None' || data.attentionReason) && (
+        {(data.attentionLevel.toLowerCase() !== 'none' || data.attentionReason) && (
           <Section cardBg={cardBg}>
             <Text style={styles.sectionLabel}>Attention</Text>
             <FieldRow label="Level" value={normalizeLabel(data.attentionLevel)} />
@@ -543,7 +562,8 @@ export default function RequestDetailScreen() {
           <Text style={styles.sectionLabel}>Participation</Text>
           <FieldRow label="You" value={normalizeLabel(data.currentUserParticipation.participationType)} />
           {responsible && <FieldRow label="Responsible" value={responsible.displayName} />}
-          {data.availableActions.canAssignResponsible && (
+          {data.availableActions.canAssignResponsible &&
+            data.currentUserParticipation.participationType.toLowerCase() !== 'responsible' && (
             <TouchableOpacity
               style={[
                 styles.actionButton,
@@ -627,16 +647,18 @@ export default function RequestDetailScreen() {
           </Section>
         )}
 
-        {canShare && (
+        {canRecordShare && (
           <Section cardBg={cardBg}>
             <Text style={styles.sectionLabel}>Tracker</Text>
-            <TouchableOpacity
-              style={[styles.actionButton, isRecordingShare && styles.actionButtonDisabled]}
-              onPress={() => void handleNativeShare()}
-              disabled={isRecordingShare}
-            >
-              <Text style={styles.actionButtonText}>Share via…</Text>
-            </TouchableOpacity>
+            {canShare && (
+              <TouchableOpacity
+                style={[styles.actionButton, isRecordingShare && styles.actionButtonDisabled]}
+                onPress={() => void handleNativeShare()}
+                disabled={isRecordingShare}
+              >
+                <Text style={styles.actionButtonText}>Share via…</Text>
+              </TouchableOpacity>
+            )}
             <TouchableOpacity
               style={[styles.actionButtonOutline, isRecordingShare && styles.actionButtonDisabled]}
               onPress={() => setShareConfirmMethod('manual_mark_shared')}

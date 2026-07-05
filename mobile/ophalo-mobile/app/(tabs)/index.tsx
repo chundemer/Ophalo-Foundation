@@ -19,6 +19,7 @@ const segments: Segment[] = [
 
 export default function MyWorkScreen() {
   const [activeView, setActiveView] = useState<MyWorkView>('assigned_to_me');
+  const [isManualRefreshing, setIsManualRefreshing] = useState(false);
   const colorScheme = useColorScheme();
   const segBg = colorScheme === 'dark' ? '#2C2C2E' : '#ECEFF3';
   const segSelectedBg = colorScheme === 'dark' ? '#3A3A3C' : '#FFFFFF';
@@ -27,6 +28,11 @@ export default function MyWorkScreen() {
   const watching = useMyWork('watching');
   const activeQuery = activeView === 'assigned_to_me' ? promises : watching;
   const requests = activeQuery.data?.requests ?? [];
+
+  function handleRefresh() {
+    setIsManualRefreshing(true);
+    void activeQuery.refetch().finally(() => setIsManualRefreshing(false));
+  }
 
   return (
     <View style={styles.screen}>
@@ -73,8 +79,8 @@ export default function MyWorkScreen() {
         contentContainerStyle={requests.length === 0 ? styles.emptyList : styles.list}
         refreshControl={(
           <RefreshControl
-            refreshing={activeQuery.isRefetching}
-            onRefresh={activeQuery.refetch}
+            refreshing={isManualRefreshing}
+            onRefresh={handleRefresh}
           />
         )}
         renderItem={({ item }) => <MyWorkRow request={item} />}
@@ -109,6 +115,9 @@ function MyWorkRow({ request }: { request: KeepRequestSummary }) {
         <Text style={styles.customer} numberOfLines={1}>{request.customerName}</Text>
         <Text style={styles.reference}>{request.referenceCode}</Text>
       </View>
+      {request.participation.responsibleDisplayName && (
+        <Text style={styles.responsible} numberOfLines={1}>{request.participation.responsibleDisplayName}</Text>
+      )}
       <Text style={styles.preview} numberOfLines={2}>{preview}</Text>
       <View style={styles.metaRow}>
         <Text style={styles.statusPill}>{status}</Text>
@@ -266,6 +275,12 @@ const styles = StyleSheet.create({
     fontSize: 12,
     opacity: 0.5,
     fontWeight: '600',
+  },
+  responsible: {
+    fontSize: 12,
+    opacity: 0.55,
+    marginTop: 3,
+    fontWeight: '500',
   },
   preview: {
     marginTop: 8,

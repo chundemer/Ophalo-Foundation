@@ -774,3 +774,93 @@ Deferred to a separate polish slice. `src/constants/brand.ts`, Inter/Source Seri
 ### TypeScript Gate
 
 `npx tsc --noEmit` passes with 0 errors. `git diff --check` clean. 1 file changed.
+
+---
+
+## Post-S17 Review Hardening Notes
+
+A focused review pass after S17j found several native review-safety and auth-edge issues. Corrections
+landed as a narrow mobile hardening pass:
+
+- `mobile/ophalo-mobile/app.json` now declares iOS `LSApplicationQueriesSchemes` for `tel`,
+  `telprompt`, and `mailto`, so standalone iOS/EAS builds can use `Linking.canOpenURL` for contact
+  actions.
+- `mobile/ophalo-mobile/app/requests/[id].tsx` now uses the same guard-wrapper pattern as
+  `modal.tsx`; unauthenticated deep links redirect before request-detail query and mutation hooks
+  mount. Unsupported contact actions now show device-appropriate feedback instead of silently
+  no-oping.
+- `mobile/ophalo-mobile/src/auth/AuthContext.tsx` no longer clears the SecureStore session token for
+  generic bootstrap/network failures; it clears only on authenticated `401`/`403`. Logout now wipes
+  local token/auth/query state before best-effort server revocation calls.
+- `mobile/ophalo-mobile/app/_layout.tsx` adds a role-blocked escape action back to sign-in and hides
+  the native modal header so Quick Capture does not double-render headers.
+- `mobile/ophalo-mobile/app/modal.tsx` maps Quick Capture create failures to user-safe copy instead
+  of rendering raw ProblemDetails JSON.
+- `mobile/ophalo-mobile/src/api/client.ts` now allows best-effort revocation calls to pass the
+  captured bearer token after local logout has already wiped SecureStore.
+- `mobile/ophalo-mobile/src/hooks/useAvailable.ts` is role-aware after local smoke testing showed
+  Owners receive `403` from `/keep/requests/available`. Operators continue to use the dedicated
+  Available endpoint; Owner/Admin users use the existing authorized `GET /keep/requests?view=unassigned`
+  contract mapped into the mobile Available row shape. Permission errors no longer retry noisily.
+
+### TypeScript Gate
+
+`npx tsc --noEmit` passes with 0 errors after the post-review hardening pass. `git diff --check`
+clean.
+
+---
+
+## Post-Session Bug Fixes (2026-07-04)
+
+Manual testing on device after S17 completion revealed five UI bugs, fixed in a single follow-up
+pass without backend changes.
+
+### Bugs Found and Fixed
+
+**1. My Work list — responsible person not displayed**
+`MyWorkRow` in `app/(tabs)/index.tsx` rendered customer name, reference code, preview, and meta
+tags but never showed `participation.responsibleDisplayName`. The `KeepRequestSummary` type already
+carried the field; it was simply not rendered. Fix: added a name line below the customer name header
+when the field is present.
+
+**2. "Assign to me" button visible when current user is already responsible**
+The participation section in `app/requests/[id].tsx` gated the button solely on
+`availableActions.canAssignResponsible`. After a successful assignment the server returns the user's
+participation type as `'responsible'`, but the cached detail had not yet refreshed by the time the
+user observed the screen. More importantly, the API could return `canAssignResponsible: true` for a
+re-assign scenario even when already responsible, leaving the button permanently visible.
+Fix: added a secondary guard — hide the button when
+`currentUserParticipation.participationType.toLowerCase() === 'responsible'`.
+
+**3. Attention section always visible (case-sensitivity mismatch)**
+The section visibility condition compared `data.attentionLevel !== 'None'` against the raw API
+value, which the server returns as `'none'` (lowercase). Because `'none' !== 'None'` is always
+true, the Attention section always rendered even when attention level was effectively absent.
+Fix: changed the comparison to `data.attentionLevel.toLowerCase() !== 'none'`.
+
+**4. RefreshControl spinner stuck after assignment mutation**
+`RefreshControl refreshing` was bound to `activeQuery.isRefetching`. When `useAssignResponsible`
+succeeded, it called `queryClient.invalidateQueries({ queryKey: ['keepRequests'] })`, which
+triggered an automatic background refetch on the My Work query. `isRefetching` became true,
+showing the pull-to-refresh spinner with no way to dismiss it until the background fetch resolved.
+On slow connections this appeared stuck indefinitely.
+Fix: replaced the direct binding with a `isManualRefreshing` local state that is only set to true
+on an explicit user pull gesture and cleared via `.finally()` when the refetch promise settles.
+Background invalidation refetches no longer surface the spinner.
+
+**5. Share / Tracker section hidden when `PUBLIC_BASE_URL` not configured**
+`canShare` required both a valid `trackerUrl` (derived from the `EXPO_PUBLIC_PUBLIC_BASE_URL` env
+var) and `availableActions.canRecordShareIntent`. When the env var was unset the entire Tracker
+section was hidden, including "Mark as shared" — an action that does not require a link.
+Fix: split into `canRecordShare` (needs share + action permitted) and `canShare` (also requires
+`trackerUrl`). The Tracker section now renders whenever `canRecordShare` is true; "Share via…" is
+conditionally rendered only when `canShare` is also true.
+
+### Files Changed
+
+- `mobile/ophalo-mobile/app/(tabs)/index.tsx` — responsible display name, manual refresh state
+- `mobile/ophalo-mobile/app/requests/[id].tsx` — assign guard, attention case fix, share split
+
+### TypeScript Gate
+
+`npx tsc --noEmit` passes with 0 errors after the bug-fix pass.
