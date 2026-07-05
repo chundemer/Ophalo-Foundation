@@ -262,6 +262,82 @@ public class KeepRequestDetailServiceTests
     }
 
     // -----------------------------------------------------------------------
+    // Timing event mapper — PlannedForDate and FollowUpOnDate on event items
+    // -----------------------------------------------------------------------
+
+    [Fact]
+    public async Task PlannedForChanged_set_event_carries_date_in_mapped_item()
+    {
+        var date = new DateOnly(2026, 7, 31);
+        var ev = KeepRequestEvent.CreatePlannedForChanged(RequestId, AccountId, UserId, "Actor", date, Now);
+        var p = HappyPathPersistence();
+        p.Events = [ev];
+        var sut = BuildSut(p);
+
+        var result = await sut.ExecuteAsync(RequestId);
+
+        Assert.True(result.IsSuccess);
+        var item = Assert.Single(result.Value.Events);
+        Assert.Equal("planned_for_changed", item.EventType);
+        Assert.Equal(date, item.PlannedForDate);
+        Assert.Null(item.FollowUpOnDate);
+    }
+
+    [Fact]
+    public async Task PlannedForChanged_clear_event_has_null_date_in_mapped_item()
+    {
+        var ev = KeepRequestEvent.CreatePlannedForChanged(RequestId, AccountId, UserId, "Actor", null, Now);
+        var p = HappyPathPersistence();
+        p.Events = [ev];
+        var sut = BuildSut(p);
+
+        var result = await sut.ExecuteAsync(RequestId);
+
+        Assert.True(result.IsSuccess);
+        var item = Assert.Single(result.Value.Events);
+        Assert.Equal("planned_for_changed", item.EventType);
+        Assert.Null(item.PlannedForDate);
+    }
+
+    [Fact]
+    public async Task FollowUpOnChanged_set_event_carries_date_and_reason_in_mapped_item()
+    {
+        var date = new DateOnly(2026, 7, 15);
+        var ev = KeepRequestEvent.CreateFollowUpOnChanged(
+            RequestId, AccountId, UserId, "Actor", date, FollowUpReason.CustomerDelay, null, Now);
+        var p = HappyPathPersistence();
+        p.Events = [ev];
+        var sut = BuildSut(p);
+
+        var result = await sut.ExecuteAsync(RequestId);
+
+        Assert.True(result.IsSuccess);
+        var item = Assert.Single(result.Value.Events);
+        Assert.Equal("follow_up_on_changed", item.EventType);
+        Assert.Equal(date, item.FollowUpOnDate);
+        Assert.Equal("customer_delay", item.FollowUpOnReason);
+        Assert.Null(item.PlannedForDate);
+    }
+
+    [Fact]
+    public async Task FollowUpOnChanged_clear_event_has_null_date_and_reason_in_mapped_item()
+    {
+        var ev = KeepRequestEvent.CreateFollowUpOnChanged(
+            RequestId, AccountId, UserId, "Actor", null, null, null, Now);
+        var p = HappyPathPersistence();
+        p.Events = [ev];
+        var sut = BuildSut(p);
+
+        var result = await sut.ExecuteAsync(RequestId);
+
+        Assert.True(result.IsSuccess);
+        var item = Assert.Single(result.Value.Events);
+        Assert.Equal("follow_up_on_changed", item.EventType);
+        Assert.Null(item.FollowUpOnDate);
+        Assert.Null(item.FollowUpOnReason);
+    }
+
+    // -----------------------------------------------------------------------
     // Fakes
     // -----------------------------------------------------------------------
 
@@ -271,6 +347,7 @@ public class KeepRequestDetailServiceTests
         public AccountAccessSnapshot? AccountSnapshot { get; set; }
         public KeepRequest? Request { get; set; }
         public IReadOnlyList<Guid> NavigationIds { get; set; } = [];
+        public IReadOnlyList<KeepRequestEvent> Events { get; set; } = [];
 
         public Task<AccountUserSnapshot?> GetAccountUserSnapshotAsync(Guid userId, CancellationToken ct) =>
             Task.FromResult(UserSnapshot);
@@ -283,7 +360,7 @@ public class KeepRequestDetailServiceTests
             Task.FromResult(Request);
 
         public Task<IReadOnlyList<KeepRequestEvent>> GetAllEventsAsync(Guid requestId, CancellationToken ct) =>
-            Task.FromResult<IReadOnlyList<KeepRequestEvent>>([]);
+            Task.FromResult(Events);
 
         public Task<IReadOnlyList<KeepParticipantProjection>> GetParticipantsAsync(Guid requestId, CancellationToken ct) =>
             Task.FromResult<IReadOnlyList<KeepParticipantProjection>>([]);

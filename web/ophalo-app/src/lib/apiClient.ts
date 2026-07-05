@@ -277,6 +277,9 @@ export interface KeepRequestEventItem {
   participationTargetDisplayName: string | null;
   participationPreviousResponsibleAccountUserId: string | null;
   participationInternalNote: string | null;
+  plannedForDate: string | null;
+  followUpOnDate: string | null;
+  followUpOnReason: string | null;
 }
 
 export interface KeepRequestNavigation {

@@ -976,10 +976,35 @@ function FieldRow({ label, value }: { label: string; value: string }) {
   );
 }
 
+const FOLLOW_UP_REASON_LABELS: Record<string, string> = {
+  weather: 'Weather',
+  parts: 'Waiting on parts',
+  customer_delay: 'Waiting on customer',
+  business_operator_availability: 'Need to schedule',
+  third_party: 'Third party',
+  other: 'Other',
+};
+
+function timingEventDetail(event: EventItem): string | null {
+  if (event.eventType === 'planned_for_changed') {
+    return event.plannedForDate
+      ? `Planned date set to ${formatDateOnly(event.plannedForDate)}`
+      : 'Planned date removed';
+  }
+  if (event.eventType === 'follow_up_on_changed') {
+    if (!event.followUpOnDate) return 'Follow-up removed';
+    const base = `Follow-up set for ${formatDateOnly(event.followUpOnDate)}`;
+    const reasonLabel = event.followUpOnReason ? FOLLOW_UP_REASON_LABELS[event.followUpOnReason] : null;
+    return reasonLabel ? `${base} · ${reasonLabel}` : base;
+  }
+  return null;
+}
+
 function EventRow({ event }: { event: EventItem }) {
   const actor = event.actorDisplayName ?? normalizeLabel(event.actorType);
   const label = normalizeLabel(event.eventType);
   const ts = formatEventTime(event.occurredAtUtc);
+  const timingDetail = timingEventDetail(event);
 
   return (
     <View style={styles.eventRow}>
@@ -988,6 +1013,9 @@ function EventRow({ event }: { event: EventItem }) {
         <Text style={styles.eventMeta}>{ts}</Text>
       </View>
       <Text style={styles.eventType}>{label}</Text>
+      {timingDetail && (
+        <Text style={styles.eventMeta}>{timingDetail}</Text>
+      )}
       {event.statusAfter && (
         <Text style={styles.eventMeta}>→ {normalizeLabel(event.statusAfter)}</Text>
       )}

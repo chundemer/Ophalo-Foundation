@@ -110,6 +110,9 @@ function appendEvent(
     participationTargetDisplayName: null,
     participationPreviousResponsibleAccountUserId: null,
     participationInternalNote: null,
+    plannedForDate: event.plannedForDate ?? null,
+    followUpOnDate: event.followUpOnDate ?? null,
+    followUpOnReason: event.followUpOnReason ?? null,
   };
   return {
     ...d,
@@ -305,6 +308,9 @@ export function installMockApi(): void {
           participationTargetDisplayName: null,
           participationPreviousResponsibleAccountUserId: null,
           participationInternalNote: null,
+          plannedForDate: null,
+          followUpOnDate: null,
+          followUpOnReason: null,
         },
       ],
       availableActions: { ...OWNER_ACTIONS },

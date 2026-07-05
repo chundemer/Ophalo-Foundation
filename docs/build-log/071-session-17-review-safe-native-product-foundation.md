@@ -958,6 +958,53 @@ in `onValueChange`, so the nil-guard is no longer needed.
 
 File changed: `mobile/ophalo-mobile/app/requests/[id].tsx`
 
+### Issue: Timing activity events showed no date detail
+
+**Decision (2026-07-05):** Planned date is an internal ops-scheduling aid, not a customer
+commitment. It must not appear on the customer page in V1 — customers only see timing when the
+business explicitly sends a customer-visible update. The promise boundary is kept clean.
+
+**Root cause:** `KeepRequestEventItem` did not include the date fields stored on
+`KeepRequestEvent` (`PlannedForDate`, `FollowUpOnDate`, `FollowUpOnReason`). The mapper dropped
+them, so both frontends rendered a static label ("Planned Date Updated") with no date detail.
+
+**Fix:**
+
+- Added `DateOnly? PlannedForDate`, `DateOnly? FollowUpOnDate`, and `string? FollowUpOnReason`
+  to `KeepRequestEventItem` (populated only on the matching event type; null on all others).
+- Updated `KeepRequestDetailMapper.MapEvent()` to pass the three fields conditionally via
+  `isPlannedFor` / `isFollowUpOn` guards — matching the existing `isContact` / `isParticipation`
+  pattern.
+- ophalo-app `RequestDetail.tsx`: added `formatDateOnly` (local-date parse to avoid UTC offset)
+  and `FOLLOW_UP_REASON_LABELS` map; updated `timelineEventSummary` to render:
+  - "Planned date set to Jul 31, 2026" / "Planned date removed"
+  - "Follow-up set for Jul 15, 2026 · Waiting on customer" / "Follow-up removed"
+  - Tightened static label map entries to "Planned Date" / "Follow-Up" (detail is in the summary).
+- Mobile `[id].tsx`: same logic extracted into `timingEventDetail()` helper; `EventRow` renders
+  the result below the event-type label; reused existing `formatDateOnly` helper.
+- Added `plannedForDate`, `followUpOnDate`, `followUpOnReason` to `KeepRequestEventItem` in
+  `apiClient.ts` (ophalo-app) and `EventItem` in `useRequestDetail.ts` (mobile); mock factories
+  updated to satisfy TypeScript.
+
+Tests added (unit — `KeepRequestDetailServiceTests`):
+- `PlannedForChanged_set_event_carries_date_in_mapped_item`
+- `PlannedForChanged_clear_event_has_null_date_in_mapped_item`
+- `FollowUpOnChanged_set_event_carries_date_and_reason_in_mapped_item`
+- `FollowUpOnChanged_clear_event_has_null_date_and_reason_in_mapped_item`
+
+Full unit suite: 944/944.
+
+Files changed (9):
+- `src/OpHalo.Keep.Application/Requests/KeepRequestDetailResult.cs`
+- `src/OpHalo.Keep.Application/Requests/KeepRequestDetailMapper.cs`
+- `tests/OpHalo.UnitTests/Keep/KeepRequestDetailServiceTests.cs`
+- `web/ophalo-app/src/lib/apiClient.ts`
+- `web/ophalo-app/src/mocks/fixtures.ts`
+- `web/ophalo-app/src/mocks/mockApiClient.ts`
+- `web/ophalo-app/src/pages/RequestDetail.tsx`
+- `mobile/ophalo-mobile/src/hooks/useRequestDetail.ts`
+- `mobile/ophalo-mobile/app/requests/[id].tsx`
+
 ### Issue: Date picker allowed selecting past dates
 
 The `DateSheetPicker` had no lower bound, so operators and owners could set a Follow Up On or

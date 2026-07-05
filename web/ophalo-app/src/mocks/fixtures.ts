@@ -222,6 +222,9 @@ function ev(
     participationTargetDisplayName: null,
     participationPreviousResponsibleAccountUserId: null,
     participationInternalNote: null,
+    plannedForDate: null,
+    followUpOnDate: null,
+    followUpOnReason: null,
     ...overrides,
   };
 }

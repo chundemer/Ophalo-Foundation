@@ -36,6 +36,9 @@ export type EventItem = {
   externalContactDirection: string | null;
   externalContactChannel: string | null;
   externalContactOutcome: string | null;
+  plannedForDate: string | null;
+  followUpOnDate: string | null;
+  followUpOnReason: string | null;
 };
 
 export type AvailableActionsDto = {

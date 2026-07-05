@@ -151,7 +151,10 @@ public sealed record KeepRequestEventItem(
     Guid? ParticipationTargetAccountUserId,
     string? ParticipationTargetDisplayName,
     Guid? ParticipationPreviousResponsibleAccountUserId,
-    string? ParticipationInternalNote);
+    string? ParticipationInternalNote,
+    DateOnly? PlannedForDate,
+    DateOnly? FollowUpOnDate,
+    string? FollowUpOnReason);
 
 /// <summary>
 /// Next/previous navigation context returned when the caller supplies a supported navView.

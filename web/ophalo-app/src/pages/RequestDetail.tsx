@@ -37,8 +37,8 @@ const EVENT_TYPE_LABELS: Record<string, string> = {
   external_contact_logged: "External Contact",
   participation_changed: "Participation Changed",
   feedback_reviewed: "Feedback Reviewed",
-  follow_up_on_changed: "Follow-Up Date Updated",
-  planned_for_changed: "Planned Date Updated",
+  follow_up_on_changed: "Follow-Up",
+  planned_for_changed: "Planned Date",
   request_classified: "Request Classified",
   share_intent_recorded: "Tracker Link Shared",
 };
@@ -74,6 +74,24 @@ function formatDate(isoUtc: string): string {
   });
 }
 
+function formatDateOnly(isoDate: string): string {
+  const [year, month, day] = isoDate.split("-").map(Number);
+  return new Date(year, month - 1, day).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
+const FOLLOW_UP_REASON_LABELS: Record<string, string> = {
+  weather: "Weather",
+  parts: "Waiting on parts",
+  customer_delay: "Waiting on customer",
+  business_operator_availability: "Need to schedule",
+  third_party: "Third party",
+  other: "Other",
+};
+
 function statusLabel(status: string): string {
   return status.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
@@ -106,6 +124,17 @@ function timelineEventSummary(event: KeepRequestEventItem): string | null {
   }
   if (event.eventType === "attention_acknowledged") return "Attention acknowledged";
   if (event.eventType === "share_intent_recorded") return "Tracker link shared with customer";
+  if (event.eventType === "planned_for_changed") {
+    return event.plannedForDate
+      ? `Planned date set to ${formatDateOnly(event.plannedForDate)}`
+      : "Planned date removed";
+  }
+  if (event.eventType === "follow_up_on_changed") {
+    if (!event.followUpOnDate) return "Follow-up removed";
+    const base = `Follow-up set for ${formatDateOnly(event.followUpOnDate)}`;
+    const reasonLabel = event.followUpOnReason ? FOLLOW_UP_REASON_LABELS[event.followUpOnReason] : null;
+    return reasonLabel ? `${base} · ${reasonLabel}` : base;
+  }
   return null;
 }
 
