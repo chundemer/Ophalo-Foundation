@@ -856,11 +856,34 @@ Fix: split into `canRecordShare` (needs share + action permitted) and `canShare`
 `trackerUrl`). The Tracker section now renders whenever `canRecordShare` is true; "Share via…" is
 conditionally rendered only when `canShare` is also true.
 
+**6. YYYY-MM-DD text input replaced with native date picker sheet (ADR-406)**
+The S17 timing controls used a free-text `TextInput` with `YYYY-MM-DD` format as a low-dependency
+implementation choice. Manual field testing confirmed this is too fiddly for operators on a phone.
+Decision: replace both Follow Up On and Planned For inputs with a shared `DateSheetPicker` bottom
+sheet component, parametrized by label and context subtitle so each field communicates its intent
+without changing the backend contract.
+
+Sheet interaction:
+- Quick-pick chips: Today, Tomorrow, This Friday (skipped when same as Today or Tomorrow), Next week.
+  Chips immediately save the date and dismiss the sheet — one tap, done.
+- Native spinner date picker (scroll wheel) for any other date.
+- Save / Cancel / Clear date action row.
+
+Display after set: friendly locale string — `Fri, Jul 10` — not raw `YYYY-MM-DD`.
+Set date row shows `Change` to re-open the sheet pre-loaded on the existing date.
+Trigger when no date set: outline button labeled with the field name (`Follow up on` / `Planned for`).
+
+Requires `@react-native-community/datetimepicker` (`npx expo install @react-native-community/datetimepicker`).
+Helper functions added at module level: `parseLocalDate`, `toDateStr`, `formatFriendlyDate`.
+`isValidDateInput` and both `TextInput` state variables removed.
+
 ### Files Changed
 
 - `mobile/ophalo-mobile/app/(tabs)/index.tsx` — responsible display name, manual refresh state
-- `mobile/ophalo-mobile/app/requests/[id].tsx` — assign guard, attention case fix, share split
+- `mobile/ophalo-mobile/app/requests/[id].tsx` — assign guard, attention case fix, share split,
+  date picker sheet replacing text inputs
 
 ### TypeScript Gate
 
-`npx tsc --noEmit` passes with 0 errors after the bug-fix pass.
+`npx tsc --noEmit` passes with one expected error (`Cannot find module '@react-native-community/datetimepicker'`)
+that resolves after `npx expo install @react-native-community/datetimepicker`. All other types clean.

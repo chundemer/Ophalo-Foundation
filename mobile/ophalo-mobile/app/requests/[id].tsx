@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   Linking,
   Modal,
+  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -11,6 +12,7 @@ import {
   TextInput,
   TouchableOpacity,
 } from 'react-native';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { Redirect, Stack, useLocalSearchParams } from 'expo-router';
 
 import { Text, View } from '@/components/Themed';
@@ -66,9 +68,7 @@ function RequestDetailContent({
   const [assignError, setAssignError] = useState<string | null>(null);
   const [watchError, setWatchError] = useState<string | null>(null);
   const [muteError, setMuteError] = useState<string | null>(null);
-  const [followUpInput, setFollowUpInput] = useState('');
   const [followUpError, setFollowUpError] = useState<string | null>(null);
-  const [plannedForInput, setPlannedForInput] = useState('');
   const [plannedForError, setPlannedForError] = useState<string | null>(null);
 
   const { mutate: logContact, isPending: isLoggingContact } = useLogExternalContact();
@@ -328,20 +328,12 @@ function RequestDetailContent({
     );
   }
 
-  function handleSetFollowUp() {
+  function handleSetFollowUp(dateStr: string) {
     if (!data) return;
-    const trimmed = followUpInput.trim();
-    if (!isValidDateInput(trimmed)) {
-      setFollowUpError('Use YYYY-MM-DD, for example 2026-07-10.');
-      return;
-    }
     setFollowUpOn(
-      { requestId: data.requestId, version: data.version, date: trimmed },
+      { requestId: data.requestId, version: data.version, date: dateStr },
       {
-        onSuccess: () => {
-          setFollowUpInput('');
-          setFollowUpError(null);
-        },
+        onSuccess: () => setFollowUpError(null),
         onError: (err) => {
           setFollowUpError(
             err instanceof ApiError && err.status === 409
@@ -370,20 +362,12 @@ function RequestDetailContent({
     );
   }
 
-  function handleSetPlannedFor() {
+  function handleSetPlannedFor(dateStr: string) {
     if (!data) return;
-    const trimmed = plannedForInput.trim();
-    if (!isValidDateInput(trimmed)) {
-      setPlannedForError('Use YYYY-MM-DD, for example 2026-07-10.');
-      return;
-    }
     setPlannedFor(
-      { requestId: data.requestId, version: data.version, date: trimmed },
+      { requestId: data.requestId, version: data.version, date: dateStr },
       {
-        onSuccess: () => {
-          setPlannedForInput('');
-          setPlannedForError(null);
-        },
+        onSuccess: () => setPlannedForError(null),
         onError: (err) => {
           setPlannedForError(
             err instanceof ApiError && err.status === 409
@@ -454,106 +438,37 @@ function RequestDetailContent({
           data.availableActions.canSetPlannedFor) && (
           <Section cardBg={cardBg}>
             <Text style={styles.sectionLabel}>Timing</Text>
-            {data.followUpOnDate && (
-              <FieldRow
-                label="Follow up"
-                value={
-                  data.followUpOnReason
-                    ? `${formatDateOnly(data.followUpOnDate)} · ${normalizeLabel(data.followUpOnReason)}`
-                    : formatDateOnly(data.followUpOnDate)
-                }
+            {(data.followUpOnDate || data.availableActions.canSetFollowUpOn) && (
+              <DateSheetPicker
+                label="Follow up on"
+                subtitle="Remind me to check back or re-engage with this customer."
+                existingDate={data.followUpOnDate}
+                onSave={handleSetFollowUp}
+                onClear={handleClearFollowUp}
+                isPending={isSettingFollowUp || isClearingFollowUp}
+                isOnline={isOnline}
+                error={followUpError}
+                cardBg={cardBg}
+                readOnly={!data.availableActions.canSetFollowUpOn}
               />
             )}
-            {data.availableActions.canSetFollowUpOn && (
-              <>
-                {data.followUpOnDate && (
-                  <TouchableOpacity
-                    style={[
-                      styles.actionButtonOutline,
-                      (isClearingFollowUp || !isOnline) && styles.actionButtonDisabled,
-                    ]}
-                    onPress={handleClearFollowUp}
-                    disabled={isClearingFollowUp || !isOnline}
-                  >
-                    <Text style={styles.actionButtonOutlineText}>Clear follow-up</Text>
-                  </TouchableOpacity>
-                )}
-                <TextInput
-                  style={[
-                    styles.timingInput,
-                    { color: colorScheme === 'dark' ? '#FFFFFF' : '#000000' },
-                  ]}
-                  placeholder="YYYY-MM-DD"
-                  placeholderTextColor="rgba(128,128,128,0.6)"
-                  value={followUpInput}
-                  onChangeText={(t) => {
-                    setFollowUpInput(t);
-                    setFollowUpError(null);
-                  }}
-                  editable={!isSettingFollowUp}
-                  autoCapitalize="none"
-                  keyboardType="numbers-and-punctuation"
-                />
-                {followUpError && <Text style={styles.actionError}>{followUpError}</Text>}
-                <TouchableOpacity
-                  style={[
-                    styles.actionButton,
-                    (followUpInput.trim() === '' || isSettingFollowUp || !isOnline) &&
-                      styles.actionButtonDisabled,
-                  ]}
-                  onPress={handleSetFollowUp}
-                  disabled={followUpInput.trim() === '' || isSettingFollowUp || !isOnline}
-                >
-                  <Text style={styles.actionButtonText}>Set follow-up</Text>
-                </TouchableOpacity>
-              </>
+            {(data.followUpOnDate || data.availableActions.canSetFollowUpOn) &&
+              (data.plannedForDate || data.availableActions.canSetPlannedFor) && (
+              <View style={styles.timingSeparator} />
             )}
-            {data.plannedForDate && (
-              <FieldRow label="Planned for" value={formatDateOnly(data.plannedForDate)} />
-            )}
-            {data.availableActions.canSetPlannedFor && (
-              <>
-                {data.plannedForDate && (
-                  <TouchableOpacity
-                    style={[
-                      styles.actionButtonOutline,
-                      (isClearingPlannedFor || !isOnline) && styles.actionButtonDisabled,
-                    ]}
-                    onPress={handleClearPlannedFor}
-                    disabled={isClearingPlannedFor || !isOnline}
-                  >
-                    <Text style={styles.actionButtonOutlineText}>Clear planned-for</Text>
-                  </TouchableOpacity>
-                )}
-                <TextInput
-                  style={[
-                    styles.timingInput,
-                    { color: colorScheme === 'dark' ? '#FFFFFF' : '#000000' },
-                  ]}
-                  placeholder="YYYY-MM-DD"
-                  placeholderTextColor="rgba(128,128,128,0.6)"
-                  value={plannedForInput}
-                  onChangeText={(t) => {
-                    setPlannedForInput(t);
-                    setPlannedForError(null);
-                  }}
-                  editable={!isSettingPlannedFor}
-                  autoCapitalize="none"
-                  keyboardType="numbers-and-punctuation"
-                />
-                {plannedForError && <Text style={styles.actionError}>{plannedForError}</Text>}
-                <TouchableOpacity
-                  style={[
-                    styles.actionButton,
-                    (plannedForInput.trim() === '' || isSettingPlannedFor || !isOnline) &&
-                      styles.actionButtonDisabled,
-                  ]}
-                  onPress={handleSetPlannedFor}
-                  disabled={plannedForInput.trim() === '' || isSettingPlannedFor || !isOnline}
-                >
-                  <Text style={styles.actionButtonText}>Set planned-for</Text>
-                </TouchableOpacity>
-              </>
+            {(data.plannedForDate || data.availableActions.canSetPlannedFor) && (
+              <DateSheetPicker
+                label="Planned for"
+                subtitle="The work is expected or scheduled for this date."
+                existingDate={data.plannedForDate}
+                onSave={handleSetPlannedFor}
+                onClear={handleClearPlannedFor}
+                isPending={isSettingPlannedFor || isClearingPlannedFor}
+                isOnline={isOnline}
+                error={plannedForError}
+                cardBg={cardBg}
+                readOnly={!data.availableActions.canSetPlannedFor}
+              />
             )}
           </Section>
         )}
@@ -849,6 +764,152 @@ function Section({ children, cardBg }: { children: React.ReactNode; cardBg: stri
   return <View style={[styles.section, { backgroundColor: cardBg }]}>{children}</View>;
 }
 
+function DateSheetPicker({
+  label,
+  subtitle,
+  existingDate,
+  onSave,
+  onClear,
+  isPending,
+  isOnline,
+  error,
+  cardBg,
+  readOnly = false,
+}: {
+  label: string;
+  subtitle?: string;
+  existingDate: string | null;
+  onSave: (dateStr: string) => void;
+  onClear: () => void;
+  isPending: boolean;
+  isOnline: boolean;
+  error: string | null;
+  cardBg: string;
+  readOnly?: boolean;
+}) {
+  const [sheetVisible, setSheetVisible] = useState(false);
+  const [pickerDate, setPickerDate] = useState(new Date());
+  const disabled = isPending || !isOnline;
+
+  function openSheet() {
+    setPickerDate(existingDate ? parseLocalDate(existingDate) : new Date());
+    setSheetVisible(true);
+  }
+
+  function handleSave() {
+    setSheetVisible(false);
+    onSave(toDateStr(pickerDate));
+  }
+
+  function handleClear() {
+    setSheetVisible(false);
+    onClear();
+  }
+
+  function handleChip(daysFromNow: number) {
+    const d = new Date();
+    d.setDate(d.getDate() + daysFromNow);
+    setSheetVisible(false);
+    onSave(toDateStr(d));
+  }
+
+  const todayDow = new Date().getDay();
+  const daysToFriday = (5 - todayDow + 7) % 7;
+  const chips: [string, number][] = [
+    ['Today', 0],
+    ['Tomorrow', 1],
+    ...(daysToFriday > 1 ? [['This Friday', daysToFriday] as [string, number]] : []),
+    ['Next week', 7],
+  ];
+
+  if (readOnly) {
+    if (!existingDate) return null;
+    return (
+      <View style={styles.dateDisplayRow}>
+        <Text style={styles.dateDisplayLabel}>{label}</Text>
+        <Text style={styles.dateDisplayValue}>{formatFriendlyDate(existingDate)}</Text>
+      </View>
+    );
+  }
+
+  return (
+    <>
+      {existingDate ? (
+        <TouchableOpacity style={styles.dateSetRow} onPress={openSheet} disabled={disabled}>
+          <View style={styles.dateSetInfo}>
+            <Text style={styles.dateSetLabel}>{label}</Text>
+            <Text style={styles.dateSetValue}>{formatFriendlyDate(existingDate)}</Text>
+          </View>
+          <Text style={[styles.dateSetChange, disabled && { opacity: 0.4 }]}>Change</Text>
+        </TouchableOpacity>
+      ) : (
+        <TouchableOpacity
+          style={[styles.dateTrigger, disabled && styles.actionButtonDisabled]}
+          onPress={openSheet}
+          disabled={disabled}
+        >
+          <Text style={styles.dateTriggerText}>{label}</Text>
+        </TouchableOpacity>
+      )}
+      {error && <Text style={styles.actionError}>{error}</Text>}
+
+      <Modal
+        transparent
+        visible={sheetVisible}
+        animationType="slide"
+        onRequestClose={() => setSheetVisible(false)}
+      >
+        <Pressable style={styles.pickerOverlay} onPress={() => setSheetVisible(false)}>
+          <Pressable style={[styles.pickerSheet, { backgroundColor: cardBg }]}>
+            <View style={styles.pickerHeader}>
+              <TouchableOpacity onPress={() => setSheetVisible(false)}>
+                <Text style={styles.pickerCancel}>Cancel</Text>
+              </TouchableOpacity>
+              <View style={styles.pickerHeaderCenter}>
+                <Text style={styles.pickerTitle}>{label}</Text>
+                {subtitle && <Text style={styles.pickerSubtitle}>{subtitle}</Text>}
+              </View>
+              <TouchableOpacity onPress={handleSave} disabled={disabled}>
+                <Text style={[styles.pickerSave, disabled && { opacity: 0.4 }]}>Save</Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.pickerChipRow}>
+              {chips.map(([chipLabel, days]) => (
+                <TouchableOpacity
+                  key={chipLabel}
+                  style={[styles.pickerChip, disabled && styles.pickerChipDisabled]}
+                  onPress={() => handleChip(days)}
+                  disabled={disabled}
+                >
+                  <Text style={styles.pickerChipText}>{chipLabel}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <DateTimePicker
+              mode="date"
+              display="spinner"
+              value={pickerDate}
+              onChange={(_event: unknown, date?: Date) => { if (date) setPickerDate(date); }}
+            />
+
+            {existingDate && (
+              <TouchableOpacity
+                style={[styles.pickerClearButton, disabled && styles.actionButtonDisabled]}
+                onPress={handleClear}
+                disabled={disabled}
+              >
+                <Text style={styles.pickerClearText}>Clear date</Text>
+              </TouchableOpacity>
+            )}
+          </Pressable>
+        </Pressable>
+      </Modal>
+    </>
+  );
+}
+
 function FieldRow({ label, value }: { label: string; value: string }) {
   return (
     <View style={styles.fieldRow}>
@@ -915,11 +976,24 @@ function formatEventTime(iso: string): string {
     d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 }
 
-function isValidDateInput(value: string): boolean {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
-  const [y, m, d] = value.split('-').map(Number);
-  const dt = new Date(y, m - 1, d);
-  return dt.getFullYear() === y && dt.getMonth() === m - 1 && dt.getDate() === d;
+function parseLocalDate(dateStr: string): Date {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  return new Date(y, m - 1, d);
+}
+
+function toDateStr(d: Date): string {
+  const y = d.getFullYear();
+  const mo = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${mo}-${day}`;
+}
+
+function formatFriendlyDate(dateStr: string): string {
+  return parseLocalDate(dateStr).toLocaleDateString([], {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+  });
 }
 
 const styles = StyleSheet.create({
@@ -985,14 +1059,96 @@ const styles = StyleSheet.create({
   actionButtonDisabled: { opacity: 0.45 },
   actionLabel: { fontSize: 14, opacity: 0.8, paddingVertical: 2 },
   actionError: { fontSize: 13, color: '#C0392B', marginTop: 2 },
-  timingInput: {
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(128,128,128,0.35)',
-    borderRadius: 6,
-    padding: 8,
-    fontSize: 14,
-    marginTop: 4,
+  timingSeparator: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: 'rgba(128,128,128,0.25)',
+    marginVertical: 6,
   },
+  dateDisplayRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'transparent',
+    gap: 8,
+  },
+  dateDisplayLabel: { fontSize: 13, opacity: 0.5, minWidth: 90 },
+  dateDisplayValue: { flex: 1, fontSize: 13, fontWeight: '600' },
+  dateTrigger: {
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#174A8B',
+    paddingVertical: 10,
+    alignItems: 'center',
+  },
+  dateTriggerText: { color: '#174A8B', fontSize: 14, fontWeight: '600' },
+  dateSetRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: 'transparent',
+    paddingVertical: 2,
+  },
+  dateSetInfo: { gap: 1 },
+  dateSetLabel: {
+    fontSize: 11,
+    opacity: 0.5,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+  },
+  dateSetValue: { fontSize: 15, fontWeight: '600' },
+  dateSetChange: { fontSize: 14, color: '#174A8B', fontWeight: '500' },
+  pickerOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    justifyContent: 'flex-end',
+  },
+  pickerSheet: {
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    paddingBottom: 36,
+  },
+  pickerHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 4,
+    backgroundColor: 'transparent',
+  },
+  pickerHeaderCenter: { alignItems: 'center', flex: 1 },
+  pickerTitle: { fontSize: 16, fontWeight: '700', textAlign: 'center' },
+  pickerSubtitle: { fontSize: 12, opacity: 0.55, textAlign: 'center', marginTop: 2 },
+  pickerCancel: { fontSize: 16, color: '#174A8B', minWidth: 60 },
+  pickerSave: { fontSize: 16, fontWeight: '700', color: '#174A8B', minWidth: 60, textAlign: 'right' },
+  pickerChipRow: {
+    flexDirection: 'row',
+    paddingHorizontal: 16,
+    gap: 8,
+    flexWrap: 'wrap',
+    marginTop: 4,
+    marginBottom: 4,
+    backgroundColor: 'transparent',
+  },
+  pickerChip: {
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#174A8B',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  pickerChipDisabled: { opacity: 0.4 },
+  pickerChipText: { fontSize: 13, color: '#174A8B', fontWeight: '600' },
+  pickerClearButton: {
+    marginHorizontal: 20,
+    marginTop: 4,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#C0392B',
+    paddingVertical: 10,
+    alignItems: 'center',
+  },
+  pickerClearText: { color: '#C0392B', fontSize: 14, fontWeight: '600' },
   emptyText: { fontSize: 14, opacity: 0.5 },
   eventRow: { gap: 3, paddingTop: 10, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: 'rgba(128,128,128,0.2)' },
   eventHeader: { flexDirection: 'row', justifyContent: 'space-between', backgroundColor: 'transparent' },
