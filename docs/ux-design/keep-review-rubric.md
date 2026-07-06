@@ -84,9 +84,9 @@ Each either passes or it does not.
   element. Exception: the §5 quick-action pill pattern
   (`inline-flex rounded-full border px-3`) which has its own spec.
 
-- [ ] **(S) Primary communication action uses `variant="teal"`.** The Send or
-  primary communication button is `<KeepButton variant="teal"`. It does not use
-  `variant="primary"` (navy) or any hard-coded color class.
+- [ ] **(S) Customer tracker Send uses `variant="primary"`.** The Send and Submit
+  feedback buttons on the customer tracker are `<KeepButton variant="primary"` (OpHalo
+  brand navy). They do not use `variant="teal"` or any hard-coded color class.
 
 - [ ] **(S) No nested primary card surfaces.** No `rounded-xl` or `rounded-2xl` card
   element wraps another `rounded-xl` or `rounded-2xl` element as a primary operational
@@ -109,9 +109,9 @@ Run the app or inspect a screenshot at 390px viewport unless stated.
   button shows a muted, bordered appearance — not teal, not navy. The button does not
   look like a ready-to-click primary action.
 
-- [ ] **(V) Enabled Send is teal-filled.** After typing any text in the composer, the
-  Send button becomes `bg-[var(--keep-accent)]` filled with white text. Not navy,
-  not gray.
+- [ ] **(V) Enabled Send is navy-filled.** After typing any text in the composer, the
+  Send button becomes `bg-[var(--ophalo-navy)]` filled with white text (OpHalo brand
+  navy). Not teal, not gray.
 
 - [ ] **(V) No horizontal scroll at 320px.** At exactly 320px viewport, no horizontal
   scrollbar appears. All cards, badges, and buttons are within the viewport.
@@ -230,14 +230,14 @@ compete with the main action.
 ---
 
 **2. Action hierarchy** — button roles match the model-v1 component contract (navy
-parent/page-level primary, teal communication primary, navy outline secondary, quiet
-bookkeeping, red destructive); disabled states are visibly disabled, not weak enabled
-buttons.
+page-level and customer-send primary, teal operator-communication primary, navy outline
+secondary, quiet bookkeeping, red destructive); disabled states are visibly disabled,
+not weak enabled buttons.
 
-*Specific check (S):* Every `<KeepButton variant="teal"` is a communication action
-(Send update, Send message, save communication preferences). Every
-`<KeepButton variant="primary"` is a page-level action (New request). No
-communication action uses `variant="primary"`.
+*Specific check (S):* On **customer-facing surfaces** (customer tracker, public intake),
+`<KeepButton variant="primary"` is used for Send and Submit — OpHalo brand navy. On
+**operator surfaces** (request detail, request list), `<KeepButton variant="teal"` is
+used for Send update — Keep brand teal. No surface mixes the two send styles.
 
 *Fail:* a primary communication button looks pale/weak; save/settings compete with
 the main action; page-local button styles introduce a new hierarchy.
@@ -339,7 +339,7 @@ happened → (6) preferences / close the loop.
   `bg-[var(--keep-accent-bg)]` icon dot — not a teal-tinted card wrapper.
 - (S) "Real business update" uses a left-rail card:
   `border-l-4 border-l-[var(--keep-accent)] bg-[var(--keep-accent-bg)]`.
-- (S) Send button: `<KeepButton variant="teal"`. Disabled state is visibly muted.
+- (S) Send button: `<KeepButton variant="primary"` (navy). Disabled state is visibly muted.
 - (V) Email preferences section has no card wrapper and is visually quieter than the
   composer above it.
 

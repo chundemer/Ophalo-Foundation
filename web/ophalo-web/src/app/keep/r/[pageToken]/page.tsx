@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { CustomerTrackerView, type CustomerPageData } from "./CustomerTrackerView";
 
 export const metadata: Metadata = {
   title: "Request Tracker",
@@ -6,27 +7,10 @@ export const metadata: Metadata = {
   other: { referrer: "no-referrer" },
 };
 
-interface CustomerEventItem {
-  eventType: string;
-  content: string | null;
-  occurredAtUtc: string;
-  actorLabel: string;
-}
-
-interface CustomerPageData {
-  businessName: string;
-  referenceCode: string;
-  status: string;
-  description: string | null;
-  currentStatusText: string | null;
-  isTerminal: boolean | null;
-  events: CustomerEventItem[] | null;
-}
-
 type PageState =
   | { kind: "unavailable" }
   | { kind: "expired"; businessName: string; referenceCode: string }
-  | { kind: "active"; page: CustomerPageData };
+  | { kind: "active"; page: CustomerPageData; pageToken: string };
 
 async function fetchPage(pageToken: string): Promise<PageState> {
   const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL;
@@ -61,67 +45,7 @@ async function fetchPage(pageToken: string): Promise<PageState> {
   const data: unknown = await res.json().catch(() => null);
   if (data == null || typeof data !== "object") return { kind: "unavailable" };
 
-  return { kind: "active", page: data as CustomerPageData };
-}
-
-function statusLabel(status: string): string {
-  switch (status) {
-    case "received":
-      return "Received";
-    case "scheduled":
-      return "Scheduled";
-    case "in_progress":
-      return "In Progress";
-    case "pending_customer":
-      return "Pending Your Response";
-    case "resolved":
-      return "Resolved";
-    case "closed":
-      return "Closed";
-    case "cancelled":
-      return "Cancelled";
-    default:
-      return status;
-  }
-}
-
-function actorDisplay(actorLabel: string): string {
-  switch (actorLabel) {
-    case "customer":
-      return "You";
-    case "business":
-      return "Business";
-    default:
-      return "";
-  }
-}
-
-function eventFallbackLabel(eventType: string): string {
-  switch (eventType) {
-    case "request_created":
-      return "Request created";
-    case "status_changed":
-      return "Status updated";
-    case "message_added":
-      return "Message";
-    case "request_closed":
-      return "Request closed";
-    case "request_cancelled":
-      return "Request cancelled";
-    case "attention_acknowledged":
-      return "Message acknowledged";
-    default:
-      return "";
-  }
-}
-
-function formatDate(iso: string): string {
-  const d = new Date(iso);
-  return d.toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
+  return { kind: "active", page: data as CustomerPageData, pageToken };
 }
 
 export default async function CustomerTrackerPage({
@@ -134,84 +58,48 @@ export default async function CustomerTrackerPage({
 
   if (state.kind === "unavailable") {
     return (
-      <div className="auth-page">
-        <div className="container">
-          <h1>This link is not available.</h1>
-          <p>
+      <main className="bg-background px-4 py-6 sm:py-10">
+        <div className="mx-auto w-full max-w-2xl">
+          <h1 className="text-2xl font-bold leading-tight tracking-tight text-foreground">
+            This link is not available.
+          </h1>
+          <p className="mt-3 text-sm leading-6 text-muted-foreground">
             This tracker link is not available. If you were sent this link,
             please contact the business directly for assistance.
           </p>
         </div>
-      </div>
+      </main>
     );
   }
 
   if (state.kind === "expired") {
     return (
-      <div className="auth-page">
-        <div className="container">
-          <h1>This tracker link has expired.</h1>
-          <p>
+      <main className="bg-background px-4 py-6 sm:py-10">
+        <div className="mx-auto w-full max-w-2xl">
+          <h1 className="text-2xl font-bold leading-tight tracking-tight text-foreground">
+            This tracker link has expired.
+          </h1>
+          <p className="mt-3 text-sm leading-6 text-muted-foreground">
             The tracker for your request with{" "}
-            <strong>{state.businessName}</strong> is no longer active.
+            <strong className="text-foreground">{state.businessName}</strong> is no longer active.
           </p>
           {state.referenceCode && (
-            <p>
+            <p className="mt-2 text-sm text-muted-foreground">
               Reference:{" "}
-              <strong className="auth-reference-code">
+              <span className="font-mono text-[13px] tracking-widest text-foreground">
                 {state.referenceCode}
-              </strong>
+              </span>
             </p>
           )}
         </div>
-      </div>
+      </main>
     );
   }
 
-  const { page } = state;
-  const events = page.events ?? [];
-
   return (
-    <div className="auth-page">
-      <div className="container">
-        <h1>{page.businessName}</h1>
-        <p>
-          Reference:{" "}
-          <strong className="auth-reference-code">{page.referenceCode}</strong>
-        </p>
-        <p>
-          <strong>Status:</strong> {statusLabel(page.status)}
-          {page.currentStatusText && ` — ${page.currentStatusText}`}
-        </p>
-        {page.description && (
-          <p>
-            <strong>Your request:</strong> {page.description}
-          </p>
-        )}
-        {events.length > 0 && (
-          <section>
-            <h2>Activity</h2>
-            <ul className="tracker-events">
-              {events.map((ev, i) => {
-                const actor = actorDisplay(ev.actorLabel);
-                const content =
-                  ev.content ?? eventFallbackLabel(ev.eventType);
-                return (
-                  <li key={i} className="tracker-event">
-                    <p className="tracker-event-meta">
-                      {formatDate(ev.occurredAtUtc)}
-                      {actor && ` · ${actor}`}
-                    </p>
-                    {content && (
-                      <p className="tracker-event-content">{content}</p>
-                    )}
-                  </li>
-                );
-              })}
-            </ul>
-          </section>
-        )}
-      </div>
-    </div>
+    <CustomerTrackerView
+      initialPage={state.page}
+      pageToken={state.pageToken}
+    />
   );
 }

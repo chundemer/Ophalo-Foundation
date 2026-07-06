@@ -323,27 +323,27 @@ section label (Rule 4).
 
 ## 4. Composer — Level 2
 
-Message field + primary send. Send is a Keep communication action — **teal-filled
-when enabled**.
+Message field + primary send. Send is an OpHalo brand primary action — **navy-filled
+when enabled** (`variant="primary"`).
 
 ```
 field     KeepTextarea  (or raw textarea where a ref/no-label is required —
           must match: bg-card border-[var(--ophalo-border)] rounded-lg
           focus:border/ring-[var(--keep-accent)] text-base resize-none min-h-[108px])
 hint      meta   (shown while disabled: "Add a message to send it to {business}.")
-send      KeepButton variant="teal" className="w-full"
+send      KeepButton variant="primary" className="w-full"
 ```
 
-**States:** enabled = teal filled · disabled (empty/pending) = bordered muted
-(`border-[var(--ophalo-border)] bg-muted text-muted-foreground`) — this is the
-correct resting look, not a bug · pending = label "Sending…" · success/error per
-Part 2. Reconcile the hand-rolled send button into `KeepButton`.
+**States:** enabled = navy filled (`bg-[var(--ophalo-navy)] text-white`) · disabled
+(empty/pending) = bordered muted (`border-[var(--ophalo-border)] bg-muted
+text-muted-foreground`) — this is the correct resting look, not a bug · pending =
+label "Sending…" · success/error per Part 2.
 
 > Note: the gray Send seen with an empty composer is the **correct disabled
-> state**, not the original "pale primary" defect. Enabled Send is already teal.
+> state**. Enabled Send is navy (OpHalo brand), not teal.
 
 **Volume:** Level 2.
-**Never:** navy/gray Send when enabled · an enabled Send that looks disabled.
+**Never:** teal Send on this surface · an enabled Send that looks disabled.
 
 ## 5. Secondary action button — quick actions
 
