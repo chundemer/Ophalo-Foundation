@@ -260,7 +260,10 @@ but never a flat strip. Largest type on page; the surface that most clearly lift
 the canvas.
 
 **Anatomy:** top accent bar · business eyebrow · status headline · subline ·
-privacy trust line · copy-link.
+privacy trust line · copy-link · metadata footer (status chip · reference, below a
+faint `border-t` divider). The subline is lifecycle reassurance derived only from
+the status code — never business-written text (that belongs to the continuity card
+and timeline) and never promissory follow-up copy.
 
 ```
 wrapper   overflow-hidden rounded-2xl border border-[var(--ophalo-border)]
@@ -448,8 +451,7 @@ focus, no clipped text, first useful content not pushed far down.
 ```
 main  bg-background px-4 py-6 sm:py-10
 └ mx-auto w-full max-w-2xl space-y-4 sm:space-y-5
-   ├ Status hero            §1   Level 1
-   ├ (metadata row: status chip §9 · submitted · reference)
+   ├ Status hero            §1   Level 1   (metadata footer: status chip §9 · reference)
    ├ Continuity card        §2   Level 2
    ├ Composer               §4   Level 2   (+ Secondary actions §5)
    ├ Standard card          §3   Level 2/3 ("What you sent")

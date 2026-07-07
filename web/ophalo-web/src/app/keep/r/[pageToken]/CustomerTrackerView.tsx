@@ -44,7 +44,7 @@ const ACTION_LABELS: Record<string, string> = {
   question: "Ask a question",
   update_request: "Request an update",
   information_added: "Add information",
-  call_requested: "Request a call",
+  call_requested: "Contact me by phone",
   timing_change_requested: "Timing change",
   cancellation_requested: "Request cancellation",
 };
@@ -70,6 +70,21 @@ function statusHeadline(status: string): string {
     case "closed": return "Closed";
     case "cancelled": return "Cancelled";
     default: return "Request Status";
+  }
+}
+
+// Lifecycle reassurance only — derived from status, never from business-written
+// text, and never promising follow-up the business may handle off-platform.
+function statusSubline(status: string): string {
+  switch (status) {
+    case "received": return "Your request has been received. Updates from the business will appear below.";
+    case "scheduled": return "Your request is on the schedule. Check below for the latest details.";
+    case "in_progress": return "The business is working on this request. Check below for the latest update.";
+    case "pending_customer": return "The business needs a reply from you to keep this moving.";
+    case "resolved": return "This request looks complete. You can review the history below.";
+    case "closed": return "This request is closed. The history remains available below.";
+    case "cancelled": return "This request was cancelled. The history remains available below.";
+    default: return "Updates from the business will appear below.";
   }
 }
 
@@ -370,29 +385,26 @@ export function CustomerTrackerView({
             <h1 className="mt-1 font-serif text-[28px] font-bold leading-tight tracking-tight text-foreground sm:text-[32px]">
               {statusHeadline(page.status)}
             </h1>
-            {page.currentStatusText && (
-              <p className="mt-1.5 text-sm leading-6 text-muted-foreground">
-                {page.currentStatusText}
-              </p>
-            )}
+            <p className="mt-1.5 text-sm leading-6 text-muted-foreground">
+              {statusSubline(page.status)}
+            </p>
             <div className="mt-3 inline-flex items-center gap-1.5 text-xs font-medium text-[var(--keep-accent)]">
               <Lock className="h-3 w-3" aria-hidden />
               Private tracking link
             </div>
+            {/* Metadata footer — status chip + reference */}
+            <div className="mt-4 flex flex-wrap items-center gap-3 border-t border-[var(--ophalo-border)] pt-4">
+              <KeepBadge variant={statusBadgeVariant(page.status)}>
+                {statusChipLabel(page.status)}
+              </KeepBadge>
+              <p className="text-xs text-muted-foreground">
+                Ref:{" "}
+                <span className="font-mono text-[11px] tracking-widest text-muted-foreground">
+                  {page.referenceCode}
+                </span>
+              </p>
+            </div>
           </div>
-        </div>
-
-        {/* Metadata row — status chip + reference */}
-        <div className="flex flex-wrap items-center gap-3 px-1">
-          <KeepBadge variant={statusBadgeVariant(page.status)}>
-            {statusChipLabel(page.status)}
-          </KeepBadge>
-          <p className="text-xs text-muted-foreground">
-            Ref:{" "}
-            <span className="font-mono text-[11px] tracking-widest text-muted-foreground">
-              {page.referenceCode}
-            </span>
-          </p>
         </div>
 
         {/* §2 — Continuity card */}
@@ -419,7 +431,7 @@ export function CustomerTrackerView({
                   Your request is in good hands.
                 </p>
                 <p className="mt-1.5 text-sm leading-6 text-muted-foreground">
-                  {page.businessName} will follow up with you here and may also contact you directly.
+                  Updates from {page.businessName} will appear here. They may also contact you directly.
                 </p>
               </div>
             </div>
@@ -435,7 +447,7 @@ export function CustomerTrackerView({
                   Delivered to {page.businessName}.
                 </p>
                 <p className="mt-1 text-base leading-6 text-muted-foreground">
-                  They&rsquo;ll follow up with you here.
+                  Your message has been added to the request history below.
                 </p>
                 <button
                   className="mt-3 text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
@@ -625,7 +637,7 @@ export function CustomerTrackerView({
                   key={i}
                   className={`relative flex gap-4 rounded-lg px-3 py-3 ${
                     isNewest
-                      ? "border border-[var(--keep-accent)] bg-[var(--keep-accent-bg)]"
+                      ? "border border-transparent border-l-[var(--keep-accent)] bg-[var(--keep-accent-bg)]"
                       : isCustomerEvent
                       ? "border border-transparent border-l-[var(--keep-accent)]"
                       : "border border-transparent"
