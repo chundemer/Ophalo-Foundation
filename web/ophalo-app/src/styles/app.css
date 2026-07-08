@@ -47,3 +47,41 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Keep workbench type roles
+   Semantic classes for consistent operational typography — use these instead of
+   one-off inline size/weight combinations throughout the workbench UI. */
+@layer components {
+  .keep-page-title {
+    @apply font-serif text-[28px] font-semibold leading-tight;
+    color: var(--ophalo-ink);
+  }
+
+  .keep-page-subtitle {
+    @apply text-base leading-6;
+    color: var(--ophalo-muted);
+  }
+
+  .keep-row-title {
+    @apply text-base font-semibold leading-6;
+    color: var(--ophalo-ink);
+  }
+
+  .keep-row-action {
+    @apply text-[15px] font-semibold leading-snug;
+    color: var(--ophalo-navy);
+  }
+
+  .keep-row-meta {
+    @apply text-sm leading-5;
+    color: var(--ophalo-muted);
+  }
+
+  .keep-tab-label {
+    @apply text-sm font-semibold;
+  }
+
+  .keep-control-text {
+    @apply text-sm;
+  }
+}

@@ -101,10 +101,10 @@ function AppShell() {
               key={item.id}
               type="button"
               onClick={() => setRoute({ page: item.id })}
-              className={`w-full flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-offset-2 ${
+              className={`w-full flex items-center gap-2.5 rounded-md px-3 py-2.5 text-sm text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-offset-2 ${
                 activeNavId === item.id
-                  ? "bg-[var(--keep-accent-bg)] text-[var(--ophalo-navy)]"
-                  : "text-[var(--ophalo-muted)] hover:bg-[var(--ophalo-canvas)] hover:text-[var(--ophalo-ink)]"
+                  ? "font-semibold bg-[var(--keep-accent-bg)] text-[var(--ophalo-navy)]"
+                  : "font-medium text-[var(--ophalo-muted)] hover:bg-[var(--ophalo-canvas)] hover:text-[var(--ophalo-ink)]"
               }`}
             >
               {item.icon}

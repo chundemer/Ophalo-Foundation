@@ -130,7 +130,7 @@ export function RequestRow({ row, onSelect }: RequestRowProps) {
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2 min-w-0">
           <span className="font-mono text-[11px] text-[var(--ophalo-muted)] shrink-0">{row.referenceCode}</span>
-          <span className="text-sm font-semibold text-[var(--ophalo-ink)] truncate">{row.customerName}</span>
+          <span className="keep-row-title truncate">{row.customerName}</span>
         </div>
         <ChevronRight className="h-4 w-4 text-[var(--ophalo-muted)] shrink-0" />
       </div>
@@ -145,20 +145,20 @@ export function RequestRow({ row, onSelect }: RequestRowProps) {
 
       {/* Row 3: action prompt */}
       {prompt && (
-        <p className="text-xs font-medium text-[var(--ophalo-navy)]">
+        <p className="keep-row-action">
           Next: {prompt}
         </p>
       )}
 
       {/* Row 4: preview text */}
       {row.preview.previewText && (
-        <p className="text-sm text-[var(--ophalo-muted)] line-clamp-2 text-left leading-5">
+        <p className="keep-row-meta line-clamp-2 text-left">
           {row.preview.previewText}
         </p>
       )}
 
       {/* Row 5: owner · last touch · unshared tracker */}
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[var(--ophalo-muted)]">
+      <div className="keep-row-meta flex flex-wrap items-center gap-x-3 gap-y-1">
         {row.participation.responsibleDisplayName && (
           <span className="flex items-center gap-1">
             <UserRound className="h-3 w-3" />
@@ -199,7 +199,7 @@ export function AvailableRequestRow({ row, onSelect }: AvailableRequestRowProps)
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2 min-w-0">
           <span className="font-mono text-[11px] text-[var(--ophalo-muted)] shrink-0">{row.referenceCode}</span>
-          <span className="text-sm font-semibold text-[var(--ophalo-ink)] truncate">{row.customerName}</span>
+          <span className="keep-row-title truncate">{row.customerName}</span>
         </div>
         <ChevronRight className="h-4 w-4 text-[var(--ophalo-muted)] shrink-0" />
       </div>
@@ -215,7 +215,7 @@ export function AvailableRequestRow({ row, onSelect }: AvailableRequestRowProps)
       </div>
 
       {row.descriptionPreview && (
-        <p className="text-sm text-[var(--ophalo-muted)] line-clamp-2 text-left leading-5">
+        <p className="keep-row-meta line-clamp-2 text-left">
           {row.descriptionPreview}
         </p>
       )}

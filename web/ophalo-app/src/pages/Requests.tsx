@@ -250,10 +250,10 @@ export function Requests({ role, viewCounts, onViewCountsUpdate, onSelectRequest
 
         {/* H1 anchor + supporting copy + summary pills */}
         <div className="px-4 pt-5 pb-4 sm:px-6 sm:pt-6">
-          <h1 className="font-serif text-[28px] font-bold leading-tight tracking-tight text-[var(--ophalo-ink)]">
+          <h1 className="keep-page-title tracking-tight">
             Requests
           </h1>
-          <p className="mt-1 text-sm text-[var(--ophalo-muted)]">
+          <p className="mt-1 keep-page-subtitle">
             Active requests that may need ownership, follow-up, or closeout.
           </p>
           {summaryPills.length > 0 && (
@@ -293,10 +293,10 @@ export function Requests({ role, viewCounts, onViewCountsUpdate, onSelectRequest
                   aria-selected={isActive}
                   type="button"
                   onClick={() => selectTab(tab)}
-                  className={`flex items-center gap-1.5 px-3 py-3 text-sm font-medium border-b-2 whitespace-nowrap transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-inset ${
+                  className={`flex items-center gap-1.5 px-3 py-4 text-sm border-b-2 whitespace-nowrap transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-inset ${
                     isActive
-                      ? "border-[var(--ophalo-navy)] text-[var(--ophalo-navy)]"
-                      : "border-transparent text-[var(--ophalo-muted)] hover:text-[var(--ophalo-ink)] hover:border-[var(--ophalo-border)]"
+                      ? "font-semibold border-[var(--ophalo-navy)] text-[var(--ophalo-navy)]"
+                      : "font-medium border-transparent text-[var(--ophalo-muted)] hover:text-[var(--ophalo-ink)] hover:border-[var(--ophalo-border)]"
                   }`}
                 >
                   {tab.label}
