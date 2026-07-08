@@ -1,7 +1,8 @@
-import { AlertTriangle, Clock, MessageSquare, Link, ArrowRight } from "lucide-react";
+import { AlertTriangle, Clock, MessageSquare, Link, ChevronRight, UserRound } from "lucide-react";
+import { KeepBadge, type KeepBadgeVariant } from "./keep/KeepBadge";
 import type { KeepRequestSummary, KeepRequestAvailableItem, KeepQuickAction } from "../lib/apiClient";
 
-// Attention reason → badge tone mapping (exhaustive; unknown reasons fall back to neutral)
+// Attention reason → severity mapping (exhaustive; unknown reasons fall back to neutral)
 const DANGER_REASONS = new Set([
   "complaint",
   "cancellation_requested",
@@ -19,7 +20,9 @@ const CUSTOMER_WAITING_REASONS = new Set([
   "change_or_cancel_request",
 ]);
 
-function attentionBadgeTone(reason: string | null): "danger" | "urgent" | "waiting" | "neutral" {
+type AttentionTone = "danger" | "urgent" | "waiting" | "neutral";
+
+function attentionTone(reason: string | null): AttentionTone {
   if (!reason) return "neutral";
   if (DANGER_REASONS.has(reason)) return "danger";
   if (URGENT_REASONS.has(reason)) return "urgent";
@@ -40,26 +43,59 @@ const ATTENTION_REASON_LABELS: Record<string, string> = {
   change_or_cancel_request: "Change/cancel",
 };
 
+function toneToVariant(tone: AttentionTone): KeepBadgeVariant {
+  switch (tone) {
+    case "danger": return "danger";
+    case "urgent":
+    case "waiting": return "attention";
+    default: return "default";
+  }
+}
+
 function AttentionBadge({ reason }: { reason: string | null }) {
   if (!reason) return null;
-  const tone = attentionBadgeTone(reason);
+  const tone = attentionTone(reason);
   const label = ATTENTION_REASON_LABELS[reason] ?? reason;
-
-  const cls = {
-    danger: "bg-red-100 text-red-800 border border-red-200",
-    urgent: "bg-orange-100 text-orange-800 border border-orange-200",
-    waiting: "bg-yellow-100 text-yellow-800 border border-yellow-200",
-    neutral: "bg-slate-100 text-slate-600 border border-slate-200",
-  }[tone];
+  const variant = toneToVariant(tone);
 
   return (
-    <span className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs font-medium ${cls}`}>
+    <KeepBadge variant={variant} className="gap-1">
       {tone === "danger" && <AlertTriangle className="h-3 w-3" />}
       {tone === "urgent" && <Clock className="h-3 w-3" />}
       {tone === "waiting" && <MessageSquare className="h-3 w-3" />}
       {label}
-    </span>
+    </KeepBadge>
   );
+}
+
+function statusBadgeVariant(status: string): KeepBadgeVariant {
+  switch (status) {
+    case "in_progress": return "teal";
+    case "received":
+    case "scheduled": return "info";
+    case "resolved": return "success";
+    default: return "default";
+  }
+}
+
+function StatusBadge({ status }: { status: string }) {
+  const label = status
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+  return <KeepBadge variant={statusBadgeVariant(status)}>{label}</KeepBadge>;
+}
+
+function relativeTime(iso: string | null): string | null {
+  if (!iso) return null;
+  const diffMs = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(diffMs / 60_000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  if (days < 7) return `${days}d ago`;
+  return `${Math.floor(days / 7)}w ago`;
 }
 
 function actionPrompt(quickActions: KeepQuickAction[]): string | null {
@@ -68,69 +104,77 @@ function actionPrompt(quickActions: KeepQuickAction[]): string | null {
   return (clearing ?? quickActions[0]).label;
 }
 
-function StatusPill({ status }: { status: string }) {
-  const label = status
-    .replace(/_/g, " ")
-    .replace(/\b\w/g, (c) => c.toUpperCase());
-  return (
-    <span className="text-xs text-slate-500 bg-slate-100 rounded px-1.5 py-0.5">
-      {label}
-    </span>
-  );
-}
-
 interface RequestRowProps {
   row: KeepRequestSummary;
   onSelect: (requestId: string) => void;
 }
 
 export function RequestRow({ row, onSelect }: RequestRowProps) {
+  const lastTouch = relativeTime(row.lastBusinessActivityAtUtc ?? row.updatedAtUtc);
+  const prompt = row.attention.attentionReason ? actionPrompt(row.actions.quickActions) : null;
+  const tone = row.attention.attentionReason ? attentionTone(row.attention.attentionReason) : null;
+
+  const accentBorder = tone === "danger"
+    ? "border-l-4 border-l-[var(--ophalo-danger)]"
+    : tone !== null
+      ? "border-l-4 border-l-[var(--ophalo-attention)]"
+      : "";
+
   return (
     <button
       type="button"
       onClick={() => onSelect(row.id)}
-      className="w-full text-left flex flex-col gap-1.5 rounded-lg border border-slate-200 bg-white px-4 py-3 hover:border-slate-300 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-1 transition-colors"
+      className={`w-full text-left flex flex-col gap-2 rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-4 py-3 hover:border-[var(--ophalo-navy)] hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-offset-2 transition-all min-h-[52px] ${accentBorder}`}
     >
-      <div className="flex items-start justify-between gap-2">
+      {/* Row 1: customer name + reference */}
+      <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2 min-w-0">
-          <span className="font-mono text-xs text-slate-400 shrink-0">{row.referenceCode}</span>
-          <span className="text-sm font-medium text-slate-900 truncate">{row.customerName}</span>
+          <span className="font-mono text-[11px] text-[var(--ophalo-muted)] shrink-0">{row.referenceCode}</span>
+          <span className="text-sm font-semibold text-[var(--ophalo-ink)] truncate">{row.customerName}</span>
         </div>
-        <div className="flex items-center gap-1.5 shrink-0">
-          {row.attention.attentionReason && (
-            <AttentionBadge reason={row.attention.attentionReason} />
-          )}
-          <StatusPill status={row.status} />
-        </div>
+        <ChevronRight className="h-4 w-4 text-[var(--ophalo-muted)] shrink-0" />
       </div>
 
-      {row.attention.attentionReason && (() => {
-        const prompt = actionPrompt(row.actions.quickActions);
-        return prompt ? (
-          <p className="flex items-center gap-1 text-sm font-medium text-slate-700">
-            <ArrowRight className="h-3.5 w-3.5 shrink-0 text-slate-400" />
-            {prompt}
-          </p>
-        ) : null;
-      })()}
+      {/* Row 2: attention badge + status chip — wrap on narrow */}
+      <div className="flex flex-wrap items-center gap-1.5">
+        {row.attention.attentionReason && (
+          <AttentionBadge reason={row.attention.attentionReason} />
+        )}
+        <StatusBadge status={row.status} />
+      </div>
 
+      {/* Row 3: action prompt */}
+      {prompt && (
+        <p className="text-xs font-medium text-[var(--ophalo-navy)]">
+          Next: {prompt}
+        </p>
+      )}
+
+      {/* Row 4: preview text */}
       {row.preview.previewText && (
-        <p className="text-sm text-slate-600 line-clamp-2 text-left">
+        <p className="text-sm text-[var(--ophalo-muted)] line-clamp-2 text-left leading-5">
           {row.preview.previewText}
         </p>
       )}
 
-      <div className="flex items-center gap-3 text-xs text-slate-400">
+      {/* Row 5: owner · last touch · unshared tracker */}
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[var(--ophalo-muted)]">
         {row.participation.responsibleDisplayName && (
-          <span>{row.participation.responsibleDisplayName}</span>
+          <span className="flex items-center gap-1">
+            <UserRound className="h-3 w-3" />
+            {row.participation.responsibleDisplayName}
+          </span>
         )}
         {row.participation.isUnassigned && (
-          <span className="text-amber-600 font-medium">Unassigned</span>
+          <span className="font-medium text-[var(--ophalo-attention)]">Unassigned</span>
+        )}
+        {lastTouch && (
+          <span>Last touch {lastTouch}</span>
         )}
         {row.needsShare && (
-          <span className="flex items-center gap-1 text-amber-700 font-medium">
+          <span className="flex items-center gap-1 font-medium text-[var(--ophalo-attention)]">
             <Link className="h-3 w-3" />
-            Unshared tracker link
+            Unshared tracker
           </span>
         )}
       </div>
@@ -144,36 +188,36 @@ interface AvailableRequestRowProps {
 }
 
 export function AvailableRequestRow({ row, onSelect }: AvailableRequestRowProps) {
-  const tone = attentionBadgeTone(row.attentionLevel === "none" ? null : row.priorityBand);
+  const tone = attentionTone(row.attentionLevel === "none" ? null : row.priorityBand);
 
   return (
     <button
       type="button"
       onClick={() => onSelect(row.requestId)}
-      className="w-full text-left flex flex-col gap-1.5 rounded-lg border border-slate-200 bg-white px-4 py-3 hover:border-slate-300 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-1 transition-colors"
+      className="w-full text-left flex flex-col gap-2 rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-4 py-3 hover:border-[var(--ophalo-navy)] hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-offset-2 transition-all min-h-[52px]"
     >
-      <div className="flex items-start justify-between gap-2">
+      <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2 min-w-0">
-          <span className="font-mono text-xs text-slate-400 shrink-0">{row.referenceCode}</span>
-          <span className="text-sm font-medium text-slate-900 truncate">{row.customerName}</span>
+          <span className="font-mono text-[11px] text-[var(--ophalo-muted)] shrink-0">{row.referenceCode}</span>
+          <span className="text-sm font-semibold text-[var(--ophalo-ink)] truncate">{row.customerName}</span>
         </div>
-        <div className="flex items-center gap-1.5 shrink-0">
-          {row.attentionLevel !== "none" && (
-            <span className={`inline-flex items-center rounded px-1.5 py-0.5 text-xs font-medium ${
-              tone === "danger" ? "bg-red-100 text-red-800 border border-red-200"
-              : tone === "urgent" ? "bg-orange-100 text-orange-800 border border-orange-200"
-              : "bg-slate-100 text-slate-600 border border-slate-200"
-            }`}>
-              <Clock className="h-3 w-3 mr-1" />
-              Needs attention
-            </span>
-          )}
-          <StatusPill status={row.status} />
-        </div>
+        <ChevronRight className="h-4 w-4 text-[var(--ophalo-muted)] shrink-0" />
+      </div>
+
+      <div className="flex flex-wrap items-center gap-1.5">
+        {row.attentionLevel !== "none" && (
+          <KeepBadge variant={toneToVariant(tone)} className="gap-1">
+            <Clock className="h-3 w-3" />
+            Needs attention
+          </KeepBadge>
+        )}
+        <StatusBadge status={row.status} />
       </div>
 
       {row.descriptionPreview && (
-        <p className="text-sm text-slate-600 line-clamp-2 text-left">{row.descriptionPreview}</p>
+        <p className="text-sm text-[var(--ophalo-muted)] line-clamp-2 text-left leading-5">
+          {row.descriptionPreview}
+        </p>
       )}
     </button>
   );

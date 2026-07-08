@@ -2,6 +2,7 @@ import { useState, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { AuthGuard } from "./components/AuthGuard";
 import { QuickCapture } from "./components/QuickCapture";
+import { KeepButton } from "./components/keep/KeepButton";
 import { Home } from "./pages/Home";
 import { Requests } from "./pages/Requests";
 import { RequestDetail } from "./pages/RequestDetail";
@@ -40,6 +41,16 @@ function getNavItems(role: AccountRole): NavItem[] {
   return items;
 }
 
+function roleLabel(role: AccountRole): string {
+  switch (role) {
+    case "owner": return "Owner";
+    case "admin": return "Admin";
+    case "operator": return "Operator";
+    case "viewer": return "Viewer";
+    default: return "";
+  }
+}
+
 function AppShell() {
   const [captureOpen, setCaptureOpen] = useState(false);
   const [route, setRoute] = useState<AppRoute>({ page: "requests" });
@@ -73,11 +84,16 @@ function AppShell() {
     : "requests";
 
   return (
-    <div className="flex min-h-screen bg-slate-50">
+    <div className="flex min-h-screen bg-[var(--ophalo-canvas)]">
       {/* Left sidebar — desktop */}
-      <aside className="hidden md:flex md:flex-col md:w-56 lg:w-64 md:shrink-0 bg-white border-r border-slate-200">
-        <div className="px-4 py-5 border-b border-slate-100">
-          <span className="font-serif text-base font-semibold text-slate-900">OpHalo Keep</span>
+      <aside className="hidden md:flex md:flex-col md:w-56 lg:w-64 md:shrink-0 bg-[var(--ophalo-card)] border-r border-[var(--ophalo-border)]">
+        <div className="px-4 py-4 border-b border-[var(--ophalo-border)]">
+          <img
+            src="/brand/ophalo-keep-lockup-color.svg"
+            alt="OpHalo Keep"
+            className="h-8 w-auto"
+            draggable={false}
+          />
         </div>
         <nav className="flex-1 px-3 py-4 space-y-0.5">
           {navItems.map((item) => (
@@ -85,10 +101,10 @@ function AppShell() {
               key={item.id}
               type="button"
               onClick={() => setRoute({ page: item.id })}
-              className={`w-full flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium text-left transition-colors ${
+              className={`w-full flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-offset-2 ${
                 activeNavId === item.id
-                  ? "bg-slate-100 text-slate-900"
-                  : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+                  ? "bg-[var(--keep-accent-bg)] text-[var(--ophalo-navy)]"
+                  : "text-[var(--ophalo-muted)] hover:bg-[var(--ophalo-canvas)] hover:text-[var(--ophalo-ink)]"
               }`}
             >
               {item.icon}
@@ -98,7 +114,11 @@ function AppShell() {
                   ? viewCounts.default
                   : viewCounts.assignedToMe + viewCounts.needsAttention;
                 return total > 0 ? (
-                  <span className="ml-auto text-xs font-medium bg-slate-200 text-slate-700 rounded-full px-1.5 py-0.5">
+                  <span className={`ml-auto text-xs font-semibold rounded-full px-1.5 py-0.5 ${
+                    activeNavId === "requests"
+                      ? "bg-[var(--keep-accent)] text-white"
+                      : "bg-[var(--keep-accent-bg)] text-[var(--keep-accent)]"
+                  }`}>
                     {total}
                   </span>
                 ) : null;
@@ -106,23 +126,29 @@ function AppShell() {
             </button>
           ))}
         </nav>
-        <div className="px-3 pb-5">
-          <button
-            type="button"
+        <div className="px-3 pb-4">
+          <KeepButton
+            variant="primary"
             onClick={openCapture}
-            className="w-full flex items-center justify-center gap-2 rounded-md bg-slate-900 px-3 py-2.5 text-sm font-medium text-white hover:bg-slate-700"
+            className="w-full gap-2"
           >
             <Plus className="h-4 w-4" />
             New Request
-          </button>
+          </KeepButton>
         </div>
+        {/* Quiet role identity — no business name available from /auth/me */}
+        {role !== "unknown" && (
+          <div className="px-4 py-3 border-t border-[var(--ophalo-border)]">
+            <p className="text-xs text-[var(--ophalo-muted)]">{roleLabel(role)}</p>
+          </div>
+        )}
       </aside>
 
       {/* Main content */}
       <main className="flex-1 min-w-0 flex flex-col">
         {route.page === "requests" && role === "unknown" && (
           <div className="flex flex-1 items-center justify-center">
-            <span className="text-slate-400 text-sm">Loading…</span>
+            <span className="text-[var(--ophalo-muted)] text-sm">Loading…</span>
           </div>
         )}
         {route.page === "requests" && role === "viewer" && <AccessLimited />}
@@ -147,7 +173,7 @@ function AppShell() {
           type="button"
           onClick={openCapture}
           aria-label="New Request"
-          className="md:hidden fixed bottom-6 right-6 z-30 flex h-14 w-14 items-center justify-center rounded-full bg-slate-900 text-white shadow-lg hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-500 focus:ring-offset-2"
+          className="md:hidden fixed bottom-6 right-6 z-30 flex h-14 w-14 items-center justify-center rounded-full bg-[var(--ophalo-navy)] text-white shadow-lg hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-offset-2"
         >
           <Plus className="h-6 w-6" />
         </button>
