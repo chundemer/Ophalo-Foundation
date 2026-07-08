@@ -316,7 +316,7 @@ function buildAttentionGuidance(detail: KeepRequestDetailResult): AttentionGuida
 
   const afterHandled =
     canAcknowledge
-      ? "After it is handled, acknowledge attention so this stops appearing as business-waiting."
+      ? "After the customer is taken care of, this stops showing as business-waiting."
       : detail.availableActions.canMarkFeedbackReviewed
         ? "Mark feedback reviewed when Owner/Admin handling is complete."
         : null;
@@ -649,7 +649,7 @@ function DesktopShareSection({
 
   return (
     <div
-      className={`rounded-xl px-5 py-5 border ${
+      className={`rounded-xl px-4 py-4 border ${
         needsShare
           ? "border-[var(--ophalo-border)] bg-[var(--ophalo-attention-bg)]"
           : "border-[var(--ophalo-border)] bg-[var(--ophalo-card)]"
@@ -839,7 +839,7 @@ function LogContactCard({ detail, onContactLaunched, highlight }: LogContactCard
     >
       <p className="text-sm font-semibold text-[var(--ophalo-ink)] mb-1">Handled outside Keep?</p>
       <p className="text-xs text-[var(--ophalo-muted)] mb-3">
-        Log a phone call, text, email, or in-person conversation.
+        Log a call, text, email, or in-person conversation.
       </p>
       <KeepButton
         type="button"
@@ -907,7 +907,7 @@ function MarkHandledCard({ requestId, detail, onDetailUpdated, highlight }: Mark
     >
       <p className="text-sm font-semibold text-[var(--ophalo-ink)] mb-1">Already handled?</p>
       <p className="text-xs text-[var(--ophalo-muted)] mb-3">
-        Use this only if the customer was already taken care of and no customer update or contact log is needed.
+        Use only when no customer update or contact log is needed.
       </p>
       {error && (
         <div
@@ -923,7 +923,7 @@ function MarkHandledCard({ requestId, detail, onDetailUpdated, highlight }: Mark
       <form onSubmit={(e) => void handleSubmit(e)} className="space-y-2.5">
         <div>
           <label htmlFor="ack-reason" className="block text-xs font-semibold text-[var(--ophalo-muted)] mb-1">
-            What was handled?
+            Brief note before marking handled
           </label>
           <textarea
             id="ack-reason"
@@ -1535,35 +1535,17 @@ function AttentionGuidanceCard({ detail, highlights }: AttentionGuidanceCardProp
             <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ophalo-attention)]">
               Recommended next step
             </p>
-            <p className="mt-1 text-sm font-semibold text-[var(--ophalo-ink)]">
-              {primaryPanelLabel}
-            </p>
-            <p className="mt-0.5 text-xs text-[var(--ophalo-muted)]">
-              Look for the highlighted section on this page.
+            <p className="mt-1 text-sm text-[var(--ophalo-ink)]">
+              {highlights.sendUpdate === "primary"
+                ? "Recommended: Send customer update using the highlighted panel on the right."
+                : highlights.logContact === "primary"
+                  ? "Recommended: Log customer contact using the highlighted panel on the right."
+                  : "Use the highlighted panel on the right."}
             </p>
           </div>
         )}
       </div>
     </section>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Latest update card — standalone teal continuity surface
-// ---------------------------------------------------------------------------
-
-interface LatestUpdateCardProps {
-  statusText: string;
-}
-
-function LatestUpdateCard({ statusText }: LatestUpdateCardProps) {
-  return (
-    <div className="rounded-xl border border-[var(--ophalo-border)] border-l-4 border-l-[var(--keep-accent)] bg-[var(--keep-accent-bg)] px-5 py-4">
-      <div className="mb-1.5">
-        <KeepBadge variant="teal">Latest update</KeepBadge>
-      </div>
-      <p className="text-sm text-[var(--ophalo-ink)] italic">"{statusText}"</p>
-    </div>
   );
 }
 
@@ -2033,6 +2015,8 @@ export function RequestDetail({ requestId, onBack }: RequestDetailProps) {
     [detail],
   );
 
+  const workControlsIsHighlighted = !!(highlights.workControls || highlights.feedbackReview);
+
   function handleShareCleared() {
     setShareCleared(true);
     void queryClient.invalidateQueries({ queryKey: ["request-detail", requestId] });
@@ -2191,11 +2175,6 @@ export function RequestDetail({ requestId, onBack }: RequestDetailProps) {
               highlights={highlights}
             />
 
-            {/* Latest update: standalone teal card, avoids nested-card feel */}
-            {detail.currentStatusText && (
-              <LatestUpdateCard statusText={detail.currentStatusText} />
-            )}
-
             {/* Mobile: primary actions appear before the timeline */}
             <div className="md:hidden space-y-4">
               {renderPrimaryActions()}
@@ -2252,8 +2231,59 @@ export function RequestDetail({ requestId, onBack }: RequestDetailProps) {
 
           {/* Right action rail — desktop only */}
           <aside className="hidden md:flex md:flex-col md:w-72 lg:w-80 md:shrink-0 border-l border-[var(--ophalo-border)] bg-[var(--ophalo-card)] overflow-y-auto px-4 py-5 gap-4">
-            {renderPrimaryActions()}
-            {renderTeamSection()}
+            {/* Resolution cards: primary actions for clearing attention */}
+            <BusinessUpdateSection
+              requestId={requestId}
+              detail={detail}
+              onDetailUpdated={handleDetailUpdated}
+              draft={businessUpdateDraft}
+              onDraftChange={setBusinessUpdateDraft}
+              draftStatus={businessUpdateDraftStatus}
+              onDraftStatusChange={setBusinessUpdateDraftStatus}
+              highlight={highlights.sendUpdate}
+            />
+            <LogContactCard
+              detail={detail}
+              onContactLaunched={handleContactLaunched}
+              highlight={highlights.logContact}
+            />
+            <MarkHandledCard
+              requestId={requestId}
+              detail={detail}
+              onDetailUpdated={handleDetailUpdated}
+              highlight={highlights.markHandled}
+            />
+            {workControlsIsHighlighted && (
+              <WorkControlsGroup
+                requestId={requestId}
+                detail={detail}
+                onDetailUpdated={handleDetailUpdated}
+                highlights={highlights}
+              />
+            )}
+
+            {/* Utilities: customer page, status, team context */}
+            <div className="space-y-3">
+              <p className="px-1 text-[10px] font-semibold uppercase tracking-widest text-[var(--ophalo-muted)]">Utilities</p>
+              {canShare && (
+                <DesktopShareSection
+                  requestId={requestId}
+                  pageToken={detail.pageToken}
+                  canRecordShareIntent={canShare}
+                  needsShare={needsShareEffective}
+                  onCleared={handleShareCleared}
+                />
+              )}
+              {!workControlsIsHighlighted && (
+                <WorkControlsGroup
+                  requestId={requestId}
+                  detail={detail}
+                  onDetailUpdated={handleDetailUpdated}
+                  highlights={highlights}
+                />
+              )}
+              {renderTeamSection()}
+            </div>
           </aside>
         </div>
       )}

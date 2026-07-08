@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { AuthGuard } from "./components/AuthGuard";
 import { QuickCapture } from "./components/QuickCapture";
@@ -23,6 +23,12 @@ type AppRoute =
   | { page: "requests" }
   | { page: "settings" }
   | { page: "detail"; requestId: string };
+
+function getRouteFromLocation(): AppRoute {
+  const match = window.location.hash.match(/^#\/request\/(.+)$/);
+  if (match?.[1]) return { page: "detail", requestId: match[1] };
+  return { page: "requests" };
+}
 
 interface NavItem {
   id: "home" | "requests" | "settings";
@@ -53,9 +59,17 @@ function roleLabel(role: AccountRole): string {
 
 function AppShell() {
   const [captureOpen, setCaptureOpen] = useState(false);
-  const [route, setRoute] = useState<AppRoute>({ page: "requests" });
+  const [route, setRoute] = useState<AppRoute>(getRouteFromLocation);
   const [viewCounts, setViewCounts] = useState<KeepRequestViewCounts | null>(null);
   const handleViewCountsUpdate = useCallback(setViewCounts, []);
+
+  useEffect(() => {
+    function onPopState() {
+      setRoute(getRouteFromLocation());
+    }
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, []);
 
   const { data: me } = useQuery({
     queryKey: ["me"],
@@ -66,16 +80,26 @@ function AppShell() {
   const role: AccountRole = me?.accountRole ?? "unknown";
   const navItems = getNavItems(role);
 
+  function navigate(newRoute: AppRoute) {
+    const base = window.location.pathname + window.location.search;
+    if (newRoute.page === "detail") {
+      history.pushState(null, "", `${base}#/request/${newRoute.requestId}`);
+    } else {
+      history.pushState(null, "", base);
+    }
+    setRoute(newRoute);
+  }
+
   function openCapture() {
     setCaptureOpen(true);
   }
 
   function selectRequest(requestId: string) {
-    setRoute({ page: "detail", requestId });
+    navigate({ page: "detail", requestId });
   }
 
   function backToRequests() {
-    setRoute({ page: "requests" });
+    navigate({ page: "requests" });
   }
 
   const activeNavId: "home" | "requests" | "settings" =
@@ -88,19 +112,26 @@ function AppShell() {
       {/* Left sidebar — desktop */}
       <aside className="hidden md:flex md:flex-col md:w-56 lg:w-64 md:shrink-0 bg-[var(--ophalo-card)] border-r border-[var(--ophalo-border)]">
         <div className="px-4 py-4 border-b border-[var(--ophalo-border)]">
-          <img
-            src="/brand/ophalo-keep-lockup-color.svg"
-            alt="OpHalo Keep"
-            className="h-8 w-auto"
-            draggable={false}
-          />
+          <button
+            type="button"
+            onClick={() => navigate({ page: "requests" })}
+            aria-label="Go to requests"
+            className="block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-offset-2 rounded"
+          >
+            <img
+              src="/brand/ophalo-keep-lockup-color.svg"
+              alt="OpHalo Keep"
+              className="h-8 w-auto"
+              draggable={false}
+            />
+          </button>
         </div>
         <nav className="flex-1 px-3 py-4 space-y-0.5">
           {navItems.map((item) => (
             <button
               key={item.id}
               type="button"
-              onClick={() => setRoute({ page: item.id })}
+              onClick={() => navigate({ page: item.id })}
               className={`w-full flex items-center gap-2.5 rounded-md px-3 py-2.5 text-sm text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-offset-2 ${
                 activeNavId === item.id
                   ? "font-semibold bg-[var(--keep-accent-bg)] text-[var(--ophalo-navy)]"

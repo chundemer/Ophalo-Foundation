@@ -3,13 +3,13 @@
 **Created:** 2026-07-02
 **Purpose:** Live tracker for pilot-blocking or pilot-relevant bugs/gaps discovered during Session 14.
 **Source:** Promoted from the Pre-S14e bug register in `docs/build-log/068-session-14-ophalo-web-front-door.md`.
-**Current active item:** None — all pilot-readiness items resolved. GAP-004 remains explicitly deferred.
+**Current active item:** GAP-004 — Browser back / refresh does not preserve app location.
 
 This document is the current working tracker. Historical discovery notes stay in the build logs, but
 triage, status, and next-session ordering should happen here.
 
-As of S15c, all active pilot-readiness bugs/gaps in this tracker are resolved.
-GAP-004 remains explicitly deferred and is not a current implementation task.
+As of S15c, all earlier active pilot-readiness bugs/gaps in this tracker were resolved.
+GAP-004 is reactivated after ADR-427 locked durable PWA request-detail navigation behavior.
 
 ## Status Legend
 
@@ -128,14 +128,16 @@ deliberately.
 
 ### GAP-004 — Browser back / refresh does not preserve app location
 
-**Status:** Deferred
+**Status:** Open
 **Severity:** P2
 **Area:** `ophalo-app` navigation
 
 State routing pushes no browser history. S13d assumed standard browser back for detail-to-list; on
 mobile PWA the back gesture can exit the app, and refresh on detail loses place.
 
-Decision needed: whether URL routing is pre-pilot or post-pilot hardening.
+Decision: ADR-427 locks this as pre-pilot PWA navigation behavior. Browser refresh and direct URL
+open must preserve authorized request detail; Requests breadcrumb/back returns to the request list;
+the OpHalo Keep logo returns to the request list/home workbench.
 
 ## Resolved During Session 14
 
