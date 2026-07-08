@@ -79,9 +79,9 @@ function statusBadgeVariant(status: string): KeepBadgeVariant {
 }
 
 function StatusBadge({ status }: { status: string }) {
-  const label = status
-    .replace(/_/g, " ")
-    .replace(/\b\w/g, (c) => c.toUpperCase());
+  const label = status === "in_progress"
+    ? "Active"
+    : status.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
   return <KeepBadge variant={statusBadgeVariant(status)}>{label}</KeepBadge>;
 }
 

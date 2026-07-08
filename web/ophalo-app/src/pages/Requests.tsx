@@ -83,7 +83,7 @@ const STATUS_OPTIONS = [
   { value: "", label: "All active statuses" },
   { value: "received", label: "Received" },
   { value: "scheduled", label: "Scheduled" },
-  { value: "in_progress", label: "In Progress" },
+  { value: "in_progress", label: "Active" },
   { value: "pending_customer", label: "Waiting on Customer" },
   { value: "resolved", label: "Resolved" },
 ];

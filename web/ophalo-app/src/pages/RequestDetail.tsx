@@ -100,6 +100,7 @@ const FOLLOW_UP_REASON_LABELS: Record<string, string> = {
 };
 
 function statusLabel(status: string): string {
+  if (status === "in_progress") return "Active";
   return status.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
@@ -1624,8 +1625,12 @@ export function RequestDetail({ requestId, onBack }: RequestDetailProps) {
   const displayedEvents = useMemo(() => {
     if (!detail) return [];
     const base = detail.events.filter((e) => !ALWAYS_HIDDEN_EVENT_TYPES.has(e.eventType));
-    if (timelineFilter === "communication") return base.filter(isCommunicationEvent);
-    return base;
+    const filtered = timelineFilter === "communication" ? base.filter(isCommunicationEvent) : base;
+    return [...filtered].sort((a, b) => {
+      const byDate = new Date(b.occurredAtUtc).getTime() - new Date(a.occurredAtUtc).getTime();
+      if (byDate !== 0) return byDate;
+      return b.id.localeCompare(a.id);
+    });
   }, [detail, timelineFilter]);
 
   function handleShareCleared() {

@@ -430,7 +430,7 @@ Always `KeepBadge` with a mapped variant. Reconciles the hand-rolled
 
 | customerStatus | KeepBadge variant | label |
 |---|---|---|
-| in_progress | `teal` | In progress |
+| in_progress | `teal` | Active |
 | needs_your_reply | `attention` | Needs your reply |
 | complete | `success` | Complete |
 | no_longer_needed | _default (muted)_ | No longer needed |

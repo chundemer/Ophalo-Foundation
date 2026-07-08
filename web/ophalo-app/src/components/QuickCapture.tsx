@@ -45,7 +45,7 @@ function formatStatus(slug: string): string {
   const map: Record<string, string> = {
     received: "Received",
     scheduled: "Scheduled",
-    in_progress: "In Progress",
+    in_progress: "Active",
     pending_customer: "Waiting on Customer",
     resolved: "Resolved",
     closed: "Closed",

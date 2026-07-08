@@ -89,6 +89,21 @@ The status color map is:
 
 **Rationale:** A customer waiting, a completed action, or a failure means the same thing across products. These colors should not be product-branded.
 
+### Keep `in_progress` Displays As Active (ADR-425)
+
+**Decision:** Keep UI displays the backend/API status slug `in_progress` as **Active**.
+
+Do not rename the backend enum `KeepRequestStatus.InProgress`, the API slug `in_progress`, stored
+data, tests, or contracts as part of this product-language decision.
+
+Use **Active** for badges, filters, status choices, timelines, and customer-facing/supporting UI
+labels that render the `in_progress` status. Keep **All active statuses** as the umbrella label for
+non-terminal request states.
+
+**Rationale:** "In Progress" sounds like the field job is physically being performed. Keep does not
+manage the work; Keep manages the promise around the work. "Active" better communicates that the
+request is alive, being handled or followed up, and not yet terminal.
+
 ### Background Model Is Locked
 
 **Decision:** OpHalo and Keep surfaces use warm canvas, white cards, navy anchors, and tinted state surfaces only.
