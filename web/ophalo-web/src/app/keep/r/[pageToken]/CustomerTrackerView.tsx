@@ -2,11 +2,9 @@
 
 import { useEffect, useRef, useState } from "react";
 import {
-  AlertCircle, AlertTriangle, ArrowRight, Bell, Calendar,
-  Clock, Lock, MessageCircle, Paperclip, Phone, RefreshCw, Send, ShieldCheck,
+  AlertCircle, AlertTriangle, ArrowRight, Calendar,
+  Check, Copy, MessageCircle, Paperclip, Phone, RefreshCw, Share2,
 } from "lucide-react";
-import { KeepBadge, type KeepBadgeVariant } from "@/components/keep/KeepBadge";
-import { KeepButton } from "@/components/keep/KeepButton";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -31,129 +29,81 @@ export interface CustomerPageData {
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 
-const MESSAGE_ACTIONS = [
-  "question",
+const PRIMARY_ACTION = "question";
+
+const SECONDARY_ACTIONS = [
   "update_request",
-  "information_added",
   "call_requested",
   "timing_change_requested",
-  "cancellation_requested",
+  "information_added",
 ] as const;
 
-const ACTION_LABELS: Record<string, string> = {
-  question: "Ask a question",
-  update_request: "Request an update",
-  information_added: "Add information",
-  call_requested: "Contact me by phone",
-  timing_change_requested: "Timing change",
-  cancellation_requested: "Request cancellation",
+const SECONDARY_ACTION_LABELS: Record<string, string> = {
+  update_request: "Request update",
+  call_requested: "Ask for a call",
+  timing_change_requested: "Share availability",
+  information_added: "Add details",
 };
 
-const ACTION_ICONS: Record<string, typeof AlertCircle> = {
-  question: MessageCircle,
+const SECONDARY_ACTION_ICONS: Record<string, typeof RefreshCw> = {
   update_request: RefreshCw,
-  information_added: Paperclip,
   call_requested: Phone,
   timing_change_requested: Calendar,
-  cancellation_requested: AlertTriangle,
+  information_added: Paperclip,
+};
+
+const ACTION_COMPOSER_LABELS: Record<string, string> = {
+  question: "Send a message",
+  update_request: "Request an update",
+  call_requested: "Request a call",
+  timing_change_requested: "Update your availability",
+  information_added: "Add details",
+  cancellation_requested: "Request cancellation",
 };
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
+function businessInitials(name: string): string {
+  const words = name.trim().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return "?";
+  if (words.length === 1) return words[0].slice(0, 2).toUpperCase();
+  return (words[0][0] + words[1][0]).toUpperCase();
+}
+
 function statusHeadline(status: string): string {
   switch (status) {
-    case "received": return "Request Received";
-    case "scheduled": return "Scheduled";
-    case "in_progress": return "In Progress";
-    case "pending_customer": return "Waiting for Your Reply";
-    case "resolved": return "Request Resolved";
-    case "closed": return "Closed";
-    case "cancelled": return "Cancelled";
-    default: return "Request Status";
+    case "received":         return "Your request has been received";
+    case "scheduled":        return "Your request is scheduled";
+    case "in_progress":      return "Your request is open";
+    case "pending_customer": return "A reply is needed to continue";
+    case "resolved":         return "Your request has been resolved";
+    case "closed":           return "This request is closed";
+    case "cancelled":        return "This request was cancelled";
+    default:                 return "Request status";
   }
 }
 
-// Lifecycle reassurance only — derived from status, never from business-written
-// text, and never promising follow-up the business may handle off-platform.
-function statusSubline(status: string): string {
-  switch (status) {
-    case "received": return "Your request has been received. Updates from the business will appear below.";
-    case "scheduled": return "Your request is on the schedule. Check below for the latest details.";
-    case "in_progress": return "The business is working on this request. Check below for the latest update.";
-    case "pending_customer": return "The business needs a reply from you to keep this moving.";
-    case "resolved": return "This request looks complete. You can review the history below.";
-    case "closed": return "This request is closed. The history remains available below.";
-    case "cancelled": return "This request was cancelled. The history remains available below.";
-    default: return "Updates from the business will appear below.";
-  }
-}
-
-function statusBadgeVariant(status: string): KeepBadgeVariant {
+function statusSubtext(status: string, businessName: string): string {
   switch (status) {
     case "received":
     case "scheduled":
-    case "in_progress": return "teal";
-    case "pending_customer": return "attention";
-    case "resolved": return "success";
-    default: return "default";
-  }
-}
-
-function statusChipLabel(status: string): string {
-  switch (status) {
-    case "received": return "Received";
-    case "scheduled": return "Scheduled";
-    case "in_progress": return "In progress";
-    case "pending_customer": return "Needs your reply";
-    case "resolved": return "Resolved";
-    case "closed": return "Closed";
-    case "cancelled": return "Cancelled";
-    default: return status;
-  }
-}
-
-function eventBadgeVariant(ev: CustomerEventItem): KeepBadgeVariant {
-  if (ev.actorLabel === "customer") return "teal";
-  if (ev.actorLabel === "business") return "success";
-  if (ev.eventType === "request_cancelled" || ev.eventType === "request_closed") return "attention";
-  return "default";
-}
-
-function eventBadgeLabel(ev: CustomerEventItem): string {
-  if (ev.actorLabel === "customer") return "You";
-  if (ev.actorLabel === "business") return "Business";
-  switch (ev.eventType) {
-    case "request_created": return "Created";
-    case "status_changed": return "Status update";
-    case "request_closed": return "Closed";
-    case "request_cancelled": return "Cancelled";
-    default: return "Update";
+    case "in_progress":
+    case "pending_customer":
+      return `${businessName} has your details. Save this link to return anytime. No account required.`;
+    default:
+      return "Save this link to return anytime. No account required.";
   }
 }
 
 function eventFallbackContent(eventType: string): string {
   switch (eventType) {
-    case "request_created": return "Request created.";
-    case "status_changed": return "Status updated.";
-    case "request_closed": return "Request closed.";
-    case "request_cancelled": return "Request cancelled.";
+    case "request_created":        return "Request created.";
+    case "status_changed":         return "Status updated.";
+    case "request_closed":         return "Request closed.";
+    case "request_cancelled":      return "Request cancelled.";
     case "attention_acknowledged": return "Message acknowledged.";
-    default: return "";
+    default:                       return "";
   }
-}
-
-const ICON_CONFIGS = {
-  customer:  { bg: "bg-[var(--keep-accent-bg)]",       iconColor: "text-[var(--keep-accent)]",       Icon: Send         },
-  business:  { bg: "bg-[var(--ophalo-success-bg)]",    iconColor: "text-[var(--ophalo-success)]",    Icon: Bell         },
-  attention: { bg: "bg-[var(--ophalo-attention-bg)]",  iconColor: "text-[var(--ophalo-attention)]",  Icon: AlertCircle  },
-  default:   { bg: "bg-muted",                         iconColor: "text-muted-foreground",           Icon: Clock        },
-} as const;
-
-function eventIconConfig(ev: CustomerEventItem) {
-  if (ev.actorLabel === "customer") return ICON_CONFIGS.customer;
-  if (ev.actorLabel === "business") return ICON_CONFIGS.business;
-  if (ev.eventType === "request_cancelled" || ev.eventType === "request_closed") return ICON_CONFIGS.attention;
-  return ICON_CONFIGS.default;
 }
 
 function formatDate(iso: string): string {
@@ -218,49 +168,85 @@ export function CustomerTrackerView({
   const [comment, setComment] = useState("");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [expired, setExpired] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [canSharePage, setCanSharePage] = useState(false);
   const dismissTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL ?? "";
   const events = [...(page.events ?? [])].reverse();
   const allowedActions = page.allowedActions ?? [];
 
-  const availableMessageActions = allowedActions.filter(
-    (a) => (MESSAGE_ACTIONS as readonly string[]).includes(a)
+  const hasPrimaryAction = allowedActions.includes(PRIMARY_ACTION);
+  const availableSecondaryActions = (SECONDARY_ACTIONS as readonly string[]).filter(
+    (a) => allowedActions.includes(a)
   );
+  const hasCancellationAction = allowedActions.includes("cancellation_requested");
   const hasFeedbackAction = allowedActions.includes("feedback");
-  const hasActions = availableMessageActions.length > 0 || hasFeedbackAction;
+  const hasActions =
+    hasPrimaryAction ||
+    availableSecondaryActions.length > 0 ||
+    hasCancellationAction ||
+    hasFeedbackAction;
 
   const selectedAction =
-    phase.kind === "composing" || phase.kind === "submitting"
-      ? phase.action
-      : null;
+    phase.kind === "composing" || phase.kind === "submitting" ? phase.action : null;
   const isSubmitting =
     phase.kind === "submitting" || phase.kind === "submitting_feedback";
 
-  // Find most recent business-authored event with content for the continuity card
-  const latestBusinessUpdate = (page.events ?? [])
-    .slice()
-    .reverse()
-    .find((e) => e.actorLabel === "business" && e.content !== null) ?? null;
+  const latestBusinessUpdate =
+    (page.events ?? [])
+      .slice()
+      .reverse()
+      .find((e) => e.actorLabel === "business" && e.content !== null) ?? null;
 
-  // Auto-dismiss success confirmation after 5s
+  const initials = businessInitials(page.businessName);
+
+  useEffect(() => {
+    setCanSharePage(typeof navigator !== "undefined" && typeof navigator.share === "function");
+  }, []);
+
+  // Auto-dismiss sent confirmation after 5s
   useEffect(() => {
     if (phase.kind === "sent" || phase.kind === "feedback_sent") {
-      dismissTimer.current = setTimeout(() => {
-        setPhase({ kind: "idle" });
-      }, 5000);
+      dismissTimer.current = setTimeout(() => setPhase({ kind: "idle" }), 5000);
     }
-    return () => {
-      if (dismissTimer.current) clearTimeout(dismissTimer.current);
-    };
+    return () => { if (dismissTimer.current) clearTimeout(dismissTimer.current); };
   }, [phase.kind]);
+
+  async function shareOrCopyLink() {
+    const url = window.location.href;
+
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: `${page.businessName} request`,
+          text: `View your request with ${page.businessName}.`,
+          url,
+        });
+        return;
+      } catch (error) {
+        if (error instanceof DOMException && error.name === "AbortError") return;
+      }
+    }
+
+    await navigator.clipboard.writeText(url);
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 2000);
+  }
+
+  function openAction(action: string) {
+    setPhase({ kind: "composing", action });
+    setErrorMsg(null);
+  }
+
+  function backToIdle() {
+    setPhase({ kind: "idle" });
+    setErrorMsg(null);
+  }
 
   async function submitMessage(action: string) {
     const trimmed = message.trim();
-    if (!trimmed) {
-      setErrorMsg("Message can't be empty.");
-      return;
-    }
+    if (!trimmed) { setErrorMsg("Message can't be empty."); return; }
     setErrorMsg(null);
     setPhase({ kind: "submitting", action });
 
@@ -279,19 +265,12 @@ export function CustomerTrackerView({
 
       if (res.ok) {
         const updated: unknown = await res.json().catch(() => null);
-        if (updated != null && typeof updated === "object") {
-          setPage(updated as CustomerPageData);
-        }
+        if (updated != null && typeof updated === "object") setPage(updated as CustomerPageData);
         setMessage("");
         setPhase({ kind: "sent" });
         return;
       }
-
-      if (res.status === 410) {
-        setExpired(true);
-        return;
-      }
-
+      if (res.status === 410) { setExpired(true); return; }
       const code = await parseErrorCode(res);
       setErrorMsg(errorMessageForCode(code, res.status));
       setPhase({ kind: "composing", action });
@@ -324,20 +303,13 @@ export function CustomerTrackerView({
 
       if (res.ok) {
         const updated: unknown = await res.json().catch(() => null);
-        if (updated != null && typeof updated === "object") {
-          setPage(updated as CustomerPageData);
-        }
+        if (updated != null && typeof updated === "object") setPage(updated as CustomerPageData);
         setComment("");
         setWasResolved(null);
         setPhase({ kind: "feedback_sent" });
         return;
       }
-
-      if (res.status === 410) {
-        setExpired(true);
-        return;
-      }
-
+      if (res.status === 410) { setExpired(true); return; }
       const code = await parseErrorCode(res);
       setErrorMsg(errorMessageForCode(code, res.status));
       setPhase({ kind: "feedback" });
@@ -347,12 +319,12 @@ export function CustomerTrackerView({
     }
   }
 
-  // ─── Expired state ──────────────────────────────────────────────────────
+  // ─── Expired ─────────────────────────────────────────────────────────────
 
   if (expired) {
     return (
-      <main className="bg-background px-4 py-6 sm:py-10">
-        <div className="mx-auto w-full max-w-2xl rounded-xl border border-[var(--ophalo-border)] bg-card px-5 py-5">
+      <main className="min-h-screen bg-[var(--ophalo-canvas)] px-4 py-6 sm:py-10">
+        <div className="mx-auto w-full max-w-2xl rounded-2xl border border-[var(--ophalo-border)] bg-card px-5 py-6 shadow-sm">
           <p className="text-base font-semibold text-foreground">This tracker link has expired.</p>
           <p className="mt-2 text-sm leading-6 text-muted-foreground">
             The tracker for your request with{" "}
@@ -374,106 +346,100 @@ export function CustomerTrackerView({
   // ─── Active page ─────────────────────────────────────────────────────────
 
   return (
-    <main className="bg-background px-4 py-6 sm:py-10">
+    <main className="min-h-screen bg-[var(--ophalo-canvas)] px-4 py-6 sm:py-10">
       <div className="mx-auto w-full max-w-2xl space-y-4 sm:space-y-5">
 
-        {/* §1 — Status hero */}
-        <div className="overflow-hidden rounded-2xl border border-[var(--ophalo-border)] bg-[var(--keep-accent-bg)] shadow-sm">
-          <div className="h-1.5 bg-[var(--keep-accent)]" />
-          <div className="px-5 pb-6 pt-5 sm:px-6">
-            <p className="text-sm font-semibold text-foreground">{page.businessName}</p>
-            <h1 className="mt-1 font-serif text-[28px] font-bold leading-tight tracking-tight text-foreground sm:text-[32px]">
-              {statusHeadline(page.status)}
-            </h1>
-            <p className="mt-1.5 text-sm leading-6 text-muted-foreground">
-              {statusSubline(page.status)}
+        {/* §1 — Business identity */}
+        <div className="flex items-center gap-3 px-1 pb-1">
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[var(--ophalo-navy)] text-sm font-bold tracking-wide text-white">
+            {initials}
+          </div>
+          <div className="min-w-0">
+            <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+              Private Request Page
             </p>
-            <div className="mt-3 inline-flex items-center gap-1.5 text-xs font-medium text-[var(--keep-accent)]">
-              <Lock className="h-3 w-3" aria-hidden />
-              Private tracking link
-            </div>
-            {/* Metadata footer — status chip + reference */}
-            <div className="mt-4 flex flex-wrap items-center gap-3 border-t border-[var(--ophalo-border)] pt-4">
-              <KeepBadge variant={statusBadgeVariant(page.status)}>
-                {statusChipLabel(page.status)}
-              </KeepBadge>
-              <p className="text-xs text-muted-foreground">
-                Ref:{" "}
-                <span className="font-mono text-[11px] tracking-widest text-muted-foreground">
-                  {page.referenceCode}
-                </span>
-              </p>
-            </div>
+            <p className="truncate text-lg font-bold leading-tight text-foreground">
+              {page.businessName}
+            </p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              This private page keeps your request details and updates from{" "}
+              {page.businessName} in one place.
+            </p>
           </div>
         </div>
 
-        {/* §2 — Continuity card */}
-        {latestBusinessUpdate !== null ? (
-          <div className="rounded-xl border border-[var(--ophalo-border)] border-l-4 border-l-[var(--keep-accent)] bg-[var(--keep-accent-bg)] px-5 py-5 shadow-[0_1px_2px_rgba(16,36,62,0.04)]">
-            <div className="flex flex-wrap items-center gap-2">
-              <KeepBadge variant="teal">Latest from {page.businessName}</KeepBadge>
+        {/* §2 — Status card */}
+        <div className="rounded-2xl border border-[var(--ophalo-border)] bg-card px-5 py-5 shadow-sm">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              <p className="text-[10px] font-semibold uppercase tracking-widest text-[var(--keep-accent)]">
+                Current Status
+              </p>
+              <h1 className="mt-1 text-2xl font-bold leading-tight text-foreground sm:text-[26px]">
+                {statusHeadline(page.status)}
+              </h1>
+              <p className="mt-1.5 text-sm text-muted-foreground">
+                {statusSubtext(page.status, page.businessName)}
+              </p>
             </div>
-            <p className="mt-3 text-lg font-semibold leading-7 text-foreground">
-              {latestBusinessUpdate.content}
-            </p>
-            <p className="mt-3 text-xs text-muted-foreground">
-              {formatDate(latestBusinessUpdate.occurredAtUtc)}
+            <button
+              onClick={shareOrCopyLink}
+              className="shrink-0 inline-flex items-center gap-1.5 rounded-lg border border-[var(--ophalo-border)] bg-card px-3 py-2 text-xs font-semibold text-foreground transition hover:border-[var(--ophalo-ink)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)]"
+            >
+              {copied
+                ? <Check className="h-3.5 w-3.5 text-[var(--keep-accent)]" aria-hidden />
+                : canSharePage
+                ? <Share2 className="h-3.5 w-3.5" aria-hidden />
+                : <Copy className="h-3.5 w-3.5" aria-hidden />
+              }
+              {copied ? "Copied!" : canSharePage ? "Share page" : "Copy link"}
+            </button>
+          </div>
+          <div className="mt-4 border-t border-[var(--ophalo-border)] pt-3">
+            <p className="text-xs text-muted-foreground">
+              Ref:{" "}
+              <span className="font-mono tracking-widest">{page.referenceCode}</span>
+              {latestBusinessUpdate && (
+                <> · Last update {formatDate(latestBusinessUpdate.occurredAtUtc)}</>
+              )}
             </p>
           </div>
-        ) : (
-          <div className="rounded-xl border border-[var(--ophalo-border)] bg-card px-5 py-5">
-            <div className="flex items-start gap-3">
-              <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--keep-accent-bg)]">
-                <ShieldCheck className="h-4 w-4 text-[var(--keep-accent)]" aria-hidden />
-              </div>
-              <div>
-                <p className="text-sm font-semibold text-foreground">
-                  Your request is in good hands.
-                </p>
-                <p className="mt-1.5 text-sm leading-6 text-muted-foreground">
-                  Updates from {page.businessName} will appear here. They may also contact you directly.
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
+        </div>
 
-        {/* §4 — Composer + §5 Action chips */}
+        {/* §3 — Actions */}
         {hasActions && (
-          <div className="rounded-xl border border-[var(--ophalo-border)] bg-card px-5 py-5">
+          <div className="rounded-2xl border border-[var(--ophalo-border)] bg-card px-5 py-5 shadow-sm">
+
             {phase.kind === "sent" ? (
               <div role="status" aria-live="polite">
                 <p className="text-base font-semibold text-foreground">
                   Delivered to {page.businessName}.
                 </p>
-                <p className="mt-1 text-base leading-6 text-muted-foreground">
-                  Your message has been added to the request history below.
+                <p className="mt-1 text-sm leading-6 text-muted-foreground">
+                  Your message was sent. You&apos;ll see it in the history below.
                 </p>
                 <button
+                  onClick={() => { if (dismissTimer.current) clearTimeout(dismissTimer.current); setPhase({ kind: "idle" }); }}
                   className="mt-3 text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
-                  onClick={() => {
-                    if (dismissTimer.current) clearTimeout(dismissTimer.current);
-                    setPhase({ kind: "idle" });
-                  }}
                 >
                   Send another message
                 </button>
               </div>
+
             ) : phase.kind === "feedback_sent" ? (
               <div role="status" aria-live="polite">
                 <p className="text-base font-semibold text-foreground">
                   Feedback submitted. Thank you.
                 </p>
-                <p className="mt-1 text-base leading-6 text-muted-foreground">
+                <p className="mt-1 text-sm leading-6 text-muted-foreground">
                   {page.businessName} appreciates you letting them know.
                 </p>
               </div>
+
             ) : hasFeedbackAction ? (
-              /* Feedback form for closed requests */
+              /* Feedback form for closed/resolved requests */
               <>
-                <p className="text-base font-semibold text-foreground">
-                  Was your request resolved?
-                </p>
+                <p className="text-base font-semibold text-foreground">Was your request resolved?</p>
                 <div className="mt-3 flex flex-wrap gap-2">
                   {[true, false].map((value) => (
                     <button
@@ -481,7 +447,7 @@ export function CustomerTrackerView({
                       aria-pressed={wasResolved === value}
                       disabled={isSubmitting}
                       onClick={() => setWasResolved(value)}
-                      className={`inline-flex min-h-[42px] items-center rounded-full border px-4 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-offset-2 ${
+                      className={`inline-flex min-h-[42px] items-center rounded-full border px-4 text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] ${
                         wasResolved === value
                           ? "border-[var(--keep-accent)] bg-[var(--keep-accent-bg)] text-[var(--keep-accent)]"
                           : "border-[var(--ophalo-border)] bg-card text-foreground hover:border-[var(--keep-accent)] hover:bg-[var(--keep-accent-bg)] hover:text-[var(--keep-accent)]"
@@ -492,12 +458,8 @@ export function CustomerTrackerView({
                   ))}
                 </div>
                 <div className="mt-4">
-                  <label
-                    htmlFor="tracker-fb-comment"
-                    className="mb-1.5 block text-sm font-semibold text-foreground"
-                  >
-                    Comment{" "}
-                    <span className="font-normal text-muted-foreground">(optional)</span>
+                  <label htmlFor="tracker-fb-comment" className="mb-1.5 block text-sm font-semibold text-foreground">
+                    Comment <span className="font-normal text-muted-foreground">(optional)</span>
                   </label>
                   <textarea
                     id="tracker-fb-comment"
@@ -507,170 +469,201 @@ export function CustomerTrackerView({
                     placeholder="Any additional feedback…"
                     maxLength={2000}
                     rows={3}
-                    className="w-full resize-none rounded-lg border border-[var(--ophalo-border)] bg-card px-4 py-3 text-base leading-6 text-foreground outline-none transition focus:border-[var(--keep-accent)] focus:ring-1 focus:ring-[var(--keep-accent)] disabled:opacity-50"
+                    className="w-full resize-none rounded-lg border border-[var(--ophalo-border)] bg-card px-4 py-3 text-sm leading-6 text-foreground outline-none transition focus:border-[var(--keep-accent)] focus:ring-1 focus:ring-[var(--keep-accent)] disabled:opacity-50"
                   />
                 </div>
-                <p
-                  aria-live="polite"
-                  className={`mt-2 text-base text-destructive${errorMsg ? "" : " hidden"}`}
-                >
-                  {errorMsg}
-                </p>
+                {errorMsg && (
+                  <p aria-live="polite" className="mt-2 text-sm text-destructive">{errorMsg}</p>
+                )}
                 <div className="mt-3">
-                  <KeepButton
-                    variant="primary"
-                    className="w-full"
+                  <button
                     disabled={isSubmitting}
                     onClick={submitFeedback}
+                    className="w-full rounded-xl bg-[var(--keep-accent)] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[var(--keep-accent-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     {isSubmitting ? "Submitting…" : "Submit feedback"}
-                  </KeepButton>
+                  </button>
                 </div>
               </>
-            ) : (
-              /* Message intent chips + composer */
+
+            ) : selectedAction ? (
+              /* Composer — shown after any action button is tapped */
               <>
-                <div className="flex flex-wrap gap-2">
-                  {availableMessageActions.map((action) => {
-                    const isCancellation = action === "cancellation_requested";
-                    const selectedClass = isCancellation
-                      ? "border-[var(--ophalo-danger)] bg-[var(--ophalo-danger-bg)] text-[var(--ophalo-danger)]"
-                      : "border-[var(--keep-accent)] bg-[var(--keep-accent-bg)] text-[var(--keep-accent)]";
-                    const restingClass = isCancellation
-                      ? "border-[var(--ophalo-border)] bg-card text-[var(--ophalo-danger)] hover:border-[var(--ophalo-danger)] hover:bg-[var(--ophalo-danger-bg)] hover:text-[var(--ophalo-danger)]"
-                      : "border-[var(--ophalo-border)] bg-card text-foreground hover:border-[var(--keep-accent)] hover:bg-[var(--keep-accent-bg)] hover:text-[var(--keep-accent)]";
-                    const PillIcon = ACTION_ICONS[action];
-                    return (
-                      <button
-                        key={action}
-                        aria-pressed={selectedAction === action}
-                        disabled={isSubmitting}
-                        onClick={() => {
-                          if (selectedAction === action) {
-                            setPhase({ kind: "idle" });
-                            setErrorMsg(null);
-                          } else {
-                            setPhase({ kind: "composing", action });
-                            setErrorMsg(null);
-                          }
-                        }}
-                        className={`inline-flex min-h-9 items-center gap-1.5 rounded-full border px-3 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-offset-2 ${
-                          selectedAction === action ? selectedClass : restingClass
-                        } disabled:cursor-not-allowed disabled:opacity-50`}
-                      >
-                        {PillIcon && <PillIcon className="h-3.5 w-3.5 shrink-0" aria-hidden />}
-                        {ACTION_LABELS[action] ?? action}
-                      </button>
-                    );
-                  })}
-                </div>
-                <div className="mt-4">
-                  <textarea
-                    id="tracker-message"
-                    value={message}
-                    onChange={(e) => setMessage(e.target.value)}
-                    disabled={!selectedAction || isSubmitting}
-                    placeholder={
-                      selectedAction
-                        ? "Write your message…"
-                        : "Choose an option above to send a message."
-                    }
-                    maxLength={4000}
-                    rows={4}
-                    className="w-full resize-none rounded-lg border border-[var(--ophalo-border)] bg-card px-4 py-3 text-base leading-6 text-foreground outline-none transition focus:border-[var(--keep-accent)] focus:ring-1 focus:ring-[var(--keep-accent)] disabled:opacity-50"
-                  />
-                </div>
-                <p
-                  aria-live="polite"
-                  className={`mt-2 text-base text-destructive${errorMsg ? "" : " hidden"}`}
-                >
-                  {errorMsg}
-                </p>
-                <div className="mt-3">
-                  <KeepButton
-                    variant="primary"
-                    className="w-full"
-                    disabled={!selectedAction || !message.trim() || isSubmitting}
-                    onClick={() => {
-                      if (selectedAction) submitMessage(selectedAction);
-                    }}
+                <div className="mb-4 flex items-center justify-between">
+                  <p className="text-sm font-semibold text-foreground">
+                    {ACTION_COMPOSER_LABELS[selectedAction] ?? "Send a message"}
+                  </p>
+                  <button
+                    onClick={backToIdle}
+                    className="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
                   >
-                    {isSubmitting ? "Sending…" : (
-                      <>Send <ArrowRight className="ml-1.5 h-4 w-4 shrink-0" aria-hidden /></>
-                    )}
-                  </KeepButton>
+                    ← Back
+                  </button>
                 </div>
+                <textarea
+                  id="tracker-message"
+                  value={message}
+                  onChange={(e) => setMessage(e.target.value)}
+                  disabled={isSubmitting}
+                  placeholder="Write your message…"
+                  maxLength={4000}
+                  rows={4}
+                  className="w-full resize-none rounded-lg border border-[var(--ophalo-border)] bg-card px-4 py-3 text-sm leading-6 text-foreground outline-none transition focus:border-[var(--keep-accent)] focus:ring-1 focus:ring-[var(--keep-accent)] disabled:opacity-50"
+                />
+                {errorMsg && (
+                  <p aria-live="polite" className="mt-2 text-sm text-destructive">{errorMsg}</p>
+                )}
+                <div className="mt-3">
+                  <button
+                    disabled={!message.trim() || isSubmitting}
+                    onClick={() => submitMessage(selectedAction)}
+                    className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[var(--keep-accent)] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[var(--keep-accent-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {isSubmitting
+                      ? "Sending…"
+                      : <><span>Send</span><ArrowRight className="h-4 w-4" aria-hidden /></>
+                    }
+                  </button>
+                </div>
+              </>
+
+            ) : (
+              /* Idle — action picker */
+              <>
+                <p className="text-sm font-semibold text-foreground">
+                  Need to make a change or ask something?
+                </p>
+
+                {hasPrimaryAction && (
+                  <button
+                    onClick={() => openAction(PRIMARY_ACTION)}
+                    className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[var(--keep-accent)] px-4 py-3.5 text-sm font-semibold text-white transition hover:bg-[var(--keep-accent-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-offset-2"
+                  >
+                    <MessageCircle className="h-4 w-4" aria-hidden />
+                    Send update or question
+                  </button>
+                )}
+
+                {availableSecondaryActions.length > 0 && (
+                  <div className="mt-3 grid grid-cols-2 gap-2">
+                    {availableSecondaryActions.map((action) => {
+                      const Icon = SECONDARY_ACTION_ICONS[action];
+                      return (
+                        <button
+                          key={action}
+                          onClick={() => openAction(action)}
+                          className="inline-flex items-center gap-2 rounded-xl border border-[var(--ophalo-border)] bg-card px-4 py-3 text-sm font-semibold text-foreground transition hover:border-[var(--ophalo-ink)] hover:bg-[var(--ophalo-canvas)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)]"
+                        >
+                          {Icon && <Icon className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />}
+                          {SECONDARY_ACTION_LABELS[action]}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {hasCancellationAction && (
+                  <div className="mt-4 text-center">
+                    <button
+                      onClick={() => openAction("cancellation_requested")}
+                      className="text-sm font-semibold text-[var(--ophalo-danger)] underline-offset-2 hover:underline focus-visible:outline-none"
+                    >
+                      Cancel request
+                    </button>
+                  </div>
+                )}
               </>
             )}
           </div>
         )}
 
-        {/* §3 — "What you sent" card */}
+        {/* §4 — Initial request */}
         {page.description && (
-          <div className="rounded-xl border border-[var(--ophalo-border)] bg-card px-5 py-5">
-            <p className="text-base font-semibold text-foreground">What you sent</p>
-            <p className="mt-2 text-sm leading-6 text-foreground">{page.description}</p>
+          <div className="rounded-2xl border border-[var(--ophalo-border)] bg-card px-5 py-5 shadow-sm">
+            <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+              Initial Request
+            </p>
+            <p className="mt-2 text-sm font-semibold text-foreground">What you sent</p>
+            <div className="mt-2 rounded-lg border border-[var(--ophalo-border)] px-4 py-3">
+              <p className="text-sm leading-6 text-foreground">{page.description}</p>
+            </div>
           </div>
         )}
 
-        {/* §6 — Timeline (Level 3 — sits directly on canvas, no card wrapper) */}
+        {/* §5 — Request history */}
         {page.events !== null && (
-          <ul className="relative space-y-3 pl-3">
-            {/* Connector rail centered on the icon dot column */}
-            {events.length > 0 && (
-              <div
-                aria-hidden
-                className="pointer-events-none absolute bottom-3 left-10 top-3 w-0.5 bg-[var(--ophalo-border)]"
-              />
-            )}
+          <div className="overflow-hidden rounded-2xl border border-[var(--ophalo-border)] bg-card shadow-sm">
+            <div className="flex items-center justify-between border-b border-[var(--ophalo-border)] px-5 py-4">
+              <p className="text-sm font-semibold text-foreground">Request history</p>
+              <p className="font-mono text-[11px] tracking-widest text-muted-foreground">
+                {page.referenceCode}
+              </p>
+            </div>
+
             {events.length === 0 ? (
-              <li className="px-3 py-3">
-                <p className="text-sm leading-6 text-muted-foreground">No updates yet.</p>
-              </li>
-            ) : events.map((ev, i) => {
-              const isNewest = i === 0;
-              const content = ev.content ?? eventFallbackContent(ev.eventType);
-              const { bg, iconColor, Icon } = eventIconConfig(ev);
-              const isCustomerEvent = ev.actorLabel === "customer";
-              return (
-                <li
-                  key={i}
-                  className={`relative flex gap-4 rounded-lg px-3 py-3 ${
-                    isNewest
-                      ? "border border-transparent border-l-[var(--keep-accent)] bg-[var(--keep-accent-bg)]"
-                      : isCustomerEvent
-                      ? "border border-transparent border-l-[var(--keep-accent)]"
-                      : "border border-transparent"
-                  }`}
-                >
-                  <div className={`relative z-10 mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full ring-2 ring-white ${bg}`}>
-                    <Icon className={`h-4 w-4 ${iconColor}`} aria-hidden />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      {isNewest && (
-                        <span className="rounded-full bg-[var(--keep-accent)] px-2 py-0.5 text-[11px] font-semibold leading-none text-white">
-                          Newest
-                        </span>
-                      )}
-                      <KeepBadge variant={eventBadgeVariant(ev)}>
-                        {eventBadgeLabel(ev)}
-                      </KeepBadge>
-                    </div>
-                    {content && (
-                      <p className="mt-1.5 text-sm leading-6 text-foreground">{content}</p>
-                    )}
-                    <p className="mt-2 text-xs text-muted-foreground">
-                      {formatDate(ev.occurredAtUtc)}
-                    </p>
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
+              <p className="px-5 py-4 text-sm text-muted-foreground">No updates yet.</p>
+            ) : (
+              <ul className="divide-y divide-[var(--ophalo-border)]">
+                {events.map((ev, i) => {
+                  const isBusiness = ev.actorLabel === "business";
+                  const isLatestBiz =
+                    latestBusinessUpdate !== null &&
+                    isBusiness &&
+                    ev.occurredAtUtc === latestBusinessUpdate.occurredAtUtc;
+                  const content = ev.content ?? eventFallbackContent(ev.eventType);
+                  const actorName = isBusiness ? page.businessName : "You";
+
+                  return (
+                    <li key={i} className={`flex gap-3 px-5 py-4 ${isBusiness ? "border-l-2 border-l-[var(--keep-accent)] bg-[var(--keep-accent-bg)]" : ""}`}>
+                      <div
+                        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full font-bold ${
+                          isBusiness
+                            ? "bg-[var(--ophalo-navy)] text-[11px] text-white"
+                            : "bg-[var(--ophalo-border)] text-[9px] text-[var(--ophalo-ink)]"
+                        }`}
+                      >
+                        {isBusiness ? initials : "YOU"}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                          <span className="text-sm font-semibold text-foreground">{actorName}</span>
+                          <span className="text-xs text-muted-foreground">
+                            {formatDate(ev.occurredAtUtc)}
+                          </span>
+                          {isLatestBiz && (
+                            <span className="rounded-full bg-[var(--keep-accent)] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white">
+                              Latest business update
+                            </span>
+                          )}
+                        </div>
+                        {content && (
+                          <p className="mt-1 text-sm leading-6 text-foreground">{content}</p>
+                        )}
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
         )}
 
       </div>
+
+      {/* Footer — quiet Keep attribution */}
+      <footer className="mx-auto w-full max-w-2xl pb-6 pt-4 text-center">
+        <img
+          src="/brand/ophalo-lockup-color.svg"
+          alt="OpHalo"
+          className="mx-auto h-6 w-auto opacity-75"
+        />
+        <p className="mt-2 text-sm font-semibold text-[var(--ophalo-ink)]">
+          Keep by OpHalo
+        </p>
+        <p className="mx-auto mt-1 max-w-md text-sm leading-5 text-[var(--ophalo-muted)]">
+          Request tracking for service businesses that work by phone, text, and in person.
+        </p>
+      </footer>
     </main>
   );
 }
