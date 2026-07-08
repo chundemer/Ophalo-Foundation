@@ -15,7 +15,7 @@ export function NeedsShareBanner({ requestId, pageToken, onCleared }: NeedsShare
   const [error, setError] = useState<string | null>(null);
 
   const publicBaseUrl = import.meta.env.VITE_PUBLIC_BASE_URL as string;
-  const trackerUrl = `${publicBaseUrl}/keep/r/${pageToken}`;
+  const customerPageUrl = `${publicBaseUrl}/keep/r/${pageToken}`;
   const canNativeShare = typeof navigator !== "undefined" && typeof navigator.share === "function";
 
   async function submit(method: ShareIntentMethod, browserAction?: () => Promise<void>) {
@@ -41,7 +41,7 @@ export function NeedsShareBanner({ requestId, pageToken, onCleared }: NeedsShare
 
   async function handleCopyLink() {
     await submit("copy_link", async () => {
-      await navigator.clipboard.writeText(trackerUrl);
+      await navigator.clipboard.writeText(customerPageUrl);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     });
@@ -49,7 +49,7 @@ export function NeedsShareBanner({ requestId, pageToken, onCleared }: NeedsShare
 
   async function handleNativeShare() {
     await submit("native_share", async () => {
-      await navigator.share({ url: trackerUrl, title: "Track Your Request" });
+      await navigator.share({ url: customerPageUrl, title: "Customer Request Page" });
     });
   }
 
@@ -60,7 +60,7 @@ export function NeedsShareBanner({ requestId, pageToken, onCleared }: NeedsShare
   return (
     <div className="md:hidden sticky top-0 z-20 bg-amber-500 px-4 py-3">
       <p className="text-sm font-semibold text-white mb-2">
-        Customer tracker link not shared.
+        Customer page not shared.
       </p>
       <div className="flex items-center gap-2">
         {canNativeShare ? (
@@ -71,7 +71,7 @@ export function NeedsShareBanner({ requestId, pageToken, onCleared }: NeedsShare
             className="flex items-center gap-1.5 rounded-md bg-white px-3 py-1.5 text-sm font-medium text-amber-700 hover:bg-amber-50 disabled:opacity-60"
           >
             <Share2 className="h-3.5 w-3.5" />
-            Share Link
+            Share page
           </button>
         ) : (
           <button
@@ -81,7 +81,7 @@ export function NeedsShareBanner({ requestId, pageToken, onCleared }: NeedsShare
             className="flex items-center gap-1.5 rounded-md bg-white px-3 py-1.5 text-sm font-medium text-amber-700 hover:bg-amber-50 disabled:opacity-60"
           >
             {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
-            {copied ? "Copied!" : "Copy Link"}
+            {copied ? "Copied!" : "Copy page link"}
           </button>
         )}
         <button

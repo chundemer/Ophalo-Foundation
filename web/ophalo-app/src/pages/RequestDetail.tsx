@@ -47,7 +47,7 @@ const EVENT_TYPE_LABELS: Record<string, string> = {
   follow_up_on_changed: "Follow-up timing",
   planned_for_changed: "Planned date",
   request_classified: "Request classified",
-  share_intent_recorded: "Tracker link shared",
+  share_intent_recorded: "Customer page shared",
 };
 
 function eventTypeLabel(type: string): string {
@@ -180,6 +180,15 @@ interface EventDisplay {
   badgeVariant: KeepBadgeVariant;
 }
 
+interface AttentionGuidance {
+  label: string;
+  why: string;
+  resolveBy: string;
+  sourceLabel: string | null;
+  sourceText: string | null;
+  afterHandled: string | null;
+}
+
 function resolveEventDisplay(event: KeepRequestEventItem): EventDisplay {
   if (event.eventType === "message_added") {
     if (event.actorType === "customer") {
@@ -234,7 +243,7 @@ function timelineEventSummary(event: KeepRequestEventItem): string | null {
     return outcome ? `${label} — ${outcome.replace(/_/g, " ")}` : label;
   }
   if (event.eventType === "attention_acknowledged") return "Attention acknowledged";
-  if (event.eventType === "share_intent_recorded") return "Tracker link shared with customer";
+  if (event.eventType === "share_intent_recorded") return "Customer page shared with customer";
   if (event.eventType === "planned_for_changed") {
     return event.plannedForDate
       ? `Planned date set to ${formatDateOnly(event.plannedForDate)}`
@@ -247,6 +256,250 @@ function timelineEventSummary(event: KeepRequestEventItem): string | null {
     return reasonLabel ? `${base} · ${reasonLabel}` : base;
   }
   return null;
+}
+
+const ATTENTION_LABELS: Record<string, string> = {
+  customer_message: "Customer message",
+  update_request: "Update requested",
+  schedule_change_request: "Timing change requested",
+  change_or_cancel_request: "Change or cancel request",
+  complaint: "Complaint",
+  first_response_due: "First response due",
+  unresolved_feedback: "Feedback needs review",
+  call_requested: "Call requested",
+  timing_change_requested: "Timing change requested",
+  cancellation_requested: "Cancellation requested",
+};
+
+function reasonLabel(reason: string): string {
+  return ATTENTION_LABELS[reason] ?? reason.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function latestAttentionSource(detail: KeepRequestDetailResult): KeepRequestEventItem | null {
+  const events = [...detail.events]
+    .filter((e) => !ALWAYS_HIDDEN_EVENT_TYPES.has(e.eventType))
+    .sort((a, b) => new Date(b.occurredAtUtc).getTime() - new Date(a.occurredAtUtc).getTime());
+
+  return (
+    events.find((e) => e.actorType === "customer" && e.content) ??
+    events.find((e) => e.eventType === "external_contact_logged" && e.externalContactRequiresFollowUp) ??
+    events.find((e) => e.eventType === "message_added" && e.content) ??
+    null
+  );
+}
+
+function buildAttentionGuidance(detail: KeepRequestDetailResult): AttentionGuidance | null {
+  if (detail.attentionLevel === "none" || !detail.attentionReason) return null;
+
+  const canSendUpdate = detail.availableActions.canSendBusinessUpdate;
+  const canLogContact = detail.availableActions.canLogExternalContact;
+  const canAcknowledge = detail.availableActions.canAcknowledgeAttention;
+  const source = latestAttentionSource(detail);
+  const sourceText = source?.content?.trim() || null;
+  const sourceLabel =
+    sourceText && source?.actorType === "customer"
+      ? `${source.actorDisplayName ?? "Customer"} said ${formatEventTime(source.occurredAtUtc)}`
+      : sourceText
+        ? `Latest related note ${formatEventTime(source!.occurredAtUtc)}`
+        : detail.attentionSinceUtc
+          ? `Needs attention since ${formatEventTime(detail.attentionSinceUtc)}`
+          : null;
+
+  const contactOrUpdate =
+    canSendUpdate && canLogContact
+      ? "Send a customer-page update, or log contact if you handle it by phone, text, email, or in person."
+      : canSendUpdate
+        ? "Send a customer-page update."
+        : canLogContact
+          ? "Log the outside contact after you handle it by phone, text, email, or in person."
+          : "Open the request history and decide the next safe handoff.";
+
+  const afterHandled =
+    canAcknowledge
+      ? "After it is handled, acknowledge attention so this stops appearing as business-waiting."
+      : detail.availableActions.canMarkFeedbackReviewed
+        ? "Mark feedback reviewed when Owner/Admin handling is complete."
+        : null;
+
+  switch (detail.attentionReason) {
+    case "customer_message":
+      return {
+        label: reasonLabel(detail.attentionReason),
+        why: "The customer sent a message and the request is waiting on the business.",
+        resolveBy: contactOrUpdate,
+        sourceLabel,
+        sourceText,
+        afterHandled,
+      };
+    case "update_request":
+      return {
+        label: reasonLabel(detail.attentionReason),
+        why: "The customer is asking for an update, so the next visible business touch matters.",
+        resolveBy: contactOrUpdate,
+        sourceLabel,
+        sourceText,
+        afterHandled,
+      };
+    case "first_response_due":
+      return {
+        label: reasonLabel(detail.attentionReason),
+        why: "This request has not received its first business response inside the response window.",
+        resolveBy: canSendUpdate
+          ? "Send the first customer-page update, or log a real external contact if you respond outside Keep."
+          : "Log the real first contact once you respond outside Keep.",
+        sourceLabel,
+        sourceText,
+        afterHandled,
+      };
+    case "call_requested":
+      return {
+        label: reasonLabel(detail.attentionReason),
+        why: "The customer asked for a call, so Keep needs a durable record that the contact was handled.",
+        resolveBy: canLogContact
+          ? "Call using your normal phone workflow, then save a phone contact log."
+          : "Call using your normal phone workflow, then add a durable note when available.",
+        sourceLabel,
+        sourceText,
+        afterHandled,
+      };
+    case "schedule_change_request":
+    case "timing_change_requested":
+      return {
+        label: reasonLabel(detail.attentionReason),
+        why: "The customer is asking about timing. Keep should protect the promise without becoming a schedule board.",
+        resolveBy: canSendUpdate
+          ? "Confirm the timing on the customer page, or log contact if you handle the timing outside Keep."
+          : "Confirm timing through your normal channel, then log the contact.",
+        sourceLabel,
+        sourceText,
+        afterHandled,
+      };
+    case "change_or_cancel_request":
+      return {
+        label: reasonLabel(detail.attentionReason),
+        why: "The customer is asking to change or cancel the request, and the business needs to decide the next promise.",
+        resolveBy: "Review the request, then update the customer or log contact. Change status only when the business decision is clear.",
+        sourceLabel,
+        sourceText,
+        afterHandled,
+      };
+    case "cancellation_requested":
+      return {
+        label: reasonLabel(detail.attentionReason),
+        why: "The customer appears to be asking to cancel.",
+        resolveBy: "Confirm the cancellation intent, then update the customer or change status to Cancelled if appropriate.",
+        sourceLabel,
+        sourceText,
+        afterHandled,
+      };
+    case "complaint":
+      return {
+        label: reasonLabel(detail.attentionReason),
+        why: "The customer raised an issue that needs a deliberate business response.",
+        resolveBy: contactOrUpdate,
+        sourceLabel,
+        sourceText,
+        afterHandled,
+      };
+    case "unresolved_feedback":
+      return {
+        label: reasonLabel(detail.attentionReason),
+        why: "The customer left unresolved feedback after closeout. This is Owner/Admin review work, not a normal acknowledgement.",
+        resolveBy: "Review the feedback and customer context. Mark feedback reviewed when the follow-up decision is complete.",
+        sourceLabel,
+        sourceText,
+        afterHandled,
+      };
+    default:
+      return {
+        label: reasonLabel(detail.attentionReason),
+        why: "This request is waiting on business attention.",
+        resolveBy: contactOrUpdate,
+        sourceLabel,
+        sourceText,
+        afterHandled,
+      };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Attention resolution highlights
+// ---------------------------------------------------------------------------
+
+type HighlightLevel = "primary" | "secondary";
+
+interface AttentionHighlights {
+  sendUpdate?: HighlightLevel;
+  logContact?: HighlightLevel;
+  workControls?: HighlightLevel;
+  feedbackReview?: HighlightLevel;
+  markHandled?: HighlightLevel;
+}
+
+function getAttentionResolutionHighlights(detail: KeepRequestDetailResult): AttentionHighlights {
+  if (detail.attentionLevel === "none" || !detail.attentionReason) return {};
+  const canSendUpdate = detail.availableActions.canSendBusinessUpdate;
+  const canLogContact = detail.availableActions.canLogExternalContact;
+  const canMarkHandled = detail.availableActions.canAcknowledgeAttention;
+  switch (detail.attentionReason) {
+    case "customer_message":
+    case "update_request":
+    case "first_response_due":
+    case "complaint":
+      return {
+        sendUpdate: canSendUpdate ? "primary" : undefined,
+        logContact: canLogContact ? (canSendUpdate ? "secondary" : "primary") : undefined,
+      };
+    case "call_requested":
+      return {
+        logContact: canLogContact ? "primary" : undefined,
+        sendUpdate: canSendUpdate ? "secondary" : undefined,
+      };
+    case "schedule_change_request":
+    case "timing_change_requested":
+      return {
+        sendUpdate: canSendUpdate ? "primary" : undefined,
+        logContact: canLogContact ? (canSendUpdate ? "secondary" : "primary") : undefined,
+      };
+    case "cancellation_requested":
+    case "change_or_cancel_request":
+      return {
+        workControls: "primary",
+        sendUpdate: canSendUpdate ? "secondary" : undefined,
+        logContact: (!canSendUpdate && canLogContact) ? "secondary" : undefined,
+      };
+    case "unresolved_feedback":
+      return { feedbackReview: "primary" };
+    default: {
+      if (canSendUpdate) return { sendUpdate: "primary", logContact: canLogContact ? "secondary" : undefined };
+      if (canLogContact) return { logContact: "primary" };
+      if (canMarkHandled) return { markHandled: "primary" };
+      return {};
+    }
+  }
+}
+
+function highlightBorderCls(level?: HighlightLevel): string {
+  if (level === "primary") return "border-[var(--ophalo-attention)]";
+  if (level === "secondary") return "border-[var(--ophalo-navy)]";
+  return "border-[var(--ophalo-border)]";
+}
+
+function highlightBgCls(level?: HighlightLevel): string {
+  if (level === "primary") return "bg-[var(--ophalo-attention-bg)]";
+  return "bg-[var(--ophalo-card)]";
+}
+
+function highlightBoxShadow(level?: HighlightLevel): string | undefined {
+  if (level === "primary") return "0 0 0 3px color-mix(in srgb, var(--ophalo-attention) 18%, transparent)";
+  if (level === "secondary") return "0 0 0 3px color-mix(in srgb, var(--ophalo-navy) 10%, transparent)";
+  return undefined;
+}
+
+function maxHighlight(...levels: (HighlightLevel | undefined)[]): HighlightLevel | undefined {
+  if (levels.includes("primary")) return "primary";
+  if (levels.includes("secondary")) return "secondary";
+  return undefined;
 }
 
 interface TimelineEventProps {
@@ -327,7 +580,7 @@ function TimelineEvent({ event, isFirst }: TimelineEventProps) {
 }
 
 // ---------------------------------------------------------------------------
-// Tracker link (secondary)
+// Customer page sharing (secondary)
 // ---------------------------------------------------------------------------
 
 interface DesktopShareSectionProps {
@@ -350,7 +603,7 @@ function DesktopShareSection({
   const [error, setError] = useState<string | null>(null);
 
   const publicBaseUrl = import.meta.env.VITE_PUBLIC_BASE_URL as string;
-  const trackerUrl = `${publicBaseUrl}/keep/r/${pageToken}`;
+  const customerPageUrl = `${publicBaseUrl}/keep/r/${pageToken}`;
   const canNativeShare = typeof navigator !== "undefined" && typeof navigator.share === "function";
 
   if (!canRecordShareIntent) return null;
@@ -378,7 +631,7 @@ function DesktopShareSection({
 
   async function handleCopyLink() {
     await submit("copy_link", async () => {
-      await navigator.clipboard.writeText(trackerUrl);
+      await navigator.clipboard.writeText(customerPageUrl);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     });
@@ -386,7 +639,7 @@ function DesktopShareSection({
 
   async function handleNativeShare() {
     await submit("native_share", async () => {
-      await navigator.share({ url: trackerUrl, title: "Track Your Request" });
+      await navigator.share({ url: customerPageUrl, title: "Customer Request Page" });
     });
   }
 
@@ -403,12 +656,12 @@ function DesktopShareSection({
       }`}
     >
       <div className="flex items-center justify-between mb-3">
-        <p className="text-base font-semibold text-[var(--ophalo-ink)]">Tracker link</p>
+        <p className="text-base font-semibold text-[var(--ophalo-ink)]">Customer page</p>
         {needsShare && <KeepBadge variant="attention">Not shared</KeepBadge>}
       </div>
       {needsShare && (
         <p className="text-xs text-[var(--ophalo-attention)] font-medium mb-3">
-          Share so the customer can track their request.
+          Share the customer page so they can follow request updates.
         </p>
       )}
       <div className="flex flex-col gap-2">
@@ -420,7 +673,7 @@ function DesktopShareSection({
             className="w-full gap-2"
           >
             <Share2 className="h-3.5 w-3.5 shrink-0" />
-            Share link
+            Share page
           </KeepButton>
         )}
         <KeepButton
@@ -434,7 +687,7 @@ function DesktopShareSection({
           ) : (
             <Copy className="h-3.5 w-3.5 shrink-0" />
           )}
-          {copied ? "Copied!" : "Copy link"}
+          {copied ? "Copied!" : "Copy page link"}
         </KeepButton>
         {needsShare && (
           <button
@@ -564,21 +817,56 @@ function StatusChangeSection({ requestId, detail, onDetailUpdated }: StatusChang
 }
 
 // ---------------------------------------------------------------------------
-// Acknowledge attention
+// Handled outside Keep? — log contact affordance card
 // ---------------------------------------------------------------------------
 
-interface AcknowledgeAttentionSectionProps {
+interface LogContactCardProps {
+  detail: KeepRequestDetailResult;
+  onContactLaunched: (direction: string, channel: string) => void;
+  highlight?: HighlightLevel;
+}
+
+function LogContactCard({ detail, onContactLaunched, highlight }: LogContactCardProps) {
+  const { canLogExternalContact } = detail.availableActions;
+  const hasAttention = detail.attentionLevel !== "none" && !!detail.attentionReason;
+  if (!canLogExternalContact || !hasAttention) return null;
+  const contactChannel = detail.customerPhone ? "phone" : detail.customerEmail ? "email" : "other";
+  const shadow = highlightBoxShadow(highlight);
+  return (
+    <div
+      className={`rounded-xl border px-5 py-4 transition-[border-color,background-color,box-shadow] ${highlightBorderCls(highlight)} ${highlightBgCls(highlight)}`}
+      style={shadow ? { boxShadow: shadow } : undefined}
+    >
+      <p className="text-sm font-semibold text-[var(--ophalo-ink)] mb-1">Handled outside Keep?</p>
+      <p className="text-xs text-[var(--ophalo-muted)] mb-3">
+        Log a phone call, text, email, or in-person conversation.
+      </p>
+      <KeepButton
+        type="button"
+        variant="secondary"
+        onClick={() => onContactLaunched("outbound", contactChannel)}
+        className="w-full"
+      >
+        Log customer contact
+      </KeepButton>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Already handled? — acknowledge attention card
+// ---------------------------------------------------------------------------
+
+interface MarkHandledCardProps {
   requestId: string;
   detail: KeepRequestDetailResult;
   onDetailUpdated: (updated: KeepRequestDetailResult) => void;
+  highlight?: HighlightLevel;
 }
 
-function AcknowledgeAttentionSection({
-  requestId,
-  detail,
-  onDetailUpdated,
-}: AcknowledgeAttentionSectionProps) {
+function MarkHandledCard({ requestId, detail, onDetailUpdated, highlight }: MarkHandledCardProps) {
   const { canAcknowledgeAttention } = detail.availableActions;
+  const hasAttention = detail.attentionLevel !== "none" && !!detail.attentionReason;
   const { acknowledgeReasonMaxLength } = detail.validation;
 
   const [reason, setReason] = useState("");
@@ -586,7 +874,7 @@ function AcknowledgeAttentionSection({
   const [conflictDisabled, setConflictDisabled] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  if (!canAcknowledgeAttention) return null;
+  if (!canAcknowledgeAttention || !hasAttention) return null;
 
   const canSubmit = reason.trim().length > 0 && !isSubmitting && !conflictDisabled;
 
@@ -603,40 +891,53 @@ function AcknowledgeAttentionSection({
         setConflictDisabled(true);
         setError(STATUS_CONFLICT_MESSAGE);
       } else {
-        setError("Could not acknowledge. Try again.");
+        setError("Could not mark handled. Try again.");
       }
     } finally {
       setIsSubmitting(false);
     }
   }
 
+  const shadow = highlightBoxShadow(highlight);
+
   return (
-    <div>
+    <div
+      className={`rounded-xl border px-5 py-4 transition-[border-color,background-color,box-shadow] ${highlightBorderCls(highlight)} ${highlightBgCls(highlight)}`}
+      style={shadow ? { boxShadow: shadow } : undefined}
+    >
+      <p className="text-sm font-semibold text-[var(--ophalo-ink)] mb-1">Already handled?</p>
+      <p className="text-xs text-[var(--ophalo-muted)] mb-3">
+        Use this only if the customer was already taken care of and no customer update or contact log is needed.
+      </p>
       {error && (
         <div
-          className={`mb-2 rounded-lg p-3 text-xs ${
-            conflictDisabled ? "bg-white text-[var(--ophalo-attention)]" : "bg-white text-[var(--ophalo-danger)]"
+          className={`mb-3 rounded-lg p-3 text-xs ${
+            conflictDisabled
+              ? "bg-[var(--ophalo-attention-bg)] text-[var(--ophalo-attention)]"
+              : "bg-[var(--ophalo-danger-bg)] text-[var(--ophalo-danger)]"
           }`}
         >
           {error}
         </div>
       )}
       <form onSubmit={(e) => void handleSubmit(e)} className="space-y-2.5">
-        <label htmlFor="ack-reason" className="block text-sm font-semibold text-[var(--ophalo-attention)]">
-          Acknowledge attention
-        </label>
-        <textarea
-          id="ack-reason"
-          value={reason}
-          onChange={(e) => setReason(e.target.value)}
-          maxLength={acknowledgeReasonMaxLength}
-          disabled={conflictDisabled}
-          placeholder="Reason for acknowledging…"
-          rows={2}
-          className={`${INPUT_CLS} resize-none`}
-        />
-        <KeepButton type="submit" variant="primary" disabled={!canSubmit} className="w-full">
-          {isSubmitting ? "Acknowledging…" : "Acknowledge"}
+        <div>
+          <label htmlFor="ack-reason" className="block text-xs font-semibold text-[var(--ophalo-muted)] mb-1">
+            What was handled?
+          </label>
+          <textarea
+            id="ack-reason"
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            maxLength={acknowledgeReasonMaxLength}
+            disabled={conflictDisabled}
+            placeholder="Example: Called Kelley and confirmed Thursday morning."
+            rows={2}
+            className={`${INPUT_CLS} resize-none`}
+          />
+        </div>
+        <KeepButton type="submit" variant="secondary" disabled={!canSubmit} className="w-full">
+          {isSubmitting ? "Marking handled…" : "Mark attention handled"}
         </KeepButton>
       </form>
     </div>
@@ -760,37 +1061,36 @@ interface WorkControlsGroupProps {
   requestId: string;
   detail: KeepRequestDetailResult;
   onDetailUpdated: (updated: KeepRequestDetailResult) => void;
+  highlights: AttentionHighlights;
 }
 
-function WorkControlsGroup({ requestId, detail, onDetailUpdated }: WorkControlsGroupProps) {
+function WorkControlsGroup({ requestId, detail, onDetailUpdated, highlights }: WorkControlsGroupProps) {
   const hasStatus = detail.availableActions.allowedStatuses.length > 0;
-  const hasAck = detail.availableActions.canAcknowledgeAttention;
   const hasFeedback =
     detail.availableActions.canMarkFeedbackReviewed &&
     detail.feedbackWasResolved === false &&
     detail.feedbackReviewedAtUtc == null;
 
-  if (!hasStatus && !hasAck && !hasFeedback) return null;
+  if (!hasStatus && !hasFeedback) return null;
+
+  const cardHighlight = maxHighlight(highlights.workControls, highlights.feedbackReview);
+  const shadow = highlightBoxShadow(cardHighlight);
 
   return (
-    <div className="rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] overflow-hidden">
+    <div
+      id="work-controls"
+      className={`rounded-xl border overflow-hidden scroll-mt-4 transition-[border-color,box-shadow] bg-[var(--ophalo-card)] ${highlightBorderCls(cardHighlight)}`}
+      style={shadow ? { boxShadow: shadow } : undefined}
+    >
       {hasStatus && (
-        <div className="px-5 py-4">
+        <div className={`px-5 py-4 transition-colors ${highlights.workControls === "primary" ? "bg-[var(--ophalo-attention-bg)]" : ""}`}>
           <StatusChangeSection requestId={requestId} detail={detail} onDetailUpdated={onDetailUpdated} />
         </div>
       )}
-      {hasAck && (
-        <>
-          {hasStatus && <div className="h-px bg-[var(--ophalo-border)]" />}
-          <div className="px-5 py-4 bg-[var(--ophalo-attention-bg)]">
-            <AcknowledgeAttentionSection requestId={requestId} detail={detail} onDetailUpdated={onDetailUpdated} />
-          </div>
-        </>
-      )}
       {hasFeedback && (
         <>
-          {(hasStatus || hasAck) && <div className="h-px bg-[var(--ophalo-border)]" />}
-          <div className="px-5 py-4">
+          {hasStatus && <div className="h-px bg-[var(--ophalo-border)]" />}
+          <div className={`px-5 py-4 transition-colors ${highlights.feedbackReview === "primary" ? "bg-[var(--ophalo-attention-bg)]" : ""}`}>
             <FeedbackReviewSection requestId={requestId} detail={detail} onDetailUpdated={onDetailUpdated} />
           </div>
         </>
@@ -1160,6 +1460,95 @@ function OriginalRequestCard({ detail, onContactLaunched }: OriginalRequestCardP
 }
 
 // ---------------------------------------------------------------------------
+// Needs attention guidance — frontend-mapped until backend action effects land
+// ---------------------------------------------------------------------------
+
+interface AttentionGuidanceCardProps {
+  detail: KeepRequestDetailResult;
+  highlights: AttentionHighlights;
+}
+
+function AttentionGuidanceCard({ detail, highlights }: AttentionGuidanceCardProps) {
+  const guidance = buildAttentionGuidance(detail);
+  if (!guidance) return null;
+
+  const isOverdue = detail.attentionLevel === "overdue";
+
+  const primaryPanelLabel: string | null = (() => {
+    if (highlights.sendUpdate === "primary") return "Send customer update";
+    if (highlights.logContact === "primary") return "Log customer contact";
+    if (highlights.workControls === "primary") return "Status / work controls";
+    if (highlights.feedbackReview === "primary") return "Review feedback";
+    if (highlights.markHandled === "primary") return "Mark attention handled";
+    return null;
+  })();
+
+  return (
+    <section className="rounded-xl border border-[var(--ophalo-border)] border-l-4 border-l-[var(--ophalo-attention)] bg-[var(--ophalo-attention-bg)] px-5 py-4">
+      <div className="flex flex-wrap items-center gap-2 mb-3">
+        <KeepBadge variant={isOverdue ? "danger" : "attention"}>
+          {isOverdue ? (
+            <AlertTriangle className="h-3 w-3 mr-1 shrink-0" />
+          ) : (
+            <Clock className="h-3 w-3 mr-1 shrink-0" />
+          )}
+          Needs attention
+        </KeepBadge>
+        <span className="text-sm font-semibold text-[var(--ophalo-ink)]">{guidance.label}</span>
+      </div>
+
+      <div className="space-y-3">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ophalo-attention)]">
+            Why
+          </p>
+          <p className="mt-1 text-sm leading-6 text-[var(--ophalo-ink)]">{guidance.why}</p>
+        </div>
+
+        {guidance.sourceText && (
+          <div className="rounded-lg border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-3 py-2.5">
+            {guidance.sourceLabel && (
+              <p className="text-xs font-semibold text-[var(--ophalo-muted)] mb-1">
+                {guidance.sourceLabel}
+              </p>
+            )}
+            <p className="text-sm leading-6 text-[var(--ophalo-ink)] italic">
+              "{guidance.sourceText}"
+            </p>
+          </div>
+        )}
+
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ophalo-attention)]">
+            Resolve by
+          </p>
+          <p className="mt-1 text-sm leading-6 text-[var(--ophalo-ink)]">{guidance.resolveBy}</p>
+          {guidance.afterHandled && (
+            <p className="mt-1 text-xs leading-5 text-[var(--ophalo-muted)]">
+              {guidance.afterHandled}
+            </p>
+          )}
+        </div>
+
+        {primaryPanelLabel && (
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ophalo-attention)]">
+              Recommended next step
+            </p>
+            <p className="mt-1 text-sm font-semibold text-[var(--ophalo-ink)]">
+              {primaryPanelLabel}
+            </p>
+            <p className="mt-0.5 text-xs text-[var(--ophalo-muted)]">
+              Look for the highlighted section on this page.
+            </p>
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Latest update card — standalone teal continuity surface
 // ---------------------------------------------------------------------------
 
@@ -1194,6 +1583,7 @@ interface BusinessUpdateSectionProps {
   onDraftChange: (v: string) => void;
   draftStatus: string;
   onDraftStatusChange: (v: string) => void;
+  highlight?: HighlightLevel;
 }
 
 function BusinessUpdateSection({
@@ -1204,6 +1594,7 @@ function BusinessUpdateSection({
   onDraftChange,
   draftStatus,
   onDraftStatusChange,
+  highlight,
 }: BusinessUpdateSectionProps) {
   const { canSendBusinessUpdate, canChangeStatus, allowedStatuses } = detail.availableActions;
   const maxLength = detail.validation.businessUpdateMaxLength;
@@ -1251,11 +1642,15 @@ function BusinessUpdateSection({
   }
 
   return (
-    <div className="rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-5 py-5">
-      <p className="text-base font-semibold text-[var(--ophalo-ink)] mb-3">Send update</p>
+    <div
+      id="customer-update"
+      className={`rounded-xl border px-5 py-5 scroll-mt-4 transition-[border-color,background-color,box-shadow] ${highlightBorderCls(highlight)} ${highlightBgCls(highlight)}`}
+      style={{ boxShadow: highlightBoxShadow(highlight) }}
+    >
+      <p className="text-base font-semibold text-[var(--ophalo-ink)] mb-3">Send customer update</p>
       {detail.needsShare && (
         <p className="mb-3 text-xs text-[var(--ophalo-attention)]">
-          Tracker link not yet shared — the customer won't see this until you share it.
+          Customer page not yet shared — the customer won't see this until you share it.
         </p>
       )}
       {error && (
@@ -1323,7 +1718,7 @@ function BusinessUpdateSection({
           </div>
         )}
         <p className="text-xs text-[var(--ophalo-muted)]">
-          Visible on the customer tracker.
+          Visible on the customer page.
           {selectedStatus && ` Status will change to ${statusLabel(selectedStatus)}.`}
         </p>
         <KeepButton type="submit" variant="teal" disabled={!canSubmit} className="w-full">
@@ -1633,6 +2028,11 @@ export function RequestDetail({ requestId, onBack }: RequestDetailProps) {
     });
   }, [detail, timelineFilter]);
 
+  const highlights = useMemo(
+    () => (detail ? getAttentionResolutionHighlights(detail) : {}),
+    [detail],
+  );
+
   function handleShareCleared() {
     setShareCleared(true);
     void queryClient.invalidateQueries({ queryKey: ["request-detail", requestId] });
@@ -1654,7 +2054,7 @@ export function RequestDetail({ requestId, onBack }: RequestDetailProps) {
         : "bg-[var(--ophalo-card)] text-[var(--ophalo-muted)] hover:text-[var(--ophalo-ink)]"
     }`;
 
-  // Primary communication actions: Send update + Tracker link + Work controls
+  // Primary communication actions: Send update + contact log + mark handled + work controls
   function renderPrimaryActions() {
     if (!detail) return null;
     return (
@@ -1667,6 +2067,18 @@ export function RequestDetail({ requestId, onBack }: RequestDetailProps) {
           onDraftChange={setBusinessUpdateDraft}
           draftStatus={businessUpdateDraftStatus}
           onDraftStatusChange={setBusinessUpdateDraftStatus}
+          highlight={highlights.sendUpdate}
+        />
+        <LogContactCard
+          detail={detail}
+          onContactLaunched={handleContactLaunched}
+          highlight={highlights.logContact}
+        />
+        <MarkHandledCard
+          requestId={requestId}
+          detail={detail}
+          onDetailUpdated={handleDetailUpdated}
+          highlight={highlights.markHandled}
         />
         {canShare && (
           <DesktopShareSection
@@ -1681,6 +2093,7 @@ export function RequestDetail({ requestId, onBack }: RequestDetailProps) {
           requestId={requestId}
           detail={detail}
           onDetailUpdated={handleDetailUpdated}
+          highlights={highlights}
         />
       </>
     );
@@ -1770,6 +2183,12 @@ export function RequestDetail({ requestId, onBack }: RequestDetailProps) {
             <OriginalRequestCard
               detail={detail}
               onContactLaunched={handleContactLaunched}
+            />
+
+            {/* Needs attention: why it is here + how to handle it */}
+            <AttentionGuidanceCard
+              detail={detail}
+              highlights={highlights}
             />
 
             {/* Latest update: standalone teal card, avoids nested-card feel */}

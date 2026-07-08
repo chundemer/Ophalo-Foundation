@@ -575,11 +575,11 @@ function SuccessPanel({
   onViewRequest,
 }: SuccessPanelProps) {
   const [copied, setCopied] = useState(false);
-  const trackerUrl = `${publicBaseUrl}/keep/r/${pageToken}`;
+  const customerPageUrl = `${publicBaseUrl}/keep/r/${pageToken}`;
 
   async function handleCopyLink() {
     try {
-      await navigator.clipboard.writeText(trackerUrl);
+      await navigator.clipboard.writeText(customerPageUrl);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
       void api.recordShareIntent(requestId, "copy_link").catch(() => {});
@@ -596,7 +596,7 @@ function SuccessPanel({
       </div>
 
       <p className="text-xs text-amber-700 font-medium">
-        Share the tracker link with the customer so they can follow progress.
+        Share the customer page with the customer so they can follow progress.
       </p>
 
       <div className="flex flex-col gap-2">
@@ -606,7 +606,7 @@ function SuccessPanel({
           className="w-full flex items-center justify-center gap-2 rounded-md bg-slate-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-slate-700"
         >
           <Copy className="h-4 w-4" />
-          {copied ? "Copied!" : "Copy Tracker Link"}
+          {copied ? "Copied!" : "Copy customer page link"}
         </button>
 
         <button
