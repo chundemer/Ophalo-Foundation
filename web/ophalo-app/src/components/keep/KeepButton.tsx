@@ -1,6 +1,6 @@
 import type { ButtonHTMLAttributes, ReactNode } from "react";
 
-export type KeepButtonVariant = "teal" | "primary";
+export type KeepButtonVariant = "teal" | "primary" | "secondary";
 
 export function KeepButton({
   variant = "teal",
@@ -21,9 +21,14 @@ export function KeepButton({
   const enabledPrimary = "bg-[var(--ophalo-navy)] text-white hover:opacity-90";
   const disabledPrimary = "border border-[var(--ophalo-border)] bg-[var(--ophalo-canvas)] text-[var(--ophalo-muted)]";
 
+  const enabledSecondary = "border-2 border-[var(--ophalo-navy)] text-[var(--ophalo-navy)] bg-transparent hover:bg-[var(--ophalo-canvas)]";
+  const disabledSecondary = "border border-[var(--ophalo-border)] bg-[var(--ophalo-canvas)] text-[var(--ophalo-muted)]";
+
   let variantClass: string;
   if (variant === "teal") {
     variantClass = disabled ? disabledTeal : enabledTeal;
+  } else if (variant === "secondary") {
+    variantClass = disabled ? disabledSecondary : enabledSecondary;
   } else {
     variantClass = disabled ? disabledPrimary : enabledPrimary;
   }
