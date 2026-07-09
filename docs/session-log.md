@@ -1,8 +1,8 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-07-09 (S22r2 preflight complete — implementation-ready)
+**Last updated:** 2026-07-09 (S22r2 complete — slug alias routing live, 7 integration tests green)
 **Branch:** `main` tracking `origin/main`
-**Last green baseline:** 964 unit · 748 integration = 1,712 total, 0 failures (1 pre-existing KeepG5 fluke excluded)
+**Last green baseline:** 964 unit · 755 integration = 1,719 total, 0 failures (1 pre-existing KeepG5 fluke excluded)
 **Next free ADR:** ADR-430
 **Current session:** Session 22 — Day-Zero Settings Redesign, Intake Sharing, And Service Location Plan
 
@@ -40,7 +40,7 @@ For every implementation slice:
 **Bug/gap tracker:** `docs/pilot-readiness-bug-tracker.md`
 **Foundation roadmap:** `docs/build-log/ophalo-foundation-build-plan-greenfield-boundaries-brownfield-behavior.md` section 9.1
 **Current session:** Session 22 — Day-Zero Settings Redesign, Intake Sharing, And Service Location Plan
-**Current slice:** S22r2 — slug-based public intake routing and alias persistence
+**Current slice:** S22r3 — Public Link & Profile polish (copy/open controls, live preview, link-name editing)
 
 ### Completed Context
 
@@ -81,46 +81,15 @@ Treat these as historical context unless a later discovery step finds a concrete
   Response Policy, Team), `OnboardingSection` removed from primary render. TypeScript clean.
 - `apiClient.ts` additions from S22b (`KeepBusinessSetupResult`, `getGuidedSetup`,
   `deferSetupStep`) are kept — backed by live backend endpoints, needed for S22r5 Getting Started.
-- S22r2 preflight complete (2026-07-09); implementation-ready. Locked decisions:
-  - New entity `KeepPublicIntakeSlugAlias` (Keep.Core): `AccountId`, `IntakeLinkId` (FK →
-    `KeepPublicIntakeLink`), `Slug` (always lowercase), `RetiredAtUtc`. Partial unique index on
-    active aliases (`ix_keep_public_intake_slug_aliases_active_slug`). EF migration required.
-  - Resolution: `FindActivePublicIntakeLinkBySlugAsync` checks current active slug first, then
-    active alias. Input slug is normalized to lowercase before querying. If the resolved link's
-    account fails the access gate (`accountAccessPolicy.Evaluate()`), returns 422 `unavailable`
-    — no DB join needed; the existing Phase B gate in `CreateKeepPublicIntakeService` handles
-    suspended/OffSeason/cancelled accounts.
-  - Service refactor: `ExecuteWithLinkAsync` private method extracted as shared Phase B (access
-    gate + customer resolution + request commit). `ExecuteBySlugAsync(slug, body, ct)` added as
-    slug entry point — resolves via `FindActivePublicIntakeLinkBySlugAsync` then calls
-    `ExecuteWithLinkAsync`. Token path unchanged.
-  - Casing hardening: `KeepPublicIntakeSlugAlias.Create()` enforces `.ToLowerInvariant().Trim()`;
-    `FindActivePublicIntakeLinkBySlugAsync` normalizes input; `ExecuteBySlugAsync` normalizes
-    before persistence call. No collation change in EF config needed.
-  - New API endpoint: `POST /keep/public-intake/slug/{slug}` with `"public-intake"` rate limit
-    policy (same as token endpoint).
-  - ophalo-web: new route `keep/s/[slug]/page.tsx`. `IntakeForm.tsx` adapted to accept
-    `{ token?: string; slug?: string }` props and build POST URL accordingly.
-  - Durable public intake URL shape: `${VITE_PUBLIC_BASE_URL}/keep/s/{publicSlug}`. The copy/open
-    button in `ophalo-app` that uses this URL is S22r3 scope.
-  - Alias redirect (302 to current slug) deferred to S22r3 — no aliases exist until S22r3.
-  - **Hard S22r3 pre-requisite:** `SlugExistsAsync` in `IKeepIntakeSetupPersistence` must be
-    extended to check active aliases before any `KeepPublicIntakeSlugAlias` row is written.
-    This prevents a new current slug matching an active alias for another account.
-- S22r2 file-level gate (approved): 3 families / 8 production files / 11 total (within gate).
-  Production files:
-  1. `src/OpHalo.Keep.Core/Entities/KeepPublicIntakeSlugAlias.cs` (new entity)
-  2. `src/OpHalo.Keep.Infrastructure/Persistence/Configurations/KeepPublicIntakeSlugAliasConfiguration.cs` (new EF config)
-  3. `src/OpHalo.Keep.Application/PublicIntake/IKeepIntakePersistence.cs` (add `FindActivePublicIntakeLinkBySlugAsync`)
-  4. `src/OpHalo.Keep.Infrastructure/Persistence/KeepIntakePersistence.cs` (slug + alias resolution impl)
-  5. `src/OpHalo.Keep.Application/PublicIntake/CreateKeepPublicIntakeService.cs` (extract Phase B, add slug entry point)
-  6. `src/OpHalo.Api/Program.cs` (new slug POST endpoint)
-  7. `web/ophalo-web/src/app/keep/intake/[token]/IntakeForm.tsx` (slug prop mode)
-  8. `web/ophalo-web/src/app/keep/s/[slug]/page.tsx` (new route)
-  Plus: EF migration (.cs + .Designer.cs) + `tests/.../KeepPublicIntakeSlugApiTests.cs`
-  Required tests: current slug → 201; active alias → 201; revoked-link alias → 422; unknown slug
-  → 422; uppercase slug variant → 201 (casing normalization proof); suspended account → 422;
-  cross-account slug isolation proof.
+- S22r2 complete (2026-07-09): `KeepPublicIntakeSlugAlias` entity + EF migration
+  (`keep_public_intake_slug_aliases`, partial unique index on active slug);
+  `FindActivePublicIntakeLinkBySlugAsync` (current slug first, then alias fallback, input
+  normalized to lowercase); `ExecuteWithLinkAsync` Phase B extracted; `ExecuteBySlugAsync` added;
+  `POST /keep/public-intake/slug/{slug}` endpoint; `ophalo-web` `keep/s/[slug]/page.tsx` route;
+  `IntakeForm.tsx` accepts `{ token?: string; slug?: string }`. 7 integration tests green.
+  **Hard S22r3 pre-requisite:** `SlugExistsAsync` in `IKeepIntakeSetupPersistence` must check
+  active aliases before writing any new `KeepPublicIntakeSlugAlias` row (prevents a new current
+  slug matching an active alias for another account).
 - Do not continue showing `Create intake page` and `Share intake page` as separate owner chores.
   Public intake should be auto-provisioned by default, then verified/copied/previewed from Settings.
 - Do not make `Build your team` feel mandatory. Team is available in Settings and reassuringly
