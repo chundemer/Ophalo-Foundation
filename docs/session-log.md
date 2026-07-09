@@ -1,9 +1,9 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-07-08 (S22 guided setup / intake / service-location planning added)
+**Last updated:** 2026-07-09 (S22a guided setup preflight handoff cleaned)
 **Branch:** `main` tracking `origin/main`
 **Last green baseline:** 939 unit · 14 arch · 713 integration = 1,666 total, 0 failures (1 pre-existing KeepG5 fluke excluded)
-**Next free ADR:** ADR-427 before S22 documentation reconciliation
+**Next free ADR:** ADR-428 before S22 documentation reconciliation
 **Current session:** Session 22 — Guided Setup, Intake Sharing, And Service Location Plan
 
 ---
@@ -66,8 +66,8 @@ Treat these as historical context unless a later discovery step finds a concrete
 - Treat Session 12 onboarding (`docs/build-log/066-session-12-account-settings-and-onboarding.md`)
   as the existing foundation to migrate, not as absent work.
 - S22a is a preflight-only pass: audit current onboarding/product-ops contracts, identify account-level
-  versus user-level state gaps, reconcile ADR-295 automatic intake provisioning with explicit guided
-  intake setup, and produce the narrow implementation plan before coding.
+  versus user-level state gaps, define `Do later` and setup-bar state, flag ADR-295/ADR-375/ADR-383
+  doc conflicts, and produce the narrow implementation plan before coding.
 - No implementation should proceed until the relevant S22 preflight has confirmed current signatures,
   DTOs, persistence, visibility boundaries, tests, and doc conflicts.
 
