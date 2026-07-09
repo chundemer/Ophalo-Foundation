@@ -1,10 +1,10 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-07-04 (S17j complete; Session 17 done)
+**Last updated:** 2026-07-08 (S22 guided setup / intake / service-location planning added)
 **Branch:** `main` tracking `origin/main`
 **Last green baseline:** 939 unit · 14 arch · 713 integration = 1,666 total, 0 failures (1 pre-existing KeepG5 fluke excluded)
-**Next free ADR:** ADR-407
-**Current session:** Session 17 — Review-Safe Native Product Foundation
+**Next free ADR:** ADR-427 before S22 documentation reconciliation
+**Current session:** Session 22 — Guided Setup, Intake Sharing, And Service Location Plan
 
 ---
 
@@ -34,13 +34,13 @@ For every implementation slice:
 
 ## Current Work
 
-**Current build log:** `docs/build-log/071-session-17-review-safe-native-product-foundation.md`
-**Last completed build log:** `docs/build-log/070-session-16-native-mobile-foundation.md` (Session 16)
+**Current build log:** `docs/build-log/076-session-22-guided-setup-intake-and-service-location.md`
+**Last completed build log:** `docs/build-log/075-session-21-attention-guidance-resolution-metadata.md` (draft handoff)
 **Readiness working doc:** `docs/pilot-readiness-decision-questions.md`
 **Bug/gap tracker:** `docs/pilot-readiness-bug-tracker.md`
 **Foundation roadmap:** `docs/build-log/ophalo-foundation-build-plan-greenfield-boundaries-brownfield-behavior.md` section 9.1
-**Current session:** Session 17 — Review-Safe Native Product Foundation
-**Current slice:** S17j — Complete
+**Current session:** Session 22 — Guided Setup, Intake Sharing, And Service Location Plan
+**Current slice:** S22a — Onboarding V2 / Guided Setup Preflight
 
 ### Completed Context
 
@@ -50,6 +50,9 @@ Completed implementation details live in the build logs and should not be repeat
 - Session 14 — web front door: `docs/build-log/068-session-14-ophalo-web-front-door.md`
 - Session 15 — pilot readiness: `docs/build-log/069-session-15-pilot-readiness.md`
 - Session 16 — native mobile foundation: `docs/build-log/070-session-16-native-mobile-foundation.md`
+- Session 19 — Keep workbench UX migration: `docs/build-log/073-session-19-keep-workbench-ux-migration.md` (S19a–S19d complete; S19e + Gate 3 sign-off deferred)
+- Session 20 — mobile Owner/Admin control mode: `docs/build-log/074-session-20-mobile-owner-admin-control-mode.md`
+- Session 21 — attention guidance resolution metadata: `docs/build-log/075-session-21-attention-guidance-resolution-metadata.md`
 
 Session 16 completed the native mobile foundation, including the Expo app shell, secure token and
 installation storage, mobile magic-link handoff, nullable push-token device registration, badge hook,
@@ -58,11 +61,22 @@ Treat these as historical context unless a later discovery step finds a concrete
 
 ### Current Direction
 
-- S17 decisions are locked in build log 071 as ADR-396 through ADR-405. Treat the build log and
-  decision index as the active S17 authority.
-- S17a through S17i are complete. Use build-log 071 as the implementation archive and this session
-  log as the current handoff brief for S17j.
-- New backend endpoints are allowed only after explicit S17a gap evidence and documentation.
+- S22 decisions and implementation slicing are captured in
+  `docs/build-log/076-session-22-guided-setup-intake-and-service-location.md`.
+- Treat Session 12 onboarding (`docs/build-log/066-session-12-account-settings-and-onboarding.md`)
+  as the existing foundation to migrate, not as absent work.
+- S22a is a preflight-only pass: audit current onboarding/product-ops contracts, identify account-level
+  versus user-level state gaps, reconcile ADR-295 automatic intake provisioning with explicit guided
+  intake setup, and produce the narrow implementation plan before coding.
+- No implementation should proceed until the relevant S22 preflight has confirmed current signatures,
+  DTOs, persistence, visibility boundaries, tests, and doc conflicts.
+
+- S17 decisions are locked in build log 071 as ADR-396 through ADR-405. Treat S17 as historical
+  implementation context unless a later S22/S20 preflight explicitly pulls a mobile dependency
+  forward.
+- S17a through S17j are complete. Use build-log 071 as the implementation archive, not the active
+  handoff brief.
+- New backend endpoints are allowed only after explicit S22 preflight gap evidence and documentation.
 - Use `docs/pilot-readiness-bug-tracker.md` as the live source of bug/gap status.
 - `ophalo-app` remains the authenticated Keep workbench.
 - `mobile/ophalo-mobile` is a separate native deliverable and must remain aligned with Apple/Google
