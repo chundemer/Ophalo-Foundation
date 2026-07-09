@@ -24,7 +24,6 @@ public sealed class CreateKeepPublicIntakeService(
     public async Task<Result<CreateKeepPublicIntakeResult>> ExecuteAsync(
         CreateKeepPublicIntakeCommand command, CancellationToken ct = default)
     {
-        // --- Shared validation pipeline ---
         var validation = KeepRequestInputValidator.Validate(
             command.CustomerName, command.CustomerPhone, command.CustomerEmail, command.Description);
         if (!validation.IsSuccess)
@@ -32,8 +31,6 @@ public sealed class CreateKeepPublicIntakeService(
 
         var v = validation.Value;
 
-        // --- Token and account gate (collapses to Unavailable; never exposes validation state) ---
-        // HashPublicIntakeToken throws ArgumentException on null/whitespace; guard first.
         if (string.IsNullOrWhiteSpace(command.PublicIntakeToken))
             return Result<CreateKeepPublicIntakeResult>.Failure(Unavailable);
 
@@ -42,6 +39,34 @@ public sealed class CreateKeepPublicIntakeService(
         if (link is null || !link.IsActive)
             return Result<CreateKeepPublicIntakeResult>.Failure(Unavailable);
 
+        return await ExecuteWithLinkAsync(link, v, ct);
+    }
+
+    public async Task<Result<CreateKeepPublicIntakeResult>> ExecuteBySlugAsync(
+        string slug, CreateKeepPublicIntakeCommand command, CancellationToken ct = default)
+    {
+        var validation = KeepRequestInputValidator.Validate(
+            command.CustomerName, command.CustomerPhone, command.CustomerEmail, command.Description);
+        if (!validation.IsSuccess)
+            return Result<CreateKeepPublicIntakeResult>.Failure(validation.Error);
+
+        var v = validation.Value;
+
+        if (string.IsNullOrWhiteSpace(slug))
+            return Result<CreateKeepPublicIntakeResult>.Failure(Unavailable);
+
+        var link = await persistence.FindActivePublicIntakeLinkBySlugAsync(slug, ct);
+        if (link is null || !link.IsActive)
+            return Result<CreateKeepPublicIntakeResult>.Failure(Unavailable);
+
+        return await ExecuteWithLinkAsync(link, v, ct);
+    }
+
+    private async Task<Result<CreateKeepPublicIntakeResult>> ExecuteWithLinkAsync(
+        KeepPublicIntakeLink link,
+        ValidatedKeepRequestInput v,
+        CancellationToken ct)
+    {
         var accountId = link.AccountId;
         var snapshot = await persistence.GetAccountAccessSnapshotAsync(accountId, ct);
         if (snapshot is null)
@@ -69,15 +94,12 @@ public sealed class CreateKeepPublicIntakeService(
         var policy = await persistence.GetResponsePolicyAsync(accountId, ct);
         var firstResponseTargetMinutes = policy?.FirstResponseTargetMinutes ?? 60;
 
-        // Load existing customer or seed a new one. UpdateContactInfo preserves the existing email
-        // when the incoming value is null/blank (anonymous omission is not a clear-email command).
         var customer = await persistence.FindCustomerByCanonicalPhoneAsync(accountId, v.CanonicalPhone, ct);
         if (customer is null)
             customer = KeepCustomer.Create(accountId, v.TrimmedName, v.TrimmedPhone, v.TrimmedEmail);
         else
             customer.UpdateContactInfo(v.TrimmedName, v.TrimmedEmail);
 
-        // Retry loop: customer-identity and token collisions share the five-attempt ceiling.
         for (var attempt = 0; attempt < MaxAttempts; attempt++)
         {
             var pageToken = tokenService.GeneratePageToken();
@@ -103,8 +125,6 @@ public sealed class CreateKeepPublicIntakeService(
                     continue;
 
                 case PublicIntakeCommitResult.CustomerCanonicalPhoneCollision:
-                    // A concurrent submission won the customer insert. Re-read the winning customer,
-                    // apply safe contact-update rules, and retry request/event persistence.
                     customer = await persistence.FindCustomerByCanonicalPhoneAsync(accountId, v.CanonicalPhone, ct)
                         ?? throw new InvalidOperationException(
                             "Expected a customer after canonical-phone collision but none was found.");

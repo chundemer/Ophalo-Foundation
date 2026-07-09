@@ -18,6 +18,15 @@ public interface IKeepIntakePersistence
         string tokenHash, CancellationToken ct);
 
     /// <summary>
+    /// Resolves an intake link by slug: checks the current active slug on
+    /// <see cref="OpHalo.Keep.Core.Entities.KeepPublicIntakeLink"/> first, then
+    /// active aliases in <c>keep_public_intake_slug_aliases</c>. Input is
+    /// normalized to lowercase before querying. Returns null if no match.
+    /// </summary>
+    Task<KeepPublicIntakeLink?> FindActivePublicIntakeLinkBySlugAsync(
+        string slug, CancellationToken ct);
+
+    /// <summary>
     /// Combines Account + AccountEntitlements into a single snapshot for
     /// policy composition. Returns null if either row is missing.
     /// </summary>

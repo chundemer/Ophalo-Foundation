@@ -43,7 +43,7 @@ function fieldError(code: string | undefined): string | null {
   }
 }
 
-export default function IntakeForm({ token }: { token: string }) {
+export default function IntakeForm({ token, slug }: { token?: string; slug?: string }) {
   const [stage, setStage] = useState<Stage>("form");
   const [referenceCode, setReferenceCode] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
@@ -63,10 +63,14 @@ export default function IntakeForm({ token }: { token: string }) {
     const customerEmail = customerEmailRaw.length > 0 ? customerEmailRaw : null;
     const description = String(data.get("description") ?? "").trim();
 
+    const intakeUrl = slug
+      ? `${process.env.NEXT_PUBLIC_API_BASE_URL}/keep/public-intake/slug/${encodeURIComponent(slug)}`
+      : `${process.env.NEXT_PUBLIC_API_BASE_URL}/keep/public-intake/token/${encodeURIComponent(token ?? "")}`;
+
     let res: Response;
     try {
       res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_BASE_URL}/keep/public-intake/token/${encodeURIComponent(token)}`,
+        intakeUrl,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },

@@ -307,8 +307,11 @@ if (!app.Environment.IsEnvironment("Testing"))
 
 // --- Routes ---
 
-// Public intake — anonymous, rate limited (ADR-051, ADR-059, ADR-060)
+// Public intake — anonymous, rate limited (ADR-051, ADR-059, ADR-060, ADR-429)
 app.MapPost("/keep/public-intake/token/{publicIntakeToken}", HandlePublicIntake)
+   .RequireRateLimiting("public-intake");
+
+app.MapPost("/keep/public-intake/slug/{slug}", HandlePublicIntakeBySlug)
    .RequireRateLimiting("public-intake");
 
 // Intake setup — authenticated, Owner/Admin only (GAP-001)
@@ -870,6 +873,29 @@ static async Task<IResult> HandlePublicIntake(
         body.Description);
 
     var result = await service.ExecuteAsync(command, ct);
+
+    if (!result.IsSuccess)
+        return ErrorHttpMapper.ToHttpResult(result.Error);
+
+    return Results.Created(
+        (string?)null,
+        new { result.Value.RequestId, result.Value.ReferenceCode, result.Value.PageToken });
+}
+
+static async Task<IResult> HandlePublicIntakeBySlug(
+    [FromRoute] string slug,
+    [FromBody] PublicIntakeRequest body,
+    CreateKeepPublicIntakeService service,
+    CancellationToken ct)
+{
+    var command = new CreateKeepPublicIntakeCommand(
+        string.Empty,
+        body.CustomerName,
+        body.CustomerPhone,
+        body.CustomerEmail,
+        body.Description);
+
+    var result = await service.ExecuteBySlugAsync(slug, command, ct);
 
     if (!result.IsSuccess)
         return ErrorHttpMapper.ToHttpResult(result.Error);

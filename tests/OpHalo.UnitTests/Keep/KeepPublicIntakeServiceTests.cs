@@ -545,6 +545,10 @@ public class KeepPublicIntakeServiceTests
             string tokenHash, CancellationToken ct) =>
             Task.FromResult(LinkToReturn);
 
+        public Task<KeepPublicIntakeLink?> FindActivePublicIntakeLinkBySlugAsync(
+            string slug, CancellationToken ct) =>
+            Task.FromResult(LinkToReturn);
+
         public Task<AccountAccessSnapshot?> GetAccountAccessSnapshotAsync(
             Guid accountId, CancellationToken ct) =>
             Task.FromResult(AccountSnapshotToReturn);

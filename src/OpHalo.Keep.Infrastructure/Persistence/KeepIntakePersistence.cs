@@ -14,6 +14,30 @@ public sealed class KeepIntakePersistence(OpHaloDbContext dbContext) : IKeepInta
             .AsNoTracking()
             .FirstOrDefaultAsync(l => l.TokenHash == tokenHash && l.RevokedAtUtc == null, ct);
 
+    public async Task<KeepPublicIntakeLink?> FindActivePublicIntakeLinkBySlugAsync(
+        string slug, CancellationToken ct)
+    {
+        var normalized = slug.ToLowerInvariant().Trim();
+
+        // Check current active slug first.
+        var byCurrentSlug = await dbContext.Set<KeepPublicIntakeLink>()
+            .AsNoTracking()
+            .FirstOrDefaultAsync(l => l.PublicSlug == normalized && l.RevokedAtUtc == null, ct);
+        if (byCurrentSlug is not null)
+            return byCurrentSlug;
+
+        // Fall back to active alias.
+        var alias = await dbContext.Set<KeepPublicIntakeSlugAlias>()
+            .AsNoTracking()
+            .FirstOrDefaultAsync(a => a.Slug == normalized && a.RetiredAtUtc == null && a.DeletedAtUtc == null, ct);
+        if (alias is null)
+            return null;
+
+        return await dbContext.Set<KeepPublicIntakeLink>()
+            .AsNoTracking()
+            .FirstOrDefaultAsync(l => l.Id == alias.IntakeLinkId && l.RevokedAtUtc == null, ct);
+    }
+
     public async Task<AccountAccessSnapshot?> GetAccountAccessSnapshotAsync(
         Guid accountId, CancellationToken ct)
     {
