@@ -40,7 +40,7 @@ For every implementation slice:
 **Bug/gap tracker:** `docs/pilot-readiness-bug-tracker.md`
 **Foundation roadmap:** `docs/build-log/ophalo-foundation-build-plan-greenfield-boundaries-brownfield-behavior.md` section 9.1
 **Current session:** Session 22 — Day-Zero Settings Redesign, Intake Sharing, And Service Location Plan
-**Current slice:** S22r3 — Public Link & Profile polish (copy/open controls, live preview, link-name editing)
+**Current slice:** S22r4 — Response Policy tab
 
 ### Completed Context
 
@@ -87,9 +87,15 @@ Treat these as historical context unless a later discovery step finds a concrete
   normalized to lowercase); `ExecuteWithLinkAsync` Phase B extracted; `ExecuteBySlugAsync` added;
   `POST /keep/public-intake/slug/{slug}` endpoint; `ophalo-web` `keep/s/[slug]/page.tsx` route;
   `IntakeForm.tsx` accepts `{ token?: string; slug?: string }`. 7 integration tests green.
-  **Hard S22r3 pre-requisite:** `SlugExistsAsync` in `IKeepIntakeSetupPersistence` must check
-  active aliases before writing any new `KeepPublicIntakeSlugAlias` row (prevents a new current
-  slug matching an active alias for another account).
+- S22r3 complete (2026-07-09): `KeepPublicIntakeLink.RenameSlug` (returns bool no-op indicator);
+  `SlugExistsAsync` expanded to check active `KeepPublicIntakeSlugAlias` rows (hard pre-requisite);
+  `KeepIntakeSetupService.RenameAsync` with diacritic-stripping `Slugify`, user-visible 422 on slug
+  collision; `CommitRenameAsync` (transactional alias insert + slug update, race-condition catch);
+  `PUT /keep/setup/intake/link-name`; `updateIntakeLinkName` in `apiClient.ts`; `IntakeSection`
+  replaced with polished `PublicLinkSection`: durable copy/open via `VITE_PUBLIC_BASE_URL/keep/s/{slug}`,
+  inline link-name editing (server slug returned, alias awareness copy), raw-token "shown once"
+  banner preserved for ensure/replace, replace kept as destructive with warning, phone-sized customer
+  preview. 19 unit tests + 29 integration tests (12 new rename tests) green.
 - Do not continue showing `Create intake page` and `Share intake page` as separate owner chores.
   Public intake should be auto-provisioned by default, then verified/copied/previewed from Settings.
 - Do not make `Build your team` feel mandatory. Team is available in Settings and reassuringly

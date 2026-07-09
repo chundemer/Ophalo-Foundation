@@ -184,6 +184,10 @@ export interface IntakeReplaceResult {
   staleLinksWarning: boolean;
 }
 
+export interface IntakeRenameLinkResult {
+  publicSlug: string;
+}
+
 export interface PhoneLookupCustomer {
   name: string;
   phone: string;
@@ -654,6 +658,11 @@ export const api = {
     apiFetch<IntakeEnsureResult>("/keep/setup/intake/ensure", { method: "POST" }),
   replaceIntake: () =>
     apiFetch<IntakeReplaceResult>("/keep/setup/intake/replace", { method: "POST" }),
+  updateIntakeLinkName: (desiredName: string) =>
+    apiFetch<IntakeRenameLinkResult>("/keep/setup/intake/link-name", {
+      method: "PUT",
+      body: JSON.stringify({ desiredName }),
+    }),
   inviteMember: (email: string, role: string) =>
     apiFetch<{ status: string }>("/accounts/me/invite", {
       method: "POST",

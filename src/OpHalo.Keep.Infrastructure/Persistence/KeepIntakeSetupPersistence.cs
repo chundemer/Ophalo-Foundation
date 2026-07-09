@@ -61,9 +61,15 @@ public sealed class KeepIntakeSetupPersistence(OpHaloDbContext dbContext) : IKee
         dbContext.Set<KeepPublicIntakeLink>()
             .FirstOrDefaultAsync(l => l.AccountId == accountId && l.RevokedAtUtc == null, ct);
 
-    public Task<bool> SlugExistsAsync(string slug, CancellationToken ct) =>
-        dbContext.Set<KeepPublicIntakeLink>()
-            .AnyAsync(l => l.PublicSlug == slug && l.RevokedAtUtc == null, ct);
+    public async Task<bool> SlugExistsAsync(string slug, CancellationToken ct)
+    {
+        if (await dbContext.Set<KeepPublicIntakeLink>()
+                .AnyAsync(l => l.PublicSlug == slug && l.RevokedAtUtc == null, ct))
+            return true;
+
+        return await dbContext.Set<KeepPublicIntakeSlugAlias>()
+            .AnyAsync(a => a.Slug == slug && a.RetiredAtUtc == null && a.DeletedAtUtc == null, ct);
+    }
 
     public async Task<EnsureIntakeLinkCommitResult> CommitEnsureAsync(
         KeepPublicIntakeLink link, CancellationToken ct)
@@ -101,5 +107,27 @@ public sealed class KeepIntakeSetupPersistence(OpHaloDbContext dbContext) : IKee
         await dbContext.SaveChangesAsync(ct);
         await tx.CommitAsync(ct);
         // On any exception the transaction auto-rolls back, preserving the old active link.
+    }
+
+    public async Task<RenameIntakeLinkCommitResult> CommitRenameAsync(
+        KeepPublicIntakeLink link, KeepPublicIntakeSlugAlias alias, CancellationToken ct)
+    {
+        await using var tx = await dbContext.Database.BeginTransactionAsync(ct);
+        dbContext.Set<KeepPublicIntakeSlugAlias>().Add(alias);
+        // link.RenameSlug() already mutated link.PublicSlug — EF flushes the UPDATE on SaveChanges.
+        try
+        {
+            await dbContext.SaveChangesAsync(ct);
+            await tx.CommitAsync(ct);
+            return RenameIntakeLinkCommitResult.Renamed;
+        }
+        catch (DbUpdateException ex) when (
+            ex.InnerException is PostgresException pg && pg.SqlState == "23505" &&
+            (pg.ConstraintName == "ix_keep_public_intake_links_active_slug" ||
+             pg.ConstraintName == "ix_keep_public_intake_slug_aliases_active_slug"))
+        {
+            dbContext.Entry(alias).State = EntityState.Detached;
+            return RenameIntakeLinkCommitResult.SlugCollision;
+        }
     }
 }

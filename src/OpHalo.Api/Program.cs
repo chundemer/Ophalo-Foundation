@@ -333,6 +333,12 @@ app.MapPost("/keep/setup/intake/replace", async (KeepIntakeSetupService service,
     return result.IsSuccess ? Results.Ok(result.Value) : ErrorHttpMapper.ToHttpResult(result.Error);
 }).RequireAuthorization();
 
+app.MapPut("/keep/setup/intake/link-name", async (RenameLinkNameBody body, KeepIntakeSetupService service, CancellationToken ct) =>
+{
+    var result = await service.RenameAsync(body.DesiredName, ct);
+    return result.IsSuccess ? Results.Ok(result.Value) : ErrorHttpMapper.ToHttpResult(result.Error);
+}).RequireAuthorization();
+
 // Business profile + response policy — authenticated, Owner/Admin only (S12a)
 app.MapGet("/keep/setup", async (KeepSetupService service, CancellationToken ct) =>
 {
@@ -956,3 +962,5 @@ static async Task<IResult> HandleFeedback(
 // Required for WebApplicationFactory<Program> — exposes the auto-generated Program
 // class to the integration test assembly (ADR-058).
 public partial class Program { }
+
+public sealed record RenameLinkNameBody(string DesiredName);

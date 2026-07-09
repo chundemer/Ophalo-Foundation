@@ -36,6 +36,7 @@ public static class ErrorHttpMapper
 
             // --- Keep-specific codes (explicit) ---
             "keep.public_intake.unavailable" => (StatusCodes.Status422UnprocessableEntity, "Unprocessable entity.", null),
+            "keep.public_intake.slug_taken"  => (StatusCodes.Status422UnprocessableEntity, "Unprocessable entity.", null),
             "KeepPublicIntakeLink.NoActiveLink" => (StatusCodes.Status404NotFound, "Resource not found.", null),
 
             // --- 400 — validation / malformed client request ---

@@ -12,4 +12,7 @@ public static class KeepPublicIntakeLinkErrors
 
     public static readonly Error NoActiveLink =
         Error.Create("KeepPublicIntakeLink.NoActiveLink", "No active intake link exists for this account.");
+
+    public static readonly Error SlugTaken =
+        Error.Create("keep.public_intake.slug_taken", "That link name is already in use. Try a different name.");
 }

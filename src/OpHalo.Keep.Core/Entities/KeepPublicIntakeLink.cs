@@ -28,6 +28,22 @@ public sealed class KeepPublicIntakeLink : BaseEntity
         return Result.Success();
     }
 
+    /// <summary>
+    /// Updates the public slug in-place (ADR-429 ordinary rename, preserves alias).
+    /// Returns true if the slug changed; false if the new slug equals the current one
+    /// (no-op — caller must not create an alias row in this case).
+    /// </summary>
+    public bool RenameSlug(string newSlug)
+    {
+        if (string.IsNullOrWhiteSpace(newSlug))
+            throw new ArgumentException("New slug is required.", nameof(newSlug));
+        var normalized = newSlug.Trim().ToLowerInvariant();
+        if (string.Equals(PublicSlug, normalized, StringComparison.OrdinalIgnoreCase))
+            return false;
+        PublicSlug = normalized;
+        return true;
+    }
+
     public static KeepPublicIntakeLink Create(
         Guid accountId,
         string publicSlug,

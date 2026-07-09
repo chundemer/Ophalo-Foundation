@@ -12,6 +12,9 @@ public interface IKeepIntakeSetupPersistence
     Task<bool> SlugExistsAsync(string slug, CancellationToken ct);
     Task<EnsureIntakeLinkCommitResult> CommitEnsureAsync(KeepPublicIntakeLink link, CancellationToken ct);
     Task CommitReplaceAsync(KeepPublicIntakeLink oldLink, KeepPublicIntakeLink newLink, CancellationToken ct);
+    Task<RenameIntakeLinkCommitResult> CommitRenameAsync(KeepPublicIntakeLink link, KeepPublicIntakeSlugAlias alias, CancellationToken ct);
 }
 
 public enum EnsureIntakeLinkCommitResult { Created = 1, AlreadyExists = 2, SlugCollision = 3 }
+
+public enum RenameIntakeLinkCommitResult { Renamed = 1, SlugCollision = 2 }

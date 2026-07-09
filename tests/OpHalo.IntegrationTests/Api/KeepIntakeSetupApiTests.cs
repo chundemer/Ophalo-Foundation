@@ -476,6 +476,232 @@ public sealed class KeepIntakeSetupApiTests : IClassFixture<KeepApiWebFactory>, 
     }
 
     // -------------------------------------------------------------------------
+    // Rename link name — PUT /keep/setup/intake/link-name
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public async Task RenameLinkName_Owner_ReturnsNewSlug()
+    {
+        var (accountId, ownerUserId) = await SeedFreshAccountAsync("Rename Owner Co", "rename-owner");
+        await EnsureLinkAsync(ownerUserId, accountId);
+        var cookie = await _factory.SeedSessionAsync(ownerUserId, accountId);
+
+        using var req = new HttpRequestMessage(HttpMethod.Put, "/keep/setup/intake/link-name");
+        req.Headers.Add("Cookie", $"{AuthConstants.CookieName}={cookie}");
+        req.Content = JsonContent.Create(new { desiredName = "New Owner Name" });
+        var resp = await _client.SendAsync(req);
+
+        Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
+        var body = await resp.Content.ReadFromJsonAsync<RenameLinkBody>(JsonOptions);
+        Assert.NotNull(body);
+        Assert.Equal("new-owner-name", body.PublicSlug);
+    }
+
+    [Fact]
+    public async Task RenameLinkName_Admin_CanRename()
+    {
+        var cookie = await _factory.SeedSessionAsync(_adminUserId, _accountId);
+
+        using var req = new HttpRequestMessage(HttpMethod.Put, "/keep/setup/intake/link-name");
+        req.Headers.Add("Cookie", $"{AuthConstants.CookieName}={cookie}");
+        req.Content = JsonContent.Create(new { desiredName = "Admin Renamed" });
+        var resp = await _client.SendAsync(req);
+
+        Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
+        var body = await resp.Content.ReadFromJsonAsync<RenameLinkBody>(JsonOptions);
+        Assert.NotNull(body?.PublicSlug);
+    }
+
+    [Fact]
+    public async Task RenameLinkName_OldSlugRemainsReachableAsAlias()
+    {
+        var (accountId, ownerUserId) = await SeedFreshAccountAsync("Alias Test Co", "alias-test");
+        await EnsureLinkAsync(ownerUserId, accountId);
+
+        // Capture original slug.
+        var statusCookie = await _factory.SeedSessionAsync(ownerUserId, accountId);
+        using var statusReq = new HttpRequestMessage(HttpMethod.Get, "/keep/setup/intake");
+        statusReq.Headers.Add("Cookie", $"{AuthConstants.CookieName}={statusCookie}");
+        var statusResp = await _client.SendAsync(statusReq);
+        var statusBody = await statusResp.Content.ReadFromJsonAsync<StatusBody>(JsonOptions);
+        var oldSlug = statusBody!.PublicSlug!;
+
+        // Rename to something new.
+        var cookie = await _factory.SeedSessionAsync(ownerUserId, accountId);
+        using var renameReq = new HttpRequestMessage(HttpMethod.Put, "/keep/setup/intake/link-name");
+        renameReq.Headers.Add("Cookie", $"{AuthConstants.CookieName}={cookie}");
+        renameReq.Content = JsonContent.Create(new { desiredName = "Alias Test Renamed" });
+        var renameResp = await _client.SendAsync(renameReq);
+        Assert.Equal(HttpStatusCode.OK, renameResp.StatusCode);
+
+        // Old slug must still resolve at the public intake endpoint (alias fallback).
+        var publicResp = await _client.PostAsJsonAsync(
+            $"/keep/public-intake/slug/{oldSlug}",
+            new { customerName = "Alias Bob", customerPhone = "0411000001", description = "Alias test" });
+
+        Assert.Equal(HttpStatusCode.Created, publicResp.StatusCode);
+    }
+
+    [Fact]
+    public async Task RenameLinkName_SameNameNoOp_NoAliasSideEffect()
+    {
+        var cookie = await _factory.SeedSessionAsync(_ownerUserId, _accountId);
+
+        // Get current slug.
+        using var statusReq = new HttpRequestMessage(HttpMethod.Get, "/keep/setup/intake");
+        statusReq.Headers.Add("Cookie", $"{AuthConstants.CookieName}={cookie}");
+        var statusResp = await _client.SendAsync(statusReq);
+        var statusBody = await statusResp.Content.ReadFromJsonAsync<StatusBody>(JsonOptions);
+        var currentSlug = statusBody!.PublicSlug!;
+
+        // Rename to same name that slugifies to the current slug.
+        using var renameReq = new HttpRequestMessage(HttpMethod.Put, "/keep/setup/intake/link-name");
+        renameReq.Headers.Add("Cookie", $"{AuthConstants.CookieName}={cookie}");
+        renameReq.Content = JsonContent.Create(new { desiredName = currentSlug });
+        var renameResp = await _client.SendAsync(renameReq);
+
+        Assert.Equal(HttpStatusCode.OK, renameResp.StatusCode);
+        var body = await renameResp.Content.ReadFromJsonAsync<RenameLinkBody>(JsonOptions);
+        Assert.Equal(currentSlug, body?.PublicSlug);
+    }
+
+    [Fact]
+    public async Task RenameLinkName_CollisionWithActiveCurrentSlug_Returns422SlugTaken()
+    {
+        // Account A has slug "collision-a-co" (from SeedFreshAccount → ensure).
+        var (accountAId, accountAOwner) = await SeedFreshAccountAsync("Collision A Co", "collision-a");
+        await EnsureLinkAsync(accountAOwner, accountAId);
+
+        // Account B tries to rename to the same desired name.
+        var (accountBId, accountBOwner) = await SeedFreshAccountAsync("Collision B Co", "collision-b");
+        await EnsureLinkAsync(accountBOwner, accountBId);
+
+        // Get Account A's slug.
+        var cookieA = await _factory.SeedSessionAsync(accountAOwner, accountAId);
+        using var statusReq = new HttpRequestMessage(HttpMethod.Get, "/keep/setup/intake");
+        statusReq.Headers.Add("Cookie", $"{AuthConstants.CookieName}={cookieA}");
+        var statusResp = await _client.SendAsync(statusReq);
+        var statusBody = await statusResp.Content.ReadFromJsonAsync<StatusBody>(JsonOptions);
+        var accountASlug = statusBody!.PublicSlug!;
+
+        // Account B tries to rename to Account A's slug.
+        var cookieB = await _factory.SeedSessionAsync(accountBOwner, accountBId);
+        using var renameReq = new HttpRequestMessage(HttpMethod.Put, "/keep/setup/intake/link-name");
+        renameReq.Headers.Add("Cookie", $"{AuthConstants.CookieName}={cookieB}");
+        renameReq.Content = JsonContent.Create(new { desiredName = accountASlug });
+        var renameResp = await _client.SendAsync(renameReq);
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, renameResp.StatusCode);
+        var problem = await renameResp.Content.ReadFromJsonAsync<ProblemBody>(JsonOptions);
+        Assert.Equal("keep.public_intake.slug_taken", problem?.Code);
+    }
+
+    [Fact]
+    public async Task RenameLinkName_CollisionWithActiveAlias_Returns422SlugTaken()
+    {
+        // Account A renames once, leaving oldSlug as active alias.
+        var (accountAId, accountAOwner) = await SeedFreshAccountAsync("Alias Collision A", "alias-collision-a");
+        await EnsureLinkAsync(accountAOwner, accountAId);
+
+        var cookieA = await _factory.SeedSessionAsync(accountAOwner, accountAId);
+        using var statusReq = new HttpRequestMessage(HttpMethod.Get, "/keep/setup/intake");
+        statusReq.Headers.Add("Cookie", $"{AuthConstants.CookieName}={cookieA}");
+        var statusResp = await _client.SendAsync(statusReq);
+        var aliasSlug = (await statusResp.Content.ReadFromJsonAsync<StatusBody>(JsonOptions))!.PublicSlug!;
+
+        // Rename A so aliasSlug becomes an active alias.
+        using var renameAReq = new HttpRequestMessage(HttpMethod.Put, "/keep/setup/intake/link-name");
+        renameAReq.Headers.Add("Cookie", $"{AuthConstants.CookieName}={cookieA}");
+        renameAReq.Content = JsonContent.Create(new { desiredName = "Alias Collision A Renamed" });
+        await _client.SendAsync(renameAReq);
+
+        // Account B tries to claim the aliasSlug as its own name.
+        var (accountBId, accountBOwner) = await SeedFreshAccountAsync("Alias Collision B", "alias-collision-b");
+        await EnsureLinkAsync(accountBOwner, accountBId);
+
+        var cookieB = await _factory.SeedSessionAsync(accountBOwner, accountBId);
+        using var renameBReq = new HttpRequestMessage(HttpMethod.Put, "/keep/setup/intake/link-name");
+        renameBReq.Headers.Add("Cookie", $"{AuthConstants.CookieName}={cookieB}");
+        renameBReq.Content = JsonContent.Create(new { desiredName = aliasSlug });
+        var renameBResp = await _client.SendAsync(renameBReq);
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, renameBResp.StatusCode);
+        var problem = await renameBResp.Content.ReadFromJsonAsync<ProblemBody>(JsonOptions);
+        Assert.Equal("keep.public_intake.slug_taken", problem?.Code);
+    }
+
+    [Fact]
+    public async Task RenameLinkName_Operator_Returns403()
+    {
+        var cookie = await _factory.SeedSessionAsync(_operatorUserId, _accountId);
+
+        using var req = new HttpRequestMessage(HttpMethod.Put, "/keep/setup/intake/link-name");
+        req.Headers.Add("Cookie", $"{AuthConstants.CookieName}={cookie}");
+        req.Content = JsonContent.Create(new { desiredName = "Operator Try" });
+        var resp = await _client.SendAsync(req);
+
+        Assert.Equal(HttpStatusCode.Forbidden, resp.StatusCode);
+    }
+
+    [Fact]
+    public async Task RenameLinkName_Viewer_Returns403()
+    {
+        var cookie = await _factory.SeedSessionAsync(_viewerUserId, _accountId);
+
+        using var req = new HttpRequestMessage(HttpMethod.Put, "/keep/setup/intake/link-name");
+        req.Headers.Add("Cookie", $"{AuthConstants.CookieName}={cookie}");
+        req.Content = JsonContent.Create(new { desiredName = "Viewer Try" });
+        var resp = await _client.SendAsync(req);
+
+        Assert.Equal(HttpStatusCode.Forbidden, resp.StatusCode);
+    }
+
+    [Fact]
+    public async Task RenameLinkName_Unauthenticated_Returns401()
+    {
+        using var req = new HttpRequestMessage(HttpMethod.Put, "/keep/setup/intake/link-name");
+        req.Content = JsonContent.Create(new { desiredName = "Anon Try" });
+        var resp = await _client.SendAsync(req);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, resp.StatusCode);
+    }
+
+    [Theory]
+    [InlineData("Acme & Sons Plumbing", "acme-sons-plumbing")]
+    [InlineData("North-End!! Doors", "north-end-doors")]
+    [InlineData("A/B Testing Co.", "a-b-testing-co")]
+    [InlineData("Café Lumière", "cafe-lumiere")]
+    public async Task RenameLinkName_SpecialCharacterInput_NormalizesAsExpected(
+        string desiredName, string expectedSlug)
+    {
+        var (accountId, ownerUserId) = await SeedFreshAccountAsync(
+            $"Norm Test {desiredName[..Math.Min(10, desiredName.Length)]}",
+            $"norm-{expectedSlug[..Math.Min(20, expectedSlug.Length)]}");
+        await EnsureLinkAsync(ownerUserId, accountId);
+        var cookie = await _factory.SeedSessionAsync(ownerUserId, accountId);
+
+        using var req = new HttpRequestMessage(HttpMethod.Put, "/keep/setup/intake/link-name");
+        req.Headers.Add("Cookie", $"{AuthConstants.CookieName}={cookie}");
+        req.Content = JsonContent.Create(new { desiredName });
+        var resp = await _client.SendAsync(req);
+
+        Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
+        var body = await resp.Content.ReadFromJsonAsync<RenameLinkBody>(JsonOptions);
+        Assert.Equal(expectedSlug, body?.PublicSlug);
+    }
+
+    private async Task<string> EnsureLinkAsync(Guid ownerUserId, Guid accountId)
+    {
+        var cookie = await _factory.SeedSessionAsync(ownerUserId, accountId);
+        using var req = new HttpRequestMessage(HttpMethod.Post, "/keep/setup/intake/ensure");
+        req.Headers.Add("Cookie", $"{AuthConstants.CookieName}={cookie}");
+        var resp = await _client.SendAsync(req);
+        resp.EnsureSuccessStatusCode();
+        var body = await resp.Content.ReadFromJsonAsync<EnsureBody>(JsonOptions);
+        return body!.PublicSlug!;
+    }
+
+    // -------------------------------------------------------------------------
     // Helpers
     // -------------------------------------------------------------------------
 
@@ -567,5 +793,6 @@ public sealed class KeepIntakeSetupApiTests : IClassFixture<KeepApiWebFactory>, 
     private sealed record StatusBody(bool HasActiveLink, string? PublicSlug, DateTime? CreatedAtUtc, string? RawToken);
     private sealed record EnsureBody(bool Created, string? RawToken, string? PublicSlug);
     private sealed record ReplaceBody(string? RawToken, string? PublicSlug, bool StaleLinksWarning);
+    private sealed record RenameLinkBody(string? PublicSlug);
     private sealed record ProblemBody(string? Code, string? Detail);
 }

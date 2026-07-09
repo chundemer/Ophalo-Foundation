@@ -117,4 +117,55 @@ public class KeepPublicIntakeLinkTests
         link.DeletedAtUtc = Now;
         Assert.False(link.IsActive);
     }
+
+    // --- RenameSlug ---
+
+    [Fact]
+    public void RenameSlug_changes_slug_and_returns_true()
+    {
+        var link = NewLink("acme-plumbing");
+
+        var renamed = link.RenameSlug("new-slug");
+
+        Assert.True(renamed);
+        Assert.Equal("new-slug", link.PublicSlug);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void RenameSlug_rejects_blank_slug(string newSlug) =>
+        Assert.Throws<ArgumentException>(() => NewLink().RenameSlug(newSlug));
+
+    [Fact]
+    public void RenameSlug_no_ops_when_same_slug_exact_case()
+    {
+        var link = NewLink("acme-plumbing");
+
+        var renamed = link.RenameSlug("acme-plumbing");
+
+        Assert.False(renamed);
+        Assert.Equal("acme-plumbing", link.PublicSlug);
+    }
+
+    [Fact]
+    public void RenameSlug_no_ops_when_same_slug_different_case()
+    {
+        var link = NewLink("acme-plumbing");
+
+        var renamed = link.RenameSlug("Acme-Plumbing");
+
+        Assert.False(renamed);
+        Assert.Equal("acme-plumbing", link.PublicSlug);
+    }
+
+    [Fact]
+    public void RenameSlug_normalizes_to_lowercase()
+    {
+        var link = NewLink("old-slug");
+
+        link.RenameSlug("  NEW-SLUG  ");
+
+        Assert.Equal("new-slug", link.PublicSlug);
+    }
 }

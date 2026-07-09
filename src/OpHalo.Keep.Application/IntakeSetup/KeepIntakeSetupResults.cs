@@ -5,3 +5,5 @@ public sealed record KeepIntakeSetupStatusResult(bool HasActiveLink, string? Pub
 public sealed record KeepIntakeSetupEnsureResult(bool Created, string? RawToken, string? PublicSlug);
 
 public sealed record KeepIntakeSetupReplaceResult(string RawToken, string PublicSlug, bool StaleLinksWarning);
+
+public sealed record KeepIntakeSetupRenameResult(string PublicSlug);
