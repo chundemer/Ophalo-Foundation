@@ -105,8 +105,10 @@ builder.Services.AddScoped<IKeepIntakePersistence, KeepIntakePersistence>();
 builder.Services.AddScoped<IKeepIntakeSetupPersistence, KeepIntakeSetupPersistence>();
 builder.Services.AddScoped<IKeepSetupPersistence, EfKeepSetupPersistence>();
 builder.Services.AddScoped<IKeepProductOpsPersistence, EfKeepProductOpsPersistence>();
+builder.Services.AddScoped<IKeepSetupDeferralPersistence, EfKeepSetupDeferralPersistence>();
 builder.Services.AddScoped<KeepSetupService>();
 builder.Services.AddScoped<KeepOnboardingService>();
+builder.Services.AddScoped<KeepBusinessSetupService>();
 builder.Services.AddScoped<IKeepBusinessRequestPersistence, KeepBusinessRequestPersistence>();
 builder.Services.AddScoped<CreateBusinessRequestService>();
 builder.Services.AddScoped<LookupKeepRequestByPhoneService>();
@@ -371,6 +373,18 @@ app.MapPost("/keep/setup/onboarding/marks/tracker-review", async (KeepOnboarding
 app.MapPost("/keep/setup/onboarding/marks/spam-classification", async (KeepOnboardingService service, CancellationToken ct) =>
 {
     var result = await service.MarkStepCompleteAsync(KeepOnboardingManualStep.SpamClassification, ct);
+    return result.IsSuccess ? Results.NoContent() : ErrorHttpMapper.ToHttpResult(result.Error);
+}).RequireAuthorization();
+
+app.MapGet("/keep/setup/guided", async (KeepBusinessSetupService service, CancellationToken ct) =>
+{
+    var result = await service.GetBusinessSetupAsync(ct);
+    return result.IsSuccess ? Results.Ok(result.Value) : ErrorHttpMapper.ToHttpResult(result.Error);
+}).RequireAuthorization();
+
+app.MapPost("/keep/setup/guided/defer/{step:int}", async (int step, KeepBusinessSetupService service, CancellationToken ct) =>
+{
+    var result = await service.DeferStepAsync((KeepSetupStep)step, ct);
     return result.IsSuccess ? Results.NoContent() : ErrorHttpMapper.ToHttpResult(result.Error);
 }).RequireAuthorization();
 

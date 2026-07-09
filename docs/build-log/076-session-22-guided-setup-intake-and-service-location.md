@@ -1,7 +1,7 @@
 # Build Log 076 — Session 22: Guided Setup, Intake Sharing, And Service Location Plan
 
 **Started:** 2026-07-08
-**Status:** Ready handoff — S22a preflight next; no coding before slice gate
+**Status:** S22a preflight complete — S22b ready for implementation
 **Session name:** S22 guided setup / intake / service-location migration
 **Next free ADR before this log:** ADR-428
 **Next free ADR after this log:** TBD during S22 documentation reconciliation
@@ -36,48 +36,42 @@ should owners understand and activate Keep without being forced through confusin
 
 ## Next Session Quick Start
 
-Start with **S22a — Onboarding V2 / Guided Setup Preflight**.
+S22a preflight is complete. See **S22a Preflight Output** below for locked decisions, v2 contract,
+and file-level plan.
 
-Do not start implementation in the next session. First audit the current Session 12 onboarding
-foundation and return a narrow file-level plan for the first coding slice.
+Start with **S22b-backend — Guided Setup Domain and Deferral** (8 production files, within gate).
+Do not start S22c (setup bar + guided Home UI) until S22b backend is committed and green.
 
-Preflight focus:
-
-1. Confirm the current `GET /keep/setup/onboarding` contract, product-ops event model, and PWA
-   checklist rendering.
-2. Decide whether guided setup v2 extends `KeepProductOpsEvent`, adds new account/user setup state,
-   or combines both.
-3. Separate account-level **Business Setup** from person-level **User Getting Started**.
-4. Define how `Do later` is stored and when deferred steps can reappear contextually.
-5. Define the setup bar data model, priority rules, and narrow/mobile PWA behavior.
-6. Identify exact doc conflicts to reconcile after the contract is locked, especially ADR-295,
-   ADR-375, and ADR-383.
-
-Expected S22a output:
-
-- current-state findings with file references;
-- proposed v2 setup contract;
-- migration/backward-compatibility plan from the existing flat checklist;
-- file-level implementation slice proposal within the normal batch gate;
-- test plan covering Owner/Admin-only setup, Operators/Viewers, mobile-width UI behavior, and
-  no accidental response-policy promotion into first-run setup.
-
-ADR/doc note: ADR-427 is already allocated in the decision index. Use ADR-428+ for new S22 decisions
-only after preflight confirms the final contract.
+S22b implementation is pre-work complete. Perform the mechanical preflight (confirm named symbols
+exist, enumerate compile-impact callers) and present the file-level gate before writing.
 
 ---
 
 ## Current-State Findings To Preserve
 
-- Existing onboarding endpoint is Owner/Admin-only through `Keep.SettingsManage`.
-- Existing onboarding is account-level only.
+Confirmed during S22a preflight (2026-07-09):
+
+- `KeepOnboardingService` derives a flat `KeepOnboardingChecklistResult` (10 bool fields) from
+  `KeepProductOpsEvent` rows via `IKeepProductOpsPersistence.GetOnboardingDataAsync`.
+- `GET /keep/setup/onboarding` is Owner/Admin-only (`Keep.SettingsManage`); 3 manual-mark POSTs
+  exist for quick-capture-exercise, tracker-review, and spam-classification.
+- `Home.tsx` renders the flat checklist for all authenticated users; `Settings.tsx` has an
+  `OnboardingSection` that reads the same endpoint.
+- `apiClient.ts` exposes `getOnboardingChecklist`, `markQuickCaptureExercise`,
+  `markTrackerReview`, and `markSpamClassification`.
+- `EfKeepProductOpsPersistence.GetOnboardingDataAsync` runs five live DB queries (events, intake
+  link, non-owner members, devices, requests); no deferred events (`FirstRequestCreated`,
+  `FirstOperatorInvited`, `FirstMobileDeviceRegistered`) are recorded yet — only
+  `ProfileAndContactSaved`, `PolicySaved`, and the three manual marks.
+- `KeepProductOpsEventType` has 17 values; three member/device/engagement signals are marked
+  deferred in comments.
+- `Account` entity has `BusinessName` and `TimeZone`; no `IntendedTeamSize` field exists anywhere.
+- No `KeepAccountSetupPreferences` or equivalent Keep-owned preferences entity exists.
+- ADR-295 states automatic intake provisioning; this conflicts with the explicit guided setup flow
+  and must be revised in S22g.
 - Existing checklist mixes business setup, user learning, response policy, mobile registration, team
   setup, quick capture, tracker review, and spam training as equal-weight items.
-- Existing response-policy controls are useful admin controls, but confusing as day-one setup.
-- Existing public intake setup requires explicit Owner/Admin `ensure` / `replace`; the raw intake URL
-  is only returned on create/replace.
-- Decision index currently contains an older ADR-295 statement about automatic intake provisioning.
-  This conflicts with the explicit setup flow now preferred and must be reconciled before coding.
+- Response-policy controls are useful admin controls but confusing as day-one setup.
 
 ---
 
@@ -260,6 +254,28 @@ Behavior:
 - answer can change later;
 - seat limits and billing still come from entitlements, not this answer.
 
+Subscription / seat-limit guardrail:
+
+- intended team size is a setup-planning answer, not a commercial entitlement, Stripe quantity, seat
+  override, or billing-plan source of truth;
+- future Stripe/subscription state must continue to flow through the commercial/entitlement boundary,
+  especially `AccountEntitlements.MaxUserSeats` / server-provided `seatUsage`;
+- team invite and activation flows must keep enforcing the server-reported seat limit, regardless of
+  the intended team-size answer;
+- the guided Build team step may explain that the current plan has a team-member limit, but it must
+  not promise that selecting `2-5 people` or `6+ people` increases available seats;
+- avoid storing intended team size directly on Foundation `Account` unless a later ADR deliberately
+  promotes it to product-neutral account profile. Preferred S22 storage is Keep-owned setup state or
+  Keep-owned business setup preferences, separate from billing and entitlements.
+
+If future subscription plans limit team members, guided setup should behave as:
+
+- `Just me`: Build team is demoted/optional.
+- Team intent larger than one and seats available: Build team is recommended.
+- Team intent larger than one and seat limit reached: Build team remains available, but the primary
+  action routes to Team with server-provided seat-limit copy such as `Team limit reached`; upgrading
+  or subscription management remains a later billing surface, not part of first-run setup.
+
 ### Mobile Setup
 
 Mobile is required for core setup completion, but not required to create the account or first request.
@@ -411,11 +427,231 @@ Check the latest status, send more details, or ask a question about your request
 
 ---
 
+## S22a Preflight Output
+
+Completed 2026-07-09. All decisions below are locked for S22 implementation. ADR stubs are
+formalized in S22g documentation reconciliation as ADR-428+.
+
+### Locked Decisions
+
+**D1 — Do later storage: `KeepSetupDeferral` table**
+
+New entity: `(Id, AccountId, Step KeepSetupStep, DeferredAtUtc, ClearedAtUtc?, DeferredByAccountUserId)`.
+Cleared automatically when the corresponding completion signal fires. Queryable, auditability-lite,
+supports contextual reappearance without event-log archaeology.
+
+**D2 — Hybrid setup contract**
+
+`KeepProductOpsEvent` rows carry durable completion signals. `KeepSetupDeferral` carries UI deferral
+state. Neither bleeds into the other's domain — events record "this meaningful thing happened,"
+deferral records "the user chose not to address this now."
+
+**D3 — Ship account-level Business Setup; define user-level track only**
+
+S22 implements Business Setup (account-level, Owner/Admin-owned). User Getting Started (person-level)
+is defined in contract/doc shape but not persisted this session. No `user_setup_state` entity in S22.
+
+**D4 — Explicit intake creation; revise ADR-295**
+
+ADR-295 auto-provision is removed. `CreateIntakePage` step completion is derived from
+`IsIntakeLinkActive` (live DB query, already exists). S22g revises ADR-295 to reflect explicit
+Owner/Admin setup flow; replacement remains exceptional recovery.
+
+**D5 — Setup bar in authenticated PWA shell**
+
+Setup bar renders in `App.tsx` authenticated shell, gated on Owner/Admin role and remaining useful
+setup. Global setup query. Page-level blockers link into the same setup model. Not page-specific.
+
+**D6 — `IntendedTeamSize` is Keep-owned setup guidance, not Foundation account state**
+
+`IntendedTeamSize` is stored in a new `KeepAccountSetupPreferences` entity (Keep layer, one row per
+account), introduced in S22c alongside the business info "no public contact" preference. It must not
+be added to `Account` in `OpHalo.Foundation.Core` unless a later ADR deliberately promotes it to a
+product-neutral account profile field.
+
+`IntendedTeamSize` affects only setup bar display priority:
+- `JustMe`: Build team demoted/optional in setup bar.
+- `TwoToFive` / `SixPlus`: Build team shown as recommended.
+
+Team invite and seat-activation flows must continue enforcing `AccountEntitlements.MaxUserSeats`
+regardless of `IntendedTeamSize`. Selecting `TwoToFive` or `SixPlus` must never imply seats are
+available. When the seat limit is reached, Build team routes to Team management with server-provided
+copy ("Team limit reached") — it does not surface upgrade flows or billing.
+
+### V2 Setup Contract
+
+**New enum `KeepSetupStep` (Core, S22b)**
+
+```
+BusinessInfo = 1
+AddFirstRequest = 2
+ReviewCustomerPage = 3
+CreateIntakePage = 4
+ShareIntakePage = 5
+BuildTeam = 6
+UseMobile = 7
+```
+
+**Completion signal mapping**
+
+| Step | Source | Notes |
+|---|---|---|
+| BusinessInfo | `ProfileAndContactSaved` event (existing) | S22b may sharpen to cover explicit no-contact decision |
+| AddFirstRequest | `HasRequest` live query (existing) | Already recorded |
+| ReviewCustomerPage | `FirstCustomerPageView` event (= 9, deferred) | V1: always-pending; links to customer page — no manual mark |
+| CreateIntakePage | `IsIntakeLinkActive` live query (existing) | Explicit create required (D4) |
+| ShareIntakePage | New `IntakeLinkShared = 18` event | Added in S22d (intake slice) when share action is built |
+| BuildTeam | `HasNonOwnerActiveMember` live query (existing) | Demoted when `IntendedTeamSize = JustMe` |
+| UseMobile | `HasDeviceRegistered` live query (existing) | Deferred event now actively derived |
+
+**New response DTO `KeepBusinessSetupResult`**
+
+```csharp
+public sealed record KeepBusinessSetupResult(
+    bool BusinessInfoComplete,
+    bool AddFirstRequestComplete,
+    bool ReviewCustomerPageComplete,
+    bool CreateIntakePageComplete,
+    bool ShareIntakePageComplete,
+    bool BuildTeamComplete,
+    bool UseMobileComplete,
+    IReadOnlyList<KeepSetupStep> DeferredSteps,
+    IntendedTeamSize? IntendedTeamSize);   // null until S22c backend
+
+public enum IntendedTeamSize { JustMe = 1, TwoToFive = 2, SixPlus = 3 }
+```
+
+`IntendedTeamSize` enum lives in Keep Core; returned as null from `GET /keep/setup/guided` until
+`KeepAccountSetupPreferences` is introduced in S22c.
+
+**New endpoints (S22b)**
+
+- `GET /keep/setup/guided` → `KeepBusinessSetupResult` (Owner/Admin only, `Keep.SettingsManage`)
+- `POST /keep/setup/guided/defer/{step}` → 204
+
+**Endpoint added in S22c**
+
+- `PUT /keep/setup/guided/team-size` → 204
+
+### Backward-Compatibility Plan
+
+| Existing surface | Action |
+|---|---|
+| `GET /keep/setup/onboarding` | Keep intact — Settings.tsx still reads it |
+| 3 manual-mark POSTs | Keep intact — no callers removed this session |
+| `KeepOnboardingService` | Untouched |
+| `Home.tsx` | Replace flat checklist with guided hub (links to future step pages) |
+| `Settings.tsx` OnboardingSection | Untouched this session; migrated in S22g cleanup |
+
+### File-Level Implementation Plan
+
+#### S22b-backend — Guided Setup Domain and Deferral (first coding slice)
+
+3 mutation families, 8 production files, within batch gate.
+
+**Mutation family 1 — Core domain**
+
+| File | Change |
+|---|---|
+| `src/OpHalo.Keep.Core/Entities/Enums/KeepSetupStep.cs` | New enum (7 steps) |
+| `src/OpHalo.Keep.Core/Entities/Enums/IntendedTeamSize.cs` | New enum (3 values, Keep-owned) |
+| `src/OpHalo.Keep.Core/Entities/KeepSetupDeferral.cs` | New entity |
+
+**Mutation family 2 — Application service**
+
+| File | Change |
+|---|---|
+| `src/OpHalo.Keep.Application/Setup/IKeepSetupDeferralPersistence.cs` | New interface |
+| `src/OpHalo.Keep.Application/Setup/KeepBusinessSetupService.cs` | New service: GetAsync, DeferAsync |
+| `src/OpHalo.Keep.Application/Setup/IKeepProductOpsPersistence.cs` | Add `GetBusinessSetupDataAsync` |
+
+**Mutation family 3 — Infrastructure and API**
+
+| File | Change |
+|---|---|
+| `src/OpHalo.Keep.Infrastructure/Persistence/EfKeepSetupDeferralPersistence.cs` | New persistence impl |
+| `src/OpHalo.Keep.Infrastructure/Persistence/Configurations/KeepSetupDeferralConfiguration.cs` | New EF config |
+
+Plus (not counted against 8-file limit): `Program.cs` adds 2 endpoint registrations; EF migration
+adds `KeepSetupDeferral` table. `KeepProductOpsEventType` is not modified this slice
+(`IntakeLinkShared = 18` deferred to S22d).
+
+`IntendedTeamSize` storage (`KeepAccountSetupPreferences`) deferred to S22c, where the
+business-info "no public contact" preference also lands. `GET /keep/setup/guided` returns
+`IntendedTeamSize: null` until S22c.
+
+**S22b-backend tests (12-file total gate includes these)**
+
+- `tests/OpHalo.UnitTests/Keep/KeepBusinessSetupServiceTests.cs` — new
+- `tests/OpHalo.IntegrationTests/Api/KeepGuidedSetupApiTests.cs` — new
+
+Test coverage required:
+- `GetAsync` returns correct step completions per event/DB state.
+- Owner/Admin: 200. Operator/Viewer: 403. Unauthenticated: 401.
+- `DeferAsync` records `KeepSetupDeferral` row; re-defer is idempotent.
+- `DeferAsync` with an invalid step value returns `400`.
+- `IntendedTeamSize` null until S22c (`GetAsync` returns null cleanly).
+- No response-policy step appears in `KeepBusinessSetupResult`.
+- `BuildTeamComplete` derives from `HasNonOwnerActiveMember` (server-authoritative); it is not
+  influenced by `IntendedTeamSize` on the server — that flag is presentation-only on the client.
+
+#### S22c-frontend — Setup Bar and Guided Home UI (second coding slice)
+
+1 mutation family, 4 production files, within batch gate.
+
+| File | Change |
+|---|---|
+| `web/ophalo-app/src/components/SetupBar.tsx` | New: max 3 items, role-gated, `Do later` per item, narrow/compact mode |
+| `web/ophalo-app/src/App.tsx` | Add `SetupBar` to authenticated shell above page content |
+| `web/ophalo-app/src/pages/Home.tsx` | Replace flat checklist with guided hub — step status cards, links |
+| `web/ophalo-app/src/lib/apiClient.ts` | Add `KeepBusinessSetupResult` type, `getGuidedSetup`, `deferSetupStep` |
+
+Frontend tests:
+- `SetupBar` renders for Owner; hidden for Operator/Viewer.
+- Shows at most 3 items; applies priority order from D5 rule.
+- `Do later` calls `POST .../defer/{step}` and optimistically removes item from bar.
+- Narrow/phone-width: collapses to compact single-prompt or short chip row — no tall checklist.
+- `BuildTeam` item shows server-provided "Team limit reached" copy when `seatUsage.atLimit` is
+  true, regardless of `IntendedTeamSize` value (which may not be set yet in S22c).
+- `Home.tsx` renders guided hub cards, not old flat checklist.
+
+**Seat-limit boundary proof points (required before S22c is approved)**
+
+- `SetupBar` never derives seat availability from `IntendedTeamSize`; it reads `seatUsage` from
+  the existing `GET /keep/setup` response.
+- Integration: `PUT /keep/setup/guided/team-size` with body `"six_plus"` does not modify
+  `AccountEntitlements.MaxUserSeats` — assert entitlements row unchanged after call.
+- Integration: account at seat limit — `POST /keep/team/invite` returns seat-limit error regardless
+  of `IntendedTeamSize` value stored.
+
+#### S22c-backend — Business Info Preferences (third coding slice, same session or S22d)
+
+Introduces `KeepAccountSetupPreferences` entity when business-info "no public contact" decision is
+also needed. Adds `PUT /keep/setup/guided/team-size` endpoint. Deferred until S22c product work
+confirms the exact preference fields needed together.
+
+### User-Level Track Definition (deferred implementation)
+
+The **User Getting Started** track is person-level and role-aware. It is not implemented in S22.
+Define it here so future sessions have the contract boundary.
+
+Conceptual steps (not persisted in S22):
+- First capture/request for that user.
+- First customer-visible update posted.
+- First contact log.
+- Mobile operator education (Operator-specific; deferred to dedicated mobile onboarding session).
+
+If persisted in a future session, the entity would be `KeepUserSetupEvent` or similar — scoped to
+`AccountUserId`, not `AccountId`. It must not be merged with account-level `KeepSetupDeferral` or
+`KeepProductOpsEvent`.
+
+---
+
 ## Implementation Session Plan
 
-Each session below needs a Codex preflight pass before coding. The preflight should audit existing
-contracts and tests, identify mismatches with this log, and produce a narrow file-level implementation
-plan.
+Each session below needs a mechanical preflight pass before coding. The preflight confirms named
+symbols exist, enumerates compile-impact callers, and presents the file-level gate. S22a preflight
+is complete; subsequent slices begin at mechanical-preflight stage only.
 
 ### S22a — Onboarding V2 / Guided Setup Preflight
 
@@ -437,6 +673,8 @@ Output:
 - account-level versus user-level state gaps;
 - `Do later` storage recommendation;
 - setup bar data model;
+- intended-team-size storage recommendation that stays separate from `AccountEntitlements`,
+  `seatUsage`, and future Stripe/subscription state;
 - mobile-web/narrow-width guided setup requirements;
 - backward-compatibility plan for existing checklist fields.
 

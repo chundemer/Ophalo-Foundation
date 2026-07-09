@@ -1,6 +1,6 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-07-09 (S22a guided setup preflight handoff cleaned)
+**Last updated:** 2026-07-09 (S22a preflight complete; S22b-backend ready for implementation)
 **Branch:** `main` tracking `origin/main`
 **Last green baseline:** 939 unit · 14 arch · 713 integration = 1,666 total, 0 failures (1 pre-existing KeepG5 fluke excluded)
 **Next free ADR:** ADR-428 before S22 documentation reconciliation
@@ -40,7 +40,7 @@ For every implementation slice:
 **Bug/gap tracker:** `docs/pilot-readiness-bug-tracker.md`
 **Foundation roadmap:** `docs/build-log/ophalo-foundation-build-plan-greenfield-boundaries-brownfield-behavior.md` section 9.1
 **Current session:** Session 22 — Guided Setup, Intake Sharing, And Service Location Plan
-**Current slice:** S22a — Onboarding V2 / Guided Setup Preflight
+**Current slice:** S22b-backend — Guided Setup Domain and Deferral (S22a preflight complete)
 
 ### Completed Context
 
@@ -65,11 +65,12 @@ Treat these as historical context unless a later discovery step finds a concrete
   `docs/build-log/076-session-22-guided-setup-intake-and-service-location.md`.
 - Treat Session 12 onboarding (`docs/build-log/066-session-12-account-settings-and-onboarding.md`)
   as the existing foundation to migrate, not as absent work.
-- S22a is a preflight-only pass: audit current onboarding/product-ops contracts, identify account-level
-  versus user-level state gaps, define `Do later` and setup-bar state, flag ADR-295/ADR-375/ADR-383
-  doc conflicts, and produce the narrow implementation plan before coding.
-- No implementation should proceed until the relevant S22 preflight has confirmed current signatures,
-  DTOs, persistence, visibility boundaries, tests, and doc conflicts.
+- S22a preflight is complete. All decisions locked, file-level plan written, and backward-compat
+  plan confirmed. See build log 076 S22a Preflight Output section.
+- S22b-backend is pre-work complete: 3 mutation families, 8 production files, within gate.
+  Mechanical preflight required before first edit; present file-level gate before writing.
+- `IntendedTeamSize` is Keep-owned setup guidance stored in `KeepAccountSetupPreferences` (S22c),
+  not on `Account`. It must never affect seat limits or entitlements.
 
 - S17 decisions are locked in build log 071 as ADR-396 through ADR-405. Treat S17 as historical
   implementation context unless a later S22/S20 preflight explicitly pulls a mobile dependency
