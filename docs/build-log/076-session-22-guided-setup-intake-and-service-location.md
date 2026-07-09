@@ -1,10 +1,10 @@
 # Build Log 076 — Session 22: Guided Setup, Intake Sharing, And Service Location Plan
 
 **Started:** 2026-07-08
-**Status:** S22a preflight complete — S22b ready for implementation
-**Session name:** S22 guided setup / intake / service-location migration
+**Status:** Direction changed 2026-07-09 — S22c guided checklist work paused; Settings/Get Started redesign required
+**Session name:** S22 day-zero readiness / settings redesign / intake / service-location migration
 **Next free ADR before this log:** ADR-428
-**Next free ADR after this log:** TBD during S22 documentation reconciliation
+**Next free ADR after this log:** ADR-430
 
 ---
 
@@ -23,7 +23,7 @@ Session 12 already delivered the first onboarding foundation in
 - manual onboarding mark endpoints;
 - a flat checklist UI in `web/ophalo-app/src/pages/Home.tsx`.
 
-This session defines the next product migration:
+This session originally defined the next product migration:
 
 ```text
 flat onboarding checklist -> guided setup + contextual setup bar
@@ -32,18 +32,41 @@ flat onboarding checklist -> guided setup + contextual setup bar
 The existing Session 12 model answers "which setup signals are complete?" This session answers "how
 should owners understand and activate Keep without being forced through confusing admin homework?"
 
+On 2026-07-09, review of the in-progress Getting Started and Settings screens changed the product
+direction. The earlier guided checklist direction was still too setup-heavy: it made owners feel like
+they had to build Keep from scratch before the product was useful. The revised direction is:
+
+```text
+admin setup chores -> day-zero readiness + focused settings tabs + lightweight verification
+```
+
+Keep must launch in a functional state by default. Owners visit Settings to adjust how Keep presents
+and routes work, not to assemble the basic system.
+
 ---
 
 ## Next Session Quick Start
 
-S22a preflight is complete. See **S22a Preflight Output** below for locked decisions, v2 contract,
-and file-level plan.
+Stop the S22c guided checklist/setup-bar direction. It was coded locally but is not approved as the
+product path.
 
-Start with **S22b-backend — Guided Setup Domain and Deferral** (8 production files, within gate).
-Do not start S22c (setup bar + guided Home UI) until S22b backend is committed and green.
+Start the redo from the revised direction below:
 
-S22b implementation is pre-work complete. Perform the mechanical preflight (confirm named symbols
-exist, enumerate compile-impact callers) and present the file-level gate before writing.
+1. Preserve the S22b backend work only where it remains useful as compatibility/state plumbing.
+2. Rework Settings into three focused Owner/Admin tabs:
+   - `Public Link & Profile`;
+   - `Response Policy`;
+   - `Team`.
+3. Make the public intake link day-zero ready by auto-provisioning it once the account has a business
+   name/profile context. Owners can copy, preview, and later replace it; they should not need to
+   create it before Keep works.
+4. Replace Getting Started as a seven-step checklist with a lightweight verification/on-ramp surface:
+   verify the public link, add/review the first request, and invite teammates only if useful.
+5. Build the Public Link & Profile view first, with a live interactive customer intake preview.
+
+Before coding, perform a mechanical preflight against the current uncommitted frontend files and the
+S22b backend additions. Present the file-level gate and call out any code that should be reverted,
+adapted, or left untouched.
 
 ---
 
@@ -67,17 +90,72 @@ Confirmed during S22a preflight (2026-07-09):
   deferred in comments.
 - `Account` entity has `BusinessName` and `TimeZone`; no `IntendedTeamSize` field exists anywhere.
 - No `KeepAccountSetupPreferences` or equivalent Keep-owned preferences entity exists.
-- ADR-295 states automatic intake provisioning; this conflicts with the explicit guided setup flow
-  and must be revised in S22g.
+- ADR-295 states automatic intake provisioning. The earlier S22a preflight incorrectly tried to
+  reverse this. The 2026-07-09 redesign restores auto-provisioning as the product direction.
 - Existing checklist mixes business setup, user learning, response policy, mobile registration, team
   setup, quick capture, tracker review, and spam training as equal-weight items.
-- Response-policy controls are useful admin controls but confusing as day-one setup.
+- Response-policy controls are useful admin controls but confusing as day-one setup. They belong in a
+  focused Settings tab with plain-language business guidance, not in Getting Started.
 
 ---
 
 ## Locked Product Direction
 
-### Guided Setup Model
+### Day-Zero Readiness Model
+
+Keep must be useful immediately after signup/account creation. The owner should not have to complete
+a setup checklist before the product can accept and manage requests.
+
+Day-zero defaults:
+
+- **Public intake link:** automatically provision one active intake link after the business has a
+  usable business name/profile context. Use the business name for the generated slug where possible.
+- **Response policy:** pre-populate the balanced V1 defaults from the existing setup policy contract
+  (including the 15-minute first response target, 240-minute standard response target, and existing
+  status-check threshold default).
+- **Business profile:** use the signup/account business name and timezone defaults already captured
+  by the auth/provisioning flow. Customer-facing phone/email remain optional and must never default
+  to the owner's login email or personal phone unless explicitly provided.
+
+Owner/Admin users visit Settings to adjust a working system, not to make Keep functional.
+
+### Settings Workspace Model
+
+Settings is still one Owner/Admin-only top-level nav item, but the previous single stacked page is
+rejected. The Settings workspace must be split into outcome-focused sub-sections:
+
+- `Public Link & Profile` — the business's online front door, public contact/profile, copy/share
+  controls, replacement controls, and a live intake-page preview.
+- `Response Policy` — customer expectation timing, with compact plain-language guidance beside each
+  field.
+- `Team` — roster and invite/member controls, with solo-business reassurance and no setup pressure.
+
+Do not keep a visible Settings `Onboarding` section in the primary V1 workspace. Existing
+`GET /keep/setup/onboarding` and manual mark endpoints may remain for compatibility/support, but the
+main owner UI should not present an onboarding status matrix.
+
+### Getting Started Model
+
+Getting Started becomes a lightweight verification/on-ramp surface, not an administrative checklist
+and not a second Settings page.
+
+Primary owner-facing jobs:
+
+1. Verify your public request link.
+2. Add or review the first customer request.
+3. Invite teammates only if someone else helps manage requests.
+
+Getting Started may show progress, but it should not make optional work feel overdue. It should never
+show `Build your team` as mandatory for a solo shop. It should not split `Create intake page` and
+`Share intake page` into separate owner chores when the link exists by default.
+
+The setup bar may survive only as a very quiet verification reminder if it proves useful after the
+redesign. It must not reintroduce seven-step checklist pressure.
+
+### Superseded Guided Setup Model
+
+The following earlier S22a direction is superseded by the 2026-07-09 redesign and must not guide new
+implementation except where explicitly reused as compatibility plumbing.
 
 Getting Started becomes a guided setup hub with separate focused pages, not one flat checklist.
 
@@ -89,7 +167,7 @@ business owners may sign up and complete first-run setup from a phone browser, t
 office desktop. Core setup pages must therefore be usable at phone widths. Deeper admin maintenance
 can remain denser, but the first-run path must not require a large screen.
 
-Primary Owner/Admin setup:
+Superseded primary Owner/Admin setup:
 
 1. Business info.
 2. Add first request.
@@ -291,27 +369,31 @@ setup may require at least one Operator mobile device, but that is a later mobil
 
 The intake page is a public job-capture channel, not a private admin link.
 
-V1 keeps the shared URL token-based. The business does not claim a visible public handle during
-first-run setup. Public handles/custom slugs are deferred.
+V1 keeps the shared URL token-based. The link should be created automatically through the Keep setup
+boundary once the account has a usable business name/profile context. The generated slug should come
+from the business name where possible, with collision-safe suffixing. The owner does not need to
+claim a visible public handle during first-run setup. Rich public handle management remains deferred.
 
 V1 intake setup:
 
-- preview before create;
+- active by default;
+- preview before sharing or replacing;
 - no logo upload or brand color in V1;
 - business logo upload deferred to V1.1 personalization;
 - brand colors deferred beyond V1.1 unless accessibility-safe customization is designed;
-- Owner/Admin can create/replace;
+- Owner/Admin can copy/share/preview and explicitly replace for recovery;
 - Operator can preview/copy/share an active intake page where a share utility is exposed;
 - Viewer gets no V1 share controls;
 - mobile may expose copy/share for an active intake page, but mobile does not create/replace the
   intake page.
 
-After intake creation, immediately transition into a share moment:
+The Public Link & Profile Settings tab should make the link tangible:
 
-- intake page ready;
+- editable safe business profile/contact fields;
 - copy link;
-- share link;
-- preview page.
+- open/preview link;
+- live interactive customer intake preview in a phone-sized panel;
+- replacement/regeneration behind explicit confirmation and stale-link warning.
 
 Important backend gap:
 
@@ -429,8 +511,9 @@ Check the latest status, send more details, or ask a question about your request
 
 ## S22a Preflight Output
 
-Completed 2026-07-09. All decisions below are locked for S22 implementation. ADR stubs are
-formalized in S22g documentation reconciliation as ADR-428+.
+Completed 2026-07-09. The S22a decisions below are preserved for history, but the checklist/setup-bar
+UX direction was superseded later the same day by ADR-428. Treat any conflicting S22a decision as
+overridden by the day-zero readiness model above.
 
 ### Locked Decisions
 
@@ -451,11 +534,13 @@ deferral records "the user chose not to address this now."
 S22 implements Business Setup (account-level, Owner/Admin-owned). User Getting Started (person-level)
 is defined in contract/doc shape but not persisted this session. No `user_setup_state` entity in S22.
 
-**D4 — Explicit intake creation; revise ADR-295**
+**D4 — Superseded: explicit intake creation; ADR-295 restored by ADR-428**
 
-ADR-295 auto-provision is removed. `CreateIntakePage` step completion is derived from
-`IsIntakeLinkActive` (live DB query, already exists). S22g revises ADR-295 to reflect explicit
-Owner/Admin setup flow; replacement remains exceptional recovery.
+This earlier S22a decision is superseded. ADR-295 automatic provisioning is restored and amended by
+ADR-428. The public intake link should exist by default after account/business profile provisioning.
+The owner verifies, copies, previews, customizes safe display/profile fields, and can explicitly
+replace the link for recovery. The primary UI must not require "Create intake page" before Keep is
+usable.
 
 **D5 — Setup bar in authenticated PWA shell**
 
@@ -478,7 +563,11 @@ regardless of `IntendedTeamSize`. Selecting `TwoToFive` or `SixPlus` must never 
 available. When the seat limit is reached, Build team routes to Team management with server-provided
 copy ("Team limit reached") — it does not surface upgrade flows or billing.
 
-### V2 Setup Contract
+### Superseded V2 Setup Contract
+
+The contract below was implemented as S22b/S22c setup plumbing, but it no longer represents the
+approved product experience. Keep it only if it helps compatibility, deferral state, or a future
+lightweight verification prompt. Do not build new owner UX around a seven-step checklist.
 
 **New enum `KeepSetupStep` (Core, S22b)**
 
@@ -499,7 +588,7 @@ UseMobile = 7
 | BusinessInfo | `ProfileAndContactSaved` event (existing) | S22b may sharpen to cover explicit no-contact decision |
 | AddFirstRequest | `HasRequest` live query (existing) | Already recorded |
 | ReviewCustomerPage | `FirstCustomerPageView` event (= 9, deferred) | V1: always-pending; links to customer page — no manual mark |
-| CreateIntakePage | `IsIntakeLinkActive` live query (existing) | Explicit create required (D4) |
+| CreateIntakePage | `IsIntakeLinkActive` live query (existing) | Superseded: active link should exist by default |
 | ShareIntakePage | New `IntakeLinkShared = 18` event | Added in S22d (intake slice) when share action is built |
 | BuildTeam | `HasNonOwnerActiveMember` live query (existing) | Demoted when `IntendedTeamSize = JustMe` |
 | UseMobile | `HasDeviceRegistered` live query (existing) | Deferred event now actively derived |
@@ -595,9 +684,13 @@ Test coverage required:
 - `BuildTeamComplete` derives from `HasNonOwnerActiveMember` (server-authoritative); it is not
   influenced by `IntendedTeamSize` on the server — that flag is presentation-only on the client.
 
-#### S22c-frontend — Setup Bar and Guided Home UI (second coding slice)
+#### Superseded S22c-frontend — Setup Bar and Guided Home UI
 
-1 mutation family, 4 production files, within batch gate.
+This slice was coded locally but is paused. Do not continue polishing this exact design without
+Christian approval. The redo should adapt or replace these files around the day-zero readiness model
+and focused Settings tabs.
+
+Original file plan:
 
 | File | Change |
 |---|---|
@@ -678,9 +771,9 @@ Output:
 - mobile-web/narrow-width guided setup requirements;
 - backward-compatibility plan for existing checklist fields.
 
-### S22b — Business Info / Contact / Timezone
+### S22b-redo — Public Link & Profile Settings
 
-Goal: guided Business info page and Settings cleanup.
+Goal: replace the monolithic Settings page with the first focused tab: Public Link & Profile.
 
 Preflight must inspect:
 
@@ -689,37 +782,60 @@ Preflight must inspect:
 - `KeepBusinessProfile`;
 - `Account.BusinessName` / `Account.TimeZone`;
 - customer page and intake page usage of business name/contact;
+- `KeepPublicIntakeLink`;
+- `KeepIntakeSetupService`;
+- `GET /keep/setup/intake`;
+- `POST /keep/setup/intake/ensure`;
+- `POST /keep/setup/intake/replace`;
+- current `web/ophalo-app/src/pages/Settings.tsx`;
+- current uncommitted `SetupBar.tsx` / `Home.tsx` changes;
 - audit/event infrastructure.
 
 Output:
 
-- explicit no-public-contact storage decision;
-- audit storage plan;
+- Settings tab/sub-navigation file-level plan;
+- auto-provision/link-ensure plan that preserves token safety;
+- active-link retrieval/copy/share plan that does not leak raw tokens into logs;
+- live interactive preview component plan;
 - customer-facing fallback-contact behavior;
 - tests required for no accidental owner-login contact exposure.
 
-### S22c — Intake Page Setup, Preview, And Sharing
+### S22c-redo — Response Policy Settings
 
-Goal: guided intake setup and repeatable share/copy without unsafe raw-token leakage.
+Goal: move response policy out of first-run setup and make it understandable as business guidance.
 
 Preflight must inspect:
 
-- `KeepPublicIntakeLink`;
-- `KeepIntakeSetupService`;
-- `KeepIntakeSetupPersistence`;
-- `GET /keep/setup/intake`;
-- `POST /keep/setup/intake/ensure`;
-- `POST /keep/setup/intake/replace`;
-- `web/ophalo-web/src/app/keep/intake/[token]/`;
-- Settings intake section.
+- `GET /keep/setup`;
+- `PUT /keep/setup/policy`;
+- `KeepResponsePolicy`;
+- existing policy defaults and validation;
+- current Settings policy section.
 
 Output:
 
-- safe retrievable share URL plan;
-- preview-before-create UI plan;
-- Owner/Admin versus Operator permissions;
-- token logging/redaction test plan;
-- ADR-295 reconciliation recommendation.
+- plain-language helper copy for each policy input;
+- compact layout plan for desktop and narrow widths;
+- validation/error mapping;
+- proof that defaults make new accounts usable without owner edits.
+
+### S22c-redo-follow-up — Team Settings
+
+Goal: move team management into a focused roster surface and remove solo-shop pressure.
+
+Preflight must inspect:
+
+- `GET /accounts/me/members`;
+- invite/member mutation endpoints;
+- `seatUsage`;
+- current Settings team section.
+
+Output:
+
+- roster layout plan;
+- solo-owner reassurance copy;
+- invite-at-limit behavior;
+- preservation of server-authoritative member/seat rules.
 
 ### S22d — Service Location Request Model
 
@@ -790,13 +906,246 @@ Goal: update decision index and stale docs after preflight confirms the final co
 
 Must reconcile:
 
-- ADR-295 automatic intake provisioning versus explicit guided setup;
-- ADR-375 flat product-ops checklist versus guided setup v2;
-- ADR-383 Settings/Onboarding section language;
+- ADR-295 automatic intake provisioning restored/amended by ADR-428;
+- ADR-375 flat product-ops checklist versus lightweight verification/on-ramp;
+- ADR-383 Settings/Onboarding section language superseded by the three-tab Settings workspace;
 - response policy placement;
 - mobile setup requirement versus Session 20 boundaries;
 - logo upload deferred to V1.1;
 - brand color deferred.
+
+## Revised S22 Redo Sessions
+
+The 2026-07-09 redo splits the work into small, reviewable slices. Do not collapse these into one
+large Settings rewrite.
+
+### S22r0 — Redo Preflight And File Disposition
+
+Goal: inspect the current dirty worktree and confirm which S22c checklist/setup-bar files are
+adapted, replaced, or removed.
+
+Preflight must inspect:
+
+- `web/ophalo-app/src/App.tsx`;
+- `web/ophalo-app/src/components/SetupBar.tsx`;
+- `web/ophalo-app/src/pages/Home.tsx`;
+- `web/ophalo-app/src/pages/Settings.tsx`;
+- `web/ophalo-app/src/lib/apiClient.ts`;
+- current `GET /keep/setup/intake`, `ensure`, and `replace` contracts;
+- `ophalo-web` public intake route shape;
+- public base URL configuration available to `ophalo-app`.
+
+Output:
+
+- file-level gate for the first coding slice;
+- explicit disposition for `SetupBar.tsx` and the guided Home changes;
+- confirmation that no copy/open UI will generate customer links from `window.location.origin`;
+- decision on whether the first slice is UI-only tabs or includes slug routing.
+
+### S22r1 — Settings Tabs Skeleton
+
+Goal: remove the monolithic Settings scroll and install the three-section workspace without claiming
+new durable link behavior yet.
+
+Scope:
+
+- remove/unmount the paused setup bar from the authenticated shell;
+- convert Settings from scroll/highlight sections to tabs/subnav:
+  - `Public Link & Profile`;
+  - `Response Policy`;
+  - `Team`;
+- map old navigation intents:
+  - `company` and `intake` -> `public-profile`;
+  - `team` -> `team`;
+  - new `policy` -> `policy`;
+- remove the onboarding status matrix from the primary Settings render;
+- preserve existing profile, policy, intake, and team forms as tab content where useful.
+
+Acceptance:
+
+- Settings no longer looks like one administrative data monolith.
+- `Public Link & Profile` may show active/intake status, but durable copy/open buttons are gated
+  until S22r2 slug routing is live.
+- No backend behavior changes are required for this slice.
+
+### S22r2 — Slug-Based Public Intake Routing
+
+Goal: make the public intake URL permanently constructable from `publicSlug` without breaking old
+published slug URLs when the owner edits the link name.
+
+Why this is required:
+
+- `KeepPublicIntakeLink` stores only `TokenHash`; the raw token is intentionally unrecoverable.
+- `GET /keep/setup/intake` returns `publicSlug`.
+- The owner must be able to return to Settings later and copy/open the same active public request
+  link without replacing it.
+- Once a slug is published to customers, ordinary slug edits must not silently turn old shared links
+  into 404s.
+
+Scope:
+
+- add a slug-alias persistence model/migration (`KeepPublicIntakeSlugAlias` or equivalent);
+- update `ophalo-web` public intake route to accept slug-based URLs;
+- update `OpHalo.Api` public-intake resolution to find an active link by current slug or active alias
+  where appropriate;
+- preserve existing token safety, account/access gates, rate limits, abuse posture, and token
+  redaction;
+- keep raw-token replacement/create one-time behavior only where still needed for compatibility;
+- ensure `ophalo-app` has an explicit public web base URL for customer-facing link construction.
+
+Rules:
+
+- Do not construct public customer links with `window.location.origin` from the authenticated PWA.
+- Do not expose raw tokens in logs, diagnostics, persisted frontend state, or long-lived UI state.
+- Current slugs resolve first; active aliases redirect or internally resolve to the latest active
+  slug.
+- V1 should prefer `302`/`307` redirects for aliases until production behavior is proven.
+- Replacement/regeneration disables old links/aliases tied to the revoked link; ordinary link-name
+  edits do not.
+- If both token and slug paths exist during migration, tests must prove the intended route resolves,
+  aliases behave correctly, and invalid/revoked/deleted links fail closed.
+
+Acceptance:
+
+- `GET /keep/setup/intake` plus public base URL is enough for `ophalo-app` to construct the active
+  public request link.
+- Returning to Settings in a later browser session still allows copy/open without replacing the link.
+- An old slug from a normal link-name edit redirects/resolves to the current active slug.
+- A slug tied to a replaced/revoked link no longer accepts requests.
+- Cross-account slug and alias collisions are rejected.
+
+### S22r3 — Public Link & Profile Polish
+
+Goal: make the Public Link & Profile tab feel like the owner's public front door.
+
+Scope:
+
+- show the active public request link with copy/open controls using public base URL + `publicSlug`;
+- show a phone-sized live intake-page preview using current business profile/contact fields;
+- keep business name/contact/timezone editing in this tab where appropriate;
+- expose friendly copy/action for `Edit link name`;
+- replace/regenerate link only behind explicit confirmation and stale-link warning;
+- use copy that describes the link as ready/working, not something the owner must create.
+
+Acceptance:
+
+- A business owner can understand what customers will see.
+- Copy/open works across sessions.
+- Editing the link name explains that old names keep working and redirect customers to the current
+  link.
+- Replacing the link feels exceptional, not routine setup, and warns that old shared links break.
+
+### S22r4 — Response Policy Tab
+
+Goal: make response timing configurable without making it day-one homework.
+
+Scope:
+
+- move policy fields into the `Response Policy` tab;
+- add compact plain-language helper copy for each field;
+- preserve existing validation and defaults.
+
+Acceptance:
+
+- Policy settings are understandable in business terms.
+- Defaults make the account usable without edits.
+
+### S22r5 — Team Tab And Lightweight Getting Started
+
+Goal: remove team pressure and replace the old checklist with a small verification/on-ramp.
+
+Scope:
+
+- make Team a clean roster/invite surface;
+- add solo-owner reassurance copy;
+- preserve server-authoritative `seatUsage` and member mutation rules;
+- replace Getting Started with:
+  - verify public link;
+  - add/review first request;
+  - invite teammates only if useful.
+
+Acceptance:
+
+- Solo businesses do not feel blocked or behind.
+- No `Create intake page` / `Share intake page` split appears as owner chores.
+- No seven-step setup bar/checklist pressure returns.
+
+### S22r6 — Backend Auto-Provision Hardening
+
+Goal: move day-zero intake readiness from frontend-on-tab-load workaround to backend-owned behavior.
+
+Scope:
+
+- ensure one active public intake link is created through the Keep setup boundary after account/profile
+  provisioning has a usable business name/profile context;
+- preserve collision-safe slug generation;
+- keep replacement exceptional and explicit;
+- add tests proving new accounts have a durable active link without opening Settings.
+
+Acceptance:
+
+- A new owner can ignore Settings and still have a public request link ready when the product needs
+  to show/share it.
+- Auto-provisioning does not couple Foundation registration directly to Keep internals in a way that
+  violates existing boundaries.
+
+## Claude Handoff — Redo Brief
+
+Give Claude this direction before it codes:
+
+```text
+We changed direction on Session 22 after reviewing the in-progress Getting Started and Settings
+screens. Do not continue the seven-step Getting Started/setup-bar design as the product path.
+
+Product goal:
+- Keep works by default after signup.
+- Settings is not one administrative scroll. Split it into Public Link & Profile, Response Policy,
+  and Team.
+- Getting Started becomes lightweight verification/on-ramp, not homework.
+- Auto-provision the public intake link by default; the owner verifies/copies/previews it rather
+  than creating it from scratch.
+- Durable public intake copy/open uses slug-based public routing. Do not use the unrecoverable raw
+  token as the long-term share URL. Do not generate customer links from window.location.origin in
+  ophalo-app; use configured public web base URL.
+- Ordinary public link-name edits must preserve old shared slugs as aliases. Replacement/regeneration
+  is the destructive/security action and must warn that old shared links break.
+
+First implementation target:
+1. Inspect current uncommitted files:
+   - web/ophalo-app/src/App.tsx
+   - web/ophalo-app/src/components/SetupBar.tsx
+   - web/ophalo-app/src/pages/Home.tsx
+   - web/ophalo-app/src/pages/Settings.tsx
+   - web/ophalo-app/src/lib/apiClient.ts
+2. Preserve S22b backend additions only if useful. They exist, but the UX must not be a seven-step
+   checklist.
+3. Rework Settings into tabs/subnav:
+   - Public Link & Profile
+   - Response Policy
+   - Team
+4. Build Settings tabs first, then implement slug-based public intake routing plus slug-alias
+   persistence before claiming durable copy/open works across sessions.
+5. Build Public Link & Profile:
+   - show the active public link;
+   - copy/open/preview actions;
+   - business name/contact/timezone fields as appropriate;
+   - live phone-sized intake-page preview using current form/profile data;
+   - replace/regenerate link only behind explicit confirmation and stale-link warning.
+6. Response Policy gets compact helper copy explaining each input in business terms.
+7. Team is a clean roster; solo owners see reassurance, not pressure.
+
+Do not:
+- show Create intake page and Share intake page as separate chores;
+- make Build your team feel mandatory;
+- put the old onboarding status matrix in primary Settings;
+- show a slug URL copy/open button as guaranteed live before ophalo-web/API can resolve publicSlug;
+- make ordinary link-name edits break already-published slug URLs;
+- leak raw public-intake tokens in logs, visible state, or persisted frontend state;
+- infer seat availability client-side.
+
+Before editing, present a file-level gate and say which existing S22c files will be adapted,
+reverted, or replaced.
+```
 
 ---
 
@@ -806,13 +1155,17 @@ Do not implement this as one large change.
 
 Suggested order:
 
-1. S22a preflight and contract lock.
-2. S22b Business info.
-3. S22c Intake setup/share.
-4. S22d Service location.
-5. S22e Customer page copy.
-6. S22f Mobile carry-forward.
-7. S22g docs/index reconciliation.
+1. S22r0 redo preflight and file-level gate.
+2. S22r1 Settings tabs skeleton.
+3. S22r2 slug-based public intake routing.
+4. S22r3 Public Link & Profile polish with live preview.
+5. S22r4 Response Policy tab with business guidance.
+6. S22r5 Team tab and lightweight Getting Started.
+7. S22r6 backend auto-provision hardening.
+8. Service location.
+9. Customer page copy.
+10. Mobile carry-forward.
+11. Docs/index reconciliation.
 
 Each coding slice should stay within the normal batch gate unless Christian explicitly splits/expands
 it:
@@ -827,7 +1180,7 @@ it:
 
 - Business logo upload: V1.1 personalization.
 - Brand color selection: deferred beyond V1.1 unless accessibility-safe customization is designed.
-- Public intake handles/custom slugs.
+- Rich public handle/custom-slug management beyond generated collision-safe slugs.
 - Embedded map preview.
 - Office/branch/service-region routing.
 - Metrics-led response-policy tuning.

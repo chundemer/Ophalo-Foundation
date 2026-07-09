@@ -1,8 +1,14 @@
 # ADR-383 — Settings And Team Management Surface
 
 **Date:** 2026-06-28  
-**Status:** Locked  
+**Status:** Amended by ADR-428  
 **Source:** Session 13 S13g settings/team-management review; ADR-377; ADR-378; build-log 067
+
+> 2026-07-09 amendment: ADR-428 supersedes the primary V1 Settings layout. The old
+> Company/Team/Onboarding vertical workspace is replaced by focused Settings sections:
+> `Public Link & Profile`, `Response Policy`, and `Team`. The team-management permissions,
+> server-authoritative seat usage, product language, invite behavior, and solo-business posture in
+> this ADR still apply.
 
 ## Context
 

@@ -74,7 +74,10 @@ function CompanySection({ setup }: CompanySectionProps) {
 
   return (
     <section>
-      <h2 className="text-base font-semibold text-slate-900 mb-4">Company</h2>
+      <h2 className="text-base font-semibold text-slate-900 mb-1.5">Company</h2>
+      <p className="text-sm text-slate-500 mb-4">
+        Customers see this business name on their request page. Add the public phone or email you want customers to use, or leave them hidden.
+      </p>
       <form onSubmit={handleSubmit} className="space-y-4 max-w-lg">
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-1">
@@ -209,7 +212,10 @@ function PolicySection({ setup }: PolicySectionProps) {
 
   return (
     <section>
-      <h2 className="text-base font-semibold text-slate-900 mb-4">Response Policy</h2>
+      <h2 className="text-base font-semibold text-slate-900 mb-1.5">Response Policy</h2>
+      <p className="text-sm text-slate-500 mb-4">
+        How quickly your team aims to respond to new and open requests. The defaults work for most teams — adjust these once you're up and running.
+      </p>
       <form onSubmit={handleSubmit} className="space-y-4 max-w-lg">
         <div className="grid grid-cols-2 gap-4">
           <div>
@@ -410,7 +416,10 @@ function IntakeSection() {
 
   return (
     <section>
-      <h2 className="text-base font-semibold text-slate-900 mb-4">Intake link</h2>
+      <h2 className="text-base font-semibold text-slate-900 mb-1.5">Intake page</h2>
+      <p className="text-sm text-slate-500 mb-4">
+        Your intake page lets new customers send requests without calling or texting first. Create it when you're ready to share a public request form.
+      </p>
       {isLoading && <p className="text-sm text-slate-400">Loading…</p>}
       {newIntakeUrl && (
         <div className="mb-4 rounded-md border border-emerald-200 bg-emerald-50 p-3 space-y-2">
@@ -958,7 +967,10 @@ function TeamSection({ callerRole }: { callerRole: AccountRole }) {
 
   return (
     <section>
-      <h2 className="text-base font-semibold text-slate-900 mb-4">Team</h2>
+      <h2 className="text-base font-semibold text-slate-900 mb-1.5">Team</h2>
+      <p className="text-sm text-slate-500 mb-4">
+        Invite the people who help answer customers or handle work. Keep uses team members to route requests and make sure nothing gets missed.
+      </p>
 
       {seatUsage?.limitApplies && (
         <p className="text-sm text-slate-600 mb-4">
@@ -1011,142 +1023,82 @@ function TeamSection({ callerRole }: { callerRole: AccountRole }) {
   );
 }
 
-// ─── Onboarding section ───────────────────────────────────────────────────────
-
-const ONBOARDING_ITEMS: Array<{
-  key: string;
-  label: string;
-  markKey?: string;
-  markFn?: () => Promise<void>;
-}> = [
-  { key: "profileAndContactSaved", label: "Profile & contact saved" },
-  { key: "timezoneSaved", label: "Timezone saved" },
-  { key: "policySaved", label: "Response policy saved" },
-  { key: "intakeLinkActive", label: "Intake link active" },
-  { key: "operatorInvited", label: "Team member invited" },
-  { key: "mobileDeviceRegistered", label: "Mobile device registered" },
-  { key: "firstRequestCreated", label: "First request created" },
-  {
-    key: "quickCaptureExerciseDone",
-    label: "Quick capture exercise",
-    markKey: "qc",
-    markFn: () => api.markQuickCaptureExercise(),
-  },
-  {
-    key: "trackerReviewDone",
-    label: "Tracker review",
-    markKey: "tr",
-    markFn: () => api.markTrackerReview(),
-  },
-  {
-    key: "spamClassificationExplained",
-    label: "Spam classification explained",
-    markKey: "sc",
-    markFn: () => api.markSpamClassification(),
-  },
-];
-
-function OnboardingSection() {
-  const queryClient = useQueryClient();
-
-  const { data: checklist, isLoading, isError } = useQuery({
-    queryKey: ["onboarding"],
-    queryFn: api.getOnboardingChecklist,
-    staleTime: 60 * 1000,
-  });
-
-  const [marking, setMarking] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  async function handleMark(markKey: string, markFn: () => Promise<void>) {
-    if (marking) return;
-    setMarking(markKey);
-    setError(null);
-    try {
-      await markFn();
-      await queryClient.invalidateQueries({ queryKey: ["onboarding"] });
-    } catch {
-      setError("Something went wrong. Please try again.");
-    } finally {
-      setMarking(null);
-    }
-  }
-
-  return (
-    <section>
-      <h2 className="text-base font-semibold text-slate-900 mb-4">Onboarding</h2>
-
-      {isLoading && <p className="text-sm text-slate-400">Loading…</p>}
-      {isError && <p className="text-sm text-slate-500">Could not load onboarding checklist.</p>}
-
-      {checklist && (
-        <ul className="space-y-3">
-          {ONBOARDING_ITEMS.map(({ key, label, markKey, markFn }) => {
-            const done = checklist[key as keyof typeof checklist];
-            return (
-              <li key={key} className="flex items-center gap-3 text-sm">
-                <span className={done ? "text-green-600" : "text-slate-300"}>
-                  {done ? "✓" : "○"}
-                </span>
-                <span className={done ? "text-slate-700" : "text-slate-500"}>{label}</span>
-                {markKey && markFn && !done && (
-                  <button
-                    onClick={() => void handleMark(markKey, markFn)}
-                    disabled={marking !== null}
-                    className="ml-auto text-xs text-slate-500 hover:text-slate-900 underline disabled:opacity-50"
-                  >
-                    {marking === markKey ? "Marking…" : "Mark done"}
-                  </button>
-                )}
-              </li>
-            );
-          })}
-        </ul>
-      )}
-
-      {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
-    </section>
-  );
-}
-
 // ─── Settings page ────────────────────────────────────────────────────────────
 
-export function Settings({ callerRole }: { callerRole: AccountRole }) {
-  const { data: setup, isLoading, isError } = useQuery({
+type SettingsTab = "public-profile" | "policy" | "team";
+
+function initialTab(section?: "public-profile" | "policy" | "team"): SettingsTab {
+  if (section === "policy") return "policy";
+  if (section === "team") return "team";
+  return "public-profile";
+}
+
+const TABS: Array<{ id: SettingsTab; label: string }> = [
+  { id: "public-profile", label: "Public Link & Profile" },
+  { id: "policy", label: "Response Policy" },
+  { id: "team", label: "Team" },
+];
+
+export function Settings({
+  callerRole,
+  scrollToSection,
+}: {
+  callerRole: AccountRole;
+  scrollToSection?: "public-profile" | "policy" | "team";
+}) {
+  const [activeTab, setActiveTab] = useState<SettingsTab>(() => initialTab(scrollToSection));
+
+  const { data: setup, isLoading: setupLoading, isError: setupError } = useQuery({
     queryKey: ["setup"],
     queryFn: api.getSetup,
     staleTime: 2 * 60 * 1000,
   });
 
-  if (isLoading) {
-    return (
-      <div className="flex flex-1 items-center justify-center">
-        <span className="text-slate-400 text-sm">Loading…</span>
-      </div>
-    );
-  }
-
-  if (isError || !setup) {
-    return (
-      <div className="flex flex-1 items-center justify-center">
-        <span className="text-slate-500 text-sm">Could not load settings.</span>
-      </div>
-    );
-  }
+  const needsSetup = activeTab === "public-profile" || activeTab === "policy";
 
   return (
     <div className="flex-1 overflow-y-auto">
-      <div className="max-w-2xl mx-auto px-4 py-8 space-y-10">
-        <h1 className="text-xl font-semibold text-slate-900">Settings</h1>
-        <CompanySection setup={setup} />
-        <hr className="border-slate-200" />
-        <PolicySection setup={setup} />
-        <hr className="border-slate-200" />
-        <IntakeSection />
-        <hr className="border-slate-200" />
-        <TeamSection callerRole={callerRole} />
-        <hr className="border-slate-200" />
-        <OnboardingSection />
+      <div className="max-w-2xl mx-auto px-4 pt-8">
+        <h1 className="text-xl font-semibold text-slate-900 mb-6">Settings</h1>
+
+        <div className="flex border-b border-slate-200 mb-8">
+          {TABS.map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setActiveTab(tab.id)}
+              className={`px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-offset-2 rounded-t-sm ${
+                activeTab === tab.id
+                  ? "border-[var(--keep-accent)] text-[var(--ophalo-navy)]"
+                  : "border-transparent text-slate-500 hover:text-slate-800 hover:border-slate-300"
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
+        <div className="pb-8">
+          {activeTab === "team" ? (
+            <TeamSection callerRole={callerRole} />
+          ) : needsSetup && setupLoading ? (
+            <div className="flex items-center justify-center py-16">
+              <span className="text-slate-400 text-sm">Loading…</span>
+            </div>
+          ) : needsSetup && (setupError || !setup) ? (
+            <div className="flex items-center justify-center py-16">
+              <span className="text-slate-500 text-sm">Could not load settings.</span>
+            </div>
+          ) : setup && activeTab === "public-profile" ? (
+            <div className="space-y-10">
+              <CompanySection setup={setup} />
+              <hr className="border-slate-200" />
+              <IntakeSection />
+            </div>
+          ) : setup && activeTab === "policy" ? (
+            <PolicySection setup={setup} />
+          ) : null}
+        </div>
       </div>
     </div>
   );

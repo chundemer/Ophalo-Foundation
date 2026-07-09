@@ -154,6 +154,18 @@ export interface ListMembersResponse {
   seatUsage: SeatUsage;
 }
 
+export interface KeepBusinessSetupResult {
+  businessInfoComplete: boolean;
+  addFirstRequestComplete: boolean;
+  reviewCustomerPageComplete: boolean;
+  createIntakePageComplete: boolean;
+  shareIntakePageComplete: boolean;
+  buildTeamComplete: boolean;
+  useMobileComplete: boolean;
+  deferredSteps: number[];
+  intendedTeamSize: number | null;
+}
+
 export interface IntakeStatusResult {
   hasActiveLink: boolean;
   publicSlug: string | null;
@@ -682,4 +694,8 @@ export const api = {
     apiFetchVoid("/keep/setup/onboarding/marks/tracker-review", { method: "POST" }),
   markSpamClassification: () =>
     apiFetchVoid("/keep/setup/onboarding/marks/spam-classification", { method: "POST" }),
+  getGuidedSetup: () =>
+    apiFetch<KeepBusinessSetupResult>("/keep/setup/guided"),
+  deferSetupStep: (step: number) =>
+    apiFetchVoid(`/keep/setup/guided/defer/${step}`, { method: "POST" }),
 };

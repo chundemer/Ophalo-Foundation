@@ -1,10 +1,10 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-07-09 (S22b-backend complete; S22c-frontend next)
+**Last updated:** 2026-07-09 (S22r1 complete — Settings tabs skeleton)
 **Branch:** `main` tracking `origin/main`
 **Last green baseline:** 964 unit · 748 integration = 1,712 total, 0 failures (1 pre-existing KeepG5 fluke excluded)
-**Next free ADR:** ADR-428 before S22 documentation reconciliation
-**Current session:** Session 22 — Guided Setup, Intake Sharing, And Service Location Plan
+**Next free ADR:** ADR-430
+**Current session:** Session 22 — Day-Zero Settings Redesign, Intake Sharing, And Service Location Plan
 
 ---
 
@@ -39,8 +39,8 @@ For every implementation slice:
 **Readiness working doc:** `docs/pilot-readiness-decision-questions.md`
 **Bug/gap tracker:** `docs/pilot-readiness-bug-tracker.md`
 **Foundation roadmap:** `docs/build-log/ophalo-foundation-build-plan-greenfield-boundaries-brownfield-behavior.md` section 9.1
-**Current session:** Session 22 — Guided Setup, Intake Sharing, And Service Location Plan
-**Current slice:** S22c-frontend — Setup Bar and Guided Home UI (S22b-backend complete)
+**Current session:** Session 22 — Day-Zero Settings Redesign, Intake Sharing, And Service Location Plan
+**Current slice:** S22r2 — slug-based public intake routing and alias persistence
 
 ### Completed Context
 
@@ -63,6 +63,9 @@ Treat these as historical context unless a later discovery step finds a concrete
 
 - S22 decisions and implementation slicing are captured in
   `docs/build-log/076-session-22-guided-setup-intake-and-service-location.md`.
+- ADR-428 is now locked: Keep launches in a day-zero functional state. Settings is split into
+  `Public Link & Profile`, `Response Policy`, and `Team`; Getting Started becomes lightweight
+  verification/on-ramp, not a seven-step checklist.
 - Treat Session 12 onboarding (`docs/build-log/066-session-12-account-settings-and-onboarding.md`)
   as the existing foundation to migrate, not as absent work.
 - S22a preflight and S22b-backend are complete. See build log 076 for locked decisions and
@@ -70,10 +73,32 @@ Treat these as historical context unless a later discovery step finds a concrete
 - S22b delivered: `KeepSetupStep`, `IntendedTeamSize`, `KeepSetupDeferral`, `KeepBusinessSetupService`,
   `IKeepSetupDeferralPersistence`, `EfKeepSetupDeferralPersistence`, `keep_setup_deferrals` table,
   `GET /keep/setup/guided`, `POST /keep/setup/guided/defer/{step}`.
-- S22c-frontend is pre-work complete: 1 mutation family, 4 production files. Mechanical preflight
-  required before first edit; present file-level gate before writing.
-- `IntendedTeamSize` returns null from `GET /keep/setup/guided` until S22c introduces
-  `KeepAccountSetupPreferences`. It must never affect seat limits or entitlements.
+- S22r0 preflight complete (2026-07-09): dirty S22c files classified; file-level gate confirmed.
+- S22r1 complete (2026-07-09): `SetupBar.tsx` deleted; `App.tsx` SetupBar wiring removed and route
+  section type updated to `"public-profile" | "policy" | "team"`; `Home.tsx` GuidedHub and
+  seven-step checklist stripped, replaced with lightweight three-card Getting Started stub;
+  `Settings.tsx` converted from monolithic scroll to three-tab subnav (Public Link & Profile,
+  Response Policy, Team), `OnboardingSection` removed from primary render. TypeScript clean.
+- `apiClient.ts` additions from S22b (`KeepBusinessSetupResult`, `getGuidedSetup`,
+  `deferSetupStep`) are kept — backed by live backend endpoints, needed for S22r5 Getting Started.
+- Do not continue showing `Create intake page` and `Share intake page` as separate owner chores.
+  Public intake should be auto-provisioned by default, then verified/copied/previewed from Settings.
+- Do not make `Build your team` feel mandatory. Team is available in Settings and reassuringly
+  optional for solo shops.
+- First redo target: Settings tabs/subnav. Build `Public Link & Profile` as the first Settings tab,
+  but gate durable copy/open controls until slug-based public routing is implemented. Then split
+  `Response Policy` with helper copy and `Team` as a clean roster.
+- Slug-based public intake URLs are the chosen durable path. Do not use `window.location.origin` for
+  customer-facing intake links from `ophalo-app`; use the configured public web base URL. Do not show
+  copy/open as guaranteed durable until `ophalo-web`/API can resolve active intake links by
+  `publicSlug`.
+- ADR-429 is locked: ordinary public link-name edits preserve old shared slugs as aliases; replacement
+  or regeneration is the destructive/security action and must warn that old shared links break. S22r2
+  includes alias persistence/migration and slug-resolution tests.
+- `seatUsage` sourced from `api.listMembers()` (`["members", false]` queryKey); fail-soft on error.
+- `IntendedTeamSize` returns null from `GET /keep/setup/guided` until any future backend preference
+  slice. It must never affect seat limits or entitlements. It is no longer required for the immediate
+  redesign.
 
 - S17 decisions are locked in build log 071 as ADR-396 through ADR-405. Treat S17 as historical
   implementation context unless a later S22/S20 preflight explicitly pulls a mobile dependency

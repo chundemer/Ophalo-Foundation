@@ -21,7 +21,7 @@ import { api, type AccountRole, type KeepRequestViewCounts } from "./lib/apiClie
 type AppRoute =
   | { page: "home" }
   | { page: "requests" }
-  | { page: "settings" }
+  | { page: "settings"; section?: "public-profile" | "policy" | "team" }
   | { page: "detail"; requestId: string };
 
 function getRouteFromLocation(): AppRoute {
@@ -92,6 +92,10 @@ function AppShell() {
 
   function openCapture() {
     setCaptureOpen(true);
+  }
+
+  function navigateToSettings(section?: "public-profile" | "policy" | "team") {
+    navigate({ page: "settings", section });
   }
 
   function selectRequest(requestId: string) {
@@ -191,8 +195,15 @@ function AppShell() {
             onSelectRequest={selectRequest}
           />
         )}
-        {route.page === "home" && <Home onStartCapture={openCapture} />}
-        {route.page === "settings" && <Settings callerRole={role} />}
+        {route.page === "home" && (
+          <Home
+            onStartCapture={openCapture}
+            role={role}
+            onNavigateSettings={navigateToSettings}
+            onNavigateRequests={() => navigate({ page: "requests" })}
+          />
+        )}
+        {route.page === "settings" && <Settings callerRole={role} scrollToSection={route.section} />}
         {route.page === "detail" && (
           <RequestDetail requestId={route.requestId} onBack={backToRequests} />
         )}
