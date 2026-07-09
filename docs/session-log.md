@@ -40,7 +40,7 @@ For every implementation slice:
 **Bug/gap tracker:** `docs/pilot-readiness-bug-tracker.md`
 **Foundation roadmap:** `docs/build-log/ophalo-foundation-build-plan-greenfield-boundaries-brownfield-behavior.md` section 9.1
 **Current session:** Session 22 — Day-Zero Settings Redesign, Intake Sharing, And Service Location Plan
-**Current slice:** S22r4 — Response Policy tab
+**Current slice:** S22r5 — Team tab and lightweight Getting Started
 
 ### Completed Context
 
@@ -87,6 +87,10 @@ Treat these as historical context unless a later discovery step finds a concrete
   normalized to lowercase); `ExecuteWithLinkAsync` Phase B extracted; `ExecuteBySlugAsync` added;
   `POST /keep/public-intake/slug/{slug}` endpoint; `ophalo-web` `keep/s/[slug]/page.tsx` route;
   `IntakeForm.tsx` accepts `{ token?: string; slug?: string }`. 7 integration tests green.
+- S22r4 complete (2026-07-09): `PolicySection` in `Settings.tsx` redesigned — stacked layout with
+  plain-language helper copy for each field (First response, Standard response, Priority response,
+  Status check); `min` tightened to 1 to match backend `> 0` constraint; intro paragraph reworded.
+  TypeScript clean. No backend or test changes.
 - S22r3 complete (2026-07-09): `KeepPublicIntakeLink.RenameSlug` (returns bool no-op indicator);
   `SlugExistsAsync` expanded to check active `KeepPublicIntakeSlugAlias` rows (hard pre-requisite);
   `KeepIntakeSetupService.RenameAsync` with diacritic-stripping `Slugify`, user-visible 422 on slug
