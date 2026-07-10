@@ -1,8 +1,8 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-07-10 (S22d complete — service location backend + intake page visual shell, all tests green)
+**Last updated:** 2026-07-10 (S22e complete — business identity header on intake form + S22d regression fixes, full suite green)
 **Branch:** `main` tracking `origin/main`
-**Last green baseline:** S22d targeted suite green (59 unit + 16 integration). Full baseline remains 964 unit · 755 integration = 1,719 total, 0 failures (1 pre-existing KeepG5 fluke excluded)
+**Last green baseline:** Full suite green — 986 unit · 786 integration = 1,772 total, 0 failures (1 pre-existing KeepG5 fluke excluded)
 **Next free ADR:** ADR-430
 **Current session:** Session 22 — Day-Zero Settings Redesign, Intake Sharing, And Service Location Plan
 
@@ -40,7 +40,7 @@ For every implementation slice:
 **Bug/gap tracker:** `docs/pilot-readiness-bug-tracker.md`
 **Foundation roadmap:** `docs/build-log/ophalo-foundation-build-plan-greenfield-boundaries-brownfield-behavior.md` section 9.1
 **Current session:** Session 22 — Day-Zero Settings Redesign, Intake Sharing, And Service Location Plan
-**Current slice:** S22d complete — S22e next (GET public intake info endpoint + business identity header on intake form)
+**Current slice:** S22e complete — customer page copy alignment (lightweight discovery) next, then S22f mobile carry-forward preflight
 
 ### Completed Context
 
@@ -112,6 +112,18 @@ Treat these as historical context unless a later discovery step finds a concrete
   businessName is non-slugifiable. `POST /keep/setup/intake/ensure` and replace remain unchanged.
   3 production files changed, 33/33 integration tests green (4 new tests: auto-provision,
   fallback slug, idempotency, concurrent GET).
+- S22e complete (2026-07-10): Business identity header on intake form.
+  `GET /keep/public-intake/token/{token}/info` and `GET /keep/public-intake/slug/{slug}/info` → `{ businessName }`
+  (anonymous, rate-limited, 404 for unknown/revoked). `GetBusinessNameByTokenHashAsync` + `GetBusinessNameBySlugAsync`
+  added to `IKeepIntakePersistence` and implemented in `KeepIntakePersistence` (reuses existing slug alias resolution).
+  `GetInfoByTokenAsync` + `GetInfoBySlugAsync` added to `CreateKeepPublicIntakeService`. Both intake page routes
+  (`[token]/page.tsx`, `s/[slug]/page.tsx`) now fetch info server-side and pass `businessName` to `IntakeForm`.
+  `IntakeForm` renders business initials avatar + name header (matching customer tracker page) when name is present;
+  falls back to generic "Submit a request" card. Footer corrected: brand logo + product description replacing
+  inline SVG stand-in and internal tagline. 5 new info endpoint integration tests. S22d regression fixes:
+  12 existing intake submission tests across `KeepIntakeApiTests`, `KeepIntakeSetupApiTests`, `KeepOffSeasonTests`
+  updated to include service location fields (S22d made these required but targeted-suite-only verification missed them).
+  `FakeIntakePersistence` in unit tests updated for new interface methods. Full suite: 986 unit + 786 integration.
 - S22d complete (2026-07-10): Service location backend + intake page visual shell. Migration:
   `20260710095627_AddServiceLocationToKeepRequest` (5 nullable columns on `keep_requests`). Inline
   US 50-state + DC validation in `CreateKeepPublicIntakeService`; 4 error constants; DTO, command,
@@ -163,15 +175,14 @@ Treat these as historical context unless a later discovery step finds a concrete
 
 ### Next Session Brief
 
-Start with S22e — business identity on the intake form.
+S22e is complete. Remaining S22 slices:
 
-Remaining S22 slices:
-
-1. S22e: `GET /keep/public-intake/slug/{slug}/info` (and `/token/{token}/info`) → `{ businessName }`;
-   use it in `IntakeForm.tsx` to render business initials avatar + name in the form header, matching
-   the customer tracker page. Generic "Submit a request" copy is the current interim state.
-2. S22e: Customer page copy alignment (capability hint, cancellation copy, label cleanup).
-3. Mobile carry-forward.
+1. **Customer page copy alignment (lightweight discovery):** Inspect `CustomerTrackerView.tsx` for
+   any capability hint, cancellation copy, or label misalignment introduced by S22 decisions. Expected
+   to be copy-only or a no-op; do not assume changes are needed before looking.
+2. **S22f — Mobile Carry-Forward Preflight:** See build log 076 for scope (service-location fields
+   mobile must consume, active-intake share utility feasibility, no new mobile settings/admin scope).
+3. **S22g — Documentation Reconciliation:** ADR-295, ADR-375, ADR-383 and response policy placement.
 4. Docs/index reconciliation.
 
 Historical mobile context lives in `docs/build-log/071-session-17-review-safe-native-product-foundation.md`.

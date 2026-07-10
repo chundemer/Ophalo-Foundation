@@ -4,6 +4,7 @@
 **Purpose:** Live tracker for pilot-blocking or pilot-relevant bugs/gaps discovered during Session 14.
 **Source:** Promoted from the Pre-S14e bug register in `docs/build-log/068-session-14-ophalo-web-front-door.md`.
 **Current active item:** GAP-004 — Browser back / refresh does not preserve app location.
+**Recently resolved:** GAP-005 — Same-account staff can submit through the public intake form.
 
 This document is the current working tracker. Historical discovery notes stay in the build logs, but
 triage, status, and next-session ordering should happen here.
@@ -138,6 +139,28 @@ mobile PWA the back gesture can exit the app, and refresh on detail loses place.
 Decision: ADR-427 locks this as pre-pilot PWA navigation behavior. Browser refresh and direct URL
 open must preserve authorized request detail; Requests breadcrumb/back returns to the request list;
 the OpHalo Keep logo returns to the request list/home workbench.
+
+## Resolved During Session 22
+
+### GAP-005 — Same-account staff can submit through the public intake form
+
+**Status:** Resolved in S22 (2026-07-09)
+**Severity:** P1
+**Area:** `OpHalo.Keep.Application` public intake service; `ophalo-web` IntakeForm
+
+Authenticated users who belong to the account that owns a public intake link were able to POST to
+`/keep/public-intake/slug/{slug}` and `/keep/public-intake/token/{token}` and create requests
+tagged as `public_intake` source. This breaks source integrity and audit semantics — public intake
+must represent only customer-submitted requests.
+
+**Fix:**
+- `CreateKeepPublicIntakeService.ExecuteWithLinkAsync` now checks `currentUser.IsAuthenticated &&
+  currentUser.AccountId == link.AccountId` and returns `keep.public_intake.staff_not_permitted`
+  (422) before any database writes. Anonymous users and members of other accounts are unaffected.
+- `ErrorHttpMapper` registers the new error code → 422 UnprocessableEntity.
+- `IntakeForm.tsx` maps `keep.public_intake.staff_not_permitted` to a staff notice stage: "You're
+  signed in to this account — use Quick Capture or Create Request in the app."
+- 4 unit tests + 3 integration tests added; all existing tests remain green.
 
 ## Resolved During Session 14
 

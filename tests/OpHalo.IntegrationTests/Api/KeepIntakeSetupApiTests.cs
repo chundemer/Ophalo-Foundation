@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using OpHalo.Foundation.Application.Accounts.Provisioning;
 using OpHalo.Foundation.Core.Constants;
@@ -310,12 +311,13 @@ public sealed class KeepIntakeSetupApiTests : IClassFixture<KeepApiWebFactory>, 
     }
 
     // -------------------------------------------------------------------------
-    // Account isolation — Account B has no link
+    // Auto-provisioning — GET /keep/setup/intake creates link when missing
     // -------------------------------------------------------------------------
 
     [Fact]
-    public async Task AccountB_GetStatus_ReturnsNoActiveLink()
+    public async Task AccountB_GetStatus_AutoProvisions_ReturnsActiveLink()
     {
+        // Account B has no pre-seeded link. GET must auto-provision one.
         var cookie = await _factory.SeedSessionAsync(_accountBOwnerUserId, _accountBId);
 
         using var request = new HttpRequestMessage(HttpMethod.Get, "/keep/setup/intake");
@@ -326,8 +328,111 @@ public sealed class KeepIntakeSetupApiTests : IClassFixture<KeepApiWebFactory>, 
 
         var body = await response.Content.ReadFromJsonAsync<StatusBody>(JsonOptions);
         Assert.NotNull(body);
-        Assert.False(body.HasActiveLink);
-        Assert.Null(body.PublicSlug);
+        Assert.True(body.HasActiveLink);
+        Assert.NotNull(body.PublicSlug);
+        Assert.Null(body.RawToken);
+    }
+
+    [Fact]
+    public async Task GetStatus_NewEligibleAccount_AutoProvisions_WithoutPriorEnsure()
+    {
+        var (accountId, ownerUserId) = await SeedFreshAccountAsync("Auto Provision Co", "auto-provision");
+        var cookie = await _factory.SeedSessionAsync(ownerUserId, accountId);
+
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/keep/setup/intake");
+        request.Headers.Add("Cookie", $"{AuthConstants.CookieName}={cookie}");
+        var response = await _client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<StatusBody>(JsonOptions);
+        Assert.NotNull(body);
+        Assert.True(body.HasActiveLink);
+        Assert.NotNull(body.PublicSlug);
+        // Raw token must never be returned from a GET read.
+        Assert.Null(body.RawToken);
+    }
+
+    [Fact]
+    public async Task GetStatus_FallbackSlug_WhenBusinessNameUnslugifiable_Succeeds()
+    {
+        // "!!! @@@" normalizes to an empty slug base → fallback "business".
+        var (accountId, ownerUserId) = await SeedFreshAccountAsync("!!! @@@", "fallback-slug");
+        var cookie = await _factory.SeedSessionAsync(ownerUserId, accountId);
+
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/keep/setup/intake");
+        request.Headers.Add("Cookie", $"{AuthConstants.CookieName}={cookie}");
+        var response = await _client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<StatusBody>(JsonOptions);
+        Assert.NotNull(body);
+        Assert.True(body.HasActiveLink);
+        // Must fall back to "business" or "business-N" slug.
+        Assert.NotNull(body.PublicSlug);
+        Assert.StartsWith("business", body.PublicSlug);
+    }
+
+    [Fact]
+    public async Task GetStatus_IsIdempotent_DoesNotCreateDuplicateLinks()
+    {
+        var (accountId, ownerUserId) = await SeedFreshAccountAsync("Idempotent Co", "idempotent-get");
+        var cookie = await _factory.SeedSessionAsync(ownerUserId, accountId);
+
+        var slug1 = await GetStatusSlugAsync(cookie);
+        var slug2 = await GetStatusSlugAsync(await _factory.SeedSessionAsync(ownerUserId, accountId));
+
+        Assert.Equal(slug1, slug2);
+
+        // Exactly one active link in the DB.
+        await using var scope = _factory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+        var activeCount = await db.Set<KeepPublicIntakeLink>()
+            .CountAsync(l => l.AccountId == accountId && l.RevokedAtUtc == null);
+        Assert.Equal(1, activeCount);
+    }
+
+    [Fact]
+    public async Task ConcurrentGetStatus_BothSucceed_SameSlug()
+    {
+        var (accountId, ownerUserId) = await SeedFreshAccountAsync("Concurrent Get Co", "concurrent-get");
+        var session1 = await _factory.SeedSessionAsync(ownerUserId, accountId);
+        var session2 = await _factory.SeedSessionAsync(ownerUserId, accountId);
+
+        var client1 = _factory.CreateClient();
+        var client2 = _factory.CreateClient();
+        var barrier = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        var task1 = Task.Run(async () =>
+        {
+            await barrier.Task;
+            using var req = new HttpRequestMessage(HttpMethod.Get, "/keep/setup/intake");
+            req.Headers.Add("Cookie", $"{AuthConstants.CookieName}={session1}");
+            return await client1.SendAsync(req);
+        });
+
+        var task2 = Task.Run(async () =>
+        {
+            await barrier.Task;
+            using var req = new HttpRequestMessage(HttpMethod.Get, "/keep/setup/intake");
+            req.Headers.Add("Cookie", $"{AuthConstants.CookieName}={session2}");
+            return await client2.SendAsync(req);
+        });
+
+        barrier.SetResult(true);
+        var responses = await Task.WhenAll(task1, task2);
+
+        Assert.All(responses, r => Assert.Equal(HttpStatusCode.OK, r.StatusCode));
+
+        var bodies = await Task.WhenAll(
+            responses[0].Content.ReadFromJsonAsync<StatusBody>(JsonOptions),
+            responses[1].Content.ReadFromJsonAsync<StatusBody>(JsonOptions));
+
+        Assert.All(bodies, b => { Assert.NotNull(b); Assert.True(b!.HasActiveLink); Assert.NotNull(b.PublicSlug); });
+
+        // Both callers must see the same slug — only one link was created.
+        Assert.Equal(bodies[0]!.PublicSlug, bodies[1]!.PublicSlug);
     }
 
     // -------------------------------------------------------------------------
@@ -402,7 +507,8 @@ public sealed class KeepIntakeSetupApiTests : IClassFixture<KeepApiWebFactory>, 
         // Old token must now be rejected at the public intake endpoint.
         var publicResponse = await _client.PostAsJsonAsync(
             $"/keep/public-intake/token/{oldRawToken}",
-            new { customerName = "Bob", customerPhone = "0499888777", description = "Old token test" });
+            new { customerName = "Bob", customerPhone = "0499888777", description = "Old token test",
+                  serviceAddressLine1 = "1 Test St", serviceCity = "Springfield", serviceState = "IL" });
 
         Assert.Equal(HttpStatusCode.UnprocessableEntity, publicResponse.StatusCode);
         var problem = await publicResponse.Content.ReadFromJsonAsync<ProblemBody>(JsonOptions);
@@ -537,7 +643,8 @@ public sealed class KeepIntakeSetupApiTests : IClassFixture<KeepApiWebFactory>, 
         // Old slug must still resolve at the public intake endpoint (alias fallback).
         var publicResp = await _client.PostAsJsonAsync(
             $"/keep/public-intake/slug/{oldSlug}",
-            new { customerName = "Alias Bob", customerPhone = "0411000001", description = "Alias test" });
+            new { customerName = "Alias Bob", customerPhone = "0411000001", description = "Alias test",
+                  serviceAddressLine1 = "1 Test St", serviceCity = "Springfield", serviceState = "IL" });
 
         Assert.Equal(HttpStatusCode.Created, publicResp.StatusCode);
     }
@@ -688,6 +795,16 @@ public sealed class KeepIntakeSetupApiTests : IClassFixture<KeepApiWebFactory>, 
         Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
         var body = await resp.Content.ReadFromJsonAsync<RenameLinkBody>(JsonOptions);
         Assert.Equal(expectedSlug, body?.PublicSlug);
+    }
+
+    private async Task<string?> GetStatusSlugAsync(string cookie)
+    {
+        using var req = new HttpRequestMessage(HttpMethod.Get, "/keep/setup/intake");
+        req.Headers.Add("Cookie", $"{AuthConstants.CookieName}={cookie}");
+        var resp = await _client.SendAsync(req);
+        resp.EnsureSuccessStatusCode();
+        var body = await resp.Content.ReadFromJsonAsync<StatusBody>(JsonOptions);
+        return body!.PublicSlug;
     }
 
     private async Task<string> EnsureLinkAsync(Guid ownerUserId, Guid accountId)

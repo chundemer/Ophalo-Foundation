@@ -308,6 +308,22 @@ if (!app.Environment.IsEnvironment("Testing"))
 // --- Routes ---
 
 // Public intake — anonymous, rate limited (ADR-051, ADR-059, ADR-060, ADR-429)
+app.MapGet("/keep/public-intake/token/{publicIntakeToken}/info",
+    async (string publicIntakeToken, CreateKeepPublicIntakeService service, CancellationToken ct) =>
+    {
+        var name = await service.GetInfoByTokenAsync(publicIntakeToken, ct);
+        return name is not null ? Results.Ok(new { businessName = name }) : Results.NotFound();
+    })
+    .RequireRateLimiting("public-intake");
+
+app.MapGet("/keep/public-intake/slug/{slug}/info",
+    async (string slug, CreateKeepPublicIntakeService service, CancellationToken ct) =>
+    {
+        var name = await service.GetInfoBySlugAsync(slug, ct);
+        return name is not null ? Results.Ok(new { businessName = name }) : Results.NotFound();
+    })
+    .RequireRateLimiting("public-intake");
+
 app.MapPost("/keep/public-intake/token/{publicIntakeToken}", HandlePublicIntake)
    .RequireRateLimiting("public-intake");
 

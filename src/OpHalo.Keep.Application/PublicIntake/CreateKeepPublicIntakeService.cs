@@ -86,6 +86,19 @@ public sealed class CreateKeepPublicIntakeService(
         return await ExecuteWithLinkAsync(link, v, command, ct);
     }
 
+    public async Task<string?> GetInfoByTokenAsync(string rawToken, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(rawToken)) return null;
+        var tokenHash = tokenService.HashPublicIntakeToken(rawToken);
+        return await persistence.GetBusinessNameByTokenHashAsync(tokenHash, ct);
+    }
+
+    public async Task<string?> GetInfoBySlugAsync(string slug, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(slug)) return null;
+        return await persistence.GetBusinessNameBySlugAsync(slug, ct);
+    }
+
     private static Result<bool> ValidateServiceLocation(CreateKeepPublicIntakeCommand command)
     {
         if (string.IsNullOrWhiteSpace(command.ServiceAddressLine1))

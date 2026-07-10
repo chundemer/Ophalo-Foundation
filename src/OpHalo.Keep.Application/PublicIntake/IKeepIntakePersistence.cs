@@ -47,6 +47,19 @@ public interface IKeepIntakePersistence
     /// </summary>
     Task<KeepResponsePolicy?> GetResponsePolicyAsync(Guid accountId, CancellationToken ct);
 
+    /// <summary>
+    /// Returns the business name for an active intake link identified by token hash, or null
+    /// if the link does not exist, is revoked, or is deleted.
+    /// </summary>
+    Task<string?> GetBusinessNameByTokenHashAsync(string tokenHash, CancellationToken ct);
+
+    /// <summary>
+    /// Returns the business name for an active intake link identified by slug, following the
+    /// same current-slug-first then active-alias fallback resolution as
+    /// <see cref="FindActivePublicIntakeLinkBySlugAsync"/>. Returns null if not found.
+    /// </summary>
+    Task<string?> GetBusinessNameBySlugAsync(string slug, CancellationToken ct);
+
     Task<bool> PageTokenExistsAsync(string pageToken, CancellationToken ct);
 
     Task<bool> ReferenceCodeExistsAsync(Guid accountId, string referenceCode, CancellationToken ct);

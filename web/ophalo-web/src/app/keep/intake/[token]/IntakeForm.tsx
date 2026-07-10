@@ -4,6 +4,13 @@ import { useRef, useState } from "react";
 
 type Stage = "form" | "submitting" | "success" | "unavailable" | "staff";
 
+function businessInitials(name: string): string {
+  const words = name.trim().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return "?";
+  if (words.length === 1) return words[0].slice(0, 2).toUpperCase();
+  return (words[0][0] + words[1][0]).toUpperCase();
+}
+
 const US_STATES = [
   ["AL","Alabama"],["AK","Alaska"],["AZ","Arizona"],["AR","Arkansas"],["CA","California"],
   ["CO","Colorado"],["CT","Connecticut"],["DE","Delaware"],["DC","Washington DC"],["FL","Florida"],
@@ -81,20 +88,29 @@ function CardSection({ children }: { children: React.ReactNode }) {
 
 function Footer() {
   return (
-    <div className="flex flex-col items-center gap-1 pb-2 pt-1">
-      <div className="flex items-center gap-1.5">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-          <rect width="24" height="24" rx="6" fill="var(--ophalo-navy)" />
-          <path d="M7 8h10M7 12h6M7 16h8" stroke="white" strokeWidth="1.8" strokeLinecap="round" />
-        </svg>
-        <span className="text-xs font-semibold text-[var(--ophalo-navy)]">Keep by OpHalo</span>
-      </div>
-      <p className="text-[11px] text-muted-foreground">Quiet Intelligence. Clear Decisions.</p>
-    </div>
+    <footer className="pb-6 pt-4 text-center">
+      <img
+        src="/brand/ophalo-lockup-color.svg"
+        alt="OpHalo"
+        className="mx-auto h-6 w-auto opacity-75"
+      />
+      <p className="mt-2 text-sm font-semibold text-[var(--ophalo-ink)]">Keep by OpHalo</p>
+      <p className="mx-auto mt-1 max-w-md text-sm leading-5 text-[var(--ophalo-muted)]">
+        Request tracking for service businesses that work by phone, text, and in person.
+      </p>
+    </footer>
   );
 }
 
-export default function IntakeForm({ token, slug }: { token?: string; slug?: string }) {
+export default function IntakeForm({
+  token,
+  slug,
+  businessName,
+}: {
+  token?: string;
+  slug?: string;
+  businessName?: string | null;
+}) {
   const [stage, setStage] = useState<Stage>("form");
   const [referenceCode, setReferenceCode] = useState<string>("");
   const [pageToken, setPageToken] = useState<string>("");
@@ -270,12 +286,31 @@ export default function IntakeForm({ token, slug }: { token?: string; slug?: str
     <main className="min-h-screen bg-[var(--ophalo-canvas)] px-4 py-6 sm:py-10">
       <div className="mx-auto w-full max-w-2xl space-y-4 sm:space-y-5">
         {/* Header */}
-        <CardSection>
-          <h1 className="text-lg font-semibold text-foreground">Submit a request</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Fill out the form below and the business will follow up with you.
-          </p>
-        </CardSection>
+        {businessName ? (
+          <div className="flex items-center gap-3 px-1 pb-1">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[var(--ophalo-navy)] text-sm font-bold tracking-wide text-white">
+              {businessInitials(businessName)}
+            </div>
+            <div className="min-w-0">
+              <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+                New Request
+              </p>
+              <p className="truncate text-lg font-bold leading-tight text-foreground">
+                {businessName}
+              </p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Fill out the form below and {businessName} will follow up with you.
+              </p>
+            </div>
+          </div>
+        ) : (
+          <CardSection>
+            <h1 className="text-lg font-semibold text-foreground">Submit a request</h1>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Fill out the form below and the business will follow up with you.
+            </p>
+          </CardSection>
+        )}
 
         <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-5">
           {/* Contact details */}

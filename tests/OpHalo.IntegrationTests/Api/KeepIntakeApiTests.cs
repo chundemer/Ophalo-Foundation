@@ -28,6 +28,7 @@ public sealed class KeepIntakeApiTests : IClassFixture<KeepApiWebFactory>, IAsyn
     private Guid _accountId;
     private Guid _ownerAccountUserId;
     private readonly string _rawToken = "test_public_intake_token_abc123_xyz";
+    private readonly string _revokedRawToken = "test_revoked_intake_token_xyz789";
 
     public KeepIntakeApiTests(KeepApiWebFactory factory)
     {
@@ -79,6 +80,16 @@ public sealed class KeepIntakeApiTests : IClassFixture<KeepApiWebFactory>, IAsyn
         var link = KeepPublicIntakeLink.Create(_accountId, "acme-plumbing", tokenHash);
         db.Set<KeepPublicIntakeLink>().Add(link);
 
+        // Seed alias for the active link (resolves "acme-plumbing-old" → same link)
+        db.Set<KeepPublicIntakeSlugAlias>().Add(
+            KeepPublicIntakeSlugAlias.Create(_accountId, link.Id, "acme-plumbing-old"));
+
+        // Seed a revoked intake link (for info endpoint revoked test)
+        var revokedTokenHash = new KeepTokenService().HashPublicIntakeToken(_revokedRawToken);
+        var revokedLink = KeepPublicIntakeLink.Create(_accountId, "acme-revoked", revokedTokenHash);
+        revokedLink.Revoke(now);
+        db.Set<KeepPublicIntakeLink>().Add(revokedLink);
+
         // Seed one open request so GET /keep/requests has data to return
         var customer = KeepCustomer.Create(_accountId, "Jane Smith", "0412345678");
         db.Set<KeepCustomer>().Add(customer);
@@ -106,7 +117,8 @@ public sealed class KeepIntakeApiTests : IClassFixture<KeepApiWebFactory>, IAsyn
     {
         var response = await _client.PostAsJsonAsync(
             $"/keep/public-intake/token/{_rawToken}",
-            new { customerName = "Bob Jones", customerPhone = "0499999999", description = "Leaking tap" });
+            new { customerName = "Bob Jones", customerPhone = "0499999999", description = "Leaking tap",
+                  serviceAddressLine1 = "1 Test St", serviceCity = "Springfield", serviceState = "IL" });
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
 
@@ -150,7 +162,8 @@ public sealed class KeepIntakeApiTests : IClassFixture<KeepApiWebFactory>, IAsyn
         // Verify the field is truly gone: sending a body that never included it still works.
         var response = await _client.PostAsJsonAsync(
             $"/keep/public-intake/token/{_rawToken}",
-            new { customerName = "Carol White", customerPhone = "0422333444", description = "Dripping tap" });
+            new { customerName = "Carol White", customerPhone = "0422333444", description = "Dripping tap",
+                  serviceAddressLine1 = "1 Test St", serviceCity = "Springfield", serviceState = "IL" });
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
     }
@@ -275,7 +288,8 @@ public sealed class KeepIntakeApiTests : IClassFixture<KeepApiWebFactory>, IAsyn
     {
         var response = await _client.PostAsJsonAsync(
             "/keep/public-intake/token/token_that_does_not_exist_in_db",
-            new { customerName = "Bob Jones", customerPhone = "0499999999", description = "Leaking tap" });
+            new { customerName = "Bob Jones", customerPhone = "0499999999", description = "Leaking tap",
+                  serviceAddressLine1 = "1 Test St", serviceCity = "Springfield", serviceState = "IL" });
 
         Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
 
@@ -294,7 +308,8 @@ public sealed class KeepIntakeApiTests : IClassFixture<KeepApiWebFactory>, IAsyn
     {
         var response = await _client.PostAsJsonAsync(
             $"/keep/public-intake/token/{_rawToken}",
-            new { customerName = new string('A', 200), customerPhone = "0411222001", description = "Desc" });
+            new { customerName = new string('A', 200), customerPhone = "0411222001", description = "Desc",
+                  serviceAddressLine1 = "1 Test St", serviceCity = "Springfield", serviceState = "IL" });
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
     }
@@ -353,7 +368,8 @@ public sealed class KeepIntakeApiTests : IClassFixture<KeepApiWebFactory>, IAsyn
     {
         var response = await _client.PostAsJsonAsync(
             $"/keep/public-intake/token/{_rawToken}",
-            new { customerName = "Bob", customerPhone = "0411222004", description = new string('X', 4000) });
+            new { customerName = "Bob", customerPhone = "0411222004", description = new string('X', 4000),
+                  serviceAddressLine1 = "1 Test St", serviceCity = "Springfield", serviceState = "IL" });
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
     }
@@ -395,7 +411,8 @@ public sealed class KeepIntakeApiTests : IClassFixture<KeepApiWebFactory>, IAsyn
     {
         var response = await _client.PostAsJsonAsync(
             $"/keep/public-intake/token/{_rawToken}",
-            new { customerName = "Bob", customerPhone = "+61 412 222 010", description = "Desc" });
+            new { customerName = "Bob", customerPhone = "+61 412 222 010", description = "Desc",
+                  serviceAddressLine1 = "1 Test St", serviceCity = "Springfield", serviceState = "IL" });
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
     }
@@ -476,13 +493,15 @@ public sealed class KeepIntakeApiTests : IClassFixture<KeepApiWebFactory>, IAsyn
         // First submission — establishes customer with email
         var first = await _client.PostAsJsonAsync(
             $"/keep/public-intake/token/{_rawToken}",
-            new { customerName = "Jane", customerPhone = phone, customerEmail = "jane@example.com", description = "First" });
+            new { customerName = "Jane", customerPhone = phone, customerEmail = "jane@example.com", description = "First",
+                  serviceAddressLine1 = "1 Test St", serviceCity = "Springfield", serviceState = "IL" });
         Assert.Equal(HttpStatusCode.Created, first.StatusCode);
 
         // Second submission — omits email
         var second = await _client.PostAsJsonAsync(
             $"/keep/public-intake/token/{_rawToken}",
-            new { customerName = "Jane Updated", customerPhone = phone, description = "Second" });
+            new { customerName = "Jane Updated", customerPhone = phone, description = "Second",
+                  serviceAddressLine1 = "1 Test St", serviceCity = "Springfield", serviceState = "IL" });
         Assert.Equal(HttpStatusCode.Created, second.StatusCode);
 
         // Customer email must be preserved
@@ -504,12 +523,14 @@ public sealed class KeepIntakeApiTests : IClassFixture<KeepApiWebFactory>, IAsyn
 
         var first = await _client.PostAsJsonAsync(
             $"/keep/public-intake/token/{_rawToken}",
-            new { customerName = "Bob", customerPhone = phone, customerEmail = "old@example.com", description = "First" });
+            new { customerName = "Bob", customerPhone = phone, customerEmail = "old@example.com", description = "First",
+                  serviceAddressLine1 = "1 Test St", serviceCity = "Springfield", serviceState = "IL" });
         Assert.Equal(HttpStatusCode.Created, first.StatusCode);
 
         var second = await _client.PostAsJsonAsync(
             $"/keep/public-intake/token/{_rawToken}",
-            new { customerName = "Bob", customerPhone = phone, customerEmail = "new@example.com", description = "Second" });
+            new { customerName = "Bob", customerPhone = phone, customerEmail = "new@example.com", description = "Second",
+                  serviceAddressLine1 = "1 Test St", serviceCity = "Springfield", serviceState = "IL" });
         Assert.Equal(HttpStatusCode.Created, second.StatusCode);
 
         await using var scope = _factory.CreateScope();
@@ -533,12 +554,14 @@ public sealed class KeepIntakeApiTests : IClassFixture<KeepApiWebFactory>, IAsyn
 
         var first = await _client.PostAsJsonAsync(
             $"/keep/public-intake/token/{_rawToken}",
-            new { customerName = "Alice", customerPhone = "0412-345-050", description = "First request" });
+            new { customerName = "Alice", customerPhone = "0412-345-050", description = "First request",
+                  serviceAddressLine1 = "1 Test St", serviceCity = "Springfield", serviceState = "IL" });
         Assert.Equal(HttpStatusCode.Created, first.StatusCode);
 
         var second = await _client.PostAsJsonAsync(
             $"/keep/public-intake/token/{_rawToken}",
-            new { customerName = "Alice", customerPhone = "0412 345 050", description = "Second request" });
+            new { customerName = "Alice", customerPhone = "0412 345 050", description = "Second request",
+                  serviceAddressLine1 = "1 Test St", serviceCity = "Springfield", serviceState = "IL" });
         Assert.Equal(HttpStatusCode.Created, second.StatusCode);
 
         await using var scope = _factory.CreateScope();
@@ -578,14 +601,16 @@ public sealed class KeepIntakeApiTests : IClassFixture<KeepApiWebFactory>, IAsyn
             await barrier.Task;
             return await client1.PostAsJsonAsync(
                 $"/keep/public-intake/token/{_rawToken}",
-                new { customerName = "Concurrent A", customerPhone = phone, description = "Request A" });
+                new { customerName = "Concurrent A", customerPhone = phone, description = "Request A",
+                      serviceAddressLine1 = "1 Test St", serviceCity = "Springfield", serviceState = "IL" });
         });
         var task2 = Task.Run(async () =>
         {
             await barrier.Task;
             return await client2.PostAsJsonAsync(
                 $"/keep/public-intake/token/{_rawToken}",
-                new { customerName = "Concurrent B", customerPhone = phone, description = "Request B" });
+                new { customerName = "Concurrent B", customerPhone = phone, description = "Request B",
+                      serviceAddressLine1 = "1 Test St", serviceCity = "Springfield", serviceState = "IL" });
         });
 
         barrier.SetResult(true);
@@ -617,6 +642,64 @@ public sealed class KeepIntakeApiTests : IClassFixture<KeepApiWebFactory>, IAsyn
             .Where(e => requestIds.Contains(e.RequestId))
             .ToListAsync();
         Assert.Equal(2, events.Count);
+    }
+
+    // -------------------------------------------------------------------------
+    // Info endpoint tests — GET /keep/public-intake/{token|slug}/.../info
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public async Task IntakeInfo_ActiveToken_Returns200WithBusinessName()
+    {
+        var response = await _client.GetAsync(
+            $"/keep/public-intake/token/{_rawToken}/info");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.True(body.TryGetProperty("businessName", out var name));
+        Assert.Equal("Acme Plumbing", name.GetString());
+    }
+
+    [Fact]
+    public async Task IntakeInfo_ActiveSlug_Returns200WithBusinessName()
+    {
+        var response = await _client.GetAsync(
+            "/keep/public-intake/slug/acme-plumbing/info");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.True(body.TryGetProperty("businessName", out var name));
+        Assert.Equal("Acme Plumbing", name.GetString());
+    }
+
+    [Fact]
+    public async Task IntakeInfo_AliasSlug_Returns200WithBusinessName()
+    {
+        var response = await _client.GetAsync(
+            "/keep/public-intake/slug/acme-plumbing-old/info");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.True(body.TryGetProperty("businessName", out var name));
+        Assert.Equal("Acme Plumbing", name.GetString());
+    }
+
+    [Fact]
+    public async Task IntakeInfo_UnknownSlug_Returns404()
+    {
+        var response = await _client.GetAsync(
+            "/keep/public-intake/slug/this-slug-does-not-exist/info");
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task IntakeInfo_RevokedToken_Returns404()
+    {
+        var response = await _client.GetAsync(
+            $"/keep/public-intake/token/{_revokedRawToken}/info");
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
     // -------------------------------------------------------------------------

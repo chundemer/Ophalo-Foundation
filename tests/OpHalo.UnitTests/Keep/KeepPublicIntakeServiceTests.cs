@@ -753,6 +753,12 @@ public class KeepPublicIntakeServiceTests
         public Task<KeepResponsePolicy?> GetResponsePolicyAsync(Guid accountId, CancellationToken ct) =>
             Task.FromResult(ResponsePolicyToReturn);
 
+        public Task<string?> GetBusinessNameByTokenHashAsync(string tokenHash, CancellationToken ct) =>
+            Task.FromResult<string?>(null);
+
+        public Task<string?> GetBusinessNameBySlugAsync(string slug, CancellationToken ct) =>
+            Task.FromResult<string?>(null);
+
         public Task<bool> PageTokenExistsAsync(string pageToken, CancellationToken ct) =>
             Task.FromResult(false);
 

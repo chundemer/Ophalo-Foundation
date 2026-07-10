@@ -309,7 +309,8 @@ public sealed class KeepOffSeasonTests : IClassFixture<KeepApiWebFactory>, IAsyn
     {
         var response = await _factory.CreateClient().PostAsJsonAsync(
             $"/keep/public-intake/token/{IntakeToken}",
-            new { customerName = "New Customer", customerPhone = "0411000000", description = "Need help" });
+            new { customerName = "New Customer", customerPhone = "0411000000", description = "Need help",
+                  serviceAddressLine1 = "1 Test St", serviceCity = "Springfield", serviceState = "IL" });
 
         Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();

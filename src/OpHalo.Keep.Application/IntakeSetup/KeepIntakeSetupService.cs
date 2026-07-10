@@ -34,18 +34,56 @@ public sealed class KeepIntakeSetupService(
 
     private static readonly Error NoActiveLink = KeepPublicIntakeLinkErrors.NoActiveLink;
 
-    public async Task<Result<KeepIntakeSetupStatusResult>> GetStatusAsync(CancellationToken ct = default)
+    public async Task<Result<KeepIntakeSetupStatusResult>> GetOrEnsureStatusAsync(CancellationToken ct = default)
     {
         var auth = await AuthorizeAsync(ct);
         if (auth.IsFailure)
             return Result<KeepIntakeSetupStatusResult>.Failure(auth.Error);
 
-        var link = await persistence.FindActiveLinkByAccountAsync(currentUser.AccountId, ct);
+        // Fast path: active link already exists.
+        var existing = await persistence.FindActiveLinkByAccountAsync(currentUser.AccountId, ct);
+        if (existing is not null)
+            return Result<KeepIntakeSetupStatusResult>.Success(new KeepIntakeSetupStatusResult(
+                HasActiveLink: true,
+                PublicSlug: existing.PublicSlug,
+                CreatedAtUtc: existing.CreatedAtUtc));
 
-        return Result<KeepIntakeSetupStatusResult>.Success(new KeepIntakeSetupStatusResult(
-            HasActiveLink: link is not null,
-            PublicSlug: link?.PublicSlug,
-            CreatedAtUtc: link?.CreatedAtUtc));
+        // Auto-provision: create a link. RawToken is generated for storage only — never returned here.
+        var businessName = await persistence.GetAccountBusinessNameAsync(currentUser.AccountId, ct);
+        var slugBase = Slugify(businessName ?? "business");
+
+        const int maxAttempts = 5;
+        for (var attempt = 0; attempt < maxAttempts; attempt++)
+        {
+            var slug = await GenerateUniqueSlugAsync(slugBase, ct);
+            var rawToken = tokenService.GeneratePublicIntakeToken();
+            var tokenHash = tokenService.HashPublicIntakeToken(rawToken);
+            var link = KeepPublicIntakeLink.Create(currentUser.AccountId, slug, tokenHash, currentUser.UserId);
+
+            var commitResult = await persistence.CommitEnsureAsync(link, ct);
+
+            switch (commitResult)
+            {
+                case EnsureIntakeLinkCommitResult.Created:
+                    return Result<KeepIntakeSetupStatusResult>.Success(new KeepIntakeSetupStatusResult(
+                        HasActiveLink: true,
+                        PublicSlug: slug,
+                        CreatedAtUtc: link.CreatedAtUtc));
+
+                case EnsureIntakeLinkCommitResult.AlreadyExists:
+                    // Concurrent caller won the race — read their link.
+                    var winner = await persistence.FindActiveLinkByAccountAsync(currentUser.AccountId, ct);
+                    return Result<KeepIntakeSetupStatusResult>.Success(new KeepIntakeSetupStatusResult(
+                        HasActiveLink: winner is not null,
+                        PublicSlug: winner?.PublicSlug,
+                        CreatedAtUtc: winner?.CreatedAtUtc));
+
+                case EnsureIntakeLinkCommitResult.SlugCollision:
+                    continue;
+            }
+        }
+
+        return Result<KeepIntakeSetupStatusResult>.Failure(SlugExhausted);
     }
 
     public async Task<Result<KeepIntakeSetupEnsureResult>> EnsureAsync(CancellationToken ct = default)

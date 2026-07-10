@@ -72,6 +72,25 @@ public sealed class KeepIntakePersistence(OpHaloDbContext dbContext) : IKeepInta
             .AsNoTracking()
             .FirstOrDefaultAsync(p => p.AccountId == accountId, ct);
 
+    public async Task<string?> GetBusinessNameByTokenHashAsync(string tokenHash, CancellationToken ct)
+    {
+        var link = await FindActivePublicIntakeLinkByTokenHashAsync(tokenHash, ct);
+        return link is null ? null : await GetBusinessNameForAccountAsync(link.AccountId, ct);
+    }
+
+    public async Task<string?> GetBusinessNameBySlugAsync(string slug, CancellationToken ct)
+    {
+        var link = await FindActivePublicIntakeLinkBySlugAsync(slug, ct);
+        return link is null ? null : await GetBusinessNameForAccountAsync(link.AccountId, ct);
+    }
+
+    private Task<string?> GetBusinessNameForAccountAsync(Guid accountId, CancellationToken ct) =>
+        dbContext.Accounts
+            .AsNoTracking()
+            .Where(a => a.Id == accountId)
+            .Select(a => (string?)a.BusinessName)
+            .FirstOrDefaultAsync(ct);
+
     public Task<bool> PageTokenExistsAsync(string pageToken, CancellationToken ct) =>
         dbContext.Set<KeepRequest>()
             .AsNoTracking()
