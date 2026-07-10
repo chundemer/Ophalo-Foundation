@@ -20,6 +20,7 @@ import {
   type KeepRequestDetailResult,
   type KeepRequestEventItem,
   type ShareIntentMethod,
+  type UpdateServiceLocationBody,
 } from "../lib/apiClient";
 import { ApiError } from "../lib/apiClient";
 import { NeedsShareBanner } from "../components/NeedsShareBanner";
@@ -48,6 +49,7 @@ const EVENT_TYPE_LABELS: Record<string, string> = {
   planned_for_changed: "Planned date",
   request_classified: "Request classified",
   share_intent_recorded: "Customer page shared",
+  service_location_changed: "Service location updated",
 };
 
 function eventTypeLabel(type: string): string {
@@ -1395,12 +1397,205 @@ function DetailHero({ detail }: DetailHeroProps) {
 // Original request card — context below the hero
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Service Location
+// ---------------------------------------------------------------------------
+
+const US_STATES: [string, string][] = [
+  ["AL","Alabama"],["AK","Alaska"],["AZ","Arizona"],["AR","Arkansas"],["CA","California"],
+  ["CO","Colorado"],["CT","Connecticut"],["DE","Delaware"],["DC","Washington DC"],["FL","Florida"],
+  ["GA","Georgia"],["HI","Hawaii"],["ID","Idaho"],["IL","Illinois"],["IN","Indiana"],
+  ["IA","Iowa"],["KS","Kansas"],["KY","Kentucky"],["LA","Louisiana"],["ME","Maine"],
+  ["MD","Maryland"],["MA","Massachusetts"],["MI","Michigan"],["MN","Minnesota"],["MS","Mississippi"],
+  ["MO","Missouri"],["MT","Montana"],["NE","Nebraska"],["NV","Nevada"],["NH","New Hampshire"],
+  ["NJ","New Jersey"],["NM","New Mexico"],["NY","New York"],["NC","North Carolina"],["ND","North Dakota"],
+  ["OH","Ohio"],["OK","Oklahoma"],["OR","Oregon"],["PA","Pennsylvania"],["RI","Rhode Island"],
+  ["SC","South Carolina"],["SD","South Dakota"],["TN","Tennessee"],["TX","Texas"],["UT","Utah"],
+  ["VT","Vermont"],["VA","Virginia"],["WA","Washington"],["WV","West Virginia"],["WI","Wisconsin"],
+  ["WY","Wyoming"],
+];
+
+interface ServiceLocationModalProps {
+  requestId: string;
+  detail: KeepRequestDetailResult;
+  onDetailUpdated: (updated: KeepRequestDetailResult) => void;
+  onClose: () => void;
+}
+
+function ServiceLocationModal({ requestId, detail, onDetailUpdated, onClose }: ServiceLocationModalProps) {
+  const [addressLine1, setAddressLine1] = useState(detail.serviceAddressLine1 ?? "");
+  const [addressLine2, setAddressLine2] = useState(detail.serviceAddressLine2 ?? "");
+  const [city, setCity] = useState(detail.serviceCity ?? "");
+  const [state, setState] = useState(detail.serviceState ?? "");
+  const [zip, setZip] = useState(detail.serviceZip ?? "");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [conflictDisabled, setConflictDisabled] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const isEditing = !!(detail.serviceAddressLine1 || detail.serviceCity);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (isSubmitting || conflictDisabled) return;
+    setIsSubmitting(true);
+    setError(null);
+    try {
+      const body: UpdateServiceLocationBody = {
+        addressLine1: addressLine1.trim(),
+        city: city.trim(),
+        state: state.trim(),
+      };
+      if (addressLine2.trim()) body.addressLine2 = addressLine2.trim();
+      if (zip.trim()) body.zip = zip.trim();
+      const updated = await api.updateServiceLocation(requestId, body, detail.version);
+      onDetailUpdated(updated);
+      onClose();
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 409) {
+        setConflictDisabled(true);
+        setError(STATUS_CONFLICT_MESSAGE);
+      } else {
+        setError("Could not save location. Check fields and try again.");
+      }
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  const inputCls = `w-full rounded-lg border border-[var(--ophalo-border)] bg-[var(--ophalo-canvas)] px-3 py-2 text-sm text-[var(--ophalo-ink)] placeholder:text-[var(--ophalo-muted)] focus:outline-none focus:ring-2 focus:ring-[var(--keep-accent)] focus:border-transparent ${FOCUS_RING}`;
+  const labelCls = "block text-xs font-medium text-[var(--ophalo-muted)] mb-1";
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
+      onClick={onClose}
+    >
+      <div
+        className="bg-[var(--ophalo-card)] rounded-xl shadow-xl w-full max-w-md p-5"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-base font-semibold text-[var(--ophalo-ink)]">
+            {isEditing ? "Edit service location" : "Add service location"}
+          </h2>
+          <button
+            type="button"
+            onClick={onClose}
+            className={`text-[var(--ophalo-muted)] hover:text-[var(--ophalo-ink)] p-1 rounded-md transition-colors ${FOCUS_RING}`}
+          >
+            <X className="h-4 w-4" />
+            <span className="sr-only">Close</span>
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-3">
+          <div>
+            <label htmlFor="sl-line1" className={labelCls}>
+              Address line 1 <span className="text-[var(--ophalo-attention)]">*</span>
+            </label>
+            <input
+              id="sl-line1"
+              type="text"
+              className={inputCls}
+              value={addressLine1}
+              onChange={(e) => setAddressLine1(e.target.value)}
+              placeholder="123 Main St"
+              required
+              autoFocus
+            />
+          </div>
+          <div>
+            <label htmlFor="sl-line2" className={labelCls}>Address line 2</label>
+            <input
+              id="sl-line2"
+              type="text"
+              className={inputCls}
+              value={addressLine2}
+              onChange={(e) => setAddressLine2(e.target.value)}
+              placeholder="Apt, unit, suite (optional)"
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label htmlFor="sl-city" className={labelCls}>
+                City <span className="text-[var(--ophalo-attention)]">*</span>
+              </label>
+              <input
+                id="sl-city"
+                type="text"
+                className={inputCls}
+                value={city}
+                onChange={(e) => setCity(e.target.value)}
+                placeholder="City"
+                required
+              />
+            </div>
+            <div>
+              <label htmlFor="sl-zip" className={labelCls}>ZIP</label>
+              <input
+                id="sl-zip"
+                type="text"
+                className={inputCls}
+                value={zip}
+                onChange={(e) => setZip(e.target.value)}
+                placeholder="00000 (optional)"
+                inputMode="numeric"
+              />
+            </div>
+          </div>
+          <div>
+            <label htmlFor="sl-state" className={labelCls}>
+              State <span className="text-[var(--ophalo-attention)]">*</span>
+            </label>
+            <select
+              id="sl-state"
+              className={inputCls}
+              value={state}
+              onChange={(e) => setState(e.target.value)}
+              required
+            >
+              <option value="">Select state…</option>
+              {US_STATES.map(([code, name]) => (
+                <option key={code} value={code}>{name}</option>
+              ))}
+            </select>
+          </div>
+
+          {error && (
+            <p className="text-xs text-[var(--ophalo-danger)]">{error}</p>
+          )}
+
+          <div className="flex justify-end gap-2 pt-1">
+            <button
+              type="button"
+              onClick={onClose}
+              className={`px-3 py-1.5 text-sm text-[var(--ophalo-muted)] hover:text-[var(--ophalo-ink)] transition-colors rounded-md ${FOCUS_RING}`}
+            >
+              Cancel
+            </button>
+            <KeepButton
+              type="submit"
+              disabled={isSubmitting || conflictDisabled}
+              className="min-h-[34px] px-4 py-1.5 text-sm"
+            >
+              {isSubmitting ? "Saving…" : "Save location"}
+            </KeepButton>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 interface OriginalRequestCardProps {
   detail: KeepRequestDetailResult;
   onContactLaunched: (direction: string, channel: string) => void;
+  onDetailUpdated: (updated: KeepRequestDetailResult) => void;
 }
 
-function OriginalRequestCard({ detail, onContactLaunched }: OriginalRequestCardProps) {
+function OriginalRequestCard({ detail, onContactLaunched, onDetailUpdated }: OriginalRequestCardProps) {
+  const [showLocationModal, setShowLocationModal] = useState(false);
+  const canEditLocation = detail.availableActions.canAddInternalNote;
   return (
     <div className="rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-5 py-4">
       {detail.description && (
@@ -1473,8 +1668,18 @@ function OriginalRequestCard({ detail, onContactLaunched }: OriginalRequestCardP
               {detail.contactPreference === "email" && "Email"}
               {detail.contactPreference === "no_preference" && "No preference"}
             </p>
-            {(detail.serviceAddressLine1 || detail.serviceCity) && (
-              <div className="mt-1">
+          </>
+        ) : (
+          <p className="text-xs text-[var(--ophalo-muted)]">
+            Source: Team added — share the customer page when useful.
+          </p>
+        )}
+
+        {/* Service location — shown for all request types; internal-only */}
+        <div className="mt-2">
+          {(detail.serviceAddressLine1 || detail.serviceCity) ? (
+            <div className="flex items-start justify-between gap-2">
+              <div>
                 <p className="text-xs font-semibold text-[var(--ophalo-muted)]">Service location</p>
                 {detail.serviceAddressLine1 && (
                   <p className="text-xs text-[var(--ophalo-muted)]">{detail.serviceAddressLine1}</p>
@@ -1488,18 +1693,45 @@ function OriginalRequestCard({ detail, onContactLaunched }: OriginalRequestCardP
                   </p>
                 )}
               </div>
-            )}
-          </>
-        ) : (
-          <p className="text-xs text-[var(--ophalo-muted)]">
-            Source: Team added — share the customer page when useful.
-          </p>
-        )}
+              {canEditLocation && (
+                <button
+                  type="button"
+                  onClick={() => setShowLocationModal(true)}
+                  className={`shrink-0 text-xs text-[var(--keep-accent)] hover:underline ${FOCUS_RING} rounded`}
+                >
+                  Edit
+                </button>
+              )}
+            </div>
+          ) : (
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-xs text-[var(--ophalo-muted)] italic">Service location needed</p>
+              {canEditLocation && (
+                <button
+                  type="button"
+                  onClick={() => setShowLocationModal(true)}
+                  className={`shrink-0 text-xs font-medium text-[var(--keep-accent)] hover:underline ${FOCUS_RING} rounded`}
+                >
+                  Add location
+                </button>
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
       <p className="text-xs text-[var(--ophalo-muted)] mt-3">
         Submitted {formatDate(detail.createdAtUtc)}
       </p>
+
+      {showLocationModal && (
+        <ServiceLocationModal
+          requestId={detail.requestId}
+          detail={detail}
+          onDetailUpdated={onDetailUpdated}
+          onClose={() => setShowLocationModal(false)}
+        />
+      )}
     </div>
   );
 }
@@ -2212,6 +2444,7 @@ export function RequestDetail({ requestId, onBack }: RequestDetailProps) {
             <OriginalRequestCard
               detail={detail}
               onContactLaunched={handleContactLaunched}
+              onDetailUpdated={handleDetailUpdated}
             />
 
             {/* Needs attention: why it is here + how to handle it */}

@@ -646,4 +646,39 @@ public sealed class KeepRequestEvent : BaseEntity
         };
     }
 
+    /// <summary>
+    /// Creates a ServiceLocationChanged event. Always Internal — service location is staff-only
+    /// operational data and must never be surfaced on the customer page.
+    /// </summary>
+    public static KeepRequestEvent CreateServiceLocationChanged(
+        Guid requestId,
+        Guid accountId,
+        Guid actorAccountUserId,
+        string actorDisplayName,
+        DateTime occurredAtUtc)
+    {
+        if (requestId == Guid.Empty)
+            throw new ArgumentException("Request ID is required.", nameof(requestId));
+        if (accountId == Guid.Empty)
+            throw new ArgumentException("Account ID is required.", nameof(accountId));
+        if (actorAccountUserId == Guid.Empty)
+            throw new ArgumentException("Actor account user ID is required.", nameof(actorAccountUserId));
+        if (string.IsNullOrWhiteSpace(actorDisplayName))
+            throw new ArgumentException("Actor display name is required.", nameof(actorDisplayName));
+        if (occurredAtUtc == default)
+            throw new ArgumentException("occurredAtUtc must be a real timestamp.", nameof(occurredAtUtc));
+
+        return new KeepRequestEvent
+        {
+            RequestId          = requestId,
+            AccountId          = accountId,
+            EventType          = KeepRequestEventType.ServiceLocationChanged,
+            Visibility         = KeepRequestEventVisibility.Internal,
+            ActorType          = ActorType.AccountUser,
+            ActorAccountUserId = actorAccountUserId,
+            ActorDisplayName   = actorDisplayName.Trim(),
+            OccurredAtUtc      = occurredAtUtc
+        };
+    }
+
 }

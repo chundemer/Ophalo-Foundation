@@ -146,6 +146,7 @@ builder.Services.AddScoped<MuteService>();
 builder.Services.AddScoped<MarkFeedbackReviewedService>();
 builder.Services.AddScoped<ManageRequestTimingService>();
 builder.Services.AddScoped<ClearShareIntentService>();
+builder.Services.AddScoped<UpdateServiceLocationService>();
 builder.Services.AddScoped<GetParticipantCandidatesService>();
 builder.Services.AddScoped<KeepRequestParticipationService>();
 builder.Services.AddScoped<KeepPublicCustomerAccessGuard>();
@@ -819,6 +820,30 @@ app.MapDelete("/keep/requests/{requestId:guid}/planned-for", async (
     return result.IsSuccess ? Results.Ok(result.Value) : ErrorHttpMapper.ToHttpResult(result.Error);
 }).RequireAuthorization();
 
+// Service Location — authenticated, versioned operator write (GAP-006)
+app.MapPut("/keep/requests/{requestId:guid}/service-location", async (
+    Guid requestId,
+    HttpRequest httpRequest,
+    UpdateServiceLocationBody body,
+    UpdateServiceLocationService service,
+    CancellationToken ct) =>
+{
+    var versionResult = KeepRequestVersionHeader.Parse(httpRequest.Headers);
+    if (!versionResult.IsSuccess)
+        return ErrorHttpMapper.ToHttpResult(versionResult.Error);
+
+    var command = new UpdateServiceLocationCommand(
+        requestId,
+        body.AddressLine1,
+        body.AddressLine2,
+        body.City,
+        body.State,
+        body.Zip,
+        versionResult.Value);
+    var result = await service.ExecuteAsync(command, ct);
+    return result.IsSuccess ? Results.Ok(result.Value) : ErrorHttpMapper.ToHttpResult(result.Error);
+}).RequireAuthorization();
+
 // Customer page — anonymous, resolved by page token (Phase 8-B1-β)
 // Returns 200 (active) or 410 (expired). Expired body: { businessName, referenceCode, isExpired, newRequestUrl }.
 app.MapGet("/keep/r/{pageToken}", async (
@@ -994,3 +1019,4 @@ static async Task<IResult> HandleFeedback(
 public partial class Program { }
 
 public sealed record RenameLinkNameBody(string DesiredName);
+public sealed record UpdateServiceLocationBody(string AddressLine1, string? AddressLine2, string City, string State, string? Zip);

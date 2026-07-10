@@ -4,7 +4,8 @@
 **Purpose:** Live tracker for pilot-blocking or pilot-relevant bugs/gaps discovered during Session 14.
 **Source:** Promoted from the Pre-S14e bug register in `docs/build-log/068-session-14-ophalo-web-front-door.md`.
 **Current active item:** GAP-004 — Browser back / refresh does not preserve app location.
-**Recently resolved:** GAP-005 — Same-account staff can submit through the public intake form.
+**Recently resolved:** GAP-006 — Staff-created requests cannot add missing service location after creation (S23).
+**Previously resolved:** GAP-005 — Same-account staff can submit through the public intake form.
 
 This document is the current working tracker. Historical discovery notes stay in the build logs, but
 triage, status, and next-session ordering should happen here.
@@ -139,6 +140,37 @@ mobile PWA the back gesture can exit the app, and refresh on detail loses place.
 Decision: ADR-427 locks this as pre-pilot PWA navigation behavior. Browser refresh and direct URL
 open must preserve authorized request detail; Requests breadcrumb/back returns to the request list;
 the OpHalo Keep logo returns to the request list/home workbench.
+
+### GAP-006 — Staff-created requests cannot add missing service location after creation
+
+**Status:** Resolved (S23)
+**Severity:** P1
+**Area:** `OpHalo.Keep.Application` request operations; `ophalo-app` request detail / Quick Capture
+
+Service companies may receive requests from external channels where the staff member can create the
+request before they know the exact service address. Public customer intake should continue to require
+service location, but authenticated business/staff-created requests need an explicit internal
+`Service location unknown` path and a post-creation way for permitted staff to add or correct the
+service location.
+
+Current gap: once a customer or business-created request exists without a usable service location,
+there is no clear operator/admin/owner workflow to add it later. This leaves externally sourced
+service requests stuck without required operational context.
+
+Expected fix:
+- Keep public intake service-location requirements intact.
+- Allow business/staff-created requests to intentionally omit service location via an explicit
+  `Service location unknown` / `Add later` path, if that path is not already present.
+- Show a request-detail service-location section to authenticated staff. When missing, show an
+  internal `Service location needed` cue with an `Add location` action; when present, show the full
+  address with an `Edit` action.
+- Persist service-location add/edit through an authenticated operation guarded by the same request
+  row/action authorization model used for operational mutations.
+- Audit service-location changes with actor, timestamp, and a safe changed-field summary.
+- Clear the internal `Service location needed` cue when a usable location is saved; allow server
+  policy to contribute the missing-location cue to Needs Attention for service businesses.
+- Keep service location internal-only: do not show it on unauthenticated customer tracker pages,
+  public metadata, or customer-facing share previews.
 
 ## Resolved During Session 22
 

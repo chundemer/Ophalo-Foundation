@@ -1205,6 +1205,49 @@ public sealed class KeepRequest : BaseEntity
 
     public void ClearNeedsShare() => NeedsShare = false;
 
+    /// <summary>
+    /// Adds or corrects service location on any request. Allowed on all lifecycle states
+    /// including terminal — staff may correct location records post-close.
+    /// AddressLine1, city, and state are required; the caller must supply a normalized
+    /// two-letter US state code (validation and US-code check are the application layer's job).
+    /// </summary>
+    public Result<KeepRequestEvent> SetServiceLocation(
+        string addressLine1,
+        string? addressLine2,
+        string city,
+        string state,
+        string? zip,
+        Guid actorAccountUserId,
+        string actorDisplayName,
+        DateTime nowUtc)
+    {
+        if (nowUtc == default)
+            throw new ArgumentException("nowUtc must be a valid UTC timestamp.", nameof(nowUtc));
+        if (actorAccountUserId == Guid.Empty)
+            throw new ArgumentException("Actor account user ID is required.", nameof(actorAccountUserId));
+        if (string.IsNullOrWhiteSpace(actorDisplayName))
+            throw new ArgumentException("Actor display name is required.", nameof(actorDisplayName));
+
+        if (string.IsNullOrWhiteSpace(addressLine1))
+            return Result<KeepRequestEvent>.Failure(KeepRequestErrors.ServiceAddressLine1Required);
+        if (string.IsNullOrWhiteSpace(city))
+            return Result<KeepRequestEvent>.Failure(KeepRequestErrors.ServiceCityRequired);
+        if (string.IsNullOrWhiteSpace(state))
+            return Result<KeepRequestEvent>.Failure(KeepRequestErrors.ServiceStateRequired);
+
+        ServiceAddressLine1 = addressLine1.Trim();
+        ServiceAddressLine2 = string.IsNullOrWhiteSpace(addressLine2) ? null : addressLine2.Trim();
+        ServiceCity         = city.Trim();
+        ServiceState        = state.Trim().ToUpperInvariant();
+        ServiceZip          = string.IsNullOrWhiteSpace(zip) ? null : zip.Trim();
+        LastBusinessActivityAt = nowUtc;
+
+        var ev = KeepRequestEvent.CreateServiceLocationChanged(
+            Id, AccountId, actorAccountUserId, actorDisplayName, nowUtc);
+
+        return Result<KeepRequestEvent>.Success(ev);
+    }
+
     private static KeepRequest CreateCore(
         Guid accountId,
         Guid customerId,

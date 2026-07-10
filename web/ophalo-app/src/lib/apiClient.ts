@@ -379,6 +379,14 @@ export interface LogExternalContactBody {
   summary?: string;
 }
 
+export interface UpdateServiceLocationBody {
+  addressLine1: string;
+  addressLine2?: string;
+  city: string;
+  state: string;
+  zip?: string;
+}
+
 // --- Request list ---
 
 export interface KeepRequestAttentionInfo {
@@ -574,6 +582,12 @@ export const api = {
   logExternalContact: (requestId: string, body: LogExternalContactBody, version: string) =>
     apiFetch<KeepRequestDetailResult>(`/keep/requests/${requestId}/external-contact`, {
       method: "POST",
+      headers: { "X-Keep-Request-Version": version },
+      body: JSON.stringify(body),
+    }),
+  updateServiceLocation: (requestId: string, body: UpdateServiceLocationBody, version: string) =>
+    apiFetch<KeepRequestDetailResult>(`/keep/requests/${requestId}/service-location`, {
+      method: "PUT",
       headers: { "X-Keep-Request-Version": version },
       body: JSON.stringify(body),
     }),
