@@ -95,6 +95,13 @@ public sealed class KeepRequest : BaseEntity
 
     public DateOnly? PlannedForDate { get; private set; }
 
+    // Service location (S22d). Nullable at DB level; required for public intake via application validation.
+    public string? ServiceAddressLine1 { get; private set; }
+    public string? ServiceAddressLine2 { get; private set; }
+    public string? ServiceCity { get; private set; }
+    public string? ServiceState { get; private set; }
+    public string? ServiceZip { get; private set; }
+
     // --- Customer page viewed telemetry (ADR-341, P6c-2) ---
 
     public DateTime? CustomerPageLastViewedAtUtc { get; private set; }
@@ -1143,14 +1150,27 @@ public sealed class KeepRequest : BaseEntity
         string referenceCode,
         string pageToken,
         DateTime nowUtc,
-        int firstResponseTargetMinutes)
+        int firstResponseTargetMinutes,
+        string? serviceAddressLine1 = null,
+        string? serviceAddressLine2 = null,
+        string? serviceCity = null,
+        string? serviceState = null,
+        string? serviceZip = null)
     {
         if (firstResponseTargetMinutes <= 0)
             throw new ArgumentException("First response target minutes must be positive.", nameof(firstResponseTargetMinutes));
 
-        return CreateCore(accountId, customerId, customerName, customerPhone, customerEmail,
+        var request = CreateCore(accountId, customerId, customerName, customerPhone, customerEmail,
             description, referenceCode, pageToken, nowUtc, firstResponseTargetMinutes,
             KeepRequestOrigin.Customer, KeepRequestSource.PublicIntake, needsShare: false);
+
+        request.ServiceAddressLine1 = serviceAddressLine1?.Trim();
+        request.ServiceAddressLine2 = serviceAddressLine2?.Trim();
+        request.ServiceCity = serviceCity?.Trim();
+        request.ServiceState = serviceState?.Trim().ToUpperInvariant();
+        request.ServiceZip = serviceZip?.Trim();
+
+        return request;
     }
 
     /// <summary>

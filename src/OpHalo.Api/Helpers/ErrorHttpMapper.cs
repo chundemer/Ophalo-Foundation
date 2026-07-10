@@ -35,8 +35,15 @@ public static class ErrorHttpMapper
             "auth.forbidden" => (StatusCodes.Status403Forbidden, "Forbidden.", null),
 
             // --- Keep-specific codes (explicit) ---
-            "keep.public_intake.unavailable" => (StatusCodes.Status422UnprocessableEntity, "Unprocessable entity.", null),
-            "keep.public_intake.slug_taken"  => (StatusCodes.Status422UnprocessableEntity, "Unprocessable entity.", null),
+            "keep.public_intake.unavailable"         => (StatusCodes.Status422UnprocessableEntity, "Unprocessable entity.", null),
+            "keep.public_intake.slug_taken"          => (StatusCodes.Status422UnprocessableEntity, "Unprocessable entity.", null),
+            "keep.public_intake.staff_not_permitted" => (StatusCodes.Status422UnprocessableEntity, "Unprocessable entity.", null),
+
+            // Service location validation — public intake only (S22d)
+            "KeepRequest.ServiceAddressLine1Required" => (StatusCodes.Status422UnprocessableEntity, "Unprocessable entity.", null),
+            "KeepRequest.ServiceCityRequired"         => (StatusCodes.Status422UnprocessableEntity, "Unprocessable entity.", null),
+            "KeepRequest.ServiceStateRequired"        => (StatusCodes.Status422UnprocessableEntity, "Unprocessable entity.", null),
+            "KeepRequest.ServiceStateInvalid"         => (StatusCodes.Status422UnprocessableEntity, "Unprocessable entity.", null),
             "KeepPublicIntakeLink.NoActiveLink" => (StatusCodes.Status404NotFound, "Resource not found.", null),
 
             // --- 400 — validation / malformed client request ---

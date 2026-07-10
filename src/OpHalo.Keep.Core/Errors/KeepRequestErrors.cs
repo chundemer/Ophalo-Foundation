@@ -250,6 +250,19 @@ public static class KeepRequestErrors
     public static readonly Error RequestDetailInvalidNavView =
         Error.Create("KeepRequest.RequestDetailInvalidNavView", "The specified navView is not recognized. Supported values are: ready_to_close.");
 
+    // Service location errors (S22d).
+    public static readonly Error ServiceAddressLine1Required =
+        Error.Create("KeepRequest.ServiceAddressLine1Required", "Service address is required.");
+
+    public static readonly Error ServiceCityRequired =
+        Error.Create("KeepRequest.ServiceCityRequired", "Service city is required.");
+
+    public static readonly Error ServiceStateRequired =
+        Error.Create("KeepRequest.ServiceStateRequired", "Service state is required.");
+
+    public static readonly Error ServiceStateInvalid =
+        Error.Create("KeepRequest.ServiceStateInvalid", "Service state must be a valid US state code.");
+
     // Spam/Test classification errors (ADR-349/350, S7e).
     public static readonly Error ClassificationRequiresOwnerOrAdmin =
         Error.Create("KeepRequest.ClassificationRequiresOwnerOrAdmin", "Only an Owner or Admin can classify a request as Spam or Test.");

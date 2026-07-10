@@ -128,6 +128,13 @@ internal sealed class KeepRequestConfiguration : BaseEntityConfiguration<KeepReq
         // Planned For field (ADR-338, P6b-1).
         builder.Property(x => x.PlannedForDate);
 
+        // Service location (S22d). Nullable — required enforced at application layer for public intake.
+        builder.Property(x => x.ServiceAddressLine1).HasMaxLength(200);
+        builder.Property(x => x.ServiceAddressLine2).HasMaxLength(200);
+        builder.Property(x => x.ServiceCity).HasMaxLength(100);
+        builder.Property(x => x.ServiceState).HasMaxLength(2);
+        builder.Property(x => x.ServiceZip).HasMaxLength(10);
+
         // Customer page viewed telemetry (ADR-341, P6c-2).
         builder.Property(x => x.CustomerPageLastViewedAtUtc);
 

@@ -1,8 +1,8 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-07-09 (S22r5 complete — next slice S22r6 backend auto-provision hardening)
+**Last updated:** 2026-07-10 (S22d complete — service location backend + intake page visual shell, all tests green)
 **Branch:** `main` tracking `origin/main`
-**Last green baseline:** S22r3 targeted suite green (19 unit + 29 integration); S22r4 TypeScript clean. Full baseline remains 964 unit · 755 integration = 1,719 total, 0 failures (1 pre-existing KeepG5 fluke excluded)
+**Last green baseline:** S22d targeted suite green (59 unit + 16 integration). Full baseline remains 964 unit · 755 integration = 1,719 total, 0 failures (1 pre-existing KeepG5 fluke excluded)
 **Next free ADR:** ADR-430
 **Current session:** Session 22 — Day-Zero Settings Redesign, Intake Sharing, And Service Location Plan
 
@@ -40,7 +40,7 @@ For every implementation slice:
 **Bug/gap tracker:** `docs/pilot-readiness-bug-tracker.md`
 **Foundation roadmap:** `docs/build-log/ophalo-foundation-build-plan-greenfield-boundaries-brownfield-behavior.md` section 9.1
 **Current session:** Session 22 — Day-Zero Settings Redesign, Intake Sharing, And Service Location Plan
-**Current slice:** S22r5 — Team tab and lightweight Getting Started
+**Current slice:** S22d complete — S22e next (GET public intake info endpoint + business identity header on intake form)
 
 ### Completed Context
 
@@ -105,6 +105,23 @@ Treat these as historical context unless a later discovery step finds a concrete
   "Just you for now — use the form above to invite someone when you're ready." `Home.tsx` three-card
   Getting Started confirmed complete from S22r1 (verify public link, Quick Capture, invite teammates
   with explicit solo-optional framing). No backend changes. TypeScript clean.
+- S22r6 complete (2026-07-09): Backend auto-provision hardening. `GET /keep/setup/intake` now
+  calls `GetOrEnsureStatusAsync` — auto-provisions one active public intake link on first eligible
+  Owner/Admin read using the same idempotent ensure loop (slug generation, collision-safe unique
+  index, concurrent race handled). RawToken never returned from GET. Fallback slug "business" when
+  businessName is non-slugifiable. `POST /keep/setup/intake/ensure` and replace remain unchanged.
+  3 production files changed, 33/33 integration tests green (4 new tests: auto-provision,
+  fallback slug, idempotency, concurrent GET).
+- S22d complete (2026-07-10): Service location backend + intake page visual shell. Migration:
+  `20260710095627_AddServiceLocationToKeepRequest` (5 nullable columns on `keep_requests`). Inline
+  US 50-state + DC validation in `CreateKeepPublicIntakeService`; 4 error constants; DTO, command,
+  handlers, EF config updated; 4 new service location errors mapped to 422 in `ErrorHttpMapper`.
+  `IntakeForm.tsx` rewritten: customer-tracker canvas/card/footer shell, service location card + US
+  state dropdown + privacy helper copy, spec-accurate success state (View your request page / Save
+  this link / bookmark tip). 59/59 unit + 16/16 integration green (8 new unit, 6 new integration
+  including privacy no-leak test on customer page). TypeScript clean.
+  Deferred to S22e: `GET /keep/public-intake/slug/{slug}/info` → business name; business identity
+  header + initials on intake form matching customer tracker page.
 - Settings refactor complete (2026-07-09): `Settings.tsx` split into per-tab section files with no
   behavior changes — `settings/CompanySection.tsx`, `settings/PolicySection.tsx`,
   `settings/PublicLinkSection.tsx` (formerly `IntakeSection`), `settings/TeamSection.tsx` (includes
@@ -146,15 +163,16 @@ Treat these as historical context unless a later discovery step finds a concrete
 
 ### Next Session Brief
 
-Start with S22r6 — backend auto-provision hardening.
+Start with S22e — business identity on the intake form.
 
 Remaining S22 slices:
 
-1. S22r6 — backend auto-provision hardening.
-2. Service location.
-3. Customer page copy.
-5. Mobile carry-forward.
-6. Docs/index reconciliation.
+1. S22e: `GET /keep/public-intake/slug/{slug}/info` (and `/token/{token}/info`) → `{ businessName }`;
+   use it in `IntakeForm.tsx` to render business initials avatar + name in the form header, matching
+   the customer tracker page. Generic "Submit a request" copy is the current interim state.
+2. S22e: Customer page copy alignment (capability hint, cancellation copy, label cleanup).
+3. Mobile carry-forward.
+4. Docs/index reconciliation.
 
 Historical mobile context lives in `docs/build-log/071-session-17-review-safe-native-product-foundation.md`.
 

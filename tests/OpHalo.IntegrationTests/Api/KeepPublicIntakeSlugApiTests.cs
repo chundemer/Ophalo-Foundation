@@ -22,6 +22,9 @@ public sealed class KeepPublicIntakeSlugApiTests : IClassFixture<KeepApiWebFacto
     private readonly HttpClient _client;
 
     private Guid _accountBId;
+    private Guid _accountBOwnerUserId;
+    private Guid _accountAId;
+    private Guid _accountAOwnerUserId;
 
     // Account A (active) — current slug
     private const string ActiveSlug = "alpha-plumbing";
@@ -63,6 +66,7 @@ public sealed class KeepPublicIntakeSlugApiTests : IClassFixture<KeepApiWebFacto
             trialEndsAtUtc: now.AddDays(30));
         Assert.True(provisionA.IsSuccess);
         var graphA = provisionA.Value;
+        _accountAId = graphA.Account.Id;
 
         // --- Account B: active, different slug ---
         var provisionB = new AccountProvisioningService().CreateVerified(
@@ -78,6 +82,7 @@ public sealed class KeepPublicIntakeSlugApiTests : IClassFixture<KeepApiWebFacto
         Assert.True(provisionB.IsSuccess);
         var graphB = provisionB.Value;
         _accountBId = graphB.Account.Id;
+        _accountBOwnerUserId = graphB.Owner.Id;
 
         // --- Account C: off-season (read-only) ---
         var provisionC = new AccountProvisioningService().CreateVerified(
@@ -116,6 +121,8 @@ public sealed class KeepPublicIntakeSlugApiTests : IClassFixture<KeepApiWebFacto
             ownerFk.CurrentValue = g.Owner.Id;
             await db.SaveChangesAsync();
         }
+
+        _accountAOwnerUserId = graphA.Owner.Id;
 
         // Account A — active link with current slug "alpha-plumbing"
         var linkA = KeepPublicIntakeLink.Create(
@@ -159,7 +166,17 @@ public sealed class KeepPublicIntakeSlugApiTests : IClassFixture<KeepApiWebFacto
     // -------------------------------------------------------------------------
 
     private static object ValidBody(string name = "Test Customer") =>
-        new { customerName = name, customerPhone = "0411111111", description = "I need help" };
+        new
+        {
+            customerName = name,
+            customerPhone = "0411111111",
+            description = "I need help",
+            serviceAddressLine1 = "42 Oak Street",
+            serviceAddressLine2 = (string?)null,
+            serviceCity = "Austin",
+            serviceState = "TX",
+            serviceZip = (string?)null
+        };
 
     private Task<HttpResponseMessage> PostSlug(string slug, object? body = null) =>
         _client.PostAsJsonAsync(
@@ -264,8 +281,189 @@ public sealed class KeepPublicIntakeSlugApiTests : IClassFixture<KeepApiWebFacto
     }
 
     // -------------------------------------------------------------------------
-    // Response body record
+    // Test 8 — same-account owner submits slug → 422 staff_not_permitted
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public async Task Slug_SameAccountOwner_Returns422StaffNotPermitted()
+    {
+        var cookie = await _factory.SeedSessionAsync(_accountAOwnerUserId, _accountAId);
+
+        using var req = new HttpRequestMessage(HttpMethod.Post, $"/keep/public-intake/slug/{ActiveSlug}");
+        req.Headers.Add("Cookie", $"{AuthConstants.CookieName}={cookie}");
+        req.Content = JsonContent.Create(ValidBody());
+        var res = await _client.SendAsync(req);
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, res.StatusCode);
+        var problem = await res.Content.ReadFromJsonAsync<ProblemBody>();
+        Assert.Equal("keep.public_intake.staff_not_permitted", problem?.Code);
+    }
+
+    [Fact]
+    public async Task Slug_SameAccountOwner_ViaAlias_Returns422StaffNotPermitted()
+    {
+        var cookie = await _factory.SeedSessionAsync(_accountAOwnerUserId, _accountAId);
+
+        using var req = new HttpRequestMessage(HttpMethod.Post, $"/keep/public-intake/slug/{AliasSlug}");
+        req.Headers.Add("Cookie", $"{AuthConstants.CookieName}={cookie}");
+        req.Content = JsonContent.Create(ValidBody());
+        var res = await _client.SendAsync(req);
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, res.StatusCode);
+        var problem = await res.Content.ReadFromJsonAsync<ProblemBody>();
+        Assert.Equal("keep.public_intake.staff_not_permitted", problem?.Code);
+    }
+
+    [Fact]
+    public async Task Slug_AuthenticatedUserFromDifferentAccount_Returns201()
+    {
+        // Account B owner posting to Account A's slug — not a member of Account A, so allowed.
+        var cookieB = await _factory.SeedSessionAsync(_accountBOwnerUserId, _accountBId);
+
+        using var req = new HttpRequestMessage(HttpMethod.Post, $"/keep/public-intake/slug/{ActiveSlug}");
+        req.Headers.Add("Cookie", $"{AuthConstants.CookieName}={cookieB}");
+        req.Content = JsonContent.Create(ValidBody());
+        var res = await _client.SendAsync(req);
+
+        Assert.Equal(HttpStatusCode.Created, res.StatusCode);
+    }
+
+    // -------------------------------------------------------------------------
+    // Test 11 — missing serviceAddressLine1 → 422
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public async Task Slug_MissingAddressLine1_Returns422()
+    {
+        var body = new
+        {
+            customerName = "Test Customer",
+            customerPhone = "0411111111",
+            description = "I need help",
+            serviceAddressLine1 = "",
+            serviceCity = "Austin",
+            serviceState = "TX"
+        };
+        var res = await PostSlug(ActiveSlug, body);
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, res.StatusCode);
+        var problem = await res.Content.ReadFromJsonAsync<ProblemBody>();
+        Assert.Equal("KeepRequest.ServiceAddressLine1Required", problem?.Code);
+    }
+
+    // -------------------------------------------------------------------------
+    // Test 12 — missing serviceCity → 422
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public async Task Slug_MissingCity_Returns422()
+    {
+        var body = new
+        {
+            customerName = "Test Customer",
+            customerPhone = "0411111111",
+            description = "I need help",
+            serviceAddressLine1 = "42 Oak St",
+            serviceCity = "",
+            serviceState = "TX"
+        };
+        var res = await PostSlug(ActiveSlug, body);
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, res.StatusCode);
+        var problem = await res.Content.ReadFromJsonAsync<ProblemBody>();
+        Assert.Equal("KeepRequest.ServiceCityRequired", problem?.Code);
+    }
+
+    // -------------------------------------------------------------------------
+    // Test 13 — missing serviceState → 422
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public async Task Slug_MissingState_Returns422()
+    {
+        var body = new
+        {
+            customerName = "Test Customer",
+            customerPhone = "0411111111",
+            description = "I need help",
+            serviceAddressLine1 = "42 Oak St",
+            serviceCity = "Austin",
+            serviceState = ""
+        };
+        var res = await PostSlug(ActiveSlug, body);
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, res.StatusCode);
+        var problem = await res.Content.ReadFromJsonAsync<ProblemBody>();
+        Assert.Equal("KeepRequest.ServiceStateRequired", problem?.Code);
+    }
+
+    // -------------------------------------------------------------------------
+    // Test 14 — invalid serviceState → 422
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public async Task Slug_InvalidState_Returns422()
+    {
+        var body = new
+        {
+            customerName = "Test Customer",
+            customerPhone = "0411111111",
+            description = "I need help",
+            serviceAddressLine1 = "42 Oak St",
+            serviceCity = "Austin",
+            serviceState = "ZZ"
+        };
+        var res = await PostSlug(ActiveSlug, body);
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, res.StatusCode);
+        var problem = await res.Content.ReadFromJsonAsync<ProblemBody>();
+        Assert.Equal("KeepRequest.ServiceStateInvalid", problem?.Code);
+    }
+
+    // -------------------------------------------------------------------------
+    // Test 15 — omitted ZIP and address line 2 → 201 (optional fields)
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public async Task Slug_OmittedOptionalLocationFields_Returns201()
+    {
+        var body = new
+        {
+            customerName = "Test Customer",
+            customerPhone = "0411111111",
+            description = "I need help",
+            serviceAddressLine1 = "42 Oak St",
+            serviceCity = "Austin",
+            serviceState = "TX"
+        };
+        var res = await PostSlug(ActiveSlug, body);
+        Assert.Equal(HttpStatusCode.Created, res.StatusCode);
+    }
+
+    // -------------------------------------------------------------------------
+    // Test 16 — service location not leaked to customer page (privacy boundary)
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public async Task Slug_ServiceLocationNotExposedOnCustomerPage()
+    {
+        var res = await PostSlug(ActiveSlug);
+        Assert.Equal(HttpStatusCode.Created, res.StatusCode);
+
+        var intake = await res.Content.ReadFromJsonAsync<SlugIntakeBody>();
+        Assert.NotNull(intake);
+
+        var pageRes = await _client.GetAsync($"/keep/r/{intake.PageToken}");
+        Assert.Equal(HttpStatusCode.OK, pageRes.StatusCode);
+
+        var pageJson = await pageRes.Content.ReadAsStringAsync();
+        Assert.DoesNotContain("serviceAddressLine1", pageJson, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("serviceCity", pageJson, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("serviceState", pageJson, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("serviceZip", pageJson, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("42 Oak Street", pageJson, StringComparison.OrdinalIgnoreCase);
+    }
+
+    // -------------------------------------------------------------------------
+    // Response body records
     // -------------------------------------------------------------------------
 
     private sealed record SlugIntakeBody(Guid RequestId, string ReferenceCode, string PageToken);
+    private sealed record ProblemBody(string? Code, string? Detail);
 }

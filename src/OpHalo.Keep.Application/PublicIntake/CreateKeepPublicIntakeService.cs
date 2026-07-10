@@ -1,9 +1,11 @@
+using OpHalo.Foundation.Application.Abstractions.Security;
 using OpHalo.Foundation.Application.Accounts.Access;
 using OpHalo.Foundation.Application.Accounts.Entitlements;
 using OpHalo.Keep.Application.Abstractions;
 using OpHalo.Keep.Application.Services;
 using OpHalo.Keep.Application.Validation;
 using OpHalo.Keep.Core.Entities;
+using OpHalo.Keep.Core.Errors;
 using OpHalo.SharedKernel.Abstractions;
 using OpHalo.SharedKernel.Results;
 
@@ -14,12 +16,26 @@ public sealed class CreateKeepPublicIntakeService(
     KeepTokenService tokenService,
     IAccountAccessPolicy accessPolicy,
     IFeatureAccessPolicy featurePolicy,
-    IClock clock)
+    IClock clock,
+    ICurrentUser currentUser)
 {
     private const int MaxAttempts = 5;
 
     private static readonly Error Unavailable =
         Error.Create("keep.public_intake.unavailable", "This intake form is not currently available.");
+
+    private static readonly Error StaffNotPermitted =
+        Error.Create("keep.public_intake.staff_not_permitted",
+            "Staff members must use the app to submit requests, not the public intake form.");
+
+    private static readonly HashSet<string> ValidUsStateCodes = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "AL","AK","AZ","AR","CA","CO","CT","DE","FL","GA",
+        "HI","ID","IL","IN","IA","KS","KY","LA","ME","MD",
+        "MA","MI","MN","MS","MO","MT","NE","NV","NH","NJ",
+        "NM","NY","NC","ND","OH","OK","OR","PA","RI","SC",
+        "SD","TN","TX","UT","VT","VA","WA","WV","WI","WY","DC"
+    };
 
     public async Task<Result<CreateKeepPublicIntakeResult>> ExecuteAsync(
         CreateKeepPublicIntakeCommand command, CancellationToken ct = default)
@@ -28,6 +44,10 @@ public sealed class CreateKeepPublicIntakeService(
             command.CustomerName, command.CustomerPhone, command.CustomerEmail, command.Description);
         if (!validation.IsSuccess)
             return Result<CreateKeepPublicIntakeResult>.Failure(validation.Error);
+
+        var locationResult = ValidateServiceLocation(command);
+        if (!locationResult.IsSuccess)
+            return Result<CreateKeepPublicIntakeResult>.Failure(locationResult.Error);
 
         var v = validation.Value;
 
@@ -39,7 +59,7 @@ public sealed class CreateKeepPublicIntakeService(
         if (link is null || !link.IsActive)
             return Result<CreateKeepPublicIntakeResult>.Failure(Unavailable);
 
-        return await ExecuteWithLinkAsync(link, v, ct);
+        return await ExecuteWithLinkAsync(link, v, command, ct);
     }
 
     public async Task<Result<CreateKeepPublicIntakeResult>> ExecuteBySlugAsync(
@@ -50,6 +70,10 @@ public sealed class CreateKeepPublicIntakeService(
         if (!validation.IsSuccess)
             return Result<CreateKeepPublicIntakeResult>.Failure(validation.Error);
 
+        var locationResult = ValidateServiceLocation(command);
+        if (!locationResult.IsSuccess)
+            return Result<CreateKeepPublicIntakeResult>.Failure(locationResult.Error);
+
         var v = validation.Value;
 
         if (string.IsNullOrWhiteSpace(slug))
@@ -59,15 +83,34 @@ public sealed class CreateKeepPublicIntakeService(
         if (link is null || !link.IsActive)
             return Result<CreateKeepPublicIntakeResult>.Failure(Unavailable);
 
-        return await ExecuteWithLinkAsync(link, v, ct);
+        return await ExecuteWithLinkAsync(link, v, command, ct);
+    }
+
+    private static Result<bool> ValidateServiceLocation(CreateKeepPublicIntakeCommand command)
+    {
+        if (string.IsNullOrWhiteSpace(command.ServiceAddressLine1))
+            return Result<bool>.Failure(KeepRequestErrors.ServiceAddressLine1Required);
+        if (string.IsNullOrWhiteSpace(command.ServiceCity))
+            return Result<bool>.Failure(KeepRequestErrors.ServiceCityRequired);
+        if (string.IsNullOrWhiteSpace(command.ServiceState))
+            return Result<bool>.Failure(KeepRequestErrors.ServiceStateRequired);
+        if (!ValidUsStateCodes.Contains(command.ServiceState))
+            return Result<bool>.Failure(KeepRequestErrors.ServiceStateInvalid);
+        return Result<bool>.Success(true);
     }
 
     private async Task<Result<CreateKeepPublicIntakeResult>> ExecuteWithLinkAsync(
         KeepPublicIntakeLink link,
         ValidatedKeepRequestInput v,
+        CreateKeepPublicIntakeCommand command,
         CancellationToken ct)
     {
         var accountId = link.AccountId;
+
+        // Block same-account staff: public intake is a customer channel only.
+        if (currentUser.IsAuthenticated && currentUser.AccountId == accountId)
+            return Result<CreateKeepPublicIntakeResult>.Failure(StaffNotPermitted);
+
         var snapshot = await persistence.GetAccountAccessSnapshotAsync(accountId, ct);
         if (snapshot is null)
             return Result<CreateKeepPublicIntakeResult>.Failure(Unavailable);
@@ -111,7 +154,9 @@ public sealed class CreateKeepPublicIntakeService(
             var request = KeepRequest.CreateFromCustomerIntake(
                 accountId, customer.Id,
                 v.TrimmedName, v.TrimmedPhone, v.TrimmedEmail,
-                v.TrimmedDescription, referenceCode, pageToken, nowUtc, firstResponseTargetMinutes);
+                v.TrimmedDescription, referenceCode, pageToken, nowUtc, firstResponseTargetMinutes,
+                command.ServiceAddressLine1, command.ServiceAddressLine2,
+                command.ServiceCity, command.ServiceState, command.ServiceZip);
             var @event = KeepRequestEvent.CreateRequestCreated(request.Id, accountId, nowUtc);
 
             var commitResult = await persistence.CommitPublicIntakeAsync(customer, request, @event, ct);

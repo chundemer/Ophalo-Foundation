@@ -317,7 +317,7 @@ app.MapPost("/keep/public-intake/slug/{slug}", HandlePublicIntakeBySlug)
 // Intake setup — authenticated, Owner/Admin only (GAP-001)
 app.MapGet("/keep/setup/intake", async (KeepIntakeSetupService service, CancellationToken ct) =>
 {
-    var result = await service.GetStatusAsync(ct);
+    var result = await service.GetOrEnsureStatusAsync(ct);
     return result.IsSuccess ? Results.Ok(result.Value) : ErrorHttpMapper.ToHttpResult(result.Error);
 }).RequireAuthorization();
 
@@ -876,7 +876,12 @@ static async Task<IResult> HandlePublicIntake(
         body.CustomerName,
         body.CustomerPhone,
         body.CustomerEmail,
-        body.Description);
+        body.Description,
+        body.ServiceAddressLine1 ?? string.Empty,
+        body.ServiceAddressLine2,
+        body.ServiceCity ?? string.Empty,
+        body.ServiceState ?? string.Empty,
+        body.ServiceZip);
 
     var result = await service.ExecuteAsync(command, ct);
 
@@ -899,7 +904,12 @@ static async Task<IResult> HandlePublicIntakeBySlug(
         body.CustomerName,
         body.CustomerPhone,
         body.CustomerEmail,
-        body.Description);
+        body.Description,
+        body.ServiceAddressLine1 ?? string.Empty,
+        body.ServiceAddressLine2,
+        body.ServiceCity ?? string.Empty,
+        body.ServiceState ?? string.Empty,
+        body.ServiceZip);
 
     var result = await service.ExecuteBySlugAsync(slug, command, ct);
 
