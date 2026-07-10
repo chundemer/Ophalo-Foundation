@@ -1,8 +1,8 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-07-09 (S22r2 complete — slug alias routing live, 7 integration tests green)
+**Last updated:** 2026-07-09 (S22r5 complete — next slice S22r6 backend auto-provision hardening)
 **Branch:** `main` tracking `origin/main`
-**Last green baseline:** 964 unit · 755 integration = 1,719 total, 0 failures (1 pre-existing KeepG5 fluke excluded)
+**Last green baseline:** S22r3 targeted suite green (19 unit + 29 integration); S22r4 TypeScript clean. Full baseline remains 964 unit · 755 integration = 1,719 total, 0 failures (1 pre-existing KeepG5 fluke excluded)
 **Next free ADR:** ADR-430
 **Current session:** Session 22 — Day-Zero Settings Redesign, Intake Sharing, And Service Location Plan
 
@@ -35,7 +35,7 @@ For every implementation slice:
 ## Current Work
 
 **Current build log:** `docs/build-log/076-session-22-guided-setup-intake-and-service-location.md`
-**Last completed build log:** `docs/build-log/075-session-21-attention-guidance-resolution-metadata.md` (draft handoff)
+**Last completed prior-session build log:** `docs/build-log/075-session-21-attention-guidance-resolution-metadata.md`
 **Readiness working doc:** `docs/pilot-readiness-decision-questions.md`
 **Bug/gap tracker:** `docs/pilot-readiness-bug-tracker.md`
 **Foundation roadmap:** `docs/build-log/ophalo-foundation-build-plan-greenfield-boundaries-brownfield-behavior.md` section 9.1
@@ -87,10 +87,6 @@ Treat these as historical context unless a later discovery step finds a concrete
   normalized to lowercase); `ExecuteWithLinkAsync` Phase B extracted; `ExecuteBySlugAsync` added;
   `POST /keep/public-intake/slug/{slug}` endpoint; `ophalo-web` `keep/s/[slug]/page.tsx` route;
   `IntakeForm.tsx` accepts `{ token?: string; slug?: string }`. 7 integration tests green.
-- S22r4 complete (2026-07-09): `PolicySection` in `Settings.tsx` redesigned — stacked layout with
-  plain-language helper copy for each field (First response, Standard response, Priority response,
-  Status check); `min` tightened to 1 to match backend `> 0` constraint; intro paragraph reworded.
-  TypeScript clean. No backend or test changes.
 - S22r3 complete (2026-07-09): `KeepPublicIntakeLink.RenameSlug` (returns bool no-op indicator);
   `SlugExistsAsync` expanded to check active `KeepPublicIntakeSlugAlias` rows (hard pre-requisite);
   `KeepIntakeSetupService.RenameAsync` with diacritic-stripping `Slugify`, user-visible 422 on slug
@@ -100,17 +96,25 @@ Treat these as historical context unless a later discovery step finds a concrete
   inline link-name editing (server slug returned, alias awareness copy), raw-token "shown once"
   banner preserved for ensure/replace, replace kept as destructive with warning, phone-sized customer
   preview. 19 unit tests + 29 integration tests (12 new rename tests) green.
+- S22r4 complete (2026-07-09): `PolicySection` in `Settings.tsx` redesigned — stacked layout with
+  plain-language helper copy for each field (First response, Standard response, Priority response,
+  Status check); `min` tightened to 1 to match backend `> 0` constraint; intro paragraph reworded.
+  TypeScript clean. No backend or test changes.
+- S22r5 complete (2026-07-09): `TeamSection` intro copy updated to reassure solo owners ("Keep works
+  great for solo businesses — no team required"); empty state changed from bare "No team members." to
+  "Just you for now — use the form above to invite someone when you're ready." `Home.tsx` three-card
+  Getting Started confirmed complete from S22r1 (verify public link, Quick Capture, invite teammates
+  with explicit solo-optional framing). No backend changes. TypeScript clean.
+- Settings refactor complete (2026-07-09): `Settings.tsx` split into per-tab section files with no
+  behavior changes — `settings/CompanySection.tsx`, `settings/PolicySection.tsx`,
+  `settings/PublicLinkSection.tsx` (formerly `IntakeSection`), `settings/TeamSection.tsx` (includes
+  `MemberRow`, `InviteForm`, shared helpers). `Settings.tsx` retained as ~75-line shell.
 - Do not continue showing `Create intake page` and `Share intake page` as separate owner chores.
   Public intake should be auto-provisioned by default, then verified/copied/previewed from Settings.
 - Do not make `Build your team` feel mandatory. Team is available in Settings and reassuringly
   optional for solo shops.
-- First redo target: Settings tabs/subnav. Build `Public Link & Profile` as the first Settings tab,
-  but gate durable copy/open controls until slug-based public routing is implemented. Then split
-  `Response Policy` with helper copy and `Team` as a clean roster.
 - Slug-based public intake URLs are the chosen durable path. Do not use `window.location.origin` for
-  customer-facing intake links from `ophalo-app`; use the configured public web base URL. Do not show
-  copy/open as guaranteed durable until `ophalo-web`/API can resolve active intake links by
-  `publicSlug`.
+  customer-facing intake links from `ophalo-app`; use the configured public web base URL.
 - ADR-429 is locked: ordinary public link-name edits preserve old shared slugs as aliases; replacement
   or regeneration is the destructive/security action and must warn that old shared links break. S22r2
   includes alias persistence/migration and slug-resolution tests.
@@ -140,85 +144,19 @@ Treat these as historical context unless a later discovery step finds a concrete
 - `OperatorBaseUrl` is retired from active settings/config/test factories/runbooks; invite links now
   use `{PublicBaseUrl}/invite/accept`.
 
-### S17 — Complete
+### Next Session Brief
 
-**Roadmap label:** Native Operator Field App.
+Start with S22r6 — backend auto-provision hardening.
 
-**Status:** All slices S17a–S17j complete. Session 17 done.
+Remaining S22 slices:
 
-**S17a findings summary:**
+1. S22r6 — backend auto-provision hardening.
+2. Service location.
+3. Customer page copy.
+5. Mobile carry-forward.
+6. Docs/index reconciliation.
 
-- All S17 API endpoints confirmed in `OpHalo.Api`: lists (`view=assigned_to_me`, `view=watching`),
-  `/keep/requests/available`, lookup, create, detail (with `AvailableActions`, `CurrentUserParticipation`,
-  `Version`, `PageToken`, `NeedsShare`), business-updates, status, external-contact, share-intent,
-  watch/unwatch, mute/unmute, responsible, follow-up-on, planned-for.
-- `X-Keep-Request-Version` conflict contract confirmed: missing header → 400
-  `KeepRequest.ExpectedVersionRequired`; invalid → 400 `KeepRequest.ExpectedVersionInvalid`; stale
-  race → 409 `KeepRequest.RequestChanged`; already-claimed → 409
-  `KeepRequest.ParticipationRequestAlreadyAssigned`. All errors are ProblemDetails JSON with `code`
-  extension field. Mobile must JSON-parse error bodies to read `code`.
-- Public intake gap confirmed: `GET /keep/setup/intake` requires `KeepSettingsManage` (Admin/Owner
-  only). S17f shipped Quick Capture only. Intake sharing is a separately approved pre-pilot gap slice.
-- `signin.tsx` `__DEV__` paste field removed (S17c complete).
-- My Work (My Promises / Watching) and Available lists wired with real cached queries; intentional loading/error/empty states; pull-to-refresh; `hasMore` indicator. Rows are read-only except detail navigation (S17d complete).
-- Request detail read surface: header, description, attention/timing/participation fields, contact affordances and available actions as plain-text metadata, oldest-first event timeline. `useRequestDetail` hook with `enabled: !!id`; `version` retained for S17h/S17i mutations. No write controls, no S17g/h/i leakage (S17e complete).
-- Quick Capture modal: phone input → lookup (`GET /keep/requests/lookup?phone=...`) → auto-fill known customer name/email; description + source picker (7 slugs, `public_intake` excluded); offline blocking via `useNetworkState` (`@react-native-community/netinfo`); `POST /keep/requests` authenticated; post-save `router.replace` to `requests/[id]`. No intake share UI (S17f complete).
-- Contact handoff and tracker share: contact rows tappable via `Linking` (`tel:`/`mailto:`); phone outcome custom sheet (Spoke/Voicemail/No answer/Skip) logs `POST .../external-contact` with `X-Keep-Request-Version`; email requires one-tap confirm; tracker share via native share sheet + explicit post-share confirm before calling `POST .../share-intent` (`native_share`); "Mark as shared" explicit confirm sends `manual_mark_shared`; `pageToken` added to `KeepRequestDetailDto`; `EXPO_PUBLIC_PUBLIC_BASE_URL` documented; share-intent requires no version header (S17a table correction documented). ADR-401 compliant (S17g complete).
-- Customer update and mark completed: composer gated on `canSendBusinessUpdate`; "Send Update" posts `{ message }`; "Send Update & Mark Completed" posts `{ message, setStatus: 'resolved' }` gated on `allowedStatuses.includes('resolved')`; both disabled when message empty/pending/offline; 409/`KeepRequest.RequestChanged` preserves text and shows conflict notice; network failure shows retry-safe copy; badge invalidated on success; composer omitted entirely when `canSendBusinessUpdate` false (S17h complete).
-- Participation and timing controls: Watch/Unwatch/Mute/Unmute in detail screen Participation section (outline buttons, per-action error state); self-assign from Available list row and detail screen (`canAssignResponsible`; passes `user.accountUserId`; `ParticipationRequestAlreadyAssigned` → "Already claimed"); Follow Up On and Planned For set (YYYY-MM-DD `TextInput` with client-side calendar validation) and clear (`canSetFollowUpOn`/`canSetPlannedFor`); timing section renders when any of four timing flags are true; `ACTION_LABELS` reduced to still-future capabilities; ADR-403 offline guard applied to previously-unguarded sheet mutation buttons (S17i complete).
-- Brand guide alignment (canvas color, Keep teal moment, Inter/Source Serif 4 fonts) deferred to a follow-up UX pass before S17j.
-- E2E handoff runbook recorded in build log 071.
-
-**S17j active brief: Review-Safe Final Pass**
-
-- Scope is mobile-only. No backend changes unless a concrete gap is found during verification.
-- No placeholder authenticated tabs or screens visible in the shipped app.
-- No unexpected runtime permissions. `@react-native-community/netinfo` (passive connectivity) is the only expected non-standard permission. Verify Android manifest output has no spurious entries.
-- Account screen: add Privacy, Support, and Request Account Deletion rows. Support row gated on `EXPO_PUBLIC_SUPPORT_URL` — omit if missing or empty. Request Account Deletion row gated on `EXPO_PUBLIC_ACCOUNT_DELETION_URL` — omit if missing, empty, invalid, non-HTTPS, or not an approved OpHalo deletion route.
-- Route and deep-link guardrails: all authenticated routes protected; `ophalo://` scheme routes verified; `+not-found` fallback in place.
-- Optional pre-S17j UX pass (brand alignment): `src/constants/brand.ts` token file, canvas/card color separation, Inter/Source Serif 4 fonts via `expo-google-fonts`, single teal moment per screen. If included, scope tightly and do not let it bleed into behavior.
-- `npx tsc --noEmit` must pass clean at S17j completion.
-- Manual workflow smoke notes recorded in build log 071 before handoff.
-
-**Hard boundaries (unchanged):**
-- No real APNs/FCM or push-token capture (S18).
-- No store-submission assets or Universal Links (S19).
-- No demo mode, local-only reviewer bypass, or production-visible dev auth.
-- No native account creation or invite acceptance.
-- `Request Account Deletion` is config-gated by `EXPO_PUBLIC_ACCOUNT_DELETION_URL`: if missing,
-  empty, invalid, non-HTTPS, or not an approved OpHalo deletion route, omit the UI row entirely.
-- Support is config-gated by `EXPO_PUBLIC_SUPPORT_URL` unless a known existing support route is
-  provided; do not link to an unverified `/support` route.
-- Slice dependencies locked: S17b/S17c before S17d; S17e before S17f/S17g/S17h/S17i/S17j.
-
----
-
-### Remaining Sessions
-
-1. ~~**Session 16 — Native Mobile App Foundation** — Complete~~
-2. **Session 17 — Review-Safe Native Product Foundation**
-   Build the review-safe native Keep field workflow in locked slices S17a through S17j. Current
-   active slice is S17j — Review-Safe Final Pass.
-3. **Session 18 — Push Delivery And Deep Links**
-   Decide and implement real APNs/FCM delivery for store-bound builds, or explicitly document a
-   review-safe no-push product posture before any submission. Verify Demo/InternalTest suppression,
-   payloads, badge behavior, and stable deep links end to end.
-4. **Session 19 — Store Submission Readiness**
-   Prepare Apple/Google approval: app names, icons, screenshots, privacy labels, permissions copy,
-   signing/profiles, production environment config, demo credentials/account, TestFlight/internal
-   testing builds, and review notes.
-5. **Session 20 — Weekly Value Report / Founder Ops Readout**
-   Build the founder/internal-only weekly report endpoint/read service that generates copy-pasteable
-   Markdown/text for an account and reporting period. No Owner/Admin report UI or automated email in
-   the first slice.
-6. **Session 21 — Pilot Support Surfaces**
-   Build authenticated Report Friction plus Pilot Updates/Help, with compact context, no client-side
-   webhook secrets, no anonymous customer OpHalo feedback hook, and no production impersonation.
-7. **Session 22 — Pilot QA And Go-Live Gate**
-   Run full web/mobile/API/customer-page/deployment/support verification, including onboarding,
-   Quick Capture, public intake, tracker sharing, attention/follow-up/status-check behavior,
-   close/cancel, feedback review, Spam/Test, weekly reporting, support runbooks, notification posture,
-   store-readiness evidence, and known limitations.
+Historical mobile context lives in `docs/build-log/071-session-17-review-safe-native-product-foundation.md`.
 
 ## Carry-Forward Boundaries
 
