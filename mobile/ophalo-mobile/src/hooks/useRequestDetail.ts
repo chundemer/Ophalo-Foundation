@@ -77,6 +77,14 @@ export type KeepRequestDetailDto = {
   followUpOnDate: string | null;
   followUpOnReason: string | null;
   plannedForDate: string | null;
+  source: string;
+  intakeUrgency: string;
+  contactPreference: string;
+  serviceAddressLine1: string | null;
+  serviceAddressLine2: string | null;
+  serviceCity: string | null;
+  serviceState: string | null;
+  serviceZip: string | null;
   contactActions: ContactActionItem[];
   participants: ParticipantItem[];
   currentUserParticipation: CurrentUserParticipationDto;

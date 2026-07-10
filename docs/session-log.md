@@ -1,6 +1,6 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-07-10 (S22p4 complete — IntakeUrgency + ContactPreference exposed on operator detail and request list; 98 unit · 101 integration all green)
+**Last updated:** 2026-07-10 (S22p7 complete — mobile request detail carry-forward; Job context section; TypeScript clean)
 **Branch:** `main` tracking `origin/main`
 **Last green baseline:** Targeted intake baseline — 66 intake unit · 25 intake integration confirmed; full suite pending (1 pre-existing KeepG5 fluke excluded)
 **Next free ADR:** ADR-433
@@ -40,7 +40,7 @@ For every implementation slice:
 **Bug/gap tracker:** `docs/pilot-readiness-bug-tracker.md`
 **Foundation roadmap:** `docs/build-log/ophalo-foundation-build-plan-greenfield-boundaries-brownfield-behavior.md` section 9.1
 **Current session:** Session 22 — Day-Zero Settings Redesign, Intake Sharing, And Service Location Plan
-**Current slice:** S22p5/remaining slices (see Next Session Brief)
+**Current slice:** S22p7 complete; remaining slices (see Next Session Brief)
 
 ### Completed Context
 
@@ -186,10 +186,16 @@ under intake metadata; compact `City, ST ZIP` appended to source line in list ro
 both present. 4 new integration tests (populated intake + null business-created, detail + list);
 79 existing detail/list tests green. TypeScript typecheck clean.
 
+#### S22p7 — Mobile Request Detail Carry-Forward ✓ complete (2026-07-10)
+Added `source`, `intakeUrgency`, `contactPreference`, `serviceAddressLine1/2`, `serviceCity`,
+`serviceState`, `serviceZip` to `KeepRequestDetailDto` in `useRequestDetail.ts`. Added read-only
+"Job context" section in `app/requests/[id].tsx` between Description and Attention: urgency banner
+and preferred contact shown for `public_intake` source only; service location block rendered for any
+source when address or city is present; no missing-location cue; no edit button; no Open in Maps.
+TypeScript typecheck clean.
+
 #### Remaining S22 slices
-1. **Mobile request detail carry-forward:** consume/render `IntakeUrgency`, `ContactPreference`, and
-   service location on mobile request detail after S22p6 exposes service-location DTO fields.
-3. **Pilot maps follow-up:** add `Open in Maps` from request detail; embedded previews remain later.
+1. **Pilot maps follow-up:** add `Open in Maps` from request detail; embedded previews remain later.
 4. **S22g — Documentation Reconciliation:** ADR-295, ADR-375, ADR-383 and response policy placement.
 5. Docs/index reconciliation.
 6. **Pre-deployment cleanup:** Build log 077 is deferred until customer request page work and testing

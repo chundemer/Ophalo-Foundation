@@ -475,6 +475,46 @@ function RequestDetailContent({
           <Text style={styles.bodyText}>{data.description}</Text>
         </Section>
 
+        {(data.source === 'public_intake' || data.serviceAddressLine1 || data.serviceCity) && (
+          <Section cardBg={cardBg}>
+            <Text style={styles.sectionLabel}>Job context</Text>
+            {data.source === 'public_intake' && data.intakeUrgency !== 'routine' && (
+              <Text style={styles.urgencyBannerText}>
+                {data.intakeUrgency === 'urgent'
+                  ? 'Customer marked this urgent.'
+                  : 'Customer marked this soon.'}
+              </Text>
+            )}
+            {data.source === 'public_intake' && (
+              <FieldRow
+                label="Preferred contact"
+                value={
+                  data.contactPreference === 'text_message' ? 'Text message' :
+                  data.contactPreference === 'phone_call'   ? 'Phone call' :
+                  data.contactPreference === 'email'        ? 'Email' :
+                                                              'No preference'
+                }
+              />
+            )}
+            {(data.serviceAddressLine1 || data.serviceCity) && (
+              <View style={styles.serviceLocationBlock}>
+                <Text style={styles.serviceLocationLabel}>Service location</Text>
+                {data.serviceAddressLine1 && (
+                  <Text style={styles.serviceLocationLine}>{data.serviceAddressLine1}</Text>
+                )}
+                {data.serviceAddressLine2 && (
+                  <Text style={styles.serviceLocationLine}>{data.serviceAddressLine2}</Text>
+                )}
+                {data.serviceCity && data.serviceState && (
+                  <Text style={styles.serviceLocationLine}>
+                    {data.serviceCity}, {data.serviceState}{data.serviceZip ? ` ${data.serviceZip}` : ''}
+                  </Text>
+                )}
+              </View>
+            )}
+          </Section>
+        )}
+
         {(data.attentionLevel.toLowerCase() !== 'none' || data.attentionReason) && (
           <Section cardBg={cardBg}>
             <Text style={styles.sectionLabel}>Attention</Text>
@@ -1402,6 +1442,10 @@ const styles = StyleSheet.create({
     textAlignVertical: 'top',
     marginBottom: 6,
   },
+  urgencyBannerText: { fontSize: 13, fontWeight: '600', color: '#B45309', marginBottom: 2 },
+  serviceLocationBlock: { marginTop: 6, gap: 1 },
+  serviceLocationLabel: { fontSize: 11, fontWeight: '700', opacity: 0.5, letterSpacing: 0.4, textTransform: 'uppercase', marginBottom: 2 },
+  serviceLocationLine: { fontSize: 13, opacity: 0.8 },
   composerError: { fontSize: 13, color: '#C0392B', marginBottom: 6 },
   composerOffline: { fontSize: 13, opacity: 0.55, marginBottom: 6 },
   errorText: { fontSize: 16, textAlign: 'center', opacity: 0.7 },
