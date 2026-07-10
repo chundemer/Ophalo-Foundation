@@ -135,12 +135,24 @@ export function RequestRow({ row, onSelect }: RequestRowProps) {
         <ChevronRight className="h-4 w-4 text-[var(--ophalo-muted)] shrink-0" />
       </div>
 
-      {/* Row 2: attention badge + status chip — wrap on narrow */}
+      {/* Row 2: attention badge + status chip + intake urgency — wrap on narrow */}
       <div className="flex flex-wrap items-center gap-1.5">
         {row.attention.attentionReason && (
           <AttentionBadge reason={row.attention.attentionReason} />
         )}
         <StatusBadge status={row.status} />
+        {row.source === "public_intake" && row.intakeUrgency === "urgent" && (
+          <KeepBadge variant="danger" className="gap-1">
+            <AlertTriangle className="h-3 w-3" />
+            Urgent
+          </KeepBadge>
+        )}
+        {row.source === "public_intake" && row.intakeUrgency === "soon" && (
+          <KeepBadge variant="attention" className="gap-1">
+            <Clock className="h-3 w-3" />
+            Soon
+          </KeepBadge>
+        )}
       </div>
 
       {/* Row 3: action prompt */}
@@ -175,6 +187,14 @@ export function RequestRow({ row, onSelect }: RequestRowProps) {
           <span className="flex items-center gap-1 font-medium text-[var(--ophalo-attention)]">
             <Link className="h-3 w-3" />
             Unshared tracker
+          </span>
+        )}
+        {row.source === "public_intake" && row.contactPreference !== "no_preference" && (
+          <span>
+            Prefers:{" "}
+            {row.contactPreference === "text_message" && "text"}
+            {row.contactPreference === "phone_call" && "call"}
+            {row.contactPreference === "email" && "email"}
           </span>
         )}
       </div>

@@ -4,7 +4,7 @@
 **Status:** Direction changed 2026-07-09 — S22c guided checklist work paused; Settings/Get Started redesign required
 **Session name:** S22 day-zero readiness / settings redesign / intake / service-location migration
 **Next free ADR before this log:** ADR-428
-**Next free ADR after this log:** ADR-430
+**Next free ADR after this log:** ADR-431
 
 ---
 
@@ -1178,14 +1178,28 @@ it:
 
 ## Completed Slices
 
+### S22p1 — Intake Form UI Polish
+
+Frontend-only polish in `web/ophalo-web/src/app/keep/intake/[token]/IntakeForm.tsx`.
+
+- Main intake H1 moved to Source Serif 4 via `font-serif text-2xl font-semibold leading-tight
+  text-foreground sm:text-[28px]`.
+- Terminal state headings (`Request submitted.`, `This link is not available.`, signed-in staff
+  fallback) also use `font-serif`.
+- Internal form hairline dividers removed; sections now use vertical spacing inside the white card.
+- Description helper copy added: "Include what happened, when it started, and anything urgent."
+- State selector uses `text-base` to avoid iOS Safari focus zoom.
+- Submit CTA keeps Keep teal treatment and has `min-h-[42px]` tap target.
+
+No backend, migration, or test changes.
+
 ### S22p2 — Intake Urgency Field
 
 `IntakeUrgency` enum (`Routine/Soon/Urgent`, default `Routine`) added as persisted metadata on
 `KeepRequest`. Piped through public intake submission: `PublicIntakeRequest.Urgency` (nullable;
 API treats null as Routine), `CreateKeepPublicIntakeCommand.IntakeUrgency`, factory
-`KeepRequest.CreateFromCustomerIntake`. EF configuration added; migration pending (Christian runs
-`dotnet ef migrations add AddUrgencyToKeepRequest --startup-project
-src/OpHalo.Keep.Infrastructure`).
+`KeepRequest.CreateFromCustomerIntake`. EF configuration and migration
+`AddUrgencyToKeepRequest` added.
 
 Frontend: urgency select in `IntakeForm.tsx` between description and service location. Options:
 Routine / Soon / Urgent with helper copy listing active examples and a safety disclaimer.
@@ -1195,8 +1209,61 @@ request view is the next display slice. This field is not invisible product debt
 and readable by any query.
 
 Tests: 3 new unit tests (default Routine, explicit Urgent, explicit Soon) + 4 new integration tests
-(Routine/Soon/Urgent values + omitted field). Integration tests require the migration before they
-pass.
+(Routine/Soon/Urgent values + omitted field).
+
+### S22p3 — Preferred Contact Method
+
+`ContactPreference` enum (`NoPreference/TextMessage/PhoneCall/Email`, default `NoPreference`) added
+as persisted metadata on `KeepRequest`. Piped through public intake submission:
+`PublicIntakeRequest.ContactPreference`, `CreateKeepPublicIntakeCommand.ContactPreference`,
+`CreateKeepPublicIntakeService`, both token and slug handlers in `Program.cs`, and
+`KeepRequest.CreateFromCustomerIntake`. EF configuration and migration
+`AddContactPreferenceToKeepRequest` added.
+
+Frontend: preferred contact selector added to `IntakeForm.tsx` contact section. If Email is selected,
+the email field is revealed and required.
+
+**Operator display deferred.** `ContactPreference` is persisted in S22p3; surfacing it together with
+`IntakeUrgency` in the operator request detail and list views is S22p4.
+
+Tests: 66 unit and 25 intake integration tests green after S22p3.
+
+---
+
+### S22p4 — Intake Metadata Operator Display
+
+Both persisted intake metadata fields are exposed on authenticated operator surfaces:
+
+- `IntakeUrgency` from S22p2.
+- `ContactPreference` from S22p3.
+
+Backend:
+
+- `src/OpHalo.Keep.Application/Requests/KeepRequestDetailResult.cs`
+- `src/OpHalo.Keep.Application/Requests/KeepRequestDetailMapper.cs`
+- `src/OpHalo.Keep.Application/Requests/KeepRequestSummary.cs`
+- `src/OpHalo.Keep.Application/Requests/GetKeepRequestListService.cs`
+
+Frontend:
+
+- `web/ophalo-app/src/lib/apiClient.ts`
+- `web/ophalo-app/src/pages/RequestDetail.tsx`
+- `web/ophalo-app/src/components/RequestRow.tsx`
+
+Copy guidance:
+
+- Urgency: `Customer marked this urgent.`
+- Preferred contact: `Preferred contact: Text message / Phone call / Email / No preference.`
+
+Detail shows both near customer contact details. Request list rows also show the metadata because
+operators on the road use the list as their primary working view and need triage/contact cues before
+opening detail.
+
+Do not convert customer-selected urgent into a verified attention condition unless a later product
+rule explicitly does that. Preferred contact remains a lightweight intake preference, not a full
+notification preference/quiet-hours/opt-out system.
+
+Tests: 98 unit and 101 integration tests green after S22p4.
 
 ---
 

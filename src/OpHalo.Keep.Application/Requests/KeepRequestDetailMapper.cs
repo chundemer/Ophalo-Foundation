@@ -96,6 +96,8 @@ internal static class KeepRequestDetailMapper
         FeedbackReviewDueAtUtc: ComputeReviewDueAtUtc(request),
         CustomerPageLastViewedAtUtc: request.CustomerPageLastViewedAtUtc,
         CustomerPageViewedAfterLatestUpdate: ComputeViewedAfterLatestUpdate(request),
+        IntakeUrgency: MapIntakeUrgency(request.IntakeUrgency),
+        ContactPreference: MapContactPreference(request.ContactPreference),
         ContactActions: BuildContactActions(availableActions.CanLogExternalContact, request.CustomerPhone, request.CustomerEmail),
         Participants: participants.Select(MapParticipant).ToList(),
         CurrentUserParticipation: currentUserParticipation,
@@ -180,6 +182,23 @@ internal static class KeepRequestDetailMapper
 
         return FeedbackReviewPolicy.ComputeReviewDueAtUtc(request.FeedbackSubmittedAtUtc.Value);
     }
+
+    private static string MapIntakeUrgency(IntakeUrgency urgency) => urgency switch
+    {
+        IntakeUrgency.Routine => "routine",
+        IntakeUrgency.Soon    => "soon",
+        IntakeUrgency.Urgent  => "urgent",
+        _ => throw new InvalidOperationException($"Unknown IntakeUrgency: {urgency}")
+    };
+
+    private static string MapContactPreference(ContactPreference preference) => preference switch
+    {
+        ContactPreference.NoPreference => "no_preference",
+        ContactPreference.TextMessage  => "text_message",
+        ContactPreference.PhoneCall    => "phone_call",
+        ContactPreference.Email        => "email",
+        _ => throw new InvalidOperationException($"Unknown ContactPreference: {preference}")
+    };
 
     private static IReadOnlyList<ContactActionItem> BuildContactActions(
         bool canLogExternalContact, string phone, string? email)

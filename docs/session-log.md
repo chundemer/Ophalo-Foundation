@@ -1,9 +1,9 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-07-10 (S22p3 complete — ContactPreference persisted, migration applied, 66 unit · 25 intake integration all green)
+**Last updated:** 2026-07-10 (S22p4 complete — IntakeUrgency + ContactPreference exposed on operator detail and request list; 98 unit · 101 integration all green)
 **Branch:** `main` tracking `origin/main`
-**Last green baseline:** Full suite baseline — 66 intake unit · 25 intake integration confirmed; full suite pending (1 pre-existing KeepG5 fluke excluded)
-**Next free ADR:** ADR-430
+**Last green baseline:** Targeted intake baseline — 66 intake unit · 25 intake integration confirmed; full suite pending (1 pre-existing KeepG5 fluke excluded)
+**Next free ADR:** ADR-431
 **Current session:** Session 22 — Day-Zero Settings Redesign, Intake Sharing, And Service Location Plan
 
 ---
@@ -40,7 +40,7 @@ For every implementation slice:
 **Bug/gap tracker:** `docs/pilot-readiness-bug-tracker.md`
 **Foundation roadmap:** `docs/build-log/ophalo-foundation-build-plan-greenfield-boundaries-brownfield-behavior.md` section 9.1
 **Current session:** Session 22 — Day-Zero Settings Redesign, Intake Sharing, And Service Location Plan
-**Current slice:** S22p4 — Intake Metadata Operator Display (next slice, own session)
+**Current slice:** S22p5/remaining slices (see Next Session Brief)
 
 ### Completed Context
 
@@ -61,121 +61,60 @@ Treat these as historical context unless a later discovery step finds a concrete
 
 ### Current Direction
 
-- S22 decisions and implementation slicing are captured in
-  `docs/build-log/076-session-22-guided-setup-intake-and-service-location.md`.
-- ADR-428 is now locked: Keep launches in a day-zero functional state. Settings is split into
-  `Public Link & Profile`, `Response Policy`, and `Team`; Getting Started becomes lightweight
-  verification/on-ramp, not a seven-step checklist.
-- Treat Session 12 onboarding (`docs/build-log/066-session-12-account-settings-and-onboarding.md`)
-  as the existing foundation to migrate, not as absent work.
-- S22a preflight and S22b-backend are complete. See build log 076 for locked decisions and
-  implementation archive.
-- S22b delivered: `KeepSetupStep`, `IntendedTeamSize`, `KeepSetupDeferral`, `KeepBusinessSetupService`,
-  `IKeepSetupDeferralPersistence`, `EfKeepSetupDeferralPersistence`, `keep_setup_deferrals` table,
-  `GET /keep/setup/guided`, `POST /keep/setup/guided/defer/{step}`.
-- S22r0 preflight complete (2026-07-09): dirty S22c files classified; file-level gate confirmed.
-- S22r1 complete (2026-07-09): `SetupBar.tsx` deleted; `App.tsx` SetupBar wiring removed and route
-  section type updated to `"public-profile" | "policy" | "team"`; `Home.tsx` GuidedHub and
-  seven-step checklist stripped, replaced with lightweight three-card Getting Started stub;
-  `Settings.tsx` converted from monolithic scroll to three-tab subnav (Public Link & Profile,
-  Response Policy, Team), `OnboardingSection` removed from primary render. TypeScript clean.
-- `apiClient.ts` additions from S22b (`KeepBusinessSetupResult`, `getGuidedSetup`,
-  `deferSetupStep`) are kept — backed by live backend endpoints, needed for S22r5 Getting Started.
-- S22r2 complete (2026-07-09): `KeepPublicIntakeSlugAlias` entity + EF migration
-  (`keep_public_intake_slug_aliases`, partial unique index on active slug);
-  `FindActivePublicIntakeLinkBySlugAsync` (current slug first, then alias fallback, input
-  normalized to lowercase); `ExecuteWithLinkAsync` Phase B extracted; `ExecuteBySlugAsync` added;
-  `POST /keep/public-intake/slug/{slug}` endpoint; `ophalo-web` `keep/s/[slug]/page.tsx` route;
-  `IntakeForm.tsx` accepts `{ token?: string; slug?: string }`. 7 integration tests green.
-- S22r3 complete (2026-07-09): `KeepPublicIntakeLink.RenameSlug` (returns bool no-op indicator);
-  `SlugExistsAsync` expanded to check active `KeepPublicIntakeSlugAlias` rows (hard pre-requisite);
-  `KeepIntakeSetupService.RenameAsync` with diacritic-stripping `Slugify`, user-visible 422 on slug
-  collision; `CommitRenameAsync` (transactional alias insert + slug update, race-condition catch);
-  `PUT /keep/setup/intake/link-name`; `updateIntakeLinkName` in `apiClient.ts`; `IntakeSection`
-  replaced with polished `PublicLinkSection`: durable copy/open via `VITE_PUBLIC_BASE_URL/keep/s/{slug}`,
-  inline link-name editing (server slug returned, alias awareness copy), raw-token "shown once"
-  banner preserved for ensure/replace, replace kept as destructive with warning, phone-sized customer
-  preview. 19 unit tests + 29 integration tests (12 new rename tests) green.
-- S22r4 complete (2026-07-09): `PolicySection` in `Settings.tsx` redesigned — stacked layout with
-  plain-language helper copy for each field (First response, Standard response, Priority response,
-  Status check); `min` tightened to 1 to match backend `> 0` constraint; intro paragraph reworded.
-  TypeScript clean. No backend or test changes.
-- S22r5 complete (2026-07-09): `TeamSection` intro copy updated to reassure solo owners ("Keep works
-  great for solo businesses — no team required"); empty state changed from bare "No team members." to
-  "Just you for now — use the form above to invite someone when you're ready." `Home.tsx` three-card
-  Getting Started confirmed complete from S22r1 (verify public link, Quick Capture, invite teammates
-  with explicit solo-optional framing). No backend changes. TypeScript clean.
-- S22r6 complete (2026-07-09): Backend auto-provision hardening. `GET /keep/setup/intake` now
-  calls `GetOrEnsureStatusAsync` — auto-provisions one active public intake link on first eligible
-  Owner/Admin read using the same idempotent ensure loop (slug generation, collision-safe unique
-  index, concurrent race handled). RawToken never returned from GET. Fallback slug "business" when
-  businessName is non-slugifiable. `POST /keep/setup/intake/ensure` and replace remain unchanged.
-  3 production files changed, 33/33 integration tests green (4 new tests: auto-provision,
-  fallback slug, idempotency, concurrent GET).
-- S22e complete (2026-07-10): Business identity header on intake form.
-  `GET /keep/public-intake/token/{token}/info` and `GET /keep/public-intake/slug/{slug}/info` → `{ businessName }`
-  (anonymous, rate-limited, 404 for unknown/revoked). `GetBusinessNameByTokenHashAsync` + `GetBusinessNameBySlugAsync`
-  added to `IKeepIntakePersistence` and implemented in `KeepIntakePersistence` (reuses existing slug alias resolution).
-  `GetInfoByTokenAsync` + `GetInfoBySlugAsync` added to `CreateKeepPublicIntakeService`. Both intake page routes
-  (`[token]/page.tsx`, `s/[slug]/page.tsx`) now fetch info server-side and pass `businessName` to `IntakeForm`.
-  `IntakeForm` renders business initials avatar + name header (matching customer tracker page) when name is present;
-  falls back to generic "Submit a request" card. Footer corrected: brand logo + product description replacing
-  inline SVG stand-in and internal tagline. 5 new info endpoint integration tests. S22d regression fixes:
-  12 existing intake submission tests across `KeepIntakeApiTests`, `KeepIntakeSetupApiTests`, `KeepOffSeasonTests`
-  updated to include service location fields (S22d made these required but targeted-suite-only verification missed them).
-  `FakeIntakePersistence` in unit tests updated for new interface methods. Full suite: 986 unit + 786 integration.
-- S22d complete (2026-07-10): Service location backend + intake page visual shell. Migration:
-  `20260710095627_AddServiceLocationToKeepRequest` (5 nullable columns on `keep_requests`). Inline
-  US 50-state + DC validation in `CreateKeepPublicIntakeService`; 4 error constants; DTO, command,
-  handlers, EF config updated; 4 new service location errors mapped to 422 in `ErrorHttpMapper`.
-  `IntakeForm.tsx` rewritten: customer-tracker canvas/card/footer shell, service location card + US
-  state dropdown + privacy helper copy, spec-accurate success state (View your request page / Save
-  this link / bookmark tip). 59/59 unit + 16/16 integration green (8 new unit, 6 new integration
-  including privacy no-leak test on customer page). TypeScript clean.
-  Deferred to S22e: `GET /keep/public-intake/slug/{slug}/info` → business name; business identity
-  header + initials on intake form matching customer tracker page.
-- Settings refactor complete (2026-07-09): `Settings.tsx` split into per-tab section files with no
-  behavior changes — `settings/CompanySection.tsx`, `settings/PolicySection.tsx`,
-  `settings/PublicLinkSection.tsx` (formerly `IntakeSection`), `settings/TeamSection.tsx` (includes
-  `MemberRow`, `InviteForm`, shared helpers). `Settings.tsx` retained as ~75-line shell.
-- Do not continue showing `Create intake page` and `Share intake page` as separate owner chores.
-  Public intake should be auto-provisioned by default, then verified/copied/previewed from Settings.
-- Do not make `Build your team` feel mandatory. Team is available in Settings and reassuringly
-  optional for solo shops.
-- Slug-based public intake URLs are the chosen durable path. Do not use `window.location.origin` for
-  customer-facing intake links from `ophalo-app`; use the configured public web base URL.
-- ADR-429 is locked: ordinary public link-name edits preserve old shared slugs as aliases; replacement
-  or regeneration is the destructive/security action and must warn that old shared links break. S22r2
-  includes alias persistence/migration and slug-resolution tests.
-- `seatUsage` sourced from `api.listMembers()` (`["members", false]` queryKey); fail-soft on error.
-- `IntendedTeamSize` returns null from `GET /keep/setup/guided` until any future backend preference
-  slice. It must never affect seat limits or entitlements. It is no longer required for the immediate
-  redesign.
+Session 22 is now in the customer request/intake metadata finishing lane. Historical S22 detail is
+archived in `docs/build-log/076-session-22-guided-setup-intake-and-service-location.md`; use this
+session log as the handoff brief only.
 
-- S17 decisions are locked in build log 071 as ADR-396 through ADR-405. Treat S17 as historical
-  implementation context unless a later S22/S20 preflight explicitly pulls a mobile dependency
-  forward.
-- S17a through S17j are complete. Use build-log 071 as the implementation archive, not the active
-  handoff brief.
-- New backend endpoints are allowed only after explicit S22 preflight gap evidence and documentation.
-- Use `docs/pilot-readiness-bug-tracker.md` as the live source of bug/gap status.
-- `ophalo-app` remains the authenticated Keep workbench.
-- `mobile/ophalo-mobile` is a separate native deliverable and must remain aligned with Apple/Google
-  review posture captured in `docs/mobile-store-submission-checklist.md`.
-- `OpHalo.Api` remains the only authority for auth, sessions, account creation, rate limiting, email,
+Locked decisions to preserve:
+
+- ADR-428: Keep launches in a day-zero functional state. Settings is split into `Public Link &
+  Profile`, `Response Policy`, and `Team`; Getting Started is a lightweight verification/on-ramp.
+- ADR-429: ordinary public link-name edits preserve old shared slugs as aliases. Replacement or
+  regeneration is the destructive/security action and must warn that old shared links break.
+- Public intake URLs use durable slug routing from the configured public web base URL. Do not build
+  customer-facing links from `window.location.origin` inside `ophalo-app`.
+- Public intake is auto-provisioned by default; owners verify/copy/preview it from Settings.
+- Team setup must remain optional and reassuring for solo businesses.
+- Public intake form now collects service location, intake urgency, and preferred contact method.
+- ADR-430: intake urgency and preferred contact method are persisted customer-reported triage
+  metadata. They appear on operator detail and on the operator request list because road operators
+  use the list as their primary view. Customer-selected urgency is not a verified system attention
+  condition; preferred contact is not a full notification preference/opt-out system.
+- Staff-auth public-intake blocking remains post-submit only for now; pre-submit staff blocking is
+  deferred because the public Next.js page has no load-time session context without a new API call.
+
+Implementation status:
+
+- S22 day-zero Settings redesign, slug routing, slug aliases, Settings tab split, backend
+  auto-provisioning, service location, business identity header, intake UI polish, intake urgency,
+  preferred contact persistence, and operator list/detail display are complete.
+- `Settings.tsx` was split into tab files:
+  `settings/CompanySection.tsx`, `settings/PolicySection.tsx`,
+  `settings/PublicLinkSection.tsx`, and `settings/TeamSection.tsx`.
+- Pre-deployment file-decomposition cleanup is parked in
+  `docs/build-log/077-pre-deployment-cleanup-and-file-decomposition.md`; do not start that cleanup
+  until the customer request page and testing are complete.
+
+Always preserve:
+
+- fail-closed account, membership, action-policy, public-token, and concurrency behavior;
+- raw-token non-disclosure in logs, diagnostics, persisted frontend state, or long-lived UI state;
+- `ophalo-app` as the authenticated Keep workbench;
+- `OpHalo.Api` as the authority for auth, sessions, account creation, rate limiting, email,
   authorization, and persistence.
-- Preserve fail-closed account, membership, action-policy, public-token, and concurrency behavior.
-- Production topology: `ophalo.com`/`www.ophalo.com` -> `ophalo-web`,
-  `app.ophalo.com` -> `ophalo-app`, `api.ophalo.com` -> `OpHalo.Api`.
-- Local topology: `ophalo-web` `http://localhost:3000`, `ophalo-app` `http://localhost:5173`,
+
+Topology:
+
+- Production: `ophalo.com`/`www.ophalo.com` -> `ophalo-web`, `app.ophalo.com` -> `ophalo-app`,
+  `api.ophalo.com` -> `OpHalo.Api`.
+- Local: `ophalo-web` `http://localhost:3000`, `ophalo-app` `http://localhost:5173`,
   `OpHalo.Api` `http://localhost:5092`.
-- Pilot cap for production launch: `SignupDefaults:MaxPilotAccounts=15`.
-- `OperatorBaseUrl` is retired from active settings/config/test factories/runbooks; invite links now
-  use `{PublicBaseUrl}/invite/accept`.
+- Pilot cap: `SignupDefaults:MaxPilotAccounts=15`.
+- `OperatorBaseUrl` is retired; invite links use `{PublicBaseUrl}/invite/accept`.
 
 ### Next Session Brief
 
-S22p3 complete. Current work: **S22p4 — Intake Metadata Operator Display** (next slice).
+S22p4 complete. Current work: **Customer page copy alignment** (lightweight discovery, next slice).
 
 #### S22p1 — Intake Form UI Polish ✓ complete (2026-07-10)
 `IntakeForm.tsx` only. No backend, no migration, no test changes.
@@ -186,14 +125,13 @@ S22p3 complete. Current work: **S22p4 — Intake Metadata Operator Display** (ne
 - State `<select>`: `text-base` added (iOS Safari zoom guard)
 - Submit `<KeepButton>`: `min-h-[42px]` (minimum tap target)
 
-#### S22p2 — Urgency Field (next slice, own session, full backend slice)
-New `IntakeUrgency` enum (Routine/Soon/Urgent), default Routine. Piped through intake submission
-and surfaced to operator. Conservative model: no auto-conversion to verified attention condition.
-Backend files: `KeepRequest.cs`, new `IntakeUrgency.cs`, `CreateKeepPublicIntakeCommand.cs`,
-`CreateKeepPublicIntakeService.cs`, `PublicIntakeRequest.cs`, EF config + migration.
-Frontend: urgency select in `IntakeForm.tsx` after description, with urgent helper copy and quiet
-safety disclaimer. Operator copy: "Customer marked this urgent." Scope operator display separately
-if it would push past the batch gate.
+#### S22p2 — Intake Urgency Field ✓ complete (2026-07-10)
+New `IntakeUrgency` enum (Routine/Soon/Urgent), default Routine. Piped through intake submission:
+`PublicIntakeRequest.Urgency`, `CreateKeepPublicIntakeCommand.IntakeUrgency`,
+`CreateKeepPublicIntakeService`, and `KeepRequest.CreateFromCustomerIntake`. EF config + migration
+`AddUrgencyToKeepRequest` complete. Frontend: urgency select in `IntakeForm.tsx` after description,
+with urgent helper copy and quiet safety disclaimer. 66 unit · 25 intake integration green after
+S22p3. Operator display deferred to S22p4.
 
 #### S22p3 — Preferred Contact Method ✓ complete (2026-07-10)
 New `ContactPreference` enum (NoPreference/TextMessage/PhoneCall/Email) on `KeepRequest`, default
@@ -203,12 +141,14 @@ NoPreference. Piped through intake submission: `CreateKeepPublicIntakeCommand`, 
 email becomes visible and `required` when Email selected. 66 unit · 25 intake integration green.
 Operator display deferred to S22p4 (would have exceeded batch gate).
 
-#### S22p4 — Intake Metadata Operator Display (own session, after S22p3)
-Expose both `IntakeUrgency` (deferred from S22p2) and `ContactPreference` (deferred from S22p3) on
-the operator request detail surface. Files: `KeepRequestDetailResult.cs`, `KeepRequestDetailMapper.cs`,
-`web/ophalo-app/src/lib/apiClient.ts`, `web/ophalo-app/src/pages/RequestDetail.tsx`.
-Copy guidance: "Customer marked this urgent." / "Preferred contact: Text message / Phone call / Email /
-No preference." Show both near customer contact details.
+#### S22p4 — Intake Metadata Operator Display ✓ complete (2026-07-10)
+Exposed `IntakeUrgency` and `ContactPreference` on operator detail and request list. Backend: new
+fields on `KeepRequestDetailResult` and `KeepRequestSummary`, mapped with exhaustive enum-string
+methods in `KeepRequestDetailMapper` and `GetKeepRequestListService`. Frontend: request detail shows
+urgency alert ("Customer marked this urgent/soon.") when source is `public_intake` and urgency ≠
+routine, and preferred contact line when source is `public_intake`; request rows show intake urgency
+and contact preference cues because operators on the road use the list as their primary view.
+98 unit · 101 integration all green.
 
 #### S22p5 — Staff Auth Early Block (deferred)
 No session context is available on the public Next.js intake page at load time without an
@@ -225,6 +165,8 @@ new lightweight `GET /keep/public-intake/session-check` endpoint and a `useEffec
    mobile must consume, active-intake share utility feasibility, no new mobile settings/admin scope).
 3. **S22g — Documentation Reconciliation:** ADR-295, ADR-375, ADR-383 and response policy placement.
 4. Docs/index reconciliation.
+5. **Pre-deployment cleanup:** Build log 077 is deferred until customer request page work and testing
+   are complete.
 
 Historical mobile context lives in `docs/build-log/071-session-17-review-safe-native-product-foundation.md`.
 

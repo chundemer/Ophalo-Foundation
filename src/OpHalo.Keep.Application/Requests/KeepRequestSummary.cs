@@ -29,7 +29,9 @@ public sealed record KeepRequestSummary(
     KeepRequestStatusCheckInfo StatusCheck,
     KeepRequestReadyToCloseInfo ReadyToClose,
     bool NeedsShare,
-    string? Source);
+    string? Source,
+    string IntakeUrgency,
+    string ContactPreference);
 
 public sealed record KeepRequestAttentionInfo(
     string AttentionLevel,

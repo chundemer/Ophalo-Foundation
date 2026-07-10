@@ -353,6 +353,8 @@ export interface KeepRequestDetailResult {
   feedbackReviewDueAtUtc: string | null;
   customerPageLastViewedAtUtc: string | null;
   customerPageViewedAfterLatestUpdate: boolean | null;
+  intakeUrgency: string;
+  contactPreference: string;
   contactActions: ContactActionItem[];
   participants: KeepRequestParticipantItem[];
   currentUserParticipation: CurrentUserDetailParticipation;
@@ -432,6 +434,9 @@ export interface KeepRequestSummary {
   isTerminal: boolean;
   isPostCloseFollowUp: boolean;
   needsShare: boolean;
+  source: string | null;
+  intakeUrgency: string;
+  contactPreference: string;
   attention: KeepRequestAttentionInfo;
   preview: KeepRequestPreviewInfo;
   participation: KeepRequestParticipationInfo;

@@ -264,6 +264,9 @@ export const mockRequestSummaries: KeepRequestSummary[] = [
     isTerminal: false,
     isPostCloseFollowUp: false,
     needsShare: false,
+    source: "phone",
+    intakeUrgency: "routine",
+    contactPreference: "no_preference",
     attention: {
       attentionLevel: "normal",
       waitingDirection: "none",
@@ -319,6 +322,9 @@ export const mockRequestSummaries: KeepRequestSummary[] = [
     isTerminal: false,
     isPostCloseFollowUp: false,
     needsShare: true,
+    source: "public_intake",
+    intakeUrgency: "urgent",
+    contactPreference: "text_message",
     attention: {
       attentionLevel: "elevated",
       waitingDirection: "business",
@@ -374,6 +380,9 @@ export const mockRequestSummaries: KeepRequestSummary[] = [
     isTerminal: false,
     isPostCloseFollowUp: false,
     needsShare: false,
+    source: "phone",
+    intakeUrgency: "routine",
+    contactPreference: "no_preference",
     attention: {
       attentionLevel: "normal",
       waitingDirection: "customer",
@@ -429,6 +438,9 @@ export const mockRequestSummaries: KeepRequestSummary[] = [
     isTerminal: false,
     isPostCloseFollowUp: false,
     needsShare: false,
+    source: "phone",
+    intakeUrgency: "routine",
+    contactPreference: "no_preference",
     attention: {
       attentionLevel: "normal",
       waitingDirection: "none",
@@ -472,6 +484,9 @@ export const mockRequestSummaries: KeepRequestSummary[] = [
     isTerminal: false,
     isPostCloseFollowUp: false,
     needsShare: false,
+    source: null,
+    intakeUrgency: "routine",
+    contactPreference: "no_preference",
     attention: {
       attentionLevel: "normal",
       waitingDirection: "business",
@@ -562,6 +577,8 @@ export const mockRequestDetails: Record<string, KeepRequestDetailResult> = {
     feedbackReviewDueAtUtc: null,
     customerPageLastViewedAtUtc: null,
     customerPageViewedAfterLatestUpdate: null,
+    intakeUrgency: "routine",
+    contactPreference: "no_preference",
     contactActions: [{ type: "call", available: true, target: "5555550101" }],
     participants: [
       {
@@ -645,6 +662,8 @@ export const mockRequestDetails: Record<string, KeepRequestDetailResult> = {
     feedbackReviewDueAtUtc: null,
     customerPageLastViewedAtUtc: null,
     customerPageViewedAfterLatestUpdate: null,
+    intakeUrgency: "routine",
+    contactPreference: "no_preference",
     contactActions: [
       { type: "call", available: true, target: "5555550102" },
       { type: "email", available: true, target: "daniela@example.com" },
@@ -712,6 +731,8 @@ export const mockRequestDetails: Record<string, KeepRequestDetailResult> = {
     feedbackReviewDueAtUtc: null,
     customerPageLastViewedAtUtc: "2026-06-27T16:00:00Z",
     customerPageViewedAfterLatestUpdate: true,
+    intakeUrgency: "routine",
+    contactPreference: "no_preference",
     contactActions: [
       { type: "call", available: true, target: "5555550103" },
       { type: "email", available: true, target: "howard.bell@example.com" },
@@ -811,6 +832,8 @@ export const mockRequestDetails: Record<string, KeepRequestDetailResult> = {
     feedbackReviewDueAtUtc: "2026-07-07T00:00:00Z",
     customerPageLastViewedAtUtc: "2026-06-30T08:00:00Z",
     customerPageViewedAfterLatestUpdate: true,
+    intakeUrgency: "routine",
+    contactPreference: "no_preference",
     contactActions: [
       { type: "call", available: true, target: "5555550100" },
       { type: "email", available: true, target: "sarah.mitchell@example.com" },
@@ -906,6 +929,8 @@ export const mockRequestDetails: Record<string, KeepRequestDetailResult> = {
     feedbackReviewDueAtUtc: null,
     customerPageLastViewedAtUtc: null,
     customerPageViewedAfterLatestUpdate: null,
+    intakeUrgency: "routine",
+    contactPreference: "no_preference",
     contactActions: [{ type: "call", available: true, target: "5555550104" }],
     participants: [],
     currentUserParticipation: { participationType: "none", notificationsEnabled: null },

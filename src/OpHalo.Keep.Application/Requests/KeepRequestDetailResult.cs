@@ -53,6 +53,8 @@ public sealed record KeepRequestDetailResult(
     // meaningful latest business update to compare against.
     DateTime? CustomerPageLastViewedAtUtc,
     bool? CustomerPageViewedAfterLatestUpdate,
+    string IntakeUrgency,
+    string ContactPreference,
     IReadOnlyList<ContactActionItem> ContactActions,
     IReadOnlyList<KeepRequestParticipantItem> Participants,
     CurrentUserDetailParticipation CurrentUserParticipation,

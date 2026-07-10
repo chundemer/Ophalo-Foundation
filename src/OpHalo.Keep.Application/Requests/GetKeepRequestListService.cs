@@ -757,7 +757,9 @@ public sealed class GetKeepRequestListService(
             StatusCheck: statusCheck,
             ReadyToClose: readyToClose,
             NeedsShare: r.NeedsShare,
-            Source: MapSource(r.Source));
+            Source: MapSource(r.Source),
+            IntakeUrgency: MapIntakeUrgency(r.IntakeUrgency),
+            ContactPreference: MapContactPreference(r.ContactPreference));
     }
 
     private static (string group, int order) ComputeRankingGroup(
@@ -1084,6 +1086,23 @@ public sealed class GetKeepRequestListService(
         KeepRequestSource.PublicIntake => "public_intake",
         KeepRequestSource.Other        => "other",
         _ => throw new InvalidOperationException($"Unknown KeepRequestSource: {source}")
+    };
+
+    private static string MapIntakeUrgency(IntakeUrgency urgency) => urgency switch
+    {
+        IntakeUrgency.Routine => "routine",
+        IntakeUrgency.Soon    => "soon",
+        IntakeUrgency.Urgent  => "urgent",
+        _ => throw new InvalidOperationException($"Unknown IntakeUrgency: {urgency}")
+    };
+
+    private static string MapContactPreference(ContactPreference preference) => preference switch
+    {
+        ContactPreference.NoPreference => "no_preference",
+        ContactPreference.TextMessage  => "text_message",
+        ContactPreference.PhoneCall    => "phone_call",
+        ContactPreference.Email        => "email",
+        _ => throw new InvalidOperationException($"Unknown ContactPreference: {preference}")
     };
 
     private static string MapStatus(KeepRequestStatus status) => status switch

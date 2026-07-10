@@ -270,6 +270,8 @@ export function installMockApi(): void {
       feedbackReviewDueAtUtc: null,
       customerPageLastViewedAtUtc: null,
       customerPageViewedAfterLatestUpdate: null,
+      intakeUrgency: "routine",
+      contactPreference: "no_preference",
       contactActions: [{ type: "call", available: true, target: body.customerPhone }],
       participants: [
         {
@@ -334,6 +336,9 @@ export function installMockApi(): void {
       isTerminal: false,
       isPostCloseFollowUp: false,
       needsShare: false,
+      source: "public_intake",
+      intakeUrgency: "routine",
+      contactPreference: "no_preference",
       attention: {
         attentionLevel: "normal",
         waitingDirection: "business",
