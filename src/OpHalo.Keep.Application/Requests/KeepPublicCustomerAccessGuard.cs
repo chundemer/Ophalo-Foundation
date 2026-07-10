@@ -92,6 +92,7 @@ public sealed class KeepPublicCustomerAccessGuard(
             FeedbackWasResolved: request.FeedbackWasResolved,
             FeedbackSubmittedAtUtc: request.FeedbackSubmittedAtUtc,
             IsOffSeason: snapshot.OperatingMode == AccountOperatingMode.OffSeason,
+            IntakeUrgency: request.IntakeUrgency,
             Version: isExpired ? null : (Guid?)request.ConcurrencyVersion));
     }
 }

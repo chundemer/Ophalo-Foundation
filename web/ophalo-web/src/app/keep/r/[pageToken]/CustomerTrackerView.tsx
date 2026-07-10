@@ -29,6 +29,7 @@ export interface CustomerPageData {
   events: CustomerEventItem[] | null;
   allowedActions: string[] | null;
   version: string | null;
+  intakeUrgency: string | null;
 }
 
 // ─── Constants ──────────────────────────────────────────────────────────────
@@ -571,15 +572,32 @@ export function CustomerTrackerView({
         )}
 
         {/* §4 — Initial request */}
-        {page.description && (
+        {(page.description || page.intakeUrgency) && (
           <div className="rounded-2xl border border-[var(--ophalo-border)] bg-card px-5 py-5 shadow-sm">
             <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
               Initial Request
             </p>
-            <p className="mt-2 text-sm font-semibold text-foreground">What you sent</p>
-            <div className="mt-2 rounded-lg border border-[var(--ophalo-border)] px-4 py-3">
-              <p className="text-sm leading-6 text-foreground">{page.description}</p>
-            </div>
+            <p className="mt-2 text-sm font-semibold text-foreground">Your original message</p>
+            {page.description && (
+              <div className="mt-2 rounded-lg border border-[var(--ophalo-border)] px-4 py-3">
+                <p className="text-sm leading-6 text-foreground">{page.description}</p>
+              </div>
+            )}
+            {page.intakeUrgency && (
+              <div className="mt-3 flex gap-2 rounded-lg px-3 py-2.5" style={{ background: "var(--ophalo-attention-bg)" }}>
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" style={{ color: "var(--ophalo-attention)" }} />
+                <div>
+                  <p className="text-xs font-semibold" style={{ color: "var(--ophalo-attention)" }}>
+                    {page.intakeUrgency === "urgent" ? "Marked urgent" : "Marked as soon"}
+                  </p>
+                  <p className="mt-0.5 text-xs" style={{ color: "var(--ophalo-attention)" }}>
+                    {page.intakeUrgency === "urgent"
+                      ? `Your request has been flagged as urgent for ${page.businessName}.`
+                      : `You requested a quick turnaround from ${page.businessName}.`}
+                  </p>
+                </div>
+              </div>
+            )}
           </div>
         )}
 

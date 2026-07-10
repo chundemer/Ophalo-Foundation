@@ -22,7 +22,8 @@ public sealed record KeepCustomerPageResult(
     DateTime? ExpiresAtUtc,
     IReadOnlyList<KeepCustomerPageEventItem>? Events,
     IReadOnlyList<string>? AllowedActions,
-    Guid? Version);
+    Guid? Version,
+    string? IntakeUrgency);
 
 /// <summary>
 /// A single entry in the customer-facing event timeline.

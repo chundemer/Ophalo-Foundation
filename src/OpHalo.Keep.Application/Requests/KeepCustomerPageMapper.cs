@@ -27,7 +27,8 @@ internal static class KeepCustomerPageMapper
             ExpiresAtUtc: null,
             Events: null,
             AllowedActions: null,
-            Version: null);
+            Version: null,
+            IntakeUrgency: null);
 
     internal static KeepCustomerPageResult BuildActiveResult(
         KeepPublicCustomerContext context,
@@ -50,7 +51,15 @@ internal static class KeepCustomerPageMapper
                 .Select(MapEvent)
                 .ToList(),
             AllowedActions: ComputeAllowedActions(context.Status, context.FeedbackSubmittedAtUtc.HasValue, context.IsOffSeason),
-            Version: context.Version);
+            Version: context.Version,
+            IntakeUrgency: MapIntakeUrgency(context.IntakeUrgency));
+
+    private static string? MapIntakeUrgency(IntakeUrgency urgency) => urgency switch
+    {
+        IntakeUrgency.Urgent => "urgent",
+        IntakeUrgency.Soon   => "soon",
+        _                    => null
+    };
 
     internal static string MapStatus(KeepRequestStatus status) => status switch
     {
