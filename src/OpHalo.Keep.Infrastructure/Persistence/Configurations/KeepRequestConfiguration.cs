@@ -135,6 +135,13 @@ internal sealed class KeepRequestConfiguration : BaseEntityConfiguration<KeepReq
         builder.Property(x => x.ServiceState).HasMaxLength(2);
         builder.Property(x => x.ServiceZip).HasMaxLength(10);
 
+        // Customer-reported urgency (S22p2). Default Routine; operator display deferred to next slice.
+        builder.Property(x => x.IntakeUrgency)
+            .HasConversion<string>()
+            .HasMaxLength(50)
+            .IsRequired()
+            .HasDefaultValue(IntakeUrgency.Routine);
+
         // Customer page viewed telemetry (ADR-341, P6c-2).
         builder.Property(x => x.CustomerPageLastViewedAtUtc);
 

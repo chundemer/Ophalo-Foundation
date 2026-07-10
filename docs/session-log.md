@@ -1,8 +1,8 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-07-10 (S22p1 complete — intake form UI polish: Source Serif H1, no dividers, description helper, iOS zoom guard, tap target)
+**Last updated:** 2026-07-10 (S22p2 complete — IntakeUrgency persisted, migration applied, 989 unit · 20 intake integration all green)
 **Branch:** `main` tracking `origin/main`
-**Last green baseline:** Full suite green — 986 unit · 786 integration = 1,772 total, 0 failures (1 pre-existing KeepG5 fluke excluded)
+**Last green baseline:** Full suite green — 989 unit · 20 intake integration confirmed; full integration suite pending (1 pre-existing KeepG5 fluke excluded)
 **Next free ADR:** ADR-430
 **Current session:** Session 22 — Day-Zero Settings Redesign, Intake Sharing, And Service Location Plan
 
@@ -40,7 +40,7 @@ For every implementation slice:
 **Bug/gap tracker:** `docs/pilot-readiness-bug-tracker.md`
 **Foundation roadmap:** `docs/build-log/ophalo-foundation-build-plan-greenfield-boundaries-brownfield-behavior.md` section 9.1
 **Current session:** Session 22 — Day-Zero Settings Redesign, Intake Sharing, And Service Location Plan
-**Current slice:** S22p2 — Urgency field (next slice, own session)
+**Current slice:** S22p3 — Preferred Contact Method (next slice, own session)
 
 ### Completed Context
 

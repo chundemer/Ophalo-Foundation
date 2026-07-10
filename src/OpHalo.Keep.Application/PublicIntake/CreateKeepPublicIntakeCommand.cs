@@ -1,3 +1,5 @@
+using OpHalo.Keep.Core.Entities.Enums;
+
 namespace OpHalo.Keep.Application.PublicIntake;
 
 public sealed record CreateKeepPublicIntakeCommand(
@@ -10,4 +12,5 @@ public sealed record CreateKeepPublicIntakeCommand(
     string? ServiceAddressLine2,
     string ServiceCity,
     string ServiceState,
-    string? ServiceZip);
+    string? ServiceZip,
+    IntakeUrgency IntakeUrgency = IntakeUrgency.Routine);

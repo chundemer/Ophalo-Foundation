@@ -461,6 +461,38 @@ public sealed class KeepPublicIntakeSlugApiTests : IClassFixture<KeepApiWebFacto
     }
 
     // -------------------------------------------------------------------------
+    // Test 17 — urgency field accepted and 201 returned
+    // -------------------------------------------------------------------------
+
+    [Theory]
+    [InlineData("Routine")]
+    [InlineData("Soon")]
+    [InlineData("Urgent")]
+    public async Task Slug_AllUrgencyValues_Return201(string urgency)
+    {
+        var body = new
+        {
+            customerName = "Test Customer",
+            customerPhone = "0411111111",
+            description = "I need help",
+            urgency,
+            serviceAddressLine1 = "42 Oak Street",
+            serviceCity = "Austin",
+            serviceState = "TX"
+        };
+
+        var res = await _client.PostAsJsonAsync($"/keep/public-intake/slug/{ActiveSlug}", body);
+        Assert.Equal(HttpStatusCode.Created, res.StatusCode);
+    }
+
+    [Fact]
+    public async Task Slug_OmittedUrgency_Returns201()
+    {
+        var res = await PostSlug(ActiveSlug);
+        Assert.Equal(HttpStatusCode.Created, res.StatusCode);
+    }
+
+    // -------------------------------------------------------------------------
     // Response body records
     // -------------------------------------------------------------------------
 

@@ -7,6 +7,7 @@ using OpHalo.Keep.Application.Abstractions;
 using OpHalo.Keep.Application.PublicIntake;
 using OpHalo.Keep.Application.Services;
 using OpHalo.Keep.Core.Entities;
+using OpHalo.Keep.Core.Entities.Enums;
 using OpHalo.SharedKernel.Abstractions;
 
 namespace OpHalo.UnitTests.Keep;
@@ -711,6 +712,46 @@ public class KeepPublicIntakeServiceTests
         Assert.True(result.IsSuccess);
     }
 
+    // --- Intake urgency (S22p2) -------------------------------------------------
+
+    [Fact]
+    public async Task Execute_defaults_intake_urgency_to_Routine()
+    {
+        var p = HappyPathPersistence();
+        var sut = BuildSut(p);
+
+        var result = await sut.ExecuteAsync(ValidCommand(p));
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(IntakeUrgency.Routine, p.LastCommittedRequest!.IntakeUrgency);
+    }
+
+    [Fact]
+    public async Task Execute_persists_Urgent_when_specified()
+    {
+        var p = HappyPathPersistence();
+        var sut = BuildSut(p);
+        var command = ValidCommand(p) with { IntakeUrgency = IntakeUrgency.Urgent };
+
+        var result = await sut.ExecuteAsync(command);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(IntakeUrgency.Urgent, p.LastCommittedRequest!.IntakeUrgency);
+    }
+
+    [Fact]
+    public async Task Execute_persists_Soon_when_specified()
+    {
+        var p = HappyPathPersistence();
+        var sut = BuildSut(p);
+        var command = ValidCommand(p) with { IntakeUrgency = IntakeUrgency.Soon };
+
+        var result = await sut.ExecuteAsync(command);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(IntakeUrgency.Soon, p.LastCommittedRequest!.IntakeUrgency);
+    }
+
     // --- Fakes ------------------------------------------------------------------
 
     private sealed class FakeCurrentUser(Guid userId, Guid accountId, bool isAuthenticated) : ICurrentUser
@@ -765,10 +806,13 @@ public class KeepPublicIntakeServiceTests
         public Task<bool> ReferenceCodeExistsAsync(Guid accountId, string referenceCode, CancellationToken ct) =>
             Task.FromResult(false);
 
+        public KeepRequest? LastCommittedRequest { get; private set; }
+
         public Task<PublicIntakeCommitResult> CommitPublicIntakeAsync(
             KeepCustomer customer, KeepRequest request, KeepRequestEvent requestEvent, CancellationToken ct)
         {
             CommitCallCount++;
+            LastCommittedRequest = request;
             var result = CommitResults.Count > 0
                 ? CommitResults.Dequeue()
                 : PublicIntakeCommitResult.Committed;

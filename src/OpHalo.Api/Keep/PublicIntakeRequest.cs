@@ -9,4 +9,5 @@ public sealed record PublicIntakeRequest(
     string? ServiceAddressLine2,
     string? ServiceCity,
     string? ServiceState,
-    string? ServiceZip);
+    string? ServiceZip,
+    string? Urgency = null);

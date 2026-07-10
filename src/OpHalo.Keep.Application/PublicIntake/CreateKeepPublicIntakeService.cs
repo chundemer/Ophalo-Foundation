@@ -169,7 +169,8 @@ public sealed class CreateKeepPublicIntakeService(
                 v.TrimmedName, v.TrimmedPhone, v.TrimmedEmail,
                 v.TrimmedDescription, referenceCode, pageToken, nowUtc, firstResponseTargetMinutes,
                 command.ServiceAddressLine1, command.ServiceAddressLine2,
-                command.ServiceCity, command.ServiceState, command.ServiceZip);
+                command.ServiceCity, command.ServiceState, command.ServiceZip,
+                command.IntakeUrgency);
             var @event = KeepRequestEvent.CreateRequestCreated(request.Id, accountId, nowUtc);
 
             var commitResult = await persistence.CommitPublicIntakeAsync(customer, request, @event, ct);

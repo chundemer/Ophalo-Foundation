@@ -1176,6 +1176,30 @@ it:
 
 ---
 
+## Completed Slices
+
+### S22p2 — Intake Urgency Field
+
+`IntakeUrgency` enum (`Routine/Soon/Urgent`, default `Routine`) added as persisted metadata on
+`KeepRequest`. Piped through public intake submission: `PublicIntakeRequest.Urgency` (nullable;
+API treats null as Routine), `CreateKeepPublicIntakeCommand.IntakeUrgency`, factory
+`KeepRequest.CreateFromCustomerIntake`. EF configuration added; migration pending (Christian runs
+`dotnet ef migrations add AddUrgencyToKeepRequest --startup-project
+src/OpHalo.Keep.Infrastructure`).
+
+Frontend: urgency select in `IntakeForm.tsx` between description and service location. Options:
+Routine / Soon / Urgent with helper copy listing active examples and a safety disclaimer.
+
+**Operator display deferred.** `IntakeUrgency` is persisted in S22p2; surfacing it in the operator
+request view is the next display slice. This field is not invisible product debt — it is in the DB
+and readable by any query.
+
+Tests: 3 new unit tests (default Routine, explicit Urgent, explicit Soon) + 4 new integration tests
+(Routine/Soon/Urgent values + omitted field). Integration tests require the migration before they
+pass.
+
+---
+
 ## Deferred
 
 - Business logo upload: V1.1 personalization.

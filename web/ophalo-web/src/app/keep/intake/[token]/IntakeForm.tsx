@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { ArrowRight, ClipboardList, Lock, MapPin, UserRound } from "lucide-react";
+import { AlertTriangle, ArrowRight, ClipboardList, Lock, MapPin, UserRound } from "lucide-react";
 import { KeepButton } from "@/components/keep/KeepButton";
 import {
   KeepBusinessHeader,
@@ -111,6 +111,7 @@ export default function IntakeForm({
     const customerEmailRaw = String(data.get("customerEmail") ?? "").trim();
     const customerEmail = customerEmailRaw.length > 0 ? customerEmailRaw : null;
     const description = String(data.get("description") ?? "").trim();
+    const urgency = (data.get("urgency") as string) || "Routine";
     const serviceAddressLine1 = String(data.get("serviceAddressLine1") ?? "").trim();
     const serviceAddressLine2Raw = String(data.get("serviceAddressLine2") ?? "").trim();
     const serviceAddressLine2 = serviceAddressLine2Raw.length > 0 ? serviceAddressLine2Raw : null;
@@ -130,6 +131,7 @@ export default function IntakeForm({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           customerName, customerPhone, customerEmail, description,
+          urgency,
           serviceAddressLine1, serviceAddressLine2, serviceCity, serviceState, serviceZip,
         }),
       });
@@ -327,7 +329,32 @@ export default function IntakeForm({
               />
             </section>
 
-            {/* ── Section 2: Service location ── */}
+            {/* ── Section 2: Urgency ── */}
+            <section>
+              <KeepSectionHeader
+                icon={<AlertTriangle className="h-4 w-4" />}
+                label="How urgent is this?"
+              />
+              <select
+                id="urgency"
+                name="urgency"
+                defaultValue="Routine"
+                disabled={submitting}
+                className={inputClass + " text-base"}
+              >
+                <option value="Routine">Routine — schedule when convenient</option>
+                <option value="Soon">Soon — I'd like this handled in the next day or two</option>
+                <option value="Urgent">Urgent — active issue affecting my home or business</option>
+              </select>
+              <p className="mt-2 text-xs text-muted-foreground">
+                Examples of urgent: active leak, no heat or A/C, safety concern, lockout, or service interruption.
+              </p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                If this is an immediate safety emergency, call emergency services first.
+              </p>
+            </section>
+
+            {/* ── Section 3: Service location ── */}
             <section>
               <KeepSectionHeader
                 icon={<MapPin className="h-4 w-4" />}
@@ -440,7 +467,7 @@ export default function IntakeForm({
               </div>
             </section>
 
-            {/* ── Section 3: Contact ── */}
+            {/* ── Section 4: Contact ── */}
             <section>
               <KeepSectionHeader
                 icon={<UserRound className="h-4 w-4" />}
