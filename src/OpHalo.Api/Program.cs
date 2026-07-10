@@ -898,7 +898,8 @@ static async Task<IResult> HandlePublicIntake(
         body.ServiceCity ?? string.Empty,
         body.ServiceState ?? string.Empty,
         body.ServiceZip,
-        Enum.TryParse<IntakeUrgency>(body.Urgency, ignoreCase: true, out var urgency) ? urgency : IntakeUrgency.Routine);
+        Enum.TryParse<IntakeUrgency>(body.Urgency, ignoreCase: true, out var urgency) ? urgency : IntakeUrgency.Routine,
+        Enum.TryParse<ContactPreference>(body.ContactPreference, ignoreCase: true, out var contactPref) ? contactPref : ContactPreference.NoPreference);
 
     var result = await service.ExecuteAsync(command, ct);
 
@@ -927,7 +928,8 @@ static async Task<IResult> HandlePublicIntakeBySlug(
         body.ServiceCity ?? string.Empty,
         body.ServiceState ?? string.Empty,
         body.ServiceZip,
-        Enum.TryParse<IntakeUrgency>(body.Urgency, ignoreCase: true, out var urgency2) ? urgency2 : IntakeUrgency.Routine);
+        Enum.TryParse<IntakeUrgency>(body.Urgency, ignoreCase: true, out var urgency2) ? urgency2 : IntakeUrgency.Routine,
+        Enum.TryParse<ContactPreference>(body.ContactPreference, ignoreCase: true, out var contactPref2) ? contactPref2 : ContactPreference.NoPreference);
 
     var result = await service.ExecuteBySlugAsync(slug, command, ct);
 

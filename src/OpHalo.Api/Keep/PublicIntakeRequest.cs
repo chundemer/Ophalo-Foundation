@@ -10,4 +10,5 @@ public sealed record PublicIntakeRequest(
     string? ServiceCity,
     string? ServiceState,
     string? ServiceZip,
-    string? Urgency = null);
+    string? Urgency = null,
+    string? ContactPreference = null);

@@ -13,4 +13,5 @@ public sealed record CreateKeepPublicIntakeCommand(
     string ServiceCity,
     string ServiceState,
     string? ServiceZip,
-    IntakeUrgency IntakeUrgency = IntakeUrgency.Routine);
+    IntakeUrgency IntakeUrgency = IntakeUrgency.Routine,
+    ContactPreference ContactPreference = ContactPreference.NoPreference);

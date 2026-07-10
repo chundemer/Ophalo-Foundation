@@ -94,6 +94,7 @@ export default function IntakeForm({
   const [error, setError] = useState<string | null>(null);
   const [showAptUnit, setShowAptUnit] = useState(false);
   const [showEmail, setShowEmail] = useState(false);
+  const [contactPreference, setContactPreference] = useState("NoPreference");
   const submitInFlight = useRef(false);
 
   const biz = businessName ?? null;
@@ -133,6 +134,7 @@ export default function IntakeForm({
           customerName, customerPhone, customerEmail, description,
           urgency,
           serviceAddressLine1, serviceAddressLine2, serviceCity, serviceState, serviceZip,
+          contactPreference,
         }),
       });
     } catch {
@@ -510,11 +512,36 @@ export default function IntakeForm({
                   </div>
                 </div>
 
-                {showEmail ? (
+                <div>
+                  <label htmlFor="contactPreference" className={labelClass}>
+                    Preferred contact method
+                  </label>
+                  <select
+                    id="contactPreference"
+                    value={contactPreference}
+                    onChange={(e) => {
+                      setContactPreference(e.target.value);
+                      if (e.target.value === "Email") setShowEmail(true);
+                    }}
+                    disabled={submitting}
+                    className={inputClass + " text-base"}
+                  >
+                    <option value="NoPreference">No preference</option>
+                    <option value="TextMessage">Text message</option>
+                    <option value="PhoneCall">Phone call</option>
+                    <option value="Email">Email</option>
+                  </select>
+                </div>
+
+                {(showEmail || contactPreference === "Email") ? (
                   <div>
                     <label htmlFor="customerEmail" className={labelClass}>
                       Email{" "}
-                      <span className="font-normal text-muted-foreground">(optional)</span>
+                      {contactPreference === "Email" ? (
+                        <span className="text-destructive">*</span>
+                      ) : (
+                        <span className="font-normal text-muted-foreground">(optional)</span>
+                      )}
                     </label>
                     <input
                       id="customerEmail"
@@ -522,6 +549,7 @@ export default function IntakeForm({
                       type="email"
                       autoComplete="email"
                       inputMode="email"
+                      required={contactPreference === "Email"}
                       disabled={submitting}
                       className={inputClass}
                       placeholder="you@example.com"

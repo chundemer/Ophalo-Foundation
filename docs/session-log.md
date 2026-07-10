@@ -1,8 +1,8 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-07-10 (S22p2 complete — IntakeUrgency persisted, migration applied, 989 unit · 20 intake integration all green)
+**Last updated:** 2026-07-10 (S22p3 complete — ContactPreference persisted, migration applied, 66 unit · 25 intake integration all green)
 **Branch:** `main` tracking `origin/main`
-**Last green baseline:** Full suite green — 989 unit · 20 intake integration confirmed; full integration suite pending (1 pre-existing KeepG5 fluke excluded)
+**Last green baseline:** Full suite baseline — 66 intake unit · 25 intake integration confirmed; full suite pending (1 pre-existing KeepG5 fluke excluded)
 **Next free ADR:** ADR-430
 **Current session:** Session 22 — Day-Zero Settings Redesign, Intake Sharing, And Service Location Plan
 
@@ -40,7 +40,7 @@ For every implementation slice:
 **Bug/gap tracker:** `docs/pilot-readiness-bug-tracker.md`
 **Foundation roadmap:** `docs/build-log/ophalo-foundation-build-plan-greenfield-boundaries-brownfield-behavior.md` section 9.1
 **Current session:** Session 22 — Day-Zero Settings Redesign, Intake Sharing, And Service Location Plan
-**Current slice:** S22p3 — Preferred Contact Method (next slice, own session)
+**Current slice:** S22p4 — Intake Metadata Operator Display (next slice, own session)
 
 ### Completed Context
 
@@ -175,7 +175,7 @@ Treat these as historical context unless a later discovery step finds a concrete
 
 ### Next Session Brief
 
-S22e complete. Current work: **S22p1 — Intake Form UI Polish** (in progress).
+S22p3 complete. Current work: **S22p4 — Intake Metadata Operator Display** (next slice).
 
 #### S22p1 — Intake Form UI Polish ✓ complete (2026-07-10)
 `IntakeForm.tsx` only. No backend, no migration, no test changes.
@@ -195,15 +195,25 @@ Frontend: urgency select in `IntakeForm.tsx` after description, with urgent help
 safety disclaimer. Operator copy: "Customer marked this urgent." Scope operator display separately
 if it would push past the batch gate.
 
-#### S22p3 — Preferred Contact Method (own session, after S22p2)
-New `ContactPreference` enum (NoPreference/TextMessage/PhoneCall/Email) on `KeepRequest`. Same
-vertical depth as S22p2. Frontend: select in contact section; if Email selected, email field becomes
-visible and `required`. Operator display: show near customer contact details.
+#### S22p3 — Preferred Contact Method ✓ complete (2026-07-10)
+New `ContactPreference` enum (NoPreference/TextMessage/PhoneCall/Email) on `KeepRequest`, default
+NoPreference. Piped through intake submission: `CreateKeepPublicIntakeCommand`, service, API body
+(`PublicIntakeRequest`), both token and slug handlers in `Program.cs`. EF config + migration
+`AddContactPreferenceToKeepRequest`. Frontend: preference select in contact section of `IntakeForm.tsx`;
+email becomes visible and `required` when Email selected. 66 unit · 25 intake integration green.
+Operator display deferred to S22p4 (would have exceeded batch gate).
 
-#### S22p4 — Staff Auth Early Block (deferred)
+#### S22p4 — Intake Metadata Operator Display (own session, after S22p3)
+Expose both `IntakeUrgency` (deferred from S22p2) and `ContactPreference` (deferred from S22p3) on
+the operator request detail surface. Files: `KeepRequestDetailResult.cs`, `KeepRequestDetailMapper.cs`,
+`web/ophalo-app/src/lib/apiClient.ts`, `web/ophalo-app/src/pages/RequestDetail.tsx`.
+Copy guidance: "Customer marked this urgent." / "Preferred contact: Text message / Phone call / Email /
+No preference." Show both near customer contact details.
+
+#### S22p5 — Staff Auth Early Block (deferred)
 No session context is available on the public Next.js intake page at load time without an
 authenticated API call. Post-submit `staff_not_permitted` guard (line 159 of `IntakeForm.tsx`)
-remains the correct defensive fallback. Do not block S22p1–S22p3 on this. If pursued, requires a
+remains the correct defensive fallback. Do not block S22p1–S22p4 on this. If pursued, requires a
 new lightweight `GET /keep/public-intake/session-check` endpoint and a `useEffect` call in
 `IntakeForm` — document as a follow-up backend/UI slice.
 

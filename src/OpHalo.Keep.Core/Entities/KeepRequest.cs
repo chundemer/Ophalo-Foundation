@@ -105,6 +105,9 @@ public sealed class KeepRequest : BaseEntity
     // Customer-reported urgency (S22p2). Default Routine; never auto-elevates attention.
     public IntakeUrgency IntakeUrgency { get; private set; } = IntakeUrgency.Routine;
 
+    // Customer-stated contact preference (S22p3). Default NoPreference.
+    public ContactPreference ContactPreference { get; private set; } = ContactPreference.NoPreference;
+
     // --- Customer page viewed telemetry (ADR-341, P6c-2) ---
 
     public DateTime? CustomerPageLastViewedAtUtc { get; private set; }
@@ -1159,7 +1162,8 @@ public sealed class KeepRequest : BaseEntity
         string? serviceCity = null,
         string? serviceState = null,
         string? serviceZip = null,
-        IntakeUrgency intakeUrgency = IntakeUrgency.Routine)
+        IntakeUrgency intakeUrgency = IntakeUrgency.Routine,
+        ContactPreference contactPreference = ContactPreference.NoPreference)
     {
         if (firstResponseTargetMinutes <= 0)
             throw new ArgumentException("First response target minutes must be positive.", nameof(firstResponseTargetMinutes));
@@ -1174,6 +1178,7 @@ public sealed class KeepRequest : BaseEntity
         request.ServiceState = serviceState?.Trim().ToUpperInvariant();
         request.ServiceZip = serviceZip?.Trim();
         request.IntakeUrgency = intakeUrgency;
+        request.ContactPreference = contactPreference;
 
         return request;
     }

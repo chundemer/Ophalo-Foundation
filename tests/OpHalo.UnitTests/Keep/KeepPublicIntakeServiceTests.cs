@@ -752,6 +752,36 @@ public class KeepPublicIntakeServiceTests
         Assert.Equal(IntakeUrgency.Soon, p.LastCommittedRequest!.IntakeUrgency);
     }
 
+    // --- Contact preference (S22p3) -------------------------------------------------
+
+    [Fact]
+    public async Task Execute_defaults_contact_preference_to_NoPreference()
+    {
+        var p = HappyPathPersistence();
+        var sut = BuildSut(p);
+
+        var result = await sut.ExecuteAsync(ValidCommand(p));
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(ContactPreference.NoPreference, p.LastCommittedRequest!.ContactPreference);
+    }
+
+    [Theory]
+    [InlineData(ContactPreference.TextMessage)]
+    [InlineData(ContactPreference.PhoneCall)]
+    [InlineData(ContactPreference.Email)]
+    public async Task Execute_persists_contact_preference_when_specified(ContactPreference pref)
+    {
+        var p = HappyPathPersistence();
+        var sut = BuildSut(p);
+        var command = ValidCommand(p) with { ContactPreference = pref };
+
+        var result = await sut.ExecuteAsync(command);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(pref, p.LastCommittedRequest!.ContactPreference);
+    }
+
     // --- Fakes ------------------------------------------------------------------
 
     private sealed class FakeCurrentUser(Guid userId, Guid accountId, bool isAuthenticated) : ICurrentUser

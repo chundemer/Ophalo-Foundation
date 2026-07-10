@@ -493,6 +493,39 @@ public sealed class KeepPublicIntakeSlugApiTests : IClassFixture<KeepApiWebFacto
     }
 
     // -------------------------------------------------------------------------
+    // Test 18 — contact preference field accepted and 201 returned
+    // -------------------------------------------------------------------------
+
+    [Theory]
+    [InlineData("NoPreference")]
+    [InlineData("TextMessage")]
+    [InlineData("PhoneCall")]
+    [InlineData("Email")]
+    public async Task Slug_AllContactPreferenceValues_Return201(string contactPreference)
+    {
+        var body = new
+        {
+            customerName = "Test Customer",
+            customerPhone = "0411111111",
+            description = "I need help",
+            serviceAddressLine1 = "42 Oak Street",
+            serviceCity = "Austin",
+            serviceState = "TX",
+            contactPreference,
+        };
+
+        var res = await _client.PostAsJsonAsync($"/keep/public-intake/slug/{ActiveSlug}", body);
+        Assert.Equal(HttpStatusCode.Created, res.StatusCode);
+    }
+
+    [Fact]
+    public async Task Slug_OmittedContactPreference_Returns201()
+    {
+        var res = await PostSlug(ActiveSlug);
+        Assert.Equal(HttpStatusCode.Created, res.StatusCode);
+    }
+
+    // -------------------------------------------------------------------------
     // Response body records
     // -------------------------------------------------------------------------
 
