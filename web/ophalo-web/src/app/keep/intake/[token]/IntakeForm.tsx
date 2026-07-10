@@ -181,7 +181,7 @@ export default function IntakeForm({
       <main className="min-h-screen bg-[var(--ophalo-canvas)] px-4 py-6 sm:py-10">
         <div className="mx-auto w-full max-w-2xl space-y-4 sm:space-y-5">
           <KeepCardShell accentTop>
-            <h1 className="text-base font-semibold text-foreground">
+            <h1 className="font-serif text-base font-semibold text-foreground">
               You&apos;re signed in to this account.
             </h1>
             <p className="mt-2 text-sm text-muted-foreground">
@@ -208,7 +208,7 @@ export default function IntakeForm({
       <main className="min-h-screen bg-[var(--ophalo-canvas)] px-4 py-6 sm:py-10">
         <div className="mx-auto w-full max-w-2xl space-y-4 sm:space-y-5">
           <KeepCardShell accentTop>
-            <h1 className="text-base font-semibold text-foreground">
+            <h1 className="font-serif text-base font-semibold text-foreground">
               This link is not available.
             </h1>
             <p className="mt-2 text-sm text-muted-foreground">
@@ -236,7 +236,7 @@ export default function IntakeForm({
             />
           )}
           <KeepCardShell accentTop>
-            <h1 className="text-base font-semibold text-foreground">Request submitted.</h1>
+            <h1 className="font-serif text-base font-semibold text-foreground">Request submitted.</h1>
             <p className="mt-2 text-sm text-muted-foreground">
               Your request has been received. Your reference code is:
             </p>
@@ -296,7 +296,7 @@ export default function IntakeForm({
           {/* Main card with teal accent */}
           <KeepCardShell accentTop>
             {/* Card headline */}
-            <h1 className="text-xl font-bold leading-snug text-foreground sm:text-2xl">
+            <h1 className="font-serif text-2xl font-semibold leading-tight text-foreground sm:text-[28px]">
               {biz ? `What can ${biz} help with?` : "How can we help?"}
             </h1>
             <p className="mt-1.5 text-sm text-muted-foreground">
@@ -305,12 +305,17 @@ export default function IntakeForm({
                 : "Share a few details and the business will follow up with your private request link."}
             </p>
 
+            <div className="mt-6 space-y-7">
+
             {/* ── Section 1: Request details ── */}
-            <div className="mt-6 border-t border-[var(--ophalo-border)] pt-5">
+            <section>
               <KeepSectionHeader
                 icon={<ClipboardList className="h-4 w-4" />}
                 label="What do you need help with?"
               />
+              <p className="mb-2 text-sm text-muted-foreground">
+                Include what happened, when it started, and anything urgent.
+              </p>
               <textarea
                 id="description"
                 name="description"
@@ -320,10 +325,10 @@ export default function IntakeForm({
                 className={inputClass + " resize-none"}
                 placeholder="Example: My AC stopped blowing cold air last night. The fan is running but no cool air is coming out."
               />
-            </div>
+            </section>
 
             {/* ── Section 2: Service location ── */}
-            <div className="mt-6 border-t border-[var(--ophalo-border)] pt-5">
+            <section>
               <KeepSectionHeader
                 icon={<MapPin className="h-4 w-4" />}
                 label="Where is the service needed?"
@@ -399,7 +404,7 @@ export default function IntakeForm({
                       required
                       disabled={submitting}
                       defaultValue=""
-                      className={inputClass}
+                      className={inputClass + " text-base"}
                     >
                       <option value="" disabled>State</option>
                       {US_STATES.map(([code, name]) => (
@@ -433,10 +438,10 @@ export default function IntakeForm({
                   Shared with {biz ?? "this business"} only. Not shown on your request page.
                 </span>
               </div>
-            </div>
+            </section>
 
             {/* ── Section 3: Contact ── */}
-            <div className="mt-6 border-t border-[var(--ophalo-border)] pt-5">
+            <section>
               <KeepSectionHeader
                 icon={<UserRound className="h-4 w-4" />}
                 label="Who should we contact?"
@@ -505,10 +510,12 @@ export default function IntakeForm({
                   </button>
                 )}
               </div>
-            </div>
+            </section>
+
+            </div>{/* end space-y-7 sections */}
 
             {/* ── Submit ── */}
-            <div className="mt-6 border-t border-[var(--ophalo-border)] pt-5">
+            <div className="mt-6">
               {error && (
                 <div className="mb-4 rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3">
                   <p className="text-sm text-destructive">{error}</p>
@@ -519,7 +526,7 @@ export default function IntakeForm({
                 type="submit"
                 variant="teal"
                 disabled={submitting}
-                className="w-full gap-2"
+                className="w-full min-h-[42px] gap-2"
               >
                 {submitting ? (
                   "Submitting…"

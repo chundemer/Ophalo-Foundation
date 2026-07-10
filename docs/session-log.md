@@ -1,6 +1,6 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-07-10 (S22e complete — business identity header on intake form + S22d regression fixes, full suite green)
+**Last updated:** 2026-07-10 (S22p1 complete — intake form UI polish: Source Serif H1, no dividers, description helper, iOS zoom guard, tap target)
 **Branch:** `main` tracking `origin/main`
 **Last green baseline:** Full suite green — 986 unit · 786 integration = 1,772 total, 0 failures (1 pre-existing KeepG5 fluke excluded)
 **Next free ADR:** ADR-430
@@ -40,7 +40,7 @@ For every implementation slice:
 **Bug/gap tracker:** `docs/pilot-readiness-bug-tracker.md`
 **Foundation roadmap:** `docs/build-log/ophalo-foundation-build-plan-greenfield-boundaries-brownfield-behavior.md` section 9.1
 **Current session:** Session 22 — Day-Zero Settings Redesign, Intake Sharing, And Service Location Plan
-**Current slice:** S22e complete — customer page copy alignment (lightweight discovery) next, then S22f mobile carry-forward preflight
+**Current slice:** S22p2 — Urgency field (next slice, own session)
 
 ### Completed Context
 
@@ -175,8 +175,39 @@ Treat these as historical context unless a later discovery step finds a concrete
 
 ### Next Session Brief
 
-S22e is complete. Remaining S22 slices:
+S22e complete. Current work: **S22p1 — Intake Form UI Polish** (in progress).
 
+#### S22p1 — Intake Form UI Polish ✓ complete (2026-07-10)
+`IntakeForm.tsx` only. No backend, no migration, no test changes.
+- Main form H1: `font-serif text-2xl font-semibold leading-tight text-foreground sm:text-[28px]`
+- Terminal H1s (`Request submitted.`, `This link is not available.`, `You're signed in…`): `font-serif` added, size unchanged
+- Removed all 4x `border-t border-[var(--ophalo-border)] pt-5` dividers; sections wrapped in `<div className="mt-6 space-y-7">` with `<section>` children; submit area uses `mt-6` only
+- Description helper text: "Include what happened, when it started, and anything urgent."
+- State `<select>`: `text-base` added (iOS Safari zoom guard)
+- Submit `<KeepButton>`: `min-h-[42px]` (minimum tap target)
+
+#### S22p2 — Urgency Field (next slice, own session, full backend slice)
+New `IntakeUrgency` enum (Routine/Soon/Urgent), default Routine. Piped through intake submission
+and surfaced to operator. Conservative model: no auto-conversion to verified attention condition.
+Backend files: `KeepRequest.cs`, new `IntakeUrgency.cs`, `CreateKeepPublicIntakeCommand.cs`,
+`CreateKeepPublicIntakeService.cs`, `PublicIntakeRequest.cs`, EF config + migration.
+Frontend: urgency select in `IntakeForm.tsx` after description, with urgent helper copy and quiet
+safety disclaimer. Operator copy: "Customer marked this urgent." Scope operator display separately
+if it would push past the batch gate.
+
+#### S22p3 — Preferred Contact Method (own session, after S22p2)
+New `ContactPreference` enum (NoPreference/TextMessage/PhoneCall/Email) on `KeepRequest`. Same
+vertical depth as S22p2. Frontend: select in contact section; if Email selected, email field becomes
+visible and `required`. Operator display: show near customer contact details.
+
+#### S22p4 — Staff Auth Early Block (deferred)
+No session context is available on the public Next.js intake page at load time without an
+authenticated API call. Post-submit `staff_not_permitted` guard (line 159 of `IntakeForm.tsx`)
+remains the correct defensive fallback. Do not block S22p1–S22p3 on this. If pursued, requires a
+new lightweight `GET /keep/public-intake/session-check` endpoint and a `useEffect` call in
+`IntakeForm` — document as a follow-up backend/UI slice.
+
+#### Remaining S22 slices (unchanged)
 1. **Customer page copy alignment (lightweight discovery):** Inspect `CustomerTrackerView.tsx` for
    any capability hint, cancellation copy, or label misalignment introduced by S22 decisions. Expected
    to be copy-only or a no-op; do not assume changes are needed before looking.
