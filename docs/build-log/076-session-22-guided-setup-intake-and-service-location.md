@@ -4,7 +4,7 @@
 **Status:** Direction changed 2026-07-09 — S22c guided checklist work paused; Settings/Get Started redesign required
 **Session name:** S22 day-zero readiness / settings redesign / intake / service-location migration
 **Next free ADR before this log:** ADR-428
-**Next free ADR after this log:** ADR-431
+**Next free ADR after this log:** ADR-432
 
 ---
 
@@ -864,6 +864,11 @@ Output:
 
 Goal: preserve current page behavior while aligning labels/copy with the decisions above.
 
+2026-07-10 update: the larger confirmation-flow/link-retention redesign is now owned by
+`docs/build-log/078-customer-tracker-link-email-and-resend-configuration.md`. S22e is narrowed to
+copy/accessibility alignment that does not introduce tracker-link email, auto-redirect behavior, or
+new notification semantics.
+
 Preflight must inspect:
 
 - customer tracker page implementation;
@@ -878,6 +883,14 @@ Output:
 - accessibility checks;
 - confirmation behavior;
 - regression list for existing customer actions.
+
+Completed narrow pass:
+
+- public intake success header label now reads `Request submitted`;
+- success helper copy no longer depends on "bookmark this page" as the primary instruction;
+- customer tracker `pending_customer` subtext now tells the customer that the business needs a reply
+  and to use the form below;
+- customer tracker message composer now has an associated `<label>` for screen readers.
 
 ### S22f — Mobile Carry-Forward Preflight
 
@@ -899,6 +912,109 @@ Output:
 - active-intake share utility feasibility;
 - confirmation that no mobile settings/admin scope is added;
 - future mobile operator onboarding questions.
+
+2026-07-10 preflight findings:
+
+- Service location is collected and persisted for public intake, but is not exposed on
+  `KeepRequestDetailResult` or `KeepRequestSummary`; this is a backend/operator gap, not a
+  mobile-only gap.
+- `IntakeUrgency` and `ContactPreference` are already exposed by the backend detail DTO, but mobile
+  request detail types/screens do not consume them yet.
+- Mobile request tracker sharing is already available from request detail through native share and
+  remains compliant with ADR-421.
+- Mobile Account tab remains non-admin/non-settings scope and compliant with ADR-424.
+- Quick Capture/business-created requests do not collect service location today.
+
+Decision:
+
+- Service location is request-level metadata and operator-visible service context. S22 must expose
+  persisted public-intake service location to operator surfaces before the session is complete.
+- Surface-specific display rule: PWA detail should show full service location; PWA list may show
+  compact text such as `City, State ZIP` only if it fits cleanly. Mobile detail should consume the
+  location later for execution context; mobile list location remains optional/deferred behind
+  urgency/contact/status cues.
+- Quick Capture service-location entry is deferred. Business-created requests may omit service
+  location for speed in V1; a later progressive-disclosure Quick Capture slice may add optional
+  service-address entry.
+- Maps are not an S22p6 blocker, but they are pilot-priority follow-up rather than indefinite
+  deferral. First target should be an `Open in Maps` action from request detail; embedded map
+  previews can wait until the pilot workflow proves the need.
+
+### S22p6 — Service Location Operator Exposure
+
+Goal: complete the S22 service-location promise by making persisted service location visible to
+operators.
+
+Scope:
+
+- add service-location fields to request detail and request summary DTOs;
+- map service-location fields from `KeepRequest` in the detail mapper and list service;
+- render service location on PWA request detail;
+- render compact service-location context on the PWA request list only if it fits cleanly;
+- add or update focused tests proving service location flows to operator detail/list responses.
+
+Out of scope:
+
+- Quick Capture service-location entry;
+- mobile settings/admin scope;
+- map previews, branch routing, service-region routing, and address validation/autocomplete.
+
+Follow-up after S22p6:
+
+- mobile request detail consumption of `IntakeUrgency`, `ContactPreference`, and service location
+  was completed in S22p7.
+- pilot-priority maps follow-up should add `Open in Maps` from request detail before considering
+  embedded map previews.
+
+### S22p7 — Mobile Request Detail Carry-Forward
+
+Completed 2026-07-10.
+
+Goal: consume the backend-exposed intake metadata and service-location fields on the native mobile
+request detail screen without adding mobile admin/settings scope.
+
+Files changed:
+
+- `mobile/ophalo-mobile/src/hooks/useRequestDetail.ts`;
+- `mobile/ophalo-mobile/app/requests/[id].tsx`.
+
+Implementation:
+
+- Added `source`, `intakeUrgency`, `contactPreference`, `serviceAddressLine1`,
+  `serviceAddressLine2`, `serviceCity`, `serviceState`, and `serviceZip` to the mobile
+  `KeepRequestDetailDto`.
+- Added a read-only `Job context` section on mobile request detail, between Description and
+  Attention.
+- Shows urgency and preferred-contact rows only for `public_intake` requests.
+- Shows service location for any source when a usable address/city is present.
+- Does not show a missing-location cue, edit control, Quick Capture location entry, mobile
+  settings/admin surface, or map action.
+
+Verification:
+
+- `npx tsc --noEmit` from `mobile/ophalo-mobile` passed.
+
+### S22p8 — Pilot Maps Follow-Up
+
+Next slice.
+
+Goal: add an `Open in Maps` action from mobile request detail when a service location is present.
+
+Scope:
+
+- use the already-rendered service-location fields from `KeepRequestDetailDto`;
+- build a native map URL from the address parts;
+- open through React Native linking from the mobile request detail screen;
+- keep the action read-only and hidden when no service location is present;
+- preserve existing mobile auth, row visibility, and offline/error posture.
+
+Out of scope:
+
+- embedded map previews;
+- address validation/autocomplete;
+- branch/service-region routing;
+- Quick Capture service-location entry;
+- mobile settings/admin surfaces.
 
 ### S22g — Documentation Reconciliation
 
@@ -1189,7 +1305,13 @@ Frontend-only polish in `web/ophalo-web/src/app/keep/intake/[token]/IntakeForm.t
 - Internal form hairline dividers removed; sections now use vertical spacing inside the white card.
 - Description helper copy added: "Include what happened, when it started, and anything urgent."
 - State selector uses `text-base` to avoid iOS Safari focus zoom.
+- Urgency selector uses short native-option labels (`Routine`, `Soon`, `Urgent`) so mobile pickers do
+  not crowd long explanatory copy; explanatory text renders below the control instead.
 - Submit CTA keeps Keep teal treatment and has `min-h-[42px]` tap target.
+- Shared public header uses business-first hierarchy: business name first, page purpose below it.
+- Intake page purpose label is `New request`, not `New request form` or internal `Adding new request`
+  phrasing.
+- Shared public footer motto is `The trust and continuity layer between businesses and customers.`
 
 No backend, migration, or test changes.
 

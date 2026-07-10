@@ -43,7 +43,7 @@ source/channel. Phone is required for the pilot service-business workflow becaus
 primary contact rail; email is optional secondary contact information. The capture form must support
 fast manual entry and paste, and should support native phone-number handoff into prefilled Quick
 Capture where feasible. Do not depend on call-log/SMS reading, voice capture, automatic parsing, or
-backend SMS/email.
+backend SMS/broad automated customer notification workflows.
 
 After save, Keep stays in the capture flow and shows confirmation, share/copy actions for the
 customer tracker link, `Capture Another`, and `View Request`. Tracker sharing is optional at
@@ -334,7 +334,8 @@ A short boundary note belongs in the authenticated Pilot Updates/Help page, alwa
 - Rich demo scenario packs/reset UI.
 - Full business-hours math and complex notification schedules.
 - Custom domains/branded public slugs.
-- Backend SMS/email, proof-of-send, call-log/SMS reading, voice capture, and automatic parsing.
+- Backend SMS, broad automated customer email/SMS notification workflows, proof-of-send,
+  call-log/SMS reading, voice capture, and automatic parsing.
 - API compatibility/minimum-client policy before native beta.
 
 ## Customer Perspective
@@ -374,7 +375,7 @@ A short boundary note belongs in the authenticated Pilot Updates/Help page, alwa
 | OP-001 | Is Quick Capture pilot-critical? | Both | If work cannot enter Keep in seconds, operators will stay in phone/text memory and Keep will miss real demand. | Locked 2026-06-25: yes; immediately-after-contact workflow, not live note-taking. |
 | OP-002 | What are the required Quick Capture fields? | Both | Too many fields kill adoption; too few can create unusable records. | Locked 2026-06-25: customer name, phone, short summary, source/channel. Email/address/category optional after creation. |
 | OP-003 | What happens immediately after Quick Capture? | Both | The next action defines whether the customer receives a tracker and whether the operator stays in flow. | Locked 2026-06-25: stay in capture flow with confirmation, share/copy actions, `Capture Another`, and `View Request`; no forced detail redirect. |
-| OP-004 | How should native SMS/email handoff work? | Both | Keeps V1 out of backend SMS compliance while making customer tracker sharing fast. | Locked 2026-06-25: native handoff/share only, prefilled tracker-link text where possible, no backend send/proof-of-send; explicit share-intent clears `Needs Share`. |
+| OP-004 | How should native SMS/email handoff work? | Both | Keeps V1 out of backend SMS compliance while making customer tracker sharing fast. | Locked 2026-06-25; amended by ADR-432: native handoff/share remains the primary staff-initiated contact path, prefilled tracker-link text where possible, no backend SMS/proof-of-send; explicit share-intent clears `Needs Share`. Narrow public-intake tracker-link email is allowed when customer email exists. |
 | OP-005 | What is the first native mobile app scope? | Both | Prevents mobile from becoming a second full admin console. | Locked 2026-06-25: see Locked Outcomes section. |
 | OP-006 | What PWA operator scope exists, if any? | Product decision | Some operators may use tablets/desktops; PWA and native should not contradict each other. | Locked 2026-06-25: PWA supports shared-workbench operator workflows; native remains optimized phone field surface. |
 | OP-007 | How fast must external-contact logging be? | Both | Source-of-truth breaks if logging a real call/text feels like paperwork. | Locked 2026-06-25: see External-Contact Logging section. |

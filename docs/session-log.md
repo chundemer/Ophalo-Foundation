@@ -1,6 +1,6 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-07-10 (S22p7 complete — mobile request detail carry-forward; Job context section; TypeScript clean)
+**Last updated:** 2026-07-10 (S22g complete; next slice docs/index reconciliation or S22 close-out)
 **Branch:** `main` tracking `origin/main`
 **Last green baseline:** Targeted intake baseline — 66 intake unit · 25 intake integration confirmed; full suite pending (1 pre-existing KeepG5 fluke excluded)
 **Next free ADR:** ADR-433
@@ -40,7 +40,7 @@ For every implementation slice:
 **Bug/gap tracker:** `docs/pilot-readiness-bug-tracker.md`
 **Foundation roadmap:** `docs/build-log/ophalo-foundation-build-plan-greenfield-boundaries-brownfield-behavior.md` section 9.1
 **Current session:** Session 22 — Day-Zero Settings Redesign, Intake Sharing, And Service Location Plan
-**Current slice:** S22p7 complete; remaining slices (see Next Session Brief)
+**Current slice:** S22 close-out / docs index reconciliation
 
 ### Completed Context
 
@@ -119,7 +119,7 @@ Topology:
 
 ### Next Session Brief
 
-S22p6 complete. Current work: **Mobile request detail carry-forward**.
+S22p7 is complete. Current work: **S22p8 — Pilot maps follow-up**.
 
 #### S22p1 — Intake Form UI Polish ✓ complete (2026-07-10)
 `IntakeForm.tsx` only. No backend, no migration, no test changes.
@@ -194,13 +194,33 @@ and preferred contact shown for `public_intake` source only; service location bl
 source when address or city is present; no missing-location cue; no edit button; no Open in Maps.
 TypeScript typecheck clean.
 
+#### S22p8 — Pilot Maps Follow-Up ✓ complete (2026-07-10)
+Added `buildMapsUrl` helper (iOS: `maps://maps.apple.com/?q=`, Android: `geo:0,0?q=`) and an
+"Open in Maps" `TouchableOpacity` button inside the `serviceLocationBlock` in `app/requests/[id].tsx`.
+Button appears only when service location data is present; embedded map previews remain deferred.
+TypeScript typecheck clean.
+
+#### S22g — Documentation Reconciliation ✓ complete (2026-07-10)
+Surgical reconciliation after S22 implementation:
+- ADR-375 amended: status "Locked" → "Amended"; added note that ADR-428 changed Getting Started
+  to a lightweight verification/on-ramp while the backend event-row contract remains valid.
+- DEF-024 closed: status "Deferred" → "Implemented — S22r4/S22"; notes updated to reflect the
+  dedicated Response Policy Settings tab (`settings/PolicySection.tsx`).
+- DEF-082 added: Business logo upload deferred to V1.1 personalization.
+- DEF-083 added: Brand color customization deferred beyond V1.1 pending accessibility-safe design.
+- ADR-295 and ADR-383 were already correctly reconciled in prior S22 slices; no changes needed.
+
 #### Remaining S22 slices
-1. **Pilot maps follow-up:** add `Open in Maps` from request detail; embedded previews remain later.
-4. **S22g — Documentation Reconciliation:** ADR-295, ADR-375, ADR-383 and response policy placement.
-5. Docs/index reconciliation.
-6. **Pre-deployment cleanup:** Build log 077 is deferred until customer request page work and testing
+1. **Docs/index reconciliation:** update session log, decision index, deferred topics, and build-plan
+   references so S22's final state is discoverable. (Partially done — session log and deferred topics
+   updated; build-log/076 cross-references may need a final summary entry.)
+2. **Pre-deployment cleanup:** Build log 077 is deferred until customer request page work and testing are complete.
+3. **Customer tracker-link email / Resend:** Build log 078 locks the tracker-link retention decisions and queues Resend configuration checks, public-intake tracker-link email, confirmation-flow copy, and operator correspondence prefill.
+3. **Docs/index reconciliation:** update session log, decision index, deferred topics, and build-plan
+   references so S22's final state is discoverable.
+4. **Pre-deployment cleanup:** Build log 077 is deferred until customer request page work and testing
    are complete.
-7. **Customer tracker-link email / Resend:** Build log 078 locks the tracker-link retention
+5. **Customer tracker-link email / Resend:** Build log 078 locks the tracker-link retention
    decisions and queues Resend configuration checks, public-intake tracker-link email,
    confirmation-flow copy, and operator correspondence prefill.
 

@@ -47,6 +47,22 @@ const FOLLOW_UP_REASONS: { label: string; value: string }[] = [
   { label: 'Other',               value: 'other' },
 ];
 
+function buildMapsUrl(
+  line1?: string | null,
+  line2?: string | null,
+  city?: string | null,
+  state?: string | null,
+  zip?: string | null,
+): string {
+  const parts = [line1, line2, city && state ? `${city}, ${state}` : (city ?? state), zip]
+    .filter(Boolean)
+    .join(' ');
+  const query = encodeURIComponent(parts);
+  return Platform.OS === 'ios'
+    ? `maps://maps.apple.com/?q=${query}`
+    : `geo:0,0?q=${query}`;
+}
+
 export default function RequestDetailScreen() {
   const { user } = useAuth();
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -510,6 +526,18 @@ function RequestDetailContent({
                     {data.serviceCity}, {data.serviceState}{data.serviceZip ? ` ${data.serviceZip}` : ''}
                   </Text>
                 )}
+                <TouchableOpacity
+                  style={styles.mapsButton}
+                  onPress={() => Linking.openURL(buildMapsUrl(
+                    data.serviceAddressLine1,
+                    data.serviceAddressLine2,
+                    data.serviceCity,
+                    data.serviceState,
+                    data.serviceZip,
+                  ))}
+                >
+                  <Text style={styles.mapsButtonText}>Open in Maps</Text>
+                </TouchableOpacity>
               </View>
             )}
           </Section>
@@ -1446,6 +1474,8 @@ const styles = StyleSheet.create({
   serviceLocationBlock: { marginTop: 6, gap: 1 },
   serviceLocationLabel: { fontSize: 11, fontWeight: '700', opacity: 0.5, letterSpacing: 0.4, textTransform: 'uppercase', marginBottom: 2 },
   serviceLocationLine: { fontSize: 13, opacity: 0.8 },
+  mapsButton: { marginTop: 8, borderRadius: 6, borderWidth: 1, borderColor: '#174A8B', paddingVertical: 7, alignItems: 'center' },
+  mapsButtonText: { color: '#174A8B', fontSize: 13, fontWeight: '600' },
   composerError: { fontSize: 13, color: '#C0392B', marginBottom: 6 },
   composerOffline: { fontSize: 13, opacity: 0.55, marginBottom: 6 },
   errorText: { fontSize: 16, textAlign: 'center', opacity: 0.7 },
