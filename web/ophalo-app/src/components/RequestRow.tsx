@@ -189,12 +189,17 @@ export function RequestRow({ row, onSelect }: RequestRowProps) {
             Unshared tracker
           </span>
         )}
-        {row.source === "public_intake" && row.contactPreference !== "no_preference" && (
+        {row.source === "public_intake" ? (
           <span>
-            Prefers:{" "}
-            {row.contactPreference === "text_message" && "text"}
-            {row.contactPreference === "phone_call" && "call"}
-            {row.contactPreference === "email" && "email"}
+            {"Customer intake"}
+            {row.contactPreference === "text_message" && " · Prefers text"}
+            {row.contactPreference === "phone_call" && " · Prefers call"}
+            {row.contactPreference === "email" && " · Prefers email"}
+          </span>
+        ) : (
+          <span className={row.needsShare ? "text-[var(--ophalo-attention)] font-medium" : ""}>
+            {"Team added"}
+            {row.needsShare && " · Customer page not yet shared"}
           </span>
         )}
       </div>

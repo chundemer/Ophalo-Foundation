@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { AlertTriangle, ArrowRight, ClipboardList, Lock, MapPin, UserRound } from "lucide-react";
+import { AlertTriangle, ArrowRight, Clock, ClipboardList, Lock, MapPin, UserRound } from "lucide-react";
 import { KeepButton } from "@/components/keep/KeepButton";
 import {
   KeepBusinessHeader,
@@ -95,6 +95,7 @@ export default function IntakeForm({
   const [showAptUnit, setShowAptUnit] = useState(false);
   const [showEmail, setShowEmail] = useState(false);
   const [contactPreference, setContactPreference] = useState("NoPreference");
+  const [urgency, setUrgency] = useState("Routine");
   const submitInFlight = useRef(false);
 
   const biz = businessName ?? null;
@@ -334,13 +335,14 @@ export default function IntakeForm({
             {/* ── Section 2: Urgency ── */}
             <section>
               <KeepSectionHeader
-                icon={<AlertTriangle className="h-4 w-4" />}
+                icon={<Clock className="h-4 w-4" />}
                 label="How urgent is this?"
               />
               <select
                 id="urgency"
                 name="urgency"
-                defaultValue="Routine"
+                value={urgency}
+                onChange={(e) => setUrgency(e.target.value)}
                 disabled={submitting}
                 className={inputClass + " text-base"}
               >
@@ -348,12 +350,21 @@ export default function IntakeForm({
                 <option value="Soon">Soon — I'd like this handled in the next day or two</option>
                 <option value="Urgent">Urgent — active issue affecting my home or business</option>
               </select>
-              <p className="mt-2 text-xs text-muted-foreground">
-                Examples of urgent: active leak, no heat or A/C, safety concern, lockout, or service interruption.
-              </p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                If this is an immediate safety emergency, call emergency services first.
-              </p>
+              {urgency === "Urgent" ? (
+                <div className="mt-2 flex gap-2 rounded-lg px-3 py-2.5" style={{ background: "var(--ophalo-attention-bg)" }}>
+                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" style={{ color: "var(--ophalo-attention)" }} />
+                  <div>
+                    <p className="text-xs font-semibold" style={{ color: "var(--ophalo-attention)" }}>Marked urgent</p>
+                    <p className="mt-0.5 text-xs" style={{ color: "var(--ophalo-attention)" }}>
+                      This request will be highlighted for the business. If there's an immediate safety risk, call emergency services first.
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <p className="mt-2 text-xs text-muted-foreground">
+                  Examples of urgent: active leak, no heat or A/C, safety concern, lockout, or service interruption.
+                </p>
+              )}
             </section>
 
             {/* ── Section 3: Service location ── */}

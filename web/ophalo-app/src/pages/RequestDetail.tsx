@@ -1452,25 +1452,34 @@ function OriginalRequestCard({ detail, onContactLaunched }: OriginalRequestCardP
           )}
       </div>
 
-      {detail.source === "public_intake" && (
-        <div className="mt-3 flex flex-col gap-1">
-          {detail.intakeUrgency !== "routine" && (
-            <p className="flex items-center gap-1.5 text-xs text-[var(--ophalo-muted)]">
-              <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-[var(--ophalo-attention)]" />
-              {detail.intakeUrgency === "urgent"
-                ? "Customer marked this urgent."
-                : "Customer marked this soon."}
+      <div className="mt-3 flex flex-col gap-1">
+        {detail.source === "public_intake" ? (
+          <>
+            <p className="text-xs text-[var(--ophalo-muted)]">
+              Source: Customer intake — customer has a Keep request page.
             </p>
-          )}
+            {detail.intakeUrgency !== "routine" && (
+              <p className="flex items-center gap-1.5 text-xs text-[var(--ophalo-muted)]">
+                <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-[var(--ophalo-attention)]" />
+                {detail.intakeUrgency === "urgent"
+                  ? "Customer marked this urgent."
+                  : "Customer marked this soon."}
+              </p>
+            )}
+            <p className="text-xs text-[var(--ophalo-muted)]">
+              Preferred contact:{" "}
+              {detail.contactPreference === "text_message" && "Text message"}
+              {detail.contactPreference === "phone_call" && "Phone call"}
+              {detail.contactPreference === "email" && "Email"}
+              {detail.contactPreference === "no_preference" && "No preference"}
+            </p>
+          </>
+        ) : (
           <p className="text-xs text-[var(--ophalo-muted)]">
-            Preferred contact:{" "}
-            {detail.contactPreference === "text_message" && "Text message"}
-            {detail.contactPreference === "phone_call" && "Phone call"}
-            {detail.contactPreference === "email" && "Email"}
-            {detail.contactPreference === "no_preference" && "No preference"}
+            Source: Team added — share the customer page when useful.
           </p>
-        </div>
-      )}
+        )}
+      </div>
 
       <p className="text-xs text-[var(--ophalo-muted)] mt-3">
         Submitted {formatDate(detail.createdAtUtc)}
