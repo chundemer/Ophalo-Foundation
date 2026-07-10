@@ -1473,6 +1473,22 @@ function OriginalRequestCard({ detail, onContactLaunched }: OriginalRequestCardP
               {detail.contactPreference === "email" && "Email"}
               {detail.contactPreference === "no_preference" && "No preference"}
             </p>
+            {(detail.serviceAddressLine1 || detail.serviceCity) && (
+              <div className="mt-1">
+                <p className="text-xs font-semibold text-[var(--ophalo-muted)]">Service location</p>
+                {detail.serviceAddressLine1 && (
+                  <p className="text-xs text-[var(--ophalo-muted)]">{detail.serviceAddressLine1}</p>
+                )}
+                {detail.serviceAddressLine2 && (
+                  <p className="text-xs text-[var(--ophalo-muted)]">{detail.serviceAddressLine2}</p>
+                )}
+                {detail.serviceCity && detail.serviceState && (
+                  <p className="text-xs text-[var(--ophalo-muted)]">
+                    {detail.serviceCity}, {detail.serviceState}{detail.serviceZip ? ` ${detail.serviceZip}` : ""}
+                  </p>
+                )}
+              </div>
+            )}
           </>
         ) : (
           <p className="text-xs text-[var(--ophalo-muted)]">

@@ -759,7 +759,12 @@ public sealed class GetKeepRequestListService(
             NeedsShare: r.NeedsShare,
             Source: MapSource(r.Source),
             IntakeUrgency: MapIntakeUrgency(r.IntakeUrgency),
-            ContactPreference: MapContactPreference(r.ContactPreference));
+            ContactPreference: MapContactPreference(r.ContactPreference),
+            ServiceAddressLine1: r.ServiceAddressLine1,
+            ServiceAddressLine2: r.ServiceAddressLine2,
+            ServiceCity: r.ServiceCity,
+            ServiceState: r.ServiceState,
+            ServiceZip: r.ServiceZip);
     }
 
     private static (string group, int order) ComputeRankingGroup(

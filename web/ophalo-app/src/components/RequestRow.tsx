@@ -195,6 +195,9 @@ export function RequestRow({ row, onSelect }: RequestRowProps) {
             {row.contactPreference === "text_message" && " · Prefers text"}
             {row.contactPreference === "phone_call" && " · Prefers call"}
             {row.contactPreference === "email" && " · Prefers email"}
+            {row.serviceCity && row.serviceState && (
+              <> · {row.serviceCity}, {row.serviceState}{row.serviceZip ? ` ${row.serviceZip}` : ""}</>
+            )}
           </span>
         ) : (
           <span className={row.needsShare ? "text-[var(--ophalo-attention)] font-medium" : ""}>

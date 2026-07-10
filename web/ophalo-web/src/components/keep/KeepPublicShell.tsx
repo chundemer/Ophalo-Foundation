@@ -28,11 +28,11 @@ export function KeepBusinessHeader({
         {keepBusinessInitials(businessName)}
       </div>
       <div className="min-w-0">
-        <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
-          {label}
-        </p>
         <p className="truncate text-lg font-bold leading-tight text-foreground">
           {businessName}
+        </p>
+        <p className="mt-0.5 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+          {label}
         </p>
         {description && (
           <p className="mt-1 text-sm text-muted-foreground">{description}</p>
@@ -110,8 +110,7 @@ export function KeepPageFooter({ className = "" }: { className?: string }) {
         Keep by OpHalo
       </p>
       <p className="mx-auto mt-1 max-w-md text-sm leading-5 text-[var(--ophalo-muted)]">
-        The trust and continuity layer between your business and the people you
-        serve.
+        The trust and continuity layer between businesses and customers.
       </p>
     </footer>
   );

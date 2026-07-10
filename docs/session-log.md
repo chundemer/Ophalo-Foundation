@@ -3,7 +3,7 @@
 **Last updated:** 2026-07-10 (S22p4 complete — IntakeUrgency + ContactPreference exposed on operator detail and request list; 98 unit · 101 integration all green)
 **Branch:** `main` tracking `origin/main`
 **Last green baseline:** Targeted intake baseline — 66 intake unit · 25 intake integration confirmed; full suite pending (1 pre-existing KeepG5 fluke excluded)
-**Next free ADR:** ADR-431
+**Next free ADR:** ADR-433
 **Current session:** Session 22 — Day-Zero Settings Redesign, Intake Sharing, And Service Location Plan
 
 ---
@@ -80,6 +80,11 @@ Locked decisions to preserve:
   metadata. They appear on operator detail and on the operator request list because road operators
   use the list as their primary view. Customer-selected urgency is not a verified system attention
   condition; preferred contact is not a full notification preference/opt-out system.
+- ADR-431: public Keep pages use business-first identity hierarchy and neutral public motto copy:
+  `The trust and continuity layer between businesses and customers.`
+- ADR-432: platform email/Resend is in scope. Public intake may send a narrow, fail-soft tracker-link
+  email when the customer supplies email; backend customer SMS and broad automated customer
+  notification workflows remain deferred.
 - Staff-auth public-intake blocking remains post-submit only for now; pre-submit staff blocking is
   deferred because the public Next.js page has no load-time session context without a new API call.
 
@@ -114,7 +119,7 @@ Topology:
 
 ### Next Session Brief
 
-S22p4 complete. Current work: **Customer page copy alignment** (lightweight discovery, next slice).
+S22p6 complete. Current work: **Mobile request detail carry-forward**.
 
 #### S22p1 — Intake Form UI Polish ✓ complete (2026-07-10)
 `IntakeForm.tsx` only. No backend, no migration, no test changes.
@@ -150,6 +155,13 @@ routine, and preferred contact line when source is `public_intake`; request rows
 and contact preference cues because operators on the road use the list as their primary view.
 98 unit · 101 integration all green.
 
+#### S22e — Customer Page Copy And Accessibility Alignment ✓ complete (2026-07-10)
+Narrowed after ADR-432/build log 078: larger tracker-link retention work, auto-redirect behavior,
+and Resend tracker-link email are deferred to 078. S22e only aligned existing public surfaces:
+success header label is `Request submitted`, success helper copy no longer depends on bookmarking,
+`pending_customer` subtext directs the customer to reply using the form below, and the tracker
+message composer has an associated label. `pnpm -C web/ophalo-web typecheck` green.
+
 #### S22p5 — Staff Auth Early Block (deferred)
 No session context is available on the public Next.js intake page at load time without an
 authenticated API call. Post-submit `staff_not_permitted` guard (line 159 of `IntakeForm.tsx`)
@@ -157,16 +169,34 @@ remains the correct defensive fallback. Do not block S22p1–S22p4 on this. If p
 new lightweight `GET /keep/public-intake/session-check` endpoint and a `useEffect` call in
 `IntakeForm` — document as a follow-up backend/UI slice.
 
-#### Remaining S22 slices (unchanged)
-1. **Customer page copy alignment (lightweight discovery):** Inspect `CustomerTrackerView.tsx` for
-   any capability hint, cancellation copy, or label misalignment introduced by S22 decisions. Expected
-   to be copy-only or a no-op; do not assume changes are needed before looking.
-2. **S22f — Mobile Carry-Forward Preflight:** See build log 076 for scope (service-location fields
-   mobile must consume, active-intake share utility feasibility, no new mobile settings/admin scope).
-3. **S22g — Documentation Reconciliation:** ADR-295, ADR-375, ADR-383 and response policy placement.
-4. Docs/index reconciliation.
-5. **Pre-deployment cleanup:** Build log 077 is deferred until customer request page work and testing
+#### S22f — Mobile Carry-Forward Preflight ✓ complete (2026-07-10)
+Preflight confirmed no new mobile settings/admin scope. Mobile tracker sharing already works through
+native share and remains ADR-421 compliant. Mobile detail still needs to consume
+`IntakeUrgency`/`ContactPreference`, and service location once backend DTOs expose it. Quick Capture
+does not collect service location today; decision: request-level service location is operator-visible
+metadata, but Quick Capture service-location entry is deferred to a later progressive-disclosure
+slice so business-created requests can remain fast in V1. Maps are pilot-priority follow-up, with
+`Open in Maps` from request detail as the first target; embedded map previews are later.
+
+#### S22p6 — Service Location Operator Exposure ✓ complete (2026-07-10)
+Added `ServiceAddressLine1/2`, `ServiceCity`, `ServiceState`, `ServiceZip` to `KeepRequestDetailResult`
+and `KeepRequestSummary`. Mapped in `KeepRequestDetailMapper.ToDetailResult` and
+`GetKeepRequestListService.ToSummary`. PWA: full address block rendered in operator request detail
+under intake metadata; compact `City, ST ZIP` appended to source line in list rows when city+state
+both present. 4 new integration tests (populated intake + null business-created, detail + list);
+79 existing detail/list tests green. TypeScript typecheck clean.
+
+#### Remaining S22 slices
+1. **Mobile request detail carry-forward:** consume/render `IntakeUrgency`, `ContactPreference`, and
+   service location on mobile request detail after S22p6 exposes service-location DTO fields.
+3. **Pilot maps follow-up:** add `Open in Maps` from request detail; embedded previews remain later.
+4. **S22g — Documentation Reconciliation:** ADR-295, ADR-375, ADR-383 and response policy placement.
+5. Docs/index reconciliation.
+6. **Pre-deployment cleanup:** Build log 077 is deferred until customer request page work and testing
    are complete.
+7. **Customer tracker-link email / Resend:** Build log 078 locks the tracker-link retention
+   decisions and queues Resend configuration checks, public-intake tracker-link email,
+   confirmation-flow copy, and operator correspondence prefill.
 
 Historical mobile context lives in `docs/build-log/071-session-17-review-safe-native-product-foundation.md`.
 
@@ -177,8 +207,10 @@ Historical mobile context lives in `docs/build-log/071-session-17-review-safe-na
 - Classification is operational/reporting/safety posture, separate from commercial lifecycle.
 - Public signup cannot create Demo/InternalTest accounts.
 - Production push delivery must stay suppressed for Demo/InternalTest accounts.
-- Keep sends no backend SMS/email to customers in V1; native `sms:`, `tel:`, and `mailto:` handoff
-  remains operator-initiated on the user's device.
+- Keep does not send backend customer SMS or ingest SMS replies in V1. Platform email/Resend is in
+  scope for auth/member flows, and ADR-432 allows one narrow fail-soft public-intake tracker-link
+  email when the customer supplies email. Broad automated customer email/SMS notification workflows,
+  notification preferences, quiet hours, proof-of-send, and delivery ledgers remain deferred.
 
 ---
 

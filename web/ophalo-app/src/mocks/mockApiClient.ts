@@ -272,6 +272,11 @@ export function installMockApi(): void {
       customerPageViewedAfterLatestUpdate: null,
       intakeUrgency: "routine",
       contactPreference: "no_preference",
+      serviceAddressLine1: null,
+      serviceAddressLine2: null,
+      serviceCity: null,
+      serviceState: null,
+      serviceZip: null,
       contactActions: [{ type: "call", available: true, target: body.customerPhone }],
       participants: [
         {
@@ -339,6 +344,11 @@ export function installMockApi(): void {
       source: "public_intake",
       intakeUrgency: "routine",
       contactPreference: "no_preference",
+      serviceAddressLine1: null,
+      serviceAddressLine2: null,
+      serviceCity: null,
+      serviceState: null,
+      serviceZip: null,
       attention: {
         attentionLevel: "normal",
         waitingDirection: "business",

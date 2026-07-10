@@ -236,7 +236,7 @@ export default function IntakeForm({
           {biz && (
             <KeepBusinessHeader
               businessName={biz}
-              label="New request form"
+              label="Request submitted"
               className="pb-1"
             />
           )}
@@ -265,7 +265,7 @@ export default function IntakeForm({
               </div>
             )}
             <p className="mt-4 text-xs text-muted-foreground">
-              Tip: bookmark this page or save the link to check back anytime — no account required.
+              Open your request page to check status or send more details. No account required.
             </p>
           </KeepCardShell>
           <KeepPageFooter />
@@ -286,13 +286,13 @@ export default function IntakeForm({
         {biz ? (
           <KeepBusinessHeader
             businessName={biz}
-            label="New request form"
+            label="New request"
             className="mb-4 sm:mb-5"
           />
         ) : (
           <div className="mb-4 px-1 sm:mb-5">
             <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
-              New request form
+              New request
             </p>
           </div>
         )}
@@ -346,23 +346,27 @@ export default function IntakeForm({
                 disabled={submitting}
                 className={inputClass + " text-base"}
               >
-                <option value="Routine">Routine — schedule when convenient</option>
-                <option value="Soon">Soon — I'd like this handled in the next day or two</option>
-                <option value="Urgent">Urgent — active issue affecting my home or business</option>
+                <option value="Routine">Routine</option>
+                <option value="Soon">Soon</option>
+                <option value="Urgent">Urgent</option>
               </select>
               {urgency === "Urgent" ? (
-                <div className="mt-2 flex gap-2 rounded-lg px-3 py-2.5" style={{ background: "var(--ophalo-attention-bg)" }}>
-                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" style={{ color: "var(--ophalo-attention)" }} />
+                <div className="mt-2 flex gap-2 rounded-lg bg-[var(--ophalo-attention-bg)] px-3 py-2.5">
+                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-[var(--ophalo-attention)]" />
                   <div>
-                    <p className="text-xs font-semibold" style={{ color: "var(--ophalo-attention)" }}>Marked urgent</p>
-                    <p className="mt-0.5 text-xs" style={{ color: "var(--ophalo-attention)" }}>
+                    <p className="text-xs font-semibold text-[var(--ophalo-attention)]">Marked urgent</p>
+                    <p className="mt-0.5 text-xs text-[var(--ophalo-attention)]">
                       This request will be highlighted for the business. If there's an immediate safety risk, call emergency services first.
                     </p>
                   </div>
                 </div>
+              ) : urgency === "Soon" ? (
+                <p className="mt-2 text-xs text-muted-foreground">
+                  Use Soon when you'd like help in the next day or two.
+                </p>
               ) : (
                 <p className="mt-2 text-xs text-muted-foreground">
-                  Examples of urgent: active leak, no heat or A/C, safety concern, lockout, or service interruption.
+                  Use Routine for work that can be scheduled when convenient.
                 </p>
               )}
             </section>

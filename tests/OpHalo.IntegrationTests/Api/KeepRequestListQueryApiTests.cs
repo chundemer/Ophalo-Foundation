@@ -765,6 +765,78 @@ public sealed class KeepRequestListQueryApiTests : IClassFixture<KeepApiWebFacto
         Assert.Equal(HttpStatusCode.OK, histRes.StatusCode);
     }
 
+    // =========================================================================
+    // S22p6 — service-location fields flow through list DTO
+    // =========================================================================
+
+    [Fact]
+    public async Task List_IntakeWithServiceLocation_ExposesServiceLocationOnRow()
+    {
+        var now = DateTime.UtcNow;
+        Guid requestId;
+
+        await using (var scope = _factory.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+            var accountId = (await db.Accounts.FirstAsync()).Id;
+            var customer = KeepCustomer.Create(accountId, "Svc Loc Customer", "0499000099");
+            db.Set<KeepCustomer>().Add(customer);
+            await db.SaveChangesAsync();
+
+            var request = KeepRequest.CreateFromCustomerIntake(
+                accountId, customer.Id,
+                "Svc Loc Customer", "0499000099", null,
+                "Roof inspection", "SVLST001", "svclst_page_token", now, 60,
+                serviceAddressLine1: "99 Pine Ave",
+                serviceAddressLine2: null,
+                serviceCity: "Nashville",
+                serviceState: "TN",
+                serviceZip: "37201");
+            db.Set<KeepRequest>().Add(request);
+            db.Set<KeepRequestEvent>().Add(
+                KeepRequestEvent.CreateRequestCreated(request.Id, accountId, now));
+            await db.SaveChangesAsync();
+            requestId = request.Id;
+        }
+
+        var response = await GetAsync("/keep/requests");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        var rows = body.GetProperty("requests").EnumerateArray().ToList();
+        var row = rows.FirstOrDefault(r => r.GetProperty("id").GetGuid() == requestId);
+        Assert.True(row.ValueKind != JsonValueKind.Undefined, "Seeded service-location request not found in list.");
+
+        Assert.Equal("99 Pine Ave", row.GetProperty("serviceAddressLine1").GetString());
+        Assert.Equal(JsonValueKind.Null, row.GetProperty("serviceAddressLine2").ValueKind);
+        Assert.Equal("Nashville", row.GetProperty("serviceCity").GetString());
+        Assert.Equal("TN",        row.GetProperty("serviceState").GetString());
+        Assert.Equal("37201",     row.GetProperty("serviceZip").GetString());
+    }
+
+    [Fact]
+    public async Task List_BusinessCreatedRequest_ServiceLocationFieldsAreNull()
+    {
+        // Seeded requests in InitializeAsync use CreateFromCustomerIntake without service location
+        // or CreateBusinessRequest (no service location). Any seeded row should return null fields.
+        var response = await GetAsync("/keep/requests");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        var rows = body.GetProperty("requests").EnumerateArray().ToList();
+        Assert.NotEmpty(rows);
+
+        // All seeded rows without service location must return null for all five fields.
+        foreach (var row in rows.Where(r =>
+            r.GetProperty("serviceCity").ValueKind == JsonValueKind.Null))
+        {
+            Assert.Equal(JsonValueKind.Null, row.GetProperty("serviceAddressLine1").ValueKind);
+            Assert.Equal(JsonValueKind.Null, row.GetProperty("serviceAddressLine2").ValueKind);
+            Assert.Equal(JsonValueKind.Null, row.GetProperty("serviceState").ValueKind);
+            Assert.Equal(JsonValueKind.Null, row.GetProperty("serviceZip").ValueKind);
+        }
+    }
+
     // --- Response DTOs ----------------------------------------------------------
 
     private sealed record ListResponseBody(

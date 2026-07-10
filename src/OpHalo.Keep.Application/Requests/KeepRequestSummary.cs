@@ -31,7 +31,12 @@ public sealed record KeepRequestSummary(
     bool NeedsShare,
     string? Source,
     string IntakeUrgency,
-    string ContactPreference);
+    string ContactPreference,
+    string? ServiceAddressLine1,
+    string? ServiceAddressLine2,
+    string? ServiceCity,
+    string? ServiceState,
+    string? ServiceZip);
 
 public sealed record KeepRequestAttentionInfo(
     string AttentionLevel,

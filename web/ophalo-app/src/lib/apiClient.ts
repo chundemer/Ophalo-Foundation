@@ -355,6 +355,11 @@ export interface KeepRequestDetailResult {
   customerPageViewedAfterLatestUpdate: boolean | null;
   intakeUrgency: string;
   contactPreference: string;
+  serviceAddressLine1: string | null;
+  serviceAddressLine2: string | null;
+  serviceCity: string | null;
+  serviceState: string | null;
+  serviceZip: string | null;
   contactActions: ContactActionItem[];
   participants: KeepRequestParticipantItem[];
   currentUserParticipation: CurrentUserDetailParticipation;
@@ -437,6 +442,11 @@ export interface KeepRequestSummary {
   source: string | null;
   intakeUrgency: string;
   contactPreference: string;
+  serviceAddressLine1: string | null;
+  serviceAddressLine2: string | null;
+  serviceCity: string | null;
+  serviceState: string | null;
+  serviceZip: string | null;
   attention: KeepRequestAttentionInfo;
   preview: KeepRequestPreviewInfo;
   participation: KeepRequestParticipationInfo;

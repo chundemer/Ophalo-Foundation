@@ -261,6 +261,67 @@ public sealed class KeepRequestDetailTests : IClassFixture<KeepApiWebFactory>, I
         Assert.Equal(JsonValueKind.Null, body.GetProperty("customerPageViewedAfterLatestUpdate").ValueKind);
     }
 
+    // =========================================================================
+    // S22p6 — service-location fields flow through detail DTO
+    // =========================================================================
+
+    [Fact]
+    public async Task GetDetail_IntakeWithoutServiceLocation_ServiceLocationFieldsAreNull()
+    {
+        // The seeded request (_requestId) was created without service location.
+        var response = await AuthRequest(_ownerCookie).GetAsync($"/keep/requests/{_requestId}");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(JsonValueKind.Null, body.GetProperty("serviceAddressLine1").ValueKind);
+        Assert.Equal(JsonValueKind.Null, body.GetProperty("serviceAddressLine2").ValueKind);
+        Assert.Equal(JsonValueKind.Null, body.GetProperty("serviceCity").ValueKind);
+        Assert.Equal(JsonValueKind.Null, body.GetProperty("serviceState").ValueKind);
+        Assert.Equal(JsonValueKind.Null, body.GetProperty("serviceZip").ValueKind);
+    }
+
+    [Fact]
+    public async Task GetDetail_IntakeWithServiceLocation_ExposesAllServiceLocationFields()
+    {
+        var now = DateTime.UtcNow;
+        Guid requestId;
+
+        await using (var scope = _factory.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+            var customer = KeepCustomer.Create(_accountId, "Bob Jones", "0499000001");
+            db.Set<KeepCustomer>().Add(customer);
+            await db.SaveChangesAsync();
+
+            var request = KeepRequest.CreateFromCustomerIntake(
+                _accountId, customer.Id,
+                "Bob Jones", "0499000001", null,
+                "Leaking roof", "SVCL0001", "svcl_page_token", now, 60,
+                serviceAddressLine1: "42 Elm Street",
+                serviceAddressLine2: "Unit 3",
+                serviceCity: "Memphis",
+                serviceState: "TN",
+                serviceZip: "38117");
+            db.Set<KeepRequest>().Add(request);
+            db.Set<KeepRequestEvent>().Add(
+                KeepRequestEvent.CreateRequestCreated(request.Id, _accountId, now));
+            await db.SaveChangesAsync();
+            requestId = request.Id;
+        }
+
+        var response = await AuthRequest(_ownerCookie).GetAsync($"/keep/requests/{requestId}");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("42 Elm Street", body.GetProperty("serviceAddressLine1").GetString());
+        Assert.Equal("Unit 3",        body.GetProperty("serviceAddressLine2").GetString());
+        Assert.Equal("Memphis",        body.GetProperty("serviceCity").GetString());
+        Assert.Equal("TN",             body.GetProperty("serviceState").GetString());
+        Assert.Equal("38117",          body.GetProperty("serviceZip").GetString());
+    }
+
     private HttpClient AuthRequest(string cookie)
     {
         var client = _factory.CreateClient();

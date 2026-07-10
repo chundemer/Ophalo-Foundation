@@ -93,8 +93,9 @@ function statusSubtext(status: string, businessName: string): string {
     case "received":
     case "scheduled":
     case "in_progress":
-    case "pending_customer":
       return `${businessName} has your details. Save this link to return anytime. No account required.`;
+    case "pending_customer":
+      return `${businessName} needs a reply from you. Use the form below to respond.`;
     default:
       return "Save this link to return anytime. No account required.";
   }
@@ -484,9 +485,9 @@ export function CustomerTrackerView({
               /* Composer — shown after any action button is tapped */
               <>
                 <div className="mb-4 flex items-center justify-between">
-                  <p className="text-sm font-semibold text-foreground">
+                  <label htmlFor="tracker-message" className="text-sm font-semibold text-foreground">
                     {ACTION_COMPOSER_LABELS[selectedAction] ?? "Send a message"}
-                  </p>
+                  </label>
                   <button
                     onClick={backToIdle}
                     className="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
