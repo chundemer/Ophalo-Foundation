@@ -1,6 +1,6 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-07-10 (S22g complete; next slice docs/index reconciliation or S22 close-out)
+**Last updated:** 2026-07-10 (S22 complete; next work is build-log/078 tracker-link email or pre-deployment cleanup)
 **Branch:** `main` tracking `origin/main`
 **Last green baseline:** Targeted intake baseline — 66 intake unit · 25 intake integration confirmed; full suite pending (1 pre-existing KeepG5 fluke excluded)
 **Next free ADR:** ADR-433
@@ -40,7 +40,7 @@ For every implementation slice:
 **Bug/gap tracker:** `docs/pilot-readiness-bug-tracker.md`
 **Foundation roadmap:** `docs/build-log/ophalo-foundation-build-plan-greenfield-boundaries-brownfield-behavior.md` section 9.1
 **Current session:** Session 22 — Day-Zero Settings Redesign, Intake Sharing, And Service Location Plan
-**Current slice:** S22 close-out / docs index reconciliation
+**Current slice:** S22 complete — next is build-log/078 (tracker-link email) or build-log/077 (pre-deployment cleanup)
 
 ### Completed Context
 
@@ -210,12 +210,17 @@ Surgical reconciliation after S22 implementation:
 - DEF-083 added: Brand color customization deferred beyond V1.1 pending accessibility-safe design.
 - ADR-295 and ADR-383 were already correctly reconciled in prior S22 slices; no changes needed.
 
-#### Remaining S22 slices
-1. **Docs/index reconciliation:** update session log, decision index, deferred topics, and build-plan
-   references so S22's final state is discoverable. (Partially done — session log and deferred topics
-   updated; build-log/076 cross-references may need a final summary entry.)
-2. **Pre-deployment cleanup:** Build log 077 is deferred until customer request page work and testing are complete.
-3. **Customer tracker-link email / Resend:** Build log 078 locks the tracker-link retention decisions and queues Resend configuration checks, public-intake tracker-link email, confirmation-flow copy, and operator correspondence prefill.
+#### Docs/index reconciliation ✓ complete (2026-07-10)
+Build log 076 updated with completed entries for S22r0–S22r5 (Settings redesign), S22e, S22p5
+(deferred), S22p6, S22p7, S22p8, and S22g. Build plan Session 22 updated to reflect actual
+shipped work; "Pilot QA And Go-Live Gate" advanced to Session 23.
+
+#### Session 22 — Complete
+
+All S22 slices are done. Remaining pre-deployment work lives in separate build logs:
+
+1. **Pre-deployment cleanup:** `docs/build-log/077-pre-deployment-cleanup-and-file-decomposition.md` — deferred until customer request page work and testing are complete.
+2. **Customer tracker-link email / Resend:** `docs/build-log/078-customer-tracker-link-email-and-resend-configuration.md` — locks tracker-link retention decisions, Resend configuration checks, public-intake tracker-link email, confirmation-flow copy, and operator correspondence prefill.
 3. **Docs/index reconciliation:** update session log, decision index, deferred topics, and build-plan
    references so S22's final state is discoverable.
 4. **Pre-deployment cleanup:** Build log 077 is deferred until customer request page work and testing

@@ -1389,10 +1389,110 @@ Tests: 98 unit and 101 integration tests green after S22p4.
 
 ---
 
+### S22r0–S22r5 — Settings Redesign (Redo)
+
+Direction change 2026-07-09: S22c guided-checklist approach paused. ADR-428 locked day-zero
+readiness posture. The S22r* slices implemented the redesigned Settings workspace.
+
+- **S22r0 — Preflight and file disposition:** confirmed Settings.tsx shape, dirty-worktree
+  disposition, and slug-routing readiness. SetupBar.tsx removed; Home.tsx restored to clean
+  authenticated landing.
+- **S22r1 — Settings tabs skeleton:** split `Settings.tsx` into `settings/PublicLinkSection.tsx`,
+  `settings/PolicySection.tsx`, `settings/TeamSection.tsx`, and retained `CompanySection.tsx`.
+  Tab nav renders Public Link & Profile, Response Policy, and Team.
+- **S22r2 — Slug-based public intake routing:** `ophalo-web` intake route changed from
+  `/keep/intake/[token]` to `/keep/[slug]` with slug→token server lookup. `PublicBaseUrl`-based
+  intake link copy. Slug aliases preserve old distributed URLs per ADR-429.
+- **S22r3 — Public Link & Profile polish:** intake copy/open/preview controls in
+  `settings/PublicLinkSection.tsx`; business identity header on public intake and customer pages.
+  ADR-431 motto copy locked.
+- **S22r4 — Response Policy tab:** `settings/PolicySection.tsx` surfaces first-response, standard,
+  priority, and status-check targets with plain-language business guidance. Closes DEF-024.
+- **S22r5 — Team tab and lightweight Getting Started:** `settings/TeamSection.tsx` retains
+  invite/list/role/suspend/remove flows; Getting Started becomes a lightweight on-ramp per
+  ADR-428/ADR-375 amendment.
+
+ADRs: ADR-428, ADR-429, ADR-430, ADR-431, ADR-432.
+
+---
+
+### S22e — Customer Page Copy And Accessibility Alignment
+
+Narrowed after ADR-432/build-log-078 scope decision. Larger tracker-link retention work, auto-redirect
+behavior, and Resend tracker-link email deferred to build-log/078. S22e aligned existing public
+surfaces only:
+
+- Success header label: `Request submitted` (no period).
+- Success helper copy no longer depends on bookmarking.
+- `pending_customer` subtext directs customer to reply using the form below.
+- Tracker message composer has an associated label for screen-reader accessibility.
+
+Files: `web/ophalo-web/src/app/keep/[slug]/IntakeForm.tsx`. TypeScript typecheck clean.
+
+---
+
+### S22p5 — Staff Auth Early Block (Deferred)
+
+No session context is available on the public Next.js intake page at load time without an additional
+authenticated API call. Post-submit `staff_not_permitted` guard remains the correct defensive
+fallback. If pursued later: requires `GET /keep/public-intake/session-check` and a `useEffect`
+call in `IntakeForm`. Blocked at preflight; no code changes.
+
+---
+
+### S22p6 — Service Location Operator Exposure
+
+Added `ServiceAddressLine1/2`, `ServiceCity`, `ServiceState`, `ServiceZip` to
+`KeepRequestDetailResult` and `KeepRequestSummary`. Mapped in `KeepRequestDetailMapper.ToDetailResult`
+and `GetKeepRequestListService.ToSummary`.
+
+PWA: full address block in operator request detail under intake metadata; compact `City, ST ZIP`
+appended to source line in request list rows when city+state both present.
+
+4 new integration tests (populated intake + null business-created, detail + list); 79 existing
+detail/list tests green. TypeScript typecheck clean.
+
+---
+
+### S22p7 — Mobile Request Detail Carry-Forward
+
+Added `source`, `intakeUrgency`, `contactPreference`, `serviceAddressLine1/2`, `serviceCity`,
+`serviceState`, `serviceZip` to `KeepRequestDetailDto` in `useRequestDetail.ts`. Added read-only
+"Job context" section in `app/requests/[id].tsx` between Description and Attention:
+
+- Urgency banner for `public_intake` source when urgency ≠ routine.
+- Preferred contact row for `public_intake` source only.
+- Service location block for any source when address or city is present.
+- No edit button; no Open in Maps (deferred to S22p8).
+
+TypeScript typecheck clean.
+
+---
+
+### S22p8 — Pilot Maps Follow-Up
+
+Added `buildMapsUrl` helper in `app/requests/[id].tsx`: iOS uses `maps://maps.apple.com/?q=`,
+Android uses `geo:0,0?q=`. Added "Open in Maps" `TouchableOpacity` outline button inside
+`serviceLocationBlock`, visible whenever service location data is present. `Linking` and `Platform`
+were already imported. Embedded map previews remain deferred. TypeScript typecheck clean.
+
+---
+
+### S22g — Documentation Reconciliation
+
+- **ADR-375** amended: status "Locked" → "Amended"; ADR-428 changed Getting Started frontend to a
+  lightweight verification/on-ramp; backend event-row derivation contract unchanged.
+- **DEF-024** closed: "Deferred" → "Implemented — S22r4/S22"; Response Policy Settings tab live.
+- **DEF-082** added: Business logo upload deferred to V1.1 personalization.
+- **DEF-083** added: Brand color customization deferred beyond V1.1 pending accessibility-safe design.
+- ADR-295 and ADR-383 were already correctly reconciled in prior S22 slices.
+
+---
+
 ## Deferred
 
-- Business logo upload: V1.1 personalization.
-- Brand color selection: deferred beyond V1.1 unless accessibility-safe customization is designed.
+- Business logo upload: V1.1 personalization (DEF-082).
+- Brand color selection: deferred beyond V1.1 unless accessibility-safe customization is designed (DEF-083).
 - Rich public handle/custom-slug management beyond generated collision-safe slugs.
 - Embedded map preview.
 - Office/branch/service-region routing.

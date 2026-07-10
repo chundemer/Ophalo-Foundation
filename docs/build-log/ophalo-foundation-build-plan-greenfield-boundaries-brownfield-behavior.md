@@ -1474,7 +1474,14 @@ Recommended remaining sessions after Session 9:
    visibility as needed for pilot operations. No anonymous customer OpHalo feedback hook and no
    production impersonation/run-as.
 
-14. **Session 22 — Pilot QA And Go-Live Gate**
+14. **Session 22 — Day-Zero Settings Redesign, Intake Sharing, And Service Location** ✓
+   ADR-428: Keep launches in a functional day-zero state. Settings split into Public Link & Profile,
+   Response Policy, and Team. Slug-based public intake routing (ADR-429), intake urgency and contact
+   preference metadata (ADR-430), business-first public identity (ADR-431), platform email scope
+   (ADR-432). Service location exposed on operator detail/list and mobile request detail. Open in
+   Maps added to mobile. Build log: `docs/build-log/076-session-22-guided-setup-intake-and-service-location.md`.
+
+15. **Session 23 — Pilot QA And Go-Live Gate**
    Run the end-to-end pilot readiness checklist: onboarding, Quick Capture, public intake, tracker
    sharing, customer page/actions, attention/follow-up/status-check behavior, close/cancel, feedback
    review, Spam/Test, weekly report generation, internal ops signals, notification posture, mobile
