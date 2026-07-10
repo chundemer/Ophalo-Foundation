@@ -5,6 +5,10 @@ import {
   AlertCircle, AlertTriangle, ArrowRight, Calendar,
   Check, Copy, MessageCircle, Paperclip, Phone, RefreshCw, Share2,
 } from "lucide-react";
+import {
+  KeepBusinessHeader,
+  KeepPageFooter,
+} from "@/components/keep/KeepPublicShell";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -350,23 +354,12 @@ export function CustomerTrackerView({
       <div className="mx-auto w-full max-w-2xl space-y-4 sm:space-y-5">
 
         {/* §1 — Business identity */}
-        <div className="flex items-center gap-3 px-1 pb-1">
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[var(--ophalo-navy)] text-sm font-bold tracking-wide text-white">
-            {initials}
-          </div>
-          <div className="min-w-0">
-            <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
-              Private Request Page
-            </p>
-            <p className="truncate text-lg font-bold leading-tight text-foreground">
-              {page.businessName}
-            </p>
-            <p className="mt-1 text-sm text-muted-foreground">
-              This private page keeps your request details and updates from{" "}
-              {page.businessName} in one place.
-            </p>
-          </div>
-        </div>
+        <KeepBusinessHeader
+          businessName={page.businessName}
+          label="Private Request Page"
+          description={`This private page keeps your request details and updates from ${page.businessName} in one place.`}
+          className="pb-1"
+        />
 
         {/* §2 — Status card */}
         <div className="rounded-2xl border border-[var(--ophalo-border)] bg-card px-5 py-5 shadow-sm">
@@ -651,19 +644,7 @@ export function CustomerTrackerView({
       </div>
 
       {/* Footer — quiet Keep attribution */}
-      <footer className="mx-auto w-full max-w-2xl pb-6 pt-4 text-center">
-        <img
-          src="/brand/ophalo-lockup-color.svg"
-          alt="OpHalo"
-          className="mx-auto h-6 w-auto opacity-75"
-        />
-        <p className="mt-2 text-sm font-semibold text-[var(--ophalo-ink)]">
-          Keep by OpHalo
-        </p>
-        <p className="mx-auto mt-1 max-w-md text-sm leading-5 text-[var(--ophalo-muted)]">
-          Request tracking for service businesses that work by phone, text, and in person.
-        </p>
-      </footer>
+      <KeepPageFooter className="mx-auto w-full max-w-2xl" />
     </main>
   );
 }

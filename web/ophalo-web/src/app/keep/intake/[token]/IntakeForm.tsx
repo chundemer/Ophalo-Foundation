@@ -1,15 +1,16 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { ArrowRight, ClipboardList, Lock, MapPin, UserRound } from "lucide-react";
+import { KeepButton } from "@/components/keep/KeepButton";
+import {
+  KeepBusinessHeader,
+  KeepCardShell,
+  KeepPageFooter,
+  KeepSectionHeader,
+} from "@/components/keep/KeepPublicShell";
 
 type Stage = "form" | "submitting" | "success" | "unavailable" | "staff";
-
-function businessInitials(name: string): string {
-  const words = name.trim().split(/\s+/).filter(Boolean);
-  if (words.length === 0) return "?";
-  if (words.length === 1) return words[0].slice(0, 2).toUpperCase();
-  return (words[0][0] + words[1][0]).toUpperCase();
-}
 
 const US_STATES = [
   ["AL","Alabama"],["AK","Alaska"],["AZ","Arizona"],["AR","Arkansas"],["CA","California"],
@@ -78,30 +79,6 @@ const inputClass =
 
 const labelClass = "block text-sm font-medium text-foreground mb-1.5";
 
-function CardSection({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="rounded-2xl border border-[var(--ophalo-border)] bg-card px-5 py-5 shadow-sm">
-      {children}
-    </div>
-  );
-}
-
-function Footer() {
-  return (
-    <footer className="pb-6 pt-4 text-center">
-      <img
-        src="/brand/ophalo-lockup-color.svg"
-        alt="OpHalo"
-        className="mx-auto h-6 w-auto opacity-75"
-      />
-      <p className="mt-2 text-sm font-semibold text-[var(--ophalo-ink)]">Keep by OpHalo</p>
-      <p className="mx-auto mt-1 max-w-md text-sm leading-5 text-[var(--ophalo-muted)]">
-        Request tracking for service businesses that work by phone, text, and in person.
-      </p>
-    </footer>
-  );
-}
-
 export default function IntakeForm({
   token,
   slug,
@@ -115,7 +92,11 @@ export default function IntakeForm({
   const [referenceCode, setReferenceCode] = useState<string>("");
   const [pageToken, setPageToken] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
+  const [showAptUnit, setShowAptUnit] = useState(false);
+  const [showEmail, setShowEmail] = useState(false);
   const submitInFlight = useRef(false);
+
+  const biz = businessName ?? null;
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -193,11 +174,13 @@ export default function IntakeForm({
     submitInFlight.current = false;
   }
 
+  // ─── Terminal states ────────────────────────────────────────────────────────
+
   if (stage === "staff") {
     return (
       <main className="min-h-screen bg-[var(--ophalo-canvas)] px-4 py-6 sm:py-10">
         <div className="mx-auto w-full max-w-2xl space-y-4 sm:space-y-5">
-          <CardSection>
+          <KeepCardShell accentTop>
             <h1 className="text-base font-semibold text-foreground">
               You&apos;re signed in to this account.
             </h1>
@@ -205,14 +188,16 @@ export default function IntakeForm({
               This is the customer intake form. Use Quick Capture or Create Request in the app
               to submit a request on behalf of a customer.
             </p>
-            <a
-              href={process.env.NEXT_PUBLIC_APP_BASE_URL ?? "/"}
-              className="mt-4 inline-flex items-center rounded-lg bg-[var(--keep-accent)] px-4 py-2.5 text-sm font-medium text-white hover:bg-[var(--keep-accent-hover)]"
-            >
-              Open the app
-            </a>
-          </CardSection>
-          <Footer />
+            <div className="mt-4">
+              <KeepButton
+                variant="teal"
+                onClick={() => { window.location.href = process.env.NEXT_PUBLIC_APP_BASE_URL ?? "/"; }}
+              >
+                Open the app
+              </KeepButton>
+            </div>
+          </KeepCardShell>
+          <KeepPageFooter />
         </div>
       </main>
     );
@@ -222,7 +207,7 @@ export default function IntakeForm({
     return (
       <main className="min-h-screen bg-[var(--ophalo-canvas)] px-4 py-6 sm:py-10">
         <div className="mx-auto w-full max-w-2xl space-y-4 sm:space-y-5">
-          <CardSection>
+          <KeepCardShell accentTop>
             <h1 className="text-base font-semibold text-foreground">
               This link is not available.
             </h1>
@@ -230,8 +215,8 @@ export default function IntakeForm({
               This intake link is no longer active. If you were sent this link by a business,
               please contact them directly for assistance.
             </p>
-          </CardSection>
-          <Footer />
+          </KeepCardShell>
+          <KeepPageFooter />
         </div>
       </main>
     );
@@ -243,259 +228,317 @@ export default function IntakeForm({
     return (
       <main className="min-h-screen bg-[var(--ophalo-canvas)] px-4 py-6 sm:py-10">
         <div className="mx-auto w-full max-w-2xl space-y-4 sm:space-y-5">
-          <CardSection>
+          {biz && (
+            <KeepBusinessHeader
+              businessName={biz}
+              label="New request form"
+              className="pb-1"
+            />
+          )}
+          <KeepCardShell accentTop>
             <h1 className="text-base font-semibold text-foreground">Request submitted.</h1>
             <p className="mt-2 text-sm text-muted-foreground">
               Your request has been received. Your reference code is:
             </p>
-            <p className="mt-2 rounded-lg bg-[var(--ophalo-canvas)] px-4 py-3 text-sm font-mono font-semibold text-foreground">
+            <p className="mt-2 rounded-lg bg-[var(--ophalo-canvas)] px-4 py-3 font-mono text-sm font-semibold text-foreground">
               {referenceCode}
             </p>
             <p className="mt-3 text-sm text-muted-foreground">
-              You can check the status of your request and send additional details from your request page.
+              You can check the status of your request and send additional details from your
+              request page.
             </p>
             {trackerUrl && (
-              <div className="mt-4 flex flex-col gap-2 sm:flex-row">
-                <a
-                  href={trackerUrl}
-                  className="inline-flex items-center justify-center rounded-lg bg-[var(--keep-accent)] px-4 py-2.5 text-sm font-medium text-white hover:bg-[var(--keep-accent-hover)]"
+              <div className="mt-4">
+                <KeepButton
+                  variant="teal"
+                  className="gap-2"
+                  onClick={() => { window.location.href = trackerUrl; }}
                 >
                   View your request page
-                </a>
-                <a
-                  href={trackerUrl}
-                  className="inline-flex items-center justify-center rounded-lg border border-[var(--ophalo-border)] bg-card px-4 py-2.5 text-sm font-medium text-foreground hover:bg-muted"
-                >
-                  Save this link
-                </a>
+                  <ArrowRight className="h-4 w-4" aria-hidden />
+                </KeepButton>
               </div>
             )}
             <p className="mt-4 text-xs text-muted-foreground">
-              Tip: save this page to your bookmarks, home screen, or messages so you can find it again.
+              Tip: bookmark this page or save the link to check back anytime — no account required.
             </p>
-          </CardSection>
-          <Footer />
+          </KeepCardShell>
+          <KeepPageFooter />
         </div>
       </main>
     );
   }
 
+  // ─── Form ───────────────────────────────────────────────────────────────────
+
   const submitting = stage === "submitting";
 
   return (
     <main className="min-h-screen bg-[var(--ophalo-canvas)] px-4 py-6 sm:py-10">
-      <div className="mx-auto w-full max-w-2xl space-y-4 sm:space-y-5">
-        {/* Header */}
-        {businessName ? (
-          <div className="flex items-center gap-3 px-1 pb-1">
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[var(--ophalo-navy)] text-sm font-bold tracking-wide text-white">
-              {businessInitials(businessName)}
-            </div>
-            <div className="min-w-0">
-              <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
-                New Request
-              </p>
-              <p className="truncate text-lg font-bold leading-tight text-foreground">
-                {businessName}
-              </p>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Fill out the form below and {businessName} will follow up with you.
-              </p>
-            </div>
-          </div>
+      <div className="mx-auto w-full max-w-2xl">
+
+        {/* Business identity header */}
+        {biz ? (
+          <KeepBusinessHeader
+            businessName={biz}
+            label="New request form"
+            className="mb-4 sm:mb-5"
+          />
         ) : (
-          <CardSection>
-            <h1 className="text-lg font-semibold text-foreground">Submit a request</h1>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Fill out the form below and the business will follow up with you.
+          <div className="mb-4 px-1 sm:mb-5">
+            <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+              New request form
             </p>
-          </CardSection>
+          </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-5">
-          {/* Contact details */}
-          <CardSection>
-            <h2 className="mb-4 text-sm font-semibold text-foreground">Your contact details</h2>
-            <div className="space-y-4">
-              <div>
-                <label htmlFor="customerName" className={labelClass}>
-                  Your name <span className="text-destructive">*</span>
-                </label>
-                <input
-                  id="customerName"
-                  name="customerName"
-                  type="text"
-                  autoComplete="name"
-                  required
-                  disabled={submitting}
-                  className={inputClass}
-                  placeholder="Full name"
-                />
-              </div>
-
-              <div>
-                <label htmlFor="customerPhone" className={labelClass}>
-                  Phone number <span className="text-destructive">*</span>
-                </label>
-                <input
-                  id="customerPhone"
-                  name="customerPhone"
-                  type="tel"
-                  autoComplete="tel"
-                  inputMode="tel"
-                  required
-                  disabled={submitting}
-                  className={inputClass}
-                  placeholder="(555) 000-0000"
-                />
-              </div>
-
-              <div>
-                <label htmlFor="customerEmail" className={labelClass}>
-                  Email address <span className="text-muted-foreground font-normal">(optional)</span>
-                </label>
-                <input
-                  id="customerEmail"
-                  name="customerEmail"
-                  type="email"
-                  autoComplete="email"
-                  inputMode="email"
-                  disabled={submitting}
-                  className={inputClass}
-                  placeholder="you@example.com"
-                />
-              </div>
-            </div>
-          </CardSection>
-
-          {/* Service location */}
-          <CardSection>
-            <h2 className="mb-1 text-sm font-semibold text-foreground">Service location</h2>
-            <p className="mb-4 text-xs text-muted-foreground">
-              Shared with this business only. Not shown on your request page.
+        <form onSubmit={handleSubmit}>
+          {/* Main card with teal accent */}
+          <KeepCardShell accentTop>
+            {/* Card headline */}
+            <h1 className="text-xl font-bold leading-snug text-foreground sm:text-2xl">
+              {biz ? `What can ${biz} help with?` : "How can we help?"}
+            </h1>
+            <p className="mt-1.5 text-sm text-muted-foreground">
+              {biz
+                ? `Share a few details and ${biz} will follow up with your private request link.`
+                : "Share a few details and the business will follow up with your private request link."}
             </p>
-            <div className="space-y-4">
-              <div>
-                <label htmlFor="serviceAddressLine1" className={labelClass}>
-                  Address <span className="text-destructive">*</span>
-                </label>
-                <input
-                  id="serviceAddressLine1"
-                  name="serviceAddressLine1"
-                  type="text"
-                  autoComplete="address-line1"
-                  required
-                  disabled={submitting}
-                  className={inputClass}
-                  placeholder="Street address"
-                />
-              </div>
 
-              <div>
-                <label htmlFor="serviceAddressLine2" className={labelClass}>
-                  Apt, suite, unit <span className="text-muted-foreground font-normal">(optional)</span>
-                </label>
-                <input
-                  id="serviceAddressLine2"
-                  name="serviceAddressLine2"
-                  type="text"
-                  autoComplete="address-line2"
-                  disabled={submitting}
-                  className={inputClass}
-                  placeholder="Apt 4B"
-                />
-              </div>
-
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-                <div className="sm:col-span-1">
-                  <label htmlFor="serviceCity" className={labelClass}>
-                    City <span className="text-destructive">*</span>
-                  </label>
-                  <input
-                    id="serviceCity"
-                    name="serviceCity"
-                    type="text"
-                    autoComplete="address-level2"
-                    required
-                    disabled={submitting}
-                    className={inputClass}
-                    placeholder="City"
-                  />
-                </div>
-
-                <div className="sm:col-span-1">
-                  <label htmlFor="serviceState" className={labelClass}>
-                    State <span className="text-destructive">*</span>
-                  </label>
-                  <select
-                    id="serviceState"
-                    name="serviceState"
-                    required
-                    disabled={submitting}
-                    defaultValue=""
-                    className={inputClass}
-                  >
-                    <option value="" disabled>Select state</option>
-                    {US_STATES.map(([code, name]) => (
-                      <option key={code} value={code}>{name}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="sm:col-span-1">
-                  <label htmlFor="serviceZip" className={labelClass}>
-                    ZIP <span className="text-muted-foreground font-normal">(optional)</span>
-                  </label>
-                  <input
-                    id="serviceZip"
-                    name="serviceZip"
-                    type="text"
-                    autoComplete="postal-code"
-                    inputMode="numeric"
-                    disabled={submitting}
-                    className={inputClass}
-                    placeholder="00000"
-                  />
-                </div>
-              </div>
-            </div>
-          </CardSection>
-
-          {/* Request details */}
-          <CardSection>
-            <h2 className="mb-4 text-sm font-semibold text-foreground">Request details</h2>
-            <div>
-              <label htmlFor="description" className={labelClass}>
-                What do you need help with? <span className="text-destructive">*</span>
-              </label>
+            {/* ── Section 1: Request details ── */}
+            <div className="mt-6 border-t border-[var(--ophalo-border)] pt-5">
+              <KeepSectionHeader
+                icon={<ClipboardList className="h-4 w-4" />}
+                label="What do you need help with?"
+              />
               <textarea
                 id="description"
                 name="description"
-                rows={4}
+                rows={5}
                 required
                 disabled={submitting}
                 className={inputClass + " resize-none"}
-                placeholder="Describe the issue or what you need…"
+                placeholder="Example: My AC stopped blowing cold air last night. The fan is running but no cool air is coming out."
               />
             </div>
-          </CardSection>
 
-          {error && (
-            <div className="rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3">
-              <p className="text-sm text-destructive">{error}</p>
+            {/* ── Section 2: Service location ── */}
+            <div className="mt-6 border-t border-[var(--ophalo-border)] pt-5">
+              <KeepSectionHeader
+                icon={<MapPin className="h-4 w-4" />}
+                label="Where is the service needed?"
+              />
+
+              <div className="space-y-3">
+                <div>
+                  <label htmlFor="serviceAddressLine1" className={labelClass}>
+                    Street address <span className="text-destructive">*</span>
+                  </label>
+                  <input
+                    id="serviceAddressLine1"
+                    name="serviceAddressLine1"
+                    type="text"
+                    autoComplete="address-line1"
+                    required
+                    disabled={submitting}
+                    className={inputClass}
+                    placeholder="123 Main St"
+                  />
+                </div>
+
+                {showAptUnit ? (
+                  <div>
+                    <label htmlFor="serviceAddressLine2" className={labelClass}>
+                      Apt / unit{" "}
+                      <span className="font-normal text-muted-foreground">(optional)</span>
+                    </label>
+                    <input
+                      id="serviceAddressLine2"
+                      name="serviceAddressLine2"
+                      type="text"
+                      autoComplete="address-line2"
+                      disabled={submitting}
+                      className={inputClass}
+                      placeholder="Apt 4B"
+                    />
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setShowAptUnit(true)}
+                    className="text-xs font-medium text-[var(--ophalo-navy)] underline-offset-2 hover:underline focus-visible:outline-none"
+                  >
+                    + Add apartment / unit
+                  </button>
+                )}
+
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_120px_100px]">
+                  <div>
+                    <label htmlFor="serviceCity" className={labelClass}>
+                      City <span className="text-destructive">*</span>
+                    </label>
+                    <input
+                      id="serviceCity"
+                      name="serviceCity"
+                      type="text"
+                      autoComplete="address-level2"
+                      required
+                      disabled={submitting}
+                      className={inputClass}
+                      placeholder="City"
+                    />
+                  </div>
+
+                  <div>
+                    <label htmlFor="serviceState" className={labelClass}>
+                      State <span className="text-destructive">*</span>
+                    </label>
+                    <select
+                      id="serviceState"
+                      name="serviceState"
+                      required
+                      disabled={submitting}
+                      defaultValue=""
+                      className={inputClass}
+                    >
+                      <option value="" disabled>State</option>
+                      {US_STATES.map(([code, name]) => (
+                        <option key={code} value={code}>{name}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label htmlFor="serviceZip" className={labelClass}>
+                      ZIP{" "}
+                      <span className="font-normal text-muted-foreground">(opt.)</span>
+                    </label>
+                    <input
+                      id="serviceZip"
+                      name="serviceZip"
+                      type="text"
+                      autoComplete="postal-code"
+                      inputMode="numeric"
+                      disabled={submitting}
+                      className={inputClass}
+                      placeholder="00000"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-3 flex items-center gap-1.5 text-xs text-muted-foreground">
+                <Lock className="h-3 w-3 shrink-0" aria-hidden />
+                <span>
+                  Shared with {biz ?? "this business"} only. Not shown on your request page.
+                </span>
+              </div>
             </div>
-          )}
 
-          <button
-            type="submit"
-            disabled={submitting}
-            className="w-full rounded-lg bg-[var(--keep-accent)] px-4 py-3 text-sm font-semibold text-white hover:bg-[var(--keep-accent-hover)] disabled:opacity-50"
-          >
-            {submitting ? "Submitting…" : "Submit request"}
-          </button>
+            {/* ── Section 3: Contact ── */}
+            <div className="mt-6 border-t border-[var(--ophalo-border)] pt-5">
+              <KeepSectionHeader
+                icon={<UserRound className="h-4 w-4" />}
+                label="Who should we contact?"
+              />
+
+              <div className="space-y-3">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <div>
+                    <label htmlFor="customerName" className={labelClass}>
+                      Name <span className="text-destructive">*</span>
+                    </label>
+                    <input
+                      id="customerName"
+                      name="customerName"
+                      type="text"
+                      autoComplete="name"
+                      required
+                      disabled={submitting}
+                      className={inputClass}
+                      placeholder="Your name"
+                    />
+                  </div>
+
+                  <div>
+                    <label htmlFor="customerPhone" className={labelClass}>
+                      Phone <span className="text-destructive">*</span>
+                    </label>
+                    <input
+                      id="customerPhone"
+                      name="customerPhone"
+                      type="tel"
+                      autoComplete="tel"
+                      inputMode="tel"
+                      required
+                      disabled={submitting}
+                      className={inputClass}
+                      placeholder="(555) 000-0000"
+                    />
+                  </div>
+                </div>
+
+                {showEmail ? (
+                  <div>
+                    <label htmlFor="customerEmail" className={labelClass}>
+                      Email{" "}
+                      <span className="font-normal text-muted-foreground">(optional)</span>
+                    </label>
+                    <input
+                      id="customerEmail"
+                      name="customerEmail"
+                      type="email"
+                      autoComplete="email"
+                      inputMode="email"
+                      disabled={submitting}
+                      className={inputClass}
+                      placeholder="you@example.com"
+                    />
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setShowEmail(true)}
+                    className="text-xs font-medium text-[var(--ophalo-navy)] underline-offset-2 hover:underline focus-visible:outline-none"
+                  >
+                    + Add optional email for backup tracking
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* ── Submit ── */}
+            <div className="mt-6 border-t border-[var(--ophalo-border)] pt-5">
+              {error && (
+                <div className="mb-4 rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3">
+                  <p className="text-sm text-destructive">{error}</p>
+                </div>
+              )}
+
+              <KeepButton
+                type="submit"
+                variant="teal"
+                disabled={submitting}
+                className="w-full gap-2"
+              >
+                {submitting ? (
+                  "Submitting…"
+                ) : (
+                  <>
+                    Submit request
+                    <ArrowRight className="h-4 w-4" aria-hidden />
+                  </>
+                )}
+              </KeepButton>
+
+              <p className="mt-3 text-center text-xs text-muted-foreground">
+                You&apos;ll get a private request page after submitting.
+              </p>
+            </div>
+          </KeepCardShell>
         </form>
 
-        <Footer />
+        <KeepPageFooter />
       </div>
     </main>
   );

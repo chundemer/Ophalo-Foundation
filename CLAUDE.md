@@ -133,4 +133,4 @@ context window.
 Claude may run targeted read-only inspection, builds, and tests. Christian runs interactive,
 authenticated, deployment, and migration commands such as `dotnet ef`, cloud CLIs, and deploys.
 
-_OpHalo — Quiet Intelligence. Clear Decisions._
+_OpHalo — The trust and continuity layer between your business and the people you serve._
