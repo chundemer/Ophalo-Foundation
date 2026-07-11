@@ -2,6 +2,7 @@ import { useState, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ChevronLeft,
+  ChevronRight,
   Copy,
   Check,
   Share2,
@@ -2175,9 +2176,12 @@ function TeamSection({ requestId, detail, onDetailUpdated }: TeamSectionProps) {
 interface RequestDetailProps {
   requestId: string;
   onBack: () => void;
+  prevId?: string;
+  nextId?: string;
+  onNavigate?: (id: string) => void;
 }
 
-export function RequestDetail({ requestId, onBack }: RequestDetailProps) {
+export function RequestDetail({ requestId, onBack, prevId, nextId, onNavigate }: RequestDetailProps) {
   const [shareCleared, setShareCleared] = useState(false);
   const [contactModal, setContactModal] = useState<{ direction: string; channel: string } | null>(null);
   const [businessUpdateDraft, setBusinessUpdateDraft] = useState("");
@@ -2303,7 +2307,7 @@ export function RequestDetail({ requestId, onBack }: RequestDetailProps) {
         />
       )}
 
-      {/* Back breadcrumb */}
+      {/* Back breadcrumb + queue navigation */}
       <div className="flex items-center gap-2 px-4 py-3 bg-[var(--ophalo-card)] border-b border-[var(--ophalo-border)] shrink-0">
         <button
           type="button"
@@ -2317,6 +2321,30 @@ export function RequestDetail({ requestId, onBack }: RequestDetailProps) {
           <span className="text-sm text-[var(--ophalo-muted)] font-mono ml-1">
             {detail.referenceCode}
           </span>
+        )}
+        {onNavigate && (prevId !== undefined || nextId !== undefined) && (
+          <div className="ml-auto flex items-center gap-1">
+            <button
+              type="button"
+              disabled={!prevId}
+              onClick={() => prevId && onNavigate(prevId)}
+              aria-label="Previous request"
+              className={`flex items-center gap-0.5 px-2 py-1 text-xs font-medium rounded text-[var(--ophalo-muted)] hover:text-[var(--ophalo-ink)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors ${FOCUS_RING}`}
+            >
+              <ChevronLeft className="h-3.5 w-3.5" />
+              Prev
+            </button>
+            <button
+              type="button"
+              disabled={!nextId}
+              onClick={() => nextId && onNavigate(nextId)}
+              aria-label="Next request"
+              className={`flex items-center gap-0.5 px-2 py-1 text-xs font-medium rounded text-[var(--ophalo-muted)] hover:text-[var(--ophalo-ink)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors ${FOCUS_RING}`}
+            >
+              Next
+              <ChevronRight className="h-3.5 w-3.5" />
+            </button>
+          </div>
         )}
       </div>
 

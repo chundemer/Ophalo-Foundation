@@ -24,6 +24,10 @@ type AppRoute =
   | { page: "settings"; section?: "public-profile" | "policy" | "team" }
   | { page: "detail"; requestId: string };
 
+interface RequestNavContext {
+  requestIds: string[];
+}
+
 function getRouteFromLocation(): AppRoute {
   const match = window.location.hash.match(/^#\/request\/(.+)$/);
   if (match?.[1]) return { page: "detail", requestId: match[1] };
@@ -61,6 +65,7 @@ function AppShell() {
   const [captureOpen, setCaptureOpen] = useState(false);
   const [route, setRoute] = useState<AppRoute>(getRouteFromLocation);
   const [viewCounts, setViewCounts] = useState<KeepRequestViewCounts | null>(null);
+  const [navContext, setNavContext] = useState<RequestNavContext | null>(null);
   const handleViewCountsUpdate = useCallback(setViewCounts, []);
 
   useEffect(() => {
@@ -98,13 +103,26 @@ function AppShell() {
     navigate({ page: "settings", section });
   }
 
-  function selectRequest(requestId: string) {
+  function selectRequest(requestId: string, context?: RequestNavContext) {
     navigate({ page: "detail", requestId });
+    setNavContext(context ?? null);
   }
 
   function backToRequests() {
     navigate({ page: "requests" });
+    setNavContext(null);
   }
+
+  const currentNavIdx =
+    route.page === "detail" && navContext
+      ? navContext.requestIds.indexOf(route.requestId)
+      : -1;
+  const prevRequestId =
+    currentNavIdx > 0 ? navContext!.requestIds[currentNavIdx - 1] : undefined;
+  const nextRequestId =
+    currentNavIdx >= 0 && navContext && currentNavIdx < navContext.requestIds.length - 1
+      ? navContext.requestIds[currentNavIdx + 1]
+      : undefined;
 
   const activeNavId: "home" | "requests" | "settings" =
     route.page === "home" ? "home"
@@ -205,7 +223,13 @@ function AppShell() {
         )}
         {route.page === "settings" && <Settings callerRole={role} scrollToSection={route.section} />}
         {route.page === "detail" && (
-          <RequestDetail requestId={route.requestId} onBack={backToRequests} />
+          <RequestDetail
+            requestId={route.requestId}
+            onBack={backToRequests}
+            prevId={prevRequestId}
+            nextId={nextRequestId}
+            onNavigate={(id) => selectRequest(id, navContext ?? undefined)}
+          />
         )}
       </main>
 

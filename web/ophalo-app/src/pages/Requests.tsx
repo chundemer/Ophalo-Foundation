@@ -148,7 +148,7 @@ interface RequestsProps {
   role: AccountRole;
   viewCounts: KeepRequestViewCounts | null;
   onViewCountsUpdate: (counts: KeepRequestViewCounts | null) => void;
-  onSelectRequest: (requestId: string) => void;
+  onSelectRequest: (requestId: string, navContext?: { requestIds: string[] }) => void;
 }
 
 export function Requests({ role, viewCounts, onViewCountsUpdate, onSelectRequest }: RequestsProps) {
@@ -240,6 +240,13 @@ export function Requests({ role, viewCounts, onViewCountsUpdate, onSelectRequest
   }
 
   const summaryPills = buildSummaryPills(viewCounts, tabs);
+
+  function handleRowSelect(id: string) {
+    const ids = isAvailableTab
+      ? (availableQuery.data?.requests ?? []).map((r) => r.requestId)
+      : (listQuery.data?.requests ?? []).map((r) => r.id);
+    onSelectRequest(id, { requestIds: ids });
+  }
 
   return (
     <div className="flex flex-col h-full bg-[var(--ophalo-canvas)]">
@@ -410,10 +417,10 @@ export function Requests({ role, viewCounts, onViewCountsUpdate, onSelectRequest
           <div className="space-y-2">
             {isAvailableTab
               ? (availableQuery.data?.requests ?? []).map((row) => (
-                  <AvailableRequestRow key={row.requestId} row={row} onSelect={onSelectRequest} />
+                  <AvailableRequestRow key={row.requestId} row={row} onSelect={handleRowSelect} />
                 ))
               : (listQuery.data?.requests ?? []).map((row) => (
-                  <RequestRow key={row.id} row={row} onSelect={onSelectRequest} />
+                  <RequestRow key={row.id} row={row} onSelect={handleRowSelect} />
                 ))
             }
           </div>
