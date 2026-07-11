@@ -271,6 +271,7 @@ export function installMockApi(): void {
       customerPageLastViewedAtUtc: null,
       customerPageViewedAfterLatestUpdate: null,
       intakeUrgency: "routine",
+      businessPriority: null,
       contactPreference: "no_preference",
       serviceAddressLine1: null,
       serviceAddressLine2: null,
@@ -343,6 +344,7 @@ export function installMockApi(): void {
       needsShare: false,
       source: "public_intake",
       intakeUrgency: "routine",
+      businessPriority: null,
       contactPreference: "no_preference",
       serviceAddressLine1: null,
       serviceAddressLine2: null,
@@ -536,6 +538,22 @@ export function installMockApi(): void {
         availableActions: { ...d.availableActions, canMarkFeedbackReviewed: false },
       },
       { eventType: "FeedbackReviewed", occurredAtUtc: now, content: body.note ?? null },
+    );
+    updateMockDetail(requestId, updated);
+    return delay(withRoleActions(updated));
+  };
+
+  api.setBusinessPriority = (requestId, priority, _version) => {
+    const d = getMockDetail(requestId);
+    if (!d) return Promise.reject(new Error("Mock: request not found"));
+    const updated = appendEvent(
+      { ...d, businessPriority: priority },
+      {
+        eventType: "business_priority_changed",
+        occurredAtUtc: new Date().toISOString(),
+        content: priority ? `Priority set to ${priority}` : "Priority cleared",
+        visibility: "internal",
+      },
     );
     updateMockDetail(requestId, updated);
     return delay(withRoleActions(updated));

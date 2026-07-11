@@ -354,6 +354,7 @@ export interface KeepRequestDetailResult {
   customerPageLastViewedAtUtc: string | null;
   customerPageViewedAfterLatestUpdate: boolean | null;
   intakeUrgency: string;
+  businessPriority: string | null;
   contactPreference: string;
   serviceAddressLine1: string | null;
   serviceAddressLine2: string | null;
@@ -460,6 +461,7 @@ export interface KeepRequestSummary {
   needsShare: boolean;
   source: string | null;
   intakeUrgency: string;
+  businessPriority: string | null;
   contactPreference: string;
   serviceAddressLine1: string | null;
   serviceAddressLine2: string | null;
@@ -602,6 +604,12 @@ export const api = {
       method: "PUT",
       headers: { "X-Keep-Request-Version": version },
       body: JSON.stringify(body),
+    }),
+  setBusinessPriority: (requestId: string, priority: string | null, version: string) =>
+    apiFetch<KeepRequestDetailResult>(`/keep/requests/${requestId}/priority`, {
+      method: "PUT",
+      headers: { "X-Keep-Request-Version": version },
+      body: JSON.stringify({ priority }),
     }),
   acknowledgeAttention: (requestId: string, reason: string, version: string) =>
     apiFetch<KeepRequestDetailResult>(`/keep/requests/${requestId}/attention/acknowledge`, {

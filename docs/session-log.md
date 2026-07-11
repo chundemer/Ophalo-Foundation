@@ -3,7 +3,7 @@
 **Last updated:** 2026-07-10 (S22 complete; pre-next-session issues pending)
 **Branch:** `main` tracking `origin/main`
 **Last green baseline:** Targeted intake baseline — 66 intake unit · 25 intake integration confirmed; full suite pending (1 pre-existing KeepG5 fluke excluded)
-**Next free ADR:** ADR-433
+**Next free ADR:** ADR-434
 **Current session:** Between sessions — Session 22 complete
 
 ---
@@ -154,10 +154,14 @@ Queued Claude slices:
   UI clarification pass: `KeepRequestRankingInfo` type added to `apiClient.ts`; `Overdue` badge now
   shown first in badge row when `ranking.isOverdue`; danger left-border for overdue rows; `Due [date]`
   compact text from `ranking.dueAtUtc`; mock fixtures updated. TypeScript clean.
-- **S22p10 — Business-editable request priority:** add `BusinessPriority` as the business triage
-  override for customer-reported `IntakeUrgency`; use `Keep.RequestsOperate`, preserve the original
-  customer urgency, suppress the customer urgent fallback once business priority is set, and create
-  ADR-433 for the priority/urgency separation.
+- **S22p10 — Business-editable request priority:** **Complete.** Backend: `BusinessPriority` enum
+  (Routine/Soon/Urgent), `SetBusinessPriority` domain method, `BusinessPriorityChanged = 17` event
+  type, `SetBusinessPriorityService`, `PUT /keep/requests/{requestId}/priority` endpoint, EF migration
+  (`business_priority` nullable varchar(50)), effective-priority ranking override in list service.
+  ADR-433 locked. Frontend: `KeepRequestSummary`/`KeepRequestDetailResult` updated, dual-signal badge
+  in `RequestRow.tsx`, Priority selector in `RequestDetail.tsx` (`canAddInternalNote` gate), mock
+  fixtures (10 locations) and mockApiClient inline details + stub updated. TypeScript clean.
+  Committed at `743a664` (backend + tests + ADR) and frontend pending commit.
 - Full Claude-ready details and locked decisions are in
   `docs/build-log/076-session-22-guided-setup-intake-and-service-location.md`.
 
@@ -166,7 +170,7 @@ Recommended slice order:
 1. Request detail command cleanup: complete.
 2. Request detail queue navigation: complete (see above).
 3. S22p9 urgency-aware queue ordering: **complete** (see above).
-4. Complete S22p10 business-priority slice.
+4. S22p10 business-priority slice: **complete** (see above).
 5. Resume build-log 078 or build-log 077 — command-center issues are now settled.
 
 ### Completed S22 Summary

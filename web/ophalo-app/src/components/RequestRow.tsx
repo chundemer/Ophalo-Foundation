@@ -156,13 +156,31 @@ export function RequestRow({ row, onSelect }: RequestRowProps) {
           <AttentionBadge reason={row.attention.attentionReason} />
         )}
         <StatusBadge status={row.status} />
-        {row.source === "public_intake" && row.intakeUrgency === "urgent" && (
+        {/* Business priority overrides intake urgency when set. Show both when they differ. */}
+        {row.businessPriority === "urgent" && (
+          <KeepBadge variant="danger" className="gap-1">
+            <AlertTriangle className="h-3 w-3" />
+            Priority: Urgent
+          </KeepBadge>
+        )}
+        {row.businessPriority === "soon" && (
+          <KeepBadge variant="attention" className="gap-1">
+            <Clock className="h-3 w-3" />
+            Priority: Soon
+          </KeepBadge>
+        )}
+        {/* Show intake urgency alongside when business priority suppressed/overrode it */}
+        {row.businessPriority !== null && row.businessPriority !== row.intakeUrgency && row.source === "public_intake" && row.intakeUrgency === "urgent" && (
+          <span className="text-[11px] text-[var(--ophalo-muted)]">Customer: urgent</span>
+        )}
+        {/* No business priority set — fall back to intake urgency display */}
+        {row.businessPriority === null && row.source === "public_intake" && row.intakeUrgency === "urgent" && (
           <KeepBadge variant="danger" className="gap-1">
             <AlertTriangle className="h-3 w-3" />
             Urgent
           </KeepBadge>
         )}
-        {row.source === "public_intake" && row.intakeUrgency === "soon" && (
+        {row.businessPriority === null && row.source === "public_intake" && row.intakeUrgency === "soon" && (
           <KeepBadge variant="attention" className="gap-1">
             <Clock className="h-3 w-3" />
             Soon

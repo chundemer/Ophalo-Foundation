@@ -1608,6 +1608,40 @@ function OriginalRequestCard({ detail, onContactLaunched, onDetailUpdated }: Ori
         </div>
       </div>
 
+      {/* Business priority — editable triage field; shown for all request types */}
+      <div className="mt-3 flex items-center gap-2">
+        <span className="text-xs text-[var(--ophalo-muted)] shrink-0">Priority:</span>
+        {canEditLocation ? (
+          <select
+            value={detail.businessPriority ?? ""}
+            onChange={async (e) => {
+              const val = e.target.value || null;
+              try {
+                const updated = await api.setBusinessPriority(
+                  detail.requestId, val, detail.version
+                );
+                onDetailUpdated(updated);
+              } catch {
+                // version conflict or network error — detail will re-fetch on next user action
+              }
+            }}
+            className="text-xs text-[var(--ophalo-ink)] bg-transparent border border-[var(--ophalo-border)] rounded px-2 py-0.5 focus:outline-none focus:ring-1 focus:ring-[var(--keep-accent)]"
+          >
+            <option value="">Not set</option>
+            <option value="routine">Routine</option>
+            <option value="soon">Soon</option>
+            <option value="urgent">Urgent</option>
+          </select>
+        ) : (
+          <span className="text-xs text-[var(--ophalo-muted)]">
+            {detail.businessPriority === "urgent" && "Urgent"}
+            {detail.businessPriority === "soon" && "Soon"}
+            {detail.businessPriority === "routine" && "Routine"}
+            {detail.businessPriority === null && "Not set"}
+          </span>
+        )}
+      </div>
+
       <p className="text-xs text-[var(--ophalo-muted)] mt-3">
         Submitted {formatDate(detail.createdAtUtc)}
       </p>
