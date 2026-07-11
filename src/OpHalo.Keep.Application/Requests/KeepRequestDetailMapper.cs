@@ -97,6 +97,7 @@ internal static class KeepRequestDetailMapper
         CustomerPageLastViewedAtUtc: request.CustomerPageLastViewedAtUtc,
         CustomerPageViewedAfterLatestUpdate: ComputeViewedAfterLatestUpdate(request),
         IntakeUrgency: MapIntakeUrgency(request.IntakeUrgency),
+        BusinessPriority: MapBusinessPriority(request.BusinessPriority),
         ContactPreference: MapContactPreference(request.ContactPreference),
         ServiceAddressLine1: request.ServiceAddressLine1,
         ServiceAddressLine2: request.ServiceAddressLine2,
@@ -194,6 +195,15 @@ internal static class KeepRequestDetailMapper
         IntakeUrgency.Soon    => "soon",
         IntakeUrgency.Urgent  => "urgent",
         _ => throw new InvalidOperationException($"Unknown IntakeUrgency: {urgency}")
+    };
+
+    private static string? MapBusinessPriority(BusinessPriority? priority) => priority switch
+    {
+        null                       => null,
+        BusinessPriority.Routine   => "routine",
+        BusinessPriority.Soon      => "soon",
+        BusinessPriority.Urgent    => "urgent",
+        _ => throw new InvalidOperationException($"Unknown BusinessPriority: {priority}")
     };
 
     private static string MapContactPreference(ContactPreference preference) => preference switch
@@ -395,7 +405,8 @@ internal static class KeepRequestDetailMapper
         KeepRequestEventType.PlannedForChanged     => "planned_for_changed",
         KeepRequestEventType.RequestClassified     => "request_classified",
         KeepRequestEventType.ShareIntentRecorded   => "share_intent_recorded",
-        KeepRequestEventType.ServiceLocationChanged => "service_location_changed",
+        KeepRequestEventType.ServiceLocationChanged  => "service_location_changed",
+        KeepRequestEventType.BusinessPriorityChanged => "business_priority_changed",
         _ => throw new InvalidOperationException($"Unknown KeepRequestEventType: {type}")
     };
 

@@ -105,6 +105,9 @@ public sealed class KeepRequest : BaseEntity
     // Customer-reported urgency (S22p2). Default Routine; never auto-elevates attention.
     public IntakeUrgency IntakeUrgency { get; private set; } = IntakeUrgency.Routine;
 
+    // Business-set operational priority (ADR-433, S22p10). Null = not set; overrides IntakeUrgency in ranking when set.
+    public BusinessPriority? BusinessPriority { get; private set; }
+
     // Customer-stated contact preference (S22p3). Default NoPreference.
     public ContactPreference ContactPreference { get; private set; } = ContactPreference.NoPreference;
 
@@ -1246,6 +1249,38 @@ public sealed class KeepRequest : BaseEntity
             Id, AccountId, actorAccountUserId, actorDisplayName, nowUtc);
 
         return Result<KeepRequestEvent>.Success(ev);
+    }
+
+    public Result<KeepRequestEvent> SetBusinessPriority(
+        Enums.BusinessPriority? priority,
+        Guid actorAccountUserId,
+        string actorDisplayName,
+        DateTime nowUtc)
+    {
+        if (nowUtc == default)
+            throw new ArgumentException("nowUtc must be a valid UTC timestamp.", nameof(nowUtc));
+        if (actorAccountUserId == Guid.Empty)
+            throw new ArgumentException("Actor account user ID is required.", nameof(actorAccountUserId));
+        if (string.IsNullOrWhiteSpace(actorDisplayName))
+            throw new ArgumentException("Actor display name is required.", nameof(actorDisplayName));
+
+        var previous = BusinessPriority;
+        BusinessPriority = priority;
+
+        var content = FormatPriorityChangeContent(previous, priority);
+
+        var ev = KeepRequestEvent.CreateBusinessPriorityChanged(
+            Id, AccountId, actorAccountUserId, actorDisplayName, content, nowUtc);
+
+        return Result<KeepRequestEvent>.Success(ev);
+    }
+
+    private static string FormatPriorityChangeContent(
+        Enums.BusinessPriority? previous, Enums.BusinessPriority? next)
+    {
+        var prevLabel = previous.HasValue ? previous.Value.ToString() : "Not set";
+        var nextLabel = next.HasValue ? next.Value.ToString() : "Not set";
+        return $"Priority changed from {prevLabel} to {nextLabel}";
     }
 
     private static KeepRequest CreateCore(

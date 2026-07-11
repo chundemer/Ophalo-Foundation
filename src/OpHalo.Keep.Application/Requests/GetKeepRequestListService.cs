@@ -759,6 +759,7 @@ public sealed class GetKeepRequestListService(
             NeedsShare: r.NeedsShare,
             Source: MapSource(r.Source),
             IntakeUrgency: MapIntakeUrgency(r.IntakeUrgency),
+            BusinessPriority: MapBusinessPriority(r.BusinessPriority),
             ContactPreference: MapContactPreference(r.ContactPreference),
             ServiceAddressLine1: r.ServiceAddressLine1,
             ServiceAddressLine2: r.ServiceAddressLine2,
@@ -786,7 +787,7 @@ public sealed class GetKeepRequestListService(
             && r.WaitingDirection == WaitingDirection.Business)
             return ("priority_business_waiting", 2);
 
-        if (r.IntakeUrgency == IntakeUrgency.Urgent
+        if (IsEffectivelyUrgent(r)
             && r.Status is not KeepRequestStatus.PendingCustomer
             && r.Status is not KeepRequestStatus.Resolved
             && !r.IsTerminal)
@@ -1108,6 +1109,21 @@ public sealed class GetKeepRequestListService(
         IntakeUrgency.Urgent  => "urgent",
         _ => throw new InvalidOperationException($"Unknown IntakeUrgency: {urgency}")
     };
+
+    private static string? MapBusinessPriority(BusinessPriority? priority) => priority switch
+    {
+        null                     => null,
+        BusinessPriority.Routine => "routine",
+        BusinessPriority.Soon    => "soon",
+        BusinessPriority.Urgent  => "urgent",
+        _ => throw new InvalidOperationException($"Unknown BusinessPriority: {priority}")
+    };
+
+    // Effective urgency: BusinessPriority overrides IntakeUrgency when set (ADR-433).
+    private static bool IsEffectivelyUrgent(KeepRequest r) =>
+        r.BusinessPriority.HasValue
+            ? r.BusinessPriority.Value == BusinessPriority.Urgent
+            : r.IntakeUrgency == IntakeUrgency.Urgent;
 
     private static string MapContactPreference(ContactPreference preference) => preference switch
     {

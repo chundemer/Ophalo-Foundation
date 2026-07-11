@@ -934,6 +934,92 @@ public class KeepRequestListServiceTests
         Assert.Equal("RTN", refs[2]); // first_response_pending (6)
     }
 
+    // --- BusinessPriority effective-priority ranking (ADR-433) ---
+
+    [Fact]
+    public async Task Execute_business_priority_urgent_overrides_routine_intake_urgency_to_rank_group_3()
+    {
+        var request = MakeRequest(firstResponseTargetMinutes: 60);
+        // IntakeUrgency defaults to Routine; BusinessPriority set to Urgent — effective = Urgent.
+        SetProp(request, nameof(KeepRequest.BusinessPriority), BusinessPriority.Urgent);
+        SetProp(request, nameof(KeepRequest.WaitingDirection), WaitingDirection.None);
+
+        var p = HappyPathPersistence([request]);
+        var sut = BuildSut(p);
+        var result = await sut.ExecuteAsync();
+
+        Assert.True(result.IsSuccess);
+        var ranking = result.Value.Requests[0].Ranking;
+        Assert.Equal("customer_urgent_active", ranking.RankingGroup);
+        Assert.Equal(3, ranking.RankingOrder);
+    }
+
+    [Fact]
+    public async Task Execute_business_priority_routine_suppresses_urgent_intake_urgency()
+    {
+        var request = MakeRequest(firstResponseTargetMinutes: 60);
+        SetProp(request, nameof(KeepRequest.IntakeUrgency), IntakeUrgency.Urgent);
+        // BusinessPriority = Routine overrides the customer signal — not urgent.
+        SetProp(request, nameof(KeepRequest.BusinessPriority), BusinessPriority.Routine);
+        SetProp(request, nameof(KeepRequest.WaitingDirection), WaitingDirection.None);
+
+        var p = HappyPathPersistence([request]);
+        var sut = BuildSut(p);
+        var result = await sut.ExecuteAsync();
+
+        Assert.True(result.IsSuccess);
+        var ranking = result.Value.Requests[0].Ranking;
+        Assert.NotEqual("customer_urgent_active", ranking.RankingGroup);
+        Assert.Equal("first_response_pending", ranking.RankingGroup);
+        Assert.Equal(6, ranking.RankingOrder);
+    }
+
+    [Fact]
+    public async Task Execute_null_business_priority_falls_back_to_intake_urgency()
+    {
+        var request = MakeRequest(firstResponseTargetMinutes: 60);
+        SetProp(request, nameof(KeepRequest.IntakeUrgency), IntakeUrgency.Urgent);
+        // BusinessPriority is null (unset) — falls back to IntakeUrgency.
+        SetProp(request, nameof(KeepRequest.WaitingDirection), WaitingDirection.None);
+
+        var p = HappyPathPersistence([request]);
+        var sut = BuildSut(p);
+        var result = await sut.ExecuteAsync();
+
+        Assert.True(result.IsSuccess);
+        var ranking = result.Value.Requests[0].Ranking;
+        Assert.Equal("customer_urgent_active", ranking.RankingGroup);
+        Assert.Equal(3, ranking.RankingOrder);
+    }
+
+    [Fact]
+    public async Task Execute_business_priority_exposed_as_string_on_summary()
+    {
+        var request = MakeRequest();
+        SetProp(request, nameof(KeepRequest.BusinessPriority), BusinessPriority.Soon);
+
+        var p = HappyPathPersistence([request]);
+        var sut = BuildSut(p);
+        var result = await sut.ExecuteAsync();
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal("soon", result.Value.Requests[0].BusinessPriority);
+    }
+
+    [Fact]
+    public async Task Execute_null_business_priority_is_null_on_summary()
+    {
+        var request = MakeRequest();
+        // BusinessPriority defaults to null.
+
+        var p = HappyPathPersistence([request]);
+        var sut = BuildSut(p);
+        var result = await sut.ExecuteAsync();
+
+        Assert.True(result.IsSuccess);
+        Assert.Null(result.Value.Requests[0].BusinessPriority);
+    }
+
     [Fact]
     public async Task Execute_first_response_pending_ranks_group_6_attention_severity()
     {

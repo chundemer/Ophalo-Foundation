@@ -54,6 +54,7 @@ public sealed record KeepRequestDetailResult(
     DateTime? CustomerPageLastViewedAtUtc,
     bool? CustomerPageViewedAfterLatestUpdate,
     string IntakeUrgency,
+    string? BusinessPriority,
     string ContactPreference,
     string? ServiceAddressLine1,
     string? ServiceAddressLine2,

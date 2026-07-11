@@ -17,5 +17,6 @@ public enum KeepRequestEventType
     PlannedForChanged = 13,
     RequestClassified = 14,
     ShareIntentRecorded = 15,
-    ServiceLocationChanged = 16
+    ServiceLocationChanged = 16,
+    BusinessPriorityChanged = 17
 }

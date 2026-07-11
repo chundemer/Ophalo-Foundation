@@ -681,4 +681,44 @@ public sealed class KeepRequestEvent : BaseEntity
         };
     }
 
+    /// <summary>
+    /// Creates a BusinessPriorityChanged event. Always Internal — business triage priority is
+    /// staff-only and must never be surfaced on the customer page. Content carries the human-readable
+    /// change description ("Priority changed from X to Y") for the operator timeline.
+    /// </summary>
+    public static KeepRequestEvent CreateBusinessPriorityChanged(
+        Guid requestId,
+        Guid accountId,
+        Guid actorAccountUserId,
+        string actorDisplayName,
+        string content,
+        DateTime occurredAtUtc)
+    {
+        if (requestId == Guid.Empty)
+            throw new ArgumentException("Request ID is required.", nameof(requestId));
+        if (accountId == Guid.Empty)
+            throw new ArgumentException("Account ID is required.", nameof(accountId));
+        if (actorAccountUserId == Guid.Empty)
+            throw new ArgumentException("Actor account user ID is required.", nameof(actorAccountUserId));
+        if (string.IsNullOrWhiteSpace(actorDisplayName))
+            throw new ArgumentException("Actor display name is required.", nameof(actorDisplayName));
+        if (string.IsNullOrWhiteSpace(content))
+            throw new ArgumentException("Content is required.", nameof(content));
+        if (occurredAtUtc == default)
+            throw new ArgumentException("occurredAtUtc must be a real timestamp.", nameof(occurredAtUtc));
+
+        return new KeepRequestEvent
+        {
+            RequestId          = requestId,
+            AccountId          = accountId,
+            EventType          = KeepRequestEventType.BusinessPriorityChanged,
+            Visibility         = KeepRequestEventVisibility.Internal,
+            ActorType          = ActorType.AccountUser,
+            ActorAccountUserId = actorAccountUserId,
+            ActorDisplayName   = actorDisplayName.Trim(),
+            Content            = content.Trim(),
+            OccurredAtUtc      = occurredAtUtc
+        };
+    }
+
 }

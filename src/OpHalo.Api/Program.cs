@@ -147,6 +147,7 @@ builder.Services.AddScoped<MarkFeedbackReviewedService>();
 builder.Services.AddScoped<ManageRequestTimingService>();
 builder.Services.AddScoped<ClearShareIntentService>();
 builder.Services.AddScoped<UpdateServiceLocationService>();
+builder.Services.AddScoped<SetBusinessPriorityService>();
 builder.Services.AddScoped<GetParticipantCandidatesService>();
 builder.Services.AddScoped<KeepRequestParticipationService>();
 builder.Services.AddScoped<KeepPublicCustomerAccessGuard>();
@@ -840,6 +841,36 @@ app.MapPut("/keep/requests/{requestId:guid}/service-location", async (
         body.State,
         body.Zip,
         versionResult.Value);
+    var result = await service.ExecuteAsync(command, ct);
+    return result.IsSuccess ? Results.Ok(result.Value) : ErrorHttpMapper.ToHttpResult(result.Error);
+}).RequireAuthorization();
+
+app.MapPut("/keep/requests/{requestId:guid}/priority", async (
+    Guid requestId,
+    HttpRequest httpRequest,
+    BusinessPriorityRequest body,
+    SetBusinessPriorityService service,
+    CancellationToken ct) =>
+{
+    var versionResult = KeepRequestVersionHeader.Parse(httpRequest.Headers);
+    if (!versionResult.IsSuccess)
+        return ErrorHttpMapper.ToHttpResult(versionResult.Error);
+
+    BusinessPriority? priority = null;
+    if (!string.IsNullOrWhiteSpace(body.Priority))
+    {
+        priority = body.Priority.ToLowerInvariant() switch
+        {
+            "routine" => BusinessPriority.Routine,
+            "soon"    => BusinessPriority.Soon,
+            "urgent"  => BusinessPriority.Urgent,
+            _         => (BusinessPriority?)null
+        };
+        if (priority is null)
+            return Results.UnprocessableEntity(new { error = "Invalid priority value. Expected: routine, soon, or urgent." });
+    }
+
+    var command = new SetBusinessPriorityCommand(requestId, priority, versionResult.Value);
     var result = await service.ExecuteAsync(command, ct);
     return result.IsSuccess ? Results.Ok(result.Value) : ErrorHttpMapper.ToHttpResult(result.Error);
 }).RequireAuthorization();

@@ -31,6 +31,7 @@ public sealed record KeepRequestSummary(
     bool NeedsShare,
     string? Source,
     string IntakeUrgency,
+    string? BusinessPriority,
     string ContactPreference,
     string? ServiceAddressLine1,
     string? ServiceAddressLine2,

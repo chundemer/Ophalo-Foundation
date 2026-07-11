@@ -142,6 +142,11 @@ internal sealed class KeepRequestConfiguration : BaseEntityConfiguration<KeepReq
             .IsRequired()
             .HasDefaultValue(IntakeUrgency.Routine);
 
+        // Business-set operational priority (ADR-433, S22p10). Nullable — null means unset.
+        builder.Property(x => x.BusinessPriority)
+            .HasConversion<string>()
+            .HasMaxLength(50);
+
         // Customer-stated contact preference (S22p3). Default NoPreference.
         builder.Property(x => x.ContactPreference)
             .HasConversion<string>()
