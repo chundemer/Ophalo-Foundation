@@ -1,10 +1,10 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-07-10 (S22 complete; pre-next-session issues pending)
+**Last updated:** 2026-07-11 (S23 complete — S23a/b/c/d implemented and committed)
 **Branch:** `main` tracking `origin/main`
 **Last green baseline:** Targeted intake baseline — 66 intake unit · 25 intake integration confirmed; full suite pending (1 pre-existing KeepG5 fluke excluded)
-**Next free ADR:** ADR-434
-**Current session:** Between sessions — Session 22 complete
+**Next free ADR:** ADR-435
+**Current session:** Session 23 complete — next: 077 file decomposition or 078 tracker-link email
 
 ---
 
@@ -34,14 +34,14 @@ For every implementation slice:
 
 ## Current Work
 
-**Current build log:** none active
+**Current build log:** `docs/build-log/080-session-23-work-completed-closeout-ux.md`
 **Latest completed build log:** `docs/build-log/076-session-22-guided-setup-intake-and-service-location.md`
 **Last completed prior-session build log:** `docs/build-log/075-session-21-attention-guidance-resolution-metadata.md`
 **Readiness working doc:** `docs/pilot-readiness-decision-questions.md`
 **Bug/gap tracker:** `docs/pilot-readiness-bug-tracker.md`
 **Foundation roadmap:** `docs/build-log/ophalo-foundation-build-plan-greenfield-boundaries-brownfield-behavior.md` section 9.1
-**Current session:** Between sessions — Session 22 complete
-**Current slice:** None active — discuss/resolve pre-next-session issues before selecting build-log 078 or 077
+**Current session:** Session 23 — work-completed / closeout UX foundation
+**Current slice:** 080 planning/implementation handoff — no new code without explicit approval
 
 ### Completed Context
 
@@ -118,13 +118,47 @@ Topology:
 - Pilot cap: `SignupDefaults:MaxPilotAccounts=15`.
 - `OperatorBaseUrl` is retired; invite links use `{PublicBaseUrl}/invite/accept`.
 
-### Pre-Next-Session Discussion Queue
+### Active Build Log 080 — Work Completed And Closeout UX
 
-No next implementation session is selected yet. Use this space to capture and resolve Christian's
-issues before opening build-log 078 or resuming build-log 077.
+Build-log 080 is the current decision/handoff document:
+`docs/build-log/080-session-23-work-completed-closeout-ux.md`.
 
-- Request detail command-center simplification: split into small UI slices before the next major
-  session rather than bundling into tracker-link email or pre-deployment cleanup.
+Authoritative decision:
+
+- ADR-434: staff-facing lifecycle UX labels backend/API status `resolved` as **Work completed** while
+  preserving `KeepRequestStatus.Resolved` and API slug `resolved`.
+- Operator/staff completion and Owner/Admin closeout remain separate:
+  - **Mark work done** -> backend `resolved`;
+  - **Close request** -> backend `closed`.
+- Normal primary **Mark work done** appears only when server metadata allows `resolved` and
+  `attentionLevel == "none"`.
+- If active attention exists, Needs Attention guidance/action stays primary. Any completion
+  affordance must be demoted and explicit, e.g. **Mark work done, attention remains**.
+- **Close request** appears only for Owner/Admin when server metadata exposes `canClose` and
+  `allowedStatuses` includes `closed`.
+- `Ready to Close` excludes active attention. Work-completed rows with attention remain attention
+  work, not closeout work.
+- Customers do not directly close, reopen, or mark work completed in V1.
+
+### Completed S23 Slices
+
+- **S23a/b/c — PWA lifecycle UX** (`38473f5`): `WorkDoneCard` attention-safe (normal primary only
+  when `attentionLevel=="none"`; demoted "Mark work done, attention remains" when active); new
+  `CloseRequestCard` (Owner/Admin, `canClose && resolved && no attention`); "Ready for closeout"
+  badge in `ready_to_close` row view; `WorkDoneCard` added to desktop right rail (was mobile-only).
+  `navView=ready_to_close` close-and-next navigation: no existing infrastructure — gap deferred.
+
+- **S23d — Mobile carry-forward** (pending commit): All contracts present in `AvailableActionsDto`
+  / `KeepRequestDetailDto`. Implemented: `resolved` → "Work completed" label; standalone "Mark work
+  done" section (attention-gated); "Close request" section (Owner/Admin, attention-gated);
+  "Send Update & Mark Completed" → "Send Update & Mark work done" + attention guard. New hook:
+  `usePatchRequestStatus`. Deferred: mobile attention section copy (raw fields, no action guidance).
+
+### Next Sessions
+
+Choose one of:
+1. **077** — pre-deployment file decomposition (`RequestDetail.tsx` split). Now unblocked.
+2. **078** — customer tracker-link email / Resend configuration.
 
 Resolved before next session:
 
@@ -144,7 +178,7 @@ Resolved before next session:
   `Requests` through `App` to `RequestDetail`; disabled at list boundaries; no nav shown on direct
   open (QuickCapture, deep link). Committed and pushed (`14347ce`).
 
-Queued Claude slices:
+Completed S22 Claude slices:
 
 - **S22p9 — Urgency-aware default queue ordering:** **Complete.** Added `customer_urgent_active`
   ranking bucket (order 3) covering any urgent active intake not yet terminal, pending-customer, or
@@ -165,13 +199,13 @@ Queued Claude slices:
 - Full Claude-ready details and locked decisions are in
   `docs/build-log/076-session-22-guided-setup-intake-and-service-location.md`.
 
-Recommended slice order:
+Current recommended slice order:
 
-1. Request detail command cleanup: complete.
-2. Request detail queue navigation: complete (see above).
-3. S22p9 urgency-aware queue ordering: **complete** (see above).
-4. S22p10 business-priority slice: **complete** (see above).
-5. Resume build-log 078 or build-log 077 — command-center issues are now settled.
+1. S23a — PWA status language and attention-safe Mark Work Done.
+2. S23b — PWA Owner/Admin Close Request card.
+3. S23c — Ready-to-close row/detail polish.
+4. Decide whether S23d mobile carry-forward is implementation or deferred audit only.
+5. Resume build-log 078 or build-log 077 after 080 is closed or explicitly paused.
 
 ### Completed S22 Summary
 

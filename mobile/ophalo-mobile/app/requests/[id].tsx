@@ -34,6 +34,7 @@ import { useAssignResponsible } from '@/src/hooks/useAssignResponsible';
 import { useSetFollowUpOn, useClearFollowUpOn } from '@/src/hooks/useFollowUpOn';
 import { useSetPlannedFor, useClearPlannedFor } from '@/src/hooks/usePlannedFor';
 import { useAddInternalNote } from '@/src/hooks/useAddInternalNote';
+import { usePatchRequestStatus } from '@/src/hooks/usePatchRequestStatus';
 import { useNetworkState } from '@/src/hooks/useNetworkState';
 
 const PUBLIC_BASE_URL = (process.env.EXPO_PUBLIC_PUBLIC_BASE_URL ?? '').replace(/\/$/, '');
@@ -112,6 +113,8 @@ function RequestDetailContent({
   const { mutate: setPlannedFor, isPending: isSettingPlannedFor } = useSetPlannedFor();
   const { mutate: clearPlannedFor, isPending: isClearingPlannedFor } = useClearPlannedFor();
   const { mutate: addInternalNote, isPending: isAddingNote } = useAddInternalNote();
+  const { mutate: patchStatus, isPending: isPatchingStatus, error: patchStatusError, reset: resetPatchStatus } = usePatchRequestStatus();
+  const [patchStatusConflict, setPatchStatusConflict] = useState(false);
   const { isOnline } = useNetworkState();
 
   if (isLoading) {
@@ -139,7 +142,9 @@ function RequestDetailContent({
     );
   }
 
-  const status = data.currentStatusText?.trim() || normalizeLabel(data.status);
+  const status = data.status === 'resolved'
+    ? 'Work completed'
+    : data.currentStatusText?.trim() || normalizeLabel(data.status);
   const responsible = data.participants.find(
     (p) => p.participationType === 'responsible' && p.detachedAtUtc === null,
   );
@@ -718,6 +723,78 @@ function RequestDetailContent({
           </Section>
         )}
 
+        {data.availableActions.canChangeStatus &&
+          data.availableActions.allowedStatuses.includes('resolved') &&
+          data.status !== 'resolved' &&
+          data.attentionLevel.toLowerCase() === 'none' && (
+          <Section cardBg={cardBg}>
+            <Text style={styles.sectionLabel}>Work completed</Text>
+            <Text style={styles.actionLabel}>Mark this when the work has been performed. Owner/Admin can close the request after review.</Text>
+            {patchStatusError && !patchStatusConflict && (
+              <Text style={styles.composerError}>Could not mark work done. Try again.</Text>
+            )}
+            {patchStatusConflict && (
+              <Text style={styles.composerError}>Request has changed — details refreshed. Review and try again.</Text>
+            )}
+            <TouchableOpacity
+              style={[styles.actionButton, (isPatchingStatus || !isOnline) && styles.actionButtonDisabled]}
+              onPress={() => {
+                setPatchStatusConflict(false);
+                resetPatchStatus();
+                patchStatus(
+                  { requestId: data.requestId, version: data.version, status: 'resolved' },
+                  {
+                    onError: (err) => {
+                      if (err instanceof ApiError && (err.status === 409 || err.code === 'KeepRequest.RequestChanged')) {
+                        setPatchStatusConflict(true);
+                      }
+                    },
+                  },
+                );
+              }}
+              disabled={isPatchingStatus || !isOnline}
+            >
+              <Text style={styles.actionButtonText}>{isPatchingStatus ? 'Saving…' : 'Mark work done'}</Text>
+            </TouchableOpacity>
+          </Section>
+        )}
+
+        {data.availableActions.canClose &&
+          data.availableActions.allowedStatuses.includes('closed') &&
+          data.status === 'resolved' &&
+          data.attentionLevel.toLowerCase() === 'none' && (
+          <Section cardBg={cardBg}>
+            <Text style={styles.sectionLabel}>Ready to close</Text>
+            <Text style={styles.actionLabel}>Close this request when the business is done managing it. The customer can still leave one-time feedback.</Text>
+            {patchStatusError && !patchStatusConflict && (
+              <Text style={styles.composerError}>Could not close request. Try again.</Text>
+            )}
+            {patchStatusConflict && (
+              <Text style={styles.composerError}>Request has changed — details refreshed. Review and try again.</Text>
+            )}
+            <TouchableOpacity
+              style={[styles.actionButton, (isPatchingStatus || !isOnline) && styles.actionButtonDisabled]}
+              onPress={() => {
+                setPatchStatusConflict(false);
+                resetPatchStatus();
+                patchStatus(
+                  { requestId: data.requestId, version: data.version, status: 'closed' },
+                  {
+                    onError: (err) => {
+                      if (err instanceof ApiError && (err.status === 409 || err.code === 'KeepRequest.RequestChanged')) {
+                        setPatchStatusConflict(true);
+                      }
+                    },
+                  },
+                );
+              }}
+              disabled={isPatchingStatus || !isOnline}
+            >
+              <Text style={styles.actionButtonText}>{isPatchingStatus ? 'Closing…' : 'Close request'}</Text>
+            </TouchableOpacity>
+          </Section>
+        )}
+
         {data.availableActions.canSendBusinessUpdate && (
           <Section cardBg={cardBg}>
             <Text style={styles.sectionLabel}>Customer Update</Text>
@@ -748,7 +825,9 @@ function RequestDetailContent({
             >
               <Text style={styles.actionButtonText}>Send Update</Text>
             </TouchableOpacity>
-            {data.availableActions.allowedStatuses.includes('resolved') && (
+            {data.availableActions.allowedStatuses.includes('resolved') &&
+              data.status !== 'resolved' &&
+              data.attentionLevel.toLowerCase() === 'none' && (
               <TouchableOpacity
                 style={[
                   styles.actionButtonOutline,
@@ -758,7 +837,7 @@ function RequestDetailContent({
                 onPress={() => handleSendUpdate('resolved')}
                 disabled={composerText.trim() === '' || isSendingUpdate || !isOnline}
               >
-                <Text style={styles.actionButtonOutlineText}>Send Update & Mark Completed</Text>
+                <Text style={styles.actionButtonOutlineText}>Send Update & Mark work done</Text>
               </TouchableOpacity>
             )}
           </Section>
