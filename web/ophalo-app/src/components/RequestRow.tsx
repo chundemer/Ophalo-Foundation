@@ -1,4 +1,4 @@
-import { AlertTriangle, Clock, MessageSquare, Link, ChevronRight, UserRound } from "lucide-react";
+import { AlertTriangle, Clock, MessageSquare, Link, ChevronRight, UserRound, CheckCircle2 } from "lucide-react";
 import { KeepBadge, type KeepBadgeVariant } from "./keep/KeepBadge";
 import type { KeepRequestSummary, KeepRequestAvailableItem, KeepQuickAction } from "../lib/apiClient";
 
@@ -81,6 +81,8 @@ function statusBadgeVariant(status: string): KeepBadgeVariant {
 function StatusBadge({ status }: { status: string }) {
   const label = status === "in_progress"
     ? "Active"
+    : status === "resolved"
+      ? "Work completed"
     : status.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
   return <KeepBadge variant={statusBadgeVariant(status)}>{label}</KeepBadge>;
 }
@@ -112,9 +114,10 @@ function actionPrompt(quickActions: KeepQuickAction[]): string | null {
 interface RequestRowProps {
   row: KeepRequestSummary;
   onSelect: (requestId: string) => void;
+  showCloseoutCue?: boolean;
 }
 
-export function RequestRow({ row, onSelect }: RequestRowProps) {
+export function RequestRow({ row, onSelect, showCloseoutCue }: RequestRowProps) {
   const lastTouch = relativeTime(row.lastBusinessActivityAtUtc ?? row.updatedAtUtc);
   const prompt = row.attention.attentionReason ? actionPrompt(row.actions.quickActions) : null;
   const tone = row.attention.attentionReason ? attentionTone(row.attention.attentionReason) : null;
@@ -156,6 +159,12 @@ export function RequestRow({ row, onSelect }: RequestRowProps) {
           <AttentionBadge reason={row.attention.attentionReason} />
         )}
         <StatusBadge status={row.status} />
+        {showCloseoutCue && row.status === "resolved" && !row.attention.attentionReason && (
+          <KeepBadge variant="success" className="gap-1">
+            <CheckCircle2 className="h-3 w-3" />
+            Ready for closeout
+          </KeepBadge>
+        )}
         {/* Business priority overrides intake urgency when set. Show both when they differ. */}
         {row.businessPriority === "urgent" && (
           <KeepBadge variant="danger" className="gap-1">

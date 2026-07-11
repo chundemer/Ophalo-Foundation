@@ -105,13 +105,14 @@ const FOLLOW_UP_REASON_LABELS: Record<string, string> = {
 
 function statusLabel(status: string): string {
   if (status === "in_progress") return "Active";
+  if (status === "resolved") return "Work completed";
   return status.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
 function statusBadgeVariant(status: string): KeepBadgeVariant {
   if (status === "in_progress") return "teal";
   if (status.includes("needs") || status.includes("waiting") || status.includes("reply")) return "attention";
-  if (status === "complete") return "success";
+  if (status === "resolved" || status === "closed" || status === "complete") return "success";
   return "default";
 }
 
@@ -1488,99 +1489,170 @@ interface OriginalRequestCardProps {
 
 function OriginalRequestCard({ detail, onContactLaunched, onDetailUpdated }: OriginalRequestCardProps) {
   const [showLocationModal, setShowLocationModal] = useState(false);
+  const [pendingPriority, setPendingPriority] = useState<string | null | undefined>(undefined);
   const canEditLocation = detail.availableActions.canAddInternalNote;
+  const hasAddress = !!(detail.serviceAddressLine1 || detail.serviceCity);
+  const displayPriority = pendingPriority !== undefined ? pendingPriority : detail.businessPriority;
+  const emailActions = detail.contactActions.filter((a) => a.available && a.type !== "call");
+
   return (
-    <div className="rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-5 py-4">
+    <div className="rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-5 py-4 space-y-4">
+
+      {/* 1. Customer description */}
       {detail.description && (
-        <p className="text-sm leading-6 text-[var(--ophalo-ink)] whitespace-pre-wrap mb-3">
-          {detail.description}
-        </p>
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--ophalo-muted)] mb-1">
+            Customer description
+          </p>
+          <p className="text-sm leading-6 text-[var(--ophalo-ink)] whitespace-pre-wrap">
+            {detail.description}
+          </p>
+        </div>
       )}
 
-      {/* Contact info + launchers */}
-      <div className="flex flex-wrap items-center gap-2">
-        {detail.customerPhone && (
-          <span className="flex items-center gap-1.5 text-sm text-[var(--ophalo-muted)]">
-            <Phone className="h-3.5 w-3.5 shrink-0" />
-            {detail.customerPhone}
-          </span>
-        )}
-        {detail.customerEmail && (
-          <span className="flex items-center gap-1.5 text-sm text-[var(--ophalo-muted)]">
-            <Mail className="h-3.5 w-3.5 shrink-0" />
-            {detail.customerEmail}
-          </span>
-        )}
-        {detail.contactActions
-          .filter((a) => a.available)
-          .filter((a) => a.type !== "call")
-          .map((action) =>
-            <a
-              key={action.type}
-              href={`mailto:${action.target}`}
-              onClick={() => onContactLaunched("outbound", "email")}
-              className={`inline-flex min-h-[32px] items-center gap-1.5 rounded-full border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-3 text-xs font-semibold text-[var(--ophalo-ink)] hover:border-[var(--keep-accent)] hover:bg-[var(--keep-accent-bg)] hover:text-[var(--keep-accent)] transition-colors ${FOCUS_RING}`}
-            >
-              <Mail className="h-3 w-3 text-[var(--keep-accent)] shrink-0" />
-              Email
-            </a>,
-          )}
-      </div>
+      {/* 2. Responsive two-column metadata grid */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
 
-      <div className="mt-3 flex flex-col gap-1">
-        {detail.source === "public_intake" ? (
-          <>
-            <p className="text-xs text-[var(--ophalo-muted)]">
-              Source: Customer intake — customer has a Keep request page.
-            </p>
-            {detail.intakeUrgency !== "routine" && (
-              <p className="flex items-center gap-1.5 text-xs text-[var(--ophalo-muted)]">
-                <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-[var(--ophalo-attention)]" />
-                {detail.intakeUrgency === "urgent"
-                  ? "Customer marked this urgent."
-                  : "Customer marked this soon."}
+        {/* Left column: contact + triage signals */}
+        <div className="space-y-3">
+
+          {/* Customer Phone */}
+          {detail.customerPhone && (
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--ophalo-muted)] mb-0.5">
+                Customer Phone
               </p>
-            )}
-            <p className="text-xs text-[var(--ophalo-muted)]">
-              Preferred contact:{" "}
-              {detail.contactPreference === "text_message" && "Text message"}
-              {detail.contactPreference === "phone_call" && "Phone call"}
-              {detail.contactPreference === "email" && "Email"}
-              {detail.contactPreference === "no_preference" && "No preference"}
-            </p>
-          </>
-        ) : (
-          <p className="text-xs text-[var(--ophalo-muted)]">
-            Source: Team added — share the customer page when useful.
-          </p>
-        )}
+              <span className="flex items-center gap-1.5">
+                <Phone className="h-3.5 w-3.5 shrink-0 text-[var(--ophalo-muted)]" />
+                <span className="text-sm font-semibold text-[var(--ophalo-ink)]">{detail.customerPhone}</span>
+              </span>
+            </div>
+          )}
 
-        {/* Service location — shown for all request types; internal-only */}
-        <div className="mt-2">
-          {(detail.serviceAddressLine1 || detail.serviceCity) ? (
-            <div className="flex items-start justify-between gap-2">
-              <div>
-                <p className="text-xs font-semibold text-[var(--ophalo-muted)]">Service location</p>
-                {detail.serviceAddressLine1 && (
-                  <p className="text-xs text-[var(--ophalo-muted)]">{detail.serviceAddressLine1}</p>
+          {/* Customer Email + launch action */}
+          {detail.customerEmail && (
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--ophalo-muted)] mb-0.5">
+                Customer Email
+              </p>
+              <span className="flex items-center gap-1.5">
+                <Mail className="h-3.5 w-3.5 shrink-0 text-[var(--ophalo-muted)]" />
+                <span className="text-sm font-semibold text-[var(--ophalo-ink)]">{detail.customerEmail}</span>
+              </span>
+              {emailActions.map((action) => (
+                <a
+                  key={action.type}
+                  href={`mailto:${action.target}`}
+                  onClick={() => onContactLaunched("outbound", "email")}
+                  className={`mt-1.5 inline-flex min-h-[32px] items-center gap-1.5 rounded-full border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-3 text-xs font-semibold text-[var(--ophalo-ink)] hover:border-[var(--keep-accent)] hover:bg-[var(--keep-accent-bg)] hover:text-[var(--keep-accent)] transition-colors ${FOCUS_RING}`}
+                >
+                  <Mail className="h-3 w-3 text-[var(--keep-accent)] shrink-0" />
+                  Email
+                </a>
+              ))}
+            </div>
+          )}
+
+          {/* Preferences & Urgency — public_intake only */}
+          {detail.source === "public_intake" && (
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--ophalo-muted)] mb-1">
+                Preferences &amp; Urgency
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {detail.intakeUrgency === "urgent" && (
+                  <KeepBadge variant="attention">Urgent Request</KeepBadge>
                 )}
-                {detail.serviceAddressLine2 && (
-                  <p className="text-xs text-[var(--ophalo-muted)]">{detail.serviceAddressLine2}</p>
+                {detail.intakeUrgency === "soon" && (
+                  <KeepBadge variant="default">Soon</KeepBadge>
                 )}
-                {detail.serviceCity && detail.serviceState && (
-                  <p className="text-xs text-[var(--ophalo-muted)]">
-                    {detail.serviceCity}, {detail.serviceState}{detail.serviceZip ? ` ${detail.serviceZip}` : ""}
-                  </p>
+                {detail.contactPreference === "phone_call" && (
+                  <KeepBadge variant="default">Phone call</KeepBadge>
+                )}
+                {detail.contactPreference === "text_message" && (
+                  <KeepBadge variant="default">Text message</KeepBadge>
+                )}
+                {detail.contactPreference === "email" && (
+                  <KeepBadge variant="default">Email</KeepBadge>
+                )}
+                {detail.contactPreference === "no_preference" && (
+                  <KeepBadge variant="default">No contact preference</KeepBadge>
                 )}
               </div>
-              {canEditLocation && (
-                <button
-                  type="button"
-                  onClick={() => setShowLocationModal(true)}
-                  className={`shrink-0 text-xs text-[var(--keep-accent)] hover:underline ${FOCUS_RING} rounded`}
-                >
-                  Edit
-                </button>
+            </div>
+          )}
+
+          {/* Business priority */}
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--ophalo-muted)] mb-0.5">
+              Priority
+            </p>
+            {canEditLocation ? (
+              <select
+                value={displayPriority ?? ""}
+                onChange={async (e) => {
+                  const val = e.target.value || null;
+                  setPendingPriority(val);
+                  try {
+                    const updated = await api.setBusinessPriority(
+                      detail.requestId, val, detail.version
+                    );
+                    onDetailUpdated(updated);
+                  } catch {
+                    // revert optimistic update on error
+                  } finally {
+                    setPendingPriority(undefined);
+                  }
+                }}
+                className="text-xs text-[var(--ophalo-ink)] bg-transparent border border-[var(--ophalo-border)] rounded px-2 py-0.5 focus:outline-none focus:ring-1 focus:ring-[var(--keep-accent)]"
+              >
+                <option value="">Not set</option>
+                <option value="routine">Routine</option>
+                <option value="soon">Soon</option>
+                <option value="urgent">Urgent</option>
+              </select>
+            ) : (
+              <span className="text-sm font-semibold text-[var(--ophalo-ink)]">
+                {detail.businessPriority === "urgent" && "Urgent"}
+                {detail.businessPriority === "soon" && "Soon"}
+                {detail.businessPriority === "routine" && "Routine"}
+                {detail.businessPriority === null && (
+                  <span className="text-[var(--ophalo-muted)]">Not set</span>
+                )}
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Right column: service location */}
+        <div>
+          <div className="flex items-center justify-between gap-2 mb-1">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--ophalo-muted)]">
+              Service Location
+            </p>
+            {canEditLocation && hasAddress && (
+              <button
+                type="button"
+                onClick={() => setShowLocationModal(true)}
+                className={`shrink-0 text-xs text-[var(--keep-accent)] hover:underline ${FOCUS_RING} rounded`}
+              >
+                Edit Address
+              </button>
+            )}
+          </div>
+
+          {hasAddress ? (
+            <div>
+              {detail.serviceAddressLine1 && (
+                <p className="text-sm font-semibold text-[var(--ophalo-ink)]">{detail.serviceAddressLine1}</p>
+              )}
+              {detail.serviceAddressLine2 && (
+                <p className="text-sm text-[var(--ophalo-ink)]">{detail.serviceAddressLine2}</p>
+              )}
+              {detail.serviceCity && detail.serviceState && (
+                <p className="text-sm text-[var(--ophalo-ink)]">
+                  {detail.serviceCity}, {detail.serviceState}{detail.serviceZip ? ` ${detail.serviceZip}` : ""}
+                </p>
               )}
             </div>
           ) : (
@@ -1608,43 +1680,15 @@ function OriginalRequestCard({ detail, onContactLaunched, onDetailUpdated }: Ori
         </div>
       </div>
 
-      {/* Business priority — editable triage field; shown for all request types */}
-      <div className="mt-3 flex items-center gap-2">
-        <span className="text-xs text-[var(--ophalo-muted)] shrink-0">Priority:</span>
-        {canEditLocation ? (
-          <select
-            value={detail.businessPriority ?? ""}
-            onChange={async (e) => {
-              const val = e.target.value || null;
-              try {
-                const updated = await api.setBusinessPriority(
-                  detail.requestId, val, detail.version
-                );
-                onDetailUpdated(updated);
-              } catch {
-                // version conflict or network error — detail will re-fetch on next user action
-              }
-            }}
-            className="text-xs text-[var(--ophalo-ink)] bg-transparent border border-[var(--ophalo-border)] rounded px-2 py-0.5 focus:outline-none focus:ring-1 focus:ring-[var(--keep-accent)]"
-          >
-            <option value="">Not set</option>
-            <option value="routine">Routine</option>
-            <option value="soon">Soon</option>
-            <option value="urgent">Urgent</option>
-          </select>
-        ) : (
-          <span className="text-xs text-[var(--ophalo-muted)]">
-            {detail.businessPriority === "urgent" && "Urgent"}
-            {detail.businessPriority === "soon" && "Soon"}
-            {detail.businessPriority === "routine" && "Routine"}
-            {detail.businessPriority === null && "Not set"}
-          </span>
-        )}
+      {/* 3. Footer: source + submitted timestamp */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 pt-3 border-t border-[var(--ophalo-border)]">
+        <p className="text-xs text-[var(--ophalo-muted)]">
+          Source: {detail.source === "public_intake" ? "Customer Intake Form" : "Team added"}
+        </p>
+        <p className="text-xs text-[var(--ophalo-muted)]">
+          Submitted {formatDate(detail.createdAtUtc)}
+        </p>
       </div>
-
-      <p className="text-xs text-[var(--ophalo-muted)] mt-3">
-        Submitted {formatDate(detail.createdAtUtc)}
-      </p>
 
       {showLocationModal && (
         <ServiceLocationModal
@@ -1754,6 +1798,198 @@ function AttentionGuidanceCard({ detail, highlights }: AttentionGuidanceCardProp
 const BUSINESS_UPDATE_EXCLUDED_STATUSES = new Set(["closed", "cancelled", "spam", "test"]);
 const BUSINESS_UPDATE_CONFLICT_MESSAGE =
   "This request was updated. Refresh to see the latest state. Your message is saved here.";
+
+interface WorkDoneCardProps {
+  requestId: string;
+  detail: KeepRequestDetailResult;
+  onDetailUpdated: (updated: KeepRequestDetailResult) => void;
+}
+
+function WorkDoneCard({ requestId, detail, onDetailUpdated }: WorkDoneCardProps) {
+  const baseEligible =
+    detail.availableActions.canChangeStatus &&
+    detail.availableActions.allowedStatuses.includes("resolved") &&
+    detail.status !== "resolved";
+  const isNormalPath = baseEligible && detail.attentionLevel === "none";
+  const isDemotedPath = baseEligible && detail.attentionLevel !== "none";
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [conflictDisabled, setConflictDisabled] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  if (!isNormalPath && !isDemotedPath) return null;
+
+  async function handleMarkDone() {
+    if (isSubmitting || conflictDisabled) return;
+    setIsSubmitting(true);
+    setError(null);
+    try {
+      const updated = await api.patchRequestStatus(
+        requestId,
+        { status: "resolved" },
+        detail.version,
+      );
+      onDetailUpdated(updated);
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 409) {
+        setConflictDisabled(true);
+        setError("This request was updated. Refresh to see the latest state.");
+      } else {
+        setError("Could not mark work done. Try again.");
+      }
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  if (isNormalPath) {
+    return (
+      <div className="rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-5 py-5">
+        <div className="mb-3 flex items-start justify-between gap-3">
+          <div>
+            <p className="text-base font-semibold text-[var(--ophalo-ink)]">Work completed</p>
+            <p className="mt-1 text-xs leading-5 text-[var(--ophalo-muted)]">
+              Mark this when the work has been performed. Owner/Admin can close the request after review.
+            </p>
+          </div>
+          <KeepBadge variant="success">Primary action</KeepBadge>
+        </div>
+        {error && (
+          <div
+            aria-live="polite"
+            className={`mb-3 rounded-lg p-3 text-xs ${
+              conflictDisabled
+                ? "bg-[var(--ophalo-attention-bg)] text-[var(--ophalo-attention)]"
+                : "bg-[var(--ophalo-danger-bg)] text-[var(--ophalo-danger)]"
+            }`}
+          >
+            {error}
+          </div>
+        )}
+        <KeepButton
+          type="button"
+          variant="teal"
+          disabled={isSubmitting || conflictDisabled}
+          onClick={() => void handleMarkDone()}
+          className="w-full"
+        >
+          {isSubmitting ? "Saving…" : "Mark work done"}
+        </KeepButton>
+      </div>
+    );
+  }
+
+  // Demoted path: attention is active; make this secondary and explicit
+  return (
+    <div className="rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-5 py-4 opacity-80">
+      <p className="text-sm font-semibold text-[var(--ophalo-ink)] mb-1">Mark work done, attention remains</p>
+      <p className="text-xs leading-5 text-[var(--ophalo-muted)] mb-3">
+        This records that the work was performed, but this request still needs attention before it can be closed.
+      </p>
+      {error && (
+        <div
+          aria-live="polite"
+          className={`mb-3 rounded-lg p-3 text-xs ${
+            conflictDisabled
+              ? "bg-[var(--ophalo-attention-bg)] text-[var(--ophalo-attention)]"
+              : "bg-[var(--ophalo-danger-bg)] text-[var(--ophalo-danger)]"
+          }`}
+        >
+          {error}
+        </div>
+      )}
+      <KeepButton
+        type="button"
+        variant="secondary"
+        disabled={isSubmitting || conflictDisabled}
+        onClick={() => void handleMarkDone()}
+        className="w-full"
+      >
+        {isSubmitting ? "Saving…" : "Mark work done, attention remains"}
+      </KeepButton>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Close Request (Owner/Admin closeout)
+// ---------------------------------------------------------------------------
+
+interface CloseRequestCardProps {
+  requestId: string;
+  detail: KeepRequestDetailResult;
+  onDetailUpdated: (updated: KeepRequestDetailResult) => void;
+}
+
+function CloseRequestCard({ requestId, detail, onDetailUpdated }: CloseRequestCardProps) {
+  const canClose =
+    detail.availableActions.canClose &&
+    detail.availableActions.allowedStatuses.includes("closed") &&
+    detail.status === "resolved" &&
+    detail.attentionLevel === "none";
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [conflictDisabled, setConflictDisabled] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  if (!canClose) return null;
+
+  async function handleClose() {
+    if (isSubmitting || conflictDisabled) return;
+    setIsSubmitting(true);
+    setError(null);
+    try {
+      const updated = await api.patchRequestStatus(
+        requestId,
+        { status: "closed" },
+        detail.version,
+      );
+      onDetailUpdated(updated);
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 409) {
+        setConflictDisabled(true);
+        setError("This request was updated. Refresh to see the latest state.");
+      } else {
+        setError("Could not close request. Try again.");
+      }
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  return (
+    <div className="rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-5 py-5">
+      <div className="mb-3 flex items-start justify-between gap-3">
+        <div>
+          <p className="text-base font-semibold text-[var(--ophalo-ink)]">Ready to close</p>
+          <p className="mt-1 text-xs leading-5 text-[var(--ophalo-muted)]">
+            Close this request when the business is done managing it. The customer can still leave one-time feedback from their request page.
+          </p>
+        </div>
+        <KeepBadge variant="success">Owner/Admin</KeepBadge>
+      </div>
+      {error && (
+        <div
+          aria-live="polite"
+          className={`mb-3 rounded-lg p-3 text-xs ${
+            conflictDisabled
+              ? "bg-[var(--ophalo-attention-bg)] text-[var(--ophalo-attention)]"
+              : "bg-[var(--ophalo-danger-bg)] text-[var(--ophalo-danger)]"
+          }`}
+        >
+          {error}
+        </div>
+      )}
+      <KeepButton
+        type="button"
+        variant="teal"
+        disabled={isSubmitting || conflictDisabled}
+        onClick={() => void handleClose()}
+        className="w-full"
+      >
+        {isSubmitting ? "Closing…" : "Close request"}
+      </KeepButton>
+    </div>
+  );
+}
 
 interface BusinessUpdateSectionProps {
   requestId: string;
@@ -2275,6 +2511,16 @@ export function RequestDetail({ requestId, onBack, prevId, nextId, onNavigate }:
     if (!detail) return null;
     return (
       <>
+        <WorkDoneCard
+          requestId={requestId}
+          detail={detail}
+          onDetailUpdated={handleDetailUpdated}
+        />
+        <CloseRequestCard
+          requestId={requestId}
+          detail={detail}
+          onDetailUpdated={handleDetailUpdated}
+        />
         <BusinessUpdateSection
           requestId={requestId}
           detail={detail}
@@ -2485,6 +2731,17 @@ export function RequestDetail({ requestId, onBack, prevId, nextId, onNavigate }:
 
           {/* Right action rail — desktop only */}
           <aside className="hidden md:flex md:flex-col md:w-72 lg:w-80 md:shrink-0 border-l border-[var(--ophalo-border)] bg-[var(--ophalo-card)] overflow-y-auto px-4 py-5 gap-4">
+            {/* Lifecycle actions: work completion and closeout */}
+            <WorkDoneCard
+              requestId={requestId}
+              detail={detail}
+              onDetailUpdated={handleDetailUpdated}
+            />
+            <CloseRequestCard
+              requestId={requestId}
+              detail={detail}
+              onDetailUpdated={handleDetailUpdated}
+            />
             {/* Resolution cards: primary actions for clearing attention */}
             <BusinessUpdateSection
               requestId={requestId}

@@ -85,7 +85,7 @@ const STATUS_OPTIONS = [
   { value: "scheduled", label: "Scheduled" },
   { value: "in_progress", label: "Active" },
   { value: "pending_customer", label: "Waiting on Customer" },
-  { value: "resolved", label: "Resolved" },
+  { value: "resolved", label: "Work completed" },
 ];
 
 // --- Sidebar count helper ---
@@ -420,7 +420,7 @@ export function Requests({ role, viewCounts, onViewCountsUpdate, onSelectRequest
                   <AvailableRequestRow key={row.requestId} row={row} onSelect={handleRowSelect} />
                 ))
               : (listQuery.data?.requests ?? []).map((row) => (
-                  <RequestRow key={row.id} row={row} onSelect={handleRowSelect} />
+                  <RequestRow key={row.id} row={row} onSelect={handleRowSelect} showCloseoutCue={activeTab.id === "ready_to_close"} />
                 ))
             }
           </div>
