@@ -1483,221 +1483,275 @@ function ServiceLocationModal({ requestId, detail, onDetailUpdated, onClose }: S
 
 interface OriginalRequestCardProps {
   detail: KeepRequestDetailResult;
+}
+
+function OriginalRequestCard({ detail }: OriginalRequestCardProps) {
+  if (!detail.description) return null;
+  return (
+    <div className="rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-5 py-4">
+      <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--ophalo-muted)] mb-1">
+        Customer description
+      </p>
+      <p className="text-sm leading-6 text-[var(--ophalo-ink)] whitespace-pre-wrap">
+        {detail.description}
+      </p>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Side panel context sections
+// ---------------------------------------------------------------------------
+
+interface CustomerPanelProps {
+  detail: KeepRequestDetailResult;
   onContactLaunched: (direction: string, channel: string) => void;
+}
+
+function CustomerPanel({ detail, onContactLaunched }: CustomerPanelProps) {
+  const [copiedPhone, setCopiedPhone] = useState(false);
+  const [copiedEmail, setCopiedEmail] = useState(false);
+  const callAction = detail.contactActions.find((a) => a.available && a.type === "call");
+  const emailAction = detail.contactActions.find((a) => a.available && a.type !== "call");
+  const canLogContact = detail.availableActions.canLogExternalContact;
+  const hasContact = !!(detail.customerPhone || detail.customerEmail);
+
+  if (!hasContact && !canLogContact) return null;
+
+  function copyToClipboard(text: string, setDone: (v: boolean) => void) {
+    navigator.clipboard.writeText(text).then(() => {
+      setDone(true);
+      setTimeout(() => setDone(false), 2000);
+    });
+  }
+
+  return (
+    <div>
+      <p className="px-1 text-[10px] font-semibold uppercase tracking-widest text-[var(--ophalo-muted)] mb-2">Customer</p>
+      <div className="rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-4 py-3 space-y-3">
+        {detail.customerPhone && (
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--ophalo-muted)] mb-1">Phone</p>
+            <div className="flex items-center gap-2 flex-wrap">
+              <Phone className="h-3.5 w-3.5 shrink-0 text-[var(--ophalo-muted)]" />
+              <span className="text-sm text-[var(--ophalo-ink)]">{detail.customerPhone}</span>
+              <button
+                type="button"
+                onClick={() => copyToClipboard(detail.customerPhone!, setCopiedPhone)}
+                aria-label="Copy phone number"
+                className={`text-[var(--ophalo-muted)] hover:text-[var(--ophalo-ink)] transition-colors ${FOCUS_RING} rounded`}
+              >
+                {copiedPhone ? <Check className="h-3.5 w-3.5 text-green-600" /> : <Copy className="h-3.5 w-3.5" />}
+              </button>
+              {callAction && (
+                <a
+                  href={`tel:${callAction.target}`}
+                  onClick={() => onContactLaunched("outbound", "phone")}
+                  className={`inline-flex items-center gap-1 text-xs font-semibold text-[var(--keep-accent)] hover:underline ${FOCUS_RING} rounded`}
+                >
+                  <Phone className="h-3 w-3" />
+                  Call
+                </a>
+              )}
+            </div>
+          </div>
+        )}
+        {detail.customerEmail && (
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--ophalo-muted)] mb-1">Email</p>
+            <div className="flex items-center gap-2 flex-wrap">
+              <Mail className="h-3.5 w-3.5 shrink-0 text-[var(--ophalo-muted)]" />
+              <span className="text-sm text-[var(--ophalo-ink)] break-all">{detail.customerEmail}</span>
+              <button
+                type="button"
+                onClick={() => copyToClipboard(detail.customerEmail!, setCopiedEmail)}
+                aria-label="Copy email address"
+                className={`text-[var(--ophalo-muted)] hover:text-[var(--ophalo-ink)] transition-colors ${FOCUS_RING} rounded`}
+              >
+                {copiedEmail ? <Check className="h-3.5 w-3.5 text-green-600" /> : <Copy className="h-3.5 w-3.5" />}
+              </button>
+              {emailAction && (
+                <a
+                  href={`mailto:${emailAction.target}`}
+                  onClick={() => onContactLaunched("outbound", "email")}
+                  className={`inline-flex items-center gap-1 text-xs font-semibold text-[var(--keep-accent)] hover:underline ${FOCUS_RING} rounded`}
+                >
+                  <Mail className="h-3 w-3" />
+                  Email
+                </a>
+              )}
+            </div>
+          </div>
+        )}
+        {canLogContact && (
+          <button
+            type="button"
+            onClick={() => onContactLaunched(
+              "outbound",
+              detail.customerPhone ? "phone" : detail.customerEmail ? "email" : "other"
+            )}
+            className={`w-full text-left text-xs font-semibold text-[var(--ophalo-muted)] hover:text-[var(--ophalo-ink)] transition-colors pt-2 border-t border-[var(--ophalo-border)] ${FOCUS_RING} rounded`}
+          >
+            Log external contact
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+interface ServiceLocationPanelProps {
+  detail: KeepRequestDetailResult;
   onDetailUpdated: (updated: KeepRequestDetailResult) => void;
 }
 
-function OriginalRequestCard({ detail, onContactLaunched, onDetailUpdated }: OriginalRequestCardProps) {
-  const [showLocationModal, setShowLocationModal] = useState(false);
-  const [pendingPriority, setPendingPriority] = useState<string | null | undefined>(undefined);
-  const canEditLocation = detail.availableActions.canAddInternalNote;
+function ServiceLocationPanel({ detail, onDetailUpdated }: ServiceLocationPanelProps) {
+  const [showModal, setShowModal] = useState(false);
+  const canEdit = detail.availableActions.canAddInternalNote;
   const hasAddress = !!(detail.serviceAddressLine1 || detail.serviceCity);
-  const displayPriority = pendingPriority !== undefined ? pendingPriority : detail.businessPriority;
-  const emailActions = detail.contactActions.filter((a) => a.available && a.type !== "call");
 
   return (
-    <div className="rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-5 py-4 space-y-4">
-
-      {/* 1. Customer description */}
-      {detail.description && (
-        <div>
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--ophalo-muted)] mb-1">
-            Customer description
-          </p>
-          <p className="text-sm leading-6 text-[var(--ophalo-ink)] whitespace-pre-wrap">
-            {detail.description}
-          </p>
+    <div>
+      <div className="flex items-center justify-between px-1 mb-2">
+        <p className="text-[10px] font-semibold uppercase tracking-widest text-[var(--ophalo-muted)]">Service Location</p>
+        {canEdit && hasAddress && (
+          <button
+            type="button"
+            onClick={() => setShowModal(true)}
+            className={`text-xs text-[var(--keep-accent)] hover:underline ${FOCUS_RING} rounded`}
+          >
+            Edit
+          </button>
+        )}
+      </div>
+      {hasAddress ? (
+        <div className="rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-4 py-3">
+          {detail.serviceAddressLine1 && (
+            <p className="text-sm font-semibold text-[var(--ophalo-ink)]">{detail.serviceAddressLine1}</p>
+          )}
+          {detail.serviceAddressLine2 && (
+            <p className="text-sm text-[var(--ophalo-ink)]">{detail.serviceAddressLine2}</p>
+          )}
+          {detail.serviceCity && detail.serviceState && (
+            <p className="text-sm text-[var(--ophalo-ink)]">
+              {detail.serviceCity}, {detail.serviceState}{detail.serviceZip ? ` ${detail.serviceZip}` : ""}
+            </p>
+          )}
+        </div>
+      ) : (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[var(--ophalo-attention)] bg-[var(--ophalo-attention-bg)] px-4 py-3">
+          <div className="flex min-w-0 items-start gap-2">
+            <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--ophalo-attention)]" />
+            <div>
+              <p className="text-xs font-semibold text-[var(--ophalo-ink)]">Service location needed</p>
+              <p className="text-xs leading-5 text-[var(--ophalo-muted)]">
+                Add the address before dispatching or scheduling field work.
+              </p>
+            </div>
+          </div>
+          {canEdit && (
+            <button
+              type="button"
+              onClick={() => setShowModal(true)}
+              className={`inline-flex min-h-[32px] shrink-0 items-center rounded-lg border border-[var(--ophalo-attention)] bg-[var(--ophalo-card)] px-3 text-xs font-semibold text-[var(--ophalo-ink)] hover:bg-white transition-colors ${FOCUS_RING}`}
+            >
+              Add location
+            </button>
+          )}
         </div>
       )}
-
-      {/* 2. Responsive two-column metadata grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
-
-        {/* Left column: contact + triage signals */}
-        <div className="space-y-3">
-
-          {/* Customer Phone */}
-          {detail.customerPhone && (
-            <div>
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--ophalo-muted)] mb-0.5">
-                Customer Phone
-              </p>
-              <span className="flex items-center gap-1.5">
-                <Phone className="h-3.5 w-3.5 shrink-0 text-[var(--ophalo-muted)]" />
-                <span className="text-sm font-semibold text-[var(--ophalo-ink)]">{detail.customerPhone}</span>
-              </span>
-            </div>
-          )}
-
-          {/* Customer Email + launch action */}
-          {detail.customerEmail && (
-            <div>
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--ophalo-muted)] mb-0.5">
-                Customer Email
-              </p>
-              <span className="flex items-center gap-1.5">
-                <Mail className="h-3.5 w-3.5 shrink-0 text-[var(--ophalo-muted)]" />
-                <span className="text-sm font-semibold text-[var(--ophalo-ink)]">{detail.customerEmail}</span>
-              </span>
-              {emailActions.map((action) => (
-                <a
-                  key={action.type}
-                  href={`mailto:${action.target}`}
-                  onClick={() => onContactLaunched("outbound", "email")}
-                  className={`mt-1.5 inline-flex min-h-[32px] items-center gap-1.5 rounded-full border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-3 text-xs font-semibold text-[var(--ophalo-ink)] hover:border-[var(--keep-accent)] hover:bg-[var(--keep-accent-bg)] hover:text-[var(--keep-accent)] transition-colors ${FOCUS_RING}`}
-                >
-                  <Mail className="h-3 w-3 text-[var(--keep-accent)] shrink-0" />
-                  Email
-                </a>
-              ))}
-            </div>
-          )}
-
-          {/* Preferences & Urgency — public_intake only */}
-          {detail.source === "public_intake" && (
-            <div>
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--ophalo-muted)] mb-1">
-                Preferences &amp; Urgency
-              </p>
-              <div className="flex flex-wrap gap-1.5">
-                {detail.intakeUrgency === "urgent" && (
-                  <KeepBadge variant="attention">Urgent Request</KeepBadge>
-                )}
-                {detail.intakeUrgency === "soon" && (
-                  <KeepBadge variant="default">Soon</KeepBadge>
-                )}
-                {detail.contactPreference === "phone_call" && (
-                  <KeepBadge variant="default">Phone call</KeepBadge>
-                )}
-                {detail.contactPreference === "text_message" && (
-                  <KeepBadge variant="default">Text message</KeepBadge>
-                )}
-                {detail.contactPreference === "email" && (
-                  <KeepBadge variant="default">Email</KeepBadge>
-                )}
-                {detail.contactPreference === "no_preference" && (
-                  <KeepBadge variant="default">No contact preference</KeepBadge>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* Business priority */}
-          <div>
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--ophalo-muted)] mb-0.5">
-              Priority
-            </p>
-            {canEditLocation ? (
-              <select
-                value={displayPriority ?? ""}
-                onChange={async (e) => {
-                  const val = e.target.value || null;
-                  setPendingPriority(val);
-                  try {
-                    const updated = await api.setBusinessPriority(
-                      detail.requestId, val, detail.version
-                    );
-                    onDetailUpdated(updated);
-                  } catch {
-                    // revert optimistic update on error
-                  } finally {
-                    setPendingPriority(undefined);
-                  }
-                }}
-                className="text-xs text-[var(--ophalo-ink)] bg-transparent border border-[var(--ophalo-border)] rounded px-2 py-0.5 focus:outline-none focus:ring-1 focus:ring-[var(--keep-accent)]"
-              >
-                <option value="">Not set</option>
-                <option value="routine">Routine</option>
-                <option value="soon">Soon</option>
-                <option value="urgent">Urgent</option>
-              </select>
-            ) : (
-              <span className="text-sm font-semibold text-[var(--ophalo-ink)]">
-                {detail.businessPriority === "urgent" && "Urgent"}
-                {detail.businessPriority === "soon" && "Soon"}
-                {detail.businessPriority === "routine" && "Routine"}
-                {detail.businessPriority === null && (
-                  <span className="text-[var(--ophalo-muted)]">Not set</span>
-                )}
-              </span>
-            )}
-          </div>
-        </div>
-
-        {/* Right column: service location */}
-        <div>
-          <div className="flex items-center justify-between gap-2 mb-1">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--ophalo-muted)]">
-              Service Location
-            </p>
-            {canEditLocation && hasAddress && (
-              <button
-                type="button"
-                onClick={() => setShowLocationModal(true)}
-                className={`shrink-0 text-xs text-[var(--keep-accent)] hover:underline ${FOCUS_RING} rounded`}
-              >
-                Edit Address
-              </button>
-            )}
-          </div>
-
-          {hasAddress ? (
-            <div>
-              {detail.serviceAddressLine1 && (
-                <p className="text-sm font-semibold text-[var(--ophalo-ink)]">{detail.serviceAddressLine1}</p>
-              )}
-              {detail.serviceAddressLine2 && (
-                <p className="text-sm text-[var(--ophalo-ink)]">{detail.serviceAddressLine2}</p>
-              )}
-              {detail.serviceCity && detail.serviceState && (
-                <p className="text-sm text-[var(--ophalo-ink)]">
-                  {detail.serviceCity}, {detail.serviceState}{detail.serviceZip ? ` ${detail.serviceZip}` : ""}
-                </p>
-              )}
-            </div>
-          ) : (
-            <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[var(--ophalo-attention)] bg-[var(--ophalo-attention-bg)] px-3 py-2.5">
-              <div className="flex min-w-0 items-start gap-2">
-                <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--ophalo-attention)]" />
-                <div>
-                  <p className="text-xs font-semibold text-[var(--ophalo-ink)]">Service location needed</p>
-                  <p className="text-xs leading-5 text-[var(--ophalo-muted)]">
-                    Add the address before dispatching or scheduling field work.
-                  </p>
-                </div>
-              </div>
-              {canEditLocation && (
-                <button
-                  type="button"
-                  onClick={() => setShowLocationModal(true)}
-                  className={`inline-flex min-h-[32px] shrink-0 items-center rounded-lg border border-[var(--ophalo-attention)] bg-[var(--ophalo-card)] px-3 text-xs font-semibold text-[var(--ophalo-ink)] hover:bg-white transition-colors ${FOCUS_RING}`}
-                >
-                  Add location
-                </button>
-              )}
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* 3. Footer: source + submitted timestamp */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 pt-3 border-t border-[var(--ophalo-border)]">
-        <p className="text-xs text-[var(--ophalo-muted)]">
-          Source: {detail.source === "public_intake" ? "Customer Intake Form" : "Team added"}
-        </p>
-        <p className="text-xs text-[var(--ophalo-muted)]">
-          Submitted {formatDate(detail.createdAtUtc)}
-        </p>
-      </div>
-
-      {showLocationModal && (
+      {showModal && (
         <ServiceLocationModal
           requestId={detail.requestId}
           detail={detail}
           onDetailUpdated={onDetailUpdated}
-          onClose={() => setShowLocationModal(false)}
+          onClose={() => setShowModal(false)}
         />
       )}
+    </div>
+  );
+}
+
+interface TriagePanelProps {
+  detail: KeepRequestDetailResult;
+  onDetailUpdated: (updated: KeepRequestDetailResult) => void;
+}
+
+function TriagePanel({ detail, onDetailUpdated }: TriagePanelProps) {
+  const [pendingPriority, setPendingPriority] = useState<string | null | undefined>(undefined);
+  const canEdit = detail.availableActions.canAddInternalNote;
+  const displayPriority = pendingPriority !== undefined ? pendingPriority : detail.businessPriority;
+  const hasCustomerSignal = detail.source === "public_intake" &&
+    !!(detail.intakeUrgency || detail.contactPreference);
+
+  return (
+    <div>
+      <p className="px-1 text-[10px] font-semibold uppercase tracking-widest text-[var(--ophalo-muted)] mb-2">Triage</p>
+      <div className="rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-4 py-3 space-y-3">
+        {hasCustomerSignal && (
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--ophalo-muted)] mb-1">Customer signal</p>
+            <div className="flex flex-wrap gap-1.5">
+              {detail.intakeUrgency === "urgent" && <KeepBadge variant="attention">Urgent request</KeepBadge>}
+              {detail.intakeUrgency === "soon" && <KeepBadge variant="default">Soon</KeepBadge>}
+              {detail.contactPreference === "phone_call" && <KeepBadge variant="default">Phone call</KeepBadge>}
+              {detail.contactPreference === "text_message" && <KeepBadge variant="default">Text message</KeepBadge>}
+              {detail.contactPreference === "email" && <KeepBadge variant="default">Email</KeepBadge>}
+              {detail.contactPreference === "no_preference" && <KeepBadge variant="default">No preference</KeepBadge>}
+            </div>
+          </div>
+        )}
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--ophalo-muted)] mb-1">Internal priority</p>
+          {canEdit ? (
+            <select
+              value={displayPriority ?? ""}
+              onChange={async (e) => {
+                const val = e.target.value || null;
+                setPendingPriority(val);
+                try {
+                  const updated = await api.setBusinessPriority(detail.requestId, val, detail.version);
+                  onDetailUpdated(updated);
+                } catch {
+                  // revert optimistic on error
+                } finally {
+                  setPendingPriority(undefined);
+                }
+              }}
+              className="text-xs text-[var(--ophalo-ink)] bg-transparent border border-[var(--ophalo-border)] rounded px-2 py-0.5 focus:outline-none focus:ring-1 focus:ring-[var(--keep-accent)]"
+            >
+              <option value="">Not set</option>
+              <option value="routine">Routine</option>
+              <option value="soon">Soon</option>
+              <option value="urgent">Urgent</option>
+            </select>
+          ) : (
+            <span className="text-sm font-semibold text-[var(--ophalo-ink)]">
+              {detail.businessPriority === "urgent" && "Urgent"}
+              {detail.businessPriority === "soon" && "Soon"}
+              {detail.businessPriority === "routine" && "Routine"}
+              {!detail.businessPriority && <span className="text-[var(--ophalo-muted)]">Not set</span>}
+            </span>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+interface SourceMetaPanelProps {
+  detail: KeepRequestDetailResult;
+}
+
+function SourceMetaPanel({ detail }: SourceMetaPanelProps) {
+  return (
+    <div className="px-1 space-y-0.5">
+      <p className="text-xs text-[var(--ophalo-muted)]">
+        Source: {detail.source === "public_intake" ? "Customer intake form" : "Team added"}
+      </p>
+      <p className="text-xs text-[var(--ophalo-muted)]">
+        Submitted {formatDate(detail.createdAtUtc)}
+      </p>
     </div>
   );
 }
@@ -2650,9 +2704,9 @@ export function RequestDetail({ requestId, onBack, prevId, nextId, onNavigate }:
 
       {/* Main content */}
       {detail && (
-        <div className="flex flex-1 min-h-0 overflow-hidden">
+        <div className="flex flex-1 min-h-0 overflow-hidden md:grid md:[grid-template-columns:minmax(0,7fr)_minmax(320px,3fr)]">
           {/* Left / main column */}
-          <div className="flex-1 overflow-y-auto px-4 md:px-6 py-5 space-y-4">
+          <div className="flex-1 md:flex-none overflow-y-auto px-4 md:px-6 py-5 space-y-4">
             {/* Hero: identity + status */}
             <DetailHero
               detail={detail}
@@ -2662,12 +2716,8 @@ export function RequestDetail({ requestId, onBack, prevId, nextId, onNavigate }:
               onShareCleared={handleShareCleared}
             />
 
-            {/* Original request: description, contact, timestamp */}
-            <OriginalRequestCard
-              detail={detail}
-              onContactLaunched={handleContactLaunched}
-              onDetailUpdated={handleDetailUpdated}
-            />
+            {/* Original request: customer description */}
+            <OriginalRequestCard detail={detail} />
 
             {/* Needs attention: why it is here + how to handle it */}
             <AttentionGuidanceCard
@@ -2723,14 +2773,18 @@ export function RequestDetail({ requestId, onBack, prevId, nextId, onNavigate }:
               )}
             </div>
 
-            {/* Mobile: team context after timeline */}
-            <div className="md:hidden pb-6">
+            {/* Mobile: contact, location, triage, team — after activity */}
+            <div className="md:hidden space-y-4 pb-6">
+              <CustomerPanel detail={detail} onContactLaunched={handleContactLaunched} />
+              <ServiceLocationPanel detail={detail} onDetailUpdated={handleDetailUpdated} />
+              <TriagePanel detail={detail} onDetailUpdated={handleDetailUpdated} />
               {renderTeamSection()}
+              <SourceMetaPanel detail={detail} />
             </div>
           </div>
 
-          {/* Right action rail — desktop only */}
-          <aside className="hidden md:flex md:flex-col md:w-72 lg:w-80 md:shrink-0 border-l border-[var(--ophalo-border)] bg-[var(--ophalo-card)] overflow-y-auto px-4 py-5 gap-4">
+          {/* Right context + action panel — desktop only */}
+          <aside className="hidden md:flex md:flex-col border-l border-[var(--ophalo-border)] bg-[var(--ophalo-card)] overflow-y-auto px-4 py-5 gap-4">
             {/* Lifecycle actions: work completion and closeout */}
             <WorkDoneCard
               requestId={requestId}
@@ -2773,6 +2827,11 @@ export function RequestDetail({ requestId, onBack, prevId, nextId, onNavigate }:
               />
             )}
 
+            {/* Context: customer, location, triage */}
+            <CustomerPanel detail={detail} onContactLaunched={handleContactLaunched} />
+            <ServiceLocationPanel detail={detail} onDetailUpdated={handleDetailUpdated} />
+            <TriagePanel detail={detail} onDetailUpdated={handleDetailUpdated} />
+
             {/* Utilities: review controls and team context */}
             <div className="space-y-3">
               <p className="px-1 text-[10px] font-semibold uppercase tracking-widest text-[var(--ophalo-muted)]">Utilities</p>
@@ -2786,6 +2845,8 @@ export function RequestDetail({ requestId, onBack, prevId, nextId, onNavigate }:
               )}
               {renderTeamSection()}
             </div>
+
+            <SourceMetaPanel detail={detail} />
           </aside>
         </div>
       )}

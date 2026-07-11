@@ -129,45 +129,112 @@ function AppShell() {
     : route.page === "settings" ? "settings"
     : "requests";
 
+  const isWorkbench = route.page === "requests" || route.page === "detail";
+
   return (
-    <div className="flex min-h-screen bg-[var(--ophalo-canvas)]">
-      {/* Left sidebar — desktop */}
-      <aside className="hidden md:flex md:flex-col md:w-56 lg:w-64 md:shrink-0 bg-[var(--ophalo-card)] border-r border-[var(--ophalo-border)]">
-        <div className="px-4 py-4 border-b border-[var(--ophalo-border)]">
+    <div className={`flex min-h-screen bg-[var(--ophalo-canvas)] ${isWorkbench ? "flex-col" : ""}`}>
+      {/* Left sidebar — desktop, non-workbench routes only */}
+      {!isWorkbench && (
+        <aside className="hidden md:flex md:flex-col md:w-56 lg:w-64 md:shrink-0 bg-[var(--ophalo-card)] border-r border-[var(--ophalo-border)]">
+          <div className="px-4 py-4 border-b border-[var(--ophalo-border)]">
+            <button
+              type="button"
+              onClick={() => navigate({ page: "requests" })}
+              aria-label="Go to requests"
+              className="block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-offset-2 rounded"
+            >
+              <img
+                src="/brand/ophalo-keep-lockup-color.svg"
+                alt="OpHalo Keep"
+                className="h-8 w-auto"
+                draggable={false}
+              />
+            </button>
+          </div>
+          <nav className="flex-1 px-3 py-4 space-y-0.5">
+            {navItems.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => navigate({ page: item.id })}
+                className={`w-full flex items-center gap-2.5 rounded-md px-3 py-2.5 text-sm text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-offset-2 ${
+                  activeNavId === item.id
+                    ? "font-semibold bg-[var(--keep-accent-bg)] text-[var(--ophalo-navy)]"
+                    : "font-medium text-[var(--ophalo-muted)] hover:bg-[var(--ophalo-canvas)] hover:text-[var(--ophalo-ink)]"
+                }`}
+              >
+                {item.icon}
+                <span>{item.label}</span>
+                {item.id === "requests" && viewCounts != null && (() => {
+                  const total = (role === "owner" || role === "admin")
+                    ? viewCounts.default
+                    : viewCounts.assignedToMe + viewCounts.needsAttention;
+                  return total > 0 ? (
+                    <span className={`ml-auto text-xs font-semibold rounded-full px-1.5 py-0.5 ${
+                      activeNavId === "requests"
+                        ? "bg-[var(--keep-accent)] text-white"
+                        : "bg-[var(--keep-accent-bg)] text-[var(--keep-accent)]"
+                    }`}>
+                      {total}
+                    </span>
+                  ) : null;
+                })()}
+              </button>
+            ))}
+          </nav>
+          <div className="px-3 pb-4">
+            <KeepButton
+              variant="primary"
+              onClick={openCapture}
+              className="w-full gap-2"
+            >
+              <Plus className="h-4 w-4" />
+              New Request
+            </KeepButton>
+          </div>
+          {role !== "unknown" && (
+            <div className="px-4 py-3 border-t border-[var(--ophalo-border)]">
+              <p className="text-xs text-[var(--ophalo-muted)]">{roleLabel(role)}</p>
+            </div>
+          )}
+        </aside>
+      )}
+
+      {/* Top nav — desktop workbench (requests + detail) */}
+      {isWorkbench && (
+        <header className="hidden md:flex items-center gap-3 px-4 h-14 shrink-0 bg-[var(--ophalo-card)] border-b border-[var(--ophalo-border)]">
           <button
             type="button"
             onClick={() => navigate({ page: "requests" })}
             aria-label="Go to requests"
-            className="block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-offset-2 rounded"
+            className="flex items-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-offset-2 rounded shrink-0"
           >
             <img
               src="/brand/ophalo-keep-lockup-color.svg"
               alt="OpHalo Keep"
-              className="h-8 w-auto"
+              className="h-7 w-auto"
               draggable={false}
             />
           </button>
-        </div>
-        <nav className="flex-1 px-3 py-4 space-y-0.5">
-          {navItems.map((item) => (
+
+          <nav className="flex items-center gap-1 ml-2">
             <button
-              key={item.id}
               type="button"
-              onClick={() => navigate({ page: item.id })}
-              className={`w-full flex items-center gap-2.5 rounded-md px-3 py-2.5 text-sm text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-offset-2 ${
-                activeNavId === item.id
-                  ? "font-semibold bg-[var(--keep-accent-bg)] text-[var(--ophalo-navy)]"
-                  : "font-medium text-[var(--ophalo-muted)] hover:bg-[var(--ophalo-canvas)] hover:text-[var(--ophalo-ink)]"
+              onClick={() => navigate({ page: "requests" })}
+              className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-offset-2 ${
+                activeNavId === "requests"
+                  ? "bg-[var(--keep-accent-bg)] text-[var(--ophalo-navy)] font-semibold"
+                  : "text-[var(--ophalo-muted)] hover:bg-[var(--ophalo-canvas)] hover:text-[var(--ophalo-ink)]"
               }`}
             >
-              {item.icon}
-              <span>{item.label}</span>
-              {item.id === "requests" && viewCounts != null && (() => {
+              <Inbox className="h-4 w-4" />
+              Requests
+              {viewCounts != null && (() => {
                 const total = (role === "owner" || role === "admin")
                   ? viewCounts.default
                   : viewCounts.assignedToMe + viewCounts.needsAttention;
                 return total > 0 ? (
-                  <span className={`ml-auto text-xs font-semibold rounded-full px-1.5 py-0.5 ${
+                  <span className={`text-xs font-semibold rounded-full px-1.5 py-0.5 ${
                     activeNavId === "requests"
                       ? "bg-[var(--keep-accent)] text-white"
                       : "bg-[var(--keep-accent-bg)] text-[var(--keep-accent)]"
@@ -177,25 +244,38 @@ function AppShell() {
                 ) : null;
               })()}
             </button>
-          ))}
-        </nav>
-        <div className="px-3 pb-4">
-          <KeepButton
-            variant="primary"
-            onClick={openCapture}
-            className="w-full gap-2"
-          >
-            <Plus className="h-4 w-4" />
-            New Request
-          </KeepButton>
-        </div>
-        {/* Quiet role identity — no business name available from /auth/me */}
-        {role !== "unknown" && (
-          <div className="px-4 py-3 border-t border-[var(--ophalo-border)]">
-            <p className="text-xs text-[var(--ophalo-muted)]">{roleLabel(role)}</p>
+            {(role === "owner" || role === "admin") && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => navigate({ page: "home" })}
+                  className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium text-[var(--ophalo-muted)] hover:bg-[var(--ophalo-canvas)] hover:text-[var(--ophalo-ink)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-offset-2"
+                >
+                  Getting Started
+                </button>
+                <button
+                  type="button"
+                  onClick={() => navigate({ page: "settings" })}
+                  className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium text-[var(--ophalo-muted)] hover:bg-[var(--ophalo-canvas)] hover:text-[var(--ophalo-ink)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-offset-2"
+                >
+                  <SettingsIcon className="h-4 w-4" />
+                  Settings
+                </button>
+              </>
+            )}
+          </nav>
+
+          <div className="ml-auto flex items-center gap-3">
+            {role !== "unknown" && (
+              <span className="text-xs text-[var(--ophalo-muted)] font-medium">{roleLabel(role)}</span>
+            )}
+            <KeepButton variant="primary" onClick={openCapture} className="gap-1.5">
+              <Plus className="h-4 w-4" />
+              New Request
+            </KeepButton>
           </div>
-        )}
-      </aside>
+        </header>
+      )}
 
       {/* Main content */}
       <main className="flex-1 min-w-0 flex flex-col">
