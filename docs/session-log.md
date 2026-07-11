@@ -140,14 +140,34 @@ Resolved before next session:
 - Request queue navigation: add detail-page navigation so users can move to the next request without
   scrolling back to the list. Preferred direction is `Previous` / `Next` or `Next needing attention`
   near the hero/top bar, plus a post-action route to the next request if the current workflow supports
-  it.
+  it. **Complete** — Prev/Next buttons in breadcrumb bar; client-side list context passed from
+  `Requests` through `App` to `RequestDetail`; disabled at list boundaries; no nav shown on direct
+  open (QuickCapture, deep link). Committed and pushed (`14347ce`).
+
+Queued Claude slices:
+
+- **S22p9 — Urgency-aware default queue ordering:** **Complete.** Added `customer_urgent_active`
+  ranking bucket (order 3) covering any urgent active intake not yet terminal, pending-customer, or
+  resolved. New order: overdue (1) → priority-biz-waiting (2) → customer-urgent-active (3) →
+  post-close (4) → standard-biz-waiting (5) → first-response-pending (6) → waiting-on-customer (7)
+  → resolved-quiet (8) → active (9). `isPostClose` guard preserved before priority and urgent checks.
+  UI clarification pass: `KeepRequestRankingInfo` type added to `apiClient.ts`; `Overdue` badge now
+  shown first in badge row when `ranking.isOverdue`; danger left-border for overdue rows; `Due [date]`
+  compact text from `ranking.dueAtUtc`; mock fixtures updated. TypeScript clean.
+- **S22p10 — Business-editable request priority:** add `BusinessPriority` as the business triage
+  override for customer-reported `IntakeUrgency`; use `Keep.RequestsOperate`, preserve the original
+  customer urgency, suppress the customer urgent fallback once business priority is set, and create
+  ADR-433 for the priority/urgency separation.
+- Full Claude-ready details and locked decisions are in
+  `docs/build-log/076-session-22-guided-setup-intake-and-service-location.md`.
 
 Recommended slice order:
 
 1. Request detail command cleanup: complete.
-2. Request detail queue navigation: add next/previous or next-needing-attention behavior after
-   preflight confirms available list context/API support.
-3. Resume build-log 078 or build-log 077 after the command-center issues are settled.
+2. Request detail queue navigation: complete (see above).
+3. S22p9 urgency-aware queue ordering: **complete** (see above).
+4. Complete S22p10 business-priority slice.
+5. Resume build-log 078 or build-log 077 — command-center issues are now settled.
 
 ### Completed S22 Summary
 

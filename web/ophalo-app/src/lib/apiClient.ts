@@ -389,6 +389,17 @@ export interface UpdateServiceLocationBody {
 
 // --- Request list ---
 
+export interface KeepRequestRankingInfo {
+  rankingGroup: string;
+  rankingOrder: number;
+  rankingReason: string;
+  severity: string;
+  isOverdue: boolean;
+  elapsedSinceUtc: string | null;
+  dueAtUtc: string | null;
+  isPostClose: boolean;
+}
+
 export interface KeepRequestAttentionInfo {
   attentionLevel: string;
   waitingDirection: string;
@@ -455,6 +466,7 @@ export interface KeepRequestSummary {
   serviceCity: string | null;
   serviceState: string | null;
   serviceZip: string | null;
+  ranking: KeepRequestRankingInfo;
   attention: KeepRequestAttentionInfo;
   preview: KeepRequestPreviewInfo;
   participation: KeepRequestParticipationInfo;

@@ -349,6 +349,16 @@ export function installMockApi(): void {
       serviceCity: null,
       serviceState: null,
       serviceZip: null,
+      ranking: {
+        rankingGroup: "first_response_pending",
+        rankingOrder: 6,
+        rankingReason: "first_response_pending",
+        severity: "attention",
+        isOverdue: false,
+        elapsedSinceUtc: null,
+        dueAtUtc: null,
+        isPostClose: false,
+      },
       attention: {
         attentionLevel: "normal",
         waitingDirection: "business",

@@ -85,6 +85,11 @@ function StatusBadge({ status }: { status: string }) {
   return <KeepBadge variant={statusBadgeVariant(status)}>{label}</KeepBadge>;
 }
 
+function shortDate(iso: string | null): string | null {
+  if (!iso) return null;
+  return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+
 function relativeTime(iso: string | null): string | null {
   if (!iso) return null;
   const diffMs = Date.now() - new Date(iso).getTime();
@@ -113,8 +118,12 @@ export function RequestRow({ row, onSelect }: RequestRowProps) {
   const lastTouch = relativeTime(row.lastBusinessActivityAtUtc ?? row.updatedAtUtc);
   const prompt = row.attention.attentionReason ? actionPrompt(row.actions.quickActions) : null;
   const tone = row.attention.attentionReason ? attentionTone(row.attention.attentionReason) : null;
+  const isOverdue = row.ranking.isOverdue;
+  const dueLabel = isOverdue
+    ? (row.ranking.dueAtUtc ? `Due ${shortDate(row.ranking.dueAtUtc)}` : null)
+    : null;
 
-  const accentBorder = tone === "danger"
+  const accentBorder = (tone === "danger" || isOverdue)
     ? "border-l-4 border-l-[var(--ophalo-danger)]"
     : tone !== null
       ? "border-l-4 border-l-[var(--ophalo-attention)]"
@@ -135,8 +144,14 @@ export function RequestRow({ row, onSelect }: RequestRowProps) {
         <ChevronRight className="h-4 w-4 text-[var(--ophalo-muted)] shrink-0" />
       </div>
 
-      {/* Row 2: attention badge + status chip + intake urgency — wrap on narrow */}
+      {/* Row 2: overdue + attention badge + status chip + intake urgency — wrap on narrow */}
       <div className="flex flex-wrap items-center gap-1.5">
+        {isOverdue && (
+          <KeepBadge variant="danger" className="gap-1">
+            <AlertTriangle className="h-3 w-3" />
+            Overdue
+          </KeepBadge>
+        )}
         {row.attention.attentionReason && (
           <AttentionBadge reason={row.attention.attentionReason} />
         )}
@@ -152,6 +167,9 @@ export function RequestRow({ row, onSelect }: RequestRowProps) {
             <Clock className="h-3 w-3" />
             Soon
           </KeepBadge>
+        )}
+        {dueLabel && (
+          <span className="text-[11px] text-[var(--ophalo-danger)]">{dueLabel}</span>
         )}
       </div>
 

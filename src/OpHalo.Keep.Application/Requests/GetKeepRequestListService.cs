@@ -551,7 +551,7 @@ public sealed class GetKeepRequestListService(
                 secondaryDescending: false);
 
         var rankingOrder = last.Ranking.RankingOrder;
-        var descending = rankingOrder is 6 or 7 or 8;
+        var descending = rankingOrder is 7 or 8 or 9;
         return KeepRequestListCursor.Encode(
             cursorProtector, fingerprint, last.Id, rankingOrder, GetSecondarySortTick(last), descending);
     }
@@ -603,10 +603,10 @@ public sealed class GetKeepRequestListService(
     private static long? GetSecondarySortTick(KeepRequestSummary row) =>
         row.Ranking.RankingOrder switch
         {
-            1 or 2 or 4 => (row.Attention.NextAttentionAtUtc ?? row.Attention.FirstResponseDueAtUtc)?.Ticks,
-            3            => row.Attention.AttentionSinceUtc?.Ticks,
-            5            => row.Attention.FirstResponseDueAtUtc?.Ticks,
-            _            => (long?)(row.LastBusinessActivityAtUtc ?? row.LastCustomerActivityAtUtc ?? row.CreatedAtUtc).Ticks
+            1 or 2 or 3 or 5 => (row.Attention.NextAttentionAtUtc ?? row.Attention.FirstResponseDueAtUtc)?.Ticks,
+            4                 => row.Attention.AttentionSinceUtc?.Ticks,
+            6                 => row.Attention.FirstResponseDueAtUtc?.Ticks,
+            _                 => (long?)(row.LastBusinessActivityAtUtc ?? row.LastCustomerActivityAtUtc ?? row.CreatedAtUtc).Ticks
         };
 
     private static int CompareSecondaryTicks(long? rowTick, long? cursorTick, bool descending)
@@ -777,26 +777,34 @@ public sealed class GetKeepRequestListService(
         if (overdueBusinessWaiting || firstResponseOverdue)
             return ("overdue_business_waiting", 1);
 
+        // Post-close checked before priority and urgent so closed-state requests never
+        // accidentally inherit a higher ranking bucket.
         if (isPostClose)
-            return ("post_close_unresolved_feedback", 3);
+            return ("post_close_unresolved_feedback", 4);
 
         if (r.PriorityBand == PriorityBand.Priority
             && r.WaitingDirection == WaitingDirection.Business)
             return ("priority_business_waiting", 2);
 
+        if (r.IntakeUrgency == IntakeUrgency.Urgent
+            && r.Status is not KeepRequestStatus.PendingCustomer
+            && r.Status is not KeepRequestStatus.Resolved
+            && !r.IsTerminal)
+            return ("customer_urgent_active", 3);
+
         if (r.WaitingDirection == WaitingDirection.Business)
-            return ("standard_business_waiting", 4);
+            return ("standard_business_waiting", 5);
 
         if (firstResponsePending)
-            return ("first_response_pending", 5);
+            return ("first_response_pending", 6);
 
         if (r.Status == KeepRequestStatus.PendingCustomer)
-            return ("waiting_on_customer", 6);
+            return ("waiting_on_customer", 7);
 
         if (r.Status == KeepRequestStatus.Resolved && r.AttentionLevel == AttentionLevel.None)
-            return ("resolved_quiet", 7);
+            return ("resolved_quiet", 8);
 
-        return ("active", 8);
+        return ("active", 9);
     }
 
     private static string ComputeSeverity(KeepRequest r, bool isOverdue, bool isPostClose, bool firstResponsePending)
@@ -1199,13 +1207,13 @@ public sealed class GetKeepRequestListService(
 
             int secondaryCmp = x.Ranking.RankingOrder switch
             {
-                1 or 2 or 4 => CompareNullableDatesAsc(
+                1 or 2 or 3 or 5 => CompareNullableDatesAsc(
                     x.Attention.NextAttentionAtUtc ?? x.Attention.FirstResponseDueAtUtc,
                     y.Attention.NextAttentionAtUtc ?? y.Attention.FirstResponseDueAtUtc),
 
-                3 => CompareNullableDatesAsc(x.Attention.AttentionSinceUtc, y.Attention.AttentionSinceUtc),
+                4 => CompareNullableDatesAsc(x.Attention.AttentionSinceUtc, y.Attention.AttentionSinceUtc),
 
-                5 => CompareNullableDatesAsc(x.Attention.FirstResponseDueAtUtc, y.Attention.FirstResponseDueAtUtc),
+                6 => CompareNullableDatesAsc(x.Attention.FirstResponseDueAtUtc, y.Attention.FirstResponseDueAtUtc),
 
                 _ => (y.LastBusinessActivityAtUtc ?? y.LastCustomerActivityAtUtc ?? y.CreatedAtUtc)
                         .CompareTo(x.LastBusinessActivityAtUtc ?? x.LastCustomerActivityAtUtc ?? x.CreatedAtUtc)

@@ -597,7 +597,7 @@ public class KeepRequestListServiceTests
         Assert.Equal("none", summary.Attention.AttentionLevel);
 
         Assert.Equal("first_response_pending", summary.Ranking.RankingGroup);
-        Assert.Equal(5, summary.Ranking.RankingOrder);
+        Assert.Equal(6, summary.Ranking.RankingOrder);
         Assert.Equal("attention", summary.Ranking.Severity);
 
         Assert.Null(summary.Preview.PreviewText);
@@ -865,7 +865,7 @@ public class KeepRequestListServiceTests
     }
 
     [Fact]
-    public async Task Execute_post_close_ranked_group_3_not_group_2()
+    public async Task Execute_post_close_ranked_group_4_not_group_2()
     {
         var request = MakeRequest();
         SetProp(request, nameof(KeepRequest.Status), KeepRequestStatus.Closed);
@@ -884,12 +884,58 @@ public class KeepRequestListServiceTests
         Assert.True(result.IsSuccess);
         var ranking = result.Value.Requests[0].Ranking;
         Assert.Equal("post_close_unresolved_feedback", ranking.RankingGroup);
-        Assert.Equal(3, ranking.RankingOrder);
+        Assert.Equal(4, ranking.RankingOrder);
         Assert.True(ranking.IsPostClose);
     }
 
     [Fact]
-    public async Task Execute_first_response_pending_ranks_group_5_attention_severity()
+    public async Task Execute_urgent_active_intake_ranks_group_3()
+    {
+        // Received (first-response-pending) request marked urgent by customer.
+        var request = MakeRequest(firstResponseTargetMinutes: 60);
+        SetProp(request, nameof(KeepRequest.IntakeUrgency), IntakeUrgency.Urgent);
+        SetProp(request, nameof(KeepRequest.WaitingDirection), WaitingDirection.None);
+
+        var p = HappyPathPersistence([request]);
+        var sut = BuildSut(p);
+        var result = await sut.ExecuteAsync();
+
+        Assert.True(result.IsSuccess);
+        var ranking = result.Value.Requests[0].Ranking;
+        Assert.Equal("customer_urgent_active", ranking.RankingGroup);
+        Assert.Equal(3, ranking.RankingOrder);
+    }
+
+    [Fact]
+    public async Task Execute_urgent_active_sorts_above_standard_business_waiting_and_first_response_pending()
+    {
+        // Standard business-waiting request.
+        var standard = MakeRequest(referenceCode: "STD");
+        SetProp(standard, nameof(KeepRequest.WaitingDirection), WaitingDirection.Business);
+        SetProp(standard, nameof(KeepRequest.AttentionLevel), AttentionLevel.Waiting);
+
+        // First-response-pending (routine) request.
+        var routine = MakeRequest(referenceCode: "RTN", firstResponseTargetMinutes: 60);
+        SetProp(routine, nameof(KeepRequest.WaitingDirection), WaitingDirection.None);
+
+        // Urgent received request (no business response yet).
+        var urgent = MakeRequest(referenceCode: "URG", firstResponseTargetMinutes: 60);
+        SetProp(urgent, nameof(KeepRequest.IntakeUrgency), IntakeUrgency.Urgent);
+        SetProp(urgent, nameof(KeepRequest.WaitingDirection), WaitingDirection.None);
+
+        var p = HappyPathPersistence([standard, routine, urgent]);
+        var sut = BuildSut(p);
+        var result = await sut.ExecuteAsync();
+
+        Assert.True(result.IsSuccess);
+        var refs = result.Value.Requests.Select(r => r.ReferenceCode).ToList();
+        Assert.Equal("URG", refs[0]); // customer_urgent_active (3)
+        Assert.Equal("STD", refs[1]); // standard_business_waiting (5)
+        Assert.Equal("RTN", refs[2]); // first_response_pending (6)
+    }
+
+    [Fact]
+    public async Task Execute_first_response_pending_ranks_group_6_attention_severity()
     {
         var request = MakeRequest(firstResponseTargetMinutes: 60);
         SetProp(request, nameof(KeepRequest.WaitingDirection), WaitingDirection.None);
@@ -901,7 +947,7 @@ public class KeepRequestListServiceTests
         Assert.True(result.IsSuccess);
         var summary = result.Value.Requests[0];
         Assert.Equal("first_response_pending", summary.Ranking.RankingGroup);
-        Assert.Equal(5, summary.Ranking.RankingOrder);
+        Assert.Equal(6, summary.Ranking.RankingOrder);
         Assert.Equal("attention", summary.Ranking.Severity);
         Assert.True(summary.Attention.FirstResponsePending);
         Assert.False(summary.Attention.FirstResponseOverdue);

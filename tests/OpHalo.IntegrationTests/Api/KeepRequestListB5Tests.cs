@@ -349,7 +349,7 @@ public sealed class KeepRequestListB5Tests : IClassFixture<KeepApiWebFactory>, I
         var resolved = body.Requests.SingleOrDefault(r => r.Id == _resolvedRequestId);
         Assert.NotNull(resolved);
         Assert.Equal("resolved_quiet", resolved.Ranking.RankingGroup);
-        Assert.Equal(7, resolved.Ranking.RankingOrder);
+        Assert.Equal(8, resolved.Ranking.RankingOrder);
         Assert.Equal("neutral", resolved.Ranking.Severity);
     }
 
@@ -364,7 +364,7 @@ public sealed class KeepRequestListB5Tests : IClassFixture<KeepApiWebFactory>, I
         Assert.True(received.Attention.FirstResponsePending);
         Assert.False(received.Attention.FirstResponseOverdue);
         Assert.Equal("first_response_pending", received.Ranking.RankingGroup);
-        Assert.Equal(5, received.Ranking.RankingOrder);
+        Assert.Equal(6, received.Ranking.RankingOrder);
         Assert.Equal("attention", received.Ranking.Severity);
     }
 

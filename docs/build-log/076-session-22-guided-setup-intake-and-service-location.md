@@ -1,10 +1,10 @@
 # Build Log 076 — Session 22: Guided Setup, Intake Sharing, And Service Location Plan
 
 **Started:** 2026-07-08
-**Status:** Complete 2026-07-10 — day-zero settings, intake metadata, service location, mobile carry-forward, maps, and docs reconciliation
+**Status:** Complete 2026-07-10 — day-zero settings, intake metadata, service location, mobile carry-forward, maps, and docs reconciliation; follow-up urgency/priority slices queued for Claude
 **Session name:** S22 day-zero readiness / settings redesign / intake / service-location migration
 **Next free ADR before this log:** ADR-428
-**Next free ADR after this log:** ADR-432
+**Next free ADR after this log:** ADR-433
 
 ---
 
@@ -1486,6 +1486,125 @@ were already imported. Embedded map previews remain deferred. TypeScript typeche
 - **DEF-082** added: Business logo upload deferred to V1.1 personalization.
 - **DEF-083** added: Brand color customization deferred beyond V1.1 pending accessibility-safe design.
 - ADR-295 and ADR-383 were already correctly reconciled in prior S22 slices.
+
+---
+
+### S22p9 — Urgency-Aware Default Queue Ordering (Claude Slice)
+
+Status: **Queued for Claude.** No code has been changed in this slice yet.
+
+Problem observed 2026-07-10: a public-intake request marked `Urgent` can appear below a standard
+business-waiting/customer-replied row in the Default Queue. Current behavior is consistent with
+S22p4's prior rule: `IntakeUrgency` is display metadata only and must not become verified
+`Needs Attention` without a later product rule. However, once operators can see `Urgent` in the
+request list, the product expectation is that it should influence triage order.
+
+Desired posture:
+
+- Do **not** convert customer-selected urgent into `AttentionLevel != None`.
+- Do **not** inflate the Needs Attention count.
+- Do **not** rewrite the customer's original intake urgency.
+- Do let untriaged customer-marked urgent work rise above standard business-waiting work in the
+  Default Queue, Assigned to Me, and Watching views where the shared B5 active comparer applies.
+- Keep overdue work and verified priority business-waiting work above customer-marked urgent.
+
+Recommended ranking adjustment:
+
+```text
+1. Active overdue business-waiting requests / overdue first response
+2. Active verified priority business-waiting requests
+3. Active customer-marked urgent, not yet business-downgraded
+4. Closed post-close unresolved feedback needing Owner/Admin review
+5. Active standard business-waiting requests
+6. Active first-response pending, not overdue
+7. PendingCustomer / waiting-on-customer
+8. Resolved without attention
+9. Other active requests
+```
+
+Implementation notes for Claude:
+
+- Primary file: `src/OpHalo.Keep.Application/Requests/GetKeepRequestListService.cs`.
+- Ranking entry point: `ComputeRankingGroup`.
+- Comparer/cursor impact: adding a new `RankingOrder` changes active-view cursor semantics. Update
+  `EncodeCursorForActiveView`, `GetSecondarySortTick`, and `RequestListComparer` secondary sorting
+  deliberately rather than relying on the fallback bucket by accident.
+- Tests should prove urgent intake sorts above standard business-waiting and non-urgent
+  first-response-pending rows, but below overdue and verified priority business-waiting rows.
+- Preserve S22p4 copy: `Customer marked this urgent.`
+
+Locked decision for coding:
+
+- Customer-marked urgent ranks above post-close unresolved feedback for pilot because the customer is
+  asking for live service help. Owner/Admin feedback review remains visible in its dedicated tab and
+  summary count, but urgent active work wins in the shared Default Queue ranking.
+
+---
+
+### S22p10 — Business-Editable Request Priority (Claude Slice)
+
+Status: **Queued for Claude.** No code has been changed in this slice yet.
+
+Problem: businesses need to correct customer-reported urgency. Example: a customer may mark a new AC
+request urgent because "it is not cooling fast enough," but the business may determine it is routine,
+soon, or truly urgent after triage.
+
+Locked product distinction:
+
+- `IntakeUrgency` remains the customer's original statement from public intake.
+- Add a business-controlled operational priority field for triage named `BusinessPriority` rather
+  than reusing `IntakeUrgency`.
+
+Recommended values:
+
+```text
+Routine
+Soon
+Urgent
+```
+
+Locked behavior:
+
+- Default `BusinessPriority` is null/unset.
+- Queue ranking uses `BusinessPriority` when set.
+- Queue ranking falls back to `IntakeUrgency` only while `BusinessPriority` is unset.
+- Changing business priority does not clear attention, change status, send a customer message, or
+  mutate the original customer urgency.
+- Write an internal audit/timeline event when business priority changes.
+- Owner/Admin/Operator with `Keep.RequestsOperate` can change it; Viewer cannot.
+- OffSeason should follow the existing write-suppression posture for operational mutations.
+- Setting `BusinessPriority = Routine` permanently suppresses the customer urgent ranking fallback
+  because business triage has overridden the customer signal.
+
+Recommended UI:
+
+- Request detail: compact editable field near Job context/intake metadata.
+- Request list: show both signals only when they differ or when the business has overridden:
+  `Customer marked urgent` plus `Priority: Routine`, for example.
+- Avoid using "Urgency" for the business-editable label. Use `Priority` to make clear this is the
+  business's operational triage decision.
+
+Implementation notes for Claude:
+
+- Likely needs a new enum in Keep Core and a nullable field on `KeepRequest`.
+- Add migration/configuration and expose through detail/list DTOs.
+- Add an authenticated mutation endpoint with optimistic concurrency.
+- Add domain method that validates transitions, rotates concurrency, and emits an internal event.
+- Update request-list ranking from S22p9 to use effective priority:
+
+```text
+effectivePriority = BusinessPriority ?? IntakeUrgency
+```
+
+Locked decisions before coding:
+
+- Field name: `BusinessPriority`.
+- Permission: existing `Keep.RequestsOperate` for Owner/Admin/Operator; no separate new permission
+  in V1.
+- Audit copy: internal event text equivalent to
+  `Priority changed from Customer-marked urgent to Routine by {actor}`.
+- ADR: create ADR-433 because this changes request-list prioritization semantics and formally
+  separates customer urgency from business priority.
 
 ---
 
