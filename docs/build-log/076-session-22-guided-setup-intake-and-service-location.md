@@ -1,7 +1,7 @@
 # Build Log 076 — Session 22: Guided Setup, Intake Sharing, And Service Location Plan
 
 **Started:** 2026-07-08
-**Status:** Direction changed 2026-07-09 — S22c guided checklist work paused; Settings/Get Started redesign required
+**Status:** Complete 2026-07-10 — day-zero settings, intake metadata, service location, mobile carry-forward, maps, and docs reconciliation
 **Session name:** S22 day-zero readiness / settings redesign / intake / service-location migration
 **Next free ADR before this log:** ADR-428
 **Next free ADR after this log:** ADR-432
@@ -996,7 +996,7 @@ Verification:
 
 ### S22p8 — Pilot Maps Follow-Up
 
-Next slice.
+Completed 2026-07-10.
 
 Goal: add an `Open in Maps` action from mobile request detail when a service location is present.
 

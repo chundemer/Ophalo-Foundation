@@ -5,6 +5,7 @@ import {
   Copy,
   Check,
   Share2,
+  ExternalLink,
   AlertTriangle,
   Clock,
   MessageSquare,
@@ -117,7 +118,7 @@ const FOCUS_RING =
   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-offset-2";
 
 const INPUT_CLS =
-  "w-full rounded-lg border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-3 py-2 text-sm text-[var(--ophalo-ink)] placeholder:text-[var(--ophalo-muted)] disabled:opacity-60 transition-colors focus:outline-none focus:ring-2 focus:ring-[var(--keep-accent)] focus:border-[var(--keep-accent)]";
+  "w-full rounded-lg border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-3 py-2 text-base md:text-sm text-[var(--ophalo-ink)] placeholder:text-[var(--ophalo-muted)] disabled:opacity-60 transition-colors focus:outline-none focus:ring-2 focus:ring-[var(--keep-accent)] focus:border-[var(--keep-accent)]";
 
 // ---------------------------------------------------------------------------
 // Timeline
@@ -358,7 +359,7 @@ function buildAttentionGuidance(detail: KeepRequestDetailResult): AttentionGuida
         label: reasonLabel(detail.attentionReason),
         why: "The customer asked for a call, so Keep needs a durable record that the contact was handled.",
         resolveBy: canLogContact
-          ? "Call using your normal phone workflow, then save a phone contact log."
+          ? "Call using your normal phone workflow, then save an external contact log."
           : "Call using your normal phone workflow, then add a durable note when available.",
         sourceLabel,
         sourceText,
@@ -380,7 +381,7 @@ function buildAttentionGuidance(detail: KeepRequestDetailResult): AttentionGuida
       return {
         label: reasonLabel(detail.attentionReason),
         why: "The customer is asking to change or cancel the request, and the business needs to decide the next promise.",
-        resolveBy: "Review the request, then update the customer or log contact. Change status only when the business decision is clear.",
+        resolveBy: "Review the request, then update the customer, log contact, or use the status selector when the business decision is clear.",
         sourceLabel,
         sourceText,
         afterHandled,
@@ -466,8 +467,7 @@ function getAttentionResolutionHighlights(detail: KeepRequestDetailResult): Atte
     case "cancellation_requested":
     case "change_or_cancel_request":
       return {
-        workControls: "primary",
-        sendUpdate: canSendUpdate ? "secondary" : undefined,
+        sendUpdate: canSendUpdate ? "primary" : undefined,
         logContact: (!canSendUpdate && canLogContact) ? "secondary" : undefined,
       };
     case "unresolved_feedback":
@@ -482,20 +482,24 @@ function getAttentionResolutionHighlights(detail: KeepRequestDetailResult): Atte
 }
 
 function highlightBorderCls(level?: HighlightLevel): string {
-  if (level === "primary") return "border-[var(--ophalo-attention)]";
+  if (level === "primary") return "border-[var(--keep-accent)]";
   if (level === "secondary") return "border-[var(--ophalo-navy)]";
   return "border-[var(--ophalo-border)]";
 }
 
-function highlightBgCls(level?: HighlightLevel): string {
-  if (level === "primary") return "bg-[var(--ophalo-attention-bg)]";
+function highlightBgCls(): string {
   return "bg-[var(--ophalo-card)]";
 }
 
 function highlightBoxShadow(level?: HighlightLevel): string | undefined {
-  if (level === "primary") return "0 0 0 3px color-mix(in srgb, var(--ophalo-attention) 18%, transparent)";
+  if (level === "primary") return "0 0 0 3px color-mix(in srgb, var(--keep-accent) 18%, transparent)";
   if (level === "secondary") return "0 0 0 3px color-mix(in srgb, var(--ophalo-navy) 10%, transparent)";
   return undefined;
+}
+
+function RecommendedActionBadge({ level }: { level?: HighlightLevel }) {
+  if (level !== "primary") return null;
+  return <KeepBadge variant="teal">Recommended next step</KeepBadge>;
 }
 
 function maxHighlight(...levels: (HighlightLevel | undefined)[]): HighlightLevel | undefined {
@@ -517,10 +521,8 @@ function TimelineEvent({ event, isFirst }: TimelineEventProps) {
 
   return (
     <div
-      className={`relative flex gap-3 rounded-lg px-3 py-3 border transition-colors ${
-        isFirst
-          ? "border-[var(--keep-accent)] bg-[var(--keep-accent-bg)]"
-          : "border-transparent"
+      className={`relative flex gap-3 rounded-lg px-3 py-3 transition-colors ${
+        isFirst ? "bg-[var(--keep-accent-bg)]/45" : ""
       }`}
     >
       {isFirst && (
@@ -582,10 +584,10 @@ function TimelineEvent({ event, isFirst }: TimelineEventProps) {
 }
 
 // ---------------------------------------------------------------------------
-// Customer page sharing (secondary)
+// Customer page sharing (hero links)
 // ---------------------------------------------------------------------------
 
-interface DesktopShareSectionProps {
+interface CustomerPageHeroActionsProps {
   requestId: string;
   pageToken: string;
   canRecordShareIntent: boolean;
@@ -593,13 +595,13 @@ interface DesktopShareSectionProps {
   onCleared: () => void;
 }
 
-function DesktopShareSection({
+function CustomerPageHeroActions({
   requestId,
   pageToken,
   canRecordShareIntent,
   needsShare,
   onCleared,
-}: DesktopShareSectionProps) {
+}: CustomerPageHeroActionsProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -607,8 +609,6 @@ function DesktopShareSection({
   const publicBaseUrl = import.meta.env.VITE_PUBLIC_BASE_URL as string;
   const customerPageUrl = `${publicBaseUrl}/keep/r/${pageToken}`;
   const canNativeShare = typeof navigator !== "undefined" && typeof navigator.share === "function";
-
-  if (!canRecordShareIntent) return null;
 
   async function submit(method: ShareIntentMethod, browserAction?: () => Promise<void>) {
     if (isSubmitting) return;
@@ -645,178 +645,53 @@ function DesktopShareSection({
     });
   }
 
-  async function handleMarkShared() {
-    await submit("manual_mark_shared");
-  }
-
   return (
-    <div
-      className={`rounded-xl px-4 py-4 border ${
-        needsShare
-          ? "border-[var(--ophalo-border)] bg-[var(--ophalo-attention-bg)]"
-          : "border-[var(--ophalo-border)] bg-[var(--ophalo-card)]"
-      }`}
-    >
-      <div className="flex items-center justify-between mb-3">
-        <p className="text-base font-semibold text-[var(--ophalo-ink)]">Customer page</p>
-        {needsShare && <KeepBadge variant="attention">Not shared</KeepBadge>}
-      </div>
-      {needsShare && (
-        <p className="text-xs text-[var(--ophalo-attention)] font-medium mb-3">
-          Share the customer page so they can follow request updates.
-        </p>
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+      {canRecordShareIntent && needsShare && <KeepBadge variant="attention">Not shared</KeepBadge>}
+      <a
+        href={customerPageUrl}
+        target="_blank"
+        rel="noreferrer"
+        className={`inline-flex items-center gap-1 font-semibold text-[var(--ophalo-muted)] hover:text-[var(--ophalo-ink)] transition-colors ${FOCUS_RING}`}
+      >
+        <ExternalLink className="h-3.5 w-3.5 shrink-0" />
+        View customer page
+      </a>
+      {canRecordShareIntent && canNativeShare && (
+        <button
+          type="button"
+          onClick={() => void handleNativeShare()}
+          disabled={isSubmitting}
+          className={`inline-flex items-center gap-1 font-semibold text-[var(--ophalo-muted)] hover:text-[var(--ophalo-ink)] disabled:opacity-50 transition-colors ${FOCUS_RING}`}
+        >
+          <Share2 className="h-3.5 w-3.5 shrink-0" />
+          Share
+        </button>
       )}
-      <div className="flex flex-col gap-2">
-        {canNativeShare && (
-          <KeepButton
-            variant="secondary"
-            onClick={() => void handleNativeShare()}
-            disabled={isSubmitting}
-            className="w-full gap-2"
-          >
-            <Share2 className="h-3.5 w-3.5 shrink-0" />
-            Share page
-          </KeepButton>
-        )}
-        <KeepButton
-          variant="secondary"
+      {canRecordShareIntent && (
+        <button
+          type="button"
           onClick={() => void handleCopyLink()}
           disabled={isSubmitting}
-          className="w-full gap-2"
+          className={`inline-flex items-center gap-1 font-semibold text-[var(--ophalo-muted)] hover:text-[var(--ophalo-ink)] disabled:opacity-50 transition-colors ${FOCUS_RING}`}
         >
           {copied ? (
             <Check className="h-3.5 w-3.5 shrink-0 text-[var(--ophalo-success)]" />
           ) : (
             <Copy className="h-3.5 w-3.5 shrink-0" />
           )}
-          {copied ? "Copied!" : "Copy page link"}
-        </KeepButton>
-        {needsShare && (
-          <button
-            type="button"
-            onClick={() => void handleMarkShared()}
-            disabled={isSubmitting}
-            className={`text-xs text-[var(--ophalo-muted)] hover:text-[var(--ophalo-ink)] text-left disabled:opacity-60 transition-colors ${FOCUS_RING}`}
-          >
-            Mark as shared manually
-          </button>
-        )}
-      </div>
-      {error && <p className="mt-2 text-xs text-[var(--ophalo-danger)]">{error}</p>}
+          {copied ? "Copied" : "Copy link"}
+        </button>
+      )}
+      {error && (
+        <p className="basis-full text-xs text-[var(--ophalo-danger)]">{error}</p>
+      )}
     </div>
   );
 }
-
-// ---------------------------------------------------------------------------
-// Change status
-// ---------------------------------------------------------------------------
 
 const STATUS_CONFLICT_MESSAGE =
   "This request has been updated by another team member. Copy your unsaved notes and refresh the workbench to load the latest history.";
-
-interface StatusChangeSectionProps {
-  requestId: string;
-  detail: KeepRequestDetailResult;
-  onDetailUpdated: (updated: KeepRequestDetailResult) => void;
-}
-
-function StatusChangeSection({ requestId, detail, onDetailUpdated }: StatusChangeSectionProps) {
-  const { allowedStatuses } = detail.availableActions;
-  const { messageRequiredForStatuses, statusMessageMaxLength } = detail.validation;
-
-  const [selectedStatus, setSelectedStatus] = useState("");
-  const [message, setMessage] = useState("");
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [conflictDisabled, setConflictDisabled] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  if (allowedStatuses.length === 0) return null;
-
-  const messageRequired = messageRequiredForStatuses.includes(selectedStatus);
-  const canSubmit =
-    selectedStatus !== "" &&
-    !isSubmitting &&
-    !conflictDisabled &&
-    (!messageRequired || message.trim().length > 0);
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!canSubmit) return;
-    setIsSubmitting(true);
-    setError(null);
-    try {
-      const body: { status: string; message?: string } = { status: selectedStatus };
-      if (message.trim()) body.message = message.trim();
-      const updated = await api.patchRequestStatus(requestId, body, detail.version);
-      onDetailUpdated(updated);
-      setSelectedStatus("");
-      setMessage("");
-    } catch (e) {
-      if (e instanceof ApiError && e.status === 409) {
-        setConflictDisabled(true);
-        setError(STATUS_CONFLICT_MESSAGE);
-      } else {
-        setError("Could not update status. Try again.");
-      }
-    } finally {
-      setIsSubmitting(false);
-    }
-  }
-
-  return (
-    <div>
-      {error && (
-        <div
-          className={`mb-3 rounded-lg p-3 text-xs ${
-            conflictDisabled
-              ? "bg-[var(--ophalo-attention-bg)] text-[var(--ophalo-attention)]"
-              : "bg-[var(--ophalo-danger-bg)] text-[var(--ophalo-danger)]"
-          }`}
-        >
-          {error}
-        </div>
-      )}
-      <form onSubmit={(e) => void handleSubmit(e)} className="space-y-2.5">
-        <label htmlFor="status-select" className="block text-sm font-semibold text-[var(--ophalo-ink)]">
-          Change status
-        </label>
-        <select
-          id="status-select"
-          value={selectedStatus}
-          onChange={(e) => {
-            setSelectedStatus(e.target.value);
-            setError(null);
-          }}
-          disabled={conflictDisabled}
-          className={INPUT_CLS}
-        >
-          <option value="">Select new status…</option>
-          {allowedStatuses.map((s) => (
-            <option key={s} value={s}>{statusLabel(s)}</option>
-          ))}
-        </select>
-        <div>
-          <label htmlFor="status-message" className="sr-only">
-            {messageRequired ? "Message (required)" : "Message (optional)"}
-          </label>
-          <textarea
-            id="status-message"
-            value={message}
-            onChange={(e) => setMessage(e.target.value)}
-            maxLength={statusMessageMaxLength}
-            disabled={conflictDisabled}
-            placeholder={messageRequired ? "Message required for this status…" : "Optional note…"}
-            rows={2}
-            className={`${INPUT_CLS} resize-none`}
-          />
-        </div>
-        <KeepButton type="submit" variant="primary" disabled={!canSubmit} className="w-full">
-          {isSubmitting ? "Updating…" : "Update status"}
-        </KeepButton>
-      </form>
-    </div>
-  );
-}
 
 // ---------------------------------------------------------------------------
 // Handled outside Keep? — log contact affordance card
@@ -836,10 +711,13 @@ function LogContactCard({ detail, onContactLaunched, highlight }: LogContactCard
   const shadow = highlightBoxShadow(highlight);
   return (
     <div
-      className={`rounded-xl border px-5 py-4 transition-[border-color,background-color,box-shadow] ${highlightBorderCls(highlight)} ${highlightBgCls(highlight)}`}
+      className={`rounded-xl border px-5 py-4 transition-[border-color,background-color,box-shadow] ${highlightBorderCls(highlight)} ${highlightBgCls()}`}
       style={shadow ? { boxShadow: shadow } : undefined}
     >
-      <p className="text-sm font-semibold text-[var(--ophalo-ink)] mb-1">Handled outside Keep?</p>
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+        <p className="text-sm font-semibold text-[var(--ophalo-ink)]">Handled outside Keep?</p>
+        <RecommendedActionBadge level={highlight} />
+      </div>
       <p className="text-xs text-[var(--ophalo-muted)] mb-3">
         Log a call, text, email, or in-person conversation.
       </p>
@@ -849,14 +727,14 @@ function LogContactCard({ detail, onContactLaunched, highlight }: LogContactCard
         onClick={() => onContactLaunched("outbound", contactChannel)}
         className="w-full"
       >
-        Log customer contact
+        Log external contact
       </KeepButton>
     </div>
   );
 }
 
 // ---------------------------------------------------------------------------
-// Already handled? — acknowledge attention card
+// Clear attention — acknowledge stale attention without logging contact
 // ---------------------------------------------------------------------------
 
 interface MarkHandledCardProps {
@@ -893,7 +771,7 @@ function MarkHandledCard({ requestId, detail, onDetailUpdated, highlight }: Mark
         setConflictDisabled(true);
         setError(STATUS_CONFLICT_MESSAGE);
       } else {
-        setError("Could not mark handled. Try again.");
+        setError("Could not clear attention. Try again.");
       }
     } finally {
       setIsSubmitting(false);
@@ -904,10 +782,13 @@ function MarkHandledCard({ requestId, detail, onDetailUpdated, highlight }: Mark
 
   return (
     <div
-      className={`rounded-xl border px-5 py-4 transition-[border-color,background-color,box-shadow] ${highlightBorderCls(highlight)} ${highlightBgCls(highlight)}`}
+      className={`rounded-xl border px-5 py-4 transition-[border-color,background-color,box-shadow] ${highlightBorderCls(highlight)} ${highlightBgCls()}`}
       style={shadow ? { boxShadow: shadow } : undefined}
     >
-      <p className="text-sm font-semibold text-[var(--ophalo-ink)] mb-1">Already handled?</p>
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+        <p className="text-sm font-semibold text-[var(--ophalo-ink)]">Clear attention</p>
+        <RecommendedActionBadge level={highlight} />
+      </div>
       <p className="text-xs text-[var(--ophalo-muted)] mb-3">
         Use only when no customer update or contact log is needed.
       </p>
@@ -925,7 +806,7 @@ function MarkHandledCard({ requestId, detail, onDetailUpdated, highlight }: Mark
       <form onSubmit={(e) => void handleSubmit(e)} className="space-y-2.5">
         <div>
           <label htmlFor="ack-reason" className="block text-xs font-semibold text-[var(--ophalo-muted)] mb-1">
-            Brief note before marking handled
+            Brief note before clearing
           </label>
           <textarea
             id="ack-reason"
@@ -933,13 +814,13 @@ function MarkHandledCard({ requestId, detail, onDetailUpdated, highlight }: Mark
             onChange={(e) => setReason(e.target.value)}
             maxLength={acknowledgeReasonMaxLength}
             disabled={conflictDisabled}
-            placeholder="Example: Called Kelley and confirmed Thursday morning."
+            placeholder="Example: Reviewed — no follow-up needed."
             rows={2}
             className={`${INPUT_CLS} resize-none`}
           />
         </div>
         <KeepButton type="submit" variant="secondary" disabled={!canSubmit} className="w-full">
-          {isSubmitting ? "Marking handled…" : "Mark attention handled"}
+          {isSubmitting ? "Clearing…" : "Clear attention"}
         </KeepButton>
       </form>
     </div>
@@ -1056,7 +937,7 @@ function FeedbackReviewSection({
 }
 
 // ---------------------------------------------------------------------------
-// Work controls group — status + attention + feedback in one card
+// Work controls group — focused review controls
 // ---------------------------------------------------------------------------
 
 interface WorkControlsGroupProps {
@@ -1067,15 +948,14 @@ interface WorkControlsGroupProps {
 }
 
 function WorkControlsGroup({ requestId, detail, onDetailUpdated, highlights }: WorkControlsGroupProps) {
-  const hasStatus = detail.availableActions.allowedStatuses.length > 0;
   const hasFeedback =
     detail.availableActions.canMarkFeedbackReviewed &&
     detail.feedbackWasResolved === false &&
     detail.feedbackReviewedAtUtc == null;
 
-  if (!hasStatus && !hasFeedback) return null;
+  if (!hasFeedback) return null;
 
-  const cardHighlight = maxHighlight(highlights.workControls, highlights.feedbackReview);
+  const cardHighlight = maxHighlight(undefined, highlights.feedbackReview);
   const shadow = highlightBoxShadow(cardHighlight);
 
   return (
@@ -1084,19 +964,12 @@ function WorkControlsGroup({ requestId, detail, onDetailUpdated, highlights }: W
       className={`rounded-xl border overflow-hidden scroll-mt-4 transition-[border-color,box-shadow] bg-[var(--ophalo-card)] ${highlightBorderCls(cardHighlight)}`}
       style={shadow ? { boxShadow: shadow } : undefined}
     >
-      {hasStatus && (
-        <div className={`px-5 py-4 transition-colors ${highlights.workControls === "primary" ? "bg-[var(--ophalo-attention-bg)]" : ""}`}>
-          <StatusChangeSection requestId={requestId} detail={detail} onDetailUpdated={onDetailUpdated} />
+      <div className="px-5 py-4">
+        <div className="mb-2 flex justify-end">
+          <RecommendedActionBadge level={highlights.feedbackReview} />
         </div>
-      )}
-      {hasFeedback && (
-        <>
-          {hasStatus && <div className="h-px bg-[var(--ophalo-border)]" />}
-          <div className={`px-5 py-4 transition-colors ${highlights.feedbackReview === "primary" ? "bg-[var(--ophalo-attention-bg)]" : ""}`}>
-            <FeedbackReviewSection requestId={requestId} detail={detail} onDetailUpdated={onDetailUpdated} />
-          </div>
-        </>
-      )}
+        <FeedbackReviewSection requestId={requestId} detail={detail} onDetailUpdated={onDetailUpdated} />
+      </div>
     </div>
   );
 }
@@ -1177,7 +1050,7 @@ function LogContactModal({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between mb-1">
-          <h2 className="text-base font-semibold text-[var(--ophalo-ink)]">Log contact</h2>
+          <h2 className="text-base font-semibold text-[var(--ophalo-ink)]">Log external contact</h2>
           <button
             type="button"
             onClick={onClose}
@@ -1338,9 +1211,19 @@ function LogContactModal({
 
 interface DetailHeroProps {
   detail: KeepRequestDetailResult;
+  requestId: string;
+  canRecordShareIntent: boolean;
+  needsShare: boolean;
+  onShareCleared: () => void;
 }
 
-function DetailHero({ detail }: DetailHeroProps) {
+function DetailHero({
+  detail,
+  requestId,
+  canRecordShareIntent,
+  needsShare,
+  onShareCleared,
+}: DetailHeroProps) {
   const hasAttention = detail.attentionLevel !== "none";
 
   // ADR-150: customer page viewed info shown in header badges
@@ -1385,10 +1268,19 @@ function DetailHero({ detail }: DetailHeroProps) {
         )}
       </div>
 
-      {/* Customer name — page type anchor */}
-      <h1 className="font-serif text-[26px] font-semibold leading-tight text-[var(--ophalo-ink)]">
-        {detail.customerName}
-      </h1>
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        {/* Customer name — page type anchor */}
+        <h1 className="font-serif text-[26px] font-semibold leading-tight text-[var(--ophalo-ink)]">
+          {detail.customerName}
+        </h1>
+        <CustomerPageHeroActions
+          requestId={requestId}
+          pageToken={detail.pageToken}
+          canRecordShareIntent={canRecordShareIntent}
+          needsShare={needsShare}
+          onCleared={onShareCleared}
+        />
+      </div>
     </div>
   );
 }
@@ -1620,30 +1512,17 @@ function OriginalRequestCard({ detail, onContactLaunched, onDetailUpdated }: Ori
         )}
         {detail.contactActions
           .filter((a) => a.available)
+          .filter((a) => a.type !== "call")
           .map((action) =>
-            action.type === "call" ? (
-              // Phone: open log modal only — no tel: launch here.
-              // Secondary tel: and copy utilities live inside the modal (ADR-PWA-phone).
-              <button
-                key={action.type}
-                type="button"
-                onClick={() => onContactLaunched("outbound", "phone")}
-                className={`inline-flex min-h-[32px] items-center gap-1.5 rounded-full border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-3 text-xs font-semibold text-[var(--ophalo-ink)] hover:border-[var(--keep-accent)] hover:bg-[var(--keep-accent-bg)] hover:text-[var(--keep-accent)] transition-colors ${FOCUS_RING}`}
-              >
-                <Phone className="h-3 w-3 text-[var(--keep-accent)] shrink-0" />
-                Log phone contact
-              </button>
-            ) : (
-              <a
-                key={action.type}
-                href={`mailto:${action.target}`}
-                onClick={() => onContactLaunched("outbound", "email")}
-                className={`inline-flex min-h-[32px] items-center gap-1.5 rounded-full border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-3 text-xs font-semibold text-[var(--ophalo-ink)] hover:border-[var(--keep-accent)] hover:bg-[var(--keep-accent-bg)] hover:text-[var(--keep-accent)] transition-colors ${FOCUS_RING}`}
-              >
-                <Mail className="h-3 w-3 text-[var(--keep-accent)] shrink-0" />
-                Email
-              </a>
-            ),
+            <a
+              key={action.type}
+              href={`mailto:${action.target}`}
+              onClick={() => onContactLaunched("outbound", "email")}
+              className={`inline-flex min-h-[32px] items-center gap-1.5 rounded-full border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-3 text-xs font-semibold text-[var(--ophalo-ink)] hover:border-[var(--keep-accent)] hover:bg-[var(--keep-accent-bg)] hover:text-[var(--keep-accent)] transition-colors ${FOCUS_RING}`}
+            >
+              <Mail className="h-3 w-3 text-[var(--keep-accent)] shrink-0" />
+              Email
+            </a>,
           )}
       </div>
 
@@ -1704,13 +1583,21 @@ function OriginalRequestCard({ detail, onContactLaunched, onDetailUpdated }: Ori
               )}
             </div>
           ) : (
-            <div className="flex items-center justify-between gap-2">
-              <p className="text-xs text-[var(--ophalo-muted)] italic">Service location needed</p>
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[var(--ophalo-attention)] bg-[var(--ophalo-attention-bg)] px-3 py-2.5">
+              <div className="flex min-w-0 items-start gap-2">
+                <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--ophalo-attention)]" />
+                <div>
+                  <p className="text-xs font-semibold text-[var(--ophalo-ink)]">Service location needed</p>
+                  <p className="text-xs leading-5 text-[var(--ophalo-muted)]">
+                    Add the address before dispatching or scheduling field work.
+                  </p>
+                </div>
+              </div>
               {canEditLocation && (
                 <button
                   type="button"
                   onClick={() => setShowLocationModal(true)}
-                  className={`shrink-0 text-xs font-medium text-[var(--keep-accent)] hover:underline ${FOCUS_RING} rounded`}
+                  className={`inline-flex min-h-[32px] shrink-0 items-center rounded-lg border border-[var(--ophalo-attention)] bg-[var(--ophalo-card)] px-3 text-xs font-semibold text-[var(--ophalo-ink)] hover:bg-white transition-colors ${FOCUS_RING}`}
                 >
                   Add location
                 </button>
@@ -1753,10 +1640,9 @@ function AttentionGuidanceCard({ detail, highlights }: AttentionGuidanceCardProp
 
   const primaryPanelLabel: string | null = (() => {
     if (highlights.sendUpdate === "primary") return "Send customer update";
-    if (highlights.logContact === "primary") return "Log customer contact";
-    if (highlights.workControls === "primary") return "Status / work controls";
+    if (highlights.logContact === "primary") return "Log external contact";
     if (highlights.feedbackReview === "primary") return "Review feedback";
-    if (highlights.markHandled === "primary") return "Mark attention handled";
+    if (highlights.markHandled === "primary") return "Clear attention";
     return null;
   })();
 
@@ -1816,7 +1702,7 @@ function AttentionGuidanceCard({ detail, highlights }: AttentionGuidanceCardProp
               {highlights.sendUpdate === "primary"
                 ? "Recommended: Send customer update using the highlighted panel on the right."
                 : highlights.logContact === "primary"
-                  ? "Recommended: Log customer contact using the highlighted panel on the right."
+                  ? "Recommended: Log external contact using the highlighted panel on the right."
                   : "Use the highlighted panel on the right."}
             </p>
           </div>
@@ -1868,13 +1754,25 @@ function BusinessUpdateSection({
 
   if (!canSendBusinessUpdate) return null;
 
-  const composerStatuses = allowedStatuses.filter(
-    (s) => !BUSINESS_UPDATE_EXCLUDED_STATUSES.has(s),
-  );
+  const composerStatuses = allowedStatuses;
   const showStatusDropdown = canChangeStatus && composerStatuses.length > 0;
   const remaining = maxLength - message.length;
   const overLimit = remaining < 0;
-  const canSubmit = message.trim().length > 0 && !overLimit && !isSubmitting && !conflictDisabled;
+  const hasMessage = message.trim().length > 0;
+  const hasStatus = selectedStatus !== "";
+  const statusRequiresMessage = detail.validation.messageRequiredForStatuses.includes(selectedStatus);
+  const canSubmit =
+    (hasMessage || hasStatus) &&
+    !overLimit &&
+    !isSubmitting &&
+    !conflictDisabled &&
+    (!statusRequiresMessage || hasMessage);
+  const submitLabel =
+    hasMessage && hasStatus
+      ? "Send update & change status"
+      : hasStatus
+        ? "Update status"
+        : "Send update";
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -1882,9 +1780,24 @@ function BusinessUpdateSection({
     setIsSubmitting(true);
     setError(null);
     try {
-      const body: { message: string; setStatus?: string } = { message: message.trim() };
-      if (selectedStatus) body.setStatus = selectedStatus;
-      const updated = await api.postBusinessUpdate(requestId, body, detail.version);
+      const statusUsesStatusEndpoint =
+        selectedStatus !== "" && BUSINESS_UPDATE_EXCLUDED_STATUSES.has(selectedStatus);
+      const updated =
+        selectedStatus && (!hasMessage || statusUsesStatusEndpoint)
+          ? await api.patchRequestStatus(
+              requestId,
+              hasMessage
+                ? { status: selectedStatus, message: message.trim() }
+                : { status: selectedStatus },
+              detail.version,
+            )
+          : await api.postBusinessUpdate(
+              requestId,
+              selectedStatus
+                ? { message: message.trim(), setStatus: selectedStatus }
+                : { message: message.trim() },
+              detail.version,
+            );
       onDetailUpdated(updated);
       setMessage("");
       setSelectedStatus("");
@@ -1893,7 +1806,7 @@ function BusinessUpdateSection({
         setConflictDisabled(true);
         setError(BUSINESS_UPDATE_CONFLICT_MESSAGE);
       } else {
-        setError("Could not send update. Try again.");
+        setError(hasMessage ? "Could not send update. Try again." : "Could not update status. Try again.");
       }
     } finally {
       setIsSubmitting(false);
@@ -1903,10 +1816,13 @@ function BusinessUpdateSection({
   return (
     <div
       id="customer-update"
-      className={`rounded-xl border px-5 py-5 scroll-mt-4 transition-[border-color,background-color,box-shadow] ${highlightBorderCls(highlight)} ${highlightBgCls(highlight)}`}
+      className={`rounded-xl border px-5 py-5 scroll-mt-4 transition-[border-color,background-color,box-shadow] ${highlightBorderCls(highlight)} ${highlightBgCls()}`}
       style={{ boxShadow: highlightBoxShadow(highlight) }}
     >
-      <p className="text-base font-semibold text-[var(--ophalo-ink)] mb-3">Send customer update</p>
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <p className="text-base font-semibold text-[var(--ophalo-ink)]">Send customer update</p>
+        <RecommendedActionBadge level={highlight} />
+      </div>
       {detail.needsShare && (
         <p className="mb-3 text-xs text-[var(--ophalo-attention)]">
           Customer page not yet shared — the customer won't see this until you share it.
@@ -1977,11 +1893,12 @@ function BusinessUpdateSection({
           </div>
         )}
         <p className="text-xs text-[var(--ophalo-muted)]">
-          Visible on the customer page.
+          {hasMessage ? "Visible on the customer page." : "No customer message will be sent."}
           {selectedStatus && ` Status will change to ${statusLabel(selectedStatus)}.`}
+          {statusRequiresMessage && !hasMessage && " Add a message for this status."}
         </p>
         <KeepButton type="submit" variant="teal" disabled={!canSubmit} className="w-full">
-          {isSubmitting ? "Sending…" : "Send update"}
+          {isSubmitting ? "Saving…" : submitLabel}
         </KeepButton>
       </form>
     </div>
@@ -2292,7 +2209,7 @@ export function RequestDetail({ requestId, onBack }: RequestDetailProps) {
     [detail],
   );
 
-  const workControlsIsHighlighted = !!(highlights.workControls || highlights.feedbackReview);
+  const workControlsIsHighlighted = !!highlights.feedbackReview;
 
   function handleShareCleared() {
     setShareCleared(true);
@@ -2341,15 +2258,6 @@ export function RequestDetail({ requestId, onBack }: RequestDetailProps) {
           onDetailUpdated={handleDetailUpdated}
           highlight={highlights.markHandled}
         />
-        {canShare && (
-          <DesktopShareSection
-            requestId={requestId}
-            pageToken={detail.pageToken}
-            canRecordShareIntent={canShare}
-            needsShare={needsShareEffective}
-            onCleared={handleShareCleared}
-          />
-        )}
         <WorkControlsGroup
           requestId={requestId}
           detail={detail}
@@ -2438,7 +2346,13 @@ export function RequestDetail({ requestId, onBack }: RequestDetailProps) {
           {/* Left / main column */}
           <div className="flex-1 overflow-y-auto px-4 md:px-6 py-5 space-y-4">
             {/* Hero: identity + status */}
-            <DetailHero detail={detail} />
+            <DetailHero
+              detail={detail}
+              requestId={requestId}
+              canRecordShareIntent={canShare}
+              needsShare={needsShareEffective}
+              onShareCleared={handleShareCleared}
+            />
 
             {/* Original request: description, contact, timestamp */}
             <OriginalRequestCard
@@ -2493,7 +2407,7 @@ export function RequestDetail({ requestId, onBack }: RequestDetailProps) {
                     : "No activity yet."}
                 </p>
               ) : (
-                <div className="relative space-y-1 border-l border-[var(--ophalo-border)] pl-3 ml-4">
+                <div className="relative space-y-2 border-l border-[var(--ophalo-border)] pl-3 ml-4">
                   {displayedEvents.map((event, idx) => (
                     <TimelineEvent key={event.id} event={event} isFirst={idx === 0} />
                   ))}
@@ -2540,18 +2454,9 @@ export function RequestDetail({ requestId, onBack }: RequestDetailProps) {
               />
             )}
 
-            {/* Utilities: customer page, status, team context */}
+            {/* Utilities: review controls and team context */}
             <div className="space-y-3">
               <p className="px-1 text-[10px] font-semibold uppercase tracking-widest text-[var(--ophalo-muted)]">Utilities</p>
-              {canShare && (
-                <DesktopShareSection
-                  requestId={requestId}
-                  pageToken={detail.pageToken}
-                  canRecordShareIntent={canShare}
-                  needsShare={needsShareEffective}
-                  onCleared={handleShareCleared}
-                />
-              )}
               {!workControlsIsHighlighted && (
                 <WorkControlsGroup
                   requestId={requestId}

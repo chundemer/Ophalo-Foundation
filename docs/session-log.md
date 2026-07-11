@@ -1,10 +1,10 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-07-10 (S22 complete; next work is build-log/078 tracker-link email or pre-deployment cleanup)
+**Last updated:** 2026-07-10 (S22 complete; pre-next-session issues pending)
 **Branch:** `main` tracking `origin/main`
 **Last green baseline:** Targeted intake baseline — 66 intake unit · 25 intake integration confirmed; full suite pending (1 pre-existing KeepG5 fluke excluded)
 **Next free ADR:** ADR-433
-**Current session:** Session 22 — Day-Zero Settings Redesign, Intake Sharing, And Service Location Plan
+**Current session:** Between sessions — Session 22 complete
 
 ---
 
@@ -34,13 +34,14 @@ For every implementation slice:
 
 ## Current Work
 
-**Current build log:** `docs/build-log/076-session-22-guided-setup-intake-and-service-location.md`
+**Current build log:** none active
+**Latest completed build log:** `docs/build-log/076-session-22-guided-setup-intake-and-service-location.md`
 **Last completed prior-session build log:** `docs/build-log/075-session-21-attention-guidance-resolution-metadata.md`
 **Readiness working doc:** `docs/pilot-readiness-decision-questions.md`
 **Bug/gap tracker:** `docs/pilot-readiness-bug-tracker.md`
 **Foundation roadmap:** `docs/build-log/ophalo-foundation-build-plan-greenfield-boundaries-brownfield-behavior.md` section 9.1
-**Current session:** Session 22 — Day-Zero Settings Redesign, Intake Sharing, And Service Location Plan
-**Current slice:** S22 complete — next is build-log/078 (tracker-link email) or build-log/077 (pre-deployment cleanup)
+**Current session:** Between sessions — Session 22 complete
+**Current slice:** None active — discuss/resolve pre-next-session issues before selecting build-log 078 or 077
 
 ### Completed Context
 
@@ -59,11 +60,11 @@ installation storage, mobile magic-link handoff, nullable push-token device regi
 viewer/unknown mobile role gate, crypto UUID generation, and the S19 store-submission checklist.
 Treat these as historical context unless a later discovery step finds a concrete gap.
 
-### Current Direction
+### Post-S22 State
 
-Session 22 is now in the customer request/intake metadata finishing lane. Historical S22 detail is
-archived in `docs/build-log/076-session-22-guided-setup-intake-and-service-location.md`; use this
-session log as the handoff brief only.
+Session 22 is complete. Historical S22 detail is archived in
+`docs/build-log/076-session-22-guided-setup-intake-and-service-location.md`; use this session log as
+the current handoff and discussion brief only.
 
 Locked decisions to preserve:
 
@@ -117,117 +118,51 @@ Topology:
 - Pilot cap: `SignupDefaults:MaxPilotAccounts=15`.
 - `OperatorBaseUrl` is retired; invite links use `{PublicBaseUrl}/invite/accept`.
 
-### Next Session Brief
+### Pre-Next-Session Discussion Queue
 
-S22p7 is complete. Current work: **S22p8 — Pilot maps follow-up**.
+No next implementation session is selected yet. Use this space to capture and resolve Christian's
+issues before opening build-log 078 or resuming build-log 077.
 
-#### S22p1 — Intake Form UI Polish ✓ complete (2026-07-10)
-`IntakeForm.tsx` only. No backend, no migration, no test changes.
-- Main form H1: `font-serif text-2xl font-semibold leading-tight text-foreground sm:text-[28px]`
-- Terminal H1s (`Request submitted.`, `This link is not available.`, `You're signed in…`): `font-serif` added, size unchanged
-- Removed all 4x `border-t border-[var(--ophalo-border)] pt-5` dividers; sections wrapped in `<div className="mt-6 space-y-7">` with `<section>` children; submit area uses `mt-6` only
-- Description helper text: "Include what happened, when it started, and anything urgent."
-- State `<select>`: `text-base` added (iOS Safari zoom guard)
-- Submit `<KeepButton>`: `min-h-[42px]` (minimum tap target)
+- Request detail command-center simplification: split into small UI slices before the next major
+  session rather than bundling into tracker-link email or pre-deployment cleanup.
 
-#### S22p2 — Intake Urgency Field ✓ complete (2026-07-10)
-New `IntakeUrgency` enum (Routine/Soon/Urgent), default Routine. Piped through intake submission:
-`PublicIntakeRequest.Urgency`, `CreateKeepPublicIntakeCommand.IntakeUrgency`,
-`CreateKeepPublicIntakeService`, and `KeepRequest.CreateFromCustomerIntake`. EF config + migration
-`AddUrgencyToKeepRequest` complete. Frontend: urgency select in `IntakeForm.tsx` after description,
-with urgent helper copy and quiet safety disclaimer. 66 unit · 25 intake integration green after
-S22p3. Operator display deferred to S22p4.
+Resolved before next session:
 
-#### S22p3 — Preferred Contact Method ✓ complete (2026-07-10)
-New `ContactPreference` enum (NoPreference/TextMessage/PhoneCall/Email) on `KeepRequest`, default
-NoPreference. Piped through intake submission: `CreateKeepPublicIntakeCommand`, service, API body
-(`PublicIntakeRequest`), both token and slug handlers in `Program.cs`. EF config + migration
-`AddContactPreferenceToKeepRequest`. Frontend: preference select in contact section of `IntakeForm.tsx`;
-email becomes visible and `required` when Email selected. 66 unit · 25 intake integration green.
-Operator display deferred to S22p4 (would have exceeded batch gate).
+- Request detail external-contact action: use the generic label `Log external contact`, remove the
+  duplicate inline `Log phone contact` pill beside the customer phone number, keep the right-rail
+  `Handled outside Keep?` card as the canonical external-contact logging action, and retitle the
+  modal `Log external contact`.
+- Request detail command cleanup: removed the separate lower-right `Change status` card; kept one
+  status selector in the `Send customer update` composer; made composer behavior explicit for
+  message-only, status-only, and message+status cases; moved customer-page actions into quiet hero
+  links; kept the customer-name heading in `font-serif`; and replaced `Already handled?` with
+  quieter `Clear attention` semantics.
+- Request queue navigation: add detail-page navigation so users can move to the next request without
+  scrolling back to the list. Preferred direction is `Previous` / `Next` or `Next needing attention`
+  near the hero/top bar, plus a post-action route to the next request if the current workflow supports
+  it.
 
-#### S22p4 — Intake Metadata Operator Display ✓ complete (2026-07-10)
-Exposed `IntakeUrgency` and `ContactPreference` on operator detail and request list. Backend: new
-fields on `KeepRequestDetailResult` and `KeepRequestSummary`, mapped with exhaustive enum-string
-methods in `KeepRequestDetailMapper` and `GetKeepRequestListService`. Frontend: request detail shows
-urgency alert ("Customer marked this urgent/soon.") when source is `public_intake` and urgency ≠
-routine, and preferred contact line when source is `public_intake`; request rows show intake urgency
-and contact preference cues because operators on the road use the list as their primary view.
-98 unit · 101 integration all green.
+Recommended slice order:
 
-#### S22e — Customer Page Copy And Accessibility Alignment ✓ complete (2026-07-10)
-Narrowed after ADR-432/build log 078: larger tracker-link retention work, auto-redirect behavior,
-and Resend tracker-link email are deferred to 078. S22e only aligned existing public surfaces:
-success header label is `Request submitted`, success helper copy no longer depends on bookmarking,
-`pending_customer` subtext directs the customer to reply using the form below, and the tracker
-message composer has an associated label. `pnpm -C web/ophalo-web typecheck` green.
+1. Request detail command cleanup: complete.
+2. Request detail queue navigation: add next/previous or next-needing-attention behavior after
+   preflight confirms available list context/API support.
+3. Resume build-log 078 or build-log 077 after the command-center issues are settled.
 
-#### S22p5 — Staff Auth Early Block (deferred)
-No session context is available on the public Next.js intake page at load time without an
-authenticated API call. Post-submit `staff_not_permitted` guard (line 159 of `IntakeForm.tsx`)
-remains the correct defensive fallback. Do not block S22p1–S22p4 on this. If pursued, requires a
-new lightweight `GET /keep/public-intake/session-check` endpoint and a `useEffect` call in
-`IntakeForm` — document as a follow-up backend/UI slice.
+### Completed S22 Summary
 
-#### S22f — Mobile Carry-Forward Preflight ✓ complete (2026-07-10)
-Preflight confirmed no new mobile settings/admin scope. Mobile tracker sharing already works through
-native share and remains ADR-421 compliant. Mobile detail still needs to consume
-`IntakeUrgency`/`ContactPreference`, and service location once backend DTOs expose it. Quick Capture
-does not collect service location today; decision: request-level service location is operator-visible
-metadata, but Quick Capture service-location entry is deferred to a later progressive-disclosure
-slice so business-created requests can remain fast in V1. Maps are pilot-priority follow-up, with
-`Open in Maps` from request detail as the first target; embedded map previews are later.
+Session 22 is complete. Shipped work included day-zero Settings redesign, durable slug-based public
+intake, slug aliases, backend intake-link auto-provisioning, business-first public identity, intake
+urgency, preferred contact method, service location collection/exposure, PWA operator display, mobile
+request-detail carry-forward, mobile Open in Maps, and documentation reconciliation.
 
-#### S22p6 — Service Location Operator Exposure ✓ complete (2026-07-10)
-Added `ServiceAddressLine1/2`, `ServiceCity`, `ServiceState`, `ServiceZip` to `KeepRequestDetailResult`
-and `KeepRequestSummary`. Mapped in `KeepRequestDetailMapper.ToDetailResult` and
-`GetKeepRequestListService.ToSummary`. PWA: full address block rendered in operator request detail
-under intake metadata; compact `City, ST ZIP` appended to source line in list rows when city+state
-both present. 4 new integration tests (populated intake + null business-created, detail + list);
-79 existing detail/list tests green. TypeScript typecheck clean.
+Detailed S22 slice notes live in
+`docs/build-log/076-session-22-guided-setup-intake-and-service-location.md`.
 
-#### S22p7 — Mobile Request Detail Carry-Forward ✓ complete (2026-07-10)
-Added `source`, `intakeUrgency`, `contactPreference`, `serviceAddressLine1/2`, `serviceCity`,
-`serviceState`, `serviceZip` to `KeepRequestDetailDto` in `useRequestDetail.ts`. Added read-only
-"Job context" section in `app/requests/[id].tsx` between Description and Attention: urgency banner
-and preferred contact shown for `public_intake` source only; service location block rendered for any
-source when address or city is present; no missing-location cue; no edit button; no Open in Maps.
-TypeScript typecheck clean.
+Remaining pre-deployment work lives in separate build logs:
 
-#### S22p8 — Pilot Maps Follow-Up ✓ complete (2026-07-10)
-Added `buildMapsUrl` helper (iOS: `maps://maps.apple.com/?q=`, Android: `geo:0,0?q=`) and an
-"Open in Maps" `TouchableOpacity` button inside the `serviceLocationBlock` in `app/requests/[id].tsx`.
-Button appears only when service location data is present; embedded map previews remain deferred.
-TypeScript typecheck clean.
-
-#### S22g — Documentation Reconciliation ✓ complete (2026-07-10)
-Surgical reconciliation after S22 implementation:
-- ADR-375 amended: status "Locked" → "Amended"; added note that ADR-428 changed Getting Started
-  to a lightweight verification/on-ramp while the backend event-row contract remains valid.
-- DEF-024 closed: status "Deferred" → "Implemented — S22r4/S22"; notes updated to reflect the
-  dedicated Response Policy Settings tab (`settings/PolicySection.tsx`).
-- DEF-082 added: Business logo upload deferred to V1.1 personalization.
-- DEF-083 added: Brand color customization deferred beyond V1.1 pending accessibility-safe design.
-- ADR-295 and ADR-383 were already correctly reconciled in prior S22 slices; no changes needed.
-
-#### Docs/index reconciliation ✓ complete (2026-07-10)
-Build log 076 updated with completed entries for S22r0–S22r5 (Settings redesign), S22e, S22p5
-(deferred), S22p6, S22p7, S22p8, and S22g. Build plan Session 22 updated to reflect actual
-shipped work; "Pilot QA And Go-Live Gate" advanced to Session 23.
-
-#### Session 22 — Complete
-
-All S22 slices are done. Remaining pre-deployment work lives in separate build logs:
-
-1. **Pre-deployment cleanup:** `docs/build-log/077-pre-deployment-cleanup-and-file-decomposition.md` — deferred until customer request page work and testing are complete.
-2. **Customer tracker-link email / Resend:** `docs/build-log/078-customer-tracker-link-email-and-resend-configuration.md` — locks tracker-link retention decisions, Resend configuration checks, public-intake tracker-link email, confirmation-flow copy, and operator correspondence prefill.
-3. **Docs/index reconciliation:** update session log, decision index, deferred topics, and build-plan
-   references so S22's final state is discoverable.
-4. **Pre-deployment cleanup:** Build log 077 is deferred until customer request page work and testing
-   are complete.
-5. **Customer tracker-link email / Resend:** Build log 078 locks the tracker-link retention
-   decisions and queues Resend configuration checks, public-intake tracker-link email,
-   confirmation-flow copy, and operator correspondence prefill.
+1. **Customer tracker-link email / Resend:** `docs/build-log/078-customer-tracker-link-email-and-resend-configuration.md` — locks tracker-link retention decisions, Resend configuration checks, public-intake tracker-link email, confirmation-flow copy, and operator correspondence prefill.
+2. **Pre-deployment cleanup:** `docs/build-log/077-pre-deployment-cleanup-and-file-decomposition.md` — deferred until customer request page work and testing are complete.
 
 Historical mobile context lives in `docs/build-log/071-session-17-review-safe-native-product-foundation.md`.
 
