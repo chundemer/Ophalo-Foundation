@@ -3,7 +3,7 @@
 **Created:** 2026-07-02
 **Purpose:** Live tracker for pilot-blocking or pilot-relevant bugs/gaps discovered during Session 14.
 **Source:** Promoted from the Pre-S14e bug register in `docs/build-log/068-session-14-ophalo-web-front-door.md`.
-**Current active item:** GAP-004 — Browser back / refresh does not preserve app location.
+**Current active item:** GAP-007 — Request-list quick actions lack row-level concurrency/action contract.
 **Recently resolved:** GAP-006 — Staff-created requests cannot add missing service location after creation (S23).
 **Previously resolved:** GAP-005 — Same-account staff can submit through the public intake form.
 
@@ -12,6 +12,8 @@ triage, status, and next-session ordering should happen here.
 
 As of S15c, all earlier active pilot-readiness bugs/gaps in this tracker were resolved.
 GAP-004 is reactivated after ADR-427 locked durable PWA request-detail navigation behavior.
+GAP-007 is active after ADR-435 locked that request-list quick actions are a cockpit workflow, not
+permanent navigation shortcuts.
 
 ## Status Legend
 
@@ -171,6 +173,55 @@ Expected fix:
   policy to contribute the missing-location cue to Needs Attention for service businesses.
 - Keep service location internal-only: do not show it on unauthenticated customer tracker pages,
   public metadata, or customer-facing share previews.
+
+### GAP-007 — Request-list quick actions lack row-level concurrency/action contract
+
+**Status:** Open
+**Severity:** P1
+**Area:** `OpHalo.Keep.Application` request list DTO/API; `ophalo-app` request list quick actions
+**Decision:** ADR-435
+
+S24 temporarily converted request-list quick actions into navigation/focus links because
+`KeepRequestSummary` does not expose the concurrency version required by existing request mutation
+endpoints.
+
+That fallback protects database safety but does not satisfy the request-list product goal. The list
+is an action cockpit for high-frequency, low-risk work; forcing owners/admins through
+open-detail/action/back loops for every customer update, contact log, internal note, or simple
+attention action is a pilot workflow regression.
+
+Expected fix:
+
+- Add safe row-mutation metadata to the request list summary contract.
+- Minimum: expose `version` on `KeepRequestSummary` so list actions can send
+  `X-Keep-Request-Version`.
+- Prefer server-authored action metadata:
+  - `requiresVersion`;
+  - `executionMode` (`inline`, `modal`, or `detail`);
+  - `customerVisible`;
+  - `internalOnly`;
+  - `clearsAttention`;
+  - `changesStatus`.
+- Keep the server authoritative for action availability, effects, permissions, and execution mode.
+- Convert list-eligible actions from deep links into row-level controls or compact modals after the
+  contract is available:
+  - send customer update;
+  - log external contact;
+  - add internal note;
+  - assign/self-assign/watch where server metadata allows;
+  - clear/acknowledge simple attention where server metadata says it is safe;
+  - close request only from Ready to Close with explicit confirmation.
+- Keep detail-owned actions as navigation/focus flows:
+  - feedback review;
+  - cancellation;
+  - spam/test/classification;
+  - service-location edits;
+  - timing controls;
+  - generic status changes.
+
+Do not implement inline list mutations by fetching detail in the background as the primary V1
+workflow unless the row contract remains blocked after explicit review. The preferred fix is to make
+the list payload carry the mutation metadata it needs.
 
 ## Resolved During Session 22
 

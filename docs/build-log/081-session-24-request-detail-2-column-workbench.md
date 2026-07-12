@@ -1,10 +1,11 @@
 # Build Log 081 — Session 24: Request Workbench 2-Column Layout And List Quick Actions
 
 **Started:** 2026-07-11
-**Status:** Draft — planning / Claude handoff
+**Status:** Draft — S24 paused for GAP-007 list quick-action contract
 **Session name:** S24 request workbench 2-column layout and list quick actions
-**Related ADRs:** ADR-377, ADR-380, ADR-382, ADR-383, ADR-433, ADR-434
+**Related ADRs:** ADR-377, ADR-380, ADR-382, ADR-383, ADR-433, ADR-434, ADR-435
 **Next free ADR before this log:** ADR-435
+**Next free ADR after ADR-435:** ADR-436
 
 ---
 
@@ -260,22 +261,34 @@ status/action lists.
 The request list should render server-provided `row.actions.quickActions` as actual quick actions,
 not only as a `Next:` text prompt.
 
+ADR-435 clarifies the product boundary:
+
+- request list is the speed/action cockpit;
+- request detail is the depth/accountability workbench;
+- S24 deep-link/focus shortcuts are only a temporary safety fallback while GAP-007 is open.
+
 List quick actions should cover routine confident work:
 
 - open detail;
 - contact customer / log contact;
 - send customer update;
+- add internal note;
 - mark handled / clear attention when server says it is allowed;
-- review feedback;
-- close request from the Ready to Close queue when server metadata safely supports it;
 - assign/self-assign/watch where the current list surface is specifically about ownership.
+
+List quick actions may cover only with stricter server metadata and explicit confirmation:
+
+- close request from the Ready to Close queue when server metadata safely supports it;
+- mark work done only for no-active-attention cases when server metadata says it is safe.
 
 Actions with meaningful context risk should remain detail-first unless a safe compact flow exists:
 
 - cancellation;
 - spam/test classification;
+- feedback review / mark feedback reviewed;
+- service-location edits;
 - status changes requiring customer-visible explanation;
-- internal notes that require careful instructions;
+- generic status changes;
 - timing changes if the row does not have enough context.
 
 List quick actions must communicate their effect:
@@ -290,10 +303,12 @@ List quick actions must communicate their effect:
 If a list quick action requires the latest concurrency version and the list row does not expose it,
 the PWA should either:
 
-- fetch detail in the background before showing/submitting the action modal; or
-- open detail focused on the action.
+- use a temporary focus/deep-link fallback; or
+- explicitly stop and fix the list summary contract before treating the action as complete.
 
-Do not guess versions or bypass server-owned concurrency.
+Do not guess versions or bypass server-owned concurrency. Do not treat background detail fetches as
+the preferred V1 workflow; the preferred fix is GAP-007: make the request list payload carry the
+safe mutation metadata it needs.
 
 ### Decision 13 — Request list row hierarchy should mirror detail hierarchy
 
@@ -643,6 +658,12 @@ Acceptance criteria:
 Goal: Make the request list match the request-detail workbench and expose safe quick actions so staff
 do not have to open detail for routine confident work.
 
+Current corrective note:
+
+- The S24g deep-link/focus implementation is a temporary safety fallback only.
+- Do not mark S24g product-complete until S24g2/S24g3 resolve GAP-007 or explicitly defer true list
+  mutations with Owner/Admin workflow sign-off.
+
 Scope:
 
 - Update the request list desktop shell/layout to visually match request detail:
@@ -685,6 +706,69 @@ Acceptance criteria:
 - Quick actions do not rely on client-inferred permissions or stale concurrency assumptions.
 - Quick-action copy communicates whether the action is customer-visible, internal-only, contact-log,
   attention-clearing, or status-changing.
+- TypeScript passes.
+
+### S24g2 — Request list action contract
+
+Goal: Add the list summary metadata required for safe inline request-list mutations.
+
+Scope:
+
+- Add `version` to the request list summary DTO/read model so list mutations can send
+  `X-Keep-Request-Version`.
+- Add or confirm server-authored quick-action metadata:
+  - `requiresVersion`;
+  - `executionMode` (`inline`, `modal`, or `detail`);
+  - `customerVisible`;
+  - `internalOnly`;
+  - `clearsAttention`;
+  - `changesStatus`.
+- Keep server action metadata authoritative; do not create client-only eligibility rules.
+- Update backend mapping/tests for list summaries.
+- Update `ophalo-app` TypeScript types and mocks.
+- Preserve existing list behavior for roles/views that do not receive a quick action.
+
+Acceptance criteria:
+
+- Request list rows expose a concurrency version suitable for versioned row-level mutations.
+- Quick actions state whether they are inline/modal/detail flows and communicate their effects.
+- No inline list mutation uses inferred eligibility.
+- Backend/API tests cover the new summary contract.
+- PWA typecheck passes.
+
+### S24g3 — True inline request-list actions
+
+Goal: Convert eligible request-list quick actions from temporary deep links into compact row-level
+controls/modals.
+
+Scope:
+
+- Implement row-level or overlay-modal flows for:
+  - send customer update;
+  - log external contact;
+  - add internal note;
+  - assign/self-assign/watch where the server exposes it;
+  - clear/acknowledge simple attention where server metadata says it is safe;
+  - close request only from Ready to Close with explicit confirmation.
+- Preserve detail/focus navigation for:
+  - feedback review;
+  - cancellation;
+  - spam/test/classification;
+  - service-location edits;
+  - timing controls;
+  - generic status changes.
+- Use `row.version` or server action token metadata for every versioned mutation.
+- On success, refresh or reconcile the affected list row so the queue remains trustworthy.
+- Preserve drafts on `409 KeepRequest.RequestChanged` and tell the user to refresh/open detail.
+- Keep visibility copy explicit: customer-visible update, internal-only note, external contact log,
+  attention-clearing action, or lifecycle/status change.
+
+Acceptance criteria:
+
+- Owners/Admins can perform routine quick actions from the list without open-detail/back loops.
+- Detail remains available and preferred for context-heavy or accountability-heavy work.
+- Row actions do not bypass concurrency, role policy, or server action metadata.
+- List rows remain scannable at desktop and mobile widths.
 - TypeScript passes.
 
 ### S24h — Responsive QA and polish
@@ -735,8 +819,10 @@ Claude should complete these sessions in order:
 4. S24d composer/activity proximity.
 5. S24e action rebalance.
 6. S24f timing controls.
-7. S24g request list layout and quick actions.
-8. S24h QA/polish.
+7. S24g request list layout and temporary quick-action focus fallback.
+8. S24g2 request list action contract / GAP-007.
+9. S24g3 true inline request-list actions.
+10. S24h QA/polish.
 
 Do not combine S24a through S24g into one large patch unless explicitly directed. Each session should
 end with a working, typechecked app state.
@@ -789,8 +875,10 @@ These should be resolved before or during S24a/S24b:
      after viewport testing.
 
 7. Which list quick actions can be completed without opening detail?
-   - Recommendation: render server-provided quick actions, but fetch detail or open detail whenever a
-     versioned mutation needs the latest request version or more context than the row safely exposes.
+   - Locked by ADR-435: routine low-risk actions belong on the list once the list row exposes safe
+     mutation metadata. Until GAP-007 is fixed, focus/deep-link shortcuts are temporary only.
+     Feedback review, cancellation, classification, service-location edits, timing controls, and
+     generic status changes stay detail-owned for V1.
 
 8. Should request list use a right-side queue panel?
    - Recommendation: only if it helps scanning or selected-row preview. Do not add a decorative or
@@ -812,6 +900,10 @@ Respect these locked decisions:
 - Desktop request list and request detail should become one request workbench system.
 - Request list/detail desktop should not keep the persistent left sidebar if that leaves a
   three-column or mismatched feel.
+- ADR-435: request list is the speed/action cockpit; request detail is the depth/accountability
+  workbench.
+- GAP-007: temporary quick-action deep links do not satisfy the final list-action requirement; true
+  inline row actions require row-level concurrency/action metadata first.
 - Main column owns customer story, attention guidance, update composer, and activity.
 - Side panel owns contact, location, customer signal, internal priority, team, timing, and utilities.
 - Request list should expose safe server-provided quick actions so routine work does not require

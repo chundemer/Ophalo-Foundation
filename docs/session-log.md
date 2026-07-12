@@ -1,10 +1,10 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-07-11 (S23 complete — S23a/b/c/d implemented and committed)
+**Last updated:** 2026-07-11 (S24 paused for GAP-007 request-list action contract)
 **Branch:** `main` tracking `origin/main`
 **Last green baseline:** Targeted intake baseline — 66 intake unit · 25 intake integration confirmed; full suite pending (1 pre-existing KeepG5 fluke excluded)
-**Next free ADR:** ADR-435
-**Current session:** Session 23 complete — next: 077 file decomposition or 078 tracker-link email
+**Next free ADR:** ADR-436
+**Current session:** Session 24 — request workbench paused before list quick-action closeout
 
 ---
 
@@ -34,14 +34,14 @@ For every implementation slice:
 
 ## Current Work
 
-**Current build log:** `docs/build-log/080-session-23-work-completed-closeout-ux.md`
-**Latest completed build log:** `docs/build-log/076-session-22-guided-setup-intake-and-service-location.md`
+**Current build log:** `docs/build-log/081-session-24-request-detail-2-column-workbench.md`
+**Latest completed build log:** `docs/build-log/080-session-23-work-completed-closeout-ux.md`
 **Last completed prior-session build log:** `docs/build-log/075-session-21-attention-guidance-resolution-metadata.md`
 **Readiness working doc:** `docs/pilot-readiness-decision-questions.md`
 **Bug/gap tracker:** `docs/pilot-readiness-bug-tracker.md`
 **Foundation roadmap:** `docs/build-log/ophalo-foundation-build-plan-greenfield-boundaries-brownfield-behavior.md` section 9.1
-**Current session:** Session 23 — work-completed / closeout UX foundation
-**Current slice:** 080 planning/implementation handoff — no new code without explicit approval
+**Current session:** Session 24 — request workbench 2-column layout and list quick actions
+**Current slice:** Resolve GAP-007 before accepting S24g/S24h as complete
 
 ### Completed Context
 
@@ -118,47 +118,75 @@ Topology:
 - Pilot cap: `SignupDefaults:MaxPilotAccounts=15`.
 - `OperatorBaseUrl` is retired; invite links use `{PublicBaseUrl}/invite/accept`.
 
-### Active Build Log 080 — Work Completed And Closeout UX
+### Active Build Log 081 — Request Workbench 2-Column Layout And List Quick Actions
 
-Build-log 080 is the current decision/handoff document:
-`docs/build-log/080-session-23-work-completed-closeout-ux.md`.
+Build-log 081 is the current decision/handoff document:
+`docs/build-log/081-session-24-request-detail-2-column-workbench.md`.
 
-Authoritative decision:
+### Completed S24 Slices
 
-- ADR-434: staff-facing lifecycle UX labels backend/API status `resolved` as **Work completed** while
-  preserving `KeepRequestStatus.Resolved` and API slug `resolved`.
-- Operator/staff completion and Owner/Admin closeout remain separate:
-  - **Mark work done** -> backend `resolved`;
-  - **Close request** -> backend `closed`.
-- Normal primary **Mark work done** appears only when server metadata allows `resolved` and
-  `attentionLevel == "none"`.
-- If active attention exists, Needs Attention guidance/action stays primary. Any completion
-  affordance must be demoted and explicit, e.g. **Mark work done, attention remains**.
-- **Close request** appears only for Owner/Admin when server metadata exposes `canClose` and
-  `allowedStatuses` includes `closed`.
-- `Ready to Close` excludes active attention. Work-completed rows with attention remain attention
-  work, not closeout work.
-- Customers do not directly close, reopen, or mark work completed in V1.
+- **S24a — Workbench top nav** (`7f9d7e1`): replaced persistent left sidebar with horizontal top
+  nav on `requests`/`detail` routes. Top nav: Keep logo, Requests (with count badge), Getting
+  Started, Settings (owner/admin), role label, New Request. Sidebar preserved for home/settings.
+  Mobile unchanged.
 
-### Completed S23 Slices
+- **S24b — 70/30 desktop grid** (`7f9d7e1`): `RequestDetail` content wrapper switches from `flex`
+  to CSS grid (`minmax(0,7fr) minmax(320px,3fr)`) on `md:`. Fixed-width rail removed; grid manages
+  sizing. Mobile unaffected.
 
-- **S23a/b/c — PWA lifecycle UX** (`38473f5`): `WorkDoneCard` attention-safe (normal primary only
-  when `attentionLevel=="none"`; demoted "Mark work done, attention remains" when active); new
-  `CloseRequestCard` (Owner/Admin, `canClose && resolved && no attention`); "Ready for closeout"
-  badge in `ready_to_close` row view; `WorkDoneCard` added to desktop right rail (was mobile-only).
-  `navView=ready_to_close` close-and-next navigation: no existing infrastructure — gap deferred.
+- **S24c — Context split** (`7f9d7e1`): `OriginalRequestCard` slimmed to description-only.
+  Extracted `CustomerPanel` (phone/email + copy/call/email links + log contact), `ServiceLocationPanel`
+  (address + add/edit modal), `TriagePanel` (ADR-433 customer signal + internal priority),
+  `SourceMetaPanel`. Desktop: panels in side rail. Mobile: panels stacked after activity per
+  Decision 14 order.
 
-- **S23d — Mobile carry-forward** (pending commit): All contracts present in `AvailableActionsDto`
-  / `KeepRequestDetailDto`. Implemented: `resolved` → "Work completed" label; standalone "Mark work
-  done" section (attention-gated); "Close request" section (Owner/Admin, attention-gated);
-  "Send Update & Mark Completed" → "Send Update & Mark work done" + attention guard. New hook:
-  `usePatchRequestStatus`. Deferred: mobile attention section copy (raw fields, no action guidance).
+- **S24d — Composer in main work loop**: `BusinessUpdateSection` moved to main column directly
+  above Activity (all screens). Removed from mobile primary actions and desktop rail. Activity
+  filter renamed **Conversation & notes** to clarify internal notes won't appear customer-visible.
 
-### Next Sessions
+- **S24e — Rebalanced actions + internal notes**: `LogContactCard` attention gate removed — now
+  shows whenever `canLogExternalContact`. New `InternalNoteCard` component (`canAddInternalNote`
+  gate, "Not visible to customer" label, 409 conflict preservation). `addInternalNote` API helper
+  added. New **Internal** section in side panel. Mock stubs added. Admin classification explicitly
+  deferred.
 
-Choose one of:
-1. **077** — pre-deployment file decomposition (`RequestDetail.tsx` split). Now unblocked.
-2. **078** — customer tracker-link email / Resend configuration.
+- **S24f — Timing controls**: `setFollowUpOn`, `clearFollowUpOn`, `setPlannedFor`,
+  `clearPlannedFor` API helpers added (all versioned). Mock stubs added. New `TimingPanel`
+  component: shows set/clear forms for follow-up (date + reason + optional note) and planned date;
+  gates on `canSetFollowUpOn`/`canSetPlannedFor`; 409 draft preservation; internal-only label.
+  Wired into desktop side panel and mobile stack.
+
+- **S24g — Request list quick actions** (temporary fallback only): Quick actions currently work as
+  navigation-intent deep links because the list summary DTO does not expose a row-level concurrency
+  version. This is safe but does **not** satisfy the request-list action-cockpit goal. ADR-435 locks
+  the product boundary: the request list must handle low-risk, high-frequency actions inline once the
+  row contract can do so safely; request detail remains the depth/accountability surface.
+  GAP-007 tracks the required API/list DTO contract.
+
+- **S24h — Polish** (complete): `keep-row-title` now uses `font-serif` for customer names in the
+  list. Quick-action pills no longer show effect sub-labels. `QuickActionEffectLabel` component
+  removed.
+
+### Next
+
+1. **S24g2 — Request-list action contract**: add safe row-mutation metadata to request summaries.
+   Minimum required field: `KeepRequestSummary.version`. Preferred quick-action metadata:
+   `requiresVersion`, `executionMode`, `customerVisible`, `internalOnly`, `clearsAttention`, and
+   `changesStatus`. Update DTOs, mapping, API tests, TypeScript types, mocks, and docs.
+2. **S24g3 — True inline list actions**: replace eligible deep-link shortcuts with compact row-level
+   controls/modals for send customer update, log external contact, add internal note,
+   assign/self-assign/watch where available, simple attention acknowledgement, and Ready to Close
+   closeout confirmation. Keep feedback review, cancellation, classification, service-location
+   edits, timing controls, and generic status changes detail-owned.
+3. **S24h — Responsive QA and polish** after S24g2/S24g3, then close build-log 081.
+4. After S24 complete: **077** pre-deployment file decomposition or **078** tracker-link email.
+
+### Active Gap
+
+- **GAP-007 — Request-list quick actions lack row-level concurrency/action contract**:
+  `docs/pilot-readiness-bug-tracker.md`.
+- **ADR-435 — Request List Action Cockpit Boundary**:
+  `docs/decisions/ADR-435-request-list-action-cockpit-boundary.md`.
 
 Resolved before next session:
 
