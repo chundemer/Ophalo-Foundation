@@ -49,6 +49,11 @@ List-eligible actions:
 List actions must remain server-driven. The client must not infer permissions, attention effects,
 status eligibility, or concurrency validity locally.
 
+If `close_request` is exposed as a detail/focus action rather than an inline confirmed mutation, the
+request-list control must be phrased as navigation/review, for example **Review closeout**. The
+destructive **Close request** button remains on request detail unless a dedicated list confirmation
+flow is explicitly implemented.
+
 ### Request Detail
 
 Detail owns context-heavy, accountability-heavy, or ambiguous work.

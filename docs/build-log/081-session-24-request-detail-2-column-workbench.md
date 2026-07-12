@@ -1,7 +1,7 @@
 # Build Log 081 — Session 24: Request Workbench 2-Column Layout And List Quick Actions
 
 **Started:** 2026-07-11
-**Status:** S24j complete — Ready to Close row action leak corrected after review feedback
+**Status:** GAP-011 / S24k queued — shared external-contact form and post-work row actions next
 **Session name:** S24 request workbench 2-column layout and list quick actions
 **Related ADRs:** ADR-377, ADR-380, ADR-382, ADR-383, ADR-433, ADR-434, ADR-435, ADR-436
 **Next free ADR before ADR-435:** ADR-435
@@ -408,7 +408,7 @@ explicitly.
 |  [ Row: Kelley S ]                                    | Queue context / filters |
 |  CK8DC3WD  Work completed  Customer: urgent           | Selected-row preview    |
 |  Unassigned  Last touch 1h ago  Brighton, TN          | or compact guidance     |
-|  [Close request] [Log contact] [Open detail]          |                         |
+|  [Review closeout] [Open detail]                      |                         |
 |                                                       |                         |
 |  [ Row: Kelley ]                                      |                         |
 |  965D8R8T  Pending customer                           |                         |
@@ -1045,7 +1045,10 @@ real logic leak on a Ready to Close-style row:
 - row copy still said `Next: Log contact or Update customer`;
 - row actions still pushed `Log contact` / `Update customer` instead of the terminal lifecycle action.
 
-The implementation was completed during the feedback pass and intentionally retained afterward.
+The first implementation was completed during the feedback pass and intentionally retained, then
+corrected after review to preserve the established boundary: the list may route staff to closeout
+review, but the destructive close action belongs on request detail unless a confirmed list-level
+close flow is explicitly implemented.
 
 ### What changed
 
@@ -1054,10 +1057,17 @@ The implementation was completed during the feedback pass and intentionally reta
 - Closeable rows emit only `open_detail` plus `close_request`.
 - Added `QuickActionDefs.CloseRequest` with label `Close request`, `requiresVersion: true`, and
   `changesStatus: true`.
-- `RequestRow.tsx` maps `close_request` to visible `Close request` copy for both the `Next:` cue and
-  row action button.
-- `close_request` row buttons use the red danger treatment so terminal lifecycle actions do not look
-  like routine communication pills.
+- `RequestRow.tsx` maps `close_request` to `Next: Close request`, preserving the triage signal.
+- The row action label is **Review closeout**, not **Close request**, because the server action uses
+  detail/focus execution and navigates to the request-detail closeout workflow.
+- The row shortcut uses neutral secondary styling; the red destructive **Close request** button stays
+  in request detail.
+
+### Follow-up found
+
+This slice fixed the misleading closeout cue but over-pruned the row. A calm **Work completed** row
+should still preserve legitimate post-work actions such as `Log contact`, `Update customer`, and
+`Add note` when server metadata allows them. GAP-011 / S24k owns that correction.
 
 ### Typography finding
 
@@ -1072,11 +1082,90 @@ different row surface, not the current `RequestRow.tsx` source.
 
 ### Acceptance criteria verified
 
-- Ready to Close rows expose `open_detail` + `close_request`, not communication quick actions. ✓
+- Ready to Close rows expose closeout direction instead of treating communication as the only next
+  action. ✓
 - `Next:` cue reads `Close request` when the server emits `close_request`. ✓
-- Row button copy reads `Close request` and uses danger styling. ✓
+- Row button copy reads `Review closeout` and uses neutral secondary styling. ✓
+- Destructive closeout remains request-detail-owned unless a confirmed list close flow is approved. ✓
 - PWA typecheck passes. ✓
 - Targeted unit and B5 integration tests pass. ✓
+
+---
+
+## S24k — GAP-011 Shared External Contact Form And Post-Work Row Actions (Queued)
+
+**Slice:** S24k — shared external-contact logging UX and calm work-completed row action correction
+**Tracker:** `docs/pilot-readiness-bug-tracker.md` GAP-011
+**Status:** Queued / next implementation slice
+
+### Why this is needed
+
+S24g3 introduced a better request-list **Log external contact** modal, but request detail still has a
+separate older modal. The two flows now differ in copy, control shape, layout, and submit language.
+That creates a training problem for business owners and makes future behavior drift likely.
+
+The request-list version is the preferred product UX and should become the shared component.
+
+S24j also over-corrected closeout rows. A calm **Work completed** row with no active attention should
+clearly communicate closeout as the next administrative step, but it should not hide legitimate
+post-work tools. A business may still need to log a final call, send a customer-visible update, or
+add an internal note before the owner/admin closes the request.
+
+### Implementation direction
+
+Use the request-list external-contact modal as the source of truth:
+
+- title: `Log external contact`;
+- customer/reference context when available;
+- `Internal record — not visible to customer` badge;
+- segmented direction control:
+  - `We contacted them`;
+  - `They contacted us`;
+- channel select;
+- outbound-phone outcome select;
+- optional note/summary textarea;
+- footer actions: `Cancel` and `Log contact`.
+
+Refactor request detail to reuse the same form/component rather than maintaining a second contact-log
+modal. If request detail still needs phone copy/call affordances, add them as optional surrounding
+UI or props/slots; do not fork the core form behavior.
+
+For calm **Work completed** rows (`resolved` + no active attention):
+
+- keep the triage cue: `Next: Close request`;
+- preserve server-allowed post-work tools:
+  - `Log contact`;
+  - `Update customer`;
+  - `Add note`;
+- include a neutral `Review closeout` shortcut that navigates/focuses request detail closeout;
+- do not show a red/destructive `Close request` button on the request list unless a confirmed
+  list-close flow is explicitly implemented.
+
+### Backend/policy check
+
+Before changing backend behavior, verify whether the current domain/application policy allows
+customer-visible updates and external contact logging on `Resolved` requests. If it does not, decide
+whether pre-terminal **Work completed** requests should allow these final communication/admin actions
+before `Closed`.
+
+Do not loosen terminal protections for:
+
+- `Closed`;
+- `Cancelled`;
+- `Spam`;
+- `Test`.
+
+### Acceptance criteria
+
+- Request list and request detail use one shared external-contact logging component/form.
+- The shared form matches the current request-list UX.
+- Calm work-completed rows no longer lose legitimate post-work communication/admin actions.
+- `Next: Close request` remains as the closeout triage cue.
+- `Review closeout` remains neutral and navigational.
+- Destructive **Close request** remains request-detail-owned unless a confirmed list-close flow is
+  deliberately added.
+- PWA typecheck passes.
+- Targeted backend list/action-policy tests are updated if server metadata/policy changes.
 
 ---
 
@@ -1107,6 +1196,10 @@ Respect these locked decisions:
   never customer-visible and do not clear customer-facing attention by themselves.
 - Log contact is available whenever server metadata allows it; active attention only changes its
   prominence.
+- Request list and request detail must share one external-contact logging form; the current
+  request-list modal is the preferred UX.
+- Work-completed/no-attention rows should keep `Next: Close request` and `Review closeout`, but must
+  not hide server-allowed post-work actions such as Log contact, Update customer, or Add note.
 - Restore Follow Up On and Planned For controls where server metadata allows them; timing is
   internal/staff-owned and does not automatically notify the customer.
 - Keep customer-visible update, internal note, external contact summary, feedback review note, and

@@ -3,7 +3,7 @@
 **Created:** 2026-07-02
 **Purpose:** Live tracker for pilot-blocking or pilot-relevant bugs/gaps discovered during Session 14.
 **Source:** Promoted from the Pre-S14e bug register in `docs/build-log/068-session-14-ophalo-web-front-door.md`.
-**Current active item:** GAP-004 — Browser back / refresh does not preserve app location.
+**Current active item:** GAP-011 — External contact logging duplicated and closeout rows over-prune communication actions.
 **Recently resolved:** GAP-010 — Ready to Close rows leaked communication next-actions (S24j).
 **Previously resolved:** GAP-009 — Staff operational signals why/next-action audit (S24i).
 
@@ -21,6 +21,9 @@ GAP-009 is active after ADR-436 generalized this into a cross-surface rule for l
 native staff signals.
 GAP-010 was found during screenshot review after S24i: a work-completed row with no active attention
 still presented communication next-actions instead of closeout.
+GAP-011 was found during the S24j follow-up: the request-list external-contact modal is the
+preferred UX, but request detail still uses a separate older modal; additionally, calm
+work-completed rows should guide closeout without hiding legitimate post-work communication actions.
 
 ## Status Legend
 
@@ -337,23 +340,83 @@ A screenshot review found a **Work completed** row with no active attention flag
 - `Next: Log contact or Update customer`;
 - quick-action buttons for `Log contact` and `Update customer`.
 
-That violated the closeout contract: a resolved/no-attention row in Ready to Close is calm
-administrative closeout work, not a prompt to restart customer communication.
+That violated the closeout contract: a resolved/no-attention row in Ready to Close must clearly
+surface closeout as the next administrative step instead of making routine communication look like
+the primary next action.
+
+S24j fixed the closeout cue and added a neutral `Review closeout` shortcut, but it over-pruned
+post-work communication/admin actions. GAP-011 tracks that follow-up correction.
 
 Expected fix:
 
 - For policy-closeable rows, server quick-action metadata should expose `close_request`.
-- Suppress routine communication/internal-note row quick actions in that terminal closeout state.
 - List `Next:` copy must be derived from the server action metadata and read `Next: Close request`
   when closeout is the available lifecycle action.
-- The visible row action should be `Close request` and use danger/destructive styling.
+- The visible row shortcut should be `Review closeout` / `Open closeout` and use neutral secondary
+  styling while `close_request` remains a detail/focus action.
+- The destructive `Close request` button belongs on request detail unless a dedicated list-level
+  confirmation flow is explicitly implemented.
 
 Acceptance criteria:
 
-- Ready to Close rows expose `open_detail` + `close_request`, not `contact_customer` /
-  `post_customer_update`.
-- `Next:` cue verbs match visible action button labels.
+- `Next:` cue reads `Close request`, while the row shortcut is clearly phrased as review/navigation.
 - Unit and B5 integration tests cover the ready-to-close action payload.
+- PWA typecheck passes.
+
+### GAP-011 — External contact logging duplicated and closeout rows over-prune communication actions
+
+**Status:** Open
+**Severity:** P1
+**Area:** `ophalo-app` shared action modals; request list row actions; request action metadata/policy
+**Decision:** ADR-434, ADR-435, ADR-436
+
+The request-list **Log external contact** modal and request-detail **Log external contact** modal are
+two different experiences. The request-list modal is the preferred product UX:
+
+- title `Log external contact`;
+- customer/reference context;
+- `Internal record — not visible to customer` badge;
+- segmented direction control: `We contacted them` / `They contacted us`;
+- channel select;
+- outbound-phone outcome select;
+- optional note/summary;
+- footer actions `Cancel` / `Log contact`.
+
+Request detail still uses a separate older form with different copy, layout, controls, and submit
+language. This creates training friction and makes future contact-log behavior drift likely.
+
+The same review also found a product nuance in S24j: **Work completed** with no active attention is
+ready for closeout, but it is not communication-dead. A business may still need to log a final call,
+send a customer-visible update, or add an internal note before closing the request. The row should
+therefore guide closeout while preserving server-allowed post-work communication/admin actions.
+
+Expected fix:
+
+- Extract one shared external-contact log component/form and use it from both request list and
+  request detail.
+- Use the request-list modal as the source of truth for layout/copy.
+- If request detail needs phone copy/call utilities, add them as optional adornments around the shared
+  form rather than forking the form.
+- For calm work-completed rows:
+  - keep `Next: Close request`;
+  - preserve allowed `Log contact`, `Update customer`, and `Add note` actions where server metadata
+    allows them;
+  - include a neutral `Review closeout` shortcut that navigates/focuses request detail closeout;
+  - do not show a red/destructive `Close request` list button unless an explicit confirmed list-close
+    flow is implemented.
+- Review backend action policy before changing behavior. If domain/application rules currently block
+  post-work customer updates or external contact on `Resolved`, decide whether to allow them before
+  final `Closed`. Keep `Closed`, `Cancelled`, `Spam`, and `Test` protections intact.
+
+Acceptance criteria:
+
+- Request list and request detail use one shared external-contact logging component/form.
+- The shared component matches the request-list UX.
+- Calm work-completed rows do not lose legitimate post-work communication/admin actions.
+- The closeout triage signal remains clear: `Next: Close request` plus neutral `Review closeout`.
+- Destructive close execution remains request-detail-owned unless a confirmed list-close flow is
+  explicitly implemented.
+- Targeted action-policy/list metadata tests are updated if backend policy changes.
 - PWA typecheck passes.
 
 ## Resolved During Session 22

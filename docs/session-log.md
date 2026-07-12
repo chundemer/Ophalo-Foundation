@@ -1,10 +1,10 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-07-12 (S24j complete — Ready to Close row action leak corrected)
+**Last updated:** 2026-07-12 (GAP-011 logged — shared external-contact form + post-work row actions next)
 **Branch:** `main` tracking `origin/main`
 **Last green baseline:** S24j — PWA typecheck clean; KeepRequestListServiceTests 167 passed; KeepRequestListB5Tests 22 passed
 **Next free ADR:** ADR-437
-**Current session:** Session 24 — request workbench; S24g3 inline modals + S24h GAP-008 + S24i GAP-009 + S24j GAP-010 complete
+**Current session:** Session 24 — request workbench; GAP-011 is the next implementation slice before S24 responsive closeout polish
 
 ---
 
@@ -41,7 +41,7 @@ For every implementation slice:
 **Bug/gap tracker:** `docs/pilot-readiness-bug-tracker.md`
 **Foundation roadmap:** `docs/build-log/ophalo-foundation-build-plan-greenfield-boundaries-brownfield-behavior.md` section 9.1
 **Current session:** Session 24 — request workbench 2-column layout and list quick actions
-**Current slice:** S24g3 — replace deep-link fallbacks with inline row modals (contract now available)
+**Current slice:** S24k / GAP-011 — shared external-contact form and post-work row action correction
 
 ### Completed Context
 
@@ -188,9 +188,15 @@ Build-log 081 is the current decision/handoff document:
 4. **GAP-008 — Request-list urgency/priority context:** resolved in S24h.
 5. **GAP-009 / ADR-436 — Staff signal clarity audit:** resolved in S24i.
 6. **GAP-010 — Ready to Close row action leak:** resolved in S24j after screenshot review; closeable
-   work-completed rows now emit/display `Close request` instead of communication next-actions.
-7. **S24h/S24 closeout — Responsive QA and polish:** remaining S24 work before closing build-log 081.
-8. After S24 complete: **077** pre-deployment file decomposition or **078** tracker-link email.
+   work-completed rows now emit `close_request`, show `Next: Close request`, and display a neutral
+   `Review closeout` detail shortcut instead of communication next-actions.
+7. **GAP-011 / S24k — Shared external-contact form + post-work row action correction:** active next.
+   Use the request-list external-contact modal as the shared UX for request list and request detail.
+   Preserve `Log contact`, `Update customer`, and `Add note` on calm work-completed rows when server
+   metadata allows them; keep `Next: Close request` and a neutral `Review closeout` detail shortcut.
+8. **S24h/S24 closeout — Responsive QA and polish:** resume after GAP-011 is resolved, then close
+   build-log 081.
+9. After S24 complete: **077** pre-deployment file decomposition or **078** tracker-link email.
 
 ### Surface Boundary
 
@@ -208,6 +214,8 @@ Build-log 081 is the current decision/handoff document:
 - **GAP-008 — Request-list urgency/priority pills lack source and next-action context**:
   `docs/pilot-readiness-bug-tracker.md`.
 - **GAP-010 — Ready to Close rows leaked communication next-actions**:
+  `docs/pilot-readiness-bug-tracker.md`.
+- **GAP-011 — External contact logging duplicated and closeout rows over-prune communication actions**:
   `docs/pilot-readiness-bug-tracker.md`.
 - **ADR-435 — Request List Action Cockpit Boundary**:
   `docs/decisions/ADR-435-request-list-action-cockpit-boundary.md`.

@@ -22,7 +22,7 @@ const ACTION_NAV_LABELS: Record<string, string> = {
   post_customer_update: "Update customer",
   acknowledge_attention: "Clear attention",
   review_feedback: "Review feedback",
-  close_request: "Close request",
+  close_request: "Review closeout",
 };
 
 const NEXT_ACTION_MAP: Record<string, string> = {
@@ -296,7 +296,6 @@ export function RequestRow({ row, onSelect, onSelectFocused, onActionClick, show
           {actionBarItems.map((action) => {
             const isModal = action.executionMode === "modal" && MODAL_ACTION_CODES.has(action.code);
             const focus = ACTION_FOCUS_MAP[action.code];
-            const isDanger = action.code === "close_request";
             return (
               <button
                 key={action.code}
@@ -311,11 +310,7 @@ export function RequestRow({ row, onSelect, onSelectFocused, onActionClick, show
                     onSelect(row.id);
                   }
                 }}
-                className={`inline-flex items-center rounded-md px-2.5 py-1 text-xs font-semibold transition-colors ${FOCUS_RING} ${
-                  isDanger
-                    ? "border border-[var(--ophalo-danger)] bg-[var(--ophalo-danger-bg)] text-[var(--ophalo-danger)] hover:bg-[var(--ophalo-danger)] hover:text-white"
-                    : "border border-[var(--ophalo-border)] bg-[var(--ophalo-canvas)] text-[var(--ophalo-ink)] hover:border-[var(--keep-accent)] hover:text-[var(--keep-accent)]"
-                }`}
+                className={`inline-flex items-center rounded-md px-2.5 py-1 text-xs font-semibold border border-[var(--ophalo-border)] bg-[var(--ophalo-canvas)] text-[var(--ophalo-ink)] hover:border-[var(--keep-accent)] hover:text-[var(--keep-accent)] transition-colors ${FOCUS_RING}`}
               >
                 {ACTION_NAV_LABELS[action.code] ?? action.label}
               </button>
