@@ -63,7 +63,7 @@
   }
 
   .keep-row-title {
-    @apply text-base font-semibold leading-6;
+    @apply font-serif text-base font-semibold leading-6;
     color: var(--ophalo-ink);
   }
 

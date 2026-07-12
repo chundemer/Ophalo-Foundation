@@ -22,7 +22,7 @@ type AppRoute =
   | { page: "home" }
   | { page: "requests" }
   | { page: "settings"; section?: "public-profile" | "policy" | "team" }
-  | { page: "detail"; requestId: string };
+  | { page: "detail"; requestId: string; focusPanel?: string };
 
 interface RequestNavContext {
   requestIds: string[];
@@ -103,8 +103,8 @@ function AppShell() {
     navigate({ page: "settings", section });
   }
 
-  function selectRequest(requestId: string, context?: RequestNavContext) {
-    navigate({ page: "detail", requestId });
+  function selectRequest(requestId: string, context?: RequestNavContext, focus?: string) {
+    navigate({ page: "detail", requestId, focusPanel: focus });
     setNavContext(context ?? null);
   }
 
@@ -305,6 +305,7 @@ function AppShell() {
         {route.page === "detail" && (
           <RequestDetail
             requestId={route.requestId}
+            focusPanel={route.focusPanel}
             onBack={backToRequests}
             prevId={prevRequestId}
             nextId={nextRequestId}

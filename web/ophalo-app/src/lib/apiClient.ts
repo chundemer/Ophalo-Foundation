@@ -740,6 +740,34 @@ export const api = {
     apiFetchVoid(`/accounts/me/members/${encodeURIComponent(accountUserId)}`, {
       method: "DELETE",
     }),
+  setFollowUpOn: (requestId: string, body: { date: string; reason: string; note?: string | null }, version: string) =>
+    apiFetch<KeepRequestDetailResult>(`/keep/requests/${requestId}/follow-up-on`, {
+      method: "PUT",
+      body: JSON.stringify(body),
+      headers: { "X-Keep-Request-Version": version },
+    }),
+  clearFollowUpOn: (requestId: string, version: string) =>
+    apiFetch<KeepRequestDetailResult>(`/keep/requests/${requestId}/follow-up-on`, {
+      method: "DELETE",
+      headers: { "X-Keep-Request-Version": version },
+    }),
+  setPlannedFor: (requestId: string, body: { date: string }, version: string) =>
+    apiFetch<KeepRequestDetailResult>(`/keep/requests/${requestId}/planned-for`, {
+      method: "PUT",
+      body: JSON.stringify(body),
+      headers: { "X-Keep-Request-Version": version },
+    }),
+  clearPlannedFor: (requestId: string, version: string) =>
+    apiFetch<KeepRequestDetailResult>(`/keep/requests/${requestId}/planned-for`, {
+      method: "DELETE",
+      headers: { "X-Keep-Request-Version": version },
+    }),
+  addInternalNote: (requestId: string, body: { note: string }, version: string) =>
+    apiFetch<KeepRequestDetailResult>(`/keep/requests/${requestId}/internal-notes`, {
+      method: "POST",
+      body: JSON.stringify(body),
+      headers: { "X-Keep-Request-Version": version },
+    }),
   markFeedbackReviewed: (requestId: string, body: { note?: string | null }, version: string) =>
     apiFetch<KeepRequestDetailResult>(`/keep/requests/${requestId}/feedback-review`, {
       method: "POST",

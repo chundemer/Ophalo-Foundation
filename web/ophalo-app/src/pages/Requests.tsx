@@ -148,7 +148,7 @@ interface RequestsProps {
   role: AccountRole;
   viewCounts: KeepRequestViewCounts | null;
   onViewCountsUpdate: (counts: KeepRequestViewCounts | null) => void;
-  onSelectRequest: (requestId: string, navContext?: { requestIds: string[] }) => void;
+  onSelectRequest: (requestId: string, navContext?: { requestIds: string[] }, focus?: string) => void;
 }
 
 export function Requests({ role, viewCounts, onViewCountsUpdate, onSelectRequest }: RequestsProps) {
@@ -246,6 +246,13 @@ export function Requests({ role, viewCounts, onViewCountsUpdate, onSelectRequest
       ? (availableQuery.data?.requests ?? []).map((r) => r.requestId)
       : (listQuery.data?.requests ?? []).map((r) => r.id);
     onSelectRequest(id, { requestIds: ids });
+  }
+
+  function handleRowSelectFocused(id: string, focus: string) {
+    const ids = isAvailableTab
+      ? (availableQuery.data?.requests ?? []).map((r) => r.requestId)
+      : (listQuery.data?.requests ?? []).map((r) => r.id);
+    onSelectRequest(id, { requestIds: ids }, focus);
   }
 
   return (
@@ -420,7 +427,7 @@ export function Requests({ role, viewCounts, onViewCountsUpdate, onSelectRequest
                   <AvailableRequestRow key={row.requestId} row={row} onSelect={handleRowSelect} />
                 ))
               : (listQuery.data?.requests ?? []).map((row) => (
-                  <RequestRow key={row.id} row={row} onSelect={handleRowSelect} showCloseoutCue={activeTab.id === "ready_to_close"} />
+                  <RequestRow key={row.id} row={row} onSelect={handleRowSelect} onSelectFocused={handleRowSelectFocused} showCloseoutCue={activeTab.id === "ready_to_close"} />
                 ))
             }
           </div>

@@ -1,8 +1,23 @@
 import { AlertTriangle, Clock, MessageSquare, Link, ChevronRight, UserRound, CheckCircle2 } from "lucide-react";
 import { KeepBadge, type KeepBadgeVariant } from "./keep/KeepBadge";
-import type { KeepRequestSummary, KeepRequestAvailableItem, KeepQuickAction } from "../lib/apiClient";
+import type { KeepRequestSummary, KeepRequestAvailableItem } from "../lib/apiClient";
 
-// Attention reason → severity mapping (exhaustive; unknown reasons fall back to neutral)
+const ACTION_FOCUS_MAP: Record<string, string> = {
+  contact_customer: "contact",
+  post_customer_update: "update",
+  acknowledge_attention: "attention",
+  review_feedback: "feedback_review",
+  close_request: "closeout",
+};
+
+const ACTION_NAV_LABELS: Record<string, string> = {
+  contact_customer: "Log contact",
+  post_customer_update: "Update customer",
+  acknowledge_attention: "Clear attention",
+  review_feedback: "Review feedback",
+  close_request: "Close out",
+};
+
 const DANGER_REASONS = new Set([
   "complaint",
   "cancellation_requested",
@@ -57,7 +72,6 @@ function AttentionBadge({ reason }: { reason: string | null }) {
   const tone = attentionTone(reason);
   const label = ATTENTION_REASON_LABELS[reason] ?? reason;
   const variant = toneToVariant(tone);
-
   return (
     <KeepBadge variant={variant} className="gap-1">
       {tone === "danger" && <AlertTriangle className="h-3 w-3" />}
@@ -83,7 +97,7 @@ function StatusBadge({ status }: { status: string }) {
     ? "Active"
     : status === "resolved"
       ? "Work completed"
-    : status.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+      : status.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
   return <KeepBadge variant={statusBadgeVariant(status)}>{label}</KeepBadge>;
 }
 
@@ -105,153 +119,172 @@ function relativeTime(iso: string | null): string | null {
   return `${Math.floor(days / 7)}w ago`;
 }
 
-function actionPrompt(quickActions: KeepQuickAction[]): string | null {
-  if (quickActions.length === 0) return null;
-  const clearing = quickActions.find((a) => a.clearsAttention);
-  return (clearing ?? quickActions[0]).label;
-}
+const FOCUS_RING = "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-offset-1";
 
 interface RequestRowProps {
   row: KeepRequestSummary;
   onSelect: (requestId: string) => void;
+  onSelectFocused?: (requestId: string, focus: string) => void;
   showCloseoutCue?: boolean;
 }
 
-export function RequestRow({ row, onSelect, showCloseoutCue }: RequestRowProps) {
+export function RequestRow({ row, onSelect, onSelectFocused, showCloseoutCue }: RequestRowProps) {
   const lastTouch = relativeTime(row.lastBusinessActivityAtUtc ?? row.updatedAtUtc);
-  const prompt = row.attention.attentionReason ? actionPrompt(row.actions.quickActions) : null;
   const tone = row.attention.attentionReason ? attentionTone(row.attention.attentionReason) : null;
   const isOverdue = row.ranking.isOverdue;
-  const dueLabel = isOverdue
-    ? (row.ranking.dueAtUtc ? `Due ${shortDate(row.ranking.dueAtUtc)}` : null)
-    : null;
+  const dueLabel = isOverdue && row.ranking.dueAtUtc ? `Due ${shortDate(row.ranking.dueAtUtc)}` : null;
+  const navActions = row.actions.quickActions.filter(
+    (a) => a.code !== "open_detail" && ACTION_FOCUS_MAP[a.code] !== undefined,
+  );
 
-  const accentBorder = (tone === "danger" || isOverdue)
+  const borderAccent = (tone === "danger" || isOverdue)
     ? "border-l-4 border-l-[var(--ophalo-danger)]"
     : tone !== null
       ? "border-l-4 border-l-[var(--ophalo-attention)]"
       : "";
 
   return (
-    <button
-      type="button"
-      onClick={() => onSelect(row.id)}
-      className={`w-full text-left flex flex-col gap-2 rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-4 py-3 hover:border-[var(--ophalo-navy)] hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-offset-2 transition-all min-h-[52px] ${accentBorder}`}
-    >
-      {/* Row 1: customer name + reference */}
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2 min-w-0">
-          <span className="font-mono text-[11px] text-[var(--ophalo-muted)] shrink-0">{row.referenceCode}</span>
-          <span className="keep-row-title truncate">{row.customerName}</span>
+    <div className={`rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] hover:shadow-sm transition-shadow ${borderAccent}`}>
+      {/* Main clickable area — opens detail */}
+      <button
+        type="button"
+        onClick={() => onSelect(row.id)}
+        className={`w-full text-left flex flex-col gap-2 px-4 pt-3 ${navActions.length > 0 ? "pb-2" : "pb-3"} ${FOCUS_RING} rounded-t-xl`}
+      >
+        {/* Identity: reference + customer name */}
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="font-mono text-[11px] text-[var(--ophalo-muted)] shrink-0">{row.referenceCode}</span>
+            <span className="keep-row-title truncate">{row.customerName}</span>
+          </div>
+          <ChevronRight className="h-4 w-4 text-[var(--ophalo-muted)] shrink-0" />
         </div>
-        <ChevronRight className="h-4 w-4 text-[var(--ophalo-muted)] shrink-0" />
-      </div>
 
-      {/* Row 2: overdue + attention badge + status chip + intake urgency — wrap on narrow */}
-      <div className="flex flex-wrap items-center gap-1.5">
-        {isOverdue && (
-          <KeepBadge variant="danger" className="gap-1">
-            <AlertTriangle className="h-3 w-3" />
-            Overdue
-          </KeepBadge>
-        )}
-        {row.attention.attentionReason && (
-          <AttentionBadge reason={row.attention.attentionReason} />
-        )}
-        <StatusBadge status={row.status} />
-        {showCloseoutCue && row.status === "resolved" && !row.attention.attentionReason && (
-          <KeepBadge variant="success" className="gap-1">
-            <CheckCircle2 className="h-3 w-3" />
-            Ready for closeout
-          </KeepBadge>
-        )}
-        {/* Business priority overrides intake urgency when set. Show both when they differ. */}
-        {row.businessPriority === "urgent" && (
-          <KeepBadge variant="danger" className="gap-1">
-            <AlertTriangle className="h-3 w-3" />
-            Priority: Urgent
-          </KeepBadge>
-        )}
-        {row.businessPriority === "soon" && (
-          <KeepBadge variant="attention" className="gap-1">
-            <Clock className="h-3 w-3" />
-            Priority: Soon
-          </KeepBadge>
-        )}
-        {/* Show intake urgency alongside when business priority suppressed/overrode it */}
-        {row.businessPriority !== null && row.businessPriority !== row.intakeUrgency && row.source === "public_intake" && row.intakeUrgency === "urgent" && (
-          <span className="text-[11px] text-[var(--ophalo-muted)]">Customer: urgent</span>
-        )}
-        {/* No business priority set — fall back to intake urgency display */}
-        {row.businessPriority === null && row.source === "public_intake" && row.intakeUrgency === "urgent" && (
-          <KeepBadge variant="danger" className="gap-1">
-            <AlertTriangle className="h-3 w-3" />
-            Urgent
-          </KeepBadge>
-        )}
-        {row.businessPriority === null && row.source === "public_intake" && row.intakeUrgency === "soon" && (
-          <KeepBadge variant="attention" className="gap-1">
-            <Clock className="h-3 w-3" />
-            Soon
-          </KeepBadge>
-        )}
-        {dueLabel && (
-          <span className="text-[11px] text-[var(--ophalo-danger)]">{dueLabel}</span>
-        )}
-      </div>
+        {/* Signals: overdue, attention, status, priority */}
+        <div className="flex flex-wrap items-center gap-1.5">
+          {isOverdue && (
+            <KeepBadge variant="danger" className="gap-1">
+              <AlertTriangle className="h-3 w-3" />
+              Overdue
+            </KeepBadge>
+          )}
+          {row.attention.attentionReason && (
+            <AttentionBadge reason={row.attention.attentionReason} />
+          )}
+          <StatusBadge status={row.status} />
+          {showCloseoutCue && row.status === "resolved" && !row.attention.attentionReason && (
+            <KeepBadge variant="success" className="gap-1">
+              <CheckCircle2 className="h-3 w-3" />
+              Ready for closeout
+            </KeepBadge>
+          )}
+          {row.businessPriority === "urgent" && (
+            <KeepBadge variant="danger" className="gap-1">
+              <AlertTriangle className="h-3 w-3" />
+              Priority: Urgent
+            </KeepBadge>
+          )}
+          {row.businessPriority === "soon" && (
+            <KeepBadge variant="attention" className="gap-1">
+              <Clock className="h-3 w-3" />
+              Priority: Soon
+            </KeepBadge>
+          )}
+          {row.businessPriority !== null && row.businessPriority !== row.intakeUrgency && row.source === "public_intake" && row.intakeUrgency === "urgent" && (
+            <span className="text-[11px] text-[var(--ophalo-muted)]">Customer: urgent</span>
+          )}
+          {row.businessPriority === null && row.source === "public_intake" && row.intakeUrgency === "urgent" && (
+            <KeepBadge variant="danger" className="gap-1">
+              <AlertTriangle className="h-3 w-3" />
+              Urgent
+            </KeepBadge>
+          )}
+          {row.businessPriority === null && row.source === "public_intake" && row.intakeUrgency === "soon" && (
+            <KeepBadge variant="attention" className="gap-1">
+              <Clock className="h-3 w-3" />
+              Soon
+            </KeepBadge>
+          )}
+          {dueLabel && (
+            <span className="text-[11px] text-[var(--ophalo-danger)]">{dueLabel}</span>
+          )}
+        </div>
 
-      {/* Row 3: action prompt */}
-      {prompt && (
-        <p className="keep-row-action">
-          Next: {prompt}
-        </p>
+        {/* Preview text */}
+        {row.preview.previewText && (
+          <p className="keep-row-meta line-clamp-1 text-left">{row.preview.previewText}</p>
+        )}
+
+        {/* Context metadata */}
+        <div className="keep-row-meta flex flex-wrap items-center gap-x-3 gap-y-1">
+          {row.participation.responsibleDisplayName && (
+            <span className="flex items-center gap-1">
+              <UserRound className="h-3 w-3" />
+              {row.participation.responsibleDisplayName}
+            </span>
+          )}
+          {row.participation.isUnassigned && (
+            <span className="font-medium text-[var(--ophalo-attention)]">Unassigned</span>
+          )}
+          {lastTouch && <span>Last touch {lastTouch}</span>}
+          {row.needsShare && (
+            <span className="flex items-center gap-1 font-medium text-[var(--ophalo-attention)]">
+              <Link className="h-3 w-3" />
+              Unshared tracker
+            </span>
+          )}
+          {row.source === "public_intake" ? (
+            <span>
+              Customer intake
+              {row.contactPreference === "text_message" && " · Prefers text"}
+              {row.contactPreference === "phone_call" && " · Prefers call"}
+              {row.contactPreference === "email" && " · Prefers email"}
+              {row.serviceCity && row.serviceState && (
+                <> · {row.serviceCity}, {row.serviceState}{row.serviceZip ? ` ${row.serviceZip}` : ""}</>
+              )}
+            </span>
+          ) : (
+            <span className={row.needsShare ? "text-[var(--ophalo-attention)] font-medium" : ""}>
+              Team added{row.needsShare && " · Customer page not yet shared"}
+            </span>
+          )}
+        </div>
+      </button>
+
+      {/* Quick action bar — shown when server provides navigation-intent actions */}
+      {navActions.length > 0 && (
+        <div className="border-t border-[var(--ophalo-border)] px-4 py-2 flex items-center gap-2">
+          {navActions.map((action) => {
+            const focus = ACTION_FOCUS_MAP[action.code];
+            return (
+              <button
+                key={action.code}
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (focus && onSelectFocused) {
+                    onSelectFocused(row.id, focus);
+                  } else {
+                    onSelect(row.id);
+                  }
+                }}
+                className={`inline-flex items-center rounded-md px-2.5 py-1 text-xs font-semibold bg-[var(--ophalo-canvas)] border border-[var(--ophalo-border)] text-[var(--ophalo-ink)] hover:border-[var(--keep-accent)] hover:text-[var(--keep-accent)] transition-colors ${FOCUS_RING}`}
+              >
+                {ACTION_NAV_LABELS[action.code] ?? action.label}
+              </button>
+            );
+          })}
+          <button
+            type="button"
+            onClick={() => onSelect(row.id)}
+            className={`ml-auto inline-flex items-center gap-1 text-xs text-[var(--ophalo-muted)] hover:text-[var(--ophalo-ink)] transition-colors rounded ${FOCUS_RING}`}
+          >
+            Open detail
+            <ChevronRight className="h-3.5 w-3.5" />
+          </button>
+        </div>
       )}
-
-      {/* Row 4: preview text */}
-      {row.preview.previewText && (
-        <p className="keep-row-meta line-clamp-2 text-left">
-          {row.preview.previewText}
-        </p>
-      )}
-
-      {/* Row 5: owner · last touch · unshared tracker */}
-      <div className="keep-row-meta flex flex-wrap items-center gap-x-3 gap-y-1">
-        {row.participation.responsibleDisplayName && (
-          <span className="flex items-center gap-1">
-            <UserRound className="h-3 w-3" />
-            {row.participation.responsibleDisplayName}
-          </span>
-        )}
-        {row.participation.isUnassigned && (
-          <span className="font-medium text-[var(--ophalo-attention)]">Unassigned</span>
-        )}
-        {lastTouch && (
-          <span>Last touch {lastTouch}</span>
-        )}
-        {row.needsShare && (
-          <span className="flex items-center gap-1 font-medium text-[var(--ophalo-attention)]">
-            <Link className="h-3 w-3" />
-            Unshared tracker
-          </span>
-        )}
-        {row.source === "public_intake" ? (
-          <span>
-            {"Customer intake"}
-            {row.contactPreference === "text_message" && " · Prefers text"}
-            {row.contactPreference === "phone_call" && " · Prefers call"}
-            {row.contactPreference === "email" && " · Prefers email"}
-            {row.serviceCity && row.serviceState && (
-              <> · {row.serviceCity}, {row.serviceState}{row.serviceZip ? ` ${row.serviceZip}` : ""}</>
-            )}
-          </span>
-        ) : (
-          <span className={row.needsShare ? "text-[var(--ophalo-attention)] font-medium" : ""}>
-            {"Team added"}
-            {row.needsShare && " · Customer page not yet shared"}
-          </span>
-        )}
-      </div>
-    </button>
+    </div>
   );
 }
 
@@ -267,7 +300,7 @@ export function AvailableRequestRow({ row, onSelect }: AvailableRequestRowProps)
     <button
       type="button"
       onClick={() => onSelect(row.requestId)}
-      className="w-full text-left flex flex-col gap-2 rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-4 py-3 hover:border-[var(--ophalo-navy)] hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-offset-2 transition-all min-h-[52px]"
+      className={`w-full text-left flex flex-col gap-2 rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-4 py-3 hover:border-[var(--ophalo-navy)] hover:shadow-sm ${FOCUS_RING} transition-all`}
     >
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2 min-w-0">
@@ -288,9 +321,7 @@ export function AvailableRequestRow({ row, onSelect }: AvailableRequestRowProps)
       </div>
 
       {row.descriptionPreview && (
-        <p className="keep-row-meta line-clamp-2 text-left">
-          {row.descriptionPreview}
-        </p>
+        <p className="keep-row-meta line-clamp-2 text-left">{row.descriptionPreview}</p>
       )}
     </button>
   );

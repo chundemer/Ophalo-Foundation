@@ -311,13 +311,13 @@ export const mockRequestSummaries: KeepRequestSummary[] = [
     actions: {
       quickActions: [
         {
-          code: "pending_customer",
-          label: "Waiting on Customer",
+          code: "post_customer_update",
+          label: "Send Update",
           visibility: "primary",
           clearsAttention: false,
           countsFirstResponse: false,
-          changesStatus: true,
-          effectSummaryCode: "pending_customer",
+          changesStatus: false,
+          effectSummaryCode: "none",
         },
       ],
     },
@@ -385,13 +385,22 @@ export const mockRequestSummaries: KeepRequestSummary[] = [
     actions: {
       quickActions: [
         {
-          code: "start",
-          label: "Start Work",
+          code: "post_customer_update",
+          label: "Send Update",
           visibility: "primary",
           clearsAttention: false,
           countsFirstResponse: true,
-          changesStatus: true,
-          effectSummaryCode: "in_progress",
+          changesStatus: false,
+          effectSummaryCode: "none",
+        },
+        {
+          code: "contact_customer",
+          label: "Contact",
+          visibility: "secondary",
+          clearsAttention: false,
+          countsFirstResponse: true,
+          changesStatus: false,
+          effectSummaryCode: "none",
         },
       ],
     },
@@ -530,7 +539,28 @@ export const mockRequestSummaries: KeepRequestSummary[] = [
       currentUserParticipationType: "responsible",
       responsibleDisplayName: "Jamie Reyes",
     },
-    actions: { quickActions: [] },
+    actions: {
+      quickActions: [
+        {
+          code: "review_feedback",
+          label: "Review Feedback",
+          visibility: "primary",
+          clearsAttention: false,
+          countsFirstResponse: false,
+          changesStatus: false,
+          effectSummaryCode: "none",
+        },
+        {
+          code: "close_request",
+          label: "Close Out",
+          visibility: "primary",
+          clearsAttention: false,
+          countsFirstResponse: false,
+          changesStatus: false,
+          effectSummaryCode: "none",
+        },
+      ],
+    },
   },
   {
     id: "mock-req-005",

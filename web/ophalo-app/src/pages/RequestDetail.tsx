@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ChevronLeft,
@@ -707,8 +707,7 @@ interface LogContactCardProps {
 
 function LogContactCard({ detail, onContactLaunched, highlight }: LogContactCardProps) {
   const { canLogExternalContact } = detail.availableActions;
-  const hasAttention = detail.attentionLevel !== "none" && !!detail.attentionReason;
-  if (!canLogExternalContact || !hasAttention) return null;
+  if (!canLogExternalContact) return null;
   const contactChannel = detail.customerPhone ? "phone" : detail.customerEmail ? "email" : "other";
   const shadow = highlightBoxShadow(highlight);
   return (
@@ -717,11 +716,11 @@ function LogContactCard({ detail, onContactLaunched, highlight }: LogContactCard
       style={shadow ? { boxShadow: shadow } : undefined}
     >
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-        <p className="text-sm font-semibold text-[var(--ophalo-ink)]">Handled outside Keep?</p>
+        <p className="text-sm font-semibold text-[var(--ophalo-ink)]">Log external contact</p>
         <RecommendedActionBadge level={highlight} />
       </div>
       <p className="text-xs text-[var(--ophalo-muted)] mb-3">
-        Log a call, text, email, or in-person conversation.
+        Record a call, text, email, or in-person conversation outside Keep.
       </p>
       <KeepButton
         type="button"
@@ -972,6 +971,346 @@ function WorkControlsGroup({ requestId, detail, onDetailUpdated, highlights }: W
         </div>
         <FeedbackReviewSection requestId={requestId} detail={detail} onDetailUpdated={onDetailUpdated} />
       </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Timing controls — Follow Up On and Planned For (side panel, staff-owned)
+// ---------------------------------------------------------------------------
+
+interface TimingPanelProps {
+  requestId: string;
+  detail: KeepRequestDetailResult;
+  onDetailUpdated: (updated: KeepRequestDetailResult) => void;
+}
+
+function TimingPanel({ requestId, detail, onDetailUpdated }: TimingPanelProps) {
+  const { canSetFollowUpOn, canSetPlannedFor } = detail.availableActions;
+  const { followUpNoteMaxLength, allowedFollowUpReasons } = detail.validation;
+
+  const [followUpDate, setFollowUpDate] = useState(detail.followUpOnDate ?? "");
+  const [followUpReason, setFollowUpReason] = useState(detail.followUpOnReason ?? "");
+  const [followUpNote, setFollowUpNote] = useState(detail.followUpOnNote ?? "");
+  const [followUpSubmitting, setFollowUpSubmitting] = useState(false);
+  const [followUpConflict, setFollowUpConflict] = useState(false);
+  const [followUpError, setFollowUpError] = useState<string | null>(null);
+
+  const [plannedDate, setPlannedDate] = useState(detail.plannedForDate ?? "");
+  const [plannedSubmitting, setPlannedSubmitting] = useState(false);
+  const [plannedConflict, setPlannedConflict] = useState(false);
+  const [plannedError, setPlannedError] = useState<string | null>(null);
+
+  if (!canSetFollowUpOn && !canSetPlannedFor) return null;
+
+  const hasFollowUp = !!detail.followUpOnDate;
+  const hasPlanned = !!detail.plannedForDate;
+
+  async function handleSetFollowUp(e: React.FormEvent) {
+    e.preventDefault();
+    if (!followUpDate || !followUpReason || followUpSubmitting || followUpConflict) return;
+    setFollowUpSubmitting(true);
+    setFollowUpError(null);
+    try {
+      const updated = await api.setFollowUpOn(
+        requestId,
+        { date: followUpDate, reason: followUpReason, note: followUpNote.trim() || null },
+        detail.version,
+      );
+      onDetailUpdated(updated);
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 409) {
+        setFollowUpConflict(true);
+        setFollowUpError(STATUS_CONFLICT_MESSAGE);
+      } else {
+        setFollowUpError("Could not set follow-up. Try again.");
+      }
+    } finally {
+      setFollowUpSubmitting(false);
+    }
+  }
+
+  async function handleClearFollowUp() {
+    if (followUpSubmitting || followUpConflict) return;
+    setFollowUpSubmitting(true);
+    setFollowUpError(null);
+    try {
+      const updated = await api.clearFollowUpOn(requestId, detail.version);
+      onDetailUpdated(updated);
+      setFollowUpDate("");
+      setFollowUpReason("");
+      setFollowUpNote("");
+      setFollowUpConflict(false);
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 409) {
+        setFollowUpConflict(true);
+        setFollowUpError(STATUS_CONFLICT_MESSAGE);
+      } else {
+        setFollowUpError("Could not clear follow-up. Try again.");
+      }
+    } finally {
+      setFollowUpSubmitting(false);
+    }
+  }
+
+  async function handleSetPlanned(e: React.FormEvent) {
+    e.preventDefault();
+    if (!plannedDate || plannedSubmitting || plannedConflict) return;
+    setPlannedSubmitting(true);
+    setPlannedError(null);
+    try {
+      const updated = await api.setPlannedFor(requestId, { date: plannedDate }, detail.version);
+      onDetailUpdated(updated);
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 409) {
+        setPlannedConflict(true);
+        setPlannedError(STATUS_CONFLICT_MESSAGE);
+      } else {
+        setPlannedError("Could not set planned date. Try again.");
+      }
+    } finally {
+      setPlannedSubmitting(false);
+    }
+  }
+
+  async function handleClearPlanned() {
+    if (plannedSubmitting || plannedConflict) return;
+    setPlannedSubmitting(true);
+    setPlannedError(null);
+    try {
+      const updated = await api.clearPlannedFor(requestId, detail.version);
+      onDetailUpdated(updated);
+      setPlannedDate("");
+      setPlannedConflict(false);
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 409) {
+        setPlannedConflict(true);
+        setPlannedError(STATUS_CONFLICT_MESSAGE);
+      } else {
+        setPlannedError("Could not clear planned date. Try again.");
+      }
+    } finally {
+      setPlannedSubmitting(false);
+    }
+  }
+
+  return (
+    <div>
+      <p className="px-1 text-[10px] font-semibold uppercase tracking-widest text-[var(--ophalo-muted)] mb-2">Timing</p>
+      <div className="rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-4 py-3 space-y-4">
+        <p className="text-[11px] text-[var(--ophalo-muted)]">
+          Timing is internal and does not automatically notify the customer.
+        </p>
+
+        {canSetFollowUpOn && (
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--ophalo-muted)] mb-2">Follow up on</p>
+            {hasFollowUp ? (
+              <div className="space-y-1">
+                <p className="text-sm font-semibold text-[var(--ophalo-ink)]">
+                  {new Date(detail.followUpOnDate!).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                </p>
+                {detail.followUpOnReason && (
+                  <p className="text-xs text-[var(--ophalo-muted)]">{detail.followUpOnReason}</p>
+                )}
+                {detail.followUpOnNote && (
+                  <p className="text-xs text-[var(--ophalo-ink)] italic">{detail.followUpOnNote}</p>
+                )}
+                {followUpError && (
+                  <p className="text-xs text-[var(--ophalo-danger)]">{followUpError}</p>
+                )}
+                <button
+                  type="button"
+                  onClick={() => void handleClearFollowUp()}
+                  disabled={followUpSubmitting || followUpConflict}
+                  className={`text-xs text-[var(--ophalo-muted)] hover:text-[var(--ophalo-ink)] disabled:opacity-50 transition-colors ${FOCUS_RING} rounded`}
+                >
+                  Clear follow-up
+                </button>
+              </div>
+            ) : (
+              <form onSubmit={(e) => void handleSetFollowUp(e)} className="space-y-2">
+                <div>
+                  <label htmlFor="follow-up-date" className="text-[11px] text-[var(--ophalo-muted)] block mb-0.5">Date</label>
+                  <input
+                    id="follow-up-date"
+                    type="date"
+                    value={followUpDate}
+                    onChange={(e) => setFollowUpDate(e.target.value)}
+                    disabled={followUpConflict}
+                    className={INPUT_CLS}
+                  />
+                </div>
+                <div>
+                  <label htmlFor="follow-up-reason" className="text-[11px] text-[var(--ophalo-muted)] block mb-0.5">Reason</label>
+                  <select
+                    id="follow-up-reason"
+                    value={followUpReason}
+                    onChange={(e) => setFollowUpReason(e.target.value)}
+                    disabled={followUpConflict}
+                    className={INPUT_CLS}
+                  >
+                    <option value="">Select reason…</option>
+                    {allowedFollowUpReasons.map((r) => (
+                      <option key={r} value={r}>{r}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label htmlFor="follow-up-note" className="text-[11px] text-[var(--ophalo-muted)] block mb-0.5">Note (optional)</label>
+                  <input
+                    id="follow-up-note"
+                    type="text"
+                    value={followUpNote}
+                    onChange={(e) => setFollowUpNote(e.target.value)}
+                    maxLength={followUpNoteMaxLength}
+                    disabled={followUpConflict}
+                    placeholder="Optional note…"
+                    className={INPUT_CLS}
+                  />
+                </div>
+                {followUpError && (
+                  <p className="text-xs text-[var(--ophalo-danger)]">{followUpError}</p>
+                )}
+                <KeepButton
+                  type="submit"
+                  variant="secondary"
+                  disabled={!followUpDate || !followUpReason || followUpSubmitting || followUpConflict}
+                  className="w-full"
+                >
+                  {followUpSubmitting ? "Saving…" : "Set follow-up"}
+                </KeepButton>
+              </form>
+            )}
+          </div>
+        )}
+
+        {canSetPlannedFor && (
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--ophalo-muted)] mb-2">Planned for</p>
+            {hasPlanned ? (
+              <div className="space-y-1">
+                <p className="text-sm font-semibold text-[var(--ophalo-ink)]">
+                  {new Date(detail.plannedForDate!).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                </p>
+                {plannedError && (
+                  <p className="text-xs text-[var(--ophalo-danger)]">{plannedError}</p>
+                )}
+                <button
+                  type="button"
+                  onClick={() => void handleClearPlanned()}
+                  disabled={plannedSubmitting || plannedConflict}
+                  className={`text-xs text-[var(--ophalo-muted)] hover:text-[var(--ophalo-ink)] disabled:opacity-50 transition-colors ${FOCUS_RING} rounded`}
+                >
+                  Clear planned date
+                </button>
+              </div>
+            ) : (
+              <form onSubmit={(e) => void handleSetPlanned(e)} className="space-y-2">
+                <div>
+                  <label htmlFor="planned-date" className="text-[11px] text-[var(--ophalo-muted)] block mb-0.5">Date</label>
+                  <input
+                    id="planned-date"
+                    type="date"
+                    value={plannedDate}
+                    onChange={(e) => setPlannedDate(e.target.value)}
+                    disabled={plannedConflict}
+                    className={INPUT_CLS}
+                  />
+                </div>
+                {plannedError && (
+                  <p className="text-xs text-[var(--ophalo-danger)]">{plannedError}</p>
+                )}
+                <KeepButton
+                  type="submit"
+                  variant="secondary"
+                  disabled={!plannedDate || plannedSubmitting || plannedConflict}
+                  className="w-full"
+                >
+                  {plannedSubmitting ? "Saving…" : "Set planned date"}
+                </KeepButton>
+              </form>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Internal note composer — side panel, never customer-visible
+// ---------------------------------------------------------------------------
+
+interface InternalNoteCardProps {
+  requestId: string;
+  detail: KeepRequestDetailResult;
+  onDetailUpdated: (updated: KeepRequestDetailResult) => void;
+}
+
+function InternalNoteCard({ requestId, detail, onDetailUpdated }: InternalNoteCardProps) {
+  const { canAddInternalNote } = detail.availableActions;
+  const { internalNoteMaxLength } = detail.validation;
+  const [note, setNote] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [conflictDisabled, setConflictDisabled] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  if (!canAddInternalNote) return null;
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!note.trim() || isSubmitting || conflictDisabled) return;
+    setIsSubmitting(true);
+    setError(null);
+    try {
+      const updated = await api.addInternalNote(requestId, { note: note.trim() }, detail.version);
+      onDetailUpdated(updated);
+      setNote("");
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 409) {
+        setConflictDisabled(true);
+        setError(STATUS_CONFLICT_MESSAGE);
+      } else {
+        setError("Could not save note. Try again.");
+      }
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  return (
+    <div>
+      <p className="text-sm font-semibold text-[var(--ophalo-ink)] mb-0.5">Internal note</p>
+      <p className="text-xs text-[var(--ophalo-muted)] mb-2">Not visible to customer</p>
+      {error && (
+        <div className={`mb-2 rounded-lg p-3 text-xs ${
+          conflictDisabled
+            ? "bg-[var(--ophalo-attention-bg)] text-[var(--ophalo-attention)]"
+            : "bg-[var(--ophalo-danger-bg)] text-[var(--ophalo-danger)]"
+        }`}>
+          {error}
+        </div>
+      )}
+      <form onSubmit={(e) => void handleSubmit(e)} className="space-y-2">
+        <textarea
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          maxLength={internalNoteMaxLength}
+          disabled={conflictDisabled}
+          placeholder="Add a note for your team…"
+          rows={3}
+          className={`${INPUT_CLS} resize-none`}
+        />
+        <KeepButton
+          type="submit"
+          variant="secondary"
+          disabled={isSubmitting || conflictDisabled || !note.trim()}
+          className="w-full"
+        >
+          {isSubmitting ? "Saving…" : "Save internal note"}
+        </KeepButton>
+      </form>
     </div>
   );
 }
@@ -2499,13 +2838,14 @@ function TeamSection({ requestId, detail, onDetailUpdated }: TeamSectionProps) {
 
 interface RequestDetailProps {
   requestId: string;
+  focusPanel?: string;
   onBack: () => void;
   prevId?: string;
   nextId?: string;
   onNavigate?: (id: string) => void;
 }
 
-export function RequestDetail({ requestId, onBack, prevId, nextId, onNavigate }: RequestDetailProps) {
+export function RequestDetail({ requestId, focusPanel, onBack, prevId, nextId, onNavigate }: RequestDetailProps) {
   const [shareCleared, setShareCleared] = useState(false);
   const [contactModal, setContactModal] = useState<{ direction: string; channel: string } | null>(null);
   const [businessUpdateDraft, setBusinessUpdateDraft] = useState("");
@@ -2532,10 +2872,42 @@ export function RequestDetail({ requestId, onBack, prevId, nextId, onNavigate }:
     });
   }, [detail, timelineFilter]);
 
-  const highlights = useMemo(
-    () => (detail ? getAttentionResolutionHighlights(detail) : {}),
-    [detail],
-  );
+  const focusScrolledRef = useRef(false);
+
+  useEffect(() => {
+    focusScrolledRef.current = false;
+  }, [requestId]);
+
+  useEffect(() => {
+    if (!focusPanel || !detail || focusScrolledRef.current) return;
+    const el = document.getElementById(`focus-panel-${focusPanel}`);
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      focusScrolledRef.current = true;
+    }
+  }, [focusPanel, detail]);
+
+  const focusHighlights = useMemo((): AttentionHighlights => {
+    if (!focusPanel || !detail) return {};
+    switch (focusPanel) {
+      case "update": return { sendUpdate: "primary" };
+      case "contact": return { logContact: "primary" };
+      case "attention": return { markHandled: "primary" };
+      case "feedback_review": return { feedbackReview: "primary" };
+      default: return {};
+    }
+  }, [focusPanel, detail]);
+
+  const highlights = useMemo(() => {
+    const attention = detail ? getAttentionResolutionHighlights(detail) : {};
+    return {
+      sendUpdate: attention.sendUpdate ?? focusHighlights.sendUpdate,
+      logContact: attention.logContact ?? focusHighlights.logContact,
+      workControls: attention.workControls ?? focusHighlights.workControls,
+      feedbackReview: attention.feedbackReview ?? focusHighlights.feedbackReview,
+      markHandled: attention.markHandled ?? focusHighlights.markHandled,
+    };
+  }, [detail, focusHighlights]);
 
   const workControlsIsHighlighted = !!highlights.feedbackReview;
 
@@ -2574,16 +2946,6 @@ export function RequestDetail({ requestId, onBack, prevId, nextId, onNavigate }:
           requestId={requestId}
           detail={detail}
           onDetailUpdated={handleDetailUpdated}
-        />
-        <BusinessUpdateSection
-          requestId={requestId}
-          detail={detail}
-          onDetailUpdated={handleDetailUpdated}
-          draft={businessUpdateDraft}
-          onDraftChange={setBusinessUpdateDraft}
-          draftStatus={businessUpdateDraftStatus}
-          onDraftStatusChange={setBusinessUpdateDraftStatus}
-          highlight={highlights.sendUpdate}
         />
         <LogContactCard
           detail={detail}
@@ -2730,6 +3092,20 @@ export function RequestDetail({ requestId, onBack, prevId, nextId, onNavigate }:
               {renderPrimaryActions()}
             </div>
 
+            {/* Send customer update — main work loop, above activity */}
+            <div id="focus-panel-update">
+              <BusinessUpdateSection
+                requestId={requestId}
+                detail={detail}
+                onDetailUpdated={handleDetailUpdated}
+                draft={businessUpdateDraft}
+                onDraftChange={setBusinessUpdateDraft}
+                draftStatus={businessUpdateDraftStatus}
+                onDraftStatusChange={setBusinessUpdateDraftStatus}
+                highlight={highlights.sendUpdate}
+              />
+            </div>
+
             {/* Activity timeline */}
             <div className="rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-5 py-5">
               <div className="flex items-center justify-between mb-4 gap-3">
@@ -2745,7 +3121,7 @@ export function RequestDetail({ requestId, onBack, prevId, nextId, onNavigate }:
                     onClick={() => setTimelineFilter("communication")}
                     className={filterBtnCls(timelineFilter === "communication")}
                   >
-                    Communication
+                    Conversation &amp; notes
                   </button>
                   <button
                     type="button"
@@ -2761,7 +3137,7 @@ export function RequestDetail({ requestId, onBack, prevId, nextId, onNavigate }:
               {displayedEvents.length === 0 ? (
                 <p className="text-sm text-[var(--ophalo-muted)]">
                   {timelineFilter === "communication"
-                    ? "No customer or contact updates yet."
+                    ? "No customer updates or internal notes yet."
                     : "No activity yet."}
                 </p>
               ) : (
@@ -2773,12 +3149,14 @@ export function RequestDetail({ requestId, onBack, prevId, nextId, onNavigate }:
               )}
             </div>
 
-            {/* Mobile: contact, location, triage, team — after activity */}
+            {/* Mobile: contact, location, triage, timing, team, internal — after activity */}
             <div className="md:hidden space-y-4 pb-6">
               <CustomerPanel detail={detail} onContactLaunched={handleContactLaunched} />
               <ServiceLocationPanel detail={detail} onDetailUpdated={handleDetailUpdated} />
               <TriagePanel detail={detail} onDetailUpdated={handleDetailUpdated} />
+              <TimingPanel requestId={requestId} detail={detail} onDetailUpdated={handleDetailUpdated} />
               {renderTeamSection()}
+              <InternalNoteCard requestId={requestId} detail={detail} onDetailUpdated={handleDetailUpdated} />
               <SourceMetaPanel detail={detail} />
             </div>
           </div>
@@ -2791,57 +3169,68 @@ export function RequestDetail({ requestId, onBack, prevId, nextId, onNavigate }:
               detail={detail}
               onDetailUpdated={handleDetailUpdated}
             />
-            <CloseRequestCard
-              requestId={requestId}
-              detail={detail}
-              onDetailUpdated={handleDetailUpdated}
-            />
-            {/* Resolution cards: primary actions for clearing attention */}
-            <BusinessUpdateSection
-              requestId={requestId}
-              detail={detail}
-              onDetailUpdated={handleDetailUpdated}
-              draft={businessUpdateDraft}
-              onDraftChange={setBusinessUpdateDraft}
-              draftStatus={businessUpdateDraftStatus}
-              onDraftStatusChange={setBusinessUpdateDraftStatus}
-              highlight={highlights.sendUpdate}
-            />
-            <LogContactCard
-              detail={detail}
-              onContactLaunched={handleContactLaunched}
-              highlight={highlights.logContact}
-            />
-            <MarkHandledCard
-              requestId={requestId}
-              detail={detail}
-              onDetailUpdated={handleDetailUpdated}
-              highlight={highlights.markHandled}
-            />
-            {workControlsIsHighlighted && (
-              <WorkControlsGroup
+            <div id="focus-panel-closeout">
+              <CloseRequestCard
                 requestId={requestId}
                 detail={detail}
                 onDetailUpdated={handleDetailUpdated}
-                highlights={highlights}
               />
-            )}
-
-            {/* Context: customer, location, triage */}
-            <CustomerPanel detail={detail} onContactLaunched={handleContactLaunched} />
-            <ServiceLocationPanel detail={detail} onDetailUpdated={handleDetailUpdated} />
-            <TriagePanel detail={detail} onDetailUpdated={handleDetailUpdated} />
-
-            {/* Utilities: review controls and team context */}
-            <div className="space-y-3">
-              <p className="px-1 text-[10px] font-semibold uppercase tracking-widest text-[var(--ophalo-muted)]">Utilities</p>
-              {!workControlsIsHighlighted && (
+            </div>
+            {/* Resolution cards: primary actions for clearing attention */}
+            <div id="focus-panel-contact">
+              <LogContactCard
+                detail={detail}
+                onContactLaunched={handleContactLaunched}
+                highlight={highlights.logContact}
+              />
+            </div>
+            <div id="focus-panel-attention">
+              <MarkHandledCard
+                requestId={requestId}
+                detail={detail}
+                onDetailUpdated={handleDetailUpdated}
+                highlight={highlights.markHandled}
+              />
+            </div>
+            {workControlsIsHighlighted && (
+              <div id="focus-panel-feedback_review">
                 <WorkControlsGroup
                   requestId={requestId}
                   detail={detail}
                   onDetailUpdated={handleDetailUpdated}
                   highlights={highlights}
                 />
+              </div>
+            )}
+
+            {/* Context: customer, location, triage, timing */}
+            <CustomerPanel detail={detail} onContactLaunched={handleContactLaunched} />
+            <ServiceLocationPanel detail={detail} onDetailUpdated={handleDetailUpdated} />
+            <TriagePanel detail={detail} onDetailUpdated={handleDetailUpdated} />
+            <TimingPanel requestId={requestId} detail={detail} onDetailUpdated={handleDetailUpdated} />
+
+            {/* Internal: notes not visible to customer */}
+            <div className="space-y-3">
+              <p className="px-1 text-[10px] font-semibold uppercase tracking-widest text-[var(--ophalo-muted)]">Internal</p>
+              <InternalNoteCard
+                requestId={requestId}
+                detail={detail}
+                onDetailUpdated={handleDetailUpdated}
+              />
+            </div>
+
+            {/* Utilities: feedback review, team, admin (classification deferred — no compact V1 UI) */}
+            <div className="space-y-3">
+              <p className="px-1 text-[10px] font-semibold uppercase tracking-widest text-[var(--ophalo-muted)]">Utilities</p>
+              {!workControlsIsHighlighted && (
+                <div id="focus-panel-feedback_review">
+                  <WorkControlsGroup
+                    requestId={requestId}
+                    detail={detail}
+                    onDetailUpdated={handleDetailUpdated}
+                    highlights={highlights}
+                  />
+                </div>
               )}
               {renderTeamSection()}
             </div>

@@ -525,6 +525,67 @@ export function installMockApi(): void {
     return delay(withRoleActions(updated));
   };
 
+  api.addInternalNote = (requestId, body, _version) => {
+    const d = getMockDetail(requestId);
+    if (!d) return Promise.reject(new Error("Mock: request not found"));
+    const now = new Date().toISOString();
+    const updated = appendEvent(d, {
+      eventType: "InternalNoteAdded",
+      occurredAtUtc: now,
+      content: body.note,
+    });
+    updateMockDetail(requestId, updated);
+    return delay(withRoleActions(updated));
+  };
+
+  api.setFollowUpOn = (requestId, body, _version) => {
+    const d = getMockDetail(requestId);
+    if (!d) return Promise.reject(new Error("Mock: request not found"));
+    const now = new Date().toISOString();
+    const updated = appendEvent(
+      { ...d, followUpOnDate: body.date, followUpOnReason: body.reason, followUpOnNote: body.note ?? null },
+      { eventType: "FollowUpOnChanged", occurredAtUtc: now, content: body.date },
+    );
+    updateMockDetail(requestId, updated);
+    return delay(withRoleActions(updated));
+  };
+
+  api.clearFollowUpOn = (requestId, _version) => {
+    const d = getMockDetail(requestId);
+    if (!d) return Promise.reject(new Error("Mock: request not found"));
+    const now = new Date().toISOString();
+    const updated = appendEvent(
+      { ...d, followUpOnDate: null, followUpOnReason: null, followUpOnNote: null },
+      { eventType: "FollowUpOnChanged", occurredAtUtc: now, content: null },
+    );
+    updateMockDetail(requestId, updated);
+    return delay(withRoleActions(updated));
+  };
+
+  api.setPlannedFor = (requestId, body, _version) => {
+    const d = getMockDetail(requestId);
+    if (!d) return Promise.reject(new Error("Mock: request not found"));
+    const now = new Date().toISOString();
+    const updated = appendEvent(
+      { ...d, plannedForDate: body.date },
+      { eventType: "PlannedForChanged", occurredAtUtc: now, content: body.date },
+    );
+    updateMockDetail(requestId, updated);
+    return delay(withRoleActions(updated));
+  };
+
+  api.clearPlannedFor = (requestId, _version) => {
+    const d = getMockDetail(requestId);
+    if (!d) return Promise.reject(new Error("Mock: request not found"));
+    const now = new Date().toISOString();
+    const updated = appendEvent(
+      { ...d, plannedForDate: null },
+      { eventType: "PlannedForChanged", occurredAtUtc: now, content: null },
+    );
+    updateMockDetail(requestId, updated);
+    return delay(withRoleActions(updated));
+  };
+
   api.markFeedbackReviewed = (requestId, body, _version) => {
     const d = getMockDetail(requestId);
     if (!d) return Promise.reject(new Error("Mock: request not found"));
