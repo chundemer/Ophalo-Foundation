@@ -73,6 +73,7 @@ export function RequestRowActionModal({ row, action, onClose, onSuccess }: Reque
     action.code === "post_customer_update" ? "Send customer update"
     : action.code === "contact_customer" ? "Log external contact"
     : action.code === "acknowledge_attention" ? "Acknowledge attention"
+    : action.code === "add_internal_note" ? "Add internal note"
     : action.label;
 
   return (
@@ -119,6 +120,9 @@ export function RequestRowActionModal({ row, action, onClose, onSuccess }: Reque
             )}
             {action.code === "acknowledge_attention" && (
               <AcknowledgeAttentionBody row={row} onClose={onClose} onSuccess={onSuccess} />
+            )}
+            {action.code === "add_internal_note" && (
+              <AddInternalNoteBody row={row} onClose={onClose} onSuccess={onSuccess} />
             )}
           </div>
         </div>
@@ -452,6 +456,80 @@ function AcknowledgeAttentionBody({ row, onClose, onSuccess }: BodyProps) {
         </button>
         <KeepButton variant="primary" type="submit" disabled={!reason.trim() || submitting}>
           {submitting ? "Acknowledging…" : "Acknowledge"}
+        </KeepButton>
+      </div>
+    </form>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Variant 4 — add_internal_note
+// ---------------------------------------------------------------------------
+
+function AddInternalNoteBody({ row, onClose, onSuccess }: BodyProps) {
+  const [note, setNote] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [conflict, setConflict] = useState(false);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!note.trim() || submitting) return;
+    setSubmitting(true);
+    setError(null);
+    setConflict(false);
+    try {
+      await api.addInternalNote(row.id, { note: note.trim() }, row.version);
+      onSuccess();
+    } catch (err) {
+      setSubmitting(false);
+      if (err instanceof ApiError && err.status === 409) {
+        setConflict(true);
+      } else {
+        setError("Something went wrong. Please try again or open detail.");
+      }
+    }
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+      <div className="flex flex-col gap-1">
+        <KeepBadge variant="default" className="self-start">Internal note</KeepBadge>
+        <p className="text-sm text-[var(--ophalo-muted)]">
+          Not visible to customer.
+        </p>
+      </div>
+
+      <div className="flex flex-col gap-1.5">
+        <label className="text-sm font-medium text-[var(--ophalo-ink)]">Note</label>
+        <textarea
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          placeholder="Add a private note for your team…"
+          rows={4}
+          className={INPUT_BASE}
+          disabled={submitting}
+          required
+        />
+      </div>
+
+      {conflict && (
+        <ConflictMessage>
+          This request was updated by someone else. Your note is preserved — open detail to continue.
+        </ConflictMessage>
+      )}
+      {error && <ErrorMessage>{error}</ErrorMessage>}
+
+      <div className="flex items-center justify-end gap-3 pt-1">
+        <button
+          type="button"
+          onClick={onClose}
+          className={`text-sm text-[var(--ophalo-muted)] hover:text-[var(--ophalo-ink)] transition-colors rounded ${FOCUS_RING}`}
+        >
+          Cancel
+        </button>
+        <KeepButton variant="primary" type="submit" disabled={!note.trim() || submitting}>
+          {submitting ? "Saving…" : "Save note"}
         </KeepButton>
       </div>
     </form>

@@ -14,6 +14,7 @@ const MODAL_ACTION_CODES = new Set([
   "post_customer_update",
   "contact_customer",
   "acknowledge_attention",
+  "add_internal_note",
 ]);
 
 const ACTION_NAV_LABELS: Record<string, string> = {

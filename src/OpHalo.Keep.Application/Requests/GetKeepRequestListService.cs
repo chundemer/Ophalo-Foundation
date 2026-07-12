@@ -883,6 +883,9 @@ public sealed class GetKeepRequestListService(
                 EffectSummaryCode: "customer_visible_status_unchanged"));
         }
 
+        if (actionDecision.CanAddInternalNote)
+            actions.Add(QuickActionDefs.AddInternalNote);
+
         // Policy-derived; first-response-overdue suppression is a presentation condition (ADR-328).
         var isFirstResponseOverdueNoResponse = firstResponseOverdue && r.FirstRespondedAtUtc is null;
         if (actionDecision.CanAcknowledgeAttention && !isFirstResponseOverdueNoResponse)
@@ -1206,6 +1209,11 @@ public sealed class GetKeepRequestListService(
             "acknowledge_attention", "Mark handled", "internal",
             RequiresVersion: true, ExecutionMode: "modal",
             true, false, false, "internal_clears_attention");
+
+        public static readonly KeepQuickAction AddInternalNote = new(
+            "add_internal_note", "Add note", "internal",
+            RequiresVersion: true, ExecutionMode: "modal",
+            false, false, false, "internal_note_only");
 
         public static readonly KeepQuickAction ReviewFeedback = new(
             "review_feedback", "Review feedback", "internal",
