@@ -77,9 +77,12 @@ public sealed class KeepRequestListPersistence(OpHaloDbContext dbContext) : IKee
 
         IQueryable<KeepRequest> query = view switch
         {
+            // ADR-437: calm Resolved (no active attention) belongs in ready_to_close, not Default Queue.
+            // Resolved rows with real active attention remain here and in NeedsAttention.
             ActiveViewKind.Default => scopedBase.Where(r =>
                 (r.Status != KeepRequestStatus.Closed && r.Status != KeepRequestStatus.Cancelled
-                    && r.Status != KeepRequestStatus.Spam && r.Status != KeepRequestStatus.Test)
+                    && r.Status != KeepRequestStatus.Spam && r.Status != KeepRequestStatus.Test
+                    && (r.Status != KeepRequestStatus.Resolved || r.AttentionLevel != AttentionLevel.None))
                 || (filters.IsOwnerOrAdmin
                     && r.Status == KeepRequestStatus.Closed
                     && r.AttentionReason == AttentionReason.UnresolvedFeedback
@@ -219,12 +222,13 @@ public sealed class KeepRequestListPersistence(OpHaloDbContext dbContext) : IKee
             && r.Status != KeepRequestStatus.Spam
             && r.Status != KeepRequestStatus.Test);
 
-        // Default: same filter as Default view rows — guarantees row/count composition (G4d).
+        // Default: same filter as Default view rows — guarantees row/count composition (G4d, ADR-437).
         var defaultCount = await scopedBase.CountAsync(r =>
             (r.Status != KeepRequestStatus.Closed
                 && r.Status != KeepRequestStatus.Cancelled
                 && r.Status != KeepRequestStatus.Spam
-                && r.Status != KeepRequestStatus.Test)
+                && r.Status != KeepRequestStatus.Test
+                && (r.Status != KeepRequestStatus.Resolved || r.AttentionLevel != AttentionLevel.None))
             || (isOwnerOrAdmin
                 && r.Status == KeepRequestStatus.Closed
                 && r.AttentionReason == AttentionReason.UnresolvedFeedback

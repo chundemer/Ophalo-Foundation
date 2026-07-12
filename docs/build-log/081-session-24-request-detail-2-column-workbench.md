@@ -1,11 +1,11 @@
 # Build Log 081 — Session 24: Request Workbench 2-Column Layout And List Quick Actions
 
 **Started:** 2026-07-11
-**Status:** S24k / GAP-011 complete (`0d03822`) — S24 responsive QA and polish next
+**Status:** S24m complete — ADR-437 persistence + integration tests done, pending commit approval
 **Session name:** S24 request workbench 2-column layout and list quick actions
-**Related ADRs:** ADR-377, ADR-380, ADR-382, ADR-383, ADR-433, ADR-434, ADR-435, ADR-436
+**Related ADRs:** ADR-377, ADR-380, ADR-382, ADR-383, ADR-433, ADR-434, ADR-435, ADR-436, ADR-437
 **Next free ADR before ADR-435:** ADR-435
-**Next free ADR after ADR-436:** ADR-437
+**Next free ADR after ADR-437:** ADR-438
 
 ---
 
@@ -1194,6 +1194,40 @@ corrected), `GetKeepRequestListService.cs`, `KeepRequestListB5Tests.cs`,
 
 ---
 
+## S24l — ADR-437 Default Queue Excludes Calm Work Completed Rows (2026-07-12)
+
+**Slice:** S24l — screenshot review decision lock before the next code slice  
+**Status:** Complete — docs-only decision lock
+
+### Decision locked
+
+ADR-437 locks the request-list queue boundary:
+
+- Default Queue is the live operational triage queue.
+- Calm **Work completed** rows (`Status == Resolved` and `AttentionLevel == None`) must leave Default
+  Queue and live in `ready_to_close`.
+- **Work completed** rows with real active attention remain in Default Queue and Needs Attention.
+- Customer-reported urgency/contact metadata alone does not keep a calm work-completed row in Default
+  Queue; server `AttentionLevel` is the controlling signal.
+- Closed unresolved feedback remains the existing Owner/Admin default-queue exception.
+
+### Implementation handoff
+
+The next code slice should update the server query/count layer, not the React list:
+
+- update `ActiveViewKind.Default` in `KeepRequestListPersistence.cs`;
+- update `defaultCount` in `GetViewCountsAsync` to match;
+- add focused tests proving:
+  - calm `Resolved` rows are absent from Default Queue;
+  - calm `Resolved` rows are present in `ready_to_close`;
+  - `Resolved` rows with active attention remain in Default Queue and Needs Attention;
+  - `ready_to_close` excludes active-attention `Resolved` rows.
+
+This supersedes older ADR-175/177/189 quiet-Resolved default-list behavior while preserving ADR-434:
+`Resolved` remains pre-terminal and staff-facing **Work completed**.
+
+---
+
 ## Claude Handoff Prompt
 
 Use this prompt when starting implementation:
@@ -1225,6 +1259,9 @@ Respect these locked decisions:
   request-list modal is the preferred UX.
 - Work-completed/no-attention rows should keep `Next: Close request` and `Review closeout`, but must
   not hide server-allowed post-work actions such as Log contact, Update customer, or Add note.
+- ADR-437: calm Work completed rows (`resolved` + no active attention) are excluded from Default
+  Queue and belong in Ready to Close; Work completed rows with real active attention remain in
+  Default Queue/Needs Attention.
 - Restore Follow Up On and Planned For controls where server metadata allows them; timing is
   internal/staff-owned and does not automatically notify the customer.
 - Keep customer-visible update, internal note, external contact summary, feedback review note, and
@@ -1237,3 +1274,32 @@ Respect these locked decisions:
 Do not make backend/API changes unless the sub-session explicitly asks for them.
 Run web/ophalo-app typecheck before finishing when dependencies are available.
 ```
+
+---
+
+## S24m — ADR-437 Default Queue Filtering Implementation (2026-07-12)
+
+**Slice:** S24m — persistence predicate + integration test coverage for ADR-437
+**Status:** Complete — tests passing, pending commit approval
+
+### Changes
+
+**`src/OpHalo.Keep.Infrastructure/Persistence/KeepRequestListPersistence.cs`**
+- `ActiveViewKind.Default` query: added `&& (r.Status != Resolved || r.AttentionLevel != None)` to
+  exclude calm Resolved rows from the Default Queue.
+- `defaultCount` in `GetViewCountsAsync`: same predicate added to keep count composition consistent
+  (G4d, ADR-437).
+
+**`tests/OpHalo.IntegrationTests/Api/KeepRequestListB5Tests.cs`**
+- Replaced `Resolved_request_included_and_ranked_as_resolved_quiet` with
+  `Calm_resolved_excluded_from_default_list` (assertion flipped: must NOT be in default).
+- Added `Calm_resolved_present_in_ready_to_close` — verifies `_resolvedRequestId` now in RTC view.
+- Added new seed request `_resolvedWithAttentionRequestId`: customer message triggers
+  `AttentionLevel = Waiting / WaitingDirection = Business`; resolved without message preserves it.
+- Added `Resolved_with_active_attention_present_in_default_list` — resolved + attention stays in default.
+- Added `Resolved_with_active_attention_absent_from_ready_to_close` — resolved + attention excluded from RTC.
+
+### Verified baseline
+
+- `KeepRequestListServiceTests`: 167 passed
+- `KeepRequestListB5Tests`: 25 passed (was 22)

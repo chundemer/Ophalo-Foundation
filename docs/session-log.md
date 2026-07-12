@@ -1,10 +1,10 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-07-12 (S24k / GAP-011 complete — S24 responsive closeout polish next)
+**Last updated:** 2026-07-12 (S24m complete — ADR-437 persistence + tests done, pending commit approval)
 **Branch:** `main` tracking `origin/main`
-**Last green baseline:** S24k — PWA typecheck clean; KeepRequestListServiceTests 167 passed; KeepRequestListB5Tests 22 passed
-**Next free ADR:** ADR-437
-**Current session:** Session 24 — request workbench; S24 responsive QA and polish is the next slice before build-log 081 closeout
+**Last green baseline:** S24m — KeepRequestListServiceTests 167 passed; KeepRequestListB5Tests 25 passed (was 22)
+**Next free ADR:** ADR-438
+**Current session:** Session 24 — request workbench; S24m ADR-437 default-queue filtering complete, awaiting commit approval; S24n customer-page copy captured next
 
 ---
 
@@ -41,7 +41,44 @@ For every implementation slice:
 **Bug/gap tracker:** `docs/pilot-readiness-bug-tracker.md`
 **Foundation roadmap:** `docs/build-log/ophalo-foundation-build-plan-greenfield-boundaries-brownfield-behavior.md` section 9.1
 **Current session:** Session 24 — request workbench 2-column layout and list quick actions
-**Current slice:** S24 responsive QA and polish — closeout of build-log 081
+**Current slice:** S24m — ADR-437 default-queue filtering complete, pending commit approval
+
+### S24m In-Progress Handoff
+
+**What is done (uncommitted, dirty working tree):**
+- `src/OpHalo.Keep.Infrastructure/Persistence/KeepRequestListPersistence.cs` — two edits:
+  1. `ActiveViewKind.Default` query: added `&& (r.Status != Resolved || r.AttentionLevel != None)` to exclude calm Resolved rows.
+  2. `defaultCount` in `GetViewCountsAsync`: same predicate added to keep count in sync.
+
+**S24m is complete and ready to commit.** All tests pass:
+- `KeepRequestListServiceTests`: 167 passed
+- `KeepRequestListB5Tests`: 25 passed (3 new ADR-437 tests + 1 replaced + 21 unchanged)
+
+**Test changes:**
+- Replaced `Resolved_request_included_and_ranked_as_resolved_quiet` with `Calm_resolved_excluded_from_default_list`
+- Added `Calm_resolved_present_in_ready_to_close`
+- Added `Resolved_with_active_attention_present_in_default_list` (new seed: `_resolvedWithAttentionRequestId`)
+- Added `Resolved_with_active_attention_absent_from_ready_to_close`
+
+### S24n Captured Next Issue — Business-Created Customer Page Copy
+
+Customer tracker pages currently use status-only copy, so a business-created request in `received`
+state can show:
+
+```text
+Your request has been received
+```
+
+That wording is appropriate for customer-submitted public intake, but not for team-created requests.
+Next slice should make customer-page copy origin-aware. Preferred direction:
+
+- expose a safe public customer-page discriminator such as `origin: "customer" | "business"` if not
+  already available on the customer page DTO;
+- customer-origin + `received`: keep `Your request has been received`;
+- business-origin + `received`: use `A request page has been created for you` or equivalent;
+- update subtext so it explains that the business created the private page to keep request details
+  and updates in one place;
+- add focused public customer-page API/frontend coverage for both origins.
 
 ### Completed Context
 

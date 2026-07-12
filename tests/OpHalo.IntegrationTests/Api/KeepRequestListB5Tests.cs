@@ -41,6 +41,7 @@ public sealed class KeepRequestListB5Tests : IClassFixture<KeepApiWebFactory>, I
     private Guid _oldIdleRequestId;
     private Guid _resolvedCleanRequestId;
     private Guid _resolvedWithCustomerActivityRequestId;
+    private Guid _resolvedWithAttentionRequestId;
 
     public KeepRequestListB5Tests(KeepApiWebFactory factory)
     {
@@ -276,6 +277,29 @@ public sealed class KeepRequestListB5Tests : IClassFixture<KeepApiWebFactory>, I
             "UPDATE keep_requests SET last_business_activity_at = {0}, last_customer_activity_at = {1} WHERE id = {2}",
             now.AddHours(-2), now.AddHours(-1), _resolvedWithCustomerActivityRequestId);
 
+        // --- 10. Resolved with active attention (ADR-437: in default, not in ready_to_close) ---
+        var resolvedWithAttention = KeepRequest.CreateFromCustomerIntake(
+            _accountId, customer.Id,
+            "Attention Customer", "0412345681", null,
+            "Active attention job", "B5-RAT-001", "b5_rat_page_token", now, 60);
+        db.Set<KeepRequest>().Add(resolvedWithAttention);
+        db.Set<KeepRequestEvent>().Add(
+            KeepRequestEvent.CreateRequestCreated(resolvedWithAttention.Id, _accountId, now));
+        await db.SaveChangesAsync();
+
+        // Customer message triggers business-waiting attention; then resolve without message to preserve it.
+        var customerMsgResult = resolvedWithAttention.AddCustomerMessage(
+            MessageIntent.GeneralMessage, "Still waiting on this.", 60, 240, 60, now);
+        Assert.True(customerMsgResult.IsSuccess);
+        db.Set<KeepRequestEvent>().Add(customerMsgResult.Value);
+        var resolveWithAttn = resolvedWithAttention.ChangeStatus(
+            KeepRequestStatus.Resolved, null, graph.Owner.Id, "B5 Owner", now);
+        Assert.True(resolveWithAttn.IsSuccess);
+        if (resolveWithAttn.Value.StatusChangedEvent is not null)
+            db.Set<KeepRequestEvent>().Add(resolveWithAttn.Value.StatusChangedEvent);
+        await db.SaveChangesAsync();
+        _resolvedWithAttentionRequestId = resolvedWithAttention.Id;
+
         // --- Sessions ---
         _ownerAccountUserId = graph.Owner.Id;
         _ownerCookie    = await _factory.SeedSessionAsync(graph.Owner.Id, _accountId);
@@ -341,16 +365,39 @@ public sealed class KeepRequestListB5Tests : IClassFixture<KeepApiWebFactory>, I
     }
 
     [Fact]
-    public async Task Resolved_request_included_and_ranked_as_resolved_quiet()
+    public async Task Calm_resolved_excluded_from_default_list()
     {
+        // ADR-437: calm Resolved (no active attention) is excluded from Default Queue.
         var body = await GetListAsync(_ownerCookie);
         Assert.NotNull(body);
+        Assert.DoesNotContain(body.Requests, r => r.Id == _resolvedRequestId);
+    }
 
-        var resolved = body.Requests.SingleOrDefault(r => r.Id == _resolvedRequestId);
-        Assert.NotNull(resolved);
-        Assert.Equal("resolved_quiet", resolved.Ranking.RankingGroup);
-        Assert.Equal(8, resolved.Ranking.RankingOrder);
-        Assert.Equal("neutral", resolved.Ranking.Severity);
+    [Fact]
+    public async Task Calm_resolved_present_in_ready_to_close()
+    {
+        // ADR-437: calm Resolved moves to ready_to_close, not Default Queue.
+        var body = await GetRtcListAsync(_ownerCookie);
+        Assert.NotNull(body);
+        Assert.Contains(body.Requests, r => r.Id == _resolvedRequestId);
+    }
+
+    [Fact]
+    public async Task Resolved_with_active_attention_present_in_default_list()
+    {
+        // ADR-437: Resolved with active attention remains in Default Queue.
+        var body = await GetListAsync(_ownerCookie);
+        Assert.NotNull(body);
+        Assert.Contains(body.Requests, r => r.Id == _resolvedWithAttentionRequestId);
+    }
+
+    [Fact]
+    public async Task Resolved_with_active_attention_absent_from_ready_to_close()
+    {
+        // ADR-437: Resolved with active attention must not appear in ready_to_close.
+        var body = await GetRtcListAsync(_ownerCookie);
+        Assert.NotNull(body);
+        Assert.DoesNotContain(body.Requests, r => r.Id == _resolvedWithAttentionRequestId);
     }
 
     [Fact]

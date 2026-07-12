@@ -1962,6 +1962,7 @@ public class KeepRequestListServiceTests
         Assert.False(result.Value.Requests[0].ReadyToClose.HasCustomerActivityAfterResolution);
     }
 
+
     [Fact]
     public async Task ReadyToClose_warning_signal_populated_on_resolved_row_in_default_view()
     {

@@ -66,6 +66,8 @@ const ACTION_COMPOSER_LABELS: Record<string, string> = {
   cancellation_requested: "Request cancellation",
 };
 
+const trackerCanvasStyle = { backgroundColor: "var(--ophalo-canvas)" };
+
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
 function businessInitials(name: string): string {
@@ -329,7 +331,7 @@ export function CustomerTrackerView({
 
   if (expired) {
     return (
-      <main className="min-h-screen bg-[var(--ophalo-canvas)] px-4 py-6 sm:py-10">
+      <main className="min-h-screen px-4 py-6 sm:py-10" style={trackerCanvasStyle}>
         <div className="mx-auto w-full max-w-2xl rounded-2xl border border-[var(--ophalo-border)] bg-card px-5 py-6 shadow-sm">
           <p className="text-base font-semibold text-foreground">This tracker link has expired.</p>
           <p className="mt-2 text-sm leading-6 text-muted-foreground">
@@ -352,7 +354,7 @@ export function CustomerTrackerView({
   // ─── Active page ─────────────────────────────────────────────────────────
 
   return (
-    <main className="min-h-screen bg-[var(--ophalo-canvas)] px-4 py-6 sm:py-10">
+    <main className="min-h-screen px-4 py-6 sm:py-10" style={trackerCanvasStyle}>
       <div className="mx-auto w-full max-w-2xl space-y-4 sm:space-y-5">
 
         {/* §1 — Business identity */}

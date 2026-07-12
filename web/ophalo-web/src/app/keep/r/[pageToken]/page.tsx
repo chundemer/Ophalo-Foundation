@@ -12,6 +12,8 @@ type PageState =
   | { kind: "expired"; businessName: string; referenceCode: string }
   | { kind: "active"; page: CustomerPageData; pageToken: string };
 
+const trackerCanvasStyle = { backgroundColor: "var(--ophalo-canvas)" };
+
 async function fetchPage(pageToken: string): Promise<PageState> {
   const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL;
   if (!apiBase) return { kind: "unavailable" };
@@ -58,7 +60,7 @@ export default async function CustomerTrackerPage({
 
   if (state.kind === "unavailable") {
     return (
-      <main className="bg-background px-4 py-6 sm:py-10">
+      <main className="min-h-screen px-4 py-6 sm:py-10" style={trackerCanvasStyle}>
         <div className="mx-auto w-full max-w-2xl">
           <h1 className="text-2xl font-bold leading-tight tracking-tight text-foreground">
             This link is not available.
@@ -74,7 +76,7 @@ export default async function CustomerTrackerPage({
 
   if (state.kind === "expired") {
     return (
-      <main className="bg-background px-4 py-6 sm:py-10">
+      <main className="min-h-screen px-4 py-6 sm:py-10" style={trackerCanvasStyle}>
         <div className="mx-auto w-full max-w-2xl">
           <h1 className="text-2xl font-bold leading-tight tracking-tight text-foreground">
             This tracker link has expired.
