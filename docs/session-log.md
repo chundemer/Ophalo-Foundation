@@ -1,10 +1,10 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-07-12 (S25c complete — PWA Share Link modal)
+**Last updated:** 2026-07-12 (Session 25 complete — Share Request Link Drawer)
 **Branch:** `main` tracking `origin/main`
-**Last green baseline:** S25a — 1042 unit tests passed, 14 architecture tests passed
+**Last green baseline:** S25d — 1042 unit tests passed, 14 architecture tests passed
 **Next free ADR:** ADR-438
-**Current session:** Session 25 — Share Request Link Drawer
+**Current session:** Session 26 — TBD
 
 ---
 

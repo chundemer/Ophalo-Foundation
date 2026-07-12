@@ -1,7 +1,8 @@
 # Build Log 082 — Session 25: Share Request Link Drawer
 
 **Started:** 2026-07-12
-**Status:** In progress — S25a–S25c complete; S25d pending
+**Completed:** 2026-07-12
+**Status:** Complete — S25a–S25d done; end-to-end QR/SMS test deferred to first deployment
 **Session name:** S25 share request link drawer / zero double-copy sharing
 **Related ADRs:** ADR-381, ADR-382, ADR-432
 **Next free ADR:** ADR-438
