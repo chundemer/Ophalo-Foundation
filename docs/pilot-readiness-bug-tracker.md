@@ -3,9 +3,9 @@
 **Created:** 2026-07-02
 **Purpose:** Live tracker for pilot-blocking or pilot-relevant bugs/gaps discovered during Session 14.
 **Source:** Promoted from the Pre-S14e bug register in `docs/build-log/068-session-14-ophalo-web-front-door.md`.
-**Current active item:** GAP-011 — External contact logging duplicated and closeout rows over-prune communication actions.
-**Recently resolved:** GAP-010 — Ready to Close rows leaked communication next-actions (S24j).
-**Previously resolved:** GAP-009 — Staff operational signals why/next-action audit (S24i).
+**Current active item:** GAP-004 — Browser back / refresh does not preserve app location (P2, pre-pilot known gap per ADR-427).
+**Recently resolved:** GAP-011 — External contact logging duplicated and closeout rows over-prune communication actions (S24k).
+**Previously resolved:** GAP-010 — Ready to Close rows leaked communication next-actions (S24j).
 
 This document is the current working tracker. Historical discovery notes stay in the build logs, but
 triage, status, and next-session ordering should happen here.
@@ -365,7 +365,7 @@ Acceptance criteria:
 
 ### GAP-011 — External contact logging duplicated and closeout rows over-prune communication actions
 
-**Status:** Open
+**Status:** Resolved in S24k (2026-07-12)
 **Severity:** P1
 **Area:** `ophalo-app` shared action modals; request list row actions; request action metadata/policy
 **Decision:** ADR-434, ADR-435, ADR-436

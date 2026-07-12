@@ -31,6 +31,7 @@ public sealed record KeepPublicCustomerContext(
     DateTime? FeedbackSubmittedAtUtc,
     bool IsOffSeason,
     IntakeUrgency IntakeUrgency,
+    KeepRequestOrigin Origin,
     // Null when IsExpired — the tombstone cannot perform mutations and must not
     // disclose concurrency state (ADR-333).
     Guid? Version);

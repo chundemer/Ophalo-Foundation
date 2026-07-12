@@ -30,6 +30,7 @@ export interface CustomerPageData {
   allowedActions: string[] | null;
   version: string | null;
   intakeUrgency: string | null;
+  origin: "customer" | "business" | null;
 }
 
 // ─── Constants ──────────────────────────────────────────────────────────────
@@ -77,7 +78,10 @@ function businessInitials(name: string): string {
   return (words[0][0] + words[1][0]).toUpperCase();
 }
 
-function statusHeadline(status: string): string {
+function statusHeadline(status: string, origin: string | null): string {
+  if (status === "received" && origin === "business") {
+    return "We've created a request for you";
+  }
   switch (status) {
     case "received":         return "Your request has been received";
     case "scheduled":        return "Your request is scheduled";
@@ -90,7 +94,10 @@ function statusHeadline(status: string): string {
   }
 }
 
-function statusSubtext(status: string, businessName: string): string {
+function statusSubtext(status: string, businessName: string, origin: string | null): string {
+  if (status === "received" && origin === "business") {
+    return `${businessName} created this page to keep your request details and updates in one place. Save this link to return anytime.`;
+  }
   switch (status) {
     case "received":
     case "scheduled":
@@ -373,10 +380,10 @@ export function CustomerTrackerView({
                 Current Status
               </p>
               <h1 className="mt-1 text-2xl font-bold leading-tight text-foreground sm:text-[26px]">
-                {statusHeadline(page.status)}
+                {statusHeadline(page.status, page.origin)}
               </h1>
               <p className="mt-1.5 text-sm text-muted-foreground">
-                {statusSubtext(page.status, page.businessName)}
+                {statusSubtext(page.status, page.businessName, page.origin)}
               </p>
             </div>
             <button

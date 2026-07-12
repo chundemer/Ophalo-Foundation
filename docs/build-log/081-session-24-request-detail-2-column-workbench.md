@@ -1,7 +1,7 @@
 # Build Log 081 — Session 24: Request Workbench 2-Column Layout And List Quick Actions
 
 **Started:** 2026-07-11
-**Status:** S24m complete — ADR-437 persistence + integration tests done, pending commit approval
+**Status:** Session 24 complete — all slices committed (S24a–S24n)
 **Session name:** S24 request workbench 2-column layout and list quick actions
 **Related ADRs:** ADR-377, ADR-380, ADR-382, ADR-383, ADR-433, ADR-434, ADR-435, ADR-436, ADR-437
 **Next free ADR before ADR-435:** ADR-435
@@ -1303,3 +1303,40 @@ Run web/ophalo-app typecheck before finishing when dependencies are available.
 
 - `KeepRequestListServiceTests`: 167 passed
 - `KeepRequestListB5Tests`: 25 passed (was 22)
+
+---
+
+## S24n — Origin-Aware Customer Page Copy (2026-07-12)
+
+**Slice:** S24n — expose `origin` on customer page DTO; origin-aware headline and subtext
+**Status:** Complete — tests passing, pending commit approval
+
+### Changes
+
+**`src/OpHalo.Keep.Application/Requests/KeepPublicCustomerContext.cs`**
+- Added `KeepRequestOrigin Origin` parameter.
+
+**`src/OpHalo.Keep.Application/Requests/KeepPublicCustomerAccessGuard.cs`**
+- Passes `request.Origin` into `KeepPublicCustomerContext`.
+
+**`src/OpHalo.Keep.Application/Requests/KeepCustomerPageResult.cs`**
+- Added `string? Origin` (null on expired tombstone, consistent with other active-only fields).
+
+**`src/OpHalo.Keep.Application/Requests/KeepCustomerPageMapper.cs`**
+- `MapOrigin` helper maps `KeepRequestOrigin` → `"customer"` / `"business"` (exhaustive switch).
+- `BuildActiveResult`: adds `Origin: MapOrigin(context.Origin)`.
+- `BuildExpiredResult`: adds `Origin: null` (tombstone never exposes origin).
+
+**`web/ophalo-web/src/app/keep/r/[pageToken]/CustomerTrackerView.tsx`**
+- Added `origin: "customer" | "business" | null` to `CustomerPageData`.
+- `statusHeadline(status, origin)`: business + received → "We've created a request for you".
+- `statusSubtext(status, businessName, origin)`: business + received → explains business created the page.
+- Call sites updated to pass `page.origin`.
+
+**`tests/OpHalo.IntegrationTests/Api/KeepCustomerPageTests.cs`**
+- `GetCustomerPage_CustomerIntakeRequest_ExposesOriginCustomer`: verifies `origin = "customer"`.
+- `GetCustomerPage_BusinessCreatedRequest_ExposesOriginBusiness`: seeds `CreateByBusiness` request, verifies `origin = "business"`.
+
+### Verified baseline
+
+- `KeepCustomerPageTests`: 14 passed (was 12)

@@ -351,4 +351,54 @@ public sealed class KeepCustomerPageTests : IClassFixture<KeepApiWebFactory>, IA
         // Version must still be exposed (not the tombstone shape).
         Assert.True(Guid.TryParseExact(body.GetProperty("version").GetString(), "D", out _));
     }
+
+    // =========================================================================
+    // S24n: origin field exposed with correct value per request creation path
+    // =========================================================================
+
+    [Fact]
+    public async Task GetCustomerPage_CustomerIntakeRequest_ExposesOriginCustomer()
+    {
+        var response = await _client.GetAsync($"/keep/r/{PageToken}");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("customer", body.GetProperty("origin").GetString());
+    }
+
+    [Fact]
+    public async Task GetCustomerPage_BusinessCreatedRequest_ExposesOriginBusiness()
+    {
+        const string businessPageToken = "business_created_page_token_s24n";
+
+        await using (var scope = _factory.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+            var accountId = await db.Set<KeepRequest>()
+                .Where(r => r.PageToken == PageToken)
+                .Select(r => r.AccountId)
+                .FirstAsync();
+
+            var customer = KeepCustomer.Create(accountId, "Bob Jones", "0400000001");
+            db.Set<KeepCustomer>().Add(customer);
+            await db.SaveChangesAsync();
+
+            var now = DateTime.UtcNow;
+            var request = KeepRequest.CreateByBusiness(
+                accountId, customer.Id,
+                "Bob Jones", "0400000001", null,
+                "Office leak follow-up", "BIZ0001", businessPageToken, now,
+                OpHalo.Keep.Core.Entities.Enums.KeepRequestSource.Phone);
+            db.Set<KeepRequest>().Add(request);
+            await db.SaveChangesAsync();
+        }
+
+        var response = await _client.GetAsync($"/keep/r/{businessPageToken}");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("business", body.GetProperty("origin").GetString());
+    }
 }

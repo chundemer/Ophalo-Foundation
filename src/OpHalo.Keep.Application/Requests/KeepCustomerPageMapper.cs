@@ -28,7 +28,8 @@ internal static class KeepCustomerPageMapper
             Events: null,
             AllowedActions: null,
             Version: null,
-            IntakeUrgency: null);
+            IntakeUrgency: null,
+            Origin: null);
 
     internal static KeepCustomerPageResult BuildActiveResult(
         KeepPublicCustomerContext context,
@@ -52,13 +53,21 @@ internal static class KeepCustomerPageMapper
                 .ToList(),
             AllowedActions: ComputeAllowedActions(context.Status, context.FeedbackSubmittedAtUtc.HasValue, context.IsOffSeason),
             Version: context.Version,
-            IntakeUrgency: MapIntakeUrgency(context.IntakeUrgency));
+            IntakeUrgency: MapIntakeUrgency(context.IntakeUrgency),
+            Origin: MapOrigin(context.Origin));
 
     private static string? MapIntakeUrgency(IntakeUrgency urgency) => urgency switch
     {
         IntakeUrgency.Urgent => "urgent",
         IntakeUrgency.Soon   => "soon",
         _                    => null
+    };
+
+    private static string MapOrigin(KeepRequestOrigin origin) => origin switch
+    {
+        KeepRequestOrigin.Customer => "customer",
+        KeepRequestOrigin.Business => "business",
+        _ => throw new InvalidOperationException($"Unknown KeepRequestOrigin: {origin}")
     };
 
     internal static string MapStatus(KeepRequestStatus status) => status switch

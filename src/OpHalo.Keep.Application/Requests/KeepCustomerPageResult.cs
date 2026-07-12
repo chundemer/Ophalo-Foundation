@@ -23,7 +23,8 @@ public sealed record KeepCustomerPageResult(
     IReadOnlyList<KeepCustomerPageEventItem>? Events,
     IReadOnlyList<string>? AllowedActions,
     Guid? Version,
-    string? IntakeUrgency);
+    string? IntakeUrgency,
+    string? Origin);
 
 /// <summary>
 /// A single entry in the customer-facing event timeline.

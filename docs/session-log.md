@@ -1,10 +1,10 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-07-12 (S24m complete — ADR-437 persistence + tests done, pending commit approval)
+**Last updated:** 2026-07-12 (Session 24 complete — S24n committed; GAP-011 resolved; Session 24 closed out)
 **Branch:** `main` tracking `origin/main`
-**Last green baseline:** S24m — KeepRequestListServiceTests 167 passed; KeepRequestListB5Tests 25 passed (was 22)
+**Last green baseline:** S24n — KeepCustomerPageTests 14 passed (was 12)
 **Next free ADR:** ADR-438
-**Current session:** Session 24 — request workbench; S24m ADR-437 default-queue filtering complete, awaiting commit approval; S24n customer-page copy captured next
+**Current session:** Session 25 — TBD (candidates: build-log 078 Resend email / build-log 077 pre-deployment cleanup)
 
 ---
 
@@ -34,51 +34,23 @@ For every implementation slice:
 
 ## Current Work
 
-**Current build log:** `docs/build-log/081-session-24-request-detail-2-column-workbench.md`
-**Latest completed build log:** `docs/build-log/080-session-23-work-completed-closeout-ux.md`
-**Last completed prior-session build log:** `docs/build-log/075-session-21-attention-guidance-resolution-metadata.md`
+**Current build log:** `docs/build-log/081-session-24-request-detail-2-column-workbench.md` (complete)
+**Latest completed build log:** `docs/build-log/081-session-24-request-detail-2-column-workbench.md`
 **Readiness working doc:** `docs/pilot-readiness-decision-questions.md`
 **Bug/gap tracker:** `docs/pilot-readiness-bug-tracker.md`
 **Foundation roadmap:** `docs/build-log/ophalo-foundation-build-plan-greenfield-boundaries-brownfield-behavior.md` section 9.1
-**Current session:** Session 24 — request workbench 2-column layout and list quick actions
-**Current slice:** S24m — ADR-437 default-queue filtering complete, pending commit approval
+**Current session:** Session 25 — TBD
 
-### S24m In-Progress Handoff
+### Session 24 Complete
 
-**What is done (uncommitted, dirty working tree):**
-- `src/OpHalo.Keep.Infrastructure/Persistence/KeepRequestListPersistence.cs` — two edits:
-  1. `ActiveViewKind.Default` query: added `&& (r.Status != Resolved || r.AttentionLevel != None)` to exclude calm Resolved rows.
-  2. `defaultCount` in `GetViewCountsAsync`: same predicate added to keep count in sync.
+All S24 slices committed. Session 24 covered request workbench 2-column layout, list quick actions,
+signal clarity, closeout UX, shared external contact form, ADR-437 default queue filtering, and
+origin-aware customer page copy. Full implementation history in build-log 081.
 
-**S24m is complete and ready to commit.** All tests pass:
-- `KeepRequestListServiceTests`: 167 passed
-- `KeepRequestListB5Tests`: 25 passed (3 new ADR-437 tests + 1 replaced + 21 unchanged)
-
-**Test changes:**
-- Replaced `Resolved_request_included_and_ranked_as_resolved_quiet` with `Calm_resolved_excluded_from_default_list`
-- Added `Calm_resolved_present_in_ready_to_close`
-- Added `Resolved_with_active_attention_present_in_default_list` (new seed: `_resolvedWithAttentionRequestId`)
-- Added `Resolved_with_active_attention_absent_from_ready_to_close`
-
-### S24n Captured Next Issue — Business-Created Customer Page Copy
-
-Customer tracker pages currently use status-only copy, so a business-created request in `received`
-state can show:
-
-```text
-Your request has been received
-```
-
-That wording is appropriate for customer-submitted public intake, but not for team-created requests.
-Next slice should make customer-page copy origin-aware. Preferred direction:
-
-- expose a safe public customer-page discriminator such as `origin: "customer" | "business"` if not
-  already available on the customer page DTO;
-- customer-origin + `received`: keep `Your request has been received`;
-- business-origin + `received`: use `A request page has been created for you` or equivalent;
-- update subtext so it explains that the business created the private page to keep request details
-  and updates in one place;
-- add focused public customer-page API/frontend coverage for both origins.
+**Candidates for Session 25:**
+1. `docs/build-log/078-customer-tracker-link-email-and-resend-configuration.md` — Resend email / tracker-link confirmation flow
+2. `docs/build-log/077-pre-deployment-cleanup-and-file-decomposition.md` — pre-deployment cleanup (unblocked now that customer page work is done)
+3. GAP-004 — browser back/refresh PWA navigation (P2, known pre-pilot gap per ADR-427)
 
 ### Completed Context
 
