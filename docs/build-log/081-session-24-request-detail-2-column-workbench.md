@@ -1,7 +1,7 @@
 # Build Log 081 — Session 24: Request Workbench 2-Column Layout And List Quick Actions
 
 **Started:** 2026-07-11
-**Status:** GAP-011 / S24k queued — shared external-contact form and post-work row actions next
+**Status:** S24k / GAP-011 complete (`0d03822`) — S24 responsive QA and polish next
 **Session name:** S24 request workbench 2-column layout and list quick actions
 **Related ADRs:** ADR-377, ADR-380, ADR-382, ADR-383, ADR-433, ADR-434, ADR-435, ADR-436
 **Next free ADR before ADR-435:** ADR-435
@@ -1092,11 +1092,11 @@ different row surface, not the current `RequestRow.tsx` source.
 
 ---
 
-## S24k — GAP-011 Shared External Contact Form And Post-Work Row Actions (Queued)
+## S24k — GAP-011 Shared External Contact Form And Post-Work Row Actions (2026-07-12)
 
 **Slice:** S24k — shared external-contact logging UX and calm work-completed row action correction
 **Tracker:** `docs/pilot-readiness-bug-tracker.md` GAP-011
-**Status:** Queued / next implementation slice
+**Status:** Complete — `0d03822`
 
 ### Why this is needed
 
@@ -1166,6 +1166,31 @@ Do not loosen terminal protections for:
   deliberately added.
 - PWA typecheck passes.
 - Targeted backend list/action-policy tests are updated if server metadata/policy changes.
+
+### What was built
+
+**Architecture decision:** Shared `ExternalContactForm` (form only, not modal). Form owns
+direction/channel/outcome/follow-up/summary state and ADR-216 payload construction. Shells
+(`RequestRowActionModal`, `RequestDetail.LogContactModal`) own API calls, conflict/error state, and
+success handling. Detail shell keeps phone copy/call affordance via `onChannelChange` callback.
+
+**ADR-216 payload corrections applied to the shared form:**
+- `requiresBusinessFollowUp` now emitted for all inbound contacts, outbound SMS/email, and outbound
+  phone with `spoke_with_customer`/`left_voicemail`; forbidden for `no_answer`/`wrong_number`.
+- Summary required (with dynamic label) for inbound and outbound SMS/email.
+
+**Backend fix (GAP-011):** Removed early return in `BuildQuickActions` after `CanClose`. Calm
+resolved rows now emit `contact_customer`, `post_customer_update`, `add_internal_note`, then
+`close_request` rightmost (terminal-action-last). `nextActionCue` in `RequestRow.tsx` checks for
+`close_request` by presence rather than position so the triage cue remains correct.
+
+**Files changed:** `ExternalContactForm.tsx` (new), `RequestRowActionModal.tsx`,
+`RequestDetail.tsx`, `RequestRow.tsx`, `mocks/fixtures.ts` (close_request label + executionMode
+corrected), `GetKeepRequestListService.cs`, `KeepRequestListB5Tests.cs`,
+`KeepRequestListServiceTests.cs`.
+
+**Verified:** PWA typecheck clean; KeepRequestListServiceTests 167 passed; KeepRequestListB5Tests
+22 passed.
 
 ---
 

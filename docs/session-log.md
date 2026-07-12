@@ -1,10 +1,10 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-07-12 (GAP-011 logged — shared external-contact form + post-work row actions next)
+**Last updated:** 2026-07-12 (S24k / GAP-011 complete — S24 responsive closeout polish next)
 **Branch:** `main` tracking `origin/main`
-**Last green baseline:** S24j — PWA typecheck clean; KeepRequestListServiceTests 167 passed; KeepRequestListB5Tests 22 passed
+**Last green baseline:** S24k — PWA typecheck clean; KeepRequestListServiceTests 167 passed; KeepRequestListB5Tests 22 passed
 **Next free ADR:** ADR-437
-**Current session:** Session 24 — request workbench; GAP-011 is the next implementation slice before S24 responsive closeout polish
+**Current session:** Session 24 — request workbench; S24 responsive QA and polish is the next slice before build-log 081 closeout
 
 ---
 
@@ -41,7 +41,7 @@ For every implementation slice:
 **Bug/gap tracker:** `docs/pilot-readiness-bug-tracker.md`
 **Foundation roadmap:** `docs/build-log/ophalo-foundation-build-plan-greenfield-boundaries-brownfield-behavior.md` section 9.1
 **Current session:** Session 24 — request workbench 2-column layout and list quick actions
-**Current slice:** S24k / GAP-011 — shared external-contact form and post-work row action correction
+**Current slice:** S24 responsive QA and polish — closeout of build-log 081
 
 ### Completed Context
 
@@ -190,12 +190,12 @@ Build-log 081 is the current decision/handoff document:
 6. **GAP-010 — Ready to Close row action leak:** resolved in S24j after screenshot review; closeable
    work-completed rows now emit `close_request`, show `Next: Close request`, and display a neutral
    `Review closeout` detail shortcut instead of communication next-actions.
-7. **GAP-011 / S24k — Shared external-contact form + post-work row action correction:** active next.
-   Use the request-list external-contact modal as the shared UX for request list and request detail.
-   Preserve `Log contact`, `Update customer`, and `Add note` on calm work-completed rows when server
-   metadata allows them; keep `Next: Close request` and a neutral `Review closeout` detail shortcut.
-8. **S24h/S24 closeout — Responsive QA and polish:** resume after GAP-011 is resolved, then close
-   build-log 081.
+7. **GAP-011 / S24k — Shared external-contact form + post-work row action correction:** complete
+   (`0d03822`). `ExternalContactForm` shared component enforces full ADR-216 payload rules.
+   `BuildQuickActions` early-return removed; calm resolved rows emit `contact_customer`,
+   `post_customer_update`, `add_internal_note`, then `close_request` rightmost. `nextActionCue`
+   checks for `close_request` by presence. Stale mock fixture corrected.
+8. **S24 closeout — Responsive QA and polish:** next — resume and close build-log 081.
 9. After S24 complete: **077** pre-deployment file decomposition or **078** tracker-link email.
 
 ### Surface Boundary
