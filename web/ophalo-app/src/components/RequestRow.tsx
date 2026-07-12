@@ -34,6 +34,9 @@ const NEXT_ACTION_MAP: Record<string, string> = {
 };
 
 function nextActionCue(quickActions: KeepQuickAction[]): string | null {
+  if (quickActions.some((a) => a.code === "close_request")) {
+    return "Close request";
+  }
   const labels = quickActions
     .filter((a) => a.code !== "open_detail" && NEXT_ACTION_MAP[a.code] !== undefined)
     .slice(0, 2)

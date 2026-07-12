@@ -864,12 +864,6 @@ public sealed class GetKeepRequestListService(
 
         var actions = new List<KeepQuickAction> { openDetail };
 
-        if (actionDecision.CanClose)
-        {
-            actions.Add(QuickActionDefs.CloseRequest);
-            return actions;
-        }
-
         // CanLogExternalContact gates the contact quick action (ADR-328).
         var hasContactMethods = !string.IsNullOrWhiteSpace(r.CustomerPhone)
             || !string.IsNullOrWhiteSpace(r.CustomerEmail);
@@ -896,6 +890,10 @@ public sealed class GetKeepRequestListService(
         var isFirstResponseOverdueNoResponse = firstResponseOverdue && r.FirstRespondedAtUtc is null;
         if (actionDecision.CanAcknowledgeAttention && !isFirstResponseOverdueNoResponse)
             actions.Add(QuickActionDefs.AcknowledgeAttention);
+
+        // Terminal action rightmost: triage cue appears after communication/admin tools (GAP-011).
+        if (actionDecision.CanClose)
+            actions.Add(QuickActionDefs.CloseRequest);
 
         return actions;
     }

@@ -28,6 +28,7 @@ import { ApiError } from "../lib/apiClient";
 import { NeedsShareBanner } from "../components/NeedsShareBanner";
 import { KeepButton } from "../components/keep/KeepButton";
 import { KeepBadge, type KeepBadgeVariant } from "../components/keep/KeepBadge";
+import { ExternalContactForm } from "../components/ExternalContactForm";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -1336,36 +1337,19 @@ function LogContactModal({
   onDetailUpdated,
   onClose,
 }: LogContactModalProps) {
-  const [direction, setDirection] = useState(initialDirection);
   const [channel, setChannel] = useState(initialChannel);
-  const [outcome, setOutcome] = useState("");
-  const [requiresFollowUp, setRequiresFollowUp] = useState(false);
-  const [summary, setSummary] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [conflictDisabled, setConflictDisabled] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [phoneCopied, setPhoneCopied] = useState(false);
 
-  const isOutbound = direction === "outbound";
-  const maxSummary = detail.validation.externalContactSummaryMaxLength;
   const showPhone = channel === "phone" && !!detail.customerPhone;
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
+  async function handleSubmit(body: Parameters<typeof api.logExternalContact>[1]) {
     if (isSubmitting || conflictDisabled) return;
     setIsSubmitting(true);
     setError(null);
     try {
-      const body: {
-        direction: string;
-        channel: string;
-        outcome?: string;
-        requiresBusinessFollowUp?: boolean;
-        summary?: string;
-      } = { direction, channel };
-      if (isOutbound && outcome) body.outcome = outcome;
-      if (!isOutbound) body.requiresBusinessFollowUp = requiresFollowUp;
-      if (summary.trim()) body.summary = summary.trim();
       const updated = await api.logExternalContact(requestId, body, detail.version);
       onDetailUpdated(updated);
       onClose();
@@ -1405,7 +1389,7 @@ function LogContactModal({
           Save a Keep record of this contact. Opening the phone app is a separate step.
         </p>
 
-        {/* Phone number + secondary utilities — only for phone channel */}
+        {/* Phone number + utilities — detail-only affordance, synced via onChannelChange */}
         {showPhone && (
           <div className="flex flex-wrap items-center gap-3 mb-4 rounded-lg border border-[var(--ophalo-border)] bg-[var(--ophalo-canvas)] px-3 py-2.5">
             <span className="flex items-center gap-1.5 text-sm font-semibold text-[var(--ophalo-ink)]">
@@ -1434,113 +1418,18 @@ function LogContactModal({
             </div>
           </div>
         )}
-        {error && (
-          <div
-            className={`mb-3 rounded-lg p-3 text-xs ${
-              conflictDisabled
-                ? "bg-[var(--ophalo-attention-bg)] text-[var(--ophalo-attention)]"
-                : "bg-[var(--ophalo-danger-bg)] text-[var(--ophalo-danger)]"
-            }`}
-          >
-            {error}
-          </div>
-        )}
-        <form onSubmit={(e) => void handleSubmit(e)} className="space-y-3">
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label htmlFor="log-direction" className="block text-xs font-medium text-[var(--ophalo-ink)] mb-1">
-                Direction
-              </label>
-              <select
-                id="log-direction"
-                value={direction}
-                onChange={(e) => {
-                  setDirection(e.target.value);
-                  setOutcome("");
-                  setRequiresFollowUp(false);
-                }}
-                disabled={conflictDisabled}
-                className={INPUT_CLS}
-              >
-                <option value="outbound">Outbound</option>
-                <option value="inbound">Inbound</option>
-              </select>
-            </div>
-            <div>
-              <label htmlFor="log-channel" className="block text-xs font-medium text-[var(--ophalo-ink)] mb-1">
-                Channel
-              </label>
-              <select
-                id="log-channel"
-                value={channel}
-                onChange={(e) => setChannel(e.target.value)}
-                disabled={conflictDisabled}
-                className={INPUT_CLS}
-              >
-                <option value="phone">Phone</option>
-                <option value="sms">SMS</option>
-                <option value="email">Email</option>
-                <option value="in_person">In Person</option>
-                <option value="other">Other</option>
-              </select>
-            </div>
-          </div>
-          {isOutbound && (
-            <div>
-              <label htmlFor="log-outcome" className="block text-xs font-medium text-[var(--ophalo-ink)] mb-1">
-                Outcome (optional)
-              </label>
-              <select
-                id="log-outcome"
-                value={outcome}
-                onChange={(e) => setOutcome(e.target.value)}
-                disabled={conflictDisabled}
-                className={INPUT_CLS}
-              >
-                <option value="">— not specified —</option>
-                <option value="spoke_with_customer">Spoke with customer</option>
-                <option value="left_voicemail">Left voicemail</option>
-                <option value="no_answer">No answer</option>
-                <option value="wrong_number">Wrong number</option>
-              </select>
-            </div>
-          )}
-          {!isOutbound && (
-            <label className="flex items-center gap-2 text-sm text-[var(--ophalo-ink)]">
-              <input
-                type="checkbox"
-                checked={requiresFollowUp}
-                onChange={(e) => setRequiresFollowUp(e.target.checked)}
-                disabled={conflictDisabled}
-                className={`rounded border-[var(--ophalo-border)] ${FOCUS_RING}`}
-              />
-              Requires business follow-up
-            </label>
-          )}
-          <div>
-            <label htmlFor="log-summary" className="block text-xs font-medium text-[var(--ophalo-ink)] mb-1">
-              Summary (optional)
-            </label>
-            <textarea
-              id="log-summary"
-              value={summary}
-              onChange={(e) => setSummary(e.target.value)}
-              maxLength={maxSummary}
-              disabled={conflictDisabled}
-              placeholder="Brief notes about this contact…"
-              rows={3}
-              className={`${INPUT_CLS} resize-none`}
-            />
-          </div>
-          <div className="flex gap-2 pt-1">
-            <KeepButton type="button" variant="secondary" onClick={onClose} disabled={isSubmitting} className="flex-1">
-              Cancel
-            </KeepButton>
-            <KeepButton type="submit" variant="primary" disabled={isSubmitting || conflictDisabled} className="flex-1">
-              {isSubmitting ? "Saving…" : "Save log"}
-            </KeepButton>
-          </div>
-        </form>
+
+        <ExternalContactForm
+          initialDirection={initialDirection as "outbound" | "inbound"}
+          initialChannel={initialChannel}
+          maxSummaryLength={detail.validation.externalContactSummaryMaxLength}
+          loading={isSubmitting}
+          disabled={conflictDisabled}
+          error={error}
+          onSubmit={(body) => void handleSubmit(body)}
+          onCancel={onClose}
+          onChannelChange={setChannel}
+        />
       </div>
     </div>
   );

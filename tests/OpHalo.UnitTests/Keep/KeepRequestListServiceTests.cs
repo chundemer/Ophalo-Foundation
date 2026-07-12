@@ -1887,7 +1887,7 @@ public class KeepRequestListServiceTests
     }
 
     [Fact]
-    public async Task ReadyToClose_resolved_clean_row_exposes_close_request_only()
+    public async Task ReadyToClose_resolved_clean_row_exposes_close_request_and_post_work_actions()
     {
         var request = MakeResolvedRequest();
         var sut = BuildSut(HappyPathPersistence([request]));
@@ -1896,7 +1896,8 @@ public class KeepRequestListServiceTests
 
         Assert.True(result.IsSuccess);
         var actionCodes = result.Value.Requests.Single().Actions.QuickActions.Select(a => a.Code).ToList();
-        Assert.Equal(["open_detail", "close_request"], actionCodes);
+        // GAP-011: close_request rightmost after post-work tools.
+        Assert.Equal(["open_detail", "contact_customer", "post_customer_update", "add_internal_note", "close_request"], actionCodes);
     }
 
     [Fact]

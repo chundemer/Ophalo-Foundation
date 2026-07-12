@@ -588,10 +588,10 @@ export const mockRequestSummaries: KeepRequestSummary[] = [
         },
         {
           code: "close_request",
-          label: "Close Out",
+          label: "Close request",
           visibility: "internal",
           requiresVersion: true,
-          executionMode: "modal",
+          executionMode: "detail",
           clearsAttention: false,
           countsFirstResponse: false,
           changesStatus: true,

@@ -1,32 +1,14 @@
 import { useState, useEffect } from "react";
 import { X } from "lucide-react";
 import { api, ApiError } from "../lib/apiClient";
-import type { KeepRequestSummary, KeepQuickAction } from "../lib/apiClient";
+import type { KeepRequestSummary, KeepQuickAction, LogExternalContactBody } from "../lib/apiClient";
 import { KeepBadge } from "./keep/KeepBadge";
 import { KeepButton } from "./keep/KeepButton";
+import { ExternalContactForm } from "./ExternalContactForm";
 
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
-
-const OUTBOUND_CHANNELS = [
-  { value: "phone", label: "Phone call" },
-  { value: "sms", label: "Text/SMS" },
-  { value: "email", label: "Email" },
-];
-
-const INBOUND_CHANNELS = [
-  ...OUTBOUND_CHANNELS,
-  { value: "in_person", label: "In person" },
-  { value: "other", label: "Other" },
-];
-
-const PHONE_OUTCOMES = [
-  { value: "spoke_with_customer", label: "Spoke with customer" },
-  { value: "left_voicemail", label: "Left voicemail" },
-  { value: "no_answer", label: "No answer" },
-  { value: "wrong_number", label: "Wrong number" },
-];
 
 const ATTENTION_REASON_LABELS: Record<string, string> = {
   complaint: "Complaint",
@@ -238,43 +220,17 @@ function PostCustomerUpdateBody({ row, onClose, onSuccess }: BodyProps) {
 // ---------------------------------------------------------------------------
 
 function ContactCustomerBody({ row, onClose, onSuccess }: BodyProps) {
-  const [direction, setDirection] = useState<"outbound" | "inbound">("outbound");
-  const [channel, setChannel] = useState("phone");
-  const [outcome, setOutcome] = useState(PHONE_OUTCOMES[0].value);
-  const [summary, setSummary] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [conflict, setConflict] = useState(false);
 
-  const channels = direction === "outbound" ? OUTBOUND_CHANNELS : INBOUND_CHANNELS;
-  const showOutcome = direction === "outbound" && channel === "phone";
-
-  function handleDirectionChange(next: "outbound" | "inbound") {
-    setDirection(next);
-    // If current channel is not valid for inbound→outbound switch, reset to phone
-    const nextChannels = next === "outbound" ? OUTBOUND_CHANNELS : INBOUND_CHANNELS;
-    if (!nextChannels.some((c) => c.value === channel)) {
-      setChannel("phone");
-    }
-  }
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
+  async function handleSubmit(body: LogExternalContactBody) {
     if (submitting) return;
     setSubmitting(true);
     setError(null);
     setConflict(false);
     try {
-      await api.logExternalContact(
-        row.id,
-        {
-          direction,
-          channel,
-          outcome: showOutcome ? outcome : undefined,
-          summary: summary.trim() || undefined,
-        },
-        row.version,
-      );
+      await api.logExternalContact(row.id, body, row.version);
       onSuccess();
     } catch (err) {
       setSubmitting(false);
@@ -287,97 +243,20 @@ function ContactCustomerBody({ row, onClose, onSuccess }: BodyProps) {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+    <>
       <KeepBadge variant="default">Internal record — not visible to customer</KeepBadge>
-
-      {/* Direction */}
-      <div className="flex flex-col gap-1.5">
-        <span className="text-sm font-medium text-[var(--ophalo-ink)]">Direction</span>
-        <div className="flex rounded-lg border border-[var(--ophalo-border)] overflow-hidden">
-          {(["outbound", "inbound"] as const).map((d) => (
-            <button
-              key={d}
-              type="button"
-              onClick={() => handleDirectionChange(d)}
-              className={`flex-1 py-2 text-sm font-medium transition-colors ${FOCUS_RING} ${
-                direction === d
-                  ? "bg-[var(--ophalo-navy)] text-white"
-                  : "bg-[var(--ophalo-card)] text-[var(--ophalo-muted)] hover:text-[var(--ophalo-ink)]"
-              }`}
-            >
-              {d === "outbound" ? "We contacted them" : "They contacted us"}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Channel */}
-      <div className="flex flex-col gap-1.5">
-        <label className="text-sm font-medium text-[var(--ophalo-ink)]">Channel</label>
-        <select
-          value={channel}
-          onChange={(e) => setChannel(e.target.value)}
-          className={INPUT_BASE}
-          disabled={submitting}
-        >
-          {channels.map((c) => (
-            <option key={c.value} value={c.value}>{c.label}</option>
-          ))}
-        </select>
-      </div>
-
-      {/* Outcome — outbound phone only */}
-      {showOutcome && (
-        <div className="flex flex-col gap-1.5">
-          <label className="text-sm font-medium text-[var(--ophalo-ink)]">Outcome</label>
-          <select
-            value={outcome}
-            onChange={(e) => setOutcome(e.target.value)}
-            className={INPUT_BASE}
-            disabled={submitting}
-          >
-            {PHONE_OUTCOMES.map((o) => (
-              <option key={o.value} value={o.value}>{o.label}</option>
-            ))}
-          </select>
-        </div>
-      )}
-
-      {/* Summary */}
-      <div className="flex flex-col gap-1.5">
-        <label className="text-sm font-medium text-[var(--ophalo-ink)]">
-          Note <span className="text-[var(--ophalo-muted)] font-normal">(optional)</span>
-        </label>
-        <textarea
-          value={summary}
-          onChange={(e) => setSummary(e.target.value)}
-          placeholder="Brief summary of the contact…"
-          rows={3}
-          className={INPUT_BASE}
-          disabled={submitting}
+      <div className="mt-4">
+        <ExternalContactForm
+          loading={submitting}
+          disabled={conflict}
+          error={conflict
+            ? "This request was updated by someone else. Your notes are preserved — open detail to continue."
+            : error}
+          onSubmit={(body) => void handleSubmit(body)}
+          onCancel={onClose}
         />
       </div>
-
-      {conflict && (
-        <ConflictMessage>
-          This request was updated by someone else. Your notes are preserved — open detail to continue.
-        </ConflictMessage>
-      )}
-      {error && <ErrorMessage>{error}</ErrorMessage>}
-
-      <div className="flex items-center justify-end gap-3 pt-1">
-        <button
-          type="button"
-          onClick={onClose}
-          className={`text-sm text-[var(--ophalo-muted)] hover:text-[var(--ophalo-ink)] transition-colors rounded ${FOCUS_RING}`}
-        >
-          Cancel
-        </button>
-        <KeepButton variant="primary" type="submit" disabled={submitting}>
-          {submitting ? "Logging…" : "Log contact"}
-        </KeepButton>
-      </div>
-    </form>
+    </>
   );
 }
 

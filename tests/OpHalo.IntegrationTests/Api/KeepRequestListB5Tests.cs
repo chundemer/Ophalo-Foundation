@@ -592,14 +592,15 @@ public sealed class KeepRequestListB5Tests : IClassFixture<KeepApiWebFactory>, I
     }
 
     [Fact]
-    public async Task ReadyToClose_resolved_clean_row_exposes_close_request_only()
+    public async Task ReadyToClose_resolved_clean_row_exposes_close_request_and_post_work_actions()
     {
         var body = await GetRtcListAsync(_ownerCookie);
         Assert.NotNull(body);
         var row = body.Requests.Single(r => r.Id == _resolvedCleanRequestId);
         var actionCodes = row.Actions.QuickActions.Select(a => a.Code).ToList();
 
-        Assert.Equal(["open_detail", "close_request"], actionCodes);
+        // GAP-011: close_request rightmost after post-work tools.
+        Assert.Equal(["open_detail", "contact_customer", "post_customer_update", "add_internal_note", "close_request"], actionCodes);
     }
 
     [Fact]
