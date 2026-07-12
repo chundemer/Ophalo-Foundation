@@ -3,9 +3,9 @@
 **Created:** 2026-07-02
 **Purpose:** Live tracker for pilot-blocking or pilot-relevant bugs/gaps discovered during Session 14.
 **Source:** Promoted from the Pre-S14e bug register in `docs/build-log/068-session-14-ophalo-web-front-door.md`.
-**Current active item:** GAP-007 — Request-list quick actions lack row-level concurrency/action contract.
-**Recently resolved:** GAP-006 — Staff-created requests cannot add missing service location after creation (S23).
-**Previously resolved:** GAP-005 — Same-account staff can submit through the public intake form.
+**Current active item:** None — S24g3 inline modals pending (not a tracker bug; contract complete).
+**Recently resolved:** GAP-007 — Request-list quick actions lack complete row-level action contract (S24g2).
+**Previously resolved:** GAP-006 — Staff-created requests cannot add missing service location after creation (S23).
 
 This document is the current working tracker. Historical discovery notes stay in the build logs, but
 triage, status, and next-session ordering should happen here.
@@ -174,16 +174,22 @@ Expected fix:
 - Keep service location internal-only: do not show it on unauthenticated customer tracker pages,
   public metadata, or customer-facing share previews.
 
-### GAP-007 — Request-list quick actions lack row-level concurrency/action contract
+### GAP-007 — Request-list quick actions lack complete row-level action contract
 
-**Status:** Open
+**Status:** Resolved in S24g2 (2026-07-11)
 **Severity:** P1
 **Area:** `OpHalo.Keep.Application` request list DTO/API; `ophalo-app` request list quick actions
 **Decision:** ADR-435
 
 S24 temporarily converted request-list quick actions into navigation/focus links because
-`KeepRequestSummary` does not expose the concurrency version required by existing request mutation
-endpoints.
+the end-to-end list/action contract is incomplete for executable row actions.
+
+Current finding:
+
+- Backend `KeepRequestSummary` already includes `Version` from `KeepRequest.ConcurrencyVersion`.
+- The PWA `KeepRequestSummary` type/mocks must still be checked and wired to consume `version`.
+- `KeepQuickAction` currently lacks explicit execution metadata such as `requiresVersion` and
+  `executionMode`.
 
 That fallback protects database safety but does not satisfy the request-list product goal. The list
 is an action cockpit for high-frequency, low-risk work; forcing owners/admins through
@@ -192,10 +198,9 @@ attention action is a pilot workflow regression.
 
 Expected fix:
 
-- Add safe row-mutation metadata to the request list summary contract.
-- Minimum: expose `version` on `KeepRequestSummary` so list actions can send
-  `X-Keep-Request-Version`.
-- Prefer server-authored action metadata:
+- Confirm `version` is serialized by the list API and consumed by the PWA list summary type/mocks so
+  list actions can send `X-Keep-Request-Version`.
+- Add server-authored action metadata:
   - `requiresVersion`;
   - `executionMode` (`inline`, `modal`, or `detail`);
   - `customerVisible`;

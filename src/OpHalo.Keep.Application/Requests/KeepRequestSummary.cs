@@ -74,6 +74,8 @@ public sealed record KeepQuickAction(
     string Code,
     string Label,
     string Visibility,
+    bool RequiresVersion,
+    string ExecutionMode,
     bool ClearsAttention,
     bool CountsFirstResponse,
     bool ChangesStatus,

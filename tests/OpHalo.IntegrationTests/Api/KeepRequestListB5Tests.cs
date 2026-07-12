@@ -431,6 +431,32 @@ public sealed class KeepRequestListB5Tests : IClassFixture<KeepApiWebFactory>, I
     }
 
     // =========================================================================
+    // S24g2: quick action execution contract (ADR-435)
+    // =========================================================================
+
+    [Fact]
+    public async Task QuickAction_open_detail_has_detail_mode_and_no_version_required()
+    {
+        var body = await GetListAsync(_ownerCookie);
+        var row = body!.Requests.FirstOrDefault(r => r.Id == _receivedRequestId);
+        Assert.NotNull(row);
+        var action = row.Actions.QuickActions.Single(a => a.Code == "open_detail");
+        Assert.Equal("detail", action.ExecutionMode);
+        Assert.False(action.RequiresVersion);
+    }
+
+    [Fact]
+    public async Task QuickAction_post_customer_update_has_modal_mode_and_requires_version()
+    {
+        var body = await GetListAsync(_ownerCookie);
+        var row = body!.Requests.FirstOrDefault(r => r.Id == _receivedRequestId);
+        Assert.NotNull(row);
+        var action = row.Actions.QuickActions.Single(a => a.Code == "post_customer_update");
+        Assert.Equal("modal", action.ExecutionMode);
+        Assert.True(action.RequiresVersion);
+    }
+
+    // =========================================================================
     // P6b-3: list timing scan metadata (ADR-337/338)
     // =========================================================================
 
@@ -626,7 +652,7 @@ public sealed class KeepRequestListB5Tests : IClassFixture<KeepApiWebFactory>, I
         List<B5QuickActionBody> QuickActions,
         List<B5ContactActionBody> ContactActions);
 
-    private sealed record B5QuickActionBody(string Code);
+    private sealed record B5QuickActionBody(string Code, bool RequiresVersion, string ExecutionMode);
 
     private sealed record B5ContactActionBody(string Type);
 

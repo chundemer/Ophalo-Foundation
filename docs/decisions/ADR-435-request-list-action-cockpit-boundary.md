@@ -14,8 +14,8 @@ Keep has two authenticated request surfaces with different jobs:
 - request detail, used to understand one request deeply and make careful changes.
 
 During S24, request-list quick actions were temporarily implemented as navigation-intent links to
-request detail because the list summary DTO does not expose the request concurrency version needed
-for safe row-level mutations.
+request detail because the end-to-end row action contract is not yet sufficient for safe executable
+list mutations.
 
 That fallback is safe, but it is not the product destination. If every quick action forces staff into
 an open-detail, perform-action, back-to-list loop, the list becomes a directory instead of the
@@ -78,10 +78,17 @@ quick actions.
 
 ## Required List Contract
 
-A follow-up backend/API slice must expose safe mutation metadata on request summaries before true
-inline list actions are implemented.
+A follow-up backend/API/frontend contract slice must expose safe mutation metadata on request
+summaries before true inline list actions are implemented.
 
-Minimum contract:
+Current finding:
+
+- Backend `KeepRequestSummary` already includes `Version` from `KeepRequest.ConcurrencyVersion`.
+- The PWA list summary type/mocks must still be checked and wired to consume `version`.
+- `KeepQuickAction` does not yet expose explicit execution metadata such as `requiresVersion` and
+  `executionMode`.
+
+Minimum contract to confirm end to end:
 
 ```text
 KeepRequestSummary.version
@@ -120,9 +127,9 @@ contract that makes them safe.
 ## Consequences
 
 - S24 quick-action deep links are explicitly transitional.
-- GAP-007 tracks the missing list concurrency/action metadata.
-- A follow-up S24g2/S24g3 path must add the list contract and then replace eligible deep links with
-  inline row modals.
+- GAP-007 tracks the incomplete end-to-end list concurrency/action metadata.
+- A follow-up S24g2/S24g3 path must complete the list contract and then replace eligible deep links
+  with inline row modals.
 - Feedback review, cancellation, classification, service-location editing, timing controls, and
   generic status changes stay detail-owned for V1.
 - The request-list UX should not be accepted as complete while routine safe actions are only fancy

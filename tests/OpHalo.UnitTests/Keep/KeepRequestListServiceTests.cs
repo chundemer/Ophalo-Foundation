@@ -1076,6 +1076,72 @@ public class KeepRequestListServiceTests
         Assert.False(postUpdate.ClearsAttention);
     }
 
+    // --- S24g2: quick action execution contract (ADR-435) -----------------------
+
+    [Fact]
+    public async Task Execute_open_detail_has_detail_mode_and_no_version_required()
+    {
+        var request = MakeRequest();
+        var p = HappyPathPersistence([request]);
+        var sut = BuildSut(p);
+        var result = await sut.ExecuteAsync();
+
+        Assert.True(result.IsSuccess);
+        var action = result.Value.Requests[0].Actions.QuickActions
+            .Single(a => a.Code == "open_detail");
+        Assert.Equal("detail", action.ExecutionMode);
+        Assert.False(action.RequiresVersion);
+    }
+
+    [Fact]
+    public async Task Execute_post_customer_update_has_modal_mode_and_requires_version()
+    {
+        var request = MakeRequest();
+        var p = HappyPathPersistence([request]);
+        var sut = BuildSut(p);
+        var result = await sut.ExecuteAsync();
+
+        Assert.True(result.IsSuccess);
+        var action = result.Value.Requests[0].Actions.QuickActions
+            .Single(a => a.Code == "post_customer_update");
+        Assert.Equal("modal", action.ExecutionMode);
+        Assert.True(action.RequiresVersion);
+    }
+
+    [Fact]
+    public async Task Execute_acknowledge_attention_has_modal_mode_and_requires_version()
+    {
+        var request = MakeRequest();
+        SetProp(request, nameof(KeepRequest.WaitingDirection), WaitingDirection.Business);
+        SetProp(request, nameof(KeepRequest.AttentionLevel), AttentionLevel.Waiting);
+
+        var p = HappyPathPersistence([request]);
+        var sut = BuildSut(p);
+        var result = await sut.ExecuteAsync();
+
+        Assert.True(result.IsSuccess);
+        var action = result.Value.Requests[0].Actions.QuickActions
+            .Single(a => a.Code == "acknowledge_attention");
+        Assert.Equal("modal", action.ExecutionMode);
+        Assert.True(action.RequiresVersion);
+    }
+
+    [Fact]
+    public async Task Execute_contact_customer_has_modal_mode_and_requires_version()
+    {
+        var request = MakeRequest();
+        // phone already set on MakeRequest default — contact_customer should appear
+        var p = HappyPathPersistence([request]);
+        var sut = BuildSut(p);
+        var result = await sut.ExecuteAsync();
+
+        Assert.True(result.IsSuccess);
+        var action = result.Value.Requests[0].Actions.QuickActions
+            .Single(a => a.Code == "contact_customer");
+        Assert.Equal("modal", action.ExecutionMode);
+        Assert.True(action.RequiresVersion);
+    }
+
     // --- B5: ranking sort -------------------------------------------------------
 
     [Fact]

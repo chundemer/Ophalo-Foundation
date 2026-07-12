@@ -1,10 +1,10 @@
 # Build Log 081 — Session 24: Request Workbench 2-Column Layout And List Quick Actions
 
 **Started:** 2026-07-11
-**Status:** Draft — S24 paused for GAP-007 list quick-action contract
+**Status:** Draft — S24 paused for GAP-007 list quick-action metadata contract
 **Session name:** S24 request workbench 2-column layout and list quick actions
 **Related ADRs:** ADR-377, ADR-380, ADR-382, ADR-383, ADR-433, ADR-434, ADR-435
-**Next free ADR before this log:** ADR-435
+**Next free ADR before ADR-435:** ADR-435
 **Next free ADR after ADR-435:** ADR-436
 
 ---
@@ -300,7 +300,7 @@ List quick actions must communicate their effect:
 - changes lifecycle/status;
 - opens detail for careful handling.
 
-If a list quick action requires the latest concurrency version and the list row does not expose it,
+If a list quick action requires execution/concurrency metadata and the list row does not expose it,
 the PWA should either:
 
 - use a temporary focus/deep-link fallback; or
@@ -661,6 +661,8 @@ do not have to open detail for routine confident work.
 Current corrective note:
 
 - The S24g deep-link/focus implementation is a temporary safety fallback only.
+- Backend `KeepRequestSummary` already includes `Version`; S24g2 should confirm API serialization,
+  wire PWA type/mocks to consume `version`, and add quick-action execution metadata.
 - Do not mark S24g product-complete until S24g2/S24g3 resolve GAP-007 or explicitly defer true list
   mutations with Owner/Admin workflow sign-off.
 
@@ -710,13 +712,14 @@ Acceptance criteria:
 
 ### S24g2 — Request list action contract
 
-Goal: Add the list summary metadata required for safe inline request-list mutations.
+Goal: Complete the list summary/action metadata required for safe inline request-list mutations.
 
 Scope:
 
-- Add `version` to the request list summary DTO/read model so list mutations can send
+- Confirm backend `KeepRequestSummary.Version` is serialized as `version` by the list API.
+- Add `version` to the PWA `KeepRequestSummary` type and mocks if missing so list mutations can send
   `X-Keep-Request-Version`.
-- Add or confirm server-authored quick-action metadata:
+- Add server-authored quick-action metadata:
   - `requiresVersion`;
   - `executionMode` (`inline`, `modal`, or `detail`);
   - `customerVisible`;
@@ -730,7 +733,8 @@ Scope:
 
 Acceptance criteria:
 
-- Request list rows expose a concurrency version suitable for versioned row-level mutations.
+- Request list rows expose a concurrency version end to end suitable for versioned row-level
+  mutations.
 - Quick actions state whether they are inline/modal/detail flows and communicate their effects.
 - No inline list mutation uses inferred eligibility.
 - Backend/API tests cover the new summary contract.

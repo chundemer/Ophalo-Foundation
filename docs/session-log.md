@@ -1,10 +1,10 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-07-11 (S24 paused for GAP-007 request-list action contract)
+**Last updated:** 2026-07-11 (S24g2 complete — list action contract done; S24g3 inline modals next)
 **Branch:** `main` tracking `origin/main`
-**Last green baseline:** Targeted intake baseline — 66 intake unit · 25 intake integration confirmed; full suite pending (1 pre-existing KeepG5 fluke excluded)
+**Last green baseline:** S24g2 — 166 unit · 21 B5 integration · PWA typecheck clean
 **Next free ADR:** ADR-436
-**Current session:** Session 24 — request workbench paused before list quick-action closeout
+**Current session:** Session 24 — request workbench; S24g2 complete, S24g3 pending
 
 ---
 
@@ -41,7 +41,7 @@ For every implementation slice:
 **Bug/gap tracker:** `docs/pilot-readiness-bug-tracker.md`
 **Foundation roadmap:** `docs/build-log/ophalo-foundation-build-plan-greenfield-boundaries-brownfield-behavior.md` section 9.1
 **Current session:** Session 24 — request workbench 2-column layout and list quick actions
-**Current slice:** Resolve GAP-007 before accepting S24g/S24h as complete
+**Current slice:** S24g3 — replace deep-link fallbacks with inline row modals (contract now available)
 
 ### Completed Context
 
@@ -157,11 +157,13 @@ Build-log 081 is the current decision/handoff document:
   Wired into desktop side panel and mobile stack.
 
 - **S24g — Request list quick actions** (temporary fallback only): Quick actions currently work as
-  navigation-intent deep links because the list summary DTO does not expose a row-level concurrency
-  version. This is safe but does **not** satisfy the request-list action-cockpit goal. ADR-435 locks
-  the product boundary: the request list must handle low-risk, high-frequency actions inline once the
-  row contract can do so safely; request detail remains the depth/accountability surface.
-  GAP-007 tracks the required API/list DTO contract.
+  navigation-intent deep links because the end-to-end list/action contract is incomplete for
+  executable row actions. Backend `KeepRequestSummary` already includes `Version`, but the PWA list
+  type/mocks still need to consume `version`, and `KeepQuickAction` needs execution metadata such as
+  `requiresVersion` and `executionMode`. This fallback is safe but does **not** satisfy the
+  request-list action-cockpit goal. ADR-435 locks the product boundary: the request list must handle
+  low-risk, high-frequency actions inline once the row contract can do so safely; request detail
+  remains the depth/accountability surface. GAP-007 tracks the required contract completion.
 
 - **S24h — Polish** (complete): `keep-row-title` now uses `font-serif` for customer names in the
   list. Quick-action pills no longer show effect sub-labels. `QuickActionEffectLabel` component
@@ -169,10 +171,11 @@ Build-log 081 is the current decision/handoff document:
 
 ### Next
 
-1. **S24g2 — Request-list action contract**: add safe row-mutation metadata to request summaries.
-   Minimum required field: `KeepRequestSummary.version`. Preferred quick-action metadata:
-   `requiresVersion`, `executionMode`, `customerVisible`, `internalOnly`, `clearsAttention`, and
-   `changesStatus`. Update DTOs, mapping, API tests, TypeScript types, mocks, and docs.
+1. **S24g2 — Request-list action contract**: complete safe row-mutation metadata for request
+   summaries. Confirm backend/API serialization of `KeepRequestSummary.version`, add it to PWA
+   TypeScript types/mocks if missing, and add quick-action metadata: `requiresVersion`,
+   `executionMode`, `customerVisible`, `internalOnly`, `clearsAttention`, and `changesStatus`.
+   Update mapping, API tests, TypeScript types, mocks, and docs.
 2. **S24g3 — True inline list actions**: replace eligible deep-link shortcuts with compact row-level
    controls/modals for send customer update, log external contact, add internal note,
    assign/self-assign/watch where available, simple attention acknowledgement, and Ready to Close
@@ -183,7 +186,7 @@ Build-log 081 is the current decision/handoff document:
 
 ### Active Gap
 
-- **GAP-007 — Request-list quick actions lack row-level concurrency/action contract**:
+- **GAP-007 — Request-list quick actions lack complete row-level action contract**:
   `docs/pilot-readiness-bug-tracker.md`.
 - **ADR-435 — Request List Action Cockpit Boundary**:
   `docs/decisions/ADR-435-request-list-action-cockpit-boundary.md`.

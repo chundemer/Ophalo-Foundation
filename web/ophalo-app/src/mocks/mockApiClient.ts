@@ -339,6 +339,7 @@ export function installMockApi(): void {
       lastBusinessActivityAtUtc: now,
       createdAtUtc: now,
       updatedAtUtc: now,
+      version: crypto.randomUUID(),
       isTerminal: false,
       isPostCloseFollowUp: false,
       needsShare: false,
@@ -387,7 +388,9 @@ export function installMockApi(): void {
           {
             code: "start",
             label: "Start Work",
-            visibility: "primary",
+            visibility: "internal",
+            requiresVersion: true,
+            executionMode: "modal",
             clearsAttention: false,
             countsFirstResponse: true,
             changesStatus: true,

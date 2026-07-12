@@ -433,6 +433,8 @@ export interface KeepQuickAction {
   code: string;
   label: string;
   visibility: string;
+  requiresVersion: boolean;
+  executionMode: "inline" | "modal" | "detail";
   clearsAttention: boolean;
   countsFirstResponse: boolean;
   changesStatus: boolean;
@@ -456,6 +458,7 @@ export interface KeepRequestSummary {
   lastBusinessActivityAtUtc: string | null;
   createdAtUtc: string;
   updatedAtUtc: string;
+  version: string;
   isTerminal: boolean;
   isPostCloseFollowUp: boolean;
   needsShare: boolean;

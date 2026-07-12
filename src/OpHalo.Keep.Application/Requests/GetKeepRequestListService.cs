@@ -875,6 +875,8 @@ public sealed class GetKeepRequestListService(
         {
             actions.Add(new KeepQuickAction(
                 "post_customer_update", "Update customer", "customer_visible",
+                RequiresVersion: true,
+                ExecutionMode: "modal",
                 ClearsAttention: r.WaitingDirection == WaitingDirection.Business && r.AttentionLevel != AttentionLevel.None,
                 CountsFirstResponse: false,
                 ChangesStatus: false,
@@ -1192,18 +1194,22 @@ public sealed class GetKeepRequestListService(
     {
         public static readonly KeepQuickAction OpenDetail = new(
             "open_detail", "Open detail", "internal",
+            RequiresVersion: false, ExecutionMode: "detail",
             false, false, false, "opens_detail");
 
         public static readonly KeepQuickAction ContactCustomer = new(
             "contact_customer", "Contact customer", "external_affordance",
+            RequiresVersion: true, ExecutionMode: "modal",
             false, false, false, "external_contact_only");
 
         public static readonly KeepQuickAction AcknowledgeAttention = new(
             "acknowledge_attention", "Mark handled", "internal",
+            RequiresVersion: true, ExecutionMode: "modal",
             true, false, false, "internal_clears_attention");
 
         public static readonly KeepQuickAction ReviewFeedback = new(
             "review_feedback", "Review feedback", "internal",
+            RequiresVersion: false, ExecutionMode: "detail",
             false, false, false, "opens_detail_feedback");
     }
 
