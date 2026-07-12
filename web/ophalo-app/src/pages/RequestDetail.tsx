@@ -21,11 +21,11 @@ import {
   api,
   type KeepRequestDetailResult,
   type KeepRequestEventItem,
-  type ShareIntentMethod,
   type UpdateServiceLocationBody,
 } from "../lib/apiClient";
 import { ApiError } from "../lib/apiClient";
 import { NeedsShareBanner } from "../components/NeedsShareBanner";
+import { ShareLinkModal } from "../components/ShareLinkModal";
 import { KeepButton } from "../components/keep/KeepButton";
 import { KeepBadge, type KeepBadgeVariant } from "../components/keep/KeepBadge";
 import { ExternalContactForm } from "../components/ExternalContactForm";
@@ -591,62 +591,20 @@ function TimelineEvent({ event, isFirst }: TimelineEventProps) {
 // ---------------------------------------------------------------------------
 
 interface CustomerPageHeroActionsProps {
-  requestId: string;
   pageToken: string;
   canRecordShareIntent: boolean;
   needsShare: boolean;
-  onCleared: () => void;
+  onOpenShareDrawer: () => void;
 }
 
 function CustomerPageHeroActions({
-  requestId,
   pageToken,
   canRecordShareIntent,
   needsShare,
-  onCleared,
+  onOpenShareDrawer,
 }: CustomerPageHeroActionsProps) {
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [copied, setCopied] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
   const publicBaseUrl = import.meta.env.VITE_PUBLIC_BASE_URL as string;
   const customerPageUrl = `${publicBaseUrl}/keep/r/${pageToken}`;
-  const canNativeShare = typeof navigator !== "undefined" && typeof navigator.share === "function";
-
-  async function submit(method: ShareIntentMethod, browserAction?: () => Promise<void>) {
-    if (isSubmitting) return;
-    setIsSubmitting(true);
-    setError(null);
-    try {
-      if (browserAction) await browserAction();
-      await api.recordShareIntent(requestId, method);
-      onCleared();
-    } catch (e) {
-      if (e instanceof DOMException && e.name === "AbortError") {
-        // user cancelled native share
-      } else if (e instanceof ApiError) {
-        setError("Could not record share. Try again.");
-      } else if (!(e instanceof DOMException)) {
-        setError("Could not complete share. Try again.");
-      }
-    } finally {
-      setIsSubmitting(false);
-    }
-  }
-
-  async function handleCopyLink() {
-    await submit("copy_link", async () => {
-      await navigator.clipboard.writeText(customerPageUrl);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    });
-  }
-
-  async function handleNativeShare() {
-    await submit("native_share", async () => {
-      await navigator.share({ url: customerPageUrl, title: "Customer Request Page" });
-    });
-  }
 
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
@@ -660,34 +618,19 @@ function CustomerPageHeroActions({
         <ExternalLink className="h-3.5 w-3.5 shrink-0" />
         View customer page
       </a>
-      {canRecordShareIntent && canNativeShare && (
-        <button
-          type="button"
-          onClick={() => void handleNativeShare()}
-          disabled={isSubmitting}
-          className={`inline-flex items-center gap-1 font-semibold text-[var(--ophalo-muted)] hover:text-[var(--ophalo-ink)] disabled:opacity-50 transition-colors ${FOCUS_RING}`}
-        >
-          <Share2 className="h-3.5 w-3.5 shrink-0" />
-          Share
-        </button>
-      )}
       {canRecordShareIntent && (
         <button
           type="button"
-          onClick={() => void handleCopyLink()}
-          disabled={isSubmitting}
-          className={`inline-flex items-center gap-1 font-semibold text-[var(--ophalo-muted)] hover:text-[var(--ophalo-ink)] disabled:opacity-50 transition-colors ${FOCUS_RING}`}
+          onClick={onOpenShareDrawer}
+          className={`inline-flex items-center gap-1 font-semibold transition-colors ${FOCUS_RING} ${
+            needsShare
+              ? "text-[var(--ophalo-attention)] hover:text-[var(--ophalo-ink)]"
+              : "text-[var(--ophalo-muted)] hover:text-[var(--ophalo-ink)]"
+          }`}
         >
-          {copied ? (
-            <Check className="h-3.5 w-3.5 shrink-0 text-[var(--ophalo-success)]" />
-          ) : (
-            <Copy className="h-3.5 w-3.5 shrink-0" />
-          )}
-          {copied ? "Copied" : "Copy link"}
+          <Share2 className="h-3.5 w-3.5 shrink-0" />
+          Share Link
         </button>
-      )}
-      {error && (
-        <p className="basis-full text-xs text-[var(--ophalo-danger)]">{error}</p>
       )}
     </div>
   );
@@ -1441,18 +1384,16 @@ function LogContactModal({
 
 interface DetailHeroProps {
   detail: KeepRequestDetailResult;
-  requestId: string;
   canRecordShareIntent: boolean;
   needsShare: boolean;
-  onShareCleared: () => void;
+  onOpenShareDrawer: () => void;
 }
 
 function DetailHero({
   detail,
-  requestId,
   canRecordShareIntent,
   needsShare,
-  onShareCleared,
+  onOpenShareDrawer,
 }: DetailHeroProps) {
   const hasAttention = detail.attentionLevel !== "none";
 
@@ -1504,11 +1445,10 @@ function DetailHero({
           {detail.customerName}
         </h1>
         <CustomerPageHeroActions
-          requestId={requestId}
           pageToken={detail.pageToken}
           canRecordShareIntent={canRecordShareIntent}
           needsShare={needsShare}
-          onCleared={onShareCleared}
+          onOpenShareDrawer={onOpenShareDrawer}
         />
       </div>
     </div>
@@ -2746,6 +2686,7 @@ interface RequestDetailProps {
 
 export function RequestDetail({ requestId, focusPanel, onBack, prevId, nextId, onNavigate }: RequestDetailProps) {
   const [shareCleared, setShareCleared] = useState(false);
+  const [shareModalOpen, setShareModalOpen] = useState(false);
   const [contactModal, setContactModal] = useState<{ direction: string; channel: string } | null>(null);
   const [businessUpdateDraft, setBusinessUpdateDraft] = useState("");
   const [businessUpdateDraftStatus, setBusinessUpdateDraftStatus] = useState("");
@@ -2812,6 +2753,7 @@ export function RequestDetail({ requestId, focusPanel, onBack, prevId, nextId, o
 
   function handleShareCleared() {
     setShareCleared(true);
+    setShareModalOpen(false);
     void queryClient.invalidateQueries({ queryKey: ["request-detail", requestId] });
   }
 
@@ -2893,13 +2835,18 @@ export function RequestDetail({ requestId, focusPanel, onBack, prevId, nextId, o
         />
       )}
 
+      {/* Share Link modal */}
+      {shareModalOpen && (
+        <ShareLinkModal
+          requestId={requestId}
+          onClose={() => setShareModalOpen(false)}
+          onShared={handleShareCleared}
+        />
+      )}
+
       {/* Mobile NeedsShare banner */}
       {detail && needsShareEffective && canShare && (
-        <NeedsShareBanner
-          requestId={requestId}
-          pageToken={detail.pageToken}
-          onCleared={handleShareCleared}
-        />
+        <NeedsShareBanner onOpenShareDrawer={() => setShareModalOpen(true)} />
       )}
 
       {/* Back breadcrumb + queue navigation */}
@@ -2971,10 +2918,9 @@ export function RequestDetail({ requestId, focusPanel, onBack, prevId, nextId, o
             {/* Hero: identity + status */}
             <DetailHero
               detail={detail}
-              requestId={requestId}
               canRecordShareIntent={canShare}
               needsShare={needsShareEffective}
-              onShareCleared={handleShareCleared}
+              onOpenShareDrawer={() => setShareModalOpen(true)}
             />
 
             {/* Original request: customer description */}

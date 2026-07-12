@@ -370,7 +370,12 @@ export interface KeepRequestDetailResult {
   navigation: KeepRequestNavigation | null;
 }
 
-export type ShareIntentMethod = "copy_link" | "native_share" | "manual_mark_shared";
+export type ShareIntentMethod = "sms_qr" | "email" | "whatsapp" | "copy_message" | "copy_link" | "manual_other";
+
+export interface CreateSmsHandoffResult {
+  handoffUrl: string;
+  expiresAtUtc: string;
+}
 
 export interface LogExternalContactBody {
   direction: string;
@@ -585,6 +590,11 @@ export const api = {
     apiFetchVoid(`/keep/requests/${requestId}/share-intent`, {
       method: "POST",
       body: JSON.stringify({ method }),
+    }),
+  createSmsHandoff: (requestId: string, messageBody: string) =>
+    apiFetch<CreateSmsHandoffResult>(`/keep/requests/${requestId}/sms-handoff`, {
+      method: "POST",
+      body: JSON.stringify({ messageBody }),
     }),
   patchRequestStatus: (
     requestId: string,

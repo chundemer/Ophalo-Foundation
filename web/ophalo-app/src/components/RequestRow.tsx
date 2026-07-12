@@ -1,4 +1,4 @@
-import { AlertTriangle, Clock, MessageSquare, Link, ChevronRight, UserRound, CheckCircle2 } from "lucide-react";
+import { AlertTriangle, Clock, MessageSquare, Link, ChevronRight, UserRound, CheckCircle2, Share2 } from "lucide-react";
 import { KeepBadge, type KeepBadgeVariant } from "./keep/KeepBadge";
 import type { KeepRequestSummary, KeepRequestAvailableItem, KeepQuickAction } from "../lib/apiClient";
 
@@ -152,10 +152,11 @@ interface RequestRowProps {
   onSelect: (requestId: string) => void;
   onSelectFocused?: (requestId: string, focus: string) => void;
   onActionClick?: (row: KeepRequestSummary, action: KeepQuickAction) => void;
+  onShareClick?: (row: KeepRequestSummary) => void;
   showCloseoutCue?: boolean;
 }
 
-export function RequestRow({ row, onSelect, onSelectFocused, onActionClick, showCloseoutCue }: RequestRowProps) {
+export function RequestRow({ row, onSelect, onSelectFocused, onActionClick, onShareClick, showCloseoutCue }: RequestRowProps) {
   const lastTouch = relativeTime(row.lastBusinessActivityAtUtc ?? row.updatedAtUtc);
   const tone = row.attention.attentionReason ? attentionTone(row.attention.attentionReason) : null;
   const isOverdue = row.ranking.isOverdue;
@@ -294,8 +295,8 @@ export function RequestRow({ row, onSelect, onSelectFocused, onActionClick, show
       </button>
 
       {/* Quick action bar */}
-      {actionBarItems.length > 0 && (
-        <div className="border-t border-[var(--ophalo-border)] px-4 py-2 flex items-center gap-2">
+      {(actionBarItems.length > 0 || row.needsShare) && (
+        <div className="border-t border-[var(--ophalo-border)] px-4 py-2 flex items-center gap-2 flex-wrap">
           {actionBarItems.map((action) => {
             const isModal = action.executionMode === "modal" && MODAL_ACTION_CODES.has(action.code);
             const focus = ACTION_FOCUS_MAP[action.code];
@@ -319,6 +320,19 @@ export function RequestRow({ row, onSelect, onSelectFocused, onActionClick, show
               </button>
             );
           })}
+          {row.needsShare && onShareClick && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onShareClick(row);
+              }}
+              className={`inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-semibold border border-[var(--ophalo-attention)] bg-[var(--ophalo-canvas)] text-[var(--ophalo-attention)] hover:bg-[var(--ophalo-attention)] hover:text-white transition-colors ${FOCUS_RING}`}
+            >
+              <Share2 className="h-3 w-3" />
+              Share Link
+            </button>
+          )}
           <button
             type="button"
             onClick={() => onSelect(row.id)}

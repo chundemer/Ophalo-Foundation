@@ -7,6 +7,7 @@ import {
 import { api, type AccountRole, type RequestView, type KeepRequestViewCounts, type KeepRequestSummary, type KeepQuickAction } from "../lib/apiClient";
 import { RequestRow, AvailableRequestRow } from "../components/RequestRow";
 import { RequestRowActionModal } from "../components/RequestRowActionModal";
+import { ShareLinkModal } from "../components/ShareLinkModal";
 import { ApiError } from "../lib/apiClient";
 
 // --- Tab definitions ---
@@ -159,6 +160,7 @@ export function Requests({ role, viewCounts, onViewCountsUpdate, onSelectRequest
     row: KeepRequestSummary;
     action: KeepQuickAction;
   } | null>(null);
+  const [shareModalTarget, setShareModalTarget] = useState<KeepRequestSummary | null>(null);
   const [q, setQ] = useState("");
   const [draftQ, setDraftQ] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
@@ -441,7 +443,7 @@ export function Requests({ role, viewCounts, onViewCountsUpdate, onSelectRequest
                   <AvailableRequestRow key={row.requestId} row={row} onSelect={handleRowSelect} />
                 ))
               : (listQuery.data?.requests ?? []).map((row) => (
-                  <RequestRow key={row.id} row={row} onSelect={handleRowSelect} onSelectFocused={handleRowSelectFocused} onActionClick={handleActionClick} showCloseoutCue={activeTab.id === "ready_to_close"} />
+                  <RequestRow key={row.id} row={row} onSelect={handleRowSelect} onSelectFocused={handleRowSelectFocused} onActionClick={handleActionClick} onShareClick={setShareModalTarget} showCloseoutCue={activeTab.id === "ready_to_close"} />
                 ))
             }
           </div>
@@ -482,6 +484,18 @@ export function Requests({ role, viewCounts, onViewCountsUpdate, onSelectRequest
           action={activeModalAction.action}
           onClose={() => setActiveModalAction(null)}
           onSuccess={handleModalSuccess}
+        />
+      )}
+
+      {/* Share Link modal */}
+      {shareModalTarget && (
+        <ShareLinkModal
+          requestId={shareModalTarget.id}
+          onClose={() => setShareModalTarget(null)}
+          onShared={() => {
+            setShareModalTarget(null);
+            void listQuery.refetch();
+          }}
         />
       )}
     </div>
