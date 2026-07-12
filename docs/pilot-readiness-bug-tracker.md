@@ -3,9 +3,9 @@
 **Created:** 2026-07-02
 **Purpose:** Live tracker for pilot-blocking or pilot-relevant bugs/gaps discovered during Session 14.
 **Source:** Promoted from the Pre-S14e bug register in `docs/build-log/068-session-14-ophalo-web-front-door.md`.
-**Current active item:** None — S24g3 inline modals pending (not a tracker bug; contract complete).
-**Recently resolved:** GAP-007 — Request-list quick actions lack complete row-level action contract (S24g2).
-**Previously resolved:** GAP-006 — Staff-created requests cannot add missing service location after creation (S23).
+**Current active item:** GAP-004 — Browser back / refresh does not preserve app location.
+**Recently resolved:** GAP-010 — Ready to Close rows leaked communication next-actions (S24j).
+**Previously resolved:** GAP-009 — Staff operational signals why/next-action audit (S24i).
 
 This document is the current working tracker. Historical discovery notes stay in the build logs, but
 triage, status, and next-session ordering should happen here.
@@ -14,6 +14,13 @@ As of S15c, all earlier active pilot-readiness bugs/gaps in this tracker were re
 GAP-004 is reactivated after ADR-427 locked durable PWA request-detail navigation behavior.
 GAP-007 is active after ADR-435 locked that request-list quick actions are a cockpit workflow, not
 permanent navigation shortcuts.
+GAP-008 is active after S24 list polish showed generic `Urgent` row pills can confuse owners/admins
+because they do not explain whether urgency came from customer intake or internal priority, nor what
+action is expected.
+GAP-009 is active after ADR-436 generalized this into a cross-surface rule for list, detail, and
+native staff signals.
+GAP-010 was found during screenshot review after S24i: a work-completed row with no active attention
+still presented communication next-actions instead of closeout.
 
 ## Status Legend
 
@@ -227,6 +234,127 @@ Expected fix:
 Do not implement inline list mutations by fetching detail in the background as the primary V1
 workflow unless the row contract remains blocked after explicit review. The preferred fix is to make
 the list payload carry the mutation metadata it needs.
+
+### GAP-008 — Request-list urgency/priority pills lack source and next-action context
+
+**Status:** Resolved in S24h (2026-07-12)
+**Severity:** P2
+**Area:** `ophalo-app` request list row hierarchy / triage copy
+**Decision:** ADR-433, ADR-435
+
+Request rows can show a generic **Urgent** pill when customer intake urgency is urgent and no
+internal business priority has been set. In context, this can be confusing for owners/admins because
+the row does not answer:
+
+- why this row is urgent;
+- whether urgency came from the customer or the business;
+- what the next expected staff action is.
+
+This is especially risky because ADR-433 deliberately separates customer-reported intake urgency
+from internal business priority. A generic urgent pill can blur that boundary and make customer
+urgency look like staff-owned priority.
+
+Expected fix:
+
+- Replace generic urgent/soon row labels with source-aware labels:
+  - `Customer signal: Urgent`;
+  - `Customer signal: Soon`;
+  - `Internal priority: Urgent`;
+  - `Internal priority: Soon`.
+- When both customer signal and internal priority are present and differ, show both without implying
+  they are the same field.
+- Keep the row dense; prefer concise labeled chips/text over a large explanatory block.
+- Add a compact next-action cue when server quick actions make the next action clear, for example:
+  - `Next: update customer or log contact`;
+  - `Next: assign owner`;
+  - `Next: close request`;
+  - avoid inventing next actions when server metadata is ambiguous.
+- Preserve the stronger visual treatment for truly actionable states such as `Unassigned`, overdue
+  attention, and active attention reason.
+- Do not merge customer urgency and business priority.
+
+Acceptance criteria:
+
+- Owners/admins can tell why a row has an urgent/soon signal without opening detail.
+- Customer-reported urgency and internal priority remain visually and semantically distinct.
+- Rows remain scannable on desktop and mobile widths.
+- TypeScript passes.
+
+### GAP-009 — Staff operational signals need why/next-action audit
+
+**Status:** Resolved in S24i (2026-07-12)
+**Severity:** P2
+**Area:** `ophalo-app` request detail/list signal copy; future native signal copy
+**Decision:** ADR-436
+
+GAP-008 resolved the immediate request-list generic urgency pill issue, but ADR-436 now locks the
+broader rule: staff-facing operational alerts, urgency signals, priority cues, and needs-attention
+states must explain both:
+
+- why the signal is shown;
+- what staff should do next.
+
+Request detail already has a strong Needs Attention guidance card with `Why` and `Resolve by`.
+However, non-attention detail surfaces still need an audit, especially the side-panel `Triage`
+section where customer intake urgency may appear as `Urgent request` without a plain-language source
+or next-step explanation.
+
+Expected fix:
+
+- Audit request detail for staff-facing signals that are not active attention:
+  - customer signal / intake urgency;
+  - internal business priority;
+  - service-location missing/needed cues;
+  - timing/follow-up cues when they appear as attention-like operational prompts;
+  - closeout/readiness cues;
+  - feedback review cues outside the main attention card.
+- Preserve existing Needs Attention `Why` / `Resolve by` structure.
+- For customer intake urgency on detail, prefer copy such as:
+  - `Customer marked urgent during intake`;
+  - `Customer asked for soon follow-up during intake`;
+  - plus concise next-step guidance when server actions make it clear.
+- Keep request-list `Next:` cue verbs aligned with visible quick-action button labels.
+- Do not invent next actions locally when server metadata is ambiguous; use conservative review copy
+  or omit the cue.
+- Do not merge customer urgency and internal priority.
+
+Acceptance criteria:
+
+- Request detail non-attention signals do not appear as unexplained alert/urgency pills.
+- Request list and detail both preserve ADR-433 source boundaries.
+- Existing attention guidance still shows `Why` and `Resolve by`.
+- TypeScript passes for any PWA changes.
+
+### GAP-010 — Ready to Close rows leaked communication next-actions
+
+**Status:** Resolved in S24j (2026-07-12)
+**Severity:** P1
+**Area:** `ophalo-app` request list row actions; `GetKeepRequestListService` quick-action metadata
+**Decision:** ADR-434, ADR-435, ADR-436
+
+A screenshot review found a **Work completed** row with no active attention flags still showing:
+
+- `Next: Log contact or Update customer`;
+- quick-action buttons for `Log contact` and `Update customer`.
+
+That violated the closeout contract: a resolved/no-attention row in Ready to Close is calm
+administrative closeout work, not a prompt to restart customer communication.
+
+Expected fix:
+
+- For policy-closeable rows, server quick-action metadata should expose `close_request`.
+- Suppress routine communication/internal-note row quick actions in that terminal closeout state.
+- List `Next:` copy must be derived from the server action metadata and read `Next: Close request`
+  when closeout is the available lifecycle action.
+- The visible row action should be `Close request` and use danger/destructive styling.
+
+Acceptance criteria:
+
+- Ready to Close rows expose `open_detail` + `close_request`, not `contact_customer` /
+  `post_customer_update`.
+- `Next:` cue verbs match visible action button labels.
+- Unit and B5 integration tests cover the ready-to-close action payload.
+- PWA typecheck passes.
 
 ## Resolved During Session 22
 

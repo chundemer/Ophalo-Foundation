@@ -1,11 +1,11 @@
 # Build Log 081 — Session 24: Request Workbench 2-Column Layout And List Quick Actions
 
 **Started:** 2026-07-11
-**Status:** Draft — S24 paused for GAP-007 list quick-action metadata contract
+**Status:** S24j complete — Ready to Close row action leak corrected after review feedback
 **Session name:** S24 request workbench 2-column layout and list quick actions
-**Related ADRs:** ADR-377, ADR-380, ADR-382, ADR-383, ADR-433, ADR-434, ADR-435
+**Related ADRs:** ADR-377, ADR-380, ADR-382, ADR-383, ADR-433, ADR-434, ADR-435, ADR-436
 **Next free ADR before ADR-435:** ADR-435
-**Next free ADR after ADR-435:** ADR-436
+**Next free ADR after ADR-436:** ADR-437
 
 ---
 
@@ -836,6 +836,12 @@ Acceptance criteria:
 
 Goal: Verify the new layout at realistic widths and clean up visual regressions.
 
+Precondition:
+
+- Resolve GAP-008 before treating S24h as complete. Request rows must explain urgent/soon signals by
+  source (`Customer signal` vs `Internal priority`) and provide next-action context only when server
+  quick actions make it clear.
+
 Scope:
 
 - Test desktop, narrow desktop/tablet, and mobile widths across request list and detail.
@@ -944,6 +950,133 @@ These should be resolved before or during S24a/S24b:
 8. Should request list use a right-side queue panel?
    - Recommendation: only if it helps scanning or selected-row preview. Do not add a decorative or
      low-value panel just to mimic detail.
+
+---
+
+## S24h — GAP-008 Closeout (2026-07-12)
+
+**Slice:** S24h — request-list urgency/priority source labels and next-action cue
+**Files changed:** `web/ophalo-app/src/components/RequestRow.tsx` (1 production file)
+
+### What changed
+
+Replaced five generic urgency/priority rendering blocks with source-aware labels per ADR-433:
+
+- `Internal priority: Urgent/Soon` (danger/attention badge) when `row.businessPriority` is urgent/soon.
+- Quiet `Customer signal: Urgent/Soon` text alongside internal priority when both signals are present
+  and differ and the customer signal is urgent or soon.
+- `Customer signal: Urgent` (danger badge) or `Customer signal: Soon` (attention badge) when
+  `businessPriority` is null and source is `public_intake`.
+
+Added `NEXT_ACTION_MAP` constant and `nextActionCue` helper that derives a compact `Next: X or Y`
+text cue from the server-provided `quickActions` array (up to two actions, excluding `open_detail`).
+The cue is plain explanatory text in the signals row, not a duplicate button bar.
+
+### Acceptance criteria verified
+
+- Owners/admins can tell urgency source without opening detail. ✓
+- Customer signal and internal priority remain visually/semantically distinct. ✓
+- `Next:` cue appears only when server quick actions are present and meaningful. ✓
+- Rows remain compact; no new layout/padding changes. ✓
+- TypeScript passes clean. ✓
+
+---
+
+## S24i — GAP-009 Signal Clarity Audit (2026-07-12)
+
+**Slice:** S24i — ADR-436 cross-surface staff signal clarity (list + detail)
+**Files changed:** `web/ophalo-app/src/components/RequestRow.tsx`, `web/ophalo-app/src/pages/RequestDetail.tsx`
+
+### What changed
+
+**RequestRow.tsx:**
+
+- `NEXT_ACTION_MAP` values capitalized to match visible button labels: `"Update customer"`,
+  `"Log contact"`, `"Clear attention"`, `"Review feedback"`, `"Close out"`.
+- `Overdue` badge → `Response overdue` (explains the signal rather than labeling it).
+- `Customer signal: Urgent` badge → `Customer marked urgent` (source-first copy).
+- `Customer signal: Soon` badge → `Customer asked for soon follow-up` (source-first copy).
+- Subordinate intake note alongside internal priority: `Customer signal: Urgent/Soon` →
+  `Customer marked urgent/soon follow-up`.
+
+**RequestDetail.tsx:**
+
+- `DetailHero` attention badge: replaced `detail.attentionReason.replace(/_/g, " ")` with
+  `reasonLabel(detail.attentionReason)` to use existing human-readable label map.
+- `TriagePanel` customer signal section:
+  - `Urgent request` → `Customer marked urgent` (source-explicit per ADR-433).
+  - `Soon` → `Customer asked for soon follow-up`.
+  - Contact preference badges prefixed: `Phone call` → `Prefers call`, `Text message` → `Prefers text`,
+    `Email` → `Prefers email` (no change to `No preference`).
+  - Helper text added below customer signal: "Review the request, then update the customer or log
+    contact if needed."
+- `TriagePanel` internal priority read-only display: `Urgent` → `Team marked urgent`;
+  `Soon` → `Team marked soon`; `Routine` and `Not set` unchanged.
+- Helper text added below priority select when no priority is set and `canEdit` is true:
+  "Set priority to handle this ahead of routine work."
+
+### Acceptance criteria verified
+
+- Request list rows no longer show unexplained `Urgent` / `Soon` style pills. ✓
+- Request list rows explain why a signal exists; `Next:` cue verbs match button labels. ✓
+- Request detail non-attention signals explain source and expected handling. ✓
+- Needs Attention card still shows `Why` and `Resolve by`. ✓
+- Customer intake urgency and internal priority remain distinct. ✓
+- No backend/API changes. ✓
+- TypeScript passes clean. ✓
+
+---
+
+## S24j — Ready to Close Row Action Correction (2026-07-12)
+
+**Slice:** S24j — screenshot review follow-up for work-completed closeout rows
+**Files changed:** `src/OpHalo.Keep.Application/Requests/GetKeepRequestListService.cs`,
+`web/ophalo-app/src/components/RequestRow.tsx`,
+`tests/OpHalo.UnitTests/Keep/KeepRequestListServiceTests.cs`,
+`tests/OpHalo.IntegrationTests/Api/KeepRequestListB5Tests.cs`
+
+### Context
+
+This started as a feedback request, not an implementation request. The screenshot review found a
+real logic leak on a Ready to Close-style row:
+
+- status was **Work completed**;
+- there were no active attention flags;
+- row copy still said `Next: Log contact or Update customer`;
+- row actions still pushed `Log contact` / `Update customer` instead of the terminal lifecycle action.
+
+The implementation was completed during the feedback pass and intentionally retained afterward.
+
+### What changed
+
+- `BuildQuickActions` now checks policy-derived `CanClose` before adding communication/internal-note
+  quick actions.
+- Closeable rows emit only `open_detail` plus `close_request`.
+- Added `QuickActionDefs.CloseRequest` with label `Close request`, `requiresVersion: true`, and
+  `changesStatus: true`.
+- `RequestRow.tsx` maps `close_request` to visible `Close request` copy for both the `Next:` cue and
+  row action button.
+- `close_request` row buttons use the red danger treatment so terminal lifecycle actions do not look
+  like routine communication pills.
+
+### Typography finding
+
+The screenshot also raised a concern that row customer names still appeared to render in Inter. Source
+inspection showed no code change was needed for the current request-list row:
+
+- `RequestRow.tsx` uses `.keep-row-title` for request-list and available-work customer names.
+- `web/ophalo-app/src/styles/app.css` defines `.keep-row-title` as `font-serif text-base font-semibold`.
+
+If a running screenshot still shows Inter, the likely cause is stale built CSS/browser cache or a
+different row surface, not the current `RequestRow.tsx` source.
+
+### Acceptance criteria verified
+
+- Ready to Close rows expose `open_detail` + `close_request`, not communication quick actions. ✓
+- `Next:` cue reads `Close request` when the server emits `close_request`. ✓
+- Row button copy reads `Close request` and uses danger styling. ✓
+- PWA typecheck passes. ✓
+- Targeted unit and B5 integration tests pass. ✓
 
 ---
 

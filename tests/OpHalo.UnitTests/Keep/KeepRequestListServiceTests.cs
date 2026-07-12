@@ -1887,6 +1887,19 @@ public class KeepRequestListServiceTests
     }
 
     [Fact]
+    public async Task ReadyToClose_resolved_clean_row_exposes_close_request_only()
+    {
+        var request = MakeResolvedRequest();
+        var sut = BuildSut(HappyPathPersistence([request]));
+
+        var result = await sut.ExecuteAsync(new KeepRequestListQuery(View: "ready_to_close"));
+
+        Assert.True(result.IsSuccess);
+        var actionCodes = result.Value.Requests.Single().Actions.QuickActions.Select(a => a.Code).ToList();
+        Assert.Equal(["open_detail", "close_request"], actionCodes);
+    }
+
+    [Fact]
     public async Task ReadyToClose_resolved_with_attention_excluded()
     {
         var request = MakeResolvedRequest();

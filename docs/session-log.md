@@ -1,10 +1,10 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-07-11 (S24g2 complete — list action contract done; S24g3 inline modals next)
+**Last updated:** 2026-07-12 (S24j complete — Ready to Close row action leak corrected)
 **Branch:** `main` tracking `origin/main`
-**Last green baseline:** S24g2 — 166 unit · 21 B5 integration · PWA typecheck clean
-**Next free ADR:** ADR-436
-**Current session:** Session 24 — request workbench; S24g2 complete, S24g3 pending
+**Last green baseline:** S24j — PWA typecheck clean; KeepRequestListServiceTests 167 passed; KeepRequestListB5Tests 22 passed
+**Next free ADR:** ADR-437
+**Current session:** Session 24 — request workbench; S24g3 inline modals + S24h GAP-008 + S24i GAP-009 + S24j GAP-010 complete
 
 ---
 
@@ -185,8 +185,12 @@ Build-log 081 is the current decision/handoff document:
 3. **S24g4 — PWA list internal note quick action**: add server-emitted `add_internal_note` as a
    pilot-priority PWA owner/admin cockpit action using the same modal/sheet shell with an
    internal-only variant. Do not let this slip behind native mobile work.
-4. **S24h — Responsive QA and polish** after S24g3/S24g4, then close build-log 081.
-5. After S24 complete: **077** pre-deployment file decomposition or **078** tracker-link email.
+4. **GAP-008 — Request-list urgency/priority context:** resolved in S24h.
+5. **GAP-009 / ADR-436 — Staff signal clarity audit:** resolved in S24i.
+6. **GAP-010 — Ready to Close row action leak:** resolved in S24j after screenshot review; closeable
+   work-completed rows now emit/display `Close request` instead of communication next-actions.
+7. **S24h/S24 closeout — Responsive QA and polish:** remaining S24 work before closing build-log 081.
+8. After S24 complete: **077** pre-deployment file decomposition or **078** tracker-link email.
 
 ### Surface Boundary
 
@@ -201,8 +205,14 @@ Build-log 081 is the current decision/handoff document:
 
 - **GAP-007 — Request-list quick actions lack complete row-level action contract**:
   `docs/pilot-readiness-bug-tracker.md`.
+- **GAP-008 — Request-list urgency/priority pills lack source and next-action context**:
+  `docs/pilot-readiness-bug-tracker.md`.
+- **GAP-010 — Ready to Close rows leaked communication next-actions**:
+  `docs/pilot-readiness-bug-tracker.md`.
 - **ADR-435 — Request List Action Cockpit Boundary**:
   `docs/decisions/ADR-435-request-list-action-cockpit-boundary.md`.
+- **ADR-436 — Staff Operational Signal Clarity**:
+  `docs/decisions/ADR-436-staff-operational-signal-clarity.md`.
 
 Resolved before next session:
 

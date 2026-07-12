@@ -592,6 +592,17 @@ public sealed class KeepRequestListB5Tests : IClassFixture<KeepApiWebFactory>, I
     }
 
     [Fact]
+    public async Task ReadyToClose_resolved_clean_row_exposes_close_request_only()
+    {
+        var body = await GetRtcListAsync(_ownerCookie);
+        Assert.NotNull(body);
+        var row = body.Requests.Single(r => r.Id == _resolvedCleanRequestId);
+        var actionCodes = row.Actions.QuickActions.Select(a => a.Code).ToList();
+
+        Assert.Equal(["open_detail", "close_request"], actionCodes);
+    }
+
+    [Fact]
     public async Task ReadyToClose_warning_signal_true_when_customer_active_after_business()
     {
         var body = await GetRtcListAsync(_ownerCookie);
@@ -675,7 +686,7 @@ public sealed class KeepRequestListB5Tests : IClassFixture<KeepApiWebFactory>, I
 
     private sealed record RtcListBody(List<RtcRequestBody> Requests);
 
-    private sealed record RtcRequestBody(Guid Id, RtcReadyToCloseBody ReadyToClose);
+    private sealed record RtcRequestBody(Guid Id, B5ActionsBody Actions, RtcReadyToCloseBody ReadyToClose);
 
     private sealed record RtcReadyToCloseBody(bool HasCustomerActivityAfterResolution);
 }

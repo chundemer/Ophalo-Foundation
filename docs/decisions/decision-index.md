@@ -489,4 +489,6 @@ decision. This file is authoritative for the new project.
 
 | ADR-435 | Request list remains the speed/action cockpit and request detail remains the depth/workbench surface. Low-risk repeatable actions such as customer updates, external contact logging, internal notes, assignment/watch, and simple attention handling belong on the list once row-level concurrency/action metadata is available. Context-heavy/accountability actions such as feedback review, cancellation, classification, service-location edits, timing controls, and generic status changes stay detail-owned for V1. S24 quick-action deep links are a temporary fallback, not the completed list-action design | Locked | [ADR-435](ADR-435-request-list-action-cockpit-boundary.md); build-log/081; GAP-007 |
 
-_Next free ID: **ADR-436**._
+| ADR-436 | Staff-facing operational alerts, attention states, urgency signals, and priority cues must answer why the signal is shown and what staff should do next. Request-list signals use compact human source/reason copy plus server-derived `Next:` cues whose verbs match visible action buttons; request detail uses fuller `Why` / `Resolve by` guidance. Customer intake urgency and internal business priority remain distinct, and clients must not invent next actions when server metadata is ambiguous | Locked | [ADR-436](ADR-436-staff-operational-signal-clarity.md); GAP-008; GAP-009 |
+
+_Next free ID: **ADR-437**._

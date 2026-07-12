@@ -22,8 +22,24 @@ const ACTION_NAV_LABELS: Record<string, string> = {
   post_customer_update: "Update customer",
   acknowledge_attention: "Clear attention",
   review_feedback: "Review feedback",
-  close_request: "Close out",
+  close_request: "Close request",
 };
+
+const NEXT_ACTION_MAP: Record<string, string> = {
+  post_customer_update: "Update customer",
+  contact_customer: "Log contact",
+  acknowledge_attention: "Clear attention",
+  review_feedback: "Review feedback",
+  close_request: "Close request",
+};
+
+function nextActionCue(quickActions: KeepQuickAction[]): string | null {
+  const labels = quickActions
+    .filter((a) => a.code !== "open_detail" && NEXT_ACTION_MAP[a.code] !== undefined)
+    .slice(0, 2)
+    .map((a) => NEXT_ACTION_MAP[a.code]);
+  return labels.length > 0 ? labels.join(" or ") : null;
+}
 
 const DANGER_REASONS = new Set([
   "complaint",
@@ -150,6 +166,8 @@ export function RequestRow({ row, onSelect, onSelectFocused, onActionClick, show
       ),
   );
 
+  const nextCue = nextActionCue(row.actions.quickActions);
+
   const borderAccent = (tone === "danger" || isOverdue)
     ? "border-l-4 border-l-[var(--ophalo-danger)]"
     : tone !== null
@@ -178,7 +196,7 @@ export function RequestRow({ row, onSelect, onSelectFocused, onActionClick, show
           {isOverdue && (
             <KeepBadge variant="danger" className="gap-1">
               <AlertTriangle className="h-3 w-3" />
-              Overdue
+              Response overdue
             </KeepBadge>
           )}
           {row.attention.attentionReason && (
@@ -194,32 +212,40 @@ export function RequestRow({ row, onSelect, onSelectFocused, onActionClick, show
           {row.businessPriority === "urgent" && (
             <KeepBadge variant="danger" className="gap-1">
               <AlertTriangle className="h-3 w-3" />
-              Priority: Urgent
+              Internal priority: Urgent
             </KeepBadge>
           )}
           {row.businessPriority === "soon" && (
             <KeepBadge variant="attention" className="gap-1">
               <Clock className="h-3 w-3" />
-              Priority: Soon
+              Internal priority: Soon
             </KeepBadge>
           )}
-          {row.businessPriority !== null && row.businessPriority !== row.intakeUrgency && row.source === "public_intake" && row.intakeUrgency === "urgent" && (
-            <span className="text-[11px] text-[var(--ophalo-muted)]">Customer: urgent</span>
+          {row.businessPriority !== null &&
+            row.businessPriority !== row.intakeUrgency &&
+            row.source === "public_intake" &&
+            (row.intakeUrgency === "urgent" || row.intakeUrgency === "soon") && (
+            <span className="text-[11px] text-[var(--ophalo-muted)]">
+              Customer marked {row.intakeUrgency === "urgent" ? "urgent" : "soon follow-up"}
+            </span>
           )}
           {row.businessPriority === null && row.source === "public_intake" && row.intakeUrgency === "urgent" && (
             <KeepBadge variant="danger" className="gap-1">
               <AlertTriangle className="h-3 w-3" />
-              Urgent
+              Customer marked urgent
             </KeepBadge>
           )}
           {row.businessPriority === null && row.source === "public_intake" && row.intakeUrgency === "soon" && (
             <KeepBadge variant="attention" className="gap-1">
               <Clock className="h-3 w-3" />
-              Soon
+              Customer asked for soon follow-up
             </KeepBadge>
           )}
           {dueLabel && (
             <span className="text-[11px] text-[var(--ophalo-danger)]">{dueLabel}</span>
+          )}
+          {nextCue && (
+            <span className="text-[11px] text-[var(--ophalo-muted)]">Next: {nextCue}</span>
           )}
         </div>
 
@@ -270,6 +296,7 @@ export function RequestRow({ row, onSelect, onSelectFocused, onActionClick, show
           {actionBarItems.map((action) => {
             const isModal = action.executionMode === "modal" && MODAL_ACTION_CODES.has(action.code);
             const focus = ACTION_FOCUS_MAP[action.code];
+            const isDanger = action.code === "close_request";
             return (
               <button
                 key={action.code}
@@ -284,7 +311,11 @@ export function RequestRow({ row, onSelect, onSelectFocused, onActionClick, show
                     onSelect(row.id);
                   }
                 }}
-                className={`inline-flex items-center rounded-md px-2.5 py-1 text-xs font-semibold bg-[var(--ophalo-canvas)] border border-[var(--ophalo-border)] text-[var(--ophalo-ink)] hover:border-[var(--keep-accent)] hover:text-[var(--keep-accent)] transition-colors ${FOCUS_RING}`}
+                className={`inline-flex items-center rounded-md px-2.5 py-1 text-xs font-semibold transition-colors ${FOCUS_RING} ${
+                  isDanger
+                    ? "border border-[var(--ophalo-danger)] bg-[var(--ophalo-danger-bg)] text-[var(--ophalo-danger)] hover:bg-[var(--ophalo-danger)] hover:text-white"
+                    : "border border-[var(--ophalo-border)] bg-[var(--ophalo-canvas)] text-[var(--ophalo-ink)] hover:border-[var(--keep-accent)] hover:text-[var(--keep-accent)]"
+                }`}
               >
                 {ACTION_NAV_LABELS[action.code] ?? action.label}
               </button>

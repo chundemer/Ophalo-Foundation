@@ -864,6 +864,12 @@ public sealed class GetKeepRequestListService(
 
         var actions = new List<KeepQuickAction> { openDetail };
 
+        if (actionDecision.CanClose)
+        {
+            actions.Add(QuickActionDefs.CloseRequest);
+            return actions;
+        }
+
         // CanLogExternalContact gates the contact quick action (ADR-328).
         var hasContactMethods = !string.IsNullOrWhiteSpace(r.CustomerPhone)
             || !string.IsNullOrWhiteSpace(r.CustomerEmail);
@@ -1219,6 +1225,11 @@ public sealed class GetKeepRequestListService(
             "review_feedback", "Review feedback", "internal",
             RequiresVersion: false, ExecutionMode: "detail",
             false, false, false, "opens_detail_feedback");
+
+        public static readonly KeepQuickAction CloseRequest = new(
+            "close_request", "Close request", "internal",
+            RequiresVersion: true, ExecutionMode: "detail",
+            false, false, true, "closes_request");
     }
 
     // B5 operational sort: attention-first ranking (ADR-252 default/assigned_to_me/watching/unassigned/needs_attention).
