@@ -176,13 +176,26 @@ Build-log 081 is the current decision/handoff document:
    TypeScript types/mocks if missing, and add quick-action metadata: `requiresVersion`,
    `executionMode`, `customerVisible`, `internalOnly`, `clearsAttention`, and `changesStatus`.
    Update mapping, API tests, TypeScript types, mocks, and docs.
-2. **S24g3 — True inline list actions**: replace eligible deep-link shortcuts with compact row-level
-   controls/modals for send customer update, log external contact, add internal note,
-   assign/self-assign/watch where available, simple attention acknowledgement, and Ready to Close
-   closeout confirmation. Keep feedback review, cancellation, classification, service-location
-   edits, timing controls, and generic status changes detail-owned.
-3. **S24h — Responsive QA and polish** after S24g2/S24g3, then close build-log 081.
-4. After S24 complete: **077** pre-deployment file decomposition or **078** tracker-link email.
+2. **S24g3 — True inline list actions**: replace eligible deep-link shortcuts with one reusable
+   row action modal/sheet shell for the currently emitted modal actions: send customer update, log
+   external contact, and simple attention acknowledgement. Use `executionMode`, `requiresVersion`,
+   and `row.version`; preserve drafts on 409; refetch the list after success. Keep feedback review,
+   cancellation, classification, service-location edits, timing controls, and generic status changes
+   detail-owned.
+3. **S24g4 — PWA list internal note quick action**: add server-emitted `add_internal_note` as a
+   pilot-priority PWA owner/admin cockpit action using the same modal/sheet shell with an
+   internal-only variant. Do not let this slip behind native mobile work.
+4. **S24h — Responsive QA and polish** after S24g3/S24g4, then close build-log 081.
+5. After S24 complete: **077** pre-deployment file decomposition or **078** tracker-link email.
+
+### Surface Boundary
+
+- PWA request list = owner/admin triage cockpit for queue scanning, customer updates, internal team
+  memory, attention handling, and desk/tablet operational control.
+- Native mobile request list = field execution surface for call/text/email launch, contact logging,
+  map/location actions, self-assignment, and phone-sized promise-loop work.
+- Both surfaces share server-owned action metadata, but their quick-action layouts and priority order
+  may differ by surface.
 
 ### Active Gap
 

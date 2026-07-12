@@ -747,13 +747,11 @@ controls/modals.
 
 Scope:
 
-- Implement row-level or overlay-modal flows for:
+- Implement row-level overlay modal/sheet flows for the server-emitted modal actions currently in the
+  list contract:
   - send customer update;
   - log external contact;
-  - add internal note;
-  - assign/self-assign/watch where the server exposes it;
-  - clear/acknowledge simple attention where server metadata says it is safe;
-  - close request only from Ready to Close with explicit confirmation.
+  - clear/acknowledge simple attention.
 - Preserve detail/focus navigation for:
   - feedback review;
   - cancellation;
@@ -761,11 +759,49 @@ Scope:
   - service-location edits;
   - timing controls;
   - generic status changes.
+- Do not add assign/watch or closeout in S24g3 unless the server emits those as quick actions and a
+  separate file-level gate is approved.
+- Do not add internal notes in S24g3 unless the server emits `add_internal_note`. Internal note is a
+  pilot-priority fast follow in S24g4 and must use the same reusable shell.
 - Use `row.version` or server action token metadata for every versioned mutation.
 - On success, refresh or reconcile the affected list row so the queue remains trustworthy.
 - Preserve drafts on `409 KeepRequest.RequestChanged` and tell the user to refresh/open detail.
 - Keep visibility copy explicit: customer-visible update, internal-only note, external contact log,
   attention-clearing action, or lifecycle/status change.
+
+Component architecture:
+
+- Build one reusable `RequestRowActionModal`/`QuickActionModal` shell instead of separate popups per
+  action.
+- The shell renders as a centered modal on desktop and a bottom sheet on narrow/mobile viewports.
+- Keep form controls stable and touch-safe; text inputs/textareas must use at least `text-base` to
+  avoid iOS focus zoom.
+- Route action rendering from server metadata:
+  - `executionMode === "modal"` opens the row modal;
+  - `executionMode === "detail"` opens request detail/focus;
+  - unknown modes/codes fall back to detail.
+- Variant behavior inside the shared shell:
+  - `post_customer_update`: customer-visible copy, customer-visible badge, customer update textarea,
+    teal/customer action button, calls `api.postBusinessUpdate(row.id, { message }, row.version)`.
+  - `contact_customer`: internal external-contact record copy, channel selector for phone/text/email
+    or other supported channels, summary/note input, primary/navy action button, calls
+    `api.logExternalContact(row.id, body, row.version)`.
+  - `acknowledge_attention`: compact confirmation with required reason text, summarize the attention
+    being cleared, primary/navy action button, calls `api.acknowledgeAttention(row.id, reason,
+    row.version)`.
+- The shell must preserve entered text on `409 KeepRequest.RequestChanged`.
+- After successful mutation, close the modal and refetch/refresh the current list query so row state,
+  counts, and quick actions remain trustworthy.
+
+PWA/native surface boundary:
+
+- The PWA request list is the owner/admin triage cockpit. It foregrounds queue scanning, customer
+  updates, internal team memory, attention handling, and desk/tablet operational control.
+- The native mobile request list is the field execution surface. It foregrounds physical-world
+  immediacy: call/text/email launch, contact logging, map/location actions, self-assignment, and
+  phone-sized promise-loop work.
+- Both surfaces share server-owned action metadata, but their quick-action layouts and priority order
+  may differ by surface. Do not force identical row controls across PWA and native.
 
 Acceptance criteria:
 
@@ -773,6 +809,27 @@ Acceptance criteria:
 - Detail remains available and preferred for context-heavy or accountability-heavy work.
 - Row actions do not bypass concurrency, role policy, or server action metadata.
 - List rows remain scannable at desktop and mobile widths.
+- TypeScript passes.
+
+### S24g4 — PWA list internal note quick action
+
+Goal: Add `add_internal_note` as a pilot-priority PWA request-list quick action.
+
+Scope:
+
+- Emit `add_internal_note` from the server quick-action contract where `canAddInternalNote` allows it
+  and the PWA list row has enough context.
+- Use `executionMode: "modal"` and `requiresVersion: true`.
+- Reuse the S24g3 modal/sheet shell with an internal-only variant.
+- Calls `api.addInternalNote(row.id, { note }, row.version)`.
+- Keep native mobile priority separate; this action is primarily for the PWA owner/admin cockpit.
+
+Acceptance criteria:
+
+- Owners/Admins can add a private team note from the PWA list without opening detail.
+- Internal-note UI is visibly internal-only and cannot be mistaken for a customer update.
+- The action is server-gated and versioned.
+- Success refreshes the current list.
 - TypeScript passes.
 
 ### S24h — Responsive QA and polish

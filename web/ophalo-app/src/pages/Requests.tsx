@@ -4,8 +4,9 @@ import {
   RefreshCw, Search, ChevronLeft, ChevronRight,
   AlertTriangle, CheckCircle2,
 } from "lucide-react";
-import { api, type AccountRole, type RequestView, type KeepRequestViewCounts } from "../lib/apiClient";
+import { api, type AccountRole, type RequestView, type KeepRequestViewCounts, type KeepRequestSummary, type KeepQuickAction } from "../lib/apiClient";
 import { RequestRow, AvailableRequestRow } from "../components/RequestRow";
+import { RequestRowActionModal } from "../components/RequestRowActionModal";
 import { ApiError } from "../lib/apiClient";
 
 // --- Tab definitions ---
@@ -154,6 +155,10 @@ interface RequestsProps {
 export function Requests({ role, viewCounts, onViewCountsUpdate, onSelectRequest }: RequestsProps) {
   const tabs = getTabsForRole(role);
   const [activeTab, setActiveTab] = useState<TabDef>(tabs[0]);
+  const [activeModalAction, setActiveModalAction] = useState<{
+    row: KeepRequestSummary;
+    action: KeepQuickAction;
+  } | null>(null);
   const [q, setQ] = useState("");
   const [draftQ, setDraftQ] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
@@ -253,6 +258,15 @@ export function Requests({ role, viewCounts, onViewCountsUpdate, onSelectRequest
       ? (availableQuery.data?.requests ?? []).map((r) => r.requestId)
       : (listQuery.data?.requests ?? []).map((r) => r.id);
     onSelectRequest(id, { requestIds: ids }, focus);
+  }
+
+  function handleActionClick(row: KeepRequestSummary, action: KeepQuickAction) {
+    setActiveModalAction({ row, action });
+  }
+
+  function handleModalSuccess() {
+    setActiveModalAction(null);
+    void listQuery.refetch();
   }
 
   return (
@@ -427,7 +441,7 @@ export function Requests({ role, viewCounts, onViewCountsUpdate, onSelectRequest
                   <AvailableRequestRow key={row.requestId} row={row} onSelect={handleRowSelect} />
                 ))
               : (listQuery.data?.requests ?? []).map((row) => (
-                  <RequestRow key={row.id} row={row} onSelect={handleRowSelect} onSelectFocused={handleRowSelectFocused} showCloseoutCue={activeTab.id === "ready_to_close"} />
+                  <RequestRow key={row.id} row={row} onSelect={handleRowSelect} onSelectFocused={handleRowSelectFocused} onActionClick={handleActionClick} showCloseoutCue={activeTab.id === "ready_to_close"} />
                 ))
             }
           </div>
@@ -459,6 +473,16 @@ export function Requests({ role, viewCounts, onViewCountsUpdate, onSelectRequest
           </button>
         </div>{/* /max-w-6xl */}
         </div>
+      )}
+
+      {/* Row action modal */}
+      {activeModalAction && (
+        <RequestRowActionModal
+          row={activeModalAction.row}
+          action={activeModalAction.action}
+          onClose={() => setActiveModalAction(null)}
+          onSuccess={handleModalSuccess}
+        />
       )}
     </div>
   );

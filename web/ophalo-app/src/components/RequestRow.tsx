@@ -1,6 +1,6 @@
 import { AlertTriangle, Clock, MessageSquare, Link, ChevronRight, UserRound, CheckCircle2 } from "lucide-react";
 import { KeepBadge, type KeepBadgeVariant } from "./keep/KeepBadge";
-import type { KeepRequestSummary, KeepRequestAvailableItem } from "../lib/apiClient";
+import type { KeepRequestSummary, KeepRequestAvailableItem, KeepQuickAction } from "../lib/apiClient";
 
 const ACTION_FOCUS_MAP: Record<string, string> = {
   contact_customer: "contact",
@@ -9,6 +9,12 @@ const ACTION_FOCUS_MAP: Record<string, string> = {
   review_feedback: "feedback_review",
   close_request: "closeout",
 };
+
+const MODAL_ACTION_CODES = new Set([
+  "post_customer_update",
+  "contact_customer",
+  "acknowledge_attention",
+]);
 
 const ACTION_NAV_LABELS: Record<string, string> = {
   contact_customer: "Log contact",
@@ -125,16 +131,22 @@ interface RequestRowProps {
   row: KeepRequestSummary;
   onSelect: (requestId: string) => void;
   onSelectFocused?: (requestId: string, focus: string) => void;
+  onActionClick?: (row: KeepRequestSummary, action: KeepQuickAction) => void;
   showCloseoutCue?: boolean;
 }
 
-export function RequestRow({ row, onSelect, onSelectFocused, showCloseoutCue }: RequestRowProps) {
+export function RequestRow({ row, onSelect, onSelectFocused, onActionClick, showCloseoutCue }: RequestRowProps) {
   const lastTouch = relativeTime(row.lastBusinessActivityAtUtc ?? row.updatedAtUtc);
   const tone = row.attention.attentionReason ? attentionTone(row.attention.attentionReason) : null;
   const isOverdue = row.ranking.isOverdue;
   const dueLabel = isOverdue && row.ranking.dueAtUtc ? `Due ${shortDate(row.ranking.dueAtUtc)}` : null;
-  const navActions = row.actions.quickActions.filter(
-    (a) => a.code !== "open_detail" && ACTION_FOCUS_MAP[a.code] !== undefined,
+  const actionBarItems = row.actions.quickActions.filter(
+    (a) =>
+      a.code !== "open_detail" &&
+      (
+        (a.executionMode === "modal" && MODAL_ACTION_CODES.has(a.code)) ||
+        ACTION_FOCUS_MAP[a.code] !== undefined
+      ),
   );
 
   const borderAccent = (tone === "danger" || isOverdue)
@@ -149,7 +161,7 @@ export function RequestRow({ row, onSelect, onSelectFocused, showCloseoutCue }: 
       <button
         type="button"
         onClick={() => onSelect(row.id)}
-        className={`w-full text-left flex flex-col gap-2 px-4 pt-3 ${navActions.length > 0 ? "pb-2" : "pb-3"} ${FOCUS_RING} rounded-t-xl`}
+        className={`w-full text-left flex flex-col gap-2 px-4 pt-3 ${actionBarItems.length > 0 ? "pb-2" : "pb-3"} ${FOCUS_RING} rounded-t-xl`}
       >
         {/* Identity: reference + customer name */}
         <div className="flex items-center justify-between gap-2">
@@ -251,10 +263,11 @@ export function RequestRow({ row, onSelect, onSelectFocused, showCloseoutCue }: 
         </div>
       </button>
 
-      {/* Quick action bar — shown when server provides navigation-intent actions */}
-      {navActions.length > 0 && (
+      {/* Quick action bar */}
+      {actionBarItems.length > 0 && (
         <div className="border-t border-[var(--ophalo-border)] px-4 py-2 flex items-center gap-2">
-          {navActions.map((action) => {
+          {actionBarItems.map((action) => {
+            const isModal = action.executionMode === "modal" && MODAL_ACTION_CODES.has(action.code);
             const focus = ACTION_FOCUS_MAP[action.code];
             return (
               <button
@@ -262,7 +275,9 @@ export function RequestRow({ row, onSelect, onSelectFocused, showCloseoutCue }: 
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation();
-                  if (focus && onSelectFocused) {
+                  if (isModal && onActionClick) {
+                    onActionClick(row, action);
+                  } else if (focus && onSelectFocused) {
                     onSelectFocused(row.id, focus);
                   } else {
                     onSelect(row.id);
