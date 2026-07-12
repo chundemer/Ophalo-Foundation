@@ -12,9 +12,9 @@ using OpHalo.SharedKernel.Abstractions;
 
 namespace OpHalo.UnitTests.Keep;
 
-public class ClearShareIntentServiceTests
+public class CreateSmsHandoffServiceTests
 {
-    private static readonly DateTime Now       = new(2026, 6, 27, 10, 0, 0, DateTimeKind.Utc);
+    private static readonly DateTime Now       = new(2026, 7, 12, 10, 0, 0, DateTimeKind.Utc);
     private static readonly Guid     AccountId = Guid.NewGuid();
     private static readonly Guid     UserId    = Guid.NewGuid();
 
@@ -22,17 +22,20 @@ public class ClearShareIntentServiceTests
     // Helpers
     // ---------------------------------------------------------------------------
 
-    private static ClearShareIntentService BuildSut(
-        FakeOperatePersistence? operate       = null,
-        AccountUserRole role                  = AccountUserRole.Owner,
-        AccountAccessPosture posture          = AccountAccessPosture.FullAccess,
-        bool permitted                        = true,
-        bool featureEnabled                   = true,
-        bool isAuthenticated                  = true)
+    private static CreateSmsHandoffService BuildSut(
+        FakeOperatePersistence? operate  = null,
+        FakeHandoffPersistence? handoff  = null,
+        AccountUserRole role             = AccountUserRole.Owner,
+        AccountAccessPosture posture     = AccountAccessPosture.FullAccess,
+        bool permitted                   = true,
+        bool featureEnabled              = true,
+        bool isAuthenticated             = true)
     {
         operate ??= HappyOperatePersistence(role);
-        return new ClearShareIntentService(
+        handoff ??= new FakeHandoffPersistence();
+        return new CreateSmsHandoffService(
             operate,
+            handoff,
             new FakeCurrentUser(UserId, AccountId, isAuthenticated),
             new FakeUserAccessPolicy(permitted),
             new FakeAccountAccessPolicy(posture),
@@ -41,24 +44,20 @@ public class ClearShareIntentServiceTests
     }
 
     private static FakeOperatePersistence HappyOperatePersistence(
-        AccountUserRole role          = AccountUserRole.Owner,
-        bool requestNeedsShare        = true,
-        KeepRequestCommitResult commit = KeepRequestCommitResult.Committed)
+        AccountUserRole role  = AccountUserRole.Owner,
+        string? customerPhone = "0499888777")
     {
         var request = KeepRequest.CreateByBusiness(
-            AccountId, Guid.NewGuid(), "Jane", "0499888777", null, "Desc",
+            AccountId, Guid.NewGuid(), "Jane", customerPhone ?? "0499888777", null, "Desc",
             "REF-001", "tok_abc", Now, KeepRequestSource.Phone);
-
-        if (!requestNeedsShare)
-            request.ClearNeedsShare();
 
         return new FakeOperatePersistence
         {
             UserSnapshot     = new AccountUserSnapshot(UserId, AccountId, role, MembershipStatus.Active),
             AccountSnapshot  = ActiveSnapshot(),
             ActorDisplayName = "Owner User",
-            Request          = request,
-            CommitResult     = commit
+            Request          = customerPhone is null ? null : request,
+            NoPhone          = customerPhone is null,
         };
     }
 
@@ -72,11 +71,11 @@ public class ClearShareIntentServiceTests
         null,
         null);
 
-    private static ClearShareIntentCommand ValidCommand() =>
-        new(Guid.NewGuid(), "copy_link");
+    private static CreateSmsHandoffCommand ValidCommand() =>
+        new(Guid.NewGuid(), "Hi Jane — ACME Plumbing created a private request page for you: https://ophalo.com/r/tok_abc");
 
     // ---------------------------------------------------------------------------
-    // Auth — unauthenticated
+    // Auth
     // ---------------------------------------------------------------------------
 
     [Fact]
@@ -88,22 +87,14 @@ public class ClearShareIntentServiceTests
         Assert.Equal("auth.unauthorized", result.Error.Code);
     }
 
-    // ---------------------------------------------------------------------------
-    // Auth — Viewer blocked
-    // ---------------------------------------------------------------------------
-
     [Fact]
     public async Task Execute_returns_viewer_blocked_for_viewer_role()
     {
         var sut = BuildSut(role: AccountUserRole.Viewer);
         var result = await sut.ExecuteAsync(ValidCommand());
         Assert.False(result.IsSuccess);
-        Assert.Equal("KeepRequest.ShareIntentViewerBlocked", result.Error.Code);
+        Assert.Equal("KeepRequest.SmsHandoffViewerBlocked", result.Error.Code);
     }
-
-    // ---------------------------------------------------------------------------
-    // Auth — OffSeason blocked
-    // ---------------------------------------------------------------------------
 
     [Fact]
     public async Task Execute_returns_offseason_blocked_when_account_read_only()
@@ -111,7 +102,7 @@ public class ClearShareIntentServiceTests
         var sut = BuildSut(posture: AccountAccessPosture.ReadOnly);
         var result = await sut.ExecuteAsync(ValidCommand());
         Assert.False(result.IsSuccess);
-        Assert.Equal("KeepRequest.ShareIntentOffSeasonBlocked", result.Error.Code);
+        Assert.Equal("KeepRequest.SmsHandoffOffSeasonBlocked", result.Error.Code);
     }
 
     [Fact]
@@ -120,20 +111,7 @@ public class ClearShareIntentServiceTests
         var sut = BuildSut(posture: AccountAccessPosture.Blocked);
         var result = await sut.ExecuteAsync(ValidCommand());
         Assert.False(result.IsSuccess);
-        Assert.Equal("KeepRequest.ShareIntentOffSeasonBlocked", result.Error.Code);
-    }
-
-    // ---------------------------------------------------------------------------
-    // Auth — permission / feature
-    // ---------------------------------------------------------------------------
-
-    [Fact]
-    public async Task Execute_returns_forbidden_when_permission_denied()
-    {
-        var sut = BuildSut(permitted: false);
-        var result = await sut.ExecuteAsync(ValidCommand());
-        Assert.False(result.IsSuccess);
-        Assert.Equal("auth.forbidden", result.Error.Code);
+        Assert.Equal("KeepRequest.SmsHandoffOffSeasonBlocked", result.Error.Code);
     }
 
     [Fact]
@@ -146,104 +124,123 @@ public class ClearShareIntentServiceTests
     }
 
     // ---------------------------------------------------------------------------
-    // Method validation
+    // Input validation
     // ---------------------------------------------------------------------------
 
     [Theory]
     [InlineData("")]
-    [InlineData("  ")]
-    [InlineData("unknown")]
-    [InlineData("COPY_LINK")]
-    public async Task Execute_returns_invalid_method_for_unrecognised_value(string method)
+    [InlineData("   ")]
+    [InlineData(null!)]
+    public async Task Execute_returns_message_required_for_empty_body(string? messageBody)
     {
         var sut = BuildSut();
-        var result = await sut.ExecuteAsync(new ClearShareIntentCommand(Guid.NewGuid(), method));
+        var result = await sut.ExecuteAsync(new CreateSmsHandoffCommand(Guid.NewGuid(), messageBody!));
         Assert.False(result.IsSuccess);
-        Assert.Equal("KeepRequest.ShareIntentInvalidMethod", result.Error.Code);
+        Assert.Equal("KeepRequest.SmsHandoffMessageRequired", result.Error.Code);
     }
 
-    [Theory]
-    [InlineData("sms_qr")]
-    [InlineData("email")]
-    [InlineData("whatsapp")]
-    [InlineData("copy_message")]
-    [InlineData("copy_link")]
-    [InlineData("manual_other")]
-    public async Task Execute_accepts_all_valid_methods(string method)
+    [Fact]
+    public async Task Execute_returns_message_too_long_when_body_exceeds_2000_chars()
     {
         var sut = BuildSut();
-        var result = await sut.ExecuteAsync(new ClearShareIntentCommand(Guid.NewGuid(), method));
-        Assert.True(result.IsSuccess);
+        var result = await sut.ExecuteAsync(new CreateSmsHandoffCommand(Guid.NewGuid(), new string('x', 2001)));
+        Assert.False(result.IsSuccess);
+        Assert.Equal("KeepRequest.SmsHandoffMessageTooLong", result.Error.Code);
     }
 
     // ---------------------------------------------------------------------------
-    // Idempotency — already cleared
+    // Row access
     // ---------------------------------------------------------------------------
 
     [Fact]
-    public async Task Execute_returns_success_without_commit_when_needs_share_already_false()
-    {
-        var operate = HappyOperatePersistence(requestNeedsShare: false);
-        var sut = BuildSut(operate: operate);
-
-        var result = await sut.ExecuteAsync(new ClearShareIntentCommand(operate.Request!.Id, "copy_link"));
-
-        Assert.True(result.IsSuccess);
-        Assert.Equal(0, operate.CommitCallCount);
-    }
-
-    // ---------------------------------------------------------------------------
-    // Happy path — clears NeedsShare and persists event
-    // ---------------------------------------------------------------------------
-
-    [Fact]
-    public async Task Execute_clears_needs_share_and_commits_event()
-    {
-        var operate = HappyOperatePersistence();
-        var sut = BuildSut(operate: operate);
-
-        var result = await sut.ExecuteAsync(new ClearShareIntentCommand(operate.Request!.Id, "sms_qr"));
-
-        Assert.True(result.IsSuccess);
-        Assert.False(operate.Request.NeedsShare);
-        Assert.Equal(1, operate.CommitCallCount);
-        Assert.NotNull(operate.CommittedEvent);
-        Assert.Equal(KeepRequestEventType.ShareIntentRecorded, operate.CommittedEvent.EventType);
-        Assert.Equal("sms_qr", operate.CommittedEvent.Content);
-        Assert.Equal(UserId, operate.CommittedEvent.ActorAccountUserId);
-    }
-
-    // ---------------------------------------------------------------------------
-    // Not found
-    // ---------------------------------------------------------------------------
-
-    [Fact]
-    public async Task Execute_returns_not_found_when_request_invisible()
+    public async Task Execute_returns_not_found_when_request_inaccessible()
     {
         var operate = HappyOperatePersistence();
         operate.Request = null;
         var sut = BuildSut(operate: operate);
-
         var result = await sut.ExecuteAsync(ValidCommand());
-
         Assert.False(result.IsSuccess);
         Assert.Equal("KeepRequest.NotFound", result.Error.Code);
     }
 
+    [Fact]
+    public async Task Execute_returns_customer_phone_missing_when_phone_is_empty()
+    {
+        var operate = HappyOperatePersistence();
+        // Create a request whose CustomerPhone is blank by reconstructing with empty phone
+        var request = KeepRequest.CreateByBusiness(
+            AccountId, Guid.NewGuid(), "Jane", "0499888777", null, "Desc",
+            "REF-001", "tok_abc", Now, KeepRequestSource.Phone);
+        // Use reflection to clear phone — exceptional legacy state tested at service layer
+        typeof(KeepRequest)
+            .GetProperty(nameof(KeepRequest.CustomerPhone))!
+            .SetValue(request, string.Empty);
+        operate.Request = request;
+        var sut = BuildSut(operate: operate);
+        var result = await sut.ExecuteAsync(ValidCommand());
+        Assert.False(result.IsSuccess);
+        Assert.Equal("KeepRequest.SmsHandoffCustomerPhoneMissing", result.Error.Code);
+    }
+
     // ---------------------------------------------------------------------------
-    // Concurrency conflict
+    // Successful creation
     // ---------------------------------------------------------------------------
 
     [Fact]
-    public async Task Execute_returns_request_changed_on_commit_conflict()
+    public async Task Execute_success_returns_raw_token_and_expiry()
     {
-        var operate = HappyOperatePersistence(commit: KeepRequestCommitResult.Conflict);
+        var sut = BuildSut();
+        var result = await sut.ExecuteAsync(ValidCommand());
+        Assert.True(result.IsSuccess);
+        Assert.NotEmpty(result.Value.RawToken);
+        Assert.Equal(Now.AddMinutes(15), result.Value.ExpiresAtUtc);
+    }
+
+    [Fact]
+    public async Task Execute_success_stores_hash_not_raw_token()
+    {
+        var handoff = new FakeHandoffPersistence();
+        var sut = BuildSut(handoff: handoff);
+        var result = await sut.ExecuteAsync(ValidCommand());
+        Assert.True(result.IsSuccess);
+
+        var stored = handoff.StoredHandoff!;
+        // Hash must differ from raw token
+        Assert.NotEqual(result.Value.RawToken, stored.HandoffTokenHash);
+        // Stored hash must equal the canonical hash of the raw token
+        Assert.Equal(KeepSmsHandoff.HashToken(result.Value.RawToken), stored.HandoffTokenHash);
+        // Raw token must never appear in the stored record
+        Assert.DoesNotContain(result.Value.RawToken, stored.HandoffTokenHash);
+    }
+
+    [Fact]
+    public async Task Execute_success_does_not_write_request_event_history()
+    {
+        var operate = HappyOperatePersistence();
         var sut = BuildSut(operate: operate);
+        var result = await sut.ExecuteAsync(ValidCommand());
+        Assert.True(result.IsSuccess);
+        // CommitAsync on the request persistence must never be called (Decision 20)
+        Assert.Equal(0, operate.CommitCallCount);
+    }
 
-        var result = await sut.ExecuteAsync(new ClearShareIntentCommand(operate.Request!.Id, "copy_link"));
+    [Fact]
+    public async Task Execute_success_stores_trimmed_message_body()
+    {
+        var handoff = new FakeHandoffPersistence();
+        var sut = BuildSut(handoff: handoff);
+        var result = await sut.ExecuteAsync(new CreateSmsHandoffCommand(Guid.NewGuid(), "  Hello  "));
+        Assert.True(result.IsSuccess);
+        Assert.Equal("Hello", handoff.StoredHandoff!.MessageBody);
+    }
 
-        Assert.False(result.IsSuccess);
-        Assert.Equal("KeepRequest.RequestChanged", result.Error.Code);
+    [Fact]
+    public async Task Execute_success_stores_customer_phone_from_request()
+    {
+        var handoff = new FakeHandoffPersistence();
+        var sut = BuildSut(handoff: handoff);
+        await sut.ExecuteAsync(ValidCommand());
+        Assert.Equal("0499888777", handoff.StoredHandoff!.CustomerPhone);
     }
 
     // ---------------------------------------------------------------------------
@@ -260,13 +257,12 @@ public class ClearShareIntentServiceTests
 
     private sealed class FakeOperatePersistence : IKeepRequestOperatePersistence
     {
-        public AccountUserSnapshot?  UserSnapshot    { get; set; }
-        public AccountAccessSnapshot? AccountSnapshot { get; set; }
-        public string?               ActorDisplayName { get; set; }
-        public KeepRequest?          Request         { get; set; }
-        public KeepRequestCommitResult CommitResult  { get; set; } = KeepRequestCommitResult.Committed;
-        public int                   CommitCallCount { get; private set; }
-        public KeepRequestEvent?     CommittedEvent  { get; private set; }
+        public AccountUserSnapshot?   UserSnapshot     { get; set; }
+        public AccountAccessSnapshot? AccountSnapshot  { get; set; }
+        public string?                ActorDisplayName { get; set; }
+        public KeepRequest?           Request          { get; set; }
+        public bool                   NoPhone          { get; set; }
+        public int                    CommitCallCount  { get; private set; }
 
         public Task<AccountUserSnapshot?> GetAccountUserSnapshotAsync(Guid id, CancellationToken ct) =>
             Task.FromResult(UserSnapshot);
@@ -284,8 +280,7 @@ public class ClearShareIntentServiceTests
         public Task<KeepRequestCommitResult> CommitAsync(KeepRequest r, KeepRequestEvent? e, CancellationToken ct)
         {
             CommitCallCount++;
-            CommittedEvent = e;
-            return Task.FromResult(CommitResult);
+            return Task.FromResult(KeepRequestCommitResult.Committed);
         }
 
         public Task<KeepResponsePolicy?> GetResponsePolicyAsync(Guid a, CancellationToken ct) => throw new NotImplementedException();
@@ -293,6 +288,20 @@ public class ClearShareIntentServiceTests
         public Task<ParticipantTargetInfo?> GetParticipantTargetAsync(Guid u, Guid a, CancellationToken ct) => throw new NotImplementedException();
         public Task<IReadOnlyList<ParticipantCandidateRecord>> GetParticipantCandidatesAsync(Guid a, CancellationToken ct) => throw new NotImplementedException();
         public Task<KeepRequestCommitResult> CommitParticipationAsync(KeepRequest r, IReadOnlyList<KeepRequestParticipant> n, KeepRequestEvent? e, CancellationToken ct) => throw new NotImplementedException();
+    }
+
+    private sealed class FakeHandoffPersistence : IKeepSmsHandoffPersistence
+    {
+        public KeepSmsHandoff? StoredHandoff { get; private set; }
+
+        public Task CreateAsync(KeepSmsHandoff handoff, CancellationToken ct)
+        {
+            StoredHandoff = handoff;
+            return Task.CompletedTask;
+        }
+
+        public Task<KeepSmsHandoffLookupResult?> FindValidByHashAsync(string tokenHash, DateTime nowUtc, CancellationToken ct) =>
+            throw new NotImplementedException();
     }
 
     private sealed class FakeUserAccessPolicy(bool permitted) : IUserAccessPolicy

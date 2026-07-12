@@ -1,4 +1,6 @@
 using System.Net;
+using System.Security.Cryptography;
+using System.Text;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Mvc;
@@ -116,6 +118,7 @@ builder.Services.AddScoped<KeepIntakeSetupService>();
 builder.Services.AddScoped<IKeepRequestListPersistence, KeepRequestListPersistence>();
 builder.Services.AddScoped<IKeepRequestDetailPersistence, EfKeepRequestDetailPersistence>();
 builder.Services.AddScoped<IKeepRequestOperatePersistence, EfKeepRequestOperatePersistence>();
+builder.Services.AddScoped<IKeepSmsHandoffPersistence, EfKeepSmsHandoffPersistence>();
 builder.Services.AddScoped<KeepTokenService>();
 builder.Services.AddScoped<CreateKeepPublicIntakeService>();
 builder.Services.AddScoped<GetKeepRequestListService>();
@@ -146,6 +149,7 @@ builder.Services.AddScoped<MuteService>();
 builder.Services.AddScoped<MarkFeedbackReviewedService>();
 builder.Services.AddScoped<ManageRequestTimingService>();
 builder.Services.AddScoped<ClearShareIntentService>();
+builder.Services.AddScoped<CreateSmsHandoffService>();
 builder.Services.AddScoped<UpdateServiceLocationService>();
 builder.Services.AddScoped<SetBusinessPriorityService>();
 builder.Services.AddScoped<GetParticipantCandidatesService>();
@@ -524,6 +528,41 @@ app.MapPost("/keep/requests/{requestId:guid}/share-intent", async (
     var result = await service.ExecuteAsync(command, ct);
     return result.IsSuccess ? Results.NoContent() : ErrorHttpMapper.ToHttpResult(result.Error);
 }).RequireAuthorization();
+
+// SMS handoff token creation — authenticated, operator write (S25a)
+app.MapPost("/keep/requests/{requestId:guid}/sms-handoff", async (
+    Guid requestId,
+    SmsHandoffBody body,
+    CreateSmsHandoffService service,
+    IClock clock,
+    IConfiguration config,
+    CancellationToken ct) =>
+{
+    var command = new CreateSmsHandoffCommand(requestId, body.MessageBody);
+    var result = await service.ExecuteAsync(command, ct);
+    if (!result.IsSuccess)
+        return ErrorHttpMapper.ToHttpResult(result.Error);
+    var appBaseUrl = config["App:AppBaseUrl"] ?? "https://app.ophalo.com";
+    var handoffUrl = $"{appBaseUrl}/keep/share-sms/{result.Value.RawToken}";
+    return Results.Ok(new { handoffUrl, expiresAtUtc = result.Value.ExpiresAtUtc });
+}).RequireAuthorization();
+
+// SMS handoff token resolve — public, no auth required (S25a)
+// Returns phone + message for a valid token; 404 for expired or invalid tokens.
+// Expired and invalid cases are intentionally indistinguishable (no payload leakage).
+app.MapGet("/keep/share-sms/{handoffToken}", async (
+    string handoffToken,
+    IKeepSmsHandoffPersistence handoffPersistence,
+    IClock clock,
+    CancellationToken ct) =>
+{
+    var tokenHash = Convert.ToHexString(
+        SHA256.HashData(Encoding.UTF8.GetBytes(handoffToken))).ToLowerInvariant();
+    var handoff = await handoffPersistence.FindValidByHashAsync(tokenHash, clock.UtcNow, ct);
+    return handoff is null
+        ? Results.NotFound()
+        : Results.Ok(new { handoff.CustomerPhone, handoff.MessageBody, handoff.ExpiresAtUtc });
+});
 
 // Add business update — authenticated, operator write (Phase 8-B2-beta)
 app.MapPost("/keep/requests/{requestId:guid}/business-updates", async (

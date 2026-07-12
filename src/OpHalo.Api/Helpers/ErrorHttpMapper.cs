@@ -160,6 +160,13 @@ public static class ErrorHttpMapper
             var c when c == "KeepRequest.ShareIntentOffSeasonBlocked" => (StatusCodes.Status403Forbidden, "Forbidden.", null),
             var c when c == "KeepRequest.ShareIntentInvalidMethod"    => (StatusCodes.Status400BadRequest, "Bad request.", null),
 
+            // --- SMS handoff errors (S25a) ---
+            var c when c == "KeepRequest.SmsHandoffViewerBlocked"       => (StatusCodes.Status403Forbidden, "Forbidden.", null),
+            var c when c == "KeepRequest.SmsHandoffOffSeasonBlocked"    => (StatusCodes.Status403Forbidden, "Forbidden.", null),
+            var c when c == "KeepRequest.SmsHandoffMessageRequired"     => (StatusCodes.Status400BadRequest, "Bad request.", null),
+            var c when c == "KeepRequest.SmsHandoffMessageTooLong"      => (StatusCodes.Status400BadRequest, "Bad request.", null),
+            var c when c == "KeepRequest.SmsHandoffCustomerPhoneMissing" => (StatusCodes.Status422UnprocessableEntity, "Unprocessable entity.", null),
+
             // --- Detail navigation errors (P6f-4) ---
             var c when c == "KeepRequest.RequestDetailInvalidNavView" => (StatusCodes.Status400BadRequest, "Bad request.", null),
 
