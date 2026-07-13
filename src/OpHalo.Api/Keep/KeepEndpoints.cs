@@ -563,6 +563,33 @@ public static class KeepEndpoints
             return result.IsSuccess ? Results.Ok(result.Value) : ErrorHttpMapper.ToHttpResult(result.Error);
         }).RequireAuthorization();
 
+        // Follow-up resolution — authenticated, versioned operator write (ADR-440, S83b)
+        app.MapPost("/keep/requests/{requestId:guid}/follow-up-resolution", async (
+            Guid requestId,
+            HttpRequest httpRequest,
+            ResolveFollowUpBody body,
+            ManageRequestTimingService service,
+            CancellationToken ct) =>
+        {
+            var versionResult = KeepRequestVersionHeader.Parse(httpRequest.Headers);
+            if (!versionResult.IsSuccess)
+                return ErrorHttpMapper.ToHttpResult(versionResult.Error);
+
+            DateOnly? newDate = null;
+            if (body.NewDate is not null)
+            {
+                if (!DateOnly.TryParseExact(body.NewDate, "yyyy-MM-dd", out var parsedDate))
+                    return ErrorHttpMapper.ToHttpResult(KeepRequestErrors.InvalidDateFormat);
+                newDate = parsedDate;
+            }
+
+            var command = new ResolveFollowUpCommand(
+                requestId, body.Outcome, body.CompletionReason,
+                body.Note, newDate, body.NewFollowUpReason, versionResult.Value);
+            var result = await service.ResolveFollowUpAsync(command, ct);
+            return result.IsSuccess ? Results.Ok(result.Value) : ErrorHttpMapper.ToHttpResult(result.Error);
+        }).RequireAuthorization();
+
         // Service Location — authenticated, versioned operator write (GAP-006)
         app.MapPut("/keep/requests/{requestId:guid}/service-location", async (
             Guid requestId,
@@ -779,3 +806,12 @@ public static class KeepEndpoints
             : Results.Ok(page);
     }
 }
+
+// Follow-up resolution request body (ADR-440, S83b).
+// NewDate / NewFollowUpReason are only used when Outcome == "move".
+file sealed record ResolveFollowUpBody(
+    string Outcome,
+    string? CompletionReason,
+    string? Note,
+    string? NewDate,
+    string? NewFollowUpReason);

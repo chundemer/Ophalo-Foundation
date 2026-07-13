@@ -1,8 +1,8 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-07-13 (S83a complete — FollowUpOn attention gap closed)
+**Last updated:** 2026-07-13 (S83b complete — follow-up resolution backend command)
 **Branch:** `main` tracking `origin/main`
-**Last green baseline:** S83a — 1,050 unit tests passed, 14 architecture tests passed
+**Last green baseline:** S83b — 1,061 unit tests passed, 14 architecture tests passed
 **Next free ADR:** ADR-442
 **Current session:** Session 28 — Follow-up and Planned Promise Workflow (Build 083)
 
@@ -142,11 +142,15 @@ Slice order:
    - 3 pre-existing domain tests updated to ADR-439 semantics; 6 new service tests added.
    - Baseline: 1,050/1,050 unit tests, 14/14 architecture tests.
 
-2. **S83b — Follow-up completion backend command**
-   - Add `POST /keep/requests/{requestId}/follow-up-resolution` or the final route chosen in
-     preflight.
-   - Require `X-Keep-Request-Version`.
-   - Return updated `KeepRequestDetailResult`.
+2. **S83b — Follow-up completion backend command** ✓ Complete
+   - `POST /keep/requests/{requestId}/follow-up-resolution` — outcomes: `complete`, `move`, `keep_active`.
+   - `FollowUpResolutionOutcome` + `FollowUpCompletionReason` enums (Core); `FollowUpResolved = 18` event type.
+   - `KeepRequest.ResolveFollowUp(...)`: complete clears date/reason/note; move sets new date/reason/note; keep_active leaves date unchanged. All require active request + follow-up set. Complete/keep_active require completion reason; move requires new date.
+   - `KeepRequestEvent.CreateFollowUpResolved(...)` factory; two new nullable columns on `keep_request_events` via migration `S83bFollowUpResolution`.
+   - `ManageRequestTimingService.ResolveFollowUpAsync` — same auth/row/account/action guard pattern as other timing mutations.
+   - `ErrorHttpMapper`: `FollowUpOnNotSet` → 409; `FollowUpOnInvalidOutcome` / `FollowUpOnCompletionReasonRequired` / `FollowUpOnMoveRequiresDate` → 400.
+   - 8 new domain tests; 9 new integration tests (owner/operator/viewer/anon/stale/no-follow-up/invalid-outcome/row-access).
+   - Baseline: 1,061/1,061 unit tests, 14/14 architecture tests.
    - Preserve fail-closed account/role/row/action authorization.
    - Ensure audit activity and Follow Up On state change commit together.
 

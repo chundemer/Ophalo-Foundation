@@ -183,6 +183,12 @@ public static class ErrorHttpMapper
             var c when c == "KeepRequest.FollowUpOnNoteTooLong"           => (StatusCodes.Status400BadRequest, "Bad request.", null),
             var c when c == "KeepRequest.InvalidDateFormat"               => (StatusCodes.Status400BadRequest, "Bad request.", null),
 
+            // --- Follow-up resolution errors (ADR-440 / S83b) ---
+            var c when c == "KeepRequest.FollowUpOnNotSet"                  => (StatusCodes.Status409Conflict, "Conflict.", null),
+            var c when c == "KeepRequest.FollowUpOnInvalidOutcome"          => (StatusCodes.Status400BadRequest, "Bad request.", null),
+            var c when c == "KeepRequest.FollowUpOnCompletionReasonRequired" => (StatusCodes.Status400BadRequest, "Bad request.", null),
+            var c when c == "KeepRequest.FollowUpOnMoveRequiresDate"        => (StatusCodes.Status400BadRequest, "Bad request.", null),
+
             // --- Feedback review errors (ADR-276 / Session 5B) ---
             var c when c == "KeepRequest.FeedbackReviewUnavailable"              => (StatusCodes.Status409Conflict, "Conflict.", null),
             var c when c == "KeepRequest.FeedbackAlreadyReviewed"                => (StatusCodes.Status409Conflict, "Conflict.", null),

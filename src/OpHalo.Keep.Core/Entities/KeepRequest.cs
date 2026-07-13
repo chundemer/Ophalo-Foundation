@@ -1028,6 +1028,74 @@ public sealed class KeepRequest : BaseEntity
     }
 
     /// <summary>
+    /// Resolves a due/overdue Follow Up On promise. Outcome must be Complete, Move, or KeepActive.
+    /// Complete and KeepActive require a completion reason; Move requires a new date (ADR-440).
+    /// </summary>
+    public Result<KeepRequestEvent> ResolveFollowUp(
+        Enums.FollowUpResolutionOutcome outcome,
+        Enums.FollowUpCompletionReason? completionReason,
+        string? note,
+        DateOnly? newDate,
+        FollowUpReason? newFollowUpReason,
+        Guid actorAccountUserId,
+        string actorDisplayName,
+        DateTime nowUtc)
+    {
+        if (nowUtc == default)
+            throw new ArgumentException("nowUtc must be a valid UTC timestamp.", nameof(nowUtc));
+        if (actorAccountUserId == Guid.Empty)
+            throw new ArgumentException("Actor account user ID is required.", nameof(actorAccountUserId));
+        if (string.IsNullOrWhiteSpace(actorDisplayName))
+            throw new ArgumentException("Actor display name is required.", nameof(actorDisplayName));
+
+        if (!IsActive)
+            return Result<KeepRequestEvent>.Failure(KeepRequestErrors.FollowUpOnRequiresActiveRequest);
+
+        if (FollowUpOnDate is null)
+            return Result<KeepRequestEvent>.Failure(KeepRequestErrors.FollowUpOnNotSet);
+
+        var trimmedNote = string.IsNullOrWhiteSpace(note) ? null : note.Trim();
+
+        if (trimmedNote?.Length > 500)
+            return Result<KeepRequestEvent>.Failure(KeepRequestErrors.FollowUpOnNoteTooLong);
+
+        switch (outcome)
+        {
+            case Enums.FollowUpResolutionOutcome.Complete:
+                if (completionReason is null)
+                    return Result<KeepRequestEvent>.Failure(KeepRequestErrors.FollowUpOnCompletionReasonRequired);
+                FollowUpOnDate = null;
+                FollowUpReason = null;
+                FollowUpNote = null;
+                break;
+
+            case Enums.FollowUpResolutionOutcome.Move:
+                if (newDate is null)
+                    return Result<KeepRequestEvent>.Failure(KeepRequestErrors.FollowUpOnMoveRequiresDate);
+                FollowUpOnDate = newDate;
+                FollowUpReason = newFollowUpReason;
+                FollowUpNote = trimmedNote;
+                break;
+
+            case Enums.FollowUpResolutionOutcome.KeepActive:
+                if (completionReason is null)
+                    return Result<KeepRequestEvent>.Failure(KeepRequestErrors.FollowUpOnCompletionReasonRequired);
+                break;
+
+            default:
+                throw new ArgumentOutOfRangeException(nameof(outcome), outcome, "Unknown FollowUpResolutionOutcome.");
+        }
+
+        LastBusinessActivityAt = nowUtc;
+
+        var ev = KeepRequestEvent.CreateFollowUpResolved(
+            Id, AccountId, actorAccountUserId, actorDisplayName,
+            outcome, completionReason, trimmedNote, nowUtc);
+
+        return Result<KeepRequestEvent>.Success(ev);
+    }
+
+    /// <summary>
     /// Sets or changes Planned For. Active requests only; does not notify the customer or
     /// change lifecycle status (ADR-338).
     /// </summary>

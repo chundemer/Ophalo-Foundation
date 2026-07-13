@@ -278,4 +278,152 @@ public class KeepRequestFollowUpTests
         Assert.False(result.IsSuccess);
         Assert.Equal(KeepRequestErrors.PlannedForRequiresActiveRequest.Code, result.Error.Code);
     }
+
+    // --- ResolveFollowUp ---
+
+    static KeepRequest ActiveRequestWithFollowUp(DateOnly date)
+    {
+        var r = ActiveRequest();
+        r.SetFollowUpOn(date, FollowUpReason.Parts, null, ActorId, "Jane", Now);
+        return r;
+    }
+
+    [Fact]
+    public void ResolveFollowUp_complete_clears_date_and_emits_event()
+    {
+        var r = ActiveRequestWithFollowUp(FutureDate);
+
+        var result = r.ResolveFollowUp(
+            FollowUpResolutionOutcome.Complete, FollowUpCompletionReason.CustomerContacted,
+            note: null, newDate: null, newFollowUpReason: null, ActorId, "Jane", Now);
+
+        Assert.True(result.IsSuccess);
+        Assert.Null(r.FollowUpOnDate);
+        Assert.Null(r.FollowUpReason);
+        Assert.Null(r.FollowUpNote);
+        Assert.Equal(Now, r.LastBusinessActivityAt);
+        var ev = result.Value;
+        Assert.Equal(KeepRequestEventType.FollowUpResolved, ev.EventType);
+        Assert.Equal(FollowUpResolutionOutcome.Complete, ev.FollowUpResolutionOutcome);
+        Assert.Equal(FollowUpCompletionReason.CustomerContacted, ev.FollowUpCompletionReason);
+    }
+
+    [Fact]
+    public void ResolveFollowUp_move_sets_new_date_and_emits_event()
+    {
+        var r = ActiveRequestWithFollowUp(FutureDate);
+        var newDate = new DateOnly(2026, 8, 1);
+
+        var result = r.ResolveFollowUp(
+            FollowUpResolutionOutcome.Move, completionReason: null,
+            note: "Parts delayed", newDate: newDate, newFollowUpReason: FollowUpReason.Parts,
+            ActorId, "Jane", Now);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(newDate, r.FollowUpOnDate);
+        Assert.Equal(FollowUpReason.Parts, r.FollowUpReason);
+        Assert.Equal("Parts delayed", r.FollowUpNote);
+        var ev = result.Value;
+        Assert.Equal(KeepRequestEventType.FollowUpResolved, ev.EventType);
+        Assert.Equal(FollowUpResolutionOutcome.Move, ev.FollowUpResolutionOutcome);
+        Assert.Null(ev.FollowUpCompletionReason);
+    }
+
+    [Fact]
+    public void ResolveFollowUp_keep_active_leaves_date_and_emits_event()
+    {
+        var r = ActiveRequestWithFollowUp(FutureDate);
+
+        var result = r.ResolveFollowUp(
+            FollowUpResolutionOutcome.KeepActive, FollowUpCompletionReason.WorkCompleted,
+            note: null, newDate: null, newFollowUpReason: null, ActorId, "Jane", Now);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(FutureDate, r.FollowUpOnDate);
+        var ev = result.Value;
+        Assert.Equal(KeepRequestEventType.FollowUpResolved, ev.EventType);
+        Assert.Equal(FollowUpResolutionOutcome.KeepActive, ev.FollowUpResolutionOutcome);
+        Assert.Equal(FollowUpCompletionReason.WorkCompleted, ev.FollowUpCompletionReason);
+    }
+
+    [Fact]
+    public void ResolveFollowUp_complete_without_completion_reason_returns_failure()
+    {
+        var r = ActiveRequestWithFollowUp(FutureDate);
+
+        var result = r.ResolveFollowUp(
+            FollowUpResolutionOutcome.Complete, completionReason: null,
+            note: null, newDate: null, newFollowUpReason: null, ActorId, "Jane", Now);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(KeepRequestErrors.FollowUpOnCompletionReasonRequired.Code, result.Error.Code);
+    }
+
+    [Fact]
+    public void ResolveFollowUp_keep_active_without_completion_reason_returns_failure()
+    {
+        var r = ActiveRequestWithFollowUp(FutureDate);
+
+        var result = r.ResolveFollowUp(
+            FollowUpResolutionOutcome.KeepActive, completionReason: null,
+            note: null, newDate: null, newFollowUpReason: null, ActorId, "Jane", Now);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(KeepRequestErrors.FollowUpOnCompletionReasonRequired.Code, result.Error.Code);
+    }
+
+    [Fact]
+    public void ResolveFollowUp_move_without_new_date_returns_failure()
+    {
+        var r = ActiveRequestWithFollowUp(FutureDate);
+
+        var result = r.ResolveFollowUp(
+            FollowUpResolutionOutcome.Move, completionReason: null,
+            note: null, newDate: null, newFollowUpReason: null, ActorId, "Jane", Now);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(KeepRequestErrors.FollowUpOnMoveRequiresDate.Code, result.Error.Code);
+    }
+
+    [Fact]
+    public void ResolveFollowUp_when_no_follow_up_set_returns_failure()
+    {
+        var r = ActiveRequest();
+
+        var result = r.ResolveFollowUp(
+            FollowUpResolutionOutcome.Complete, FollowUpCompletionReason.NoLongerNeeded,
+            note: null, newDate: null, newFollowUpReason: null, ActorId, "Jane", Now);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(KeepRequestErrors.FollowUpOnNotSet.Code, result.Error.Code);
+    }
+
+    [Fact]
+    public void ResolveFollowUp_note_too_long_returns_failure()
+    {
+        var r = ActiveRequestWithFollowUp(FutureDate);
+
+        var result = r.ResolveFollowUp(
+            FollowUpResolutionOutcome.Complete, FollowUpCompletionReason.Other,
+            note: new string('x', 501), newDate: null, newFollowUpReason: null, ActorId, "Jane", Now);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(KeepRequestErrors.FollowUpOnNoteTooLong.Code, result.Error.Code);
+    }
+
+    [Theory]
+    [InlineData(KeepRequestStatus.Resolved)]
+    [InlineData(KeepRequestStatus.Closed)]
+    [InlineData(KeepRequestStatus.Cancelled)]
+    public void ResolveFollowUp_on_inactive_status_returns_failure(KeepRequestStatus status)
+    {
+        var r = ActiveRequest(status);
+
+        var result = r.ResolveFollowUp(
+            FollowUpResolutionOutcome.Complete, FollowUpCompletionReason.CustomerContacted,
+            note: null, newDate: null, newFollowUpReason: null, ActorId, "Jane", Now);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(KeepRequestErrors.FollowUpOnRequiresActiveRequest.Code, result.Error.Code);
+    }
 }

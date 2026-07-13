@@ -60,6 +60,18 @@ public sealed class RequestTimingTests : IClassFixture<KeepApiWebFactory>, IAsyn
     private Guid _closedRequestId;
     private Guid _closedRequestVersion;
 
+    // Follow-up resolution requests (S83b).
+    private Guid _resolveCompleteRequestId;
+    private Guid _resolveCompleteRequestVersion;
+    private Guid _resolveMoveRequestId;
+    private Guid _resolveMoveRequestVersion;
+    private Guid _resolveKeepActiveRequestId;
+    private Guid _resolveKeepActiveRequestVersion;
+    private Guid _resolveNoFollowUpRequestId;
+    private Guid _resolveNoFollowUpRequestVersion;
+    private Guid _resolveOperatorAccessRequestId;
+    private Guid _resolveOperatorAccessRequestVersion;
+
     // Operator row-access proofs.
     private Guid _operatorAccessRequestId;
     private Guid _operatorAccessRequestVersion;
@@ -227,6 +239,72 @@ public sealed class RequestTimingTests : IClassFixture<KeepApiWebFactory>, IAsyn
         await db.SaveChangesAsync();
         _closedRequestId      = closedRequest.Id;
         _closedRequestVersion = closedRequest.ConcurrencyVersion;
+
+        // Follow-up resolution requests: pre-seed Follow Up On date via domain (S83b).
+        var resolveCompleteRequest = KeepRequest.CreateFromCustomerIntake(
+            _accountId, customer.Id,
+            "Tim Customer", "0411000001", null,
+            "Resolve-complete job", "TIM-RVC", "timing_rvc_token", now, 60);
+        resolveCompleteRequest.SetFollowUpOn(
+            new DateOnly(2026, 7, 1), FollowUpReason.Parts, null,
+            graph.Owner.Id, "Timing Owner", now);
+        db.Set<KeepRequest>().Add(resolveCompleteRequest);
+        db.Set<KeepRequestEvent>().Add(
+            KeepRequestEvent.CreateRequestCreated(resolveCompleteRequest.Id, _accountId, now));
+        await db.SaveChangesAsync();
+        _resolveCompleteRequestId      = resolveCompleteRequest.Id;
+        _resolveCompleteRequestVersion = resolveCompleteRequest.ConcurrencyVersion;
+
+        var resolveMoveRequest = KeepRequest.CreateFromCustomerIntake(
+            _accountId, customer.Id,
+            "Tim Customer", "0411000001", null,
+            "Resolve-move job", "TIM-RVM", "timing_rvm_token", now, 60);
+        resolveMoveRequest.SetFollowUpOn(
+            new DateOnly(2026, 7, 1), FollowUpReason.CustomerDelay, null,
+            graph.Owner.Id, "Timing Owner", now);
+        db.Set<KeepRequest>().Add(resolveMoveRequest);
+        db.Set<KeepRequestEvent>().Add(
+            KeepRequestEvent.CreateRequestCreated(resolveMoveRequest.Id, _accountId, now));
+        await db.SaveChangesAsync();
+        _resolveMoveRequestId      = resolveMoveRequest.Id;
+        _resolveMoveRequestVersion = resolveMoveRequest.ConcurrencyVersion;
+
+        var resolveKeepActiveRequest = KeepRequest.CreateFromCustomerIntake(
+            _accountId, customer.Id,
+            "Tim Customer", "0411000001", null,
+            "Resolve-keep-active job", "TIM-RVK", "timing_rvk_token", now, 60);
+        resolveKeepActiveRequest.SetFollowUpOn(
+            new DateOnly(2026, 7, 1), FollowUpReason.ThirdParty, null,
+            graph.Owner.Id, "Timing Owner", now);
+        db.Set<KeepRequest>().Add(resolveKeepActiveRequest);
+        db.Set<KeepRequestEvent>().Add(
+            KeepRequestEvent.CreateRequestCreated(resolveKeepActiveRequest.Id, _accountId, now));
+        await db.SaveChangesAsync();
+        _resolveKeepActiveRequestId      = resolveKeepActiveRequest.Id;
+        _resolveKeepActiveRequestVersion = resolveKeepActiveRequest.ConcurrencyVersion;
+
+        // No follow-up set — resolution should return 409.
+        (_resolveNoFollowUpRequestId, _resolveNoFollowUpRequestVersion) = await SeedRequestAsync(
+            db, _accountId, customer.Id, "TIM-RVN", "timing_rvn_token", now);
+
+        // Operator row-access resolution request.
+        var resolveOperatorRequest = KeepRequest.CreateFromCustomerIntake(
+            _accountId, customer.Id,
+            "Tim Customer", "0411000001", null,
+            "Resolve-operator job", "TIM-RVO", "timing_rvo_token", now, 60);
+        resolveOperatorRequest.SetFollowUpOn(
+            new DateOnly(2026, 7, 1), FollowUpReason.Weather, null,
+            graph.Owner.Id, "Timing Owner", now);
+        db.Set<KeepRequest>().Add(resolveOperatorRequest);
+        db.Set<KeepRequestEvent>().Add(
+            KeepRequestEvent.CreateRequestCreated(resolveOperatorRequest.Id, _accountId, now));
+        db.Set<KeepRequestParticipant>().Add(
+            KeepRequestParticipant.Create(
+                resolveOperatorRequest.Id, _accountId, operatorMember.Id,
+                ParticipationType.Responsible, notificationsEnabled: true, now));
+        await db.SaveChangesAsync();
+        _resolveOperatorAccessRequestId      = resolveOperatorRequest.Id;
+        _resolveOperatorAccessRequestVersion = resolveOperatorRequest.ConcurrencyVersion;
 
         // Operator row-access request (operator is Responsible participant).
         (_operatorAccessRequestId, _operatorAccessRequestVersion) = await SeedRequestAsync(
@@ -566,6 +644,124 @@ public sealed class RequestTimingTests : IClassFixture<KeepApiWebFactory>, IAsyn
         var availableActions = body.GetProperty("availableActions");
         Assert.True(availableActions.GetProperty("canSetFollowUpOn").GetBoolean());
         Assert.True(availableActions.GetProperty("canSetPlannedFor").GetBoolean());
+    }
+
+    // =========================================================================
+    // Follow-up resolution (S83b / ADR-440)
+    // =========================================================================
+
+    [Fact]
+    public async Task ResolveFollowUp_Complete_Owner_Returns200AndClearsDate()
+    {
+        var response = await AuthRequest(_ownerCookie, _resolveCompleteRequestVersion).PostAsJsonAsync(
+            $"/keep/requests/{_resolveCompleteRequestId}/follow-up-resolution",
+            new { outcome = "complete", completionReason = "customer_contacted" });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.True(body.GetProperty("followUpOnDate").ValueKind == JsonValueKind.Null);
+        var events = body.GetProperty("events").EnumerateArray().ToList();
+        Assert.Contains(events, e => e.GetProperty("eventType").GetString() == "follow_up_resolved");
+    }
+
+    [Fact]
+    public async Task ResolveFollowUp_Move_Owner_Returns200AndSetsNewDate()
+    {
+        var response = await AuthRequest(_ownerCookie, _resolveMoveRequestVersion).PostAsJsonAsync(
+            $"/keep/requests/{_resolveMoveRequestId}/follow-up-resolution",
+            new { outcome = "move", newDate = "2026-09-01", newFollowUpReason = "parts" });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("2026-09-01", body.GetProperty("followUpOnDate").GetString());
+    }
+
+    [Fact]
+    public async Task ResolveFollowUp_KeepActive_Owner_Returns200AndPreservesDate()
+    {
+        var response = await AuthRequest(_ownerCookie, _resolveKeepActiveRequestVersion).PostAsJsonAsync(
+            $"/keep/requests/{_resolveKeepActiveRequestId}/follow-up-resolution",
+            new { outcome = "keep_active", completionReason = "work_completed" });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.NotNull(body.GetProperty("followUpOnDate").GetString());
+    }
+
+    [Fact]
+    public async Task ResolveFollowUp_NoFollowUpSet_Returns409()
+    {
+        var response = await AuthRequest(_ownerCookie, _resolveNoFollowUpRequestVersion).PostAsJsonAsync(
+            $"/keep/requests/{_resolveNoFollowUpRequestId}/follow-up-resolution",
+            new { outcome = "complete", completionReason = "no_longer_needed" });
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("KeepRequest.FollowUpOnNotSet", body.GetProperty("code").GetString());
+    }
+
+    [Fact]
+    public async Task ResolveFollowUp_InvalidOutcome_Returns400()
+    {
+        var response = await AuthRequest(_ownerCookie, _validationRequestVersion).PostAsJsonAsync(
+            $"/keep/requests/{_validationRequestId}/follow-up-resolution",
+            new { outcome = "explode" });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("KeepRequest.FollowUpOnInvalidOutcome", body.GetProperty("code").GetString());
+    }
+
+    [Fact]
+    public async Task ResolveFollowUp_StaleVersion_Returns409()
+    {
+        var response = await AuthRequest(_ownerCookie, Guid.NewGuid()).PostAsJsonAsync(
+            $"/keep/requests/{_resolveCompleteRequestId}/follow-up-resolution",
+            new { outcome = "complete", completionReason = "customer_contacted" });
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task ResolveFollowUp_Viewer_Returns403()
+    {
+        var response = await AuthRequest(_viewerCookie, _resolveCompleteRequestVersion).PostAsJsonAsync(
+            $"/keep/requests/{_resolveCompleteRequestId}/follow-up-resolution",
+            new { outcome = "complete", completionReason = "customer_contacted" });
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task ResolveFollowUp_Anonymous_Returns401()
+    {
+        var client = _factory.CreateClient();
+        client.DefaultRequestHeaders.Add("X-Keep-Request-Version", _resolveCompleteRequestVersion.ToString("D"));
+        var response = await client.PostAsJsonAsync(
+            $"/keep/requests/{_resolveCompleteRequestId}/follow-up-resolution",
+            new { outcome = "complete", completionReason = "customer_contacted" });
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task ResolveFollowUp_OperatorWithRowAccess_Returns200()
+    {
+        var response = await AuthRequest(_operatorCookie, _resolveOperatorAccessRequestVersion).PostAsJsonAsync(
+            $"/keep/requests/{_resolveOperatorAccessRequestId}/follow-up-resolution",
+            new { outcome = "complete", completionReason = "work_completed" });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task ResolveFollowUp_OperatorWithoutRowAccess_Returns404()
+    {
+        var response = await AuthRequest(_operatorCookie, _resolveNoFollowUpRequestVersion).PostAsJsonAsync(
+            $"/keep/requests/{_resolveNoFollowUpRequestId}/follow-up-resolution",
+            new { outcome = "complete", completionReason = "customer_contacted" });
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
     // =========================================================================

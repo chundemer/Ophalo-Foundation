@@ -86,6 +86,14 @@ internal sealed class KeepRequestEventConfiguration : BaseEntityConfiguration<Ke
             .HasMaxLength(50);
         builder.Property(x => x.PlannedForDate);
 
+        // Follow-up resolution fields — present on FollowUpResolved events only (ADR-440, S83b).
+        builder.Property(x => x.FollowUpResolutionOutcome)
+            .HasConversion<string>()
+            .HasMaxLength(50);
+        builder.Property(x => x.FollowUpCompletionReason)
+            .HasConversion<string>()
+            .HasMaxLength(50);
+
         // Participation fields — present on ParticipationChanged events only (ADR-234).
         builder.Property(x => x.ParticipationAction)
             .HasConversion<string>()

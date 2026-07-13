@@ -263,6 +263,19 @@ public static class KeepRequestErrors
     public static readonly Error ServiceStateInvalid =
         Error.Create("KeepRequest.ServiceStateInvalid", "Service state must be a valid US state code.");
 
+    // Follow-up resolution errors (ADR-440, S83b).
+    public static readonly Error FollowUpOnNotSet =
+        Error.Create("KeepRequest.FollowUpOnNotSet", "No Follow Up On date is set. There is nothing to resolve.");
+
+    public static readonly Error FollowUpOnInvalidOutcome =
+        Error.Create("KeepRequest.FollowUpOnInvalidOutcome", "Outcome must be 'complete', 'move', or 'keep_active'.");
+
+    public static readonly Error FollowUpOnCompletionReasonRequired =
+        Error.Create("KeepRequest.FollowUpOnCompletionReasonRequired", "A completion reason is required.");
+
+    public static readonly Error FollowUpOnMoveRequiresDate =
+        Error.Create("KeepRequest.FollowUpOnMoveRequiresDate", "A new date is required when moving a follow-up.");
+
     // Spam/Test classification errors (ADR-349/350, S7e).
     public static readonly Error ClassificationRequiresOwnerOrAdmin =
         Error.Create("KeepRequest.ClassificationRequiresOwnerOrAdmin", "Only an Owner or Admin can classify a request as Spam or Test.");

@@ -9,6 +9,8 @@ using OpHalo.Keep.Core.Entities.Enums;
 using OpHalo.Keep.Core.Errors;
 using OpHalo.SharedKernel.Abstractions;
 using OpHalo.SharedKernel.Results;
+using FollowUpResolutionOutcome = OpHalo.Keep.Core.Entities.Enums.FollowUpResolutionOutcome;
+using FollowUpCompletionReason = OpHalo.Keep.Core.Entities.Enums.FollowUpCompletionReason;
 
 namespace OpHalo.Keep.Application.Requests;
 
@@ -30,6 +32,15 @@ public sealed record SetPlannedForCommand(
 
 public sealed record ClearPlannedForCommand(
     Guid RequestId,
+    Guid ExpectedVersion);
+
+public sealed record ResolveFollowUpCommand(
+    Guid RequestId,
+    string Outcome,
+    string? CompletionReason,
+    string? Note,
+    DateOnly? NewDate,
+    string? NewFollowUpReason,
     Guid ExpectedVersion);
 
 public sealed class ManageRequestTimingService(
@@ -182,6 +193,78 @@ public sealed class ManageRequestTimingService(
         return Result<KeepRequestDetailResult>.Success(
             await BuildDetailAsync(request, userSnapshot.Role, nowUtc, ct));
     }
+
+    public async Task<Result<KeepRequestDetailResult>> ResolveFollowUpAsync(
+        ResolveFollowUpCommand command, CancellationToken ct = default)
+    {
+        var authResult = await AuthAsync(ct);
+        if (authResult.IsFailure) return Result<KeepRequestDetailResult>.Failure(authResult.Error);
+        var (userSnapshot, actorDisplayName, scope) = authResult.Value;
+
+        var outcome = ParseOutcomeSlug(command.Outcome);
+        if (outcome is null)
+            return Result<KeepRequestDetailResult>.Failure(KeepRequestErrors.FollowUpOnInvalidOutcome);
+
+        var request = await operatePersistence.GetVisibleRequestForUpdateAsync(
+            command.RequestId, currentUser.AccountId, currentUser.UserId, scope, ct);
+        if (request is null)
+            return Result<KeepRequestDetailResult>.Failure(KeepRequestErrors.NotFound);
+
+        if (request.ConcurrencyVersion != command.ExpectedVersion)
+            return Result<KeepRequestDetailResult>.Failure(KeepRequestErrors.RequestChanged);
+
+        FollowUpCompletionReason? completionReason = null;
+        if (command.CompletionReason is not null)
+        {
+            completionReason = ParseCompletionReasonSlug(command.CompletionReason);
+            if (completionReason is null)
+                return Result<KeepRequestDetailResult>.Failure(KeepRequestErrors.FollowUpOnCompletionReasonRequired);
+        }
+
+        FollowUpReason? newFollowUpReason = null;
+        if (command.NewFollowUpReason is not null)
+        {
+            newFollowUpReason = KeepRequestDetailMapper.ParseFollowUpReasonSlug(command.NewFollowUpReason);
+            if (newFollowUpReason is null)
+                return Result<KeepRequestDetailResult>.Failure(KeepRequestErrors.FollowUpOnReasonRequired);
+        }
+
+        var nowUtc = clock.UtcNow;
+        var domainResult = request.ResolveFollowUp(
+            outcome.Value, completionReason, command.Note,
+            command.NewDate, newFollowUpReason,
+            currentUser.UserId, actorDisplayName, nowUtc);
+        if (domainResult.IsFailure)
+            return Result<KeepRequestDetailResult>.Failure(domainResult.Error);
+
+        var commitResult = await operatePersistence.CommitAsync(request, domainResult.Value, ct);
+        if (commitResult == KeepRequestCommitResult.Conflict)
+            return Result<KeepRequestDetailResult>.Failure(KeepRequestErrors.RequestChanged);
+        if (commitResult != KeepRequestCommitResult.Committed)
+            throw new ArgumentOutOfRangeException(nameof(commitResult));
+
+        return Result<KeepRequestDetailResult>.Success(
+            await BuildDetailAsync(request, userSnapshot.Role, nowUtc, ct));
+    }
+
+    private static FollowUpResolutionOutcome? ParseOutcomeSlug(string? slug) =>
+        slug?.Trim().ToLowerInvariant() switch
+        {
+            "complete"    => FollowUpResolutionOutcome.Complete,
+            "move"        => FollowUpResolutionOutcome.Move,
+            "keep_active" => FollowUpResolutionOutcome.KeepActive,
+            _             => null
+        };
+
+    private static FollowUpCompletionReason? ParseCompletionReasonSlug(string? slug) =>
+        slug?.Trim().ToLowerInvariant() switch
+        {
+            "customer_contacted" => FollowUpCompletionReason.CustomerContacted,
+            "work_completed"     => FollowUpCompletionReason.WorkCompleted,
+            "no_longer_needed"   => FollowUpCompletionReason.NoLongerNeeded,
+            "other"              => FollowUpCompletionReason.Other,
+            _                    => null
+        };
 
     // --- helpers ---
 

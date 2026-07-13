@@ -46,6 +46,10 @@ public sealed class KeepRequestEvent : BaseEntity
     public DateOnly? FollowUpOnDate { get; private set; }
     public FollowUpReason? FollowUpOnReason { get; private set; }
 
+    // Present on FollowUpResolved events only (ADR-440, S83b).
+    public FollowUpResolutionOutcome? FollowUpResolutionOutcome { get; private set; }
+    public FollowUpCompletionReason? FollowUpCompletionReason { get; private set; }
+
     // Present on PlannedForChanged events only (ADR-338, P6b-1).
     public DateOnly? PlannedForDate { get; private set; }
 
@@ -458,6 +462,47 @@ public sealed class KeepRequestEvent : BaseEntity
             OccurredAtUtc = occurredAtUtc,
             FollowUpOnDate = date,
             FollowUpOnReason = reason
+        };
+    }
+
+    /// <summary>
+    /// Creates a FollowUpResolved event. Always Internal. Records the outcome of resolving
+    /// a due/overdue Follow Up On promise (ADR-440, S83b).
+    /// </summary>
+    public static KeepRequestEvent CreateFollowUpResolved(
+        Guid requestId,
+        Guid accountId,
+        Guid actorAccountUserId,
+        string actorDisplayName,
+        FollowUpResolutionOutcome outcome,
+        FollowUpCompletionReason? completionReason,
+        string? note,
+        DateTime occurredAtUtc)
+    {
+        if (requestId == Guid.Empty)
+            throw new ArgumentException("Request ID is required.", nameof(requestId));
+        if (accountId == Guid.Empty)
+            throw new ArgumentException("Account ID is required.", nameof(accountId));
+        if (actorAccountUserId == Guid.Empty)
+            throw new ArgumentException("Actor account user ID is required.", nameof(actorAccountUserId));
+        if (string.IsNullOrWhiteSpace(actorDisplayName))
+            throw new ArgumentException("Actor display name is required.", nameof(actorDisplayName));
+        if (occurredAtUtc == default)
+            throw new ArgumentException("occurredAtUtc must be a real timestamp.", nameof(occurredAtUtc));
+
+        return new KeepRequestEvent
+        {
+            RequestId                  = requestId,
+            AccountId                  = accountId,
+            EventType                  = KeepRequestEventType.FollowUpResolved,
+            Visibility                 = KeepRequestEventVisibility.Internal,
+            Content                    = string.IsNullOrWhiteSpace(note) ? null : note.Trim(),
+            ActorType                  = ActorType.AccountUser,
+            ActorAccountUserId         = actorAccountUserId,
+            ActorDisplayName           = actorDisplayName.Trim(),
+            OccurredAtUtc              = occurredAtUtc,
+            FollowUpResolutionOutcome  = outcome,
+            FollowUpCompletionReason   = completionReason
         };
     }
 
