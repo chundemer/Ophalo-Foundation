@@ -56,6 +56,21 @@ production/mobile browser behavior.
 
 API composition cleanup landed. `Program.cs` reduced from 1,092 → 254 lines.
 
+### S26b Complete
+
+PWA request detail mechanical split landed. `RequestDetail.tsx` reduced from 3,152 → 1,510 lines.
+
+Seven new files created under `web/ophalo-app/src/pages/request-detail/`:
+- `helpers.ts` — format utils, label constants, FOCUS_RING/INPUT_CLS/STATUS_CONFLICT_MESSAGE, attention guidance logic
+- `highlights.tsx` — HighlightLevel, AttentionHighlights, RecommendedActionBadge, all highlight helpers
+- `TimelineEvent.tsx` — timeline event display + TimelineEvent component
+- `TimingPanel.tsx` — follow-up / planned timing controls
+- `DetailHero.tsx` — CustomerPageHeroActions + TodayPromiseBanner + DetailHero
+- `TeamSection.tsx` — team participation controls
+- `BusinessSection.tsx` — WorkDoneCard + CloseRequestCard + BusinessUpdateSection
+
+TypeScript: zero errors. Vite production build: clean. No behavior changes.
+
 - `src/OpHalo.Api/Keep/KeepServiceCollectionExtensions.cs` — `AddKeepServices()` with all Keep DI registrations.
 - `src/OpHalo.Api/Keep/KeepEndpoints.cs` — `MapKeepEndpoints()` with all `/keep/...` routes; four handlers as private statics.
 - `src/OpHalo.Api/Keep/RenameLinkNameBody.cs`, `UpdateServiceLocationBody.cs` — orphan records moved.
