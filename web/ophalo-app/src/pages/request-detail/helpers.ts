@@ -64,14 +64,28 @@ export function formatDateOnly(isoDate: string): string {
 
 export function isDateOnlyToday(isoDate: string | null): boolean {
   if (!isoDate) return false;
-  const [year, month, day] = isoDate.split("-").map(Number);
   const now = new Date();
-  return (
-    year === now.getFullYear() &&
-    month === now.getMonth() + 1 &&
-    day === now.getDate()
-  );
+  const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+  return isoDate === todayStr;
 }
+
+export function isDateOnlyPast(isoDate: string | null): boolean {
+  if (!isoDate) return false;
+  const now = new Date();
+  const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+  return isoDate < todayStr;
+}
+
+export function isDueOrOverdueFollowUp(isoDate: string | null): boolean {
+  return isDateOnlyToday(isoDate) || isDateOnlyPast(isoDate);
+}
+
+export const COMPLETION_REASON_LABELS: Record<string, string> = {
+  customer_contacted: "Customer contacted",
+  work_completed: "Follow-up work done",
+  no_longer_needed: "No longer needed",
+  other: "Other",
+};
 
 export const FOLLOW_UP_REASON_LABELS: Record<string, string> = {
   weather: "Weather",

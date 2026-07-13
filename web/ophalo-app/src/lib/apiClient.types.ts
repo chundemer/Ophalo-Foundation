@@ -466,3 +466,18 @@ export interface GetRequestsParams {
   cursor?: string;
   limit?: number;
 }
+
+export type FollowUpResolutionOutcome = "complete" | "move" | "keep_active";
+export type FollowUpCompletionReason =
+  | "customer_contacted"
+  | "work_completed"
+  | "no_longer_needed"
+  | "other";
+
+export interface ResolveFollowUpBody {
+  outcome: FollowUpResolutionOutcome;
+  completionReason?: FollowUpCompletionReason | null;
+  note?: string | null;
+  newDate?: string | null;
+  newFollowUpReason?: string | null;
+}

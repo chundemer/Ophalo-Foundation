@@ -1,7 +1,7 @@
 # Build Log 083 — Follow-up And Planned Promise Workflow
 
 **Started:** Drafted 2026-07-12; decision lock 2026-07-13  
-**Status:** Ready for implementation preflight  
+**Status:** Complete — S83a–S83e landed 2026-07-13  
 **Related ADRs:** ADR-337, ADR-338, ADR-339, ADR-359, ADR-406, ADR-435, ADR-439, ADR-440, ADR-441  
 **Next free ADR:** ADR-442
 
@@ -287,6 +287,52 @@ Update:
 - No proof-of-send semantics.
 - No broad recurring task engine.
 - No native mobile command-center implementation in initial pilot.
+
+---
+
+---
+
+## Completion Notes
+
+### S83a — Backend verification and attention gap closure ✓ (2026-07-13)
+
+- `KeepRequest.GetNeedsStatusCheckInputs()`: due/overdue FollowUpOn suppressed from NeedsStatusCheck; routes to NeedsAttention with slug `"due_or_overdue_follow_up_on"`.
+- `KeepRequestListPersistence`: `IClock` injected; NeedsAttention DB query expanded to include `FollowUpOnDate <= today && AttentionLevel == None` rows.
+- `GetKeepRequestListService.ToSummary`: computes `isDueOrOverdueFollowUpOn` / `isFollowUpOverdue`; new ranking group `"due_follow_up_on"` (order 5), severity `"danger"` / `"attention"`, rowContext `"needs_attention"`.
+- 3 pre-existing domain tests updated; 6 new service tests added.
+- Baseline after: 1,050/1,050 unit, 14/14 architecture.
+
+### S83b — Follow-up completion backend command ✓ (2026-07-13)
+
+- `POST /keep/requests/{requestId}/follow-up-resolution` — outcomes: `complete`, `move`, `keep_active`.
+- `FollowUpResolutionOutcome` + `FollowUpCompletionReason` enums (Core); `FollowUpResolved = 18` event type.
+- `KeepRequest.ResolveFollowUp(...)`: complete clears date/reason/note; move sets new date/reason/note; keep_active leaves date unchanged.
+- `KeepRequestEvent.CreateFollowUpResolved(...)` factory; two nullable columns on `keep_request_events` via migration `S83bFollowUpResolution`.
+- `ManageRequestTimingService.ResolveFollowUpAsync` with full auth/row/account/action guard pattern.
+- `ErrorHttpMapper`: `FollowUpOnNotSet` → 409; `FollowUpOnInvalidOutcome` / `FollowUpOnCompletionReasonRequired` / `FollowUpOnMoveRequiresDate` → 400.
+- 8 new domain tests; 9 new integration tests.
+- Baseline after: 1,061/1,061 unit, 14/14 architecture.
+
+### S83c — PWA detail follow-up completion workflow ✓ (2026-07-13)
+
+- `apiClient.types.ts`: `FollowUpResolutionOutcome`, `FollowUpCompletionReason` union types, `ResolveFollowUpBody`.
+- `apiClient.ts`: `resolveFollowUp` method (`POST /keep/requests/{id}/follow-up-resolution`).
+- `helpers.ts`: `isDateOnlyPast`, `isDueOrOverdueFollowUp` (string-compare, no `new Date()` on YYYY-MM-DD); `COMPLETION_REASON_LABELS`; `isDateOnlyToday` also converted to string compare.
+- `FollowUpResolutionPanel.tsx` (new): bottom sheet mobile / centered modal desktop; tap-first outcome buttons; quick-pick dates for move (today / tomorrow / next week); optional note; conflict-preserving draft; "work completed" label clarifies it resolves the follow-up only, not the request.
+- `DetailHero.tsx`: `TodayPromiseBanner` extended — overdue follow-up shows danger banner + "Record follow-up" button; due-today shows accent banner + button; Planned For signal never triggers the button (guarded by `canSetFollowUpOn` and `followUpOnDate` only).
+- `TimingPanel.tsx`: accepts `onRecordFollowUp?`; active follow-up display shows "Record follow-up" link alongside "Clear follow-up".
+- `RequestDetail.tsx`: `followUpPanelOpen` state; both `TimingPanel` instances wired; `FollowUpResolutionPanel` rendered when open.
+- TypeScript: zero errors. Vite build: clean, 1,600 modules.
+
+### S83d — Request list timing signals ✓ (2026-07-13)
+
+- `RequestRow.tsx`: local `isDateOnlyToday` helper (string compare); `followUpIsOverdue` → `danger` badge variant; `plannedIsOverdue` → `attention`; future timing → `default`. Server-provided labels (`followUpOnLabel`, `plannedForLabel`) already carry the right text.
+
+### Deferred
+
+- Native mobile command-center follow-up completion — early post-pilot / early release (not initial pilot).
+- Planned For completion workflow (move planned date, remove, mark work done via Planned For resolution path) — deferred separately.
+- End-to-end device testing for QR/SMS remains a deployment smoke item.
 
 ---
 

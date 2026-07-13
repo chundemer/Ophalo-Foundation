@@ -4,8 +4,10 @@ import { type KeepRequestDetailResult } from "../../lib/apiClient";
 import { KeepBadge } from "../../components/keep/KeepBadge";
 import {
   isDateOnlyToday,
+  isDateOnlyPast,
   FOLLOW_UP_REASON_LABELS,
   formatEventTime,
+  formatDateOnly,
   reasonLabel,
   statusLabel,
   statusBadgeVariant,
@@ -66,11 +68,45 @@ export function CustomerPageHeroActions({
 // Hero card — identity anchor
 // ---------------------------------------------------------------------------
 
-export function TodayPromiseBanner({ detail }: { detail: KeepRequestDetailResult }) {
-  const followUpToday = isDateOnlyToday(detail.followUpOnDate);
-  const plannedToday = isDateOnlyToday(detail.plannedForDate);
+interface TodayPromiseBannerProps {
+  detail: KeepRequestDetailResult;
+  onRecordFollowUp?: () => void;
+}
 
-  if (!followUpToday && !plannedToday) return null;
+export function TodayPromiseBanner({ detail, onRecordFollowUp }: TodayPromiseBannerProps) {
+  const followUpToday = isDateOnlyToday(detail.followUpOnDate);
+  const followUpOverdue = isDateOnlyPast(detail.followUpOnDate);
+  const plannedToday = isDateOnlyToday(detail.plannedForDate);
+  const canRecordFollowUp = !!onRecordFollowUp && detail.availableActions.canSetFollowUpOn;
+
+  const hasFollowUpSignal = followUpToday || followUpOverdue;
+  if (!hasFollowUpSignal && !plannedToday) return null;
+
+  if (followUpOverdue) {
+    const reason = detail.followUpOnReason
+      ? FOLLOW_UP_REASON_LABELS[detail.followUpOnReason] ?? detail.followUpOnReason
+      : null;
+    const dateLabel = detail.followUpOnDate ? formatDateOnly(detail.followUpOnDate) : null;
+    return (
+      <div className="rounded-xl border border-[var(--ophalo-danger)] bg-[var(--ophalo-danger-bg)] px-4 py-3 flex items-center justify-between gap-3">
+        <div>
+          <p className="text-sm font-semibold text-[var(--ophalo-danger)]">
+            Overdue follow-up{dateLabel ? ` · ${dateLabel}` : ""}
+          </p>
+          {reason && <p className="text-xs text-[var(--ophalo-danger)] mt-0.5">{reason}</p>}
+        </div>
+        {canRecordFollowUp && (
+          <button
+            type="button"
+            onClick={onRecordFollowUp}
+            className={`shrink-0 rounded-lg border border-[var(--ophalo-danger)] px-3 py-1.5 text-xs font-semibold text-[var(--ophalo-danger)] hover:bg-[var(--ophalo-danger)] hover:text-white transition-colors ${FOCUS_RING}`}
+          >
+            Record follow-up
+          </button>
+        )}
+      </div>
+    );
+  }
 
   const items: string[] = [];
   if (followUpToday) {
@@ -84,8 +120,17 @@ export function TodayPromiseBanner({ detail }: { detail: KeepRequestDetailResult
   }
 
   return (
-    <div className="rounded-xl border border-[var(--keep-accent)] bg-[var(--keep-accent-bg)] px-4 py-3">
+    <div className="rounded-xl border border-[var(--keep-accent)] bg-[var(--keep-accent-bg)] px-4 py-3 flex items-center justify-between gap-3">
       <p className="text-sm font-semibold text-[var(--keep-accent)]">{items.join(" · ")}</p>
+      {followUpToday && canRecordFollowUp && (
+        <button
+          type="button"
+          onClick={onRecordFollowUp}
+          className={`shrink-0 rounded-lg border border-[var(--keep-accent)] px-3 py-1.5 text-xs font-semibold text-[var(--keep-accent)] hover:bg-[var(--keep-accent)] hover:text-white transition-colors ${FOCUS_RING}`}
+        >
+          Record follow-up
+        </button>
+      )}
     </div>
   );
 }

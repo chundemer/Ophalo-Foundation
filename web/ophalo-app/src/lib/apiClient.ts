@@ -139,6 +139,7 @@ import type {
   KeepAvailableRequestsResult,
   RequestView,
   GetRequestsParams,
+  ResolveFollowUpBody,
 } from "./apiClient.types";
 
 export type {
@@ -187,7 +188,10 @@ export type {
   KeepAvailableRequestsResult,
   RequestView,
   GetRequestsParams,
+  ResolveFollowUpBody,
 };
+
+export type { FollowUpResolutionOutcome, FollowUpCompletionReason } from "./apiClient.types";
 
 export const api = {
   getMe: () => apiFetch<MeResponse>("/auth/me"),
@@ -401,6 +405,12 @@ export const api = {
   clearFollowUpOn: (requestId: string, version: string) =>
     apiFetch<KeepRequestDetailResult>(`/keep/requests/${requestId}/follow-up-on`, {
       method: "DELETE",
+      headers: { "X-Keep-Request-Version": version },
+    }),
+  resolveFollowUp: (requestId: string, body: ResolveFollowUpBody, version: string) =>
+    apiFetch<KeepRequestDetailResult>(`/keep/requests/${requestId}/follow-up-resolution`, {
+      method: "POST",
+      body: JSON.stringify(body),
       headers: { "X-Keep-Request-Version": version },
     }),
   setPlannedFor: (requestId: string, body: { date: string }, version: string) =>

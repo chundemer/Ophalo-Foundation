@@ -14,9 +14,10 @@ interface TimingPanelProps {
   requestId: string;
   detail: KeepRequestDetailResult;
   onDetailUpdated: (updated: KeepRequestDetailResult) => void;
+  onRecordFollowUp?: () => void;
 }
 
-export function TimingPanel({ requestId, detail, onDetailUpdated }: TimingPanelProps) {
+export function TimingPanel({ requestId, detail, onDetailUpdated, onRecordFollowUp }: TimingPanelProps) {
   const { canSetFollowUpOn, canSetPlannedFor } = detail.availableActions;
   const { followUpNoteMaxLength, allowedFollowUpReasons } = detail.validation;
 
@@ -173,14 +174,26 @@ export function TimingPanel({ requestId, detail, onDetailUpdated }: TimingPanelP
                 {followUpError && (
                   <p className="text-xs text-[var(--ophalo-danger)]">{followUpError}</p>
                 )}
-                <button
-                  type="button"
-                  onClick={() => void handleClearFollowUp()}
-                  disabled={followUpSubmitting || followUpConflict}
-                  className={`text-xs text-[var(--ophalo-muted)] hover:text-[var(--ophalo-ink)] disabled:opacity-50 transition-colors ${FOCUS_RING} rounded`}
-                >
-                  Clear follow-up
-                </button>
+                <div className="flex flex-wrap items-center gap-3 pt-0.5">
+                  {onRecordFollowUp && (
+                    <button
+                      type="button"
+                      onClick={onRecordFollowUp}
+                      disabled={followUpSubmitting || followUpConflict}
+                      className={`text-xs font-semibold text-[var(--keep-accent)] hover:text-[var(--ophalo-ink)] disabled:opacity-50 transition-colors ${FOCUS_RING} rounded`}
+                    >
+                      Record follow-up
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => void handleClearFollowUp()}
+                    disabled={followUpSubmitting || followUpConflict}
+                    className={`text-xs text-[var(--ophalo-muted)] hover:text-[var(--ophalo-ink)] disabled:opacity-50 transition-colors ${FOCUS_RING} rounded`}
+                  >
+                    Clear follow-up
+                  </button>
+                </div>
               </div>
             ) : (
               <form onSubmit={(e) => void handleSetFollowUp(e)} className="space-y-2">

@@ -1,10 +1,10 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-07-13 (S83b complete — follow-up resolution backend command)
+**Last updated:** 2026-07-13 (S83e complete — Build 083 closed)
 **Branch:** `main` tracking `origin/main`
-**Last green baseline:** S83b — 1,061 unit tests passed, 14 architecture tests passed
+**Last green baseline:** S83b — 1,061 unit tests passed, 14 architecture tests passed (S83c/S83d frontend only — TypeScript clean, Vite build clean)
 **Next free ADR:** ADR-442
-**Current session:** Session 28 — Follow-up and Planned Promise Workflow (Build 083)
+**Current session:** Session 29 — next session (Build 078 tracker-link email/Resend or new direction)
 
 ---
 
@@ -34,7 +34,8 @@ For every implementation slice:
 
 ## Current Work
 
-**Current build log:** `docs/build-log/083-session-26-follow-up-and-planned-promise-workflow-draft.md`
+**Current build log:** `docs/build-log/078-customer-tracker-link-email-and-resend-configuration.md` (planned next) or new direction per Christian
+**Completed build log:** `docs/build-log/083-session-26-follow-up-and-planned-promise-workflow-draft.md`
 **Latest completed build logs:** `docs/build-log/077-pre-deployment-cleanup-and-file-decomposition.md`, `docs/build-log/082-session-25-share-request-link-drawer.md`
 **Readiness working doc:** `docs/pilot-readiness-decision-questions.md`
 **Bug/gap tracker:** `docs/pilot-readiness-bug-tracker.md`
@@ -109,7 +110,22 @@ TypeScript: zero errors. Vite production build: clean. No behavior changes.
 
 Pre-existing gap identified: two ShareIntent integration tests (`ShareIntent_NeedsShare_false_after_successful_clear`, `ShareIntent_idempotent_second_call_returns_204_without_error`) return `BadRequest` instead of `NoContent` on baseline. Not caused by S26a; needs separate investigation.
 
-### Session 28 Goal
+### Session 28 Complete
+
+Build 083 — Follow-up and Planned Promise Workflow — fully landed:
+
+- **S83a**: backend attention gap closed (due/overdue FollowUpOn routes to NeedsAttention with `"due_or_overdue_follow_up_on"` slug, ranking group `"due_follow_up_on"` order 5).
+- **S83b**: `POST /keep/requests/{id}/follow-up-resolution` backend command (complete / move / keep_active outcomes, full auth/row/audit guard, migration `S83bFollowUpResolution`).
+- **S83c**: `FollowUpResolutionPanel` PWA workflow (modal/bottom-sheet, tap-first, due/overdue banners, timing panel affordance).
+- **S83d**: `RequestRow` overdue follow-up → danger badge; past planned → attention; future → default.
+- **S83e**: docs closed.
+
+Deferred into next sessions:
+- Native mobile follow-up completion (early post-pilot / early release).
+- Planned For completion workflow.
+- Session 27 / Build 078 tracker-link email/Resend slice.
+
+### Session 28 Goal (archived)
 
 Implement the Follow Up On and Planned For promise workflow from Build Log 083.
 
@@ -154,19 +170,20 @@ Slice order:
    - Preserve fail-closed account/role/row/action authorization.
    - Ensure audit activity and Follow Up On state change commit together.
 
-3. **S83c — PWA detail follow-up completion workflow**
-   - Add `Record follow-up` entry from due/overdue detail banner and timing panel.
-   - Desktop: focused modal/drawer.
-   - Mobile-width PWA: bottom sheet or focused full-screen panel, tap-first choices, optional note.
-   - Preserve drafts on conflict/error.
+3. **S83c — PWA detail follow-up completion workflow** ✓ Complete
+   - `FollowUpResolutionPanel.tsx` (new): bottom sheet mobile / centered modal desktop; tap-first outcome (complete / move / keep active); quick-pick dates; optional note; conflict-preserving draft.
+   - `TodayPromiseBanner`: overdue → danger banner + "Record follow-up" button; due today → accent banner + button; Planned For signal never triggers button.
+   - `TimingPanel`: "Record follow-up" link alongside "Clear follow-up" when follow-up is active.
+   - `apiClient.ts` / `apiClient.types.ts`: `resolveFollowUp` method + typed union types.
+   - `helpers.ts`: `isDateOnlyPast`, `isDueOrOverdueFollowUp`, `COMPLETION_REASON_LABELS`; date helpers use string compare (no `new Date()` on YYYY-MM-DD).
+   - TypeScript clean; Vite build clean, 1,600 modules.
 
-4. **S83d — Request list timing signals**
-   - Show due/overdue Follow Up On and past Planned For signals.
-   - Route list users to detail; do not implement inline follow-up completion in V1.
+4. **S83d — Request list timing signals** ✓ Complete
+   - `RequestRow.tsx`: overdue follow-up → `danger` badge; past planned → `attention`; future → `default`. Local `isDateOnlyToday` (string compare). Server-provided labels used as-is.
 
-5. **S83e — Closeout docs**
-   - Update Build Log 083 with what landed and remaining deferrals.
-   - Update session-log next state after verification.
+5. **S83e — Closeout docs** ✓ Complete
+   - Build Log 083 updated with completion notes and deferred items.
+   - Session log updated to Build 083 complete state.
 
 Hard boundaries:
 

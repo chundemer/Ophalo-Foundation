@@ -149,6 +149,12 @@ function relativeTime(iso: string | null): string | null {
   return `${Math.floor(days / 7)}w ago`;
 }
 
+function isDateOnlyToday(isoDate: string): boolean {
+  const now = new Date();
+  const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+  return isoDate === todayStr;
+}
+
 function timingChipText(
   label: string,
   displayLabel: string | null | undefined,
@@ -177,7 +183,9 @@ export function RequestRow({ row, onSelect, onSelectFocused, onActionClick, onSh
   const isOverdue = row.ranking.isOverdue;
   const dueLabel = isOverdue && row.ranking.dueAtUtc ? `Due ${shortDate(row.ranking.dueAtUtc)}` : null;
   const isCalmCloseout = showCloseoutCue === true && row.status === "resolved" && !row.attention.attentionReason;
+  const followUpIsOverdue = !!(row.timing?.followUpOnDate && !row.timing.hasFutureFollowUpOn && !isDateOnlyToday(row.timing.followUpOnDate));
   const followUpChip = timingChipText("Follow-up", row.timing?.followUpOnLabel, row.timing?.followUpOnDate);
+  const plannedIsOverdue = !!(row.timing?.plannedForDate && !row.timing.hasFuturePlannedFor && !isDateOnlyToday(row.timing.plannedForDate));
   const plannedChip = timingChipText("Planned", row.timing?.plannedForLabel, row.timing?.plannedForDate);
   const actionBarItems = row.actions.quickActions
     .filter((a) =>
@@ -280,13 +288,27 @@ export function RequestRow({ row, onSelect, onSelectFocused, onActionClick, onSh
             <span className="text-[11px] text-[var(--ophalo-danger)]">{dueLabel}</span>
           )}
           {followUpChip && (
-            <KeepBadge variant={row.timing?.hasFutureFollowUpOn ? "default" : "attention"} className="gap-1">
+            <KeepBadge
+              variant={
+                followUpIsOverdue ? "danger"
+                : row.timing?.hasFutureFollowUpOn ? "default"
+                : "attention"
+              }
+              className="gap-1"
+            >
               <Clock className="h-3 w-3" />
               {followUpChip}
             </KeepBadge>
           )}
           {plannedChip && (
-            <KeepBadge variant={row.timing?.hasFuturePlannedFor ? "default" : "attention"} className="gap-1">
+            <KeepBadge
+              variant={
+                plannedIsOverdue ? "attention"
+                : row.timing?.hasFuturePlannedFor ? "default"
+                : "attention"
+              }
+              className="gap-1"
+            >
               <Clock className="h-3 w-3" />
               {plannedChip}
             </KeepBadge>

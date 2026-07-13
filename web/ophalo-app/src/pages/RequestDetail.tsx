@@ -43,6 +43,7 @@ import {
 import { type TimelineFilter, isCommunicationEvent, TimelineEvent } from "./request-detail/TimelineEvent";
 import { TimingPanel } from "./request-detail/TimingPanel";
 import { TodayPromiseBanner, DetailHero } from "./request-detail/DetailHero";
+import { FollowUpResolutionPanel } from "./request-detail/FollowUpResolutionPanel";
 import { TeamSection } from "./request-detail/TeamSection";
 import { WorkDoneCard, CloseRequestCard, BusinessUpdateSection } from "./request-detail/BusinessSection";
 
@@ -1106,6 +1107,7 @@ interface RequestDetailProps {
 export function RequestDetail({ requestId, focusPanel, onBack, prevId, nextId, onNavigate }: RequestDetailProps) {
   const [shareCleared, setShareCleared] = useState(false);
   const [shareModalOpen, setShareModalOpen] = useState(false);
+  const [followUpPanelOpen, setFollowUpPanelOpen] = useState(false);
   const [contactModal, setContactModal] = useState<{ direction: string; channel: string } | null>(null);
   const [businessUpdateDraft, setBusinessUpdateDraft] = useState("");
   const [businessUpdateDraftStatus, setBusinessUpdateDraftStatus] = useState("");
@@ -1263,6 +1265,16 @@ export function RequestDetail({ requestId, focusPanel, onBack, prevId, nextId, o
         />
       )}
 
+      {/* Follow-up resolution panel */}
+      {followUpPanelOpen && detail && (
+        <FollowUpResolutionPanel
+          requestId={requestId}
+          detail={detail}
+          onDetailUpdated={handleDetailUpdated}
+          onClose={() => setFollowUpPanelOpen(false)}
+        />
+      )}
+
       {/* Mobile NeedsShare banner */}
       {detail && needsShareEffective && canShare && (
         <NeedsShareBanner onOpenShareDrawer={() => setShareModalOpen(true)} />
@@ -1334,7 +1346,10 @@ export function RequestDetail({ requestId, focusPanel, onBack, prevId, nextId, o
         <div className="flex flex-1 min-h-0 overflow-hidden md:grid md:[grid-template-columns:minmax(0,7fr)_minmax(320px,3fr)]">
           {/* Left / main column */}
           <div className="flex-1 md:flex-none overflow-y-auto px-4 md:px-6 py-5 space-y-4">
-            <TodayPromiseBanner detail={detail} />
+            <TodayPromiseBanner
+              detail={detail}
+              onRecordFollowUp={() => setFollowUpPanelOpen(true)}
+            />
 
             {/* Hero: identity + status */}
             <DetailHero
@@ -1420,7 +1435,7 @@ export function RequestDetail({ requestId, focusPanel, onBack, prevId, nextId, o
               <CustomerPanel detail={detail} onContactLaunched={handleContactLaunched} />
               <ServiceLocationPanel detail={detail} onDetailUpdated={handleDetailUpdated} />
               <TriagePanel detail={detail} onDetailUpdated={handleDetailUpdated} />
-              <TimingPanel requestId={requestId} detail={detail} onDetailUpdated={handleDetailUpdated} />
+              <TimingPanel requestId={requestId} detail={detail} onDetailUpdated={handleDetailUpdated} onRecordFollowUp={() => setFollowUpPanelOpen(true)} />
               {renderTeamSection()}
               <InternalNoteCard requestId={requestId} detail={detail} onDetailUpdated={handleDetailUpdated} />
               <SourceMetaPanel detail={detail} />
