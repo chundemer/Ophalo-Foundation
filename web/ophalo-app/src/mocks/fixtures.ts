@@ -511,6 +511,16 @@ export const mockRequestSummaries: KeepRequestSummary[] = [
         },
       ],
     },
+    timing: {
+      followUpOnDate: "2026-07-04",
+      followUpOnReason: "customer_delay",
+      followUpOnNote: "Follow up if no response by Friday",
+      followUpOnLabel: "Customer delay",
+      hasFutureFollowUpOn: true,
+      plannedForDate: null,
+      plannedForLabel: null,
+      hasFuturePlannedFor: false,
+    },
   },
   {
     id: "mock-req-004",

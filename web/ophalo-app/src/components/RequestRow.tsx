@@ -1,4 +1,4 @@
-import { AlertTriangle, Clock, MessageSquare, Link, ChevronRight, UserRound, CheckCircle2, Share2 } from "lucide-react";
+import { AlertTriangle, Clock, MessageSquare, ChevronRight, UserRound, CheckCircle2, Share2 } from "lucide-react";
 import { KeepBadge, type KeepBadgeVariant } from "./keep/KeepBadge";
 import type { KeepRequestSummary, KeepRequestAvailableItem, KeepQuickAction } from "../lib/apiClient";
 
@@ -129,6 +129,10 @@ function StatusBadge({ status }: { status: string }) {
 
 function shortDate(iso: string | null): string | null {
   if (!iso) return null;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(iso)) {
+    const [year, month, day] = iso.split("-").map(Number);
+    return new Date(year, month - 1, day).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  }
   return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
@@ -143,6 +147,17 @@ function relativeTime(iso: string | null): string | null {
   const days = Math.floor(hrs / 24);
   if (days < 7) return `${days}d ago`;
   return `${Math.floor(days / 7)}w ago`;
+}
+
+function timingChipText(
+  label: string,
+  displayLabel: string | null | undefined,
+  date: string | null | undefined,
+): string | null {
+  if (!date) return null;
+  const dateLabel = shortDate(date);
+  if (!dateLabel) return null;
+  return `${label}: ${displayLabel ? `${displayLabel} · ` : ""}${dateLabel}`;
 }
 
 const FOCUS_RING = "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-offset-1";
@@ -161,16 +176,25 @@ export function RequestRow({ row, onSelect, onSelectFocused, onActionClick, onSh
   const tone = row.attention.attentionReason ? attentionTone(row.attention.attentionReason) : null;
   const isOverdue = row.ranking.isOverdue;
   const dueLabel = isOverdue && row.ranking.dueAtUtc ? `Due ${shortDate(row.ranking.dueAtUtc)}` : null;
-  const actionBarItems = row.actions.quickActions.filter(
-    (a) =>
+  const isCalmCloseout = showCloseoutCue === true && row.status === "resolved" && !row.attention.attentionReason;
+  const followUpChip = timingChipText("Follow-up", row.timing?.followUpOnLabel, row.timing?.followUpOnDate);
+  const plannedChip = timingChipText("Planned", row.timing?.plannedForLabel, row.timing?.plannedForDate);
+  const actionBarItems = row.actions.quickActions
+    .filter((a) =>
       a.code !== "open_detail" &&
       (
         (a.executionMode === "modal" && MODAL_ACTION_CODES.has(a.code)) ||
         ACTION_FOCUS_MAP[a.code] !== undefined
       ),
-  );
+    )
+    .sort((a, b) => {
+      if (!isCalmCloseout) return 0;
+      if (a.code === "close_request") return -1;
+      if (b.code === "close_request") return 1;
+      return 0;
+    });
 
-  const nextCue = nextActionCue(row.actions.quickActions);
+  const nextCue = row.needsShare ? "Share link" : nextActionCue(row.actions.quickActions);
 
   const borderAccent = (tone === "danger" || isOverdue)
     ? "border-l-4 border-l-[var(--ophalo-danger)]"
@@ -207,7 +231,13 @@ export function RequestRow({ row, onSelect, onSelectFocused, onActionClick, onSh
             <AttentionBadge reason={row.attention.attentionReason} />
           )}
           <StatusBadge status={row.status} />
-          {showCloseoutCue && row.status === "resolved" && !row.attention.attentionReason && (
+          {row.needsShare && (
+            <KeepBadge variant="attention" className="gap-1">
+              <Share2 className="h-3 w-3" />
+              Customer page not shared
+            </KeepBadge>
+          )}
+          {isCalmCloseout && (
             <KeepBadge variant="success" className="gap-1">
               <CheckCircle2 className="h-3 w-3" />
               Ready for closeout
@@ -228,18 +258,19 @@ export function RequestRow({ row, onSelect, onSelectFocused, onActionClick, onSh
           {row.businessPriority !== null &&
             row.businessPriority !== row.intakeUrgency &&
             row.source === "public_intake" &&
+            !isCalmCloseout &&
             (row.intakeUrgency === "urgent" || row.intakeUrgency === "soon") && (
             <span className="text-[11px] text-[var(--ophalo-muted)]">
               Customer marked {row.intakeUrgency === "urgent" ? "urgent" : "soon follow-up"}
             </span>
           )}
-          {row.businessPriority === null && row.source === "public_intake" && row.intakeUrgency === "urgent" && (
+          {!isCalmCloseout && row.businessPriority === null && row.source === "public_intake" && row.intakeUrgency === "urgent" && (
             <KeepBadge variant="danger" className="gap-1">
               <AlertTriangle className="h-3 w-3" />
               Customer marked urgent
             </KeepBadge>
           )}
-          {row.businessPriority === null && row.source === "public_intake" && row.intakeUrgency === "soon" && (
+          {!isCalmCloseout && row.businessPriority === null && row.source === "public_intake" && row.intakeUrgency === "soon" && (
             <KeepBadge variant="attention" className="gap-1">
               <Clock className="h-3 w-3" />
               Customer asked for soon follow-up
@@ -247,6 +278,18 @@ export function RequestRow({ row, onSelect, onSelectFocused, onActionClick, onSh
           )}
           {dueLabel && (
             <span className="text-[11px] text-[var(--ophalo-danger)]">{dueLabel}</span>
+          )}
+          {followUpChip && (
+            <KeepBadge variant={row.timing?.hasFutureFollowUpOn ? "default" : "attention"} className="gap-1">
+              <Clock className="h-3 w-3" />
+              {followUpChip}
+            </KeepBadge>
+          )}
+          {plannedChip && (
+            <KeepBadge variant={row.timing?.hasFuturePlannedFor ? "default" : "attention"} className="gap-1">
+              <Clock className="h-3 w-3" />
+              {plannedChip}
+            </KeepBadge>
           )}
           {nextCue && (
             <span className="text-[11px] text-[var(--ophalo-muted)]">Next: {nextCue}</span>
@@ -267,15 +310,9 @@ export function RequestRow({ row, onSelect, onSelectFocused, onActionClick, onSh
             </span>
           )}
           {row.participation.isUnassigned && (
-            <span className="font-medium text-[var(--ophalo-attention)]">Unassigned</span>
+            <span>Unassigned</span>
           )}
           {lastTouch && <span>Last touch {lastTouch}</span>}
-          {row.needsShare && (
-            <span className="flex items-center gap-1 font-medium text-[var(--ophalo-attention)]">
-              <Link className="h-3 w-3" />
-              Unshared tracker
-            </span>
-          )}
           {row.source === "public_intake" ? (
             <span>
               Customer intake
@@ -287,9 +324,7 @@ export function RequestRow({ row, onSelect, onSelectFocused, onActionClick, onSh
               )}
             </span>
           ) : (
-            <span className={row.needsShare ? "text-[var(--ophalo-attention)] font-medium" : ""}>
-              Team added{row.needsShare && " · Customer page not yet shared"}
-            </span>
+            <span>Created by business</span>
           )}
         </div>
       </button>
@@ -297,6 +332,19 @@ export function RequestRow({ row, onSelect, onSelectFocused, onActionClick, onSh
       {/* Quick action bar */}
       {(actionBarItems.length > 0 || row.needsShare) && (
         <div className="border-t border-[var(--ophalo-border)] px-4 py-2 flex items-center gap-2 flex-wrap">
+          {row.needsShare && onShareClick && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onShareClick(row);
+              }}
+              className={`inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-semibold border border-[var(--ophalo-attention)] bg-[var(--ophalo-canvas)] text-[var(--ophalo-attention)] hover:bg-[var(--ophalo-attention)] hover:text-white transition-colors ${FOCUS_RING}`}
+            >
+              <Share2 className="h-3 w-3" />
+              Share Link
+            </button>
+          )}
           {actionBarItems.map((action) => {
             const isModal = action.executionMode === "modal" && MODAL_ACTION_CODES.has(action.code);
             const focus = ACTION_FOCUS_MAP[action.code];
@@ -320,19 +368,6 @@ export function RequestRow({ row, onSelect, onSelectFocused, onActionClick, onSh
               </button>
             );
           })}
-          {row.needsShare && onShareClick && (
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                onShareClick(row);
-              }}
-              className={`inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-semibold border border-[var(--ophalo-attention)] bg-[var(--ophalo-canvas)] text-[var(--ophalo-attention)] hover:bg-[var(--ophalo-attention)] hover:text-white transition-colors ${FOCUS_RING}`}
-            >
-              <Share2 className="h-3 w-3" />
-              Share Link
-            </button>
-          )}
           <button
             type="button"
             onClick={() => onSelect(row.id)}
