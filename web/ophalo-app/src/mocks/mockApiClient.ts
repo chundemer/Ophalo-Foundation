@@ -165,7 +165,10 @@ export function installMockApi(): void {
     let filtered = all.filter((r) => !r.isTerminal);
 
     if (params.view === "assigned_to_me") {
-      filtered = all.filter((r) => r.participation.currentUserParticipationType === "responsible");
+      filtered = all.filter((r) =>
+        r.participation.currentUserParticipationType === "responsible" &&
+        (r.status !== "resolved" || r.attention.attentionLevel !== "normal")
+      );
     } else if (params.view === "needs_attention") {
       filtered = all.filter((r) => r.attention.attentionLevel === "elevated");
     } else if (params.view === "watching") {
@@ -173,7 +176,7 @@ export function installMockApi(): void {
     } else if (params.view === "feedback_review") {
       filtered = all.filter((r) => r.preview.previewSource === "customer_feedback");
     } else if (params.view === "ready_to_close") {
-      filtered = [];
+      filtered = all.filter((r) => r.status === "resolved" && r.attention.attentionLevel === "normal");
     }
 
     if (params.status) {

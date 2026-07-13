@@ -93,6 +93,7 @@ public sealed class KeepRequestListPersistence(OpHaloDbContext dbContext) : IKee
                 && r.Status != KeepRequestStatus.Cancelled
                 && r.Status != KeepRequestStatus.Spam
                 && r.Status != KeepRequestStatus.Test
+                && (r.Status != KeepRequestStatus.Resolved || r.AttentionLevel != AttentionLevel.None)
                 && dbContext.Set<KeepRequestParticipant>()
                     .Any(p => p.RequestId == r.Id
                         && p.AccountUserId == currentAccountUserId
@@ -234,8 +235,10 @@ public sealed class KeepRequestListPersistence(OpHaloDbContext dbContext) : IKee
                 && r.AttentionReason == AttentionReason.UnresolvedFeedback
                 && r.AttentionLevel != AttentionLevel.None), ct);
 
-        // assigned_to_me: scoped active where current user is Responsible.
+        // assigned_to_me: current user's active promises. Calm Resolved rows move to ready_to_close.
         var assignedToMeCount = await scopedActive.CountAsync(r =>
+            (r.Status != KeepRequestStatus.Resolved || r.AttentionLevel != AttentionLevel.None)
+            &&
             dbContext.Set<KeepRequestParticipant>()
                 .Any(p => p.RequestId == r.Id
                     && p.AccountUserId == currentAccountUserId

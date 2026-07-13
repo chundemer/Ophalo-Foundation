@@ -250,6 +250,9 @@ public sealed class KeepRequestListB5Tests : IClassFixture<KeepApiWebFactory>, I
         Assert.True(resolveResult.IsSuccess);
         if (resolveResult.Value.StatusChangedEvent is not null)
             db.Set<KeepRequestEvent>().Add(resolveResult.Value.StatusChangedEvent);
+        db.Set<KeepRequestParticipant>().Add(KeepRequestParticipant.Create(
+            resolvedClean.Id, _accountId, graph.Owner.Id,
+            ParticipationType.Responsible, notificationsEnabled: true, now));
         await db.SaveChangesAsync();
         _resolvedCleanRequestId = resolvedClean.Id;
 
@@ -297,6 +300,9 @@ public sealed class KeepRequestListB5Tests : IClassFixture<KeepApiWebFactory>, I
         Assert.True(resolveWithAttn.IsSuccess);
         if (resolveWithAttn.Value.StatusChangedEvent is not null)
             db.Set<KeepRequestEvent>().Add(resolveWithAttn.Value.StatusChangedEvent);
+        db.Set<KeepRequestParticipant>().Add(KeepRequestParticipant.Create(
+            resolvedWithAttention.Id, _accountId, graph.Owner.Id,
+            ParticipationType.Responsible, notificationsEnabled: true, now));
         await db.SaveChangesAsync();
         _resolvedWithAttentionRequestId = resolvedWithAttention.Id;
 
@@ -321,6 +327,15 @@ public sealed class KeepRequestListB5Tests : IClassFixture<KeepApiWebFactory>, I
     private async Task<B5RequestListBody?> GetListAsync(string cookie)
     {
         using var req = WithCookie(HttpMethod.Get, "/keep/requests", cookie);
+        var response = await _client.SendAsync(req);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        return await response.Content.ReadFromJsonAsync<B5RequestListBody>(
+            new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+    }
+
+    private async Task<B5RequestListBody?> GetAssignedToMeListAsync(string cookie)
+    {
+        using var req = WithCookie(HttpMethod.Get, "/keep/requests?view=assigned_to_me", cookie);
         var response = await _client.SendAsync(req);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         return await response.Content.ReadFromJsonAsync<B5RequestListBody>(
@@ -398,6 +413,22 @@ public sealed class KeepRequestListB5Tests : IClassFixture<KeepApiWebFactory>, I
         var body = await GetRtcListAsync(_ownerCookie);
         Assert.NotNull(body);
         Assert.DoesNotContain(body.Requests, r => r.Id == _resolvedWithAttentionRequestId);
+    }
+
+    [Fact]
+    public async Task Calm_resolved_excluded_from_assigned_to_me()
+    {
+        var body = await GetAssignedToMeListAsync(_ownerCookie);
+        Assert.NotNull(body);
+        Assert.DoesNotContain(body.Requests, r => r.Id == _resolvedCleanRequestId);
+    }
+
+    [Fact]
+    public async Task Resolved_with_active_attention_remains_in_assigned_to_me()
+    {
+        var body = await GetAssignedToMeListAsync(_ownerCookie);
+        Assert.NotNull(body);
+        Assert.Contains(body.Requests, r => r.Id == _resolvedWithAttentionRequestId);
     }
 
     [Fact]

@@ -493,4 +493,6 @@ decision. This file is authoritative for the new project.
 
 | ADR-437 | Default Queue is the live operational triage queue and excludes calm **Work completed** rows (`Status == Resolved` and `AttentionLevel == None`), which belong in `ready_to_close`. Work-completed rows with real active attention remain in Default Queue and Needs Attention because unresolved attention overrides completed workflow state. Customer-reported urgency/contact metadata alone does not keep a calm work-completed row in Default Queue. This supersedes older quiet-Resolved default-list behavior from ADR-175/177/189 while preserving `Resolved` as pre-terminal lifecycle state | Locked | [ADR-437](ADR-437-default-queue-excludes-calm-work-completed.md); build-log/081 |
 
-_Next free ID: **ADR-438**._
+| ADR-438 | Assigned to Me is the current user's active-promise queue and excludes calm **Work completed** rows (`Status == Resolved` and `AttentionLevel == None`), which belong in `ready_to_close`. Work-completed rows with active attention remain in Assigned to Me when the current user is responsible because the customer promise is not calm | Locked | [ADR-438](ADR-438-assigned-to-me-excludes-calm-work-completed.md); build-log/082 |
+
+_Next free ID: **ADR-439**._
