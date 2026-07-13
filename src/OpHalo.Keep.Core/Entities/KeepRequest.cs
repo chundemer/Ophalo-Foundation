@@ -1122,6 +1122,11 @@ public sealed class KeepRequest : BaseEntity
         if (FollowUpOnDate.HasValue && FollowUpOnDate.Value > today)
             return new KeepRequestNeedsStatusCheckInputs(false, "future_follow_up_on", null);
 
+        // Due/overdue FollowUpOn is active operational attention (ADR-439); it routes to
+        // NeedsAttention, not NeedsStatusCheck.
+        if (FollowUpOnDate.HasValue && FollowUpOnDate.Value <= today)
+            return new KeepRequestNeedsStatusCheckInputs(false, "due_or_overdue_follow_up_on", null);
+
         if (PlannedForDate.HasValue && PlannedForDate.Value > today)
             return new KeepRequestNeedsStatusCheckInputs(false, "future_planned_for", null);
 

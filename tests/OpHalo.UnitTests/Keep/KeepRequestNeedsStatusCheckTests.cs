@@ -83,28 +83,30 @@ public class KeepRequestNeedsStatusCheckTests
         Assert.Null(result.LatestMeaningfulActivityAtUtc);
     }
 
-    // --- Timing suppressors do not exclude when past/today ---
+    // --- Due/overdue FollowUpOn routes to NeedsAttention, not NeedsStatusCheck (ADR-439) ---
 
     [Fact]
-    public void Past_follow_up_on_does_not_suppress()
+    public void Past_follow_up_on_suppresses_as_due_or_overdue()
     {
         var r = ActiveRequest();
         r.SetFollowUpOn(Today.AddDays(-1), FollowUpReason.Parts, null, ActorId, "Jane", Now);
 
         var result = r.GetNeedsStatusCheckInputs(Today);
 
-        Assert.True(result.IsEligible);
+        Assert.False(result.IsEligible);
+        Assert.Equal("due_or_overdue_follow_up_on", result.ExclusionReason);
     }
 
     [Fact]
-    public void Follow_up_on_today_does_not_suppress()
+    public void Follow_up_on_today_suppresses_as_due_or_overdue()
     {
         var r = ActiveRequest();
         r.SetFollowUpOn(Today, FollowUpReason.Parts, null, ActorId, "Jane", Now);
 
         var result = r.GetNeedsStatusCheckInputs(Today);
 
-        Assert.True(result.IsEligible);
+        Assert.False(result.IsEligible);
+        Assert.Equal("due_or_overdue_follow_up_on", result.ExclusionReason);
     }
 
     [Fact]
@@ -184,8 +186,11 @@ public class KeepRequestNeedsStatusCheckTests
     }
 
     [Fact]
-    public void Set_follow_up_on_updates_business_activity_and_counts_as_signal()
+    public void Set_follow_up_on_to_past_date_suppresses_from_needs_status_check()
     {
+        // Setting FollowUpOn to a past date makes the row active operational attention (ADR-439);
+        // it routes to NeedsAttention, not NeedsStatusCheck. LastBusinessActivityAt is still
+        // updated and surfaces as the signal once FollowUpOn is cleared (see Clear_ test).
         var r = ActiveRequest();
         var followUpTime = Now.AddHours(4);
 
@@ -193,8 +198,9 @@ public class KeepRequestNeedsStatusCheckTests
 
         var result = r.GetNeedsStatusCheckInputs(Today);
 
-        Assert.True(result.IsEligible);
-        Assert.Equal(followUpTime, result.LatestMeaningfulActivityAtUtc);
+        Assert.False(result.IsEligible);
+        Assert.Equal("due_or_overdue_follow_up_on", result.ExclusionReason);
+        Assert.Null(result.LatestMeaningfulActivityAtUtc);
     }
 
     [Fact]

@@ -495,4 +495,10 @@ decision. This file is authoritative for the new project.
 
 | ADR-438 | Assigned to Me is the current user's active-promise queue and excludes calm **Work completed** rows (`Status == Resolved` and `AttentionLevel == None`), which belong in `ready_to_close`. Work-completed rows with active attention remain in Assigned to Me when the current user is responsible because the customer promise is not calm | Locked | [ADR-438](ADR-438-assigned-to-me-excludes-calm-work-completed.md); build-log/082 |
 
-_Next free ID: **ADR-439**._
+| ADR-439 | Follow Up On is a lightweight, business-owned promise reminder attached to a customer request. Customers may request timing/follow-up but cannot directly set or expose internal Follow Up On; Owners/Admins can set it where authorized and Operators can set it with operate access. Setting requires date + reason, note optional except `other`; future follow-up is quiet timing metadata, while due/overdue follow-up becomes active operational attention unless a stronger attention reason owns the request | Locked | [ADR-439](ADR-439-follow-up-on-promise-protection-semantics.md); build-log/083 |
+
+| ADR-440 | Completing Follow Up On requires a lightweight completion reason, not mandatory free text. Follow-up can be completed, moved, or left active after recorded activity. Missed follow-ups remain visible as overdue active promise work until completed or moved, are recorded for metrics, and are never hidden/expired away. Completion should use a narrow backend command so audit activity and timing state commit atomically | Locked | [ADR-440](ADR-440-follow-up-completion-and-missed-follow-up-handling.md); build-log/083 |
+
+| ADR-441 | Planned For remains internal timing context in V1, not a completion workflow or follow-up attention. Past Planned For stays visible as `Planned date passed` and prompts staff to mark work done, move the planned date, or remove it; active requests with past Planned For may feed needs-status-check/review until resolved | Locked | [ADR-441](ADR-441-planned-for-internal-timing-and-past-date-handling.md); build-log/083 |
+
+_Next free ID: **ADR-442**._

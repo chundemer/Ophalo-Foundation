@@ -5,10 +5,11 @@ using OpHalo.Keep.Application.Abstractions;
 using OpHalo.Keep.Application.Requests;
 using OpHalo.Keep.Core.Entities;
 using OpHalo.Keep.Core.Entities.Enums;
+using OpHalo.SharedKernel.Abstractions;
 
 namespace OpHalo.Keep.Infrastructure.Persistence;
 
-public sealed class KeepRequestListPersistence(OpHaloDbContext dbContext) : IKeepRequestListPersistence
+public sealed class KeepRequestListPersistence(OpHaloDbContext dbContext, IClock clock) : IKeepRequestListPersistence
 {
     public async Task<AccountUserSnapshot?> GetAccountUserSnapshotAsync(
         Guid accountUserId, CancellationToken ct)
@@ -75,6 +76,8 @@ public sealed class KeepRequestListPersistence(OpHaloDbContext dbContext) : IKee
         var scopedBase = KeepRequestRowQueryFactory.Apply(
             dbContext.Set<KeepRequest>().AsNoTracking(), scope, accountId, currentAccountUserId, dbContext);
 
+        var today = DateOnly.FromDateTime(clock.UtcNow);
+
         IQueryable<KeepRequest> query = view switch
         {
             // ADR-437: calm Resolved (no active attention) belongs in ready_to_close, not Default Queue.
@@ -117,12 +120,15 @@ public sealed class KeepRequestListPersistence(OpHaloDbContext dbContext) : IKee
             ActiveViewKind.Unassigned => KeepRequestRowQueryFactory.ApplyAvailable(
                 dbContext.Set<KeepRequest>().AsNoTracking(), accountId, currentAccountUserId, dbContext),
 
+            // ADR-439: due/overdue FollowUpOn is active operational attention; include alongside
+            // persisted AttentionLevel != None. Fully terminal statuses excluded from both branches.
             ActiveViewKind.NeedsAttention => scopedBase.Where(r =>
                 r.Status != KeepRequestStatus.Closed
                 && r.Status != KeepRequestStatus.Cancelled
                 && r.Status != KeepRequestStatus.Spam
                 && r.Status != KeepRequestStatus.Test
-                && r.AttentionLevel != AttentionLevel.None),
+                && (r.AttentionLevel != AttentionLevel.None
+                    || (r.FollowUpOnDate.HasValue && r.FollowUpOnDate.Value <= today))),
 
             ActiveViewKind.FeedbackReview => scopedBase.Where(r =>
                 r.Status == KeepRequestStatus.Closed
@@ -216,6 +222,8 @@ public sealed class KeepRequestListPersistence(OpHaloDbContext dbContext) : IKee
         var scopedBase = KeepRequestRowQueryFactory.Apply(
             baseSet, scope, accountId, currentAccountUserId, dbContext);
 
+        var today = DateOnly.FromDateTime(clock.UtcNow);
+
         // Non-terminal scoped base for counts that exclude terminal rows.
         var scopedActive = scopedBase.Where(r =>
             r.Status != KeepRequestStatus.Closed
@@ -267,9 +275,10 @@ public sealed class KeepRequestListPersistence(OpHaloDbContext dbContext) : IKee
             unassignedCount = 0;
         }
 
-        // needs_attention: scoped active with raised attention.
+        // needs_attention: persisted attention or due/overdue FollowUpOn (ADR-439).
         var needsAttentionCount = await scopedActive.CountAsync(
-            r => r.AttentionLevel != AttentionLevel.None, ct);
+            r => r.AttentionLevel != AttentionLevel.None
+                || (r.FollowUpOnDate.HasValue && r.FollowUpOnDate.Value <= today), ct);
 
         // feedback_review: AccountWide closed unresolved feedback (Owner/Admin only, ADR-241/242).
         int feedbackReviewCount = isOwnerOrAdmin

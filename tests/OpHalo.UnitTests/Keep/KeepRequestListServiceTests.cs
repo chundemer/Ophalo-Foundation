@@ -1865,6 +1865,104 @@ public class KeepRequestListServiceTests
         Assert.Equal(KeepRequestVisibilityScope.MyWork, p.LastActiveScope);
     }
 
+    // --- Follow Up On attention (ADR-439) -----------------------------------------
+
+    [Fact]
+    public async Task NeedsStatusCheck_due_follow_up_on_suppresses_row()
+    {
+        // FollowUpOnDate == today: becomes active operational attention, not NeedsStatusCheck.
+        var request = MakeDueRequest(daysOld: 10);
+        SetProp(request, nameof(KeepRequest.FollowUpOnDate), Today);
+        var sut = BuildSut(HappyPathPersistence([request]));
+
+        var result = await sut.ExecuteAsync(new KeepRequestListQuery(View: "needs_status_check"));
+
+        Assert.True(result.IsSuccess);
+        Assert.Empty(result.Value.Requests);
+    }
+
+    [Fact]
+    public async Task NeedsStatusCheck_overdue_follow_up_on_suppresses_row()
+    {
+        // FollowUpOnDate in the past: also routes to NeedsAttention, not NeedsStatusCheck.
+        var request = MakeDueRequest(daysOld: 10);
+        SetProp(request, nameof(KeepRequest.FollowUpOnDate), Today.AddDays(-3));
+        var sut = BuildSut(HappyPathPersistence([request]));
+
+        var result = await sut.ExecuteAsync(new KeepRequestListQuery(View: "needs_status_check"));
+
+        Assert.True(result.IsSuccess);
+        Assert.Empty(result.Value.Requests);
+    }
+
+    [Fact]
+    public async Task NeedsStatusCheck_exclusion_reason_is_due_or_overdue_follow_up_on()
+    {
+        var request = MakeDueRequest(daysOld: 10);
+        SetProp(request, nameof(KeepRequest.FollowUpOnDate), Today.AddDays(-1));
+        var sut = BuildSut(HappyPathPersistence([request]));
+
+        var result = await sut.ExecuteAsync(new KeepRequestListQuery(View: "default"));
+
+        Assert.True(result.IsSuccess);
+        var sc = result.Value.Requests.Single().StatusCheck;
+        Assert.False(sc.IsDue);
+        Assert.Equal("due_or_overdue_follow_up_on", sc.ExclusionReason);
+    }
+
+    [Fact]
+    public async Task NeedsAttention_due_follow_up_on_row_included_with_correct_ranking_and_context()
+    {
+        // Confirms that a due FollowUpOn row with AttentionLevel.None gets:
+        //   rankingGroup = "due_follow_up_on", rowContext = "needs_attention", severity = "attention".
+        var request = MakeRequest();
+        SetProp(request, nameof(KeepRequest.FollowUpOnDate), Today);
+
+        var sut = BuildSut(HappyPathPersistence([request]));
+
+        var result = await sut.ExecuteAsync(new KeepRequestListQuery(View: "needs_attention"));
+
+        Assert.True(result.IsSuccess);
+        var row = result.Value.Requests.Single();
+        Assert.Equal("due_follow_up_on", row.Ranking.RankingGroup);
+        Assert.Equal(5, row.Ranking.RankingOrder);
+        Assert.Equal("needs_attention", row.RowContext);
+        Assert.Equal("attention", row.Ranking.Severity);
+    }
+
+    [Fact]
+    public async Task NeedsAttention_overdue_follow_up_on_row_has_danger_severity()
+    {
+        var request = MakeRequest();
+        SetProp(request, nameof(KeepRequest.FollowUpOnDate), Today.AddDays(-2));
+        var sut = BuildSut(HappyPathPersistence([request]));
+
+        var result = await sut.ExecuteAsync(new KeepRequestListQuery(View: "needs_attention"));
+
+        Assert.True(result.IsSuccess);
+        var row = result.Value.Requests.Single();
+        Assert.Equal("due_follow_up_on", row.Ranking.RankingGroup);
+        Assert.Equal("danger", row.Ranking.Severity);
+    }
+
+    [Fact]
+    public async Task NeedsAttention_stronger_persisted_attention_takes_ranking_priority_over_due_follow_up_on()
+    {
+        // Row has both raised attention and due FollowUpOn: persisted attention wins the ranking.
+        var request = MakeRequest();
+        SetProp(request, nameof(KeepRequest.FollowUpOnDate), Today.AddDays(-1));
+        SetProp(request, nameof(KeepRequest.AttentionLevel), AttentionLevel.NeedsAttention);
+        SetProp(request, nameof(KeepRequest.WaitingDirection), WaitingDirection.Business);
+        SetProp(request, nameof(KeepRequest.AttentionReason), AttentionReason.CustomerMessage);
+        var sut = BuildSut(HappyPathPersistence([request]));
+
+        var result = await sut.ExecuteAsync(new KeepRequestListQuery(View: "needs_attention"));
+
+        Assert.True(result.IsSuccess);
+        var row = result.Value.Requests.Single();
+        Assert.Equal("standard_business_waiting", row.Ranking.RankingGroup);
+    }
+
     // --- ready_to_close view (P6f-2) ----------------------------------------------
 
     private static KeepRequest MakeResolvedRequest()

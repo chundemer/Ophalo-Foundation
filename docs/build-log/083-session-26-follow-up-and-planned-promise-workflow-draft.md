@@ -1,13 +1,13 @@
-# Build Log 083 — Session 26 Draft: Follow-up and Planned-for Promise Workflow
+# Build Log 083 — Follow-up And Planned Promise Workflow
 
-**Started:** Drafted 2026-07-12  
-**Status:** Draft / next-session planning  
-**Related ADRs:** ADR-337, ADR-338, ADR-339, ADR-359, ADR-406, ADR-435  
-**Next free ADR:** ADR-439
+**Started:** Drafted 2026-07-12; decision lock 2026-07-13  
+**Status:** Ready for implementation preflight  
+**Related ADRs:** ADR-337, ADR-338, ADR-339, ADR-359, ADR-406, ADR-435, ADR-439, ADR-440, ADR-441  
+**Next free ADR:** ADR-442
 
 ---
 
-## Why This Session Exists
+## Purpose
 
 Late Session 25 review exposed that Follow Up On and Planned For are technically present but not yet
 good enough as a promise workflow.
@@ -37,227 +37,271 @@ the promised action through a clean completion path.
 
 ---
 
-## Existing Product Semantics
+## Locked Product Semantics
 
 ### Follow Up On
 
-ADR-337 says Follow Up On is:
+ADR-439 locks Follow Up On as lightweight, business-owned promise protection attached to a request.
 
-- staff-owned active-request communication follow-up;
-- not scheduling;
-- date-only in V1;
-- internal by default;
-- should resurface as follow-up attention on/after the date;
-- should make explicit customer update/contact easy.
+Tighter definition:
+
+```text
+Follow Up On is an internal staff-owned date that tells Keep:
+"Do not let this request go quiet. Bring it back to the responsible staff member on this date
+because the customer/business loop is not fully settled yet."
+```
+
+Rules:
+
+- Owners/Admins may set Follow Up On where they have request access.
+- Operators may set Follow Up On when they have operate access to the request.
+- Customers may request timing/follow-up but do not directly create or edit internal Follow Up On.
+- Internal Follow Up On is not shown on the customer page by default.
+- Setting Follow Up On requires date + reason; note is optional except `other`, which requires note.
+- Future Follow Up On remains quiet timing metadata and suppresses stale/status-check noise.
+- Due/overdue Follow Up On becomes active operational attention unless a stronger active attention
+  reason already owns the request.
+
+### Follow-up Completion
+
+ADR-440 locks Follow Up On completion and missed follow-up handling.
+
+Rules:
+
+- Completing Follow Up On requires a lightweight completion reason, not mandatory free text.
+- Silent clear is not the default completion path.
+- Follow-up can be completed, moved, or left active after recorded activity.
+- Customer updates and external contact logs are valid audit records when those paths are used.
+- Internal/no-longer-needed completion creates an internal completion event.
+- Missed follow-ups remain visible as overdue active promise work until completed or moved.
+- Missed follow-ups are recorded for metrics; they are never hidden or expired away.
+- Completion should use a narrow backend command so audit activity and timing state commit together.
+
+Use `Overdue follow-up` / `Follow-up overdue` in product UI. Avoid `expired`.
 
 ### Planned For
 
-ADR-338 says Planned For is:
+ADR-441 locks Planned For as internal timing context only in V1.
 
-- lightweight staff-owned active-request timing context;
-- not dispatch, scheduling, booking, or customer appointment management;
-- date-only and internal by default;
-- useful for scan labels such as `Planned today`, `Planned tomorrow`, `Planned Fri`, `date passed`;
-- should make explicit customer updates easy but must not notify automatically.
+Rules:
 
-### Important distinction
-
-```text
-Follow Up On = we need to check back / communicate / verify something.
-Planned For = we intend to do or resume work around this date.
-```
-
-Both protect the customer promise, but they should not collapse into one generic date field.
+- Planned For can be set, changed, or removed.
+- Planned For does not get a completion workflow.
+- Future Planned For is a quiet timing chip.
+- Planned today is visible timing context but not customer-promise attention.
+- Past Planned For stays visible as `Planned date passed`.
+- Past Planned For should prompt staff to mark work done, move the planned date, or remove it.
+- Active requests with past Planned For may feed needs-status-check/review until resolved.
 
 ---
 
-## Session 25 Observations To Carry Forward
+## Purpose Matrix
 
-Implemented during Session 25:
+What Follow Up On is for:
 
-- request list displays timing chips from server `timing` metadata;
-- request detail promotes `Follow-up & planned timing`;
-- planned date now has an obvious `Remove planned date` affordance;
-- request detail shows a top banner when Follow Up On or Planned For is today:
+| Use | Example |
+|---|---|
+| Customer check-in | Customer asked us to check back Friday. |
+| Business delay follow-up | Parts arrive Thursday; follow up after that. |
+| Waiting on third party | Waiting on supplier response; check again Monday. |
+| Timing uncertainty | Weather blocked work; revisit tomorrow. |
+| Promise made during contact | Told customer we'd update them next week. |
+| Internal review before customer update | Owner needs to confirm estimate before replying. |
 
-```text
-Protecting a promise today
-```
+What Follow Up On is not for:
 
-Open concern:
-
-The banner tells the business that today matters, but it still does not answer:
-
-```text
-What did you do, and should this promise be cleared or moved?
-```
-
----
-
-## Gap Statement
-
-Keep needs a first-class "complete the follow-up" workflow.
-
-The workflow must combine activity capture with timing cleanup:
-
-- record contact, update, or internal note;
-- clear Follow Up On when the promise is handled;
-- optionally set the next Follow Up On date when the promise remains open;
-- avoid false audit language such as sent/delivered/done unless the user explicitly records that
-  action.
-
-Planned For also needs a clearer completion/reset story, but it is not identical to Follow Up On.
+| Not for | Why |
+|---|---|
+| Scheduling a job | That is Planned For / future dispatch territory. |
+| Booking appointments | Keep is not a calendar or scheduling system. |
+| Generic personal tasks | Follow Up On should belong to a customer request. |
+| Proof that contact happened | External contact and customer update history own that evidence. |
+| Automatic customer notification | Follow-up is internal unless staff explicitly updates the customer. |
+| Closing the request | It may lead to work done or closeout, but it is not closure itself. |
 
 ---
 
-## Proposed UX Direction
+## Surface Scope
 
-### Detail top banner
+This is PWA command-center work for initial pilot.
 
-When Follow Up On or Planned For is today, the detail banner should include an action, not just
-awareness.
+| Surface | Decision |
+|---|---|
+| PWA desktop detail | Full follow-up completion workflow. |
+| PWA mobile-width detail | Full workflow, frictionless/tap-first. |
+| PWA request list | Shows due/overdue/past timing signals and routes into detail. |
+| Native mobile | Deferred from initial pilot; planned for early post-pilot/early release. |
+| Customer page | No internal Follow Up On / Planned For display by default. |
 
-Possible primary actions:
+PWA mobile requirements:
 
-```text
-Record follow-up
-Review timing
-Log what happened
-```
-
-Preferred direction:
-
-```text
-Record follow-up
-```
-
-Reason: it names the operator task and keeps the workflow anchored in the promise loop.
-
-### Follow-up completion drawer/modal
-
-`Record follow-up` should open a focused workflow.
-
-Possible options:
-
-- `Logged a call, text, email, or in-person contact`
-- `Sent customer update`
-- `Added internal note only`
-- `Still waiting / move follow-up`
-
-Possible completion outcomes:
-
-- clear Follow Up On;
-- clear attention if the logged activity qualifies under existing external-contact policy;
-- set a new Follow Up On date;
-- leave Follow Up On in place if not actually handled.
-
-### Request list row
-
-The list should not use a full banner inside rows. Use compact chips:
-
-```text
-Promise today · Follow-up: Waiting on customer
-Promise today · Planned for today
-```
-
-If both are today:
-
-```text
-Promise today · Follow-up: Waiting on customer · Planned today
-```
-
-The list chip should sit in the signal/status line before `Next:`.
+- one obvious `Record follow-up` action;
+- bottom sheet or focused full-screen panel on small screens;
+- tap-first completion reasons;
+- optional text, not mandatory typing;
+- quick-pick date options plus date picker when moving follow-up;
+- return to detail with updated state and clear confirmation;
+- usable one-handed between jobs.
 
 ---
 
-## Product Questions For Tomorrow
+## Implementation Slices
 
-1. Should `Record follow-up` be a new backend endpoint, or a composed UI workflow using existing
-   endpoints?
+Hard gate unless explicitly split: at most 3 mutation families, 8 production files, and 12 total
+changed files including tests/docs per slice.
 
-2. Should completing a Follow Up On always require an activity record?
+### S83a — Backend verification and attention gap closure
 
-   Suggested answer: yes. Clearing a follow-up without recording anything loses the audit trail.
+Goal: confirm and, if needed, implement ADR-439 due/overdue Follow Up On attention behavior.
 
-3. Which activity types should be allowed in the follow-up completion flow?
+Preflight:
 
-   Candidate V1 set:
+- Inspect current Follow Up On domain/application/list/detail behavior.
+- Confirm whether due/overdue Follow Up On sets or derives active operational attention/ranking.
+- Confirm stronger attention reasons remain primary.
+- Confirm future Follow Up On suppresses needs-status-check/stale noise.
 
-   - external contact;
-   - customer update;
-   - internal note;
-   - reschedule follow-up.
+Expected changes if gap exists:
 
-4. Should Planned For have a separate `Mark planned work handled` flow?
+- backend attention/list/detail mapping or service logic;
+- focused unit/integration tests for future, due today, overdue, stronger-attention coexistence, and
+  move/clear effects.
 
-   Suggested answer: not yet. V1 can make Planned For removable/changeable and today-visible, while
-   Follow Up On gets the completion workflow first.
+Verification:
 
-5. Should due Follow Up On raise actual attention, or remain timing metadata plus banner/list chip?
+- focused Keep timing/list/detail tests;
+- broader relevant unit/integration suite if attention/list logic changes.
 
-   ADR-337 says it should resurface as follow-up attention on/after the date. Confirm whether current
-   backend behavior does this fully; if not, create a backend gap.
+### S83b — Follow-up completion backend command
 
----
+Goal: add the narrow atomic command from ADR-440.
 
-## Candidate Implementation Slices
+Candidate route:
 
-### S26a — Documentation and decision lock
+```text
+POST /keep/requests/{requestId}/follow-up-resolution
+```
 
-- Lock workflow language:
-  - `Record follow-up`;
-  - `Clear follow-up`;
-  - `Move follow-up`;
-  - `Planned for`.
-- Decide whether completing follow-up requires an activity record.
-- Decide whether Planned For gets a completion workflow or remains date context.
+Candidate outcomes:
 
-### S26b — Request list promise-today chip
+```text
+complete
+move
+keep_active
+```
 
-- Promote today Follow Up On / Planned For into a distinct list chip.
-- Keep future timing chips quieter.
-- Add test/mocks for today labels.
+Contract:
 
-### S26c — Detail banner action
+- requires `X-Keep-Request-Version`;
+- returns updated `KeepRequestDetailResult`;
+- preserves account/role/row/action authorization;
+- fails without partial activity/clear state;
+- records internal completion/move/keep-active events;
+- does not expose customer-visible copy or notify customers;
+- does not implement Planned For completion.
 
-- Add `Record follow-up` action to the `Protecting a promise today` banner.
-- Route to a focused panel/modal.
+Tests:
 
-### S26d — Follow-up completion workflow
+- owner/admin success;
+- operator with operate access success;
+- viewer forbidden;
+- cross-account/unknown fail-closed;
+- stale version conflict;
+- complete clears Follow Up On and records event;
+- move sets new date/reason and records event;
+- keep_active records activity and leaves Follow Up On active;
+- due/overdue attention clears only when follow-up attention was the active reason.
 
-- Compose existing activity actions or add a narrow backend command.
-- Ensure follow-up clearing writes durable activity.
-- Allow "still needs follow-up" with new date.
+### S83c — PWA detail follow-up completion workflow
 
-### S26e — Backend verification
+Goal: implement the command-center detail workflow with mobile-width PWA as first-class.
 
-- Confirm due Follow Up On appears in attention/list ranking as ADR-337 expects.
-- Add tests if missing.
+Entry points:
+
+- `Record follow-up` in due/overdue detail banner.
+- Timing panel affordance when Follow Up On is active.
+
+UX:
+
+- desktop: focused modal/drawer;
+- mobile width: bottom sheet or focused full-screen panel;
+- tap-first reason/outcome controls;
+- optional note;
+- move flow with quick-pick dates plus date input/picker;
+- clear confirmation after success.
+
+Constraints:
+
+- use server-provided capabilities and `version`;
+- preserve drafts on conflict/error;
+- do not show internal Follow Up On on customer page;
+- do not add customer notifications;
+- do not make Planned For completable.
+
+Verification:
+
+- TypeScript;
+- PWA build;
+- responsive manual check or screenshot/checklist for desktop and mobile width.
+
+### S83d — Request list timing signals
+
+Goal: make list scan signals match ADR-439/440/441 without implementing inline completion.
+
+Behavior:
+
+- future Follow Up On remains quiet timing metadata;
+- due today Follow Up On promoted as active promise signal;
+- overdue Follow Up On shown as `Overdue follow-up`;
+- past Planned For shown as `Planned date passed`;
+- list actions route to detail workflow rather than completing inline.
+
+Tests:
+
+- mock/server labels for future, today, overdue, and past planned;
+- no customer-visible exposure of internal dates;
+- stronger attention reason remains primary where applicable.
+
+### S83e — Closeout docs and early native follow-up note
+
+Goal: document what landed and what remains deferred.
+
+Update:
+
+- build-log 083 completion notes;
+- decision-index only if new ADRs are added beyond ADR-439..441;
+- session-log next session state;
+- deferred/native note that native command-center follow-up completion is early post-pilot/early
+  release, not initial pilot.
 
 ---
 
 ## Non-Goals
 
 - No customer self-scheduling.
+- No customer direct editing of Follow Up On.
+- No customer-page display of internal Follow Up On or Planned For by default.
 - No dispatch calendar.
 - No automatic customer notifications from timing changes.
 - No backend SMS.
 - No proof-of-send semantics.
 - No broad recurring task engine.
+- No native mobile command-center implementation in initial pilot.
 
 ---
 
-## Draft Recommendation
+## Acceptance Summary
 
-Start S26 with Follow Up On, not Planned For.
-
-Follow Up On is the cleaner promise-completion workflow because it is explicitly about communication
-follow-up. Planned For can remain timing context until the follow-up workflow is solid.
-
-The first production-worthy shape should be:
+The production-worthy shape is:
 
 ```text
-Promise today banner -> Record follow-up -> record activity -> clear or move follow-up
+Due/overdue promise -> Record follow-up -> choose lightweight reason/outcome
+-> complete, move, or keep active -> durable audit + updated detail state
 ```
 
-That is the missing loop.
+Planned For remains:
+
+```text
+Internal timing context -> planned today / planned date passed
+-> mark work done, move planned date, or remove planned date
+```

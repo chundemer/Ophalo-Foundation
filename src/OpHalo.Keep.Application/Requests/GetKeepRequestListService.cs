@@ -649,6 +649,14 @@ public sealed class GetKeepRequestListService(
 
         var isOverdue = overdueBusinessWaiting || firstResponseOverdue;
 
+        // ADR-439: due/overdue FollowUpOn is active operational attention when no stronger
+        // persisted attention already owns the request.
+        var today = DateOnly.FromDateTime(nowUtc);
+        var isDueOrOverdueFollowUpOn = r.AttentionLevel == AttentionLevel.None
+            && r.FollowUpOnDate.HasValue
+            && r.FollowUpOnDate.Value <= today;
+        var isFollowUpOverdue = isDueOrOverdueFollowUpOn && r.FollowUpOnDate!.Value < today;
+
         var attention = new KeepRequestAttentionInfo(
             AttentionLevel: MapAttentionLevel(r.AttentionLevel),
             WaitingDirection: MapWaitingDirection(r.WaitingDirection),
@@ -662,9 +670,11 @@ public sealed class GetKeepRequestListService(
             FirstResponseOverdue: firstResponseOverdue);
 
         var (rankingGroup, rankingOrder) = ComputeRankingGroup(
-            r, isPostClose, firstResponsePending, firstResponseOverdue, overdueBusinessWaiting);
+            r, isPostClose, firstResponsePending, firstResponseOverdue, overdueBusinessWaiting,
+            isDueOrOverdueFollowUpOn);
 
-        var severity = ComputeSeverity(r, isOverdue, isPostClose, firstResponsePending);
+        var severity = ComputeSeverity(r, isOverdue, isPostClose, firstResponsePending,
+            isDueOrOverdueFollowUpOn, isFollowUpOverdue);
 
         var elapsedSinceUtc = r.WaitingDirection == WaitingDirection.Business
             ? r.AttentionSinceUtc
@@ -711,7 +721,8 @@ public sealed class GetKeepRequestListService(
             && actionDecision.CanSelfAssignResponsible
             && isUnassigned;
 
-        var rowContext = ComputeRowContext(r, isPostClose, firstResponsePending, firstResponseOverdue, canSelfAssignFromList);
+        var rowContext = ComputeRowContext(r, isPostClose, firstResponsePending, firstResponseOverdue,
+            isDueOrOverdueFollowUpOn, canSelfAssignFromList);
         var participationInfo = BuildParticipationInfo(participation, canAssignFromList, canSelfAssignFromList);
         var notificationInfo = BuildNotificationInfo(canOperate, isOffSeason, participation);
 
@@ -773,7 +784,8 @@ public sealed class GetKeepRequestListService(
         bool isPostClose,
         bool firstResponsePending,
         bool firstResponseOverdue,
-        bool overdueBusinessWaiting)
+        bool overdueBusinessWaiting,
+        bool isDueOrOverdueFollowUpOn)
     {
         if (overdueBusinessWaiting || firstResponseOverdue)
             return ("overdue_business_waiting", 1);
@@ -796,6 +808,11 @@ public sealed class GetKeepRequestListService(
         if (r.WaitingDirection == WaitingDirection.Business)
             return ("standard_business_waiting", 5);
 
+        // ADR-439: due/overdue FollowUpOn with no stronger persisted attention ranks as
+        // active promise work alongside standard business-waiting rows (order 5).
+        if (isDueOrOverdueFollowUpOn)
+            return ("due_follow_up_on", 5);
+
         if (firstResponsePending)
             return ("first_response_pending", 6);
 
@@ -808,7 +825,13 @@ public sealed class GetKeepRequestListService(
         return ("active", 9);
     }
 
-    private static string ComputeSeverity(KeepRequest r, bool isOverdue, bool isPostClose, bool firstResponsePending)
+    private static string ComputeSeverity(
+        KeepRequest r,
+        bool isOverdue,
+        bool isPostClose,
+        bool firstResponsePending,
+        bool isDueOrOverdueFollowUpOn,
+        bool isFollowUpOverdue)
     {
         if (isOverdue || isPostClose)
             return "danger";
@@ -818,13 +841,17 @@ public sealed class GetKeepRequestListService(
             or AttentionReason.ChangeOrCancelRequest)
             return "danger";
 
+        // ADR-439: overdue follow-up is danger; due today is attention.
+        if (isFollowUpOverdue)
+            return "danger";
+
         if (r.PriorityBand == PriorityBand.Priority && r.WaitingDirection == WaitingDirection.Business)
             return "priority";
 
         if (r.WaitingDirection == WaitingDirection.Business)
             return "attention";
 
-        if (firstResponsePending)
+        if (firstResponsePending || isDueOrOverdueFollowUpOn)
             return "attention";
 
         if (r.Status == KeepRequestStatus.PendingCustomer
@@ -920,12 +947,13 @@ public sealed class GetKeepRequestListService(
         bool isPostClose,
         bool firstResponsePending,
         bool firstResponseOverdue,
+        bool isDueOrOverdueFollowUpOn,
         bool canSelfAssignFromList)
     {
         if (isPostClose) return "feedback_review";
         if (r.Status == KeepRequestStatus.Closed) return "closed_history";
         if (r.Status == KeepRequestStatus.Cancelled) return "cancelled_history";
-        if (r.AttentionLevel != AttentionLevel.None) return "needs_attention";
+        if (r.AttentionLevel != AttentionLevel.None || isDueOrOverdueFollowUpOn) return "needs_attention";
         if (firstResponsePending || firstResponseOverdue) return "first_response";
         if (r.Status == KeepRequestStatus.PendingCustomer) return "waiting_on_customer";
         if (canSelfAssignFromList) return "unassigned_available";

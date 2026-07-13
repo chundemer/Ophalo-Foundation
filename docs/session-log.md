@@ -1,10 +1,10 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-07-13 (Session 26 complete — S26 closeout)
+**Last updated:** 2026-07-13 (S83a complete — FollowUpOn attention gap closed)
 **Branch:** `main` tracking `origin/main`
-**Last green baseline:** S26 closeout — 1044 unit tests passed, 14 architecture tests passed
-**Next free ADR:** ADR-438
-**Current session:** Session 27 — Customer tracker link email / Resend (Build 078)
+**Last green baseline:** S83a — 1,050 unit tests passed, 14 architecture tests passed
+**Next free ADR:** ADR-442
+**Current session:** Session 28 — Follow-up and Planned Promise Workflow (Build 083)
 
 ---
 
@@ -34,8 +34,8 @@ For every implementation slice:
 
 ## Current Work
 
-**Current build log:** `docs/build-log/077-pre-deployment-cleanup-and-file-decomposition.md`
-**Latest completed build log:** `docs/build-log/082-session-25-share-request-link-drawer.md`
+**Current build log:** `docs/build-log/083-session-26-follow-up-and-planned-promise-workflow-draft.md`
+**Latest completed build logs:** `docs/build-log/077-pre-deployment-cleanup-and-file-decomposition.md`, `docs/build-log/082-session-25-share-request-link-drawer.md`
 **Readiness working doc:** `docs/pilot-readiness-decision-questions.md`
 **Bug/gap tracker:** `docs/pilot-readiness-bug-tracker.md`
 **Foundation roadmap:** `docs/build-log/ophalo-foundation-build-plan-greenfield-boundaries-brownfield-behavior.md` section 9.1
@@ -109,21 +109,74 @@ TypeScript: zero errors. Vite production build: clean. No behavior changes.
 
 Pre-existing gap identified: two ShareIntent integration tests (`ShareIntent_NeedsShare_false_after_successful_clear`, `ShareIntent_idempotent_second_call_returns_204_without_error`) return `BadRequest` instead of `NoContent` on baseline. Not caused by S26a; needs separate investigation.
 
-### Session 27 Goal
+### Session 28 Goal
 
-Wire the tracker-link confirmation email so customers who submit public intake with an email
-address receive a link back to their private request page.
+Implement the Follow Up On and Planned For promise workflow from Build Log 083.
 
-**Current build log:** `docs/build-log/078-customer-tracker-link-email-and-resend-configuration.md`
+Locked ADRs:
 
-Scope (from build-log 078):
-- Resend production configuration via `IEmailSender` and `App:ResendApiKey`.
-- Narrow transactional tracker-link email sent after successful public intake when the customer
-  supplied an email address; fail-soft (intake succeeds even if email send fails).
-- No customer SMS, broad notification workflows, delivery ledgers, or campaigns.
-- ADR-432 locks the email-vs-SMS boundary.
+- ADR-439 — Follow Up On Promise Protection Semantics.
+- ADR-440 — Follow Up Completion And Missed Follow-Up Handling.
+- ADR-441 — Planned For Internal Timing And Past-Date Handling.
 
-Pre-work: read build-log 078 in full before the implementation gate.
+Scope:
+
+- verify and close any backend gap for due/overdue Follow Up On attention/ranking;
+- add a narrow atomic follow-up completion backend command;
+- implement the PWA command-center detail workflow with mobile-width PWA as first-class;
+- update request-list timing signals without inline list completion;
+- keep native mobile command-center follow-up completion deferred from initial pilot but planned for
+  early post-pilot/early release.
+
+Slice order:
+
+1. **S83a — Backend verification and attention gap closure** ✓ Complete
+   - Gap confirmed at three levels and closed.
+   - `KeepRequest.GetNeedsStatusCheckInputs()`: due/overdue FollowUpOn now suppressed with slug
+     `"due_or_overdue_follow_up_on"` — routes to NeedsAttention, not NeedsStatusCheck.
+   - `KeepRequestListPersistence`: `IClock` injected; NeedsAttention DB query and count expanded
+     to include `FollowUpOnDate <= today && AttentionLevel == None` rows.
+   - `GetKeepRequestListService.ToSummary`: computes `isDueOrOverdueFollowUpOn` / `isFollowUpOverdue`;
+     new ranking group `"due_follow_up_on"` (order 5), severity `"danger"` / `"attention"`,
+     rowContext `"needs_attention"`. Stronger persisted attention remains primary.
+   - 3 pre-existing domain tests updated to ADR-439 semantics; 6 new service tests added.
+   - Baseline: 1,050/1,050 unit tests, 14/14 architecture tests.
+
+2. **S83b — Follow-up completion backend command**
+   - Add `POST /keep/requests/{requestId}/follow-up-resolution` or the final route chosen in
+     preflight.
+   - Require `X-Keep-Request-Version`.
+   - Return updated `KeepRequestDetailResult`.
+   - Preserve fail-closed account/role/row/action authorization.
+   - Ensure audit activity and Follow Up On state change commit together.
+
+3. **S83c — PWA detail follow-up completion workflow**
+   - Add `Record follow-up` entry from due/overdue detail banner and timing panel.
+   - Desktop: focused modal/drawer.
+   - Mobile-width PWA: bottom sheet or focused full-screen panel, tap-first choices, optional note.
+   - Preserve drafts on conflict/error.
+
+4. **S83d — Request list timing signals**
+   - Show due/overdue Follow Up On and past Planned For signals.
+   - Route list users to detail; do not implement inline follow-up completion in V1.
+
+5. **S83e — Closeout docs**
+   - Update Build Log 083 with what landed and remaining deferrals.
+   - Update session-log next state after verification.
+
+Hard boundaries:
+
+- no customer self-scheduling;
+- no customer direct editing of Follow Up On;
+- no customer-page display of internal Follow Up On or Planned For by default;
+- no automatic customer notifications from timing changes;
+- no backend SMS;
+- no Planned For completion workflow;
+- no native mobile implementation in initial pilot.
+
+Session 27 / Build 078 (`docs/build-log/078-customer-tracker-link-email-and-resend-configuration.md`)
+remains a planned tracker-link email/Resend slice and should be resumed separately after this
+implementation path or by explicit direction.
 
 ---
 
