@@ -24,6 +24,9 @@ still presented communication next-actions instead of closeout.
 GAP-011 was found during the S24j follow-up: the request-list external-contact modal is the
 preferred UX, but request detail still uses a separate older modal; additionally, calm
 work-completed rows should guide closeout without hiding legitimate post-work communication actions.
+GAP-012 through GAP-014 were found during pilot app testing after feedback/closeout review:
+Closed requests need a follow-up-request path instead of reopen, customer feedback needs an explicit
+submitted state, and authenticated request detail needs a visible feedback card/state.
 
 ## Status Legend
 
@@ -417,6 +420,121 @@ Acceptance criteria:
 - Destructive close execution remains request-detail-owned unless a confirmed list-close flow is
   explicitly implemented.
 - Targeted action-policy/list metadata tests are updated if backend policy changes.
+- PWA typecheck passes.
+
+### GAP-012 — Closed requests need follow-up-request path, not reopen
+
+**Status:** Needs decision
+**Severity:** P2
+**Area:** `ophalo-app` request detail / closed request actions; future Quick Capture/create request flow
+**Decision:** ADR-089, ADR-148, ADR-434
+
+Pilot testing raised the closed-request recovery question: when a customer or staff member identifies
+more work after a request is already `Closed`, should Owner/Admin reopen the request or copy its
+details into a new follow-up request?
+
+Current locked direction says reopen is deferred and `Closed` is a meaningful terminal lifecycle
+boundary. Reopen would create semantic churn around close timestamps, customer page state, feedback,
+closeout review, metrics, and whether post-close customer feedback becomes part of the old work or
+new work.
+
+Expected decision/fix:
+
+- Do not add general `Reopen` in V1 unless a later ADR deliberately changes the lifecycle model.
+- Add or plan a `Create follow-up request` action from Closed request detail for Owner/Admin.
+- The action should prefill/copy safe customer/request context into the normal business-created
+  request flow.
+- The new request should link back to the original through an internal note or future relation field.
+- Keep the original request Closed and preserve its feedback/closeout history.
+- A lighter `Copy request info` utility may be acceptable before a full prefilled-create flow if the
+  full flow is too large for the pilot slice.
+
+Acceptance criteria:
+
+- Closed request detail gives Owner/Admin a clear path for new work without reopening the original.
+- Original Closed request lifecycle, feedback, and closeout history remain intact.
+- Customer-visible pages do not imply the old Closed request has reopened.
+- Any copied/prefilled data respects existing public-token and visibility boundaries.
+
+### GAP-013 — Customer feedback submission lacks clear submitted state
+
+**Status:** Open
+**Severity:** P2
+**Area:** `ophalo-web` customer tracker feedback form
+**Decision:** ADR-135, ADR-136, ADR-139
+
+Pilot testing found that after a customer submits closed-request feedback, the feedback form appears
+to disappear without a strong confirmation. The customer should receive an explicit submitted state
+so they know the action worked.
+
+Existing product model is binary resolution feedback:
+
+```text
+wasResolved=true  -> positive/resolved feedback
+wasResolved=false -> negative/unresolved feedback
+```
+
+V1 should not add ratings, stars, CSAT/NPS, public reviews, or testimonials. The customer UI should
+make the binary choice plain and human:
+
+- `Yes, this was resolved`
+- `No, I still need help`
+
+Expected fix:
+
+- Replace the feedback form with a durable submitted state after success.
+- Use clear copy such as `Feedback submitted. Thank you.`.
+- Include safe supporting copy such as `Your feedback has been shared with {businessName}.`.
+- If the returned customer page result includes feedback fields, render the submitted state from
+  server state so refresh/direct revisit remains consistent.
+- Do not reveal internal attention/review state to the customer.
+
+Acceptance criteria:
+
+- After feedback submit, the customer sees an explicit confirmation instead of an empty/disappearing
+  area.
+- Refreshing the closed customer page after feedback still shows that feedback was submitted.
+- The feedback choice is binary and resolution-oriented, not a rating/review system.
+- Error/duplicate/rate-limit states remain safe and customer-friendly.
+
+### GAP-014 — Authenticated request detail does not clearly show submitted feedback
+
+**Status:** Open
+**Severity:** P1
+**Area:** `ophalo-app` request detail / feedback review visibility
+**Decision:** ADR-151, ADR-263, ADR-271, ADR-384
+
+Pilot testing found that customer feedback is not clearly appearing on authenticated request detail,
+or there is no visual indication that feedback has been submitted. Staff need to see the closed
+request's feedback state according to role visibility rules.
+
+Expected fix:
+
+- Add or correct a request-detail Feedback card/state.
+- Show whether feedback was submitted.
+- Show positive/resolved feedback as a quiet completed signal.
+- Show negative/unresolved feedback prominently for Owner/Admin review.
+- Show `FeedbackComment` only where existing visibility rules allow it.
+- Show submitted timestamp when available.
+- Show reviewed metadata for reviewed negative feedback.
+- Render `Mark feedback reviewed` only when server metadata allows it.
+- Preserve the distinction that negative feedback does not reopen the request automatically.
+
+Suggested card states:
+
+| State | Staff display |
+|---|---|
+| No feedback yet | Quiet `No feedback submitted yet` or omit unless useful. |
+| Positive feedback | `Customer marked request resolved` plus optional visible comment where allowed. |
+| Negative feedback | `Customer said this was not resolved` plus comment/review action where allowed. |
+| Reviewed negative feedback | Reviewed metadata and retained feedback context. |
+
+Acceptance criteria:
+
+- Owner/Admin can see submitted feedback and review state on request detail.
+- Negative feedback is visually hard to miss and routes to the existing review action.
+- Positive feedback is visible as feedback submitted, without creating false active work.
+- Operators/Viewers receive only the feedback metadata/comment visibility allowed by ADR-151/ADR-263.
 - PWA typecheck passes.
 
 ## Resolved During Session 22
