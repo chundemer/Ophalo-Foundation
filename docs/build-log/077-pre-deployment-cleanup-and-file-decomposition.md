@@ -176,14 +176,33 @@ Checks:
 - customer-facing links use configured public/app base URLs;
 - mock fixture split does not mask real API contract drift.
 
-### S26d — Re-scan and defer/advance decision
+### S26d — CustomerTrackerView split (complete)
 
-After S26a-S26c:
+Re-scan after S26a–S26c identified `CustomerTrackerView.tsx` (678 lines, ophalo-web public app)
+as the highest-priority split. Build 078 (customer tracker link email / Resend) will add
+email-link behavior to this surface, so reducing local complexity before that work was the
+lowest-risk sequencing choice.
 
-- re-run line-count scan;
-- decide whether mobile request detail or customer tracker page should be split before Resend;
-- defer `KeepRequest.cs` and `GetKeepRequestListService.cs` unless a concrete semantic extraction
-  plan is approved.
+Files created:
+- `web/ophalo-web/src/app/keep/r/[pageToken]/tracker-types.ts` (158 lines) — types (`CustomerEventItem`, `CustomerPageData`, `ComposerPhase`), all constants, and all pure helpers.
+- `web/ophalo-web/src/app/keep/r/[pageToken]/TrackerExpiredView.tsx` (29 lines) — expired-link full-page state.
+- `web/ophalo-web/src/app/keep/r/[pageToken]/TrackerStatusCard.tsx` (61 lines) — §2 status card with share/copy button.
+- `web/ophalo-web/src/app/keep/r/[pageToken]/TrackerActionCard.tsx` (220 lines) — §3 action card: idle picker, composer, feedback form, sent/feedback_sent confirmations.
+- `web/ophalo-web/src/app/keep/r/[pageToken]/TrackerInitialRequestCard.tsx` (40 lines) — §4 initial request and urgency display.
+- `web/ophalo-web/src/app/keep/r/[pageToken]/TrackerHistoryCard.tsx` (72 lines) — §5 request history event list.
+
+File modified:
+- `web/ophalo-web/src/app/keep/r/[pageToken]/CustomerTrackerView.tsx` — 678 → 268 lines. State, effects, and all submit handlers remain in orchestrator. Sub-components receive props and callbacks only; no fetch/mutation logic moved into children.
+
+`page.tsx` required no changes; `CustomerPageData` is re-exported from the orchestrator.
+
+Verification: `tsc --noEmit` clean (0 errors).
+
+Deferred items:
+- `mobile/ophalo-mobile/app/requests/[id].tsx` (1,588 lines) — not in the Resend path; needs a separate semantic preflight before splitting.
+- `web/ophalo-app/src/pages/RequestDetail.tsx` (1,510 lines) — orchestrator after S26b extract; defer until the current refactor batch stabilizes.
+- `web/ophalo-app/src/components/ShareLinkModal.tsx` (509 lines), `Requests.tsx` (503 lines), `settings/TeamSection.tsx` (592 lines), `web/ophalo-web/…/IntakeForm.tsx` (622 lines) — defer unless Build 078 directly touches them.
+- `KeepRequest.cs` and `GetKeepRequestListService.cs` — deferred; require separate semantic preflight.
 
 ---
 

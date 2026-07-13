@@ -1,6 +1,6 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-07-12 (Session 26 prepared — pre-deployment cleanup and file decomposition)
+**Last updated:** 2026-07-13 (S26d complete — CustomerTrackerView split)
 **Branch:** `main` tracking `origin/main`
 **Last green baseline:** S25d — 1042 unit tests passed, 14 architecture tests passed
 **Next free ADR:** ADR-438
@@ -59,6 +59,16 @@ API composition cleanup landed. `Program.cs` reduced from 1,092 → 254 lines.
 ### S26b Complete
 
 PWA request detail mechanical split landed. `RequestDetail.tsx` reduced from 3,152 → 1,510 lines.
+
+### S26d Complete
+
+`CustomerTrackerView.tsx` (ophalo-web public app) split from 678 → 268 lines. Six new files
+extracted into the same folder: `tracker-types.ts`, `TrackerExpiredView`, `TrackerStatusCard`,
+`TrackerActionCard`, `TrackerInitialRequestCard`, `TrackerHistoryCard`. All state, effects, and
+submit handlers remain in the orchestrator. TypeScript check clean.
+
+Deferred: mobile `[id].tsx` (1,588 lines), PWA `RequestDetail.tsx` (1,510 lines), and remaining
+large files — all recorded in build-log 077.
 
 ### S26c Complete
 
