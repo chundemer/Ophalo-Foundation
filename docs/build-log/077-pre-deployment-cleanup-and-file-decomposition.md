@@ -115,6 +115,22 @@ Findings to address before S26 closeout:
   `ShareIntent_idempotent_second_call_returns_204_without_error`. Both return `BadRequest` instead
   of `NoContent`; handle as a separate behavior gap, not an API-composition regression.
 
+### S26 Closeout (complete)
+
+**IClock removal:** Removed unused `IClock clock` parameter from the SMS handoff creation
+endpoint (`MapPost /keep/requests/{requestId:guid}/sms-handoff`) in `KeepEndpoints.cs`. The
+resolve endpoint (`MapGet /keep/share-sms/{handoffToken}`) correctly retains `IClock` for
+`clock.UtcNow` expiry checks.
+
+**ShareIntent method gap fixed:** Added `native_share` and `manual_mark_shared` to
+`ClearShareIntentService.ValidMethods`. These are the two mobile-app share methods that existed
+in `useClearShareIntent.ts` but were absent from server-side validation, causing two integration
+tests to return `BadRequest` instead of `NoContent`. Updated error message and added
+`[InlineData]` cases to `ClearShareIntentServiceTests`.
+
+Verification: 1,044/1,044 unit tests passed (was 1,042 — two new `[InlineData]` cases);
+14/14 architecture tests passed; 10/10 ShareIntent integration tests passed (was 8/10).
+
 ---
 
 ## S26 Slice Plan

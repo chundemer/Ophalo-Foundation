@@ -1,10 +1,10 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-07-13 (S26d complete — CustomerTrackerView split)
+**Last updated:** 2026-07-13 (Session 26 complete — S26 closeout)
 **Branch:** `main` tracking `origin/main`
-**Last green baseline:** S25d — 1042 unit tests passed, 14 architecture tests passed
+**Last green baseline:** S26 closeout — 1044 unit tests passed, 14 architecture tests passed
 **Next free ADR:** ADR-438
-**Current session:** Session 26 — Pre-deployment cleanup and file decomposition
+**Current session:** Session 27 — Customer tracker link email / Resend (Build 078)
 
 ---
 
@@ -60,15 +60,22 @@ API composition cleanup landed. `Program.cs` reduced from 1,092 → 254 lines.
 
 PWA request detail mechanical split landed. `RequestDetail.tsx` reduced from 3,152 → 1,510 lines.
 
-### S26d Complete
+### Session 26 Complete
 
-`CustomerTrackerView.tsx` (ophalo-web public app) split from 678 → 268 lines. Six new files
-extracted into the same folder: `tracker-types.ts`, `TrackerExpiredView`, `TrackerStatusCard`,
-`TrackerActionCard`, `TrackerInitialRequestCard`, `TrackerHistoryCard`. All state, effects, and
-submit handlers remain in the orchestrator. TypeScript check clean.
+All four slices landed (S26a–S26d) plus S26 closeout. Build-log 077 is closed.
 
-Deferred: mobile `[id].tsx` (1,588 lines), PWA `RequestDetail.tsx` (1,510 lines), and remaining
-large files — all recorded in build-log 077.
+**S26d:** `CustomerTrackerView.tsx` (ophalo-web) split from 678 → 268 lines. Six new files:
+`tracker-types.ts`, `TrackerExpiredView`, `TrackerStatusCard`, `TrackerActionCard`,
+`TrackerInitialRequestCard`, `TrackerHistoryCard`. TypeScript check clean.
+
+**S26 closeout:**
+- Removed unused `IClock clock` from SMS handoff creation endpoint.
+- Added `native_share` and `manual_mark_shared` to `ClearShareIntentService.ValidMethods`,
+  fixing two pre-existing integration test failures (returning `BadRequest` instead of `NoContent`).
+- New baseline: 1,044/1,044 unit tests, 14/14 architecture tests.
+
+Deferred (recorded in build-log 077): mobile `[id].tsx` (1,588 lines), PWA `RequestDetail.tsx`
+(1,510 lines), and remaining large frontend files.
 
 ### S26c Complete
 
@@ -102,118 +109,21 @@ TypeScript: zero errors. Vite production build: clean. No behavior changes.
 
 Pre-existing gap identified: two ShareIntent integration tests (`ShareIntent_NeedsShare_false_after_successful_clear`, `ShareIntent_idempotent_second_call_returns_204_without_error`) return `BadRequest` instead of `NoContent` on baseline. Not caused by S26a; needs separate investigation.
 
-### Session 26 Goal
+### Session 27 Goal
 
-Reduce pre-deployment maintenance risk before wiring Resend/customer tracker-link email.
+Wire the tracker-link confirmation email so customers who submit public intake with an email
+address receive a link back to their private request page.
 
-This is a cleanup session, not a feature session. The goal is to split large composition files and
-surface any implementation gaps found while doing that work, without changing user-facing behavior.
+**Current build log:** `docs/build-log/078-customer-tracker-link-email-and-resend-configuration.md`
 
-Current line-count scan after S25:
+Scope (from build-log 078):
+- Resend production configuration via `IEmailSender` and `App:ResendApiKey`.
+- Narrow transactional tracker-link email sent after successful public intake when the customer
+  supplied an email address; fail-soft (intake succeeds even if email send fails).
+- No customer SMS, broad notification workflows, delivery ledgers, or campaigns.
+- ADR-432 locks the email-vs-SMS boundary.
 
-```text
-web/ophalo-app/src/pages/RequestDetail.tsx                         3,089
-mobile/ophalo-mobile/app/requests/[id].tsx                         1,588
-src/OpHalo.Keep.Core/Entities/KeepRequest.cs                       1,341
-src/OpHalo.Keep.Application/Requests/GetKeepRequestListService.cs   1,320
-web/ophalo-app/src/mocks/fixtures.ts                                1,125
-src/OpHalo.Api/Program.cs                                           1,092
-web/ophalo-app/src/components/QuickCapture.tsx                        811
-web/ophalo-app/src/lib/apiClient.ts                                   800
-web/ophalo-web/src/app/keep/r/[pageToken]/CustomerTrackerView.tsx      678
-web/ophalo-web/src/app/keep/intake/[token]/IntakeForm.tsx             622
-web/ophalo-app/src/components/ShareLinkModal.tsx                      509
-```
-
-### S26 Cleanup Principles
-
-- No feature changes unless a bug/gap is discovered and explicitly accepted.
-- Prefer mechanical extraction: move code, preserve behavior, keep names stable where practical.
-- Keep route paths, API contracts, event semantics, auth policy, rate limits, and public-token
-  behavior unchanged.
-- After each extraction, run the smallest meaningful compile/test check before continuing.
-- If cleanup reveals a behavioral issue, record it as a gap before fixing it in the same slice.
-
-### Expected Slice Order
-
-1. **S26a — API composition cleanup: Program.cs**
-   - Extract Keep service registrations into an extension method.
-   - Extract Keep endpoint mappings into `OpHalo.Api/Keep/KeepEndpoints.cs` or equivalent.
-   - Move local Keep handlers/body records only where it reduces `Program.cs` without changing
-     route behavior.
-   - Keep account/auth/device/badge endpoint files as they are.
-   - Gap check: token hashing/resolve logic should not remain ad hoc in `Program.cs`; public SMS
-     handoff resolve should stay no-payload on invalid/expired tokens.
-
-2. **S26b — PWA request detail mechanical split**
-   - Split [RequestDetail.tsx](/Users/christian/saas/ophalo-foundation/web/ophalo-app/src/pages/RequestDetail.tsx) into stable presentational sections.
-   - Preserve data loading, mutation handlers, route behavior, modals, and props.
-   - Candidate folder: `web/ophalo-app/src/pages/request-detail/`.
-   - Gap check: while extracting, look for duplicated visibility copy, stale disabled states,
-     unguarded customer-visible/internal text areas, and any lingering **Sent** wording from share
-     workflows.
-
-3. **S26c — QuickCapture and API client low-risk splits**
-   - Split [QuickCapture.tsx](/Users/christian/saas/ophalo-foundation/web/ophalo-app/src/components/QuickCapture.tsx) along existing internal boundaries.
-   - Consider splitting [apiClient.ts](/Users/christian/saas/ophalo-foundation/web/ophalo-app/src/lib/apiClient.ts) by feature area if S26b does not require more time.
-   - Gap check: link construction must use configured public/app base URLs, never accidental
-     `window.location.origin` for customer-facing links.
-
-4. **S26d — Public/mobile cleanup triage**
-   - Re-scan line counts after S26a-S26c.
-   - Decide whether to split mobile request detail, customer tracker page, or defer them until after
-     Resend.
-   - Do not split `KeepRequest.cs` or `GetKeepRequestListService.cs` without a separate semantic
-     preflight; those are behavior-heavy.
-
-5. **S26 closeout**
-   - Update build-log 077 with actual files split, deferred items, and remaining risk.
-   - Resolve or explicitly defer the S26 findings listed below.
-   - Run focused frontend/backend checks.
-   - Prepare Session 27 for [078 customer tracker link email / Resend](/Users/christian/saas/ophalo-foundation/docs/build-log/078-customer-tracker-link-email-and-resend-configuration.md).
-
-### S26 Findings To Address Before Closeout
-
-- `IClock clock` remains an unused injected parameter in the SMS handoff creation endpoint after
-  S26a. This was pre-existing and not caused by the extraction, but should either be removed or
-  justified before the session closes.
-- Two pre-existing ShareIntent integration failures were confirmed on baseline before S26a:
-  `ShareIntent_NeedsShare_false_after_successful_clear` and
-  `ShareIntent_idempotent_second_call_returns_204_without_error`. Both currently return
-  `BadRequest` instead of `NoContent`; address as a separate behavior gap, not as an S26a
-  regression.
-
-### Gap Check While Cleaning
-
-Every cleanup slice should explicitly check for:
-
-- token leakage in route logs, frontend state, diagnostics, test output, or docs;
-- account/row authorization drift when routes or handlers move;
-- public endpoint behavior that distinguishes invalid vs expired capability tokens more than needed;
-- customer-visible vs internal-only copy getting blurred;
-- direct-ID public paths or direct request IDs in public URLs;
-- share/contact actions implying delivery instead of preparation/manual confirmation;
-- hard-coded production URLs where existing configuration should be used;
-- duplicated request-detail UI state after extraction.
-
-### Program.cs Status
-
-[Program.cs](/Users/christian/saas/ophalo-foundation/src/OpHalo.Api/Program.cs) is not broken, but
-at 1,092 lines it now owns too many responsibilities:
-
-- host/config setup;
-- DI registration;
-- rate limiting policy definitions;
-- public intake routes;
-- setup routes;
-- request list/detail routes;
-- request mutation routes;
-- public customer page routes;
-- SMS handoff token creation/resolve;
-- local handler methods and request body records.
-
-Priority cleanup: move Keep registration and route mapping out first. Leave broader host setup in
-`Program.cs` until after endpoint extraction proves clean.
+Pre-work: read build-log 078 in full before the implementation gate.
 
 ---
 

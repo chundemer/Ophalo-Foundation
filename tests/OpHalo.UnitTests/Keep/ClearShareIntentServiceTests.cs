@@ -169,6 +169,8 @@ public class ClearShareIntentServiceTests
     [InlineData("copy_message")]
     [InlineData("copy_link")]
     [InlineData("manual_other")]
+    [InlineData("native_share")]
+    [InlineData("manual_mark_shared")]
     public async Task Execute_accepts_all_valid_methods(string method)
     {
         var sut = BuildSut();

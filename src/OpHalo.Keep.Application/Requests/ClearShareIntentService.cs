@@ -20,7 +20,7 @@ public sealed class ClearShareIntentService(
     IClock clock)
 {
     private static readonly string[] ValidMethods =
-        ["sms_qr", "email", "whatsapp", "copy_message", "copy_link", "manual_other"];
+        ["sms_qr", "email", "whatsapp", "copy_message", "copy_link", "manual_other", "native_share", "manual_mark_shared"];
 
     private static readonly Error Unauthorized =
         Error.Create("auth.unauthorized", "Authentication required.");
@@ -35,7 +35,7 @@ public sealed class ClearShareIntentService(
         Error.Create("KeepRequest.ShareIntentOffSeasonBlocked", "Share intent is not available while the account is off-season.");
 
     private static readonly Error InvalidMethod =
-        Error.Create("KeepRequest.ShareIntentInvalidMethod", "The provided share method is not valid. Allowed values: sms_qr, email, whatsapp, copy_message, copy_link, manual_other.");
+        Error.Create("KeepRequest.ShareIntentInvalidMethod", "The provided share method is not valid. Allowed values: sms_qr, email, whatsapp, copy_message, copy_link, manual_other, native_share, manual_mark_shared.");
 
     public async Task<Result> ExecuteAsync(ClearShareIntentCommand command, CancellationToken ct = default)
     {

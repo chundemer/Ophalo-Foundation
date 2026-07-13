@@ -238,7 +238,6 @@ public static class KeepEndpoints
             Guid requestId,
             SmsHandoffBody body,
             CreateSmsHandoffService service,
-            IClock clock,
             IConfiguration config,
             CancellationToken ct) =>
         {
