@@ -1,8 +1,8 @@
 # Build Log 078 — Customer Tracker Link Email And Resend Configuration
 
 **Started:** 2026-07-10
-**Status:** Queued session — run after current customer request page findings are resolved
-**Session name:** S23 customer tracker link delivery / Resend configuration / confirmation flow
+**Status:** Complete — S78a–S78e landed 2026-07-13
+**Session name:** S29 customer tracker link delivery / Resend configuration / confirmation flow
 **Next free ADR before this log:** ADR-432
 **Next free ADR after this log:** ADR-433
 
@@ -95,7 +95,7 @@ page access remains a high-entropy capability URL/token.
 
 ## Implementation Slice Candidates
 
-### S23a — Resend Production Configuration Check
+### S78a — Resend Production Configuration Check
 
 Goal: ensure the existing email seam is deployment-ready.
 
@@ -106,7 +106,7 @@ Scope:
 - document production secret requirements and local/dev terminal-output behavior;
 - add or update a small smoke/runbook note if missing.
 
-### S23b — Public Intake Tracker-Link Email
+### S78b — Public Intake Tracker-Link Email
 
 Goal: if a public-intake customer supplies email, send the private request-page link by email.
 
@@ -127,7 +127,7 @@ Out of scope:
 - durable notification ledger/outbox/retry/dead-letter;
 - proof-of-send semantics.
 
-### S23c — Confirmation Flow And Link Retention UX
+### S78c — Confirmation Flow And Link Retention UX
 
 Goal: stop treating the success screen as the final destination.
 
@@ -139,7 +139,7 @@ Scope:
 - provide copy/share fallback for users who do not provide email;
 - avoid "bookmark this page" as the primary instruction.
 
-### S23d — Operator Correspondence Prefill
+### S78d — Operator Correspondence Prefill
 
 Goal: make every operator-written contact an opportunity to re-deliver the customer page link.
 
@@ -173,3 +173,54 @@ Scope:
   track your request" even when email is not required?
 - Should auto-redirect happen immediately after the success response or after a short visible
   confirmation delay?
+
+---
+
+## Completion Notes (2026-07-13)
+
+### Decisions locked during S29
+
+- **Reply-To**: None for V1. Send from `Resend:FromAddress` only. `IEmailSender` interface unchanged.
+  Email copy clarifies replies may not be monitored.
+- **Email helper copy**: Benefit-led — "Add your email — we'll send you a link to track this request."
+- **Auto-redirect**: ~2s delay with visible confirmation, manual "Open now" fallback.
+
+### S78a — Resend configuration verified (no code change)
+
+Wiring in `Program.cs` is deployment-ready:
+- `ConsoleEmailSender` in development when `Resend:ApiKey` is absent.
+- `ResendEmailSender` with Bearer token otherwise.
+- Required production secrets: `Resend:ApiKey`, `Resend:FromAddress`, `App:PublicBaseUrl` (all in
+  `appsettings.json` as empty strings — populate per environment).
+- `MagicLinkSettings.PublicBaseUrl` is the correct injection point for building outbound URLs.
+
+### S78b — Public intake tracker-link email ✓
+
+- `CreateKeepPublicIntakeService`: `IEmailSender` + `IOptions<MagicLinkSettings>` injected.
+  `TrySendTrackerLinkEmailAsync` sends after durable commit when `TrimmedEmail` is non-null.
+  Tracker URL built as `publicBaseUrl.TrimEnd('/') + "/keep/r/" + pageToken`.
+  Delivery failure swallowed — intake result unaffected. Public response unchanged.
+- 3 new unit tests: email sent when present, not sent when absent, delivery failure → success.
+- 2 new integration tests using `CapturingEmailSender`: email captured when present, empty when absent.
+- Baseline: 1,064/1,064 unit tests.
+
+### S78c — Confirmation flow and link-retention UX ✓
+
+- `IntakeForm.tsx` (`ophalo-web`): email helper copy updated to benefit-led text.
+  Success screen: reference code demoted to `Reference: {code}` footer metadata.
+  Auto-redirect via `setTimeout(..., 2000)` to `/keep/r/{pageToken}`.
+  When email was provided, confirmation copy explains link was sent and replies may not be monitored.
+  Manual "Open request page now" button remains throughout.
+
+### S78d — Operator correspondence prefill ✓
+
+- `RequestDetail.tsx` `CustomerPanel` mailto: prefilled with subject "Your request page link"
+  and body containing the customer page URL. URL built from `VITE_PUBLIC_BASE_URL` (public/customer
+  web origin, not `window.location.origin`). Opening the composer does not mutate request state.
+
+### Deferred
+
+- Reply-To when Keep has a deliberate business-facing contact email setting.
+- Delivery ledger / proof-of-send / retry / dead-letter queue.
+- Notification preferences, quiet hours, opt-out.
+- Backend customer SMS.

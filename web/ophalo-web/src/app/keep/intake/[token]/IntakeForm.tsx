@@ -91,6 +91,7 @@ export default function IntakeForm({
   const [stage, setStage] = useState<Stage>("form");
   const [referenceCode, setReferenceCode] = useState<string>("");
   const [pageToken, setPageToken] = useState<string>("");
+  const [emailProvided, setEmailProvided] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showAptUnit, setShowAptUnit] = useState(false);
   const [showEmail, setShowEmail] = useState(false);
@@ -149,6 +150,7 @@ export default function IntakeForm({
       const body = await res.json().catch(() => null);
       setReferenceCode(typeof body?.referenceCode === "string" ? body.referenceCode : "");
       setPageToken(typeof body?.pageToken === "string" ? body.pageToken : "");
+      setEmailProvided(!!customerEmail);
       setStage("success");
       return;
     }
@@ -230,6 +232,11 @@ export default function IntakeForm({
   if (stage === "success") {
     const trackerUrl = pageToken ? `/keep/r/${pageToken}` : null;
 
+    // Auto-redirect to the tracker page after a short confirmation delay.
+    if (trackerUrl && typeof window !== "undefined") {
+      setTimeout(() => { window.location.href = trackerUrl; }, 2000);
+    }
+
     return (
       <main className="min-h-screen bg-[var(--ophalo-canvas)] px-4 py-6 sm:py-10">
         <div className="mx-auto w-full max-w-2xl space-y-4 sm:space-y-5">
@@ -243,15 +250,19 @@ export default function IntakeForm({
           <KeepCardShell accentTop>
             <h1 className="font-serif text-base font-semibold text-foreground">Request submitted.</h1>
             <p className="mt-2 text-sm text-muted-foreground">
-              Your request has been received. Your reference code is:
+              {biz
+                ? `${biz} has received your request. Taking you to your private request page…`
+                : "Your request has been received. Taking you to your private request page…"}
             </p>
-            <p className="mt-2 rounded-lg bg-[var(--ophalo-canvas)] px-4 py-3 font-mono text-sm font-semibold text-foreground">
-              {referenceCode}
-            </p>
-            <p className="mt-3 text-sm text-muted-foreground">
-              You can check the status of your request and send additional details from your
-              request page.
-            </p>
+
+            {emailProvided && (
+              <p className="mt-3 text-sm text-muted-foreground">
+                A link to your request page has been sent to your email address.
+                Replies to that email may not be monitored — use your request page to send messages
+                directly to {biz ?? "the business"}.
+              </p>
+            )}
+
             {trackerUrl && (
               <div className="mt-4">
                 <KeepButton
@@ -259,13 +270,14 @@ export default function IntakeForm({
                   className="gap-2"
                   onClick={() => { window.location.href = trackerUrl; }}
                 >
-                  View your request page
+                  Open request page now
                   <ArrowRight className="h-4 w-4" aria-hidden />
                 </KeepButton>
               </div>
             )}
+
             <p className="mt-4 text-xs text-muted-foreground">
-              Open your request page to check status or send more details. No account required.
+              Reference: <span className="font-mono">{referenceCode}</span>
             </p>
           </KeepCardShell>
           <KeepPageFooter />
@@ -576,7 +588,7 @@ export default function IntakeForm({
                     onClick={() => setShowEmail(true)}
                     className="text-xs font-medium text-[var(--ophalo-navy)] underline-offset-2 hover:underline focus-visible:outline-none"
                   >
-                    + Add optional email for backup tracking
+                    + Add your email — we&apos;ll send you a link to track this request
                   </button>
                 )}
               </div>

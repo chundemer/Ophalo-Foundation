@@ -750,6 +750,8 @@ function CustomerPanel({ detail, onContactLaunched }: CustomerPanelProps) {
   const [copiedEmail, setCopiedEmail] = useState(false);
   const callAction = detail.contactActions.find((a) => a.available && a.type === "call");
   const emailAction = detail.contactActions.find((a) => a.available && a.type !== "call");
+  const publicBaseUrl = (import.meta.env.VITE_PUBLIC_BASE_URL as string).replace(/\/$/, "");
+  const customerPageUrl = detail.pageToken ? `${publicBaseUrl}/keep/r/${detail.pageToken}` : null;
   const canLogContact = detail.availableActions.canLogExternalContact;
   const hasContact = !!(detail.customerPhone || detail.customerEmail);
 
@@ -809,7 +811,13 @@ function CustomerPanel({ detail, onContactLaunched }: CustomerPanelProps) {
               </button>
               {emailAction && (
                 <a
-                  href={`mailto:${emailAction.target}`}
+                  href={(() => {
+                    const subject = encodeURIComponent("Your request page link");
+                    const body = customerPageUrl
+                      ? encodeURIComponent(`Here is a link to your private request page:\n\n${customerPageUrl}`)
+                      : "";
+                    return `mailto:${emailAction.target}?subject=${subject}${body ? `&body=${body}` : ""}`;
+                  })()}
                   onClick={() => onContactLaunched("outbound", "email")}
                   className={`inline-flex items-center gap-1 text-xs font-semibold text-[var(--keep-accent)] hover:underline ${FOCUS_RING} rounded`}
                 >

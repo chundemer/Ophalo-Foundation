@@ -706,6 +706,44 @@ public sealed class KeepIntakeApiTests : IClassFixture<KeepApiWebFactory>, IAsyn
     // Helpers
     // -------------------------------------------------------------------------
 
+    // -------------------------------------------------------------------------
+    // S78b — Tracker-link email
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public async Task PublicIntake_WithCustomerEmail_SendsTrackerLinkEmail()
+    {
+        _factory.EmailSender.Clear();
+
+        var response = await _client.PostAsJsonAsync(
+            $"/keep/public-intake/token/{_rawToken}",
+            new { customerName = "Alice Smith", customerPhone = "0499111222",
+                  customerEmail = "alice@example.com", description = "Broken heater",
+                  serviceAddressLine1 = "42 Test Ave", serviceCity = "Austin", serviceState = "TX" });
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+
+        var sent = Assert.Single(_factory.EmailSender.SentEmails);
+        Assert.Equal("alice@example.com", sent.To);
+        Assert.Contains("/keep/r/", sent.HtmlBody);
+        Assert.Contains("test.ophalo.com", sent.HtmlBody);
+    }
+
+    [Fact]
+    public async Task PublicIntake_WithoutCustomerEmail_SendsNoEmail()
+    {
+        _factory.EmailSender.Clear();
+
+        var response = await _client.PostAsJsonAsync(
+            $"/keep/public-intake/token/{_rawToken}",
+            new { customerName = "Bob Jones", customerPhone = "0499333444",
+                  description = "Leaking pipe",
+                  serviceAddressLine1 = "10 Oak St", serviceCity = "Austin", serviceState = "TX" });
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        Assert.Empty(_factory.EmailSender.SentEmails);
+    }
+
     private static async Task<string?> GetErrorCodeAsync(HttpResponseMessage response)
     {
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();

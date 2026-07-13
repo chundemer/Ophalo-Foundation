@@ -1,6 +1,9 @@
+using Microsoft.Extensions.Options;
+using OpHalo.Foundation.Application.Abstractions.Messaging;
 using OpHalo.Foundation.Application.Abstractions.Security;
 using OpHalo.Foundation.Application.Accounts.Access;
 using OpHalo.Foundation.Application.Accounts.Entitlements;
+using OpHalo.Foundation.Application.Auth;
 using OpHalo.Foundation.Core.Entities.Accounts;
 using OpHalo.Foundation.Core.Entities.Accounts.Enums;
 using OpHalo.Keep.Application.Abstractions;
@@ -9,6 +12,7 @@ using OpHalo.Keep.Application.Services;
 using OpHalo.Keep.Core.Entities;
 using OpHalo.Keep.Core.Entities.Enums;
 using OpHalo.SharedKernel.Abstractions;
+using OpHalo.SharedKernel.Results;
 
 namespace OpHalo.UnitTests.Keep;
 
@@ -23,16 +27,21 @@ public class KeepPublicIntakeServiceTests
         FakeIntakePersistence? persistence = null,
         AccountAccessPosture posture = AccountAccessPosture.FullAccess,
         bool featureEnabled = true,
-        ICurrentUser? currentUser = null)
+        ICurrentUser? currentUser = null,
+        IEmailSender? emailSender = null,
+        string publicBaseUrl = "https://test.ophalo.com")
     {
         persistence ??= HappyPathPersistence();
+        var settings = Options.Create(new MagicLinkSettings { PublicBaseUrl = publicBaseUrl });
         return new CreateKeepPublicIntakeService(
             persistence,
             new KeepTokenService(),
             new FakeAccountAccessPolicy(posture),
             new FakeFeatureAccessPolicy(featureEnabled),
             new FakeClock(Now),
-            currentUser ?? new FakeCurrentUser(Guid.Empty, Guid.Empty, false));
+            currentUser ?? new FakeCurrentUser(Guid.Empty, Guid.Empty, false),
+            emailSender ?? new NoOpEmailSender(),
+            settings);
     }
 
     private static FakeIntakePersistence HappyPathPersistence()
@@ -782,6 +791,52 @@ public class KeepPublicIntakeServiceTests
         Assert.Equal(pref, p.LastCommittedRequest!.ContactPreference);
     }
 
+    // --- Tracker-link email (S78b) ----------------------------------------------
+
+    [Fact]
+    public async Task Execute_sends_tracker_link_email_when_customer_email_present()
+    {
+        var p = HappyPathPersistence();
+        var emailSender = new RecordingEmailSender();
+        var sut = BuildSut(p, emailSender: emailSender);
+
+        var command = ValidCommand(p); // ValidCommand supplies "jane@example.com"
+        var result = await sut.ExecuteAsync(command);
+
+        Assert.True(result.IsSuccess);
+        var sent = Assert.Single(emailSender.Sent);
+        Assert.Equal("jane@example.com", sent.To);
+        Assert.Contains("/keep/r/", sent.HtmlBody);
+        Assert.Contains("test.ophalo.com", sent.HtmlBody);
+    }
+
+    [Fact]
+    public async Task Execute_does_not_send_email_when_customer_email_absent()
+    {
+        var p = HappyPathPersistence();
+        var emailSender = new RecordingEmailSender();
+        var sut = BuildSut(p, emailSender: emailSender);
+
+        var command = new CreateKeepPublicIntakeCommand(
+            p.RawToken, "Jane", "555-1234", null, "Help",
+            "123 Main St", null, "Austin", "TX", null);
+        var result = await sut.ExecuteAsync(command);
+
+        Assert.True(result.IsSuccess);
+        Assert.Empty(emailSender.Sent);
+    }
+
+    [Fact]
+    public async Task Execute_succeeds_even_when_email_delivery_fails()
+    {
+        var p = HappyPathPersistence();
+        var sut = BuildSut(p, emailSender: new FailingEmailSender());
+
+        var result = await sut.ExecuteAsync(ValidCommand(p));
+
+        Assert.True(result.IsSuccess);
+    }
+
     // --- Fakes ------------------------------------------------------------------
 
     private sealed class FakeCurrentUser(Guid userId, Guid accountId, bool isAuthenticated) : ICurrentUser
@@ -866,5 +921,29 @@ public class KeepPublicIntakeServiceTests
     private sealed class FakeClock(DateTime utcNow) : IClock
     {
         public DateTime UtcNow => utcNow;
+    }
+
+    private sealed class NoOpEmailSender : IEmailSender
+    {
+        public Task<Result> SendAsync(string to, string subject, string htmlBody, CancellationToken ct)
+            => Task.FromResult(Result.Success());
+    }
+
+    private sealed record SentEmail(string To, string Subject, string HtmlBody);
+
+    private sealed class RecordingEmailSender : IEmailSender
+    {
+        public List<SentEmail> Sent { get; } = [];
+        public Task<Result> SendAsync(string to, string subject, string htmlBody, CancellationToken ct)
+        {
+            Sent.Add(new SentEmail(to, subject, htmlBody));
+            return Task.FromResult(Result.Success());
+        }
+    }
+
+    private sealed class FailingEmailSender : IEmailSender
+    {
+        public Task<Result> SendAsync(string to, string subject, string htmlBody, CancellationToken ct)
+            => throw new HttpRequestException("Simulated delivery failure");
     }
 }

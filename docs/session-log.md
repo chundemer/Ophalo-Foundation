@@ -1,10 +1,10 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-07-13 (S83e complete — Build 083 closed)
+**Last updated:** 2026-07-13 (S78e complete — Build 078 closed)
 **Branch:** `main` tracking `origin/main`
-**Last green baseline:** S83b — 1,061 unit tests passed, 14 architecture tests passed (S83c/S83d frontend only — TypeScript clean, Vite build clean)
+**Last green baseline:** S78b — 1,064 unit tests passed, 14 architecture tests passed; ophalo-app and ophalo-web TypeScript clean; Vite build clean (1,600 modules)
 **Next free ADR:** ADR-442
-**Current session:** Session 29 — next session (Build 078 tracker-link email/Resend or new direction)
+**Current session:** Session 29 — Build 078 tracker-link email / Resend configuration / confirmation flow
 
 ---
 
@@ -34,85 +34,101 @@ For every implementation slice:
 
 ## Current Work
 
-**Current build log:** `docs/build-log/078-customer-tracker-link-email-and-resend-configuration.md` (planned next) or new direction per Christian
+**Current build log:** `docs/build-log/078-customer-tracker-link-email-and-resend-configuration.md`
 **Completed build log:** `docs/build-log/083-session-26-follow-up-and-planned-promise-workflow-draft.md`
 **Latest completed build logs:** `docs/build-log/077-pre-deployment-cleanup-and-file-decomposition.md`, `docs/build-log/082-session-25-share-request-link-drawer.md`
 **Readiness working doc:** `docs/pilot-readiness-decision-questions.md`
 **Bug/gap tracker:** `docs/pilot-readiness-bug-tracker.md`
 **Foundation roadmap:** `docs/build-log/ophalo-foundation-build-plan-greenfield-boundaries-brownfield-behavior.md` section 9.1
 
-### Session 25 Complete
+### Session 29 Goal
 
-Session 25 is complete. Four slices landed:
+Implement Build 078: make customer tracker links harder to lose after public intake while preserving
+the V1 communication boundary.
 
-- S25a — backend share commit and SMS handoff model/service;
-- S25b — public SMS handoff page;
-- S25c — authenticated PWA Share Link modal;
-- S25d — tests, responsive QA, and closeout.
+Product direction:
 
-End-to-end QR/SMS device testing remains a deployment smoke item because it depends on real
-production/mobile browser behavior.
+- Platform email through `IEmailSender` / Resend is in scope for auth/member flows and this one
+  narrow public-intake tracker-link email.
+- If a public-intake customer supplies email, send a single transactional tracker-link email after
+  the durable request commit and customer page token creation.
+- Delivery is best-effort and fail-soft: intake must still succeed if email delivery fails, and the
+  public API response must not reveal whether an email was sent.
+- If no email is supplied, confirmation UX should still help the customer reach and retain the
+  tracker page through auto-open, copy/share, and clear reassurance.
+- Operator handoff surfaces should prefill the customer page link where supported, without treating
+  composer launch as proof of contact.
+- Customer page access remains high-entropy token/capability-link based; phone numbers are lookup and
+  recovery identifiers, not URL access tokens.
 
-### S26a Complete
+### Session 29 Slice Plan
 
-API composition cleanup landed. `Program.cs` reduced from 1,092 → 254 lines.
+Use targeted preflight before each slice. Keep the hard slice gate unless Christian explicitly
+splits or expands the work: at most 3 mutation families, 8 production files, and 12 total changed
+files including tests/docs.
 
-### S26b Complete
+1. **S78a — Resend configuration verified** ✓ (no code change)
+   - Wiring confirmed deployment-ready: `ConsoleEmailSender` in dev without `ApiKey`, `ResendEmailSender` otherwise.
+   - Required secrets: `Resend:ApiKey`, `Resend:FromAddress`, `App:PublicBaseUrl`.
+   - `MagicLinkSettings.PublicBaseUrl` is the injection point for outbound URLs.
 
-PWA request detail mechanical split landed. `RequestDetail.tsx` reduced from 3,152 → 1,510 lines.
+2. **S78b — Public intake tracker-link email** ✓
+   - `CreateKeepPublicIntakeService` now takes `IEmailSender` + `IOptions<MagicLinkSettings>`.
+   - `TrySendTrackerLinkEmailAsync`: sends after durable commit, fail-soft, no public response disclosure.
+   - No Reply-To for V1. Email copy clarifies replies may not be monitored.
+   - 3 new unit tests + 2 new integration tests. Baseline: 1,064/1,064 unit.
 
-### Session 26 Complete
+3. **S78c — Confirmation flow and link-retention UX** ✓
+   - `IntakeForm.tsx`: email helper copy → benefit-led; reference code demoted to footer metadata;
+     ~2s auto-redirect to `/keep/r/{pageToken}`; email confirmation copy when email was provided.
 
-All four slices landed (S26a–S26d) plus S26 closeout. Build-log 077 is closed.
+4. **S78d — Operator correspondence prefill** ✓
+   - `RequestDetail.tsx` `CustomerPanel` mailto: prefilled with subject + body containing customer page URL.
+   - Uses `VITE_PUBLIC_BASE_URL`, not `window.location.origin`. No state mutation on open.
 
-**S26d:** `CustomerTrackerView.tsx` (ophalo-web) split from 678 → 268 lines. Six new files:
-`tracker-types.ts`, `TrackerExpiredView`, `TrackerStatusCard`, `TrackerActionCard`,
-`TrackerInitialRequestCard`, `TrackerHistoryCard`. TypeScript check clean.
+5. **S78e — Closeout docs** ✓
+   - Build Log 078 updated. Session log advanced.
 
-**S26 closeout:**
-- Removed unused `IClock clock` from SMS handoff creation endpoint.
-- Added `native_share` and `manual_mark_shared` to `ClearShareIntentService.ValidMethods`,
-  fixing two pre-existing integration test failures (returning `BadRequest` instead of `NoContent`).
-- New baseline: 1,044/1,044 unit tests, 14/14 architecture tests.
+### Deployment smoke items (not automated)
 
-Deferred (recorded in build-log 077): mobile `[id].tsx` (1,588 lines), PWA `RequestDetail.tsx`
-(1,510 lines), and remaining large frontend files.
+- Real Resend email delivery end-to-end (requires `Resend:ApiKey` + `Resend:FromAddress` in production).
+- Auto-redirect behavior on real mobile browsers after public intake.
 
-### S26c Complete
+### Session 29 Open Questions
 
-QuickCapture and API client splits landed.
+- Should the tracker-link email `Reply-To` use a configured business customer-facing email when
+  present, or a product-controlled support/no-reply address for V1?
+- Should public-intake email helper copy explicitly say: "Add your email and we'll send you a secure
+  link to track your request"?
+- Should success auto-redirect happen immediately after the success response or after a short visible
+  confirmation delay?
 
-`QuickCapture.tsx` reduced from 811 → 183 lines. Five new files under `web/ophalo-app/src/components/quick-capture/`:
-- `utils.ts` — `Stage` type, `SOURCE_OPTIONS`, `stripToDigits`, `isPhoneShaped`, `formatStatus`
-- `LookupGate.tsx` — phone lookup form with clipboard + contact picker
-- `LookupResultView.tsx` — customer match display + `ActiveRequestCard` (co-located)
-- `CaptureForm.tsx` — new request capture form
-- `SuccessPanel.tsx` — post-capture success actions
+### Session 29 Hard Boundaries
 
-`apiClient.ts` reduced from 812 → 439 lines. All exported types extracted to `apiClient.types.ts` (468 lines). Consumer import surface preserved exactly via `import type` + `export type` re-exports.
+- No backend customer SMS.
+- No SMS reply ingestion.
+- No broad automated customer notification workflows.
+- No notification preferences, quiet hours, opt-out center, campaign behavior, delivery ledger,
+  retries, dead-letter queue, or proof-of-send semantics.
+- No phone-number-based customer request URLs.
+- No public API disclosure of email delivery success/failure.
+- No raw-token disclosure in logs, diagnostics, persisted frontend state, or long-lived UI state.
 
-TypeScript: zero errors. Vite production build: clean (1,599 modules). No behavior changes.
+### Recent Completed Work
 
-Seven new files created under `web/ophalo-app/src/pages/request-detail/`:
-- `helpers.ts` — format utils, label constants, FOCUS_RING/INPUT_CLS/STATUS_CONFLICT_MESSAGE, attention guidance logic
-- `highlights.tsx` — HighlightLevel, AttentionHighlights, RecommendedActionBadge, all highlight helpers
-- `TimelineEvent.tsx` — timeline event display + TimelineEvent component
-- `TimingPanel.tsx` — follow-up / planned timing controls
-- `DetailHero.tsx` — CustomerPageHeroActions + TodayPromiseBanner + DetailHero
-- `TeamSection.tsx` — team participation controls
-- `BusinessSection.tsx` — WorkDoneCard + CloseRequestCard + BusinessUpdateSection
+Session 25 / Build 082 is complete: backend share commit and SMS handoff model/service, public SMS
+handoff page, authenticated PWA Share Link modal, and closeout landed. End-to-end QR/SMS device
+testing remains a deployment smoke item because it depends on real production/mobile browser
+behavior.
 
-TypeScript: zero errors. Vite production build: clean. No behavior changes.
+Session 26 / Build 077 is complete: API composition cleanup, PWA request detail split, QuickCapture
+split, API client type extraction, customer tracker page split, and closeout landed. Deferred file
+decomposition remains recorded in Build 077: native mobile `[id].tsx`, PWA `RequestDetail.tsx`, and
+remaining large frontend files.
 
-- `src/OpHalo.Api/Keep/KeepServiceCollectionExtensions.cs` — `AddKeepServices()` with all Keep DI registrations.
-- `src/OpHalo.Api/Keep/KeepEndpoints.cs` — `MapKeepEndpoints()` with all `/keep/...` routes; four handlers as private statics.
-- `src/OpHalo.Api/Keep/RenameLinkNameBody.cs`, `UpdateServiceLocationBody.cs` — orphan records moved.
-
-Pre-existing gap identified: two ShareIntent integration tests (`ShareIntent_NeedsShare_false_after_successful_clear`, `ShareIntent_idempotent_second_call_returns_204_without_error`) return `BadRequest` instead of `NoContent` on baseline. Not caused by S26a; needs separate investigation.
-
-### Session 28 Complete
-
-Build 083 — Follow-up and Planned Promise Workflow — fully landed:
+Session 28 / Build 083 is complete: Follow Up On promise protection, follow-up resolution backend
+command, PWA command-center completion workflow, request-list timing signals, and closeout docs
+landed.
 
 - **S83a**: backend attention gap closed (due/overdue FollowUpOn routes to NeedsAttention with `"due_or_overdue_follow_up_on"` slug, ranking group `"due_follow_up_on"` order 5).
 - **S83b**: `POST /keep/requests/{id}/follow-up-resolution` backend command (complete / move / keep_active outcomes, full auth/row/audit guard, migration `S83bFollowUpResolution`).
@@ -123,81 +139,6 @@ Build 083 — Follow-up and Planned Promise Workflow — fully landed:
 Deferred into next sessions:
 - Native mobile follow-up completion (early post-pilot / early release).
 - Planned For completion workflow.
-- Session 27 / Build 078 tracker-link email/Resend slice.
-
-### Session 28 Goal (archived)
-
-Implement the Follow Up On and Planned For promise workflow from Build Log 083.
-
-Locked ADRs:
-
-- ADR-439 — Follow Up On Promise Protection Semantics.
-- ADR-440 — Follow Up Completion And Missed Follow-Up Handling.
-- ADR-441 — Planned For Internal Timing And Past-Date Handling.
-
-Scope:
-
-- verify and close any backend gap for due/overdue Follow Up On attention/ranking;
-- add a narrow atomic follow-up completion backend command;
-- implement the PWA command-center detail workflow with mobile-width PWA as first-class;
-- update request-list timing signals without inline list completion;
-- keep native mobile command-center follow-up completion deferred from initial pilot but planned for
-  early post-pilot/early release.
-
-Slice order:
-
-1. **S83a — Backend verification and attention gap closure** ✓ Complete
-   - Gap confirmed at three levels and closed.
-   - `KeepRequest.GetNeedsStatusCheckInputs()`: due/overdue FollowUpOn now suppressed with slug
-     `"due_or_overdue_follow_up_on"` — routes to NeedsAttention, not NeedsStatusCheck.
-   - `KeepRequestListPersistence`: `IClock` injected; NeedsAttention DB query and count expanded
-     to include `FollowUpOnDate <= today && AttentionLevel == None` rows.
-   - `GetKeepRequestListService.ToSummary`: computes `isDueOrOverdueFollowUpOn` / `isFollowUpOverdue`;
-     new ranking group `"due_follow_up_on"` (order 5), severity `"danger"` / `"attention"`,
-     rowContext `"needs_attention"`. Stronger persisted attention remains primary.
-   - 3 pre-existing domain tests updated to ADR-439 semantics; 6 new service tests added.
-   - Baseline: 1,050/1,050 unit tests, 14/14 architecture tests.
-
-2. **S83b — Follow-up completion backend command** ✓ Complete
-   - `POST /keep/requests/{requestId}/follow-up-resolution` — outcomes: `complete`, `move`, `keep_active`.
-   - `FollowUpResolutionOutcome` + `FollowUpCompletionReason` enums (Core); `FollowUpResolved = 18` event type.
-   - `KeepRequest.ResolveFollowUp(...)`: complete clears date/reason/note; move sets new date/reason/note; keep_active leaves date unchanged. All require active request + follow-up set. Complete/keep_active require completion reason; move requires new date.
-   - `KeepRequestEvent.CreateFollowUpResolved(...)` factory; two new nullable columns on `keep_request_events` via migration `S83bFollowUpResolution`.
-   - `ManageRequestTimingService.ResolveFollowUpAsync` — same auth/row/account/action guard pattern as other timing mutations.
-   - `ErrorHttpMapper`: `FollowUpOnNotSet` → 409; `FollowUpOnInvalidOutcome` / `FollowUpOnCompletionReasonRequired` / `FollowUpOnMoveRequiresDate` → 400.
-   - 8 new domain tests; 9 new integration tests (owner/operator/viewer/anon/stale/no-follow-up/invalid-outcome/row-access).
-   - Baseline: 1,061/1,061 unit tests, 14/14 architecture tests.
-   - Preserve fail-closed account/role/row/action authorization.
-   - Ensure audit activity and Follow Up On state change commit together.
-
-3. **S83c — PWA detail follow-up completion workflow** ✓ Complete
-   - `FollowUpResolutionPanel.tsx` (new): bottom sheet mobile / centered modal desktop; tap-first outcome (complete / move / keep active); quick-pick dates; optional note; conflict-preserving draft.
-   - `TodayPromiseBanner`: overdue → danger banner + "Record follow-up" button; due today → accent banner + button; Planned For signal never triggers button.
-   - `TimingPanel`: "Record follow-up" link alongside "Clear follow-up" when follow-up is active.
-   - `apiClient.ts` / `apiClient.types.ts`: `resolveFollowUp` method + typed union types.
-   - `helpers.ts`: `isDateOnlyPast`, `isDueOrOverdueFollowUp`, `COMPLETION_REASON_LABELS`; date helpers use string compare (no `new Date()` on YYYY-MM-DD).
-   - TypeScript clean; Vite build clean, 1,600 modules.
-
-4. **S83d — Request list timing signals** ✓ Complete
-   - `RequestRow.tsx`: overdue follow-up → `danger` badge; past planned → `attention`; future → `default`. Local `isDateOnlyToday` (string compare). Server-provided labels used as-is.
-
-5. **S83e — Closeout docs** ✓ Complete
-   - Build Log 083 updated with completion notes and deferred items.
-   - Session log updated to Build 083 complete state.
-
-Hard boundaries:
-
-- no customer self-scheduling;
-- no customer direct editing of Follow Up On;
-- no customer-page display of internal Follow Up On or Planned For by default;
-- no automatic customer notifications from timing changes;
-- no backend SMS;
-- no Planned For completion workflow;
-- no native mobile implementation in initial pilot.
-
-Session 27 / Build 078 (`docs/build-log/078-customer-tracker-link-email-and-resend-configuration.md`)
-remains a planned tracker-link email/Resend slice and should be resumed separately after this
-implementation path or by explicit direction.
 
 ---
 
