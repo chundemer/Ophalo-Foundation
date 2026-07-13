@@ -1,10 +1,10 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-07-12 (Session 25 complete — Share Request Link Drawer)
+**Last updated:** 2026-07-12 (Session 26 prepared — pre-deployment cleanup and file decomposition)
 **Branch:** `main` tracking `origin/main`
 **Last green baseline:** S25d — 1042 unit tests passed, 14 architecture tests passed
 **Next free ADR:** ADR-438
-**Current session:** Session 26 — TBD
+**Current session:** Session 26 — Pre-deployment cleanup and file decomposition
 
 ---
 
@@ -34,99 +34,146 @@ For every implementation slice:
 
 ## Current Work
 
-**Current build log:** `docs/build-log/082-session-25-share-request-link-drawer.md`
-**Latest completed build log:** `docs/build-log/081-session-24-request-detail-2-column-workbench.md`
+**Current build log:** `docs/build-log/077-pre-deployment-cleanup-and-file-decomposition.md`
+**Latest completed build log:** `docs/build-log/082-session-25-share-request-link-drawer.md`
 **Readiness working doc:** `docs/pilot-readiness-decision-questions.md`
 **Bug/gap tracker:** `docs/pilot-readiness-bug-tracker.md`
 **Foundation roadmap:** `docs/build-log/ophalo-foundation-build-plan-greenfield-boundaries-brownfield-behavior.md` section 9.1
 
-### Session 25 Goal
+### Session 25 Complete
 
-Build the authenticated PWA **Share Link** workflow for an existing customer request page.
+Session 25 is complete. Four slices landed:
 
-The product contract is:
+- S25a — backend share commit and SMS handoff model/service;
+- S25b — public SMS handoff page;
+- S25c — authenticated PWA Share Link modal;
+- S25d — tests, responsive QA, and closeout.
+
+End-to-end QR/SMS device testing remains a deployment smoke item because it depends on real
+production/mobile browser behavior.
+
+### S26a Complete
+
+API composition cleanup landed. `Program.cs` reduced from 1,092 → 254 lines.
+
+- `src/OpHalo.Api/Keep/KeepServiceCollectionExtensions.cs` — `AddKeepServices()` with all Keep DI registrations.
+- `src/OpHalo.Api/Keep/KeepEndpoints.cs` — `MapKeepEndpoints()` with all `/keep/...` routes; four handlers as private statics.
+- `src/OpHalo.Api/Keep/RenameLinkNameBody.cs`, `UpdateServiceLocationBody.cs` — orphan records moved.
+
+Pre-existing gap identified: two ShareIntent integration tests (`ShareIntent_NeedsShare_false_after_successful_clear`, `ShareIntent_idempotent_second_call_returns_204_without_error`) return `BadRequest` instead of `NoContent` on baseline. Not caused by S26a; needs separate investigation.
+
+### Session 26 Goal
+
+Reduce pre-deployment maintenance risk before wiring Resend/customer tracker-link email.
+
+This is a cleanup session, not a feature session. The goal is to split large composition files and
+surface any implementation gaps found while doing that work, without changing user-facing behavior.
+
+Current line-count scan after S25:
 
 ```text
-OpHalo prepares the handoff.
-The human sends through their chosen channel.
-OpHalo records only the human confirmation: Mark as Shared.
+web/ophalo-app/src/pages/RequestDetail.tsx                         3,089
+mobile/ophalo-mobile/app/requests/[id].tsx                         1,588
+src/OpHalo.Keep.Core/Entities/KeepRequest.cs                       1,341
+src/OpHalo.Keep.Application/Requests/GetKeepRequestListService.cs   1,320
+web/ophalo-app/src/mocks/fixtures.ts                                1,125
+src/OpHalo.Api/Program.cs                                           1,092
+web/ophalo-app/src/components/QuickCapture.tsx                        811
+web/ophalo-app/src/lib/apiClient.ts                                   800
+web/ophalo-web/src/app/keep/r/[pageToken]/CustomerTrackerView.tsx      678
+web/ophalo-web/src/app/keep/intake/[token]/IntakeForm.tsx             622
+web/ophalo-app/src/components/ShareLinkModal.tsx                      509
 ```
 
-The session should deliver a modal/dialog available from request list rows and request detail, with:
+### S26 Cleanup Principles
 
-- Scan to Text QR as the primary method;
-- Open Email, Open WhatsApp, Copy Message, and Copy Link as secondary paths;
-- editable customer-ready message body;
-- honest **Mark as Shared** audit flow;
-- secure 15-minute SMS micro-handoff tokens;
-- owner/customer private-link transparency copy.
-
-### Locked S25 Decisions
-
-Use build-log 082 as the source of truth. Summary:
-
-- Scan to Text is primary.
-- Drawer stays open until **Mark as Shared**.
-- Never say **Sent** for external handoffs.
-- V1 actions: Scan to Text, Open Email, Open WhatsApp, Copy Message, Copy Link.
-- Phone is required for requests; email is optional.
-- Default message uses customer first name and business name.
-- Message is editable, but edited copy is not saved permanently.
-- **Mark as Shared** is always enabled and can log `manual_other`.
-- Entry points are request list and request detail.
-- This drawer shares only the existing customer request page link.
-- Customer page and drawer disclose private-link visibility.
-- SMS QR uses a compact handoff URL with opaque 15-minute token.
-- QR uses stale-guard refresh after edits.
-- Expired handoff tokens expose no payload.
-- Tokens are reusable until fixed expiry.
-- Mobile handoff page includes **Open Text Message** and **Copy Message** while valid.
-- Only **Mark as Shared** creates request history.
-- Short-lived handoff record may store the prepared message body; request history may not.
-- Email/WhatsApp use direct launch links.
-- Frontend renders QR with a small QR library.
-- V1 UI container is a modal/dialog.
-
-### Current Code Validation
-
-The customer request page already supports the share-message promise:
-
-- customers can view request status/history;
-- active pages expose update/question, request update, request call, share availability, add details,
-  and cancellation request actions;
-- closed eligible pages expose feedback;
-- anonymous customer write routes are rate limited;
-- customer-visible events are filtered before public exposure.
-
-Relevant files:
-
-- `web/ophalo-web/src/app/keep/r/[pageToken]/CustomerTrackerView.tsx`
-- `src/OpHalo.Api/Program.cs`
-- `src/OpHalo.Keep.Application/Requests/KeepCustomerPageMapper.cs`
+- No feature changes unless a bug/gap is discovered and explicitly accepted.
+- Prefer mechanical extraction: move code, preserve behavior, keep names stable where practical.
+- Keep route paths, API contracts, event semantics, auth policy, rate limits, and public-token
+  behavior unchanged.
+- After each extraction, run the smallest meaningful compile/test check before continuing.
+- If cleanup reveals a behavioral issue, record it as a gap before fixing it in the same slice.
 
 ### Expected Slice Order
 
-1. **S25a — Backend share commit and SMS handoff model/service**
-   - Confirm existing clear-share-intent service/endpoint shape.
-   - Add or adapt honest manual-share commit semantics.
-   - Add short-lived SMS handoff token creation/resolve persistence.
-   - Preserve token hashing and fail-closed request access.
+1. **S26a — API composition cleanup: Program.cs**
+   - Extract Keep service registrations into an extension method.
+   - Extract Keep endpoint mappings into `OpHalo.Api/Keep/KeepEndpoints.cs` or equivalent.
+   - Move local Keep handlers/body records only where it reduces `Program.cs` without changing
+     route behavior.
+   - Keep account/auth/device/badge endpoint files as they are.
+   - Gap check: token hashing/resolve logic should not remain ad hoc in `Program.cs`; public SMS
+     handoff resolve should stay no-payload on invalid/expired tokens.
 
-2. **S25b — Public SMS handoff page**
-   - Add `/keep/share-sms/{handoffToken}` public mobile page.
-   - Resolve valid token, format `sms:` URI, attempt launch, and show fallback controls.
-   - Expired/invalid tokens expose no payload.
+2. **S26b — PWA request detail mechanical split**
+   - Split [RequestDetail.tsx](/Users/christian/saas/ophalo-foundation/web/ophalo-app/src/pages/RequestDetail.tsx) into stable presentational sections.
+   - Preserve data loading, mutation handlers, route behavior, modals, and props.
+   - Candidate folder: `web/ophalo-app/src/pages/request-detail/`.
+   - Gap check: while extracting, look for duplicated visibility copy, stale disabled states,
+     unguarded customer-visible/internal text areas, and any lingering **Sent** wording from share
+     workflows.
 
-3. **S25c — PWA Share Link modal**
-   - Add shared modal/dialog component.
-   - Wire from request list and request detail.
-   - Add editable message, direct email/WhatsApp/copy actions, QR rendering, stale guard, expiry
-     state, and **Mark as Shared** flow.
+3. **S26c — QuickCapture and API client low-risk splits**
+   - Split [QuickCapture.tsx](/Users/christian/saas/ophalo-foundation/web/ophalo-app/src/components/QuickCapture.tsx) along existing internal boundaries.
+   - Consider splitting [apiClient.ts](/Users/christian/saas/ophalo-foundation/web/ophalo-app/src/lib/apiClient.ts) by feature area if S26b does not require more time.
+   - Gap check: link construction must use configured public/app base URLs, never accidental
+     `window.location.origin` for customer-facing links.
 
-4. **S25d — Tests, responsive QA, and docs closeout**
-   - Add focused API tests for access, token expiry, no payload leakage, and manual-share history.
-   - Add frontend/unit or integration coverage where the current test setup supports it.
-   - Run proportionate suites and close build-log 082.
+4. **S26d — Public/mobile cleanup triage**
+   - Re-scan line counts after S26a-S26c.
+   - Decide whether to split mobile request detail, customer tracker page, or defer them until after
+     Resend.
+   - Do not split `KeepRequest.cs` or `GetKeepRequestListService.cs` without a separate semantic
+     preflight; those are behavior-heavy.
+
+5. **S26 closeout**
+   - Update build-log 077 with actual files split, deferred items, and remaining risk.
+   - Resolve or explicitly defer the S26 findings listed below.
+   - Run focused frontend/backend checks.
+   - Prepare Session 27 for [078 customer tracker link email / Resend](/Users/christian/saas/ophalo-foundation/docs/build-log/078-customer-tracker-link-email-and-resend-configuration.md).
+
+### S26 Findings To Address Before Closeout
+
+- `IClock clock` remains an unused injected parameter in the SMS handoff creation endpoint after
+  S26a. This was pre-existing and not caused by the extraction, but should either be removed or
+  justified before the session closes.
+- Two pre-existing ShareIntent integration failures were confirmed on baseline before S26a:
+  `ShareIntent_NeedsShare_false_after_successful_clear` and
+  `ShareIntent_idempotent_second_call_returns_204_without_error`. Both currently return
+  `BadRequest` instead of `NoContent`; address as a separate behavior gap, not as an S26a
+  regression.
+
+### Gap Check While Cleaning
+
+Every cleanup slice should explicitly check for:
+
+- token leakage in route logs, frontend state, diagnostics, test output, or docs;
+- account/row authorization drift when routes or handlers move;
+- public endpoint behavior that distinguishes invalid vs expired capability tokens more than needed;
+- customer-visible vs internal-only copy getting blurred;
+- direct-ID public paths or direct request IDs in public URLs;
+- share/contact actions implying delivery instead of preparation/manual confirmation;
+- hard-coded production URLs where existing configuration should be used;
+- duplicated request-detail UI state after extraction.
+
+### Program.cs Status
+
+[Program.cs](/Users/christian/saas/ophalo-foundation/src/OpHalo.Api/Program.cs) is not broken, but
+at 1,092 lines it now owns too many responsibilities:
+
+- host/config setup;
+- DI registration;
+- rate limiting policy definitions;
+- public intake routes;
+- setup routes;
+- request list/detail routes;
+- request mutation routes;
+- public customer page routes;
+- SMS handoff token creation/resolve;
+- local handler methods and request body records.
+
+Priority cleanup: move Keep registration and route mapping out first. Leave broader host setup in
+`Program.cs` until after endpoint extraction proves clean.
 
 ---
 
