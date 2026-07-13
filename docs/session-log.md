@@ -60,6 +60,21 @@ API composition cleanup landed. `Program.cs` reduced from 1,092 → 254 lines.
 
 PWA request detail mechanical split landed. `RequestDetail.tsx` reduced from 3,152 → 1,510 lines.
 
+### S26c Complete
+
+QuickCapture and API client splits landed.
+
+`QuickCapture.tsx` reduced from 811 → 183 lines. Five new files under `web/ophalo-app/src/components/quick-capture/`:
+- `utils.ts` — `Stage` type, `SOURCE_OPTIONS`, `stripToDigits`, `isPhoneShaped`, `formatStatus`
+- `LookupGate.tsx` — phone lookup form with clipboard + contact picker
+- `LookupResultView.tsx` — customer match display + `ActiveRequestCard` (co-located)
+- `CaptureForm.tsx` — new request capture form
+- `SuccessPanel.tsx` — post-capture success actions
+
+`apiClient.ts` reduced from 812 → 439 lines. All exported types extracted to `apiClient.types.ts` (468 lines). Consumer import surface preserved exactly via `import type` + `export type` re-exports.
+
+TypeScript: zero errors. Vite production build: clean (1,599 modules). No behavior changes.
+
 Seven new files created under `web/ophalo-app/src/pages/request-detail/`:
 - `helpers.ts` — format utils, label constants, FOCUS_RING/INPUT_CLS/STATUS_CONFLICT_MESSAGE, attention guidance logic
 - `highlights.tsx` — HighlightLevel, AttentionHighlights, RecommendedActionBadge, all highlight helpers
