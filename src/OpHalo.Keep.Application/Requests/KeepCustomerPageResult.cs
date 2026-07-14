@@ -18,6 +18,7 @@ public sealed record KeepCustomerPageResult(
     string? CurrentStatusText,
     bool? IsTerminal,
     bool? FeedbackWasResolved,
+    string? FeedbackComment,
     DateTime? FeedbackSubmittedAtUtc,
     DateTime? ExpiresAtUtc,
     IReadOnlyList<KeepCustomerPageEventItem>? Events,

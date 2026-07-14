@@ -1,10 +1,10 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-07-13 (S78e complete — Build 078 closed)
+**Last updated:** 2026-07-13 (Session 30 complete — GAP-012/013/014)
 **Branch:** `main` tracking `origin/main`
-**Last green baseline:** S78b — 1,064 unit tests passed, 14 architecture tests passed; ophalo-app and ophalo-web TypeScript clean; Vite build clean (1,600 modules)
+**Last green baseline:** S84e — 1,069 unit tests passed, 14 architecture tests passed (not re-run this session); ophalo-app and ophalo-web TypeScript clean
 **Next free ADR:** ADR-442
-**Current session:** Session 29 — Build 078 tracker-link email / Resend configuration / confirmation flow
+**Current session:** Session 30 — Build 084 feedback visibility and Closed request follow-up gaps
 
 ---
 
@@ -34,85 +34,79 @@ For every implementation slice:
 
 ## Current Work
 
-**Current build log:** `docs/build-log/078-customer-tracker-link-email-and-resend-configuration.md`
-**Completed build log:** `docs/build-log/083-session-26-follow-up-and-planned-promise-workflow-draft.md`
-**Latest completed build logs:** `docs/build-log/077-pre-deployment-cleanup-and-file-decomposition.md`, `docs/build-log/082-session-25-share-request-link-drawer.md`
+**Completed build log:** `docs/build-log/084-feedback-and-closed-request-follow-up-gaps.md`
+**Completed build log:** `docs/build-log/078-customer-tracker-link-email-and-resend-configuration.md`
+**Latest completed build logs:** `docs/build-log/083-session-26-follow-up-and-planned-promise-workflow-draft.md`, `docs/build-log/082-session-25-share-request-link-drawer.md`, `docs/build-log/077-pre-deployment-cleanup-and-file-decomposition.md`
 **Readiness working doc:** `docs/pilot-readiness-decision-questions.md`
 **Bug/gap tracker:** `docs/pilot-readiness-bug-tracker.md`
 **Foundation roadmap:** `docs/build-log/ophalo-foundation-build-plan-greenfield-boundaries-brownfield-behavior.md` section 9.1
 
-### Session 29 Goal
+### Session 30 Goal
 
-Implement Build 078: make customer tracker links harder to lose after public intake while preserving
-the V1 communication boundary.
+Implement the pilot feedback/closed-request gaps from the tracker:
+
+- **GAP-013:** customer feedback submission needs a clear submitted state.
+- **GAP-014:** authenticated request detail needs a visible submitted-feedback card/state.
+- **GAP-012:** Closed requests need a new follow-up-work path without reopening the original request.
 
 Product direction:
 
-- Platform email through `IEmailSender` / Resend is in scope for auth/member flows and this one
-  narrow public-intake tracker-link email.
-- If a public-intake customer supplies email, send a single transactional tracker-link email after
-  the durable request commit and customer page token creation.
-- Delivery is best-effort and fail-soft: intake must still succeed if email delivery fails, and the
-  public API response must not reveal whether an email was sent.
-- If no email is supplied, confirmation UX should still help the customer reach and retain the
-  tracker page through auto-open, copy/share, and clear reassurance.
-- Operator handoff surfaces should prefill the customer page link where supported, without treating
-  composer launch as proof of contact.
-- Customer page access remains high-entropy token/capability-link based; phone numbers are lookup and
-  recovery identifiers, not URL access tokens.
+- Feedback remains binary and resolution-oriented in V1: `Yes, this was resolved` / `No, I still
+  need help`.
+- No ratings, stars, CSAT/NPS, public reviews, or testimonials.
+- Customer feedback submission must show a clear submitted state and must not reveal internal review
+  state.
+- Staff request detail must show submitted feedback according to existing role/visibility rules.
+- Negative feedback should be hard for Owner/Admin to miss and route to the existing review action.
+- Positive feedback should be visible as a completed signal without creating false active work.
+- Closed requests should not get a general V1 `Reopen` action unless a new ADR changes the lifecycle
+  model.
+- Preferred Closed-request direction is `Create follow-up request`; a lighter `Copy request info`
+  utility may be acceptable if full prefill is too large for the pilot slice.
 
-### Session 29 Slice Plan
+### Session 30 Slice Plan
 
 Use targeted preflight before each slice. Keep the hard slice gate unless Christian explicitly
 splits or expands the work: at most 3 mutation families, 8 production files, and 12 total changed
 files including tests/docs.
 
-1. **S78a — Resend configuration verified** ✓ (no code change)
-   - Wiring confirmed deployment-ready: `ConsoleEmailSender` in dev without `ApiKey`, `ResendEmailSender` otherwise.
-   - Required secrets: `Resend:ApiKey`, `Resend:FromAddress`, `App:PublicBaseUrl`.
-   - `MagicLinkSettings.PublicBaseUrl` is the injection point for outbound URLs.
+1. **S84a — Preflight and GAP-012 product decision**
+   - Decide whether V1 implements full `Create follow-up request`, lighter `Copy request info`, or
+     documented deferral for Closed request follow-up work.
+   - Inspect closed request detail actions, Quick Capture/business-created request prefill seams, and
+     any existing backend relation/internal-note support.
+   - Present the file-level gate before implementation.
 
-2. **S78b — Public intake tracker-link email** ✓
-   - `CreateKeepPublicIntakeService` now takes `IEmailSender` + `IOptions<MagicLinkSettings>`.
-   - `TrySendTrackerLinkEmailAsync`: sends after durable commit, fail-soft, no public response disclosure.
-   - No Reply-To for V1. Email copy clarifies replies may not be monitored.
-   - 3 new unit tests + 2 new integration tests. Baseline: 1,064/1,064 unit.
+2. **S84b — Customer feedback submitted state**
+   - Replace the customer tracker feedback form with an explicit submitted state after success.
+   - Render submitted state from server feedback fields on refresh/direct revisit when available.
+   - Preserve binary resolved/unresolved semantics and customer-safe duplicate/error states.
 
-3. **S78c — Confirmation flow and link-retention UX** ✓
-   - `IntakeForm.tsx`: email helper copy → benefit-led; reference code demoted to footer metadata;
-     ~2s auto-redirect to `/keep/r/{pageToken}`; email confirmation copy when email was provided.
+3. **S84c — Authenticated request detail feedback card/state**
+   - Add or correct request-detail feedback visibility.
+   - Show positive feedback quietly, negative feedback prominently, and reviewed metadata where
+     allowed.
+   - Render `Mark feedback reviewed` only when server metadata allows it.
 
-4. **S78d — Operator correspondence prefill** ✓
-   - `RequestDetail.tsx` `CustomerPanel` mailto: prefilled with subject + body containing customer page URL.
-   - Uses `VITE_PUBLIC_BASE_URL`, not `window.location.origin`. No state mutation on open.
+4. **S84d — Closed request follow-up path**
+   - Implement the smallest path locked in S84a, if selected for this session.
+   - Preserve the original Closed request lifecycle, feedback, closeout history, and customer page
+     state.
+   - Respect public-token and visibility boundaries for copied/prefilled data.
 
-5. **S78e — Closeout docs** ✓
-   - Build Log 078 updated. Session log advanced.
+5. **S84e — Closeout docs**
+   - Update Build 084, session log, and bug tracker statuses with landed scope and deferred items.
 
-### Deployment smoke items (not automated)
+### Session 30 Hard Boundaries
 
-- Real Resend email delivery end-to-end (requires `Resend:ApiKey` + `Resend:FromAddress` in production).
-- Auto-redirect behavior on real mobile browsers after public intake.
-
-### Session 29 Open Questions
-
-- Should the tracker-link email `Reply-To` use a configured business customer-facing email when
-  present, or a product-controlled support/no-reply address for V1?
-- Should public-intake email helper copy explicitly say: "Add your email and we'll send you a secure
-  link to track your request"?
-- Should success auto-redirect happen immediately after the success response or after a short visible
-  confirmation delay?
-
-### Session 29 Hard Boundaries
-
-- No backend customer SMS.
-- No SMS reply ingestion.
-- No broad automated customer notification workflows.
-- No notification preferences, quiet hours, opt-out center, campaign behavior, delivery ledger,
-  retries, dead-letter queue, or proof-of-send semantics.
-- No phone-number-based customer request URLs.
-- No public API disclosure of email delivery success/failure.
-- No raw-token disclosure in logs, diagnostics, persisted frontend state, or long-lived UI state.
+- No feedback ratings, stars, CSAT/NPS, public reviews, or testimonials.
+- No internal attention/review state on the customer tracker page.
+- No automatic reopen from feedback.
+- No general `Reopen` action for Closed requests in V1.
+- No customer-visible implication that old Closed requests have reopened.
+- No public-token leakage or visibility expansion through copied/prefilled follow-up data.
+- Preserve fail-closed account, membership, row/action-policy, and public-token behavior.
+- Preserve feedback comment/review visibility from ADR-151, ADR-263, ADR-271, and ADR-384.
 
 ### Recent Completed Work
 
@@ -139,6 +133,14 @@ landed.
 Deferred into next sessions:
 - Native mobile follow-up completion (early post-pilot / early release).
 - Planned For completion workflow.
+
+Session 29 / Build 078 is complete: Resend configuration verified, public-intake tracker-link email
+landed, customer intake confirmation now redirects to the tracker page after a short confirmation
+state, operator mailto handoffs prefill the customer page link, and closeout docs landed.
+
+Deployment smoke items carried forward from Build 078:
+- Real Resend email delivery end-to-end with production `Resend:ApiKey` and `Resend:FromAddress`.
+- Auto-redirect behavior on real mobile browsers after public intake.
 
 ---
 
@@ -192,8 +194,8 @@ Completed implementation details live in the build logs and should not be repeat
 
 Remaining pre-deployment work lives in separate build logs:
 
-1. `docs/build-log/078-customer-tracker-link-email-and-resend-configuration.md` — tracker-link
-   email / Resend configuration and confirmation flow.
+1. `docs/build-log/084-feedback-and-closed-request-follow-up-gaps.md` — feedback visibility and
+   Closed request follow-up gaps.
 2. `docs/build-log/077-pre-deployment-cleanup-and-file-decomposition.md` — pre-deployment cleanup.
 
 ---

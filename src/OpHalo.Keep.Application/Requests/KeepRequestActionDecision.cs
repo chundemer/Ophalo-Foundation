@@ -32,4 +32,5 @@ public sealed record KeepRequestActionDecision(
     bool CanClose,
     bool CanClassify,
     bool CanRecordShareIntent,
+    bool CanCreateFollowUpRequest,
     IReadOnlyList<KeepRequestStatus> AllowedStatuses);

@@ -72,8 +72,8 @@ const EMPTY_STATE: Record<TabId, { heading: string; detail: string }> = {
     detail: "Resolved work will appear here when it is ready for owner/admin closeout.",
   },
   feedback_review: {
-    heading: "No feedback to review",
-    detail: "Negative customer feedback will appear here until it is handled.",
+    heading: "No customer feedback",
+    detail: "Customer feedback will appear here after customers submit it.",
   },
   available_work: {
     heading: "No available work",

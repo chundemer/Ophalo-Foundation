@@ -239,6 +239,12 @@ export function RequestRow({ row, onSelect, onSelectFocused, onActionClick, onSh
             <AttentionBadge reason={row.attention.attentionReason} />
           )}
           <StatusBadge status={row.status} />
+          {row.feedbackWasResolved === true && !row.attention.attentionReason && (
+            <KeepBadge variant="success" className="gap-1">
+              <CheckCircle2 className="h-3 w-3" />
+              Customer confirmed resolved
+            </KeepBadge>
+          )}
           {row.needsShare && (
             <KeepBadge variant="attention" className="gap-1">
               <Share2 className="h-3 w-3" />

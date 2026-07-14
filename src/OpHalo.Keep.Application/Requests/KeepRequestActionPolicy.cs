@@ -29,10 +29,11 @@ public static class KeepRequestActionPolicy
         CanMarkFeedbackReviewed:  false,
         CanSetFollowUpOn:         false,
         CanSetPlannedFor:         false,
-        CanClose:                 false,
-        CanClassify:              false,
-        CanRecordShareIntent:     false,
-        AllowedStatuses:          []);
+        CanClose:                       false,
+        CanClassify:                    false,
+        CanRecordShareIntent:           false,
+        CanCreateFollowUpRequest:       false,
+        AllowedStatuses:                []);
 
     public static KeepRequestActionDecision Evaluate(KeepRequest request, KeepRequestActionContext actor)
     {
@@ -104,10 +105,11 @@ public static class KeepRequestActionPolicy
             CanMarkFeedbackReviewed:  CanMarkFeedbackReviewedCore(isOwnerAdmin, request),
             CanSetFollowUpOn:         canSetTiming,
             CanSetPlannedFor:         canSetTiming,
-            CanClose:                 canClose,
-            CanClassify:              isOwnerAdmin && isNonTerminal,
-            CanRecordShareIntent:     true,
-            AllowedStatuses:          ComputeAllowedStatuses(request.Status, isOwnerAdmin, canClose));
+            CanClose:                       canClose,
+            CanClassify:                    isOwnerAdmin && isNonTerminal,
+            CanRecordShareIntent:           true,
+            CanCreateFollowUpRequest:       isOwnerAdmin && request.Status == KeepRequestStatus.Closed,
+            AllowedStatuses:                ComputeAllowedStatuses(request.Status, isOwnerAdmin, canClose));
     }
 
     private static bool CanMarkFeedbackReviewedCore(bool isOwnerAdmin, KeepRequest request) =>

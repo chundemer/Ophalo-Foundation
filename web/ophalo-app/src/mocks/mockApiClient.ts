@@ -62,6 +62,7 @@ function actionsForRole(base: AvailableActionsMetadata, role: AccountRole): Avai
       canClose: false,
       canClassify: false,
       canRecordShareIntent: false,
+      canCreateFollowUpRequest: false,
       allowedStatuses: [],
     };
   }
@@ -345,6 +346,9 @@ export function installMockApi(): void {
       version: crypto.randomUUID(),
       isTerminal: false,
       isPostCloseFollowUp: false,
+      feedbackWasResolved: null,
+      feedbackReviewAgeBucket: null,
+      feedbackReviewDueAtUtc: null,
       needsShare: false,
       source: "public_intake",
       intakeUrgency: "routine",

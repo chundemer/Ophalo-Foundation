@@ -12,13 +12,21 @@ export interface QuickCaptureProps {
   onSelectRequest?: (requestId: string) => void;
   isPastDue?: boolean;
   isReadOnly?: boolean;
+  // Intentional bypass of the phone lookup gate — used only by Create follow-up request.
+  // The phone has already been verified by the original closed request; re-running the lookup
+  // would surface that closed request and confuse the duplicate-detection UX.
+  followUpPrefill?: { phone: string; name?: string; email?: string; description?: string };
 }
 
-export function QuickCapture({ onClose, onSelectRequest, isPastDue = false, isReadOnly = false }: QuickCaptureProps) {
+export function QuickCapture({ onClose, onSelectRequest, isPastDue = false, isReadOnly = false, followUpPrefill }: QuickCaptureProps) {
   const publicBaseUrl = import.meta.env.VITE_PUBLIC_BASE_URL as string;
   const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
 
-  const [stage, setStage] = useState<Stage>({ kind: "lookup" });
+  const [stage, setStage] = useState<Stage>(
+    followUpPrefill
+      ? { kind: "capture", lockedPhone: followUpPrefill.phone, prefill: followUpPrefill }
+      : { kind: "lookup" }
+  );
 
   function handleLookupSuccess(result: PhoneLookupResult, phone: string) {
     if (result.customer) {
@@ -76,7 +84,7 @@ export function QuickCapture({ onClose, onSelectRequest, isPastDue = false, isRe
       : stage.kind === "result"
         ? "Customer Found"
         : stage.kind === "capture"
-          ? "New Request"
+          ? followUpPrefill ? "Create Follow-up Request" : "New Request"
           : "Request Captured";
 
   const content = (() => {

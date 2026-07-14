@@ -3,7 +3,7 @@
 **Created:** 2026-07-02
 **Purpose:** Live tracker for pilot-blocking or pilot-relevant bugs/gaps discovered during Session 14.
 **Source:** Promoted from the Pre-S14e bug register in `docs/build-log/068-session-14-ophalo-web-front-door.md`.
-**Current active item:** GAP-004 — Browser back / refresh does not preserve app location (P2, pre-pilot known gap per ADR-427).
+**Current active item:** GAP-012 through GAP-014 — closed request follow-up path and feedback visibility.
 **Recently resolved:** GAP-011 — External contact logging duplicated and closeout rows over-prune communication actions (S24k).
 **Previously resolved:** GAP-010 — Ready to Close rows leaked communication next-actions (S24j).
 
@@ -424,7 +424,7 @@ Acceptance criteria:
 
 ### GAP-012 — Closed requests need follow-up-request path, not reopen
 
-**Status:** Needs decision
+**Status:** Fixed — Session 30 / Build 084
 **Severity:** P2
 **Area:** `ophalo-app` request detail / closed request actions; future Quick Capture/create request flow
 **Decision:** ADR-089, ADR-148, ADR-434
@@ -458,7 +458,7 @@ Acceptance criteria:
 
 ### GAP-013 — Customer feedback submission lacks clear submitted state
 
-**Status:** Open
+**Status:** Fixed — Session 30 / Build 084
 **Severity:** P2
 **Area:** `ophalo-web` customer tracker feedback form
 **Decision:** ADR-135, ADR-136, ADR-139
@@ -499,7 +499,7 @@ Acceptance criteria:
 
 ### GAP-014 — Authenticated request detail does not clearly show submitted feedback
 
-**Status:** Open
+**Status:** Fixed — Session 30 / Build 084
 **Severity:** P1
 **Area:** `ophalo-app` request detail / feedback review visibility
 **Decision:** ADR-151, ADR-263, ADR-271, ADR-384

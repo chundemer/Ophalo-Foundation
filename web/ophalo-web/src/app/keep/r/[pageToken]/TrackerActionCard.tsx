@@ -4,6 +4,7 @@ import {
   SECONDARY_ACTION_LABELS,
   SECONDARY_ACTION_ICONS,
   ACTION_COMPOSER_LABELS,
+  formatDate,
   type ComposerPhase,
 } from "./tracker-types";
 
@@ -16,6 +17,7 @@ export function TrackerActionCard({
   onCommentChange,
   wasResolved,
   onWasResolvedChange,
+  feedbackSubmittedAtUtc,
   errorMsg,
   isSubmitting,
   selectedAction,
@@ -37,6 +39,7 @@ export function TrackerActionCard({
   onCommentChange: (c: string) => void;
   wasResolved: boolean | null;
   onWasResolvedChange: (v: boolean) => void;
+  feedbackSubmittedAtUtc: string | null;
   errorMsg: string | null;
   isSubmitting: boolean;
   selectedAction: string | null;
@@ -70,13 +73,33 @@ export function TrackerActionCard({
         </div>
 
       ) : phase.kind === "feedback_sent" ? (
-        <div role="status" aria-live="polite">
-          <p className="text-base font-semibold text-foreground">
-            Feedback submitted. Thank you.
-          </p>
-          <p className="mt-1 text-sm leading-6 text-muted-foreground">
-            {businessName} appreciates you letting them know.
-          </p>
+        <div role="status" aria-live="polite" className="space-y-3">
+          <div>
+            <p className="text-base font-semibold text-foreground">
+              Feedback submitted. Thank you.
+            </p>
+            <p className="mt-1 text-sm leading-6 text-muted-foreground">
+              {businessName} appreciates you letting them know.
+            </p>
+          </div>
+          {wasResolved !== null && (
+            <div className="rounded-lg border border-[var(--ophalo-border)] bg-[var(--ophalo-canvas)] px-4 py-3 space-y-2">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Your feedback</p>
+              <span className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold ${
+                wasResolved
+                  ? "border-[var(--keep-accent)] bg-[var(--keep-accent-bg)] text-[var(--keep-accent)]"
+                  : "border-[var(--ophalo-border)] bg-card text-foreground"
+              }`}>
+                {wasResolved ? "Yes, resolved" : "No, I still need help"}
+              </span>
+              {comment && (
+                <p className="text-sm leading-6 text-foreground italic">&ldquo;{comment}&rdquo;</p>
+              )}
+              {feedbackSubmittedAtUtc && (
+                <p className="text-xs text-muted-foreground">Submitted {formatDate(feedbackSubmittedAtUtc)}</p>
+              )}
+            </div>
+          )}
         </div>
 
       ) : hasFeedbackAction ? (

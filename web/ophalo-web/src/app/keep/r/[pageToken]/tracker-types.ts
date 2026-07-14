@@ -21,6 +21,9 @@ export interface CustomerPageData {
   version: string | null;
   intakeUrgency: string | null;
   origin: "customer" | "business" | null;
+  feedbackWasResolved: boolean | null;
+  feedbackComment: string | null;
+  feedbackSubmittedAtUtc: string | null;
 }
 
 export type ComposerPhase =

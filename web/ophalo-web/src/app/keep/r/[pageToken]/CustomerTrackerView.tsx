@@ -31,10 +31,12 @@ export function CustomerTrackerView({
   pageToken: string;
 }) {
   const [page, setPage] = useState(initialPage);
-  const [phase, setPhase] = useState<ComposerPhase>({ kind: "idle" });
+  const [phase, setPhase] = useState<ComposerPhase>(
+    initialPage.feedbackSubmittedAtUtc != null ? { kind: "feedback_sent" } : { kind: "idle" }
+  );
   const [message, setMessage] = useState("");
-  const [wasResolved, setWasResolved] = useState<boolean | null>(null);
-  const [comment, setComment] = useState("");
+  const [wasResolved, setWasResolved] = useState<boolean | null>(initialPage.feedbackWasResolved ?? null);
+  const [comment, setComment] = useState(initialPage.feedbackComment ?? "");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [expired, setExpired] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -75,7 +77,7 @@ export function CustomerTrackerView({
   }, []);
 
   useEffect(() => {
-    if (phase.kind === "sent" || phase.kind === "feedback_sent") {
+    if (phase.kind === "sent") {
       dismissTimer.current = setTimeout(() => setPhase({ kind: "idle" }), 5000);
     }
     return () => { if (dismissTimer.current) clearTimeout(dismissTimer.current); };
@@ -217,7 +219,7 @@ export function CustomerTrackerView({
           onShareOrCopy={shareOrCopyLink}
         />
 
-        {hasActions && (
+        {(hasActions || phase.kind === "feedback_sent") && (
           <TrackerActionCard
             phase={phase}
             businessName={page.businessName}
@@ -227,6 +229,7 @@ export function CustomerTrackerView({
             onCommentChange={setComment}
             wasResolved={wasResolved}
             onWasResolvedChange={setWasResolved}
+            feedbackSubmittedAtUtc={page.feedbackSubmittedAtUtc}
             errorMsg={errorMsg}
             isSubmitting={isSubmitting}
             selectedAction={selectedAction}

@@ -90,6 +90,7 @@ public sealed record AvailableActionsMetadata(
     bool CanClose,
     bool CanClassify,
     bool CanRecordShareIntent,
+    bool CanCreateFollowUpRequest,
     IReadOnlyList<string> AllowedStatuses);
 
 /// <summary>

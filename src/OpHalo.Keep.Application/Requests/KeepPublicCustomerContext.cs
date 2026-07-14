@@ -28,6 +28,7 @@ public sealed record KeepPublicCustomerContext(
     bool IsExpired,
     DateTime? ExpiresAtUtc,
     bool? FeedbackWasResolved,
+    string? FeedbackComment,
     DateTime? FeedbackSubmittedAtUtc,
     bool IsOffSeason,
     IntakeUrgency IntakeUrgency,

@@ -130,10 +130,11 @@ public sealed class KeepRequestListPersistence(OpHaloDbContext dbContext, IClock
                 && (r.AttentionLevel != AttentionLevel.None
                     || (r.FollowUpOnDate.HasValue && r.FollowUpOnDate.Value <= today))),
 
+            // All closed requests with any submitted feedback: pending-review (unresolved) rows
+            // surface with active attention signals; positive (resolved) rows appear quietly.
             ActiveViewKind.FeedbackReview => scopedBase.Where(r =>
                 r.Status == KeepRequestStatus.Closed
-                && r.AttentionReason == AttentionReason.UnresolvedFeedback
-                && r.AttentionLevel != AttentionLevel.None),
+                && r.FeedbackSubmittedAtUtc.HasValue),
 
             // NeedsStatusCheck: candidate rows with no active attention and an active status.
             // The 5-day due check and FollowUpOn/PlannedFor suppression are applied in-memory

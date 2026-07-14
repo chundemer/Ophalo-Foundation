@@ -19,6 +19,7 @@ import {
 } from "../lib/apiClient";
 import { NeedsShareBanner } from "../components/NeedsShareBanner";
 import { ShareLinkModal } from "../components/ShareLinkModal";
+import { QuickCapture } from "../components/QuickCapture";
 import { KeepButton } from "../components/keep/KeepButton";
 import { KeepBadge, type KeepBadgeVariant } from "../components/keep/KeepBadge";
 import { ExternalContactForm } from "../components/ExternalContactForm";
@@ -287,6 +288,52 @@ function FeedbackReviewSection({
       </form>
     </div>
   );
+}
+
+// ---------------------------------------------------------------------------
+// Feedback summary card — quiet completed state for positive or reviewed feedback
+// ---------------------------------------------------------------------------
+
+function FeedbackSummaryCard({ detail }: { detail: KeepRequestDetailResult }) {
+  if (!detail.feedbackSubmittedAtUtc) return null;
+
+  if (detail.feedbackWasResolved === true) {
+    return (
+      <div className="rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-5 py-4">
+        <p className="text-sm font-semibold text-[var(--ophalo-ink)]">Customer feedback</p>
+        <p className="mt-1 text-xs text-[var(--ophalo-muted)]">
+          Customer confirmed their request was resolved
+          {detail.feedbackSubmittedAtUtc ? ` on ${formatDate(detail.feedbackSubmittedAtUtc)}` : ""}.
+        </p>
+        {detail.feedbackCommentVisible && detail.feedbackComment && (
+          <p className="mt-1.5 text-xs text-[var(--ophalo-muted)] italic">
+            &ldquo;{detail.feedbackComment}&rdquo;
+          </p>
+        )}
+      </div>
+    );
+  }
+
+  if (detail.feedbackWasResolved === false && detail.feedbackReviewedAtUtc != null) {
+    return (
+      <div className="rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-5 py-4">
+        <p className="text-sm font-semibold text-[var(--ophalo-ink)]">Negative feedback reviewed</p>
+        <p className="mt-1 text-xs text-[var(--ophalo-muted)]">
+          Marked reviewed on {formatDate(detail.feedbackReviewedAtUtc)}.
+        </p>
+        {detail.feedbackCommentVisible && detail.feedbackComment && (
+          <p className="mt-1.5 text-xs text-[var(--ophalo-muted)] italic">
+            &ldquo;{detail.feedbackComment}&rdquo;
+          </p>
+        )}
+        {detail.feedbackReviewNote && (
+          <p className="mt-1.5 text-xs text-[var(--ophalo-muted)]">Note: {detail.feedbackReviewNote}</p>
+        )}
+      </div>
+    );
+  }
+
+  return null;
 }
 
 // ---------------------------------------------------------------------------
@@ -1116,6 +1163,7 @@ export function RequestDetail({ requestId, focusPanel, onBack, prevId, nextId, o
   const [shareCleared, setShareCleared] = useState(false);
   const [shareModalOpen, setShareModalOpen] = useState(false);
   const [followUpPanelOpen, setFollowUpPanelOpen] = useState(false);
+  const [followUpCaptureOpen, setFollowUpCaptureOpen] = useState(false);
   const [contactModal, setContactModal] = useState<{ direction: string; channel: string } | null>(null);
   const [businessUpdateDraft, setBusinessUpdateDraft] = useState("");
   const [businessUpdateDraftStatus, setBusinessUpdateDraftStatus] = useState("");
@@ -1202,6 +1250,37 @@ export function RequestDetail({ requestId, focusPanel, onBack, prevId, nextId, o
         : "bg-[var(--ophalo-card)] text-[var(--ophalo-muted)] hover:text-[var(--ophalo-ink)]"
     }`;
 
+  function renderCreateFollowUpCard() {
+    if (!detail?.availableActions.canCreateFollowUpRequest) return null;
+    const prefillDescription = `Follow-up to closed request ${detail.referenceCode}: ${detail.description}`;
+    return (
+      <div className="rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-5 py-4">
+        <p className="text-sm font-semibold text-[var(--ophalo-ink)] mb-1">Follow-up work</p>
+        <p className="text-xs text-[var(--ophalo-muted)] mb-3">
+          This request is closed. Start a new request for any additional work needed.
+        </p>
+        <KeepButton
+          variant="secondary"
+          onClick={() => setFollowUpCaptureOpen(true)}
+          className="w-full"
+        >
+          Create follow-up request
+        </KeepButton>
+        {followUpCaptureOpen && (
+          <QuickCapture
+            onClose={() => setFollowUpCaptureOpen(false)}
+            followUpPrefill={{
+              phone: detail.customerPhone,
+              name: detail.customerName,
+              email: detail.customerEmail ?? undefined,
+              description: prefillDescription,
+            }}
+          />
+        )}
+      </div>
+    );
+  }
+
   // Primary communication actions: Send update + contact log + mark handled + work controls
   function renderPrimaryActions() {
     if (!detail) return null;
@@ -1234,6 +1313,8 @@ export function RequestDetail({ requestId, focusPanel, onBack, prevId, nextId, o
           onDetailUpdated={handleDetailUpdated}
           highlights={highlights}
         />
+        <FeedbackSummaryCard detail={detail} />
+        {renderCreateFollowUpCard()}
       </>
     );
   }
@@ -1519,8 +1600,10 @@ export function RequestDetail({ requestId, focusPanel, onBack, prevId, nextId, o
                     onDetailUpdated={handleDetailUpdated}
                     highlights={highlights}
                   />
+                  <FeedbackSummaryCard detail={detail} />
                 </div>
               )}
+              {renderCreateFollowUpCard()}
               {renderTeamSection()}
             </div>
 

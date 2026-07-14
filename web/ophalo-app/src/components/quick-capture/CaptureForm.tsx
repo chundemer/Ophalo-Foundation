@@ -6,7 +6,7 @@ import { SOURCE_OPTIONS } from "./utils";
 
 interface CaptureFormProps {
   lockedPhone: string;
-  prefill: { name?: string; email?: string } | null;
+  prefill: { name?: string; email?: string; description?: string } | null;
   isPastDue: boolean;
   isReadOnly: boolean;
   onSuccess: (requestId: string, referenceCode: string, pageToken: string) => void;
@@ -25,7 +25,7 @@ export function CaptureForm({
 }: CaptureFormProps) {
   const [name, setName] = useState(prefill?.name ?? "");
   const [email, setEmail] = useState(prefill?.email ?? "");
-  const [description, setDescription] = useState("");
+  const [description, setDescription] = useState(prefill?.description ?? "");
   const [source, setSource] = useState<string>("");
 
   const { mutate, isPending, error } = useMutation({

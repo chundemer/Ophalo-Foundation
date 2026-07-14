@@ -1336,6 +1336,22 @@ public class KeepRequestListServiceTests
     }
 
     [Fact]
+    public async Task Execute_rowContext_feedback_review_for_positive_feedback_request()
+    {
+        var request = MakeRequest();
+        SetProp(request, nameof(KeepRequest.Status), KeepRequestStatus.Closed);
+        SetProp(request, nameof(KeepRequest.FeedbackSubmittedAtUtc), Now.AddHours(-1));
+        SetProp(request, nameof(KeepRequest.FeedbackWasResolved), true);
+
+        var p = HappyPathPersistence([request]);
+        var sut = BuildSut(p);
+        var result = await sut.ExecuteAsync();
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal("feedback_review", result.Value.Requests[0].RowContext);
+    }
+
+    [Fact]
     public async Task Execute_rowContext_closed_history_for_closed_request_in_history_view()
     {
         // Uses view=closed_history — the real surface that returns Closed rows (ADR-248).

@@ -23,6 +23,7 @@ internal static class KeepCustomerPageMapper
             CurrentStatusText: null,
             IsTerminal: null,
             FeedbackWasResolved: null,
+            FeedbackComment: null,
             FeedbackSubmittedAtUtc: null,
             ExpiresAtUtc: null,
             Events: null,
@@ -43,6 +44,7 @@ internal static class KeepCustomerPageMapper
             CurrentStatusText: context.CurrentStatusText,
             IsTerminal: context.IsTerminal,
             FeedbackWasResolved: context.FeedbackWasResolved,
+            FeedbackComment: context.FeedbackComment,
             FeedbackSubmittedAtUtc: context.FeedbackSubmittedAtUtc,
             ExpiresAtUtc: context.ExpiresAtUtc,
             // Defensive filter even though persistence already scopes to Visibility = All.

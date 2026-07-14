@@ -727,4 +727,26 @@ public class KeepRequestActionPolicyTests
         };
         Assert.False(KeepRequestActionPolicy.Evaluate(r, OwnerWrite()).CanClassify);
     }
+
+    // CanCreateFollowUpRequest
+
+    [Fact]
+    public void CreateFollowUpRequest_Owner_on_Closed_is_true()
+        => Assert.True(KeepRequestActionPolicy.Evaluate(MakeClosed(), OwnerWrite()).CanCreateFollowUpRequest);
+
+    [Fact]
+    public void CreateFollowUpRequest_Admin_on_Closed_is_true()
+        => Assert.True(KeepRequestActionPolicy.Evaluate(MakeClosed(), AdminWrite()).CanCreateFollowUpRequest);
+
+    [Fact]
+    public void CreateFollowUpRequest_Operator_on_Closed_is_false()
+        => Assert.False(KeepRequestActionPolicy.Evaluate(MakeClosed(), OperatorWrite()).CanCreateFollowUpRequest);
+
+    [Fact]
+    public void CreateFollowUpRequest_Owner_on_non_Closed_active_is_false()
+        => Assert.False(KeepRequestActionPolicy.Evaluate(MakeReceived(), OwnerWrite()).CanCreateFollowUpRequest);
+
+    [Fact]
+    public void CreateFollowUpRequest_Owner_on_Cancelled_is_false()
+        => Assert.False(KeepRequestActionPolicy.Evaluate(MakeCancelled(), OwnerWrite()).CanCreateFollowUpRequest);
 }

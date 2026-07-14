@@ -23,6 +23,7 @@ public sealed record KeepRequestSummary(
     KeepRequestActionsInfo Actions,
     KeepRequestParticipationInfo Participation,
     KeepRequestNotificationInfo CurrentUserNotification,
+    bool? FeedbackWasResolved,
     string? FeedbackReviewAgeBucket,
     DateTime? FeedbackReviewDueAtUtc,
     KeepRequestTimingInfo Timing,

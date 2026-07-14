@@ -138,6 +138,7 @@ export interface AvailableActionsMetadata {
   canClose: boolean;
   canClassify: boolean;
   canRecordShareIntent: boolean;
+  canCreateFollowUpRequest: boolean;
   allowedStatuses: string[];
 }
 
@@ -392,6 +393,9 @@ export interface KeepRequestSummary {
   serviceCity: string | null;
   serviceState: string | null;
   serviceZip: string | null;
+  feedbackWasResolved: boolean | null;
+  feedbackReviewAgeBucket: string | null;
+  feedbackReviewDueAtUtc: string | null;
   ranking: KeepRequestRankingInfo;
   attention: KeepRequestAttentionInfo;
   preview: KeepRequestPreviewInfo;

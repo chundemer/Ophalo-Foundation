@@ -90,6 +90,7 @@ public sealed class KeepPublicCustomerAccessGuard(
             IsExpired: isExpired,
             ExpiresAtUtc: request.ExpiresAtUtc,
             FeedbackWasResolved: request.FeedbackWasResolved,
+            FeedbackComment: request.FeedbackComment,
             FeedbackSubmittedAtUtc: request.FeedbackSubmittedAtUtc,
             IsOffSeason: snapshot.OperatingMode == AccountOperatingMode.OffSeason,
             IntakeUrgency: request.IntakeUrgency,

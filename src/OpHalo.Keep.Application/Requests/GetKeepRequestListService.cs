@@ -762,6 +762,7 @@ public sealed class GetKeepRequestListService(
             Actions: actions,
             Participation: participationInfo,
             CurrentUserNotification: notificationInfo,
+            FeedbackWasResolved: r.FeedbackWasResolved,
             FeedbackReviewAgeBucket: feedbackReviewAgeBucket,
             FeedbackReviewDueAtUtc: feedbackReviewDueAtUtc,
             Timing: timing,
@@ -951,6 +952,7 @@ public sealed class GetKeepRequestListService(
         bool canSelfAssignFromList)
     {
         if (isPostClose) return "feedback_review";
+        if (r.Status == KeepRequestStatus.Closed && r.FeedbackWasResolved == true) return "feedback_review";
         if (r.Status == KeepRequestStatus.Closed) return "closed_history";
         if (r.Status == KeepRequestStatus.Cancelled) return "cancelled_history";
         if (r.AttentionLevel != AttentionLevel.None || isDueOrOverdueFollowUpOn) return "needs_attention";
