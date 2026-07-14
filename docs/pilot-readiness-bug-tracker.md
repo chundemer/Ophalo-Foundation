@@ -3,8 +3,8 @@
 **Created:** 2026-07-02
 **Purpose:** Live tracker for pilot-blocking or pilot-relevant bugs/gaps discovered during Session 14.
 **Source:** Promoted from the Pre-S14e bug register in `docs/build-log/068-session-14-ophalo-web-front-door.md`.
-**Current active item:** None — feedback review operational loop implemented; closeout verification pending.
-**Recently resolved:** GAP-015 — feedback review operational loop and accountability trail (commit `315b231`).
+**Current active item:** None — all tracked gaps resolved; deployment smoke testing is next.
+**Recently resolved:** GAP-015 — feedback review operational loop and accountability trail (commit `315b231`); GAP-004 — durable PWA request-detail routing (commit `3ebdc57`).
 **Previously resolved:** GAP-010 — Ready to Close rows leaked communication next-actions (S24j).
 
 This document is the current working tracker. Historical discovery notes stay in the build logs, but
@@ -149,7 +149,7 @@ deliberately.
 
 ### GAP-004 — Browser back / refresh does not preserve app location
 
-**Status:** Open
+**Status:** Resolved in commit `3ebdc57` (2026-07-08)
 **Severity:** P2
 **Area:** `ophalo-app` navigation
 
@@ -159,6 +159,11 @@ mobile PWA the back gesture can exit the app, and refresh on detail loses place.
 Decision: ADR-427 locks this as pre-pilot PWA navigation behavior. Browser refresh and direct URL
 open must preserve authorized request detail; Requests breadcrumb/back returns to the request list;
 the OpHalo Keep logo returns to the request list/home workbench.
+
+Fix: hash-based routing (`#/request/{id}`) with `pushState` on navigation and `popstate` listener
+for back/forward; `getRouteFromLocation()` runs on mount so hard refresh restores authorized detail;
+logo and Requests nav both navigate to the requests list; malformed hash and unauthorized/missing
+requests remain fail-closed with user-friendly error copy.
 
 ### GAP-006 — Staff-created requests cannot add missing service location after creation
 
@@ -543,7 +548,7 @@ Acceptance criteria:
 
 ### GAP-015 — Feedback review lacks a complete operational loop
 
-**Status:** Implemented — commit `315b231`; closeout verification pending
+**Status:** Resolved — commit `315b231` (2026-07-14); verified 2026-07-14
 **Severity:** P1
 **Area:** `ophalo-app` request list/detail, `ophalo-web` customer tracker, Keep feedback activity
 **Decision:** Build 085 locked direction; preserve ADR-135, ADR-263, ADR-264, and ADR-269 behavior

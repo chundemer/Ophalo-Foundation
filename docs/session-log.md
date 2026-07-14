@@ -1,10 +1,10 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-07-14 (Session 30 feedback-loop follow-on landed; documentation reconciled)
+**Last updated:** 2026-07-14 (audit complete; all tracked gaps resolved; next: deployment smoke testing)
 **Branch:** `main` tracking `origin/main`
 **Last green baseline:** S84e — 1,069 unit tests passed, 14 architecture tests passed (not re-run this session); ophalo-app and ophalo-web TypeScript clean
 **Next free ADR:** ADR-442
-**Current session:** No active implementation session — verify Build 085 closeout before selecting new work
+**Current session:** No active implementation session
 
 ---
 
@@ -42,16 +42,18 @@ For every implementation slice:
 **Bug/gap tracker:** `docs/pilot-readiness-bug-tracker.md`
 **Foundation roadmap:** `docs/build-log/ophalo-foundation-build-plan-greenfield-boundaries-brownfield-behavior.md` section 9.1
 
-### Current Feedback-Loop State
+### Current-State Audit Required
 
-The feedback-review operational loop is implemented in commit `315b231` (following Build 084). The
-implementation records customer feedback receipt, promotes unreviewed negative feedback when entered
-from Feedback Review, clears active feedback on Owner/Admin review, and preserves separate activity
-events. Build 085 records the locked product behavior and implementation evidence.
+Do not select or brief the next implementation session from the tracker alone. Before proposing new
+work, inspect the current code, recent commits, and the relevant acceptance proof; several tracker
+items may be stale relative to landed implementation. Update the tracker and session log only after
+that audit.
 
-The normal request-detail Utility uses the existing secondary/recommended-action treatment for active
-negative feedback rather than literal `New feedback` copy. Treat that wording as a product-polish
-decision only if pilot testing shows the cue is not clear enough.
+### Completed Feedback-Loop Follow-on
+
+The feedback-review operational loop is implemented in commit `315b231` following Build 084. Build
+085 is the implementation record and is complete. Verified 2026-07-14: 1,073 unit tests, 14
+architecture tests, TypeScript clean on both `ophalo-app` and `ophalo-web`. No open code gaps remain.
 
 ### Recent Completed Work
 
@@ -139,9 +141,8 @@ Completed implementation details live in the build logs and should not be repeat
 
 Remaining pre-deployment work lives in separate build logs:
 
-1. `docs/build-log/085-feedback-review-operational-loop.md` — active feedback review operational
-   loop and accountability-trail work.
-2. `docs/build-log/077-pre-deployment-cleanup-and-file-decomposition.md` — pre-deployment cleanup.
+1. `docs/build-log/085-feedback-review-operational-loop.md` — **complete** (commit `315b231`, verified 2026-07-14).
+2. `docs/build-log/077-pre-deployment-cleanup-and-file-decomposition.md` — pre-deployment cleanup (deferred file decomposition items).
 
 ---
 
