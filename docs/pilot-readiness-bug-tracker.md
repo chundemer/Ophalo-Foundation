@@ -3,8 +3,8 @@
 **Created:** 2026-07-02
 **Purpose:** Live tracker for pilot-blocking or pilot-relevant bugs/gaps discovered during Session 14.
 **Source:** Promoted from the Pre-S14e bug register in `docs/build-log/068-session-14-ophalo-web-front-door.md`.
-**Current active item:** GAP-012 through GAP-014 — closed request follow-up path and feedback visibility.
-**Recently resolved:** GAP-011 — External contact logging duplicated and closeout rows over-prune communication actions (S24k).
+**Current active item:** None — feedback review operational loop implemented; closeout verification pending.
+**Recently resolved:** GAP-015 — feedback review operational loop and accountability trail (commit `315b231`).
 **Previously resolved:** GAP-010 — Ready to Close rows leaked communication next-actions (S24j).
 
 This document is the current working tracker. Historical discovery notes stay in the build logs, but
@@ -27,6 +27,10 @@ work-completed rows should guide closeout without hiding legitimate post-work co
 GAP-012 through GAP-014 were found during pilot app testing after feedback/closeout review:
 Closed requests need a follow-up-request path instead of reopen, customer feedback needs an explicit
 submitted state, and authenticated request detail needs a visible feedback card/state.
+
+GAP-015 was identified after reviewing the completed Build 084 interaction: the existing feedback
+model and review mutation work, but feedback-review entry context, clearing behavior, and the
+customer-feedback activity record need to form one clear Owner/Admin workflow.
 
 ## Status Legend
 
@@ -536,6 +540,38 @@ Acceptance criteria:
 - Positive feedback is visible as feedback submitted, without creating false active work.
 - Operators/Viewers receive only the feedback metadata/comment visibility allowed by ADR-151/ADR-263.
 - PWA typecheck passes.
+
+### GAP-015 — Feedback review lacks a complete operational loop
+
+**Status:** Implemented — commit `315b231`; closeout verification pending
+**Severity:** P1
+**Area:** `ophalo-app` request list/detail, `ophalo-web` customer tracker, Keep feedback activity
+**Decision:** Build 085 locked direction; preserve ADR-135, ADR-263, ADR-264, and ADR-269 behavior
+
+Build 084 made customer feedback visible and preserved the underlying review mutation, but pilot
+operation still lacks a consistent review journey: opening an item from Feedback Review does not make
+feedback the main task, reviewed negative feedback remains in Utilities, and All Activity has a
+review event without a corresponding customer-feedback-received event.
+
+Required fix:
+
+- Opening a row from Feedback Review promotes unreviewed negative feedback above Activity; normal
+  request navigation keeps it as a subtly highlighted Utility.
+- Owner/Admin acknowledgement remains one-click and removes active negative feedback from both
+  surfaces, queue, and count, with a short confirmation.
+- Positive feedback remains display-only in Utilities.
+- Persist an internal `feedback_received` activity event separately from `feedback_reviewed`.
+- Return the saved public feedback comment in the immediate successful submission response as well as
+  on a later revisit.
+
+Acceptance criteria:
+
+- Feedback Review opens directly into the focused review state.
+- Review clears active feedback presentation without deleting original feedback or reopening work.
+- Authenticated All Activity shows separate received/reviewed accountability events.
+- Customer recap remains consistent immediately after submission and on revisit.
+- Existing authorization, optimistic concurrency, visibility, and public-token boundaries remain
+  intact.
 
 ## Resolved During Session 22
 

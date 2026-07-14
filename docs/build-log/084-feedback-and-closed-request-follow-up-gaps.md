@@ -155,19 +155,18 @@ Tests:
 ### S84e — Closeout docs
 - Build log, session log, and bug tracker updated.
 
+### Follow-on scope
+
+Build 084 is complete. The subsequent feedback-review operational-loop enhancements are intentionally
+tracked separately in `docs/build-log/085-feedback-review-operational-loop.md`; they do not reopen
+GAP-012/013/014 or require a new feedback schema.
+
 ---
 
 ## Deferred
 
 - Native mobile follow-up completion (post-pilot).
 - Planned For completion workflow (post-pilot).
-
----
-
-### S84e — Closeout docs (original placeholder)
-
-Goal: update this build log, session log, and bug tracker statuses with landed scope and deferred
-items.
 
 ---
 

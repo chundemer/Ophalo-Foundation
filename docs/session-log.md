@@ -1,10 +1,10 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-07-13 (Session 30 complete — GAP-012/013/014)
+**Last updated:** 2026-07-14 (Session 30 feedback-loop follow-on landed; documentation reconciled)
 **Branch:** `main` tracking `origin/main`
 **Last green baseline:** S84e — 1,069 unit tests passed, 14 architecture tests passed (not re-run this session); ophalo-app and ophalo-web TypeScript clean
 **Next free ADR:** ADR-442
-**Current session:** Session 30 — Build 084 feedback visibility and Closed request follow-up gaps
+**Current session:** No active implementation session — verify Build 085 closeout before selecting new work
 
 ---
 
@@ -34,6 +34,7 @@ For every implementation slice:
 
 ## Current Work
 
+**Follow-on implementation record:** `docs/build-log/085-feedback-review-operational-loop.md`
 **Completed build log:** `docs/build-log/084-feedback-and-closed-request-follow-up-gaps.md`
 **Completed build log:** `docs/build-log/078-customer-tracker-link-email-and-resend-configuration.md`
 **Latest completed build logs:** `docs/build-log/083-session-26-follow-up-and-planned-promise-workflow-draft.md`, `docs/build-log/082-session-25-share-request-link-drawer.md`, `docs/build-log/077-pre-deployment-cleanup-and-file-decomposition.md`
@@ -41,72 +42,16 @@ For every implementation slice:
 **Bug/gap tracker:** `docs/pilot-readiness-bug-tracker.md`
 **Foundation roadmap:** `docs/build-log/ophalo-foundation-build-plan-greenfield-boundaries-brownfield-behavior.md` section 9.1
 
-### Session 30 Goal
+### Current Feedback-Loop State
 
-Implement the pilot feedback/closed-request gaps from the tracker:
+The feedback-review operational loop is implemented in commit `315b231` (following Build 084). The
+implementation records customer feedback receipt, promotes unreviewed negative feedback when entered
+from Feedback Review, clears active feedback on Owner/Admin review, and preserves separate activity
+events. Build 085 records the locked product behavior and implementation evidence.
 
-- **GAP-013:** customer feedback submission needs a clear submitted state.
-- **GAP-014:** authenticated request detail needs a visible submitted-feedback card/state.
-- **GAP-012:** Closed requests need a new follow-up-work path without reopening the original request.
-
-Product direction:
-
-- Feedback remains binary and resolution-oriented in V1: `Yes, this was resolved` / `No, I still
-  need help`.
-- No ratings, stars, CSAT/NPS, public reviews, or testimonials.
-- Customer feedback submission must show a clear submitted state and must not reveal internal review
-  state.
-- Staff request detail must show submitted feedback according to existing role/visibility rules.
-- Negative feedback should be hard for Owner/Admin to miss and route to the existing review action.
-- Positive feedback should be visible as a completed signal without creating false active work.
-- Closed requests should not get a general V1 `Reopen` action unless a new ADR changes the lifecycle
-  model.
-- Preferred Closed-request direction is `Create follow-up request`; a lighter `Copy request info`
-  utility may be acceptable if full prefill is too large for the pilot slice.
-
-### Session 30 Slice Plan
-
-Use targeted preflight before each slice. Keep the hard slice gate unless Christian explicitly
-splits or expands the work: at most 3 mutation families, 8 production files, and 12 total changed
-files including tests/docs.
-
-1. **S84a — Preflight and GAP-012 product decision**
-   - Decide whether V1 implements full `Create follow-up request`, lighter `Copy request info`, or
-     documented deferral for Closed request follow-up work.
-   - Inspect closed request detail actions, Quick Capture/business-created request prefill seams, and
-     any existing backend relation/internal-note support.
-   - Present the file-level gate before implementation.
-
-2. **S84b — Customer feedback submitted state**
-   - Replace the customer tracker feedback form with an explicit submitted state after success.
-   - Render submitted state from server feedback fields on refresh/direct revisit when available.
-   - Preserve binary resolved/unresolved semantics and customer-safe duplicate/error states.
-
-3. **S84c — Authenticated request detail feedback card/state**
-   - Add or correct request-detail feedback visibility.
-   - Show positive feedback quietly, negative feedback prominently, and reviewed metadata where
-     allowed.
-   - Render `Mark feedback reviewed` only when server metadata allows it.
-
-4. **S84d — Closed request follow-up path**
-   - Implement the smallest path locked in S84a, if selected for this session.
-   - Preserve the original Closed request lifecycle, feedback, closeout history, and customer page
-     state.
-   - Respect public-token and visibility boundaries for copied/prefilled data.
-
-5. **S84e — Closeout docs**
-   - Update Build 084, session log, and bug tracker statuses with landed scope and deferred items.
-
-### Session 30 Hard Boundaries
-
-- No feedback ratings, stars, CSAT/NPS, public reviews, or testimonials.
-- No internal attention/review state on the customer tracker page.
-- No automatic reopen from feedback.
-- No general `Reopen` action for Closed requests in V1.
-- No customer-visible implication that old Closed requests have reopened.
-- No public-token leakage or visibility expansion through copied/prefilled follow-up data.
-- Preserve fail-closed account, membership, row/action-policy, and public-token behavior.
-- Preserve feedback comment/review visibility from ADR-151, ADR-263, ADR-271, and ADR-384.
+The normal request-detail Utility uses the existing secondary/recommended-action treatment for active
+negative feedback rather than literal `New feedback` copy. Treat that wording as a product-polish
+decision only if pilot testing shows the cue is not clear enough.
 
 ### Recent Completed Work
 
@@ -194,8 +139,8 @@ Completed implementation details live in the build logs and should not be repeat
 
 Remaining pre-deployment work lives in separate build logs:
 
-1. `docs/build-log/084-feedback-and-closed-request-follow-up-gaps.md` — feedback visibility and
-   Closed request follow-up gaps.
+1. `docs/build-log/085-feedback-review-operational-loop.md` — active feedback review operational
+   loop and accountability-trail work.
 2. `docs/build-log/077-pre-deployment-cleanup-and-file-decomposition.md` — pre-deployment cleanup.
 
 ---
