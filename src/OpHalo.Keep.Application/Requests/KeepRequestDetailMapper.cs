@@ -278,10 +278,11 @@ internal static class KeepRequestDetailMapper
 
     private static KeepRequestEventItem MapEvent(KeepRequestEvent e)
     {
-        var isContact       = e.EventType == KeepRequestEventType.ExternalContactLogged;
-        var isParticipation = e.EventType == KeepRequestEventType.ParticipationChanged;
-        var isPlannedFor    = e.EventType == KeepRequestEventType.PlannedForChanged;
-        var isFollowUpOn    = e.EventType == KeepRequestEventType.FollowUpOnChanged;
+        var isContact          = e.EventType == KeepRequestEventType.ExternalContactLogged;
+        var isParticipation    = e.EventType == KeepRequestEventType.ParticipationChanged;
+        var isPlannedFor       = e.EventType == KeepRequestEventType.PlannedForChanged;
+        var isFollowUpOn       = e.EventType == KeepRequestEventType.FollowUpOnChanged;
+        var isFeedbackReceived = e.EventType == KeepRequestEventType.FeedbackReceived;
         return new(
             e.Id,
             MapEventType(e.EventType),
@@ -311,7 +312,8 @@ internal static class KeepRequestDetailMapper
             isParticipation ? e.ParticipationInternalNote : null,
             isPlannedFor ? e.PlannedForDate : null,
             isFollowUpOn ? e.FollowUpOnDate : null,
-            isFollowUpOn && e.FollowUpOnReason.HasValue ? MapFollowUpReason(e.FollowUpOnReason.Value) : null);
+            isFollowUpOn && e.FollowUpOnReason.HasValue ? MapFollowUpReason(e.FollowUpOnReason.Value) : null,
+            isFeedbackReceived ? e.FeedbackWasResolved : null);
     }
 
     private static string MapOrigin(KeepRequestOrigin origin) => origin switch
@@ -409,6 +411,7 @@ internal static class KeepRequestDetailMapper
         KeepRequestEventType.ServiceLocationChanged  => "service_location_changed",
         KeepRequestEventType.BusinessPriorityChanged => "business_priority_changed",
         KeepRequestEventType.FollowUpResolved        => "follow_up_resolved",
+        KeepRequestEventType.FeedbackReceived        => "feedback_received",
         _ => throw new InvalidOperationException($"Unknown KeepRequestEventType: {type}")
     };
 

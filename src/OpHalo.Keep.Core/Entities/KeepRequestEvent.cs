@@ -62,6 +62,9 @@ public sealed class KeepRequestEvent : BaseEntity
     public bool ExternalContactSetFirstResponse { get; private set; }
     public bool ExternalContactClearedAttention { get; private set; }
 
+    // Present on FeedbackReceived events only — records whether the customer said the request was resolved.
+    public bool? FeedbackWasResolved { get; private set; }
+
     public static KeepRequestEvent CreateRequestCreated(
         Guid requestId,
         Guid accountId,
@@ -359,6 +362,41 @@ public sealed class KeepRequestEvent : BaseEntity
             ActorType = ActorType.AccountUser,
             ActorAccountUserId = actorAccountUserId,
             ActorDisplayName = actorDisplayName.Trim(),
+            OccurredAtUtc = occurredAtUtc
+        };
+    }
+
+    /// <summary>
+    /// Creates a FeedbackReceived event. Always Internal — never customer-visible.
+    /// Stores the customer's resolution answer (FeedbackWasResolved) and optional trimmed
+    /// comment (Content). ActorType = Customer; ActorAccountUserId and ActorDisplayName are null
+    /// because feedback is anonymous at the event level.
+    /// </summary>
+    public static KeepRequestEvent CreateFeedbackReceived(
+        Guid requestId,
+        Guid accountId,
+        bool wasResolved,
+        string? comment,
+        DateTime occurredAtUtc)
+    {
+        if (requestId == Guid.Empty)
+            throw new ArgumentException("Request ID is required.", nameof(requestId));
+        if (accountId == Guid.Empty)
+            throw new ArgumentException("Account ID is required.", nameof(accountId));
+        if (occurredAtUtc == default)
+            throw new ArgumentException("occurredAtUtc must be a real timestamp.", nameof(occurredAtUtc));
+
+        return new KeepRequestEvent
+        {
+            RequestId = requestId,
+            AccountId = accountId,
+            EventType = KeepRequestEventType.FeedbackReceived,
+            Visibility = KeepRequestEventVisibility.Internal,
+            Content = string.IsNullOrWhiteSpace(comment) ? null : comment.Trim(),
+            ActorType = ActorType.Customer,
+            ActorAccountUserId = null,
+            ActorDisplayName = null,
+            FeedbackWasResolved = wasResolved,
             OccurredAtUtc = occurredAtUtc
         };
     }

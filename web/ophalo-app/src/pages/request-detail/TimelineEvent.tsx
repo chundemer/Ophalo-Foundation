@@ -17,6 +17,7 @@ const COMMUNICATION_EVENT_TYPES = new Set([
   "external_contact_logged",
   "share_intent_recorded",
   "feedback_reviewed",
+  "feedback_received",
   "request_closed",
   "request_cancelled",
 ]);
@@ -39,6 +40,7 @@ const EVENT_ICON_MAP: Record<string, EventIconConfig> = {
   external_contact_logged: { Icon: Phone,          bgClass: "bg-[var(--keep-accent-bg)]",      iconClass: "text-[var(--keep-accent)]" },
   share_intent_recorded:   { Icon: Share2,         bgClass: "bg-[var(--keep-info-bg)]",        iconClass: "text-[var(--keep-info)]" },
   feedback_reviewed:       { Icon: Check,          bgClass: "bg-[var(--ophalo-success-bg)]",   iconClass: "text-[var(--ophalo-success)]" },
+  feedback_received:       { Icon: MessageSquare,  bgClass: "bg-[var(--ophalo-canvas)]",       iconClass: "text-[var(--ophalo-muted)]" },
   request_created:         { Icon: Clock,          bgClass: "bg-[var(--ophalo-canvas)]",       iconClass: "text-[var(--ophalo-muted)]" },
   request_closed:          { Icon: Check,          bgClass: "bg-[var(--ophalo-success-bg)]",   iconClass: "text-[var(--ophalo-success)]" },
   request_cancelled:       { Icon: X,              bgClass: "bg-[var(--ophalo-canvas)]",       iconClass: "text-[var(--ophalo-muted)]" },
@@ -120,6 +122,10 @@ function timelineEventSummary(event: KeepRequestEventItem): string | null {
   }
   if (event.eventType === "attention_acknowledged") return "Attention acknowledged";
   if (event.eventType === "share_intent_recorded") return "Customer page shared with customer";
+  if (event.eventType === "feedback_received") {
+    if (event.feedbackWasResolved === true) return "Customer confirmed request was resolved";
+    if (event.feedbackWasResolved === false) return "Customer reported request was not resolved";
+  }
   if (event.eventType === "planned_for_changed") {
     return event.plannedForDate
       ? `Planned date set to ${formatDateOnly(event.plannedForDate)}`

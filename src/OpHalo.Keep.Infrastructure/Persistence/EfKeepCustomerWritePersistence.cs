@@ -33,8 +33,9 @@ public sealed class EfKeepCustomerWritePersistence(OpHaloDbContext dbContext) : 
         }
     }
 
-    public async Task<KeepRequestCommitResult> CommitFeedbackAsync(KeepRequest request, CancellationToken ct)
+    public async Task<KeepRequestCommitResult> CommitFeedbackAsync(KeepRequest request, KeepRequestEvent feedbackEvent, CancellationToken ct)
     {
+        dbContext.Set<KeepRequestEvent>().Add(feedbackEvent);
         request.RotateConcurrencyVersion();
         try
         {

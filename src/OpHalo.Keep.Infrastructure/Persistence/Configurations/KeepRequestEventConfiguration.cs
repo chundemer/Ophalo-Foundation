@@ -94,6 +94,9 @@ internal sealed class KeepRequestEventConfiguration : BaseEntityConfiguration<Ke
             .HasConversion<string>()
             .HasMaxLength(50);
 
+        // Feedback received field — present on FeedbackReceived events only.
+        builder.Property(x => x.FeedbackWasResolved);
+
         // Participation fields — present on ParticipationChanged events only (ADR-234).
         builder.Property(x => x.ParticipationAction)
             .HasConversion<string>()

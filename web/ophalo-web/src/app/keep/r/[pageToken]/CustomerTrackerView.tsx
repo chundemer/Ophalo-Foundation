@@ -172,9 +172,12 @@ export function CustomerTrackerView({
       );
       if (res.ok) {
         const updated: unknown = await res.json().catch(() => null);
-        if (updated != null && typeof updated === "object") setPage(updated as CustomerPageData);
-        setComment("");
-        setWasResolved(null);
+        if (updated != null && typeof updated === "object") {
+          const updatedPage = updated as CustomerPageData;
+          setPage(updatedPage);
+          setWasResolved(updatedPage.feedbackWasResolved ?? null);
+          setComment(updatedPage.feedbackComment ?? "");
+        }
         setPhase({ kind: "feedback_sent" });
         return;
       }

@@ -42,7 +42,7 @@ public sealed class SubmitFeedbackService(
         if (!domainResult.IsSuccess)
             return Result<KeepCustomerPageResult>.Failure(domainResult.Error);
 
-        var commitResult = await persistence.CommitFeedbackAsync(request, ct);
+        var commitResult = await persistence.CommitFeedbackAsync(request, domainResult.Value, ct);
         switch (commitResult)
         {
             case KeepRequestCommitResult.Committed:
@@ -86,6 +86,7 @@ public sealed class SubmitFeedbackService(
         {
             Version = request.ConcurrencyVersion,
             FeedbackWasResolved = request.FeedbackWasResolved,
+            FeedbackComment = request.FeedbackComment,
             FeedbackSubmittedAtUtc = request.FeedbackSubmittedAtUtc
         };
 

@@ -353,4 +353,62 @@ public class KeepRequestFeedbackReviewTests
         var expected = submitted.AddHours(72);
         Assert.Equal(expected, FeedbackReviewPolicy.ComputeReviewDueAtUtc(submitted));
     }
+
+    // -----------------------------------------------------------------------
+    // SubmitFeedback — FeedbackReceived event
+    // -----------------------------------------------------------------------
+
+    static KeepRequest ClosedRequest()
+    {
+        var r = KeepRequest.CreateFromCustomerIntake(AccountId, CustomerId, "Alice", "555-0001", null, "Desc", "REF001",
+            "tok_" + Guid.NewGuid().ToString("N"), BaseTime.AddHours(-48), 60);
+        r.ChangeStatus(KeepRequestStatus.Resolved, null, ActorId, ActorName, BaseTime.AddHours(-24));
+        r.ChangeStatus(KeepRequestStatus.Closed, null, ActorId, ActorName, BaseTime.AddHours(-20));
+        return r;
+    }
+
+    [Fact]
+    public void SubmitFeedback_returns_FeedbackReceived_event_with_wasResolved_false_and_comment()
+    {
+        var r = ClosedRequest();
+        var result = r.SubmitFeedback(wasResolved: false, comment: "Still leaking.", priorityResponseTargetMinutes: 60, BaseTime);
+
+        Assert.True(result.IsSuccess);
+        var ev = result.Value;
+        Assert.Equal(KeepRequestEventType.FeedbackReceived, ev.EventType);
+        Assert.Equal(KeepRequestEventVisibility.Internal, ev.Visibility);
+        Assert.Equal(ActorType.Customer, ev.ActorType);
+        Assert.Null(ev.ActorAccountUserId);
+        Assert.Null(ev.ActorDisplayName);
+        Assert.False(ev.FeedbackWasResolved);
+        Assert.Equal("Still leaking.", ev.Content);
+        Assert.Equal(BaseTime, ev.OccurredAtUtc);
+    }
+
+    [Fact]
+    public void SubmitFeedback_returns_FeedbackReceived_event_with_wasResolved_true_and_null_comment()
+    {
+        var r = ClosedRequest();
+        var result = r.SubmitFeedback(wasResolved: true, comment: null, priorityResponseTargetMinutes: 60, BaseTime);
+
+        Assert.True(result.IsSuccess);
+        var ev = result.Value;
+        Assert.Equal(KeepRequestEventType.FeedbackReceived, ev.EventType);
+        Assert.True(ev.FeedbackWasResolved);
+        Assert.Null(ev.Content);
+        Assert.Equal(ActorType.Customer, ev.ActorType);
+    }
+
+    [Fact]
+    public void MarkFeedbackReviewed_event_content_holds_note_not_customer_comment()
+    {
+        var r = EligibleRequest();
+        var reviewResult = r.MarkFeedbackReviewed(note: "Called customer back.", ActorId, ActorName, BaseTime);
+
+        Assert.True(reviewResult.IsSuccess);
+        var reviewEvent = reviewResult.Value;
+        Assert.Equal(KeepRequestEventType.FeedbackReviewed, reviewEvent.EventType);
+        Assert.Equal("Called customer back.", reviewEvent.Content);
+        Assert.Null(reviewEvent.FeedbackWasResolved);
+    }
 }

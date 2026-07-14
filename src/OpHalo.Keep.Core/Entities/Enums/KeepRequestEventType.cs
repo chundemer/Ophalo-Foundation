@@ -19,5 +19,6 @@ public enum KeepRequestEventType
     ShareIntentRecorded = 15,
     ServiceLocationChanged = 16,
     BusinessPriorityChanged = 17,
-    FollowUpResolved = 18
+    FollowUpResolved = 18,
+    FeedbackReceived = 19
 }

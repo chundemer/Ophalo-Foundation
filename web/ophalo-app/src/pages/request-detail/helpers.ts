@@ -15,6 +15,7 @@ export const EVENT_TYPE_LABELS: Record<string, string> = {
   external_contact_logged: "External contact",
   participation_changed: "Team update",
   feedback_reviewed: "Feedback reviewed",
+  feedback_received: "Customer feedback",
   follow_up_on_changed: "Follow-up timing",
   planned_for_changed: "Planned date",
   request_classified: "Request classified",

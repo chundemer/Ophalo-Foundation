@@ -252,7 +252,8 @@ export function Requests({ role, viewCounts, onViewCountsUpdate, onSelectRequest
     const ids = isAvailableTab
       ? (availableQuery.data?.requests ?? []).map((r) => r.requestId)
       : (listQuery.data?.requests ?? []).map((r) => r.id);
-    onSelectRequest(id, { requestIds: ids });
+    const focus = activeTab.id === "feedback_review" ? "feedback_review" : undefined;
+    onSelectRequest(id, { requestIds: ids }, focus);
   }
 
   function handleRowSelectFocused(id: string, focus: string) {

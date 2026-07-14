@@ -101,6 +101,8 @@ internal static class KeepCustomerPageMapper
         KeepRequestEventType.RequestCancelled      => "request_cancelled",
         KeepRequestEventType.InternalNoteAdded     => "internal_note_added",
         KeepRequestEventType.AttentionAcknowledged => "attention_acknowledged",
+        // FeedbackReceived is Internal — filtered before MapEvent is called; handled defensively.
+        KeepRequestEventType.FeedbackReceived      => "feedback_received",
         _ => throw new InvalidOperationException($"Unknown KeepRequestEventType: {type}")
     };
 

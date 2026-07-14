@@ -525,7 +525,7 @@ public sealed class KeepRequest : BaseEntity
     /// Comment is optional even when wasResolved = false (ADR-135).
     /// Comment max length: 2000 characters.
     /// </summary>
-    public Result SubmitFeedback(
+    public Result<KeepRequestEvent> SubmitFeedback(
         bool wasResolved,
         string? comment,
         int priorityResponseTargetMinutes,
@@ -535,15 +535,15 @@ public sealed class KeepRequest : BaseEntity
             throw new ArgumentException("nowUtc must be a valid UTC timestamp.", nameof(nowUtc));
 
         if (Status != KeepRequestStatus.Closed)
-            return Result.Failure(KeepRequestErrors.FeedbackUnavailable);
+            return Result<KeepRequestEvent>.Failure(KeepRequestErrors.FeedbackUnavailable);
 
         if (FeedbackSubmittedAtUtc.HasValue)
-            return Result.Failure(KeepRequestErrors.FeedbackAlreadySubmitted);
+            return Result<KeepRequestEvent>.Failure(KeepRequestErrors.FeedbackAlreadySubmitted);
 
         var trimmedComment = string.IsNullOrWhiteSpace(comment) ? null : comment.Trim();
 
         if (trimmedComment?.Length > 2000)
-            return Result.Failure(KeepRequestErrors.FeedbackCommentTooLong);
+            return Result<KeepRequestEvent>.Failure(KeepRequestErrors.FeedbackCommentTooLong);
 
         FeedbackWasResolved = wasResolved;
         FeedbackComment = trimmedComment;
@@ -561,7 +561,8 @@ public sealed class KeepRequest : BaseEntity
             NextAttentionAtUtc = nowUtc.AddMinutes(priorityResponseTargetMinutes);
         }
 
-        return Result.Success();
+        var feedbackEvent = KeepRequestEvent.CreateFeedbackReceived(Id, AccountId, wasResolved, trimmedComment, nowUtc);
+        return Result<KeepRequestEvent>.Success(feedbackEvent);
     }
 
     /// <summary>

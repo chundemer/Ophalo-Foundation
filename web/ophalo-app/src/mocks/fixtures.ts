@@ -226,6 +226,7 @@ function ev(
     plannedForDate: null,
     followUpOnDate: null,
     followUpOnReason: null,
+    feedbackWasResolved: null,
     ...overrides,
   };
 }

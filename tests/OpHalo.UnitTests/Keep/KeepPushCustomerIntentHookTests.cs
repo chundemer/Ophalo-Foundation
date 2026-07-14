@@ -240,7 +240,7 @@ public class KeepPushCustomerIntentHookTests
         public Task<KeepRequestCommitResult> CommitAsync(KeepRequest r, KeepRequestEvent e, CancellationToken ct) =>
             Task.FromResult(KeepRequestCommitResult.Committed);
 
-        public Task<KeepRequestCommitResult> CommitFeedbackAsync(KeepRequest r, CancellationToken ct) =>
+        public Task<KeepRequestCommitResult> CommitFeedbackAsync(KeepRequest r, KeepRequestEvent e, CancellationToken ct) =>
             Task.FromResult(KeepRequestCommitResult.Committed);
 
         public Task<IReadOnlyList<KeepRequestEvent>> GetCustomerVisibleEventsAsync(Guid requestId, CancellationToken ct) =>

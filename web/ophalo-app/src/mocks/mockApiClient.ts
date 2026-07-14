@@ -114,6 +114,7 @@ function appendEvent(
     plannedForDate: event.plannedForDate ?? null,
     followUpOnDate: event.followUpOnDate ?? null,
     followUpOnReason: event.followUpOnReason ?? null,
+    feedbackWasResolved: event.feedbackWasResolved ?? null,
   };
   return {
     ...d,
@@ -323,6 +324,7 @@ export function installMockApi(): void {
           plannedForDate: null,
           followUpOnDate: null,
           followUpOnReason: null,
+          feedbackWasResolved: null,
         },
       ],
       availableActions: { ...OWNER_ACTIONS },

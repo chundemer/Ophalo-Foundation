@@ -410,16 +410,35 @@ public sealed class KeepFeedbackReviewApiTests : IClassFixture<KeepApiWebFactory
         var requests = body.GetProperty("requests").EnumerateArray().ToList();
         Assert.NotEmpty(requests);
 
+        // The view now includes all closed rows with any feedback (positive + reviewed appear
+        // quietly alongside unreviewed negative). Only unreviewed negative rows carry aging metadata.
         Assert.All(requests, row =>
         {
-            // ageBucket must be a non-null string from the known set.
+            var wasResolved = row.GetProperty("feedbackWasResolved");
+            var rowCtx = row.GetProperty("rowContext").GetString();
             var bucketProp = row.GetProperty("feedbackReviewAgeBucket");
-            Assert.Equal(JsonValueKind.String, bucketProp.ValueKind);
-            Assert.Contains(bucketProp.GetString(), new[] { "new", "aging", "overdue" });
+            var dueProp = row.GetProperty("feedbackReviewDueAtUtc");
 
-            // dueAtUtc must be a non-null datetime string.
-            Assert.Equal(JsonValueKind.String, row.GetProperty("feedbackReviewDueAtUtc").ValueKind);
+            // Active unreviewed-negative: rowContext == "feedback_review" and wasResolved == false.
+            if (wasResolved.ValueKind == JsonValueKind.False && rowCtx == "feedback_review")
+            {
+                Assert.Equal(JsonValueKind.String, bucketProp.ValueKind);
+                Assert.Contains(bucketProp.GetString(), new[] { "new", "aging", "overdue" });
+                Assert.Equal(JsonValueKind.String, dueProp.ValueKind);
+            }
+            else
+            {
+                // Positive or already-reviewed rows must not carry aging metadata.
+                Assert.Equal(JsonValueKind.Null, bucketProp.ValueKind);
+                Assert.Equal(JsonValueKind.Null, dueProp.ValueKind);
+            }
         });
+
+        // At least the 4 seeded unreviewed-negative rows must appear with aging metadata.
+        var activeCount = requests.Count(row =>
+            row.GetProperty("feedbackWasResolved").ValueKind == JsonValueKind.False
+            && row.GetProperty("rowContext").GetString() == "feedback_review");
+        Assert.True(activeCount >= 4, $"Expected ≥4 active unreviewed-negative rows, got {activeCount}.");
     }
 
     // =========================================================================

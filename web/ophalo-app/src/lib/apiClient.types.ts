@@ -202,6 +202,7 @@ export interface KeepRequestEventItem {
   plannedForDate: string | null;
   followUpOnDate: string | null;
   followUpOnReason: string | null;
+  feedbackWasResolved: boolean | null;
 }
 
 export interface KeepRequestNavigation {

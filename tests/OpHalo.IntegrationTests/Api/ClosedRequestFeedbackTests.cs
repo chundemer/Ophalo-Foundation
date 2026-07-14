@@ -160,10 +160,11 @@ public sealed class ClosedRequestFeedbackTests : IClassFixture<KeepApiWebFactory
         var persisted = await db.Set<KeepRequest>().AsNoTracking().FirstAsync(r => r.Id == _requestId);
         Assert.Equal(persisted.ConcurrencyVersion, responseVersion);
 
-        // Feedback creates no timeline event (ADR-137).
-        var eventCount = await db.Set<KeepRequestEvent>().AsNoTracking()
-            .CountAsync(e => e.RequestId == _requestId);
-        Assert.Equal(1, eventCount);
+        // Feedback now creates a FeedbackReceived internal event (supersedes ADR-137 no-event stance).
+        var events = await db.Set<KeepRequestEvent>().AsNoTracking()
+            .Where(e => e.RequestId == _requestId).ToListAsync();
+        Assert.Equal(2, events.Count);
+        Assert.Contains(events, e => e.EventType == KeepRequestEventType.FeedbackReceived);
     }
 
     // =========================================================================
@@ -491,6 +492,48 @@ public sealed class ClosedRequestFeedbackTests : IClassFixture<KeepApiWebFactory
         var eventCount = await db.Set<KeepRequestEvent>().AsNoTracking()
             .CountAsync(e => e.RequestId == _requestId);
         Assert.Equal(1, eventCount);
+    }
+
+    // =========================================================================
+    // Test — Immediate POST response includes feedbackComment
+    // =========================================================================
+
+    [Fact]
+    public async Task PostFeedback_WithComment_ResponseIncludesFeedbackComment()
+    {
+        const string comment = "The issue is still there.";
+        var response = await PostFeedback(new { wasResolved = false, comment }, _requestVersion);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(comment, body.GetProperty("feedbackComment").GetString());
+        Assert.False(body.GetProperty("feedbackWasResolved").GetBoolean());
+        Assert.NotEqual(JsonValueKind.Null, body.GetProperty("feedbackSubmittedAtUtc").ValueKind);
+    }
+
+    // =========================================================================
+    // Test — Feedback submission creates FeedbackReceived internal event
+    // =========================================================================
+
+    [Fact]
+    public async Task PostFeedback_NegativeFeedback_CreatesFeedbackReceivedEvent()
+    {
+        var response = await PostFeedback(new { wasResolved = false, comment = "Not fixed." }, _requestVersion);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        await using var scope = _factory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+
+        var events = await db.Set<KeepRequestEvent>().AsNoTracking()
+            .Where(e => e.RequestId == _requestId).ToListAsync();
+        var fbEvent = Assert.Single(events, e => e.EventType == KeepRequestEventType.FeedbackReceived);
+
+        Assert.Equal(KeepRequestEventVisibility.Internal, fbEvent.Visibility);
+        Assert.Equal(ActorType.Customer, fbEvent.ActorType);
+        Assert.Null(fbEvent.ActorAccountUserId);
+        Assert.False(fbEvent.FeedbackWasResolved);
+        Assert.Equal("Not fixed.", fbEvent.Content);
     }
 
     // =========================================================================

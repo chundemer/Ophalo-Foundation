@@ -189,12 +189,14 @@ interface FeedbackReviewSectionProps {
   requestId: string;
   detail: KeepRequestDetailResult;
   onDetailUpdated: (updated: KeepRequestDetailResult) => void;
+  onReviewSuccess?: () => void;
 }
 
 function FeedbackReviewSection({
   requestId,
   detail,
   onDetailUpdated,
+  onReviewSuccess,
 }: FeedbackReviewSectionProps) {
   const { canMarkFeedbackReviewed } = detail.availableActions;
   const { feedbackReviewNoteMaxLength } = detail.validation;
@@ -229,6 +231,7 @@ function FeedbackReviewSection({
         detail.version,
       );
       onDetailUpdated(updated);
+      onReviewSuccess?.();
     } catch (e) {
       if (e instanceof ApiError && e.status === 409) {
         setConflictDisabled(true);
@@ -295,45 +298,25 @@ function FeedbackReviewSection({
 // ---------------------------------------------------------------------------
 
 function FeedbackSummaryCard({ detail }: { detail: KeepRequestDetailResult }) {
-  if (!detail.feedbackSubmittedAtUtc) return null;
+  // Only positive feedback shows a summary card in Utilities.
+  // Unreviewed negative feedback appears in WorkControlsGroup (Utilities) or ProminentFeedbackCard (main column).
+  // Reviewed negative feedback is removed from Utilities entirely — it lives in the activity timeline.
+  if (detail.feedbackWasResolved !== true || !detail.feedbackSubmittedAtUtc) return null;
 
-  if (detail.feedbackWasResolved === true) {
-    return (
-      <div className="rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-5 py-4">
-        <p className="text-sm font-semibold text-[var(--ophalo-ink)]">Customer feedback</p>
-        <p className="mt-1 text-xs text-[var(--ophalo-muted)]">
-          Customer confirmed their request was resolved
-          {detail.feedbackSubmittedAtUtc ? ` on ${formatDate(detail.feedbackSubmittedAtUtc)}` : ""}.
+  return (
+    <div className="rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-5 py-4">
+      <p className="text-sm font-semibold text-[var(--ophalo-ink)]">Customer feedback</p>
+      <p className="mt-1 text-xs text-[var(--ophalo-muted)]">
+        Customer confirmed their request was resolved
+        {detail.feedbackSubmittedAtUtc ? ` on ${formatDate(detail.feedbackSubmittedAtUtc)}` : ""}.
+      </p>
+      {detail.feedbackCommentVisible && detail.feedbackComment && (
+        <p className="mt-1.5 text-xs text-[var(--ophalo-muted)] italic">
+          &ldquo;{detail.feedbackComment}&rdquo;
         </p>
-        {detail.feedbackCommentVisible && detail.feedbackComment && (
-          <p className="mt-1.5 text-xs text-[var(--ophalo-muted)] italic">
-            &ldquo;{detail.feedbackComment}&rdquo;
-          </p>
-        )}
-      </div>
-    );
-  }
-
-  if (detail.feedbackWasResolved === false && detail.feedbackReviewedAtUtc != null) {
-    return (
-      <div className="rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-5 py-4">
-        <p className="text-sm font-semibold text-[var(--ophalo-ink)]">Negative feedback reviewed</p>
-        <p className="mt-1 text-xs text-[var(--ophalo-muted)]">
-          Marked reviewed on {formatDate(detail.feedbackReviewedAtUtc)}.
-        </p>
-        {detail.feedbackCommentVisible && detail.feedbackComment && (
-          <p className="mt-1.5 text-xs text-[var(--ophalo-muted)] italic">
-            &ldquo;{detail.feedbackComment}&rdquo;
-          </p>
-        )}
-        {detail.feedbackReviewNote && (
-          <p className="mt-1.5 text-xs text-[var(--ophalo-muted)]">Note: {detail.feedbackReviewNote}</p>
-        )}
-      </div>
-    );
-  }
-
-  return null;
+      )}
+    </div>
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -345,9 +328,10 @@ interface WorkControlsGroupProps {
   detail: KeepRequestDetailResult;
   onDetailUpdated: (updated: KeepRequestDetailResult) => void;
   highlights: AttentionHighlights;
+  onReviewSuccess?: () => void;
 }
 
-function WorkControlsGroup({ requestId, detail, onDetailUpdated, highlights }: WorkControlsGroupProps) {
+function WorkControlsGroup({ requestId, detail, onDetailUpdated, highlights, onReviewSuccess }: WorkControlsGroupProps) {
   const hasFeedback =
     detail.availableActions.canMarkFeedbackReviewed &&
     detail.feedbackWasResolved === false &&
@@ -368,8 +352,48 @@ function WorkControlsGroup({ requestId, detail, onDetailUpdated, highlights }: W
         <div className="mb-2 flex justify-end">
           <RecommendedActionBadge level={highlights.feedbackReview} />
         </div>
-        <FeedbackReviewSection requestId={requestId} detail={detail} onDetailUpdated={onDetailUpdated} />
+        <FeedbackReviewSection requestId={requestId} detail={detail} onDetailUpdated={onDetailUpdated} onReviewSuccess={onReviewSuccess} />
       </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Prominent feedback card — main column card shown when opened from Feedback Review tab
+// ---------------------------------------------------------------------------
+
+interface ProminentFeedbackCardProps {
+  requestId: string;
+  detail: KeepRequestDetailResult;
+  onDetailUpdated: (updated: KeepRequestDetailResult) => void;
+  onReviewSuccess: () => void;
+}
+
+function ProminentFeedbackCard({ requestId, detail, onDetailUpdated, onReviewSuccess }: ProminentFeedbackCardProps) {
+  const isUnreviewedNegative =
+    detail.availableActions.canMarkFeedbackReviewed &&
+    detail.feedbackWasResolved === false &&
+    detail.feedbackReviewedAtUtc == null;
+
+  if (!isUnreviewedNegative) return null;
+
+  return (
+    <div
+      id="focus-panel-feedback_review"
+      className="rounded-xl border border-[var(--ophalo-attention)] bg-[var(--ophalo-attention-bg)] px-5 py-4 scroll-mt-4 space-y-3"
+    >
+      <div className="flex items-start justify-between gap-2">
+        <p className="text-sm font-semibold text-[var(--ophalo-ink)]">Customer feedback</p>
+        <KeepBadge variant="attention">Needs review</KeepBadge>
+      </div>
+      <p className="text-xs text-[var(--ophalo-muted)]">
+        Customer reported their request was <strong>not resolved</strong>
+        {detail.feedbackSubmittedAtUtc ? ` on ${formatDate(detail.feedbackSubmittedAtUtc)}` : ""}.
+      </p>
+      {detail.feedbackCommentVisible && detail.feedbackComment && (
+        <p className="text-sm text-[var(--ophalo-ink)] italic">&ldquo;{detail.feedbackComment}&rdquo;</p>
+      )}
+      <FeedbackReviewSection requestId={requestId} detail={detail} onDetailUpdated={onDetailUpdated} onReviewSuccess={onReviewSuccess} />
     </div>
   );
 }
@@ -1168,6 +1192,8 @@ export function RequestDetail({ requestId, focusPanel, onBack, prevId, nextId, o
   const [businessUpdateDraft, setBusinessUpdateDraft] = useState("");
   const [businessUpdateDraftStatus, setBusinessUpdateDraftStatus] = useState("");
   const [timelineFilter, setTimelineFilter] = useState<TimelineFilter>("communication");
+  const [reviewSuccessMsg, setReviewSuccessMsg] = useState<string | null>(null);
+  const reviewSuccessTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const queryClient = useQueryClient();
 
   const { data: detail, isLoading, isError, error } = useQuery({
@@ -1226,7 +1252,18 @@ export function RequestDetail({ requestId, focusPanel, onBack, prevId, nextId, o
     };
   }, [detail, focusHighlights]);
 
-  const workControlsIsHighlighted = !!highlights.feedbackReview;
+  const showProminentFeedbackCard = focusPanel === "feedback_review" &&
+    !!detail &&
+    detail.feedbackWasResolved === false &&
+    detail.feedbackReviewedAtUtc == null &&
+    !!detail.availableActions.canMarkFeedbackReviewed;
+
+  function handleReviewSuccess() {
+    if (reviewSuccessTimerRef.current) clearTimeout(reviewSuccessTimerRef.current);
+    setReviewSuccessMsg("Feedback marked as reviewed.");
+    reviewSuccessTimerRef.current = setTimeout(() => setReviewSuccessMsg(null), 4000);
+    void queryClient.invalidateQueries({ queryKey: ["requests"] });
+  }
 
   function handleShareCleared() {
     setShareCleared(true);
@@ -1307,12 +1344,15 @@ export function RequestDetail({ requestId, focusPanel, onBack, prevId, nextId, o
           onDetailUpdated={handleDetailUpdated}
           highlight={highlights.markHandled}
         />
-        <WorkControlsGroup
-          requestId={requestId}
-          detail={detail}
-          onDetailUpdated={handleDetailUpdated}
-          highlights={highlights}
-        />
+        {!showProminentFeedbackCard && (
+          <WorkControlsGroup
+            requestId={requestId}
+            detail={detail}
+            onDetailUpdated={handleDetailUpdated}
+            highlights={{ feedbackReview: "secondary" }}
+            onReviewSuccess={handleReviewSuccess}
+          />
+        )}
         <FeedbackSummaryCard detail={detail} />
         {renderCreateFollowUpCard()}
       </>
@@ -1476,6 +1516,27 @@ export function RequestDetail({ requestId, focusPanel, onBack, prevId, nextId, o
               />
             </div>
 
+            {/* Prominent feedback card — only when opened from Feedback Review tab with unreviewed negative feedback */}
+            {showProminentFeedbackCard && (
+              <ProminentFeedbackCard
+                requestId={requestId}
+                detail={detail}
+                onDetailUpdated={handleDetailUpdated}
+                onReviewSuccess={handleReviewSuccess}
+              />
+            )}
+
+            {/* Inline review success toast */}
+            {reviewSuccessMsg && (
+              <div
+                role="status"
+                aria-live="polite"
+                className="rounded-xl border border-[var(--ophalo-success)] bg-[var(--ophalo-success-bg)] px-4 py-3 text-sm text-[var(--ophalo-success)] font-medium"
+              >
+                {reviewSuccessMsg}
+              </div>
+            )}
+
             {/* Activity timeline */}
             <div className="rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-5 py-5">
               <div className="flex items-center justify-between mb-4 gap-3">
@@ -1562,17 +1623,6 @@ export function RequestDetail({ requestId, focusPanel, onBack, prevId, nextId, o
                 highlight={highlights.markHandled}
               />
             </div>
-            {workControlsIsHighlighted && (
-              <div id="focus-panel-feedback_review">
-                <WorkControlsGroup
-                  requestId={requestId}
-                  detail={detail}
-                  onDetailUpdated={handleDetailUpdated}
-                  highlights={highlights}
-                />
-              </div>
-            )}
-
             {/* Context: customer, location, triage, timing */}
             <CustomerPanel detail={detail} onContactLaunched={handleContactLaunched} />
             <ServiceLocationPanel detail={detail} onDetailUpdated={handleDetailUpdated} />
@@ -1589,16 +1639,17 @@ export function RequestDetail({ requestId, focusPanel, onBack, prevId, nextId, o
               />
             </div>
 
-            {/* Utilities: feedback review, team, admin (classification deferred — no compact V1 UI) */}
+            {/* Utilities: feedback review (when not in focused mode), team, admin */}
             <div className="space-y-3">
               <p className="px-1 text-[10px] font-semibold uppercase tracking-widest text-[var(--ophalo-muted)]">Utilities</p>
-              {!workControlsIsHighlighted && (
-                <div id="focus-panel-feedback_review">
+              {!showProminentFeedbackCard && (
+                <div>
                   <WorkControlsGroup
                     requestId={requestId}
                     detail={detail}
                     onDetailUpdated={handleDetailUpdated}
-                    highlights={highlights}
+                    highlights={{ feedbackReview: "secondary" }}
+                    onReviewSuccess={handleReviewSuccess}
                   />
                   <FeedbackSummaryCard detail={detail} />
                 </div>
