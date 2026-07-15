@@ -1,17 +1,17 @@
-import type { ButtonHTMLAttributes, ReactNode } from "react";
+import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from "react";
 
 export type KeepButtonVariant = "teal" | "primary" | "secondary";
 
-export function KeepButton({
+export const KeepButton = forwardRef<
+  HTMLButtonElement,
+  ButtonHTMLAttributes<HTMLButtonElement> & { variant?: KeepButtonVariant; children: ReactNode }
+>(function KeepButton({
   variant = "teal",
   className = "",
   disabled,
   children,
   ...props
-}: ButtonHTMLAttributes<HTMLButtonElement> & {
-  variant?: KeepButtonVariant;
-  children: ReactNode;
-}) {
+}, ref) {
   const base =
     "inline-flex items-center justify-center rounded-lg px-5 font-semibold transition-colors min-h-[42px] text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-offset-2";
 
@@ -35,6 +35,7 @@ export function KeepButton({
 
   return (
     <button
+      ref={ref}
       disabled={disabled}
       className={`${base} ${variantClass} ${disabled ? "cursor-not-allowed" : "cursor-pointer"} ${className}`}
       {...props}
@@ -42,4 +43,4 @@ export function KeepButton({
       {children}
     </button>
   );
-}
+});

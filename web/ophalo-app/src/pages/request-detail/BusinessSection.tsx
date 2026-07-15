@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { api, ApiError, type KeepRequestDetailResult } from "../../lib/apiClient";
 import { KeepBadge } from "../../components/keep/KeepBadge";
 import { KeepButton } from "../../components/keep/KeepButton";
@@ -15,6 +15,8 @@ import { INPUT_CLS, statusLabel } from "./helpers";
 // Work Done card
 // ---------------------------------------------------------------------------
 
+const WORK_DONE_CONFIRM_TIMEOUT_MS = 8000;
+
 interface WorkDoneCardProps {
   requestId: string;
   detail: KeepRequestDetailResult;
@@ -26,16 +28,73 @@ export function WorkDoneCard({ requestId, detail, onDetailUpdated }: WorkDoneCar
     detail.availableActions.canChangeStatus &&
     detail.availableActions.allowedStatuses.includes("resolved") &&
     detail.status !== "resolved";
-  const isNormalPath = baseEligible && detail.attentionLevel === "none";
-  const isDemotedPath = baseEligible && detail.attentionLevel !== "none";
+  const hasAttention = detail.attentionLevel !== "none";
+  const isReceived = detail.status === "received";
+
+  // Three visual branches:
+  // normal:    no attention, not Received  → teal, "Primary action" badge
+  // received:  no attention, Received      → secondary, no badge
+  // attention: has attention               → secondary, "attention remains" copy
+  const isNormalPath = baseEligible && !hasAttention && !isReceived;
+  const isReceivedPath = baseEligible && !hasAttention && isReceived;
+  const isDemotedPath = baseEligible && hasAttention;
+
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [conflictDisabled, setConflictDisabled] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [confirming, setConfirming] = useState(false);
 
-  if (!isNormalPath && !isDemotedPath) return null;
+  const confirmBtnRef = useRef<HTMLButtonElement>(null);
+  const triggerBtnRef = useRef<HTMLButtonElement>(null);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const clearTimer = useCallback(() => {
+    if (timerRef.current !== null) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+  }, []);
+
+  const exitConfirming = useCallback((returnFocus: boolean) => {
+    clearTimer();
+    setConfirming(false);
+    if (returnFocus) {
+      triggerBtnRef.current?.focus();
+    }
+  }, [clearTimer]);
+
+  useEffect(() => {
+    if (!confirming) return;
+    confirmBtnRef.current?.focus();
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        exitConfirming(true);
+      }
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [confirming, exitConfirming]);
+
+  useEffect(() => {
+    return () => clearTimer();
+  }, [clearTimer]);
+
+  if (!isNormalPath && !isReceivedPath && !isDemotedPath) return null;
+
+  function enterConfirming() {
+    setConfirming(true);
+    clearTimer();
+    timerRef.current = setTimeout(() => {
+      setConfirming(false);
+      timerRef.current = null;
+    }, WORK_DONE_CONFIRM_TIMEOUT_MS);
+  }
 
   async function handleMarkDone() {
     if (isSubmitting || conflictDisabled) return;
+    clearTimer();
+    setConfirming(false);
     setIsSubmitting(true);
     setError(null);
     try {
@@ -57,6 +116,48 @@ export function WorkDoneCard({ requestId, detail, onDetailUpdated }: WorkDoneCar
     }
   }
 
+  function renderError() {
+    if (!error) return null;
+    return (
+      <div
+        aria-live="polite"
+        className={`mb-3 rounded-lg p-3 text-xs ${
+          conflictDisabled
+            ? "bg-[var(--ophalo-attention-bg)] text-[var(--ophalo-attention)]"
+            : "bg-[var(--ophalo-danger-bg)] text-[var(--ophalo-danger)]"
+        }`}
+      >
+        {error}
+      </div>
+    );
+  }
+
+  function renderConfirmation() {
+    return (
+      <div className="flex items-center gap-2">
+        <KeepButton
+          ref={confirmBtnRef}
+          type="button"
+          variant="teal"
+          disabled={isSubmitting}
+          onClick={() => void handleMarkDone()}
+          className="flex-1"
+        >
+          {isSubmitting ? "Saving…" : "Confirm"}
+        </KeepButton>
+        <KeepButton
+          type="button"
+          variant="secondary"
+          disabled={isSubmitting}
+          onClick={() => exitConfirming(true)}
+          className="flex-1"
+        >
+          Cancel
+        </KeepButton>
+      </div>
+    );
+  }
+
   if (isNormalPath) {
     return (
       <div className="rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-5 py-5">
@@ -69,27 +170,53 @@ export function WorkDoneCard({ requestId, detail, onDetailUpdated }: WorkDoneCar
           </div>
           <KeepBadge variant="success">Primary action</KeepBadge>
         </div>
-        {error && (
-          <div
-            aria-live="polite"
-            className={`mb-3 rounded-lg p-3 text-xs ${
-              conflictDisabled
-                ? "bg-[var(--ophalo-attention-bg)] text-[var(--ophalo-attention)]"
-                : "bg-[var(--ophalo-danger-bg)] text-[var(--ophalo-danger)]"
-            }`}
+        {renderError()}
+        {confirming ? (
+          <>
+            <p className="mb-2 text-sm font-medium text-[var(--ophalo-ink)]">Confirm work is done?</p>
+            {renderConfirmation()}
+          </>
+        ) : (
+          <KeepButton
+            ref={triggerBtnRef}
+            type="button"
+            variant="teal"
+            disabled={isSubmitting || conflictDisabled}
+            onClick={enterConfirming}
+            className="w-full"
           >
-            {error}
-          </div>
+            Mark work done
+          </KeepButton>
         )}
-        <KeepButton
-          type="button"
-          variant="teal"
-          disabled={isSubmitting || conflictDisabled}
-          onClick={() => void handleMarkDone()}
-          className="w-full"
-        >
-          {isSubmitting ? "Saving…" : "Mark work done"}
-        </KeepButton>
+      </div>
+    );
+  }
+
+  if (isReceivedPath) {
+    return (
+      <div className="rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-5 py-4 opacity-80">
+        <p className="text-sm font-semibold text-[var(--ophalo-ink)] mb-1">Mark work done</p>
+        <p className="text-xs leading-5 text-[var(--ophalo-muted)] mb-3">
+          This request hasn't been acted on yet. Mark work done only when the work has actually been performed.
+        </p>
+        {renderError()}
+        {confirming ? (
+          <>
+            <p className="mb-2 text-sm font-medium text-[var(--ophalo-ink)]">Confirm work is done?</p>
+            {renderConfirmation()}
+          </>
+        ) : (
+          <KeepButton
+            ref={triggerBtnRef}
+            type="button"
+            variant="secondary"
+            disabled={isSubmitting || conflictDisabled}
+            onClick={enterConfirming}
+            className="w-full"
+          >
+            Mark work done
+          </KeepButton>
+        )}
       </div>
     );
   }
@@ -101,27 +228,24 @@ export function WorkDoneCard({ requestId, detail, onDetailUpdated }: WorkDoneCar
       <p className="text-xs leading-5 text-[var(--ophalo-muted)] mb-3">
         This records that the work was performed, but this request still needs attention before it can be closed.
       </p>
-      {error && (
-        <div
-          aria-live="polite"
-          className={`mb-3 rounded-lg p-3 text-xs ${
-            conflictDisabled
-              ? "bg-[var(--ophalo-attention-bg)] text-[var(--ophalo-attention)]"
-              : "bg-[var(--ophalo-danger-bg)] text-[var(--ophalo-danger)]"
-          }`}
+      {renderError()}
+      {confirming ? (
+        <>
+          <p className="mb-2 text-sm font-medium text-[var(--ophalo-ink)]">Confirm work is done?</p>
+          {renderConfirmation()}
+        </>
+      ) : (
+        <KeepButton
+          ref={triggerBtnRef}
+          type="button"
+          variant="secondary"
+          disabled={isSubmitting || conflictDisabled}
+          onClick={enterConfirming}
+          className="w-full"
         >
-          {error}
-        </div>
+          Mark work done, attention remains
+        </KeepButton>
       )}
-      <KeepButton
-        type="button"
-        variant="secondary"
-        disabled={isSubmitting || conflictDisabled}
-        onClick={() => void handleMarkDone()}
-        className="w-full"
-      >
-        {isSubmitting ? "Saving…" : "Mark work done, attention remains"}
-      </KeepButton>
     </div>
   );
 }
