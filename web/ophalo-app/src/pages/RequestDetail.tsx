@@ -1515,9 +1515,9 @@ export function RequestDetail({ requestId, focusPanel, onBack, prevId, nextId, o
             </div>
           </div>
 
-          {/* Right context + action panel — desktop only */}
+          {/* Right panel — desktop only */}
           <aside className="hidden md:flex md:flex-col border-l border-[var(--ophalo-border)] bg-[var(--ophalo-card)] overflow-y-auto px-4 py-5 gap-4">
-            {/* Lifecycle actions: work completion and closeout */}
+            {/* Actions: lifecycle, contact, timing, follow-up work */}
             <WorkDoneCard
               requestId={requestId}
               detail={detail}
@@ -1530,7 +1530,6 @@ export function RequestDetail({ requestId, focusPanel, onBack, prevId, nextId, o
                 onDetailUpdated={handleDetailUpdated}
               />
             </div>
-            {/* Resolution cards: primary actions for clearing attention */}
             <div id="focus-panel-contact">
               <LogContactCard
                 detail={detail}
@@ -1546,31 +1545,30 @@ export function RequestDetail({ requestId, focusPanel, onBack, prevId, nextId, o
                 highlight={highlights.markHandled}
               />
             </div>
-            {/* Context: customer, location, triage, timing */}
+            <TimingPanel
+              requestId={requestId}
+              detail={detail}
+              onDetailUpdated={handleDetailUpdated}
+              onRecordFollowUp={() => setFollowUpPanelOpen(true)}
+            />
+            {!showProminentFeedbackCard && (
+              <WorkControlsGroup
+                requestId={requestId}
+                detail={detail}
+                onDetailUpdated={handleDetailUpdated}
+                highlights={{ feedbackReview: "secondary" }}
+                onReviewSuccess={handleReviewSuccess}
+              />
+            )}
+            {renderCreateFollowUpCard()}
+
+            {/* Context: customer identity, location, triage, team, feedback summary, source */}
+            <hr className="border-[var(--ophalo-border)]" />
             <CustomerPanel detail={detail} onContactLaunched={handleContactLaunched} />
             <ServiceLocationPanel detail={detail} onDetailUpdated={handleDetailUpdated} />
             <TriagePanel detail={detail} onDetailUpdated={handleDetailUpdated} />
-            <TimingPanel requestId={requestId} detail={detail} onDetailUpdated={handleDetailUpdated} />
-
-            {/* Utilities: feedback review (when not in focused mode), team, admin */}
-            <div className="space-y-3">
-              <p className="px-1 text-[10px] font-semibold uppercase tracking-widest text-[var(--ophalo-muted)]">Utilities</p>
-              {!showProminentFeedbackCard && (
-                <div>
-                  <WorkControlsGroup
-                    requestId={requestId}
-                    detail={detail}
-                    onDetailUpdated={handleDetailUpdated}
-                    highlights={{ feedbackReview: "secondary" }}
-                    onReviewSuccess={handleReviewSuccess}
-                  />
-                  <FeedbackSummaryCard detail={detail} />
-                </div>
-              )}
-              {renderCreateFollowUpCard()}
-              {renderTeamSection()}
-            </div>
-
+            {!showProminentFeedbackCard && <FeedbackSummaryCard detail={detail} />}
+            {renderTeamSection()}
             <SourceMetaPanel detail={detail} />
           </aside>
         </div>

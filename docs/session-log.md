@@ -5,7 +5,7 @@
 **Last green baseline:** Build 085 — 1,073 unit tests, 14 architecture tests, and TypeScript clean
 for `ophalo-app` and `ophalo-web` (verified 2026-07-14; re-run proportionately before closeout).
 **Next free ADR:** ADR-442
-**Current session:** R86b — Summary-first timing and Actions/Context sidebar
+**Current session:** R86c — State-aware Work Done hierarchy and inline confirmation
 
 ---
 
@@ -34,7 +34,7 @@ For every implementation slice:
 ## Current Work — Build 086 Request Detail V1 Launch Pass
 
 **Controlling brief:** `docs/build-log/086-request-detail-v1-launch-pass.md`
-**Status:** R86a complete — R86b next.
+**Status:** R86a and R86b complete — R86c next.
 **Follow-on brief:** `docs/build-log/087-request-list-v1-launch-pass.md` — do not begin until Build
 086 is complete and its closeout evidence is recorded.
 **Production roadmap:** `docs/build-log/ophalo-foundation-build-plan-greenfield-boundaries-brownfield-behavior.md`, Section 9.0.
@@ -55,12 +55,35 @@ Files changed:
   `UnifiedComposer`; local `InternalNoteCard` definition deleted; both sidebar/mobile
   `InternalNoteCard` renders removed.
 
+### R86b — Summary-first timing and Actions/Context sidebar
+
+**Implemented 2026-07-15. TypeScript clean (`npm run typecheck`).**
+
+Files changed:
+
+- `web/ophalo-app/src/pages/request-detail/TimingPanel.tsx` — timing is summary-first: both
+  unset and configured states start as compact action/summary rows; **Set** and **Edit** expand
+  inline; opening one editor closes the other. `openEditor()` seeds drafts from the latest detail
+  data, save/clear closes the editor, and existing mutations plus 409 handling remain intact.
+  The rows are semantic buttons with `aria-expanded` and `aria-controls`; **Record follow-up**,
+  **Clear follow-up**, and **Remove planned date** remain available when applicable.
+- `web/ophalo-app/src/pages/RequestDetail.tsx` — desktop sidebar is now ordered as Actions first
+  (lifecycle, contact, timing, feedback/work controls, create follow-up), then Context
+  (customer, location, triage, feedback summary, team, source). The obsolete **Utilities** label
+  is removed, and desktop `TimingPanel` now receives `onRecordFollowUp`.
+
+Remaining closeout checks (R86e):
+
+- Run the full manual timing matrix for unset, configured, save, clear, conflict, stale-detail,
+  desktop, and mobile states.
+- Confirm disclosure relationships and keyboard focus in a browser and with a screen reader.
+- Verify the Action/Context order under each lifecycle and feedback state.
+
 ### Subsequent Build 086 Sessions — Not Yet Active
 
-1. **R86b:** summary-first timing and Actions/Context sidebar.
-2. **R86c:** state-aware Work Done hierarchy and inline confirmation.
-3. **R86d:** skeleton/Retry, readable type, contrast, focus, and long-data resilience.
-4. **R86e:** integrated verification and Build 086 closeout.
+1. **R86c:** state-aware Work Done hierarchy and inline confirmation.
+2. **R86d:** skeleton/Retry, readable type, contrast, focus, and long-data resilience.
+3. **R86e:** integrated verification and Build 086 closeout.
 
 The full scope, boundaries, and acceptance evidence for each are in Build 086. Advance one session
 only after the preceding session is green and its results are recorded here.
