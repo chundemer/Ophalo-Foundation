@@ -425,6 +425,16 @@ function LogContactModal({
   const [conflictDisabled, setConflictDisabled] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [phoneCopied, setPhoneCopied] = useState(false);
+  const dialogRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    dialogRef.current?.focus();
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") { e.preventDefault(); onClose(); }
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [onClose]);
 
   const showPhone = channel === "phone" && !!detail.customerPhone;
 
@@ -454,11 +464,16 @@ function LogContactModal({
       onClick={onClose}
     >
       <div
-        className="bg-[var(--ophalo-card)] rounded-xl shadow-xl w-full max-w-md p-5"
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="log-contact-dialog-heading"
+        tabIndex={-1}
+        className="bg-[var(--ophalo-card)] rounded-xl shadow-xl w-full max-w-md p-5 focus:outline-none"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between mb-1">
-          <h2 className="text-base font-semibold text-[var(--ophalo-ink)]">Log external contact</h2>
+          <h2 id="log-contact-dialog-heading" className="text-base font-semibold text-[var(--ophalo-ink)]">Log external contact</h2>
           <button
             type="button"
             onClick={onClose}
@@ -558,6 +573,14 @@ function ServiceLocationModal({ requestId, detail, onDetailUpdated, onClose }: S
   const [conflictDisabled, setConflictDisabled] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") { e.preventDefault(); onClose(); }
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [onClose]);
+
   const isEditing = !!(detail.serviceAddressLine1 || detail.serviceCity);
 
   async function handleSubmit(e: React.FormEvent) {
@@ -597,11 +620,14 @@ function ServiceLocationModal({ requestId, detail, onDetailUpdated, onClose }: S
       onClick={onClose}
     >
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="service-location-dialog-heading"
         className="bg-[var(--ophalo-card)] rounded-xl shadow-xl w-full max-w-md p-5"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-base font-semibold text-[var(--ophalo-ink)]">
+          <h2 id="service-location-dialog-heading" className="text-base font-semibold text-[var(--ophalo-ink)]">
             {isEditing ? "Edit service location" : "Add service location"}
           </h2>
           <button
@@ -721,7 +747,7 @@ function OriginalRequestCard({ detail }: OriginalRequestCardProps) {
   if (!detail.description) return null;
   return (
     <div className="rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-5 py-4">
-      <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--ophalo-muted)] mb-1">
+      <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ophalo-muted)] mb-1">
         Customer description
       </p>
       <p className="text-sm leading-6 text-[var(--ophalo-ink)] whitespace-pre-wrap">
@@ -761,11 +787,11 @@ function CustomerPanel({ detail, onContactLaunched }: CustomerPanelProps) {
 
   return (
     <div>
-      <p className="px-1 text-[10px] font-semibold uppercase tracking-widest text-[var(--ophalo-muted)] mb-2">Customer</p>
+      <p className="px-1 text-xs font-semibold uppercase tracking-widest text-[var(--ophalo-muted)] mb-2">Customer</p>
       <div className="rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-4 py-3 space-y-3">
         {detail.customerPhone && (
           <div>
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--ophalo-muted)] mb-1">Phone</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ophalo-muted)] mb-1">Phone</p>
             <div className="flex items-center gap-2 flex-wrap">
               <Phone className="h-3.5 w-3.5 shrink-0 text-[var(--ophalo-muted)]" />
               <span className="text-sm text-[var(--ophalo-ink)]">{detail.customerPhone}</span>
@@ -792,7 +818,7 @@ function CustomerPanel({ detail, onContactLaunched }: CustomerPanelProps) {
         )}
         {detail.customerEmail && (
           <div>
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--ophalo-muted)] mb-1">Email</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ophalo-muted)] mb-1">Email</p>
             <div className="flex items-center gap-2 flex-wrap">
               <Mail className="h-3.5 w-3.5 shrink-0 text-[var(--ophalo-muted)]" />
               <span className="text-sm text-[var(--ophalo-ink)] break-all">{detail.customerEmail}</span>
@@ -847,15 +873,17 @@ interface ServiceLocationPanelProps {
 
 function ServiceLocationPanel({ detail, onDetailUpdated }: ServiceLocationPanelProps) {
   const [showModal, setShowModal] = useState(false);
+  const editTriggerRef = useRef<HTMLButtonElement>(null);
   const canEdit = detail.availableActions.canAddInternalNote;
   const hasAddress = !!(detail.serviceAddressLine1 || detail.serviceCity);
 
   return (
     <div>
       <div className="flex items-center justify-between px-1 mb-2">
-        <p className="text-[10px] font-semibold uppercase tracking-widest text-[var(--ophalo-muted)]">Service Location</p>
+        <p className="text-xs font-semibold uppercase tracking-widest text-[var(--ophalo-muted)]">Service Location</p>
         {canEdit && hasAddress && (
           <button
+            ref={editTriggerRef}
             type="button"
             onClick={() => setShowModal(true)}
             className={`text-xs text-[var(--keep-accent)] hover:underline ${FOCUS_RING} rounded`}
@@ -891,6 +919,7 @@ function ServiceLocationPanel({ detail, onDetailUpdated }: ServiceLocationPanelP
           </div>
           {canEdit && (
             <button
+              ref={editTriggerRef}
               type="button"
               onClick={() => setShowModal(true)}
               className={`inline-flex min-h-[32px] shrink-0 items-center rounded-lg border border-[var(--ophalo-attention)] bg-[var(--ophalo-card)] px-3 text-xs font-semibold text-[var(--ophalo-ink)] hover:bg-white transition-colors ${FOCUS_RING}`}
@@ -905,7 +934,7 @@ function ServiceLocationPanel({ detail, onDetailUpdated }: ServiceLocationPanelP
           requestId={detail.requestId}
           detail={detail}
           onDetailUpdated={onDetailUpdated}
-          onClose={() => setShowModal(false)}
+          onClose={() => { setShowModal(false); editTriggerRef.current?.focus(); }}
         />
       )}
     </div>
@@ -926,11 +955,11 @@ function TriagePanel({ detail, onDetailUpdated }: TriagePanelProps) {
 
   return (
     <div>
-      <p className="px-1 text-[10px] font-semibold uppercase tracking-widest text-[var(--ophalo-muted)] mb-2">Triage</p>
+      <p className="px-1 text-xs font-semibold uppercase tracking-widest text-[var(--ophalo-muted)] mb-2">Triage</p>
       <div className="rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-4 py-3 space-y-3">
         {hasCustomerSignal && (
           <div>
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--ophalo-muted)] mb-1">Customer signal</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ophalo-muted)] mb-1">Customer signal</p>
             <div className="flex flex-wrap gap-1.5 mb-1.5">
               {detail.intakeUrgency === "urgent" && <KeepBadge variant="attention">Customer marked urgent</KeepBadge>}
               {detail.intakeUrgency === "soon" && <KeepBadge variant="default">Customer asked for soon follow-up</KeepBadge>}
@@ -939,13 +968,13 @@ function TriagePanel({ detail, onDetailUpdated }: TriagePanelProps) {
               {detail.contactPreference === "email" && <KeepBadge variant="default">Prefers email</KeepBadge>}
               {detail.contactPreference === "no_preference" && <KeepBadge variant="default">No preference</KeepBadge>}
             </div>
-            <p className="text-[11px] text-[var(--ophalo-muted)]">
+            <p className="text-xs text-[var(--ophalo-muted)]">
               Review the request, then update the customer or log contact if needed.
             </p>
           </div>
         )}
         <div>
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--ophalo-muted)] mb-1">Internal priority</p>
+          <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ophalo-muted)] mb-1">Internal priority</p>
           {canEdit ? (
             <>
               <select
@@ -970,7 +999,7 @@ function TriagePanel({ detail, onDetailUpdated }: TriagePanelProps) {
                 <option value="urgent">Urgent</option>
               </select>
               {!displayPriority && (
-                <p className="text-[11px] text-[var(--ophalo-muted)] mt-1">
+                <p className="text-xs text-[var(--ophalo-muted)] mt-1">
                   Set priority to handle this ahead of routine work.
                 </p>
               )}
@@ -1098,6 +1127,48 @@ function AttentionGuidanceCard({ detail, highlights }: AttentionGuidanceCardProp
 // RequestDetail page
 // ---------------------------------------------------------------------------
 
+function RequestDetailSkeleton() {
+  const pulse = "animate-pulse motion-reduce:animate-none rounded bg-[var(--ophalo-canvas)]";
+  return (
+    <div
+      aria-busy="true"
+      aria-label="Loading request details"
+      className="flex flex-1 min-h-0 overflow-hidden md:grid md:[grid-template-columns:minmax(0,7fr)_minmax(320px,3fr)]"
+    >
+      {/* Left / main column */}
+      <div className="flex-1 md:flex-none overflow-y-auto px-4 md:px-6 py-5 space-y-4">
+        {/* Hero */}
+        <div className="rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-5 py-5">
+          <div className="flex gap-2 mb-3">
+            <div className={`h-5 w-16 ${pulse}`} />
+            <div className={`h-5 w-24 ${pulse}`} />
+          </div>
+          <div className={`h-8 w-56 ${pulse}`} />
+        </div>
+        {/* Composer */}
+        <div className="rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-5 py-4 space-y-3">
+          <div className="flex gap-2">
+            <div className={`h-8 w-36 ${pulse}`} />
+            <div className={`h-8 w-28 ${pulse}`} />
+          </div>
+          <div className={`h-24 w-full ${pulse}`} />
+        </div>
+        {/* Activity */}
+        <div className="rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-5 py-4 space-y-3">
+          <div className={`h-4 w-20 ${pulse}`} />
+          <div className={`h-3 w-48 ${pulse}`} />
+        </div>
+      </div>
+      {/* Sidebar — desktop only */}
+      <div className="hidden md:flex md:flex-col border-l border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-4 py-5 gap-4">
+        <div className={`h-24 w-full ${pulse}`} />
+        <div className={`h-16 w-full ${pulse}`} />
+        <div className={`h-16 w-full ${pulse}`} />
+      </div>
+    </div>
+  );
+}
+
 interface RequestDetailProps {
   requestId: string;
   focusPanel?: string;
@@ -1120,7 +1191,9 @@ export function RequestDetail({ requestId, focusPanel, onBack, prevId, nextId, o
   const reviewSuccessTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const queryClient = useQueryClient();
 
-  const { data: detail, isLoading, isError, error } = useQuery({
+  const lastFocusRef = useRef<HTMLElement | null>(null);
+
+  const { data: detail, isLoading, isError, isFetching, error, refetch } = useQuery({
     queryKey: ["request-detail", requestId],
     queryFn: () => api.getRequestDetail(requestId),
   });
@@ -1201,6 +1274,7 @@ export function RequestDetail({ requestId, focusPanel, onBack, prevId, nextId, o
   }
 
   function handleContactLaunched(direction: string, channel: string) {
+    lastFocusRef.current = document.activeElement as HTMLElement;
     setContactModal({ direction, channel });
   }
 
@@ -1305,7 +1379,7 @@ export function RequestDetail({ requestId, focusPanel, onBack, prevId, nextId, o
           initialDirection={contactModal.direction}
           initialChannel={contactModal.channel}
           onDetailUpdated={handleDetailUpdated}
-          onClose={() => setContactModal(null)}
+          onClose={() => { setContactModal(null); lastFocusRef.current?.focus(); }}
         />
       )}
 
@@ -1374,23 +1448,29 @@ export function RequestDetail({ requestId, focusPanel, onBack, prevId, nextId, o
         )}
       </div>
 
-      {/* Loading */}
-      {isLoading && (
-        <div className="flex flex-1 items-center justify-center">
-          <span className="text-[var(--ophalo-muted)] text-sm">Loading…</span>
-        </div>
-      )}
+      {/* Loading skeleton */}
+      {isLoading && <RequestDetailSkeleton />}
 
       {/* Error */}
       {isError && (
-        <div className="flex flex-1 items-center justify-center px-4">
+        <div className="flex flex-1 flex-col items-center justify-center gap-3 px-4">
           <span className="text-[var(--ophalo-muted)] text-sm text-center">
             {error instanceof ApiError && error.status === 403
               ? "You don't have access to this request."
               : error instanceof ApiError && error.status === 404
                 ? "Request not found."
-                : "Something went wrong. Try going back and reopening."}
+                : "Something went wrong loading this request."}
           </span>
+          {!(error instanceof ApiError && (error.status === 403 || error.status === 404)) && (
+            <button
+              type="button"
+              onClick={() => void refetch()}
+              disabled={isFetching}
+              className={`px-4 py-2 text-sm font-semibold rounded-lg border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] text-[var(--ophalo-ink)] hover:bg-[var(--ophalo-canvas)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${FOCUS_RING}`}
+            >
+              {isFetching ? "Retrying…" : "Retry"}
+            </button>
+          )}
         </div>
       )}
 

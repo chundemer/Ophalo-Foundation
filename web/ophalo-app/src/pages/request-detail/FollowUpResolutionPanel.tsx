@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { X } from "lucide-react";
 import { api, ApiError, type KeepRequestDetailResult } from "../../lib/apiClient";
 import type { FollowUpResolutionOutcome, FollowUpCompletionReason } from "../../lib/apiClient";
@@ -102,6 +102,14 @@ export function FollowUpResolutionPanel({
     outcome !== null &&
     ((outcome === "complete" || outcome === "keep_active") ? !!completionReason : !!newDate);
 
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") { e.preventDefault(); onClose(); }
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [onClose]);
+
   return (
     <div className="fixed inset-0 z-50" role="dialog" aria-modal="true" aria-label="Record follow-up outcome">
       {/* Backdrop */}
@@ -147,7 +155,7 @@ export function FollowUpResolutionPanel({
 
             {/* Outcome tap-first buttons */}
             <div>
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--ophalo-muted)] mb-2">What happened?</p>
+              <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ophalo-muted)] mb-2">What happened?</p>
               <div className="grid gap-2">
                 <OutcomeButton
                   selected={outcome === "complete"}
@@ -174,7 +182,7 @@ export function FollowUpResolutionPanel({
             {(outcome === "complete" || outcome === "keep_active") && (
               <div className="space-y-3">
                 <div>
-                  <label htmlFor="follow-up-completion-reason" className="text-[11px] text-[var(--ophalo-muted)] block mb-1">
+                  <label htmlFor="follow-up-completion-reason" className="text-xs text-[var(--ophalo-muted)] block mb-1">
                     Why is this{outcome === "complete" ? " complete" : " still active"}?
                   </label>
                   <div className="grid gap-1.5">
@@ -192,7 +200,7 @@ export function FollowUpResolutionPanel({
                       >
                         {COMPLETION_REASON_LABELS[r]}
                         {r === "work_completed" && (
-                          <span className="block text-[11px] text-[var(--ophalo-muted)] font-normal mt-0.5">
+                          <span className="block text-xs text-[var(--ophalo-muted)] font-normal mt-0.5">
                             Resolves this follow-up only — does not close the request
                           </span>
                         )}
@@ -201,7 +209,7 @@ export function FollowUpResolutionPanel({
                   </div>
                 </div>
                 <div>
-                  <label htmlFor="follow-up-note" className="text-[11px] text-[var(--ophalo-muted)] block mb-0.5">Note (optional)</label>
+                  <label htmlFor="follow-up-note" className="text-xs text-[var(--ophalo-muted)] block mb-0.5">Note (optional)</label>
                   <input
                     id="follow-up-note"
                     type="text"
@@ -219,7 +227,7 @@ export function FollowUpResolutionPanel({
             {outcome === "move" && (
               <div className="space-y-3">
                 <div>
-                  <p className="text-[11px] text-[var(--ophalo-muted)] mb-1.5">Quick pick</p>
+                  <p className="text-xs text-[var(--ophalo-muted)] mb-1.5">Quick pick</p>
                   <div className="flex flex-wrap gap-2">
                     {[
                       { label: "Today", value: today },
@@ -243,7 +251,7 @@ export function FollowUpResolutionPanel({
                   </div>
                 </div>
                 <div>
-                  <label htmlFor="move-date" className="text-[11px] text-[var(--ophalo-muted)] block mb-0.5">Or choose a date</label>
+                  <label htmlFor="move-date" className="text-xs text-[var(--ophalo-muted)] block mb-0.5">Or choose a date</label>
                   <input
                     id="move-date"
                     type="date"
@@ -255,7 +263,7 @@ export function FollowUpResolutionPanel({
                 </div>
                 {allowedFollowUpReasons.length > 0 && (
                   <div>
-                    <label htmlFor="move-reason" className="text-[11px] text-[var(--ophalo-muted)] block mb-0.5">Reason (optional)</label>
+                    <label htmlFor="move-reason" className="text-xs text-[var(--ophalo-muted)] block mb-0.5">Reason (optional)</label>
                     <select
                       id="move-reason"
                       value={newReason}
@@ -271,7 +279,7 @@ export function FollowUpResolutionPanel({
                   </div>
                 )}
                 <div>
-                  <label htmlFor="move-note" className="text-[11px] text-[var(--ophalo-muted)] block mb-0.5">Note (optional)</label>
+                  <label htmlFor="move-note" className="text-xs text-[var(--ophalo-muted)] block mb-0.5">Note (optional)</label>
                   <input
                     id="move-note"
                     type="text"
@@ -328,7 +336,7 @@ function OutcomeButton({ selected, onClick, label, description }: OutcomeButtonP
       }`}
     >
       <p className={`text-sm font-semibold ${selected ? "text-[var(--ophalo-ink)]" : "text-[var(--ophalo-ink)]"}`}>{label}</p>
-      <p className="text-[11px] text-[var(--ophalo-muted)] mt-0.5">{description}</p>
+      <p className="text-xs text-[var(--ophalo-muted)] mt-0.5">{description}</p>
     </button>
   );
 }

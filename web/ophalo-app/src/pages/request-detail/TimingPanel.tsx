@@ -148,7 +148,7 @@ export function TimingPanel({ requestId, detail, onDetailUpdated, onRecordFollow
 
   return (
     <div>
-      <p className="px-1 text-[10px] font-semibold uppercase tracking-widest text-[var(--ophalo-muted)] mb-2">
+      <p className="px-1 text-xs font-semibold uppercase tracking-widest text-[var(--ophalo-muted)] mb-2">
         Follow-up &amp; planned timing
       </p>
       <div
@@ -162,7 +162,7 @@ export function TimingPanel({ requestId, detail, onDetailUpdated, onRecordFollow
             className={`h-3.5 w-3.5 shrink-0 ${hasActiveTiming ? "text-[var(--keep-accent)]" : "text-[var(--ophalo-muted)]"}`}
             aria-hidden="true"
           />
-          <p className="text-[11px] leading-5 text-[var(--ophalo-muted)]">
+          <p className="text-xs leading-5 text-[var(--ophalo-muted)]">
             Internal — does not notify the customer.
           </p>
         </div>
@@ -215,7 +215,7 @@ export function TimingPanel({ requestId, detail, onDetailUpdated, onRecordFollow
               )}
               <form onSubmit={(e) => void handleSetFollowUp(e)} className="space-y-2">
                 <div>
-                  <label htmlFor="follow-up-date" className="text-[11px] text-[var(--ophalo-muted)] block mb-0.5">Date</label>
+                  <label htmlFor="follow-up-date" className="text-xs text-[var(--ophalo-muted)] block mb-0.5">Date</label>
                   <input
                     id="follow-up-date"
                     type="date"
@@ -226,7 +226,7 @@ export function TimingPanel({ requestId, detail, onDetailUpdated, onRecordFollow
                   />
                 </div>
                 <div>
-                  <label htmlFor="follow-up-reason" className="text-[11px] text-[var(--ophalo-muted)] block mb-0.5">Reason</label>
+                  <label htmlFor="follow-up-reason" className="text-xs text-[var(--ophalo-muted)] block mb-0.5">Reason</label>
                   <select
                     id="follow-up-reason"
                     value={editorFollowUpReason}
@@ -241,7 +241,7 @@ export function TimingPanel({ requestId, detail, onDetailUpdated, onRecordFollow
                   </select>
                 </div>
                 <div>
-                  <label htmlFor="follow-up-note" className="text-[11px] text-[var(--ophalo-muted)] block mb-0.5">Note (optional)</label>
+                  <label htmlFor="follow-up-note" className="text-xs text-[var(--ophalo-muted)] block mb-0.5">Note (optional)</label>
                   <input
                     id="follow-up-note"
                     type="text"
@@ -338,7 +338,7 @@ export function TimingPanel({ requestId, detail, onDetailUpdated, onRecordFollow
               )}
               <form onSubmit={(e) => void handleSetPlanned(e)} className="space-y-2">
                 <div>
-                  <label htmlFor="planned-date" className="text-[11px] text-[var(--ophalo-muted)] block mb-0.5">
+                  <label htmlFor="planned-date" className="text-xs text-[var(--ophalo-muted)] block mb-0.5">
                     {hasPlanned ? "Change date" : "Date"}
                   </label>
                   <input
