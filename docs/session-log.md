@@ -1,10 +1,11 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-07-14 (audit complete; all tracked gaps resolved; next: deployment smoke testing)
+**Last updated:** 2026-07-15
 **Branch:** `main` tracking `origin/main`
-**Last green baseline:** S84e — 1,069 unit tests passed, 14 architecture tests passed (not re-run this session); ophalo-app and ophalo-web TypeScript clean
+**Last green baseline:** Build 085 — 1,073 unit tests, 14 architecture tests, and TypeScript clean
+for `ophalo-app` and `ophalo-web` (verified 2026-07-14; re-run proportionately before closeout).
 **Next free ADR:** ADR-442
-**Current session:** No active implementation session
+**Current session:** R86b — Summary-first timing and Actions/Context sidebar
 
 ---
 
@@ -16,80 +17,53 @@ detail lives in `docs/build-log/`; authoritative decisions live in
 
 For every implementation slice:
 
-- Classify the work explicitly: discovery when pre-work is incomplete; mechanical implementation
-  preflight when the current brief is marked pre-work complete.
-- Use targeted `rg` during preflight to confirm named signatures and compile-impact callers. Do not
-  rediscover already-locked architecture, scope, tests, or decisions.
-- Inspect current signatures, endpoint/persistence patterns, failure modes, and tests before editing.
-- Present the file-level gate before writing.
-- Keep the hard slice gate unless explicitly split: at most 3 mutation families, 8 production files,
-  and 12 total changed files including tests/docs.
-- Preserve fail-closed account, row, action, membership, and public-token behavior.
-- Add focused authorization/regression tests and run the proportionate broader suite.
+- Read this file and the active build brief before editing.
+- Use targeted `rg` during preflight to confirm named signatures, existing tests, and compile-impact
+  callers. Do not rediscover already-locked architecture or product decisions.
+- Inspect current signatures, failure modes, action-policy seams, and tests before editing.
+- Present the file-level gate before writing production code.
+- Keep the hard slice gate unless Christian explicitly approves otherwise: at most three mutation
+  families, eight production files, and twelve total changed files including tests/docs.
+- Preserve fail-closed account, row, action, membership, public-token, and optimistic-concurrency
+  behavior.
+- Add focused regression tests and run proportionate broader checks.
 - Self-review for policy drift, accidental visibility expansion, token leakage, untested direct-ID
   paths, stale docs, and unrelated scope.
 - Commit only after Christian approves the completed diff.
 
----
+## Current Work — Build 086 Request Detail V1 Launch Pass
 
-## Current Work
+**Controlling brief:** `docs/build-log/086-request-detail-v1-launch-pass.md`
+**Status:** R86a complete — R86b next.
+**Follow-on brief:** `docs/build-log/087-request-list-v1-launch-pass.md` — do not begin until Build
+086 is complete and its closeout evidence is recorded.
+**Production roadmap:** `docs/build-log/ophalo-foundation-build-plan-greenfield-boundaries-brownfield-behavior.md`, Section 9.0.
 
-**Follow-on implementation record:** `docs/build-log/085-feedback-review-operational-loop.md`
-**Completed build log:** `docs/build-log/084-feedback-and-closed-request-follow-up-gaps.md`
-**Completed build log:** `docs/build-log/078-customer-tracker-link-email-and-resend-configuration.md`
-**Latest completed build logs:** `docs/build-log/083-session-26-follow-up-and-planned-promise-workflow-draft.md`, `docs/build-log/082-session-25-share-request-link-drawer.md`, `docs/build-log/077-pre-deployment-cleanup-and-file-decomposition.md`
-**Readiness working doc:** `docs/pilot-readiness-decision-questions.md`
-**Bug/gap tracker:** `docs/pilot-readiness-bug-tracker.md`
-**Foundation roadmap:** `docs/build-log/ophalo-foundation-build-plan-greenfield-boundaries-brownfield-behavior.md` section 9.1
+### R86a — Unified communication composer ✓
 
-### Current-State Audit Required
+**Implemented 2026-07-15. TypeScript clean.**
 
-Do not select or brief the next implementation session from the tracker alone. Before proposing new
-work, inspect the current code, recent commits, and the relevant acceptance proof; several tracker
-items may be stale relative to landed implementation. Update the tracker and session log only after
-that audit.
+Files changed:
+- `web/ophalo-app/src/pages/request-detail/UnifiedComposer.tsx` — new; two-tab composer with
+  `role="tablist"`, proper ARIA, always-mounted panels using `hidden` for inactive, explicit label
+  for internal-note textarea, `Cmd/Ctrl+Enter` on both textareas, default tab driven by
+  `canSendBusinessUpdate`, no-render when neither action permitted.
+- `web/ophalo-app/src/pages/request-detail/BusinessSection.tsx` — `composerMode` prop; submit
+  logic extracted to `doSubmit()`; composerMode suppresses outer card and title, shows persistent
+  "Visible to customer" label; `Cmd/Ctrl+Enter` via `handleKeyDown`.
+- `web/ophalo-app/src/pages/RequestDetail.tsx` — `BusinessUpdateSection` replaced with
+  `UnifiedComposer`; local `InternalNoteCard` definition deleted; both sidebar/mobile
+  `InternalNoteCard` renders removed.
 
-### Completed Feedback-Loop Follow-on
+### Subsequent Build 086 Sessions — Not Yet Active
 
-The feedback-review operational loop is implemented in commit `315b231` following Build 084. Build
-085 is the implementation record and is complete. Verified 2026-07-14: 1,073 unit tests, 14
-architecture tests, TypeScript clean on both `ophalo-app` and `ophalo-web`. No open code gaps remain.
+1. **R86b:** summary-first timing and Actions/Context sidebar.
+2. **R86c:** state-aware Work Done hierarchy and inline confirmation.
+3. **R86d:** skeleton/Retry, readable type, contrast, focus, and long-data resilience.
+4. **R86e:** integrated verification and Build 086 closeout.
 
-### Recent Completed Work
-
-Session 25 / Build 082 is complete: backend share commit and SMS handoff model/service, public SMS
-handoff page, authenticated PWA Share Link modal, and closeout landed. End-to-end QR/SMS device
-testing remains a deployment smoke item because it depends on real production/mobile browser
-behavior.
-
-Session 26 / Build 077 is complete: API composition cleanup, PWA request detail split, QuickCapture
-split, API client type extraction, customer tracker page split, and closeout landed. Deferred file
-decomposition remains recorded in Build 077: native mobile `[id].tsx`, PWA `RequestDetail.tsx`, and
-remaining large frontend files.
-
-Session 28 / Build 083 is complete: Follow Up On promise protection, follow-up resolution backend
-command, PWA command-center completion workflow, request-list timing signals, and closeout docs
-landed.
-
-- **S83a**: backend attention gap closed (due/overdue FollowUpOn routes to NeedsAttention with `"due_or_overdue_follow_up_on"` slug, ranking group `"due_follow_up_on"` order 5).
-- **S83b**: `POST /keep/requests/{id}/follow-up-resolution` backend command (complete / move / keep_active outcomes, full auth/row/audit guard, migration `S83bFollowUpResolution`).
-- **S83c**: `FollowUpResolutionPanel` PWA workflow (modal/bottom-sheet, tap-first, due/overdue banners, timing panel affordance).
-- **S83d**: `RequestRow` overdue follow-up → danger badge; past planned → attention; future → default.
-- **S83e**: docs closed.
-
-Deferred into next sessions:
-- Native mobile follow-up completion (early post-pilot / early release).
-- Planned For completion workflow.
-
-Session 29 / Build 078 is complete: Resend configuration verified, public-intake tracker-link email
-landed, customer intake confirmation now redirects to the tracker page after a short confirmation
-state, operator mailto handoffs prefill the customer page link, and closeout docs landed.
-
-Deployment smoke items carried forward from Build 078:
-- Real Resend email delivery end-to-end with production `Resend:ApiKey` and `Resend:FromAddress`.
-- Auto-redirect behavior on real mobile browsers after public intake.
-
----
+The full scope, boundaries, and acceptance evidence for each are in Build 086. Advance one session
+only after the preceding session is green and its results are recorded here.
 
 ## Standing Boundaries
 
@@ -99,9 +73,9 @@ Deployment smoke items carried forward from Build 078:
 - Broad automated customer email/SMS notification workflows, notification preferences, quiet hours,
   proof-of-send, and delivery ledgers remain deferred.
 - Google Voice remains owner-managed and is indirectly supported through **Copy Message** only.
-- Business new request link sharing is separate from this drawer.
-- Saved share-message templates are deferred.
-- Mobile app push-to-phone handoff is deferred.
+- Preserve the Request Detail customer/internal visibility boundary. Internal notes and internal
+  timing never become customer-visible.
+- Do not change server action policy or lifecycle transitions merely to simplify PWA presentation.
 
 Always preserve:
 
@@ -114,64 +88,21 @@ Always preserve:
 
 Topology:
 
-- Production: `ophalo.com`/`www.ophalo.com` -> `ophalo-web`, `app.ophalo.com` -> `ophalo-app`,
-  `api.ophalo.com` -> `OpHalo.Api`.
+- Production target: `ophalo.com`/`www.ophalo.com` → `ophalo-web`, `app.ophalo.com` →
+  `ophalo-app`, `api.ophalo.com` → `OpHalo.Api`.
 - Local: `ophalo-web` `http://localhost:3000`, `ophalo-app` `http://localhost:5173`,
   `OpHalo.Api` `http://localhost:5092`.
 - Pilot cap: `SignupDefaults:MaxPilotAccounts=15`.
 - `OperatorBaseUrl` is retired; invite links use `{PublicBaseUrl}/invite/accept`.
 
----
+## After Build 086 And Build 087
 
-## Historical Context
+1. Conduct a decision-first marketing and onboarding launch pass.
+2. Deploy and validate a Vercel production candidate.
+3. Test the PWA on real iPhone and Android devices before promotion, then run a production smoke
+   test after deployment.
+4. Shift primary implementation attention to native mobile public-release readiness and Apple/Google
+   store approval.
 
-Completed implementation details live in the build logs and should not be repeated here:
-
-- Session 13 — PWA workbench: `docs/build-log/067-session-13-pwa-workbench.md`
-- Session 14 — web front door: `docs/build-log/068-session-14-ophalo-web-front-door.md`
-- Session 15 — pilot readiness: `docs/build-log/069-session-15-pilot-readiness.md`
-- Session 16 — native mobile foundation: `docs/build-log/070-session-16-native-mobile-foundation.md`
-- Session 19 — Keep workbench UX migration: `docs/build-log/073-session-19-keep-workbench-ux-migration.md`
-- Session 20 — mobile Owner/Admin control mode: `docs/build-log/074-session-20-mobile-owner-admin-control-mode.md`
-- Session 21 — attention guidance resolution metadata: `docs/build-log/075-session-21-attention-guidance-resolution-metadata.md`
-- Session 22 — guided setup, intake, service location: `docs/build-log/076-session-22-guided-setup-intake-and-service-location.md`
-- Session 23 — work completed and closeout UX: `docs/build-log/080-session-23-work-completed-closeout-ux.md`
-- Session 24 — request workbench 2-column layout and list quick actions:
-  `docs/build-log/081-session-24-request-detail-2-column-workbench.md`
-
-Remaining pre-deployment work lives in separate build logs:
-
-1. `docs/build-log/085-feedback-review-operational-loop.md` — **complete** (commit `315b231`, verified 2026-07-14).
-2. `docs/build-log/077-pre-deployment-cleanup-and-file-decomposition.md` — pre-deployment cleanup (deferred file decomposition items).
-
----
-
-## Carry-Forward Boundaries
-
-- Real APNs/FCM provider implementation remains future work.
-- Demo scenario packs, demo reset UI, and admin/internal classification management remain deferred.
-- Classification is operational/reporting/safety posture, separate from commercial lifecycle.
-- Public signup cannot create Demo/InternalTest accounts.
-- Production push delivery must stay suppressed for Demo/InternalTest accounts.
-
----
-
-## Deferred Decisions
-
-- **Mobile package manager standardisation:** `mobile/ophalo-mobile` was scaffolded with Expo's
-  default npm and has used `package-lock.json` since S16b. `web/ophalo-app` uses `pnpm@11.9.0`.
-  Standardising mobile to pnpm remains low urgency, but worth aligning before EAS Build
-  configuration introduces CI/CD package-manager assumptions.
-
----
-
-## Operational Watch-Outs
-
-- GitHub remote `origin` is configured; push local commits daily when green.
-- Integration tests reset PostgreSQL schema and run migrations.
-- Testing environment intentionally skips runtime rate limiting; production-like proof exists in
-  `RateLimitTesting` (G8a/S7b).
-- Deployment still requires correct Cloudflare/Vercel/Railway topology, trusted-proxy posture, and
-  token-redaction configuration even though application-level proofs are complete.
-- Persistent local PostgreSQL setup/migration/smoke runbook is verified against local `ophalo_local`
-  in Docker; guarded reset remains documented but was not exercised.
+Historical implementation detail remains in `docs/build-log/`. Do not re-add it to this active
+execution brief.

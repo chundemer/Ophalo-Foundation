@@ -46,7 +46,8 @@ import { TimingPanel } from "./request-detail/TimingPanel";
 import { TodayPromiseBanner, DetailHero } from "./request-detail/DetailHero";
 import { FollowUpResolutionPanel } from "./request-detail/FollowUpResolutionPanel";
 import { TeamSection } from "./request-detail/TeamSection";
-import { WorkDoneCard, CloseRequestCard, BusinessUpdateSection } from "./request-detail/BusinessSection";
+import { WorkDoneCard, CloseRequestCard } from "./request-detail/BusinessSection";
+import { UnifiedComposer } from "./request-detail/UnifiedComposer";
 
 // ---------------------------------------------------------------------------
 // Handled outside Keep? — log contact affordance card
@@ -394,83 +395,6 @@ function ProminentFeedbackCard({ requestId, detail, onDetailUpdated, onReviewSuc
         <p className="text-sm text-[var(--ophalo-ink)] italic">&ldquo;{detail.feedbackComment}&rdquo;</p>
       )}
       <FeedbackReviewSection requestId={requestId} detail={detail} onDetailUpdated={onDetailUpdated} onReviewSuccess={onReviewSuccess} />
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Internal note composer — side panel, never customer-visible
-// ---------------------------------------------------------------------------
-
-interface InternalNoteCardProps {
-  requestId: string;
-  detail: KeepRequestDetailResult;
-  onDetailUpdated: (updated: KeepRequestDetailResult) => void;
-}
-
-function InternalNoteCard({ requestId, detail, onDetailUpdated }: InternalNoteCardProps) {
-  const { canAddInternalNote } = detail.availableActions;
-  const { internalNoteMaxLength } = detail.validation;
-  const [note, setNote] = useState("");
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [conflictDisabled, setConflictDisabled] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  if (!canAddInternalNote) return null;
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!note.trim() || isSubmitting || conflictDisabled) return;
-    setIsSubmitting(true);
-    setError(null);
-    try {
-      const updated = await api.addInternalNote(requestId, { note: note.trim() }, detail.version);
-      onDetailUpdated(updated);
-      setNote("");
-    } catch (err) {
-      if (err instanceof ApiError && err.status === 409) {
-        setConflictDisabled(true);
-        setError(STATUS_CONFLICT_MESSAGE);
-      } else {
-        setError("Could not save note. Try again.");
-      }
-    } finally {
-      setIsSubmitting(false);
-    }
-  }
-
-  return (
-    <div>
-      <p className="text-sm font-semibold text-[var(--ophalo-ink)] mb-0.5">Internal note</p>
-      <p className="text-xs text-[var(--ophalo-muted)] mb-2">Not visible to customer</p>
-      {error && (
-        <div className={`mb-2 rounded-lg p-3 text-xs ${
-          conflictDisabled
-            ? "bg-[var(--ophalo-attention-bg)] text-[var(--ophalo-attention)]"
-            : "bg-[var(--ophalo-danger-bg)] text-[var(--ophalo-danger)]"
-        }`}>
-          {error}
-        </div>
-      )}
-      <form onSubmit={(e) => void handleSubmit(e)} className="space-y-2">
-        <textarea
-          value={note}
-          onChange={(e) => setNote(e.target.value)}
-          maxLength={internalNoteMaxLength}
-          disabled={conflictDisabled}
-          placeholder="Add a note for your team…"
-          rows={3}
-          className={`${INPUT_CLS} resize-none`}
-        />
-        <KeepButton
-          type="submit"
-          variant="secondary"
-          disabled={isSubmitting || conflictDisabled || !note.trim()}
-          className="w-full"
-        >
-          {isSubmitting ? "Saving…" : "Save internal note"}
-        </KeepButton>
-      </form>
     </div>
   );
 }
@@ -1502,16 +1426,16 @@ export function RequestDetail({ requestId, focusPanel, onBack, prevId, nextId, o
               {renderPrimaryActions()}
             </div>
 
-            {/* Send customer update — main work loop, above activity */}
+            {/* Unified composer — Customer Update and Internal Note tabs */}
             <div id="focus-panel-update">
-              <BusinessUpdateSection
+              <UnifiedComposer
                 requestId={requestId}
                 detail={detail}
                 onDetailUpdated={handleDetailUpdated}
-                draft={businessUpdateDraft}
-                onDraftChange={setBusinessUpdateDraft}
-                draftStatus={businessUpdateDraftStatus}
-                onDraftStatusChange={setBusinessUpdateDraftStatus}
+                customerUpdateDraft={businessUpdateDraft}
+                onCustomerUpdateDraftChange={setBusinessUpdateDraft}
+                customerUpdateDraftStatus={businessUpdateDraftStatus}
+                onCustomerUpdateDraftStatusChange={setBusinessUpdateDraftStatus}
                 highlight={highlights.sendUpdate}
               />
             </div>
@@ -1587,7 +1511,6 @@ export function RequestDetail({ requestId, focusPanel, onBack, prevId, nextId, o
               <TriagePanel detail={detail} onDetailUpdated={handleDetailUpdated} />
               <TimingPanel requestId={requestId} detail={detail} onDetailUpdated={handleDetailUpdated} onRecordFollowUp={() => setFollowUpPanelOpen(true)} />
               {renderTeamSection()}
-              <InternalNoteCard requestId={requestId} detail={detail} onDetailUpdated={handleDetailUpdated} />
               <SourceMetaPanel detail={detail} />
             </div>
           </div>
@@ -1628,16 +1551,6 @@ export function RequestDetail({ requestId, focusPanel, onBack, prevId, nextId, o
             <ServiceLocationPanel detail={detail} onDetailUpdated={handleDetailUpdated} />
             <TriagePanel detail={detail} onDetailUpdated={handleDetailUpdated} />
             <TimingPanel requestId={requestId} detail={detail} onDetailUpdated={handleDetailUpdated} />
-
-            {/* Internal: notes not visible to customer */}
-            <div className="space-y-3">
-              <p className="px-1 text-[10px] font-semibold uppercase tracking-widest text-[var(--ophalo-muted)]">Internal</p>
-              <InternalNoteCard
-                requestId={requestId}
-                detail={detail}
-                onDetailUpdated={handleDetailUpdated}
-              />
-            </div>
 
             {/* Utilities: feedback review (when not in focused mode), team, admin */}
             <div className="space-y-3">

@@ -224,6 +224,7 @@ interface BusinessUpdateSectionProps {
   draftStatus: string;
   onDraftStatusChange: (v: string) => void;
   highlight?: HighlightLevel;
+  composerMode?: boolean;
 }
 
 export function BusinessUpdateSection({
@@ -235,6 +236,7 @@ export function BusinessUpdateSection({
   draftStatus,
   onDraftStatusChange,
   highlight,
+  composerMode = false,
 }: BusinessUpdateSectionProps) {
   const { canSendBusinessUpdate, canChangeStatus, allowedStatuses } = detail.availableActions;
   const maxLength = detail.validation.businessUpdateMaxLength;
@@ -269,8 +271,7 @@ export function BusinessUpdateSection({
         ? "Update status"
         : "Send update";
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
+  async function doSubmit() {
     if (!canSubmit) return;
     setIsSubmitting(true);
     setError(null);
@@ -308,6 +309,111 @@ export function BusinessUpdateSection({
     }
   }
 
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    await doSubmit();
+  }
+
+  function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+    if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+      e.preventDefault();
+      void doSubmit();
+    }
+  }
+
+  const sharedErrorBlock = error && (
+    <div
+      aria-live="polite"
+      className={`mb-3 rounded-lg p-3 text-xs ${
+        conflictDisabled
+          ? "bg-[var(--ophalo-attention-bg)] text-[var(--ophalo-attention)]"
+          : "bg-[var(--ophalo-danger-bg)] text-[var(--ophalo-danger)]"
+      }`}
+    >
+      {error}
+    </div>
+  );
+
+  const sharedForm = (
+    <form onSubmit={(e) => void handleSubmit(e)} className="space-y-3">
+      <div>
+        <label htmlFor="business-update-message" className="sr-only">
+          Customer update message
+        </label>
+        <textarea
+          id="business-update-message"
+          value={message}
+          onChange={(e) => {
+            setMessage(e.target.value);
+            if (error && !conflictDisabled) setError(null);
+          }}
+          onKeyDown={handleKeyDown}
+          disabled={conflictDisabled}
+          placeholder="Write an update for the customer…"
+          rows={4}
+          className={`${INPUT_CLS} resize-none ${
+            overLimit
+              ? "border-[var(--ophalo-danger)] focus:ring-[var(--ophalo-danger)] focus:border-[var(--ophalo-danger)]"
+              : ""
+          }`}
+        />
+        <p
+          className={`mt-1 text-xs text-right ${
+            overLimit
+              ? "text-[var(--ophalo-danger)] font-medium"
+              : remaining <= 50
+                ? "text-[var(--ophalo-attention)]"
+                : "text-[var(--ophalo-muted)]"
+          }`}
+        >
+          {overLimit ? `${Math.abs(remaining)} over limit` : `${remaining} remaining`}
+        </p>
+      </div>
+      {showStatusDropdown && (
+        <div>
+          <label htmlFor="update-status-select" className="sr-only">
+            Also change status (optional)
+          </label>
+          <select
+            id="update-status-select"
+            value={selectedStatus}
+            onChange={(e) => setSelectedStatus(e.target.value)}
+            disabled={conflictDisabled}
+            className={INPUT_CLS}
+          >
+            <option value="">No status change</option>
+            {composerStatuses.map((s) => (
+              <option key={s} value={s}>{statusLabel(s)}</option>
+            ))}
+          </select>
+        </div>
+      )}
+      <p className="text-xs text-[var(--ophalo-muted)]">
+        {hasMessage ? "Visible on the customer page." : "No customer message will be sent."}
+        {selectedStatus && ` Status will change to ${statusLabel(selectedStatus)}.`}
+        {statusRequiresMessage && !hasMessage && " Add a message for this status."}
+      </p>
+      <KeepButton type="submit" variant="teal" disabled={!canSubmit} className="w-full">
+        {isSubmitting ? "Saving…" : submitLabel}
+      </KeepButton>
+    </form>
+  );
+
+  if (composerMode) {
+    return (
+      <div>
+        <p className="text-xs font-medium text-[var(--ophalo-teal)] mb-3">Visible to customer</p>
+        {detail.needsShare && (
+          <p className="mb-3 text-xs text-[var(--ophalo-attention)]">
+            Customer page not yet shared — the customer won't see this until you share it.
+          </p>
+        )}
+        {sharedErrorBlock}
+        {sharedForm}
+      </div>
+    );
+  }
+
   return (
     <div
       id="customer-update"
@@ -323,79 +429,8 @@ export function BusinessUpdateSection({
           Customer page not yet shared — the customer won't see this until you share it.
         </p>
       )}
-      {error && (
-        <div
-          aria-live="polite"
-          className={`mb-3 rounded-lg p-3 text-xs ${
-            conflictDisabled
-              ? "bg-[var(--ophalo-attention-bg)] text-[var(--ophalo-attention)]"
-              : "bg-[var(--ophalo-danger-bg)] text-[var(--ophalo-danger)]"
-          }`}
-        >
-          {error}
-        </div>
-      )}
-      <form onSubmit={(e) => void handleSubmit(e)} className="space-y-3">
-        <div>
-          <label htmlFor="business-update-message" className="sr-only">
-            Customer update message
-          </label>
-          <textarea
-            id="business-update-message"
-            value={message}
-            onChange={(e) => {
-              setMessage(e.target.value);
-              if (error && !conflictDisabled) setError(null);
-            }}
-            disabled={conflictDisabled}
-            placeholder="Write an update for the customer…"
-            rows={4}
-            className={`${INPUT_CLS} resize-none ${
-              overLimit
-                ? "border-[var(--ophalo-danger)] focus:ring-[var(--ophalo-danger)] focus:border-[var(--ophalo-danger)]"
-                : ""
-            }`}
-          />
-          <p
-            className={`mt-1 text-xs text-right ${
-              overLimit
-                ? "text-[var(--ophalo-danger)] font-medium"
-                : remaining <= 50
-                  ? "text-[var(--ophalo-attention)]"
-                  : "text-[var(--ophalo-muted)]"
-            }`}
-          >
-            {overLimit ? `${Math.abs(remaining)} over limit` : `${remaining} remaining`}
-          </p>
-        </div>
-        {showStatusDropdown && (
-          <div>
-            <label htmlFor="update-status-select" className="sr-only">
-              Also change status (optional)
-            </label>
-            <select
-              id="update-status-select"
-              value={selectedStatus}
-              onChange={(e) => setSelectedStatus(e.target.value)}
-              disabled={conflictDisabled}
-              className={INPUT_CLS}
-            >
-              <option value="">No status change</option>
-              {composerStatuses.map((s) => (
-                <option key={s} value={s}>{statusLabel(s)}</option>
-              ))}
-            </select>
-          </div>
-        )}
-        <p className="text-xs text-[var(--ophalo-muted)]">
-          {hasMessage ? "Visible on the customer page." : "No customer message will be sent."}
-          {selectedStatus && ` Status will change to ${statusLabel(selectedStatus)}.`}
-          {statusRequiresMessage && !hasMessage && " Add a message for this status."}
-        </p>
-        <KeepButton type="submit" variant="teal" disabled={!canSubmit} className="w-full">
-          {isSubmitting ? "Saving…" : submitLabel}
-        </KeepButton>
-      </form>
+      {sharedErrorBlock}
+      {sharedForm}
     </div>
   );
 }
