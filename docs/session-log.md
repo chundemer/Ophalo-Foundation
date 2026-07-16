@@ -97,20 +97,35 @@ and approve before R88a implementation. Build 087 remains paused.
    required desktop Email + Scan-to-Text QR and mobile Email + direct Text actions; do not bypass
    that state on mobile. Add Escape, initial focus, and focus restoration to the Quick Capture
    drawer.
-5. **R88e — GAP-016/GAP-017 staff fallback capture.** After phone-scope confirmation, implement
-   shared phone validation/correction and optional complete service-address capture through the
-   authenticated-create contract.
-6. **R88f — GAP-018 customer self-service New Request handoff.** Implement ADR-442: make the
+5. **R88e-a — GAP-016 shared backend normalization + public intake client readiness.** ADR-444
+   locked (10-digit North American, leading `+1`/`1` stripped). Change `PhoneNormalizer.IsValidLength`
+   to `== 10`; update `CustomerPhoneInvalidFormat` and `LookupKeepRequestByPhoneService` error
+   messages; update `IntakeForm.tsx` error-message translation. Add `PhoneNormalizerTests` and one
+   business-request integration test for 9-digit rejection. 4 production + 2 test = 6 files.
+6. **R88e-b — GAP-016/GAP-017 authenticated desktop staff fallback.** Add optional address params
+   to `CreateByBusiness` and the authenticated-create command/body/service. In Quick Capture: remove
+   `maxLength`, disable lookup/submit until exactly 10 normalized digits, show inline error, replace
+   read-only phone display with **Change** (preserves draft), add **Add service address (optional)**
+   disclosure. 8 production + 2 test = 10 files.
+7. **R88e-c — GAP-016/GAP-017 native mobile capture parity.** Align `useQuickCapture` and
+   `modal.tsx` to 10-digit gate; add service address disclosure matching R88e-b UX. 2 production
+   files; manual verification deferred to R88g.
+8. **R88f — GAP-018 customer self-service New Request handoff.** Implement ADR-442: make the
    durable business public-intake link the Owner/Admin handoff default and staff entry the visible
    fallback; preflight the public-intake and SMS-handoff contracts before coding.
-7. **R88g — Integrated PWA verification.** Run the complete desktop and mobile PWA matrix for all
+9. **R88g — Integrated PWA verification.** Run the complete desktop and mobile PWA matrix for all
    above flows, including QR handoffs, direct external actions, draft/error retention,
    accessibility, long data, and real-device behavior. Only then resume Build 087.
 
-R88a–R88d and R88f may preflight now. R88e requires the stated phone-policy decision; do not
-silently assume it. Every R88 slice requires its own bounded brief section, file-level preflight,
-proportionate verification, Christian's approval of the completed diff, and a commit before the
-next slice begins.
+R88a–R88d and R88f may preflight now. R88e-a is implementation-ready (ADR-444 locked, file-level
+preflight approved). R88e-b and R88e-c begin only after their predecessor commits. Every R88 slice
+requires its own bounded brief section, file-level preflight, proportionate verification,
+Christian's approval of the completed diff, and a commit before the next slice begins.
+
+**Public intake client-validation posture (R88e-a):** `IntakeForm.tsx` performs no client-side
+digit normalization; server-side `PhoneNormalizer` is authoritative. R88e-a updates the
+`CustomerPhoneInvalidFormat` error translation to `"Please enter a 10-digit phone number."` — no
+additional client-side digit-counting is added to the public intake form.
 
 ## Build 087 — Request List V1 Launch Pass
 
