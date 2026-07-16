@@ -1,16 +1,6 @@
 import { useState, useMemo, useRef, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import {
-  ChevronLeft,
-  ChevronRight,
-  Copy,
-  Check,
-  AlertTriangle,
-  Clock,
-  Phone,
-  Mail,
-  X,
-} from "lucide-react";
+import { ChevronLeft, ChevronRight, Phone, X } from "lucide-react";
 import {
   api,
   ApiError,
@@ -21,386 +11,33 @@ import { NeedsShareBanner } from "../components/NeedsShareBanner";
 import { ShareLinkModal } from "../components/ShareLinkModal";
 import { QuickCapture } from "../components/QuickCapture";
 import { KeepButton } from "../components/keep/KeepButton";
-import { KeepBadge, type KeepBadgeVariant } from "../components/keep/KeepBadge";
 import { ExternalContactForm } from "../components/ExternalContactForm";
 import {
   FOCUS_RING,
-  INPUT_CLS,
   STATUS_CONFLICT_MESSAGE,
   ALWAYS_HIDDEN_EVENT_TYPES,
-  formatDate,
-  buildAttentionGuidance,
 } from "./request-detail/helpers";
 import {
-  type HighlightLevel,
   type AttentionHighlights,
   getAttentionResolutionHighlights,
-  highlightBorderCls,
-  highlightBgCls,
-  highlightBoxShadow,
-  RecommendedActionBadge,
-  maxHighlight,
 } from "./request-detail/highlights";
 import { type TimelineFilter, isCommunicationEvent, TimelineEvent } from "./request-detail/TimelineEvent";
-import { TimingPanel } from "./request-detail/TimingPanel";
 import { TodayPromiseBanner, DetailHero } from "./request-detail/DetailHero";
 import { FollowUpResolutionPanel } from "./request-detail/FollowUpResolutionPanel";
-import { TeamSection } from "./request-detail/TeamSection";
-import { WorkDoneCard, CloseRequestCard } from "./request-detail/BusinessSection";
 import { UnifiedComposer } from "./request-detail/UnifiedComposer";
+import {
+  OriginalRequestCard,
+  AttentionGuidanceCard,
+  ProminentFeedbackCard,
+} from "./request-detail/DetailPanels";
+import { RequestDetailDesktopLayout } from "./request-detail/RequestDetailDesktopLayout";
+import {
+  RequestDetailMobileActions,
+  RequestDetailMobileContext,
+} from "./request-detail/RequestDetailMobileLayout";
 
 // ---------------------------------------------------------------------------
-// Handled outside Keep? — log contact affordance card
-// ---------------------------------------------------------------------------
-
-interface LogContactCardProps {
-  detail: KeepRequestDetailResult;
-  onContactLaunched: (direction: string, channel: string) => void;
-  highlight?: HighlightLevel;
-}
-
-function LogContactCard({ detail, onContactLaunched, highlight }: LogContactCardProps) {
-  const { canLogExternalContact } = detail.availableActions;
-  if (!canLogExternalContact) return null;
-  const contactChannel = detail.customerPhone ? "phone" : detail.customerEmail ? "email" : "other";
-  const shadow = highlightBoxShadow(highlight);
-  return (
-    <div
-      className={`rounded-xl border px-5 py-4 transition-[border-color,background-color,box-shadow] ${highlightBorderCls(highlight)} ${highlightBgCls()}`}
-      style={shadow ? { boxShadow: shadow } : undefined}
-    >
-      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-        <p className="text-sm font-semibold text-[var(--ophalo-ink)]">Log external contact</p>
-        <RecommendedActionBadge level={highlight} />
-      </div>
-      <p className="text-xs text-[var(--ophalo-muted)] mb-3">
-        Record a call, text, email, or in-person conversation outside Keep.
-      </p>
-      <KeepButton
-        type="button"
-        variant="secondary"
-        onClick={() => onContactLaunched("outbound", contactChannel)}
-        className="w-full"
-      >
-        Log external contact
-      </KeepButton>
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Clear attention — acknowledge stale attention without logging contact
-// ---------------------------------------------------------------------------
-
-interface MarkHandledCardProps {
-  requestId: string;
-  detail: KeepRequestDetailResult;
-  onDetailUpdated: (updated: KeepRequestDetailResult) => void;
-  highlight?: HighlightLevel;
-}
-
-function MarkHandledCard({ requestId, detail, onDetailUpdated, highlight }: MarkHandledCardProps) {
-  const { canAcknowledgeAttention } = detail.availableActions;
-  const hasAttention = detail.attentionLevel !== "none" && !!detail.attentionReason;
-  const { acknowledgeReasonMaxLength } = detail.validation;
-
-  const [reason, setReason] = useState("");
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [conflictDisabled, setConflictDisabled] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  if (!canAcknowledgeAttention || !hasAttention) return null;
-
-  const canSubmit = reason.trim().length > 0 && !isSubmitting && !conflictDisabled;
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!canSubmit) return;
-    setIsSubmitting(true);
-    setError(null);
-    try {
-      const updated = await api.acknowledgeAttention(requestId, reason.trim(), detail.version);
-      onDetailUpdated(updated);
-    } catch (e) {
-      if (e instanceof ApiError && e.status === 409) {
-        setConflictDisabled(true);
-        setError(STATUS_CONFLICT_MESSAGE);
-      } else {
-        setError("Could not clear attention. Try again.");
-      }
-    } finally {
-      setIsSubmitting(false);
-    }
-  }
-
-  const shadow = highlightBoxShadow(highlight);
-
-  return (
-    <div
-      className={`rounded-xl border px-5 py-4 transition-[border-color,background-color,box-shadow] ${highlightBorderCls(highlight)} ${highlightBgCls()}`}
-      style={shadow ? { boxShadow: shadow } : undefined}
-    >
-      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-        <p className="text-sm font-semibold text-[var(--ophalo-ink)]">Clear attention</p>
-        <RecommendedActionBadge level={highlight} />
-      </div>
-      <p className="text-xs text-[var(--ophalo-muted)] mb-3">
-        Use only when no customer update or contact log is needed.
-      </p>
-      {error && (
-        <div
-          className={`mb-3 rounded-lg p-3 text-xs ${
-            conflictDisabled
-              ? "bg-[var(--ophalo-attention-bg)] text-[var(--ophalo-attention)]"
-              : "bg-[var(--ophalo-danger-bg)] text-[var(--ophalo-danger)]"
-          }`}
-        >
-          {error}
-        </div>
-      )}
-      <form onSubmit={(e) => void handleSubmit(e)} className="space-y-2.5">
-        <div>
-          <label htmlFor="ack-reason" className="block text-xs font-semibold text-[var(--ophalo-muted)] mb-1">
-            Brief note before clearing
-          </label>
-          <textarea
-            id="ack-reason"
-            value={reason}
-            onChange={(e) => setReason(e.target.value)}
-            maxLength={acknowledgeReasonMaxLength}
-            disabled={conflictDisabled}
-            placeholder="Example: Reviewed — no follow-up needed."
-            rows={2}
-            className={`${INPUT_CLS} resize-none`}
-          />
-        </div>
-        <KeepButton type="submit" variant="secondary" disabled={!canSubmit} className="w-full">
-          {isSubmitting ? "Clearing…" : "Clear attention"}
-        </KeepButton>
-      </form>
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Feedback review
-// ---------------------------------------------------------------------------
-
-interface FeedbackReviewSectionProps {
-  requestId: string;
-  detail: KeepRequestDetailResult;
-  onDetailUpdated: (updated: KeepRequestDetailResult) => void;
-  onReviewSuccess?: () => void;
-}
-
-function FeedbackReviewSection({
-  requestId,
-  detail,
-  onDetailUpdated,
-  onReviewSuccess,
-}: FeedbackReviewSectionProps) {
-  const { canMarkFeedbackReviewed } = detail.availableActions;
-  const { feedbackReviewNoteMaxLength } = detail.validation;
-
-  const [note, setNote] = useState("");
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [conflictDisabled, setConflictDisabled] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  if (
-    !canMarkFeedbackReviewed ||
-    detail.feedbackWasResolved !== false ||
-    detail.feedbackReviewedAtUtc != null
-  )
-    return null;
-
-  const ageBucket = detail.feedbackReviewAgeBucket;
-  const ageLabel =
-    ageBucket === "overdue" ? "Overdue" : ageBucket === "aging" ? "Aging" : ageBucket === "new" ? "New" : null;
-  const ageBadgeVariant: KeepBadgeVariant =
-    ageBucket === "overdue" ? "danger" : ageBucket === "aging" ? "attention" : "default";
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (isSubmitting || conflictDisabled) return;
-    setIsSubmitting(true);
-    setError(null);
-    try {
-      const updated = await api.markFeedbackReviewed(
-        requestId,
-        { note: note.trim() || null },
-        detail.version,
-      );
-      onDetailUpdated(updated);
-      onReviewSuccess?.();
-    } catch (e) {
-      if (e instanceof ApiError && e.status === 409) {
-        setConflictDisabled(true);
-        setError(STATUS_CONFLICT_MESSAGE);
-      } else {
-        setError("Could not mark feedback reviewed. Try again.");
-      }
-    } finally {
-      setIsSubmitting(false);
-    }
-  }
-
-  return (
-    <div>
-      <div className="flex items-center gap-2 mb-2">
-        <p className="text-sm font-semibold text-[var(--ophalo-ink)]">Negative feedback</p>
-        {ageLabel && <KeepBadge variant={ageBadgeVariant}>{ageLabel}</KeepBadge>}
-      </div>
-      {detail.feedbackCommentVisible && detail.feedbackComment && (
-        <p className="text-xs text-[var(--ophalo-muted)] mb-2 italic">
-          &ldquo;{detail.feedbackComment}&rdquo;
-        </p>
-      )}
-      {error && (
-        <div
-          className={`mb-2 rounded-lg p-3 text-xs ${
-            conflictDisabled
-              ? "bg-[var(--ophalo-attention-bg)] text-[var(--ophalo-attention)]"
-              : "bg-[var(--ophalo-danger-bg)] text-[var(--ophalo-danger)]"
-          }`}
-        >
-          {error}
-        </div>
-      )}
-      <form onSubmit={(e) => void handleSubmit(e)} className="space-y-2">
-        <div>
-          <label htmlFor="feedback-note" className="sr-only">Internal note (optional)</label>
-          <textarea
-            id="feedback-note"
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-            maxLength={feedbackReviewNoteMaxLength}
-            disabled={conflictDisabled}
-            placeholder="Internal note (optional)…"
-            rows={2}
-            className={`${INPUT_CLS} resize-none`}
-          />
-        </div>
-        <KeepButton
-          type="submit"
-          variant="primary"
-          disabled={isSubmitting || conflictDisabled}
-          className="w-full"
-        >
-          {isSubmitting ? "Marking…" : "Mark reviewed"}
-        </KeepButton>
-      </form>
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Feedback summary card — quiet completed state for positive or reviewed feedback
-// ---------------------------------------------------------------------------
-
-function FeedbackSummaryCard({ detail }: { detail: KeepRequestDetailResult }) {
-  // Only positive feedback shows a summary card in Utilities.
-  // Unreviewed negative feedback appears in WorkControlsGroup (Utilities) or ProminentFeedbackCard (main column).
-  // Reviewed negative feedback is removed from Utilities entirely — it lives in the activity timeline.
-  if (detail.feedbackWasResolved !== true || !detail.feedbackSubmittedAtUtc) return null;
-
-  return (
-    <div className="rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-5 py-4">
-      <p className="text-sm font-semibold text-[var(--ophalo-ink)]">Customer feedback</p>
-      <p className="mt-1 text-xs text-[var(--ophalo-muted)]">
-        Customer confirmed their request was resolved
-        {detail.feedbackSubmittedAtUtc ? ` on ${formatDate(detail.feedbackSubmittedAtUtc)}` : ""}.
-      </p>
-      {detail.feedbackCommentVisible && detail.feedbackComment && (
-        <p className="mt-1.5 text-xs text-[var(--ophalo-muted)] italic">
-          &ldquo;{detail.feedbackComment}&rdquo;
-        </p>
-      )}
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Work controls group — focused review controls
-// ---------------------------------------------------------------------------
-
-interface WorkControlsGroupProps {
-  requestId: string;
-  detail: KeepRequestDetailResult;
-  onDetailUpdated: (updated: KeepRequestDetailResult) => void;
-  highlights: AttentionHighlights;
-  onReviewSuccess?: () => void;
-}
-
-function WorkControlsGroup({ requestId, detail, onDetailUpdated, highlights, onReviewSuccess }: WorkControlsGroupProps) {
-  const hasFeedback =
-    detail.availableActions.canMarkFeedbackReviewed &&
-    detail.feedbackWasResolved === false &&
-    detail.feedbackReviewedAtUtc == null;
-
-  if (!hasFeedback) return null;
-
-  const cardHighlight = maxHighlight(undefined, highlights.feedbackReview);
-  const shadow = highlightBoxShadow(cardHighlight);
-
-  return (
-    <div
-      id="work-controls"
-      className={`rounded-xl border overflow-hidden scroll-mt-4 transition-[border-color,box-shadow] bg-[var(--ophalo-card)] ${highlightBorderCls(cardHighlight)}`}
-      style={shadow ? { boxShadow: shadow } : undefined}
-    >
-      <div className="px-5 py-4">
-        <div className="mb-2 flex justify-end">
-          <RecommendedActionBadge level={highlights.feedbackReview} />
-        </div>
-        <FeedbackReviewSection requestId={requestId} detail={detail} onDetailUpdated={onDetailUpdated} onReviewSuccess={onReviewSuccess} />
-      </div>
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Prominent feedback card — main column card shown when opened from Feedback Review tab
-// ---------------------------------------------------------------------------
-
-interface ProminentFeedbackCardProps {
-  requestId: string;
-  detail: KeepRequestDetailResult;
-  onDetailUpdated: (updated: KeepRequestDetailResult) => void;
-  onReviewSuccess: () => void;
-}
-
-function ProminentFeedbackCard({ requestId, detail, onDetailUpdated, onReviewSuccess }: ProminentFeedbackCardProps) {
-  const isUnreviewedNegative =
-    detail.availableActions.canMarkFeedbackReviewed &&
-    detail.feedbackWasResolved === false &&
-    detail.feedbackReviewedAtUtc == null;
-
-  if (!isUnreviewedNegative) return null;
-
-  return (
-    <div
-      id="focus-panel-feedback_review"
-      className="rounded-xl border border-[var(--ophalo-attention)] bg-[var(--ophalo-attention-bg)] px-5 py-4 scroll-mt-4 space-y-3"
-    >
-      <div className="flex items-start justify-between gap-2">
-        <p className="text-sm font-semibold text-[var(--ophalo-ink)]">Customer feedback</p>
-        <KeepBadge variant="attention">Needs review</KeepBadge>
-      </div>
-      <p className="text-xs text-[var(--ophalo-muted)]">
-        Customer reported their request was <strong>not resolved</strong>
-        {detail.feedbackSubmittedAtUtc ? ` on ${formatDate(detail.feedbackSubmittedAtUtc)}` : ""}.
-      </p>
-      {detail.feedbackCommentVisible && detail.feedbackComment && (
-        <p className="text-sm text-[var(--ophalo-ink)] italic">&ldquo;{detail.feedbackComment}&rdquo;</p>
-      )}
-      <FeedbackReviewSection requestId={requestId} detail={detail} onDetailUpdated={onDetailUpdated} onReviewSuccess={onReviewSuccess} />
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Log external contact modal
+// Log external contact modal — controller-owned overlay
 // ---------------------------------------------------------------------------
 
 interface LogContactModalProps {
@@ -487,7 +124,6 @@ function LogContactModal({
           Save a Keep record of this contact. Opening the phone app is a separate step.
         </p>
 
-        {/* Phone number + utilities — detail-only affordance, synced via onChannelChange */}
         {showPhone && (
           <div className="flex flex-wrap items-center gap-3 mb-4 rounded-lg border border-[var(--ophalo-border)] bg-[var(--ophalo-canvas)] px-3 py-2.5">
             <span className="flex items-center gap-1.5 text-sm font-semibold text-[var(--ophalo-ink)]">
@@ -533,13 +169,8 @@ function LogContactModal({
   );
 }
 
-
 // ---------------------------------------------------------------------------
-// Original request card — context below the hero
-// ---------------------------------------------------------------------------
-
-// ---------------------------------------------------------------------------
-// Service Location
+// Service location modal — controller-owned overlay
 // ---------------------------------------------------------------------------
 
 const US_STATES: [string, string][] = [
@@ -739,392 +370,8 @@ function ServiceLocationModal({ requestId, detail, onDetailUpdated, onClose }: S
   );
 }
 
-interface OriginalRequestCardProps {
-  detail: KeepRequestDetailResult;
-}
-
-function OriginalRequestCard({ detail }: OriginalRequestCardProps) {
-  if (!detail.description) return null;
-  return (
-    <div className="rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-5 py-4">
-      <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ophalo-muted)] mb-1">
-        Customer description
-      </p>
-      <p className="text-sm leading-6 text-[var(--ophalo-ink)] whitespace-pre-wrap">
-        {detail.description}
-      </p>
-    </div>
-  );
-}
-
 // ---------------------------------------------------------------------------
-// Side panel context sections
-// ---------------------------------------------------------------------------
-
-interface CustomerPanelProps {
-  detail: KeepRequestDetailResult;
-  onContactLaunched: (direction: string, channel: string) => void;
-}
-
-function CustomerPanel({ detail, onContactLaunched }: CustomerPanelProps) {
-  const [copiedPhone, setCopiedPhone] = useState(false);
-  const [copiedEmail, setCopiedEmail] = useState(false);
-  const callAction = detail.contactActions.find((a) => a.available && a.type === "call");
-  const emailAction = detail.contactActions.find((a) => a.available && a.type !== "call");
-  const publicBaseUrl = (import.meta.env.VITE_PUBLIC_BASE_URL as string).replace(/\/$/, "");
-  const customerPageUrl = detail.pageToken ? `${publicBaseUrl}/keep/r/${detail.pageToken}` : null;
-  const canLogContact = detail.availableActions.canLogExternalContact;
-  const hasContact = !!(detail.customerPhone || detail.customerEmail);
-
-  if (!hasContact && !canLogContact) return null;
-
-  function copyToClipboard(text: string, setDone: (v: boolean) => void) {
-    navigator.clipboard.writeText(text).then(() => {
-      setDone(true);
-      setTimeout(() => setDone(false), 2000);
-    });
-  }
-
-  return (
-    <div>
-      <p className="px-1 text-xs font-semibold uppercase tracking-widest text-[var(--ophalo-muted)] mb-2">Customer</p>
-      <div className="rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-4 py-3 space-y-3">
-        {detail.customerPhone && (
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ophalo-muted)] mb-1">Phone</p>
-            <div className="flex items-center gap-2 flex-wrap">
-              <Phone className="h-3.5 w-3.5 shrink-0 text-[var(--ophalo-muted)]" />
-              <span className="text-sm text-[var(--ophalo-ink)]">{detail.customerPhone}</span>
-              <button
-                type="button"
-                onClick={() => copyToClipboard(detail.customerPhone!, setCopiedPhone)}
-                aria-label="Copy phone number"
-                className={`text-[var(--ophalo-muted)] hover:text-[var(--ophalo-ink)] transition-colors ${FOCUS_RING} rounded`}
-              >
-                {copiedPhone ? <Check className="h-3.5 w-3.5 text-green-600" /> : <Copy className="h-3.5 w-3.5" />}
-              </button>
-              {callAction && (
-                <a
-                  href={`tel:${callAction.target}`}
-                  onClick={() => onContactLaunched("outbound", "phone")}
-                  className={`inline-flex items-center gap-1 text-xs font-semibold text-[var(--keep-accent)] hover:underline ${FOCUS_RING} rounded`}
-                >
-                  <Phone className="h-3 w-3" />
-                  Call
-                </a>
-              )}
-            </div>
-          </div>
-        )}
-        {detail.customerEmail && (
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ophalo-muted)] mb-1">Email</p>
-            <div className="flex items-center gap-2 flex-wrap">
-              <Mail className="h-3.5 w-3.5 shrink-0 text-[var(--ophalo-muted)]" />
-              <span className="text-sm text-[var(--ophalo-ink)] break-all">{detail.customerEmail}</span>
-              <button
-                type="button"
-                onClick={() => copyToClipboard(detail.customerEmail!, setCopiedEmail)}
-                aria-label="Copy email address"
-                className={`text-[var(--ophalo-muted)] hover:text-[var(--ophalo-ink)] transition-colors ${FOCUS_RING} rounded`}
-              >
-                {copiedEmail ? <Check className="h-3.5 w-3.5 text-green-600" /> : <Copy className="h-3.5 w-3.5" />}
-              </button>
-              {emailAction && (
-                <a
-                  href={(() => {
-                    const subject = encodeURIComponent("Your request page link");
-                    const body = customerPageUrl
-                      ? encodeURIComponent(`Here is a link to your private request page:\n\n${customerPageUrl}`)
-                      : "";
-                    return `mailto:${emailAction.target}?subject=${subject}${body ? `&body=${body}` : ""}`;
-                  })()}
-                  onClick={() => onContactLaunched("outbound", "email")}
-                  className={`inline-flex items-center gap-1 text-xs font-semibold text-[var(--keep-accent)] hover:underline ${FOCUS_RING} rounded`}
-                >
-                  <Mail className="h-3 w-3" />
-                  Email
-                </a>
-              )}
-            </div>
-          </div>
-        )}
-        {canLogContact && (
-          <button
-            type="button"
-            onClick={() => onContactLaunched(
-              "outbound",
-              detail.customerPhone ? "phone" : detail.customerEmail ? "email" : "other"
-            )}
-            className={`w-full text-left text-xs font-semibold text-[var(--ophalo-muted)] hover:text-[var(--ophalo-ink)] transition-colors pt-2 border-t border-[var(--ophalo-border)] ${FOCUS_RING} rounded`}
-          >
-            Log external contact
-          </button>
-        )}
-      </div>
-    </div>
-  );
-}
-
-interface ServiceLocationPanelProps {
-  detail: KeepRequestDetailResult;
-  onDetailUpdated: (updated: KeepRequestDetailResult) => void;
-}
-
-function ServiceLocationPanel({ detail, onDetailUpdated }: ServiceLocationPanelProps) {
-  const [showModal, setShowModal] = useState(false);
-  const editTriggerRef = useRef<HTMLButtonElement>(null);
-  const canEdit = detail.availableActions.canAddInternalNote;
-  const hasAddress = !!(detail.serviceAddressLine1 || detail.serviceCity);
-
-  return (
-    <div>
-      <div className="flex items-center justify-between px-1 mb-2">
-        <p className="text-xs font-semibold uppercase tracking-widest text-[var(--ophalo-muted)]">Service Location</p>
-        {canEdit && hasAddress && (
-          <button
-            ref={editTriggerRef}
-            type="button"
-            onClick={() => setShowModal(true)}
-            className={`text-xs text-[var(--keep-accent)] hover:underline ${FOCUS_RING} rounded`}
-          >
-            Edit
-          </button>
-        )}
-      </div>
-      {hasAddress ? (
-        <div className="rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-4 py-3">
-          {detail.serviceAddressLine1 && (
-            <p className="text-sm font-semibold text-[var(--ophalo-ink)]">{detail.serviceAddressLine1}</p>
-          )}
-          {detail.serviceAddressLine2 && (
-            <p className="text-sm text-[var(--ophalo-ink)]">{detail.serviceAddressLine2}</p>
-          )}
-          {detail.serviceCity && detail.serviceState && (
-            <p className="text-sm text-[var(--ophalo-ink)]">
-              {detail.serviceCity}, {detail.serviceState}{detail.serviceZip ? ` ${detail.serviceZip}` : ""}
-            </p>
-          )}
-        </div>
-      ) : (
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[var(--ophalo-attention)] bg-[var(--ophalo-attention-bg)] px-4 py-3">
-          <div className="flex min-w-0 items-start gap-2">
-            <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--ophalo-attention)]" />
-            <div>
-              <p className="text-xs font-semibold text-[var(--ophalo-ink)]">Service location needed</p>
-              <p className="text-xs leading-5 text-[var(--ophalo-muted)]">
-                Add the address before dispatching or scheduling field work.
-              </p>
-            </div>
-          </div>
-          {canEdit && (
-            <button
-              ref={editTriggerRef}
-              type="button"
-              onClick={() => setShowModal(true)}
-              className={`inline-flex min-h-[32px] shrink-0 items-center rounded-lg border border-[var(--ophalo-attention)] bg-[var(--ophalo-card)] px-3 text-xs font-semibold text-[var(--ophalo-ink)] hover:bg-white transition-colors ${FOCUS_RING}`}
-            >
-              Add location
-            </button>
-          )}
-        </div>
-      )}
-      {showModal && (
-        <ServiceLocationModal
-          requestId={detail.requestId}
-          detail={detail}
-          onDetailUpdated={onDetailUpdated}
-          onClose={() => { setShowModal(false); editTriggerRef.current?.focus(); }}
-        />
-      )}
-    </div>
-  );
-}
-
-interface TriagePanelProps {
-  detail: KeepRequestDetailResult;
-  onDetailUpdated: (updated: KeepRequestDetailResult) => void;
-}
-
-function TriagePanel({ detail, onDetailUpdated }: TriagePanelProps) {
-  const [pendingPriority, setPendingPriority] = useState<string | null | undefined>(undefined);
-  const canEdit = detail.availableActions.canAddInternalNote;
-  const displayPriority = pendingPriority !== undefined ? pendingPriority : detail.businessPriority;
-  const hasCustomerSignal = detail.source === "public_intake" &&
-    !!(detail.intakeUrgency || detail.contactPreference);
-
-  return (
-    <div>
-      <p className="px-1 text-xs font-semibold uppercase tracking-widest text-[var(--ophalo-muted)] mb-2">Triage</p>
-      <div className="rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-4 py-3 space-y-3">
-        {hasCustomerSignal && (
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ophalo-muted)] mb-1">Customer signal</p>
-            <div className="flex flex-wrap gap-1.5 mb-1.5">
-              {detail.intakeUrgency === "urgent" && <KeepBadge variant="attention">Customer marked urgent</KeepBadge>}
-              {detail.intakeUrgency === "soon" && <KeepBadge variant="default">Customer asked for soon follow-up</KeepBadge>}
-              {detail.contactPreference === "phone_call" && <KeepBadge variant="default">Prefers call</KeepBadge>}
-              {detail.contactPreference === "text_message" && <KeepBadge variant="default">Prefers text</KeepBadge>}
-              {detail.contactPreference === "email" && <KeepBadge variant="default">Prefers email</KeepBadge>}
-              {detail.contactPreference === "no_preference" && <KeepBadge variant="default">No preference</KeepBadge>}
-            </div>
-            <p className="text-xs text-[var(--ophalo-muted)]">
-              Review the request, then update the customer or log contact if needed.
-            </p>
-          </div>
-        )}
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ophalo-muted)] mb-1">Internal priority</p>
-          {canEdit ? (
-            <>
-              <select
-                value={displayPriority ?? ""}
-                onChange={async (e) => {
-                  const val = e.target.value || null;
-                  setPendingPriority(val);
-                  try {
-                    const updated = await api.setBusinessPriority(detail.requestId, val, detail.version);
-                    onDetailUpdated(updated);
-                  } catch {
-                    // revert optimistic on error
-                  } finally {
-                    setPendingPriority(undefined);
-                  }
-                }}
-                className="text-xs text-[var(--ophalo-ink)] bg-transparent border border-[var(--ophalo-border)] rounded px-2 py-0.5 focus:outline-none focus:ring-1 focus:ring-[var(--keep-accent)]"
-              >
-                <option value="">Not set</option>
-                <option value="routine">Routine</option>
-                <option value="soon">Soon</option>
-                <option value="urgent">Urgent</option>
-              </select>
-              {!displayPriority && (
-                <p className="text-xs text-[var(--ophalo-muted)] mt-1">
-                  Set priority to handle this ahead of routine work.
-                </p>
-              )}
-            </>
-          ) : (
-            <span className="text-sm font-semibold text-[var(--ophalo-ink)]">
-              {detail.businessPriority === "urgent" && "Team marked urgent"}
-              {detail.businessPriority === "soon" && "Team marked soon"}
-              {detail.businessPriority === "routine" && "Routine"}
-              {!detail.businessPriority && <span className="text-[var(--ophalo-muted)]">Not set</span>}
-            </span>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-interface SourceMetaPanelProps {
-  detail: KeepRequestDetailResult;
-}
-
-function SourceMetaPanel({ detail }: SourceMetaPanelProps) {
-  return (
-    <div className="px-1 space-y-0.5">
-      <p className="text-xs text-[var(--ophalo-muted)]">
-        Source: {detail.source === "public_intake" ? "Customer intake form" : "Team added"}
-      </p>
-      <p className="text-xs text-[var(--ophalo-muted)]">
-        Submitted {formatDate(detail.createdAtUtc)}
-      </p>
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Needs attention guidance — frontend-mapped until backend action effects land
-// ---------------------------------------------------------------------------
-
-interface AttentionGuidanceCardProps {
-  detail: KeepRequestDetailResult;
-  highlights: AttentionHighlights;
-}
-
-function AttentionGuidanceCard({ detail, highlights }: AttentionGuidanceCardProps) {
-  const guidance = buildAttentionGuidance(detail);
-  if (!guidance) return null;
-
-  const isOverdue = detail.attentionLevel === "overdue";
-
-  const primaryPanelLabel: string | null = (() => {
-    if (highlights.sendUpdate === "primary") return "Send customer update";
-    if (highlights.logContact === "primary") return "Log external contact";
-    if (highlights.feedbackReview === "primary") return "Review feedback";
-    if (highlights.markHandled === "primary") return "Clear attention";
-    return null;
-  })();
-
-  return (
-    <section className="rounded-xl border border-[var(--ophalo-border)] border-l-4 border-l-[var(--ophalo-attention)] bg-[var(--ophalo-attention-bg)] px-5 py-4">
-      <div className="flex flex-wrap items-center gap-2 mb-3">
-        <KeepBadge variant={isOverdue ? "danger" : "attention"}>
-          {isOverdue ? (
-            <AlertTriangle className="h-3 w-3 mr-1 shrink-0" />
-          ) : (
-            <Clock className="h-3 w-3 mr-1 shrink-0" />
-          )}
-          Needs attention
-        </KeepBadge>
-        <span className="text-sm font-semibold text-[var(--ophalo-ink)]">{guidance.label}</span>
-      </div>
-
-      <div className="space-y-3">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ophalo-attention)]">
-            Why
-          </p>
-          <p className="mt-1 text-sm leading-6 text-[var(--ophalo-ink)]">{guidance.why}</p>
-        </div>
-
-        {guidance.sourceText && (
-          <div className="rounded-lg border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-3 py-2.5">
-            {guidance.sourceLabel && (
-              <p className="text-xs font-semibold text-[var(--ophalo-muted)] mb-1">
-                {guidance.sourceLabel}
-              </p>
-            )}
-            <p className="text-sm leading-6 text-[var(--ophalo-ink)] italic">
-              "{guidance.sourceText}"
-            </p>
-          </div>
-        )}
-
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ophalo-attention)]">
-            Resolve by
-          </p>
-          <p className="mt-1 text-sm leading-6 text-[var(--ophalo-ink)]">{guidance.resolveBy}</p>
-          {guidance.afterHandled && (
-            <p className="mt-1 text-xs leading-5 text-[var(--ophalo-muted)]">
-              {guidance.afterHandled}
-            </p>
-          )}
-        </div>
-
-        {primaryPanelLabel && (
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ophalo-attention)]">
-              Recommended next step
-            </p>
-            <p className="mt-1 text-sm text-[var(--ophalo-ink)]">
-              {highlights.sendUpdate === "primary"
-                ? "Recommended: Send customer update using the highlighted panel on the right."
-                : highlights.logContact === "primary"
-                  ? "Recommended: Log external contact using the highlighted panel on the right."
-                  : "Use the highlighted panel on the right."}
-            </p>
-          </div>
-        )}
-      </div>
-    </section>
-  );
-}
-// ---------------------------------------------------------------------------
-// RequestDetail page
+// Loading skeleton
 // ---------------------------------------------------------------------------
 
 function RequestDetailSkeleton() {
@@ -1135,9 +382,7 @@ function RequestDetailSkeleton() {
       aria-label="Loading request details"
       className="flex flex-1 min-h-0 overflow-hidden md:grid md:[grid-template-columns:minmax(0,7fr)_minmax(320px,3fr)]"
     >
-      {/* Left / main column */}
       <div className="flex-1 md:flex-none overflow-y-auto px-4 md:px-6 py-5 space-y-4">
-        {/* Hero */}
         <div className="rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-5 py-5">
           <div className="flex gap-2 mb-3">
             <div className={`h-5 w-16 ${pulse}`} />
@@ -1145,7 +390,6 @@ function RequestDetailSkeleton() {
           </div>
           <div className={`h-8 w-56 ${pulse}`} />
         </div>
-        {/* Composer */}
         <div className="rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-5 py-4 space-y-3">
           <div className="flex gap-2">
             <div className={`h-8 w-36 ${pulse}`} />
@@ -1153,13 +397,11 @@ function RequestDetailSkeleton() {
           </div>
           <div className={`h-24 w-full ${pulse}`} />
         </div>
-        {/* Activity */}
         <div className="rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-5 py-4 space-y-3">
           <div className={`h-4 w-20 ${pulse}`} />
           <div className={`h-3 w-48 ${pulse}`} />
         </div>
       </div>
-      {/* Sidebar — desktop only */}
       <div className="hidden md:flex md:flex-col border-l border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-4 py-5 gap-4">
         <div className={`h-24 w-full ${pulse}`} />
         <div className={`h-16 w-full ${pulse}`} />
@@ -1168,6 +410,10 @@ function RequestDetailSkeleton() {
     </div>
   );
 }
+
+// ---------------------------------------------------------------------------
+// RequestDetail page — controller
+// ---------------------------------------------------------------------------
 
 interface RequestDetailProps {
   requestId: string;
@@ -1183,6 +429,7 @@ export function RequestDetail({ requestId, focusPanel, onBack, prevId, nextId, o
   const [shareModalOpen, setShareModalOpen] = useState(false);
   const [followUpPanelOpen, setFollowUpPanelOpen] = useState(false);
   const [followUpCaptureOpen, setFollowUpCaptureOpen] = useState(false);
+  const [serviceLocationModalOpen, setServiceLocationModalOpen] = useState(false);
   const [contactModal, setContactModal] = useState<{ direction: string; channel: string } | null>(null);
   const [businessUpdateDraft, setBusinessUpdateDraft] = useState("");
   const [businessUpdateDraftStatus, setBusinessUpdateDraftStatus] = useState("");
@@ -1192,6 +439,7 @@ export function RequestDetail({ requestId, focusPanel, onBack, prevId, nextId, o
   const queryClient = useQueryClient();
 
   const lastFocusRef = useRef<HTMLElement | null>(null);
+  const serviceLocationFocusRef = useRef<HTMLElement | null>(null);
 
   const { data: detail, isLoading, isError, isFetching, error, refetch } = useQuery({
     queryKey: ["request-detail", requestId],
@@ -1278,6 +526,11 @@ export function RequestDetail({ requestId, focusPanel, onBack, prevId, nextId, o
     setContactModal({ direction, channel });
   }
 
+  function handleOpenServiceLocation() {
+    serviceLocationFocusRef.current = document.activeElement as HTMLElement;
+    setServiceLocationModalOpen(true);
+  }
+
   const filterBtnCls = (active: boolean) =>
     `flex-1 px-3 py-1.5 text-xs font-semibold transition-colors ${FOCUS_RING} ${
       active
@@ -1285,93 +538,9 @@ export function RequestDetail({ requestId, focusPanel, onBack, prevId, nextId, o
         : "bg-[var(--ophalo-card)] text-[var(--ophalo-muted)] hover:text-[var(--ophalo-ink)]"
     }`;
 
-  function renderCreateFollowUpCard() {
-    if (!detail?.availableActions.canCreateFollowUpRequest) return null;
-    const prefillDescription = `Follow-up to closed request ${detail.referenceCode}: ${detail.description}`;
-    return (
-      <div className="rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-5 py-4">
-        <p className="text-sm font-semibold text-[var(--ophalo-ink)] mb-1">Follow-up work</p>
-        <p className="text-xs text-[var(--ophalo-muted)] mb-3">
-          This request is closed. Start a new request for any additional work needed.
-        </p>
-        <KeepButton
-          variant="secondary"
-          onClick={() => setFollowUpCaptureOpen(true)}
-          className="w-full"
-        >
-          Create follow-up request
-        </KeepButton>
-        {followUpCaptureOpen && (
-          <QuickCapture
-            onClose={() => setFollowUpCaptureOpen(false)}
-            followUpPrefill={{
-              phone: detail.customerPhone,
-              name: detail.customerName,
-              email: detail.customerEmail ?? undefined,
-              description: prefillDescription,
-            }}
-          />
-        )}
-      </div>
-    );
-  }
-
-  // Primary communication actions: Send update + contact log + mark handled + work controls
-  function renderPrimaryActions() {
-    if (!detail) return null;
-    return (
-      <>
-        <WorkDoneCard
-          requestId={requestId}
-          detail={detail}
-          onDetailUpdated={handleDetailUpdated}
-        />
-        <CloseRequestCard
-          requestId={requestId}
-          detail={detail}
-          onDetailUpdated={handleDetailUpdated}
-        />
-        <LogContactCard
-          detail={detail}
-          onContactLaunched={handleContactLaunched}
-          highlight={highlights.logContact}
-        />
-        <MarkHandledCard
-          requestId={requestId}
-          detail={detail}
-          onDetailUpdated={handleDetailUpdated}
-          highlight={highlights.markHandled}
-        />
-        {!showProminentFeedbackCard && (
-          <WorkControlsGroup
-            requestId={requestId}
-            detail={detail}
-            onDetailUpdated={handleDetailUpdated}
-            highlights={{ feedbackReview: "secondary" }}
-            onReviewSuccess={handleReviewSuccess}
-          />
-        )}
-        <FeedbackSummaryCard detail={detail} />
-        {renderCreateFollowUpCard()}
-      </>
-    );
-  }
-
-  // Team / context: participation, timing
-  function renderTeamSection() {
-    if (!detail) return null;
-    return (
-      <TeamSection
-        requestId={requestId}
-        detail={detail}
-        onDetailUpdated={handleDetailUpdated}
-      />
-    );
-  }
-
   return (
     <div className="flex flex-col h-full bg-[var(--ophalo-canvas)]">
-      {/* Log contact modal */}
+      {/* Controller-owned overlays */}
       {contactModal && detail && (
         <LogContactModal
           requestId={requestId}
@@ -1382,8 +551,14 @@ export function RequestDetail({ requestId, focusPanel, onBack, prevId, nextId, o
           onClose={() => { setContactModal(null); lastFocusRef.current?.focus(); }}
         />
       )}
-
-      {/* Share Link modal */}
+      {serviceLocationModalOpen && detail && (
+        <ServiceLocationModal
+          requestId={requestId}
+          detail={detail}
+          onDetailUpdated={handleDetailUpdated}
+          onClose={() => { setServiceLocationModalOpen(false); serviceLocationFocusRef.current?.focus(); }}
+        />
+      )}
       {shareModalOpen && (
         <ShareLinkModal
           requestId={requestId}
@@ -1391,14 +566,23 @@ export function RequestDetail({ requestId, focusPanel, onBack, prevId, nextId, o
           onShared={handleShareCleared}
         />
       )}
-
-      {/* Follow-up resolution panel */}
       {followUpPanelOpen && detail && (
         <FollowUpResolutionPanel
           requestId={requestId}
           detail={detail}
           onDetailUpdated={handleDetailUpdated}
           onClose={() => setFollowUpPanelOpen(false)}
+        />
+      )}
+      {followUpCaptureOpen && detail && (
+        <QuickCapture
+          onClose={() => setFollowUpCaptureOpen(false)}
+          followUpPrefill={{
+            phone: detail.customerPhone,
+            name: detail.customerName,
+            email: detail.customerEmail ?? undefined,
+            description: `Follow-up to closed request ${detail.referenceCode}: ${detail.description}`,
+          }}
         />
       )}
 
@@ -1477,14 +661,13 @@ export function RequestDetail({ requestId, focusPanel, onBack, prevId, nextId, o
       {/* Main content */}
       {detail && (
         <div className="flex flex-1 min-h-0 overflow-hidden md:grid md:[grid-template-columns:minmax(0,7fr)_minmax(320px,3fr)]">
-          {/* Left / main column */}
+          {/* Left / main column — shared content with mobile layout injections */}
           <div className="flex-1 md:flex-none overflow-y-auto px-4 md:px-6 py-5 space-y-4">
             <TodayPromiseBanner
               detail={detail}
               onRecordFollowUp={() => setFollowUpPanelOpen(true)}
             />
 
-            {/* Hero: identity + status */}
             <DetailHero
               detail={detail}
               canRecordShareIntent={canShare}
@@ -1492,21 +675,27 @@ export function RequestDetail({ requestId, focusPanel, onBack, prevId, nextId, o
               onOpenShareDrawer={() => setShareModalOpen(true)}
             />
 
-            {/* Original request: customer description */}
             <OriginalRequestCard detail={detail} />
 
-            {/* Needs attention: why it is here + how to handle it */}
-            <AttentionGuidanceCard
-              detail={detail}
-              highlights={highlights}
-            />
+            <AttentionGuidanceCard detail={detail} highlights={highlights} />
 
-            {/* Mobile: primary actions appear before the timeline */}
+            {/* Mobile: primary actions before the composer */}
             <div className="md:hidden space-y-4">
-              {renderPrimaryActions()}
+              <RequestDetailMobileActions
+                requestId={requestId}
+                detail={detail}
+                highlights={highlights}
+                showProminentFeedbackCard={showProminentFeedbackCard}
+                onDetailUpdated={handleDetailUpdated}
+                onContactLaunched={handleContactLaunched}
+                onEditLocation={handleOpenServiceLocation}
+                onRecordFollowUp={() => setFollowUpPanelOpen(true)}
+                onCreateFollowUp={() => setFollowUpCaptureOpen(true)}
+                onReviewSuccess={handleReviewSuccess}
+              />
             </div>
 
-            {/* Unified composer — Customer Update and Internal Note tabs */}
+            {/* Unified composer */}
             <div id="focus-panel-update">
               <UnifiedComposer
                 requestId={requestId}
@@ -1520,7 +709,7 @@ export function RequestDetail({ requestId, focusPanel, onBack, prevId, nextId, o
               />
             </div>
 
-            {/* Prominent feedback card — only when opened from Feedback Review tab with unreviewed negative feedback */}
+            {/* Prominent feedback — only when opened from Feedback Review with unreviewed negative feedback */}
             {showProminentFeedbackCard && (
               <ProminentFeedbackCard
                 requestId={requestId}
@@ -1584,73 +773,36 @@ export function RequestDetail({ requestId, focusPanel, onBack, prevId, nextId, o
               )}
             </div>
 
-            {/* Mobile: contact, location, triage, timing, team, internal — after activity */}
+            {/* Mobile: context panels after the timeline */}
             <div className="md:hidden space-y-4 pb-6">
-              <CustomerPanel detail={detail} onContactLaunched={handleContactLaunched} />
-              <ServiceLocationPanel detail={detail} onDetailUpdated={handleDetailUpdated} />
-              <TriagePanel detail={detail} onDetailUpdated={handleDetailUpdated} />
-              <TimingPanel requestId={requestId} detail={detail} onDetailUpdated={handleDetailUpdated} onRecordFollowUp={() => setFollowUpPanelOpen(true)} />
-              {renderTeamSection()}
-              <SourceMetaPanel detail={detail} />
+              <RequestDetailMobileContext
+                requestId={requestId}
+                detail={detail}
+                highlights={highlights}
+                showProminentFeedbackCard={showProminentFeedbackCard}
+                onDetailUpdated={handleDetailUpdated}
+                onContactLaunched={handleContactLaunched}
+                onEditLocation={handleOpenServiceLocation}
+                onRecordFollowUp={() => setFollowUpPanelOpen(true)}
+                onCreateFollowUp={() => setFollowUpCaptureOpen(true)}
+                onReviewSuccess={handleReviewSuccess}
+              />
             </div>
           </div>
 
-          {/* Right panel — desktop only */}
-          <aside className="hidden md:flex md:flex-col border-l border-[var(--ophalo-border)] bg-[var(--ophalo-card)] overflow-y-auto px-4 py-5 gap-4">
-            {/* Actions: lifecycle, contact, timing, follow-up work */}
-            <WorkDoneCard
-              requestId={requestId}
-              detail={detail}
-              onDetailUpdated={handleDetailUpdated}
-            />
-            <div id="focus-panel-closeout">
-              <CloseRequestCard
-                requestId={requestId}
-                detail={detail}
-                onDetailUpdated={handleDetailUpdated}
-              />
-            </div>
-            <div id="focus-panel-contact">
-              <LogContactCard
-                detail={detail}
-                onContactLaunched={handleContactLaunched}
-                highlight={highlights.logContact}
-              />
-            </div>
-            <div id="focus-panel-attention">
-              <MarkHandledCard
-                requestId={requestId}
-                detail={detail}
-                onDetailUpdated={handleDetailUpdated}
-                highlight={highlights.markHandled}
-              />
-            </div>
-            <TimingPanel
-              requestId={requestId}
-              detail={detail}
-              onDetailUpdated={handleDetailUpdated}
-              onRecordFollowUp={() => setFollowUpPanelOpen(true)}
-            />
-            {!showProminentFeedbackCard && (
-              <WorkControlsGroup
-                requestId={requestId}
-                detail={detail}
-                onDetailUpdated={handleDetailUpdated}
-                highlights={{ feedbackReview: "secondary" }}
-                onReviewSuccess={handleReviewSuccess}
-              />
-            )}
-            {renderCreateFollowUpCard()}
-
-            {/* Context: customer identity, location, triage, team, feedback summary, source */}
-            <hr className="border-[var(--ophalo-border)]" />
-            <CustomerPanel detail={detail} onContactLaunched={handleContactLaunched} />
-            <ServiceLocationPanel detail={detail} onDetailUpdated={handleDetailUpdated} />
-            <TriagePanel detail={detail} onDetailUpdated={handleDetailUpdated} />
-            {!showProminentFeedbackCard && <FeedbackSummaryCard detail={detail} />}
-            {renderTeamSection()}
-            <SourceMetaPanel detail={detail} />
-          </aside>
+          {/* Desktop sidebar */}
+          <RequestDetailDesktopLayout
+            requestId={requestId}
+            detail={detail}
+            highlights={highlights}
+            showProminentFeedbackCard={showProminentFeedbackCard}
+            onDetailUpdated={handleDetailUpdated}
+            onContactLaunched={handleContactLaunched}
+            onEditLocation={handleOpenServiceLocation}
+            onRecordFollowUp={() => setFollowUpPanelOpen(true)}
+            onCreateFollowUp={() => setFollowUpCaptureOpen(true)}
+            onReviewSuccess={handleReviewSuccess}
+          />
         </div>
       )}
     </div>
