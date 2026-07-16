@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { X } from "lucide-react";
 import { type PhoneLookupResult } from "../lib/apiClient";
 import { type Stage } from "./quick-capture/utils";
@@ -20,7 +20,25 @@ export interface QuickCaptureProps {
 
 export function QuickCapture({ onClose, onSelectRequest, isPastDue = false, isReadOnly = false, followUpPrefill }: QuickCaptureProps) {
   const publicBaseUrl = import.meta.env.VITE_PUBLIC_BASE_URL as string;
-  const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
+
+  const panelRef = useRef<HTMLDivElement>(null);
+  const previousFocusRef = useRef<HTMLElement | null>(null);
+
+  // Capture trigger element for focus restoration on unmount
+  useEffect(() => {
+    previousFocusRef.current = document.activeElement as HTMLElement;
+    panelRef.current?.focus();
+    return () => { previousFocusRef.current?.focus(); };
+  }, []);
+
+  // Escape to close
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") { e.preventDefault(); onClose(); }
+    }
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [onClose]);
 
   const [stage, setStage] = useState<Stage>(
     followUpPrefill
@@ -39,17 +57,8 @@ export function QuickCapture({ onClose, onSelectRequest, isPastDue = false, isRe
     }
   }
 
-  function handleCaptureSuccess(requestId: string, referenceCode: string, pageToken: string) {
-    if (isMobile) {
-      if (onSelectRequest) {
-        onSelectRequest(requestId);
-        onClose();
-      } else {
-        window.location.href = `/keep/requests/${requestId}`;
-      }
-      return;
-    }
-    setStage({ kind: "success", requestId, referenceCode, pageToken });
+  function handleCaptureSuccess(requestId: string, referenceCode: string, pageToken: string, customerPhone: string, customerEmail: string | null, customerName: string) {
+    setStage({ kind: "success", requestId, referenceCode, pageToken, customerPhone, customerEmail, customerName });
   }
 
   function handleCaptureAnother() {
@@ -140,6 +149,9 @@ export function QuickCapture({ onClose, onSelectRequest, isPastDue = false, isRe
         referenceCode={stage.referenceCode}
         pageToken={stage.pageToken}
         publicBaseUrl={publicBaseUrl}
+        customerPhone={stage.customerPhone}
+        customerEmail={stage.customerEmail}
+        customerName={stage.customerName}
         onCaptureAnother={handleCaptureAnother}
         onViewRequest={() => handleViewRequest(stage.requestId)}
       />
@@ -159,11 +171,13 @@ export function QuickCapture({ onClose, onSelectRequest, isPastDue = false, isRe
 
       {/* Panel */}
       <div
+        ref={panelRef}
         role="dialog"
         aria-modal="true"
         aria-label={title}
+        tabIndex={-1}
         className={[
-          "fixed z-50 bg-white shadow-xl flex flex-col",
+          "fixed z-50 bg-white shadow-xl flex flex-col focus:outline-none",
           "md:right-0 md:top-0 md:bottom-0 md:w-[420px] md:max-w-full",
           "max-md:inset-0",
         ].join(" ")}

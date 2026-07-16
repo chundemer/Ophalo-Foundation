@@ -4,7 +4,7 @@ export type Stage =
   | { kind: "lookup" }
   | { kind: "result"; lookup: PhoneLookupResult; lockedPhone: string }
   | { kind: "capture"; prefill: { name?: string; email?: string } | null; lockedPhone: string }
-  | { kind: "success"; requestId: string; referenceCode: string; pageToken: string };
+  | { kind: "success"; requestId: string; referenceCode: string; pageToken: string; customerPhone: string; customerEmail: string | null; customerName: string };
 
 export const SOURCE_OPTIONS = [
   { label: "Phone Call", value: "phone" },

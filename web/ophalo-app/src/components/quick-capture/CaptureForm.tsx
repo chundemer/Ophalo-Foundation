@@ -9,7 +9,7 @@ interface CaptureFormProps {
   prefill: { name?: string; email?: string; description?: string } | null;
   isPastDue: boolean;
   isReadOnly: boolean;
-  onSuccess: (requestId: string, referenceCode: string, pageToken: string) => void;
+  onSuccess: (requestId: string, referenceCode: string, pageToken: string, customerPhone: string, customerEmail: string | null, customerName: string) => void;
   onBack: () => void;
   onClose: () => void;
 }
@@ -37,7 +37,7 @@ export function CaptureForm({
         description: description.trim(),
         source,
       }),
-    onSuccess: (result) => onSuccess(result.requestId, result.referenceCode, result.pageToken),
+    onSuccess: (result) => onSuccess(result.requestId, result.referenceCode, result.pageToken, lockedPhone, email.trim() || null, name.trim()),
   });
 
   const apiError = error instanceof ApiError ? error : null;
