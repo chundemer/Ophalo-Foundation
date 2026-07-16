@@ -2,9 +2,10 @@
 
 ## Greenfield Boundaries, Brownfield Behavior
 
-**Status:** Locked build direction — ready for Phase 0 / Phase 1 execution  
-**Product context:** OpHalo Foundation with Keep as the first product module  
+**Status:** Foundation and initial PWA build complete; production-readiness execution in progress
+**Product context:** OpHalo Foundation with Keep as the first product module
 **Working doctrine:** Build a clean foundation without reinventing proven behavior  
+**Last updated:** 2026-07-15
 
 ---
 
@@ -1376,7 +1377,159 @@ Exit gate:
 
 ---
 
-## 9.1 Post-Session-8 Pilot Readiness Roadmap
+## 9.0 Current State And Path To Production
+
+### Current State — 2026-07-15
+
+The initial Foundation and Keep PWA build is complete. The authenticated workbench, public intake,
+customer tracker, customer feedback loop, request timing, participation, public/auth surfaces, and
+native mobile foundation/field-workflow work have been built in prior sessions.
+
+The immediate work is no longer foundational architecture. It is a focused public-launch readiness
+pass for the PWA and marketing/onboarding surfaces, followed by a controlled Vercel deployment and
+real-device PWA validation.
+
+The two highest-priority PWA workbench decisions are locked but not yet implemented:
+
+- **Build 086 — Request Detail V1 Launch Pass:** unified customer-update/internal-note composer,
+  summary-first timing, action/context sidebar structure, safe/state-aware work completion,
+  readable type/contrast, keyboard guidance, mobile placement, skeleton, and Retry.
+- **Build 087 — Request List V1 Launch Pass:** Default Queue/Feedback Review separation,
+  Needs Attention count alignment, one-status/one-exception row anatomy, description preview,
+  validated action-priority matrix, readable type, semantic color/icons, search, skeleton, and
+  Retry.
+
+These documents are the controlling requirements for the next two PWA implementation sessions.
+They do not authorize lifecycle, authorization, customer-visibility, or data-model redesign.
+
+### Active Production Sequence
+
+#### Gate 1 — Request Detail V1 implementation and verification
+
+Implement Build 086 as a bounded polish slice.
+
+Required completion evidence:
+
+- focused PWA and relevant backend tests pass;
+- TypeScript/build checks pass;
+- contrast, keyboard, screen-reader-label, long-data, responsive, and 200% zoom checks pass;
+- desktop and mobile Request Detail flows preserve server action policy, concurrency behavior, and
+  customer/internal visibility boundaries;
+- Build 086 is updated from “implementation pending” only after the evidence is recorded.
+
+#### Gate 2 — Request List V1 implementation and verification
+
+Implement Build 087 as a bounded polish slice after Gate 1.
+
+Required completion evidence:
+
+- Default, Needs Attention, Feedback Review, and Ready-to-Close query/count behavior agrees with
+  the locked list policy;
+- the Closed-row “Response overdue” screenshot condition is reproduced or disproven against the
+  current API/build before any backend bug claim is made;
+- focused list API/service and PWA tests, TypeScript/build checks, accessibility, long-data,
+  responsive, and 200% zoom checks pass;
+- Build 087 is updated from “implementation pending” only after the evidence is recorded.
+
+#### Gate 3 — Marketing and onboarding launch pass
+
+Review the marketing and public-auth surfaces one page at a time before code changes. Treat the
+business owner’s first-use path as one continuous journey:
+
+```text
+Marketing page → sign in/start → check email/exchange → business setup → public intake setup
+→ first request → customer-page sharing → Request List → Request Detail
+```
+
+Validate at minimum:
+
+- homepage, product positioning, trust, Privacy, Terms, and contact/pilot calls to action;
+- mobile readability, navigation, loading/error/empty states, SEO metadata, and public-link
+  correctness;
+- sign-in, magic-link exchange/error handling, invite acceptance, and safe redirect behavior;
+- day-zero account setup, business public identity, intake link, response policy, team handoff,
+  and completion guidance;
+- no misleading promise about unsupported notifications, native capability, or future automation.
+
+Record a dedicated locked launch-pass brief before implementing marketing/onboarding changes, using
+the same decision-first method as Builds 086 and 087.
+
+#### Gate 4 — Vercel production-candidate deployment
+
+Deploy a production candidate to Vercel before the public production promotion. Verify the actual
+deployed environment rather than relying on localhost behavior.
+
+Required checks:
+
+- production/preview environment variables, API/public base URLs, cookie domain, CORS, redirects,
+  and customer tracker/intake links;
+- auth, logout, onboarding, public intake, tracker sharing, Request List, Request Detail, feedback,
+  and error/retry flows;
+- `/health/ready` and relevant service health/diagnostic checks;
+- custom domain, TLS, cache behavior, robots/metadata/sitemap as applicable, and no exposed test or
+  development configuration;
+- production support contacts, known limitations, rollback/incident procedure, and an explicit
+  go/no-go checklist.
+
+#### Gate 5 — Real-device PWA validation
+
+Test the Vercel production candidate on real iPhone and Android devices before public promotion,
+then repeat a concise smoke test after production deployment.
+
+Required scenarios:
+
+- browser and installed-PWA entry, sign-in, refresh, logout, and session recovery;
+- Request List, Request Detail, Quick Capture, public intake, customer tracker, sharing, feedback,
+  and key error/conflict behavior;
+- touch targets, keyboard/viewport behavior, safe-area layout, orientation, slow/poor-network
+  behavior, and refresh/resume recovery;
+- no unsupported offline, push, or native capability claims.
+
+#### Gate 6 — Public production launch
+
+Promote only after Gates 1–5 pass and a production smoke test succeeds. Keep the launch scope
+small: correct behavior, readable UI, clear support path, and documented known limitations take
+priority over additional features.
+
+#### Gate 7 — Native mobile app public-release program
+
+After the PWA launch is stable, shift primary implementation attention to the native mobile app.
+The existing native foundation/field-workflow work is a starting point, not public-store approval.
+
+The native release program must cover:
+
+- current feature/behavior audit against the launched PWA and an explicit V1 native scope;
+- phone-first workflow completion, secure session storage, deep links, device registration,
+  refresh/resume, network/error states, and permission posture;
+- real APNs/FCM decision and validation, with safe delivery eligibility/suppression behavior;
+- iOS and Android device QA, accessibility, privacy disclosures, required policies, and support
+  handling;
+- app identity, icons, screenshots, store listing copy, signing/profiles, production configuration,
+  TestFlight/internal testing, Play testing tracks, demo/review accounts, and review notes;
+- Apple App Store and Google Play submission, review-response readiness, and post-approval release
+  checklist.
+
+Native work does not reopen PWA launch decisions without a deliberate cross-surface product review.
+
+### Operating Rule For The Production Path
+
+For every gate:
+
+1. inspect the current behavior and real deployment seam;
+2. discuss and lock the user-facing decision;
+3. record the decision in a focused build brief;
+4. implement in a bounded slice;
+5. verify with automated checks and real user/device scenarios;
+6. update the brief with evidence before advancing to the next gate.
+
+This keeps launch work focused on friction reduction and public trust rather than speculative
+feature expansion.
+
+## 9.1 Historical Post-Session-8 Pilot Readiness Roadmap
+
+> Historical roadmap note: this section records the original foundation/pilot sequence. The current
+> production path in Section 9.0 governs all work from 2026-07-15 forward. Do not use the older
+> “immediate next step” language as the active execution plan.
 
 This roadmap reflects the 2026-06-25 pilot readiness discussion. It is provisional sequencing for
 the remaining go-live work after Session 8, not a substitute for the per-session ADR/build-log lock.
@@ -1531,20 +1684,19 @@ Risk controls:
 
 ## 11. Immediate Next Step
 
-Start with Phase 0.
+The active immediate next step is **Gate 1: implement and verify Build 086 — Request Detail V1
+Launch Pass**. Gate 2 (Build 087 — Request List V1 Launch Pass) follows only after Gate 1 evidence
+is recorded.
 
-Create the ADR and decision-index entry before implementation.
+Do not restart the historical Phase 0/Phase 1 foundation sequence. The foundation and initial PWA
+build are complete; current work is public-launch readiness under Section 9.0.
 
-Then Phase 1 begins with skeleton and architecture tests, not product behavior movement.
-
-Recommended first coding instruction:
+Recommended next coding instruction:
 
 ```text
-Do not port business behavior yet.
-Create the target solution skeleton and real architecture test project.
-Add architecture rules for Foundation, Keep, SharedKernel, API, and Signal exclusion.
-Make the empty/near-empty solution build and tests pass.
-Stop after the skeleton and tests are green.
+Implement only the locked Request Detail V1 decisions in Build 086.
+Preserve server action policy, lifecycle, concurrency, and customer/internal visibility boundaries.
+Add focused tests and complete desktop/mobile/accessibility verification before advancing.
 ```
 
 ---
