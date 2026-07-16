@@ -3,7 +3,7 @@
 **Created:** 2026-07-02
 **Purpose:** Live tracker for pilot-blocking or pilot-relevant bugs/gaps discovered during Session 14.
 **Source:** Promoted from the Pre-S14e bug register in `docs/build-log/068-session-14-ophalo-web-front-door.md`.
-**Current active items:** GAP-016 through GAP-025 — New Request launch blockers, Request Detail
+**Current active items:** GAP-016 through GAP-027 — New Request launch blockers, Request Detail
 launch findings, and a maintainability seam found during
 Build 086 manual verification on 2026-07-16. Build 087 is paused until they are triaged and the
 selected fixes are complete.
@@ -104,7 +104,8 @@ initial request creation. The omission path remains explicit and safe.
 
 ### GAP-018 — New Request leads with staff entry instead of customer self-service handoff
 
-**Status:** Needs decision
+**Status:** In progress — ADR-442/445 locked; R88f-a/b require correction before the PWA entry
+surface is implemented
 **Severity:** P1
 **Area:** `ophalo-app` Quick Capture; public-intake link setup; secure SMS handoff
 
@@ -118,12 +119,13 @@ customer** is the clear secondary, last-resort path.
 **Proposed solution:**
 
 - For Owner/Admin, lead New Request with **Let the customer submit their request** and expose the
-  existing durable business public-intake link through **Copy link**, an in-person **Show customer QR**, and
-  **Text customer from your phone**.
-- The desktop text action uses an opaque, short-lived SMS-handoff URL in a QR code. The owner scans
-  it with their phone; the phone opens a pre-addressed SMS composer containing the public intake
-  link. Mobile opens that composer directly. Keep does not send SMS, and neither recipient phone nor
-  message appears in the QR payload.
+  existing durable business public-intake link through **Copy link**, **Text customer from your
+  phone**, and an optional in-person **Show customer QR**.
+- For the remote-caller text action, the Owner/Admin confirms the caller's mobile number. Desktop
+  renders an opaque, short-lived QR handoff that the Owner/Admin scans with their phone; it opens a
+  pre-addressed SMS composer containing the public intake link. Mobile opens that same
+  pre-addressed composer directly. Keep does not send SMS. The raw phone number and message body
+  are stored only in the short-lived server-side handoff and never appear in the QR payload.
 - The in-person QR may encode the durable public intake slug because it carries no customer data.
 - The public-intake link is not the private customer request page. A private page is minted only
   after a request exists; it cannot be the pre-capture handoff. Operators retain the staff-entry
@@ -131,7 +133,8 @@ customer** is the clear secondary, last-resort path.
 - Do not present the public form as a staff-entry action: same-account authenticated staff are
   deliberately blocked from posting public intake. It is a customer handoff/preview only.
 
-**Decision:** ADR-442 locks the public-intake handoff as the primary New Request route.
+**Decision:** ADR-442 locks the public-intake handoff as the primary New Request route. ADR-445
+locks the exact caller-text, desktop QR, mobile-direct, URL, and server-side token contract.
 
 ### GAP-019 — Request Detail needs layout decomposition before further launch changes
 
@@ -248,6 +251,79 @@ seeded, or otherwise unbackfilled request/customer data.
 normalized request-phone lookup and return existing name/email for Quick Capture prefill. Decide
 whether the successful fallback should also backfill/link the `KeepCustomer` row; preserve account
 isolation and test both prefilled legacy data and ordinary current customer matches.
+
+### GAP-026 — Request-list search has no clear affordance
+
+**Status:** Open
+**Severity:** P2
+**Area:** `ophalo-app` Requests list search
+
+**Verified cause:** After entering a phone number, name, reference code, or other query, the request
+list offers no visible one-click way to clear the search and return to the current queue view.
+
+**Required resolution:** Add an accessible clear control when a search value is present. It must
+reset the query, restore the selected queue's unfiltered list, and support both pointer and keyboard
+use without requiring the user to manually select and delete the text.
+
+### GAP-027 — Request list has competing alerts and no lifecycle scan cue
+
+**Status:** Needs decision
+**Severity:** P1
+**Area:** `ophalo-app` Requests list row hierarchy, queue-count contract, and lifecycle presentation
+
+**Verified cause:** The request-list screenshot review on 2026-07-16 shows multiple independently
+colored signals on the same row: lifecycle status, response-overdue, attention reason, unshared
+customer page, follow-up timing, planned timing, internal/customer priority, and a separate due
+label. This makes routine future planning appear as visually important as an actionable breach.
+It also exposes a trust problem: the page-level and tab counts can say **1 Needs attention** while
+several default-queue rows visibly say **Response overdue**. A closed request can additionally
+retain an overdue-response presentation even though terminal requests must suppress ordinary SLA
+and follow-up attention; unresolved negative feedback remains the explicit closed-request exception
+under GAP-015 / Build 085.
+
+The list also has no concise indication of where a request is in its real lifecycle. Staff must
+infer that from a status chip among unrelated alerts, which slows scanning of a mixed queue.
+
+**Required product decision:** Lock a compact, truthful lifecycle representation for list rows.
+It must describe the request's actual current state rather than imply that every request moves
+linearly through every stage. A candidate is a small, muted milestone strip or header:
+`Received → Scheduled → Active → Work completed → Closed`, with the current valid stage highlighted
+and skipped/inapplicable stages left neutral. `Pending customer` is a waiting state, not a fabricated
+completion step. The server-owned status and allowed transitions remain authoritative; do not add a
+client-only lifecycle state machine.
+
+**Required resolution after the decision:**
+
+- Render one quiet lifecycle/status cue and at most one prominent, actionable exception per row.
+  Use a deterministic priority order (for example: cancellation/customer urgent; response overdue;
+  overdue follow-up; unresolved negative feedback; customer page unshared). Preserve other signals
+  in detail or behind a compact, accessible `More signals` affordance rather than additional alert
+  pills.
+- Merge the relevant deadline into the selected exception, for example **Response overdue · Jul 13**;
+  do not display a separate red due label for the same condition.
+- Render future planned/follow-up dates as quiet metadata, not bordered or attention-colored badges.
+- Suppress response-SLA and follow-up-overdue signals for closed requests. Retain only the approved
+  unresolved-negative-feedback path for a closed request, including its Feedback Review queue
+  behavior.
+- Reconcile summary-pill/tab counts with the same canonical conditions that receive prominent
+  attention treatment. A request shown as response-overdue must not make **Needs attention** look
+  inaccurate; if it belongs to a different queue, the row treatment and label must make that
+  distinction explicit.
+- Retain the request list as the speed/action cockpit: keep one clearly visible contextual primary
+  action where the server permits it, but move secondary actions into detail or an accessible overflow.
+  Do not rely on hover-only controls, since the PWA must remain usable on touch devices.
+
+**Acceptance criteria:**
+
+- At normal desktop and mobile widths, a row communicates identity, current lifecycle state, and its
+  single most important next intervention without a cluster of competing colored pills.
+- Future scheduling is visually calmer than an overdue customer-facing commitment.
+- Closed rows have no zombie SLA/follow-up alarm; unreviewed negative feedback remains visible and
+  actionable through its dedicated workflow.
+- Queue tabs and summary counts agree with the urgency the list visibly communicates.
+- Lifecycle rendering follows server-returned state/transition policy and is covered by focused UI
+  tests for received, active, waiting-on-customer, work-completed, closed, and closed-with-unresolved-
+  feedback cases.
 
 ## P0/P1 Pilot Flow Bugs
 
