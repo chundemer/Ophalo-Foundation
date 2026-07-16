@@ -27,20 +27,24 @@ export interface CreateRequestBody {
   customerEmail?: string | null;
   description: string;
   source: string;
+  serviceAddressLine1?: string;
+  serviceAddressLine2?: string;
+  serviceCity?: string;
+  serviceState?: string;
+  serviceZip?: string;
 }
 
 export interface CreatedRequestResult {
   requestId: string;
 }
 
-// Digits-only normalization for stable query keys and lookup triggering.
-export function normalizePhoneDigits(raw: string): string {
-  return raw.replace(/\D/g, '');
-}
+import { normalizePhoneDigits, validateAddressIfOpen } from './phoneUtils';
+export type { AddressErrors } from './phoneUtils';
+export { normalizePhoneDigits, validateAddressIfOpen };
 
 export function usePhoneLookup(rawPhone: string) {
   const digits = normalizePhoneDigits(rawPhone);
-  const enabled = digits.length >= 7 && digits.length <= 15;
+  const enabled = digits.length === 10;
 
   return useQuery<PhoneLookupResult>({
     queryKey: ['phoneLookup', digits],

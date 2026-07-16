@@ -18,9 +18,11 @@ import { ApiError } from '@/src/api/client';
 import { Text, View } from '@/components/Themed';
 import { useNetworkState } from '@/src/hooks/useNetworkState';
 import {
+  AddressErrors,
   normalizePhoneDigits,
   useCreateRequest,
   usePhoneLookup,
+  validateAddressIfOpen,
 } from '@/src/hooks/useQuickCapture';
 
 const SOURCE_OPTIONS: { label: string; value: string }[] = [
@@ -52,8 +54,16 @@ function CaptureModalContent() {
   const [lookupApplied, setLookupApplied] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
 
+  const [showAddress, setShowAddress] = useState(false);
+  const [addrLine1, setAddrLine1] = useState('');
+  const [addrLine2, setAddrLine2] = useState('');
+  const [addrCity, setAddrCity] = useState('');
+  const [addrState, setAddrState] = useState('');
+  const [addrZip, setAddrZip] = useState('');
+  const [addrErrors, setAddrErrors] = useState<AddressErrors>({});
+
   const digits = normalizePhoneDigits(phone);
-  const lookupReady = digits.length >= 7 && digits.length <= 15;
+  const lookupReady = digits.length === 10;
 
   const { data: lookup, isFetching: lookupFetching } = usePhoneLookup(phone);
   const createMutation = useCreateRequest();
@@ -74,13 +84,19 @@ function CaptureModalContent() {
 
   const canCreate =
     isOnline &&
-    digits.length >= 7 &&
+    digits.length === 10 &&
     customerName.trim().length > 0 &&
     description.trim().length > 0 &&
     !createMutation.isPending;
 
   async function handleCreate() {
     if (!canCreate) return;
+    const errors = validateAddressIfOpen(showAddress, addrLine1, addrCity, addrState);
+    if (Object.keys(errors).length > 0) {
+      setAddrErrors(errors);
+      return;
+    }
+    setAddrErrors({});
     setCreateError(null);
     try {
       const result = await createMutation.mutateAsync({
@@ -89,6 +105,13 @@ function CaptureModalContent() {
         customerEmail: customerEmail.trim() || null,
         description: description.trim(),
         source,
+        ...(showAddress && {
+          serviceAddressLine1: addrLine1.trim() || undefined,
+          serviceAddressLine2: addrLine2.trim() || undefined,
+          serviceCity: addrCity.trim() || undefined,
+          serviceState: addrState.trim() || undefined,
+          serviceZip: addrZip.trim() || undefined,
+        }),
       });
       router.replace({ pathname: '/requests/[id]', params: { id: result.requestId } });
     } catch (err) {
@@ -164,6 +187,10 @@ function CaptureModalContent() {
           />
           {lookupFetching && <ActivityIndicator size="small" style={styles.lookupSpinner} />}
         </View>
+
+        {digits.length > 0 && digits.length !== 10 && (
+          <Text style={styles.phoneHint}>Please enter a 10-digit phone number.</Text>
+        )}
 
         {lookup && lookupReady && (
           <View style={styles.lookupResult}>
@@ -256,6 +283,88 @@ function CaptureModalContent() {
             </TouchableOpacity>
           ))}
         </View>
+        {!showAddress ? (
+          <TouchableOpacity
+            onPress={() => setShowAddress(true)}
+            style={styles.addAddressLink}
+            accessibilityLabel="Add service address"
+          >
+            <Text style={styles.addAddressText}>+ Add service address (optional)</Text>
+          </TouchableOpacity>
+        ) : (
+          <View style={styles.addressSection}>
+            <View style={styles.addressHeader}>
+              <Text style={styles.label}>Service address</Text>
+              <TouchableOpacity
+                onPress={() => {
+                  setShowAddress(false);
+                  setAddrLine1(''); setAddrLine2(''); setAddrCity(''); setAddrState(''); setAddrZip('');
+                  setAddrErrors({});
+                }}
+                accessibilityLabel="Remove service address"
+              >
+                <Text style={styles.removeAddressText}>Remove</Text>
+              </TouchableOpacity>
+            </View>
+            <TextInput
+              style={[styles.inputStandalone, { backgroundColor: inputBg, borderColor: addrErrors.line1 ? '#DC3545' : borderColor, color: inputColor }]}
+              value={addrLine1}
+              onChangeText={(v) => { setAddrLine1(v); if (addrErrors.line1) setAddrErrors((e) => ({ ...e, line1: undefined })); }}
+              placeholder="Address line 1 *"
+              placeholderTextColor={placeholderColor}
+              returnKeyType="next"
+              accessibilityLabel="Address line 1"
+            />
+            {addrErrors.line1 && <Text style={styles.fieldError}>{addrErrors.line1}</Text>}
+            <TextInput
+              style={[styles.inputStandalone, styles.addressFieldTop, { backgroundColor: inputBg, borderColor, color: inputColor }]}
+              value={addrLine2}
+              onChangeText={setAddrLine2}
+              placeholder="Address line 2 (optional)"
+              placeholderTextColor={placeholderColor}
+              returnKeyType="next"
+              accessibilityLabel="Address line 2"
+            />
+            <View style={styles.cityStateRow}>
+              <TextInput
+                style={[styles.inputStandalone, styles.cityInput, { backgroundColor: inputBg, borderColor: addrErrors.city ? '#DC3545' : borderColor, color: inputColor }]}
+                value={addrCity}
+                onChangeText={(v) => { setAddrCity(v); if (addrErrors.city) setAddrErrors((e) => ({ ...e, city: undefined })); }}
+                placeholder="City *"
+                placeholderTextColor={placeholderColor}
+                returnKeyType="next"
+                accessibilityLabel="City"
+              />
+              <TextInput
+                style={[styles.inputStandalone, styles.stateInput, { backgroundColor: inputBg, borderColor: addrErrors.state ? '#DC3545' : borderColor, color: inputColor }]}
+                value={addrState}
+                onChangeText={(v) => { setAddrState(v); if (addrErrors.state) setAddrErrors((e) => ({ ...e, state: undefined })); }}
+                placeholder="State *"
+                placeholderTextColor={placeholderColor}
+                maxLength={2}
+                autoCapitalize="characters"
+                returnKeyType="next"
+                accessibilityLabel="State"
+              />
+              <TextInput
+                style={[styles.inputStandalone, styles.zipInput, { backgroundColor: inputBg, borderColor, color: inputColor }]}
+                value={addrZip}
+                onChangeText={setAddrZip}
+                placeholder="ZIP"
+                placeholderTextColor={placeholderColor}
+                keyboardType="number-pad"
+                maxLength={10}
+                returnKeyType="done"
+                accessibilityLabel="ZIP code"
+              />
+            </View>
+            {(addrErrors.city || addrErrors.state) && (
+              <Text style={styles.fieldError}>
+                {[addrErrors.city, addrErrors.state].filter(Boolean).join(' ')}
+              </Text>
+            )}
+          </View>
+        )}
       </ScrollView>
       <StatusBar style={Platform.OS === 'ios' ? 'light' : 'auto'} />
     </KeyboardAvoidingView>
@@ -332,4 +441,16 @@ const styles = StyleSheet.create({
   sourceChipSelected: { backgroundColor: '#168A9A', borderColor: '#168A9A' },
   sourceChipText: { fontSize: 14 },
   sourceChipTextSelected: { color: '#FFFFFF', fontWeight: '600' },
+  phoneHint: { fontSize: 12, color: '#DC3545', marginTop: 4 },
+  addAddressLink: { marginTop: 20 },
+  addAddressText: { fontSize: 14, color: '#6B7280' },
+  addressSection: { marginTop: 20 },
+  addressHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
+  removeAddressText: { fontSize: 13, color: '#9CA3AF' },
+  addressFieldTop: { marginTop: 8 },
+  cityStateRow: { flexDirection: 'row', gap: 8, marginTop: 8 },
+  cityInput: { flex: 1 },
+  stateInput: { width: 60 },
+  zipInput: { width: 80 },
+  fieldError: { fontSize: 12, color: '#DC3545', marginTop: 4 },
 });
