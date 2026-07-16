@@ -3,8 +3,8 @@
 **Created:** 2026-07-02
 **Purpose:** Live tracker for pilot-blocking or pilot-relevant bugs/gaps discovered during Session 14.
 **Source:** Promoted from the Pre-S14e bug register in `docs/build-log/068-session-14-ophalo-web-front-door.md`.
-**Current active items:** GAP-016 through GAP-019 — New Request launch blockers and a Request
-Detail maintainability seam found during
+**Current active items:** GAP-016 through GAP-025 — New Request launch blockers, Request Detail
+launch findings, and a maintainability seam found during
 Build 086 manual verification on 2026-07-16. Build 087 is paused until they are triaged and the
 selected fixes are complete.
 **Recently resolved:** GAP-015 — feedback review operational loop and accountability trail (commit `315b231`); GAP-004 — durable PWA request-detail routing (commit `3ebdc57`).
@@ -55,7 +55,8 @@ Rules:
 
 ### GAP-016 — New Request accepts invalid phone numbers and traps correction
 
-**Status:** Needs decision
+**Status:** In progress — ADR-444 and authenticated-web work are committed; native parity and
+leading-country-code client normalization remain open
 **Severity:** P0
 **Area:** `ophalo-app` Quick Capture lookup/capture; authenticated business-request API; shared
 request-input validation
@@ -78,12 +79,14 @@ operator cannot correct it without abandoning the request.
   focuses the number, re-runs duplicate lookup as appropriate, and preserves entered name, email,
   description, source, and address draft.
 
-**Decision required:** Confirm North American 10-digit phone validation for launch, or define the
-international phone/country-selection model before implementation.
+**Decision:** ADR-444 locks normalized 10-digit North American validation. The remaining work must
+accept a leading `+1`/`1` in the authenticated lookup UI and align native capture before this gap is
+closed.
 
 ### GAP-017 — Staff New Request cannot capture service location at creation
 
-**Status:** Open
+**Status:** In progress — backend contract and disclosure are committed; incomplete-address client
+handling and native parity remain open
 **Severity:** P1
 **Area:** `ophalo-app` Quick Capture; PWA create-request contract; Keep business-request command,
 service, and entity creation
@@ -162,6 +165,89 @@ in the other.
 **Acceptance criteria:** A Request Detail contact/share or accessibility change has one shared
 behavioral implementation and explicit desktop/mobile composition call sites; TypeScript remains
 clean; no lifecycle, permission, or optimistic-concurrency behavior changes as part of the refactor.
+
+### GAP-020 — Desktop call QR exposes customer phone number
+
+**Status:** Open
+**Severity:** P0
+**Area:** `ophalo-app` Request Detail contact strip and external-contact modal
+
+**Verified cause:** Desktop call QR codes currently encode `tel:{customerPhone}` directly. This
+puts raw customer phone data into the QR image, contradicting the Locked Responsive-PWA Strategy.
+
+**Required resolution:** Replace the direct payload with an opaque, short-lived call-handoff URL
+that opens the owner device's phone action, or explicitly amend the locked privacy rule before
+launch. Do not ship the current direct-phone QR payload.
+
+### GAP-021 — Authenticated Quick Capture rejects ADR-444 country-code input
+
+**Status:** Open
+**Severity:** P1
+**Area:** `ophalo-app` Quick Capture lookup
+
+**Verified cause:** `LookupGate` strips formatting but requires the resulting value to contain
+exactly 10 digits. A valid ADR-444 input such as `+1 (555) 123-4567` therefore becomes 11 digits
+and cannot be looked up, even though shared backend normalization accepts it.
+
+**Required resolution:** Normalize an 11-digit value beginning with `1` to its final 10 digits
+before applying the UI gate, lookup request, and draft return path.
+
+### GAP-022 — Optional service-address disclosure can silently discard entered data
+
+**Status:** Open
+**Severity:** P1
+**Area:** `ophalo-app` Quick Capture create form
+
+**Verified cause:** The form sends address properties only when line 1 is populated. If staff opens
+the disclosure and enters city, state, ZIP, or line 2 without line 1, request creation succeeds
+without an address rather than surfacing the required-if-open condition.
+
+**Required resolution:** When the disclosure is open, require line 1, city, and state client-side;
+show associated field errors and submit all supplied address fields so server validation remains a
+backstop. Line 2 and ZIP remain optional.
+
+### GAP-023 — Change-phone draft can conflict with the newly selected customer
+
+**Status:** Open
+**Severity:** P1
+**Area:** `ophalo-app` Quick Capture draft restoration
+
+**Verified cause:** After **Change**, a newly looked-up customer can supply a new name/email prefill,
+but the preserved draft takes precedence. The old name/email can then be displayed as read-only for
+the new phone/customer.
+
+**Required resolution:** On a changed-phone lookup that resolves to a different customer, reset or
+explicitly confirm the identity fields while preserving request-specific draft fields such as
+description, source, and address.
+
+### GAP-024 — Modal accessibility is incomplete for Quick Capture and desktop call handoff
+
+**Status:** Open
+**Severity:** P1
+**Area:** `ophalo-app` Quick Capture and Request Detail contact modal
+
+**Verified cause:** The overlays set `aria-modal` and handle Escape, but keyboard focus is not
+trapped inside them. The desktop call QR modal also does not restore focus to its launching control
+when closed.
+
+**Required resolution:** Add a focus trap to both overlays and restore focus to the original trigger
+on every close path; retain Escape and initial-focus behavior.
+
+### GAP-025 — Quick Capture does not recognize a customer found by request-list phone search
+
+**Status:** Open
+**Severity:** P1
+**Area:** `ophalo-app` Quick Capture lookup; Keep customer/request identity data
+
+**Verified cause:** Request-list search matches `KeepRequest.CustomerPhone`, while Quick Capture
+looks up only `KeepCustomer.CanonicalPhone`. A request can therefore be found in the list by phone
+while Quick Capture returns `customer: null` and opens a blank capture form. This affects legacy,
+seeded, or otherwise unbackfilled request/customer data.
+
+**Required resolution:** When the account-scoped customer lookup misses, safely fall back to a
+normalized request-phone lookup and return existing name/email for Quick Capture prefill. Decide
+whether the successful fallback should also backfill/link the `KeepCustomer` row; preserve account
+isolation and test both prefilled legacy data and ordinary current customer matches.
 
 ## P0/P1 Pilot Flow Bugs
 
