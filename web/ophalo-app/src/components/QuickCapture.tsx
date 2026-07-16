@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { X } from "lucide-react";
 import { type PhoneLookupResult } from "../lib/apiClient";
-import { type Stage } from "./quick-capture/utils";
+import { type Stage, type CaptureFormDraft } from "./quick-capture/utils";
 import { LookupGate } from "./quick-capture/LookupGate";
 import { LookupResultView } from "./quick-capture/LookupResultView";
 import { CaptureForm } from "./quick-capture/CaptureForm";
@@ -45,6 +45,7 @@ export function QuickCapture({ onClose, onSelectRequest, isPastDue = false, isRe
       ? { kind: "capture", lockedPhone: followUpPrefill.phone, prefill: followUpPrefill }
       : { kind: "lookup" }
   );
+  const [captureFormDraft, setCaptureFormDraft] = useState<CaptureFormDraft | null>(null);
 
   function handleLookupSuccess(result: PhoneLookupResult, phone: string) {
     if (result.customer) {
@@ -62,6 +63,7 @@ export function QuickCapture({ onClose, onSelectRequest, isPastDue = false, isRe
   }
 
   function handleCaptureAnother() {
+    setCaptureFormDraft(null);
     setStage({ kind: "lookup" });
   }
 
@@ -83,7 +85,8 @@ export function QuickCapture({ onClose, onSelectRequest, isPastDue = false, isRe
     }
   }
 
-  function handleBack() {
+  function handleBack(draft: CaptureFormDraft) {
+    setCaptureFormDraft(draft);
     setStage({ kind: "lookup" });
   }
 
@@ -124,7 +127,7 @@ export function QuickCapture({ onClose, onSelectRequest, isPastDue = false, isRe
             })
           }
           onNavigateToRequest={handleNavigateToExisting}
-          onBack={handleBack}
+          onBack={() => setStage({ kind: "lookup" })}
         />
       );
     }
@@ -134,6 +137,7 @@ export function QuickCapture({ onClose, onSelectRequest, isPastDue = false, isRe
         <CaptureForm
           lockedPhone={stage.lockedPhone}
           prefill={stage.prefill}
+          initialDraft={captureFormDraft ?? undefined}
           isPastDue={isPastDue}
           isReadOnly={isReadOnly}
           onSuccess={handleCaptureSuccess}

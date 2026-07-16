@@ -1,5 +1,18 @@
 import type { PhoneLookupResult } from "../../lib/apiClient";
 
+export type CaptureFormDraft = {
+  name: string;
+  email: string;
+  description: string;
+  source: string;
+  showAddress: boolean;
+  addrLine1: string;
+  addrLine2: string;
+  addrCity: string;
+  addrState: string;
+  addrZip: string;
+};
+
 export type Stage =
   | { kind: "lookup" }
   | { kind: "result"; lookup: PhoneLookupResult; lockedPhone: string }

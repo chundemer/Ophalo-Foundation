@@ -2,37 +2,43 @@ import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { AlertTriangle, Loader2 } from "lucide-react";
 import { api, ApiError } from "../../lib/apiClient";
-import { SOURCE_OPTIONS } from "./utils";
+import { SOURCE_OPTIONS, type CaptureFormDraft } from "./utils";
 
 interface CaptureFormProps {
   lockedPhone: string;
   prefill: { name?: string; email?: string; description?: string } | null;
+  initialDraft?: CaptureFormDraft;
   isPastDue: boolean;
   isReadOnly: boolean;
   onSuccess: (requestId: string, referenceCode: string, pageToken: string, customerPhone: string, customerEmail: string | null, customerName: string) => void;
-  onBack: () => void;
+  onBack: (draft: CaptureFormDraft) => void;
   onClose: () => void;
 }
 
 export function CaptureForm({
   lockedPhone,
   prefill,
+  initialDraft,
   isPastDue,
   isReadOnly,
   onSuccess,
   onBack,
   onClose,
 }: CaptureFormProps) {
-  const [name, setName] = useState(prefill?.name ?? "");
-  const [email, setEmail] = useState(prefill?.email ?? "");
-  const [description, setDescription] = useState(prefill?.description ?? "");
-  const [source, setSource] = useState<string>("");
-  const [showAddress, setShowAddress] = useState(false);
-  const [addrLine1, setAddrLine1] = useState("");
-  const [addrLine2, setAddrLine2] = useState("");
-  const [addrCity, setAddrCity] = useState("");
-  const [addrState, setAddrState] = useState("");
-  const [addrZip, setAddrZip] = useState("");
+  const [name, setName] = useState(initialDraft?.name ?? prefill?.name ?? "");
+  const [email, setEmail] = useState(initialDraft?.email ?? prefill?.email ?? "");
+  const [description, setDescription] = useState(initialDraft?.description ?? prefill?.description ?? "");
+  const [source, setSource] = useState<string>(initialDraft?.source ?? "");
+  const [showAddress, setShowAddress] = useState(initialDraft?.showAddress ?? false);
+  const [addrLine1, setAddrLine1] = useState(initialDraft?.addrLine1 ?? "");
+  const [addrLine2, setAddrLine2] = useState(initialDraft?.addrLine2 ?? "");
+  const [addrCity, setAddrCity] = useState(initialDraft?.addrCity ?? "");
+  const [addrState, setAddrState] = useState(initialDraft?.addrState ?? "");
+  const [addrZip, setAddrZip] = useState(initialDraft?.addrZip ?? "");
+
+  function buildDraft(): CaptureFormDraft {
+    return { name, email, description, source, showAddress, addrLine1, addrLine2, addrCity, addrState, addrZip };
+  }
 
   const { mutate, isPending, error } = useMutation({
     mutationFn: () =>
@@ -76,12 +82,17 @@ export function CaptureForm({
 
       <div>
         <label className="block text-sm font-medium text-slate-700 mb-1">Phone</label>
-        <input
-          type="text"
-          value={lockedPhone}
-          readOnly
-          className="block w-full rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-500 cursor-not-allowed"
-        />
+        <div className="flex items-center justify-between py-2">
+          <span className="text-sm text-slate-700">{lockedPhone}</span>
+          <button
+            type="button"
+            onClick={() => onBack(buildDraft())}
+            disabled={isPending}
+            className="text-sm text-slate-500 hover:text-slate-700 disabled:opacity-40"
+          >
+            Change
+          </button>
+        </div>
       </div>
 
       <div>
@@ -236,7 +247,7 @@ export function CaptureForm({
       <div className="flex justify-between items-center pt-2 border-t border-slate-100">
         <button
           type="button"
-          onClick={onBack}
+          onClick={() => onBack(buildDraft())}
           disabled={isPending}
           className="text-sm text-slate-500 hover:text-slate-700 disabled:opacity-40"
         >
