@@ -1,7 +1,9 @@
+using Microsoft.Extensions.Options;
 using OpHalo.Foundation.Application.Abstractions.Security;
 using OpHalo.Foundation.Application.Accounts.Access;
 using OpHalo.Foundation.Application.Accounts.Authorization;
 using OpHalo.Foundation.Application.Accounts.Entitlements;
+using OpHalo.Foundation.Application.Auth;
 using OpHalo.Foundation.Core.Entities.Accounts;
 using OpHalo.Foundation.Core.Entities.Accounts.Enums;
 using OpHalo.Keep.Application.Abstractions;
@@ -18,6 +20,9 @@ public class CreateIntakeSmsHandoffServiceTests
     private static readonly Guid     AccountId = Guid.NewGuid();
     private static readonly Guid     UserId    = Guid.NewGuid();
 
+    private const string ValidPhone      = "5551234567";
+    private const string ValidPublicBase = "https://public.ophalo.com";
+
     // ---------------------------------------------------------------------------
     // Helpers
     // ---------------------------------------------------------------------------
@@ -29,7 +34,8 @@ public class CreateIntakeSmsHandoffServiceTests
         bool                      permitted      = true,
         bool                      featureEnabled = true,
         bool                      isAuthenticated = true,
-        bool                      hasActiveLink  = true)
+        bool                      hasActiveLink  = true,
+        string                    publicBaseUrl  = ValidPublicBase)
     {
         persistence ??= new FakePersistence(role, hasActiveLink);
         return new CreateIntakeSmsHandoffService(
@@ -39,11 +45,12 @@ public class CreateIntakeSmsHandoffServiceTests
             new FakeUserAccessPolicy(permitted),
             new FakeAccountAccessPolicy(posture),
             new FakeFeatureAccessPolicy(featureEnabled),
+            Options.Create(new MagicLinkSettings { PublicBaseUrl = publicBaseUrl }),
             new FakeClock(Now));
     }
 
-    private static CreateIntakeSmsHandoffCommand ValidCommand() =>
-        new("https://app.ophalo.com");
+    private static CreateIntakeSmsHandoffCommand ValidCommand(string phone = ValidPhone) =>
+        new(phone);
 
     // ---------------------------------------------------------------------------
     // Auth
@@ -61,7 +68,6 @@ public class CreateIntakeSmsHandoffServiceTests
     [Fact]
     public async Task Execute_returns_forbidden_for_operator_role()
     {
-        // Operator lacks Keep.SettingsManage
         var sut = BuildSut(role: AccountUserRole.Operator, permitted: false);
         var result = await sut.ExecuteAsync(ValidCommand());
         Assert.False(result.IsSuccess);
@@ -84,6 +90,69 @@ public class CreateIntakeSmsHandoffServiceTests
         var result = await sut.ExecuteAsync(ValidCommand());
         Assert.False(result.IsSuccess);
         Assert.Equal("auth.forbidden", result.Error.Code);
+    }
+
+    // ---------------------------------------------------------------------------
+    // Configuration guard
+    // ---------------------------------------------------------------------------
+
+    [Fact]
+    public async Task Execute_returns_not_configured_when_PublicBaseUrl_is_blank()
+    {
+        var sut = BuildSut(publicBaseUrl: "");
+        var result = await sut.ExecuteAsync(ValidCommand());
+        Assert.False(result.IsSuccess);
+        Assert.Equal("App.NotConfigured", result.Error.Code);
+    }
+
+    // ---------------------------------------------------------------------------
+    // Phone validation
+    // ---------------------------------------------------------------------------
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public async Task Execute_returns_phone_required_for_blank_input(string? phone)
+    {
+        var sut = BuildSut();
+        var result = await sut.ExecuteAsync(new CreateIntakeSmsHandoffCommand(phone!));
+        Assert.False(result.IsSuccess);
+        Assert.Equal("KeepRequest.CustomerPhoneRequired", result.Error.Code);
+    }
+
+    [Theory]
+    [InlineData("abc5551234567")]  // letters — must be rejected before normalization strips them
+    [InlineData("555@1234567")]
+    [InlineData("555#1234567")]
+    public async Task Execute_returns_invalid_characters_for_disallowed_chars(string phone)
+    {
+        var sut = BuildSut();
+        var result = await sut.ExecuteAsync(new CreateIntakeSmsHandoffCommand(phone));
+        Assert.False(result.IsSuccess);
+        Assert.Equal("KeepRequest.CustomerPhoneInvalidCharacters", result.Error.Code);
+    }
+
+    [Theory]
+    [InlineData("555123456")]    // 9 digits
+    [InlineData("55512345678")]  // 11 digits, no leading 1 to strip
+    public async Task Execute_returns_invalid_format_for_wrong_digit_count(string phone)
+    {
+        var sut = BuildSut();
+        var result = await sut.ExecuteAsync(new CreateIntakeSmsHandoffCommand(phone));
+        Assert.False(result.IsSuccess);
+        Assert.Equal("KeepRequest.CustomerPhoneInvalidFormat", result.Error.Code);
+    }
+
+    [Theory]
+    [InlineData("+15551234567")]  // +1 country code stripped → 10 digits
+    [InlineData("15551234567")]   // leading 1 stripped → 10 digits
+    [InlineData("(555) 123-4567")] // formatted with allowed chars → 10 digits
+    public async Task Execute_succeeds_for_valid_phone_variations(string phone)
+    {
+        var sut = BuildSut();
+        var result = await sut.ExecuteAsync(new CreateIntakeSmsHandoffCommand(phone));
+        Assert.True(result.IsSuccess);
     }
 
     // ---------------------------------------------------------------------------
@@ -122,34 +191,41 @@ public class CreateIntakeSmsHandoffServiceTests
         Assert.True(result.IsSuccess);
 
         var stored = persistence.StoredHandoff!;
-        // Hash must differ from raw token
         Assert.NotEqual(result.Value.RawToken, stored.HandoffTokenHash);
-        // Stored hash must equal the canonical SHA-256 of the raw token
         Assert.Equal(KeepIntakeSmsHandoff.HashToken(result.Value.RawToken), stored.HandoffTokenHash);
-        // Raw token must not appear in the stored hash
         Assert.DoesNotContain(result.Value.RawToken, stored.HandoffTokenHash);
     }
 
     [Fact]
-    public async Task Execute_success_message_body_contains_intake_link()
+    public async Task Execute_success_stores_canonical_phone()
     {
-        var persistence = new FakePersistence(AccountUserRole.Owner, true, slug: "acme-plumbing");
+        var persistence = new FakePersistence(AccountUserRole.Owner, true);
         var sut = BuildSut(persistence: persistence);
-        var result = await sut.ExecuteAsync(new CreateIntakeSmsHandoffCommand("https://app.ophalo.com"));
+        // +1 prefix must be stripped to canonical 10 digits before storage
+        var result = await sut.ExecuteAsync(new CreateIntakeSmsHandoffCommand("+15551234567"));
         Assert.True(result.IsSuccess);
-        Assert.Contains("https://app.ophalo.com/keep/acme-plumbing", persistence.StoredHandoff!.MessageBody);
+        Assert.Equal("5551234567", persistence.StoredHandoff!.CustomerPhone);
     }
 
     [Fact]
-    public async Task Execute_success_trailing_slash_base_url_produces_clean_intake_link()
+    public async Task Execute_success_message_body_contains_public_intake_link()
+    {
+        var persistence = new FakePersistence(AccountUserRole.Owner, true, slug: "acme-plumbing");
+        var sut = BuildSut(persistence: persistence, publicBaseUrl: "https://public.ophalo.com");
+        var result = await sut.ExecuteAsync(ValidCommand());
+        Assert.True(result.IsSuccess);
+        Assert.Contains("https://public.ophalo.com/keep/s/acme-plumbing", persistence.StoredHandoff!.MessageBody);
+    }
+
+    [Fact]
+    public async Task Execute_success_trailing_slash_public_base_url_produces_clean_intake_link()
     {
         var persistence = new FakePersistence(AccountUserRole.Owner, true, slug: "my-biz");
-        var sut = BuildSut(persistence: persistence);
-        // AppBaseUrl has a trailing slash — the stored URL must not contain a double slash
-        var result = await sut.ExecuteAsync(new CreateIntakeSmsHandoffCommand("https://app.ophalo.com/"));
+        var sut = BuildSut(persistence: persistence, publicBaseUrl: "https://public.ophalo.com/");
+        var result = await sut.ExecuteAsync(ValidCommand());
         Assert.True(result.IsSuccess);
         Assert.DoesNotContain("//keep", persistence.StoredHandoff!.MessageBody);
-        Assert.Contains("https://app.ophalo.com/keep/my-biz", persistence.StoredHandoff!.MessageBody);
+        Assert.Contains("https://public.ophalo.com/keep/s/my-biz", persistence.StoredHandoff!.MessageBody);
     }
 
     // ---------------------------------------------------------------------------

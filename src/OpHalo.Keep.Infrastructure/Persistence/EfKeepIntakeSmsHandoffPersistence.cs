@@ -57,11 +57,13 @@ public sealed class EfKeepIntakeSmsHandoffPersistence(OpHaloDbContext dbContext)
     {
         var row = await dbContext.Set<KeepIntakeSmsHandoff>()
             .AsNoTracking()
-            .Where(h => h.HandoffTokenHash == tokenHash && h.ExpiresAtUtc > nowUtc && !h.IsDeleted)
-            .Select(h => new { h.MessageBody, h.ExpiresAtUtc })
+            .Where(h => h.HandoffTokenHash == tokenHash && h.ExpiresAtUtc > nowUtc && h.DeletedAtUtc == null)
+            .Select(h => new { h.CustomerPhone, h.MessageBody, h.ExpiresAtUtc })
             .FirstOrDefaultAsync(ct);
-        return row is null
-            ? null
-            : new KeepIntakeSmsHandoffLookupResult(row.MessageBody, row.ExpiresAtUtc);
+        // Blank CustomerPhone indicates a legacy row written before R88f-c-repair-a.
+        // Treat it as unavailable — same 404 response as expired or invalid tokens.
+        if (row is null || string.IsNullOrEmpty(row.CustomerPhone))
+            return null;
+        return new KeepIntakeSmsHandoffLookupResult(row.CustomerPhone, row.MessageBody, row.ExpiresAtUtc);
     }
 }

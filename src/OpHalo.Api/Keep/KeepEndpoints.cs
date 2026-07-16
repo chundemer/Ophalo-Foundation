@@ -2,7 +2,9 @@ using System.Security.Cryptography;
 using System.Text;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Options;
 using OpHalo.Api.Helpers;
+using OpHalo.Foundation.Application.Auth;
 using OpHalo.Keep.Application.IntakeSetup;
 using OpHalo.Keep.Application.PublicIntake;
 using OpHalo.Keep.Application.Requests;
@@ -66,22 +68,23 @@ public static class KeepEndpoints
             return result.IsSuccess ? Results.Ok(result.Value) : ErrorHttpMapper.ToHttpResult(result.Error);
         }).RequireAuthorization();
 
-        // Intake SMS handoff creation — authenticated, Owner/Admin only (R88f-a, GAP-018)
+        // Intake SMS handoff creation — authenticated, Owner/Admin only (R88f-c, GAP-018)
         app.MapPost("/keep/setup/intake/sms-handoff", async (
+            IntakeSmsHandoffBody body,
             CreateIntakeSmsHandoffService service,
-            IConfiguration config,
+            IOptions<MagicLinkSettings> appSettings,
             CancellationToken ct) =>
         {
-            var appBaseUrl = config["App:AppBaseUrl"] ?? "https://app.ophalo.com";
-            var result = await service.ExecuteAsync(new CreateIntakeSmsHandoffCommand(appBaseUrl), ct);
+            var result = await service.ExecuteAsync(new CreateIntakeSmsHandoffCommand(body.CustomerPhone), ct);
             if (!result.IsSuccess)
                 return ErrorHttpMapper.ToHttpResult(result.Error);
-            var handoffUrl = $"{appBaseUrl.TrimEnd('/')}/keep/intake-sms/{result.Value.RawToken}";
+            var publicBaseUrl = appSettings.Value.PublicBaseUrl.TrimEnd('/');
+            var handoffUrl = $"{publicBaseUrl}/keep/intake-sms/{result.Value.RawToken}";
             return Results.Ok(new { handoffUrl, expiresAtUtc = result.Value.ExpiresAtUtc });
         }).RequireAuthorization();
 
-        // Intake SMS handoff resolve — public, rate-limited, no-store cache (R88f-a, GAP-018)
-        // Expired and invalid tokens are intentionally indistinguishable (404 for both).
+        // Intake SMS handoff resolve — public, rate-limited, no-store cache (R88f-c, GAP-018)
+        // Expired, invalid, and legacy blank-phone tokens are intentionally indistinguishable (404).
         app.MapGet("/keep/intake-sms/{handoffToken}", async (
             string handoffToken,
             HttpContext httpContext,
@@ -94,7 +97,7 @@ public static class KeepEndpoints
             var result = await persistence.FindValidByHashAsync(tokenHash, clock.UtcNow, ct);
             return result is null
                 ? Results.NotFound()
-                : Results.Ok(new { result.MessageBody, result.ExpiresAtUtc });
+                : Results.Ok(new { result.CustomerPhone, result.MessageBody, result.ExpiresAtUtc });
         }).RequireRateLimiting("public-intake");
 
         // Business profile + response policy — authenticated, Owner/Admin only (S12a)

@@ -1,8 +1,11 @@
+using Microsoft.Extensions.Options;
 using OpHalo.Foundation.Application.Abstractions.Security;
 using OpHalo.Foundation.Application.Accounts.Access;
 using OpHalo.Foundation.Application.Accounts.Authorization;
 using OpHalo.Foundation.Application.Accounts.Entitlements;
+using OpHalo.Foundation.Application.Auth;
 using OpHalo.Keep.Application.Services;
+using OpHalo.Keep.Core.Domain;
 using OpHalo.Keep.Core.Entities;
 using OpHalo.Keep.Core.Errors;
 using OpHalo.SharedKernel.Abstractions;
@@ -10,7 +13,7 @@ using OpHalo.SharedKernel.Results;
 
 namespace OpHalo.Keep.Application.IntakeSetup;
 
-public sealed record CreateIntakeSmsHandoffCommand(string AppBaseUrl);
+public sealed record CreateIntakeSmsHandoffCommand(string CustomerPhone);
 
 public sealed record CreateIntakeSmsHandoffResult(string RawToken, DateTime ExpiresAtUtc);
 
@@ -21,6 +24,7 @@ public sealed class CreateIntakeSmsHandoffService(
     IUserAccessPolicy userAccessPolicy,
     IAccountAccessPolicy accountAccessPolicy,
     IFeatureAccessPolicy featurePolicy,
+    IOptions<MagicLinkSettings> appSettings,
     IClock clock)
 {
     private const int HandoffExpiryMinutes = 15;
@@ -33,28 +37,40 @@ public sealed class CreateIntakeSmsHandoffService(
 
     private static readonly Error NoActiveLink = KeepPublicIntakeLinkErrors.NoActiveLink;
 
+    private static readonly Error NotConfigured =
+        Error.Create("App.NotConfigured", "PublicBaseUrl is not configured.");
+
     public async Task<Result<CreateIntakeSmsHandoffResult>> ExecuteAsync(
         CreateIntakeSmsHandoffCommand command, CancellationToken ct = default)
     {
+        var publicBaseUrl = appSettings.Value.PublicBaseUrl;
+        if (string.IsNullOrWhiteSpace(publicBaseUrl))
+            return Result<CreateIntakeSmsHandoffResult>.Failure(NotConfigured);
+
         var auth = await AuthorizeAsync(ct);
         if (auth.IsFailure)
             return Result<CreateIntakeSmsHandoffResult>.Failure(auth.Error);
+
+        var phoneValidation = ValidatePhone(command.CustomerPhone);
+        if (phoneValidation.IsFailure)
+            return Result<CreateIntakeSmsHandoffResult>.Failure(phoneValidation.Error);
+        var canonicalPhone = phoneValidation.Value;
 
         var link = await persistence.FindActiveLinkByAccountAsync(currentUser.AccountId, ct);
         if (link is null)
             return Result<CreateIntakeSmsHandoffResult>.Failure(NoActiveLink);
 
-        var baseUrl = command.AppBaseUrl.TrimEnd('/');
-        var messageBody = $"Submit your request here: {baseUrl}/keep/{link.PublicSlug}";
+        var messageBody = $"Submit your request here: {publicBaseUrl.TrimEnd('/')}/keep/s/{link.PublicSlug}";
 
-        var rawToken    = tokenService.GeneratePublicIntakeToken();
-        var tokenHash   = tokenService.HashPublicIntakeToken(rawToken);
-        var nowUtc      = clock.UtcNow;
+        var rawToken     = tokenService.GeneratePublicIntakeToken();
+        var tokenHash    = tokenService.HashPublicIntakeToken(rawToken);
+        var nowUtc       = clock.UtcNow;
         var expiresAtUtc = nowUtc.AddMinutes(HandoffExpiryMinutes);
 
         var handoff = KeepIntakeSmsHandoff.Create(
             currentUser.AccountId,
             tokenHash,
+            canonicalPhone,
             messageBody,
             currentUser.UserId,
             expiresAtUtc);
@@ -62,6 +78,36 @@ public sealed class CreateIntakeSmsHandoffService(
         await persistence.CreateAsync(handoff, ct);
 
         return Result<CreateIntakeSmsHandoffResult>.Success(new CreateIntakeSmsHandoffResult(rawToken, expiresAtUtc));
+    }
+
+    private static Result<string> ValidatePhone(string? rawPhone)
+    {
+        if (string.IsNullOrWhiteSpace(rawPhone))
+            return Result<string>.Failure(KeepRequestErrors.CustomerPhoneRequired);
+
+        var trimmed = rawPhone.Trim();
+        if (!HasValidPhoneCharacters(trimmed))
+            return Result<string>.Failure(KeepRequestErrors.CustomerPhoneInvalidCharacters);
+
+        var canonical = PhoneNormalizer.Normalize(trimmed);
+        if (!PhoneNormalizer.IsValidLength(canonical))
+            return Result<string>.Failure(KeepRequestErrors.CustomerPhoneInvalidFormat);
+
+        return Result<string>.Success(canonical);
+    }
+
+    private static bool HasValidPhoneCharacters(string trimmedPhone)
+    {
+        for (var i = 0; i < trimmedPhone.Length; i++)
+        {
+            var c = trimmedPhone[i];
+            if (char.IsAsciiDigit(c) || c is ' ' or '-' or '(' or ')' or '.')
+                continue;
+            if (c == '+' && i == 0)
+                continue;
+            return false;
+        }
+        return true;
     }
 
     private async Task<Result> AuthorizeAsync(CancellationToken ct)

@@ -13,12 +13,14 @@ public sealed class KeepIntakeSmsHandoff : BaseEntity
 {
     public Guid AccountId { get; private set; }
     public string HandoffTokenHash { get; private set; } = string.Empty;
+    public string CustomerPhone { get; private set; } = string.Empty;
     public string MessageBody { get; private set; } = string.Empty;
     public DateTime ExpiresAtUtc { get; private set; }
 
     public static KeepIntakeSmsHandoff Create(
         Guid accountId,
         string handoffTokenHash,
+        string customerPhone,
         string messageBody,
         Guid? createdByUserId,
         DateTime expiresAtUtc)
@@ -26,6 +28,7 @@ public sealed class KeepIntakeSmsHandoff : BaseEntity
         if (accountId == Guid.Empty)
             throw new ArgumentException("Account ID is required.", nameof(accountId));
         ArgumentException.ThrowIfNullOrWhiteSpace(handoffTokenHash, nameof(handoffTokenHash));
+        ArgumentException.ThrowIfNullOrWhiteSpace(customerPhone, nameof(customerPhone));
         ArgumentException.ThrowIfNullOrWhiteSpace(messageBody, nameof(messageBody));
         if (expiresAtUtc == default)
             throw new ArgumentException("ExpiresAtUtc must be a real timestamp.", nameof(expiresAtUtc));
@@ -34,6 +37,7 @@ public sealed class KeepIntakeSmsHandoff : BaseEntity
         {
             AccountId        = accountId,
             HandoffTokenHash = handoffTokenHash,
+            CustomerPhone    = customerPhone,
             MessageBody      = messageBody,
             CreatedByUserId  = createdByUserId,
             ExpiresAtUtc     = expiresAtUtc,

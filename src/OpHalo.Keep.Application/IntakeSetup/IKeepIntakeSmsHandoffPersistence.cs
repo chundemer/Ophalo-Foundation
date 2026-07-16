@@ -12,4 +12,4 @@ public interface IKeepIntakeSmsHandoffPersistence
     Task<KeepIntakeSmsHandoffLookupResult?> FindValidByHashAsync(string tokenHash, DateTime nowUtc, CancellationToken ct);
 }
 
-public sealed record KeepIntakeSmsHandoffLookupResult(string MessageBody, DateTime ExpiresAtUtc);
+public sealed record KeepIntakeSmsHandoffLookupResult(string CustomerPhone, string MessageBody, DateTime ExpiresAtUtc);

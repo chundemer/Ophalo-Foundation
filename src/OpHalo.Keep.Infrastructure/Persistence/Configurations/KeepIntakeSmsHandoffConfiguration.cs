@@ -19,6 +19,13 @@ internal sealed class KeepIntakeSmsHandoffConfiguration : BaseEntityConfiguratio
             .HasMaxLength(64)
             .IsRequired();
 
+        // Empty-string default is a migration-only compatibility mechanism for rows written
+        // before R88f-c-repair-a. FindValidByHashAsync treats blank CustomerPhone as unavailable.
+        builder.Property(x => x.CustomerPhone)
+            .HasMaxLength(20)
+            .IsRequired()
+            .HasDefaultValue(string.Empty);
+
         builder.Property(x => x.MessageBody)
             .HasMaxLength(2000)
             .IsRequired();

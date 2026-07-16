@@ -2,9 +2,9 @@
 
 **Last updated:** 2026-07-16
 **Branch:** `main` tracking `origin/main`
-**Last green code baseline:** R88f-a — 1,104 unit tests, 14 architecture tests, 15 mobile unit tests (verified 2026-07-16).
+**Last green code baseline:** R88f-c-repair-a — 1,117 unit tests, 14 architecture tests, 15 mobile unit tests, 14 integration tests (verified 2026-07-16).
 Not deployment-ready; GAP-016–GAP-019 still active.
-**Next free ADR:** ADR-445
+**Next free ADR:** ADR-446
 **Current session:** New Request launch blockers — decisions and implementation preflight
 
 ---
@@ -62,7 +62,9 @@ Locked direction:
 
 - Customer self-service is the primary New Request route; staff-entered request capture is the
   visible fallback for cases where the customer cannot submit it. The pre-capture handoff is the
-  durable business public-intake link, never a per-request private customer page.
+  durable business public-intake link, never a per-request private customer page. ADR-445 locks the
+  remote-caller text flow: confirm only the caller phone, then use a desktop opaque QR handoff or a
+  mobile direct SMS draft addressed to that caller.
 - Owner/Admin receive public-intake handoff controls; Operators do not receive link-management
   controls.
 - The Locked Responsive-PWA Strategy in `docs/pilot-readiness-bug-tracker.md` applies: one shared
@@ -73,10 +75,9 @@ Locked direction:
 - Request Detail keeps one shared controller and shared behavioral panels; desktop/mobile layout
   composition is extracted before further Request Detail launch changes.
 
-Open decision before staff fallback implementation:
-
-1. Launch phone scope: normalized 10-digit North American validation (recommended), or an explicit
-   international phone/country-selection model.
+Resolved handoff decisions: ADR-444 locks the normalized caller-phone policy; ADR-445 locks the
+pre-capture caller-text, desktop QR, and mobile-direct behavior. The remaining work is the R88f-c
+correction described below, not a new product decision.
 
 ### Required Resolution Order
 
@@ -112,26 +113,25 @@ and approve before R88a implementation. Build 087 remains paused.
    fields on `CreateRequestBody`. `modal.tsx`: 10-digit lookup/create gates, service address
    disclosure with required-if-open field errors, address fields forwarded on create. 15 mobile
    unit tests (vitest); manual verification deferred to R88g.
-9. **R88f-a — GAP-018 pre-capture SMS handoff backend.** ✓ Committed 2026-07-16.
-   `KeepIntakeSmsHandoff` entity + EF config + `EfKeepIntakeSmsHandoffPersistence` +
-   `CreateIntakeSmsHandoffService` (Owner/Admin, `Keep.SettingsManage`, `PublicIntake` feature);
-   `POST /keep/setup/intake/sms-handoff` + `GET /keep/intake-sms/{token}` (rate-limited,
-   `Cache-Control: no-store, private`); `PublicTokenPathRedactor` extended. 11 unit tests green;
-   1,104 unit tests total. Migration `20260716223955_R88faKeepIntakeSmsHandoffs` applied.
-10. **R88f-b — GAP-018 ophalo-web intake SMS page.** New Next.js page at
-    `app/keep/intake-sms/[handoffToken]/page.tsx`; fetches `GET /keep/intake-sms/{token}`;
-    renders client component opening `sms:?body={messageBody}` (no recipient phone); mirrors
-    existing `share-sms` page: `cache: "no-store"`, `robots: noindex`, `referrer: no-referrer`.
-11. **R88f-c — GAP-018 PWA handoff panel.** `HandoffPanel.tsx` (new): Copy link, in-person QR
-    (durable slug URL), desktop SMS QR (opaque intake handoff token), mobile SMS direct link,
-    Enter-for-customer fallback. `QuickCapture`: add `isOwnerOrAdmin` prop + `handoff` stage;
-    Owner/Admin enters handoff panel first, Operator goes directly to lookup. `App.tsx` passes
-    `isOwnerOrAdmin`. API client + mock for `createIntakeSmsHandoff`.
-12. **R88g — Integrated PWA verification.** Run the complete desktop and mobile PWA matrix for all
+9. **R88f-a/b — GAP-018 pre-capture handoff groundwork.** ✓ Committed 2026-07-16, superseded by
+   ADR-445. Repaired by R88f-c-repair-a below.
+10. **R88f-c-repair-a — GAP-018 backend contract repair.** ✓ Committed 2026-07-16. Adds
+    `CustomerPhone` to entity/migration/service/endpoint; 3-step ADR-444 phone validation
+    (`Required` → `InvalidCharacters` → `InvalidFormat`); `IOptions<MagicLinkSettings>` for
+    `PublicBaseUrl`; `App.NotConfigured` guard; `/keep/s/{slug}` URL; backward-safe
+    `NOT NULL DEFAULT ''` migration with blank-phone legacy 404; `IsDeleted` → `DeletedAtUtc == null`
+    query fix. 1,117 unit + 14 integration tests green.
+11. **R88f-c-repair-b — GAP-018 web handoff page repair.** Two `ophalo-web` files: `page.tsx`
+    reads `customerPhone` from API; `IntakeSmsHandoffView.tsx` builds `sms:{phone}${sep}body=...`.
+12. **R88f-c-panel — GAP-018 Owner/Admin New Request handoff panel.** Customer self-service controls
+    at the start of Quick Capture: Copy link, Text customer from your phone (desktop opaque QR →
+    scan → pre-addressed SMS; mobile direct SMS), optional in-person durable QR, manual entry
+    fallback. Operators continue directly to staff entry. Separate preflight required.
+13. **R88g — Integrated PWA verification.** Run the complete desktop and mobile PWA matrix for all
     above flows, including QR handoffs, direct external actions, draft/error retention,
     accessibility, long data, and real-device behavior. Only then resume Build 087.
 
-R88f-b is next. Begin in a fresh session.
+R88f-c-repair-b is next, then the panel.
 Every R88 slice requires its own bounded brief section, file-level preflight, proportionate
 verification, Christian's approval of the completed diff, and a commit before the next slice begins.
 
