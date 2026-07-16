@@ -62,7 +62,8 @@ export function TimingPanel({ requestId, detail, onDetailUpdated, onRecordFollow
 
   async function handleSetFollowUp(e: React.FormEvent) {
     e.preventDefault();
-    if (!editorFollowUpDate || !editorFollowUpReason || followUpSubmitting || followUpConflict) return;
+    const isOtherReason = editorFollowUpReason === "other";
+    if (!editorFollowUpDate || !editorFollowUpReason || (isOtherReason && editorFollowUpNote.trim().length === 0) || followUpSubmitting || followUpConflict) return;
     setFollowUpSubmitting(true);
     setFollowUpError(null);
     try {
@@ -77,6 +78,8 @@ export function TimingPanel({ requestId, detail, onDetailUpdated, onRecordFollow
       if (err instanceof ApiError && err.status === 409) {
         setFollowUpConflict(true);
         setFollowUpError(STATUS_CONFLICT_MESSAGE);
+      } else if (err instanceof ApiError && err.code === "KeepRequest.FollowUpOnNoteRequired") {
+        setFollowUpError('A note is required when the reason is "Other".');
       } else {
         setFollowUpError("Could not set follow-up. Try again.");
       }
@@ -170,6 +173,7 @@ export function TimingPanel({ requestId, detail, onDetailUpdated, onRecordFollow
         {/* Follow-up section */}
         {canSetFollowUpOn && (
           <div className="px-4 py-3 space-y-2">
+            <p className="text-xs text-[var(--ophalo-muted)]">Your internal reminder to check back on this request.</p>
             <button
               type="button"
               aria-expanded={expandedEditor === "followUp"}
@@ -241,7 +245,9 @@ export function TimingPanel({ requestId, detail, onDetailUpdated, onRecordFollow
                   </select>
                 </div>
                 <div>
-                  <label htmlFor="follow-up-note" className="text-xs text-[var(--ophalo-muted)] block mb-0.5">Note (optional)</label>
+                  <label htmlFor="follow-up-note" className="text-xs text-[var(--ophalo-muted)] block mb-0.5">
+                    {editorFollowUpReason === "other" ? "Note (required)" : "Note (optional)"}
+                  </label>
                   <input
                     id="follow-up-note"
                     type="text"
@@ -249,7 +255,7 @@ export function TimingPanel({ requestId, detail, onDetailUpdated, onRecordFollow
                     onChange={(e) => setEditorFollowUpNote(e.target.value)}
                     maxLength={followUpNoteMaxLength}
                     disabled={followUpConflict}
-                    placeholder="Optional note…"
+                    placeholder={editorFollowUpReason === "other" ? "Describe the follow-up reason…" : "Optional note…"}
                     className={INPUT_CLS}
                   />
                 </div>
@@ -257,7 +263,7 @@ export function TimingPanel({ requestId, detail, onDetailUpdated, onRecordFollow
                   <KeepButton
                     type="submit"
                     variant="secondary"
-                    disabled={!editorFollowUpDate || !editorFollowUpReason || followUpSubmitting || followUpConflict}
+                    disabled={!editorFollowUpDate || !editorFollowUpReason || (editorFollowUpReason === "other" && editorFollowUpNote.trim().length === 0) || followUpSubmitting || followUpConflict}
                     className="flex-1"
                   >
                     {followUpSubmitting ? "Saving…" : hasFollowUp ? "Save follow-up" : "Set follow-up"}
@@ -303,6 +309,7 @@ export function TimingPanel({ requestId, detail, onDetailUpdated, onRecordFollow
         {/* Planned-for section */}
         {canSetPlannedFor && (
           <div className="px-4 py-3 space-y-2">
+            <p className="text-xs text-[var(--ophalo-muted)]">When work is scheduled to be performed.</p>
             <button
               type="button"
               aria-expanded={expandedEditor === "planned"}

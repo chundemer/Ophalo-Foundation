@@ -562,9 +562,9 @@ export function ServiceLocationPanel({ detail, onEditLocation }: ServiceLocation
           <div className="flex min-w-0 items-start gap-2">
             <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--ophalo-attention)]" />
             <div>
-              <p className="text-xs font-semibold text-[var(--ophalo-ink)]">Service location needed</p>
+              <p className="text-xs font-semibold text-[var(--ophalo-ink)]">No service location on file</p>
               <p className="text-xs leading-5 text-[var(--ophalo-muted)]">
-                Add the address before dispatching or scheduling field work.
+                Add the service address if work will be performed on-site.
               </p>
             </div>
           </div>
