@@ -2,10 +2,9 @@
 
 **Last updated:** 2026-07-16
 **Branch:** `main` tracking `origin/main`
-**Last green code baseline:** Build 086 — 1,073 unit tests, 14 architecture tests, and TypeScript
-clean for `ophalo-app` and `ophalo-web` (verified 2026-07-16). Manual public-use testing then found
-active New Request launch blockers; this is not deployment-ready.
-**Next free ADR:** ADR-444
+**Last green code baseline:** R88e-b — 1,093 unit tests, 14 architecture tests (verified 2026-07-16).
+Not deployment-ready; GAP-016–GAP-019 still active.
+**Next free ADR:** ADR-445
 **Current session:** New Request launch blockers — decisions and implementation preflight
 
 ---
@@ -97,19 +96,12 @@ and approve before R88a implementation. Build 087 remains paused.
    required desktop Email + Scan-to-Text QR and mobile Email + direct Text actions; do not bypass
    that state on mobile. Add Escape, initial focus, and focus restoration to the Quick Capture
    drawer.
-5. **R88e-a — GAP-016 shared backend normalization + public intake client readiness.** ADR-444
-   locked (10-digit North American, leading `+1`/`1` stripped). Change `PhoneNormalizer.IsValidLength`
-   to `== 10`; update `CustomerPhoneInvalidFormat` and `LookupKeepRequestByPhoneService` error
-   messages; update `IntakeForm.tsx` error-message translation. Add `PhoneNormalizerTests` and one
-   business-request integration test for 9-digit rejection. 4 production + 2 test = 6 files.
-6. **R88e-b — GAP-016/GAP-017 authenticated create-address contract.** Add optional address params
-   to `CreateByBusiness` and the authenticated-create command/body/service; validate if-any-then-all
-   (line1 + city + state required if any address field supplied; state normalized and checked against
-   US state code set). In `LookupGate`: remove `maxLength`, gate Look Up button and Enter to exactly
-   10 digits, show inline error when digits present but `!== 10`. In `CaptureForm`: add **Add service
-   address (optional)** disclosure with line1/line2/city/state/zip inputs; pass address in create
-   call. Read-only phone display and Change-phone UX deferred to R88e-b2. 8 production + 2 test = 10
-   files.
+5. **R88e-a — GAP-016 shared backend normalization + public intake client readiness.** ✓ Committed
+   2026-07-16. ADR-444 locked (10-digit North American, leading `+1`/`1` stripped).
+6. **R88e-b — GAP-016/GAP-017 authenticated create-address contract.** ✓ Committed 2026-07-16.
+   Optional service address on business-staff create (if-any-then-all validation, US state code
+   check). `LookupGate` gated to exactly 10 digits with inline error. `CaptureForm` collapsible
+   address disclosure. 1,093 unit tests, 14 architecture tests green.
 7. **R88e-b2 — Change-phone UX and draft preservation.** In `CaptureForm`: replace read-only phone
    display with **Change** link; `onBack(draft)` passes current form state back to `QuickCapture`.
    In `QuickCapture`: own `captureFormDraft` state; restore draft when lookup completes and re-enters
@@ -124,10 +116,9 @@ and approve before R88a implementation. Build 087 remains paused.
     above flows, including QR handoffs, direct external actions, draft/error retention,
     accessibility, long data, and real-device behavior. Only then resume Build 087.
 
-R88a–R88d and R88f may preflight now. R88e-a is implementation-ready (ADR-444 locked, file-level
-preflight approved). R88e-b through R88e-c begin only after their predecessor commits. Every R88
-slice requires its own bounded brief section, file-level preflight, proportionate verification,
-Christian's approval of the completed diff, and a commit before the next slice begins.
+R88a–R88d and R88f may preflight now. R88e-b2 is next (Change-phone UX, 3 production files).
+Every R88 slice requires its own bounded brief section, file-level preflight, proportionate
+verification, Christian's approval of the completed diff, and a commit before the next slice begins.
 
 **Public intake client-validation posture (R88e-a):** `IntakeForm.tsx` performs no client-side
 digit normalization; server-side `PhoneNormalizer` is authoritative. R88e-a updates the
