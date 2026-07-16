@@ -406,6 +406,96 @@ public class KeepCreateBusinessRequestServiceTests
     }
 
     // ---------------------------------------------------------------------------
+    // Service address validation
+    // ---------------------------------------------------------------------------
+
+    [Fact]
+    public async Task Execute_sets_service_address_when_all_required_fields_supplied()
+    {
+        var sut = BuildSut();
+        var cmd = new CreateBusinessRequestCommand(
+            "Jane", "0499888777", null, "Desc", "phone",
+            ServiceAddressLine1: "123 Main St",
+            ServiceAddressLine2: "Suite 4",
+            ServiceCity: "Springfield",
+            ServiceState: "IL",
+            ServiceZip: "62701");
+
+        var result = await sut.ExecuteAsync(cmd);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal("123 Main St", result.Value.ServiceAddressLine1);
+        Assert.Equal("Suite 4",     result.Value.ServiceAddressLine2);
+        Assert.Equal("Springfield", result.Value.ServiceCity);
+        Assert.Equal("IL",          result.Value.ServiceState);
+        Assert.Equal("62701",       result.Value.ServiceZip);
+    }
+
+    [Fact]
+    public async Task Execute_normalizes_state_to_uppercase()
+    {
+        var sut = BuildSut();
+        var cmd = new CreateBusinessRequestCommand(
+            "Jane", "0499888777", null, "Desc", "phone",
+            ServiceAddressLine1: "123 Main St",
+            ServiceCity: "Springfield",
+            ServiceState: "il");
+
+        var result = await sut.ExecuteAsync(cmd);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal("IL", result.Value.ServiceState);
+    }
+
+    [Theory]
+    [InlineData(null,          "Springfield", "IL")]  // missing line1
+    [InlineData("123 Main St", null,          "IL")]  // missing city
+    [InlineData("123 Main St", "Springfield", null)]  // missing state
+    public async Task Execute_returns_error_when_address_incomplete(
+        string? line1, string? city, string? state)
+    {
+        var sut = BuildSut();
+        var cmd = new CreateBusinessRequestCommand(
+            "Jane", "0499888777", null, "Desc", "phone",
+            ServiceAddressLine1: line1,
+            ServiceCity: city,
+            ServiceState: state);
+
+        var result = await sut.ExecuteAsync(cmd);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal("KeepRequest.ServiceAddressIncomplete", result.Error.Code);
+    }
+
+    [Fact]
+    public async Task Execute_returns_error_when_state_code_invalid()
+    {
+        var sut = BuildSut();
+        var cmd = new CreateBusinessRequestCommand(
+            "Jane", "0499888777", null, "Desc", "phone",
+            ServiceAddressLine1: "123 Main St",
+            ServiceCity: "Springfield",
+            ServiceState: "XX");
+
+        var result = await sut.ExecuteAsync(cmd);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal("KeepRequest.ServiceStateInvalid", result.Error.Code);
+    }
+
+    [Fact]
+    public async Task Execute_succeeds_without_address_when_no_fields_supplied()
+    {
+        var sut = BuildSut();
+        var result = await sut.ExecuteAsync(ValidCommand());
+
+        Assert.True(result.IsSuccess);
+        Assert.Null(result.Value.ServiceAddressLine1);
+        Assert.Null(result.Value.ServiceCity);
+        Assert.Null(result.Value.ServiceState);
+    }
+
+    // ---------------------------------------------------------------------------
     // Fakes
     // ---------------------------------------------------------------------------
 

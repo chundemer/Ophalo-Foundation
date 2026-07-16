@@ -27,6 +27,12 @@ export function CaptureForm({
   const [email, setEmail] = useState(prefill?.email ?? "");
   const [description, setDescription] = useState(prefill?.description ?? "");
   const [source, setSource] = useState<string>("");
+  const [showAddress, setShowAddress] = useState(false);
+  const [addrLine1, setAddrLine1] = useState("");
+  const [addrLine2, setAddrLine2] = useState("");
+  const [addrCity, setAddrCity] = useState("");
+  const [addrState, setAddrState] = useState("");
+  const [addrZip, setAddrZip] = useState("");
 
   const { mutate, isPending, error } = useMutation({
     mutationFn: () =>
@@ -36,6 +42,13 @@ export function CaptureForm({
         customerEmail: email.trim() || undefined,
         description: description.trim(),
         source,
+        ...(showAddress && addrLine1.trim() ? {
+          serviceAddressLine1: addrLine1.trim(),
+          serviceAddressLine2: addrLine2.trim() || undefined,
+          serviceCity: addrCity.trim() || undefined,
+          serviceState: addrState.trim() || undefined,
+          serviceZip: addrZip.trim() || undefined,
+        } : {}),
       }),
     onSuccess: (result) => onSuccess(result.requestId, result.referenceCode, result.pageToken, lockedPhone, email.trim() || null, name.trim()),
   });
@@ -136,6 +149,75 @@ export function CaptureForm({
           placeholder="What does the customer need?"
           className="block w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500 disabled:bg-slate-50 disabled:text-slate-400 resize-none"
         />
+      </div>
+
+      <div>
+        {!showAddress ? (
+          <button
+            type="button"
+            onClick={() => setShowAddress(true)}
+            className="text-sm text-slate-500 hover:text-slate-700 underline-offset-2 hover:underline"
+          >
+            + Add service address (optional)
+          </button>
+        ) : (
+          <div className="flex flex-col gap-3">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium text-slate-700">Service address</span>
+              <button
+                type="button"
+                onClick={() => { setShowAddress(false); setAddrLine1(""); setAddrLine2(""); setAddrCity(""); setAddrState(""); setAddrZip(""); }}
+                className="text-xs text-slate-400 hover:text-slate-600"
+              >
+                Remove
+              </button>
+            </div>
+            <input
+              type="text"
+              value={addrLine1}
+              onChange={(e) => setAddrLine1(e.target.value)}
+              disabled={isReadOnly}
+              placeholder="Address line 1"
+              className="block w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500 disabled:bg-slate-50 disabled:text-slate-400"
+            />
+            <input
+              type="text"
+              value={addrLine2}
+              onChange={(e) => setAddrLine2(e.target.value)}
+              disabled={isReadOnly}
+              placeholder="Address line 2 (optional)"
+              className="block w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500 disabled:bg-slate-50 disabled:text-slate-400"
+            />
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={addrCity}
+                onChange={(e) => setAddrCity(e.target.value)}
+                disabled={isReadOnly}
+                placeholder="City"
+                className="block flex-1 rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500 disabled:bg-slate-50 disabled:text-slate-400"
+              />
+              <input
+                type="text"
+                value={addrState}
+                onChange={(e) => setAddrState(e.target.value)}
+                disabled={isReadOnly}
+                placeholder="State"
+                maxLength={2}
+                className="block w-16 rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500 disabled:bg-slate-50 disabled:text-slate-400"
+              />
+              <input
+                type="text"
+                value={addrZip}
+                onChange={(e) => setAddrZip(e.target.value)}
+                disabled={isReadOnly}
+                placeholder="ZIP"
+                maxLength={10}
+                className="block w-24 rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500 disabled:bg-slate-50 disabled:text-slate-400"
+              />
+            </div>
+          </div>
+        )}
       </div>
 
       {is403 && (

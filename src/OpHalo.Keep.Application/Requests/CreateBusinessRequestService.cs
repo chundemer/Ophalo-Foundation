@@ -41,6 +41,22 @@ public sealed class CreateBusinessRequestService(
     private static readonly Error SourceCannotBePublicIntake =
         Error.Create("KeepRequest.SourceCannotBePublicIntake", "Staff cannot select Public Intake as a source.");
 
+    private static readonly Error ServiceAddressIncomplete =
+        Error.Create("KeepRequest.ServiceAddressIncomplete",
+            "Address line 1, city, and state are required when any address field is provided.");
+
+    private static readonly Error ServiceStateInvalid =
+        Error.Create("KeepRequest.ServiceStateInvalid", "State must be a valid two-letter US state code.");
+
+    private static readonly HashSet<string> ValidUsStateCodes = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "AL","AK","AZ","AR","CA","CO","CT","DE","FL","GA",
+        "HI","ID","IL","IN","IA","KS","KY","LA","ME","MD",
+        "MA","MI","MN","MS","MO","MT","NE","NV","NH","NJ",
+        "NM","NY","NC","ND","OH","OK","OR","PA","RI","SC",
+        "SD","TN","TX","UT","VT","VA","WA","WV","WI","WY","DC"
+    };
+
     public async Task<Result<KeepRequestDetailResult>> ExecuteAsync(
         CreateBusinessRequestCommand command, CancellationToken ct = default)
     {
@@ -98,6 +114,26 @@ public sealed class CreateBusinessRequestService(
             return Result<KeepRequestDetailResult>.Failure(
                 command.Source == "public_intake" ? SourceCannotBePublicIntake : InvalidSource);
 
+        // --- Optional service address: if any field supplied, line1 + city + state are required ---
+        string? normalizedState = null;
+        var anyAddress = !string.IsNullOrWhiteSpace(command.ServiceAddressLine1)
+            || !string.IsNullOrWhiteSpace(command.ServiceAddressLine2)
+            || !string.IsNullOrWhiteSpace(command.ServiceCity)
+            || !string.IsNullOrWhiteSpace(command.ServiceState)
+            || !string.IsNullOrWhiteSpace(command.ServiceZip);
+
+        if (anyAddress)
+        {
+            if (string.IsNullOrWhiteSpace(command.ServiceAddressLine1)
+                || string.IsNullOrWhiteSpace(command.ServiceCity)
+                || string.IsNullOrWhiteSpace(command.ServiceState))
+                return Result<KeepRequestDetailResult>.Failure(ServiceAddressIncomplete);
+
+            normalizedState = command.ServiceState.Trim().ToUpperInvariant();
+            if (!ValidUsStateCodes.Contains(normalizedState))
+                return Result<KeepRequestDetailResult>.Failure(ServiceStateInvalid);
+        }
+
         var actorDisplayName = await operatePersistence.GetActorDisplayNameAsync(currentUser.UserId, ct);
         if (actorDisplayName is null)
             return Result<KeepRequestDetailResult>.Failure(Forbidden);
@@ -130,7 +166,12 @@ public sealed class CreateBusinessRequestService(
                 referenceCode,
                 pageToken,
                 nowUtc,
-                parsedSource);
+                parsedSource,
+                serviceAddressLine1: command.ServiceAddressLine1,
+                serviceAddressLine2: command.ServiceAddressLine2,
+                serviceCity:         command.ServiceCity,
+                serviceState:        normalizedState,
+                serviceZip:          command.ServiceZip);
 
             var @event = KeepRequestEvent.CreateRequestCreated(
                 request.Id, accountId, currentUser.UserId, actorDisplayName, nowUtc);

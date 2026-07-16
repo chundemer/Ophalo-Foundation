@@ -760,6 +760,71 @@ public sealed class KeepBusinessRequestApiTests : IClassFixture<KeepApiWebFactor
     }
 
     // =========================================================================
+    // Service address at create (R88e-b)
+    // =========================================================================
+
+    [Fact]
+    public async Task CreateBusinessRequest_WithServiceAddress_Returns201_WithAddressInResponse()
+    {
+        var response = await AuthRequest(_ownerCookie).PostAsJsonAsync("/keep/requests", new
+        {
+            customerName          = "Addr Test Customer",
+            customerPhone         = "0411000099",
+            description           = "Service address test",
+            source                = "phone",
+            serviceAddressLine1   = "42 Oak Street",
+            serviceAddressLine2   = "Unit 7",
+            serviceCity           = "Chicago",
+            serviceState          = "il",
+            serviceZip            = "60601"
+        });
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.Equal("42 Oak Street", body.GetProperty("serviceAddressLine1").GetString());
+        Assert.Equal("Unit 7",        body.GetProperty("serviceAddressLine2").GetString());
+        Assert.Equal("Chicago",       body.GetProperty("serviceCity").GetString());
+        Assert.Equal("IL",            body.GetProperty("serviceState").GetString());
+        Assert.Equal("60601",         body.GetProperty("serviceZip").GetString());
+    }
+
+    [Fact]
+    public async Task CreateBusinessRequest_WithIncompleteAddress_Returns400()
+    {
+        var response = await AuthRequest(_ownerCookie).PostAsJsonAsync("/keep/requests", new
+        {
+            customerName        = "Partial Addr Customer",
+            customerPhone       = "0411000098",
+            description         = "Partial address test",
+            source              = "phone",
+            serviceAddressLine1 = "99 Elm Street"
+            // city and state omitted — should fail
+        });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal("KeepRequest.ServiceAddressIncomplete", await GetErrorCodeAsync(response));
+    }
+
+    [Fact]
+    public async Task CreateBusinessRequest_WithInvalidStateCode_Returns400()
+    {
+        var response = await AuthRequest(_ownerCookie).PostAsJsonAsync("/keep/requests", new
+        {
+            customerName        = "Bad State Customer",
+            customerPhone       = "0411000097",
+            description         = "Bad state test",
+            source              = "phone",
+            serviceAddressLine1 = "1 Bad State Rd",
+            serviceCity         = "Nowhere",
+            serviceState        = "XX"
+        });
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+        Assert.Equal("KeepRequest.ServiceStateInvalid", await GetErrorCodeAsync(response));
+    }
+
+    // =========================================================================
     // Helpers
     // =========================================================================
 

@@ -34,7 +34,7 @@ export function LookupGate({ onClose, onLookupSuccess, isPastDue, isReadOnly }: 
   }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
-    if (e.key === "Enter" && raw.length >= 7) {
+    if (e.key === "Enter" && raw.length === 10) {
       doLookup(raw);
     }
   }
@@ -121,7 +121,6 @@ export function LookupGate({ onClose, onLookupSuccess, isPastDue, isReadOnly }: 
               onKeyDown={handleKeyDown}
               onPaste={handlePaste}
               disabled={isPending || isReadOnly}
-              maxLength={15}
               className="block w-full rounded-md border border-slate-300 px-3 py-2 pr-8 text-sm text-slate-900 placeholder:text-slate-400 focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500 disabled:bg-slate-50 disabled:text-slate-400"
             />
             {isPending && (
@@ -172,9 +171,14 @@ export function LookupGate({ onClose, onLookupSuccess, isPastDue, isReadOnly }: 
           </div>
         )}
 
-        <p className="mt-1 text-xs text-slate-400">
-          Digits only · Lookup fires automatically at 10 digits or press Enter
-        </p>
+        {raw.length > 0 && raw.length !== 10 && (
+          <p className="mt-1 text-xs text-red-600">Please enter a 10-digit phone number.</p>
+        )}
+        {(raw.length === 0 || raw.length === 10) && (
+          <p className="mt-1 text-xs text-slate-400">
+            Digits only · Lookup fires automatically at 10 digits
+          </p>
+        )}
       </div>
 
       {is403 && (
@@ -197,7 +201,7 @@ export function LookupGate({ onClose, onLookupSuccess, isPastDue, isReadOnly }: 
         </button>
         <button
           type="button"
-          disabled={isPending || raw.length < 7 || isReadOnly}
+          disabled={isPending || raw.length !== 10 || isReadOnly}
           onClick={() => doLookup(raw)}
           title={isReadOnly ? "Read-only permission" : undefined}
           className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-40"

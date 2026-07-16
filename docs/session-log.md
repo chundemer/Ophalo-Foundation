@@ -102,24 +102,31 @@ and approve before R88a implementation. Build 087 remains paused.
    to `== 10`; update `CustomerPhoneInvalidFormat` and `LookupKeepRequestByPhoneService` error
    messages; update `IntakeForm.tsx` error-message translation. Add `PhoneNormalizerTests` and one
    business-request integration test for 9-digit rejection. 4 production + 2 test = 6 files.
-6. **R88e-b — GAP-016/GAP-017 authenticated desktop staff fallback.** Add optional address params
-   to `CreateByBusiness` and the authenticated-create command/body/service. In Quick Capture: remove
-   `maxLength`, disable lookup/submit until exactly 10 normalized digits, show inline error, replace
-   read-only phone display with **Change** (preserves draft), add **Add service address (optional)**
-   disclosure. 8 production + 2 test = 10 files.
-7. **R88e-c — GAP-016/GAP-017 native mobile capture parity.** Align `useQuickCapture` and
+6. **R88e-b — GAP-016/GAP-017 authenticated create-address contract.** Add optional address params
+   to `CreateByBusiness` and the authenticated-create command/body/service; validate if-any-then-all
+   (line1 + city + state required if any address field supplied; state normalized and checked against
+   US state code set). In `LookupGate`: remove `maxLength`, gate Look Up button and Enter to exactly
+   10 digits, show inline error when digits present but `!== 10`. In `CaptureForm`: add **Add service
+   address (optional)** disclosure with line1/line2/city/state/zip inputs; pass address in create
+   call. Read-only phone display and Change-phone UX deferred to R88e-b2. 8 production + 2 test = 10
+   files.
+7. **R88e-b2 — Change-phone UX and draft preservation.** In `CaptureForm`: replace read-only phone
+   display with **Change** link; `onBack(draft)` passes current form state back to `QuickCapture`.
+   In `QuickCapture`: own `captureFormDraft` state; restore draft when lookup completes and re-enters
+   capture. 3 production files (CaptureForm, QuickCapture, utils); manual verification in R88g.
+8. **R88e-c — GAP-016/GAP-017 native mobile capture parity.** Align `useQuickCapture` and
    `modal.tsx` to 10-digit gate; add service address disclosure matching R88e-b UX. 2 production
    files; manual verification deferred to R88g.
-8. **R88f — GAP-018 customer self-service New Request handoff.** Implement ADR-442: make the
+9. **R88f — GAP-018 customer self-service New Request handoff.** Implement ADR-442: make the
    durable business public-intake link the Owner/Admin handoff default and staff entry the visible
    fallback; preflight the public-intake and SMS-handoff contracts before coding.
-9. **R88g — Integrated PWA verification.** Run the complete desktop and mobile PWA matrix for all
-   above flows, including QR handoffs, direct external actions, draft/error retention,
-   accessibility, long data, and real-device behavior. Only then resume Build 087.
+10. **R88g — Integrated PWA verification.** Run the complete desktop and mobile PWA matrix for all
+    above flows, including QR handoffs, direct external actions, draft/error retention,
+    accessibility, long data, and real-device behavior. Only then resume Build 087.
 
 R88a–R88d and R88f may preflight now. R88e-a is implementation-ready (ADR-444 locked, file-level
-preflight approved). R88e-b and R88e-c begin only after their predecessor commits. Every R88 slice
-requires its own bounded brief section, file-level preflight, proportionate verification,
+preflight approved). R88e-b through R88e-c begin only after their predecessor commits. Every R88
+slice requires its own bounded brief section, file-level preflight, proportionate verification,
 Christian's approval of the completed diff, and a commit before the next slice begins.
 
 **Public intake client-validation posture (R88e-a):** `IntakeForm.tsx` performs no client-side

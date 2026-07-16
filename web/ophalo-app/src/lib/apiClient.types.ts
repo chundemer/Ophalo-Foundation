@@ -119,6 +119,11 @@ export interface CreateRequestBody {
   customerEmail?: string;
   description: string;
   source: string;
+  serviceAddressLine1?: string;
+  serviceAddressLine2?: string;
+  serviceCity?: string;
+  serviceState?: string;
+  serviceZip?: string;
 }
 
 export interface AvailableActionsMetadata {

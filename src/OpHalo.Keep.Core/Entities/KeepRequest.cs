@@ -1275,10 +1275,23 @@ public sealed class KeepRequest : BaseEntity
         string referenceCode,
         string pageToken,
         DateTime nowUtc,
-        KeepRequestSource source) =>
-        CreateCore(accountId, customerId, customerName, customerPhone, customerEmail,
+        KeepRequestSource source,
+        string? serviceAddressLine1 = null,
+        string? serviceAddressLine2 = null,
+        string? serviceCity = null,
+        string? serviceState = null,
+        string? serviceZip = null)
+    {
+        var request = CreateCore(accountId, customerId, customerName, customerPhone, customerEmail,
             description, referenceCode, pageToken, nowUtc, firstResponseTargetMinutes: 0,
             KeepRequestOrigin.Business, source, needsShare: true);
+        request.ServiceAddressLine1 = serviceAddressLine1?.Trim();
+        request.ServiceAddressLine2 = serviceAddressLine2?.Trim();
+        request.ServiceCity         = serviceCity?.Trim();
+        request.ServiceState        = serviceState?.Trim().ToUpperInvariant();
+        request.ServiceZip          = serviceZip?.Trim();
+        return request;
+    }
 
     public void ClearNeedsShare() => NeedsShare = false;
 

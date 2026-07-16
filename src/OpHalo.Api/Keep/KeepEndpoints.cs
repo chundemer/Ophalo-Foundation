@@ -144,7 +144,9 @@ public static class KeepEndpoints
             CancellationToken ct) =>
         {
             var command = new CreateBusinessRequestCommand(
-                body.CustomerName, body.CustomerPhone, body.CustomerEmail, body.Description, body.Source);
+                body.CustomerName, body.CustomerPhone, body.CustomerEmail, body.Description, body.Source,
+                body.ServiceAddressLine1, body.ServiceAddressLine2, body.ServiceCity,
+                body.ServiceState, body.ServiceZip);
             var result = await service.ExecuteAsync(command, ct);
             return result.IsSuccess
                 ? Results.Created($"/keep/requests/{result.Value.RequestId}", result.Value)
