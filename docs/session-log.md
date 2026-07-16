@@ -2,10 +2,11 @@
 
 **Last updated:** 2026-07-16
 **Branch:** `main` tracking `origin/main`
-**Last green baseline:** Build 086 — 1,073 unit tests, 14 architecture tests, and TypeScript clean
-for `ophalo-app` and `ophalo-web` (verified 2026-07-16).
-**Next free ADR:** ADR-442
-**Current session:** Build 087 — Request List V1 Launch Pass
+**Last green code baseline:** Build 086 — 1,073 unit tests, 14 architecture tests, and TypeScript
+clean for `ophalo-app` and `ophalo-web` (verified 2026-07-16). Manual public-use testing then found
+active New Request launch blockers; this is not deployment-ready.
+**Next free ADR:** ADR-444
+**Current session:** New Request launch blockers — decisions and implementation preflight
 
 ---
 
@@ -47,14 +48,75 @@ All five sessions committed to `main` and verified:
 **R86e evidence:** 1,073 unit tests passed, 14 architecture tests passed, TypeScript clean on
 `ophalo-app` and `ophalo-web`.
 
-**Deferred to pre-deployment testing:** full manual timing matrix (unset/configured/save/clear/
-conflict/stale-detail), screen reader and keyboard focus pass, long-data and 200% zoom checks,
-desktop/mobile conflict paths. Christian to complete before Vercel deployment.
+**Launch-readiness note:** Manual verification is still required before Vercel deployment. Testing
+also surfaced New Request defects/workflow gaps and a Request Detail maintainability seam, now
+tracked as **GAP-016–GAP-019** in
+`docs/pilot-readiness-bug-tracker.md`; resolve their selected scope before resuming page-pass work.
 
-## Current Work — Build 087 Request List V1 Launch Pass
+## Current Work — New Request And Request Detail Launch Blockers
+
+**Tracker:** `docs/pilot-readiness-bug-tracker.md` — GAP-016 through GAP-019
+**Status:** GAP-019 preflight may begin now. The Request Detail, sharing, and public-intake handoff
+work may follow; staff fallback capture remains blocked only on the stated phone-policy decision.
+
+Locked direction:
+
+- Customer self-service is the primary New Request route; staff-entered request capture is the
+  visible fallback for cases where the customer cannot submit it. The pre-capture handoff is the
+  durable business public-intake link, never a per-request private customer page.
+- Owner/Admin receive public-intake handoff controls; Operators do not receive link-management
+  controls.
+- The Locked Responsive-PWA Strategy in `docs/pilot-readiness-bug-tracker.md` applies: one shared
+  PWA controller and behavior, with desktop QR handoffs and mobile direct external-channel actions.
+  Keep does not send SMS, and raw phone/message data never appears in a QR payload.
+- Staff service location remains optional under the existing GAP-006 decision, but a supplied
+  location must be complete and valid.
+- Request Detail keeps one shared controller and shared behavioral panels; desktop/mobile layout
+  composition is extracted before further Request Detail launch changes.
+
+Open decision before staff fallback implementation:
+
+1. Launch phone scope: normalized 10-digit North American validation (recommended), or an explicit
+   international phone/country-selection model.
+
+### Required Resolution Order
+
+**Controlling remediation brief:** `docs/build-log/088-pwa-launch-readiness-remediation.md` — create
+and approve before R88a implementation. Build 087 remains paused.
+
+1. **R88a — GAP-019 Request Detail layout decomposition.** Extract the shared controller from
+   responsive desktop/mobile composition before touching Detail contact, sharing, timing, or
+   location UI. Structural only: no API, lifecycle, or permission behavior changes.
+2. **R88b — Request Detail contact and communication handoffs.** Implement the locked header
+   contact strip, desktop QR-to-call/mobile direct-call pattern, direct-email behavior, and
+   separate explicit contact-outcome logging.
+3. **R88c — Request Detail timing and location clarity.** Correct service-location warning copy;
+   add Follow-up versus Planned-date guidance; make the Follow-up `Other` note requirement visible,
+   prevented client-side, and specifically reported on server rejection.
+4. **R88d — Post-capture sharing and Quick Capture accessibility.** Give the success state the
+   required desktop Email + Scan-to-Text QR and mobile Email + direct Text actions; do not bypass
+   that state on mobile. Add Escape, initial focus, and focus restoration to the Quick Capture
+   drawer.
+5. **R88e — GAP-016/GAP-017 staff fallback capture.** After phone-scope confirmation, implement
+   shared phone validation/correction and optional complete service-address capture through the
+   authenticated-create contract.
+6. **R88f — GAP-018 customer self-service New Request handoff.** Implement ADR-442: make the
+   durable business public-intake link the Owner/Admin handoff default and staff entry the visible
+   fallback; preflight the public-intake and SMS-handoff contracts before coding.
+7. **R88g — Integrated PWA verification.** Run the complete desktop and mobile PWA matrix for all
+   above flows, including QR handoffs, direct external actions, draft/error retention,
+   accessibility, long data, and real-device behavior. Only then resume Build 087.
+
+R88a–R88d and R88f may preflight now. R88e requires the stated phone-policy decision; do not
+silently assume it. Every R88 slice requires its own bounded brief section, file-level preflight,
+proportionate verification, Christian's approval of the completed diff, and a commit before the
+next slice begins.
+
+## Build 087 — Request List V1 Launch Pass
 
 **Controlling brief:** `docs/build-log/087-request-list-v1-launch-pass.md`
-**Status:** Not yet started — read the brief before beginning.
+**Status:** Paused. Do not begin while GAP-016–GAP-019 are active; return after their scope is
+implemented or deliberately deferred.
 
 ## Standing Boundaries
 
@@ -86,13 +148,15 @@ Topology:
 - Pilot cap: `SignupDefaults:MaxPilotAccounts=15`.
 - `OperatorBaseUrl` is retired; invite links use `{PublicBaseUrl}/invite/accept`.
 
-## After Build 086 And Build 087
+## Remaining Path To Production
 
-1. Conduct a decision-first marketing and onboarding launch pass.
-2. Deploy and validate a Vercel production candidate.
-3. Test the PWA on real iPhone and Android devices before promotion, then run a production smoke
+1. Resolve or deliberately defer the active New Request launch blockers and Request Detail
+   maintainability seam (GAP-016–GAP-019), then resume Build 087.
+2. Conduct decision-first marketing and onboarding launch passes.
+3. Deploy and validate a Vercel production candidate.
+4. Test the PWA on real iPhone and Android devices before promotion, then run a production smoke
    test after deployment.
-4. Shift primary implementation attention to native mobile public-release readiness and Apple/Google
+5. Shift primary implementation attention to native mobile public-release readiness and Apple/Google
    store approval.
 
 Historical implementation detail remains in `docs/build-log/`. Do not re-add it to this active

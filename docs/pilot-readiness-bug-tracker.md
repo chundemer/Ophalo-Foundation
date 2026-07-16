@@ -3,34 +3,21 @@
 **Created:** 2026-07-02
 **Purpose:** Live tracker for pilot-blocking or pilot-relevant bugs/gaps discovered during Session 14.
 **Source:** Promoted from the Pre-S14e bug register in `docs/build-log/068-session-14-ophalo-web-front-door.md`.
-**Current active item:** None — all tracked gaps resolved; deployment smoke testing is next.
+**Current active items:** GAP-016 through GAP-019 — New Request launch blockers and a Request
+Detail maintainability seam found during
+Build 086 manual verification on 2026-07-16. Build 087 is paused until they are triaged and the
+selected fixes are complete.
 **Recently resolved:** GAP-015 — feedback review operational loop and accountability trail (commit `315b231`); GAP-004 — durable PWA request-detail routing (commit `3ebdc57`).
 **Previously resolved:** GAP-010 — Ready to Close rows leaked communication next-actions (S24j).
 
 This document is the current working tracker. Historical discovery notes stay in the build logs, but
 triage, status, and next-session ordering should happen here.
 
-As of S15c, all earlier active pilot-readiness bugs/gaps in this tracker were resolved.
-GAP-004 is reactivated after ADR-427 locked durable PWA request-detail navigation behavior.
-GAP-007 is active after ADR-435 locked that request-list quick actions are a cockpit workflow, not
-permanent navigation shortcuts.
-GAP-008 is active after S24 list polish showed generic `Urgent` row pills can confuse owners/admins
-because they do not explain whether urgency came from customer intake or internal priority, nor what
-action is expected.
-GAP-009 is active after ADR-436 generalized this into a cross-surface rule for list, detail, and
-native staff signals.
-GAP-010 was found during screenshot review after S24i: a work-completed row with no active attention
-still presented communication next-actions instead of closeout.
-GAP-011 was found during the S24j follow-up: the request-list external-contact modal is the
-preferred UX, but request detail still uses a separate older modal; additionally, calm
-work-completed rows should guide closeout without hiding legitimate post-work communication actions.
-GAP-012 through GAP-014 were found during pilot app testing after feedback/closeout review:
-Closed requests need a follow-up-request path instead of reopen, customer feedback needs an explicit
-submitted state, and authenticated request detail needs a visible feedback card/state.
-
-GAP-015 was identified after reviewing the completed Build 084 interaction: the existing feedback
-model and review mutation work, but feedback-review entry context, clearing behavior, and the
-customer-feedback activity record need to form one clear Owner/Admin workflow.
+As of S15c, all earlier active pilot-readiness bugs/gaps in this tracker were resolved. The active
+New Request items below were found during the subsequent V1 public-use audit and supersede the
+previous assumption that deployment smoke testing was the next step.
+Detailed historical discovery notes and their resolved status remain below for traceability; only the
+Active Launch Blockers section controls current work.
 
 ## Status Legend
 
@@ -38,6 +25,143 @@ customer-feedback activity record need to form one clear Owner/Admin workflow.
 - **Resolved:** Fixed in a committed slice.
 - **Deferred:** Known issue, not currently selected for the next implementation slice.
 - **Needs decision:** Requires a product/architecture decision before implementation.
+
+## Locked Responsive-PWA Strategy
+
+Keep has one authenticated PWA, not separate desktop and native-mobile products. It shares one
+backend contract, action policy, mutation behavior, visibility boundary, and React page controller.
+Desktop and mobile PWA layouts may differ when that removes real-world friction for a busy owner.
+
+| Capability | Desktop PWA | Mobile PWA |
+|---|---|---|
+| Call customer | QR handoff to the owner’s phone; no desktop `tel:` launch | Direct `tel:` action |
+| Text customer/request link | Short-lived opaque QR handoff that opens the owner’s phone SMS draft | Direct SMS action |
+| Email | `mailto:` action | `mailto:` action |
+| Focused form/action | Centered modal | Bottom sheet |
+| Request Detail composition | Desktop work area plus action/context sidebar | Mobile stack using the same shared panels and callbacks |
+
+Rules:
+
+- Adapt the presentation by responsive PWA layout/capability; do not fork business logic by device
+  or create separate desktop/mobile request implementations.
+- QR payloads never expose raw customer phone numbers or message bodies. Keep prepares a handoff;
+  the owner’s device launches the external app. Keep does not send SMS.
+- Direct call, text, and email launch external channels only. Logging the contact outcome remains a
+  separate, explicit Keep action.
+- A customer-facing action must be present in the relevant layout: do not tell an owner to share a
+  page while exposing only a copy fallback.
+
+## Active Launch Blockers — New Request
+
+### GAP-016 — New Request accepts invalid phone numbers and traps correction
+
+**Status:** Needs decision
+**Severity:** P0
+**Area:** `ophalo-app` Quick Capture lookup/capture; authenticated business-request API; shared
+request-input validation
+
+**Verified cause:** The lookup button permits 7–15 digits, the lookup service accepts 7–15 digits,
+and `KeepRequestInputValidator` accepts the same range. A nine-digit number can therefore reach
+the capture stage. That stage displays the number in a read-only field with no change path, so the
+operator cannot correct it without abandoning the request.
+
+**Proposed solution:**
+
+- Lock launch phone policy to a normalized 10-digit North American number, accepting a leading
+  country-code `1` and normalizing it before lookup/create. Do not imply international support with
+  an ambiguous 7–15 digit field; add a country selector in a later dedicated internationalization
+  slice if needed.
+- Apply the identical rule in the lookup UI, authenticated create API, and public intake validation.
+- Disable lookup/capture until valid and show an inline, associated error: **Enter a 10-digit phone
+  number.**
+- Replace the capture-stage read-only phone field with **Change**. Returning to lookup preserves and
+  focuses the number, re-runs duplicate lookup as appropriate, and preserves entered name, email,
+  description, source, and address draft.
+
+**Decision required:** Confirm North American 10-digit phone validation for launch, or define the
+international phone/country-selection model before implementation.
+
+### GAP-017 — Staff New Request cannot capture service location at creation
+
+**Status:** Open
+**Severity:** P1
+**Area:** `ophalo-app` Quick Capture; PWA create-request contract; Keep business-request command,
+service, and entity creation
+**Existing decision:** GAP-006 remains valid: staff may intentionally create a request without a
+known service location and add it later; public customer intake continues to require location.
+
+**Verified cause:** The authenticated create body currently contains only customer name, phone,
+email, description, and source. The public intake command supports service-address fields, but the
+staff-create command and `KeepRequest.CreateByBusiness` path do not.
+
+**Proposed solution:** Add an **Add service address (optional)** disclosure to staff capture. When
+opened, require a complete valid address—line 1, city, and two-letter US state—with line 2 and ZIP
+optional. Carry it through the authenticated request-create contract and persist it as part of the
+initial request creation. The omission path remains explicit and safe.
+
+### GAP-018 — New Request leads with staff entry instead of customer self-service handoff
+
+**Status:** Needs decision
+**Severity:** P1
+**Area:** `ophalo-app` Quick Capture; public-intake link setup; secure SMS handoff
+
+**Verified cause:** A durable public customer-request page already exists in Settings, but it is not
+available from New Request. The current drawer begins with internal phone lookup and staff capture,
+even though staff entry should be the fallback when the customer cannot submit the request.
+
+**Locked hierarchy:** Customer self-service is the default New Request path. **Enter request for
+customer** is the clear secondary, last-resort path.
+
+**Proposed solution:**
+
+- For Owner/Admin, lead New Request with **Let the customer submit their request** and expose the
+  existing durable business public-intake link through **Copy link**, an in-person **Show customer QR**, and
+  **Text customer from your phone**.
+- The desktop text action uses an opaque, short-lived SMS-handoff URL in a QR code. The owner scans
+  it with their phone; the phone opens a pre-addressed SMS composer containing the public intake
+  link. Mobile opens that composer directly. Keep does not send SMS, and neither recipient phone nor
+  message appears in the QR payload.
+- The in-person QR may encode the durable public intake slug because it carries no customer data.
+- The public-intake link is not the private customer request page. A private page is minted only
+  after a request exists; it cannot be the pre-capture handoff. Operators retain the staff-entry
+  fallback and do not receive link-management controls.
+- Do not present the public form as a staff-entry action: same-account authenticated staff are
+  deliberately blocked from posting public intake. It is a customer handoff/preview only.
+
+**Decision:** ADR-442 locks the public-intake handoff as the primary New Request route.
+
+### GAP-019 — Request Detail needs layout decomposition before further launch changes
+
+**Status:** Open
+**Severity:** P1
+**Area:** `ophalo-app` Request Detail presentation architecture
+
+**Verified cause:** `RequestDetail.tsx` combines page query/state ownership, mutation handlers,
+modal orchestration, desktop sidebar composition, mobile-stack composition, and repeated placement
+of shared panels. This makes the desktop/mobile contact, sharing, timing, accessibility, and
+location changes unnecessarily risky: a behavioral change can be applied to one placement and missed
+in the other.
+
+**Proposed solution:**
+
+- Retain `RequestDetail.tsx` as the single controller for data, mutations, navigation, modal state,
+  and shared callbacks.
+- Extract `RequestDetailDesktopLayout.tsx` and `RequestDetailMobileLayout.tsx` for composition
+  only. Both receive the same detail data, permissions, and callbacks; neither fetches data or owns
+  business rules.
+- Continue extracting shared panels where their behavior is used in both layouts, beginning with a
+  header-level `CustomerContactStrip` and the existing timing, service-location, sharing, composer,
+  and activity components.
+- Do not create two independent device-specific Request Detail implementations. Presentation order
+  may differ; action policy, state transitions, contact logging, accessibility behavior, and error
+  handling must remain shared.
+- Apply the Locked Responsive-PWA Strategy: desktop contact/share actions use QR handoffs where a
+  desktop cannot perform the physical phone action; mobile PWA actions launch the permitted native
+  `tel:`, `sms:`, or `mailto:` channel directly.
+
+**Acceptance criteria:** A Request Detail contact/share or accessibility change has one shared
+behavioral implementation and explicit desktop/mobile composition call sites; TypeScript remains
+clean; no lifecycle, permission, or optimistic-concurrency behavior changes as part of the refactor.
 
 ## P0/P1 Pilot Flow Bugs
 
