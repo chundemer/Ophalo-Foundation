@@ -112,14 +112,29 @@ and approve before R88a implementation. Build 087 remains paused.
    fields on `CreateRequestBody`. `modal.tsx`: 10-digit lookup/create gates, service address
    disclosure with required-if-open field errors, address fields forwarded on create. 15 mobile
    unit tests (vitest); manual verification deferred to R88g.
-9. **R88f — GAP-018 customer self-service New Request handoff.** Implement ADR-442: make the
-   durable business public-intake link the Owner/Admin handoff default and staff entry the visible
-   fallback; preflight the public-intake and SMS-handoff contracts before coding.
-10. **R88g — Integrated PWA verification.** Run the complete desktop and mobile PWA matrix for all
+9. **R88f-a — GAP-018 pre-capture SMS handoff backend.** New account-scoped
+   `KeepIntakeSmsHandoff` entity + EF config + persistence + `CreateIntakeSmsHandoffService`
+   (auth mirrors `KeepIntakeSetupService`: Owner/Admin via `Keep.SettingsManage`, `PublicIntake`
+   feature, account-access posture); `POST /keep/setup/intake/sms-handoff` + `GET
+   /keep/intake-sms/{token}` (rate-limited, `Cache-Control: no-store, private` on both valid and
+   404 responses); `PublicTokenPathRedactor` extended; 8 production files. Unit tests: Operator
+   denied, no active link, hash-only persistence, 15-min expiry, trailing-slash URL construction.
+   Expired/invalid resolver indistinguishability deferred to existing Keep intake API test file.
+   Migration run by Christian after commit.
+10. **R88f-b — GAP-018 ophalo-web intake SMS page.** New Next.js page at
+    `app/keep/intake-sms/[handoffToken]/page.tsx`; fetches `GET /keep/intake-sms/{token}`;
+    renders client component opening `sms:?body={messageBody}` (no recipient phone); mirrors
+    existing `share-sms` page: `cache: "no-store"`, `robots: noindex`, `referrer: no-referrer`.
+11. **R88f-c — GAP-018 PWA handoff panel.** `HandoffPanel.tsx` (new): Copy link, in-person QR
+    (durable slug URL), desktop SMS QR (opaque intake handoff token), mobile SMS direct link,
+    Enter-for-customer fallback. `QuickCapture`: add `isOwnerOrAdmin` prop + `handoff` stage;
+    Owner/Admin enters handoff panel first, Operator goes directly to lookup. `App.tsx` passes
+    `isOwnerOrAdmin`. API client + mock for `createIntakeSmsHandoff`.
+12. **R88g — Integrated PWA verification.** Run the complete desktop and mobile PWA matrix for all
     above flows, including QR handoffs, direct external actions, draft/error retention,
     accessibility, long data, and real-device behavior. Only then resume Build 087.
 
-R88a–R88d and R88f may preflight now. R88f is next (GAP-018 customer self-service New Request handoff).
+R88f-a is next; gate is approved. Begin in a fresh session.
 Every R88 slice requires its own bounded brief section, file-level preflight, proportionate
 verification, Christian's approval of the completed diff, and a commit before the next slice begins.
 
