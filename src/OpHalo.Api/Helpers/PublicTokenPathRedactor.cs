@@ -17,6 +17,9 @@ public static class PublicTokenPathRedactor
         if (path.StartsWith("/continuity/public-intake/token/", StringComparison.OrdinalIgnoreCase))
             return "/continuity/public-intake/token/[redacted]";
 
+        if (path.StartsWith("/keep/intake-sms/", StringComparison.OrdinalIgnoreCase))
+            return "/keep/intake-sms/[redacted]";
+
         if (path.StartsWith("/keep/r/", StringComparison.OrdinalIgnoreCase))
         {
             var after = path.AsSpan("/keep/r/".Length);

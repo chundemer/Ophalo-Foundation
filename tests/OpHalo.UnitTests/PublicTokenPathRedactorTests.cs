@@ -59,6 +59,23 @@ public sealed class PublicTokenPathRedactorTests
         Assert.Contains(action, result);
     }
 
+    // --- /keep/intake-sms/{token} ---
+
+    [Fact]
+    public void IntakeSmsHandoffPath_TokenIsRedacted()
+    {
+        var result = PublicTokenPathRedactor.Redact("/keep/intake-sms/abc123secret");
+        Assert.Equal("/keep/intake-sms/[redacted]", result);
+        Assert.DoesNotContain("abc123secret", result);
+    }
+
+    [Fact]
+    public void IntakeSmsHandoffPath_CaseInsensitive_IsRedacted()
+    {
+        var result = PublicTokenPathRedactor.Redact("/KEEP/INTAKE-SMS/abc123secret");
+        Assert.Equal("/keep/intake-sms/[redacted]", result);
+    }
+
     // --- Unrelated paths are returned unchanged ---
 
     [Theory]

@@ -7,6 +7,7 @@ using OpHalo.Keep.Application.IntakeSetup;
 using OpHalo.Keep.Application.PublicIntake;
 using OpHalo.Keep.Application.Requests;
 using OpHalo.Keep.Application.Setup;
+using OpHalo.Keep.Core.Entities;
 using OpHalo.Keep.Core.Entities.Enums;
 using OpHalo.Keep.Core.Errors;
 using OpHalo.SharedKernel.Abstractions;
@@ -64,6 +65,37 @@ public static class KeepEndpoints
             var result = await service.RenameAsync(body.DesiredName, ct);
             return result.IsSuccess ? Results.Ok(result.Value) : ErrorHttpMapper.ToHttpResult(result.Error);
         }).RequireAuthorization();
+
+        // Intake SMS handoff creation — authenticated, Owner/Admin only (R88f-a, GAP-018)
+        app.MapPost("/keep/setup/intake/sms-handoff", async (
+            CreateIntakeSmsHandoffService service,
+            IConfiguration config,
+            CancellationToken ct) =>
+        {
+            var appBaseUrl = config["App:AppBaseUrl"] ?? "https://app.ophalo.com";
+            var result = await service.ExecuteAsync(new CreateIntakeSmsHandoffCommand(appBaseUrl), ct);
+            if (!result.IsSuccess)
+                return ErrorHttpMapper.ToHttpResult(result.Error);
+            var handoffUrl = $"{appBaseUrl.TrimEnd('/')}/keep/intake-sms/{result.Value.RawToken}";
+            return Results.Ok(new { handoffUrl, expiresAtUtc = result.Value.ExpiresAtUtc });
+        }).RequireAuthorization();
+
+        // Intake SMS handoff resolve — public, rate-limited, no-store cache (R88f-a, GAP-018)
+        // Expired and invalid tokens are intentionally indistinguishable (404 for both).
+        app.MapGet("/keep/intake-sms/{handoffToken}", async (
+            string handoffToken,
+            HttpContext httpContext,
+            IKeepIntakeSmsHandoffPersistence persistence,
+            IClock clock,
+            CancellationToken ct) =>
+        {
+            httpContext.Response.Headers.CacheControl = "no-store, private";
+            var tokenHash = KeepIntakeSmsHandoff.HashToken(handoffToken);
+            var result = await persistence.FindValidByHashAsync(tokenHash, clock.UtcNow, ct);
+            return result is null
+                ? Results.NotFound()
+                : Results.Ok(new { result.MessageBody, result.ExpiresAtUtc });
+        }).RequireRateLimiting("public-intake");
 
         // Business profile + response policy — authenticated, Owner/Admin only (S12a)
         app.MapGet("/keep/setup", async (KeepSetupService service, CancellationToken ct) =>

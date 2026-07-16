@@ -31,6 +31,7 @@ public static class KeepServiceCollectionExtensions
         services.AddScoped<IKeepRequestDetailPersistence, EfKeepRequestDetailPersistence>();
         services.AddScoped<IKeepRequestOperatePersistence, EfKeepRequestOperatePersistence>();
         services.AddScoped<IKeepSmsHandoffPersistence, EfKeepSmsHandoffPersistence>();
+        services.AddScoped<IKeepIntakeSmsHandoffPersistence, EfKeepIntakeSmsHandoffPersistence>();
         services.AddScoped<KeepTokenService>();
         services.AddScoped<CreateKeepPublicIntakeService>();
         services.AddScoped<GetKeepRequestListService>();
@@ -62,6 +63,7 @@ public static class KeepServiceCollectionExtensions
         services.AddScoped<ManageRequestTimingService>();
         services.AddScoped<ClearShareIntentService>();
         services.AddScoped<CreateSmsHandoffService>();
+        services.AddScoped<CreateIntakeSmsHandoffService>();
         services.AddScoped<UpdateServiceLocationService>();
         services.AddScoped<SetBusinessPriorityService>();
         services.AddScoped<GetParticipantCandidatesService>();

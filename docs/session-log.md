@@ -2,7 +2,7 @@
 
 **Last updated:** 2026-07-16
 **Branch:** `main` tracking `origin/main`
-**Last green code baseline:** R88e-c — 1,093 unit tests, 14 architecture tests, 15 mobile unit tests (verified 2026-07-16).
+**Last green code baseline:** R88f-a — 1,104 unit tests, 14 architecture tests, 15 mobile unit tests (verified 2026-07-16).
 Not deployment-ready; GAP-016–GAP-019 still active.
 **Next free ADR:** ADR-445
 **Current session:** New Request launch blockers — decisions and implementation preflight
@@ -112,15 +112,12 @@ and approve before R88a implementation. Build 087 remains paused.
    fields on `CreateRequestBody`. `modal.tsx`: 10-digit lookup/create gates, service address
    disclosure with required-if-open field errors, address fields forwarded on create. 15 mobile
    unit tests (vitest); manual verification deferred to R88g.
-9. **R88f-a — GAP-018 pre-capture SMS handoff backend.** New account-scoped
-   `KeepIntakeSmsHandoff` entity + EF config + persistence + `CreateIntakeSmsHandoffService`
-   (auth mirrors `KeepIntakeSetupService`: Owner/Admin via `Keep.SettingsManage`, `PublicIntake`
-   feature, account-access posture); `POST /keep/setup/intake/sms-handoff` + `GET
-   /keep/intake-sms/{token}` (rate-limited, `Cache-Control: no-store, private` on both valid and
-   404 responses); `PublicTokenPathRedactor` extended; 8 production files. Unit tests: Operator
-   denied, no active link, hash-only persistence, 15-min expiry, trailing-slash URL construction.
-   Expired/invalid resolver indistinguishability deferred to existing Keep intake API test file.
-   Migration run by Christian after commit.
+9. **R88f-a — GAP-018 pre-capture SMS handoff backend.** ✓ Committed 2026-07-16.
+   `KeepIntakeSmsHandoff` entity + EF config + `EfKeepIntakeSmsHandoffPersistence` +
+   `CreateIntakeSmsHandoffService` (Owner/Admin, `Keep.SettingsManage`, `PublicIntake` feature);
+   `POST /keep/setup/intake/sms-handoff` + `GET /keep/intake-sms/{token}` (rate-limited,
+   `Cache-Control: no-store, private`); `PublicTokenPathRedactor` extended. 11 unit tests green;
+   1,104 unit tests total. Migration `20260716223955_R88faKeepIntakeSmsHandoffs` applied.
 10. **R88f-b — GAP-018 ophalo-web intake SMS page.** New Next.js page at
     `app/keep/intake-sms/[handoffToken]/page.tsx`; fetches `GET /keep/intake-sms/{token}`;
     renders client component opening `sms:?body={messageBody}` (no recipient phone); mirrors
@@ -134,7 +131,7 @@ and approve before R88a implementation. Build 087 remains paused.
     above flows, including QR handoffs, direct external actions, draft/error retention,
     accessibility, long data, and real-device behavior. Only then resume Build 087.
 
-R88f-a is next; gate is approved. Begin in a fresh session.
+R88f-b is next. Begin in a fresh session.
 Every R88 slice requires its own bounded brief section, file-level preflight, proportionate
 verification, Christian's approval of the completed diff, and a commit before the next slice begins.
 
