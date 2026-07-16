@@ -2,7 +2,7 @@
 
 **Last updated:** 2026-07-16
 **Branch:** `main` tracking `origin/main`
-**Last green code baseline:** R88e-b — 1,093 unit tests, 14 architecture tests (verified 2026-07-16).
+**Last green code baseline:** R88e-c — 1,093 unit tests, 14 architecture tests, 15 mobile unit tests (verified 2026-07-16).
 Not deployment-ready; GAP-016–GAP-019 still active.
 **Next free ADR:** ADR-445
 **Current session:** New Request launch blockers — decisions and implementation preflight
@@ -106,9 +106,12 @@ and approve before R88a implementation. Build 087 remains paused.
    display with **Change** link; `onBack(draft)` passes current form state back to `QuickCapture`.
    In `QuickCapture`: own `captureFormDraft` state; restore draft when lookup completes and re-enters
    capture. 3 production files (CaptureForm, QuickCapture, utils); manual verification in R88g.
-8. **R88e-c — GAP-016/GAP-017 native mobile capture parity.** Align `useQuickCapture` and
-   `modal.tsx` to 10-digit gate; add service address disclosure matching R88e-b UX. 2 production
-   files; manual verification deferred to R88g.
+8. **R88e-c — GAP-016/GAP-017 native mobile capture parity.** ✓ Committed 2026-07-16.
+   `phoneUtils.ts` (pure): ADR-444-correct `normalizePhoneDigits` (leading-1 strip) and
+   `validateAddressIfOpen` (GAP-022 required-if-open). `useQuickCapture`: 10-digit gate, address
+   fields on `CreateRequestBody`. `modal.tsx`: 10-digit lookup/create gates, service address
+   disclosure with required-if-open field errors, address fields forwarded on create. 15 mobile
+   unit tests (vitest); manual verification deferred to R88g.
 9. **R88f — GAP-018 customer self-service New Request handoff.** Implement ADR-442: make the
    durable business public-intake link the Owner/Admin handoff default and staff entry the visible
    fallback; preflight the public-intake and SMS-handoff contracts before coding.
@@ -116,7 +119,7 @@ and approve before R88a implementation. Build 087 remains paused.
     above flows, including QR handoffs, direct external actions, draft/error retention,
     accessibility, long data, and real-device behavior. Only then resume Build 087.
 
-R88a–R88d and R88f may preflight now. R88e-b2 is next (Change-phone UX, 3 production files).
+R88a–R88d and R88f may preflight now. R88f is next (GAP-018 customer self-service New Request handoff).
 Every R88 slice requires its own bounded brief section, file-level preflight, proportionate
 verification, Christian's approval of the completed diff, and a commit before the next slice begins.
 
