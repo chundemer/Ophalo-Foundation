@@ -452,11 +452,12 @@ export function CustomerPanel({ detail, onContactLaunched }: CustomerPanelProps)
               >
                 {copiedPhone ? <Check className="h-3.5 w-3.5 text-green-600" /> : <Copy className="h-3.5 w-3.5" />}
               </button>
+              {/* Mobile only — desktop uses CustomerContactStrip QR handoff (ADR-443) */}
               {callAction && (
                 <a
                   href={`tel:${callAction.target}`}
                   onClick={() => onContactLaunched("outbound", "phone")}
-                  className={`inline-flex items-center gap-1 text-xs font-semibold text-[var(--keep-accent)] hover:underline ${FOCUS_RING} rounded`}
+                  className={`inline-flex md:hidden items-center gap-1 text-xs font-semibold text-[var(--keep-accent)] hover:underline ${FOCUS_RING} rounded`}
                 >
                   <Phone className="h-3 w-3" />
                   Call

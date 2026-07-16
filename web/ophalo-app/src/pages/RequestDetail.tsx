@@ -1,6 +1,7 @@
 import { useState, useMemo, useRef, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronLeft, ChevronRight, Phone, X } from "lucide-react";
+import QRCode from "react-qr-code";
 import {
   api,
   ApiError,
@@ -30,6 +31,7 @@ import {
   AttentionGuidanceCard,
   ProminentFeedbackCard,
 } from "./request-detail/DetailPanels";
+import { CustomerContactStrip } from "./request-detail/CustomerContactStrip";
 import { RequestDetailDesktopLayout } from "./request-detail/RequestDetailDesktopLayout";
 import {
   RequestDetailMobileActions,
@@ -125,30 +127,40 @@ function LogContactModal({
         </p>
 
         {showPhone && (
-          <div className="flex flex-wrap items-center gap-3 mb-4 rounded-lg border border-[var(--ophalo-border)] bg-[var(--ophalo-canvas)] px-3 py-2.5">
-            <span className="flex items-center gap-1.5 text-sm font-semibold text-[var(--ophalo-ink)]">
-              <Phone className="h-3.5 w-3.5 text-[var(--keep-accent)] shrink-0" />
-              {detail.customerPhone}
-            </span>
-            <div className="flex items-center gap-2 ml-auto">
-              <button
-                type="button"
-                onClick={async () => {
-                  await navigator.clipboard.writeText(detail.customerPhone!);
-                  setPhoneCopied(true);
-                  setTimeout(() => setPhoneCopied(false), 2000);
-                }}
-                className={`text-xs text-[var(--ophalo-muted)] hover:text-[var(--ophalo-ink)] transition-colors ${FOCUS_RING}`}
-              >
-                {phoneCopied ? "Copied!" : "Copy"}
-              </button>
-              <span className="text-[var(--ophalo-border)]">·</span>
-              <a
-                href={`tel:${detail.customerPhone}`}
-                className={`text-xs text-[var(--ophalo-muted)] hover:text-[var(--ophalo-ink)] transition-colors ${FOCUS_RING}`}
-              >
-                Call with phone app
-              </a>
+          <div className="flex flex-col gap-2 mb-4 rounded-lg border border-[var(--ophalo-border)] bg-[var(--ophalo-canvas)] px-3 py-2.5">
+            <div className="flex flex-wrap items-center gap-3">
+              <span className="flex items-center gap-1.5 text-sm font-semibold text-[var(--ophalo-ink)]">
+                <Phone className="h-3.5 w-3.5 text-[var(--keep-accent)] shrink-0" />
+                {detail.customerPhone}
+              </span>
+              <div className="flex items-center gap-2 ml-auto">
+                <button
+                  type="button"
+                  onClick={async () => {
+                    await navigator.clipboard.writeText(detail.customerPhone!);
+                    setPhoneCopied(true);
+                    setTimeout(() => setPhoneCopied(false), 2000);
+                  }}
+                  className={`text-xs text-[var(--ophalo-muted)] hover:text-[var(--ophalo-ink)] transition-colors ${FOCUS_RING}`}
+                >
+                  {phoneCopied ? "Copied!" : "Copy"}
+                </button>
+                {/* Mobile: direct tel: link (ADR-443) */}
+                <span className="md:hidden text-[var(--ophalo-border)]">·</span>
+                <a
+                  href={`tel:${detail.customerPhone}`}
+                  className={`md:hidden text-xs text-[var(--ophalo-muted)] hover:text-[var(--ophalo-ink)] transition-colors ${FOCUS_RING}`}
+                >
+                  Call with phone app
+                </a>
+              </div>
+            </div>
+            {/* Desktop: QR handoff instead of direct tel: (ADR-443) */}
+            <div className="hidden md:flex flex-col items-center gap-1.5 pt-2 border-t border-[var(--ophalo-border)]">
+              <div className="bg-white p-2 rounded-lg">
+                <QRCode value={`tel:${detail.customerPhone!}`} size={108} />
+              </div>
+              <p className="text-xs text-[var(--ophalo-muted)]">Scan to call with your phone</p>
             </div>
           </div>
         )}
@@ -673,6 +685,14 @@ export function RequestDetail({ requestId, focusPanel, onBack, prevId, nextId, o
               canRecordShareIntent={canShare}
               needsShare={needsShareEffective}
               onOpenShareDrawer={() => setShareModalOpen(true)}
+            />
+
+            <CustomerContactStrip
+              phone={detail.customerPhone ?? null}
+              email={detail.customerEmail ?? null}
+              customerName={detail.customerName}
+              pageToken={detail.pageToken ?? null}
+              onContactLaunched={handleContactLaunched}
             />
 
             <OriginalRequestCard detail={detail} />
