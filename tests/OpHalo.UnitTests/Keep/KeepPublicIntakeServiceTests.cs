@@ -74,7 +74,7 @@ public class KeepPublicIntakeServiceTests
     private static CreateKeepPublicIntakeCommand ValidCommand(FakeIntakePersistence persistence) => new(
         persistence.RawToken,
         "Jane Doe",
-        "555-1234",
+        "555-123-4567",
         "jane@example.com",
         "Help with the boiler",
         "123 Main St",
@@ -90,7 +90,7 @@ public class KeepPublicIntakeServiceTests
     {
         var p = HappyPathPersistence();
         var sut = BuildSut(p);
-        var command = new CreateKeepPublicIntakeCommand(p.RawToken, "", "555-1234", null, "Desc",
+        var command = new CreateKeepPublicIntakeCommand(p.RawToken, "", "555-123-4567", null, "Desc",
             "123 Main St", null, "Austin", "TX", null);
 
         var result = await sut.ExecuteAsync(command);
@@ -118,7 +118,7 @@ public class KeepPublicIntakeServiceTests
     {
         var p = HappyPathPersistence();
         var sut = BuildSut(p);
-        var command = new CreateKeepPublicIntakeCommand(p.RawToken, "Jane", "5551234", null, "",
+        var command = new CreateKeepPublicIntakeCommand(p.RawToken, "Jane", "5551234567", null, "",
             "123 Main St", null, "Austin", "TX", null);
 
         var result = await sut.ExecuteAsync(command);
@@ -135,7 +135,7 @@ public class KeepPublicIntakeServiceTests
     public async Task Execute_returns_unavailable_when_token_blank(string token)
     {
         var sut = BuildSut();
-        var command = new CreateKeepPublicIntakeCommand(token, "Jane", "5551234", null, "Desc",
+        var command = new CreateKeepPublicIntakeCommand(token, "Jane", "5551234567", null, "Desc",
             "123 Main St", null, "Austin", "TX", null);
 
         var result = await sut.ExecuteAsync(command);
@@ -241,12 +241,12 @@ public class KeepPublicIntakeServiceTests
     public async Task Execute_succeeds_for_existing_customer_and_updates_contact_info()
     {
         var p = HappyPathPersistence();
-        var existingCustomer = KeepCustomer.Create(AccountId, "Old Name", "555-1234");
+        var existingCustomer = KeepCustomer.Create(AccountId, "Old Name", "555-123-4567");
         p.ExistingCustomer = existingCustomer;
         p.CommitResults.Enqueue(PublicIntakeCommitResult.Committed);
         var sut = BuildSut(p);
 
-        var command = new CreateKeepPublicIntakeCommand(p.RawToken, "New Name", "555-1234", "new@email.com", "Desc",
+        var command = new CreateKeepPublicIntakeCommand(p.RawToken, "New Name", "555-123-4567", "new@email.com", "Desc",
             "123 Main St", null, "Austin", "TX", null);
         var result = await sut.ExecuteAsync(command);
 
@@ -289,7 +289,7 @@ public class KeepPublicIntakeServiceTests
     {
         var p = HappyPathPersistence();
         var sut = BuildSut(p);
-        var command = new CreateKeepPublicIntakeCommand(p.RawToken, new string('A', 201), "5551234", null, "Desc",
+        var command = new CreateKeepPublicIntakeCommand(p.RawToken, new string('A', 201), "5551234567", null, "Desc",
             "123 Main St", null, "Austin", "TX", null);
 
         var result = await sut.ExecuteAsync(command);
@@ -304,7 +304,7 @@ public class KeepPublicIntakeServiceTests
     {
         var p = HappyPathPersistence();
         var sut = BuildSut(p);
-        var command = new CreateKeepPublicIntakeCommand(p.RawToken, new string('A', 200), "5551234", null, "Desc",
+        var command = new CreateKeepPublicIntakeCommand(p.RawToken, new string('A', 200), "5551234567", null, "Desc",
             "123 Main St", null, "Austin", "TX", null);
 
         var result = await sut.ExecuteAsync(command);
@@ -333,7 +333,7 @@ public class KeepPublicIntakeServiceTests
         var p = HappyPathPersistence();
         var sut = BuildSut(p);
         var longEmail = new string('a', 315) + "@x.com"; // 321 chars > 320
-        var command = new CreateKeepPublicIntakeCommand(p.RawToken, "Jane", "5551234", longEmail, "Desc",
+        var command = new CreateKeepPublicIntakeCommand(p.RawToken, "Jane", "5551234567", longEmail, "Desc",
             "123 Main St", null, "Austin", "TX", null);
 
         var result = await sut.ExecuteAsync(command);
@@ -348,7 +348,7 @@ public class KeepPublicIntakeServiceTests
     {
         var p = HappyPathPersistence();
         var sut = BuildSut(p);
-        var command = new CreateKeepPublicIntakeCommand(p.RawToken, "Jane", "5551234", null, new string('X', 4001),
+        var command = new CreateKeepPublicIntakeCommand(p.RawToken, "Jane", "5551234567", null, new string('X', 4001),
             "123 Main St", null, "Austin", "TX", null);
 
         var result = await sut.ExecuteAsync(command);
@@ -363,7 +363,7 @@ public class KeepPublicIntakeServiceTests
     {
         var p = HappyPathPersistence();
         var sut = BuildSut(p);
-        var command = new CreateKeepPublicIntakeCommand(p.RawToken, "Jane", "5551234", null, new string('X', 4000),
+        var command = new CreateKeepPublicIntakeCommand(p.RawToken, "Jane", "5551234567", null, new string('X', 4000),
             "123 Main St", null, "Austin", "TX", null);
 
         var result = await sut.ExecuteAsync(command);
@@ -394,10 +394,10 @@ public class KeepPublicIntakeServiceTests
     }
 
     [Theory]
-    [InlineData("+61 412 345 678")]  // leading + allowed
+    [InlineData("+1 (555) 123-4567")]  // +1 country code, parens, hyphens stripped
     [InlineData("(02) 9876-5432")]   // parens and hyphen
     [InlineData("555.123.4567")]     // dots allowed
-    [InlineData("5551234")]          // plain digits
+    [InlineData("5551234567")]          // plain digits
     public async Task Execute_accepts_phone_with_valid_formatting_characters(string phone)
     {
         var p = HappyPathPersistence();
@@ -413,7 +413,8 @@ public class KeepPublicIntakeServiceTests
     // --- Phone digit-count validation -------------------------------------------
 
     [Theory]
-    [InlineData("123456")]       // 6 digits — too few
+    [InlineData("123456789")]        // 9 digits — too few
+    [InlineData("123456")]           // 6 digits — too few
     [InlineData("1234567890123456")] // 16 digits — too many
     public async Task Execute_returns_error_when_phone_digit_count_out_of_range(string phone)
     {
@@ -439,7 +440,7 @@ public class KeepPublicIntakeServiceTests
     {
         var p = HappyPathPersistence();
         var sut = BuildSut(p);
-        var command = new CreateKeepPublicIntakeCommand(p.RawToken, "Jane", "5551234", email, "Desc",
+        var command = new CreateKeepPublicIntakeCommand(p.RawToken, "Jane", "5551234567", email, "Desc",
             "123 Main St", null, "Austin", "TX", null);
 
         var result = await sut.ExecuteAsync(command);
@@ -457,7 +458,7 @@ public class KeepPublicIntakeServiceTests
     {
         var p = HappyPathPersistence();
         var sut = BuildSut(p);
-        var command = new CreateKeepPublicIntakeCommand(p.RawToken, "Jane", "5551234", email, "Desc",
+        var command = new CreateKeepPublicIntakeCommand(p.RawToken, "Jane", "5551234567", email, "Desc",
             "123 Main St", null, "Austin", "TX", null);
 
         var result = await sut.ExecuteAsync(command);
@@ -471,13 +472,13 @@ public class KeepPublicIntakeServiceTests
     public async Task Execute_preserves_existing_customer_email_when_repeat_intake_omits_email()
     {
         var p = HappyPathPersistence();
-        var existingCustomer = KeepCustomer.Create(AccountId, "Jane", "555-1234", "original@example.com");
+        var existingCustomer = KeepCustomer.Create(AccountId, "Jane", "555-123-4567", "original@example.com");
         p.ExistingCustomer = existingCustomer;
         p.CommitResults.Enqueue(PublicIntakeCommitResult.Committed);
         var sut = BuildSut(p);
 
         // Second intake omits email
-        var command = new CreateKeepPublicIntakeCommand(p.RawToken, "Jane Updated", "555-1234", null, "Desc",
+        var command = new CreateKeepPublicIntakeCommand(p.RawToken, "Jane Updated", "555-123-4567", null, "Desc",
             "123 Main St", null, "Austin", "TX", null);
         var result = await sut.ExecuteAsync(command);
 
@@ -490,12 +491,12 @@ public class KeepPublicIntakeServiceTests
     public async Task Execute_replaces_existing_customer_email_when_nonblank_email_supplied()
     {
         var p = HappyPathPersistence();
-        var existingCustomer = KeepCustomer.Create(AccountId, "Jane", "555-1234", "old@example.com");
+        var existingCustomer = KeepCustomer.Create(AccountId, "Jane", "555-123-4567", "old@example.com");
         p.ExistingCustomer = existingCustomer;
         p.CommitResults.Enqueue(PublicIntakeCommitResult.Committed);
         var sut = BuildSut(p);
 
-        var command = new CreateKeepPublicIntakeCommand(p.RawToken, "Jane", "555-1234", "new@example.com", "Desc",
+        var command = new CreateKeepPublicIntakeCommand(p.RawToken, "Jane", "555-123-4567", "new@example.com", "Desc",
             "123 Main St", null, "Austin", "TX", null);
         var result = await sut.ExecuteAsync(command);
 
@@ -511,7 +512,7 @@ public class KeepPublicIntakeServiceTests
         var p = HappyPathPersistence();
         // First FindCustomer call: no existing customer (both threads see null simultaneously).
         // Second FindCustomer call (after collision): winning customer is now visible.
-        var winningCustomer = KeepCustomer.Create(AccountId, "Jane Original", "555-1234");
+        var winningCustomer = KeepCustomer.Create(AccountId, "Jane Original", "555-123-4567");
         p.CustomerResults.Enqueue(null);           // initial lookup: no customer yet
         p.CustomerResults.Enqueue(winningCustomer); // post-collision re-read
 
@@ -520,7 +521,7 @@ public class KeepPublicIntakeServiceTests
         p.CommitResults.Enqueue(PublicIntakeCommitResult.Committed);
 
         var sut = BuildSut(p);
-        var command = new CreateKeepPublicIntakeCommand(p.RawToken, "Jane New", "555-1234", "new@example.com", "Desc",
+        var command = new CreateKeepPublicIntakeCommand(p.RawToken, "Jane New", "555-123-4567", "new@example.com", "Desc",
             "123 Main St", null, "Austin", "TX", null);
         var result = await sut.ExecuteAsync(command);
 
@@ -534,7 +535,7 @@ public class KeepPublicIntakeServiceTests
     public async Task Execute_preserves_winning_customer_email_after_collision_when_intake_omits_email()
     {
         var p = HappyPathPersistence();
-        var winningCustomer = KeepCustomer.Create(AccountId, "Jane Original", "555-1234", "original@example.com");
+        var winningCustomer = KeepCustomer.Create(AccountId, "Jane Original", "555-123-4567", "original@example.com");
         p.CustomerResults.Enqueue(null);
         p.CustomerResults.Enqueue(winningCustomer);
 
@@ -543,7 +544,7 @@ public class KeepPublicIntakeServiceTests
         p.CommitResults.Enqueue(PublicIntakeCommitResult.Committed);
 
         var sut = BuildSut(p);
-        var command = new CreateKeepPublicIntakeCommand(p.RawToken, "Jane New", "555-1234", null, "Desc",
+        var command = new CreateKeepPublicIntakeCommand(p.RawToken, "Jane New", "555-123-4567", null, "Desc",
             "123 Main St", null, "Austin", "TX", null);
         await sut.ExecuteAsync(command);
 
@@ -631,7 +632,7 @@ public class KeepPublicIntakeServiceTests
     {
         var p = HappyPathPersistence();
         var sut = BuildSut(p);
-        var command = new CreateKeepPublicIntakeCommand(p.RawToken, "Jane", "5551234", null, "Desc",
+        var command = new CreateKeepPublicIntakeCommand(p.RawToken, "Jane", "5551234567", null, "Desc",
             "", null, "Austin", "TX", null);
 
         var result = await sut.ExecuteAsync(command);
@@ -646,7 +647,7 @@ public class KeepPublicIntakeServiceTests
     {
         var p = HappyPathPersistence();
         var sut = BuildSut(p);
-        var command = new CreateKeepPublicIntakeCommand(p.RawToken, "Jane", "5551234", null, "Desc",
+        var command = new CreateKeepPublicIntakeCommand(p.RawToken, "Jane", "5551234567", null, "Desc",
             "123 Main St", null, "  ", "TX", null);
 
         var result = await sut.ExecuteAsync(command);
@@ -661,7 +662,7 @@ public class KeepPublicIntakeServiceTests
     {
         var p = HappyPathPersistence();
         var sut = BuildSut(p);
-        var command = new CreateKeepPublicIntakeCommand(p.RawToken, "Jane", "5551234", null, "Desc",
+        var command = new CreateKeepPublicIntakeCommand(p.RawToken, "Jane", "5551234567", null, "Desc",
             "123 Main St", null, "Austin", "", null);
 
         var result = await sut.ExecuteAsync(command);
@@ -680,7 +681,7 @@ public class KeepPublicIntakeServiceTests
     {
         var p = HappyPathPersistence();
         var sut = BuildSut(p);
-        var command = new CreateKeepPublicIntakeCommand(p.RawToken, "Jane", "5551234", null, "Desc",
+        var command = new CreateKeepPublicIntakeCommand(p.RawToken, "Jane", "5551234567", null, "Desc",
             "123 Main St", null, "Austin", state, null);
 
         var result = await sut.ExecuteAsync(command);
@@ -699,7 +700,7 @@ public class KeepPublicIntakeServiceTests
     {
         var p = HappyPathPersistence();
         var sut = BuildSut(p);
-        var command = new CreateKeepPublicIntakeCommand(p.RawToken, "Jane", "5551234", null, "Desc",
+        var command = new CreateKeepPublicIntakeCommand(p.RawToken, "Jane", "5551234567", null, "Desc",
             "123 Main St", null, "Austin", state, null);
         p.CommitResults.Enqueue(PublicIntakeCommitResult.Committed);
 
@@ -713,7 +714,7 @@ public class KeepPublicIntakeServiceTests
     {
         var p = HappyPathPersistence();
         var sut = BuildSut(p);
-        var command = new CreateKeepPublicIntakeCommand(p.RawToken, "Jane", "5551234", null, "Desc",
+        var command = new CreateKeepPublicIntakeCommand(p.RawToken, "Jane", "5551234567", null, "Desc",
             "123 Main St", null, "Austin", "TX", null);
 
         var result = await sut.ExecuteAsync(command);
@@ -818,7 +819,7 @@ public class KeepPublicIntakeServiceTests
         var sut = BuildSut(p, emailSender: emailSender);
 
         var command = new CreateKeepPublicIntakeCommand(
-            p.RawToken, "Jane", "555-1234", null, "Help",
+            p.RawToken, "Jane", "555-123-4567", null, "Help",
             "123 Main St", null, "Austin", "TX", null);
         var result = await sut.ExecuteAsync(command);
 

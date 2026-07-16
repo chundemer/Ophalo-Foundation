@@ -26,7 +26,7 @@ public static class KeepRequestErrors
         Error.Create("KeepRequest.CustomerPhoneInvalidCharacters", "Customer phone contains unsupported characters. Digits, spaces, and the characters +, -, (, ), and . are allowed.");
 
     public static readonly Error CustomerPhoneInvalidFormat =
-        Error.Create("KeepRequest.CustomerPhoneInvalidFormat", "Customer phone must contain between 7 and 15 digits.");
+        Error.Create("KeepRequest.CustomerPhoneInvalidFormat", "Customer phone must contain exactly 10 digits.");
 
     public static readonly Error CustomerEmailTooLong =
         Error.Create("KeepRequest.CustomerEmailTooLong", "Customer email must not exceed 320 characters.");

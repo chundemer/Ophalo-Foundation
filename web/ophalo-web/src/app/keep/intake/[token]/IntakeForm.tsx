@@ -50,8 +50,9 @@ function fieldError(code: string | undefined): string | null {
     case "KeepRequest.CustomerPhoneTooLong":
       return "Phone number is too long.";
     case "KeepRequest.CustomerPhoneInvalidCharacters":
-    case "KeepRequest.CustomerPhoneInvalidFormat":
       return "Please enter a valid phone number.";
+    case "KeepRequest.CustomerPhoneInvalidFormat":
+      return "Please enter a 10-digit phone number.";
     case "KeepRequest.CustomerEmailTooLong":
       return "Email address is too long.";
     case "KeepRequest.CustomerEmailInvalid":

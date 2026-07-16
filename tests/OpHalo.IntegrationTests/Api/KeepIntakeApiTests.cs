@@ -411,7 +411,7 @@ public sealed class KeepIntakeApiTests : IClassFixture<KeepApiWebFactory>, IAsyn
     {
         var response = await _client.PostAsJsonAsync(
             $"/keep/public-intake/token/{_rawToken}",
-            new { customerName = "Bob", customerPhone = "+61 412 222 010", description = "Desc",
+            new { customerName = "Bob", customerPhone = "+1 (555) 000-0099", description = "Desc",
                   serviceAddressLine1 = "1 Test St", serviceCity = "Springfield", serviceState = "IL" });
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
@@ -422,8 +422,9 @@ public sealed class KeepIntakeApiTests : IClassFixture<KeepApiWebFactory>, IAsyn
     // -------------------------------------------------------------------------
 
     [Theory]
-    [InlineData("123456")]          // 6 digits — below minimum
-    [InlineData("1234567890123456")] // 16 digits — above maximum
+    [InlineData("123456")]          // 6 digits — below 10
+    [InlineData("123456789")]       // 9 digits — below 10
+    [InlineData("1234567890123456")] // 16 digits — above 10
     public async Task PublicIntake_PhoneDigitCountOutOfRange_Returns400(string phone)
     {
         var response = await _client.PostAsJsonAsync(

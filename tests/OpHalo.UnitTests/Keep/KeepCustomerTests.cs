@@ -22,10 +22,9 @@ public class KeepCustomerTests
     }
 
     [Theory]
-    [InlineData("0412 345 678", "0412345678")]   // spaces stripped
-    [InlineData("+61 412-345-678", "61412345678")] // international prefix, hyphens
-    [InlineData("(02) 9876-5432", "0298765432")] // parens and hyphen
-    [InlineData("5551234", "5551234")]             // already canonical, 7-digit minimum
+    [InlineData("0412 345 678",      "0412345678")] // spaces stripped
+    [InlineData("+1 (555) 000-0099", "5550000099")] // +1 country code, parens, hyphens stripped
+    [InlineData("(02) 9876-5432",    "0298765432")] // parens and hyphen stripped
     public void Create_derives_canonical_phone_by_stripping_non_digits(string input, string expectedCanonical)
     {
         var customer = KeepCustomer.Create(AccountId, "Jane", input);
@@ -33,8 +32,9 @@ public class KeepCustomerTests
     }
 
     [Theory]
-    [InlineData("123456")]   // 6 digits — below 7-digit minimum
-    [InlineData("12")]       // very short
+    [InlineData("123456789")] // 9 digits — below 10
+    [InlineData("123456")]    // 6 digits
+    [InlineData("12")]        // very short
     public void Create_throws_when_phone_has_too_few_digits(string phone) =>
         Assert.Throws<ArgumentException>(() => KeepCustomer.Create(AccountId, "Jane", phone));
 
@@ -47,11 +47,11 @@ public class KeepCustomerTests
     }
 
     [Fact]
-    public void Create_accepts_15_digit_phone_as_maximum()
+    public void Create_accepts_exactly_10_digit_phone()
     {
-        const string maxLength = "123456789012345";
-        var customer = KeepCustomer.Create(AccountId, "Jane", maxLength);
-        Assert.Equal(maxLength, customer.CanonicalPhone);
+        const string phone = "5551234567";
+        var customer = KeepCustomer.Create(AccountId, "Jane", phone);
+        Assert.Equal(phone, customer.CanonicalPhone);
     }
 
     [Fact]

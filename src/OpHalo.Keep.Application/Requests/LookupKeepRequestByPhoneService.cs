@@ -42,7 +42,7 @@ public sealed class LookupKeepRequestByPhoneService(
         Error.Create("auth.forbidden", "You do not have permission to perform this action.");
 
     private static readonly Error InvalidPhone =
-        Error.Create("KeepRequest.InvalidPhone", "Phone must contain 7–15 digits.");
+        Error.Create("KeepRequest.InvalidPhone", "Phone must contain exactly 10 digits.");
 
     public async Task<Result<PhoneLookupResult>> ExecuteAsync(string? rawPhone, CancellationToken ct = default)
     {

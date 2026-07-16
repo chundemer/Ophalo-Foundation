@@ -1,20 +1,20 @@
 namespace OpHalo.Keep.Core.Domain;
 
 /// <summary>
-/// Conservative phone normalizer for Keep customer identity.
+/// Phone normalizer for Keep customer identity (ADR-444: 10-digit North American).
 ///
-/// Strips all non-ASCII-digit characters from the submitted value to produce a
-/// canonical digit-only string used for account-scoped uniqueness and lookup.
-/// No country-code inference is performed — the canonical form deliberately
-/// preserves leading zeros and reflects exactly the digits the customer provided.
-/// Validation (7–15 digits) is enforced by KeepCustomer on creation and by the
-/// application layer on intake validation (G2).
+/// Strips all non-ASCII-digit characters, then strips a leading '1' country code
+/// from 11-digit inputs. The canonical form is exactly 10 digits.
+/// International numbers outside this range are unsupported at launch.
 /// </summary>
 public static class PhoneNormalizer
 {
-    public static string Normalize(string raw) =>
-        new string(raw.Where(char.IsAsciiDigit).ToArray());
+    public static string Normalize(string raw)
+    {
+        var digits = new string(raw.Where(char.IsAsciiDigit).ToArray());
+        return digits.Length == 11 && digits[0] == '1' ? digits[1..] : digits;
+    }
 
     public static bool IsValidLength(string canonical) =>
-        canonical.Length is >= 7 and <= 15;
+        canonical.Length == 10;
 }
