@@ -125,15 +125,40 @@ and approve before R88a implementation. Build 087 remains paused.
     `ophalo-web` files: `page.tsx` reads `customerPhone` from API; `IntakeSmsHandoffView.tsx`
     builds `sms:{phone}${sep}body=...`. Mechanical port of the sibling `keep/share-sms`
     pair's proven pattern. TypeScript clean (`npm run typecheck`).
-12. **R88f-c-panel — GAP-018 Owner/Admin New Request handoff panel.** Customer self-service controls
-    at the start of Quick Capture: Copy link, Text customer from your phone (desktop opaque QR →
-    scan → pre-addressed SMS; mobile direct SMS), optional in-person durable QR, manual entry
-    fallback. Operators continue directly to staff entry. Separate preflight required.
+12. **R88f-c-panel — GAP-018 Owner/Admin New Request handoff panel.** Preflight complete 2026-07-17;
+    split into two slices because the panel needs a response field the backend does not yet return.
+    - **R88f-c-panel-1 — backend response-contract slice.** `CreateIntakeSmsHandoffService` /
+      `CreateIntakeSmsHandoffResult` and the `POST /keep/setup/intake/sms-handoff` handler in
+      `KeepEndpoints.cs` add `customerPhone` (canonical) and `messageBody` to the response, alongside
+      the existing `handoffUrl`/`expiresAtUtc`. Locked reason: server stays sole authority for
+      caller-phone validation/normalization, Owner/Admin authorization, active-link checks, and
+      exact customer-facing copy — the mobile panel must not duplicate that copy or validation
+      client-side. Files: `CreateIntakeSmsHandoffService.cs`, `KeepEndpoints.cs`,
+      `CreateIntakeSmsHandoffServiceTests.cs`, `KeepIntakeSmsHandoffApiTests.cs`. Commit standalone
+      before the panel slice starts.
+    - **R88f-c-panel-2 — panel slice.** Fresh session after -1 is committed. 8 `web/ophalo-app`
+      production files: `App.tsx` (adds `isOwnerOrAdmin` and `onNavigateSettings` props to
+      `QuickCapture`, reusing existing `navigateToSettings("public-profile")`), `QuickCapture.tsx`
+      (initial stage `handoff` for Owner/Admin vs. existing `lookup` for Operator;
+      `followUpPrefill` bypass unchanged regardless of role), `quick-capture/utils.ts` (`Stage` gains
+      `{ kind: "handoff" }`), new `quick-capture/HandoffPanel.tsx`, `lib/apiClient.ts`,
+      `lib/apiClient.types.ts`, `mocks/mockApiClient.ts`, `mocks/fixtures.ts`. Locked panel details:
+      phone field labeled "Customer's mobile number for a text link" with a prompt to confirm it can
+      receive texts; client-side format check is immediate UX only, server response errors are
+      authoritative; desktop QR renders `handoffUrl` (pattern mirrors `SuccessPanel.tsx`); mobile
+      shows an explicit **Open Text Message** button once the POST resolves (no auto-navigation),
+      built from `customerPhone`/`messageBody` using the same iOS `&` / other `?` separator logic as
+      `IntakeSmsHandoffView.tsx`; optional in-person QR encodes only the durable
+      `{PublicBaseUrl}/keep/s/{slug}` URL (no token, no phone/message); **Enter request for
+      customer** fallback to the existing `lookup` stage stays immediately visible, not gated behind
+      panel completion; `hasActiveLink === false` empty state routes through `onNavigateSettings`.
 13. **R88g — Integrated PWA verification.** Run the complete desktop and mobile PWA matrix for all
     above flows, including QR handoffs, direct external actions, draft/error retention,
     accessibility, long data, and real-device behavior. Only then resume Build 087.
 
-R88f-c-panel is next.
+R88f-c-panel-1 is next. R88f-c-panel-2 starts in a fresh session only after -1 is committed —
+per the Session Protocol, discovery/review for the next batch is not carried in the same context
+window as an approved commit.
 Every R88 slice requires its own bounded brief section, file-level preflight, proportionate
 verification, Christian's approval of the completed diff, and a commit before the next slice begins.
 

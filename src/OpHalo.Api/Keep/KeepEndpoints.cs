@@ -80,7 +80,13 @@ public static class KeepEndpoints
                 return ErrorHttpMapper.ToHttpResult(result.Error);
             var publicBaseUrl = appSettings.Value.PublicBaseUrl.TrimEnd('/');
             var handoffUrl = $"{publicBaseUrl}/keep/intake-sms/{result.Value.RawToken}";
-            return Results.Ok(new { handoffUrl, expiresAtUtc = result.Value.ExpiresAtUtc });
+            return Results.Ok(new
+            {
+                handoffUrl,
+                customerPhone = result.Value.CustomerPhone,
+                messageBody = result.Value.MessageBody,
+                expiresAtUtc = result.Value.ExpiresAtUtc,
+            });
         }).RequireAuthorization();
 
         // Intake SMS handoff resolve — public, rate-limited, no-store cache (R88f-c, GAP-018)

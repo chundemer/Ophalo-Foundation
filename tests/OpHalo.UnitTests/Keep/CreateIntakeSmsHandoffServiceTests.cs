@@ -183,6 +183,18 @@ public class CreateIntakeSmsHandoffServiceTests
     }
 
     [Fact]
+    public async Task Execute_success_returns_canonical_phone_and_message_body()
+    {
+        var sut = BuildSut();
+        var result = await sut.ExecuteAsync(ValidCommand("(555) 123-4567"));
+        Assert.True(result.IsSuccess);
+        Assert.Equal(ValidPhone, result.Value.CustomerPhone);
+        Assert.Equal(
+            $"Submit your request here: {ValidPublicBase}/keep/s/test-biz",
+            result.Value.MessageBody);
+    }
+
+    [Fact]
     public async Task Execute_success_stores_hash_not_raw_token()
     {
         var persistence = new FakePersistence(AccountUserRole.Owner, true);

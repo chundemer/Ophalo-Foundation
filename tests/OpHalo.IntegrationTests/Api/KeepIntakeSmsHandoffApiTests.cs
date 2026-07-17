@@ -216,6 +216,8 @@ public sealed class KeepIntakeSmsHandoffApiTests : IClassFixture<KeepApiWebFacto
         Assert.False(string.IsNullOrWhiteSpace(body.HandoffUrl));
         // handoffUrl must use PublicBaseUrl (https://test.ophalo.com), not AppBaseUrl
         Assert.StartsWith("https://test.ophalo.com/keep/intake-sms/", body.HandoffUrl);
+        Assert.Equal("5551234567", body.CustomerPhone);
+        Assert.Equal($"Submit your request here: https://test.ophalo.com/keep/s/{Slug}", body.MessageBody);
     }
 
     [Fact]
@@ -322,6 +324,10 @@ public sealed class KeepIntakeSmsHandoffApiTests : IClassFixture<KeepApiWebFacto
     }
 
     private sealed record ProblemBody(string? Code, string? Detail);
-    private sealed record HandoffCreatedBody(string? HandoffUrl, DateTime ExpiresAtUtc);
+    private sealed record HandoffCreatedBody(
+        string? HandoffUrl,
+        string? CustomerPhone,
+        string? MessageBody,
+        DateTime ExpiresAtUtc);
     private sealed record HandoffResolvedBody(string CustomerPhone, string MessageBody, DateTime ExpiresAtUtc);
 }

@@ -15,7 +15,11 @@ namespace OpHalo.Keep.Application.IntakeSetup;
 
 public sealed record CreateIntakeSmsHandoffCommand(string CustomerPhone);
 
-public sealed record CreateIntakeSmsHandoffResult(string RawToken, DateTime ExpiresAtUtc);
+public sealed record CreateIntakeSmsHandoffResult(
+    string RawToken,
+    string CustomerPhone,
+    string MessageBody,
+    DateTime ExpiresAtUtc);
 
 public sealed class CreateIntakeSmsHandoffService(
     IKeepIntakeSmsHandoffPersistence persistence,
@@ -77,7 +81,8 @@ public sealed class CreateIntakeSmsHandoffService(
 
         await persistence.CreateAsync(handoff, ct);
 
-        return Result<CreateIntakeSmsHandoffResult>.Success(new CreateIntakeSmsHandoffResult(rawToken, expiresAtUtc));
+        return Result<CreateIntakeSmsHandoffResult>.Success(
+            new CreateIntakeSmsHandoffResult(rawToken, canonicalPhone, messageBody, expiresAtUtc));
     }
 
     private static Result<string> ValidatePhone(string? rawPhone)
