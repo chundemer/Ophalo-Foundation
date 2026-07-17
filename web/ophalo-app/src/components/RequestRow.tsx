@@ -89,10 +89,10 @@ function severityToTone(severity: string): Tone | null {
 /**
  * Build 087 §3: one deterministically-selected exception pill, driven by the server's canonical
  * ranking (rankingGroup/severity) rather than the action-priority order — a follow-up promise
- * outranks an administrative gap like an unshared customer page even though Build 087 §4 promotes
- * Share Link as the more useful *action* in that situation. GAP-027: Closed/Cancelled rows suppress
- * every branch except the unresolved-feedback exception, since FollowUpOn/PlannedFor dates are not
- * cleared server-side on terminal transition and would otherwise read as zombie alarms.
+ * outranks an administrative gap like an unshared customer page. GAP-027: Closed/Cancelled rows
+ * suppress every branch except the unresolved-feedback exception, since FollowUpOn/PlannedFor
+ * dates are not cleared server-side on terminal transition and would otherwise read as zombie
+ * alarms.
  */
 function resolveException(row: KeepRequestSummary, isCalmCloseout: boolean): Exception | null {
   if (row.isPostCloseFollowUp) {
@@ -128,8 +128,10 @@ function resolveException(row: KeepRequestSummary, isCalmCloseout: boolean): Exc
       case "due_follow_up_on": {
         const date = row.timing?.followUpOnDate ?? null;
         const dueToday = !!(date && isDateOnlyToday(date));
+        // One phrase, not "Follow-up due today · Follow up today" — the server label already
+        // reads naturally (e.g. "Follow up today"), so just append the date once.
         const label = dueToday
-          ? `Follow-up due today${row.timing?.followUpOnLabel ? ` · ${row.timing.followUpOnLabel}` : ""}`
+          ? `${row.timing?.followUpOnLabel ?? "Follow-up due today"}${date ? ` · ${shortDate(date)}` : ""}`
           : `Follow-up overdue${date ? ` · ${shortDate(date)}` : ""}`;
         return { key: group, label, tone: dueToday ? "attention" : "danger", icon: Clock };
       }
@@ -152,9 +154,12 @@ function resolveException(row: KeepRequestSummary, isCalmCloseout: boolean): Exc
 
 /**
  * Build 087 §4: the list may promote one permitted row action using this fixed priority order.
- * Deliberately independent of resolveException — e.g. a row can show a Follow-up overdue exception
- * while still promoting Share Link, since sharing the page is the fastest unblock regardless of
- * which signal is most urgent to display.
+ * A due-or-overdue follow-up is active operational work — a standing promise — so it outranks
+ * the administrative "Share Link" step even though §4 lists Share Link earlier; Share Link only
+ * applies when "no higher-priority workflow state" exists, and a due follow-up is one. There is
+ * no persisted attention to acknowledge for a pure due-follow-up-on row (it exists precisely
+ * because AttentionLevel is None), so its action navigates straight to detail instead of
+ * depending on the acknowledge_attention quick action.
  */
 function selectPromotedAction(row: KeepRequestSummary, isCalmCloseout: boolean): PromotedAction | null {
   const reason = row.attention.attentionReason;
@@ -171,6 +176,11 @@ function selectPromotedAction(row: KeepRequestSummary, isCalmCloseout: boolean):
   if (reason === "call_requested") {
     return hasAction(row, "contact_customer") ? { code: "contact_customer", label: ACTION_LABELS.contact_customer } : null;
   }
+  const followUpDate = row.timing?.followUpOnDate ?? null;
+  const followUpNotFuture = !!(followUpDate && !row.timing?.hasFutureFollowUpOn);
+  if (followUpNotFuture) {
+    return { code: "review_request", label: "Review request" };
+  }
   if (row.needsShare) {
     return { code: "share_link", label: "Share Link" };
   }
@@ -184,11 +194,6 @@ function selectPromotedAction(row: KeepRequestSummary, isCalmCloseout: boolean):
       : hasAction(row, "post_customer_update")
         ? { code: "post_customer_update", label: ACTION_LABELS.post_customer_update }
         : null;
-  }
-  const followUpDate = row.timing?.followUpOnDate ?? null;
-  const followUpNotFuture = !!(followUpDate && !row.timing?.hasFutureFollowUpOn);
-  if (followUpNotFuture) {
-    return hasAction(row, "acknowledge_attention") ? { code: "acknowledge_attention", label: ACTION_LABELS.acknowledge_attention } : null;
   }
   if (isCalmCloseout) {
     return hasAction(row, "close_request") ? { code: "close_request", label: ACTION_LABELS.close_request } : null;
@@ -318,6 +323,10 @@ export function RequestRow({ row, onSelect, onSelectFocused, onActionClick, onSh
   function runAction(action: PromotedAction) {
     if (action.code === "share_link") {
       onShareClick?.(row);
+      return;
+    }
+    if (action.code === "review_request") {
+      onSelect(row.id);
       return;
     }
     const quickAction = row.actions.quickActions.find((a) => a.code === action.code);

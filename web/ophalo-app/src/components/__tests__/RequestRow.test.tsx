@@ -229,32 +229,47 @@ describe("RequestRow — Build 087 / GAP-027 locked row contract", () => {
     expect(onShareClick).toHaveBeenCalledWith(row);
   });
 
-  it("shows the overdue follow-up exception, not Customer page not shared, when both are true — canonical urgency wins", () => {
+  it("shows Follow-up overdue (not Customer page not shared) and promotes Review request, which navigates to detail — 'kelley 3'", () => {
     const row = buildRow({
       status: "received",
       needsShare: true,
       ranking: { rankingGroup: "due_follow_up_on", rankingOrder: 5, rankingReason: "due_follow_up_on", severity: "attention", isOverdue: false, elapsedSinceUtc: null, dueAtUtc: null, isPostClose: false },
       timing: { followUpOnDate: "2026-07-12", followUpOnReason: "check_in", followUpOnNote: null, followUpOnLabel: "Check in", hasFutureFollowUpOn: false, plannedForDate: null, plannedForLabel: null, hasFuturePlannedFor: false },
+      actions: { quickActions: [quickAction("open_detail", "detail")] },
     });
+    const onSelect = vi.fn();
 
-    render(<RequestRow row={row} onSelect={noop} />);
+    render(<RequestRow row={row} onSelect={onSelect} />);
 
     expect(screen.getByText(/Follow-up overdue · Jul 12/)).toBeInTheDocument();
     expect(screen.queryByText("Customer page not shared")).not.toBeInTheDocument();
+
+    const reviewButton = screen.getByRole("button", { name: "Review request" });
+    reviewButton.click();
+    expect(onSelect).toHaveBeenCalledWith(row.id);
   });
 
-  it("renders a follow-up due today as an attention-tone alert, not an overdue one", () => {
+  it("shows a single Follow up today phrase (no duplicated copy) and promotes Review request over Share Link — 'customer test3'", () => {
     const now = new Date();
     const todayIso = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
     const row = buildRow({
       status: "received",
+      needsShare: true,
       ranking: { rankingGroup: "due_follow_up_on", rankingOrder: 5, rankingReason: "due_follow_up_on", severity: "attention", isOverdue: false, elapsedSinceUtc: null, dueAtUtc: null, isPostClose: false },
-      timing: { followUpOnDate: todayIso, followUpOnReason: "check_in", followUpOnNote: null, followUpOnLabel: "Check in", hasFutureFollowUpOn: false, plannedForDate: null, plannedForLabel: null, hasFuturePlannedFor: false },
+      timing: { followUpOnDate: todayIso, followUpOnReason: "check_in", followUpOnNote: null, followUpOnLabel: "Follow up today", hasFutureFollowUpOn: false, plannedForDate: "2026-07-24", plannedForLabel: "Planned Fri", hasFuturePlannedFor: true },
+      actions: { quickActions: [quickAction("open_detail", "detail")] },
     });
+    const onSelect = vi.fn();
 
-    render(<RequestRow row={row} onSelect={noop} />);
+    render(<RequestRow row={row} onSelect={onSelect} />);
 
-    expect(screen.getByText(/Follow-up due today/)).toBeInTheDocument();
-    expect(screen.queryByText(/Follow-up overdue/)).not.toBeInTheDocument();
+    const dateLabel = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+      .toLocaleDateString("en-US", { month: "short", day: "numeric" });
+    expect(screen.getByText(`Follow up today · ${dateLabel}`)).toBeInTheDocument();
+    expect(screen.queryByText(/Follow-up due today/)).not.toBeInTheDocument();
+    expect(screen.queryByText("Customer page not shared")).not.toBeInTheDocument();
+
+    expect(screen.getByRole("button", { name: "Review request" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Share Link" })).not.toBeInTheDocument();
   });
 });
