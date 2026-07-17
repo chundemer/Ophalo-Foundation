@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { X } from "lucide-react";
 import { type PhoneLookupResult } from "../lib/apiClient";
 import { type Stage, type CaptureFormDraft } from "./quick-capture/utils";
+import { HandoffPanel } from "./quick-capture/HandoffPanel";
 import { LookupGate } from "./quick-capture/LookupGate";
 import { LookupResultView } from "./quick-capture/LookupResultView";
 import { CaptureForm } from "./quick-capture/CaptureForm";
@@ -12,13 +13,15 @@ export interface QuickCaptureProps {
   onSelectRequest?: (requestId: string) => void;
   isPastDue?: boolean;
   isReadOnly?: boolean;
+  isOwnerOrAdmin?: boolean;
+  onNavigateSettings?: (section?: "public-profile" | "policy" | "team") => void;
   // Intentional bypass of the phone lookup gate — used only by Create follow-up request.
   // The phone has already been verified by the original closed request; re-running the lookup
   // would surface that closed request and confuse the duplicate-detection UX.
   followUpPrefill?: { phone: string; name?: string; email?: string; description?: string };
 }
 
-export function QuickCapture({ onClose, onSelectRequest, isPastDue = false, isReadOnly = false, followUpPrefill }: QuickCaptureProps) {
+export function QuickCapture({ onClose, onSelectRequest, isPastDue = false, isReadOnly = false, isOwnerOrAdmin = false, onNavigateSettings, followUpPrefill }: QuickCaptureProps) {
   const publicBaseUrl = import.meta.env.VITE_PUBLIC_BASE_URL as string;
 
   const panelRef = useRef<HTMLDivElement>(null);
@@ -43,7 +46,9 @@ export function QuickCapture({ onClose, onSelectRequest, isPastDue = false, isRe
   const [stage, setStage] = useState<Stage>(
     followUpPrefill
       ? { kind: "capture", lockedPhone: followUpPrefill.phone, prefill: followUpPrefill }
-      : { kind: "lookup" }
+      : isOwnerOrAdmin
+        ? { kind: "handoff" }
+        : { kind: "lookup" }
   );
   const [captureFormDraft, setCaptureFormDraft] = useState<CaptureFormDraft | null>(null);
 
@@ -91,15 +96,26 @@ export function QuickCapture({ onClose, onSelectRequest, isPastDue = false, isRe
   }
 
   const title =
-    stage.kind === "lookup"
-      ? "Look Up Customer"
-      : stage.kind === "result"
-        ? "Customer Found"
-        : stage.kind === "capture"
-          ? followUpPrefill ? "Create Follow-up Request" : "New Request"
-          : "Request Captured";
+    stage.kind === "handoff"
+      ? "Text a Link"
+      : stage.kind === "lookup"
+        ? "Look Up Customer"
+        : stage.kind === "result"
+          ? "Customer Found"
+          : stage.kind === "capture"
+            ? followUpPrefill ? "Create Follow-up Request" : "New Request"
+            : "Request Captured";
 
   const content = (() => {
+    if (stage.kind === "handoff") {
+      return (
+        <HandoffPanel
+          onEnterForCustomer={() => setStage({ kind: "lookup" })}
+          onNavigateSettings={() => { onClose(); onNavigateSettings?.("public-profile"); }}
+        />
+      );
+    }
+
     if (stage.kind === "lookup") {
       return (
         <LookupGate

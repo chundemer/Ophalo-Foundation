@@ -331,6 +331,8 @@ function AppShell() {
         <QuickCapture
           onClose={() => setCaptureOpen(false)}
           onSelectRequest={(id) => { selectRequest(id); setCaptureOpen(false); }}
+          isOwnerOrAdmin={role === "owner" || role === "admin"}
+          onNavigateSettings={navigateToSettings}
         />
       )}
     </div>

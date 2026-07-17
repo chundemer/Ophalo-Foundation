@@ -11,6 +11,7 @@ import {
   MOCK_VALIDATION,
   OWNER_ACTIONS,
   mockIntake,
+  mockIntakeSmsHandoff,
   mockMembers,
   mockMeByRole,
   mockOnboarding,
@@ -160,6 +161,7 @@ export function installMockApi(): void {
     delay({ created: false, rawToken: null, publicSlug: mockIntake.publicSlug });
   api.replaceIntake = () =>
     delay({ rawToken: "mock-raw-token-new", publicSlug: "apex-home-new9z", staleLinksWarning: true });
+  api.createIntakeSmsHandoff = (customerPhone) => delay(mockIntakeSmsHandoff(customerPhone));
 
   // Request list
   api.getRequests = (params = {}) => {

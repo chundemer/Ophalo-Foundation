@@ -93,6 +93,13 @@ export interface IntakeRenameLinkResult {
   publicSlug: string;
 }
 
+export interface CreateIntakeSmsHandoffResult {
+  handoffUrl: string;
+  customerPhone: string;
+  messageBody: string;
+  expiresAtUtc: string;
+}
+
 export interface PhoneLookupCustomer {
   name: string;
   phone: string;

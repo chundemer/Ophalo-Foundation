@@ -107,6 +107,7 @@ import type {
   IntakeEnsureResult,
   IntakeReplaceResult,
   IntakeRenameLinkResult,
+  CreateIntakeSmsHandoffResult,
   PhoneLookupCustomer,
   PhoneLookupActiveRequest,
   PhoneLookupResult,
@@ -156,6 +157,7 @@ export type {
   IntakeEnsureResult,
   IntakeReplaceResult,
   IntakeRenameLinkResult,
+  CreateIntakeSmsHandoffResult,
   PhoneLookupCustomer,
   PhoneLookupActiveRequest,
   PhoneLookupResult,
@@ -367,6 +369,11 @@ export const api = {
     apiFetch<IntakeRenameLinkResult>("/keep/setup/intake/link-name", {
       method: "PUT",
       body: JSON.stringify({ desiredName }),
+    }),
+  createIntakeSmsHandoff: (customerPhone: string) =>
+    apiFetch<CreateIntakeSmsHandoffResult>("/keep/setup/intake/sms-handoff", {
+      method: "POST",
+      body: JSON.stringify({ customerPhone }),
     }),
   inviteMember: (email: string, role: string) =>
     apiFetch<{ status: string }>("/accounts/me/invite", {

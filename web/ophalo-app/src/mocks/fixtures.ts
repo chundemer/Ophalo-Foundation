@@ -4,6 +4,7 @@ import type {
   KeepSetupResult,
   ListMembersResponse,
   IntakeStatusResult,
+  CreateIntakeSmsHandoffResult,
   KeepRequestViewCounts,
   KeepRequestSummary,
   KeepRequestDetailResult,
@@ -144,6 +145,15 @@ export const mockIntake: IntakeStatusResult = {
   publicSlug: "apex-home-k7x2p",
   createdAtUtc: "2026-01-15T10:00:00Z",
 };
+
+export function mockIntakeSmsHandoff(customerPhone: string): CreateIntakeSmsHandoffResult {
+  return {
+    handoffUrl: "https://app.ophalo.com/keep/intake-sms/mock-raw-token",
+    customerPhone,
+    messageBody: `Submit your request here: https://ophalo.com/keep/s/${mockIntake.publicSlug}`,
+    expiresAtUtc: new Date(Date.now() + 15 * 60_000).toISOString(),
+  };
+}
 
 // ---------------------------------------------------------------------------
 // Shared validation + base available actions
