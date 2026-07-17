@@ -6,9 +6,9 @@
 completed R88 entries below; integrated desktop/mobile acceptance verification has not begun.
 **Deployment posture:** Not deployment-ready. Active launch gaps remain in
 `docs/pilot-readiness-bug-tracker.md`.
-**Next free ADR:** ADR-446
-**Current session:** Outstanding launch gaps and request-list triage. Verification is deferred until
-those selected corrective slices are complete.
+**Next free ADR:** ADR-448
+**Current session:** Outstanding launch gaps, request-list triage, and public trust/entry-surface
+hardening. Verification is deferred until the selected corrective slices are complete.
 
 ---
 
@@ -55,20 +55,75 @@ also surfaced New Request defects/workflow gaps and a Request Detail maintainabi
 tracked as **GAP-016–GAP-019** in
 `docs/pilot-readiness-bug-tracker.md`; resolve their selected scope before resuming page-pass work.
 
-## Current Work — Outstanding Launch Gaps And Request List
+## Current Work — Outstanding Launch Gaps, Request List, And Public Trust
 
-**Tracker:** `docs/pilot-readiness-bug-tracker.md` — active GAP-016 through GAP-027.
+**Tracker:** `docs/pilot-readiness-bug-tracker.md` — active GAP-016 through GAP-035.
+
+**Controlling product decisions:** ADR-446 requires recognizable, truthful first-visit trust across
+external surfaces. ADR-447 requires every slice to reduce unnecessary business/customer friction and
+to prove usable next action, correction, and return behavior—not merely technical completion.
+
+### Next Selected Code Slice — R90a / GAP-033 Public Intake Trust And Return Continuity
+
+**Goal:** Make the existing public intake form clearer and safer to use before expanding public
+business-profile data or rebuilding auth-entry composition. This is a bounded `ophalo-web` slice;
+it must improve the live customer path without changing public-token authorization, request creation,
+email delivery, lifecycle behavior, or the underlying business-profile schema.
+
+**In scope:**
+
+1. Rewrite the form introduction and submission expectation so they make one accurate promise about
+   submission, the private request page, and any actually supported return path.
+2. Put factual service-location privacy information before street-address entry and concise
+   contact-use information before name/phone entry. No unsupported `secure`, `verified`, or
+   encryption claim.
+3. Make the existing email option visible, optional, and clearly recommended for private-page return
+   access without treating transactional delivery as marketing consent.
+4. Replace the render-time success auto-redirect with managed, cancellable behavior. Give the
+   customer a readable confirmation, explicit continue action, and save/return guidance before any
+   navigation. Preserve server-authoritative submission and existing fail-soft tracker-link email.
+5. Add the applicable public Privacy link and factual platform attribution using existing assets; do
+   not add a fake trust seal or new public business-profile fields in this slice.
+
+**Explicitly out of scope:** custom business logo upload; website/social/phone public-profile data
+model and settings; dynamic public browser titles; known-business expired/OffSeason terminal-state
+identity; shared auth shell; legal-policy text changes; account/invite/auth contracts. Those are
+separate follow-on slices under GAP-033 through GAP-035.
+
+**Preflight and completion gate:**
+
+- Confirm the current `IntakeForm` submission/success and tracker-link-email contracts, the public
+  privacy route, existing focused test placement, and desktop/mobile behavior before editing.
+- Keep the slice inside the session file gate. Prefer `IntakeForm.tsx`, the shared public footer only
+  if required, and focused tests/docs; do not pull profile/schema/API changes into R90a.
+- Verify required-field/browser validation, server validation/error retention, duplicate-submit
+  guard, email/no-email success behavior, tracker navigation, keyboard focus/error announcement,
+  desktop screenshot, and phone viewport screenshot.
+- Run relevant `ophalo-web` tests and TypeScript/build checks. Record exact evidence, Christian's
+  visual acceptance, and the commit before selecting R90b.
+
+**Follow-on ordering after R90a:**
+
+1. **R90b / GAP-033:** public-safe business identity data/profile/settings and known-business public
+   header/title/terminal-state treatment; explicitly preserve unknown-token non-enumeration.
+2. **R90c / GAP-035:** shared normal-browser auth-entry shell and accessible recovery states while
+   preserving ADR-390 sterile mobile-handoff restrictions.
+3. Reassess the existing P0/P1 New Request and Request List slices against the updated tracker before
+   beginning broad manual verification.
 
 **Current order:**
 
-1. Execute the approved GAP-027 Request List parity slice under Build 087; GAP-026 and the
-   remaining P0/P1 New Request blockers follow as separately bounded slices.
-2. Implement and commit each approved slice with decision-record, contract, focused-test, and
+1. Execute R90a as the next selected bounded customer-trust slice, then R90b/R90c only after their
+   respective preflights. Do not treat GAP-033–035 as cosmetic work or combine them into one large
+   redesign.
+2. Resume the approved GAP-027 Request List parity and the remaining P0/P1 New Request blockers as
+   separately bounded slices after the current public-trust sequence is reassessed.
+3. Implement and commit each approved slice with decision-record, contract, focused-test, and
    relevant build/typecheck verification.
-3. Reassess the active tracker. Only after the selected blocker set is resolved or deliberately
+4. Reassess the active tracker. Only after the selected blocker set is resolved or deliberately
    deferred, hold a pre-work discussion for the manual verification pass in
    `docs/build-log/089-launch-verification-pass.md`.
-4. Run desktop operational verification first, then the dedicated real-device mobile PWA gate.
+5. Run desktop operational verification first, then the dedicated real-device mobile PWA gate.
 
 **GAP-027 approved implementation scope (2026-07-17):** Build 087 already locks the product
 behavior; GAP-027 is an implementation-parity correction, not a new design or lifecycle decision.
@@ -255,9 +310,11 @@ Topology:
 
 ## Remaining Path To Production
 
-1. Resolve or deliberately defer the active New Request launch blockers and Request Detail
-   maintainability seam (GAP-016–GAP-019), then resume Build 087.
-2. Conduct decision-first marketing and onboarding launch passes.
+1. Complete or deliberately defer the selected P0/P1 launch slices, beginning with R90a and then
+   the bounded GAP-033–035 follow-ons, alongside the selected New Request/Request List/Request
+   Detail corrective work.
+2. Run the ADR-446/ADR-447 decision-first first-visit, business-workflow, and customer-continuity
+   launch passes in Build 089.
 3. Deploy and validate a Vercel production candidate.
 4. Test the PWA on real iPhone and Android devices before promotion, then run a production smoke
    test after deployment.

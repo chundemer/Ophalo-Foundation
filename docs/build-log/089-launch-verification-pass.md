@@ -38,6 +38,12 @@ check-email, magic-link success/error, invite success/error, public intake, cust
 known-business terminal states where applicable. Treat an anonymous-looking or unfinished-looking
 entry surface as a launch finding, not cosmetic polish.
 
+Apply ADR-447 to each tested workflow: record whether the business owner/staff member can identify
+the next action, correct an error, and continue through interruption without unnecessary duplicate
+work; record whether the customer can recognize the business, understand the request and outcome,
+and recover/return without support. A technically passing flow that fails either perspective is a
+product finding to triage.
+
 ## Gate 1 — Desktop Operational Verification
 
 Run after request-list changes and the selected desktop-facing gaps are committed.
