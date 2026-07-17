@@ -41,11 +41,16 @@ pre-addressed draft; keeping data out of the QR payload does not prohibit this s
 The handoff expires after 15 minutes. Invalid and expired tokens are indistinguishable, are
 rate-limited, receive `Cache-Control: no-store, private`, and are redacted from application logs.
 
-## In-Person Option
+## Durable Public QR Placement
 
-An Owner/Admin may additionally show a durable QR code containing the public intake URL directly
-when a customer is physically present. This is an optional in-person convenience, not the primary
-remote-caller workflow and not a replacement for the caller-text handoff.
+The durable public intake QR is not rendered in the New Request / **Text a Link** handoff panel.
+That panel has one purpose: help an Owner/Admin text a remote caller. It must show at most one QR
+code—the opaque, short-lived QR that transfers the pre-addressed SMS draft to the Owner/Admin's
+phone.
+
+When a business wants a walk-in self-service QR, it uses the durable public intake URL from Public
+Link settings to create a separate counter, print, or other customer-facing display. That durable
+QR contains only the public intake URL and is not a replacement for the remote-caller text flow.
 
 ## Consequences
 
@@ -55,5 +60,8 @@ remote-caller workflow and not a replacement for the caller-text handoff.
   uses the established platform-specific SMS URI separator behavior.
 - The PWA must lead Owner/Admin New Request with customer self-service controls and must not put
   those controls on Request Detail. Operators continue directly to the staff-entry path.
+- The **Text a Link** panel contains no customer-facing durable QR. Its action label must describe
+  preparation, not sending: Keep prepares the SMS draft; the Owner/Admin reviews and sends it from
+  their phone.
 - Existing R88f-a/b code that builds `/keep/{slug}` from `AppBaseUrl`, or that opens a
   blank-recipient draft, is superseded and must be repaired before the PWA handoff panel is built.

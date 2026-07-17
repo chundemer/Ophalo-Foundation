@@ -5,7 +5,7 @@
 **Last green code baseline:** R88f-c-repair-a — 1,117 unit tests, 14 architecture tests, 15 mobile unit tests, 14 integration tests (verified 2026-07-16).
 Not deployment-ready; GAP-016–GAP-019 still active.
 **Next free ADR:** ADR-446
-**Current session:** R88f-c-panel-2 committed. Next: R88g integrated PWA verification.
+**Current session:** R88f-c-panel-3 committed. Next: R88g integrated PWA verification.
 
 ---
 
@@ -143,11 +143,20 @@ and approve before R88a implementation. Build 087 remains paused.
       prompt to confirm it can receive texts; desktop QR renders `handoffUrl` (pattern mirrors
       `SuccessPanel.tsx`); mobile shows an explicit **Open Text Message** button once the POST
       resolves (no auto-navigation), built from `customerPhone`/`messageBody` using the same iOS
-      `&` / other `?` separator logic as `IntakeSmsHandoffView.tsx`; optional in-person QR encodes
-      only the durable `{PublicBaseUrl}/keep/s/{slug}` URL; **Enter request for customer** fallback
-      to the `lookup` stage stays immediately visible; `hasActiveLink === false` empty state routes
-      through `onNavigateSettings`. TypeScript clean (`npm run typecheck`).
-13. **R88g — Integrated PWA verification.** Run the complete desktop and mobile PWA matrix for all
+      `&` / other `?` separator logic as `IntakeSmsHandoffView.tsx`; **Enter request for customer**
+      fallback to the `lookup` stage stays immediately visible; `hasActiveLink === false` empty
+      state routes through `onNavigateSettings`. The originally included in-panel durable customer
+      QR is superseded by the R88f-c-panel-3 correction below. TypeScript clean
+      (`npm run typecheck`).
+13. **R88f-c-panel-3 — Text a Link single-QR correction.** ✓ Committed 2026-07-17. 1 production
+    file: `quick-capture/HandoffPanel.tsx`. Removed the durable customer-facing QR block and its
+    now-unused `durableSlugUrl`/`publicBaseUrl` computation; the panel shows only the opaque staff
+    QR after **Prepare text** succeeds, and the Owner/Admin scans it and sends the draft from their
+    phone. Also relabeled the action button `Send`/`Sending…` → `Prepare text`/`Preparing…` per the
+    ADR-445 consequence that the label must describe preparation, not sending. **Enter request for
+    customer** fallback and the `hasActiveLink === false` empty state are unchanged. TypeScript
+    clean (`npm run typecheck`).
+14. **R88g — Integrated PWA verification.** Run the complete desktop and mobile PWA matrix for all
     above flows, including QR handoffs, direct external actions, draft/error retention,
     accessibility, long data, and real-device behavior. Only then resume Build 087.
 

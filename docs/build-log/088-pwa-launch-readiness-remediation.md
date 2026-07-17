@@ -23,6 +23,9 @@ address, and request details. Manual staff capture remains the immediate fallbac
   confirmed caller number.
 - Mobile Owner/Admin: direct pre-addressed SMS draft; no QR token.
 - QR payload: opaque URL only; never raw phone, message, account ID, or slug.
+- The New Request / **Text a Link** panel displays only the desktop opaque handoff QR. A durable
+  customer QR belongs to a separately prepared counter/print display sourced from Public Link
+  settings, never beside the staff QR in this active workflow.
 - Customer self-service appears at the beginning of New Request for Owner/Admin. It does not belong
   in Request Detail. Operators go directly to staff-entry fallback.
 - Keep does not send SMS, receive SMS replies, or create another public intake form.
@@ -37,8 +40,9 @@ address, and request details. Manual staff capture remains the immediate fallbac
 3. Implement R88f-c only after those repairs: Owner/Admin Quick Capture begins at the customer
    self-service handoff panel; desktop renders the opaque QR; mobile launches the direct SMS URI;
    manual entry remains the explicit fallback.
-4. Verify both desktop-to-phone and mobile-direct paths with a confirmed caller number, plus the
-   in-person durable public-QR option and the manual-entry fallback.
+4. Verify both desktop-to-phone and mobile-direct paths with a confirmed caller number and the
+   manual-entry fallback. Verify any durable public QR separately from its Public Link settings
+   source; it must not appear in the Text a Link panel.
 
 ### Non-goals
 

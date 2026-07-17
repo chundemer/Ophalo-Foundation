@@ -119,14 +119,17 @@ customer** is the clear secondary, last-resort path.
 **Proposed solution:**
 
 - For Owner/Admin, lead New Request with **Let the customer submit their request** and expose the
-  existing durable business public-intake link through **Copy link**, **Text customer from your
-  phone**, and an optional in-person **Show customer QR**.
+  remote-caller **Text customer from your phone** flow plus the explicit staff-entry fallback. Do
+  not render a durable customer QR in this active panel; businesses manage any printed/counter QR
+  separately from Public Link settings.
 - For the remote-caller text action, the Owner/Admin confirms the caller's mobile number. Desktop
   renders an opaque, short-lived QR handoff that the Owner/Admin scans with their phone; it opens a
   pre-addressed SMS composer containing the public intake link. Mobile opens that same
   pre-addressed composer directly. Keep does not send SMS. The raw phone number and message body
   are stored only in the short-lived server-side handoff and never appear in the QR payload.
-- The in-person QR may encode the durable public intake slug because it carries no customer data.
+- A durable in-person QR may encode the public intake slug because it carries no customer data, but
+  it belongs on a separately prepared customer-facing counter/print display, not beside the staff
+  QR in New Request.
 - The public-intake link is not the private customer request page. A private page is minted only
   after a request exists; it cannot be the pre-capture handoff. Operators retain the staff-entry
   fallback and do not receive link-management controls.

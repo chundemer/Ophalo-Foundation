@@ -11,7 +11,6 @@ interface HandoffPanelProps {
 }
 
 export function HandoffPanel({ onEnterForCustomer, onNavigateSettings }: HandoffPanelProps) {
-  const publicBaseUrl = import.meta.env.VITE_PUBLIC_BASE_URL as string;
   const [raw, setRaw] = useState("");
 
   const { data: intake, isLoading: intakeLoading } = useQuery({
@@ -42,10 +41,6 @@ export function HandoffPanel({ onEnterForCustomer, onNavigateSettings }: Handoff
   const isIos = /iphone|ipad|ipod/i.test(navigator.userAgent.toLowerCase());
   const smsUri = handoff
     ? `sms:${handoff.customerPhone}${isIos ? "&" : "?"}body=${encodeURIComponent(handoff.messageBody)}`
-    : null;
-
-  const durableSlugUrl = intake?.publicSlug
-    ? `${publicBaseUrl.replace(/\/$/, "")}/keep/s/${intake.publicSlug}`
     : null;
 
   if (!intakeLoading && intake && !intake.hasActiveLink) {
@@ -100,7 +95,7 @@ export function HandoffPanel({ onEnterForCustomer, onNavigateSettings }: Handoff
             disabled={isPending || raw.length !== 10}
             className="shrink-0 rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-40"
           >
-            {isPending ? "Sending…" : "Send"}
+            {isPending ? "Preparing…" : "Prepare text"}
           </button>
         </div>
         {raw.length > 0 && raw.length !== 10 && (
@@ -141,17 +136,6 @@ export function HandoffPanel({ onEnterForCustomer, onNavigateSettings }: Handoff
               Open Text Message
             </a>
           )}
-        </div>
-      )}
-
-      {durableSlugUrl && (
-        <div className="flex flex-col items-center gap-2 pt-3 border-t border-slate-100">
-          <p className="text-xs text-slate-500 text-center">
-            Or let the customer scan this in person to submit their own request
-          </p>
-          <div className="rounded-lg border border-slate-200 bg-white p-2 shadow-sm">
-            <QRCode value={durableSlugUrl} size={120} />
-          </div>
         </div>
       )}
 
