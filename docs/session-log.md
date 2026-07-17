@@ -2,10 +2,13 @@
 
 **Last updated:** 2026-07-17
 **Branch:** `main` tracking `origin/main`
-**Last green code baseline:** R88f-c-repair-a — 1,117 unit tests, 14 architecture tests, 15 mobile unit tests, 14 integration tests (verified 2026-07-16).
-Not deployment-ready; GAP-016–GAP-019 still active.
+**Last green code baseline:** R88f-c-panel-3. Slice-level automated evidence is recorded in the
+completed R88 entries below; integrated desktop/mobile acceptance verification has not begun.
+**Deployment posture:** Not deployment-ready. Active launch gaps remain in
+`docs/pilot-readiness-bug-tracker.md`.
 **Next free ADR:** ADR-446
-**Current session:** R88f-c-panel-3 committed. Next: R88g integrated PWA verification.
+**Current session:** Outstanding launch gaps and request-list triage. Verification is deferred until
+those selected corrective slices are complete.
 
 ---
 
@@ -52,11 +55,55 @@ also surfaced New Request defects/workflow gaps and a Request Detail maintainabi
 tracked as **GAP-016–GAP-019** in
 `docs/pilot-readiness-bug-tracker.md`; resolve their selected scope before resuming page-pass work.
 
-## Current Work — New Request And Request Detail Launch Blockers
+## Current Work — Outstanding Launch Gaps And Request List
 
-**Tracker:** `docs/pilot-readiness-bug-tracker.md` — GAP-016 through GAP-019
-**Status:** GAP-019 preflight may begin now. The Request Detail, sharing, and public-intake handoff
-work may follow; staff fallback capture remains blocked only on the stated phone-policy decision.
+**Tracker:** `docs/pilot-readiness-bug-tracker.md` — active GAP-016 through GAP-027.
+
+**Current order:**
+
+1. Execute the approved GAP-027 Request List parity slice under Build 087; GAP-026 and the
+   remaining P0/P1 New Request blockers follow as separately bounded slices.
+2. Implement and commit each approved slice with decision-record, contract, focused-test, and
+   relevant build/typecheck verification.
+3. Reassess the active tracker. Only after the selected blocker set is resolved or deliberately
+   deferred, hold a pre-work discussion for the manual verification pass in
+   `docs/build-log/089-launch-verification-pass.md`.
+4. Run desktop operational verification first, then the dedicated real-device mobile PWA gate.
+
+**GAP-027 approved implementation scope (2026-07-17):** Build 087 already locks the product
+behavior; GAP-027 is an implementation-parity correction, not a new design or lifecycle decision.
+
+1. Reproduce and diagnose any displayed operational-overdue versus Needs Attention count mismatch
+   against the current API before changing a query or count contract.
+2. Render one server-status pill and at most one highest-priority operational exception per row;
+   merge its deadline into that exception and move other signals to quiet metadata.
+3. Suppress response-SLA, overdue-follow-up, and planned-date alarms on Closed/Cancelled rows;
+   preserve the existing unresolved-negative-feedback / Feedback Review exception. Do not treat
+   Resolved (Work completed) as terminal.
+4. Render future planned/follow-up dates as unbordered quiet metadata.
+5. Apply Build 087's existing permitted primary-action priority: at most one promoted action and
+   one relevant secondary action; no ambiguous `Next: X or Y`, repeated Add Note, or redundant
+   Open Detail row action.
+6. Verify count/alert parity, terminal feedback behavior, row hierarchy, future timing, permitted
+   action selection, mobile/touch/keyboard behavior, and long-data layouts with focused tests and
+   the relevant quality gates.
+
+**Change-control rule:** Before and after each file change, confirm the controlling ADR/build-log,
+affected API/UI contract, permissions and terminal-state behavior, focused automated coverage, and
+relevant build/typecheck results. Do not expand a bounded gap fix into a new product policy without
+an explicit decision.
+
+**GAP-027 status (2026-07-17):** `needs_attention` list/count parity, Default Queue excluding Closed
+unresolved-feedback (Feedback Review only), and the Request List row-hierarchy/action-priority
+rework are committed and pushed to `main` (`6a33e6e`, `9359bf0`). A follow-up correction round —
+canonical-urgency exception selection overriding action order for due/overdue follow-ups, and
+Button-Hierarchy-Locked brand colors on row quick actions (teal communication, navy-outline
+secondary, neutral bookkeeping, red destructive; no amber buttons) — is implemented and passing
+focused tests, pending Christian's visual acceptance before commit. Verified baseline: 32
+`KeepRequestListB5Tests`, 113 KeepRequestList/FeedbackReview/AcknowledgeAttention integration tests,
+14 architecture tests, 891 unit tests, 19 `ophalo-app` frontend tests, TypeScript clean. One
+pre-existing, unrelated integration failure noted and left untouched:
+`KeepCustomerPageTests.GetCustomerPage_ValidRequest_DoesNotExposeOperatorInternalFields`.
 
 Locked direction:
 
@@ -76,13 +123,12 @@ Locked direction:
   composition is extracted before further Request Detail launch changes.
 
 Resolved handoff decisions: ADR-444 locks the normalized caller-phone policy; ADR-445 locks the
-pre-capture caller-text, desktop QR, and mobile-direct behavior. The remaining work is the R88f-c
-correction described below, not a new product decision.
+pre-capture caller-text, desktop QR, and mobile-direct behavior.
 
-### Required Resolution Order
+### Completed R88 Record
 
-**Controlling remediation brief:** `docs/build-log/088-pwa-launch-readiness-remediation.md` — create
-and approve before R88a implementation. Build 087 remains paused.
+The entries below preserve the completed remediation history. Current execution order is the active
+gap plan above; do not treat the historical R88 ordering as the next-task list.
 
 1. **R88a — GAP-019 Request Detail layout decomposition.** Extract the shared controller from
    responsive desktop/mobile composition before touching Detail contact, sharing, timing, or
@@ -156,12 +202,12 @@ and approve before R88a implementation. Build 087 remains paused.
     ADR-445 consequence that the label must describe preparation, not sending. **Enter request for
     customer** fallback and the `hasActiveLink === false` empty state are unchanged. TypeScript
     clean (`npm run typecheck`).
-14. **R88g — Integrated PWA verification.** Run the complete desktop and mobile PWA matrix for all
-    above flows, including QR handoffs, direct external actions, draft/error retention,
-    accessibility, long data, and real-device behavior. Only then resume Build 087.
+14. **R88g — Integrated PWA verification.** Superseded as a single undifferentiated pass by
+    `docs/build-log/089-launch-verification-pass.md`: Gate 1 is desktop operational verification
+    after the selected gap work; Gate 2 is dedicated real-device mobile PWA verification.
 
-R88g is next, in a fresh session — per the Session Protocol, discovery/review for the next batch is
-not carried in the same context window as an approved commit.
+Do not begin manual verification until the active-gap plan above is ready. The verification pre-work
+discussion occurs in a fresh session; implementation discovery/review is not carried into it.
 Every R88 slice requires its own bounded brief section, file-level preflight, proportionate
 verification, Christian's approval of the completed diff, and a commit before the next slice begins.
 
@@ -173,8 +219,9 @@ additional client-side digit-counting is added to the public intake form.
 ## Build 087 — Request List V1 Launch Pass
 
 **Controlling brief:** `docs/build-log/087-request-list-v1-launch-pass.md`
-**Status:** Paused. Do not begin while GAP-016–GAP-019 are active; return after their scope is
-implemented or deliberately deferred.
+**Status:** GAP-027 implementation parity is approved under the locked Build 087 decisions; begin
+with its evidence-led preflight. GAP-026 follows as a separate bounded slice. Do not begin broad
+manual verification while their selected corrective scope is incomplete.
 
 ## Standing Boundaries
 
