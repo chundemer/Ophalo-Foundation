@@ -4,7 +4,13 @@ import { useEffect, useRef, useState } from "react";
 import { KeepButton } from "@/components/keep/KeepButton";
 import { KeepPageFooter } from "@/components/keep/KeepPublicShell";
 
-export function IntakeSmsHandoffView({ messageBody }: { messageBody: string }) {
+export function IntakeSmsHandoffView({
+  customerPhone,
+  messageBody,
+}: {
+  customerPhone: string;
+  messageBody: string;
+}) {
   const [smsUri, setSmsUri] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const launched = useRef(false);
@@ -13,14 +19,14 @@ export function IntakeSmsHandoffView({ messageBody }: { messageBody: string }) {
     // Compute URI on client to avoid SSR/hydration mismatch on iOS vs Android separator
     const isIos = /iphone|ipad|ipod/i.test(navigator.userAgent.toLowerCase());
     const sep = isIos ? "&" : "?";
-    const uri = `sms:${sep}body=${encodeURIComponent(messageBody)}`;
+    const uri = `sms:${customerPhone}${sep}body=${encodeURIComponent(messageBody)}`;
     setSmsUri(uri);
 
     if (!launched.current) {
       launched.current = true;
       window.location.href = uri;
     }
-  }, [messageBody]);
+  }, [customerPhone, messageBody]);
 
   async function handleCopy() {
     try {

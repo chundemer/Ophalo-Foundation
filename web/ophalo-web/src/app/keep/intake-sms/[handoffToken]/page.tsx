@@ -11,7 +11,7 @@ export const metadata: Metadata = {
 const canvasStyle = { backgroundColor: "var(--ophalo-canvas)" };
 
 type HandoffState =
-  | { kind: "valid"; messageBody: string }
+  | { kind: "valid"; customerPhone: string; messageBody: string }
   | { kind: "expired" }
   | { kind: "unavailable" };
 
@@ -36,11 +36,12 @@ async function fetchHandoff(handoffToken: string): Promise<HandoffState> {
   if (data == null || typeof data !== "object") return { kind: "unavailable" };
 
   const d = data as Record<string, unknown>;
+  const customerPhone = typeof d.customerPhone === "string" ? d.customerPhone : null;
   const messageBody = typeof d.messageBody === "string" ? d.messageBody : null;
 
-  if (!messageBody) return { kind: "unavailable" };
+  if (!customerPhone || !messageBody) return { kind: "unavailable" };
 
-  return { kind: "valid", messageBody };
+  return { kind: "valid", customerPhone, messageBody };
 }
 
 export default async function IntakeSmsHandoffPage({
@@ -84,5 +85,10 @@ export default async function IntakeSmsHandoffPage({
     );
   }
 
-  return <IntakeSmsHandoffView messageBody={state.messageBody} />;
+  return (
+    <IntakeSmsHandoffView
+      customerPhone={state.customerPhone}
+      messageBody={state.messageBody}
+    />
+  );
 }

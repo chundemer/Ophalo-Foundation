@@ -1,6 +1,6 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-07-16
+**Last updated:** 2026-07-17
 **Branch:** `main` tracking `origin/main`
 **Last green code baseline:** R88f-c-repair-a — 1,117 unit tests, 14 architecture tests, 15 mobile unit tests, 14 integration tests (verified 2026-07-16).
 Not deployment-ready; GAP-016–GAP-019 still active.
@@ -121,8 +121,10 @@ and approve before R88a implementation. Build 087 remains paused.
     `PublicBaseUrl`; `App.NotConfigured` guard; `/keep/s/{slug}` URL; backward-safe
     `NOT NULL DEFAULT ''` migration with blank-phone legacy 404; `IsDeleted` → `DeletedAtUtc == null`
     query fix. 1,117 unit + 14 integration tests green.
-11. **R88f-c-repair-b — GAP-018 web handoff page repair.** Two `ophalo-web` files: `page.tsx`
-    reads `customerPhone` from API; `IntakeSmsHandoffView.tsx` builds `sms:{phone}${sep}body=...`.
+11. **R88f-c-repair-b — GAP-018 web handoff page repair.** ✓ Committed 2026-07-17. Two
+    `ophalo-web` files: `page.tsx` reads `customerPhone` from API; `IntakeSmsHandoffView.tsx`
+    builds `sms:{phone}${sep}body=...`. Mechanical port of the sibling `keep/share-sms`
+    pair's proven pattern. TypeScript clean (`npm run typecheck`).
 12. **R88f-c-panel — GAP-018 Owner/Admin New Request handoff panel.** Customer self-service controls
     at the start of Quick Capture: Copy link, Text customer from your phone (desktop opaque QR →
     scan → pre-addressed SMS; mobile direct SMS), optional in-person durable QR, manual entry
@@ -131,7 +133,7 @@ and approve before R88a implementation. Build 087 remains paused.
     above flows, including QR handoffs, direct external actions, draft/error retention,
     accessibility, long data, and real-device behavior. Only then resume Build 087.
 
-R88f-c-repair-b is next, then the panel.
+R88f-c-panel is next.
 Every R88 slice requires its own bounded brief section, file-level preflight, proportionate
 verification, Christian's approval of the completed diff, and a commit before the next slice begins.
 
