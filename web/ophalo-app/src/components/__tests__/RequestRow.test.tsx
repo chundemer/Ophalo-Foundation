@@ -214,6 +214,27 @@ describe("RequestRow — Build 087 / GAP-027 locked row contract", () => {
     expect(actionBar?.querySelectorAll("button").length).toBe(2);
   });
 
+  it("colors action buttons by brand role, not amber — Update customer teal, Log contact navy-outline", () => {
+    // Button Hierarchy Is Locked (ux-design-decisions.md): amber is a status color, never a
+    // button treatment; communication actions are Keep teal, secondary operator actions are
+    // navy outline.
+    const row = buildRow({
+      status: "in_progress",
+      attention: { attentionLevel: "waiting", waitingDirection: "customer", attentionReason: "customer_message", priorityBand: "standard", attentionSinceUtc: null, nextAttentionAtUtc: null, firstResponseDueAtUtc: null, firstRespondedAtUtc: "2026-07-01T00:00:00Z", firstResponsePending: false, firstResponseOverdue: false },
+      actions: { quickActions: [quickAction("open_detail", "detail"), quickAction("post_customer_update"), quickAction("contact_customer")] },
+    });
+
+    render(<RequestRow row={row} onSelect={noop} />);
+
+    const updateButton = screen.getByRole("button", { name: "Update customer" });
+    expect(updateButton.className).toContain("bg-[var(--keep-accent)]");
+    expect(updateButton.className).not.toMatch(/attention/);
+
+    const contactButton = screen.getByRole("button", { name: "Log contact" });
+    expect(contactButton.className).toContain("border-[var(--ophalo-navy)]");
+    expect(contactButton.className).not.toMatch(/attention/);
+  });
+
   it("promotes Share Link when the customer page is unshared and no higher-priority state exists", () => {
     const row = buildRow({
       status: "received",

@@ -38,6 +38,34 @@ const ATTENTION_LABELS: Record<string, string> = {
   change_or_cancel_request: "Change/cancel",
 };
 
+// Button Hierarchy Is Locked (docs/ux-design/ux-design-decisions.md): color follows the
+// action's brand role, not its position in the row. Amber is a status/attention color
+// (KeepBadge), never a button treatment.
+type ActionRole = "teal" | "navy-outline" | "neutral" | "danger";
+
+const ACTION_ROLES: Record<string, ActionRole> = {
+  post_customer_update: "teal",       // Keep communication primary — customer-visible update.
+  contact_customer: "navy-outline",   // Secondary operator action.
+  share_link: "navy-outline",         // Customer-page secondary action.
+  review_feedback: "navy-outline",    // Secondary operator action.
+  acknowledge_attention: "neutral",   // Quiet bookkeeping ("Mark handled").
+  review_request: "neutral",          // Quiet bookkeeping — plain navigation to detail.
+  close_request: "danger",            // Destructive.
+};
+
+function actionButtonClass(code: string): string {
+  switch (ACTION_ROLES[code] ?? "neutral") {
+    case "teal":
+      return "border border-transparent bg-[var(--keep-accent)] text-white hover:bg-[var(--keep-accent-hover)]";
+    case "navy-outline":
+      return "border border-[var(--ophalo-navy)] bg-[var(--ophalo-canvas)] text-[var(--ophalo-navy)] hover:bg-[var(--ophalo-navy)] hover:text-white";
+    case "danger":
+      return "border border-[var(--ophalo-danger)] bg-[var(--ophalo-canvas)] text-[var(--ophalo-danger)] hover:bg-[var(--ophalo-danger)] hover:text-white";
+    default:
+      return "border border-[var(--ophalo-border)] bg-[var(--ophalo-canvas)] text-[var(--ophalo-ink)] hover:border-[var(--ophalo-navy)] hover:text-[var(--ophalo-navy)]";
+  }
+}
+
 type Tone = "danger" | "attention" | "success";
 
 interface Exception {
@@ -371,7 +399,7 @@ export function RequestRow({ row, onSelect, onSelectFocused, onActionClick, onSh
             </KeepBadge>
           )}
           {promoted && (
-            <span className="text-[13px] text-[var(--ophalo-muted)]">Next: {promoted.label}</span>
+            <span className="text-sm text-[var(--ophalo-muted)]">Next: {promoted.label}</span>
           )}
         </div>
 
@@ -425,7 +453,7 @@ export function RequestRow({ row, onSelect, onSelectFocused, onActionClick, onSh
       {/* Quick action bar — at most one promoted action and one relevant secondary (Build 087 §5) */}
       {quickActionButtons.length > 0 && (
         <div className="border-t border-[var(--ophalo-border)] px-4 py-2 flex items-center gap-2 flex-wrap">
-          {quickActionButtons.map((action, i) => (
+          {quickActionButtons.map((action) => (
             <button
               key={action.code}
               type="button"
@@ -433,11 +461,7 @@ export function RequestRow({ row, onSelect, onSelectFocused, onActionClick, onSh
                 e.stopPropagation();
                 runAction(action);
               }}
-              className={`inline-flex items-center justify-center gap-1 rounded-md px-3 min-h-10 text-sm font-semibold border transition-colors ${FOCUS_RING} ${
-                i === 0
-                  ? "border-[var(--ophalo-attention)] bg-[var(--ophalo-canvas)] text-[var(--ophalo-attention)] hover:bg-[var(--ophalo-attention)] hover:text-white"
-                  : "border-[var(--ophalo-border)] bg-[var(--ophalo-canvas)] text-[var(--ophalo-ink)] hover:border-[var(--keep-accent)] hover:text-[var(--keep-accent)]"
-              }`}
+              className={`inline-flex items-center justify-center gap-1 rounded-md px-3 min-h-10 text-sm font-semibold transition-colors ${FOCUS_RING} ${actionButtonClass(action.code)}`}
             >
               {action.code === "share_link" && <Share2 className="h-3.5 w-3.5" />}
               {action.label}
