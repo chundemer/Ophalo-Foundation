@@ -42,6 +42,9 @@ public sealed class KeepRequestListB5Tests : IClassFixture<KeepApiWebFactory>, I
     private Guid _resolvedCleanRequestId;
     private Guid _resolvedWithCustomerActivityRequestId;
     private Guid _resolvedWithAttentionRequestId;
+    private Guid _firstResponseOverdueRequestId;
+    private Guid _businessCreatedNoResponseSlaRequestId;
+    private readonly List<Guid> _multipleOverdueRequestIds = [];
 
     public KeepRequestListB5Tests(KeepApiWebFactory factory)
     {
@@ -306,6 +309,61 @@ public sealed class KeepRequestListB5Tests : IClassFixture<KeepApiWebFactory>, I
         await db.SaveChangesAsync();
         _resolvedWithAttentionRequestId = resolvedWithAttention.Id;
 
+        // --- 11. Customer-origin request with an overdue first response, no persisted attention
+        // and no FollowUpOn (GAP-027 regression: must still surface in needs_attention). ---
+        var firstResponseOverdueRequest = KeepRequest.CreateFromCustomerIntake(
+            _accountId, customer.Id,
+            "Overdue Customer", "0412345682", null,
+            "Overdue first response job", "B5-FRO-001", "b5_fro_page_token", now, 60);
+        db.Set<KeepRequest>().Add(firstResponseOverdueRequest);
+        db.Set<KeepRequestEvent>().Add(
+            KeepRequestEvent.CreateRequestCreated(firstResponseOverdueRequest.Id, _accountId, now));
+        await db.SaveChangesAsync();
+        _firstResponseOverdueRequestId = firstResponseOverdueRequest.Id;
+
+        // Backdate the first-response due time into the past; leave AttentionLevel/FollowUpOnDate
+        // untouched so this row exercises only the firstResponseOverdue branch of needs_attention.
+        await db.Database.ExecuteSqlRawAsync(
+            "UPDATE keep_requests SET first_response_due_at_utc = {0} WHERE id = {1}",
+            now.AddMinutes(-30), _firstResponseOverdueRequestId);
+
+        // --- 12. Business-created request (no customer-contact clock) — must never acquire a
+        // first-response SLA/count merely by being new (GAP-027 guard). ---
+        var businessCreatedRequest = KeepRequest.CreateByBusiness(
+            _accountId, customer.Id,
+            "Business Origin Customer", "0412345683", null,
+            "Business-entered job", "B5-BIZ-001", "b5_biz_page_token", now,
+            KeepRequestSource.Phone);
+        db.Set<KeepRequest>().Add(businessCreatedRequest);
+        db.Set<KeepRequestEvent>().Add(
+            KeepRequestEvent.CreateRequestCreated(businessCreatedRequest.Id, _accountId, now));
+        await db.SaveChangesAsync();
+        _businessCreatedNoResponseSlaRequestId = businessCreatedRequest.Id;
+
+        // --- 13. Three more simultaneously-overdue customer-intake rows, reproducing the exact
+        // multi-row scenario from the GAP-027 manual acceptance screenshot (three visible
+        // "Response overdue" rows). Proves defaultCount's isOverdue rows match needsAttentionCount
+        // under multiplicity, not just a single-row case. ---
+        for (var i = 0; i < 3; i++)
+        {
+            var overdueRequest = KeepRequest.CreateFromCustomerIntake(
+                _accountId, customer.Id,
+                $"Overdue Multi Customer {i}", $"041234569{i}", null,
+                $"Overdue multi job {i}", $"B5-MOV-00{i}", $"b5_mov{i}_page_token", now, 60);
+            db.Set<KeepRequest>().Add(overdueRequest);
+            db.Set<KeepRequestEvent>().Add(
+                KeepRequestEvent.CreateRequestCreated(overdueRequest.Id, _accountId, now));
+            await db.SaveChangesAsync();
+            _multipleOverdueRequestIds.Add(overdueRequest.Id);
+        }
+
+        foreach (var id in _multipleOverdueRequestIds)
+        {
+            await db.Database.ExecuteSqlRawAsync(
+                "UPDATE keep_requests SET first_response_due_at_utc = {0} WHERE id = {1}",
+                now.AddHours(-4), id);
+        }
+
         // --- Sessions ---
         _ownerAccountUserId = graph.Owner.Id;
         _ownerCookie    = await _factory.SeedSessionAsync(graph.Owner.Id, _accountId);
@@ -342,20 +400,34 @@ public sealed class KeepRequestListB5Tests : IClassFixture<KeepApiWebFactory>, I
             new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
     }
 
+    private async Task<B5RequestListBody?> GetNeedsAttentionListAsync(string cookie)
+    {
+        using var req = WithCookie(HttpMethod.Get, "/keep/requests?view=needs_attention", cookie);
+        var response = await _client.SendAsync(req);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        return await response.Content.ReadFromJsonAsync<B5RequestListBody>(
+            new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+    }
+
+    private async Task<B5RequestListBody?> GetFeedbackReviewListAsync(string cookie)
+    {
+        using var req = WithCookie(HttpMethod.Get, "/keep/requests?view=feedback_review", cookie);
+        var response = await _client.SendAsync(req);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        return await response.Content.ReadFromJsonAsync<B5RequestListBody>(
+            new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+    }
+
     // --- Tests ---
 
     [Fact]
-    public async Task Owner_sees_closed_unresolved_feedback_in_default_list()
+    public async Task Owner_does_not_see_closed_unresolved_feedback_in_default_list()
     {
+        // Build 087 §1 / GAP-027: Closed unresolved-feedback work belongs to Feedback Review only —
+        // Default Queue is active work, even for Owner/Admin who can also reach Feedback Review.
         var body = await GetListAsync(_ownerCookie);
         Assert.NotNull(body);
-        Assert.Contains(body.Requests, r => r.Id == _closedUnresolvedRequestId);
-
-        var row = body.Requests.Single(r => r.Id == _closedUnresolvedRequestId);
-        Assert.Equal("closed", row.Status);
-        Assert.True(row.IsPostCloseFollowUp);
-        Assert.Equal("post_close_unresolved_feedback", row.Ranking.RankingGroup);
-        Assert.Equal("danger", row.Ranking.Severity);
+        Assert.DoesNotContain(body.Requests, r => r.Id == _closedUnresolvedRequestId);
     }
 
     [Fact]
@@ -367,16 +439,26 @@ public sealed class KeepRequestListB5Tests : IClassFixture<KeepApiWebFactory>, I
     }
 
     [Fact]
-    public async Task Cancelled_and_normal_closed_requests_excluded_from_default_list()
+    public async Task Closed_unresolved_feedback_reachable_only_through_feedback_review()
+    {
+        var body = await GetFeedbackReviewListAsync(_ownerCookie);
+        Assert.NotNull(body);
+
+        var row = body.Requests.Single(r => r.Id == _closedUnresolvedRequestId);
+        Assert.Equal("closed", row.Status);
+        Assert.True(row.IsPostCloseFollowUp);
+        Assert.Equal("post_close_unresolved_feedback", row.Ranking.RankingGroup);
+        Assert.Equal("danger", row.Ranking.Severity);
+    }
+
+    [Fact]
+    public async Task Cancelled_and_closed_requests_excluded_from_default_list()
     {
         var body = await GetListAsync(_ownerCookie);
         Assert.NotNull(body);
 
         Assert.DoesNotContain(body.Requests, r => r.Status == "cancelled");
-        // Only the unresolved-feedback closed row should appear; the normal closed one is excluded.
-        var closedRows = body.Requests.Where(r => r.Status == "closed").ToList();
-        Assert.Single(closedRows);
-        Assert.Equal(_closedUnresolvedRequestId, closedRows[0].Id);
+        Assert.DoesNotContain(body.Requests, r => r.Status == "closed");
     }
 
     [Fact]
@@ -446,11 +528,79 @@ public sealed class KeepRequestListB5Tests : IClassFixture<KeepApiWebFactory>, I
         Assert.Equal("attention", received.Ranking.Severity);
     }
 
+    // --- GAP-027: needs_attention list/count must mirror the row's overdue badge ---
+
+    [Fact]
+    public async Task NeedsAttention_includes_row_with_overdue_first_response_and_no_persisted_attention()
+    {
+        var body = await GetNeedsAttentionListAsync(_ownerCookie);
+        Assert.NotNull(body);
+
+        var row = body.Requests.SingleOrDefault(r => r.Id == _firstResponseOverdueRequestId);
+        Assert.NotNull(row);
+        Assert.True(row!.Attention.FirstResponseOverdue);
+        Assert.Equal("none", row.Attention.AttentionLevel);
+    }
+
+    [Fact]
+    public async Task NeedsAttention_count_includes_overdue_first_response_row()
+    {
+        var withoutRow = await GetListAsync(_ownerCookie);
+        Assert.NotNull(withoutRow);
+        var needsAttentionCount = withoutRow!.ViewCounts!.NeedsAttention;
+
+        var needsAttentionBody = await GetNeedsAttentionListAsync(_ownerCookie);
+        Assert.NotNull(needsAttentionBody);
+        Assert.Contains(needsAttentionBody.Requests, r => r.Id == _firstResponseOverdueRequestId);
+        Assert.Equal(needsAttentionCount, needsAttentionBody.ViewCounts!.NeedsAttention);
+    }
+
+    [Fact]
+    public async Task NeedsAttention_excludes_business_created_request_with_no_response_sla()
+    {
+        var body = await GetNeedsAttentionListAsync(_ownerCookie);
+        Assert.NotNull(body);
+        Assert.DoesNotContain(body.Requests, r => r.Id == _businessCreatedNoResponseSlaRequestId);
+
+        var defaultBody = await GetListAsync(_ownerCookie);
+        Assert.NotNull(defaultBody);
+        var businessRow = defaultBody!.Requests.SingleOrDefault(r => r.Id == _businessCreatedNoResponseSlaRequestId);
+        Assert.NotNull(businessRow);
+        Assert.False(businessRow!.Attention.FirstResponsePending);
+        Assert.False(businessRow.Attention.FirstResponseOverdue);
+    }
+
+    [Fact]
+    public async Task NeedsAttention_count_and_view_include_every_row_showing_response_overdue()
+    {
+        // Direct reproduction of the GAP-027 manual acceptance defect: every row the Default
+        // Queue response marks isOverdue (the condition that renders the red "Response overdue"
+        // badge) must be both counted in the same response's viewCounts.needsAttention and
+        // returned by view=needs_attention. needsAttentionCount is a superset (it also includes
+        // non-overdue persisted-attention and due-follow-up rows), so this asserts inclusion,
+        // not exact equality. Four rows are overdue in this fixture (the single-row fixture plus
+        // three more seeded for multiplicity, matching the screenshot's three visible badges).
+        var defaultBody = await GetListAsync(_ownerCookie);
+        Assert.NotNull(defaultBody);
+
+        var overdueRowIds = defaultBody!.Requests.Where(r => r.Ranking.IsOverdue).Select(r => r.Id).ToList();
+        Assert.Equal(4, overdueRowIds.Count);
+        Assert.True(defaultBody.ViewCounts!.NeedsAttention >= overdueRowIds.Count);
+
+        var needsAttentionBody = await GetNeedsAttentionListAsync(_ownerCookie);
+        Assert.NotNull(needsAttentionBody);
+        foreach (var id in overdueRowIds)
+        {
+            Assert.Contains(needsAttentionBody!.Requests, r => r.Id == id);
+        }
+    }
+
     [Fact]
     public async Task Closed_unresolved_feedback_row_exposes_review_feedback_and_contact_for_owner()
     {
         // G7b: Owner in exact active review state gets review_feedback + contact_customer + open_detail.
-        var body = await GetListAsync(_ownerCookie);
+        // Build 087 §1 / GAP-027: this row now surfaces only in Feedback Review, not Default Queue.
+        var body = await GetFeedbackReviewListAsync(_ownerCookie);
         Assert.NotNull(body);
 
         var row = body.Requests.Single(r => r.Id == _closedUnresolvedRequestId);
@@ -714,7 +864,9 @@ public sealed class KeepRequestListB5Tests : IClassFixture<KeepApiWebFactory>, I
 
     // --- Response DTOs (B5 nested shape) ---
 
-    private sealed record B5RequestListBody(List<B5RequestSummaryBody> Requests);
+    private sealed record B5RequestListBody(List<B5RequestSummaryBody> Requests, B5ViewCountsBody? ViewCounts);
+
+    private sealed record B5ViewCountsBody(int NeedsAttention);
 
     private sealed record B5RequestSummaryBody(
         Guid Id,
@@ -736,7 +888,8 @@ public sealed class KeepRequestListB5Tests : IClassFixture<KeepApiWebFactory>, I
     private sealed record B5RankingBody(
         string RankingGroup,
         int RankingOrder,
-        string Severity);
+        string Severity,
+        bool IsOverdue);
 
     private sealed record B5ActionsBody(
         List<B5QuickActionBody> QuickActions,

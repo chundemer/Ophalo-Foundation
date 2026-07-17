@@ -76,20 +76,19 @@ public sealed class KeepRequestListPersistence(OpHaloDbContext dbContext, IClock
         var scopedBase = KeepRequestRowQueryFactory.Apply(
             dbContext.Set<KeepRequest>().AsNoTracking(), scope, accountId, currentAccountUserId, dbContext);
 
-        var today = DateOnly.FromDateTime(clock.UtcNow);
+        var nowUtc = clock.UtcNow;
+        var today = DateOnly.FromDateTime(nowUtc);
 
         IQueryable<KeepRequest> query = view switch
         {
             // ADR-437: calm Resolved (no active attention) belongs in ready_to_close, not Default Queue.
             // Resolved rows with real active attention remain here and in NeedsAttention.
+            // Build 087 §1 / GAP-027: Closed unresolved-feedback work belongs to Feedback Review,
+            // not the Default Queue — Default Queue is active work only.
             ActiveViewKind.Default => scopedBase.Where(r =>
-                (r.Status != KeepRequestStatus.Closed && r.Status != KeepRequestStatus.Cancelled
-                    && r.Status != KeepRequestStatus.Spam && r.Status != KeepRequestStatus.Test
-                    && (r.Status != KeepRequestStatus.Resolved || r.AttentionLevel != AttentionLevel.None))
-                || (filters.IsOwnerOrAdmin
-                    && r.Status == KeepRequestStatus.Closed
-                    && r.AttentionReason == AttentionReason.UnresolvedFeedback
-                    && r.AttentionLevel != AttentionLevel.None)),
+                r.Status != KeepRequestStatus.Closed && r.Status != KeepRequestStatus.Cancelled
+                && r.Status != KeepRequestStatus.Spam && r.Status != KeepRequestStatus.Test
+                && (r.Status != KeepRequestStatus.Resolved || r.AttentionLevel != AttentionLevel.None)),
 
             ActiveViewKind.AssignedToMe => scopedBase.Where(r =>
                 r.Status != KeepRequestStatus.Closed
@@ -121,14 +120,19 @@ public sealed class KeepRequestListPersistence(OpHaloDbContext dbContext, IClock
                 dbContext.Set<KeepRequest>().AsNoTracking(), accountId, currentAccountUserId, dbContext),
 
             // ADR-439: due/overdue FollowUpOn is active operational attention; include alongside
-            // persisted AttentionLevel != None. Fully terminal statuses excluded from both branches.
+            // persisted AttentionLevel != None. GAP-027: mirror GetKeepRequestListService's
+            // read-time firstResponseOverdue so a row showing Response overdue is never excluded
+            // from this view. Fully terminal statuses excluded from all branches.
             ActiveViewKind.NeedsAttention => scopedBase.Where(r =>
                 r.Status != KeepRequestStatus.Closed
                 && r.Status != KeepRequestStatus.Cancelled
                 && r.Status != KeepRequestStatus.Spam
                 && r.Status != KeepRequestStatus.Test
                 && (r.AttentionLevel != AttentionLevel.None
-                    || (r.FollowUpOnDate.HasValue && r.FollowUpOnDate.Value <= today))),
+                    || (r.FollowUpOnDate.HasValue && r.FollowUpOnDate.Value <= today)
+                    || (r.FirstRespondedAtUtc == null
+                        && r.FirstResponseDueAtUtc.HasValue
+                        && r.FirstResponseDueAtUtc.Value <= nowUtc))),
 
             // All closed requests with any submitted feedback: pending-review (unresolved) rows
             // surface with active attention signals; positive (resolved) rows appear quietly.
@@ -223,7 +227,8 @@ public sealed class KeepRequestListPersistence(OpHaloDbContext dbContext, IClock
         var scopedBase = KeepRequestRowQueryFactory.Apply(
             baseSet, scope, accountId, currentAccountUserId, dbContext);
 
-        var today = DateOnly.FromDateTime(clock.UtcNow);
+        var nowUtc = clock.UtcNow;
+        var today = DateOnly.FromDateTime(nowUtc);
 
         // Non-terminal scoped base for counts that exclude terminal rows.
         var scopedActive = scopedBase.Where(r =>
@@ -233,16 +238,13 @@ public sealed class KeepRequestListPersistence(OpHaloDbContext dbContext, IClock
             && r.Status != KeepRequestStatus.Test);
 
         // Default: same filter as Default view rows — guarantees row/count composition (G4d, ADR-437).
+        // Build 087 §1 / GAP-027: Closed unresolved-feedback work belongs to Feedback Review only.
         var defaultCount = await scopedBase.CountAsync(r =>
-            (r.Status != KeepRequestStatus.Closed
-                && r.Status != KeepRequestStatus.Cancelled
-                && r.Status != KeepRequestStatus.Spam
-                && r.Status != KeepRequestStatus.Test
-                && (r.Status != KeepRequestStatus.Resolved || r.AttentionLevel != AttentionLevel.None))
-            || (isOwnerOrAdmin
-                && r.Status == KeepRequestStatus.Closed
-                && r.AttentionReason == AttentionReason.UnresolvedFeedback
-                && r.AttentionLevel != AttentionLevel.None), ct);
+            r.Status != KeepRequestStatus.Closed
+            && r.Status != KeepRequestStatus.Cancelled
+            && r.Status != KeepRequestStatus.Spam
+            && r.Status != KeepRequestStatus.Test
+            && (r.Status != KeepRequestStatus.Resolved || r.AttentionLevel != AttentionLevel.None), ct);
 
         // assigned_to_me: current user's active promises. Calm Resolved rows move to ready_to_close.
         var assignedToMeCount = await scopedActive.CountAsync(r =>
@@ -276,10 +278,15 @@ public sealed class KeepRequestListPersistence(OpHaloDbContext dbContext, IClock
             unassignedCount = 0;
         }
 
-        // needs_attention: persisted attention or due/overdue FollowUpOn (ADR-439).
+        // needs_attention: persisted attention, due/overdue FollowUpOn (ADR-439), or overdue
+        // first response (GAP-027) — must mirror GetKeepRequestListService's firstResponseOverdue
+        // so the count never lags the row's Response overdue badge.
         var needsAttentionCount = await scopedActive.CountAsync(
             r => r.AttentionLevel != AttentionLevel.None
-                || (r.FollowUpOnDate.HasValue && r.FollowUpOnDate.Value <= today), ct);
+                || (r.FollowUpOnDate.HasValue && r.FollowUpOnDate.Value <= today)
+                || (r.FirstRespondedAtUtc == null
+                    && r.FirstResponseDueAtUtc.HasValue
+                    && r.FirstResponseDueAtUtc.Value <= nowUtc), ct);
 
         // feedback_review: AccountWide closed unresolved feedback (Owner/Admin only, ADR-241/242).
         int feedbackReviewCount = isOwnerOrAdmin
