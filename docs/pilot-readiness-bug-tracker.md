@@ -3,10 +3,10 @@
 **Created:** 2026-07-02
 **Purpose:** Live tracker for pilot-blocking or pilot-relevant bugs/gaps discovered during Session 14.
 **Source:** Promoted from the Pre-S14e bug register in `docs/build-log/068-session-14-ophalo-web-front-door.md`.
-**Current active items:** GAP-016 through GAP-027 — New Request launch blockers, Request Detail
-launch findings, and a maintainability seam found during
-Build 086 manual verification on 2026-07-16. Build 087 is paused until they are triaged and the
-selected fixes are complete.
+**Current active items:** GAP-016 through GAP-035 — New Request launch blockers, public-intake
+trust/continuity work, account-start and auth-entry conversion work, Request Detail launch findings,
+and frontend robustness/consistency findings from the 2026-07-17 launch verification review. Build
+087 is paused until they are triaged and the selected fixes are complete.
 **Recently resolved:** GAP-015 — feedback review operational loop and accountability trail (commit `315b231`); GAP-004 — durable PWA request-detail routing (commit `3ebdc57`).
 **Previously resolved:** GAP-010 — Ready to Close rows leaked communication next-actions (S24j).
 
@@ -18,6 +18,125 @@ New Request items below were found during the subsequent V1 public-use audit and
 previous assumption that deployment smoke testing was the next step.
 Detailed historical discovery notes and their resolved status remain below for traceability; only the
 Active Launch Blockers section controls current work.
+
+## Verification Findings — 2026-07-17
+
+The current frontend passed its baseline typecheck and existing automated tests. The review that
+produced the items below also found that those checks do not systematically validate CSS-token
+references, shared presentation consistency, modal keyboard containment, async UI cleanup, or
+render-failure recovery. These are validation-gate gaps, not evidence that ordinary build/test
+validation was skipped.
+
+The corrective work must add focused tests or automated checks with each relevant resolution, so
+the same classes of defect are not rediscovered only by a later manual review. Do not combine all
+items below into one implementation session; use the bounded slices listed in the proposed
+sequencing at the end of this section.
+
+### GAP-028 — Undefined CSS tokens silently break intended visual states
+
+**Status:** Open
+**Severity:** P1
+**Area:** `ophalo-app` token use and CI validation
+
+**Verified cause:** `BusinessSection.tsx` uses undefined `--ophalo-teal` for the customer-visible
+composer cue, and `ShareLinkModal.tsx` uses undefined `--muted` for disabled share-channel rows.
+CSS custom-property failures are not caught by TypeScript; each declaration is discarded by the
+browser, losing the intended teal cue or muted disabled fill.
+
+**Required resolution:** Replace `--ophalo-teal` with `--keep-accent`; replace `--muted` with the
+approved neutral fill `--ophalo-canvas`. Add a repository check that compares every component
+`var(--...)` reference with the token definitions and fails CI for undefined references. Keep the
+inlined app token block synchronized with `web/shared/styles/ophalo-tokens.css` as part of that
+check or its existing synchronization verification.
+
+### GAP-029 — Request-status labels and badge variants are inconsistent by surface
+
+**Status:** Open
+**Severity:** P1
+**Area:** `ophalo-app` request list, request detail, and Quick Capture
+
+**Verified cause:** Status formatting/variant logic is independently implemented in
+`pages/request-detail/helpers.ts`, `components/RequestRow.tsx`, and
+`components/quick-capture/utils.ts`. As a result, `resolved` is `Work completed` in list/detail but
+`Resolved` in Quick Capture; `pending_customer` is `Waiting on Customer` in Quick Capture but
+`Pending Customer` in detail; and `received`/`scheduled` use an info badge in the list but a
+default badge in detail. The detail helper also relies on substring heuristics for some variants.
+
+**Required resolution:** Create one explicit `lib/requestStatus.ts` mapping every supported
+server-status slug to its display label and `KeepBadge` variant. Import it from all three surfaces;
+do not retain fallback substring heuristics. Lock the desired terminology and variants in focused
+unit tests, including received, scheduled, active (`in_progress`), waiting on customer,
+work completed, closed, cancelled, spam, and test.
+
+### GAP-030 — Transient copy/success UI can reject or update after disposal
+
+**Status:** Open
+**Severity:** P1
+**Area:** `ophalo-app` clipboard actions and Request Detail success feedback
+
+**Verified cause:** Clipboard writes in Request Detail, customer panels, share links, and public
+link settings are not consistently caught; permission/security denial can create an unhandled
+promise rejection. Six independent copied-state timeout patterns also lack unmount cleanup. In
+addition, `RequestDetail` does not clear its four-second feedback-review success timer on unmount.
+
+**Required resolution:** Introduce a small shared copy-feedback hook that catches clipboard
+failure, presents non-disruptive failure copy where appropriate, replaces/cleans its timer on reuse,
+and clears it on unmount. Add equivalent cleanup for the feedback-review timer. Test successful and
+rejected clipboard paths plus timer disposal; do not claim React's removed unmounted-state warning
+is the defect—the defect is stale asynchronous UI work and missing failure handling.
+
+### GAP-031 — A render exception can blank the authenticated workbench
+
+**Status:** Open
+**Severity:** P1
+**Area:** `ophalo-app` application bootstrap
+
+**Verified cause:** No React error boundary wraps `App` at the application root. A rendering error
+in any authenticated-workbench panel can therefore unmount the visible application with no recovery
+card. This finding applies to `ophalo-app`, not the separate public/customer `ophalo-web` surface.
+
+**Required resolution:** Add a root error boundary with a plain recovery card and Reload action;
+retain normal query/API error states inside their existing components. Add a focused render-throw
+test that verifies the fallback and reload affordance.
+
+### GAP-032 — Shared modal/focus behavior and Request Detail seams remain incomplete
+
+**Status:** Open
+**Severity:** P1
+**Area:** `ophalo-app` form modals and Request Detail presentation architecture
+
+**Verified cause:** The contact and service-location modals close from backdrop click, Escape,
+close, and Cancel without dirty-form protection; a stray close can discard entered form data.
+Neither traps keyboard focus. The same overlay/Escape/ARIA/click-stop pattern is hand-written across
+Log Contact, Service Location, Share Link, Request Row Action, Follow-up Resolution, and Quick
+Capture. `RequestDetail.tsx` remains 830 lines, including both form modal implementations and the
+US state table, making these shared behavior fixes harder to apply safely.
+
+**Required resolution:** Build a shared `KeepModal` primitive that provides dialog semantics,
+initial focus, focus trap, focus restoration, Escape handling, and an explicit backdrop-close
+policy. Form wrappers must use a dirty-close confirmation or disable backdrop-close; apply the same
+policy to contact and service-location forms. Then extract `LogContactModal`,
+`ServiceLocationModal`, and the US-state data into `pages/request-detail/`, leaving
+`RequestDetail.tsx` as controller/orchestration code. Cover keyboard containment, trigger-focus
+restoration, and dirty-close behavior with tests.
+
+**Proposed bounded sequencing:**
+
+1. GAP-028 and focus-ring consolidation: correct the two tokens, move the shared focus-ring class
+   to a common UI constant, and add the CSS-variable CI check.
+2. GAP-029: introduce the canonical status module with mapping tests.
+3. GAP-032 and existing GAP-024/GAP-019: introduce `KeepModal`, protect dirty forms, then perform
+   the Request Detail modal extraction without changing request mutation behavior.
+4. GAP-030 and GAP-031: shared copy feedback/timer cleanup and the root error boundary.
+5. In a separate tooling slice, introduce ESLint with React hooks and JSX-a11y rules. Establish the
+   initial error/warning policy explicitly rather than allowing a configuration rollout to become an
+   unbounded cleanup session.
+
+**Mock-parity note:** `mockApiClient.ts` currently mutates the imported `api` object. Assignments
+already receive signature checking, but simply annotating the mutable object as `typeof api` would
+not prove every endpoint was mocked. When mock parity is selected, define a complete
+`const mockApi: typeof api` and install it with `Object.assign(api, mockApi)` so a newly added
+client method becomes a compile-time omission.
 
 ## Status Legend
 
@@ -51,7 +170,218 @@ Rules:
 - A customer-facing action must be present in the relevant layout: do not tell an owner to share a
   page while exposing only a copy fallback.
 
-## Active Launch Blockers — New Request
+## Active Launch Blockers — New Request, Public Intake, And Account Start
+
+### GAP-033 — Public intake does not establish sufficient customer trust or return continuity
+
+**Status:** Open
+**Severity:** P1
+**Area:** `ophalo-web` public intake identity, privacy disclosure, and post-submit customer journey
+**Decision:** ADR-446
+
+The public business request page asks a first-time customer to provide a service address, name, and
+phone number before it gives enough concrete evidence that the page belongs to the business they
+intended to contact or explains how they can reliably return to their request later. The current
+fallback business-initial badge and business name are clean but can resemble an anonymous form
+template when no logo is present. The key address-privacy disclosure appears only after the address
+fields, email is hidden behind an optional disclosure despite being the clearest durable return-link
+channel, and the page uses imprecise/competing language about a business following up with a private
+request link versus the customer receiving a private request page after submission.
+
+This is a conversion and trust risk, not a decorative-polish concern: a cautious customer who opens
+the public link from a text message may reasonably leave rather than provide their home address and
+contact information. The launch verification plan currently checks public-intake form behavior but
+does not explicitly test first-visit business recognition, pre-entry privacy comprehension, or
+customer return access.
+
+**Required resolution:**
+
+- Add a public-safe business identity block before form entry: custom logo when available; otherwise
+  retain a polished initials fallback; business display name; and verified business website domain
+  and phone contact when configured. Do not expose unverified owner-entered URLs, imply that OpHalo
+  has independently verified a business, or require social-network links.
+- Rewrite the form introduction to state the actual customer outcome consistently, for example:
+  `Submit your request, then view updates on your private request page.` Do not promise a specific
+  follow-up channel unless the product will actually deliver one.
+- Move the factual address privacy disclosure directly below the `Where is the service needed?`
+  heading, before the street-address field. It must plainly identify what is shared, with whom, and
+  what is not visible on the private request page. Add concise, equally factual contact-use copy
+  before name/phone entry.
+- Make email visible and optional but recommended for durable return access, with plain copy such as
+  `Email (recommended) — we'll send your private request-page link.` Preserve the existing customer
+  preference model and do not treat a request-update channel as marketing consent.
+- Make the submit-state promise specific: no payment is collected on this page (only if universally
+  true), the customer will see their private request page next, and the request is then received by
+  the named business. The post-submit page must provide a durable confirmation, safe request
+  reference, clear next-step/return guidance, and link delivery through the selected permitted
+  channel where supported. A customer without a delivery channel must be told to save the private
+  page rather than being left unable to return.
+- Add a real public privacy-policy link beside the submission/identity context. Any marketing use of
+  phone or email requires separate explicit consent and appropriate legal review; do not use vague
+  `secure`, `verified`, or `end-to-end encrypted` badges unless those claims are technically,
+  operationally, and legally substantiated.
+- Apply the same business-first/OpHalo-secondary identity and recovery rules to public terminal
+  states where the request/link is known: post-submit confirmation, expired tracker, OffSeason or
+  known-link unavailable, and safe error states. An unknown/invalid token must remain
+  non-enumerating and must not reveal business identity. Known-business terminal states must not
+  strand the customer in an anonymous shell; provide the safe business contact/recovery route that
+  the available public contract permits.
+- Replace the success state's render-time auto-redirect with managed effect/cleanup behavior. Do not
+  rush a customer through a two-second interstitial before they can understand confirmation, save
+  their private-page access, or use the explicit continue action. A manual continue must not leave a
+  stale redirect pending.
+- Make safe public browser/document titles identify the known business and outcome, for example
+  `Request service from {businessName} — OpHalo Keep` and `{businessName} request updates — OpHalo
+  Keep`. Retain `noindex` and restrictive referrer behavior for capability-link pages; do not put a
+  page token, address, customer name, or other private request data in title/metadata.
+- Simplify the OpHalo footer to factual platform attribution and privacy access. Do not use a fake
+  security seal, decorative encryption claim, or a progress indicator that does not reduce a real
+  customer uncertainty.
+- Expand the public-intake launch verification gate with a skeptical-first-time-customer review on
+  desktop and a real phone: business recognition from an inbound link, data-sharing comprehension
+  before address entry, no-payment expectation, private-page return after success, lost-page
+  recovery, and the unbranded-logo fallback.
+
+**Acceptance criteria:**
+
+- Before entering personal information, a customer can identify the intended business through its
+  name and configured real-world identity/contact anchors, or sees a deliberate safe fallback when
+  none are configured.
+- Before entering an address or phone number, a customer can understand who receives that data and
+  how it is used without relying on unsupported security claims.
+- Public intake copy, submit behavior, and success state make one accurate promise about when the
+  private request page is available and how the customer can return to it.
+- Customers can optionally provide an email for a private-page link; customers who do not have a
+  permitted delivery channel receive explicit save/return guidance.
+- Privacy and marketing-consent boundaries are visible and accurately implemented; service-location
+  and internal-only data remain absent from the public tracker.
+- Known-business success, expired, unavailable, and OffSeason/error states retain safe identity and
+  a usable recovery/contact path; unknown-token states do not reveal account identity.
+- Success/return access remains readable and controllable: no render-time redirect leak or automatic
+  navigation prevents a customer from understanding or preserving their private request page.
+- Public browser titles identify the known business/outcome without leaking a capability token or
+  private request information.
+- Screenshot/manual verification passes for known-logo, no-logo, desktop, and real-phone inbound
+  link flows; relevant public-intake tests and TypeScript checks pass.
+
+### GAP-034 — Business account-start page looks unfinished and obscures the pilot value proposition
+
+**Status:** Open
+**Severity:** P1
+**Area:** `ophalo-web` `/start` business account creation / pilot conversion
+**Decision:** ADR-446
+
+The `/start` page is the first product interaction for a prospective business owner, but its current
+desktop presentation is a narrow, left-aligned unframed form in a wide canvas. The page has no
+visible OpHalo/Keep identity beyond a small `Back to OpHalo` link, does not use the available space
+to explain the operating value of Keep, and makes a production pilot-registration flow resemble an
+internal development form. Its primary copy is also ambiguous: `Request access` implies a manual
+approval queue even though the flow sends a sign-in link so the owner can finish setting up Keep.
+
+The page already detects a browser time zone, but renders the stored technical IANA identifier (for
+example, `America/Chicago`) as a primary form field. Removing time-zone confirmation entirely would
+be unsafe: account time zone drives operational dates and response-policy timing, and a browser
+guess can be wrong. The problem is presentation and unnecessary cognitive load, not the existence
+of the setting.
+
+**Required resolution:**
+
+- Replace the unframed desktop form with a deliberate, responsive account-start composition. At
+  desktop widths, use a centered, contained two-panel frame (approximately 40/60 rather than an
+  obligatory equal split): a restrained navy Keep identity/value panel beside a white form panel.
+  At mobile widths, stack a compact identity/value header above the form; do not preserve a cramped
+  split panel.
+- Give the identity panel a real OpHalo Keep mark/wordmark and a concise, factual value proposition
+  for service businesses. Use product-supported benefits such as one place for service requests,
+  clear customer updates/private request pages, and dependable follow-through. Do not add generic
+  enterprise claims, unsubstantiated security claims, or inaccurate claims that Keep sends native
+  SMS itself.
+- Rewrite the form heading, supporting copy, and primary action to match the actual flow. Prefer
+  `Start your Keep pilot` or `Set up Keep for your business` over `Get access to Keep`; state that
+  the pilot is free only if universally true; and explain that an emailed sign-in link finishes
+  setup. Do not say `Request access` unless a manual approval step truly exists.
+- Retain browser time-zone detection and server validation, but present the selected value in
+  customer language (for example, `Central Time — Chicago`) with concise `Detected from your device`
+  context and an explicit Change control. Persist the canonical IANA identifier; never silently
+  remove the customer's ability to correct it.
+- Integrate existing sign-in and questions/support affordances into the form-panel/footer hierarchy
+  so they are discoverable but do not compete with account start. Preserve accessible labels, errors,
+  keyboard flow, and the existing pilot-full/email-in-use states.
+- Add visible Privacy Policy and Terms links beside the account-start submit/support context. The
+  links must describe actual policy resources and must not substitute for a separate marketing
+  consent decision where one is required.
+- Add screenshot/manual conversion review at wide desktop, common laptop, and mobile widths. It must
+  review first-visit identity, value comprehension, CTA expectation, timezone correction, magic-link
+  success/error states, and real long business/name/email data.
+
+**Acceptance criteria:**
+
+- A first-time service-business owner can identify OpHalo Keep, understand a factual reason to try
+  it, and understand what will happen after submitting before entering form data.
+- Desktop composition uses its available space intentionally; it no longer appears as a left-drifting
+  development form. Mobile has a clear, compact stacked equivalent.
+- Form copy and the primary action accurately describe the access/sign-in-link flow and pilot-cost
+  posture.
+- Time zone defaults from the browser where available, is shown in understandable local language,
+  remains editable, and reaches the API as a valid canonical IANA identifier.
+- Existing validation, duplicate-email, pilot-full, keyboard, and magic-link checks continue to
+  pass; errors are programmatically associated with their fields or announced through an accessible
+  summary/live region, and keyboard focus has a visible `:focus-visible` treatment.
+- Privacy/Terms and support/recovery routes are visible without competing with the primary account
+  start action; focused visual/manual checks cover desktop and phone layouts.
+
+### GAP-035 — Auth, invite, and recovery states still present as anonymous development shells
+
+**Status:** Open
+**Severity:** P1
+**Area:** `ophalo-web` sign-in, check-email, magic-link exchange/error, invite acceptance/error, and
+mobile authorization entry states
+**Decision:** ADR-446; ADR-390
+
+GAP-034 identified the `/start` account-creation page as a weak first impression, but the same raw
+left-aligned `.auth-page` shell is currently reused by sign-in, check-email, magic-link exchange and
+failure states, invite acceptance and failures, and mobile authorization. Most of these pages show
+no OpHalo Keep mark/wordmark and do not give an intentional visual hierarchy for success, recovery,
+or support. A prospective owner can therefore begin on a redesigned page and immediately land on an
+anonymous-looking intermediate/error state after providing their email; an invited team member sees
+the same inconsistency.
+
+The current auth forms also render errors as unassociated plain paragraphs and remove default
+outlines while relying primarily on a border-color change for focus. This leaves keyboard and
+assistive-technology feedback weaker exactly where a user is trying to enter/recover account access.
+
+**Required resolution:**
+
+- Build one shared, responsive auth-entry shell using the approved OpHalo Keep mark/wordmark,
+  shared type/color tokens, intentional desktop/mobile composition, and a slot for contextual
+  heading, outcome, recovery, and optional support/legal content. Migrate `/start`, `/signin`,
+  `/auth/check-email`, browser magic-link exchange/error, and invite accept/error states to it.
+- Give each state truthful, specific context: whether an email was sent, what to do if it does not
+  arrive, whether an account/invite/link is expired, and the precise available recovery action. Do
+  not imply that an email was delivered, an account was approved, or a support path exists when the
+  underlying flow cannot provide it.
+- Preserve ADR-390's sterile mobile authorization posture: it may use the OpHalo Keep identity asset,
+  but must not add third-party scripts, analytics, external links, credentials, or raw-token
+  exposure to the mobile handoff page.
+- Add shared accessible field-error and status patterns: labels/inputs/errors are associated,
+  submit failures are announced, focus treatment is clearly visible with `:focus-visible`, and
+  keyboard focus is preserved or moved meaningfully after state transitions.
+- Apply appropriate Privacy/Terms/support links to normal browser auth/account-entry surfaces. Keep
+  such external links out of the sterile mobile-handoff surface required by ADR-390.
+- Add page-specific titles for auth/recovery outcomes without placing a magic-link/invite token,
+  email address, or other sensitive data into metadata. Test titles, keyboard flow, error
+  announcement, and success/error/recovery states at desktop and phone widths.
+
+**Acceptance criteria:**
+
+- A business owner or invited member recognizes OpHalo Keep on every normal web auth/invite entry,
+  loading, success, and failure state—not only on `/start`.
+- Each state gives a factual next step or safe recovery route and does not regress existing
+  authentication, invite, rate-limit, or session behavior.
+- Normal browser auth pages have visible focus, associated/announced validation errors, and policy/
+  support access where appropriate; the mobile authorization handoff remains ADR-390 sterile.
+- Screenshot/manual verification passes for start, sign-in, check-email, expired/invalid magic link,
+  invite success/failure, and mobile authorization on their relevant desktop/phone contexts.
 
 ### GAP-016 — New Request accepts invalid phone numbers and traps correction
 
