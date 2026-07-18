@@ -21,6 +21,12 @@ internal sealed class KeepBusinessProfileConfiguration : BaseEntityConfiguration
         builder.Property(x => x.CustomerFacingEmail)
             .HasMaxLength(256);
 
+        builder.Property(x => x.LogoUrl)
+            .HasMaxLength(2048);
+
+        builder.Property(x => x.WebsiteUrl)
+            .HasMaxLength(2048);
+
         builder.HasIndex(x => x.AccountId)
             .IsUnique()
             .HasDatabaseName("ix_keep_business_profiles_account_id");

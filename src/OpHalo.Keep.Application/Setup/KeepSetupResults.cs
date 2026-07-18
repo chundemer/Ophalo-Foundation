@@ -5,6 +5,8 @@ public sealed record KeepSetupResult(
     string TimeZone,
     string? CustomerFacingPhone,
     string? CustomerFacingEmail,
+    string? LogoUrl,
+    string? WebsiteUrl,
     KeepSetupPolicyResult ResponsePolicy);
 
 public sealed record KeepSetupPolicyResult(

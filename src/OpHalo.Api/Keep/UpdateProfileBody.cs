@@ -4,4 +4,6 @@ public sealed record UpdateProfileBody(
     string BusinessName,
     string TimeZone,
     string? CustomerFacingPhone,
-    string? CustomerFacingEmail);
+    string? CustomerFacingEmail,
+    string? LogoUrl,
+    string? WebsiteUrl);

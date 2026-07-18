@@ -40,6 +40,8 @@ public sealed class KeepSetupService(
             TimeZone: account.TimeZone,
             CustomerFacingPhone: profile?.CustomerFacingPhone,
             CustomerFacingEmail: profile?.CustomerFacingEmail,
+            LogoUrl: profile?.LogoUrl,
+            WebsiteUrl: profile?.WebsiteUrl,
             ResponsePolicy: ToPolicy(policy)));
     }
 
@@ -48,6 +50,8 @@ public sealed class KeepSetupService(
         string timeZone,
         string? customerFacingPhone,
         string? customerFacingEmail,
+        string? logoUrl,
+        string? websiteUrl,
         CancellationToken ct = default)
     {
         var auth = await AuthorizeAsync(ct);
@@ -61,6 +65,9 @@ public sealed class KeepSetupService(
         var profile = existingProfile ?? KeepBusinessProfile.Create(currentUser.AccountId);
         profile.UpdateContact(customerFacingPhone, customerFacingEmail);
 
+        var identityResult = profile.UpdatePublicIdentity(logoUrl, websiteUrl);
+        if (identityResult.IsFailure) return Result<KeepSetupResult>.Failure(identityResult.Error);
+
         var profileEvent = KeepProductOpsEvent.Record(
             currentUser.AccountId, KeepProductOpsEventType.ProfileAndContactSaved, clock.UtcNow);
         await persistence.SaveProfileAsync(account, profile, profileEvent, ct);
@@ -72,6 +79,8 @@ public sealed class KeepSetupService(
             TimeZone: account.TimeZone,
             CustomerFacingPhone: profile.CustomerFacingPhone,
             CustomerFacingEmail: profile.CustomerFacingEmail,
+            LogoUrl: profile.LogoUrl,
+            WebsiteUrl: profile.WebsiteUrl,
             ResponsePolicy: ToPolicy(policy)));
     }
 
@@ -121,6 +130,8 @@ public sealed class KeepSetupService(
             TimeZone: account.TimeZone,
             CustomerFacingPhone: profile?.CustomerFacingPhone,
             CustomerFacingEmail: profile?.CustomerFacingEmail,
+            LogoUrl: profile?.LogoUrl,
+            WebsiteUrl: profile?.WebsiteUrl,
             ResponsePolicy: ToPolicy(policy)));
     }
 

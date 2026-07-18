@@ -63,25 +63,31 @@ tracked as **GAP-016–GAP-019** in
 external surfaces. ADR-447 requires every slice to reduce unnecessary business/customer friction and
 to prove usable next action, correction, and return behavior—not merely technical completion.
 
-### Next Selected Code Slice — R90a / GAP-033 Public Intake Trust And Return Continuity
+### Completed Code Slice — R90a / GAP-033 Public Intake Trust And Return Continuity
 
 **Goal:** Make the existing public intake form clearer and safer to use before expanding public
-business-profile data or rebuilding auth-entry composition. This is a bounded `ophalo-web` slice;
-it must improve the live customer path without changing public-token authorization, request creation,
-email delivery, lifecycle behavior, or the underlying business-profile schema.
+business-profile data or rebuilding auth-entry composition. This was a bounded `ophalo-web` slice;
+it improved the live customer path without changing public-token authorization, request creation,
+lifecycle behavior, or the underlying business-profile schema.
+
+**Superseding handoff decision:** The original R90a return-path direction below was superseded by
+the locked GAP-033 decision and corrected in `cc33ec3`. Public intake ends with a stable,
+business-branded receipt confirmation and safe reference only. It does not expose, send, or promise
+a tracker link, and it does not redirect. The business's first real email or text is the trusted
+delivery point for the request-specific tracker link.
 
 **In scope:**
 
-1. Rewrite the form introduction and submission expectation so they make one accurate promise about
-   submission, the private request page, and any actually supported return path.
+1. Rewrite the form introduction and submission expectation so they accurately promise that the
+   business receives the request and will make first contact; do not promise immediate tracker
+   access from public intake.
 2. Put factual service-location privacy information before street-address entry and concise
    contact-use information before name/phone entry. No unsupported `secure`, `verified`, or
    encryption claim.
-3. Make the existing email option visible, optional, and clearly recommended for private-page return
-   access without treating transactional delivery as marketing consent.
-4. Replace the render-time success auto-redirect with managed, cancellable behavior. Give the
-   customer a readable confirmation, explicit continue action, and save/return guidance before any
-   navigation. Preserve server-authoritative submission and existing fail-soft tracker-link email.
+3. Make the existing email option visible and optional for business contact without treating it as
+   tracker-link delivery or marketing consent.
+4. Replace the render-time success auto-redirect with a stable readable confirmation. Do not provide
+   an immediate tracker CTA, save/return guidance, tracker-email claim, or any navigation.
 5. Link to the existing real public `/privacy` policy route and add factual platform attribution
    using existing assets; do not add a fake trust seal, a duplicate/minimal policy page, or new
    public business-profile fields in this slice.
@@ -93,16 +99,16 @@ separate follow-on slices under GAP-033 through GAP-035.
 
 **Preflight and completion gate:**
 
-- Confirm the current `IntakeForm` submission/success and tracker-link-email contracts, the existing
-  `/privacy` route, the absence of `ophalo-web` test infrastructure, and desktop/mobile behavior
+- Confirm the current `IntakeForm` submission/success contract, the existing `/privacy` route, the
+  absence of `ophalo-web` test infrastructure, and desktop/mobile behavior
   before editing. Do not claim that focused web tests run when no web test runner or test placement
   exists.
 - Keep the slice inside the session file gate. Prefer `IntakeForm.tsx`, the shared public footer only
   if required, and docs; do not pull profile/schema/API changes or a test-framework rollout into
   R90a. Test infrastructure is a separate bounded tooling decision/slice.
 - Verify required-field/browser validation, server validation/error retention, duplicate-submit
-  guard, email/no-email success behavior, tracker navigation, keyboard focus/error announcement,
-  desktop screenshot, and phone viewport screenshot.
+  guard, email/no-email success behavior, the absence of tracker handoff or redirect, keyboard
+  focus/error announcement, desktop screenshot, and phone viewport screenshot.
 - Run `ophalo-web` TypeScript and production-build checks plus the defined manual evidence. Record
   the absence of a web test runner, exact manual evidence, Christian's visual acceptance, and the
   commit before selecting R90b.
@@ -132,6 +138,66 @@ They'll contact you soon."` with the reference code retained. Request creation, 
 the `/keep/r/[pageToken]` tracker route itself, and all R90a privacy/validation work are unchanged.
 `tsc --noEmit` and `next build` clean; Christian manually verified the corrected success behavior.
 Committed to `main` (`cc33ec3`).
+
+### Next Selected Code Slice — R90b / GAP-033 Public-Safe Business Identity And Recovery
+
+**Goal:** Make every known-business public Keep surface clearly recognizable and recoverable without
+turning unknown capability URLs into an account-enumeration oracle. This is the remaining public
+trust slice after R90a; it must preserve the locked business-delivered tracker-link model.
+
+**In scope:**
+
+1. Add settings/profile support for public-safe business identity anchors required by GAP-033:
+   custom logo and website as Owner/Admin-configured, input-validated absolute HTTPS URLs, plus a
+   customer-facing phone when configured. There is no upload pipeline in this slice; a logo URL
+   points to an externally hosted asset. Display a polished initials fallback when no logo exists.
+   This is validation only, not DNS/domain-ownership verification: do not label a website or
+   business "verified" or imply OpHalo independently verifies either.
+2. Return and render only that approved public identity on known-business public intake, submitted,
+   tracker, expired, unavailable, and OffSeason surfaces. Keep business-first identity with
+   secondary OpHalo Keep attribution.
+3. Give known-business terminal states an actionable, safe recovery/contact route using the
+   configured public contact data. Unknown/invalid tokens must remain non-enumerating and reveal no
+   business identity or contact data.
+4. Add safe known-business browser titles for public intake and tracker/terminal states. Titles and
+   metadata must not contain page tokens, addresses, customer names, or other request data; tracker
+   pages retain `noindex` and restrictive referrer behavior.
+
+**Out of scope:** tracker access/delivery policy, automated customer email/SMS, customer login or
+inbox, public request data beyond the existing contract, unverified website/social links, auth-entry
+work (R90c), and a broad public-profile redesign.
+
+**Preflight and completion gate:**
+
+- Trace the existing account/business-profile settings, public-intake and tracker DTOs/endpoints,
+  public-token guard, and terminal-state handling before selecting persistence/API/UI seams. Reuse
+  existing customer-facing phone behavior where it meets the public-safety contract.
+- Add proportionate backend/API coverage for configuration, authorized public projection, and
+  unknown-token non-enumeration. Run relevant backend tests plus `ophalo-web` TypeScript and
+  production-build checks.
+- Manually verify configured-logo and no-logo fallbacks, configured/no-contact recovery, desktop and
+  phone layouts, known-business terminal states, and unknown-token non-enumeration. Record the
+  commit and evidence before selecting R90c.
+
+**R90b split:** R90b is implemented as independently compiling backend/frontend vertical slices under
+the session's hard batch-size gate, not as one change:
+
+- **R90b-1 (backend, settings) — implemented:** Added `LogoUrl`/`WebsiteUrl` to `KeepBusinessProfile`
+  with a new `UpdatePublicIdentity` domain method (input-validated absolute `https://` URLs only,
+  optional, no DNS/ownership verification and no "verified" label) and a `KeepBusinessProfileErrors`
+  catalog. Threaded through `KeepSetupResult`/`KeepSetupService` (`GetSetupAsync`, `UpdateProfileAsync`,
+  `UpdatePolicyAsync`) and `UpdateProfileBody`/`PUT /keep/setup/profile`. Settings-only — no public
+  endpoint exposes these fields yet; existing Owner/Admin `SettingsManage` authorization unchanged.
+  28 focused unit tests added/passing (`KeepBusinessProfileTests`, new `KeepSetupServiceTests`), 14
+  architecture tests passing. `ophalo-web` untouched, so no web checks run for this backend-only
+  slice. Migration not yet generated — Christian runs `dotnet ef migrations add` per repo Commands
+  policy before this can deploy. Awaiting commit.
+- **R90b-2 (backend, public projection) — not started:** extend `IKeepIntakePersistence`/tracker
+  lookup to return a public-safe identity DTO (name, logo, website, phone — never email) on intake-info
+  and tracker/terminal responses; unknown-token non-enumeration tests.
+- **R90b-3 (frontend) — not started:** render identity block (logo/initials, website, phone) and safe
+  browser titles across intake/submitted/tracker/expired/unavailable/OffSeason, plus terminal-state
+  recovery route in `ophalo-web`.
 
 **Follow-on ordering after R90a:**
 
