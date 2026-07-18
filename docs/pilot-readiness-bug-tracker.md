@@ -202,10 +202,9 @@ customer return access.
   Owner/Admin, not a DNS/ownership-verified domain; do not label it "verified" or imply OpHalo has
   independently verified a business. Do not require social-network links.
 - Rewrite the form introduction to state the actual customer outcome consistently, for example:
-  `Submit your request and {businessName} will contact you soon.` The private tracker is not an
-  intake-success destination or an automatic delivery promise: the business supplies its
-  request-specific link in its first real customer email or text, then may include it in later
-  customer communications.
+  `Submit your request, then manage updates on your private request page.` After a successful
+  submission, take the customer directly to that request-specific tracker. The business also
+  includes the same tracker link in its later customer email/text communications.
 - Move the factual address privacy disclosure directly below the `Where is the service needed?`
   heading, before the street-address field. It must plainly identify what is shared, with whom, and
   what is not visible on the private request page. Add concise, equally factual contact-use copy
@@ -213,12 +212,13 @@ customer return access.
 - Keep email visible and optional for the business to contact the customer. Do not describe it as an
   automatic tracker-link delivery mechanism. Preserve the existing customer preference model and do
   not treat a request-update channel as marketing consent.
-- Replace the current post-submit private-page handoff with a durable, non-redirecting confirmation:
-  the named business received the request, will contact the customer soon, and a safe request
-  reference is shown. Do not show an `Open private request page` CTA, instruct the customer to save
-  a capability URL, claim a link was emailed, or promise that the tracker is immediately available.
-  The business's first actual email or text is the trusted delivery point for the private
-  request-specific tracker link.
+- Replace the separate post-submit receipt/handoff page with direct navigation to the new private
+  request tracker. On that first tracker visit, show a one-time, dismissible welcome banner with the
+  business identity and safe request reference. It explains that the page keeps the request,
+  updates, and next steps in one place, and that the customer can add details, ask a question, or
+  request a call there. Do not claim a tracker link was emailed or make the customer save a
+  capability URL as their only return method. The configured phone is a secondary recovery/contact
+  route, not a replacement for the tracker.
 - Add a real public privacy-policy link beside the submission/identity context. Any marketing use of
   phone or email requires separate explicit consent and appropriate legal review; do not use vague
   `secure`, `verified`, or `end-to-end encrypted` badges unless those claims are technically,
@@ -229,8 +229,9 @@ customer return access.
   non-enumerating and must not reveal business identity. Known-business terminal states must not
   strand the customer in an anonymous shell; provide the safe business contact/recovery route that
   the available public contract permits.
-- Eliminate the success-state redirect and private-page handoff altogether. Submission confirmation
-  must remain stable until the customer leaves; it must not schedule automatic navigation.
+- Do not use a timer-based or interstitial redirect. Successful submission navigates directly to the
+  newly created tracker, where the one-time welcome banner provides the receipt/next-step context.
+  The banner must be dismissible and must not reappear on ordinary later tracker visits.
 - Make safe public browser/document titles identify the known business and outcome, for example
   `Request service from {businessName} — OpHalo Keep` and `{businessName} request updates — OpHalo
   Keep`. Retain `noindex` and restrictive referrer behavior for capability-link pages; do not put a
@@ -240,8 +241,8 @@ customer return access.
   customer uncertainty.
 - Expand the public-intake launch verification gate with a skeptical-first-time-customer review on
   desktop and a real phone: business recognition from an inbound link, data-sharing comprehension
-  before address entry, no-payment expectation, stable confirmation after success, first business
-  response containing the tracker link, and the unbranded-logo fallback.
+  before address entry, no-payment expectation, direct arrival at the private tracker with its
+  one-time welcome, later business-message link continuity, and the unbranded-logo fallback.
 
 **Deferred deployment decision — explicit OffSeason banner:**
 
@@ -260,18 +261,20 @@ or expose OffSeason state for unknown/invalid tokens.
   none are configured.
 - Before entering an address or phone number, a customer can understand who receives that data and
   how it is used without relying on unsupported security claims.
-- Public intake copy, submit behavior, and success state accurately state that the business has
-  received the request and will make first contact; they make no immediate tracker-link promise.
-- The success state shows the request reference and does not show a tracker CTA, saving guidance, or
-  a claim that the tracker link was sent. The first business email/text is the tracker-link delivery
-  point.
+- Public intake copy and submit behavior accurately state that successful submission opens the
+  private tracker; later business communications repeat that same tracker link.
+- After submission, the customer lands on the tracker—not a separate receipt page—and sees a
+  one-time, dismissible welcome banner with the request reference and clear tracker-use guidance.
+  The banner does not claim a tracker email was sent or tell the customer the capability link is
+  their only way back.
 - Privacy and marketing-consent boundaries are visible and accurately implemented; service-location
   and internal-only data remain absent from the public tracker.
 - Known-business success, expired, unavailable, and OffSeason/error states retain safe identity and
   a usable recovery/contact path; unknown-token states do not reveal account identity. Explicit
   OffSeason banner/copy remains a required pre-deployment review decision.
-- The success confirmation is readable and controllable: no redirect, scheduled navigation, or
-  private-link handoff occurs after submission.
+- Post-submit continuity is readable and controllable: direct tracker navigation occurs only after a
+  successful submission; no timer-based/interstitial redirect occurs, and the welcome banner can be
+  dismissed and remains absent on ordinary later visits.
 - Public browser titles identify the known business/outcome without leaking a capability token or
   private request information.
 - Screenshot/manual verification passes for known-logo, no-logo, desktop, and real-phone inbound
@@ -395,6 +398,61 @@ assistive-technology feedback weaker exactly where a user is trying to enter/rec
   support access where appropriate; the mobile authorization handoff remains ADR-390 sterile.
 - Screenshot/manual verification passes for start, sign-in, check-email, expired/invalid magic link,
   invite success/failure, and mobile authorization on their relevant desktop/phone contexts.
+
+### GAP-036 — Public Link & Profile settings do not complete the public-trust workflow
+
+**Status:** Open — follow R90b-3
+**Severity:** P1
+**Area:** `ophalo-app` Settings / Public Link & Profile
+**Decision:** ADR-446; GAP-033 public-safe identity rules
+
+R90b added optional hosted logo and website configuration and projects the approved identity to
+known-business public surfaces, but the owner-facing settings form does not yet expose those fields.
+An owner therefore cannot complete the branding configuration that the public request/tracker pages
+are designed to display. The customer preview is also static: it does not reflect a business-name
+edit while the owner is deciding how the public page will appear.
+
+The same screen exposes `Replace link (breaks old shared links)` as a low-friction text action.
+Replacing a durable public link can invalidate printed QR codes, website links, email signatures, and
+text templates. The operation needs an explicit, server-enforced destructive confirmation rather
+than relying on link styling or a client-only warning.
+
+**Required resolution:**
+
+- Add a clear `Branding & trust anchors` subsection to the existing company/profile settings. Expose
+  optional **Logo URL** and **Website URL** fields that use the existing R90b-1 contracts and
+  validation. This V1 uses externally hosted, absolute HTTPS URLs; it does not add an image upload
+  drop-zone, blob storage, Facebook/social fields, or domain-ownership verification.
+- Explain in concise factual copy that the logo, website, and existing customer-facing phone may
+  appear on customer request/tracker pages. Never label the business or website `verified`.
+- Bind the customer preview to unsaved profile draft values at least for business name, and include
+  configured logo/fallback identity where the existing preview can do so without duplicating the
+  public page implementation. A Save action remains required; live preview does not persist a draft.
+- Replace the bare `Replace link` action with a destructive confirmation dialog that states the old
+  public link will stop working. Require the owner to type `REPLACE` exactly before the final action
+  becomes available. The server-side replacement command/endpoint must require and validate the
+  explicit confirmation too; a client-only typed guard is not sufficient.
+- Preserve the current public-link/slug authorization, old-link invalidation semantics, aliases, and
+  non-enumeration behavior. Do not silently replace a link, rotate a token, or invalidate a printed
+  link as part of an unrelated profile save.
+- If the settings identity form/preview and destructive replacement guard exceed the slice gate,
+  implement them as two independently tested, committed slices; do not weaken the confirmation to
+  combine them.
+
+**Acceptance criteria:**
+
+- Owner/Admin can view, edit, validate, save, and revisit Logo URL and Website URL using the existing
+  settings contract; Operators/Viewers cannot mutate them.
+- Invalid/non-HTTPS URLs show the existing actionable validation behavior, and no upload or social
+  integration has been added.
+- The preview reflects the draft business name immediately and does not claim unsaved changes are
+  live.
+- Link replacement cannot execute until `REPLACE` is entered and the server validates the explicit
+  confirmation; cancel/escape leaves the existing link unchanged.
+- Successful replacement keeps the intended existing invalidation/alias behavior; failed, stale,
+  unauthorized, and canceled operations leave the old link usable.
+- Focus management, keyboard operation, and announced validation/destructive-dialog errors are
+  verified, alongside relevant API/PWA checks.
 
 ### GAP-016 — New Request accepts invalid phone numbers and traps correction
 

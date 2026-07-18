@@ -1,16 +1,18 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { AlertTriangle, ArrowRight, Clock, ClipboardList, Lock, MapPin, UserRound } from "lucide-react";
 import { KeepButton } from "@/components/keep/KeepButton";
 import {
   KeepBusinessHeader,
   KeepCardShell,
+  KeepConfiguredContact,
   KeepPageFooter,
   KeepSectionHeader,
 } from "@/components/keep/KeepPublicShell";
 
-type Stage = "form" | "submitting" | "success" | "unavailable" | "staff";
+type Stage = "form" | "submitting" | "unavailable" | "staff";
 
 const US_STATES = [
   ["AL","Alabama"],["AK","Alaska"],["AZ","Arizona"],["AR","Arkansas"],["CA","California"],
@@ -96,13 +98,19 @@ export default function IntakeForm({
   token,
   slug,
   businessName,
+  logoUrl,
+  websiteUrl,
+  phone,
 }: {
   token?: string;
   slug?: string;
   businessName?: string | null;
+  logoUrl?: string | null;
+  websiteUrl?: string | null;
+  phone?: string | null;
 }) {
+  const router = useRouter();
   const [stage, setStage] = useState<Stage>("form");
-  const [referenceCode, setReferenceCode] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
   const [fieldError, setFieldError] = useState<{ field: KnownField; message: string } | null>(null);
   const [showAptUnit, setShowAptUnit] = useState(false);
@@ -161,8 +169,14 @@ export default function IntakeForm({
 
     if (res.ok) {
       const body = await res.json().catch(() => null);
-      setReferenceCode(typeof body?.referenceCode === "string" ? body.referenceCode : "");
-      setStage("success");
+      const pageToken = typeof body?.pageToken === "string" ? body.pageToken : null;
+      if (pageToken) {
+        router.push(`/keep/r/${encodeURIComponent(pageToken)}?welcome=1`);
+        return;
+      }
+      setError("Something went wrong. Please try again.");
+      setStage("form");
+      submitInFlight.current = false;
       return;
     }
 
@@ -243,35 +257,6 @@ export default function IntakeForm({
     );
   }
 
-  if (stage === "success") {
-    return (
-      <main className="min-h-screen bg-[var(--ophalo-canvas)] px-4 py-6 sm:py-10">
-        <div className="mx-auto w-full max-w-2xl space-y-4 sm:space-y-5">
-          {biz && (
-            <KeepBusinessHeader
-              businessName={biz}
-              label="Request submitted"
-              className="pb-1"
-            />
-          )}
-          <KeepCardShell accentTop>
-            <h1 className="font-serif text-base font-semibold text-foreground">Request submitted.</h1>
-            <p className="mt-2 text-sm text-muted-foreground">
-              {biz
-                ? `${biz} has received your request. They'll contact you soon.`
-                : "Your request has been received. The business will contact you soon."}
-            </p>
-
-            <p className="mt-4 text-xs text-muted-foreground">
-              Reference: <span className="font-mono">{referenceCode}</span>
-            </p>
-          </KeepCardShell>
-          <KeepPageFooter />
-        </div>
-      </main>
-    );
-  }
-
   // ─── Form ───────────────────────────────────────────────────────────────────
 
   const submitting = stage === "submitting";
@@ -282,11 +267,18 @@ export default function IntakeForm({
 
         {/* Business identity header */}
         {biz ? (
-          <KeepBusinessHeader
-            businessName={biz}
-            label="New request"
-            className="mb-4 sm:mb-5"
-          />
+          <div className="mb-4 sm:mb-5">
+            <KeepBusinessHeader
+              businessName={biz}
+              logoUrl={logoUrl}
+              label="New request"
+            />
+            <KeepConfiguredContact
+              websiteUrl={websiteUrl}
+              phone={phone}
+              className="mt-2 px-1"
+            />
+          </div>
         ) : (
           <div className="mb-4 px-1 sm:mb-5">
             <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
@@ -623,8 +615,8 @@ export default function IntakeForm({
                     </p>
                   )}
                   <p className="mt-1.5 text-xs text-muted-foreground">
-                    We&apos;ll send a link to your private request page so you can find your way
-                    back to it. This isn&apos;t used for marketing.
+                    {biz ? `${biz} may use this to contact you about your request.` : "May be used to contact you about your request."}{" "}
+                    Not used for marketing.
                   </p>
                 </div>
               </div>

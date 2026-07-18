@@ -25,11 +25,11 @@ For every implementation slice:
   `docs/build-log/086-request-detail-v1-launch-pass.md`.
 - **GAP-027 Request List parity:** complete and committed; its decisions/evidence are in Build 087
   and the tracker.
-- **R90a / GAP-033 Public Intake Trust:** the customer-facing correction is complete. `df07717`
-  added intake trust/validation work; `cc33ec3` removed the success-page tracker CTA, save-link
-  guidance, tracker-email claim, and redirect. The page now gives a stable business-branded receipt
-  confirmation and safe reference. `tsc --noEmit`, `next build`, and Christian's visual acceptance
-  passed.
+- **R90a / GAP-033 Public Intake Trust:** `df07717` added intake trust/validation work and
+  `cc33ec3` removed the misleading tracker-email claim and timer/interstitial behavior. The
+  post-submit continuity decision has since been revised: successful intake navigates directly to
+  the private tracker, which shows a one-time dismissible welcome banner with request reference and
+  tracker-use guidance. Later business messages repeat the same tracker link.
 - **R90b-1 / GAP-033 Public identity settings:** committed in `333bcd7`. It adds optional
   `LogoUrl` and `WebsiteUrl` to `KeepBusinessProfile`, validated as absolute HTTPS URLs; they are
   Owner/Admin settings only and are not publicly projected yet. There is no upload pipeline and no
@@ -91,14 +91,18 @@ For every implementation slice:
   restrictive referrer behavior.
 - Keep does not send backend customer SMS or ingest SMS replies in V1. Broad customer
   messaging/notification workflows remain deferred.
+- A configured business phone is a secondary public recovery/contact route; it does not replace the
+  tracker as the post-submit customer destination.
 
 ## Next Selected Code Slice — R90b-3b
 
-**Goal:** Intake identity rendering — form + submitted-receipt screens on the two public-intake
-routes (`intake/[token]`, `s/[slug]`), completing the rendering work R90b-3a started on the tracker
-routes. See `docs/build-log/` history for 3a; expected surface is `intake/[token]/page.tsx`,
-`s/[slug]/page.tsx`, and `intake/[token]/IntakeForm.tsx` (3 production files), reusing the
-`KeepBusinessHeader`/`KeepConfiguredContact` components 3a already extended.
+**Goal:** Complete post-submit continuity and intake identity rendering. Successful public intake
+navigates directly to the private tracker; its first visit shows a one-time dismissible welcome
+banner. Intake routes retain business identity before submission, while the tracker—not a separate
+submitted-receipt page—is the post-submit destination. Reuse the `KeepBusinessHeader` and
+`KeepConfiguredContact` components from R90b-3a. Re-preflight the affected intake submit contract
+and tracker onboarding seam before editing; the prior three-file submitted-receipt scope is
+superseded by this decision.
 
 ## R90b Follow-On Order
 

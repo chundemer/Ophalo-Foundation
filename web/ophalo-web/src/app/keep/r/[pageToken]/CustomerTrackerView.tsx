@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useRouter, usePathname } from "next/navigation";
+import { X } from "lucide-react";
 import {
   KeepBusinessHeader,
   KeepPageFooter,
@@ -26,11 +28,16 @@ export type { CustomerPageData };
 export function CustomerTrackerView({
   initialPage,
   pageToken,
+  showWelcome = false,
 }: {
   initialPage: CustomerPageData;
   pageToken: string;
+  showWelcome?: boolean;
 }) {
+  const router = useRouter();
+  const pathname = usePathname();
   const [page, setPage] = useState(initialPage);
+  const [welcomeVisible, setWelcomeVisible] = useState(showWelcome);
   const [phase, setPhase] = useState<ComposerPhase>(
     initialPage.feedbackSubmittedAtUtc != null ? { kind: "feedback_sent" } : { kind: "idle" }
   );
@@ -75,6 +82,16 @@ export function CustomerTrackerView({
   useEffect(() => {
     setCanSharePage(typeof navigator !== "undefined" && typeof navigator.share === "function");
   }, []);
+
+  // Strip the one-time welcome signal from the URL so a refresh or later
+  // visit to this same link never re-shows the banner.
+  useEffect(() => {
+    if (showWelcome) router.replace(pathname, { scroll: false });
+  }, [showWelcome, router, pathname]);
+
+  function dismissWelcome() {
+    setWelcomeVisible(false);
+  }
 
   useEffect(() => {
     if (phase.kind === "sent") {
@@ -206,6 +223,26 @@ export function CustomerTrackerView({
   return (
     <main className="min-h-screen px-4 py-6 sm:py-10" style={trackerCanvasStyle}>
       <div className="mx-auto w-full max-w-2xl space-y-4 sm:space-y-5">
+
+        {welcomeVisible && (
+          <div className="flex items-start gap-3 rounded-2xl border border-[var(--ophalo-border)] bg-card px-4 py-3.5 shadow-sm">
+            <div className="min-w-0 flex-1 text-sm text-foreground">
+              <p className="font-semibold">Request received — {page.referenceCode}</p>
+              <p className="mt-1 text-muted-foreground">
+                This page keeps your request, updates, and next steps in one place.
+                You can add details, ask a question, or request a call anytime below.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={dismissWelcome}
+              aria-label="Dismiss"
+              className="shrink-0 rounded-full p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        )}
 
         <KeepBusinessHeader
           businessName={page.businessName}

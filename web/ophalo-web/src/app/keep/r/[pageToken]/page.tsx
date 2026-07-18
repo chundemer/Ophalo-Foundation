@@ -81,10 +81,13 @@ export async function generateMetadata({
 
 export default async function CustomerTrackerPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ pageToken: string }>;
+  searchParams: Promise<{ welcome?: string }>;
 }) {
   const { pageToken } = await params;
+  const { welcome } = await searchParams;
   const state = await fetchPage(pageToken);
 
   if (state.kind === "unavailable") {
@@ -119,6 +122,7 @@ export default async function CustomerTrackerPage({
     <CustomerTrackerView
       initialPage={state.page}
       pageToken={state.pageToken}
+      showWelcome={welcome === "1"}
     />
   );
 }
