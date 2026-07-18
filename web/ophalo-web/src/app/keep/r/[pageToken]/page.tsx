@@ -1,15 +1,22 @@
 import type { Metadata } from "next";
 import { CustomerTrackerView, type CustomerPageData } from "./CustomerTrackerView";
+import { TrackerExpiredView } from "./TrackerExpiredView";
 
-export const metadata: Metadata = {
-  title: "Request Tracker",
+const baseMetadata: Metadata = {
   robots: { index: false, follow: false },
   other: { referrer: "no-referrer" },
 };
 
 type PageState =
   | { kind: "unavailable" }
-  | { kind: "expired"; businessName: string; referenceCode: string }
+  | {
+      kind: "expired";
+      businessName: string;
+      logoUrl: string | null;
+      websiteUrl: string | null;
+      phone: string | null;
+      referenceCode: string;
+    }
   | { kind: "active"; page: CustomerPageData; pageToken: string };
 
 const trackerCanvasStyle = { backgroundColor: "var(--ophalo-canvas)" };
@@ -37,6 +44,9 @@ async function fetchPage(pageToken: string): Promise<PageState> {
       kind: "expired",
       businessName:
         typeof b?.businessName === "string" ? b.businessName : "the business",
+      logoUrl: typeof b?.logoUrl === "string" ? b.logoUrl : null,
+      websiteUrl: typeof b?.websiteUrl === "string" ? b.websiteUrl : null,
+      phone: typeof b?.phone === "string" ? b.phone : null,
       referenceCode:
         typeof b?.referenceCode === "string" ? b.referenceCode : "",
     };
@@ -48,6 +58,25 @@ async function fetchPage(pageToken: string): Promise<PageState> {
   if (data == null || typeof data !== "object") return { kind: "unavailable" };
 
   return { kind: "active", page: data as CustomerPageData, pageToken };
+}
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ pageToken: string }>;
+}): Promise<Metadata> {
+  const { pageToken } = await params;
+  const state = await fetchPage(pageToken);
+
+  const businessName =
+    state.kind === "active" ? state.page.businessName
+      : state.kind === "expired" ? state.businessName
+      : null;
+
+  return {
+    ...baseMetadata,
+    title: businessName ? `${businessName} — Request Tracker` : "Request Tracker",
+  };
 }
 
 export default async function CustomerTrackerPage({
@@ -76,25 +105,13 @@ export default async function CustomerTrackerPage({
 
   if (state.kind === "expired") {
     return (
-      <main className="min-h-screen px-4 py-6 sm:py-10" style={trackerCanvasStyle}>
-        <div className="mx-auto w-full max-w-2xl">
-          <h1 className="text-2xl font-bold leading-tight tracking-tight text-foreground">
-            This tracker link has expired.
-          </h1>
-          <p className="mt-3 text-sm leading-6 text-muted-foreground">
-            The tracker for your request with{" "}
-            <strong className="text-foreground">{state.businessName}</strong> is no longer active.
-          </p>
-          {state.referenceCode && (
-            <p className="mt-2 text-sm text-muted-foreground">
-              Reference:{" "}
-              <span className="font-mono text-[13px] tracking-widest text-foreground">
-                {state.referenceCode}
-              </span>
-            </p>
-          )}
-        </div>
-      </main>
+      <TrackerExpiredView
+        businessName={state.businessName}
+        logoUrl={state.logoUrl}
+        websiteUrl={state.websiteUrl}
+        phone={state.phone}
+        referenceCode={state.referenceCode}
+      />
     );
   }
 

@@ -195,6 +195,9 @@ export function CustomerTrackerView({
     return (
       <TrackerExpiredView
         businessName={page.businessName}
+        logoUrl={page.logoUrl}
+        websiteUrl={page.websiteUrl}
+        phone={page.phone}
         referenceCode={page.referenceCode}
       />
     );
@@ -206,6 +209,7 @@ export function CustomerTrackerView({
 
         <KeepBusinessHeader
           businessName={page.businessName}
+          logoUrl={page.logoUrl}
           label="Private Request Page"
           description={`This private page keeps your request details and updates from ${page.businessName} in one place.`}
           className="pb-1"

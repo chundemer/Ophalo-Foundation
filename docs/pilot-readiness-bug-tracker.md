@@ -243,6 +243,16 @@ customer return access.
   before address entry, no-payment expectation, stable confirmation after success, first business
   response containing the tracker link, and the unbranded-logo fallback.
 
+**Deferred deployment decision — explicit OffSeason banner:**
+
+R90b-3 may render the configured business identity and recovery/contact route while the existing
+OffSeason policy reduces customer actions. It does **not** add a customer-facing `OffSeason` banner
+in that slice: the current public customer-page contract has no `IsOffSeason` field. Before app
+deployment, review real known-business OffSeason screenshots/behavior and decide whether the reduced
+actions plus identity/recovery are sufficiently clear. If not, create a bounded follow-on to expose
+a public-safe `IsOffSeason` signal and render explicit, non-alarming availability copy. Do not infer
+or expose OffSeason state for unknown/invalid tokens.
+
 **Acceptance criteria:**
 
 - Before entering personal information, a customer can identify the intended business through its
@@ -258,7 +268,8 @@ customer return access.
 - Privacy and marketing-consent boundaries are visible and accurately implemented; service-location
   and internal-only data remain absent from the public tracker.
 - Known-business success, expired, unavailable, and OffSeason/error states retain safe identity and
-  a usable recovery/contact path; unknown-token states do not reveal account identity.
+  a usable recovery/contact path; unknown-token states do not reveal account identity. Explicit
+  OffSeason banner/copy remains a required pre-deployment review decision.
 - The success confirmation is readable and controllable: no redirect, scheduled navigation, or
   private-link handoff occurs after submission.
 - Public browser titles identify the known business/outcome without leaking a capability token or

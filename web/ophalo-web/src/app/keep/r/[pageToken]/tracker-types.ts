@@ -11,6 +11,9 @@ export interface CustomerEventItem {
 
 export interface CustomerPageData {
   businessName: string;
+  logoUrl: string | null;
+  websiteUrl: string | null;
+  phone: string | null;
   referenceCode: string;
   status: string;
   description: string | null;

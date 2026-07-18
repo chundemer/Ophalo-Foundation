@@ -14,20 +14,32 @@ export function keepBusinessInitials(name: string): string {
 
 export function KeepBusinessHeader({
   businessName,
+  logoUrl,
   label,
   description,
   className = "",
 }: {
   businessName: string;
+  logoUrl?: string | null;
   label: string;
   description?: string;
   className?: string;
 }) {
+  const safeLogoUrl = logoUrl && logoUrl.startsWith("https://") ? logoUrl : null;
+
   return (
     <div className={`flex items-center gap-3 px-1 ${className}`}>
-      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[var(--ophalo-navy)] text-sm font-bold tracking-wide text-white">
-        {keepBusinessInitials(businessName)}
-      </div>
+      {safeLogoUrl ? (
+        <img
+          src={safeLogoUrl}
+          alt={businessName}
+          className="h-12 w-12 shrink-0 rounded-xl object-cover"
+        />
+      ) : (
+        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[var(--ophalo-navy)] text-sm font-bold tracking-wide text-white">
+          {keepBusinessInitials(businessName)}
+        </div>
+      )}
       <div className="min-w-0">
         <p className="truncate text-lg font-bold leading-tight text-foreground">
           {businessName}
@@ -39,6 +51,46 @@ export function KeepBusinessHeader({
           <p className="mt-1 text-sm text-muted-foreground">{description}</p>
         )}
       </div>
+    </div>
+  );
+}
+
+// ─── Configured-contact recovery ────────────────────────────────────────────
+
+export function KeepConfiguredContact({
+  websiteUrl,
+  phone,
+  className = "",
+}: {
+  websiteUrl?: string | null;
+  phone?: string | null;
+  className?: string;
+}) {
+  const safeWebsiteUrl = websiteUrl && websiteUrl.startsWith("https://") ? websiteUrl : null;
+  const safePhone = phone && phone.trim().length > 0 ? phone.trim() : null;
+
+  if (!safeWebsiteUrl && !safePhone) return null;
+
+  return (
+    <div className={`flex flex-wrap items-center gap-x-4 gap-y-1 text-sm ${className}`}>
+      {safePhone && (
+        <a
+          href={`tel:${safePhone.replace(/[^\d+]/g, "")}`}
+          className="font-medium text-[var(--keep-accent)] underline-offset-2 hover:underline"
+        >
+          Call {safePhone}
+        </a>
+      )}
+      {safeWebsiteUrl && (
+        <a
+          href={safeWebsiteUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="font-medium text-[var(--keep-accent)] underline-offset-2 hover:underline"
+        >
+          Visit website
+        </a>
+      )}
     </div>
   );
 }
