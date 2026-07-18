@@ -119,7 +119,7 @@ added. No `ophalo-web` test runner exists, so no automated web tests were claime
 build output. Christian manually verified required-field/browser validation, server
 validation/error retention, duplicate-submit guard, email/no-email success behavior, tracker
 navigation, keyboard focus/error announcement, and desktop/phone-viewport behavior, and gave visual
-acceptance. Committed to `main`.
+acceptance. Committed to `main` (`df07717`).
 
 **Follow-on ordering after R90a:**
 
