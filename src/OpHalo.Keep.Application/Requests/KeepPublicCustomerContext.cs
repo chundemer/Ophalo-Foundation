@@ -10,16 +10,21 @@ namespace OpHalo.Keep.Application.Requests;
 /// (GetKeepCustomerPageService, AddCustomerMessageService) do not need a second query
 /// against the request. EF tracking is never exposed here (ADR-119).
 ///
-/// When IsExpired is true, only BusinessName, ReferenceCode, IsExpired, and ExpiresAtUtc
-/// are meaningful; all other fields reflect the terminal request at expiry time but are
-/// not safe to surface individually — callers must build the tombstone page shape and
-/// return AllowedActions = null (ADR-120, ADR-126).
+/// When IsExpired is true, only BusinessName, LogoUrl, WebsiteUrl, Phone, ReferenceCode,
+/// IsExpired, and ExpiresAtUtc are meaningful; all other fields reflect the terminal request at
+/// expiry time but are not safe to surface individually — callers must build the tombstone page
+/// shape and return AllowedActions = null (ADR-120, ADR-126). Identity fields remain populated at
+/// expiry so a known business does not go anonymous at a terminal state (GAP-033/R90b-2b); Email
+/// is deliberately never included.
 /// </summary>
 public sealed record KeepPublicCustomerContext(
     Guid RequestId,
     Guid AccountId,
     string ReferenceCode,
     string BusinessName,
+    string? LogoUrl,
+    string? WebsiteUrl,
+    string? Phone,
     string CustomerName,
     KeepRequestStatus Status,
     string? Description,

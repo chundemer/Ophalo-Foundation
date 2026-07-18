@@ -15,6 +15,9 @@ internal static class KeepCustomerPageMapper
 
     internal static KeepCustomerPageResult BuildExpiredResult(KeepPublicCustomerContext context) =>
         new(BusinessName: context.BusinessName,
+            LogoUrl: context.LogoUrl,
+            WebsiteUrl: context.WebsiteUrl,
+            Phone: context.Phone,
             ReferenceCode: context.ReferenceCode,
             IsExpired: true,
             NewRequestUrl: null,
@@ -36,6 +39,9 @@ internal static class KeepCustomerPageMapper
         KeepPublicCustomerContext context,
         IReadOnlyList<KeepRequestEvent> events) =>
         new(BusinessName: context.BusinessName,
+            LogoUrl: context.LogoUrl,
+            WebsiteUrl: context.WebsiteUrl,
+            Phone: context.Phone,
             ReferenceCode: context.ReferenceCode,
             IsExpired: false,
             NewRequestUrl: null,

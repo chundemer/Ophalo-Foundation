@@ -4,12 +4,17 @@ namespace OpHalo.Keep.Application.Requests;
 /// The customer page read model. Safe for public exposure — no internal IDs, account IDs,
 /// user IDs, internal notes, or routing internals.
 ///
-/// When IsExpired = true, only BusinessName, ReferenceCode, IsExpired, and NewRequestUrl
-/// are populated; all other fields are null. The endpoint maps this to a 410 response.
+/// When IsExpired = true, only BusinessName, LogoUrl, WebsiteUrl, Phone, ReferenceCode,
+/// IsExpired, and NewRequestUrl are populated; all other fields are null. The endpoint maps this
+/// to a 410 response. Identity fields are populated at expiry so a known business does not go
+/// anonymous at a terminal state (GAP-033/R90b-2b); Email is deliberately never included.
 /// When IsExpired = false, all fields are populated.
 /// </summary>
 public sealed record KeepCustomerPageResult(
     string BusinessName,
+    string? LogoUrl,
+    string? WebsiteUrl,
+    string? Phone,
     string ReferenceCode,
     bool IsExpired,
     string? NewRequestUrl,

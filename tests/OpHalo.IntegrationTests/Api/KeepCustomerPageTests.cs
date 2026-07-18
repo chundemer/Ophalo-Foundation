@@ -189,8 +189,9 @@ public sealed class KeepCustomerPageTests : IClassFixture<KeepApiWebFactory>, IA
         Assert.False(body.TryGetProperty("firstResponseDueAtUtc", out _));
         Assert.False(body.TryGetProperty("firstRespondedAtUtc", out _));
 
-        // Operator-restricted feedback field must not be exposed.
-        Assert.False(body.TryGetProperty("feedbackComment", out _));
+        // feedbackCommentVisible is an operator-detail-only field (role-gated redaction) — the
+        // customer page's own feedbackComment is the customer's own submitted comment, not
+        // operator-restricted (S84/292d03d), and is intentionally present.
         Assert.False(body.TryGetProperty("feedbackCommentVisible", out _));
     }
 
@@ -400,5 +401,88 @@ public sealed class KeepCustomerPageTests : IClassFixture<KeepApiWebFactory>, IA
 
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
         Assert.Equal("business", body.GetProperty("origin").GetString());
+    }
+
+    // =========================================================================
+    // R90b-2b: tracker/terminal identity projection (GAP-033)
+    // =========================================================================
+
+    [Fact]
+    public async Task GetCustomerPage_ActiveRequest_NoConfiguredIdentity_ReturnsNullIdentityFields()
+    {
+        var response = await _client.GetAsync($"/keep/r/{PageToken}");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.True(body.TryGetProperty("logoUrl", out var logo));
+        Assert.Equal(JsonValueKind.Null, logo.ValueKind);
+        Assert.True(body.TryGetProperty("websiteUrl", out var website));
+        Assert.Equal(JsonValueKind.Null, website.ValueKind);
+        Assert.True(body.TryGetProperty("phone", out var phone));
+        Assert.Equal(JsonValueKind.Null, phone.ValueKind);
+    }
+
+    [Fact]
+    public async Task GetCustomerPage_ActiveRequest_WithConfiguredIdentity_ReturnsLogoWebsitePhone()
+    {
+        await SeedBusinessIdentityAsync();
+
+        var response = await _client.GetAsync($"/keep/r/{PageToken}");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.Equal("https://cdn.example.com/logo.png", body.GetProperty("logoUrl").GetString());
+        Assert.Equal("https://acme-plumbing.example.com", body.GetProperty("websiteUrl").GetString());
+        Assert.Equal("+61412345678", body.GetProperty("phone").GetString());
+
+        // Never expose email on the public tracker projection.
+        Assert.False(body.TryGetProperty("email", out _));
+        Assert.False(body.TryGetProperty("customerFacingEmail", out _));
+    }
+
+    [Fact]
+    public async Task GetCustomerPage_ExpiredTombstone_WithConfiguredIdentity_RetainsLogoWebsitePhone()
+    {
+        await SeedBusinessIdentityAsync();
+
+        await using (var scope = _factory.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+            await db.Database.ExecuteSqlRawAsync(
+                "UPDATE keep_requests SET status = 'Closed', expires_at_utc = @p0 WHERE page_token = @p1",
+                DateTime.UtcNow.AddDays(-1), PageToken);
+        }
+
+        var response = await _client.GetAsync($"/keep/r/{PageToken}");
+
+        Assert.Equal(HttpStatusCode.Gone, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.True(body.GetProperty("isExpired").GetBoolean());
+        // A known business must not go anonymous at a terminal state (GAP-033/R90b-2b).
+        Assert.Equal("https://cdn.example.com/logo.png", body.GetProperty("logoUrl").GetString());
+        Assert.Equal("https://acme-plumbing.example.com", body.GetProperty("websiteUrl").GetString());
+        Assert.Equal("+61412345678", body.GetProperty("phone").GetString());
+        Assert.False(body.TryGetProperty("email", out _));
+    }
+
+    private async Task SeedBusinessIdentityAsync()
+    {
+        await using var scope = _factory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+        var accountId = await db.Set<KeepRequest>()
+            .Where(r => r.PageToken == PageToken)
+            .Select(r => r.AccountId)
+            .FirstAsync();
+
+        var profile = KeepBusinessProfile.Create(accountId);
+        profile.UpdateContact("+61412345678", null);
+        var identityResult = profile.UpdatePublicIdentity(
+            "https://cdn.example.com/logo.png", "https://acme-plumbing.example.com");
+        Assert.True(identityResult.IsSuccess);
+        db.Set<KeepBusinessProfile>().Add(profile);
+        await db.SaveChangesAsync();
     }
 }

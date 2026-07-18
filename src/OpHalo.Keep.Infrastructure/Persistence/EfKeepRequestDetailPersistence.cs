@@ -130,10 +130,26 @@ public sealed class EfKeepRequestDetailPersistence(OpHaloDbContext dbContext) : 
             from r in dbContext.Set<KeepRequest>().AsNoTracking()
             join a in dbContext.Accounts.AsNoTracking() on r.AccountId equals a.Id
             where r.PageToken == pageToken
-            select new { Request = r, a.BusinessName })
+            select new
+            {
+                Request = r,
+                a.BusinessName,
+                Profile = dbContext.Set<KeepBusinessProfile>()
+                    .AsNoTracking()
+                    .Where(p => p.AccountId == r.AccountId)
+                    .Select(p => new { p.LogoUrl, p.WebsiteUrl, p.CustomerFacingPhone })
+                    .FirstOrDefault()
+            })
             .FirstOrDefaultAsync(ct);
 
-        return row is null ? null : new KeepRequestPageLookup(row.Request, row.BusinessName);
+        return row is null
+            ? null
+            : new KeepRequestPageLookup(
+                row.Request,
+                row.BusinessName,
+                row.Profile?.LogoUrl,
+                row.Profile?.WebsiteUrl,
+                row.Profile?.CustomerFacingPhone);
     }
 
     public async Task<IReadOnlyList<KeepRequestEvent>> GetCustomerVisibleEventsAsync(

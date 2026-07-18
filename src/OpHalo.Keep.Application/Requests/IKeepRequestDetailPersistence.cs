@@ -86,5 +86,12 @@ public sealed record KeepParticipantProjection(
 
 /// <summary>
 /// The minimal data the customer page service needs to resolve a request by page token.
+/// LogoUrl/WebsiteUrl/Phone are the public-safe business identity (GAP-033/R90b-2b) — email is
+/// deliberately never included here.
 /// </summary>
-public sealed record KeepRequestPageLookup(KeepRequest Request, string BusinessName);
+public sealed record KeepRequestPageLookup(
+    KeepRequest Request,
+    string BusinessName,
+    string? LogoUrl,
+    string? WebsiteUrl,
+    string? Phone);

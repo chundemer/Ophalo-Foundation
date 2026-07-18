@@ -210,7 +210,7 @@ public class KeepPushCustomerIntentHookTests
         : IKeepRequestDetailPersistence
     {
         public Task<KeepRequestPageLookup?> GetRequestByPageTokenAsync(string t, CancellationToken ct) =>
-            Task.FromResult<KeepRequestPageLookup?>(new KeepRequestPageLookup(request, "Biz"));
+            Task.FromResult<KeepRequestPageLookup?>(new KeepRequestPageLookup(request, "Biz", null, null, null));
 
         public Task<AccountAccessSnapshot?> GetAccountAccessSnapshotAsync(Guid id, CancellationToken ct) =>
             Task.FromResult<AccountAccessSnapshot?>(new AccountAccessSnapshot(
