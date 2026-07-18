@@ -197,9 +197,10 @@ customer return access.
 **Required resolution:**
 
 - Add a public-safe business identity block before form entry: custom logo when available; otherwise
-  retain a polished initials fallback; business display name; and verified business website domain
-  and phone contact when configured. Do not expose unverified owner-entered URLs, imply that OpHalo
-  has independently verified a business, or require social-network links.
+  retain a polished initials fallback; business display name; and configured public website and phone
+  contact when available. For this pilot, a website is an input-validated absolute HTTPS URL set by
+  Owner/Admin, not a DNS/ownership-verified domain; do not label it "verified" or imply OpHalo has
+  independently verified a business. Do not require social-network links.
 - Rewrite the form introduction to state the actual customer outcome consistently, for example:
   `Submit your request and {businessName} will contact you soon.` The private tracker is not an
   intake-success destination or an automatic delivery promise: the business supplies its
