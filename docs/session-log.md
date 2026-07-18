@@ -60,6 +60,21 @@ For every implementation slice:
   constructor dependencies. `KeepPublicIntakeServiceTests` dropped the three tracker-email tests and
   their fakes (`NoOpEmailSender`, `RecordingEmailSender`, `FailingEmailSender`); 67/67 unit tests
   pass. R90a is now fully decision-complete.
+- **R90b-3a / GAP-033 Tracker identity rendering:** complete, committed in `fcd3152`. The tracker
+  routes (`r/[pageToken]`) now render the logo/website/phone identity the API already returned
+  (R90b-2b) but the frontend previously dropped: `KeepBusinessHeader` shows a hosted logo when
+  configured (initials fallback otherwise); a new `KeepConfiguredContact` renders `tel:`/`https://`
+  recovery links only for known-business responses, never unknown/invalid tokens. Both routes gained
+  dynamic, token-free `generateMetadata` titles (falls back to a generic title when the business is
+  unknown), preserving `noindex`/`no-referrer`. `TrackerExpiredView` is now shared between the SSR
+  410 path and the client-side expiry transition. Verified via `tsc --noEmit`, `next build`, and
+  manual checks against a live (restarted) API: active state, unknown-token non-enumeration,
+  no-logo/no-contact fallback. Not yet visually confirmed with a business that has logo/website/phone
+  configured, or a genuinely expired (30+ day) tracker — both share the same components already
+  exercised by the no-identity checks and by backend `KeepCustomerPageTests` coverage.
+- **Deferred:** explicit customer-facing OffSeason banner. See
+  `docs/pilot-readiness-bug-tracker.md` GAP-033 for the pre-deployment follow-on decision — the
+  public customer-page contract has no `IsOffSeason` field today, so R90b-3 does not add one.
 
 ## Locked Public-Trust Decisions
 
@@ -77,10 +92,13 @@ For every implementation slice:
 - Keep does not send backend customer SMS or ingest SMS replies in V1. Broad customer
   messaging/notification workflows remain deferred.
 
-## Next Selected Code Slice — R90b-3
+## Next Selected Code Slice — R90b-3b
 
-**Goal:** Public rendering, safe titles, and configured-contact recovery UI, building on the
-identity projections from R90b-2a/2b and the R90a delivery-alignment correction (all complete).
+**Goal:** Intake identity rendering — form + submitted-receipt screens on the two public-intake
+routes (`intake/[token]`, `s/[slug]`), completing the rendering work R90b-3a started on the tracker
+routes. See `docs/build-log/` history for 3a; expected surface is `intake/[token]/page.tsx`,
+`s/[slug]/page.tsx`, and `intake/[token]/IntakeForm.tsx` (3 production files), reusing the
+`KeepBusinessHeader`/`KeepConfiguredContact` components 3a already extended.
 
 ## R90b Follow-On Order
 
@@ -88,8 +106,10 @@ identity projections from R90b-2a/2b and the R90a delivery-alignment correction 
 2. **R90b-2b:** tracker and known-business terminal identity projection, including expired/active
    mapper branches and non-enumeration coverage — complete.
 3. **R90a delivery-alignment correction:** remove automatic tracker-link email — complete.
-4. **R90b-3:** public rendering, safe titles, and configured-contact recovery UI — next.
-5. **R90c / GAP-035:** normal-browser auth-entry shell and recovery states, preserving ADR-390
+4. **R90b-3a:** tracker-route identity rendering (logo/website/phone, dynamic token-free titles) —
+   complete, committed in `fcd3152`.
+5. **R90b-3b:** intake-route identity rendering (form + submitted receipt) — next.
+6. **R90c / GAP-035:** normal-browser auth-entry shell and recovery states, preserving ADR-390
    sterile mobile-handoff restrictions.
 
 ## Standing Technical Boundaries
