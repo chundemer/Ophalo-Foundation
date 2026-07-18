@@ -91,17 +91,17 @@ public sealed class CreateKeepPublicIntakeService(
         return await ExecuteWithLinkAsync(link, v, command, ct);
     }
 
-    public async Task<string?> GetInfoByTokenAsync(string rawToken, CancellationToken ct = default)
+    public async Task<KeepPublicIntakeInfo?> GetInfoByTokenAsync(string rawToken, CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(rawToken)) return null;
         var tokenHash = tokenService.HashPublicIntakeToken(rawToken);
-        return await persistence.GetBusinessNameByTokenHashAsync(tokenHash, ct);
+        return await persistence.GetPublicIdentityByTokenHashAsync(tokenHash, ct);
     }
 
-    public async Task<string?> GetInfoBySlugAsync(string slug, CancellationToken ct = default)
+    public async Task<KeepPublicIntakeInfo?> GetInfoBySlugAsync(string slug, CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(slug)) return null;
-        return await persistence.GetBusinessNameBySlugAsync(slug, ct);
+        return await persistence.GetPublicIdentityBySlugAsync(slug, ct);
     }
 
     private async Task TrySendTrackerLinkEmailAsync(string? email, string pageToken, CancellationToken ct)

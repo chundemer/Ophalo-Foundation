@@ -659,6 +659,43 @@ public sealed class KeepIntakeApiTests : IClassFixture<KeepApiWebFactory>, IAsyn
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
         Assert.True(body.TryGetProperty("businessName", out var name));
         Assert.Equal("Acme Plumbing", name.GetString());
+
+        // No configured KeepBusinessProfile — identity fields present but null (GAP-033/R90b-2a).
+        Assert.True(body.TryGetProperty("logoUrl", out var logo));
+        Assert.Equal(JsonValueKind.Null, logo.ValueKind);
+        Assert.True(body.TryGetProperty("websiteUrl", out var website));
+        Assert.Equal(JsonValueKind.Null, website.ValueKind);
+        Assert.True(body.TryGetProperty("phone", out var phone));
+        Assert.Equal(JsonValueKind.Null, phone.ValueKind);
+    }
+
+    [Fact]
+    public async Task IntakeInfo_ActiveToken_WithConfiguredIdentity_ReturnsLogoWebsitePhone()
+    {
+        await using (var scope = _factory.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+            var profile = KeepBusinessProfile.Create(_accountId);
+            profile.UpdateContact("+61412345678", null);
+            var identityResult = profile.UpdatePublicIdentity("https://cdn.example.com/logo.png", "https://acme-plumbing.example.com");
+            Assert.True(identityResult.IsSuccess);
+            db.Set<KeepBusinessProfile>().Add(profile);
+            await db.SaveChangesAsync();
+        }
+
+        var response = await _client.GetAsync(
+            $"/keep/public-intake/token/{_rawToken}/info");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("Acme Plumbing", body.GetProperty("businessName").GetString());
+        Assert.Equal("https://cdn.example.com/logo.png", body.GetProperty("logoUrl").GetString());
+        Assert.Equal("https://acme-plumbing.example.com", body.GetProperty("websiteUrl").GetString());
+        Assert.Equal("+61412345678", body.GetProperty("phone").GetString());
+
+        // Never expose email on the public info projection.
+        Assert.False(body.TryGetProperty("email", out _));
+        Assert.False(body.TryGetProperty("customerFacingEmail", out _));
     }
 
     [Fact]
@@ -692,6 +729,10 @@ public sealed class KeepIntakeApiTests : IClassFixture<KeepApiWebFactory>, IAsyn
             "/keep/public-intake/slug/this-slug-does-not-exist/info");
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+
+        // Non-enumeration (GAP-033): no business identity fields disclosed for an unknown slug.
+        var content = await response.Content.ReadAsStringAsync();
+        Assert.True(string.IsNullOrEmpty(content));
     }
 
     [Fact]
@@ -701,6 +742,10 @@ public sealed class KeepIntakeApiTests : IClassFixture<KeepApiWebFactory>, IAsyn
             $"/keep/public-intake/token/{_revokedRawToken}/info");
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+
+        // Non-enumeration (GAP-033): a revoked token must not disclose the underlying business identity.
+        var content = await response.Content.ReadAsStringAsync();
+        Assert.True(string.IsNullOrEmpty(content));
     }
 
     // -------------------------------------------------------------------------

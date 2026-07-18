@@ -72,24 +72,42 @@ public sealed class KeepIntakePersistence(OpHaloDbContext dbContext) : IKeepInta
             .AsNoTracking()
             .FirstOrDefaultAsync(p => p.AccountId == accountId, ct);
 
-    public async Task<string?> GetBusinessNameByTokenHashAsync(string tokenHash, CancellationToken ct)
+    public async Task<KeepPublicIntakeInfo?> GetPublicIdentityByTokenHashAsync(string tokenHash, CancellationToken ct)
     {
         var link = await FindActivePublicIntakeLinkByTokenHashAsync(tokenHash, ct);
-        return link is null ? null : await GetBusinessNameForAccountAsync(link.AccountId, ct);
+        return link is null ? null : await GetPublicIdentityForAccountAsync(link.AccountId, ct);
     }
 
-    public async Task<string?> GetBusinessNameBySlugAsync(string slug, CancellationToken ct)
+    public async Task<KeepPublicIntakeInfo?> GetPublicIdentityBySlugAsync(string slug, CancellationToken ct)
     {
         var link = await FindActivePublicIntakeLinkBySlugAsync(slug, ct);
-        return link is null ? null : await GetBusinessNameForAccountAsync(link.AccountId, ct);
+        return link is null ? null : await GetPublicIdentityForAccountAsync(link.AccountId, ct);
     }
 
-    private Task<string?> GetBusinessNameForAccountAsync(Guid accountId, CancellationToken ct) =>
-        dbContext.Accounts
-            .AsNoTracking()
-            .Where(a => a.Id == accountId)
-            .Select(a => (string?)a.BusinessName)
+    private async Task<KeepPublicIntakeInfo?> GetPublicIdentityForAccountAsync(Guid accountId, CancellationToken ct)
+    {
+        var row = await (
+            from a in dbContext.Accounts.AsNoTracking()
+            where a.Id == accountId
+            select new
+            {
+                a.BusinessName,
+                Profile = dbContext.Set<KeepBusinessProfile>()
+                    .AsNoTracking()
+                    .Where(p => p.AccountId == accountId)
+                    .Select(p => new { p.LogoUrl, p.WebsiteUrl, p.CustomerFacingPhone })
+                    .FirstOrDefault()
+            })
             .FirstOrDefaultAsync(ct);
+
+        return row is null
+            ? null
+            : new KeepPublicIntakeInfo(
+                row.BusinessName,
+                row.Profile?.LogoUrl,
+                row.Profile?.WebsiteUrl,
+                row.Profile?.CustomerFacingPhone);
+    }
 
     public Task<bool> PageTokenExistsAsync(string pageToken, CancellationToken ct) =>
         dbContext.Set<KeepRequest>()

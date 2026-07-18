@@ -48,17 +48,17 @@ public interface IKeepIntakePersistence
     Task<KeepResponsePolicy?> GetResponsePolicyAsync(Guid accountId, CancellationToken ct);
 
     /// <summary>
-    /// Returns the business name for an active intake link identified by token hash, or null
-    /// if the link does not exist, is revoked, or is deleted.
+    /// Returns the public-safe business identity for an active intake link identified by
+    /// token hash, or null if the link does not exist, is revoked, or is deleted.
     /// </summary>
-    Task<string?> GetBusinessNameByTokenHashAsync(string tokenHash, CancellationToken ct);
+    Task<KeepPublicIntakeInfo?> GetPublicIdentityByTokenHashAsync(string tokenHash, CancellationToken ct);
 
     /// <summary>
-    /// Returns the business name for an active intake link identified by slug, following the
-    /// same current-slug-first then active-alias fallback resolution as
+    /// Returns the public-safe business identity for an active intake link identified by slug,
+    /// following the same current-slug-first then active-alias fallback resolution as
     /// <see cref="FindActivePublicIntakeLinkBySlugAsync"/>. Returns null if not found.
     /// </summary>
-    Task<string?> GetBusinessNameBySlugAsync(string slug, CancellationToken ct);
+    Task<KeepPublicIntakeInfo?> GetPublicIdentityBySlugAsync(string slug, CancellationToken ct);
 
     Task<bool> PageTokenExistsAsync(string pageToken, CancellationToken ct);
 
@@ -79,3 +79,15 @@ public interface IKeepIntakePersistence
         KeepRequestEvent requestEvent,
         CancellationToken ct);
 }
+
+/// <summary>
+/// Public-safe business identity for pre-submission intake surfaces (GAP-033/R90b-2a).
+/// LogoUrl/WebsiteUrl are input-validated absolute https:// URLs, not domain-verified — never
+/// label them "verified". Phone is the configured customer-facing contact number. Email is
+/// deliberately never included here — it is not surfaced to unauthenticated public callers.
+/// </summary>
+public sealed record KeepPublicIntakeInfo(
+    string BusinessName,
+    string? LogoUrl,
+    string? WebsiteUrl,
+    string? Phone);

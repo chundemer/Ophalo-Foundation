@@ -24,16 +24,16 @@ public static class KeepEndpoints
         app.MapGet("/keep/public-intake/token/{publicIntakeToken}/info",
             async (string publicIntakeToken, CreateKeepPublicIntakeService service, CancellationToken ct) =>
             {
-                var name = await service.GetInfoByTokenAsync(publicIntakeToken, ct);
-                return name is not null ? Results.Ok(new { businessName = name }) : Results.NotFound();
+                var info = await service.GetInfoByTokenAsync(publicIntakeToken, ct);
+                return info is not null ? Results.Ok(ToPublicIntakeInfoResponse(info)) : Results.NotFound();
             })
             .RequireRateLimiting("public-intake");
 
         app.MapGet("/keep/public-intake/slug/{slug}/info",
             async (string slug, CreateKeepPublicIntakeService service, CancellationToken ct) =>
             {
-                var name = await service.GetInfoBySlugAsync(slug, ct);
-                return name is not null ? Results.Ok(new { businessName = name }) : Results.NotFound();
+                var info = await service.GetInfoBySlugAsync(slug, ct);
+                return info is not null ? Results.Ok(ToPublicIntakeInfoResponse(info)) : Results.NotFound();
             })
             .RequireRateLimiting("public-intake");
 
@@ -849,6 +849,15 @@ public static class KeepEndpoints
             ? Results.Json(page, statusCode: StatusCodes.Status410Gone)
             : Results.Ok(page);
     }
+
+    // Public-safe identity projection (GAP-033/R90b-2a) — never includes email.
+    private static object ToPublicIntakeInfoResponse(KeepPublicIntakeInfo info) => new
+    {
+        businessName = info.BusinessName,
+        logoUrl = info.LogoUrl,
+        websiteUrl = info.WebsiteUrl,
+        phone = info.Phone
+    };
 }
 
 // Follow-up resolution request body (ADR-440, S83b).
