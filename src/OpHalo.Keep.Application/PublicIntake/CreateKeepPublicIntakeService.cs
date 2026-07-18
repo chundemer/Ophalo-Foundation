@@ -1,5 +1,3 @@
-using Microsoft.Extensions.Options;
-using OpHalo.Foundation.Application.Abstractions.Messaging;
 using OpHalo.Foundation.Application.Abstractions.Security;
 using OpHalo.Foundation.Application.Accounts.Access;
 using OpHalo.Foundation.Application.Accounts.Entitlements;
@@ -20,9 +18,7 @@ public sealed class CreateKeepPublicIntakeService(
     IAccountAccessPolicy accessPolicy,
     IFeatureAccessPolicy featurePolicy,
     IClock clock,
-    ICurrentUser currentUser,
-    IEmailSender emailSender,
-    IOptions<MagicLinkSettings> appSettings)
+    ICurrentUser currentUser)
 {
     private const int MaxAttempts = 5;
 
@@ -104,35 +100,6 @@ public sealed class CreateKeepPublicIntakeService(
         return await persistence.GetPublicIdentityBySlugAsync(slug, ct);
     }
 
-    private async Task TrySendTrackerLinkEmailAsync(string? email, string pageToken, CancellationToken ct)
-    {
-        if (string.IsNullOrWhiteSpace(email)) return;
-
-        var publicBaseUrl = appSettings.Value.PublicBaseUrl.TrimEnd('/');
-        if (string.IsNullOrWhiteSpace(publicBaseUrl)) return;
-
-        var trackerUrl = $"{publicBaseUrl}/keep/r/{pageToken}";
-        var subject = "Your request page link";
-        var html = $"""
-            <p>Your request has been received.</p>
-            <p>Use the link below to check the status of your request or send additional details:</p>
-            <p><a href="{trackerUrl}">{trackerUrl}</a></p>
-            <p style="color:#666;font-size:0.85em;">
-              This is a one-way notification. Replies to this email may not be monitored.
-              To reach the business directly, use the contact information provided at your request page.
-            </p>
-            """;
-
-        try
-        {
-            await emailSender.SendAsync(email, subject, html, ct);
-        }
-        catch
-        {
-            // Delivery failure must not fail intake; swallow silently.
-        }
-    }
-
     private static Result<bool> ValidateServiceLocation(CreateKeepPublicIntakeCommand command)
     {
         if (string.IsNullOrWhiteSpace(command.ServiceAddressLine1))
@@ -211,7 +178,6 @@ public sealed class CreateKeepPublicIntakeService(
             switch (commitResult)
             {
                 case PublicIntakeCommitResult.Committed:
-                    await TrySendTrackerLinkEmailAsync(v.TrimmedEmail, pageToken, ct);
                     return Result<CreateKeepPublicIntakeResult>.Success(
                         new CreateKeepPublicIntakeResult(request.Id, referenceCode, pageToken));
 

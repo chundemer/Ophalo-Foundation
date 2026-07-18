@@ -43,6 +43,23 @@ For every implementation slice:
   `{ businessName, logoUrl, websiteUrl, phone }` (never email). 70/70 unit tests and 38/38
   `KeepIntakeApiTests` integration tests pass, including seeded-identity and unknown/revoked-token
   non-enumeration coverage.
+- **R90b-2b / GAP-033 Tracker/terminal identity projection:** complete, committed in `b2e3b92`.
+  `KeepRequestPageLookup` and `GetRequestByPageTokenAsync` now carry the same
+  `LogoUrl`/`WebsiteUrl`/`Phone` identity (never email), threaded through
+  `KeepPublicCustomerContext` → `KeepCustomerPageResult` and populated in both
+  `KeepCustomerPageMapper.BuildExpiredResult` and `BuildActiveResult`, so a known business retains
+  identity at a terminal tracker state. `KeepCustomerPageTests`: 17/17 integration tests pass
+  (adds 3 new identity-projection tests); the four named `IKeepRequestDetailPersistence` fakes:
+  65/65 unit tests pass. The same commit also fixed a stale `KeepCustomerPageTests` assertion
+  (introduced in `474fc7d`, copy-pasted from the operator-detail boundary test) that incorrectly
+  expected `feedbackComment` absent from the customer page response — it is the customer's own
+  submitted comment (S84/`292d03d`) and is consumed by `CustomerTrackerView.tsx`.
+- **R90a delivery-alignment correction:** complete. `CreateKeepPublicIntakeService` no longer sends
+  an automatic tracker-link email after public intake commit; `TrySendTrackerLinkEmailAsync` and its
+  call site are removed, along with the now-unused `IEmailSender`/`IOptions<MagicLinkSettings>`
+  constructor dependencies. `KeepPublicIntakeServiceTests` dropped the three tracker-email tests and
+  their fakes (`NoOpEmailSender`, `RecordingEmailSender`, `FailingEmailSender`); 67/67 unit tests
+  pass. R90a is now fully decision-complete.
 
 ## Locked Public-Trust Decisions
 
@@ -60,41 +77,19 @@ For every implementation slice:
 - Keep does not send backend customer SMS or ingest SMS replies in V1. Broad customer
   messaging/notification workflows remain deferred.
 
-## Active Decision-Alignment Finding — R90a Delivery
+## Next Selected Code Slice — R90b-3
 
-The locked GAP-033 direction requires the business's first real email/text to deliver the tracker
-link. Preflight found that `CreateKeepPublicIntakeService` still calls
-`TrySendTrackerLinkEmailAsync` immediately after public intake commits. This backend behavior is not
-shown in the corrected UI but remains inconsistent with the decision. After the in-progress R90b-2a
-batch is completed/committed, run a narrow R90a delivery-alignment corrective slice to remove that
-automatic tracker-email call and its now-unused dependencies/tests. Do not represent R90a as fully
-decision-complete until that correction lands.
-
-## Next Selected Code Slice — R90b-2b / GAP-033 Tracker/Terminal Identity Projection
-
-**Goal:** Extend the known-business tracker/terminal customer-page response with the same
-public-safe identity (name/logo/website/phone, never email), populated in both the expired and
-active mapper branches so a known business does not go anonymous at a terminal state. Under the
-hard batch gate this is a separate slice from R90b-2a (already complete).
-
-**Expected surface (six production files):** `IKeepRequestDetailPersistence`,
-`EfKeepRequestDetailPersistence`, `KeepPublicCustomerContext`, `KeepPublicCustomerAccessGuard`,
-`KeepCustomerPageResult`, `KeepCustomerPageMapper`. Test fan-out includes four existing
-`IKeepRequestDetailPersistence` fakes (`KeepRequestDetailServiceTests`,
-`KeepPushCustomerIntentHookTests`, `KeepCreateBusinessRequestServiceTests`,
-`KeepPushAssignmentHookTests`) needing the new lookup fields, plus non-enumeration coverage for
-unknown page tokens.
-
-**Out of scope:** public rendering/titles/recovery UI (R90b-3), file uploads, email exposure,
-automated messaging, customer login, and unrelated schema changes.
+**Goal:** Public rendering, safe titles, and configured-contact recovery UI, building on the
+identity projections from R90b-2a/2b and the R90a delivery-alignment correction (all complete).
 
 ## R90b Follow-On Order
 
 1. **R90b-2a:** intake-info identity projection — complete.
 2. **R90b-2b:** tracker and known-business terminal identity projection, including expired/active
-   mapper branches and non-enumeration coverage — next.
-3. **R90b-3:** public rendering, safe titles, and configured-contact recovery UI.
-4. **R90c / GAP-035:** normal-browser auth-entry shell and recovery states, preserving ADR-390
+   mapper branches and non-enumeration coverage — complete.
+3. **R90a delivery-alignment correction:** remove automatic tracker-link email — complete.
+4. **R90b-3:** public rendering, safe titles, and configured-contact recovery UI — next.
+5. **R90c / GAP-035:** normal-browser auth-entry shell and recovery states, preserving ADR-390
    sterile mobile-handoff restrictions.
 
 ## Standing Technical Boundaries
