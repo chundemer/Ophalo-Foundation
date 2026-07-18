@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
-import { X } from "lucide-react";
 import {
   KeepBusinessHeader,
   KeepPageFooter,
@@ -225,21 +224,20 @@ export function CustomerTrackerView({
       <div className="mx-auto w-full max-w-2xl space-y-4 sm:space-y-5">
 
         {welcomeVisible && (
-          <div className="flex items-start gap-3 rounded-2xl border border-[var(--ophalo-border)] bg-card px-4 py-3.5 shadow-sm">
-            <div className="min-w-0 flex-1 text-sm text-foreground">
-              <p className="font-semibold">Request received — {page.referenceCode}</p>
-              <p className="mt-1 text-muted-foreground">
-                This page keeps your request, updates, and next steps in one place.
-                You can add details, ask a question, or request a call anytime below.
+          <div className="flex items-start justify-between gap-4 rounded-2xl bg-[var(--ophalo-navy)] px-5 py-4 sm:px-6">
+            <div className="min-w-0 text-sm text-white">
+              <p className="font-semibold">Welcome to your request page</p>
+              <p className="mt-1 text-white/80">
+                Use this page to see updates, add details, ask a question, or request a call from{" "}
+                {page.businessName}.
               </p>
             </div>
             <button
               type="button"
               onClick={dismissWelcome}
-              aria-label="Dismiss"
-              className="shrink-0 rounded-full p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+              className="shrink-0 rounded-lg border border-white/30 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-white/10"
             >
-              <X className="h-4 w-4" />
+              Got it
             </button>
           </div>
         )}

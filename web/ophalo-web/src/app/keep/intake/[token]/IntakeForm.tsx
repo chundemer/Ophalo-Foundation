@@ -92,6 +92,22 @@ const inputClass =
 const invalidInputClass =
   "border-destructive ring-1 ring-destructive focus:border-destructive focus:ring-destructive";
 
+function RequiredMark() {
+  return <span className="ml-1.5 text-xs font-semibold text-destructive">* Required</span>;
+}
+
+function OptionalMark({ children = "Optional" }: { children?: string }) {
+  return <span className="ml-1.5 text-xs font-normal text-muted-foreground">{children}</span>;
+}
+
+function formatPhoneAsYouType(raw: string): string {
+  const digits = raw.replace(/\D/g, "").slice(0, 10);
+  if (digits.length === 0) return "";
+  if (digits.length < 4) return `(${digits}`;
+  if (digits.length < 7) return `(${digits.slice(0, 3)}) ${digits.slice(3)}`;
+  return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
+}
+
 const labelClass = "block text-sm font-medium text-foreground mb-1.5";
 
 export default function IntakeForm({
@@ -116,6 +132,7 @@ export default function IntakeForm({
   const [showAptUnit, setShowAptUnit] = useState(false);
   const [contactPreference, setContactPreference] = useState("NoPreference");
   const [urgency, setUrgency] = useState("Routine");
+  const [phoneValue, setPhoneValue] = useState("");
   const submitInFlight = useRef(false);
   const fieldRefs = useRef<Partial<Record<KnownField, HTMLElement | null>>>({});
 
@@ -302,7 +319,120 @@ export default function IntakeForm({
 
             <div className="mt-6 space-y-7">
 
-            {/* ── Section 1: Request details ── */}
+            {/* ── Section 1: Contact ── */}
+            <section>
+              <KeepSectionHeader
+                icon={<UserRound className="h-4 w-4" />}
+                label="Who should we contact?"
+              />
+              <p className="mb-3 text-xs text-muted-foreground">
+                Shared only with {biz ?? "this business"} to respond to this request. Not used for
+                marketing or sold.
+              </p>
+
+              <div className="space-y-3">
+                <div>
+                  <label htmlFor="customerName" className={labelClass}>
+                    Your name <RequiredMark />
+                  </label>
+                  <input
+                    id="customerName"
+                    name="customerName"
+                    type="text"
+                    autoComplete="name"
+                    required
+                    disabled={submitting}
+                    ref={(el) => { fieldRefs.current.customerName = el; }}
+                    aria-invalid={fieldError?.field === "customerName"}
+                    aria-describedby={fieldError?.field === "customerName" ? "customerName-error" : undefined}
+                    className={inputClass + (fieldError?.field === "customerName" ? " " + invalidInputClass : "")}
+                    placeholder="Your name"
+                  />
+                  {fieldError?.field === "customerName" && (
+                    <p id="customerName-error" role="alert" className="mt-1.5 text-xs font-medium text-destructive">
+                      {fieldError.message}
+                    </p>
+                  )}
+                </div>
+
+                <div>
+                  <label htmlFor="customerPhone" className={labelClass}>
+                    Mobile phone <RequiredMark />
+                  </label>
+                  <input
+                    id="customerPhone"
+                    name="customerPhone"
+                    type="tel"
+                    autoComplete="tel"
+                    inputMode="tel"
+                    required
+                    disabled={submitting}
+                    value={phoneValue}
+                    onChange={(e) => setPhoneValue(formatPhoneAsYouType(e.target.value))}
+                    ref={(el) => { fieldRefs.current.customerPhone = el; }}
+                    aria-invalid={fieldError?.field === "customerPhone"}
+                    aria-describedby={fieldError?.field === "customerPhone" ? "customerPhone-error" : undefined}
+                    className={inputClass + (fieldError?.field === "customerPhone" ? " " + invalidInputClass : "")}
+                    placeholder="(555) 000-0000"
+                  />
+                  {fieldError?.field === "customerPhone" && (
+                    <p id="customerPhone-error" role="alert" className="mt-1.5 text-xs font-medium text-destructive">
+                      {fieldError.message}
+                    </p>
+                  )}
+                </div>
+
+                <div>
+                  <label htmlFor="customerEmail" className={labelClass}>
+                    Email{" "}
+                    {contactPreference === "Email" ? <RequiredMark /> : <OptionalMark />}
+                  </label>
+                  <input
+                    id="customerEmail"
+                    name="customerEmail"
+                    type="email"
+                    autoComplete="email"
+                    inputMode="email"
+                    required={contactPreference === "Email"}
+                    disabled={submitting}
+                    ref={(el) => { fieldRefs.current.customerEmail = el; }}
+                    aria-invalid={fieldError?.field === "customerEmail"}
+                    aria-describedby={fieldError?.field === "customerEmail" ? "customerEmail-error" : undefined}
+                    className={inputClass + (fieldError?.field === "customerEmail" ? " " + invalidInputClass : "")}
+                    placeholder="you@example.com"
+                  />
+                  {fieldError?.field === "customerEmail" && (
+                    <p id="customerEmail-error" role="alert" className="mt-1.5 text-xs font-medium text-destructive">
+                      {fieldError.message}
+                    </p>
+                  )}
+                  <p className="mt-1.5 text-xs text-muted-foreground">
+                    {biz ? `${biz} may use this to contact you about your request.` : "May be used to contact you about your request."}{" "}
+                    Not used for marketing.
+                  </p>
+                </div>
+
+                <div>
+                  <label htmlFor="contactPreference" className={labelClass}>
+                    Preferred contact method
+                  </label>
+                  <select
+                    id="contactPreference"
+                    value={contactPreference}
+                    onChange={(e) => setContactPreference(e.target.value)}
+                    disabled={submitting}
+                    className={inputClass + " text-base"}
+                  >
+                    <option value="NoPreference">No preference</option>
+                    <option value="TextMessage">Text message</option>
+                    <option value="PhoneCall">Phone call</option>
+                    <option value="Email">Email</option>
+                  </select>
+                </div>
+              </div>
+            </section>
+
+            {/* ── Section 2: Request details ── */}
             <section>
               <KeepSectionHeader
                 icon={<ClipboardList className="h-4 w-4" />}
@@ -330,7 +460,7 @@ export default function IntakeForm({
               )}
             </section>
 
-            {/* ── Section 2: Urgency ── */}
+            {/* ── Section 3: Urgency ── */}
             <section>
               <KeepSectionHeader
                 icon={<Clock className="h-4 w-4" />}
@@ -369,7 +499,7 @@ export default function IntakeForm({
               )}
             </section>
 
-            {/* ── Section 3: Service location ── */}
+            {/* ── Section 4: Service location ── */}
             <section>
               <KeepSectionHeader
                 icon={<MapPin className="h-4 w-4" />}
@@ -385,7 +515,7 @@ export default function IntakeForm({
               <div className="space-y-3">
                 <div>
                   <label htmlFor="serviceAddressLine1" className={labelClass}>
-                    Street address <span className="text-destructive">*</span>
+                    Street address <RequiredMark />
                   </label>
                   <input
                     id="serviceAddressLine1"
@@ -410,8 +540,7 @@ export default function IntakeForm({
                 {showAptUnit ? (
                   <div>
                     <label htmlFor="serviceAddressLine2" className={labelClass}>
-                      Apt / unit{" "}
-                      <span className="font-normal text-muted-foreground">(optional)</span>
+                      Apt / unit <OptionalMark />
                     </label>
                     <input
                       id="serviceAddressLine2"
@@ -436,7 +565,7 @@ export default function IntakeForm({
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_120px_100px]">
                   <div>
                     <label htmlFor="serviceCity" className={labelClass}>
-                      City <span className="text-destructive">*</span>
+                      City <RequiredMark />
                     </label>
                     <input
                       id="serviceCity"
@@ -460,7 +589,7 @@ export default function IntakeForm({
 
                   <div>
                     <label htmlFor="serviceState" className={labelClass}>
-                      State <span className="text-destructive">*</span>
+                      State <RequiredMark />
                     </label>
                     <select
                       id="serviceState"
@@ -487,8 +616,7 @@ export default function IntakeForm({
 
                   <div>
                     <label htmlFor="serviceZip" className={labelClass}>
-                      ZIP{" "}
-                      <span className="font-normal text-muted-foreground">(opt.)</span>
+                      ZIP <OptionalMark>Opt.</OptionalMark>
                     </label>
                     <input
                       id="serviceZip"
@@ -501,123 +629,6 @@ export default function IntakeForm({
                       placeholder="00000"
                     />
                   </div>
-                </div>
-              </div>
-            </section>
-
-            {/* ── Section 4: Contact ── */}
-            <section>
-              <KeepSectionHeader
-                icon={<UserRound className="h-4 w-4" />}
-                label="Who should we contact?"
-              />
-              <p className="mb-3 text-xs text-muted-foreground">
-                Shared only with {biz ?? "this business"} to respond to this request. Not used for
-                marketing or sold.
-              </p>
-
-              <div className="space-y-3">
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                  <div>
-                    <label htmlFor="customerName" className={labelClass}>
-                      Name <span className="text-destructive">*</span>
-                    </label>
-                    <input
-                      id="customerName"
-                      name="customerName"
-                      type="text"
-                      autoComplete="name"
-                      required
-                      disabled={submitting}
-                      ref={(el) => { fieldRefs.current.customerName = el; }}
-                      aria-invalid={fieldError?.field === "customerName"}
-                      aria-describedby={fieldError?.field === "customerName" ? "customerName-error" : undefined}
-                      className={inputClass + (fieldError?.field === "customerName" ? " " + invalidInputClass : "")}
-                      placeholder="Your name"
-                    />
-                    {fieldError?.field === "customerName" && (
-                      <p id="customerName-error" role="alert" className="mt-1.5 text-xs font-medium text-destructive">
-                        {fieldError.message}
-                      </p>
-                    )}
-                  </div>
-
-                  <div>
-                    <label htmlFor="customerPhone" className={labelClass}>
-                      Phone <span className="text-destructive">*</span>
-                    </label>
-                    <input
-                      id="customerPhone"
-                      name="customerPhone"
-                      type="tel"
-                      autoComplete="tel"
-                      inputMode="tel"
-                      required
-                      disabled={submitting}
-                      ref={(el) => { fieldRefs.current.customerPhone = el; }}
-                      aria-invalid={fieldError?.field === "customerPhone"}
-                      aria-describedby={fieldError?.field === "customerPhone" ? "customerPhone-error" : undefined}
-                      className={inputClass + (fieldError?.field === "customerPhone" ? " " + invalidInputClass : "")}
-                      placeholder="(555) 000-0000"
-                    />
-                    {fieldError?.field === "customerPhone" && (
-                      <p id="customerPhone-error" role="alert" className="mt-1.5 text-xs font-medium text-destructive">
-                        {fieldError.message}
-                      </p>
-                    )}
-                  </div>
-                </div>
-
-                <div>
-                  <label htmlFor="contactPreference" className={labelClass}>
-                    Preferred contact method
-                  </label>
-                  <select
-                    id="contactPreference"
-                    value={contactPreference}
-                    onChange={(e) => setContactPreference(e.target.value)}
-                    disabled={submitting}
-                    className={inputClass + " text-base"}
-                  >
-                    <option value="NoPreference">No preference</option>
-                    <option value="TextMessage">Text message</option>
-                    <option value="PhoneCall">Phone call</option>
-                    <option value="Email">Email</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label htmlFor="customerEmail" className={labelClass}>
-                    Email{" "}
-                    {contactPreference === "Email" ? (
-                      <span className="text-destructive">*</span>
-                    ) : (
-                      <span className="font-normal text-muted-foreground">(optional, recommended)</span>
-                    )}
-                  </label>
-                  <input
-                    id="customerEmail"
-                    name="customerEmail"
-                    type="email"
-                    autoComplete="email"
-                    inputMode="email"
-                    required={contactPreference === "Email"}
-                    disabled={submitting}
-                    ref={(el) => { fieldRefs.current.customerEmail = el; }}
-                    aria-invalid={fieldError?.field === "customerEmail"}
-                    aria-describedby={fieldError?.field === "customerEmail" ? "customerEmail-error" : undefined}
-                    className={inputClass + (fieldError?.field === "customerEmail" ? " " + invalidInputClass : "")}
-                    placeholder="you@example.com"
-                  />
-                  {fieldError?.field === "customerEmail" && (
-                    <p id="customerEmail-error" role="alert" className="mt-1.5 text-xs font-medium text-destructive">
-                      {fieldError.message}
-                    </p>
-                  )}
-                  <p className="mt-1.5 text-xs text-muted-foreground">
-                    {biz ? `${biz} may use this to contact you about your request.` : "May be used to contact you about your request."}{" "}
-                    Not used for marketing.
-                  </p>
                 </div>
               </div>
             </section>
