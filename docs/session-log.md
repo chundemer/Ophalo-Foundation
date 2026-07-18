@@ -68,10 +68,27 @@ For every implementation slice:
   dynamic, token-free `generateMetadata` titles (falls back to a generic title when the business is
   unknown), preserving `noindex`/`no-referrer`. `TrackerExpiredView` is now shared between the SSR
   410 path and the client-side expiry transition. Verified via `tsc --noEmit`, `next build`, and
-  manual checks against a live (restarted) API: active state, unknown-token non-enumeration,
-  no-logo/no-contact fallback. Not yet visually confirmed with a business that has logo/website/phone
-  configured, or a genuinely expired (30+ day) tracker — both share the same components already
-  exercised by the no-identity checks and by backend `KeepCustomerPageTests` coverage.
+  manual checks against a live API: active state, unknown-token non-enumeration, no-logo/no-contact
+  fallback; a real configured phone was later confirmed rendering correctly (R90b-3b verification
+  below). Not yet visually confirmed on a genuinely expired (30+ day) tracker — shares the same
+  `TrackerExpiredView` component already exercised by backend `KeepCustomerPageTests` coverage.
+- **R90b-3b / GAP-033 Intake identity rendering + post-submit continuity:** complete, committed in
+  `7c95dc2`. Supersedes the earlier three-file submitted-receipt plan per the revised post-submit
+  decision: successful intake now navigates directly to `/keep/r/{pageToken}?welcome=1` (the
+  pageToken was already in the create-intake response, previously unused) instead of rendering a
+  separate receipt screen; `IntakeForm`'s dead `success` stage is removed. The tracker
+  (`CustomerTrackerView`) shows a one-time, dismissible welcome banner (reference code +
+  tracker-use guidance) when `welcome=1` is present; the query param is stripped via
+  `router.replace` on load so refreshes/later visits never re-show it. `KeepConfiguredContact` was
+  moved onto intake's pre-entry identity block (both `intake/[token]` and `s/[slug]`) rather than a
+  terminal screen, per GAP-033's identity-before-form-entry requirement. Also fixes stale intake-form
+  copy that predated the R90a email removal and falsely claimed an automatic tracker-link email.
+  Verified via `tsc --noEmit`, `next build`, and manual checks against a live API: form-stage
+  identity with real logo/website/phone data (confirmed `tel:901-888-8888` rendering), stale-copy
+  removal, live intake→pageToken contract, welcome banner present only with the query param and
+  absent on ordinary visits. Not yet visually confirmed via an actual browser form submission
+  (verified via direct API/URL checks simulating the same data flow) — Christian can spot-check the
+  end-to-end browser redirect if desired.
 - **Deferred:** explicit customer-facing OffSeason banner. See
   `docs/pilot-readiness-bug-tracker.md` GAP-033 for the pre-deployment follow-on decision — the
   public customer-page contract has no `IsOffSeason` field today, so R90b-3 does not add one.
@@ -94,15 +111,11 @@ For every implementation slice:
 - A configured business phone is a secondary public recovery/contact route; it does not replace the
   tracker as the post-submit customer destination.
 
-## Next Selected Code Slice — R90b-3b
+## Next Selected Code Slice — R90c / GAP-035
 
-**Goal:** Complete post-submit continuity and intake identity rendering. Successful public intake
-navigates directly to the private tracker; its first visit shows a one-time dismissible welcome
-banner. Intake routes retain business identity before submission, while the tracker—not a separate
-submitted-receipt page—is the post-submit destination. Reuse the `KeepBusinessHeader` and
-`KeepConfiguredContact` components from R90b-3a. Re-preflight the affected intake submit contract
-and tracker onboarding seam before editing; the prior three-file submitted-receipt scope is
-superseded by this decision.
+**Goal:** Normal-browser auth-entry shell and recovery states, preserving ADR-390 sterile
+mobile-handoff restrictions. Pre-work not yet confirmed complete — requires discovery before an
+implementation-ready file-level gate.
 
 ## R90b Follow-On Order
 
@@ -112,9 +125,10 @@ superseded by this decision.
 3. **R90a delivery-alignment correction:** remove automatic tracker-link email — complete.
 4. **R90b-3a:** tracker-route identity rendering (logo/website/phone, dynamic token-free titles) —
    complete, committed in `fcd3152`.
-5. **R90b-3b:** intake-route identity rendering (form + submitted receipt) — next.
+5. **R90b-3b:** intake-route identity rendering + direct post-submit tracker navigation with
+   one-time welcome banner — complete, committed in `7c95dc2`.
 6. **R90c / GAP-035:** normal-browser auth-entry shell and recovery states, preserving ADR-390
-   sterile mobile-handoff restrictions.
+   sterile mobile-handoff restrictions — next.
 
 ## Standing Technical Boundaries
 
