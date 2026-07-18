@@ -77,18 +77,30 @@ For every implementation slice:
   decision: successful intake now navigates directly to `/keep/r/{pageToken}?welcome=1` (the
   pageToken was already in the create-intake response, previously unused) instead of rendering a
   separate receipt screen; `IntakeForm`'s dead `success` stage is removed. The tracker
-  (`CustomerTrackerView`) shows a one-time, dismissible welcome banner (reference code +
-  tracker-use guidance) when `welcome=1` is present; the query param is stripped via
-  `router.replace` on load so refreshes/later visits never re-show it. `KeepConfiguredContact` was
-  moved onto intake's pre-entry identity block (both `intake/[token]` and `s/[slug]`) rather than a
-  terminal screen, per GAP-033's identity-before-form-entry requirement. Also fixes stale intake-form
-  copy that predated the R90a email removal and falsely claimed an automatic tracker-link email.
-  Verified via `tsc --noEmit`, `next build`, and manual checks against a live API: form-stage
-  identity with real logo/website/phone data (confirmed `tel:901-888-8888` rendering), stale-copy
-  removal, live intake→pageToken contract, welcome banner present only with the query param and
-  absent on ordinary visits. Not yet visually confirmed via an actual browser form submission
-  (verified via direct API/URL checks simulating the same data flow) — Christian can spot-check the
-  end-to-end browser redirect if desired.
+  (`CustomerTrackerView`) shows a one-time, dismissible welcome banner when `welcome=1` is present;
+  the query param is stripped via `router.replace` on load so refreshes/later visits never re-show
+  it. `KeepConfiguredContact` was moved onto intake's pre-entry identity block (both
+  `intake/[token]` and `s/[slug]`) rather than a terminal screen, per GAP-033's
+  identity-before-form-entry requirement. Also fixes stale intake-form copy that predated the R90a
+  email removal and falsely claimed an automatic tracker-link email. Verified via `tsc --noEmit`,
+  `next build`, and manual checks against a live API: form-stage identity with real logo/website/phone
+  data (confirmed `tel:901-888-8888` rendering), stale-copy removal, live intake→pageToken contract,
+  welcome banner present only with the query param and absent on ordinary visits. Not yet visually
+  confirmed via an actual browser form submission (verified via direct API/URL checks simulating the
+  same data flow) — Christian can spot-check the end-to-end browser redirect if desired.
+- **R90b-3b polish follow-up:** complete, committed in `2e4dac8`, per Christian's design review.
+  Intake form sections reordered so customer-identifying fields come first (Your name, Mobile phone,
+  Email, then Preferred contact method), followed by request details and service address. All
+  required fields (name, phone, street address, city, state) now show a red asterisk plus visible
+  "Required" text instead of asterisk-only, for accessibility; email shows "Optional" by default and
+  the same required treatment when Email is the chosen contact preference. Mobile phone formats live
+  as typed (`(512) 555-0199`). The tracker welcome banner is redesigned from a floating white card to
+  a full-width navy band with white text and a "Got it" dismiss button at the far right (not sticky);
+  copy simplified to "Welcome to your request page" / "Use this page to see updates, add details, ask
+  a question, or request a call from {Business}."; the reference code was removed from the banner
+  (stays in the status card only, where it already belonged). Verified via `tsc --noEmit`,
+  `next build`, and manual checks against a live API confirming field order, required/optional marks,
+  address-disclosure placement, and banner content/styling.
 - **Deferred:** explicit customer-facing OffSeason banner. See
   `docs/pilot-readiness-bug-tracker.md` GAP-033 for the pre-deployment follow-on decision — the
   public customer-page contract has no `IsOffSeason` field today, so R90b-3 does not add one.
