@@ -201,21 +201,23 @@ customer return access.
   and phone contact when configured. Do not expose unverified owner-entered URLs, imply that OpHalo
   has independently verified a business, or require social-network links.
 - Rewrite the form introduction to state the actual customer outcome consistently, for example:
-  `Submit your request, then view updates on your private request page.` Do not promise a specific
-  follow-up channel unless the product will actually deliver one.
+  `Submit your request and {businessName} will contact you soon.` The private tracker is not an
+  intake-success destination or an automatic delivery promise: the business supplies its
+  request-specific link in its first real customer email or text, then may include it in later
+  customer communications.
 - Move the factual address privacy disclosure directly below the `Where is the service needed?`
   heading, before the street-address field. It must plainly identify what is shared, with whom, and
   what is not visible on the private request page. Add concise, equally factual contact-use copy
   before name/phone entry.
-- Make email visible and optional but recommended for durable return access, with plain copy such as
-  `Email (recommended) — we'll send your private request-page link.` Preserve the existing customer
-  preference model and do not treat a request-update channel as marketing consent.
-- Make the submit-state promise specific: no payment is collected on this page (only if universally
-  true), the customer will see their private request page next, and the request is then received by
-  the named business. The post-submit page must provide a durable confirmation, safe request
-  reference, clear next-step/return guidance, and link delivery through the selected permitted
-  channel where supported. A customer without a delivery channel must be told to save the private
-  page rather than being left unable to return.
+- Keep email visible and optional for the business to contact the customer. Do not describe it as an
+  automatic tracker-link delivery mechanism. Preserve the existing customer preference model and do
+  not treat a request-update channel as marketing consent.
+- Replace the current post-submit private-page handoff with a durable, non-redirecting confirmation:
+  the named business received the request, will contact the customer soon, and a safe request
+  reference is shown. Do not show an `Open private request page` CTA, instruct the customer to save
+  a capability URL, claim a link was emailed, or promise that the tracker is immediately available.
+  The business's first actual email or text is the trusted delivery point for the private
+  request-specific tracker link.
 - Add a real public privacy-policy link beside the submission/identity context. Any marketing use of
   phone or email requires separate explicit consent and appropriate legal review; do not use vague
   `secure`, `verified`, or `end-to-end encrypted` badges unless those claims are technically,
@@ -226,10 +228,8 @@ customer return access.
   non-enumerating and must not reveal business identity. Known-business terminal states must not
   strand the customer in an anonymous shell; provide the safe business contact/recovery route that
   the available public contract permits.
-- Replace the success state's render-time auto-redirect with managed effect/cleanup behavior. Do not
-  rush a customer through a two-second interstitial before they can understand confirmation, save
-  their private-page access, or use the explicit continue action. A manual continue must not leave a
-  stale redirect pending.
+- Eliminate the success-state redirect and private-page handoff altogether. Submission confirmation
+  must remain stable until the customer leaves; it must not schedule automatic navigation.
 - Make safe public browser/document titles identify the known business and outcome, for example
   `Request service from {businessName} — OpHalo Keep` and `{businessName} request updates — OpHalo
   Keep`. Retain `noindex` and restrictive referrer behavior for capability-link pages; do not put a
@@ -239,8 +239,8 @@ customer return access.
   customer uncertainty.
 - Expand the public-intake launch verification gate with a skeptical-first-time-customer review on
   desktop and a real phone: business recognition from an inbound link, data-sharing comprehension
-  before address entry, no-payment expectation, private-page return after success, lost-page
-  recovery, and the unbranded-logo fallback.
+  before address entry, no-payment expectation, stable confirmation after success, first business
+  response containing the tracker link, and the unbranded-logo fallback.
 
 **Acceptance criteria:**
 
@@ -249,16 +249,17 @@ customer return access.
   none are configured.
 - Before entering an address or phone number, a customer can understand who receives that data and
   how it is used without relying on unsupported security claims.
-- Public intake copy, submit behavior, and success state make one accurate promise about when the
-  private request page is available and how the customer can return to it.
-- Customers can optionally provide an email for a private-page link; customers who do not have a
-  permitted delivery channel receive explicit save/return guidance.
+- Public intake copy, submit behavior, and success state accurately state that the business has
+  received the request and will make first contact; they make no immediate tracker-link promise.
+- The success state shows the request reference and does not show a tracker CTA, saving guidance, or
+  a claim that the tracker link was sent. The first business email/text is the tracker-link delivery
+  point.
 - Privacy and marketing-consent boundaries are visible and accurately implemented; service-location
   and internal-only data remain absent from the public tracker.
 - Known-business success, expired, unavailable, and OffSeason/error states retain safe identity and
   a usable recovery/contact path; unknown-token states do not reveal account identity.
-- Success/return access remains readable and controllable: no render-time redirect leak or automatic
-  navigation prevents a customer from understanding or preserving their private request page.
+- The success confirmation is readable and controllable: no redirect, scheduled navigation, or
+  private-link handoff occurs after submission.
 - Public browser titles identify the known business/outcome without leaking a capability token or
   private request information.
 - Screenshot/manual verification passes for known-logo, no-logo, desktop, and real-phone inbound
