@@ -55,9 +55,11 @@ Run after request-list changes and the selected desktop-facing gaps are committe
 - New Request: Owner/Admin customer-text handoff; one staff QR only; confirmed caller number;
   manual-entry fallback; Operator staff-entry path; captured-request draft/error retention.
 - Public intake: durable `/keep/s/{slug}` form, business-first identity with secondary OpHalo Keep
-  endorsement, pre-entry data-use clarity, validation, submission, private-page return/recovery, and
-  return to the business workbench path. Verify known-business post-submit/expired/unavailable/
-  OffSeason states retain safe identity and recovery while unknown tokens remain non-enumerating.
+  endorsement, pre-entry data-use clarity, validation, and a stable request-submitted confirmation
+  with safe reference. Verify it has no private-page CTA, tracker-link delivery claim, or automatic
+  redirect; verify the business's first real email/text carries the private tracker link. Verify
+  known-business post-submit/expired/unavailable/OffSeason states retain safe identity and recovery
+  while unknown tokens remain non-enumerating.
 - Account start and auth entry: visible OpHalo Keep identity, accurate pilot/magic-link outcome copy,
   desktop/laptop composition, time-zone confirmation/correction, sign-in recovery, pilot-full and
   duplicate-email states, Privacy/Terms/support routes where appropriate, associated/announced
@@ -84,7 +86,8 @@ handoff behavior; desktop viewport emulation is useful but is not a substitute.
   available, long data, loading/error states, and external `tel:`/`sms:`/email intents.
 - Public pages: open the durable public intake link from the phone and complete a test request;
   verify business-first identity, OpHalo Keep endorsement, privacy clarity before address/contact
-  entry, and private-page return/recovery. Review account-start/auth entry in its stacked mobile
+  entry, stable request-submitted confirmation without a tracker handoff or redirect, and then the
+  tracker link in the business's first real message. Review account-start/auth entry in its stacked mobile
   presentation as well, including known-business terminal states and safe browser/document titles.
 
 Record platform-specific failures separately from general PWA defects.
