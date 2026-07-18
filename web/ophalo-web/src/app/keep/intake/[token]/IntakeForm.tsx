@@ -39,35 +39,44 @@ function parseErrorCode(body: unknown): string | undefined {
   return undefined;
 }
 
-function fieldError(code: string | undefined): string | null {
+type KnownField =
+  | "customerName"
+  | "customerPhone"
+  | "customerEmail"
+  | "description"
+  | "serviceAddressLine1"
+  | "serviceCity"
+  | "serviceState";
+
+function mapKnownFieldError(code: string | undefined): { field: KnownField; message: string } | null {
   switch (code) {
     case "KeepRequest.CustomerNameRequired":
-      return "Please enter your name.";
+      return { field: "customerName", message: "Please enter your name." };
     case "KeepRequest.CustomerNameTooLong":
-      return "Name is too long (max 200 characters).";
+      return { field: "customerName", message: "Name is too long (max 200 characters)." };
     case "KeepRequest.CustomerPhoneRequired":
-      return "Please enter your phone number.";
+      return { field: "customerPhone", message: "Please enter your phone number." };
     case "KeepRequest.CustomerPhoneTooLong":
-      return "Phone number is too long.";
+      return { field: "customerPhone", message: "Phone number is too long." };
     case "KeepRequest.CustomerPhoneInvalidCharacters":
-      return "Please enter a valid phone number.";
+      return { field: "customerPhone", message: "Please enter a valid phone number." };
     case "KeepRequest.CustomerPhoneInvalidFormat":
-      return "Please enter a 10-digit phone number.";
+      return { field: "customerPhone", message: "Please enter a 10-digit phone number." };
     case "KeepRequest.CustomerEmailTooLong":
-      return "Email address is too long.";
+      return { field: "customerEmail", message: "Email address is too long." };
     case "KeepRequest.CustomerEmailInvalid":
-      return "Please enter a valid email address.";
+      return { field: "customerEmail", message: "Please enter a valid email address." };
     case "KeepRequest.DescriptionRequired":
-      return "Please describe what you need help with.";
+      return { field: "description", message: "Please describe what you need help with." };
     case "KeepRequest.DescriptionTooLong":
-      return "Description is too long (max 4000 characters).";
+      return { field: "description", message: "Description is too long (max 4000 characters)." };
     case "KeepRequest.ServiceAddressLine1Required":
-      return "Please enter the service address.";
+      return { field: "serviceAddressLine1", message: "Please enter the service address." };
     case "KeepRequest.ServiceCityRequired":
-      return "Please enter the city.";
+      return { field: "serviceCity", message: "Please enter the city." };
     case "KeepRequest.ServiceStateRequired":
     case "KeepRequest.ServiceStateInvalid":
-      return "Please select a state.";
+      return { field: "serviceState", message: "Please select a state." };
     default:
       return null;
   }
@@ -77,6 +86,9 @@ const inputClass =
   "w-full rounded-lg border border-[var(--ophalo-border)] bg-card px-4 py-3 text-sm " +
   "placeholder:text-muted-foreground focus:border-[var(--keep-accent)] focus:ring-1 " +
   "focus:ring-[var(--keep-accent)] focus:outline-none disabled:opacity-50";
+
+const invalidInputClass =
+  "border-destructive ring-1 ring-destructive focus:border-destructive focus:ring-destructive";
 
 const labelClass = "block text-sm font-medium text-foreground mb-1.5";
 
@@ -94,19 +106,22 @@ export default function IntakeForm({
   const [pageToken, setPageToken] = useState<string>("");
   const [emailProvided, setEmailProvided] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [fieldError, setFieldError] = useState<{ field: KnownField; message: string } | null>(null);
   const [showAptUnit, setShowAptUnit] = useState(false);
-  const [showEmail, setShowEmail] = useState(false);
   const [contactPreference, setContactPreference] = useState("NoPreference");
   const [urgency, setUrgency] = useState("Routine");
   const submitInFlight = useRef(false);
+  const fieldRefs = useRef<Partial<Record<KnownField, HTMLElement | null>>>({});
 
   const biz = businessName ?? null;
+  const trackerUrl = pageToken ? `/keep/r/${pageToken}` : null;
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (submitInFlight.current) return;
     submitInFlight.current = true;
     setError(null);
+    setFieldError(null);
     setStage("submitting");
 
     const data = new FormData(e.currentTarget);
@@ -169,11 +184,14 @@ export default function IntakeForm({
       return;
     }
 
-    const known = fieldError(code);
+    const known = mapKnownFieldError(code);
     if (known) {
-      setError(known);
+      setFieldError(known);
       setStage("form");
       submitInFlight.current = false;
+      const el = fieldRefs.current[known.field];
+      el?.focus();
+      el?.scrollIntoView({ behavior: "smooth", block: "center" });
       return;
     }
 
@@ -231,13 +249,6 @@ export default function IntakeForm({
   }
 
   if (stage === "success") {
-    const trackerUrl = pageToken ? `/keep/r/${pageToken}` : null;
-
-    // Auto-redirect to the tracker page after a short confirmation delay.
-    if (trackerUrl && typeof window !== "undefined") {
-      setTimeout(() => { window.location.href = trackerUrl; }, 2000);
-    }
-
     return (
       <main className="min-h-screen bg-[var(--ophalo-canvas)] px-4 py-6 sm:py-10">
         <div className="mx-auto w-full max-w-2xl space-y-4 sm:space-y-5">
@@ -251,14 +262,19 @@ export default function IntakeForm({
           <KeepCardShell accentTop>
             <h1 className="font-serif text-base font-semibold text-foreground">Request submitted.</h1>
             <p className="mt-2 text-sm text-muted-foreground">
-              {biz
-                ? `${biz} has received your request. Taking you to your private request page…`
-                : "Your request has been received. Taking you to your private request page…"}
+              {biz ? `${biz} has received your request.` : "Your request has been received."}
             </p>
+
+            {trackerUrl && (
+              <p className="mt-3 text-sm text-muted-foreground">
+                Your private request page is ready whenever you are. Save its link once you open
+                it — it's the only way back to it.
+              </p>
+            )}
 
             {emailProvided && (
               <p className="mt-3 text-sm text-muted-foreground">
-                A link to your request page has been sent to your email address.
+                A link to your request page has also been sent to your email address.
                 Replies to that email may not be monitored — use your request page to send messages
                 directly to {biz ?? "the business"}.
               </p>
@@ -271,7 +287,7 @@ export default function IntakeForm({
                   className="gap-2"
                   onClick={() => { window.location.href = trackerUrl; }}
                 >
-                  Open request page now
+                  Open private request page
                   <ArrowRight className="h-4 w-4" aria-hidden />
                 </KeepButton>
               </div>
@@ -319,8 +335,8 @@ export default function IntakeForm({
             </h1>
             <p className="mt-1.5 text-sm text-muted-foreground">
               {biz
-                ? `Share a few details and ${biz} will follow up with your private request link.`
-                : "Share a few details and the business will follow up with your private request link."}
+                ? `Share a few details. After you submit, you'll get a private page to track this request and message ${biz}.`
+                : "Share a few details. After you submit, you'll get a private page to track this request and message the business."}
             </p>
 
             <div className="mt-6 space-y-7">
@@ -340,9 +356,17 @@ export default function IntakeForm({
                 rows={5}
                 required
                 disabled={submitting}
-                className={inputClass + " resize-none"}
+                ref={(el) => { fieldRefs.current.description = el; }}
+                aria-invalid={fieldError?.field === "description"}
+                aria-describedby={fieldError?.field === "description" ? "description-error" : undefined}
+                className={inputClass + " resize-none" + (fieldError?.field === "description" ? " " + invalidInputClass : "")}
                 placeholder="Example: My AC stopped blowing cold air last night. The fan is running but no cool air is coming out."
               />
+              {fieldError?.field === "description" && (
+                <p id="description-error" role="alert" className="mt-1.5 text-xs font-medium text-destructive">
+                  {fieldError.message}
+                </p>
+              )}
             </section>
 
             {/* ── Section 2: Urgency ── */}
@@ -390,6 +414,12 @@ export default function IntakeForm({
                 icon={<MapPin className="h-4 w-4" />}
                 label="Where is the service needed?"
               />
+              <div className="mb-3 flex items-center gap-1.5 text-xs text-muted-foreground">
+                <Lock className="h-3 w-3 shrink-0" aria-hidden />
+                <span>
+                  Shared with {biz ?? "this business"} only. Not shown on your request page.
+                </span>
+              </div>
 
               <div className="space-y-3">
                 <div>
@@ -403,9 +433,17 @@ export default function IntakeForm({
                     autoComplete="address-line1"
                     required
                     disabled={submitting}
-                    className={inputClass}
+                    ref={(el) => { fieldRefs.current.serviceAddressLine1 = el; }}
+                    aria-invalid={fieldError?.field === "serviceAddressLine1"}
+                    aria-describedby={fieldError?.field === "serviceAddressLine1" ? "serviceAddressLine1-error" : undefined}
+                    className={inputClass + (fieldError?.field === "serviceAddressLine1" ? " " + invalidInputClass : "")}
                     placeholder="123 Main St"
                   />
+                  {fieldError?.field === "serviceAddressLine1" && (
+                    <p id="serviceAddressLine1-error" role="alert" className="mt-1.5 text-xs font-medium text-destructive">
+                      {fieldError.message}
+                    </p>
+                  )}
                 </div>
 
                 {showAptUnit ? (
@@ -446,9 +484,17 @@ export default function IntakeForm({
                       autoComplete="address-level2"
                       required
                       disabled={submitting}
-                      className={inputClass}
+                      ref={(el) => { fieldRefs.current.serviceCity = el; }}
+                      aria-invalid={fieldError?.field === "serviceCity"}
+                      aria-describedby={fieldError?.field === "serviceCity" ? "serviceCity-error" : undefined}
+                      className={inputClass + (fieldError?.field === "serviceCity" ? " " + invalidInputClass : "")}
                       placeholder="City"
                     />
+                    {fieldError?.field === "serviceCity" && (
+                      <p id="serviceCity-error" role="alert" className="mt-1.5 text-xs font-medium text-destructive">
+                        {fieldError.message}
+                      </p>
+                    )}
                   </div>
 
                   <div>
@@ -461,13 +507,21 @@ export default function IntakeForm({
                       required
                       disabled={submitting}
                       defaultValue=""
-                      className={inputClass + " text-base"}
+                      ref={(el) => { fieldRefs.current.serviceState = el; }}
+                      aria-invalid={fieldError?.field === "serviceState"}
+                      aria-describedby={fieldError?.field === "serviceState" ? "serviceState-error" : undefined}
+                      className={inputClass + " text-base" + (fieldError?.field === "serviceState" ? " " + invalidInputClass : "")}
                     >
                       <option value="" disabled>State</option>
                       {US_STATES.map(([code, name]) => (
                         <option key={code} value={code}>{name}</option>
                       ))}
                     </select>
+                    {fieldError?.field === "serviceState" && (
+                      <p id="serviceState-error" role="alert" className="mt-1.5 text-xs font-medium text-destructive">
+                        {fieldError.message}
+                      </p>
+                    )}
                   </div>
 
                   <div>
@@ -488,13 +542,6 @@ export default function IntakeForm({
                   </div>
                 </div>
               </div>
-
-              <div className="mt-3 flex items-center gap-1.5 text-xs text-muted-foreground">
-                <Lock className="h-3 w-3 shrink-0" aria-hidden />
-                <span>
-                  Shared with {biz ?? "this business"} only. Not shown on your request page.
-                </span>
-              </div>
             </section>
 
             {/* ── Section 4: Contact ── */}
@@ -503,6 +550,10 @@ export default function IntakeForm({
                 icon={<UserRound className="h-4 w-4" />}
                 label="Who should we contact?"
               />
+              <p className="mb-3 text-xs text-muted-foreground">
+                Shared only with {biz ?? "this business"} to respond to this request. Not used for
+                marketing or sold.
+              </p>
 
               <div className="space-y-3">
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -517,9 +568,17 @@ export default function IntakeForm({
                       autoComplete="name"
                       required
                       disabled={submitting}
-                      className={inputClass}
+                      ref={(el) => { fieldRefs.current.customerName = el; }}
+                      aria-invalid={fieldError?.field === "customerName"}
+                      aria-describedby={fieldError?.field === "customerName" ? "customerName-error" : undefined}
+                      className={inputClass + (fieldError?.field === "customerName" ? " " + invalidInputClass : "")}
                       placeholder="Your name"
                     />
+                    {fieldError?.field === "customerName" && (
+                      <p id="customerName-error" role="alert" className="mt-1.5 text-xs font-medium text-destructive">
+                        {fieldError.message}
+                      </p>
+                    )}
                   </div>
 
                   <div>
@@ -534,9 +593,17 @@ export default function IntakeForm({
                       inputMode="tel"
                       required
                       disabled={submitting}
-                      className={inputClass}
+                      ref={(el) => { fieldRefs.current.customerPhone = el; }}
+                      aria-invalid={fieldError?.field === "customerPhone"}
+                      aria-describedby={fieldError?.field === "customerPhone" ? "customerPhone-error" : undefined}
+                      className={inputClass + (fieldError?.field === "customerPhone" ? " " + invalidInputClass : "")}
                       placeholder="(555) 000-0000"
                     />
+                    {fieldError?.field === "customerPhone" && (
+                      <p id="customerPhone-error" role="alert" className="mt-1.5 text-xs font-medium text-destructive">
+                        {fieldError.message}
+                      </p>
+                    )}
                   </div>
                 </div>
 
@@ -547,10 +614,7 @@ export default function IntakeForm({
                   <select
                     id="contactPreference"
                     value={contactPreference}
-                    onChange={(e) => {
-                      setContactPreference(e.target.value);
-                      if (e.target.value === "Email") setShowEmail(true);
-                    }}
+                    onChange={(e) => setContactPreference(e.target.value)}
                     disabled={submitting}
                     className={inputClass + " text-base"}
                   >
@@ -561,37 +625,39 @@ export default function IntakeForm({
                   </select>
                 </div>
 
-                {(showEmail || contactPreference === "Email") ? (
-                  <div>
-                    <label htmlFor="customerEmail" className={labelClass}>
-                      Email{" "}
-                      {contactPreference === "Email" ? (
-                        <span className="text-destructive">*</span>
-                      ) : (
-                        <span className="font-normal text-muted-foreground">(optional)</span>
-                      )}
-                    </label>
-                    <input
-                      id="customerEmail"
-                      name="customerEmail"
-                      type="email"
-                      autoComplete="email"
-                      inputMode="email"
-                      required={contactPreference === "Email"}
-                      disabled={submitting}
-                      className={inputClass}
-                      placeholder="you@example.com"
-                    />
-                  </div>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => setShowEmail(true)}
-                    className="text-xs font-medium text-[var(--ophalo-navy)] underline-offset-2 hover:underline focus-visible:outline-none"
-                  >
-                    + Add your email — we&apos;ll send you a link to track this request
-                  </button>
-                )}
+                <div>
+                  <label htmlFor="customerEmail" className={labelClass}>
+                    Email{" "}
+                    {contactPreference === "Email" ? (
+                      <span className="text-destructive">*</span>
+                    ) : (
+                      <span className="font-normal text-muted-foreground">(optional, recommended)</span>
+                    )}
+                  </label>
+                  <input
+                    id="customerEmail"
+                    name="customerEmail"
+                    type="email"
+                    autoComplete="email"
+                    inputMode="email"
+                    required={contactPreference === "Email"}
+                    disabled={submitting}
+                    ref={(el) => { fieldRefs.current.customerEmail = el; }}
+                    aria-invalid={fieldError?.field === "customerEmail"}
+                    aria-describedby={fieldError?.field === "customerEmail" ? "customerEmail-error" : undefined}
+                    className={inputClass + (fieldError?.field === "customerEmail" ? " " + invalidInputClass : "")}
+                    placeholder="you@example.com"
+                  />
+                  {fieldError?.field === "customerEmail" && (
+                    <p id="customerEmail-error" role="alert" className="mt-1.5 text-xs font-medium text-destructive">
+                      {fieldError.message}
+                    </p>
+                  )}
+                  <p className="mt-1.5 text-xs text-muted-foreground">
+                    We&apos;ll send a link to your private request page so you can find your way
+                    back to it. This isn&apos;t used for marketing.
+                  </p>
+                </div>
               </div>
             </section>
 

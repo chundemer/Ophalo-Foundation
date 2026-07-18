@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import Link from "next/link";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -112,6 +113,12 @@ export function KeepPageFooter({ className = "" }: { className?: string }) {
       <p className="mx-auto mt-1 max-w-md text-sm leading-5 text-[var(--ophalo-muted)]">
         The trust and continuity layer between businesses and customers.
       </p>
+      <Link
+        href="/privacy"
+        className="mt-2 inline-block text-xs font-medium text-[var(--ophalo-muted)] underline-offset-2 hover:underline"
+      >
+        Privacy policy
+      </Link>
     </footer>
   );
 }

@@ -82,8 +82,9 @@ email delivery, lifecycle behavior, or the underlying business-profile schema.
 4. Replace the render-time success auto-redirect with managed, cancellable behavior. Give the
    customer a readable confirmation, explicit continue action, and save/return guidance before any
    navigation. Preserve server-authoritative submission and existing fail-soft tracker-link email.
-5. Add the applicable public Privacy link and factual platform attribution using existing assets; do
-   not add a fake trust seal or new public business-profile fields in this slice.
+5. Link to the existing real public `/privacy` policy route and add factual platform attribution
+   using existing assets; do not add a fake trust seal, a duplicate/minimal policy page, or new
+   public business-profile fields in this slice.
 
 **Explicitly out of scope:** custom business logo upload; website/social/phone public-profile data
 model and settings; dynamic public browser titles; known-business expired/OffSeason terminal-state
@@ -92,15 +93,33 @@ separate follow-on slices under GAP-033 through GAP-035.
 
 **Preflight and completion gate:**
 
-- Confirm the current `IntakeForm` submission/success and tracker-link-email contracts, the public
-  privacy route, existing focused test placement, and desktop/mobile behavior before editing.
+- Confirm the current `IntakeForm` submission/success and tracker-link-email contracts, the existing
+  `/privacy` route, the absence of `ophalo-web` test infrastructure, and desktop/mobile behavior
+  before editing. Do not claim that focused web tests run when no web test runner or test placement
+  exists.
 - Keep the slice inside the session file gate. Prefer `IntakeForm.tsx`, the shared public footer only
-  if required, and focused tests/docs; do not pull profile/schema/API changes into R90a.
+  if required, and docs; do not pull profile/schema/API changes or a test-framework rollout into
+  R90a. Test infrastructure is a separate bounded tooling decision/slice.
 - Verify required-field/browser validation, server validation/error retention, duplicate-submit
   guard, email/no-email success behavior, tracker navigation, keyboard focus/error announcement,
   desktop screenshot, and phone viewport screenshot.
-- Run relevant `ophalo-web` tests and TypeScript/build checks. Record exact evidence, Christian's
-  visual acceptance, and the commit before selecting R90b.
+- Run `ophalo-web` TypeScript and production-build checks plus the defined manual evidence. Record
+  the absence of a web test runner, exact manual evidence, Christian's visual acceptance, and the
+  commit before selecting R90b.
+
+**R90a status (2026-07-17):** Implemented and verified. `IntakeForm.tsx` carries the accurate
+intro/submission copy, service-address privacy note and contact-use note ahead of their respective
+fields, an always-visible optional-recommended email field, server field-errors mapped to the
+specific input (`aria-invalid`, inline message, focus + scroll-into-view), and a managed success
+stage with an explicit "Open private request page" action and save/return guidance in place of the
+prior auto-redirect. `KeepPublicShell.tsx` footer links to the existing real `/privacy` route
+alongside the existing platform-attribution line; no fake trust seal or new profile fields were
+added. No `ophalo-web` test runner exists, so no automated web tests were claimed or run;
+`tsc --noEmit` and `next build` are clean, and `/privacy` confirmed present as a static route in the
+build output. Christian manually verified required-field/browser validation, server
+validation/error retention, duplicate-submit guard, email/no-email success behavior, tracker
+navigation, keyboard focus/error announcement, and desktop/phone-viewport behavior, and gave visual
+acceptance. Committed to `main`.
 
 **Follow-on ordering after R90a:**
 
