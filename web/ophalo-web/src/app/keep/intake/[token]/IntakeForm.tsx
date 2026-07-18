@@ -103,8 +103,6 @@ export default function IntakeForm({
 }) {
   const [stage, setStage] = useState<Stage>("form");
   const [referenceCode, setReferenceCode] = useState<string>("");
-  const [pageToken, setPageToken] = useState<string>("");
-  const [emailProvided, setEmailProvided] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [fieldError, setFieldError] = useState<{ field: KnownField; message: string } | null>(null);
   const [showAptUnit, setShowAptUnit] = useState(false);
@@ -114,7 +112,6 @@ export default function IntakeForm({
   const fieldRefs = useRef<Partial<Record<KnownField, HTMLElement | null>>>({});
 
   const biz = businessName ?? null;
-  const trackerUrl = pageToken ? `/keep/r/${pageToken}` : null;
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -165,8 +162,6 @@ export default function IntakeForm({
     if (res.ok) {
       const body = await res.json().catch(() => null);
       setReferenceCode(typeof body?.referenceCode === "string" ? body.referenceCode : "");
-      setPageToken(typeof body?.pageToken === "string" ? body.pageToken : "");
-      setEmailProvided(!!customerEmail);
       setStage("success");
       return;
     }
@@ -262,36 +257,10 @@ export default function IntakeForm({
           <KeepCardShell accentTop>
             <h1 className="font-serif text-base font-semibold text-foreground">Request submitted.</h1>
             <p className="mt-2 text-sm text-muted-foreground">
-              {biz ? `${biz} has received your request.` : "Your request has been received."}
+              {biz
+                ? `${biz} has received your request. They'll contact you soon.`
+                : "Your request has been received. The business will contact you soon."}
             </p>
-
-            {trackerUrl && (
-              <p className="mt-3 text-sm text-muted-foreground">
-                Your private request page is ready whenever you are. Save its link once you open
-                it — it's the only way back to it.
-              </p>
-            )}
-
-            {emailProvided && (
-              <p className="mt-3 text-sm text-muted-foreground">
-                A link to your request page has also been sent to your email address.
-                Replies to that email may not be monitored — use your request page to send messages
-                directly to {biz ?? "the business"}.
-              </p>
-            )}
-
-            {trackerUrl && (
-              <div className="mt-4">
-                <KeepButton
-                  variant="teal"
-                  className="gap-2"
-                  onClick={() => { window.location.href = trackerUrl; }}
-                >
-                  Open private request page
-                  <ArrowRight className="h-4 w-4" aria-hidden />
-                </KeepButton>
-              </div>
-            )}
 
             <p className="mt-4 text-xs text-muted-foreground">
               Reference: <span className="font-mono">{referenceCode}</span>

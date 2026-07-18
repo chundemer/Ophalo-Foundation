@@ -107,19 +107,31 @@ separate follow-on slices under GAP-033 through GAP-035.
   the absence of a web test runner, exact manual evidence, Christian's visual acceptance, and the
   commit before selecting R90b.
 
-**R90a status (2026-07-17):** Implemented and verified. `IntakeForm.tsx` carries the accurate
-intro/submission copy, service-address privacy note and contact-use note ahead of their respective
-fields, an always-visible optional-recommended email field, server field-errors mapped to the
-specific input (`aria-invalid`, inline message, focus + scroll-into-view), and a managed success
-stage with an explicit "Open private request page" action and save/return guidance in place of the
-prior auto-redirect. `KeepPublicShell.tsx` footer links to the existing real `/privacy` route
-alongside the existing platform-attribution line; no fake trust seal or new profile fields were
-added. No `ophalo-web` test runner exists, so no automated web tests were claimed or run;
-`tsc --noEmit` and `next build` are clean, and `/privacy` confirmed present as a static route in the
-build output. Christian manually verified required-field/browser validation, server
-validation/error retention, duplicate-submit guard, email/no-email success behavior, tracker
-navigation, keyboard focus/error announcement, and desktop/phone-viewport behavior, and gave visual
-acceptance. Committed to `main` (`df07717`).
+**R90a status (2026-07-17):** Implemented and verified in `df07717`. `IntakeForm.tsx` carries the
+accurate intro/submission copy, service-address privacy note and contact-use note ahead of their
+respective fields, an always-visible optional-recommended email field, and server field-errors
+mapped to the specific input (`aria-invalid`, inline message, focus + scroll-into-view).
+`KeepPublicShell.tsx` footer links to the existing real `/privacy` route alongside the existing
+platform-attribution line; no fake trust seal or new profile fields were added. No `ophalo-web` test
+runner exists, so no automated web tests were claimed or run; `tsc --noEmit` and `next build` are
+clean, and `/privacy` confirmed present as a static route in the build output. Christian manually
+verified required-field/browser validation, server validation/error retention, duplicate-submit
+guard, keyboard focus/error announcement, and desktop/phone-viewport behavior, and gave visual
+acceptance.
+
+**R90a corrective slice (2026-07-17):** `df07717`'s post-submit success handoff (an "Open private
+request page" CTA, save-the-link guidance, and a tracker-link-emailed claim) is superseded by the
+locked GAP-033 decision (`docs/pilot-readiness-bug-tracker.md`): public intake must end on a stable
+confirmation with business name and safe reference only — no immediate tracker CTA, no save-link
+guidance, no tracker-email claim, no redirect. The business's first real email/text is the tracker
+delivery point. This is not a reinterpretation of ADR-447 as requiring immediate tracker access;
+ADR-447 requires an understandable next step, which here is "the business will contact you soon."
+Corrected: removed the CTA, save-link paragraph, and email-sent claim, and the now-unused
+`pageToken`/`emailProvided` state; success copy is now `"{Business} has received your request.
+They'll contact you soon."` with the reference code retained. Request creation, token authorization,
+the `/keep/r/[pageToken]` tracker route itself, and all R90a privacy/validation work are unchanged.
+`tsc --noEmit` and `next build` clean; Christian manually verified the corrected success behavior.
+Committed to `main` (commit recorded after this session's commit).
 
 **Follow-on ordering after R90a:**
 
