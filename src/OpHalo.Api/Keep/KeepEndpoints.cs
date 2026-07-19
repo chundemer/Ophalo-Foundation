@@ -298,18 +298,54 @@ public static class KeepEndpoints
         // Returns phone + message for a valid token; 404 for expired or invalid tokens.
         // Expired and invalid cases are intentionally indistinguishable (no payload leakage).
         app.MapGet("/keep/share-sms/{handoffToken}", async (
+            HttpContext httpContext,
             string handoffToken,
             IKeepSmsHandoffPersistence handoffPersistence,
             IClock clock,
             CancellationToken ct) =>
         {
+            httpContext.Response.Headers.CacheControl = "no-store, private";
             var tokenHash = Convert.ToHexString(
                 SHA256.HashData(Encoding.UTF8.GetBytes(handoffToken))).ToLowerInvariant();
             var handoff = await handoffPersistence.FindValidByHashAsync(tokenHash, clock.UtcNow, ct);
             return handoff is null
                 ? Results.NotFound()
                 : Results.Ok(new { handoff.CustomerPhone, handoff.MessageBody, handoff.ExpiresAtUtc });
-        });
+        }).RequireRateLimiting("public-intake");
+
+        // Call handoff token creation — authenticated, operator write (ADR-448, GAP-020)
+        app.MapPost("/keep/requests/{requestId:guid}/call-handoff", async (
+            Guid requestId,
+            CreateCallHandoffService service,
+            IConfiguration config,
+            CancellationToken ct) =>
+        {
+            var command = new CreateCallHandoffCommand(requestId);
+            var result = await service.ExecuteAsync(command, ct);
+            if (!result.IsSuccess)
+                return ErrorHttpMapper.ToHttpResult(result.Error);
+            var appBaseUrl = config["App:AppBaseUrl"] ?? "https://app.ophalo.com";
+            var handoffUrl = $"{appBaseUrl}/keep/share-call/{result.Value.RawToken}";
+            return Results.Ok(new { handoffUrl, expiresAtUtc = result.Value.ExpiresAtUtc });
+        }).RequireAuthorization();
+
+        // Call handoff token resolve — public, no auth required (ADR-448, GAP-020)
+        // Returns phone for a valid token; 404 for expired or invalid tokens.
+        // Expired and invalid cases are intentionally indistinguishable (no payload leakage).
+        app.MapGet("/keep/share-call/{handoffToken}", async (
+            HttpContext httpContext,
+            string handoffToken,
+            IKeepCallHandoffPersistence handoffPersistence,
+            IClock clock,
+            CancellationToken ct) =>
+        {
+            httpContext.Response.Headers.CacheControl = "no-store, private";
+            var tokenHash = KeepCallHandoff.HashToken(handoffToken);
+            var handoff = await handoffPersistence.FindValidByHashAsync(tokenHash, clock.UtcNow, ct);
+            return handoff is null
+                ? Results.NotFound()
+                : Results.Ok(new { handoff.CustomerPhone, handoff.ExpiresAtUtc });
+        }).RequireRateLimiting("public-intake");
 
         // Add business update — authenticated, operator write (Phase 8-B2-beta)
         app.MapPost("/keep/requests/{requestId:guid}/business-updates", async (

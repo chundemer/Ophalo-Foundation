@@ -1,11 +1,13 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-07-19 (GAP-036 resolved; GAP-034 resolved)
+**Last updated:** 2026-07-19 (GAP-020 Slice A implemented, uncommitted; blocked on migration)
 **Branch:** `main` tracking `origin/main`
 **Deployment posture:** Not deployment-ready. The active launch gate is
 `docs/pilot-readiness-bug-tracker.md`.
-**Current work:** GAP-036 and GAP-034 are resolved (uncommitted, pending Christian's review). Next
-code slice not yet selected — see `docs/pilot-readiness-bug-tracker.md` and the V1 Sequence below.
+**Current work:** GAP-034 is resolved in `45cea22` (completion docs `dfa554a`). GAP-020 — replacing
+the raw-phone desktop call QR with an opaque short-lived handoff — is in progress: Slice A
+(backend) is implemented and uncommitted in the working tree. Slice A is not yet closed out —
+see "GAP-020 Slice A Status" below for the exact next step before commit.
 
 Detailed historical implementation evidence belongs in `docs/build-log/`; active requirements and
 status belong in `docs/pilot-readiness-bug-tracker.md`; decisions belong in
@@ -29,7 +31,7 @@ For every implementation slice:
 - **GAP-035 / R90c-1 through R90c-4:** complete in `8aba5dc`, `0f70437`, `3490cb1`, and
   `c1a1379`. All normal browser auth/invite/recovery states now use `AuthShell`; mobile exchange
   uses `AuthShell bare` and remains ADR-390 sterile.
-- **GAP-034 `/start` conversion redesign:** resolved (uncommitted) in
+- **GAP-034 `/start` conversion redesign:** resolved in `45cea22` (completion docs `dfa554a`) in
   `web/ophalo-web/src/app/start/page.tsx`. Contained two-panel desktop composition (navy identity/
   value panel + white form panel, compact stacked header on narrow widths), truthful `Start your
   Keep pilot` copy and CTA, friendly editable time-zone display, and a client-side `/auth/me`
@@ -61,6 +63,11 @@ For every implementation slice:
   closed/cancelled history through the existing protected contract; replace opaque `Default Queue`
   language with factual owner orientation; and make applied search/filter state visible and easy to
   recover. GAP-041 now explicitly includes arrow-key/roving-focus tab behavior.
+- **GAP-047 through GAP-051:** newly recorded Request Detail/customer-continuity gaps: never fail a
+  priority mutation silently; make email tracker sharing a deliberate attested action; bound
+  follow-up prefill; show compact same-customer related work; and format North American phone entry
+  and display while preserving ADR-444 canonical storage. GAP-020 remains the separate P0 raw-phone
+  desktop QR blocker. GAP-039 now includes `VITE_PUBLIC_BASE_URL` release configuration validation.
 
 ## Locked Public-Trust Boundaries
 
@@ -75,11 +82,13 @@ For every implementation slice:
 
 ## V1 Sequence After GAP-036
 
-1. GAP-034 full `/start` conversion redesign — resolved, uncommitted.
+1. GAP-020 P0 opaque desktop call-handoff replacement, then resolve remaining selected P0/P1
+   request-capture/detail/list safety and trust gaps in bounded slices.
 2. GAP-037 founder/internal weekly value report; GAP-038 PWA feedback/help; GAP-039 redacted
    production observability; GAP-040 marketing accuracy/assets/deployment readiness; GAP-042
    authenticated business context; GAP-043 deliberate request-list scale UX; GAP-044 history
-   access; GAP-045 queue orientation; GAP-046 search/filter clarity.
+   access; GAP-045 queue orientation; GAP-046 search/filter clarity; GAP-047 through GAP-051
+   Request Detail reliability, continuity, and phone-quality work.
 3. Finish or explicitly defer all selected P0/P1 tracker items; collect the remaining GAP-033
    evidence; run Build 089 desktop, then real-device mobile PWA verification.
 4. Deploy and validate the V1 production candidate: marketing and app HTTPS/domain/cookie/DNS,
@@ -89,3 +98,72 @@ For every implementation slice:
    Universal/App Links, direct account deletion, GAP-038 native parity, and real-device production
    checks. Christian forms the LLC and completes business setup during store review. Go live only
    after store approval and the final production-readiness decision.
+
+## GAP-020 Slice A Status — Opaque Desktop Call Handoff (Backend)
+
+**Status:** Implemented, uncommitted. Migration `20260719212740_AddKeepCallHandoffs` applied
+(Christian authorized Claude to run `dotnet ef migrations add`/`database update` as a one-time
+override of the normal Christian-runs-migrations policy). All tests pass: `KeepCallHandoffApiTests`
+8/8, sibling `KeepIntakeSmsHandoffApiTests` 14/14 (regression-checked), unit tests 36/36. Awaiting
+Christian's diff review and the file-count re-confirmation below before commit. Read ADR-448 for the
+locked contract.
+
+**Bug found and fixed during migration verification:** `EfKeepCallHandoffPersistence` and the
+pre-existing `EfKeepSmsHandoffPersistence` both filtered on `!h.IsDeleted`, a computed
+(non-mapped) property on `BaseEntity` that EF Core cannot translate to SQL — this was latent in
+the SMS sibling too (no prior test exercised its `GET /keep/share-sms/{token}` resolve success
+path). Fixed both to filter on `h.DeletedAtUtc == null` directly, per Christian's approval. This
+adds `EfKeepSmsHandoffPersistence.cs` as a 10th production file (15th total) beyond the
+originally agreed 8/13 — Christian approved this specific fix but has not yet re-confirmed the
+final count for commit.
+
+**Locked decisions (2026-07-19, carried into ADR-448):** distinct `KeepCallHandoff` entity (not an
+extension of `KeepSmsHandoff`); Slice C will extract a narrow shared call-handoff QR component/hook
+used by both `CustomerContactStrip` and the Log external contact modal, without making either modal
+call the other; the sibling `/keep/share-sms/{token}` resolver is repaired in this same slice
+(redaction, `Cache-Control: no-store, private`, and `public-intake` rate limiting), not deferred.
+
+**Files changed (uncommitted):**
+
+- New: `src/OpHalo.Keep.Core/Entities/KeepCallHandoff.cs`,
+  `src/OpHalo.Keep.Application/Requests/IKeepCallHandoffPersistence.cs`,
+  `src/OpHalo.Keep.Application/Requests/CreateCallHandoffService.cs`,
+  `src/OpHalo.Keep.Infrastructure/Persistence/EfKeepCallHandoffPersistence.cs`,
+  `src/OpHalo.Keep.Infrastructure/Persistence/Configurations/KeepCallHandoffConfiguration.cs`,
+  `docs/decisions/ADR-448-opaque-desktop-call-handoff.md`,
+  `tests/OpHalo.UnitTests/Keep/CreateCallHandoffServiceTests.cs`,
+  `tests/OpHalo.IntegrationTests/Api/KeepCallHandoffApiTests.cs`.
+- Edited: `src/OpHalo.Api/Keep/KeepEndpoints.cs` (new `POST /keep/requests/{requestId}/call-handoff`
+  and `GET /keep/share-call/{handoffToken}`; added `Cache-Control`/rate-limiting to the existing
+  `GET /keep/share-sms/{handoffToken}`), `src/OpHalo.Api/Keep/KeepServiceCollectionExtensions.cs`
+  (DI registration), `src/OpHalo.Api/Helpers/PublicTokenPathRedactor.cs` (redact `/keep/share-call/`
+  and `/keep/share-sms/`), `src/OpHalo.Api/Helpers/ErrorHttpMapper.cs` (map the 3 new
+  `KeepRequest.CallHandoff*` error codes — found unregistered during implementation; without this
+  fix they fell through to the mapper's default status), `docs/decisions/decision-index.md` (ADR-448
+  row, next-free-id bumped to ADR-449), `tests/OpHalo.UnitTests/PublicTokenPathRedactorTests.cs`
+  (redaction cases for both token paths).
+- Gate note: this is 9 production files / 14 total (one over the originally agreed 8/13 count),
+  because the `ErrorHttpMapper` fix was a genuine correctness gap discovered mid-slice, not scope
+  creep. Christian has not yet re-confirmed this final count.
+
+**Verified so far:** `dotnet build` clean for `OpHalo.Api`, `OpHalo.Keep.Infrastructure`, and both
+test projects. `CreateCallHandoffServiceTests` + `PublicTokenPathRedactorTests`: 36/36 passing.
+`KeepCallHandoffApiTests` compiles and correctly reaches the test database, but every test currently
+fails with EF Core's `PendingModelChangesWarning` — expected, since `keep_call_handoffs` has no
+migration yet. This is the only known blocker; it is not a code defect.
+
+**Exact next step (before commit):** Christian runs
+`dotnet ef migrations add <Name> --startup-project src/OpHalo.Keep.Infrastructure` (per
+`reference_ef_migration_commands` — never `Api` or `Foundation` alone), applies it, then Claude
+re-runs `dotnet test tests/OpHalo.IntegrationTests --filter FullyQualifiedName~KeepCallHandoffApiTests`
+to confirm all cases pass (auth boundary, not-found, success/no-raw-phone-in-url, resolve success,
+resolve Cache-Control, invalid-token 404, and the `/keep/share-sms/` sibling Cache-Control
+regression). Only after that passes and Christian reviews the diff should Slice A be committed.
+
+**After Slice A is committed:** proceed to Slice B (public `share-call` resolver page in
+`ophalo-web`, mirroring `web/ophalo-web/src/app/keep/share-sms/[handoffToken]/page.tsx` +
+`SmsHandoffView.tsx`, but launching `tel:` instead of `sms:`), then Slice C (wire
+`CustomerContactStrip.tsx`'s `CallQrModal` and `RequestDetail.tsx`'s Log external contact modal to
+call `POST /keep/requests/{requestId}/call-handoff` and encode the returned `handoffUrl` — via the
+locked shared QR component/hook — instead of raw `tel:{phone}`). Each is its own session per the
+batch-size gate.

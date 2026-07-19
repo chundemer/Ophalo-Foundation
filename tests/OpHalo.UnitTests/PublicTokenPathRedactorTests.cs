@@ -76,6 +76,40 @@ public sealed class PublicTokenPathRedactorTests
         Assert.Equal("/keep/intake-sms/[redacted]", result);
     }
 
+    // --- /keep/share-sms/{token} ---
+
+    [Fact]
+    public void ShareSmsHandoffPath_TokenIsRedacted()
+    {
+        var result = PublicTokenPathRedactor.Redact("/keep/share-sms/abc123secret");
+        Assert.Equal("/keep/share-sms/[redacted]", result);
+        Assert.DoesNotContain("abc123secret", result);
+    }
+
+    [Fact]
+    public void ShareSmsHandoffPath_CaseInsensitive_IsRedacted()
+    {
+        var result = PublicTokenPathRedactor.Redact("/KEEP/SHARE-SMS/abc123secret");
+        Assert.Equal("/keep/share-sms/[redacted]", result);
+    }
+
+    // --- /keep/share-call/{token} ---
+
+    [Fact]
+    public void ShareCallHandoffPath_TokenIsRedacted()
+    {
+        var result = PublicTokenPathRedactor.Redact("/keep/share-call/abc123secret");
+        Assert.Equal("/keep/share-call/[redacted]", result);
+        Assert.DoesNotContain("abc123secret", result);
+    }
+
+    [Fact]
+    public void ShareCallHandoffPath_CaseInsensitive_IsRedacted()
+    {
+        var result = PublicTokenPathRedactor.Redact("/KEEP/SHARE-CALL/abc123secret");
+        Assert.Equal("/keep/share-call/[redacted]", result);
+    }
+
     // --- Unrelated paths are returned unchanged ---
 
     [Theory]

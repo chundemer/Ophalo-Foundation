@@ -169,6 +169,11 @@ public static class ErrorHttpMapper
             var c when c == "KeepRequest.SmsHandoffMessageTooLong"      => (StatusCodes.Status400BadRequest, "Bad request.", null),
             var c when c == "KeepRequest.SmsHandoffCustomerPhoneMissing" => (StatusCodes.Status422UnprocessableEntity, "Unprocessable entity.", null),
 
+            // --- Call handoff errors (ADR-448, GAP-020) ---
+            var c when c == "KeepRequest.CallHandoffViewerBlocked"        => (StatusCodes.Status403Forbidden, "Forbidden.", null),
+            var c when c == "KeepRequest.CallHandoffOffSeasonBlocked"     => (StatusCodes.Status403Forbidden, "Forbidden.", null),
+            var c when c == "KeepRequest.CallHandoffCustomerPhoneMissing" => (StatusCodes.Status422UnprocessableEntity, "Unprocessable entity.", null),
+
             // --- Detail navigation errors (P6f-4) ---
             var c when c == "KeepRequest.RequestDetailInvalidNavView" => (StatusCodes.Status400BadRequest, "Bad request.", null),
 
