@@ -1,13 +1,14 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-07-19 (GAP-020 Slice A implemented, uncommitted; blocked on migration)
+**Last updated:** 2026-07-19 (GAP-020 Slice A committed in `60797b6`; Slice B implemented,
+uncommitted)
 **Branch:** `main` tracking `origin/main`
 **Deployment posture:** Not deployment-ready. The active launch gate is
 `docs/pilot-readiness-bug-tracker.md`.
 **Current work:** GAP-034 is resolved in `45cea22` (completion docs `dfa554a`). GAP-020 — replacing
 the raw-phone desktop call QR with an opaque short-lived handoff — is in progress: Slice A
-(backend) is implemented and uncommitted in the working tree. Slice A is not yet closed out —
-see "GAP-020 Slice A Status" below for the exact next step before commit.
+(backend) is committed in `60797b6`. Slice B (public `share-call` resolver page) is implemented
+and uncommitted in the working tree — see "GAP-020 Slice B Status" below.
 
 Detailed historical implementation evidence belongs in `docs/build-log/`; active requirements and
 status belong in `docs/pilot-readiness-bug-tracker.md`; decisions belong in
@@ -99,71 +100,41 @@ For every implementation slice:
    checks. Christian forms the LLC and completes business setup during store review. Go live only
    after store approval and the final production-readiness decision.
 
-## GAP-020 Slice A Status — Opaque Desktop Call Handoff (Backend)
+## GAP-020 Slice A — Opaque Desktop Call Handoff (Backend) — Committed
 
-**Status:** Implemented, uncommitted. Migration `20260719212740_AddKeepCallHandoffs` applied
-(Christian authorized Claude to run `dotnet ef migrations add`/`database update` as a one-time
-override of the normal Christian-runs-migrations policy). All tests pass: `KeepCallHandoffApiTests`
-8/8, sibling `KeepIntakeSmsHandoffApiTests` 14/14 (regression-checked), unit tests 36/36. Awaiting
-Christian's diff review and the file-count re-confirmation below before commit. Read ADR-448 for the
-locked contract.
+**Status:** Committed in `60797b6`. `KeepCallHandoff` entity, `CreateCallHandoffService`,
+`POST /keep/requests/{requestId}/call-handoff`, and `GET /keep/share-call/{handoffToken}` are live
+per ADR-448's locked contract. The sibling `/keep/share-sms/{handoffToken}` resolver was repaired
+in the same commit (`Cache-Control: no-store, private`, `public-intake` rate limiting, redaction).
+Migration `20260719212740_AddKeepCallHandoffs` applied. Also fixed a latent bug found during
+verification: both handoff persistence classes filtered on the non-mapped `IsDeleted` computed
+property, which EF Core cannot translate — replaced with `DeletedAtUtc == null` in both
+`EfKeepCallHandoffPersistence` and `EfKeepSmsHandoffPersistence`. Final verified counts:
+`KeepCallHandoffApiTests` 8/8, sibling `KeepIntakeSmsHandoffApiTests` 14/14, unit tests 36/36.
 
-**Bug found and fixed during migration verification:** `EfKeepCallHandoffPersistence` and the
-pre-existing `EfKeepSmsHandoffPersistence` both filtered on `!h.IsDeleted`, a computed
-(non-mapped) property on `BaseEntity` that EF Core cannot translate to SQL — this was latent in
-the SMS sibling too (no prior test exercised its `GET /keep/share-sms/{token}` resolve success
-path). Fixed both to filter on `h.DeletedAtUtc == null` directly, per Christian's approval. This
-adds `EfKeepSmsHandoffPersistence.cs` as a 10th production file (15th total) beyond the
-originally agreed 8/13 — Christian approved this specific fix but has not yet re-confirmed the
-final count for commit.
+## GAP-020 Slice B Status — Public Call-Handoff Resolver Page
 
-**Locked decisions (2026-07-19, carried into ADR-448):** distinct `KeepCallHandoff` entity (not an
-extension of `KeepSmsHandoff`); Slice C will extract a narrow shared call-handoff QR component/hook
-used by both `CustomerContactStrip` and the Log external contact modal, without making either modal
-call the other; the sibling `/keep/share-sms/{token}` resolver is repaired in this same slice
-(redaction, `Cache-Control: no-store, private`, and `public-intake` rate limiting), not deferred.
+**Status:** Implemented, uncommitted. Two new files mirroring the existing SMS handoff page
+pattern, launching `tel:` instead of `sms:`:
 
-**Files changed (uncommitted):**
+- `web/ophalo-web/src/app/keep/share-call/[handoffToken]/page.tsx` — server component; fetches
+  `GET /keep/share-call/{handoffToken}`; handles `expired` (404) and `unavailable` (missing
+  `NEXT_PUBLIC_API_BASE_URL`, non-OK response, or malformed payload) states with the same copy
+  pattern as `share-sms`'s page, substituting "call link" for "text link". Static page title
+  ("Open Call"), `noindex`/`nofollow`, `no-referrer` — no phone number in the title, mirroring the
+  ADR-448 no-leakage requirement.
+- `web/ophalo-web/src/app/keep/share-call/[handoffToken]/CallHandoffView.tsx` — client component;
+  auto-launches `tel:{customerPhone}` on mount (same launched-ref-guard pattern as
+  `SmsHandoffView`), shows the phone number for reference, and offers a "Call Customer" button plus
+  a "Copy Number" fallback.
 
-- New: `src/OpHalo.Keep.Core/Entities/KeepCallHandoff.cs`,
-  `src/OpHalo.Keep.Application/Requests/IKeepCallHandoffPersistence.cs`,
-  `src/OpHalo.Keep.Application/Requests/CreateCallHandoffService.cs`,
-  `src/OpHalo.Keep.Infrastructure/Persistence/EfKeepCallHandoffPersistence.cs`,
-  `src/OpHalo.Keep.Infrastructure/Persistence/Configurations/KeepCallHandoffConfiguration.cs`,
-  `docs/decisions/ADR-448-opaque-desktop-call-handoff.md`,
-  `tests/OpHalo.UnitTests/Keep/CreateCallHandoffServiceTests.cs`,
-  `tests/OpHalo.IntegrationTests/Api/KeepCallHandoffApiTests.cs`.
-- Edited: `src/OpHalo.Api/Keep/KeepEndpoints.cs` (new `POST /keep/requests/{requestId}/call-handoff`
-  and `GET /keep/share-call/{handoffToken}`; added `Cache-Control`/rate-limiting to the existing
-  `GET /keep/share-sms/{handoffToken}`), `src/OpHalo.Api/Keep/KeepServiceCollectionExtensions.cs`
-  (DI registration), `src/OpHalo.Api/Helpers/PublicTokenPathRedactor.cs` (redact `/keep/share-call/`
-  and `/keep/share-sms/`), `src/OpHalo.Api/Helpers/ErrorHttpMapper.cs` (map the 3 new
-  `KeepRequest.CallHandoff*` error codes — found unregistered during implementation; without this
-  fix they fell through to the mapper's default status), `docs/decisions/decision-index.md` (ADR-448
-  row, next-free-id bumped to ADR-449), `tests/OpHalo.UnitTests/PublicTokenPathRedactorTests.cs`
-  (redaction cases for both token paths).
-- Gate note: this is 9 production files / 14 total (one over the originally agreed 8/13 count),
-  because the `ErrorHttpMapper` fix was a genuine correctness gap discovered mid-slice, not scope
-  creep. Christian has not yet re-confirmed this final count.
+**Verified so far:** `npx tsc --noEmit` clean. No frontend unit/E2E tests exist for the sibling
+`share-sms` page either, so none were added here — this mirrors existing test coverage, not a gap
+introduced by this slice. Live browser verification (scan-and-launch on desktop, expired/unavailable
+states) is still outstanding before this is considered fully verified.
 
-**Verified so far:** `dotnet build` clean for `OpHalo.Api`, `OpHalo.Keep.Infrastructure`, and both
-test projects. `CreateCallHandoffServiceTests` + `PublicTokenPathRedactorTests`: 36/36 passing.
-`KeepCallHandoffApiTests` compiles and correctly reaches the test database, but every test currently
-fails with EF Core's `PendingModelChangesWarning` — expected, since `keep_call_handoffs` has no
-migration yet. This is the only known blocker; it is not a code defect.
-
-**Exact next step (before commit):** Christian runs
-`dotnet ef migrations add <Name> --startup-project src/OpHalo.Keep.Infrastructure` (per
-`reference_ef_migration_commands` — never `Api` or `Foundation` alone), applies it, then Claude
-re-runs `dotnet test tests/OpHalo.IntegrationTests --filter FullyQualifiedName~KeepCallHandoffApiTests`
-to confirm all cases pass (auth boundary, not-found, success/no-raw-phone-in-url, resolve success,
-resolve Cache-Control, invalid-token 404, and the `/keep/share-sms/` sibling Cache-Control
-regression). Only after that passes and Christian reviews the diff should Slice A be committed.
-
-**After Slice A is committed:** proceed to Slice B (public `share-call` resolver page in
-`ophalo-web`, mirroring `web/ophalo-web/src/app/keep/share-sms/[handoffToken]/page.tsx` +
-`SmsHandoffView.tsx`, but launching `tel:` instead of `sms:`), then Slice C (wire
+**Next step:** Christian reviews the diff; after commit, proceed to Slice C (wire
 `CustomerContactStrip.tsx`'s `CallQrModal` and `RequestDetail.tsx`'s Log external contact modal to
-call `POST /keep/requests/{requestId}/call-handoff` and encode the returned `handoffUrl` — via the
-locked shared QR component/hook — instead of raw `tel:{phone}`). Each is its own session per the
+call `POST /keep/requests/{requestId}/call-handoff` and encode the returned `handoffUrl` — via a new
+shared call-handoff QR component/hook — instead of raw `tel:{phone}`). Its own session per the
 batch-size gate.
