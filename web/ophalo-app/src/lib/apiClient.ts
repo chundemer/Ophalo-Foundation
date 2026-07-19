@@ -122,6 +122,7 @@ import type {
   KeepRequestDetailResult,
   ShareIntentMethod,
   CreateSmsHandoffResult,
+  CreateCallHandoffResult,
   LogExternalContactBody,
   UpdateServiceLocationBody,
   KeepRequestRankingInfo,
@@ -172,6 +173,7 @@ export type {
   KeepRequestDetailResult,
   ShareIntentMethod,
   CreateSmsHandoffResult,
+  CreateCallHandoffResult,
   LogExternalContactBody,
   UpdateServiceLocationBody,
   KeepRequestRankingInfo,
@@ -240,6 +242,10 @@ export const api = {
     apiFetch<CreateSmsHandoffResult>(`/keep/requests/${requestId}/sms-handoff`, {
       method: "POST",
       body: JSON.stringify({ messageBody }),
+    }),
+  createCallHandoff: (requestId: string) =>
+    apiFetch<CreateCallHandoffResult>(`/keep/requests/${requestId}/call-handoff`, {
+      method: "POST",
     }),
   patchRequestStatus: (
     requestId: string,

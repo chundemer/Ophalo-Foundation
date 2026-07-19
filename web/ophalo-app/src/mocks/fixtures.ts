@@ -5,6 +5,7 @@ import type {
   ListMembersResponse,
   IntakeStatusResult,
   CreateIntakeSmsHandoffResult,
+  CreateCallHandoffResult,
   KeepRequestViewCounts,
   KeepRequestSummary,
   KeepRequestDetailResult,
@@ -153,6 +154,16 @@ export function mockIntakeSmsHandoff(customerPhone: string): CreateIntakeSmsHand
     handoffUrl: "https://app.ophalo.com/keep/intake-sms/mock-raw-token",
     customerPhone,
     messageBody: `Submit your request here: https://ophalo.com/keep/s/${mockIntake.publicSlug}`,
+    expiresAtUtc: new Date(Date.now() + 15 * 60_000).toISOString(),
+  };
+}
+
+// GAP-020 / ADR-448: mock/demo mode must mint the same opaque handoff shape as the real
+// call-handoff endpoint — never a tel:/raw-phone payload — so the desktop Call QR is
+// representative in demo mode.
+export function mockCallHandoff(): CreateCallHandoffResult {
+  return {
+    handoffUrl: "https://app.ophalo.com/keep/share-call/mock-call-token",
     expiresAtUtc: new Date(Date.now() + 15 * 60_000).toISOString(),
   };
 }

@@ -1,7 +1,6 @@
 import { useState, useMemo, useRef, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronLeft, ChevronRight, Phone, X } from "lucide-react";
-import QRCode from "react-qr-code";
 import {
   api,
   ApiError,
@@ -32,6 +31,7 @@ import {
   ProminentFeedbackCard,
 } from "./request-detail/DetailPanels";
 import { CustomerContactStrip } from "./request-detail/CustomerContactStrip";
+import { CallHandoffQr } from "./request-detail/CallHandoffQr";
 import { RequestDetailDesktopLayout } from "./request-detail/RequestDetailDesktopLayout";
 import {
   RequestDetailMobileActions,
@@ -51,7 +51,7 @@ interface LogContactModalProps {
   onClose: () => void;
 }
 
-function LogContactModal({
+export function LogContactModal({
   requestId,
   detail,
   initialDirection,
@@ -155,12 +155,9 @@ function LogContactModal({
                 </a>
               </div>
             </div>
-            {/* Desktop: QR handoff instead of direct tel: (ADR-443) */}
+            {/* Desktop: QR handoff instead of direct tel: (ADR-443, GAP-020) */}
             <div className="hidden md:flex flex-col items-center gap-1.5 pt-2 border-t border-[var(--ophalo-border)]">
-              <div className="bg-white p-2 rounded-lg">
-                <QRCode value={`tel:${detail.customerPhone!}`} size={108} />
-              </div>
-              <p className="text-xs text-[var(--ophalo-muted)]">Scan to call with your phone</p>
+              <CallHandoffQr requestId={requestId} size={108} caption="Scan to call with your phone" />
             </div>
           </div>
         )}
@@ -688,6 +685,7 @@ export function RequestDetail({ requestId, focusPanel, onBack, prevId, nextId, o
             />
 
             <CustomerContactStrip
+              requestId={requestId}
               phone={detail.customerPhone ?? null}
               email={detail.customerEmail ?? null}
               customerName={detail.customerName}

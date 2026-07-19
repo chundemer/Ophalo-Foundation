@@ -298,6 +298,11 @@ export interface CreateSmsHandoffResult {
   expiresAtUtc: string;
 }
 
+export interface CreateCallHandoffResult {
+  handoffUrl: string;
+  expiresAtUtc: string;
+}
+
 export interface LogExternalContactBody {
   direction: string;
   channel: string;

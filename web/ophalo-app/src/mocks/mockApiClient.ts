@@ -10,6 +10,7 @@ import {
   MOCK_USER_ID,
   MOCK_VALIDATION,
   OWNER_ACTIONS,
+  mockCallHandoff,
   mockIntake,
   mockIntakeSmsHandoff,
   mockMembers,
@@ -428,6 +429,8 @@ export function installMockApi(): void {
     if (!d) return Promise.reject(new Error(`Mock: no detail for ${requestId}`));
     return delay(withRoleActions(d));
   };
+
+  api.createCallHandoff = () => delay(mockCallHandoff());
 
   // Mutations — all update local state so re-fetches show changes
 

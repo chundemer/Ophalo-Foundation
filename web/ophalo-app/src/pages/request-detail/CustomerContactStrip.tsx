@@ -1,9 +1,10 @@
 import { useState, useRef, useEffect } from "react";
 import { Phone, Mail, X } from "lucide-react";
-import QRCode from "react-qr-code";
 import { FOCUS_RING } from "./helpers";
+import { CallHandoffQr } from "./CallHandoffQr";
 
 interface CustomerContactStripProps {
+  requestId: string;
   phone: string | null;
   email: string | null;
   customerName: string;
@@ -12,6 +13,7 @@ interface CustomerContactStripProps {
 }
 
 export function CustomerContactStrip({
+  requestId,
   phone,
   email,
   customerName,
@@ -78,6 +80,7 @@ export function CustomerContactStrip({
       </div>
       {callQrOpen && phone && (
         <CallQrModal
+          requestId={requestId}
           phone={phone}
           customerName={customerName}
           onDone={() => {
@@ -96,13 +99,14 @@ export function CustomerContactStrip({
 // ---------------------------------------------------------------------------
 
 interface CallQrModalProps {
+  requestId: string;
   phone: string;
   customerName: string;
   onDone: () => void;
   onClose: () => void;
 }
 
-function CallQrModal({ phone, customerName, onDone, onClose }: CallQrModalProps) {
+function CallQrModal({ requestId, phone, customerName, onDone, onClose }: CallQrModalProps) {
   const dialogRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -147,8 +151,8 @@ function CallQrModal({ phone, customerName, onDone, onClose }: CallQrModalProps)
         <p className="text-xs text-[var(--ophalo-muted)] mb-4">
           Scan with your phone to call {phone}.
         </p>
-        <div className="flex justify-center mb-4 p-3 bg-white rounded-lg">
-          <QRCode value={`tel:${phone}`} size={160} />
+        <div className="flex justify-center mb-4">
+          <CallHandoffQr requestId={requestId} size={160} />
         </div>
         <button
           type="button"
