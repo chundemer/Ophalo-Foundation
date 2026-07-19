@@ -15,4 +15,8 @@ public static class KeepPublicIntakeLinkErrors
 
     public static readonly Error SlugTaken =
         Error.Create("keep.public_intake.slug_taken", "That link name is already in use. Try a different name.");
+
+    public static readonly Error ReplaceConfirmationInvalid =
+        Error.Create("KeepPublicIntakeLink.ReplaceConfirmationInvalid",
+            "Type REPLACE to confirm this action.");
 }

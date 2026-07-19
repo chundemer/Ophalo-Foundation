@@ -1,6 +1,8 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, type IntakeStatusResult, ApiError } from "../../lib/apiClient";
+
+const REPLACE_CONFIRMATION_VALUE = "REPLACE";
 
 // Simple local fallback treatment for the preview only — not the public page.
 function businessInitials(name: string): string {
@@ -8,6 +10,141 @@ function businessInitials(name: string): string {
   if (words.length === 0) return "?";
   if (words.length === 1) return words[0].slice(0, 2).toUpperCase();
   return (words[0][0] + words[1][0]).toUpperCase();
+}
+
+interface ReplaceLinkDialogProps {
+  replacing: boolean;
+  error: string | null;
+  onConfirm: (confirmation: string) => void;
+  onClose: () => void;
+  triggerRef: React.RefObject<HTMLButtonElement | null>;
+}
+
+// Accessible destructive-action dialog (GAP-036b): requires an exact, case-sensitive
+// "REPLACE" value before the confirm action is enabled. The server independently
+// validates the same value — this is a UX gate, not the security boundary.
+function ReplaceLinkDialog({ replacing, error, onConfirm, onClose, triggerRef }: ReplaceLinkDialogProps) {
+  const [confirmation, setConfirmation] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  // Read via refs inside the keydown handler so the listener can be installed once
+  // (on mount) while still seeing the latest in-flight/close state on every keystroke.
+  const replacingRef = useRef(replacing);
+  replacingRef.current = replacing;
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+
+  useEffect(() => {
+    inputRef.current?.focus();
+
+    function getFocusable(): HTMLElement[] {
+      if (!panelRef.current) return [];
+      return Array.from(
+        panelRef.current.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), input:not([disabled]), [href], [tabindex]:not([tabindex="-1"])',
+        ),
+      );
+    }
+
+    function onKey(e: KeyboardEvent) {
+      // Block all dismissal paths while a replace request is in flight.
+      if (e.key === "Escape") {
+        if (!replacingRef.current) onCloseRef.current();
+        return;
+      }
+
+      // Contain Tab focus within the dialog — aria-modal alone does not do this.
+      if (e.key === "Tab") {
+        const focusable = getFocusable();
+        if (focusable.length === 0) return;
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        const active = document.activeElement;
+        const withinPanel = active instanceof Node && panelRef.current?.contains(active);
+
+        if (e.shiftKey) {
+          if (!withinPanel || active === first) {
+            e.preventDefault();
+            last.focus();
+          }
+        } else {
+          if (!withinPanel || active === last) {
+            e.preventDefault();
+            first.focus();
+          }
+        }
+      }
+    }
+
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      triggerRef.current?.focus();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const canConfirm = confirmation === REPLACE_CONFIRMATION_VALUE && !replacing;
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="replace-link-dialog-title"
+    >
+      <div
+        data-testid="replace-link-dialog-backdrop"
+        className="absolute inset-0 bg-black/50"
+        onClick={() => { if (!replacing) onClose(); }}
+      />
+      <div ref={panelRef} className="relative w-full max-w-sm rounded-lg bg-white p-4 shadow-xl space-y-3">
+        <h3 id="replace-link-dialog-title" className="text-sm font-semibold text-amber-800">
+          Replace this link?
+        </h3>
+        <p className="text-xs text-amber-700">
+          Your current public link and every previously shared link or link name — including any
+          you emailed or posted — will stop working immediately. This cannot be undone.
+        </p>
+        <div className="space-y-1">
+          <label htmlFor="replace-link-confirmation" className="text-xs font-medium text-slate-600">
+            Type REPLACE to confirm
+          </label>
+          <input
+            ref={inputRef}
+            id="replace-link-confirmation"
+            type="text"
+            value={confirmation}
+            onChange={(e) => setConfirmation(e.target.value)}
+            disabled={replacing}
+            autoComplete="off"
+            className="w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm focus:border-slate-500 focus:outline-none disabled:opacity-50"
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && canConfirm) onConfirm(confirmation);
+            }}
+          />
+        </div>
+        {error && <p className="text-xs text-red-600">{error}</p>}
+        <div className="flex gap-2 pt-1">
+          <button
+            onClick={() => onConfirm(confirmation)}
+            disabled={!canConfirm}
+            className="rounded-md bg-amber-800 px-3 py-1.5 text-xs font-medium text-white hover:bg-amber-700 disabled:opacity-50"
+          >
+            {replacing ? "Replacing…" : "Yes, replace link"}
+          </button>
+          <button
+            onClick={onClose}
+            disabled={replacing}
+            className="rounded-md border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 interface PublicLinkSectionProps {
@@ -38,11 +175,13 @@ export function PublicLinkSection({ businessName, logoUrl }: PublicLinkSectionPr
   // ensure / replace / edit state
   const [ensuring, setEnsuring] = useState(false);
   const [replacing, setReplacing] = useState(false);
-  const [confirmReplace, setConfirmReplace] = useState(false);
+  const [showReplaceDialog, setShowReplaceDialog] = useState(false);
   const [editingName, setEditingName] = useState(false);
   const [nameInput, setNameInput] = useState("");
   const [savingName, setSavingName] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [replaceError, setReplaceError] = useState<string | null>(null);
+  const replaceTriggerRef = useRef<HTMLButtonElement>(null);
 
   function slugUrl(slug: string) {
     return `${publicBaseUrl}/keep/s/${slug}`;
@@ -69,24 +208,33 @@ export function PublicLinkSection({ businessName, logoUrl }: PublicLinkSectionPr
     }
   }
 
-  async function handleReplace() {
+  async function handleReplace(confirmation: string) {
     setReplacing(true);
-    setError(null);
-    setConfirmReplace(false);
-    setNewIntakeRawUrl(null);
+    setReplaceError(null);
     try {
-      const result = await api.replaceIntake();
+      const result = await api.replaceIntake(confirmation);
+      setShowReplaceDialog(false);
+      setNewIntakeRawUrl(null);
       queryClient.setQueryData<IntakeStatusResult>(["intake"], {
         hasActiveLink: true,
         publicSlug: result.publicSlug,
         createdAtUtc: null,
       });
       setNewIntakeRawUrl(`${publicBaseUrl}/keep/intake/${result.rawToken}`);
-    } catch {
-      setError("Something went wrong. Please try again.");
+    } catch (err) {
+      if (err instanceof ApiError && err.code === "KeepPublicIntakeLink.ReplaceConfirmationInvalid") {
+        setReplaceError("Type REPLACE to confirm this action.");
+      } else {
+        setReplaceError("Something went wrong. Please try again.");
+      }
     } finally {
       setReplacing(false);
     }
+  }
+
+  function closeReplaceDialog() {
+    setShowReplaceDialog(false);
+    setReplaceError(null);
   }
 
   async function handleCopyRawUrl() {
@@ -246,38 +394,25 @@ export function PublicLinkSection({ businessName, logoUrl }: PublicLinkSectionPr
 
           {/* replace link — destructive / exceptional */}
           <div className="pt-1 border-t border-slate-100">
-            {!confirmReplace ? (
-              <button
-                onClick={() => { setConfirmReplace(true); setError(null); }}
-                className="text-xs text-slate-400 hover:text-slate-700 underline"
-              >
-                Replace link (breaks old shared links)
-              </button>
-            ) : (
-              <div className="space-y-2 rounded-md border border-amber-200 bg-amber-50 p-3">
-                <p className="text-sm font-medium text-amber-800">Replace this link?</p>
-                <p className="text-xs text-amber-700">
-                  All previously shared links — including any you emailed or posted — will stop working immediately. This cannot be undone.
-                </p>
-                <div className="flex gap-2 pt-1">
-                  <button
-                    onClick={() => void handleReplace()}
-                    disabled={replacing}
-                    className="rounded-md bg-amber-800 px-3 py-1.5 text-xs font-medium text-white hover:bg-amber-700 disabled:opacity-50"
-                  >
-                    {replacing ? "Replacing…" : "Yes, replace link"}
-                  </button>
-                  <button
-                    onClick={() => setConfirmReplace(false)}
-                    className="rounded-md border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </div>
-            )}
+            <button
+              ref={replaceTriggerRef}
+              onClick={() => setShowReplaceDialog(true)}
+              className="text-xs text-slate-400 hover:text-slate-700 underline"
+            >
+              Replace link (breaks old shared links)
+            </button>
           </div>
         </div>
+      )}
+
+      {showReplaceDialog && (
+        <ReplaceLinkDialog
+          replacing={replacing}
+          error={replaceError}
+          onConfirm={(confirmation) => void handleReplace(confirmation)}
+          onClose={closeReplaceDialog}
+          triggerRef={replaceTriggerRef}
+        />
       )}
 
       {error && <p className="text-sm text-red-600">{error}</p>}

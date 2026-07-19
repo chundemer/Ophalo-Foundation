@@ -365,8 +365,11 @@ export const api = {
   getIntake: () => apiFetch<IntakeStatusResult>("/keep/setup/intake"),
   ensureIntake: () =>
     apiFetch<IntakeEnsureResult>("/keep/setup/intake/ensure", { method: "POST" }),
-  replaceIntake: () =>
-    apiFetch<IntakeReplaceResult>("/keep/setup/intake/replace", { method: "POST" }),
+  replaceIntake: (confirmation: string) =>
+    apiFetch<IntakeReplaceResult>("/keep/setup/intake/replace", {
+      method: "POST",
+      body: JSON.stringify({ confirmation }),
+    }),
   updateIntakeLinkName: (desiredName: string) =>
     apiFetch<IntakeRenameLinkResult>("/keep/setup/intake/link-name", {
       method: "PUT",

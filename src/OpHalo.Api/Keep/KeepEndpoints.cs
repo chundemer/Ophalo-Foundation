@@ -56,9 +56,9 @@ public static class KeepEndpoints
             return result.IsSuccess ? Results.Ok(result.Value) : ErrorHttpMapper.ToHttpResult(result.Error);
         }).RequireAuthorization();
 
-        app.MapPost("/keep/setup/intake/replace", async (KeepIntakeSetupService service, CancellationToken ct) =>
+        app.MapPost("/keep/setup/intake/replace", async (ReplaceIntakeBody? body, KeepIntakeSetupService service, CancellationToken ct) =>
         {
-            var result = await service.ReplaceAsync(ct);
+            var result = await service.ReplaceAsync(body?.Confirmation, ct);
             return result.IsSuccess ? Results.Ok(result.Value) : ErrorHttpMapper.ToHttpResult(result.Error);
         }).RequireAuthorization();
 

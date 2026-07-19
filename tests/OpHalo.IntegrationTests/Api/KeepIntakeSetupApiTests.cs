@@ -457,6 +457,14 @@ public sealed class KeepIntakeSetupApiTests : IClassFixture<KeepApiWebFactory>, 
     // Replace — creates new token, old token rejected at public intake
     // -------------------------------------------------------------------------
 
+    private static HttpRequestMessage ReplaceRequest(string cookie, string? confirmation)
+    {
+        var req = new HttpRequestMessage(HttpMethod.Post, "/keep/setup/intake/replace");
+        req.Headers.Add("Cookie", $"{AuthConstants.CookieName}={cookie}");
+        req.Content = JsonContent.Create(new { confirmation });
+        return req;
+    }
+
     [Fact]
     public async Task Replace_CreatesNewTokenAndStaleLinksWarning()
     {
@@ -474,8 +482,7 @@ public sealed class KeepIntakeSetupApiTests : IClassFixture<KeepApiWebFactory>, 
         var oldRawToken = ensureBody.RawToken!;
 
         // Now replace — should return a new token.
-        using var replaceReq = new HttpRequestMessage(HttpMethod.Post, "/keep/setup/intake/replace");
-        replaceReq.Headers.Add("Cookie", $"{AuthConstants.CookieName}={cookie}");
+        using var replaceReq = ReplaceRequest(cookie, "REPLACE");
         var replaceResp = await _client.SendAsync(replaceReq);
         Assert.Equal(HttpStatusCode.OK, replaceResp.StatusCode);
         var replaceBody = await replaceResp.Content.ReadFromJsonAsync<ReplaceBody>(JsonOptions);
@@ -500,8 +507,7 @@ public sealed class KeepIntakeSetupApiTests : IClassFixture<KeepApiWebFactory>, 
         var oldRawToken = ensureBody!.RawToken!;
 
         // Replace — revokes old link.
-        using var replaceReq = new HttpRequestMessage(HttpMethod.Post, "/keep/setup/intake/replace");
-        replaceReq.Headers.Add("Cookie", $"{AuthConstants.CookieName}={cookie}");
+        using var replaceReq = ReplaceRequest(cookie, "REPLACE");
         await _client.SendAsync(replaceReq);
 
         // Old token must now be rejected at the public intake endpoint.
@@ -521,11 +527,115 @@ public sealed class KeepIntakeSetupApiTests : IClassFixture<KeepApiWebFactory>, 
         var (accountId, ownerUserId) = await SeedFreshAccountAsync("No Link Replace Co", "no-link-replace");
         var cookie = await _factory.SeedSessionAsync(ownerUserId, accountId);
 
-        using var request = new HttpRequestMessage(HttpMethod.Post, "/keep/setup/intake/replace");
-        request.Headers.Add("Cookie", $"{AuthConstants.CookieName}={cookie}");
+        using var request = ReplaceRequest(cookie, "REPLACE");
         var response = await _client.SendAsync(request);
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Replace_MissingConfirmation_Returns400AndLeavesOldLinkUsable()
+    {
+        var (accountId, ownerUserId) = await SeedFreshAccountAsync("Missing Confirm Co", "missing-confirm");
+        var cookie = await _factory.SeedSessionAsync(ownerUserId, accountId);
+
+        using var ensureReq = new HttpRequestMessage(HttpMethod.Post, "/keep/setup/intake/ensure");
+        ensureReq.Headers.Add("Cookie", $"{AuthConstants.CookieName}={cookie}");
+        var ensureResp = await _client.SendAsync(ensureReq);
+        var ensureBody = await ensureResp.Content.ReadFromJsonAsync<EnsureBody>(JsonOptions);
+        var oldRawToken = ensureBody!.RawToken!;
+
+        using var replaceReq = ReplaceRequest(cookie, confirmation: null);
+        var replaceResp = await _client.SendAsync(replaceReq);
+        Assert.Equal(HttpStatusCode.BadRequest, replaceResp.StatusCode);
+        var problem = await replaceResp.Content.ReadFromJsonAsync<ProblemBody>(JsonOptions);
+        Assert.Equal("KeepPublicIntakeLink.ReplaceConfirmationInvalid", problem?.Code);
+
+        // Old link must still work — a failed confirmation must not revoke it.
+        var publicResponse = await _client.PostAsJsonAsync(
+            $"/keep/public-intake/token/{oldRawToken}",
+            new { customerName = "Bob", customerPhone = "0499888777", description = "Still valid",
+                  serviceAddressLine1 = "1 Test St", serviceCity = "Springfield", serviceState = "IL" });
+        Assert.Equal(HttpStatusCode.Created, publicResponse.StatusCode);
+    }
+
+    [Fact]
+    public async Task Replace_NoRequestBodyAtAll_Returns400AndLeavesOldLinkUsable()
+    {
+        var (accountId, ownerUserId) = await SeedFreshAccountAsync("No Body Co", "no-body-confirm");
+        var cookie = await _factory.SeedSessionAsync(ownerUserId, accountId);
+
+        using var ensureReq = new HttpRequestMessage(HttpMethod.Post, "/keep/setup/intake/ensure");
+        ensureReq.Headers.Add("Cookie", $"{AuthConstants.CookieName}={cookie}");
+        var ensureResp = await _client.SendAsync(ensureReq);
+        var ensureBody = await ensureResp.Content.ReadFromJsonAsync<EnsureBody>(JsonOptions);
+        var oldRawToken = ensureBody!.RawToken!;
+
+        // No Content at all — not even an empty JSON object — must still reach the
+        // service-level confirmation gate rather than being rejected by model binding.
+        using var replaceReq = new HttpRequestMessage(HttpMethod.Post, "/keep/setup/intake/replace");
+        replaceReq.Headers.Add("Cookie", $"{AuthConstants.CookieName}={cookie}");
+        var replaceResp = await _client.SendAsync(replaceReq);
+        Assert.Equal(HttpStatusCode.BadRequest, replaceResp.StatusCode);
+        var problem = await replaceResp.Content.ReadFromJsonAsync<ProblemBody>(JsonOptions);
+        Assert.Equal("KeepPublicIntakeLink.ReplaceConfirmationInvalid", problem?.Code);
+
+        // Old link must still work — a missing body must not revoke it.
+        var publicResponse = await _client.PostAsJsonAsync(
+            $"/keep/public-intake/token/{oldRawToken}",
+            new { customerName = "Bob", customerPhone = "0499888777", description = "Still valid",
+                  serviceAddressLine1 = "1 Test St", serviceCity = "Springfield", serviceState = "IL" });
+        Assert.Equal(HttpStatusCode.Created, publicResponse.StatusCode);
+    }
+
+    [Fact]
+    public async Task Replace_IncorrectConfirmation_Returns400()
+    {
+        var (accountId, ownerUserId) = await SeedFreshAccountAsync("Incorrect Confirm Co", "incorrect-confirm");
+        var cookie = await _factory.SeedSessionAsync(ownerUserId, accountId);
+
+        using var ensureReq = new HttpRequestMessage(HttpMethod.Post, "/keep/setup/intake/ensure");
+        ensureReq.Headers.Add("Cookie", $"{AuthConstants.CookieName}={cookie}");
+        await _client.SendAsync(ensureReq);
+
+        // Case-sensitive: lowercase must not satisfy the confirmation gate.
+        using var replaceReq = ReplaceRequest(cookie, "replace");
+        var replaceResp = await _client.SendAsync(replaceReq);
+        Assert.Equal(HttpStatusCode.BadRequest, replaceResp.StatusCode);
+        var problem = await replaceResp.Content.ReadFromJsonAsync<ProblemBody>(JsonOptions);
+        Assert.Equal("KeepPublicIntakeLink.ReplaceConfirmationInvalid", problem?.Code);
+    }
+
+    [Fact]
+    public async Task Replace_Operator_Returns403()
+    {
+        var cookie = await _factory.SeedSessionAsync(_operatorUserId, _accountId);
+
+        using var req = ReplaceRequest(cookie, "REPLACE");
+        var resp = await _client.SendAsync(req);
+
+        Assert.Equal(HttpStatusCode.Forbidden, resp.StatusCode);
+    }
+
+    [Fact]
+    public async Task Replace_Viewer_Returns403()
+    {
+        var cookie = await _factory.SeedSessionAsync(_viewerUserId, _accountId);
+
+        using var req = ReplaceRequest(cookie, "REPLACE");
+        var resp = await _client.SendAsync(req);
+
+        Assert.Equal(HttpStatusCode.Forbidden, resp.StatusCode);
+    }
+
+    [Fact]
+    public async Task Replace_Unauthenticated_Returns401()
+    {
+        using var req = new HttpRequestMessage(HttpMethod.Post, "/keep/setup/intake/replace");
+        req.Content = JsonContent.Create(new { confirmation = "REPLACE" });
+        var resp = await _client.SendAsync(req);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, resp.StatusCode);
     }
 
     // -------------------------------------------------------------------------

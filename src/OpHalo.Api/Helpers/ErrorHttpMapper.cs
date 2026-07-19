@@ -45,6 +45,8 @@ public static class ErrorHttpMapper
             "KeepRequest.ServiceStateRequired"        => (StatusCodes.Status422UnprocessableEntity, "Unprocessable entity.", null),
             "KeepRequest.ServiceStateInvalid"         => (StatusCodes.Status422UnprocessableEntity, "Unprocessable entity.", null),
             "KeepPublicIntakeLink.NoActiveLink" => (StatusCodes.Status404NotFound, "Resource not found.", null),
+            "KeepPublicIntakeLink.ReplaceConfirmationInvalid" =>
+                (StatusCodes.Status400BadRequest, "Bad request.", null),
 
             // --- 400 — validation / malformed client request ---
             var c when c.Contains("Validation") => (StatusCodes.Status400BadRequest, "Validation failed.", null),

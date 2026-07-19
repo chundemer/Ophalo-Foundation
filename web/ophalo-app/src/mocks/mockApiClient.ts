@@ -1,4 +1,4 @@
-import { api } from "../lib/apiClient";
+import { api, ApiError } from "../lib/apiClient";
 import type {
   AccountRole,
   AvailableActionsMetadata,
@@ -159,8 +159,14 @@ export function installMockApi(): void {
   api.getIntake = () => delay({ ...mockIntake });
   api.ensureIntake = () =>
     delay({ created: false, rawToken: null, publicSlug: mockIntake.publicSlug });
-  api.replaceIntake = () =>
-    delay({ rawToken: "mock-raw-token-new", publicSlug: "apex-home-new9z", staleLinksWarning: true });
+  api.replaceIntake = (confirmation) => {
+    if (confirmation !== "REPLACE") {
+      return Promise.reject(
+        new ApiError(400, "KeepPublicIntakeLink.ReplaceConfirmationInvalid", "Type REPLACE to confirm this action."),
+      );
+    }
+    return delay({ rawToken: "mock-raw-token-new", publicSlug: "apex-home-new9z", staleLinksWarning: true });
+  };
   api.createIntakeSmsHandoff = (customerPhone) => delay(mockIntakeSmsHandoff(customerPhone));
 
   // Request list

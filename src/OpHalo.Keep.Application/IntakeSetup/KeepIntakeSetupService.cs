@@ -133,11 +133,18 @@ public sealed class KeepIntakeSetupService(
         return Result<KeepIntakeSetupEnsureResult>.Failure(SlugExhausted);
     }
 
-    public async Task<Result<KeepIntakeSetupReplaceResult>> ReplaceAsync(CancellationToken ct = default)
+    public const string ReplaceConfirmationValue = "REPLACE";
+
+    public async Task<Result<KeepIntakeSetupReplaceResult>> ReplaceAsync(string? confirmation, CancellationToken ct = default)
     {
         var auth = await AuthorizeAsync(ct);
         if (auth.IsFailure)
             return Result<KeepIntakeSetupReplaceResult>.Failure(auth.Error);
+
+        // Case-sensitive, server-independent confirmation gate — the destructive-dialog contract
+        // must not rely on the client-side disabled-button check alone (GAP-036b).
+        if (!string.Equals(confirmation, ReplaceConfirmationValue, StringComparison.Ordinal))
+            return Result<KeepIntakeSetupReplaceResult>.Failure(KeepPublicIntakeLinkErrors.ReplaceConfirmationInvalid);
 
         var existing = await persistence.FindActiveLinkByAccountAsync(currentUser.AccountId, ct);
         if (existing is null)
