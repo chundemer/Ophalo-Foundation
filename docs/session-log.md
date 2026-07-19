@@ -1,14 +1,14 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-07-19 (GAP-020 Slice A committed in `60797b6`; Slice B implemented,
-uncommitted)
+**Last updated:** 2026-07-19 (GAP-020 Slices A/B/C committed — GAP-020 resolved)
 **Branch:** `main` tracking `origin/main`
 **Deployment posture:** Not deployment-ready. The active launch gate is
 `docs/pilot-readiness-bug-tracker.md`.
 **Current work:** GAP-034 is resolved in `45cea22` (completion docs `dfa554a`). GAP-020 — replacing
-the raw-phone desktop call QR with an opaque short-lived handoff — is in progress: Slice A
-(backend) is committed in `60797b6`. Slice B (public `share-call` resolver page) is implemented
-and uncommitted in the working tree — see "GAP-020 Slice B Status" below.
+the raw-phone desktop call QR with an opaque short-lived handoff — is complete: Slice A (backend) is
+committed in `60797b6`; Slice B (public `share-call` resolver page) in `372829f`; Slice C (wiring
+both desktop QR entry points) in `e22b451`. Live browser/real-device verification of the end-to-end
+scan flow remains outstanding — see the GAP-020 tracker entry's post-gap deployment gate.
 
 Detailed historical implementation evidence belongs in `docs/build-log/`; active requirements and
 status belong in `docs/pilot-readiness-bug-tracker.md`; decisions belong in
@@ -83,8 +83,9 @@ For every implementation slice:
 
 ## V1 Sequence After GAP-036
 
-1. GAP-020 P0 opaque desktop call-handoff replacement, then resolve remaining selected P0/P1
-   request-capture/detail/list safety and trust gaps in bounded slices.
+1. GAP-020 P0 opaque desktop call-handoff replacement is implemented (Slices A/B/C committed;
+   live-device verification outstanding). Resolve remaining selected P0/P1 request-capture/detail/
+   list safety and trust gaps in bounded slices.
 2. GAP-037 founder/internal weekly value report; GAP-038 PWA feedback/help; GAP-039 redacted
    production observability; GAP-040 marketing accuracy/assets/deployment readiness; GAP-042
    authenticated business context; GAP-043 deliberate request-list scale UX; GAP-044 history
@@ -112,10 +113,10 @@ property, which EF Core cannot translate — replaced with `DeletedAtUtc == null
 `EfKeepCallHandoffPersistence` and `EfKeepSmsHandoffPersistence`. Final verified counts:
 `KeepCallHandoffApiTests` 8/8, sibling `KeepIntakeSmsHandoffApiTests` 14/14, unit tests 36/36.
 
-## GAP-020 Slice B Status — Public Call-Handoff Resolver Page
+## GAP-020 Slice B — Public Call-Handoff Resolver Page — Committed
 
-**Status:** Implemented, uncommitted. Two new files mirroring the existing SMS handoff page
-pattern, launching `tel:` instead of `sms:`:
+**Status:** Committed in `372829f`. Two new files mirror the existing SMS handoff page pattern,
+launching `tel:` instead of `sms:`:
 
 - `web/ophalo-web/src/app/keep/share-call/[handoffToken]/page.tsx` — server component; fetches
   `GET /keep/share-call/{handoffToken}`; handles `expired` (404) and `unavailable` (missing
@@ -133,8 +134,23 @@ pattern, launching `tel:` instead of `sms:`:
 introduced by this slice. Live browser verification (scan-and-launch on desktop, expired/unavailable
 states) is still outstanding before this is considered fully verified.
 
-**Next step:** Christian reviews the diff; after commit, proceed to Slice C (wire
-`CustomerContactStrip.tsx`'s `CallQrModal` and `RequestDetail.tsx`'s Log external contact modal to
-call `POST /keep/requests/{requestId}/call-handoff` and encode the returned `handoffUrl` — via a new
-shared call-handoff QR component/hook — instead of raw `tel:{phone}`). Its own session per the
-batch-size gate.
+## GAP-020 Slice C — Wire Desktop Call QR to Opaque Handoff — Committed
+
+**Status:** Committed in `e22b451`. Both desktop call-QR entry points now mint an opaque handoff
+via `POST /keep/requests/{requestId}/call-handoff` and encode the returned `handoffUrl`, replacing
+the raw `tel:{phone}` QR payload — `ophalo-app`'s `CustomerContactStrip.tsx` (`CallQrModal`) and
+`RequestDetail.tsx` (`LogContactModal`'s desktop QR block). A shared `CallHandoffQr` component and
+`useCallHandoff` hook (`pages/request-detail/`) handle minting plus loading/error/retry states.
+Mock/demo API client (`mocks/fixtures.ts`, `mocks/mockApiClient.ts`) mints the same opaque shape for
+parity. Mobile direct `tel:` links and explicit contact logging are unchanged.
+
+**Verified:** `tsc --noEmit` clean; full frontend suite 38/38 (32 pre-existing + 6 new) passing;
+`git diff --check` clean. New focused coverage in
+`pages/request-detail/__tests__/CallHandoffQr.test.tsx`: mint-on-mount, opaque payload (asserts
+QR value is never `tel:`-prefixed), loading state, error+retry, and a wiring assertion for each
+desktop entry point.
+
+**GAP-020 status:** Resolved pending the tracker's post-gap deployment gate — live browser/
+real-device verification (scan → dialer → fallback page, expiry, invalid-token, cache headers, iOS
+Safari/Android Chrome) still requires a phone-reachable (non-`localhost`) environment. See
+`docs/pilot-readiness-bug-tracker.md` GAP-020 for the exact manual checklist.
