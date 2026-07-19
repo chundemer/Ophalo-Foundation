@@ -81,6 +81,8 @@ export const mockSetup: KeepSetupResult = {
   timeZone: "America/Chicago",
   customerFacingPhone: "5555550100",
   customerFacingEmail: "hello@apexhomeservices.example",
+  logoUrl: null,
+  websiteUrl: null,
   responsePolicy: {
     firstResponseTargetMinutes: 60,
     standardResponseTargetMinutes: 240,

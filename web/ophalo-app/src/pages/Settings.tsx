@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api, type AccountRole } from "../lib/apiClient";
-import { CompanySection } from "./settings/CompanySection";
+import { CompanySection, draftFromSetup, type ProfileDraft } from "./settings/CompanySection";
 import { PolicySection } from "./settings/PolicySection";
 import { PublicLinkSection } from "./settings/PublicLinkSection";
 import { TeamSection } from "./settings/TeamSection";
@@ -34,6 +34,16 @@ export function Settings({
     queryFn: api.getSetup,
     staleTime: 2 * 60 * 1000,
   });
+
+  // Unsaved profile draft, shared between the company form and the public-link
+  // preview so the preview never presents unsaved edits as live. Re-synced
+  // whenever `setup` changes identity (initial load or a successful save).
+  const [profileDraft, setProfileDraft] = useState<ProfileDraft | null>(null);
+  const [syncedSetup, setSyncedSetup] = useState<typeof setup>(undefined);
+  if (setup && setup !== syncedSetup) {
+    setSyncedSetup(setup);
+    setProfileDraft(draftFromSetup(setup));
+  }
 
   const needsSetup = activeTab === "public-profile" || activeTab === "policy";
 
@@ -70,11 +80,17 @@ export function Settings({
             <div className="flex items-center justify-center py-16">
               <span className="text-slate-500 text-sm">Could not load settings.</span>
             </div>
-          ) : setup && activeTab === "public-profile" ? (
+          ) : setup && profileDraft && activeTab === "public-profile" ? (
             <div className="space-y-10">
-              <CompanySection setup={setup} />
+              <CompanySection
+                draft={profileDraft}
+                onDraftChange={(patch) => setProfileDraft({ ...profileDraft, ...patch })}
+              />
               <hr className="border-slate-200" />
-              <PublicLinkSection />
+              <PublicLinkSection
+                businessName={profileDraft.businessName}
+                logoUrl={profileDraft.logoUrl}
+              />
             </div>
           ) : setup && activeTab === "policy" ? (
             <PolicySection setup={setup} />

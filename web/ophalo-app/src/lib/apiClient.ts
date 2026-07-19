@@ -341,6 +341,8 @@ export const api = {
     timeZone: string;
     customerFacingPhone: string | null;
     customerFacingEmail: string | null;
+    logoUrl: string | null;
+    websiteUrl: string | null;
   }) =>
     apiFetch<KeepSetupResult>("/keep/setup/profile", {
       method: "PUT",

@@ -33,6 +33,8 @@ export interface KeepSetupResult {
   timeZone: string;
   customerFacingPhone: string | null;
   customerFacingEmail: string | null;
+  logoUrl: string | null;
+  websiteUrl: string | null;
   responsePolicy: KeepSetupPolicyResult;
 }
 

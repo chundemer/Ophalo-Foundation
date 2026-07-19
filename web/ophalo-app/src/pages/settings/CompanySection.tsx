@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { api, type KeepSetupResult, ApiError } from "../../lib/apiClient";
 
@@ -11,27 +11,37 @@ const ALL_TIMEZONES: string[] = (() => {
   }
 })();
 
-interface CompanySectionProps {
-  setup: KeepSetupResult;
+export interface ProfileDraft {
+  businessName: string;
+  timeZone: string;
+  customerFacingPhone: string;
+  customerFacingEmail: string;
+  logoUrl: string;
+  websiteUrl: string;
 }
 
-export function CompanySection({ setup }: CompanySectionProps) {
+export function draftFromSetup(setup: KeepSetupResult): ProfileDraft {
+  return {
+    businessName: setup.businessName,
+    timeZone: setup.timeZone,
+    customerFacingPhone: setup.customerFacingPhone ?? "",
+    customerFacingEmail: setup.customerFacingEmail ?? "",
+    logoUrl: setup.logoUrl ?? "",
+    websiteUrl: setup.websiteUrl ?? "",
+  };
+}
+
+interface CompanySectionProps {
+  draft: ProfileDraft;
+  onDraftChange: (patch: Partial<ProfileDraft>) => void;
+}
+
+export function CompanySection({ draft, onDraftChange }: CompanySectionProps) {
   const queryClient = useQueryClient();
 
-  const [businessName, setBusinessName] = useState(setup.businessName);
-  const [timeZone, setTimeZone] = useState(setup.timeZone);
-  const [phone, setPhone] = useState(setup.customerFacingPhone ?? "");
-  const [email, setEmail] = useState(setup.customerFacingEmail ?? "");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
-
-  useEffect(() => {
-    setBusinessName(setup.businessName);
-    setTimeZone(setup.timeZone);
-    setPhone(setup.customerFacingPhone ?? "");
-    setEmail(setup.customerFacingEmail ?? "");
-  }, [setup]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -41,10 +51,12 @@ export function CompanySection({ setup }: CompanySectionProps) {
     setSaved(false);
     try {
       const updated = await api.updateProfile({
-        businessName: businessName.trim(),
-        timeZone,
-        customerFacingPhone: phone.trim() || null,
-        customerFacingEmail: email.trim() || null,
+        businessName: draft.businessName.trim(),
+        timeZone: draft.timeZone,
+        customerFacingPhone: draft.customerFacingPhone.trim() || null,
+        customerFacingEmail: draft.customerFacingEmail.trim() || null,
+        logoUrl: draft.logoUrl.trim() || null,
+        websiteUrl: draft.websiteUrl.trim() || null,
       });
       queryClient.setQueryData(["setup"], updated);
       setSaved(true);
@@ -59,7 +71,7 @@ export function CompanySection({ setup }: CompanySectionProps) {
     }
   }
 
-  const knownTz = ALL_TIMEZONES.includes(timeZone);
+  const knownTz = ALL_TIMEZONES.includes(draft.timeZone);
 
   return (
     <section>
@@ -69,30 +81,32 @@ export function CompanySection({ setup }: CompanySectionProps) {
       </p>
       <form onSubmit={handleSubmit} className="space-y-4 max-w-lg">
         <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">
+          <label htmlFor="company-business-name" className="block text-sm font-medium text-slate-700 mb-1">
             Business name
           </label>
           <input
+            id="company-business-name"
             type="text"
-            value={businessName}
-            onChange={(e) => { setBusinessName(e.target.value); setSaved(false); }}
+            value={draft.businessName}
+            onChange={(e) => { onDraftChange({ businessName: e.target.value }); setSaved(false); }}
             required
             className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
           />
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">
+          <label htmlFor="company-timezone" className="block text-sm font-medium text-slate-700 mb-1">
             Timezone
           </label>
           <select
-            value={knownTz ? timeZone : ""}
-            onChange={(e) => { setTimeZone(e.target.value); setSaved(false); }}
+            id="company-timezone"
+            value={knownTz ? draft.timeZone : ""}
+            onChange={(e) => { onDraftChange({ timeZone: e.target.value }); setSaved(false); }}
             className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
           >
             {!knownTz && (
               <option value="" disabled>
-                {timeZone} (custom)
+                {draft.timeZone} (custom)
               </option>
             )}
             {ALL_TIMEZONES.map((tz) => (
@@ -104,29 +118,69 @@ export function CompanySection({ setup }: CompanySectionProps) {
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">
+          <label htmlFor="company-phone" className="block text-sm font-medium text-slate-700 mb-1">
             Customer-facing phone
           </label>
           <input
+            id="company-phone"
             type="tel"
-            value={phone}
-            onChange={(e) => { setPhone(e.target.value); setSaved(false); }}
+            value={draft.customerFacingPhone}
+            onChange={(e) => { onDraftChange({ customerFacingPhone: e.target.value }); setSaved(false); }}
             placeholder="Optional"
             className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
           />
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">
+          <label htmlFor="company-email" className="block text-sm font-medium text-slate-700 mb-1">
             Customer-facing email
           </label>
           <input
+            id="company-email"
             type="email"
-            value={email}
-            onChange={(e) => { setEmail(e.target.value); setSaved(false); }}
+            value={draft.customerFacingEmail}
+            onChange={(e) => { onDraftChange({ customerFacingEmail: e.target.value }); setSaved(false); }}
             placeholder="Optional"
             className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
           />
+        </div>
+
+        <div className="pt-2 border-t border-slate-100">
+          <h3 className="text-sm font-semibold text-slate-900 mb-1">
+            Branding &amp; trust anchors
+          </h3>
+          <p className="text-xs text-slate-500 mb-3">
+            The logo, website, and customer-facing phone above can appear on customer request and
+            tracker pages.
+          </p>
+
+          <div className="mb-4">
+            <label htmlFor="company-logo-url" className="block text-sm font-medium text-slate-700 mb-1">
+              Logo URL
+            </label>
+            <input
+              id="company-logo-url"
+              type="url"
+              value={draft.logoUrl}
+              onChange={(e) => { onDraftChange({ logoUrl: e.target.value }); setSaved(false); }}
+              placeholder="https://example.com/logo.png"
+              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+            />
+          </div>
+
+          <div>
+            <label htmlFor="company-website-url" className="block text-sm font-medium text-slate-700 mb-1">
+              Website URL
+            </label>
+            <input
+              id="company-website-url"
+              type="url"
+              value={draft.websiteUrl}
+              onChange={(e) => { onDraftChange({ websiteUrl: e.target.value }); setSaved(false); }}
+              placeholder="https://example.com"
+              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+            />
+          </div>
         </div>
 
         {error && (

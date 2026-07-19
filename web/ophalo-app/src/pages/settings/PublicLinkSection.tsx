@@ -2,7 +2,20 @@ import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, type IntakeStatusResult, ApiError } from "../../lib/apiClient";
 
-export function PublicLinkSection() {
+// Simple local fallback treatment for the preview only — not the public page.
+function businessInitials(name: string): string {
+  const words = name.trim().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return "?";
+  if (words.length === 1) return words[0].slice(0, 2).toUpperCase();
+  return (words[0][0] + words[1][0]).toUpperCase();
+}
+
+interface PublicLinkSectionProps {
+  businessName: string;
+  logoUrl: string;
+}
+
+export function PublicLinkSection({ businessName, logoUrl }: PublicLinkSectionProps) {
   const publicBaseUrl = import.meta.env.VITE_PUBLIC_BASE_URL as string;
   const queryClient = useQueryClient();
   const { data: intake, isLoading } = useQuery({
@@ -17,6 +30,10 @@ export function PublicLinkSection() {
 
   // durable slug-URL copy feedback
   const [slugCopied, setSlugCopied] = useState(false);
+
+  // preview logo — tracks the specific drafted URL that failed to load, so the
+  // initials fallback shows for a broken URL and clears itself once the draft changes
+  const [failedLogoUrl, setFailedLogoUrl] = useState<string | null>(null);
 
   // ensure / replace / edit state
   const [ensuring, setEnsuring] = useState(false);
@@ -265,15 +282,33 @@ export function PublicLinkSection() {
 
       {error && <p className="text-sm text-red-600">{error}</p>}
 
-      {/* phone-sized customer preview */}
+      {/* phone-sized customer preview — reflects unsaved draft, never fetched from the live public page */}
       {intake?.hasActiveLink && (
         <div className="pt-2">
-          <p className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Customer preview</p>
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-xs font-medium text-slate-400 uppercase tracking-wide">Customer preview</p>
+            <p className="text-[11px] text-slate-400">Unsaved changes shown live — save to publish</p>
+          </div>
           <div className="mx-auto max-w-[300px] rounded-2xl border-2 border-slate-200 bg-white shadow-md overflow-hidden">
             <div className="bg-slate-800 h-5 flex items-center justify-center">
               <div className="w-10 h-1 rounded-full bg-slate-600" />
             </div>
             <div className="px-4 py-4 space-y-3">
+              <div className="flex items-center gap-2">
+                {logoUrl.trim() && logoUrl.trim() !== failedLogoUrl ? (
+                  <img
+                    src={logoUrl.trim()}
+                    alt={`${businessName.trim() || "Business"} logo`}
+                    className="h-8 w-8 rounded-full object-cover border border-slate-200 shrink-0"
+                    onError={() => setFailedLogoUrl(logoUrl.trim())}
+                  />
+                ) : (
+                  <div className="h-8 w-8 rounded-full bg-slate-200 text-slate-600 text-[10px] font-semibold flex items-center justify-center shrink-0">
+                    {businessInitials(businessName)}
+                  </div>
+                )}
+                <p className="text-xs font-medium text-slate-700 truncate">{businessName.trim() || "Your business"}</p>
+              </div>
               <div>
                 <p className="text-sm font-semibold text-slate-900">Submit a request</p>
                 <p className="text-[11px] text-slate-500 mt-0.5 leading-snug">
