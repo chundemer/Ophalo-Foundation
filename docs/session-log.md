@@ -4,8 +4,9 @@
 **Branch:** `main` tracking `origin/main`
 **Deployment posture:** Not deployment-ready. Active launch gaps remain in
 `docs/pilot-readiness-bug-tracker.md`.
-**Current work:** R90c / GAP-035 auth-entry shell migration. Build/archive detail belongs in
-`docs/build-log/`; decisions belong in `docs/decisions/decision-index.md`.
+**Current work:** R90c / GAP-035 auth-entry shell migration — complete. Next slice not yet
+selected. Build/archive detail belongs in `docs/build-log/`; decisions belong in
+`docs/decisions/decision-index.md`.
 
 ## Session Protocol
 
@@ -137,11 +138,11 @@ For every implementation slice:
 - A configured business phone is a secondary public recovery/contact route; it does not replace the
   tracker as the post-submit customer destination.
 
-## Next Selected Code Slice — R90c-4 / GAP-035
+## Next Selected Code Slice
 
-**Goal:** Migrate `MobileExchangeClient` (ADR-390 sterile flow) onto the `AuthShell` built in
-R90c-1. Implementation-ready — reuse the existing shell/field/error components; no new discovery
-needed. This is the final slice in the R90c auth-entry shell migration.
+R90c / GAP-035 auth-entry shell migration is complete (R90c-1 through R90c-4). `AuthShell` gained
+a `bare` prop in R90c-4 to satisfy ADR-390's "no external links" constraint on the mobile handoff
+page while still reusing the shared shell. Next slice not yet selected.
 
 ## R90b Follow-On Order
 
@@ -157,7 +158,8 @@ needed. This is the final slice in the R90c auth-entry shell migration.
    `/auth/check-email` migration — complete.
 7. **R90c-2 / GAP-035:** `/auth/exchange/error` + `ExchangeClient` migration — complete.
 8. **R90c-3 / GAP-035:** invite `accept/error` + `AcceptClient` migration — complete.
-9. **R90c-4 / GAP-035:** `MobileExchangeClient` ADR-390 sterile migration — next.
+9. **R90c-4 / GAP-035:** `MobileExchangeClient` ADR-390 sterile migration onto `AuthShell bare` —
+   complete.
 
 ## Standing Technical Boundaries
 

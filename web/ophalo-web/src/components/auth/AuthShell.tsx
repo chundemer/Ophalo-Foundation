@@ -22,15 +22,22 @@ const labelClass = "mb-1.5 block text-sm font-medium text-ophalo-ink";
 export function AuthShell({
   children,
   maxWidthClassName = "max-w-md",
+  bare = false,
 }: {
   children: ReactNode;
   maxWidthClassName?: string;
+  /**
+   * ADR-390: the mobile auth handoff page must be a minimal page with no
+   * external links. Suppresses the home-link wrapper and footer links,
+   * leaving only static brand imagery and the card content.
+   */
+  bare?: boolean;
 }) {
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-ophalo-canvas px-4 py-12 sm:py-16">
       <div className={`w-full ${maxWidthClassName}`}>
         <div className="mb-8 flex justify-center">
-          <Link href="/" aria-label="OpHalo home" className={focusRingClass}>
+          {bare ? (
             <Image
               src="/brand/ophalo-lockup-color.svg"
               alt="OpHalo"
@@ -39,12 +46,23 @@ export function AuthShell({
               priority
               className="h-9 w-auto"
             />
-          </Link>
+          ) : (
+            <Link href="/" aria-label="OpHalo home" className={focusRingClass}>
+              <Image
+                src="/brand/ophalo-lockup-color.svg"
+                alt="OpHalo"
+                width={128}
+                height={40}
+                priority
+                className="h-9 w-auto"
+              />
+            </Link>
+          )}
         </div>
         <div className="rounded-2xl border border-ophalo-border bg-ophalo-card px-6 py-8 shadow-sm sm:px-8">
           {children}
         </div>
-        <AuthFooterLinks />
+        {!bare && <AuthFooterLinks />}
       </div>
     </div>
   );

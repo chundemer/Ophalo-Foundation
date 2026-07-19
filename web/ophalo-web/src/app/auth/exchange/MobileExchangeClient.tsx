@@ -1,6 +1,12 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { AuthShell, AuthHeading, AuthLead, AuthNote } from "@/components/auth/AuthShell";
+
+const deepLinkButtonClass =
+  "block w-full rounded-lg bg-ophalo-navy px-5 py-3 text-center text-sm font-semibold text-white " +
+  "transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 " +
+  "focus-visible:ring-keep-accent focus-visible:ring-offset-2";
 
 type Phase = "exchanging" | "ready" | "error";
 
@@ -58,35 +64,33 @@ export default function MobileExchangeClient({ code }: { code: string }) {
 
   if (phase === "exchanging") {
     return (
-      <div className="auth-page">
-        <div className="container">
-          <p>Authorizing device&hellip;</p>
-        </div>
-      </div>
+      <AuthShell bare>
+        <AuthLead>Authorizing device&hellip;</AuthLead>
+      </AuthShell>
     );
   }
 
   if (phase === "error") {
     return (
-      <div className="auth-page">
-        <div className="container">
-          <p>This link is invalid, expired, or has already been used.</p>
-          <p>Open the app and request a new sign-in link.</p>
-        </div>
-      </div>
+      <AuthShell bare>
+        <AuthLead>This link is invalid, expired, or has already been used.</AuthLead>
+        <AuthNote>Open the app and request a new sign-in link.</AuthNote>
+      </AuthShell>
     );
   }
 
   const deepLink = `ophalo://auth/callback?code=${encodeURIComponent(handoffCode!)}`;
 
   return (
-    <div className="auth-page">
-      <div className="container">
-        <h1>Device Authorized</h1>
-        <p>Tap the button below to open OpHalo Keep.</p>
-        <a href={deepLink}>Open Keep Mobile App</a>
-        <p>If nothing happens, open the app and sign in again.</p>
+    <AuthShell bare>
+      <AuthHeading>Device Authorized</AuthHeading>
+      <AuthLead>Tap the button below to open OpHalo Keep.</AuthLead>
+      <div className="mt-6">
+        <a href={deepLink} className={deepLinkButtonClass}>
+          Open Keep Mobile App
+        </a>
       </div>
-    </div>
+      <AuthNote>If nothing happens, open the app and sign in again.</AuthNote>
+    </AuthShell>
   );
 }
