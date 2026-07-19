@@ -1,10 +1,10 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-07-17
+**Last updated:** 2026-07-18
 **Branch:** `main` tracking `origin/main`
 **Deployment posture:** Not deployment-ready. Active launch gaps remain in
 `docs/pilot-readiness-bug-tracker.md`.
-**Current work:** Public-trust remediation under GAP-033. Build/archive detail belongs in
+**Current work:** R90c / GAP-035 auth-entry shell migration. Build/archive detail belongs in
 `docs/build-log/`; decisions belong in `docs/decisions/decision-index.md`.
 
 ## Session Protocol
@@ -104,6 +104,20 @@ For every implementation slice:
 - **Deferred:** explicit customer-facing OffSeason banner. See
   `docs/pilot-readiness-bug-tracker.md` GAP-033 for the pre-deployment follow-on decision — the
   public customer-page contract has no `IsOffSeason` field today, so R90b-3 does not add one.
+- **R90c-1 / GAP-035 Shared auth-entry shell:** complete. New `src/components/auth/AuthShell.tsx`
+  (`AuthShell`, `AuthField`, `AuthFormError`, `AuthHeading`/`AuthLead`/`AuthNote`,
+  `AuthSubmitButton`, `AuthRequiredMark`, `authInputClass`/`authInvalidInputClass`) provides the
+  OpHalo Keep wordmark, `role="alert"`/`aria-invalid`/`aria-describedby`-associated field errors,
+  and a `:focus-visible` ring treatment, replacing the raw `.auth-page` shell (`outline: none`,
+  border-color-only focus, unassociated errors). Migrated `/signin`, `/auth/check-email` (gained a
+  page-specific `<title>`), and `/start`. The `/start` migration is shell-only, per Christian's
+  scope decision — GAP-034's full redesign (two-panel layout, copy rewrite, timezone-language UX,
+  Privacy/Terms placement) remains a separate, larger, still-open P1 not addressed here. The old
+  `.auth-*` rules in `globals.css` are intentionally untouched: 5 remaining consumers
+  (`auth/exchange/error`, `ExchangeClient`, `MobileExchangeClient`, `invite/accept/error`,
+  `AcceptClient`) still depend on them until later R90c slices migrate. Verified via
+  `tsc --noEmit`, `next build`, and manual screenshot review of signin/start/check-email confirming
+  wordmark, card styling, and required-field marks render with real color (not inert classes).
 
 ## Locked Public-Trust Decisions
 
@@ -123,11 +137,12 @@ For every implementation slice:
 - A configured business phone is a secondary public recovery/contact route; it does not replace the
   tracker as the post-submit customer destination.
 
-## Next Selected Code Slice — R90c / GAP-035
+## Next Selected Code Slice — R90c-2 / GAP-035
 
-**Goal:** Normal-browser auth-entry shell and recovery states, preserving ADR-390 sterile
-mobile-handoff restrictions. Pre-work not yet confirmed complete — requires discovery before an
-implementation-ready file-level gate.
+**Goal:** Migrate `/auth/exchange/error` and `ExchangeClient` (the in-flight "Signing you in…"
+state) onto the `AuthShell` built in R90c-1. Implementation-ready — reuse the existing shell/field/
+error components; no new discovery needed. R90c-3 (invite accept/error + `AcceptClient`) and
+R90c-4 (`MobileExchangeClient`, ADR-390 sterile — isolated slice) follow after.
 
 ## R90b Follow-On Order
 
@@ -139,8 +154,11 @@ implementation-ready file-level gate.
    complete, committed in `fcd3152`.
 5. **R90b-3b:** intake-route identity rendering + direct post-submit tracker navigation with
    one-time welcome banner — complete, committed in `7c95dc2`.
-6. **R90c / GAP-035:** normal-browser auth-entry shell and recovery states, preserving ADR-390
-   sterile mobile-handoff restrictions — next.
+6. **R90c-1 / GAP-035:** shared auth-entry shell + `/start` (minimal), `/signin`,
+   `/auth/check-email` migration — complete.
+7. **R90c-2 / GAP-035:** `/auth/exchange/error` + `ExchangeClient` migration — next.
+8. **R90c-3 / GAP-035:** invite `accept/error` + `AcceptClient` migration.
+9. **R90c-4 / GAP-035:** `MobileExchangeClient` ADR-390 sterile migration.
 
 ## Standing Technical Boundaries
 

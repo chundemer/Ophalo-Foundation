@@ -3,6 +3,17 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import {
+  AuthShell,
+  AuthHeading,
+  AuthLead,
+  AuthNote,
+  AuthField,
+  AuthFormError,
+  AuthSubmitButton,
+  authInputClass,
+  authInvalidInputClass,
+} from "@/components/auth/AuthShell";
 
 const FALLBACK_TZ_LIST = [
   "America/New_York",
@@ -111,104 +122,110 @@ export default function StartPage() {
 
   if (pilotFull) {
     return (
-      <div className="auth-page">
-        <div className="container">
-          <h1>Pilot is full.</h1>
-          <p>
-            {"We've reached our pilot capacity. Email us at "}
-            <a href="mailto:pilot@ophalo.com">pilot@ophalo.com</a>
-            {" if you'd like to be notified when we open up."}
-          </p>
-        </div>
-      </div>
+      <AuthShell>
+        <AuthHeading>Pilot is full.</AuthHeading>
+        <AuthLead>
+          {"We've reached our pilot capacity. Email us at "}
+          <a href="mailto:pilot@ophalo.com" className="underline underline-offset-2">
+            pilot@ophalo.com
+          </a>
+          {" if you'd like to be notified when we open up."}
+        </AuthLead>
+      </AuthShell>
     );
   }
 
+  const emailErrorId = emailInUse ? "email-in-use-error" : undefined;
+
   return (
-    <div className="auth-page">
-      <div className="container">
-        <Link href="/" className="auth-back">← Back to OpHalo</Link>
-        <h1>Get access to Keep</h1>
-        <p>
-          Keep is currently in pilot with service businesses. Early users can
-          try it on real active jobs and help shape what we build next.
-        </p>
-        <p className="auth-note">No cost during pilot.</p>
+    <AuthShell>
+      <AuthHeading>Get access to Keep</AuthHeading>
+      <AuthLead>
+        Keep is currently in pilot with service businesses. Early users can
+        try it on real active jobs and help shape what we build next.
+      </AuthLead>
+      <AuthNote>No cost during pilot.</AuthNote>
 
-        <form className="auth-form" onSubmit={handleSubmit}>
-          <div className="auth-form-field">
-            <label htmlFor="name">Name</label>
-            <input
-              id="name"
-              name="name"
-              type="text"
-              autoComplete="name"
-              required
-              disabled={submitting}
-            />
-          </div>
-          <div className="auth-form-field">
-            <label htmlFor="businessName">Business name</label>
-            <input
-              id="businessName"
-              name="businessName"
-              type="text"
-              autoComplete="organization"
-              required
-              disabled={submitting}
-            />
-          </div>
-          <div className="auth-form-field">
-            <label htmlFor="email">Work email</label>
-            <input
-              id="email"
-              name="email"
-              type="email"
-              autoComplete="email"
-              required
-              disabled={submitting}
-            />
-          </div>
-          <div className="auth-form-field">
-            <label htmlFor="timeZone">Time zone</label>
-            <select
-              id="timeZone"
-              name="timeZone"
-              value={timeZone}
-              onChange={(e) => setTimeZone(e.target.value)}
-              required
-              disabled={submitting}
-            >
-              {TZ_LIST.map((tz) => (
-                <option key={tz} value={tz}>
-                  {tz}
-                </option>
-              ))}
-            </select>
-          </div>
+      <form
+        className="mt-6"
+        onSubmit={handleSubmit}
+        aria-describedby={error ? "auth-form-error" : undefined}
+      >
+        {error && <AuthFormError>{error}</AuthFormError>}
+        {emailInUse && (
+          <AuthFormError id="email-in-use-error">
+            This email already has an account.{" "}
+            <Link href="/signin" className="underline underline-offset-2">Sign in instead</Link>
+          </AuthFormError>
+        )}
 
-          {emailInUse && (
-            <p className="auth-error">
-              This email already has an account.{" "}
-              <Link href="/signin">Sign in instead</Link>
-            </p>
-          )}
-          {error && <p className="auth-error">{error}</p>}
+        <AuthField id="name" label="Name" required>
+          <input
+            id="name"
+            name="name"
+            type="text"
+            autoComplete="name"
+            required
+            disabled={submitting}
+            className={authInputClass}
+          />
+        </AuthField>
 
-          <button type="submit" className="auth-submit" disabled={submitting}>
-            {submitting ? "Submitting…" : "Request access"}
-          </button>
-        </form>
+        <AuthField id="businessName" label="Business name" required>
+          <input
+            id="businessName"
+            name="businessName"
+            type="text"
+            autoComplete="organization"
+            required
+            disabled={submitting}
+            className={authInputClass}
+          />
+        </AuthField>
 
-        <p className="auth-note">
-          Already have an account?{" "}
-          <Link href="/signin">Sign in</Link>
-        </p>
-        <p className="auth-note">
-          Questions?{" "}
-          <a href="mailto:hello@ophalo.com">Talk to us</a>
-        </p>
-      </div>
-    </div>
+        <AuthField id="email" label="Work email" required>
+          <input
+            id="email"
+            name="email"
+            type="email"
+            autoComplete="email"
+            required
+            disabled={submitting}
+            aria-invalid={emailInUse}
+            aria-describedby={emailErrorId}
+            className={authInputClass + (emailInUse ? " " + authInvalidInputClass : "")}
+          />
+        </AuthField>
+
+        <AuthField id="timeZone" label="Time zone" required>
+          <select
+            id="timeZone"
+            name="timeZone"
+            value={timeZone}
+            onChange={(e) => setTimeZone(e.target.value)}
+            required
+            disabled={submitting}
+            className={authInputClass}
+          >
+            {TZ_LIST.map((tz) => (
+              <option key={tz} value={tz}>
+                {tz}
+              </option>
+            ))}
+          </select>
+        </AuthField>
+
+        <AuthSubmitButton disabled={submitting}>
+          {submitting ? "Submitting…" : "Request access"}
+        </AuthSubmitButton>
+      </form>
+
+      <AuthNote>
+        Already have an account? <Link href="/signin" className="underline underline-offset-2">Sign in</Link>
+      </AuthNote>
+      <AuthNote>
+        Questions? <a href="mailto:hello@ophalo.com" className="underline underline-offset-2">Talk to us</a>
+      </AuthNote>
+    </AuthShell>
   );
 }

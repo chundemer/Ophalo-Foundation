@@ -3,6 +3,17 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import {
+  AuthShell,
+  AuthHeading,
+  AuthLead,
+  AuthNote,
+  AuthField,
+  AuthFormError,
+  AuthSubmitButton,
+  authInputClass,
+  authInvalidInputClass,
+} from "@/components/auth/AuthShell";
 
 export default function SignInPage() {
   const router = useRouter();
@@ -48,37 +59,38 @@ export default function SignInPage() {
   }
 
   return (
-    <div className="auth-page">
-      <div className="container">
-        <Link href="/" className="auth-back">← Back to OpHalo</Link>
-        <h1>Sign in to Keep</h1>
-        <p>Enter your email and we&rsquo;ll send you a sign-in link.</p>
+    <AuthShell>
+      <AuthHeading>Sign in to Keep</AuthHeading>
+      <AuthLead>Enter your email and we&rsquo;ll send you a sign-in link.</AuthLead>
 
-        <form className="auth-form" onSubmit={handleSubmit}>
-          <div className="auth-form-field">
-            <label htmlFor="email">Email</label>
-            <input
-              id="email"
-              name="email"
-              type="email"
-              autoComplete="email"
-              required
-              disabled={submitting}
-            />
-          </div>
+      <form
+        className="mt-6"
+        onSubmit={handleSubmit}
+        aria-describedby={error ? "auth-form-error" : undefined}
+      >
+        {error && <AuthFormError>{error}</AuthFormError>}
 
-          {error && <p className="auth-error">{error}</p>}
+        <AuthField id="email" label="Email" required>
+          <input
+            id="email"
+            name="email"
+            type="email"
+            autoComplete="email"
+            required
+            disabled={submitting}
+            aria-invalid={!!error}
+            className={authInputClass + (error ? " " + authInvalidInputClass : "")}
+          />
+        </AuthField>
 
-          <button type="submit" className="auth-submit" disabled={submitting}>
-            {submitting ? "Sending…" : "Send sign-in link"}
-          </button>
-        </form>
+        <AuthSubmitButton disabled={submitting}>
+          {submitting ? "Sending…" : "Send sign-in link"}
+        </AuthSubmitButton>
+      </form>
 
-        <p className="auth-note">
-          New to Keep?{" "}
-          <Link href="/start">Get started</Link>
-        </p>
-      </div>
-    </div>
+      <AuthNote>
+        New to Keep? <Link href="/start" className="underline underline-offset-2">Get started</Link>
+      </AuthNote>
+    </AuthShell>
   );
 }
