@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import Link from "next/link";
 import {
   AuthShell,
@@ -11,6 +12,7 @@ import {
   AuthField,
   AuthFormError,
   AuthSubmitButton,
+  AuthFooterLinks,
   authInputClass,
   authInvalidInputClass,
 } from "@/components/auth/AuthShell";
@@ -41,18 +43,77 @@ function getTimeZoneList(): string[] {
 
 const TZ_LIST = getTimeZoneList();
 
+function friendlyTimeZoneLabel(tz: string): string {
+  const city = tz.includes("/") ? tz.split("/").pop()!.replace(/_/g, " ") : "";
+  for (const style of ["longGeneric", "long"] as const) {
+    try {
+      const parts = new Intl.DateTimeFormat("en-US", {
+        timeZone: tz,
+        timeZoneName: style,
+      }).formatToParts(new Date());
+      const name = parts.find((p) => p.type === "timeZoneName")?.value;
+      if (name) return city && city !== name ? `${name} — ${city}` : name;
+    } catch {
+      // try the next style
+    }
+  }
+  return city || tz;
+}
+
+const VALUE_POINTS = [
+  "One place to track every service request",
+  "Customers get clear updates through a private request page",
+  "Dependable follow-through — nothing falls through the cracks",
+];
+
+type SessionCheck = "checking" | "unauthenticated" | "authenticated" | "error";
+
 export default function StartPage() {
   const router = useRouter();
+  const [sessionCheck, setSessionCheck] = useState<SessionCheck>("checking");
   const [timeZone, setTimeZone] = useState(TZ_LIST[0]);
+  const [detectedTimeZone, setDetectedTimeZone] = useState<string | null>(null);
+  const [editingTimeZone, setEditingTimeZone] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pilotFull, setPilotFull] = useState(false);
   const [emailInUse, setEmailInUse] = useState(false);
 
+  const checkSession = useCallback(async () => {
+    setSessionCheck("checking");
+    try {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/auth/me`, {
+        credentials: "include",
+      });
+      if (res.ok) {
+        setSessionCheck("authenticated");
+      } else if (res.status === 401) {
+        setSessionCheck("unauthenticated");
+      } else {
+        setSessionCheck("error");
+      }
+    } catch {
+      setSessionCheck("error");
+    }
+  }, []);
+
+  useEffect(() => {
+    checkSession();
+  }, [checkSession]);
+
+  useEffect(() => {
+    if (sessionCheck === "authenticated") {
+      window.location.assign(
+        process.env.NEXT_PUBLIC_APP_BASE_URL ?? "http://localhost:5173",
+      );
+    }
+  }, [sessionCheck]);
+
   useEffect(() => {
     const detected = Intl.DateTimeFormat().resolvedOptions().timeZone;
     if (TZ_LIST.includes(detected)) {
       setTimeZone(detected);
+      setDetectedTimeZone(detected);
     }
   }, []);
 
@@ -120,6 +181,37 @@ export default function StartPage() {
     }
   }
 
+  if (sessionCheck === "checking" || sessionCheck === "authenticated") {
+    return (
+      <div
+        className="flex min-h-screen items-center justify-center bg-ophalo-canvas px-4"
+        role="status"
+        aria-label="Loading"
+      >
+        <div className="h-8 w-8 animate-pulse rounded-full bg-ophalo-navy/20" aria-hidden="true" />
+      </div>
+    );
+  }
+
+  if (sessionCheck === "error") {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-ophalo-canvas px-4">
+        <div className="w-full max-w-sm rounded-2xl border border-ophalo-border bg-ophalo-card px-6 py-8 text-center shadow-sm">
+          <p role="alert" className="text-sm text-ophalo-ink">
+            We couldn&apos;t check your sign-in status. Please try again.
+          </p>
+          <button
+            type="button"
+            onClick={checkSession}
+            className="mt-4 w-full rounded-lg bg-ophalo-navy px-5 py-3 text-sm font-semibold text-white transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-keep-accent focus-visible:ring-offset-2"
+          >
+            Try again
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   if (pilotFull) {
     return (
       <AuthShell>
@@ -136,96 +228,172 @@ export default function StartPage() {
   }
 
   const emailErrorId = emailInUse ? "email-in-use-error" : undefined;
+  const isDetectedValue = detectedTimeZone !== null && timeZone === detectedTimeZone;
 
   return (
-    <AuthShell>
-      <AuthHeading>Get access to Keep</AuthHeading>
-      <AuthLead>
-        Keep is currently in pilot with service businesses. Early users can
-        try it on real active jobs and help shape what we build next.
-      </AuthLead>
-      <AuthNote>No cost during pilot.</AuthNote>
-
-      <form
-        className="mt-6"
-        onSubmit={handleSubmit}
-        aria-describedby={error ? "auth-form-error" : undefined}
-      >
-        {error && <AuthFormError>{error}</AuthFormError>}
-        {emailInUse && (
-          <AuthFormError id="email-in-use-error">
-            This email already has an account.{" "}
-            <Link href="/signin" className="underline underline-offset-2">Sign in instead</Link>
-          </AuthFormError>
-        )}
-
-        <AuthField id="name" label="Name" required>
-          <input
-            id="name"
-            name="name"
-            type="text"
-            autoComplete="name"
-            required
-            disabled={submitting}
-            className={authInputClass}
-          />
-        </AuthField>
-
-        <AuthField id="businessName" label="Business name" required>
-          <input
-            id="businessName"
-            name="businessName"
-            type="text"
-            autoComplete="organization"
-            required
-            disabled={submitting}
-            className={authInputClass}
-          />
-        </AuthField>
-
-        <AuthField id="email" label="Work email" required>
-          <input
-            id="email"
-            name="email"
-            type="email"
-            autoComplete="email"
-            required
-            disabled={submitting}
-            aria-invalid={emailInUse}
-            aria-describedby={emailErrorId}
-            className={authInputClass + (emailInUse ? " " + authInvalidInputClass : "")}
-          />
-        </AuthField>
-
-        <AuthField id="timeZone" label="Time zone" required>
-          <select
-            id="timeZone"
-            name="timeZone"
-            value={timeZone}
-            onChange={(e) => setTimeZone(e.target.value)}
-            required
-            disabled={submitting}
-            className={authInputClass}
+    <div className="flex min-h-screen items-center justify-center bg-ophalo-canvas px-4 py-8 sm:py-12">
+      <div className="w-full max-w-5xl overflow-hidden rounded-2xl border border-ophalo-border bg-ophalo-card shadow-sm md:grid md:grid-cols-5">
+        {/* Compact identity/value header — narrow widths only */}
+        <div className="flex items-center gap-3 bg-ophalo-navy px-6 py-5 text-white md:hidden">
+          <Link
+            href="/"
+            aria-label="OpHalo home"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-ophalo-card p-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-keep-accent focus-visible:ring-offset-2 focus-visible:ring-offset-ophalo-navy"
           >
-            {TZ_LIST.map((tz) => (
-              <option key={tz} value={tz}>
-                {tz}
-              </option>
-            ))}
-          </select>
-        </AuthField>
+            <Image src="/brand/ophalo-mark.svg" alt="" width={32} height={32} />
+          </Link>
+          <div>
+            <p className="text-sm font-semibold tracking-tight">OpHalo Keep</p>
+            <p className="text-xs text-white/70">
+              The trust and continuity layer for service businesses.
+            </p>
+          </div>
+        </div>
 
-        <AuthSubmitButton disabled={submitting}>
-          {submitting ? "Submitting…" : "Request access"}
-        </AuthSubmitButton>
-      </form>
+        {/* Identity/value panel — desktop */}
+        <div className="hidden flex-col justify-between bg-ophalo-navy px-8 py-10 text-white md:col-span-2 md:flex">
+          <div>
+            <Link
+              href="/"
+              aria-label="OpHalo home"
+              className="inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-ophalo-card p-2.5 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-keep-accent focus-visible:ring-offset-2 focus-visible:ring-offset-ophalo-navy"
+            >
+              <Image src="/brand/ophalo-mark.svg" alt="" width={40} height={40} />
+            </Link>
+            <p className="mt-5 text-xl font-semibold tracking-tight">OpHalo Keep</p>
+            <p className="mt-3 text-sm leading-6 text-white/75">
+              Keep gives your service business one place for customer requests,
+              with clear updates that keep everyone on the same page.
+            </p>
+            <ul className="mt-7 space-y-3">
+              {VALUE_POINTS.map((point) => (
+                <li key={point} className="flex items-start gap-2.5 text-sm leading-6 text-white/90">
+                  <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-keep-accent" aria-hidden="true" />
+                  {point}
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
 
-      <AuthNote>
-        Already have an account? <Link href="/signin" className="underline underline-offset-2">Sign in</Link>
-      </AuthNote>
-      <AuthNote>
-        Questions? <a href="mailto:hello@ophalo.com" className="underline underline-offset-2">Talk to us</a>
-      </AuthNote>
-    </AuthShell>
+        {/* Form panel */}
+        <div className="px-6 py-8 sm:px-10 sm:py-10 md:col-span-3">
+          <AuthHeading>Start your Keep pilot</AuthHeading>
+          <AuthLead>
+            Tell us about your business and we&apos;ll email you a secure sign-in
+            link to finish setting up your account — no separate approval step.
+          </AuthLead>
+          <AuthNote>No cost during pilot.</AuthNote>
+
+          <form
+            className="mt-6"
+            onSubmit={handleSubmit}
+            aria-describedby={error ? "auth-form-error" : undefined}
+          >
+            {error && <AuthFormError>{error}</AuthFormError>}
+            {emailInUse && (
+              <AuthFormError id="email-in-use-error">
+                This email already has an account.{" "}
+                <Link href="/signin" className="underline underline-offset-2">Sign in instead</Link>
+              </AuthFormError>
+            )}
+
+            <AuthField id="name" label="Name" required>
+              <input
+                id="name"
+                name="name"
+                type="text"
+                autoComplete="name"
+                required
+                disabled={submitting}
+                className={authInputClass}
+              />
+            </AuthField>
+
+            <AuthField id="businessName" label="Business name" required>
+              <input
+                id="businessName"
+                name="businessName"
+                type="text"
+                autoComplete="organization"
+                required
+                disabled={submitting}
+                className={authInputClass}
+              />
+            </AuthField>
+
+            <AuthField id="email" label="Work email" required>
+              <input
+                id="email"
+                name="email"
+                type="email"
+                autoComplete="email"
+                required
+                disabled={submitting}
+                aria-invalid={emailInUse}
+                aria-describedby={emailErrorId}
+                className={authInputClass + (emailInUse ? " " + authInvalidInputClass : "")}
+              />
+            </AuthField>
+
+            <div className="mb-4">
+              <label htmlFor={editingTimeZone ? "timeZone" : "timeZoneChange"} className="mb-1.5 block text-sm font-medium text-ophalo-ink">
+                Time zone <span className="ml-1.5 text-xs font-semibold text-ophalo-danger">* Required</span>
+              </label>
+              {editingTimeZone ? (
+                <select
+                  id="timeZone"
+                  name="timeZone"
+                  value={timeZone}
+                  onChange={(e) => {
+                    setTimeZone(e.target.value);
+                    setEditingTimeZone(false);
+                  }}
+                  onBlur={() => setEditingTimeZone(false)}
+                  required
+                  disabled={submitting}
+                  autoFocus
+                  className={authInputClass}
+                >
+                  {TZ_LIST.map((tz) => (
+                    <option key={tz} value={tz}>
+                      {friendlyTimeZoneLabel(tz)}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <div className="flex items-center justify-between gap-3 rounded-lg border border-ophalo-border bg-ophalo-card px-4 py-3">
+                  <div>
+                    <p className="text-sm text-ophalo-ink">{friendlyTimeZoneLabel(timeZone)}</p>
+                    {isDetectedValue && (
+                      <p className="mt-0.5 text-xs text-ophalo-muted">Detected from your device</p>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    id="timeZoneChange"
+                    onClick={() => setEditingTimeZone(true)}
+                    disabled={submitting}
+                    className="shrink-0 rounded text-sm font-medium text-keep-accent underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-keep-accent focus-visible:ring-offset-2 disabled:opacity-50"
+                  >
+                    Change
+                  </button>
+                  <input type="hidden" name="timeZone" value={timeZone} />
+                </div>
+              )}
+            </div>
+
+            <AuthSubmitButton disabled={submitting}>
+              {submitting ? "Submitting…" : "Start my Keep pilot"}
+            </AuthSubmitButton>
+          </form>
+
+          <AuthNote>
+            Already have an account? <Link href="/signin" className="underline underline-offset-2">Sign in</Link>
+          </AuthNote>
+          <AuthFooterLinks />
+        </div>
+      </div>
+    </div>
   );
 }
