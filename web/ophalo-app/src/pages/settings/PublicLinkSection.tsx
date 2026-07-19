@@ -57,7 +57,16 @@ function ReplaceLinkDialog({ replacing, error, onConfirm, onClose, triggerRef }:
       // Contain Tab focus within the dialog — aria-modal alone does not do this.
       if (e.key === "Tab") {
         const focusable = getFocusable();
-        if (focusable.length === 0) return;
+
+        // While replacing, every control is disabled — nothing to cycle through.
+        // Keep focus pinned to the panel itself rather than letting Tab fall through
+        // to controls behind the dialog.
+        if (focusable.length === 0) {
+          e.preventDefault();
+          panelRef.current?.focus();
+          return;
+        }
+
         const first = focusable[0];
         const last = focusable[focusable.length - 1];
         const active = document.activeElement;
@@ -85,6 +94,16 @@ function ReplaceLinkDialog({ replacing, error, onConfirm, onClose, triggerRef }:
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Disabling the focused control (entering the replacing state) makes the browser blur
+  // it to the document body, which would otherwise let focus fall outside the dialog
+  // before the user ever presses Tab. Reclaim it onto the panel itself.
+  useEffect(() => {
+    if (!replacing) return;
+    const active = document.activeElement;
+    const withinPanel = active instanceof Node && panelRef.current?.contains(active);
+    if (!withinPanel) panelRef.current?.focus();
+  }, [replacing]);
+
   const canConfirm = confirmation === REPLACE_CONFIRMATION_VALUE && !replacing;
 
   return (
@@ -99,7 +118,11 @@ function ReplaceLinkDialog({ replacing, error, onConfirm, onClose, triggerRef }:
         className="absolute inset-0 bg-black/50"
         onClick={() => { if (!replacing) onClose(); }}
       />
-      <div ref={panelRef} className="relative w-full max-w-sm rounded-lg bg-white p-4 shadow-xl space-y-3">
+      <div
+        ref={panelRef}
+        tabIndex={-1}
+        className="relative w-full max-w-sm rounded-lg bg-white p-4 shadow-xl space-y-3 focus:outline-none"
+      >
         <h3 id="replace-link-dialog-title" className="text-sm font-semibold text-amber-800">
           Replace this link?
         </h3>

@@ -401,7 +401,8 @@ assistive-technology feedback weaker exactly where a user is trying to enter/rec
 
 ### GAP-036 — Public Link & Profile settings do not complete the public-trust workflow
 
-**Status:** Open — follow R90b-3
+**Status:** Implemented (GAP-036a `8085971`, GAP-036b `014bae5`) — pending manual desktop/mobile
+keyboard verification with a live authenticated session before this can be marked resolved.
 **Severity:** P1
 **Area:** `ophalo-app` Settings / Public Link & Profile
 **Decision:** ADR-446; GAP-033 public-safe identity rules

@@ -150,6 +150,36 @@ describe("PublicLinkSection replace-link dialog", () => {
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
   });
 
+  it("keeps focus trapped in the panel while every control is disabled in flight", async () => {
+    const user = userEvent.setup();
+    let resolveReplace: (value: unknown) => void = () => {};
+    mockReplaceIntake.mockImplementation(
+      () => new Promise((resolve) => { resolveReplace = resolve; }),
+    );
+    renderSection();
+
+    await user.click(await screen.findByText("Replace link (breaks old shared links)"));
+    await user.type(screen.getByLabelText(/type replace to confirm/i), "REPLACE");
+    await user.click(screen.getByRole("button", { name: /yes, replace link/i }));
+
+    expect(await screen.findByRole("button", { name: /replacing…/i })).toBeInTheDocument();
+    const dialog = screen.getByRole("dialog");
+
+    // Disabling the focused control blurs it — focus must land back inside the dialog
+    // rather than escaping to the document body, even before Tab is pressed.
+    expect(dialog.contains(document.activeElement)).toBe(true);
+
+    // Tab has nothing to cycle through (every control disabled) — it must not leak
+    // focus to controls behind the dialog.
+    await user.tab();
+    expect(dialog.contains(document.activeElement)).toBe(true);
+    await user.tab({ shift: true });
+    expect(dialog.contains(document.activeElement)).toBe(true);
+
+    resolveReplace({ rawToken: "new-raw-token", publicSlug: "apex-home-services-2", staleLinksWarning: true });
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+  });
+
   it("surfaces a server confirmation-mismatch error and leaves the dialog open", async () => {
     const user = userEvent.setup();
     mockReplaceIntake.mockRejectedValue(
