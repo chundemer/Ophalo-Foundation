@@ -3,11 +3,18 @@
 **Created:** 2026-07-02
 **Purpose:** Live tracker for pilot-blocking or pilot-relevant bugs/gaps discovered during Session 14.
 **Source:** Promoted from the Pre-S14e bug register in `docs/build-log/068-session-14-ophalo-web-front-door.md`.
-**Current active items:** GAP-016 through GAP-035 — New Request launch blockers, public-intake
-trust/continuity work, account-start and auth-entry conversion work, Request Detail launch findings,
-and frontend robustness/consistency findings from the 2026-07-17 launch verification review. Build
-087 is paused until they are triaged and the selected fixes are complete.
-**Recently resolved:** GAP-015 — feedback review operational loop and accountability trail (commit `315b231`); GAP-004 — durable PWA request-detail routing (commit `3ebdc57`).
+**Current active items:** GAP-016 through GAP-034 and GAP-037 through GAP-046 — New Request
+launch blockers, public-intake trust/continuity work, account-start conversion work, public-link/
+profile safety, pilot value/support/observability/marketing gates, authenticated-workspace identity
+and list-scale/history/readability readiness, Request Detail launch findings, and frontend
+robustness/consistency findings from the 2026-07-17 launch verification review. Build 087 is paused
+until they are triaged and the selected fixes are complete.
+**Recently resolved:** GAP-036 — public-link/profile safety (GAP-036a `8085971`, GAP-036b
+`014bae5`, focus containment follow-up `aae9257`; live desktop/mobile keyboard verification
+completed 2026-07-19); GAP-035 — auth, invite, and recovery entry states (R90c-1 through R90c-4,
+commits `8aba5dc`, `0f70437`, `3490cb1`, `c1a1379`); GAP-015 — feedback review operational loop
+and accountability trail (commit `315b231`); GAP-004 — durable PWA request-detail routing (commit
+`3ebdc57`).
 **Previously resolved:** GAP-010 — Ready to Close rows leaked communication next-actions (S24j).
 
 This document is the current working tracker. Historical discovery notes stay in the build logs, but
@@ -282,7 +289,8 @@ or expose OffSeason state for unknown/invalid tokens.
 
 ### GAP-034 — Business account-start page looks unfinished and obscures the pilot value proposition
 
-**Status:** Open
+**Status:** Resolved — 2026-07-19. Two-panel `/start` redesign and the authenticated-session redirect
+are implemented in `web/ophalo-web/src/app/start/page.tsx`; live authenticated-redirect verified.
 **Severity:** P1
 **Area:** `ophalo-web` `/start` business account creation / pilot conversion
 **Decision:** ADR-446
@@ -323,6 +331,13 @@ of the setting.
 - Integrate existing sign-in and questions/support affordances into the form-panel/footer hierarchy
   so they are discoverable but do not compete with account start. Preserve accessible labels, errors,
   keyboard flow, and the existing pilot-full/email-in-use states.
+- Before exposing the account-start form, check whether the browser already has a valid
+  authenticated Keep session. An authenticated business user must be redirected to the
+  authenticated app/workspace rather than invited to create a second account; an unauthenticated or
+  expired session continues to the normal start form. Avoid a form flash before redirect. A
+  temporary session-check failure must offer a clear retry/error state rather than falsely claiming
+  the user is signed out. This is a convenience/orientation check only—the authenticated app and
+  server authorization remain authoritative.
 - Add visible Privacy Policy and Terms links beside the account-start submit/support context. The
   links must describe actual policy resources and must not substitute for a separate marketing
   consent decision where one is required.
@@ -343,12 +358,14 @@ of the setting.
 - Existing validation, duplicate-email, pilot-full, keyboard, and magic-link checks continue to
   pass; errors are programmatically associated with their fields or announced through an accessible
   summary/live region, and keyboard focus has a visible `:focus-visible` treatment.
+- A valid existing browser session reaches the authenticated app without being shown the start form;
+  anonymous, expired-session, and session-check-retry behavior remains understandable and safe.
 - Privacy/Terms and support/recovery routes are visible without competing with the primary account
   start action; focused visual/manual checks cover desktop and phone layouts.
 
 ### GAP-035 — Auth, invite, and recovery states still present as anonymous development shells
 
-**Status:** Open
+**Status:** Resolved — R90c-1 through R90c-4 (2026-07-19; commits `8aba5dc`, `0f70437`, `3490cb1`, `c1a1379`)
 **Severity:** P1
 **Area:** `ophalo-web` sign-in, check-email, magic-link exchange/error, invite acceptance/error, and
 mobile authorization entry states
@@ -401,8 +418,8 @@ assistive-technology feedback weaker exactly where a user is trying to enter/rec
 
 ### GAP-036 — Public Link & Profile settings do not complete the public-trust workflow
 
-**Status:** Implemented (GAP-036a `8085971`, GAP-036b `014bae5`) — pending manual desktop/mobile
-keyboard verification with a live authenticated session before this can be marked resolved.
+**Status:** Resolved — GAP-036a `8085971`; GAP-036b `014bae5`; focus-containment follow-up
+`aae9257`; live authenticated desktop/mobile keyboard verification completed 2026-07-19.
 **Severity:** P1
 **Area:** `ophalo-app` Settings / Public Link & Profile
 **Decision:** ADR-446; GAP-033 public-safe identity rules
@@ -417,6 +434,14 @@ The same screen exposes `Replace link (breaks old shared links)` as a low-fricti
 Replacing a durable public link can invalidate printed QR codes, website links, email signatures, and
 text templates. The operation needs an explicit, server-enforced destructive confirmation rather
 than relying on link styling or a client-only warning.
+
+**Reconfirmed deployment decision — 2026-07-19:**
+
+Keep the exceptional Owner/Admin replacement/recovery path. A business may need to invalidate its
+public New Request link when it is compromised, broadly abused, or receiving persistent spam. This
+is not ordinary link management: `Edit link name` preserves previous aliases, while replacement
+revokes the old link and its aliases. GAP-036b supplies the required deliberate client and
+server-side confirmation before that recovery action can execute.
 
 **Required resolution:**
 
@@ -454,6 +479,353 @@ than relying on link styling or a client-only warning.
   unauthorized, and canceled operations leave the old link usable.
 - Focus management, keyboard operation, and announced validation/destructive-dialog errors are
   verified, alongside relevant API/PWA checks.
+
+### GAP-037 — Pilot has no weekly, evidence-based value report for the business owner
+
+**Status:** Open — V1 pre-deployment gate
+**Severity:** P1
+**Area:** internal founder/pilot operations and account-level reporting
+**Decision:** OWN-002 through OWN-004; REP-001 through REP-005
+
+Pilot value becomes invisible if Keep does not turn its operating record into a short, defensible
+weekly review. An owner deciding whether to continue using or pay for Keep needs a factual account
+of the customer promises it helped the business keep; the founder also needs a consistent basis for
+the weekly pilot conversation.
+
+**Required resolution:**
+
+- Provide a founder/internal-only endpoint or read service that produces a copy-pasteable Markdown
+  or text summary for one account and reporting period in that account's timezone.
+- Report only safe account/request-level signals: requests captured, customer updates or external
+  contacts logged, follow-ups surfaced/handled, negative feedback reviewed, open/closed work, and
+  stale/overdue work. Exclude Spam/Test requests and Demo/InternalTest accounts.
+- Do not build an Owner/Admin analytics dashboard, automated report email, per-operator scorecard,
+  or unsupported revenue/retention/SLA claim. The founder shares the report manually in the weekly
+  pilot review.
+
+**Acceptance criteria:**
+
+- The report has tested account, authorization, date-range, and account-timezone boundaries.
+- Its wording is factual and does not claim revenue saved, review prevention, or staff productivity.
+- A founder can generate and manually share a useful weekly summary for a real pilot account.
+
+### GAP-038 — Pilot businesses lack an in-product feedback and help loop
+
+**Status:** Open — V1 pre-deployment gate
+**Severity:** P1
+**Area:** authenticated PWA pilot support; native parity before store submission
+**Decision:** ADR-293; ADR-294
+
+An owner who cannot report confusion, bugs, or missing capability in the moment is more likely to
+quietly abandon the pilot. Keep needs a small, trustworthy path for that feedback and a place to
+see current pilot guidance without promising a full support desk or public roadmap.
+
+**Required resolution:**
+
+- Add authenticated PWA `Report friction` / `Send feedback` submission for bugs, confusion,
+  missing needs, and slow or frustrating moments. Send compact route/app/device context through
+  the API to a private founder channel; do not attach broad logs or customer PII automatically.
+- Add a simple authenticated `Pilot Updates` / `Help & Updates` page with Known Issues, What's New,
+  Coming Soon, the feedback entry point, and a visible last-updated date.
+- Make delivery fail-soft and rate-limited. Do not add a client-side webhook, anonymous customer
+  feedback hook, ticketing system, CMS, feature-voting portal, or production impersonation.
+
+**Acceptance criteria:**
+
+- An authenticated PWA business user can submit concise feedback without leaving the product, and a
+  forwarding failure does not break their workflow or disclose internal delivery details. Native
+  parity is required before the native release is locked for submission.
+- Pilot updates render as maintained factual content, with a clear feedback route.
+- API authorization, validation/rate limiting, sensitive-data boundary, and web/native keyboard or
+  screen-reader flow are verified.
+
+### GAP-039 — Production failures and pilot health are not observable enough to earn trust
+
+**Status:** Open — V1 pre-deployment gate
+**Severity:** P0
+**Area:** production reliability, error handling, and minimal internal product operations
+
+Structured application logs and token-path redaction exist, but there is no verified production
+error aggregation, alert path, or release-aware operational view. A pilot business cannot trust a
+customer-facing system if OpHalo cannot promptly detect a broken request flow or distinguish a
+quiet account from a platform failure.
+
+**Required resolution:**
+
+- Configure redacted server and browser error capture with release/version identity, health or
+  availability checks, and an actionable founder alert/runbook path.
+- Preserve capability-token and PII boundaries: do not send raw capability URLs/tokens, request
+  text, addresses, phones, emails, authorization headers, sessions, or broad replay recordings to
+  telemetry.
+- Add only the minimal internal product-ops signals needed to support onboarding, detect account
+  inactivity, and generate GAP-037. Do not add generic behavioral surveillance, a data warehouse,
+  session replay, or an internal admin dashboard in this slice.
+
+**Acceptance criteria:**
+
+- A controlled server and browser failure is captured with enough redacted context to triage, and
+  triggers the documented alert path.
+- Health checks and release identification are verified in the production candidate.
+- Telemetry redaction is tested for public capability tokens and representative customer PII.
+- The founder can distinguish an account that has not adopted Keep from an observed platform fault.
+
+### GAP-040 — Marketing site no longer accurately represents the current product or launch posture
+
+**Status:** Open — V1 pre-deployment gate
+**Severity:** P1
+**Area:** `ophalo-web` marketing routes, product imagery, legal/support links, and deployment
+**Decision:** ADR-446; ADR-447
+
+The marketing site is a first-visit promise to a prospective owner, but its copy and visual product
+representation predate the recent public-intake, customer-tracker, settings, and auth work. At least
+one current pilot-page statement says that sending a status update gives the customer an email,
+although Keep does not send that automatic tracker-link email. Stale imagery or unsupported claims
+will erode trust before a business begins a pilot.
+
+**Required resolution:**
+
+- Audit every marketing route (`/`, `/pilot`, `/about`, `/privacy`, and `/terms`) against the shipped
+  product and the final pilot/commercial posture. Replace stale statements, including the automatic
+  customer-email claim; never imply backend SMS, automatic text delivery, verified businesses,
+  guaranteed response times, revenue saved, or security properties that are not substantiated.
+- Refresh product images/mockups using current, representative Keep surfaces. Clearly distinguish a
+  styled illustration from a real product screenshot; use no customer data, capability token, or
+  private request information in published assets.
+- Make the owner journey coherent: factual value proposition, appropriate pilot/availability/pricing
+  language, direct `/start` and sign-in paths, and real Privacy, Terms, and support/contact routes.
+  Remove any phone number, availability, pilot-free, or "best terms" promise that is not approved
+  for launch.
+- Verify metadata, titles, social-preview assets, favicon/brand assets, keyboard/mobile layout,
+  image performance/alt text, and absence of broken or development-only links.
+- Include the marketing deployment in the production-candidate gate: canonical HTTPS host behavior,
+  redirects, environment-dependent links, crawl/index policy for public marketing pages, and a
+  rollback/contact-owner runbook.
+
+**Acceptance criteria:**
+
+- A skeptical small-business owner can understand what Keep does, what it does not do, the pilot or
+  commercial next step, and how to get help without encountering a stale or unsupported claim.
+- Every published product visual and claim matches the tested V1 behavior and current brand assets.
+- Desktop and mobile screenshot/manual review, accessible keyboard navigation, metadata/link checks,
+  and production-candidate smoke checks pass.
+
+### GAP-041 — First selection of a request-list queue blanks the work area like a page refresh
+
+**Status:** Open
+**Severity:** P1
+**Area:** `ophalo-app` Request List queue tabs and loading behavior
+**Decision:** ADR-447
+
+Selecting an unvisited request queue changes the React Query key and starts its first fetch. The
+current `isLoading` branch replaces the entire request-list region with a plain `Loading…` message.
+The app shell does not navigate or reload, but the abrupt removal of the queue contents makes the
+interaction look like the whole page refreshed. After a queue has been visited, its cached result
+avoids that first-load blank state.
+
+**Required resolution:**
+
+- Keep the queue header, selected-tab context, controls, and overall list-region geometry stable
+  while a newly selected queue loads.
+- Render a queue-appropriate loading treatment (for example row skeletons) rather than an empty
+  work area. Do not display rows from the previously selected queue under the new queue label.
+- Preserve the existing query keys, freshness/refetch policy, filters/search reset semantics,
+  pagination behavior, and accessible loading announcement.
+- Implement the tab pattern fully: arrow-key navigation and roving focus/selection behavior must
+  work alongside click and ordinary Tab navigation. Do not retain `role="tab"` semantics without the
+  expected keyboard interaction.
+
+**Acceptance criteria:**
+
+- First selection of every queue, including Available, has a stable, intentional transition and no
+  browser navigation or app-shell remount.
+- Returning to a cached queue remains immediate while background freshness behavior stays correct.
+- Arrow-key and Tab keyboard queue selection, screen-reader loading/status feedback, and focus
+  placement are verified at desktop and narrow/mobile widths; focused PWA regression coverage and
+  TypeScript/build checks pass.
+
+### GAP-042 — Authenticated request work does not visibly belong to the business using Keep
+
+**Status:** Open — V1 pre-deployment gate
+**Severity:** P1
+**Area:** `ophalo-app` Request List, Request Detail, and authenticated workspace identity
+**Decision:** ADR-446; ADR-447
+
+The Request List in the current desktop review is headed only `Requests` beneath a generic OpHalo
+Keep app header. Request Detail has the same risk: while an authenticated user works through
+customer promises, the page does not consistently reinforce which business account’s work they are
+operating. The result reads as a generic tool rather than the business’s own operational workspace.
+That weakens ownership and makes a business owner less certain that the requests and customer data
+belong to their company.
+
+The required account identity already exists in the authenticated setup/detail contracts (for
+example, `KeepRequestDetailResult.businessName`); this is a presentation/context gap, not a reason
+to put account identity into customer-facing URLs, request rows, public pages, or logs.
+
+**Required resolution:**
+
+- Add a restrained, consistently placed business-name context to both Request List and Request
+  Detail—for example, `Requests for Acme Plumbing` and an equivalent detail breadcrumb/eyebrow.
+  The customer/request remains the primary item on a detail page; the business identity is context,
+  not a repeated row label or competing headline.
+- Source the name from the authenticated account/setup or detail contract and refresh it after a
+  saved business-name change. Do not duplicate a stale local label, confuse the signed-in person’s
+  name with the business name, or expose it on anonymous public request/tracker flows.
+- Preserve role/account isolation, existing page titles/navigation, responsive hierarchy, and
+  accessible heading structure. Long business names must wrap or truncate intentionally without
+  hiding the request/customer context or overflowing narrow screens.
+
+**Acceptance criteria:**
+
+- An Owner, Admin, Operator, or Viewer can immediately tell which business’s request workspace and
+  detail they are viewing, while the primary request/customer task remains clear.
+- A changed business name is reflected on a safe subsequent list/detail render; no public identity,
+  account data, or another account’s name leaks through the new treatment.
+- Desktop and mobile review covers normal and long business names, keyboard navigation, headings,
+  and request-detail back/navigation behavior; focused PWA checks pass.
+
+### GAP-043 — Request-list scale behavior exists but is not yet a deliberate, verified operating experience
+
+**Status:** Open — V1 pre-deployment gate
+**Severity:** P1
+**Area:** `ophalo-app` Request List cursor pagination, scale UX, and accessibility
+**Decision:** ADR-249; ADR-447
+
+The Request List is already cursor-paginated: authenticated list queries default to 50 rows (maximum
+100), return `hasMore`/`nextCursor`, and the PWA maintains a previous-cursor stack with Previous and
+Next controls. The screenshot’s long card stack is therefore not evidence that pagination is absent;
+it is evidence that the first-page scale and the transition to older work need a deliberate product
+and usability review before pilots accumulate materially more than one page.
+
+Today the pager appears only once more results exist or the user has left page one, without a result
+range/count, explicit page-change focus behavior, or evidence that 50 dense request cards remains
+usable on common desktop and mobile workdays. Changing this blindly could also regress protected
+cursor/query semantics, search/filter resets, first-page refresh, and request-detail navigation.
+
+**Required resolution:**
+
+- Make an explicit V1 scale decision from representative pilot data and realistic request-card
+  density: retain the existing cursor pager with clearer operational context, reduce the default
+  page size, or adopt a deliberately tested alternative. Do not add offset pagination, numbered
+  pages that pretend a cursor has a stable total, infinite scroll, or a server rewrite by default.
+- If the current cursor model is retained, make loading and completion state discoverable: clear
+  Previous/Next affordances when applicable, an accessible result-range or older/newer-work cue,
+  sensible focus/scroll placement after page changes, and an intentional end-of-results state.
+- Preserve cursor fingerprint/query binding, authorization and account isolation, current
+  search/status/tab reset semantics, first-page freshness policy, and the rule that prior-queue rows
+  are never shown under a newly selected queue label. Coordinate with GAP-041 so first selection and
+  page transitions remain visually stable.
+
+**Acceptance criteria:**
+
+- A business with more than one page of realistic requests can find, move between, and return from
+  older work without losing queue/filter context or mistaking the change for a browser refresh.
+- Keyboard and screen-reader users receive an understandable page/result change, and focus lands in
+  a useful place; desktop and mobile layouts remain operable with long rows and a bottom pager.
+- Cursor tampering, stale/changed filters, role/account boundaries, detail back/navigation context,
+  and current list-query coverage continue to pass. The chosen page-size/interaction is documented
+  with representative manual evidence rather than only a synthetic empty list.
+
+### GAP-044 — Completed and cancelled customer work is not discoverable from the PWA request workspace
+
+**Status:** Open — V1 pre-deployment gate
+**Severity:** P1
+**Area:** `ophalo-app` Request List history access and request retrieval
+**Decision:** ADR-249; ADR-447
+
+The request API already supports protected cursor-based `closed_history`, `cancelled_history`, and
+`all_history` views with closed-date boundaries. The PWA exposes only active queues and an `All
+active statuses` filter. Once real work accumulates, an owner cannot reliably retrieve a completed
+or cancelled request—for a customer follow-up, billing/review conversation, or simple proof that
+the business handled it—without a hidden route or technical intervention.
+
+**Required resolution:**
+
+- Add a clear, non-competing path from the Request List to completed/cancelled history for only the
+  roles the existing API permits. Use the existing cursor/history contract; do not replace it with
+  an unbounded client-side archive or broaden Operator visibility without an explicit policy change.
+- Make the active-versus-history context unmistakable in the heading, tabs, filters, empty state,
+  and result cues. History search and date filtering must never silently mix active and terminal
+  requests under an active queue label.
+- Preserve terminal lifecycle semantics: viewing history is not reopening, editing, or exposing
+  private customer data outside the existing account/role boundary. Keep protected cursors,
+  canonical query binding, and Request Detail back/navigation context intact.
+
+**Acceptance criteria:**
+
+- An authorized owner/admin can find a known completed or cancelled request from the normal PWA
+  workflow and return to the prior history result set after viewing detail.
+- Operators and Viewers retain exactly their existing visibility; unauthorized history attempts
+  remain fail-closed.
+- Desktop/mobile, long-history, empty-history, search/date filter, keyboard, screen-reader, and
+  cursor/error states are verified with focused API/PWA coverage.
+
+### GAP-045 — Default Queue language does not explain the owner’s work scope or prioritization
+
+**Status:** Open — V1 pre-deployment gate
+**Severity:** P1
+**Area:** `ophalo-app` Request List queue naming, owner orientation, and triage comprehension
+**Decision:** ADR-435; ADR-436; ADR-447
+
+`Default Queue` is implementation language. On the first screen, a business owner sees a count and
+a stack of customer names but is not told whether this means all active work, only unassigned work,
+or a server-ranked priority queue. This makes it harder to trust the list as the daily operating
+surface and adds needless explanation/training burden.
+
+**Required resolution:**
+
+- Replace `Default Queue` with truthful owner-facing language such as `All active work` or
+  `Business queue`, selected only after confirming the server’s exact membership and ranking rules.
+  Add concise supporting copy that explains the scope and, where appropriate, that urgent or
+  overdue customer promises are surfaced first.
+- Keep the server authoritative for queue membership, ranking, action availability, and counts. Do
+  not imply a manually curated assignment queue, guaranteed ordering, or a customer-service SLA
+  that the product does not provide.
+- Apply the terminology consistently to the tab, heading/subtitle, empty state, counts, loading
+  announcements, and any responsive/mobile equivalent without renaming an API view or breaking
+  saved query/cursor behavior.
+
+**Acceptance criteria:**
+
+- A first-time owner can tell what the primary queue contains and why it is the right place to begin
+  work, without confusing it with Assigned to Me or Needs Attention.
+- Queue labels, counts, empty/loading states, and accessible names remain consistent across roles
+  and narrow/wide layouts.
+- Existing server selection/ranking, authorization, cursor, and quick-action behavior are unchanged
+  and focused PWA checks pass.
+
+### GAP-046 — Request search and filters do not make the current result set sufficiently visible or recoverable
+
+**Status:** Open — V1 pre-deployment gate
+**Severity:** P2
+**Area:** `ophalo-app` Request List search, status filters, and result-state accessibility
+**Decision:** ADR-447
+
+The Request List search field has no visible submit or clear control, and the page gives no concise
+confirmation of the active query/filter or the result set it produced. A busy owner can search for
+a customer, change a status filter, or return from a detail page without being sure whether they are
+seeing the intended queue, a filtered subset, or an empty state caused by a stale query.
+
+**Required resolution:**
+
+- Make applied search and status criteria visible and easy to clear without adding noisy permanent
+  controls. Provide an accessible result/status announcement that identifies the active queue and
+  whether a query/filter is applied; use an honest count/range only where the cursor contract can
+  support it.
+- Preserve deliberate-submit search behavior unless a separately tested debounce/cancellation
+  design is selected. Do not issue a request per keystroke, lose a typed draft unexpectedly, or
+  claim an exact total from a cursor page that has no total-count contract.
+- Keep tab/filter/search resets, query-key semantics, cursor fingerprint binding, error states, and
+  desktop/mobile keyboard order intact. Coordinate empty/loading feedback with GAP-041 and page
+  changes with GAP-043.
+
+**Acceptance criteria:**
+
+- An owner can tell the current queue, applied criteria, and how to clear them; empty results explain
+  whether no active work exists or no work matches the criteria.
+- Search/filter application, clear/reset, paging, tab switches, errors, and return from Request
+  Detail remain predictable by keyboard and screen reader.
+- Focused PWA coverage verifies the visible and announced state without changing backend list
+  authorization or cursor/query behavior.
 
 ### GAP-016 — New Request accepts invalid phone numbers and traps correction
 
