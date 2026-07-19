@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { AuthShell, AuthLead } from "@/components/auth/AuthShell";
 
 export default function AcceptClient({ token }: { token: string }) {
   const hasAccepted = useRef(false);
@@ -101,10 +102,8 @@ export default function AcceptClient({ token }: { token: string }) {
   }, [token]);
 
   return (
-    <div className="auth-page">
-      <div className="container">
-        <p>Accepting your invite&hellip;</p>
-      </div>
-    </div>
+    <AuthShell>
+      <AuthLead>Accepting your invite&hellip;</AuthLead>
+    </AuthShell>
   );
 }

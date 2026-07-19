@@ -137,12 +137,11 @@ For every implementation slice:
 - A configured business phone is a secondary public recovery/contact route; it does not replace the
   tracker as the post-submit customer destination.
 
-## Next Selected Code Slice — R90c-2 / GAP-035
+## Next Selected Code Slice — R90c-4 / GAP-035
 
-**Goal:** Migrate `/auth/exchange/error` and `ExchangeClient` (the in-flight "Signing you in…"
-state) onto the `AuthShell` built in R90c-1. Implementation-ready — reuse the existing shell/field/
-error components; no new discovery needed. R90c-3 (invite accept/error + `AcceptClient`) and
-R90c-4 (`MobileExchangeClient`, ADR-390 sterile — isolated slice) follow after.
+**Goal:** Migrate `MobileExchangeClient` (ADR-390 sterile flow) onto the `AuthShell` built in
+R90c-1. Implementation-ready — reuse the existing shell/field/error components; no new discovery
+needed. This is the final slice in the R90c auth-entry shell migration.
 
 ## R90b Follow-On Order
 
@@ -156,9 +155,9 @@ R90c-4 (`MobileExchangeClient`, ADR-390 sterile — isolated slice) follow after
    one-time welcome banner — complete, committed in `7c95dc2`.
 6. **R90c-1 / GAP-035:** shared auth-entry shell + `/start` (minimal), `/signin`,
    `/auth/check-email` migration — complete.
-7. **R90c-2 / GAP-035:** `/auth/exchange/error` + `ExchangeClient` migration — next.
-8. **R90c-3 / GAP-035:** invite `accept/error` + `AcceptClient` migration.
-9. **R90c-4 / GAP-035:** `MobileExchangeClient` ADR-390 sterile migration.
+7. **R90c-2 / GAP-035:** `/auth/exchange/error` + `ExchangeClient` migration — complete.
+8. **R90c-3 / GAP-035:** invite `accept/error` + `AcceptClient` migration — complete.
+9. **R90c-4 / GAP-035:** `MobileExchangeClient` ADR-390 sterile migration — next.
 
 ## Standing Technical Boundaries
 
