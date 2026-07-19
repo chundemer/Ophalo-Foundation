@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { AuthShell, AuthLead } from "@/components/auth/AuthShell";
 
 export default function ExchangeClient({ code }: { code: string }) {
   const hasExchanged = useRef(false);
@@ -101,10 +102,8 @@ export default function ExchangeClient({ code }: { code: string }) {
   }, [code]);
 
   return (
-    <div className="auth-page">
-      <div className="container">
-        <p>Signing you in&hellip;</p>
-      </div>
-    </div>
+    <AuthShell>
+      <AuthLead>Signing you in&hellip;</AuthLead>
+    </AuthShell>
   );
 }

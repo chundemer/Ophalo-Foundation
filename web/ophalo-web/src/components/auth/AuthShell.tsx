@@ -142,3 +142,20 @@ export function AuthSubmitButton({
     </button>
   );
 }
+
+export function AuthLinkButton({
+  href,
+  children,
+}: {
+  href: string;
+  children: ReactNode;
+}) {
+  return (
+    <Link
+      href={href}
+      className={`block w-full rounded-lg bg-ophalo-navy px-5 py-3 text-center text-sm font-semibold text-white transition hover:opacity-90 ${focusRingClass}`}
+    >
+      {children}
+    </Link>
+  );
+}
