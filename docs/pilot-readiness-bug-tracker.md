@@ -3,18 +3,19 @@
 **Created:** 2026-07-02
 **Purpose:** Live tracker for pilot-blocking or pilot-relevant bugs/gaps discovered during Session 14.
 **Source:** Promoted from the Pre-S14e bug register in `docs/build-log/068-session-14-ophalo-web-front-door.md`.
-**Current active items:** GAP-016 through GAP-034 and GAP-037 through GAP-046 — New Request
+**Current active items:** GAP-016 through GAP-033 and GAP-037 through GAP-051 — New Request
 launch blockers, public-intake trust/continuity work, account-start conversion work, public-link/
 profile safety, pilot value/support/observability/marketing gates, authenticated-workspace identity
-and list-scale/history/readability readiness, Request Detail launch findings, and frontend
-robustness/consistency findings from the 2026-07-17 launch verification review. Build 087 is paused
-until they are triaged and the selected fixes are complete.
-**Recently resolved:** GAP-036 — public-link/profile safety (GAP-036a `8085971`, GAP-036b
-`014bae5`, focus containment follow-up `aae9257`; live desktop/mobile keyboard verification
-completed 2026-07-19); GAP-035 — auth, invite, and recovery entry states (R90c-1 through R90c-4,
-commits `8aba5dc`, `0f70437`, `3490cb1`, `c1a1379`); GAP-015 — feedback review operational loop
-and accountability trail (commit `315b231`); GAP-004 — durable PWA request-detail routing (commit
-`3ebdc57`).
+and list-scale/history/readability readiness, request-detail reliability/customer-continuity work,
+and frontend robustness/consistency findings from the 2026-07-17 launch verification review. Build
+087 is paused until they are triaged and the selected fixes are complete.
+**Recently resolved:** GAP-034 — `/start` conversion and existing-session redirect (commit
+`45cea22`, documentation completion `dfa554a`); GAP-036 — public-link/profile safety (GAP-036a
+`8085971`, GAP-036b `014bae5`, focus containment follow-up `aae9257`; live desktop/mobile keyboard
+verification completed 2026-07-19); GAP-035 — auth, invite, and recovery entry states (R90c-1
+through R90c-4, commits `8aba5dc`, `0f70437`, `3490cb1`, `c1a1379`); GAP-015 — feedback review
+operational loop and accountability trail (commit `315b231`); GAP-004 — durable PWA request-detail
+routing (commit `3ebdc57`).
 **Previously resolved:** GAP-010 — Ready to Close rows leaked communication next-actions (S24j).
 
 This document is the current working tracker. Historical discovery notes stay in the build logs, but
@@ -554,6 +555,10 @@ quiet account from a platform failure.
 
 - Configure redacted server and browser error capture with release/version identity, health or
   availability checks, and an actionable founder alert/runbook path.
+- Validate required frontend deployment configuration before release, including
+  `VITE_PUBLIC_BASE_URL`: current Request Detail contact/share rendering calls `.replace(...)` on
+  that value and can throw if it is absent. Until GAP-031 supplies a root error boundary, that
+  configuration mistake can blank the authenticated workbench.
 - Preserve capability-token and PII boundaries: do not send raw capability URLs/tokens, request
   text, addresses, phones, emails, authorization headers, sessions, or broad replay recordings to
   telemetry.
@@ -566,6 +571,8 @@ quiet account from a platform failure.
 - A controlled server and browser failure is captured with enough redacted context to triage, and
   triggers the documented alert path.
 - Health checks and release identification are verified in the production candidate.
+- A production-candidate configuration check proves required public-base URL settings are present
+  and valid, and a missing/invalid value fails safely rather than blanking Request Detail.
 - Telemetry redaction is tested for public capability tokens and representative customer PII.
 - The founder can distinguish an account that has not adopted Keep from an observed platform fault.
 
@@ -827,6 +834,154 @@ seeing the intended queue, a filtered subset, or an empty state caused by a stal
 - Focused PWA coverage verifies the visible and announced state without changing backend list
   authorization or cursor/query behavior.
 
+### GAP-047 — Internal-priority updates can fail silently on Request Detail
+
+**Status:** Open — V1 pre-deployment gate
+**Severity:** P1
+**Area:** `ophalo-app` Request Detail triage mutation and optimistic/concurrency feedback
+**Decision:** ADR-334; ADR-447
+
+The Internal priority selector in `DetailPanels.tsx` optimistically displays the selected priority,
+but its mutation `catch` block is empty. A network failure or `409 KeepRequest.RequestChanged`
+conflict therefore silently restores the old value. An owner can reasonably believe they marked work
+Urgent when the server did not save it—the opposite of the product’s dependable follow-through
+promise and inconsistent with the stable conflict treatment used by other Request Detail mutations.
+
+**Required resolution:**
+
+- Surface actionable, associated failure feedback for priority changes. On a concurrency conflict,
+  use the established request-changed message and prevent further stale mutation attempts until the
+  user refreshes; handle ordinary transport/API errors without implying the priority was saved.
+- Preserve server authority, role/action policy, version headers, and optimistic display behavior.
+  Do not retry, overwrite a newer change, or silently reapply the user’s selection.
+
+**Acceptance criteria:**
+
+- Successful, forbidden, validation, network, and stale-version priority changes each leave an
+  understandable, truthful UI state.
+- A conflict cannot be mistaken for a successful priority change, and refresh returns the canonical
+  server value.
+- Focused PWA coverage and existing concurrency behavior remain intact.
+
+### GAP-048 — Emailing a customer’s private request page bypasses the deliberate share-intent workflow
+
+**Status:** Open — V1 pre-deployment gate
+**Severity:** P1
+**Area:** `ophalo-app` Request Detail customer email/share path and `Needs Share` integrity
+**Decision:** ADR-370; ADR-447
+
+Request Detail’s Email actions prefill a `mailto:` body with the private customer-page URL, but do
+not use the established share-intent flow. The app cannot know whether the external email was sent,
+so it must neither silently clear `Needs Share` on launch nor leave the owner with an unexplained
+share warning after they deliberately complete the email. This is a sibling regression of resolved
+BUG-005, not a reason to expose the capability URL in logs, telemetry, or unrelated UI.
+
+**Required resolution:**
+
+- Route email-with-tracker-link through one deliberate, truthful share workflow. It must make the
+  private-link inclusion clear and offer an explicit user confirmation/recording step only when the
+  owner attests they sent or shared it; merely opening a `mailto:` client is not proof of delivery.
+- Keep a plain email/contact action available when policy allows, and preserve existing customer-page
+  access, role/action policy, token secrecy, and `Needs Share` semantics. Do not infer email-send
+  success from browser launch or add automated email delivery.
+
+**Acceptance criteria:**
+
+- The owner understands whether an email includes the private request page and can intentionally
+  record it as shared; cancel/abandon leaves `Needs Share` truthful.
+- No raw page token/URL reaches logs, analytics, durable frontend state, or an unintended recipient.
+- Desktop/mobile keyboard flow, failed external-launch behavior, and share-state refresh are covered.
+
+### GAP-049 — Closed-request follow-up prefill can exceed the allowed description length
+
+**Status:** Open — V1 pre-deployment gate
+**Severity:** P1
+**Area:** `ophalo-app` Request Detail follow-up creation and Quick Capture validation
+**Decision:** ADR-089; ADR-148; ADR-447
+
+Creating a follow-up from a closed request prepends `Follow-up to closed request {reference}: ` to
+the full original description. A near-limit original description then exceeds Quick Capture’s
+validated description limit and blocks the otherwise useful follow-up path with a confusing error.
+
+**Required resolution:**
+
+- Build the follow-up draft within the canonical description maximum, reserving space for the
+  provenance prefix and truncating only the copied original text at a safe boundary. Make any
+  truncation understandable in the capture UI without altering the original closed request.
+- Preserve customer/contact prefill, terminal-state semantics, account isolation, and normal
+  Quick Capture validation. Do not silently create a request with an invalid or unrelated
+  description.
+
+**Acceptance criteria:**
+
+- A maximum-length closed-request description can start a follow-up successfully with clear copied
+  context, while the original record remains unchanged.
+- Short and empty descriptions, validation errors, cancellation, and keyboard/mobile flows remain
+  correct with focused regression coverage.
+
+### GAP-050 — Request Detail does not reveal related work for a repeat customer
+
+**Status:** Open — V1 pre-deployment gate (promoted from DEF-050)
+**Severity:** P1
+**Area:** `ophalo-app` Request Detail customer continuity and repeat-work context
+**Decision:** ADR-447
+
+Quick Capture can help avoid duplicate customer creation, but once a request is open the list and
+detail surfaces do not tell staff that the same customer has other active or recent requests. A
+business can therefore double-contact a repeat customer or miss related work while treating each row
+as isolated. This is a continuity risk, not a request-list-wide customer-history or surveillance
+feature.
+
+**Required resolution:**
+
+- Add a compact, account-scoped related-work indicator on Request Detail: at minimum an accurate
+  count of other active/recent requests for the same canonical customer, with a safe path to the
+  permitted summaries or filtered list context. Decide and document the matching boundary (customer
+  identity versus normalized phone/email); do not use fuzzy names or service address as identity.
+- Keep the current request primary. Respect role visibility, terminal/cancelled inclusion policy,
+  customer privacy, cursor/query rules, and existing detail navigation. Do not expose internal notes,
+  another account’s data, or a broad cross-customer history dashboard.
+
+**Acceptance criteria:**
+
+- Staff can recognize that a customer has related work before making a duplicate contact, and can
+  move to permitted related requests without losing the current request context.
+- Single-request customers remain visually quiet; matching, role/account isolation, terminal-state,
+  and empty/error behavior are tested.
+- Desktop/mobile and keyboard/screen-reader review confirms the indicator is useful rather than
+  competing with the primary request action.
+
+### GAP-051 — North American phone numbers are not formatted consistently while entered or displayed
+
+**Status:** Open — V1 pre-deployment gate
+**Severity:** P1
+**Area:** authenticated/public phone inputs and Request Detail/contact presentation
+**Decision:** ADR-444
+
+ADR-444 locks canonical normalized 10-digit North American phone storage, but the product presents
+raw digits in customer details and does not give users a consistently readable formatted phone input.
+Numbers such as `9012167159` are harder to scan, dictate, and verify than `(901) 216-7159`, reducing
+the polish and error-resistance of a service-business workflow.
+
+**Required resolution:**
+
+- Introduce one shared, accessibility-safe North American phone presentation/entry treatment across
+  relevant authenticated and public capture inputs plus staff/customer-contact display surfaces.
+  Accept paste and the existing permitted `+1`/`1` forms, show a readable local format while editing
+  without destructive cursor jumps, and keep mobile numeric input practical.
+- Continue sending/storing only the canonical normalized 10-digit value required by ADR-444. The
+  display formatter must not change identity matching, lookup, validation, `tel:` targets, API
+  payloads, or raw-phone privacy boundaries.
+
+**Acceptance criteria:**
+
+- Users can type, paste, edit, and correct a valid phone number naturally; invalid input retains the
+  existing actionable validation behavior.
+- Displayed phone numbers are consistently readable while copy and call actions use the canonical
+  value.
+- Shared-formatting tests cover normal, `+1`, partial, invalid, and paste cases across desktop and
+  mobile-relevant input paths.
+
 ### GAP-016 — New Request accepts invalid phone numbers and traps correction
 
 **Status:** In progress — ADR-444 and authenticated-web work are committed; native parity and
@@ -958,6 +1113,33 @@ puts raw customer phone data into the QR image, contradicting the Locked Respons
 **Required resolution:** Replace the direct payload with an opaque, short-lived call-handoff URL
 that opens the owner device's phone action, or explicitly amend the locked privacy rule before
 launch. Do not ship the current direct-phone QR payload.
+
+**Post-gap pre-deployment verification — call-handoff resolver (GAP-020 Slice B/C):**
+
+This manual gate requires an environment reachable from a real phone—not `localhost`. Use a
+deployed/staging URL, or a LAN-reachable host with `NEXT_PUBLIC_API_BASE_URL` and
+`NEXT_PUBLIC_APP_BASE_URL` pointing to addresses the phone can resolve.
+
+1. As an authenticated Owner, Admin, or permitted Operator, mint a real handoff with
+   `POST /keep/requests/{requestId}/call-handoff` for a request that has a customer phone. Confirm
+   the response is `{ handoffUrl, expiresAtUtc }` and expiration is approximately 15 minutes away.
+2. On a real phone, open `handoffUrl` (or scan the desktop QR once Slice C wires it). Confirm the
+   native dialer opens with the correct customer number; the fallback page shows that same number;
+   **Call Customer** works when auto-launch is blocked/ignored; and **Copy Number** copies the
+   correct value.
+3. Confirm no browser-facing leakage: the tab title is only **Open Call**, the URL contains only an
+   opaque token, and browser history/autocomplete does not contain the raw phone number.
+4. After the 15-minute expiry (or a controlled manual expiry), reload the same URL. It must show
+   the generic **This call link expired.** terminal state, not a technical error.
+5. Visit `/keep/share-call/{made-up-token}`. It must show the same terminal state as expiry; invalid
+   and expired tokens must be indistinguishable and reveal no account/customer data.
+6. Confirm a successfully resolved token remains resolvable during its 15-minute window. Resolution
+   is read-only, not single-use, unless the implemented ADR-448 contract deliberately changes that
+   SMS-sibling behavior and records the reason.
+7. In browser devtools, confirm `GET /keep/share-call/{token}` returns
+   `Cache-Control: no-store, private`.
+8. Repeat the valid-token flow on both iOS Safari and Android Chrome, recording any dialer-launch
+   differences and confirming the manual fallback remains usable.
 
 ### GAP-021 — Authenticated Quick Capture rejects ADR-444 country-code input
 
