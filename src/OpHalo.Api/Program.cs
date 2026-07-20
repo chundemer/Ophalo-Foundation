@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
+using Npgsql;
 using OpHalo.Api.Accounts;
 using OpHalo.Api.Auth;
 using OpHalo.Api.Helpers;
@@ -70,6 +71,8 @@ builder.Services.AddScoped<OpHaloDbContext>(sp =>
         throw new InvalidOperationException(
             "Connection string 'DefaultConnection' is required. " +
             "Supply it via user secrets, environment variable, or appsettings.");
+
+    cs = NormalizePostgresConnectionString(cs);
 
     var clock = sp.GetRequiredService<IClock>();
     var options = new DbContextOptionsBuilder<OpHaloDbContext>()
@@ -248,6 +251,30 @@ app.MapAccountDeviceEndpoints();
 app.MapBadgeEndpoints();
 
 app.Run();
+
+// Railway supplies PostgreSQL's DATABASE_URL in URI form. Npgsql uses keyword/value connection
+// strings, so normalize that provider-standard URI at the configuration boundary while retaining
+// compatibility with conventional Npgsql connection strings used locally and in tests.
+static string NormalizePostgresConnectionString(string value)
+{
+    if (!Uri.TryCreate(value, UriKind.Absolute, out var uri) ||
+        (uri.Scheme != "postgres" && uri.Scheme != "postgresql"))
+        return value;
+
+    var userInfo = Uri.UnescapeDataString(uri.UserInfo);
+    var separator = userInfo.IndexOf(':');
+    if (separator <= 0)
+        throw new InvalidOperationException("PostgreSQL connection URL must include a username and password.");
+
+    return new NpgsqlConnectionStringBuilder
+    {
+        Host = uri.Host,
+        Port = uri.IsDefaultPort ? 5432 : uri.Port,
+        Database = Uri.UnescapeDataString(uri.AbsolutePath.TrimStart('/')),
+        Username = userInfo[..separator],
+        Password = userInfo[(separator + 1)..],
+    }.ConnectionString;
+}
 
 // Required for WebApplicationFactory<Program> — exposes the auto-generated Program
 // class to the integration test assembly (ADR-058).
