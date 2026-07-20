@@ -32,6 +32,12 @@ using OpHalo.SharedKernel.Abstractions;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Railway supplies the port at runtime. Bind explicitly instead of relying on shell-style
+// expansion inside ASPNETCORE_URLS, which the container entrypoint does not perform.
+var railwayPort = Environment.GetEnvironmentVariable("PORT");
+if (!string.IsNullOrWhiteSpace(railwayPort))
+    builder.WebHost.UseUrls($"http://0.0.0.0:{railwayPort}");
+
 // Suppress Microsoft.AspNetCore.Hosting.Diagnostics request-path logs below Warning.
 // Those logs can emit raw route paths which may include bearer tokens on public-token routes.
 // appsettings.json already sets "Microsoft.AspNetCore": "Warning" but this code-level filter
