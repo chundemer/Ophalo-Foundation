@@ -70,6 +70,16 @@ decision index.
 - GAP-047 through GAP-051: make priority failures visible; preserve deliberate tracker-share intent;
   bound follow-up prefill; add same-customer related-work context; and finish consistent North
   American phone formatting.
+- **Complete.** First-visit Requests onboarding banner for Owner/Admin: `RequestsOnboardingBanner`
+  (new component) renders above the Requests heading via `api.getGuidedSetup()`, gated on
+  `businessInfoComplete && createIntakePageComplete && addFirstRequestComplete` (the real,
+  non-hardcoded fields). Primary CTA and the "public request page" checklist item route to
+  Settings `public-profile`; "Add your first customer request" opens Quick Capture; team invite is
+  shown as optional and never gates visibility. Operator/Viewer never see it (Viewer never mounts
+  `Requests`; Operator is excluded by role check). **Known limitation, unchanged:**
+  `reviewCustomerPageComplete` and `shareIntakePageComplete` remain hardcoded `false` server-side
+  (durable "link shared/viewed" events deferred to S22d) and are intentionally not used as
+  completion signals or claimed as "shared" anywhere in this banner.
 
 ## Claude Work-Session Queue
 

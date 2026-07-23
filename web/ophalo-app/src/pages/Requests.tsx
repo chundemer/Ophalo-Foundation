@@ -8,6 +8,7 @@ import { api, type AccountRole, type RequestView, type KeepRequestViewCounts, ty
 import { RequestRow, AvailableRequestRow } from "../components/RequestRow";
 import { RequestRowActionModal } from "../components/RequestRowActionModal";
 import { ShareLinkModal } from "../components/ShareLinkModal";
+import { RequestsOnboardingBanner } from "../components/RequestsOnboardingBanner";
 import { ApiError } from "../lib/apiClient";
 
 // --- Tab definitions ---
@@ -151,9 +152,18 @@ interface RequestsProps {
   viewCounts: KeepRequestViewCounts | null;
   onViewCountsUpdate: (counts: KeepRequestViewCounts | null) => void;
   onSelectRequest: (requestId: string, navContext?: { requestIds: string[] }, focus?: string) => void;
+  onNavigateSettings: (section?: "public-profile" | "policy" | "team") => void;
+  onStartCapture: () => void;
 }
 
-export function Requests({ role, viewCounts, onViewCountsUpdate, onSelectRequest }: RequestsProps) {
+export function Requests({
+  role,
+  viewCounts,
+  onViewCountsUpdate,
+  onSelectRequest,
+  onNavigateSettings,
+  onStartCapture,
+}: RequestsProps) {
   const tabs = getTabsForRole(role);
   const [activeTab, setActiveTab] = useState<TabDef>(tabs[0]);
   const [activeModalAction, setActiveModalAction] = useState<{
@@ -207,6 +217,19 @@ export function Requests({ role, viewCounts, onViewCountsUpdate, onSelectRequest
     refetchInterval: isOnFirstPage ? 30_000 : false,
     refetchOnWindowFocus: isOnFirstPage,
   });
+
+  const isOwnerOrAdmin = role === "owner" || role === "admin";
+  const guidedSetupQuery = useQuery({
+    queryKey: ["guided-setup"],
+    queryFn: api.getGuidedSetup,
+    enabled: isOwnerOrAdmin,
+    staleTime: 60_000,
+  });
+  const setup = guidedSetupQuery.data;
+  const showOnboardingBanner =
+    isOwnerOrAdmin &&
+    !!setup &&
+    !(setup.businessInfoComplete && setup.createIntakePageComplete && setup.addFirstRequestComplete);
 
   const latestCounts = listQuery.data?.viewCounts ?? null;
   useEffect(() => {
@@ -281,6 +304,15 @@ export function Requests({ role, viewCounts, onViewCountsUpdate, onSelectRequest
 
         {/* H1 anchor + supporting copy + summary pills */}
         <div className="px-4 pt-5 pb-4 sm:px-6 sm:pt-6">
+          {showOnboardingBanner && setup && (
+            <div className="mb-4">
+              <RequestsOnboardingBanner
+                setup={setup}
+                onNavigateSettings={onNavigateSettings}
+                onStartCapture={onStartCapture}
+              />
+            </div>
+          )}
           <h1 className="keep-page-title tracking-tight">
             Requests
           </h1>

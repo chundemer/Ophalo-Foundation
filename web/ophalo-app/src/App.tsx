@@ -291,6 +291,8 @@ function AppShell() {
             viewCounts={viewCounts}
             onViewCountsUpdate={handleViewCountsUpdate}
             onSelectRequest={selectRequest}
+            onNavigateSettings={navigateToSettings}
+            onStartCapture={openCapture}
           />
         )}
         {route.page === "home" && (
