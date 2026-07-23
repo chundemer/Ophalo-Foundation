@@ -1904,3 +1904,20 @@ failures in share sections are silently swallowed in the `DOMException` branch.
 
 Duplicated mobile/desktop mounts mean a draft typed at one viewport width may disappear after
 resizing.
+
+### POL-005 — Stale S78b test still asserts the removed automatic tracker-link email
+
+**Status:** Open
+**Severity:** P3 (test-only; no production behavior is wrong)
+**Area:** `tests/OpHalo.IntegrationTests/Api/KeepIntakeApiTests.cs`
+
+`KeepIntakeApiTests.PublicIntake_WithCustomerEmail_SendsTrackerLinkEmail` (from the original S78b
+tracker-link-email slice, `c24117a`) asserts that public intake with a customer email automatically
+sends a tracker-link email. GAP-033/R90b later locked the opposite behavior — automatic tracker-link
+email was removed; a business shares the tracker link itself via its own later communication — but
+this one test was never updated to match. Found via the full integration suite during the GAP-039a
+verification session (895/896 passing, this test the sole failure); confirmed unrelated to GAP-039a.
+
+Expected fix: update or remove the stale assertion to match the locked no-auto-email behavior
+(`PublicIntake_WithCustomerEmail_SendsNoEmail`-style coverage may already exist alongside it —
+check for duplication before rewriting). Test-only change; no production code should need to move.

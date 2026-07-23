@@ -753,11 +753,13 @@ public sealed class KeepIntakeApiTests : IClassFixture<KeepApiWebFactory>, IAsyn
     // -------------------------------------------------------------------------
 
     // -------------------------------------------------------------------------
-    // S78b — Tracker-link email
+    // GAP-033/R90b — automatic tracker-link email was removed (POL-005); a business shares the
+    // tracker link itself via its own later communication. Public intake accepts a customer email
+    // for the business's own use, but never sends mail automatically, with or without one.
     // -------------------------------------------------------------------------
 
     [Fact]
-    public async Task PublicIntake_WithCustomerEmail_SendsTrackerLinkEmail()
+    public async Task PublicIntake_WithCustomerEmail_DoesNotSendAutomaticTrackerLinkEmail()
     {
         _factory.EmailSender.Clear();
 
@@ -768,11 +770,7 @@ public sealed class KeepIntakeApiTests : IClassFixture<KeepApiWebFactory>, IAsyn
                   serviceAddressLine1 = "42 Test Ave", serviceCity = "Austin", serviceState = "TX" });
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
-
-        var sent = Assert.Single(_factory.EmailSender.SentEmails);
-        Assert.Equal("alice@example.com", sent.To);
-        Assert.Contains("/keep/r/", sent.HtmlBody);
-        Assert.Contains("test.ophalo.com", sent.HtmlBody);
+        Assert.Empty(_factory.EmailSender.SentEmails);
     }
 
     [Fact]
