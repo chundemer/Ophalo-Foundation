@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
@@ -16,6 +16,8 @@ import {
   authInputClass,
   authInvalidInputClass,
 } from "@/components/auth/AuthShell";
+import { SessionRedirectGate } from "@/components/auth/SessionRedirectGate";
+import { useSessionRedirect } from "@/lib/useSessionRedirect";
 
 const FALLBACK_TZ_LIST = [
   "America/New_York",
@@ -66,11 +68,9 @@ const VALUE_POINTS = [
   "Dependable follow-through — nothing falls through the cracks",
 ];
 
-type SessionCheck = "checking" | "unauthenticated" | "authenticated" | "error";
-
 export default function StartPage() {
   const router = useRouter();
-  const [sessionCheck, setSessionCheck] = useState<SessionCheck>("checking");
+  const { sessionCheck, retry: checkSession } = useSessionRedirect();
   const [timeZone, setTimeZone] = useState(TZ_LIST[0]);
   const [detectedTimeZone, setDetectedTimeZone] = useState<string | null>(null);
   const [editingTimeZone, setEditingTimeZone] = useState(false);
@@ -78,36 +78,6 @@ export default function StartPage() {
   const [error, setError] = useState<string | null>(null);
   const [pilotFull, setPilotFull] = useState(false);
   const [emailInUse, setEmailInUse] = useState(false);
-
-  const checkSession = useCallback(async () => {
-    setSessionCheck("checking");
-    try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/auth/me`, {
-        credentials: "include",
-      });
-      if (res.ok) {
-        setSessionCheck("authenticated");
-      } else if (res.status === 401) {
-        setSessionCheck("unauthenticated");
-      } else {
-        setSessionCheck("error");
-      }
-    } catch {
-      setSessionCheck("error");
-    }
-  }, []);
-
-  useEffect(() => {
-    checkSession();
-  }, [checkSession]);
-
-  useEffect(() => {
-    if (sessionCheck === "authenticated") {
-      window.location.assign(
-        process.env.NEXT_PUBLIC_APP_BASE_URL ?? "http://localhost:5173",
-      );
-    }
-  }, [sessionCheck]);
 
   useEffect(() => {
     const detected = Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -181,49 +151,20 @@ export default function StartPage() {
     }
   }
 
-  if (sessionCheck === "checking" || sessionCheck === "authenticated") {
-    return (
-      <div
-        className="flex min-h-screen items-center justify-center bg-ophalo-canvas px-4"
-        role="status"
-        aria-label="Loading"
-      >
-        <div className="h-8 w-8 animate-pulse rounded-full bg-ophalo-navy/20" aria-hidden="true" />
-      </div>
-    );
-  }
-
-  if (sessionCheck === "error") {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-ophalo-canvas px-4">
-        <div className="w-full max-w-sm rounded-2xl border border-ophalo-border bg-ophalo-card px-6 py-8 text-center shadow-sm">
-          <p role="alert" className="text-sm text-ophalo-ink">
-            We couldn&apos;t check your sign-in status. Please try again.
-          </p>
-          <button
-            type="button"
-            onClick={checkSession}
-            className="mt-4 w-full rounded-lg bg-ophalo-navy px-5 py-3 text-sm font-semibold text-white transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-keep-accent focus-visible:ring-offset-2"
-          >
-            Try again
-          </button>
-        </div>
-      </div>
-    );
-  }
-
   if (pilotFull) {
     return (
-      <AuthShell>
-        <AuthHeading>Pilot is full.</AuthHeading>
-        <AuthLead>
-          {"We've reached our pilot capacity. Email us at "}
-          <a href="mailto:pilot@ophalo.com" className="underline underline-offset-2">
-            pilot@ophalo.com
-          </a>
-          {" if you'd like to be notified when we open up."}
-        </AuthLead>
-      </AuthShell>
+      <SessionRedirectGate sessionCheck={sessionCheck} onRetry={checkSession}>
+        <AuthShell>
+          <AuthHeading>Pilot is full.</AuthHeading>
+          <AuthLead>
+            {"We've reached our pilot capacity. Email us at "}
+            <a href="mailto:pilot@ophalo.com" className="underline underline-offset-2">
+              pilot@ophalo.com
+            </a>
+            {" if you'd like to be notified when we open up."}
+          </AuthLead>
+        </AuthShell>
+      </SessionRedirectGate>
     );
   }
 
@@ -231,6 +172,7 @@ export default function StartPage() {
   const isDetectedValue = detectedTimeZone !== null && timeZone === detectedTimeZone;
 
   return (
+    <SessionRedirectGate sessionCheck={sessionCheck} onRetry={checkSession}>
     <div className="flex min-h-screen items-center justify-center bg-ophalo-canvas px-4 py-8 sm:py-12">
       <div className="w-full max-w-5xl overflow-hidden rounded-2xl border border-ophalo-border bg-ophalo-card shadow-sm md:grid md:grid-cols-5">
         {/* Compact identity/value header — narrow widths only */}
@@ -395,5 +337,6 @@ export default function StartPage() {
         </div>
       </div>
     </div>
+    </SessionRedirectGate>
   );
 }

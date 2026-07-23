@@ -14,9 +14,12 @@ import {
   authInputClass,
   authInvalidInputClass,
 } from "@/components/auth/AuthShell";
+import { SessionRedirectGate } from "@/components/auth/SessionRedirectGate";
+import { useSessionRedirect } from "@/lib/useSessionRedirect";
 
 export default function SignInPage() {
   const router = useRouter();
+  const { sessionCheck, retry } = useSessionRedirect();
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -59,6 +62,7 @@ export default function SignInPage() {
   }
 
   return (
+    <SessionRedirectGate sessionCheck={sessionCheck} onRetry={retry}>
     <AuthShell>
       <AuthHeading>Sign in to Keep</AuthHeading>
       <AuthLead>Enter your email and we&rsquo;ll send you a sign-in link.</AuthLead>
@@ -92,5 +96,6 @@ export default function SignInPage() {
         New to Keep? <Link href="/start" className="underline underline-offset-2">Get started</Link>
       </AuthNote>
     </AuthShell>
+    </SessionRedirectGate>
   );
 }
