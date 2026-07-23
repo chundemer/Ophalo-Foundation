@@ -6,6 +6,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using OpHalo.Foundation.Application.Abstractions.Messaging;
 using OpHalo.Foundation.Infrastructure.Persistence;
+using System.Collections.Immutable;
 using System.Net.Http.Json;
 using Testcontainers.PostgreSql;
 
@@ -26,19 +27,46 @@ public sealed class CapturingLoggerProvider : ILoggerProvider
 
     public ILogger CreateLogger(string categoryName) => new Logger(_messages, categoryName);
 
+    public void Clear() { lock (_messages) _messages.Clear(); }
+
     public void Dispose() { }
 
     private sealed class Logger(List<string> messages, string category) : ILogger
     {
-        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+        // AsyncLocal so nested BeginScope calls flow correctly with the request's async context,
+        // matching how ASP.NET Core's own scope stack behaves.
+        private static readonly AsyncLocal<ImmutableStack<object>> Scopes = new();
+
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull
+        {
+            Scopes.Value = (Scopes.Value ?? ImmutableStack<object>.Empty).Push(state);
+            return new ScopePopper();
+        }
+
         public bool IsEnabled(LogLevel logLevel) => true;
 
         public void Log<TState>(LogLevel logLevel, EventId eventId, TState state,
             Exception? exception, Func<TState, Exception?, string> formatter)
         {
             var text = formatter(state, exception);
+            var scopeText = string.Join(" ", (Scopes.Value ?? ImmutableStack<object>.Empty).Select(FormatScope));
             lock (messages)
-                messages.Add($"[{category}] {text}");
+                messages.Add(scopeText.Length > 0
+                    ? $"[{category}] {{{scopeText}}} {text}"
+                    : $"[{category}] {text}");
+        }
+
+        private static string FormatScope(object state) => state is IEnumerable<KeyValuePair<string, object>> kvps
+            ? string.Join(",", kvps.Select(kv => $"{kv.Key}={kv.Value}"))
+            : state.ToString() ?? string.Empty;
+
+        private sealed class ScopePopper : IDisposable
+        {
+            public void Dispose()
+            {
+                if (Scopes.Value is { IsEmpty: false } stack)
+                    Scopes.Value = stack.Pop();
+            }
         }
     }
 }

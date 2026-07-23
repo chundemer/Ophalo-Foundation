@@ -65,11 +65,19 @@ public sealed class SignInAuthService(
         // is preserved even when the email transport throws.
         try
         {
-            await emailSender.SendAsync(
+            var sendResult = await emailSender.SendAsync(
                 normalizedEmail,
                 MagicLinkEmailTemplate.Subject,
                 MagicLinkEmailTemplate.BuildHtmlBody(magicLink),
                 cancellationToken);
+
+            if (sendResult.IsFailure)
+            {
+                logger.LogWarning(
+                    "Magic link email delivery failed for code {CodeId}: {ErrorCode}.",
+                    code.Id,
+                    sendResult.Error.Code);
+            }
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {

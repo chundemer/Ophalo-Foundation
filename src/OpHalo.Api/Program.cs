@@ -1,12 +1,15 @@
 using System.Net;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Npgsql;
 using OpHalo.Api.Accounts;
 using OpHalo.Api.Auth;
+using OpHalo.Api.Diagnostics;
 using OpHalo.Api.Helpers;
 using OpHalo.Api.Keep;
 using OpHalo.Foundation.Application.Abstractions.Messaging;
@@ -94,6 +97,9 @@ builder.Services.AddScoped<OpHaloDbContext>(sp =>
         clock,
         [typeof(OpHalo.Keep.Infrastructure.AssemblyMarker).Assembly]);
 });
+
+// --- Health checks ---
+builder.Services.AddHealthChecks().AddCheck<DatabaseHealthCheck>("database");
 
 // --- Services ---
 builder.Services.AddSingleton<IClock, OpHalo.Foundation.Infrastructure.Services.SystemClock>();
@@ -226,6 +232,16 @@ builder.Services.AddRateLimiter(options =>
 
 var app = builder.Build();
 
+// Fail fast on missing production configuration rather than surfacing an obscure runtime error
+// later (e.g. a blank magic link, or a silently rejected Resend call). Skipped for the local/test
+// environments that intentionally omit Resend configuration and substitute a fake IEmailSender.
+if (!app.Environment.IsDevelopment() &&
+    !app.Environment.IsEnvironment("Testing") &&
+    !app.Environment.IsEnvironment("RateLimitTesting"))
+{
+    ProductionConfigurationValidator.ValidateOrThrow(app.Configuration);
+}
+
 // Production deployments apply schema changes only when explicitly enabled. This keeps automatic
 // migration opt-in while allowing a fresh managed database to be initialized by its API service.
 if (app.Configuration.GetValue<bool>("Database:ApplyMigrationsOnStartup"))
@@ -237,6 +253,8 @@ if (app.Configuration.GetValue<bool>("Database:ApplyMigrationsOnStartup"))
 
 if (app.Environment.IsDevelopment())
     app.MapOpenApi();
+
+app.UseMiddleware<CorrelationIdMiddleware>();
 
 // Skip HTTPS redirect for "Testing" (ADR-058, build-log/014) and "RateLimitTesting"
 // (production-like test host that still needs plain HTTP for the test server).
@@ -256,6 +274,23 @@ app.UseAuthorization();
 // "RateLimitTesting" intentionally keeps rate limiting enabled for G8a proof tests.
 if (!app.Environment.IsEnvironment("Testing"))
     app.UseRateLimiter();
+
+// --- Health ---
+// Minimal pass/fail signals for Railway's health checks. No dependency names, config values,
+// or exception detail — the response body is deliberately opaque; see structured logs/alerts
+// (GAP-039) for diagnosis.
+app.MapGet("/health/live", () => Results.Ok(new { status = "healthy" }))
+    .DisableRateLimiting();
+
+app.MapHealthChecks("/health/ready", new HealthCheckOptions
+{
+    ResponseWriter = (context, report) =>
+    {
+        context.Response.ContentType = "application/json";
+        var status = report.Status == HealthStatus.Healthy ? "healthy" : "unhealthy";
+        return context.Response.WriteAsync($"{{\"status\":\"{status}\"}}");
+    }
+}).DisableRateLimiting();
 
 // --- Routes ---
 app.MapKeepEndpoints();
