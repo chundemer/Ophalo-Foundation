@@ -1,3 +1,6 @@
+"use client";
+
+import { useState } from "react";
 import type { ReactNode } from "react";
 import Link from "next/link";
 
@@ -26,15 +29,20 @@ export function KeepBusinessHeader({
   className?: string;
 }) {
   const safeLogoUrl = logoUrl && logoUrl.startsWith("https://") ? logoUrl : null;
+  const [logoFailed, setLogoFailed] = useState(false);
+  const showLogo = safeLogoUrl != null && !logoFailed;
 
   return (
     <div className={`flex items-center gap-3 px-1 ${className}`}>
-      {safeLogoUrl ? (
-        <img
-          src={safeLogoUrl}
-          alt={businessName}
-          className="h-12 w-12 shrink-0 rounded-xl object-cover"
-        />
+      {showLogo ? (
+        <div className="flex h-12 shrink-0 items-center">
+          <img
+            src={safeLogoUrl}
+            alt={businessName}
+            onError={() => setLogoFailed(true)}
+            className="h-auto w-auto max-h-12 max-w-[160px] object-contain"
+          />
+        </div>
       ) : (
         <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[var(--ophalo-navy)] text-sm font-bold tracking-wide text-white">
           {keepBusinessInitials(businessName)}

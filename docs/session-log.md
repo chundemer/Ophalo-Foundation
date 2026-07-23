@@ -80,6 +80,18 @@ decision index.
   `reviewCustomerPageComplete` and `shareIntakePageComplete` remain hardcoded `false` server-side
   (durable "link shared/viewed" events deferred to S22d) and are intentionally not used as
   completion signals or claimed as "shared" anywhere in this banner.
+- **Complete.** Business-logo rendering fix on public customer pages and the Settings preview:
+  `KeepBusinessHeader` (`web/ophalo-web/src/components/keep/KeepPublicShell.tsx`) and the Settings
+  customer preview (`web/ophalo-app/src/pages/settings/PublicLinkSection.tsx`) now render the logo
+  with `object-contain` at a bounded `max-h`/`max-w` footprint instead of `object-cover`, so
+  horizontal wordmark logos are no longer cropped into a square/circle. No forced circular/square
+  treatment is applied to a successfully loaded logo; the initials fallback is unchanged (no logo
+  URL, or `onError`). `KeepBusinessHeader` gained local image-error state and is now a client
+  component (`"use client"`) to support the fallback; existing HTTPS-only URL safeguard preserved.
+  Rendering-only; no backend/schema change. **Known gap:** `web/ophalo-web` has no test runner
+  configured (no vitest/jest, no test script), so regression coverage for `KeepBusinessHeader` is
+  manual/visual only. Automated coverage was added only in `web/ophalo-app`
+  (`PublicLinkSection.logo.test.tsx`), where test infra already exists.
 
 ## Claude Work-Session Queue
 

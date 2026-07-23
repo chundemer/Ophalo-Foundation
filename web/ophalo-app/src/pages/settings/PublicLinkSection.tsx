@@ -454,12 +454,14 @@ export function PublicLinkSection({ businessName, logoUrl }: PublicLinkSectionPr
             <div className="px-4 py-4 space-y-3">
               <div className="flex items-center gap-2">
                 {logoUrl.trim() && logoUrl.trim() !== failedLogoUrl ? (
-                  <img
-                    src={logoUrl.trim()}
-                    alt={`${businessName.trim() || "Business"} logo`}
-                    className="h-8 w-8 rounded-full object-cover border border-slate-200 shrink-0"
-                    onError={() => setFailedLogoUrl(logoUrl.trim())}
-                  />
+                  <div className="flex h-8 shrink-0 items-center">
+                    <img
+                      src={logoUrl.trim()}
+                      alt={`${businessName.trim() || "Business"} logo`}
+                      className="h-auto w-auto max-h-8 max-w-[96px] object-contain"
+                      onError={() => setFailedLogoUrl(logoUrl.trim())}
+                    />
+                  </div>
                 ) : (
                   <div className="h-8 w-8 rounded-full bg-slate-200 text-slate-600 text-[10px] font-semibold flex items-center justify-center shrink-0">
                     {businessInitials(businessName)}
