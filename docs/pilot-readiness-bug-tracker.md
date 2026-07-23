@@ -953,7 +953,8 @@ feature.
 
 ### GAP-051 — North American phone numbers are not formatted consistently while entered or displayed
 
-**Status:** Open — V1 pre-deployment gate
+**Status:** In progress — authenticated `ophalo-app` (PWA) staff-facing surfaces complete; native
+mobile and a broader `ophalo-web`/RequestRow re-audit remain open
 **Severity:** P1
 **Area:** authenticated/public phone inputs and Request Detail/contact presentation
 **Decision:** ADR-444
@@ -981,6 +982,29 @@ the polish and error-resistance of a service-business workflow.
   value.
 - Shared-formatting tests cover normal, `+1`, partial, invalid, and paste cases across desktop and
   mobile-relevant input paths.
+
+**Completed this session (authenticated `ophalo-app` staff PWA):** Added
+`normalizeNaPhoneInput`/`formatNaPhone` to `web/ophalo-app/src/components/quick-capture/utils.ts`
+(canonical-10-digit normalization drops an optional leading `1`/`+1`; no valid NANP area code starts
+with `1`, so this is unambiguous whether it arrives mid-type or as a full paste). Applied to:
+`HandoffPanel.tsx` (Text a Link input — the reported regression), `LookupGate.tsx` (phone-lookup
+input, paste, clipboard-prompt preview, and contact-picker path), `CaptureForm.tsx` (locked phone
+summary), `LookupResultView.tsx` (found-customer and no-customer-found phone text),
+`ShareLinkModal.tsx` (contact-preview phone), `RequestDetail.tsx`, and `DetailPanels.tsx` (customer
+phone panel). Canonical digits-only values are unchanged for API payloads, lookup, `tel:`/`sms:`
+targets, and copy-to-clipboard actions — only the rendered text/input value is formatted. 20 new
+focused Vitest tests cover normal, partial, `+1`/leading-`1`, paste, invalid-length, and
+correction/edit cases; `tsc --noEmit` and `vite build` pass.
+
+**Still open:**
+- Native mobile (`mobile/ophalo-mobile`) parity was not touched this session.
+- `web/ophalo-web`'s public intake form (`IntakeForm.tsx`) already had its own
+  `formatPhoneAsYouType` and was intentionally left as-is per this session's scope (no cross-app
+  coupling); it does not yet accept/normalize a leading `1`/`+1` the way the new `ophalo-app` utility
+  does, so the two apps' phone-entry tolerance is not yet identical.
+- `RequestRow.tsx` (request list rows) was checked and does not render raw phone text, so no change
+  was needed there, but a full GAP-051 close-out should still confirm no other authenticated surface
+  was missed.
 
 ### GAP-016 — New Request accepts invalid phone numbers and traps correction
 

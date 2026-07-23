@@ -2,7 +2,7 @@ import { useRef, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { Clipboard, Phone, AlertTriangle, Loader2 } from "lucide-react";
 import { api, ApiError, type PhoneLookupResult } from "../../lib/apiClient";
-import { stripToDigits, isPhoneShaped } from "./utils";
+import { normalizeNaPhoneInput, formatNaPhone, isPhoneShaped } from "./utils";
 
 interface LookupGateProps {
   onClose: () => void;
@@ -26,7 +26,7 @@ export function LookupGate({ onClose, onLookupSuccess, isPastDue, isReadOnly }: 
   });
 
   function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const digits = stripToDigits(e.target.value);
+    const digits = normalizeNaPhoneInput(e.target.value);
     setRaw(digits);
     if (digits.length === 10) {
       doLookup(digits);
@@ -41,7 +41,7 @@ export function LookupGate({ onClose, onLookupSuccess, isPastDue, isReadOnly }: 
 
   async function handlePaste(e: React.ClipboardEvent<HTMLInputElement>) {
     const text = e.clipboardData.getData("text");
-    const digits = stripToDigits(text);
+    const digits = normalizeNaPhoneInput(text);
     if (digits.length >= 7) {
       e.preventDefault();
       setRaw(digits);
@@ -55,7 +55,7 @@ export function LookupGate({ onClose, onLookupSuccess, isPastDue, isReadOnly }: 
     try {
       const text = await navigator.clipboard.readText();
       if (isPhoneShaped(text)) {
-        const digits = stripToDigits(text);
+        const digits = normalizeNaPhoneInput(text);
         setPendingClipboard(digits);
         setClipboardPrompt(true);
       }
@@ -79,7 +79,7 @@ export function LookupGate({ onClose, onLookupSuccess, isPastDue, isReadOnly }: 
       if (contacts?.length > 0) {
         const tel: string | undefined = contacts[0]?.tel?.[0];
         if (tel) {
-          const digits = stripToDigits(tel);
+          const digits = normalizeNaPhoneInput(tel);
           setRaw(digits);
           if (digits.length === 10) {
             doLookup(digits);
@@ -115,8 +115,8 @@ export function LookupGate({ onClose, onLookupSuccess, isPastDue, isReadOnly }: 
               ref={inputRef}
               type="tel"
               inputMode="numeric"
-              placeholder="Enter digits"
-              value={raw}
+              placeholder="(555) 555-5555"
+              value={formatNaPhone(raw)}
               onChange={handleChange}
               onKeyDown={handleKeyDown}
               onPaste={handlePaste}
@@ -151,7 +151,7 @@ export function LookupGate({ onClose, onLookupSuccess, isPastDue, isReadOnly }: 
 
         {clipboardPrompt && (
           <div className="mt-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 flex items-center justify-between gap-3 text-sm">
-            <span className="text-slate-600">Use <span className="font-mono font-medium">{pendingClipboard}</span> from clipboard?</span>
+            <span className="text-slate-600">Use <span className="font-mono font-medium">{formatNaPhone(pendingClipboard)}</span> from clipboard?</span>
             <div className="flex gap-2 shrink-0">
               <button
                 type="button"
@@ -176,7 +176,7 @@ export function LookupGate({ onClose, onLookupSuccess, isPastDue, isReadOnly }: 
         )}
         {(raw.length === 0 || raw.length === 10) && (
           <p className="mt-1 text-xs text-slate-400">
-            Digits only · Lookup fires automatically at 10 digits
+            Lookup fires automatically once the number is complete
           </p>
         )}
       </div>

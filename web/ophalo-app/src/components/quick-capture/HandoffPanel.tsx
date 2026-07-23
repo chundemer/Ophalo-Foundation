@@ -3,7 +3,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import QRCode from "react-qr-code";
 import { MessageSquare } from "lucide-react";
 import { api, ApiError } from "../../lib/apiClient";
-import { stripToDigits } from "./utils";
+import { normalizeNaPhoneInput, formatNaPhone } from "./utils";
 
 interface HandoffPanelProps {
   onEnterForCustomer: () => void;
@@ -29,7 +29,7 @@ export function HandoffPanel({ onEnterForCustomer, onNavigateSettings }: Handoff
   const isValidationError = apiError?.status === 400 || apiError?.status === 422;
 
   function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
-    setRaw(stripToDigits(e.target.value));
+    setRaw(normalizeNaPhoneInput(e.target.value));
     if (handoff || error) reset();
   }
 
@@ -83,8 +83,8 @@ export function HandoffPanel({ onEnterForCustomer, onNavigateSettings }: Handoff
             id="handoff-phone"
             type="tel"
             inputMode="numeric"
-            placeholder="Enter digits"
-            value={raw}
+            placeholder="(555) 555-5555"
+            value={formatNaPhone(raw)}
             onChange={handleChange}
             disabled={isPending}
             className="block w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500 disabled:bg-slate-50 disabled:text-slate-400"

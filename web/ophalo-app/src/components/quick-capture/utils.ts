@@ -39,6 +39,27 @@ export function isPhoneShaped(text: string): boolean {
   return digits.length >= 7 && digits.length <= 15;
 }
 
+/**
+ * Normalizes typed/pasted phone input to the canonical 10-digit NANP value
+ * used by the API and lookup. A leading "1" (a typed or pasted "+1"/"1"
+ * country-code prefix) is dropped — no valid NANP area code starts with 1,
+ * so this is unambiguous whether it arrives mid-type or via a full paste.
+ */
+export function normalizeNaPhoneInput(raw: string): string {
+  let digits = stripToDigits(raw);
+  if (digits.startsWith("1")) digits = digits.slice(1);
+  return digits.slice(0, 10);
+}
+
+/** Formats canonical NANP digits as the customer sees them: (555) 555-5555. */
+export function formatNaPhone(digits: string): string {
+  const d = stripToDigits(digits).slice(0, 10);
+  if (d.length === 0) return "";
+  if (d.length < 4) return `(${d}`;
+  if (d.length < 7) return `(${d.slice(0, 3)}) ${d.slice(3)}`;
+  return `(${d.slice(0, 3)}) ${d.slice(3, 6)}-${d.slice(6)}`;
+}
+
 export function formatStatus(slug: string): string {
   const map: Record<string, string> = {
     received: "Received",

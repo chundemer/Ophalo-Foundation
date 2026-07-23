@@ -12,6 +12,7 @@ import { ShareLinkModal } from "../components/ShareLinkModal";
 import { QuickCapture } from "../components/QuickCapture";
 import { KeepButton } from "../components/keep/KeepButton";
 import { ExternalContactForm } from "../components/ExternalContactForm";
+import { formatNaPhone } from "../components/quick-capture/utils";
 import {
   FOCUS_RING,
   STATUS_CONFLICT_MESSAGE,
@@ -131,7 +132,7 @@ export function LogContactModal({
             <div className="flex flex-wrap items-center gap-3">
               <span className="flex items-center gap-1.5 text-sm font-semibold text-[var(--ophalo-ink)]">
                 <Phone className="h-3.5 w-3.5 text-[var(--keep-accent)] shrink-0" />
-                {detail.customerPhone}
+                {formatNaPhone(detail.customerPhone)}
               </span>
               <div className="flex items-center gap-2 ml-auto">
                 <button

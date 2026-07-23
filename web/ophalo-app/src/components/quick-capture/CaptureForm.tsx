@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { AlertTriangle, Loader2 } from "lucide-react";
 import { api, ApiError } from "../../lib/apiClient";
-import { SOURCE_OPTIONS, type CaptureFormDraft } from "./utils";
+import { SOURCE_OPTIONS, formatNaPhone, type CaptureFormDraft } from "./utils";
 
 interface CaptureFormProps {
   lockedPhone: string;
@@ -83,7 +83,7 @@ export function CaptureForm({
       <div>
         <label className="block text-sm font-medium text-slate-700 mb-1">Phone</label>
         <div className="flex items-center justify-between py-2">
-          <span className="text-sm text-slate-700">{lockedPhone}</span>
+          <span className="text-sm text-slate-700">{formatNaPhone(lockedPhone)}</span>
           <button
             type="button"
             onClick={() => onBack(buildDraft())}

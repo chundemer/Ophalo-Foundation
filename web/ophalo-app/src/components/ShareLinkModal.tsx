@@ -15,6 +15,7 @@ import {
 import { api, type ShareIntentMethod } from "../lib/apiClient";
 import { ApiError } from "../lib/apiClient";
 import { KeepButton } from "./keep/KeepButton";
+import { formatNaPhone } from "./quick-capture/utils";
 
 const FOCUS_RING =
   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-offset-1";
@@ -337,7 +338,7 @@ export function ShareLinkModal({ requestId, onClose, onShared }: ShareLinkModalP
                 <div className="flex flex-col gap-1 text-sm">
                   <div className="flex items-center gap-1.5 text-[var(--ophalo-ink)]">
                     <MessageSquare className="h-3.5 w-3.5 text-[var(--ophalo-muted)] shrink-0" />
-                    <span className="font-medium">{customerPhone}</span>
+                    <span className="font-medium">{formatNaPhone(customerPhone)}</span>
                   </div>
                   {customerEmail && (
                     <div className="flex items-center gap-1.5 text-[var(--ophalo-muted)]">

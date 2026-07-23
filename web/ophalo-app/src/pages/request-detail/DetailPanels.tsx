@@ -6,6 +6,7 @@ import {
   type KeepRequestDetailResult,
 } from "../../lib/apiClient";
 import { KeepButton } from "../../components/keep/KeepButton";
+import { formatNaPhone } from "../../components/quick-capture/utils";
 import { KeepBadge, type KeepBadgeVariant } from "../../components/keep/KeepBadge";
 import {
   FOCUS_RING,
@@ -443,7 +444,7 @@ export function CustomerPanel({ detail, onContactLaunched }: CustomerPanelProps)
             <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ophalo-muted)] mb-1">Phone</p>
             <div className="flex items-center gap-2 flex-wrap">
               <Phone className="h-3.5 w-3.5 shrink-0 text-[var(--ophalo-muted)]" />
-              <span className="text-sm text-[var(--ophalo-ink)]">{detail.customerPhone}</span>
+              <span className="text-sm text-[var(--ophalo-ink)]">{formatNaPhone(detail.customerPhone)}</span>
               <button
                 type="button"
                 onClick={() => copyToClipboard(detail.customerPhone!, setCopiedPhone)}

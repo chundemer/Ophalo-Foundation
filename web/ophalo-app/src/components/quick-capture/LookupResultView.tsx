@@ -1,5 +1,5 @@
 import type { PhoneLookupResult, PhoneLookupActiveRequest } from "../../lib/apiClient";
-import { formatStatus } from "./utils";
+import { formatStatus, formatNaPhone } from "./utils";
 
 interface LookupResultProps {
   lookup: PhoneLookupResult;
@@ -23,12 +23,12 @@ export function LookupResultView({
       {customer ? (
         <div>
           <p className="text-sm font-medium text-slate-800">{customer.name}</p>
-          <p className="text-sm text-slate-500">{customer.phone}</p>
+          <p className="text-sm text-slate-500">{formatNaPhone(customer.phone)}</p>
           {customer.email && <p className="text-xs text-slate-400">{customer.email}</p>}
         </div>
       ) : (
         <div>
-          <p className="text-sm text-slate-500">No customer found for <span className="font-mono font-medium">{lockedPhone}</span>.</p>
+          <p className="text-sm text-slate-500">No customer found for <span className="font-mono font-medium">{formatNaPhone(lockedPhone)}</span>.</p>
         </div>
       )}
 
