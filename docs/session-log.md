@@ -1,156 +1,143 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-07-19 (GAP-020 Slices A/B/C committed — GAP-020 resolved)
-**Branch:** `main` tracking `origin/main`
-**Deployment posture:** Not deployment-ready. The active launch gate is
-`docs/pilot-readiness-bug-tracker.md`.
-**Current work:** GAP-034 is resolved in `45cea22` (completion docs `dfa554a`). GAP-020 — replacing
-the raw-phone desktop call QR with an opaque short-lived handoff — is complete: Slice A (backend) is
-committed in `60797b6`; Slice B (public `share-call` resolver page) in `372829f`; Slice C (wiring
-both desktop QR entry points) in `e22b451`. Live browser/real-device verification of the end-to-end
-scan flow remains outstanding — see the GAP-020 tracker entry's post-gap deployment gate.
+**Last updated:** 2026-07-23
+**Deployment posture:** Not pilot-ready.
+**Source of truth for acceptance criteria:** `docs/pilot-readiness-bug-tracker.md`.
 
-Detailed historical implementation evidence belongs in `docs/build-log/`; active requirements and
-status belong in `docs/pilot-readiness-bug-tracker.md`; decisions belong in
-`docs/decisions/decision-index.md`.
+This log intentionally contains only outstanding work. Historical implementation evidence belongs in
+`docs/build-log/`; locked decisions belong in `docs/pilot-readiness-decision-questions.md` and the
+decision index.
 
-## Session Protocol
+## Immediate Production Access And Reliability Blockers
 
-For every implementation slice:
+- **Provision and verify the first production smoke account.** The deployed database is empty, so
+  the existing-member **Sign in** flow cannot create a session. Use **Get started** (`/start`) with
+  a dedicated internal inbox to create the first account, receive/exchange its magic link, confirm
+  `/auth/me`, and load the authenticated Keep request list. Then test the normal Sign in flow with
+  that same account. Do not use a pilot account as a test fixture. Account/User rows are expected
+  only after link exchange; before then, validate the pending `account_auth_codes` record instead.
+  If `/start` reports success without an email, inspect its browser/API response, the pending code,
+  Railway configuration, and Resend delivery activity. The current sender can return a failed
+  delivery result without surfacing it to the browser or application log, so GAP-039/error-capture
+  work must make this diagnosable. Public DNS is delegated to Vercel; the Resend dashboard's
+  Cloudflare provider label is stale metadata, not active DNS control. Confirm that
+  `Resend__FromAddress` exactly uses the verified `mail.ophalo.com` subdomain (for example,
+  `OpHalo <no-reply@mail.ophalo.com>`) and that the deployed API key belongs to that Resend team.
+  The observed generic Sign in error also needs a Railway/browser correlation if it reproduces: an
+  unknown-email sign-in is expected to return neutral success, not a visible generic failure.
+- **GAP-039 (P0): production observability and pilot health.** Implement the locked low-cost
+  posture: retain Vercel Pro/Railway, use redacted free errors-only Sentry for browser/API unhandled
+  errors and release identity, add health/readiness/configuration checks, safe correlation/error
+  references, founder email alerts, and a post-deployment smoke-test script. No paid observability
+  add-on, paid uptime/incident tool, or persistent staging stack before revenue. Preserve token and
+  PII redaction.
+- **Verify deployed routing and release configuration.** The operator request list is served at
+  `https://app.ophalo.com/`; `/keep/requests` currently produces a Vercel 404. Validate the
+  intended public/deep-link contract, Vercel environment variables, DNS/domain/cookie topology, and
+  API deployment configuration before pilot access.
+- **GAP-020 (P0): complete the opaque desktop call-handoff deployment gate.** Live browser and
+  real-device verification remains: QR scan → dialer/fallback, expiry/invalid-token behavior,
+  cache headers, iOS Safari, Android Chrome, and a non-`localhost` phone-reachable environment.
+- **GAP-016 (P0): complete phone-validation parity.** Native parity and the remaining manual
+  browser/device verification are still required for the ADR-444 phone-input contract.
 
-- Read this file and the relevant active tracker entry before editing.
-- Preflight named signatures, authorization, failure modes, and focused tests with `rg`.
-- Present the file-level gate before production edits. Unless Christian explicitly overrides it,
-  keep to three mutation families, eight production files, and twelve total changed files.
-- Preserve fail-closed account, membership, action-policy, public-token, privacy, and concurrency
-  behavior.
-- Add focused regression coverage, run proportionate checks, self-review visibility/token policy,
-  and commit only after Christian approves the completed diff.
+## Open Product And Pilot-Readiness Work
 
-## Current Baseline
+### Quick Capture, Input, And Modal Safety
 
-- **GAP-035 / R90c-1 through R90c-4:** complete in `8aba5dc`, `0f70437`, `3490cb1`, and
-  `c1a1379`. All normal browser auth/invite/recovery states now use `AuthShell`; mobile exchange
-  uses `AuthShell bare` and remains ADR-390 sterile.
-- **GAP-034 `/start` conversion redesign:** resolved in `45cea22` (completion docs `dfa554a`) in
-  `web/ophalo-web/src/app/start/page.tsx`. Contained two-panel desktop composition (navy identity/
-  value panel + white form panel, compact stacked header on narrow widths), truthful `Start your
-  Keep pilot` copy and CTA, friendly editable time-zone display, and a client-side `/auth/me`
-  session check that redirects an already-authenticated business user to `NEXT_PUBLIC_APP_BASE_URL`
-  with no start-form flash and an explicit retry state on session-check failure. `AuthShell.tsx` and
-  the backend `/auth/start` contract were not changed. Live authenticated-redirect verified.
-- **GAP-033 / R90b public trust:** public identity fields and projections are complete. Known public
-  intake/tracker/expired pages can render business name, hosted logo, website, and public phone;
-  unknown tokens remain non-enumerating. Successful public intake goes directly to the tracker with
-  a one-time welcome state. Automatic tracker-link email was removed.
-- **GAP-033 deployment evidence still required:** actual browser intake submission, an actual
-  expired-tracker visual check, and a known-business OffSeason behavior/banner decision.
-- **GAP-036 / GAP-036a + GAP-036b:** resolved in `8085971` and `014bae5`, with focus-containment
-  follow-up `aae9257`. Owner/Admin can configure
-  Logo URL/Website URL with a shared unsaved-draft customer preview (GAP-036a). Public-link
-  replacement now requires an exact, case-sensitive `REPLACE` value in an accessible, focus-trapped
-  destructive dialog (Tab contained, Escape/backdrop blocked while in flight, focus returns to the
-  trigger on close); the server independently re-validates the same confirmation before revoking the
-  active link — a missing or empty request body still reaches that gate rather than being rejected
-  by model binding (GAP-036b). Live authenticated desktop/mobile keyboard verification is complete.
-- **GAP-042:** newly recorded authenticated-workspace identity gap. Request List and Request Detail
-  need restrained account business-name context so work visibly belongs to the business, without
-  leaking it to public routes or repeating it on each request row.
-- **GAP-043:** newly recorded request-list scale/readiness gap. Cursor paging already exists (50-row
-  default, protected next cursor, Previous/Next stack); decide and verify its real-work UX rather
-  than replacing it on the assumption that no pagination exists. Coordinate any implementation with
-  GAP-041’s stable first-load queue transition.
-- **GAP-044 through GAP-046:** newly recorded request-list operating gaps. Expose authorized
-  closed/cancelled history through the existing protected contract; replace opaque `Default Queue`
-  language with factual owner orientation; and make applied search/filter state visible and easy to
-  recover. GAP-041 now explicitly includes arrow-key/roving-focus tab behavior.
-- **GAP-047 through GAP-051:** newly recorded Request Detail/customer-continuity gaps: never fail a
-  priority mutation silently; make email tracker sharing a deliberate attested action; bound
-  follow-up prefill; show compact same-customer related work; and format North American phone entry
-  and display while preserving ADR-444 canonical storage. GAP-020 remains the separate P0 raw-phone
-  desktop QR blocker. GAP-039 now includes `VITE_PUBLIC_BASE_URL` release configuration validation.
+- GAP-017 through GAP-019: complete service-location creation/disclosure behavior, the intended
+  customer-self-service handoff posture, and Request Detail layout decomposition.
+- GAP-021 through GAP-027: finish international/country-code lookup compatibility, address-draft
+  preservation, customer-selection draft safety, modal accessibility, customer recognition from
+  request-list phone search, clear search affordance, and the remaining lifecycle-row decision.
+- GAP-028 through GAP-032: resolve CSS-token validation, status/badge consistency, transient UI
+  disposal safety, the authenticated-workbench error boundary, and shared modal/focus architecture.
 
-## Locked Public-Trust Boundaries
+### Public Trust, Pilot Support, And Go-Live Gates
 
-- Public pages are business-first; OpHalo Keep is secondary. Hosted logo/website/public phone are
-  allowed only for known businesses. Never expose public email.
-- URLs are input-validated absolute HTTPS values, not ownership-verified domains. Unknown/invalid
-  capability tokens never disclose business identity or contact data.
-- No raw tokens in metadata, logs, diagnostics, persisted frontend state, or durable UI. Tracker
-  pages remain `noindex` with restrictive referrer handling.
-- Keep does not send backend customer SMS, ingest SMS replies, or automatically email a tracker link
-  after intake. A business may use its own later communication to share the tracker link.
+- GAP-033: collect remaining deployed public-intake/tracker evidence, including actual browser
+  intake submission, expired-tracker presentation, and the known-business OffSeason decision.
+- GAP-037: deliver the founder/internal weekly value-report path.
+- GAP-038: deliver authenticated Pilot Feedback plus Help & Updates, with required native parity
+  before store submission.
+- GAP-040: complete marketing accuracy, assets, legal/support links, and deployment-readiness work.
 
-## V1 Sequence After GAP-036
+### Authenticated Workspace And Request Operations
 
-1. GAP-020 P0 opaque desktop call-handoff replacement is implemented (Slices A/B/C committed;
-   live-device verification outstanding). Resolve remaining selected P0/P1 request-capture/detail/
-   list safety and trust gaps in bounded slices.
-2. GAP-037 founder/internal weekly value report; GAP-038 PWA feedback/help; GAP-039 redacted
-   production observability; GAP-040 marketing accuracy/assets/deployment readiness; GAP-042
-   authenticated business context; GAP-043 deliberate request-list scale UX; GAP-044 history
-   access; GAP-045 queue orientation; GAP-046 search/filter clarity; GAP-047 through GAP-051
-   Request Detail reliability, continuity, and phone-quality work.
-3. Finish or explicitly defer all selected P0/P1 tracker items; collect the remaining GAP-033
-   evidence; run Build 089 desktop, then real-device mobile PWA verification.
-4. Deploy and validate the V1 production candidate: marketing and app HTTPS/domain/cookie/DNS,
-   monitoring, and production smoke checks.
-5. Lock and submit the native release against the stable deployed service. The store gate includes
-   signing/EAS builds, permissions/privacy labels, screenshots, reviewer access/notes,
-   Universal/App Links, direct account deletion, GAP-038 native parity, and real-device production
-   checks. Christian forms the LLC and completes business setup during store review. Go live only
-   after store approval and the final production-readiness decision.
+- GAP-041 through GAP-046: fix first-load queue transition; add business context; decide/verify
+  paging at real-work scale; expose history; clarify queue orientation; and make search/filter state
+  visible and recoverable.
+- GAP-047 through GAP-051: make priority failures visible; preserve deliberate tracker-share intent;
+  bound follow-up prefill; add same-customer related-work context; and finish consistent North
+  American phone formatting.
 
-## GAP-020 Slice A — Opaque Desktop Call Handoff (Backend) — Committed
+## Claude Work-Session Queue
 
-**Status:** Committed in `60797b6`. `KeepCallHandoff` entity, `CreateCallHandoffService`,
-`POST /keep/requests/{requestId}/call-handoff`, and `GET /keep/share-call/{handoffToken}` are live
-per ADR-448's locked contract. The sibling `/keep/share-sms/{handoffToken}` resolver was repaired
-in the same commit (`Cache-Control: no-store, private`, `public-intake` rate limiting, redaction).
-Migration `20260719212740_AddKeepCallHandoffs` applied. Also fixed a latent bug found during
-verification: both handoff persistence classes filtered on the non-mapped `IsDeleted` computed
-property, which EF Core cannot translate — replaced with `DeletedAtUtc == null` in both
-`EfKeepCallHandoffPersistence` and `EfKeepSmsHandoffPersistence`. Final verified counts:
-`KeepCallHandoffApiTests` 8/8, sibling `KeepIntakeSmsHandoffApiTests` 14/14, unit tests 36/36.
+Each session is one reviewable change set. Claude must read the named tracker entries first, keep
+the change to the stated scope, add focused regression coverage, and run the proportionate checks.
+Do not combine later sessions merely because files overlap. If a session uncovers a new production
+blocker, record it in the tracker and stop for a decision rather than expanding scope.
 
-## GAP-020 Slice B — Public Call-Handoff Resolver Page — Committed
+### Phase 0 — Restore a Safe Validation Loop
 
-**Status:** Committed in `372829f`. Two new files mirror the existing SMS handoff page pattern,
-launching `tel:` instead of `sms:`:
+| Order | Session | Scope and completion gate |
+|---|---|---|
+| 0.1 | First production smoke account and sign-in baseline | **Manual/provider task, not a coding session.** Create the dedicated internal account through `/start` because the deployed database is empty; then verify email delivery, link exchange, `/auth/me`, request-list load, and a subsequent normal Sign in. If the generic Sign in error reproduces, inspect its Railway/browser request, identify the exact response/exception, and implement only that root-cause fix in a follow-up bounded session. |
+| 0.2 | GAP-039a — API readiness and safe diagnostics | Add configuration validation, liveness/readiness checks, release identity, and correlation IDs to the API. Ensure values and logs are redacted; test configuration-failure and readiness behavior. |
+| 0.3 | GAP-039b — Error capture and safe customer references | Wire the selected free errors-only Sentry projects for browser/API unhandled errors, with release identity and PII/token scrubbing. Return/display a safe error reference where appropriate; do not add replay or broad telemetry. Requires the Sentry projects/DSNs before implementation. |
+| 0.4 | GAP-039c — Deploy smoke checks and runbook | Add the repository-owned production smoke-test script and concise runbook. It must use the dedicated internal smoke account/inbox and verify health, sign-in, link exchange, authenticated session, and request-list load. |
+| 0.5 | GAP-020 deployment verification | **Manual device task.** Complete the tracker’s real-device opaque call-handoff checks against the deployed, phone-reachable service; record evidence and any defects. |
 
-- `web/ophalo-web/src/app/keep/share-call/[handoffToken]/page.tsx` — server component; fetches
-  `GET /keep/share-call/{handoffToken}`; handles `expired` (404) and `unavailable` (missing
-  `NEXT_PUBLIC_API_BASE_URL`, non-OK response, or malformed payload) states with the same copy
-  pattern as `share-sms`'s page, substituting "call link" for "text link". Static page title
-  ("Open Call"), `noindex`/`nofollow`, `no-referrer` — no phone number in the title, mirroring the
-  ADR-448 no-leakage requirement.
-- `web/ophalo-web/src/app/keep/share-call/[handoffToken]/CallHandoffView.tsx` — client component;
-  auto-launches `tel:{customerPhone}` on mount (same launched-ref-guard pattern as
-  `SmsHandoffView`), shows the phone number for reference, and offers a "Call Customer" button plus
-  a "Copy Number" fallback.
+### Phase 1 — Shared UI Safety Foundations
 
-**Verified so far:** `npx tsc --noEmit` clean. No frontend unit/E2E tests exist for the sibling
-`share-sms` page either, so none were added here — this mirrors existing test coverage, not a gap
-introduced by this slice. Live browser verification (scan-and-launch on desktop, expired/unavailable
-states) is still outstanding before this is considered fully verified.
+| Order | Session | Scope and completion gate |
+|---|---|---|
+| 1.1 | GAP-028 — CSS token validation | Identify undefined token usage, establish the narrow validation guard, repair affected states, and add focused proof. |
+| 1.2 | GAP-029 — Status language and badges | Centralize the locked status labels/variants and update the Request List, Request Detail, and Quick Capture surfaces with regression tests. |
+| 1.3 | GAP-030 / GAP-031 — Transient UI and error boundary | Make delayed copy/success feedback disposal-safe and add the root authenticated-workbench error boundary with recovery/reload coverage. |
+| 1.4 | GAP-032 / GAP-024 — Modal and focus contract | Build/adopt the shared modal primitive, then apply it only to the scoped Quick Capture and desktop call-handoff modals; verify keyboard, focus, Escape/backdrop, and in-flight behavior. |
 
-## GAP-020 Slice C — Wire Desktop Call QR to Opaque Handoff — Committed
+### Phase 2 — Quick Capture Reliability
 
-**Status:** Committed in `e22b451`. Both desktop call-QR entry points now mint an opaque handoff
-via `POST /keep/requests/{requestId}/call-handoff` and encode the returned `handoffUrl`, replacing
-the raw `tel:{phone}` QR payload — `ophalo-app`'s `CustomerContactStrip.tsx` (`CallQrModal`) and
-`RequestDetail.tsx` (`LogContactModal`'s desktop QR block). A shared `CallHandoffQr` component and
-`useCallHandoff` hook (`pages/request-detail/`) handle minting plus loading/error/retry states.
-Mock/demo API client (`mocks/fixtures.ts`, `mocks/mockApiClient.ts`) mints the same opaque shape for
-parity. Mobile direct `tel:` links and explicit contact logging are unchanged.
+| Order | Session | Scope and completion gate |
+|---|---|---|
+| 2.1 | GAP-016 / GAP-021 — Phone-entry contract | Finish ADR-444 phone validation, native parity, and country-code lookup compatibility across the PWA/native contract. |
+| 2.2 | GAP-017 / GAP-022 / GAP-023 — Service location and draft safety | Complete address-at-creation behavior, prevent silent address loss, and make change-phone/customer-selection drafts safe. |
+| 2.3 | GAP-018 / GAP-025 — Self-service handoff and customer recognition | Correct the entry/posture for public-intake handoff and make Quick Capture recognize the customer found through request-list phone search. |
+| 2.4 | GAP-016 phone-input verification | **Manual device task.** Complete the tracker’s browser and real-device verification for the finished ADR-444 phone-input contract. |
 
-**Verified:** `tsc --noEmit` clean; full frontend suite 38/38 (32 pre-existing + 6 new) passing;
-`git diff --check` clean. New focused coverage in
-`pages/request-detail/__tests__/CallHandoffQr.test.tsx`: mint-on-mount, opaque payload (asserts
-QR value is never `tel:`-prefixed), loading state, error+retry, and a wiring assertion for each
-desktop entry point.
+### Phase 3 — Request List Operating Experience
 
-**GAP-020 status:** Resolved pending the tracker's post-gap deployment gate — live browser/
-real-device verification (scan → dialer → fallback page, expiry, invalid-token, cache headers, iOS
-Safari/Android Chrome) still requires a phone-reachable (non-`localhost`) environment. See
-`docs/pilot-readiness-bug-tracker.md` GAP-020 for the exact manual checklist.
+| Order | Session | Scope and completion gate |
+|---|---|---|
+| 3.1 | GAP-041 / GAP-026 — First-load queue and search affordance | Remove the page-refresh-like first queue transition and make search discoverable without changing queue contracts. |
+| 3.2 | GAP-043 / GAP-044 — Paging and history | Verify the existing cursor model with realistic data, make its controls accessible, and expose authorized closed/cancelled history through the existing protected contract. |
+| 3.3 | GAP-045 / GAP-046 / GAP-027 — Queue orientation and filters | Replace opaque queue language, surface/recover applied filter state, and implement the separately locked row-hierarchy/lifecycle presentation decision. |
+
+### Phase 4 — Request Detail Reliability And Continuity
+
+| Order | Session | Scope and completion gate |
+|---|---|---|
+| 4.1 | GAP-019 — Request Detail decomposition | Establish the component/presentation seams required for later detail work without changing behavior beyond the documented refactor guard. |
+| 4.2 | GAP-047 / GAP-048 / GAP-049 — Mutations, sharing, and follow-up bounds | Make priority failures visible, retain deliberate tracker-share intent for email, and bound follow-up prefill; cover optimistic/concurrency/error paths. |
+| 4.3 | GAP-050 / GAP-051 — Continuity and phone presentation | Add compact same-customer related work and complete consistent North American phone display/entry without changing canonical storage. |
+| 4.4 | GAP-042 — Authenticated workspace identity | Add restrained business-name context to Request List and Request Detail, with no public-route leakage or request-row repetition. |
+
+### Phase 5 — Pilot Operations And Launch Evidence
+
+| Order | Session | Scope and completion gate |
+|---|---|---|
+| 5.1 | GAP-033 — Public-trust deployment evidence | **Manual/review task.** Capture the required real-browser intake, expired-tracker, and OffSeason evidence; implement only defects or the explicit banner decision that the review uncovers. |
+| 5.2 | GAP-037 — Weekly value report | Build the founder/internal account report endpoint/read path and manual-share output; do not build a business analytics dashboard or automated report delivery. |
+| 5.3 | GAP-038 — Pilot feedback and help | Add authenticated Report Friction and Help & Updates, its private founder route, and the required native parity work; preserve PII boundaries. |
+| 5.4 | GAP-040 — Marketing and launch accuracy | Bring public marketing copy/assets/legal/support links into alignment with the deployed product; verify deployment-facing claims and links. |
+| 5.5 | Production-candidate release gate | **Manual/release task.** Run the full end-to-end checklist, validate alert routing/error capture/health/release identity, review known limitations, and decide whether pilot onboarding may begin. |
+
+## Release Rules
+
+- Finish or explicitly defer each selected P0/P1 tracker item before pilot invitation. A broken
+  required-persona core flow, including authentication, is a pilot blocker.
+- Before every production candidate, run the repository checks and the controlled smoke test;
+  verify health/readiness, release identity, error capture, alert routing, and telemetry redaction.
+- Do not onboard the excited pilot client until the production sign-in flow and the required
+  end-to-end pilot checklist are verified.

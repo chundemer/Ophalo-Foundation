@@ -94,6 +94,31 @@ first staff-created request, first public-intake request, first tracker link sha
 page view, first operator invited, first mobile device registered, first request closed, weekly
 inactivity/no new requests, repeated `Needs Share` backlog, and negative feedback awaiting review.
 
+### Cost-Conscious Production Reliability
+
+**Locked 2026-07-23:** The pilot reliability slice must add **no new recurring vendor cost** beyond
+the existing Vercel Pro and Railway services until the product has paying customers or measured
+pilot usage that justifies a change. This is an implementation constraint for GAP-039, not a reason
+to defer pilot-blocking diagnosis or release safety.
+
+- Keep Vercel Pro and Railway as the hosting/runtime sources of deployment and service logs. Do not
+  purchase Vercel Observability Plus, a paid uptime service, a paid incident-management service, or
+  a paid permanent staging environment for the pilot.
+- Use Sentry's free errors-only offering for redacted browser and API unhandled-error capture,
+  release identity, and email alerting. Disable session replay, performance tracing, and broad user
+  telemetry for this slice.
+- Build the health/readiness checks, correlation/error references, configuration validation, and
+  post-deployment smoke-test script in the product/repository. Use a dedicated internal smoke-test
+  account and inbox; never use a pilot business or pilot user's account as a test fixture.
+- Do not operate a persistent staging stack before revenue. Validate locally and in Vercel preview
+  deployments, then run the controlled smoke test against the production candidate/release.
+- Send initial actionable production alerts to the founder by email. Add a shared alert channel,
+  paid monitoring, or a persistent staging environment only when a paying customer, pilot volume,
+  or demonstrated incident load makes the added recurring cost worthwhile.
+- Maintain an explicit provider spend ceiling/alert and preserve existing token and PII redaction
+  requirements. No magic-link code, session/cookie, authorization header, customer request text,
+  phone number, email address, or capability URL may be sent to telemetry.
+
 ### Account Classification And Demo Safety
 
 Account classification is separate from commercial lifecycle. Classification values are `Pilot`,
@@ -398,6 +423,7 @@ A short boundary note belongs in the authenticated Pilot Updates/Help page, alwa
 | INT-007 | Do we need demo role switching or real demo users? | Both | Run-as adds security/audit complexity. | Locked 2026-06-25: separate real demo users per role; run-as deferred. |
 | INT-008 | What founder/support access is allowed in pilot? | Both | Support needs visibility, but broad impersonation erodes trust. | Locked 2026-06-25: read-only first, audited, bounded; no production impersonation/run-as by default. |
 | INT-009 | What pilot feedback loop is required in-app? | Both | Users who cannot easily complain will silently abandon. | Locked 2026-06-25: authenticated business-user Report Friction plus Pilot Updates/Help; no generic OpHalo hook on anonymous customer page. |
+| INT-010 | What is the minimum affordable production reliability stack? | Both | Pilot-blocking failures must be diagnosable without adding unsustainable pre-revenue cost. | Locked 2026-07-23: retain Vercel Pro/Railway; free errors-only Sentry; repository-owned health/configuration/smoke checks; email alerts to founder; no paid observability add-ons, uptime/incident tool, or persistent staging stack before revenue. See Cost-Conscious Production Reliability. |
 
 ## Client Surface And Build-Order Questions
 
