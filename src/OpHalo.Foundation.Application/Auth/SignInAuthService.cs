@@ -69,6 +69,7 @@ public sealed class SignInAuthService(
                 normalizedEmail,
                 MagicLinkEmailTemplate.Subject,
                 MagicLinkEmailTemplate.BuildHtmlBody(magicLink),
+                MagicLinkEmailTemplate.BuildTextBody(magicLink),
                 cancellationToken);
 
             if (sendResult.IsFailure)

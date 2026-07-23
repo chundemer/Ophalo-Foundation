@@ -19,6 +19,7 @@ public sealed class ResendEmailSender(
         string to,
         string subject,
         string htmlBody,
+        string textBody,
         CancellationToken cancellationToken)
     {
         var payload = new
@@ -26,7 +27,8 @@ public sealed class ResendEmailSender(
             from = settings.FromAddress,
             to = new[] { to },
             subject = subject,
-            html = htmlBody
+            html = htmlBody,
+            text = textBody
         };
 
         using var response = await httpClient.PostAsJsonAsync("/emails", payload, cancellationToken);

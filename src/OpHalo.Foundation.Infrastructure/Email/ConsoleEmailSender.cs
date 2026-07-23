@@ -19,6 +19,7 @@ public sealed partial class ConsoleEmailSender : IEmailSender
         string to,
         string subject,
         string htmlBody,
+        string textBody,
         CancellationToken cancellationToken)
     {
         var match = HrefPattern().Match(htmlBody);

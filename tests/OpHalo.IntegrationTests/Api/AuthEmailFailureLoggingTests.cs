@@ -20,7 +20,7 @@ namespace OpHalo.IntegrationTests.Api;
 /// </summary>
 public sealed class FailingEmailSender : IEmailSender
 {
-    public Task<Result> SendAsync(string to, string subject, string htmlBody, CancellationToken cancellationToken) =>
+    public Task<Result> SendAsync(string to, string subject, string htmlBody, string textBody, CancellationToken cancellationToken) =>
         Task.FromResult(Result.Failure(Error.Create("Email.DeliveryFailed", "Email delivery failed.")));
 }
 

@@ -165,6 +165,28 @@ public sealed class InviteTests : IClassFixture<KeepApiWebFactory>, IAsyncLifeti
         Assert.Equal(43, token.Length); // 32 bytes → 43 URL-safe Base64 chars
     }
 
+    // GAP-039 session 0.3 — shared branded account-email template (ADR-431 motto, ADR-446
+    // transactional-email identity requirement).
+    [Fact]
+    public async Task SendInvite_EmailUsesBrandedTemplateWithLogoMottoFooterAndTextAlternative()
+    {
+        const string inviteeEmail = "branding-invitee@example.com";
+        var (_, _, cookie) = await SeedAccountAsync();
+
+        await AuthRequest(cookie).PostAsJsonAsync("/accounts/me/invite",
+            new { email = inviteeEmail, role = "operator" });
+
+        var email = _factory.EmailSender.SentEmails.Single(e => e.To == inviteeEmail);
+
+        Assert.Contains("https://www.ophalo.com/brand/ophalo-lockup-color.png", email.HtmlBody);
+        Assert.Contains("alt=\"OpHalo\"", email.HtmlBody);
+        Assert.Contains("The trust and continuity layer between businesses and customers.", email.HtmlBody);
+        Assert.Contains("https://www.ophalo.com/privacy", email.HtmlBody);
+        Assert.Contains("https://www.ophalo.com/terms", email.HtmlBody);
+        Assert.False(string.IsNullOrWhiteSpace(email.TextBody));
+        Assert.DoesNotContain("<", email.TextBody);
+    }
+
     [Fact]
     public async Task SendInvite_InviteRowStoresHashNotRawToken()
     {

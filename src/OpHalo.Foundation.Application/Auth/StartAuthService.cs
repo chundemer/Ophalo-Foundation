@@ -102,6 +102,7 @@ public sealed class StartAuthService(
                 normalizedEmail,
                 MagicLinkEmailTemplate.Subject,
                 MagicLinkEmailTemplate.BuildHtmlBody(magicLink),
+                MagicLinkEmailTemplate.BuildTextBody(magicLink),
                 cancellationToken);
 
             if (sendResult.IsFailure)
@@ -158,7 +159,8 @@ public sealed class StartAuthService(
             var sendResult = await emailSender.SendAsync(
                 normalizedEmail,
                 MagicLinkEmailTemplate.NewAccountSubject,
-                MagicLinkEmailTemplate.BuildHtmlBody(magicLink),
+                MagicLinkEmailTemplate.BuildNewAccountHtmlBody(magicLink),
+                MagicLinkEmailTemplate.BuildNewAccountTextBody(magicLink),
                 cancellationToken);
 
             if (sendResult.IsFailure)

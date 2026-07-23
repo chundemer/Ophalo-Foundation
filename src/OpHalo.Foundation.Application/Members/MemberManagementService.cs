@@ -385,6 +385,7 @@ public sealed class MemberManagementService(
                 recipientEmail,
                 InviteEmailTemplate.BuildSubject(accountBusinessName),
                 InviteEmailTemplate.BuildHtmlBody(accountBusinessName, inviteLink),
+                InviteEmailTemplate.BuildTextBody(accountBusinessName, inviteLink),
                 cancellationToken);
 
             if (emailResult.IsFailure)

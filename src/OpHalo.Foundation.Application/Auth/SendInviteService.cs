@@ -140,6 +140,7 @@ public sealed class SendInviteService(
                 email,
                 InviteEmailTemplate.BuildSubject(context.AccountBusinessName),
                 InviteEmailTemplate.BuildHtmlBody(context.AccountBusinessName, inviteLink),
+                InviteEmailTemplate.BuildTextBody(context.AccountBusinessName, inviteLink),
                 cancellationToken);
 
             if (emailResult.IsFailure)

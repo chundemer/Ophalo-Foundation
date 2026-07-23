@@ -146,9 +146,9 @@ public sealed class CapturingEmailSender : IEmailSender
 
     public IReadOnlyList<CapturedEmail> SentEmails => _emails.ToArray();
 
-    public Task<Result> SendAsync(string to, string subject, string htmlBody, CancellationToken cancellationToken)
+    public Task<Result> SendAsync(string to, string subject, string htmlBody, string textBody, CancellationToken cancellationToken)
     {
-        _emails.Enqueue(new CapturedEmail(to, subject, htmlBody));
+        _emails.Enqueue(new CapturedEmail(to, subject, htmlBody, textBody));
         return Task.FromResult(Result.Success());
     }
 
@@ -214,7 +214,7 @@ public sealed class PilotCapWebFactory : WebApplicationFactory<Program>, IAsyncL
     }
 }
 
-public sealed record CapturedEmail(string To, string Subject, string HtmlBody)
+public sealed record CapturedEmail(string To, string Subject, string HtmlBody, string TextBody)
 {
     /// <summary>
     /// Extracts the magic link href from the HTML body.

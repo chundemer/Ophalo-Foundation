@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using Microsoft.Extensions.DependencyInjection;
 using OpHalo.Foundation.Application.Accounts.Provisioning;
 using OpHalo.Foundation.Core.Entities.Accounts;
@@ -145,6 +146,29 @@ public sealed class AuthStartTests : IClassFixture<KeepApiWebFactory>, IAsyncLif
         Assert.Single(_factory.EmailSender.SentEmails);
         Assert.Equal(NewEmail, _factory.EmailSender.SentEmails[0].To);
         Assert.NotNull(_factory.EmailSender.SentEmails[0].ExtractCode());
+    }
+
+    // GAP-039 session 0.3 — shared branded account-email template (ADR-431 motto, ADR-446
+    // transactional-email identity requirement).
+    [Fact]
+    public async Task Start_NewAccountEmail_UsesBrandedTemplateWithLogoMottoFooterAndTextAlternative()
+    {
+        await _client.PostAsJsonAsync("/auth/start", NewAccountBody());
+
+        var sent = Assert.Single(_factory.EmailSender.SentEmails);
+
+        Assert.Contains("https://www.ophalo.com/brand/ophalo-lockup-color.png", sent.HtmlBody);
+        Assert.Contains("alt=\"OpHalo\"", sent.HtmlBody);
+        Assert.Contains("The trust and continuity layer between businesses and customers.", sent.HtmlBody);
+        Assert.Contains("https://www.ophalo.com/privacy", sent.HtmlBody);
+        Assert.Contains("https://www.ophalo.com/terms", sent.HtmlBody);
+        Assert.Contains("mailto:pilot@ophalo.com", sent.HtmlBody);
+        Assert.DoesNotContain("width=\"1\"", sent.HtmlBody);
+        Assert.Single(Regex.Matches(sent.HtmlBody, "<img")); // exactly the logo — no tracking pixel
+
+        Assert.False(string.IsNullOrWhiteSpace(sent.TextBody));
+        Assert.Contains("The trust and continuity layer between businesses and customers.", sent.TextBody);
+        Assert.DoesNotContain("<", sent.TextBody);
     }
 
     [Fact]

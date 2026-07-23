@@ -16,13 +16,15 @@ namespace OpHalo.Foundation.Application.Abstractions.Messaging;
 public interface IEmailSender
 {
     /// <summary>
-    /// Sends an email to the specified recipient. Returns <see cref="Result.Failure"/>
-    /// if delivery is rejected by the provider. Provider failures are expected
-    /// operational conditions, not exceptions.
+    /// Sends an email to the specified recipient. <paramref name="textBody"/> is the
+    /// plain-text alternative delivered alongside the HTML body. Returns
+    /// <see cref="Result.Failure"/> if delivery is rejected by the provider. Provider
+    /// failures are expected operational conditions, not exceptions.
     /// </summary>
     Task<Result> SendAsync(
         string to,
         string subject,
         string htmlBody,
+        string textBody,
         CancellationToken cancellationToken);
 }
