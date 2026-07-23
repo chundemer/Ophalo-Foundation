@@ -33,8 +33,7 @@ internal static class AccountEmailLayout
                       <table role="presentation" width="480" cellpadding="0" cellspacing="0" style="background-color:#ffffff;border-radius:8px;overflow:hidden;">
                         <tr>
                           <td style="padding:32px 32px 16px 32px;text-align:center;">
-                            <img src="{LogoUrl}" width="160" alt="OpHalo" style="display:block;margin:0 auto 8px auto;max-width:160px;height:auto;" />
-                            <div style="font-size:20px;font-weight:bold;color:#12213f;">ophalo</div>
+                            <img src="{LogoUrl}" width="160" alt="OpHalo" style="display:block;margin:0 auto;max-width:160px;height:auto;" />
                           </td>
                         </tr>
                         <tr>
