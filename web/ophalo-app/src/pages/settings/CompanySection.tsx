@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { api, type KeepSetupResult, ApiError } from "../../lib/apiClient";
+import { normalizeNaPhoneInput, formatNaPhone } from "../../components/quick-capture/utils";
 
 const ALL_TIMEZONES: string[] = (() => {
   try {
@@ -124,8 +125,9 @@ export function CompanySection({ draft, onDraftChange }: CompanySectionProps) {
           <input
             id="company-phone"
             type="tel"
-            value={draft.customerFacingPhone}
-            onChange={(e) => { onDraftChange({ customerFacingPhone: e.target.value }); setSaved(false); }}
+            inputMode="tel"
+            value={formatNaPhone(draft.customerFacingPhone)}
+            onChange={(e) => { onDraftChange({ customerFacingPhone: normalizeNaPhoneInput(e.target.value) }); setSaved(false); }}
             placeholder="Optional"
             className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
           />

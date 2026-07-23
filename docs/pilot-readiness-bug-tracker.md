@@ -992,9 +992,13 @@ input, paste, clipboard-prompt preview, and contact-picker path), `CaptureForm.t
 summary), `LookupResultView.tsx` (found-customer and no-customer-found phone text),
 `ShareLinkModal.tsx` (contact-preview phone), `RequestDetail.tsx`, and `DetailPanels.tsx` (customer
 phone panel). Canonical digits-only values are unchanged for API payloads, lookup, `tel:`/`sms:`
-targets, and copy-to-clipboard actions — only the rendered text/input value is formatted. 20 new
-focused Vitest tests cover normal, partial, `+1`/leading-`1`, paste, invalid-length, and
-correction/edit cases; `tsc --noEmit` and `vite build` pass.
+targets, and copy-to-clipboard actions — only the rendered text/input value is formatted. Also
+applied to the business's own **Customer-facing phone** field in Settings
+(`web/ophalo-app/src/pages/settings/CompanySection.tsx`) — this had been missed in the first pass:
+it now formats as-you-type and normalizes to canonical 10 digits on save (dropping a leading `1`/`+1`
+the same way), matching the rest of the authenticated PWA. 23 new focused Vitest tests total cover
+normal, partial, `+1`/leading-`1`, paste, invalid-length, correction/edit, and the Settings
+save-payload cases; `tsc --noEmit` and `vite build` pass.
 
 **Still open:**
 - Native mobile (`mobile/ophalo-mobile`) parity was not touched this session.
@@ -1002,6 +1006,10 @@ correction/edit cases; `tsc --noEmit` and `vite build` pass.
   `formatPhoneAsYouType` and was intentionally left as-is per this session's scope (no cross-app
   coupling); it does not yet accept/normalize a leading `1`/`+1` the way the new `ophalo-app` utility
   does, so the two apps' phone-entry tolerance is not yet identical.
+- The same business phone value is also rendered on public pages by `KeepConfiguredContact`
+  (`web/ophalo-web/src/components/keep/KeepPublicShell.tsx`) as `Call {phone}`, still unformatted —
+  not a regression (it was already raw digits before this fix) but still an open display gap on the
+  public side, left untouched for the same cross-app-coupling reason.
 - `RequestRow.tsx` (request list rows) was checked and does not render raw phone text, so no change
   was needed there, but a full GAP-051 close-out should still confirm no other authenticated surface
   was missed.
