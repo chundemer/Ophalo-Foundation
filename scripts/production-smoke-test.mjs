@@ -137,13 +137,23 @@ async function main() {
 
   await checkHealthLive();
   await checkHealthReady();
-  await triggerSignIn();
 
   let sessionCookie = storedCookie ?? null;
 
   if (exchangeCode) {
+    // Full end-to-end mode: a POST to /auth/signin invalidates the previous unused
+    // sign-in code for this account (D8/AccountAuthCode single-active-code contract),
+    // so it must NOT run here — the supplied code came from an earlier, separate
+    // sign-in trigger (see docs/runbook/production-smoke-test.md).
+    record(
+      "auth/signin (trigger)",
+      "skip",
+      "skipped in exchange-code mode — would invalidate the supplied code",
+    );
     const freshCookie = await exchangeCodeForCookie(exchangeCode);
     if (freshCookie) sessionCookie = freshCookie;
+  } else {
+    await triggerSignIn();
   }
 
   if (sessionCookie) {

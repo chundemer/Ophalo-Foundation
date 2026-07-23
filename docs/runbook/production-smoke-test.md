@@ -48,20 +48,30 @@ Pass `--exchange-code=<code>` with a real code copied from the magic-link email 
 sent to the smoke inbox. This proves the full path: signin trigger → email delivery →
 `/auth/exchange` → session → authenticated calls — not just the routine path.
 
-```bash
-SMOKE_API_BASE_URL=https://api.ophalo.com \
-SMOKE_ACCOUNT_EMAIL=smoke-inbox@example.com \
-node scripts/production-smoke-test.mjs --exchange-code=<code from the email>
-```
+**Important — this is a two-step, two-run process, not one command.** A `POST
+/auth/signin` invalidates the account's previous unused sign-in code (single-active-code
+contract), so if the script triggered sign-in again on the same run it would invalidate
+the very code you just supplied via `--exchange-code`. The script accounts for this: when
+`--exchange-code` is passed, it **skips** the sign-in trigger entirely (recorded as a
+`skip`, not run) and goes straight to exchange.
 
 Steps:
-1. Run the script once without `--exchange-code` (or trigger sign-in manually) to send
-   a fresh magic link to the smoke inbox.
+1. **Separately trigger a fresh sign-in** to send a new magic link to the smoke inbox —
+   either run the script once in routine mode (no `--exchange-code`), or call
+   `POST {SMOKE_API_BASE_URL}/auth/signin` yourself (e.g. via `curl`) with the smoke
+   account's email.
 2. Open the smoke inbox, copy the `code=` query value from the magic-link URL
    (`.../auth/exchange?code=<code>`).
-3. Re-run the script with `--exchange-code=<code>` immediately — sign-in codes expire
-   24 hours after issue and are single-use (a prior code is invalidated once a new one
-   is issued for the same account).
+3. Run the script **in a separate invocation** with `--exchange-code=<code>` — this run
+   must NOT also trigger sign-in, or it will invalidate the code from step 1:
+
+   ```bash
+   SMOKE_API_BASE_URL=https://api.ophalo.com \
+   SMOKE_ACCOUNT_EMAIL=smoke-inbox@example.com \
+   node scripts/production-smoke-test.mjs --exchange-code=<code from the email>
+   ```
+
+   Do this promptly — sign-in codes expire 24 hours after issue and are single-use.
 
 If `--exchange-code` is supplied, its freshly-exchanged session takes priority over
 `SMOKE_SESSION_COOKIE` for that run.
