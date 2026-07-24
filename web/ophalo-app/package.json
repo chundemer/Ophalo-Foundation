@@ -6,9 +6,10 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "pnpm copy-fonts && tsc && vite build",
+    "build": "pnpm copy-fonts && pnpm check:tokens && tsc && vite build",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
+    "check:tokens": "node scripts/check-css-tokens.mjs",
     "preview": "vite preview",
     "copy-fonts": "node scripts/copy-fonts.mjs",
     "postinstall": "node scripts/copy-fonts.mjs"

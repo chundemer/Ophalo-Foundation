@@ -526,7 +526,7 @@ export function BusinessUpdateSection({
   if (composerMode) {
     return (
       <div>
-        <p className="text-xs font-medium text-[var(--ophalo-teal)] mb-3">Visible to customer</p>
+        <p className="text-xs font-medium text-[var(--keep-accent)] mb-3">Visible to customer</p>
         {detail.needsShare && (
           <p className="mb-3 text-xs text-[var(--ophalo-attention)]">
             Customer page not yet shared — the customer won't see this until you share it.

@@ -494,7 +494,7 @@ function ChannelButton({
     <div
       className={`flex items-center gap-2.5 rounded-lg border px-3 py-2.5 text-sm font-medium transition-colors ${
         disabled
-          ? "border-[var(--ophalo-border)] bg-[var(--muted)] text-[var(--ophalo-muted)] cursor-not-allowed"
+          ? "border-[var(--ophalo-border)] bg-[var(--ophalo-canvas)] text-[var(--ophalo-muted)] cursor-not-allowed"
           : "border-[var(--ophalo-border)] bg-[var(--ophalo-card)] text-[var(--ophalo-ink)] hover:border-[var(--keep-accent)] hover:text-[var(--keep-accent)]"
       }`}
     >
