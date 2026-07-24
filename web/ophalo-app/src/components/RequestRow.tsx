@@ -230,6 +230,18 @@ function selectPromotedAction(row: KeepRequestSummary, isCalmCloseout: boolean):
   return null;
 }
 
+// GAP-007 (Phase 3.0): routine rows with no attention-driven promoted action still need their
+// server-eligible actions surfaced — omitting the "Next:" cue must not mean omitting the action bar.
+function routineActions(row: KeepRequestSummary): PromotedAction[] {
+  if (row.isTerminal || row.isPostCloseFollowUp) return [];
+  const isClosedOrCancelled = row.status === "closed" || row.status === "cancelled";
+  if (isClosedOrCancelled) return [];
+  return (["post_customer_update", "contact_customer"] as const)
+    .filter((code) => hasAction(row, code))
+    .slice(0, 2)
+    .map((code) => ({ code, label: ACTION_LABELS[code] }));
+}
+
 function secondaryAction(row: KeepRequestSummary, promoted: PromotedAction | null): PromotedAction | null {
   if (!promoted) return null;
   const candidates = promoted.code === "contact_customer" ? ["post_customer_update"] : ["contact_customer", "post_customer_update"];
@@ -318,6 +330,7 @@ export function RequestRow({ row, onSelect, onSelectFocused, onActionClick, onSh
   const exception = resolveException(row, isCalmCloseout);
   const promoted = selectPromotedAction(row, isCalmCloseout);
   const secondary = secondaryAction(row, promoted);
+  const fallbackRoutineActions = promoted ? [] : routineActions(row);
 
   // Quiet metadata: future or already-exceptioned timing stays out of the exception pill's way.
   // Planned-for dates never become the exception (server ranking never promotes them), so they
@@ -356,7 +369,9 @@ export function RequestRow({ row, onSelect, onSelectFocused, onActionClick, onSh
     }
   }
 
-  const quickActionButtons = [promoted, secondary].filter((a): a is PromotedAction => a !== null);
+  const quickActionButtons = promoted
+    ? [promoted, secondary].filter((a): a is PromotedAction => a !== null)
+    : fallbackRoutineActions;
 
   return (
     <div className={`rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] hover:shadow-sm transition-shadow ${borderAccent}`}>

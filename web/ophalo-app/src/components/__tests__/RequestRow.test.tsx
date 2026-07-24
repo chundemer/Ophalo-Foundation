@@ -145,6 +145,31 @@ describe("RequestRow — Build 087 / GAP-027 locked row contract", () => {
     expect(screen.queryByRole("button", { name: /Update customer|Log contact|Review request/ })).not.toBeInTheDocument();
   });
 
+  it("GAP-007: routine row with no promoted Next: cue still shows its server-eligible actions, Update customer then Log contact", () => {
+    const row = buildRow({
+      status: "in_progress",
+      actions: { quickActions: [quickAction("open_detail", "detail"), quickAction("post_customer_update"), quickAction("contact_customer")] },
+    });
+
+    render(<RequestRow row={row} onSelect={noop} />);
+
+    expect(screen.queryByText(/^Next:/)).not.toBeInTheDocument();
+    const buttons = screen.getAllByRole("button", { name: /Update customer|Log contact/ });
+    expect(buttons.map((b) => b.textContent)).toEqual(["Update customer", "Log contact"]);
+  });
+
+  it("GAP-007: routine row exposes only the single server-eligible action it has, without inventing the other", () => {
+    const row = buildRow({
+      status: "in_progress",
+      actions: { quickActions: [quickAction("open_detail", "detail"), quickAction("contact_customer")] },
+    });
+
+    render(<RequestRow row={row} onSelect={noop} />);
+
+    expect(screen.getByRole("button", { name: "Log contact" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Update customer" })).not.toBeInTheDocument();
+  });
+
   it("work-completed (Resolved) row still shows an overdue follow-up alarm — Resolved is not terminal", () => {
     const row = buildRow({
       status: "resolved",
