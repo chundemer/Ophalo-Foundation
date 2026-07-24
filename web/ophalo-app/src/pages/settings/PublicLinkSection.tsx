@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, type IntakeStatusResult, ApiError } from "../../lib/apiClient";
+import { useCopyFeedback } from "../../hooks/useCopyFeedback";
 
 const REPLACE_CONFIRMATION_VALUE = "REPLACE";
 
@@ -186,10 +187,9 @@ export function PublicLinkSection({ businessName, logoUrl }: PublicLinkSectionPr
 
   // shown-once raw-token banner (ensure / replace only)
   const [newIntakeRawUrl, setNewIntakeRawUrl] = useState<string | null>(null);
-  const [rawUrlCopied, setRawUrlCopied] = useState(false);
 
-  // durable slug-URL copy feedback
-  const [slugCopied, setSlugCopied] = useState(false);
+  // durable slug-URL / raw-URL copy feedback
+  const { copiedId: linkCopiedId, failedId: linkCopyFailedId, copy: copyLink } = useCopyFeedback();
 
   // preview logo — tracks the specific drafted URL that failed to load, so the
   // initials fallback shows for a broken URL and clears itself once the draft changes
@@ -262,25 +262,13 @@ export function PublicLinkSection({ businessName, logoUrl }: PublicLinkSectionPr
 
   async function handleCopyRawUrl() {
     if (!newIntakeRawUrl) return;
-    try {
-      await navigator.clipboard.writeText(newIntakeRawUrl);
-      setRawUrlCopied(true);
-      setTimeout(() => setRawUrlCopied(false), 2000);
-    } catch {
-      // clipboard denied
-    }
+    await copyLink(newIntakeRawUrl, "rawUrl");
   }
 
   async function handleCopySlugUrl() {
     const slug = intake?.publicSlug;
     if (!slug) return;
-    try {
-      await navigator.clipboard.writeText(slugUrl(slug));
-      setSlugCopied(true);
-      setTimeout(() => setSlugCopied(false), 2000);
-    } catch {
-      // clipboard denied
-    }
+    await copyLink(slugUrl(slug), "slugUrl");
   }
 
   async function handleSaveName() {
@@ -330,7 +318,7 @@ export function PublicLinkSection({ businessName, logoUrl }: PublicLinkSectionPr
             onClick={() => void handleCopyRawUrl()}
             className="rounded-md bg-emerald-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-600"
           >
-            {rawUrlCopied ? "Copied!" : "Copy"}
+            {linkCopiedId === "rawUrl" ? "Copied!" : linkCopyFailedId === "rawUrl" ? "Couldn't copy" : "Copy"}
           </button>
         </div>
       )}
@@ -361,7 +349,7 @@ export function PublicLinkSection({ businessName, logoUrl }: PublicLinkSectionPr
                 onClick={() => void handleCopySlugUrl()}
                 className="rounded-md bg-slate-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-slate-700"
               >
-                {slugCopied ? "Copied!" : "Copy link"}
+                {linkCopiedId === "slugUrl" ? "Copied!" : linkCopyFailedId === "slugUrl" ? "Couldn't copy" : "Copy link"}
               </button>
               <a
                 href={slugUrl(activeSlug)}

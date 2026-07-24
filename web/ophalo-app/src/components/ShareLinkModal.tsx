@@ -16,6 +16,7 @@ import { api, type ShareIntentMethod } from "../lib/apiClient";
 import { ApiError } from "../lib/apiClient";
 import { KeepButton } from "./keep/KeepButton";
 import { formatNaPhone } from "./quick-capture/utils";
+import { useCopyFeedback } from "../hooks/useCopyFeedback";
 
 const FOCUS_RING =
   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-offset-1";
@@ -105,7 +106,7 @@ export function ShareLinkModal({ requestId, onClose, onShared }: ShareLinkModalP
   const [preparedLabel, setPreparedLabel] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
-  const [copied, setCopied] = useState<"message" | "link" | null>(null);
+  const { copiedId, failedId, copy: copyToClipboard } = useCopyFeedback(2500);
   const [isExpired, setIsExpired] = useState(false);
   const initialized = useRef(false);
 
@@ -176,21 +177,15 @@ export function ShareLinkModal({ requestId, onClose, onShared }: ShareLinkModalP
   }
 
   async function handleCopyMessage() {
-    try {
-      await navigator.clipboard.writeText(messageBody);
-      setCopied("message");
-      setTimeout(() => setCopied(null), 2500);
+    if (await copyToClipboard(messageBody, "message")) {
       setPrepared("copy_message", "Message copied.");
-    } catch { /* ignore */ }
+    }
   }
 
   async function handleCopyLink() {
-    try {
-      await navigator.clipboard.writeText(customerPageUrl);
-      setCopied("link");
-      setTimeout(() => setCopied(null), 2500);
+    if (await copyToClipboard(customerPageUrl, "link")) {
       setPrepared("copy_link", "Link copied.");
-    } catch { /* ignore */ }
+    }
   }
 
   async function handleMarkAsShared() {
@@ -411,11 +406,19 @@ export function ShareLinkModal({ requestId, onClose, onShared }: ShareLinkModalP
                   >
                     <ChannelButton
                       icon={
-                        copied === "message"
+                        copiedId === "message"
                           ? <Check className="h-4 w-4 text-[var(--ophalo-success)]" />
-                          : <Copy className="h-4 w-4" />
+                          : failedId === "message"
+                            ? <AlertTriangle className="h-4 w-4 text-[var(--ophalo-attention)]" />
+                            : <Copy className="h-4 w-4" />
                       }
-                      label={copied === "message" ? "Message Copied!" : "Copy Message"}
+                      label={
+                        copiedId === "message"
+                          ? "Message Copied!"
+                          : failedId === "message"
+                            ? "Couldn't Copy — Try Again"
+                            : "Copy Message"
+                      }
                     />
                   </button>
 
@@ -426,11 +429,19 @@ export function ShareLinkModal({ requestId, onClose, onShared }: ShareLinkModalP
                   >
                     <ChannelButton
                       icon={
-                        copied === "link"
+                        copiedId === "link"
                           ? <Check className="h-4 w-4 text-[var(--ophalo-success)]" />
-                          : <Link className="h-4 w-4" />
+                          : failedId === "link"
+                            ? <AlertTriangle className="h-4 w-4 text-[var(--ophalo-attention)]" />
+                            : <Link className="h-4 w-4" />
                       }
-                      label={copied === "link" ? "Link Copied!" : "Copy Link"}
+                      label={
+                        copiedId === "link"
+                          ? "Link Copied!"
+                          : failedId === "link"
+                            ? "Couldn't Copy — Try Again"
+                            : "Copy Link"
+                      }
                     />
                   </button>
                 </div>

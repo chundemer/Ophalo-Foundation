@@ -8,6 +8,7 @@ import {
 import { KeepButton } from "../../components/keep/KeepButton";
 import { formatNaPhone } from "../../components/quick-capture/utils";
 import { KeepBadge, type KeepBadgeVariant } from "../../components/keep/KeepBadge";
+import { useCopyFeedback } from "../../hooks/useCopyFeedback";
 import {
   FOCUS_RING,
   INPUT_CLS,
@@ -417,8 +418,7 @@ interface CustomerPanelProps {
 }
 
 export function CustomerPanel({ detail, onContactLaunched }: CustomerPanelProps) {
-  const [copiedPhone, setCopiedPhone] = useState(false);
-  const [copiedEmail, setCopiedEmail] = useState(false);
+  const { copiedId: copiedContactId, failedId: copyContactFailedId, copy: copyContact } = useCopyFeedback();
   const callAction = detail.contactActions.find((a) => a.available && a.type === "call");
   const emailAction = detail.contactActions.find((a) => a.available && a.type !== "call");
   const publicBaseUrl = (import.meta.env.VITE_PUBLIC_BASE_URL as string).replace(/\/$/, "");
@@ -427,13 +427,6 @@ export function CustomerPanel({ detail, onContactLaunched }: CustomerPanelProps)
   const hasContact = !!(detail.customerPhone || detail.customerEmail);
 
   if (!hasContact && !canLogContact) return null;
-
-  function copyToClipboard(text: string, setDone: (v: boolean) => void) {
-    navigator.clipboard.writeText(text).then(() => {
-      setDone(true);
-      setTimeout(() => setDone(false), 2000);
-    });
-  }
 
   return (
     <div>
@@ -447,12 +440,27 @@ export function CustomerPanel({ detail, onContactLaunched }: CustomerPanelProps)
               <span className="text-sm text-[var(--ophalo-ink)]">{formatNaPhone(detail.customerPhone)}</span>
               <button
                 type="button"
-                onClick={() => copyToClipboard(detail.customerPhone!, setCopiedPhone)}
-                aria-label="Copy phone number"
+                onClick={() => void copyContact(detail.customerPhone!, "phone")}
+                aria-label={
+                  copiedContactId === "phone"
+                    ? "Phone number copied"
+                    : copyContactFailedId === "phone"
+                      ? "Couldn't copy phone number, try again"
+                      : "Copy phone number"
+                }
                 className={`text-[var(--ophalo-muted)] hover:text-[var(--ophalo-ink)] transition-colors ${FOCUS_RING} rounded`}
               >
-                {copiedPhone ? <Check className="h-3.5 w-3.5 text-green-600" /> : <Copy className="h-3.5 w-3.5" />}
+                {copiedContactId === "phone"
+                  ? <Check className="h-3.5 w-3.5 text-green-600" />
+                  : copyContactFailedId === "phone"
+                    ? <AlertTriangle className="h-3.5 w-3.5 text-[var(--ophalo-attention)]" />
+                    : <Copy className="h-3.5 w-3.5" />}
               </button>
+              {copyContactFailedId === "phone" && (
+                <span role="status" aria-live="polite" className="text-xs text-[var(--ophalo-attention)]">
+                  Couldn't copy — try again.
+                </span>
+              )}
               {/* Mobile only — desktop uses CustomerContactStrip QR handoff (ADR-443) */}
               {callAction && (
                 <a
@@ -475,12 +483,27 @@ export function CustomerPanel({ detail, onContactLaunched }: CustomerPanelProps)
               <span className="text-sm text-[var(--ophalo-ink)] break-all">{detail.customerEmail}</span>
               <button
                 type="button"
-                onClick={() => copyToClipboard(detail.customerEmail!, setCopiedEmail)}
-                aria-label="Copy email address"
+                onClick={() => void copyContact(detail.customerEmail!, "email")}
+                aria-label={
+                  copiedContactId === "email"
+                    ? "Email address copied"
+                    : copyContactFailedId === "email"
+                      ? "Couldn't copy email address, try again"
+                      : "Copy email address"
+                }
                 className={`text-[var(--ophalo-muted)] hover:text-[var(--ophalo-ink)] transition-colors ${FOCUS_RING} rounded`}
               >
-                {copiedEmail ? <Check className="h-3.5 w-3.5 text-green-600" /> : <Copy className="h-3.5 w-3.5" />}
+                {copiedContactId === "email"
+                  ? <Check className="h-3.5 w-3.5 text-green-600" />
+                  : copyContactFailedId === "email"
+                    ? <AlertTriangle className="h-3.5 w-3.5 text-[var(--ophalo-attention)]" />
+                    : <Copy className="h-3.5 w-3.5" />}
               </button>
+              {copyContactFailedId === "email" && (
+                <span role="status" aria-live="polite" className="text-xs text-[var(--ophalo-attention)]">
+                  Couldn't copy — try again.
+                </span>
+              )}
               {emailAction && (
                 <a
                   href={(() => {

@@ -13,6 +13,7 @@ import { QuickCapture } from "../components/QuickCapture";
 import { KeepButton } from "../components/keep/KeepButton";
 import { ExternalContactForm } from "../components/ExternalContactForm";
 import { formatNaPhone } from "../components/quick-capture/utils";
+import { useCopyFeedback } from "../hooks/useCopyFeedback";
 import {
   FOCUS_RING,
   STATUS_CONFLICT_MESSAGE,
@@ -64,7 +65,7 @@ export function LogContactModal({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [conflictDisabled, setConflictDisabled] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [phoneCopied, setPhoneCopied] = useState(false);
+  const { copiedId: phoneCopyState, failedId: phoneCopyFailed, copy: copyPhone } = useCopyFeedback();
   const dialogRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -137,14 +138,10 @@ export function LogContactModal({
               <div className="flex items-center gap-2 ml-auto">
                 <button
                   type="button"
-                  onClick={async () => {
-                    await navigator.clipboard.writeText(detail.customerPhone!);
-                    setPhoneCopied(true);
-                    setTimeout(() => setPhoneCopied(false), 2000);
-                  }}
+                  onClick={() => void copyPhone(detail.customerPhone!, "phone")}
                   className={`text-xs text-[var(--ophalo-muted)] hover:text-[var(--ophalo-ink)] transition-colors ${FOCUS_RING}`}
                 >
-                  {phoneCopied ? "Copied!" : "Copy"}
+                  {phoneCopyState === "phone" ? "Copied!" : phoneCopyFailed === "phone" ? "Couldn't copy" : "Copy"}
                 </button>
                 {/* Mobile: direct tel: link (ADR-443) */}
                 <span className="md:hidden text-[var(--ophalo-border)]">·</span>
@@ -447,6 +444,12 @@ export function RequestDetail({ requestId, focusPanel, onBack, prevId, nextId, o
   const [reviewSuccessMsg, setReviewSuccessMsg] = useState<string | null>(null);
   const reviewSuccessTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const queryClient = useQueryClient();
+
+  useEffect(() => {
+    return () => {
+      if (reviewSuccessTimerRef.current) clearTimeout(reviewSuccessTimerRef.current);
+    };
+  }, []);
 
   const lastFocusRef = useRef<HTMLElement | null>(null);
   const serviceLocationFocusRef = useRef<HTMLElement | null>(null);
