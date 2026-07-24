@@ -106,7 +106,9 @@ to defer pilot-blocking diagnosis or release safety.
   a paid permanent staging environment for the pilot.
 - Use Sentry's free errors-only offering for redacted browser and API unhandled-error capture,
   release identity, and email alerting. Disable session replay, performance tracing, and broad user
-  telemetry for this slice.
+  telemetry for this slice. Do not create a generic application error/exception table: Sentry plus
+  correlated Railway/Vercel logs is the pilot diagnostic path, and a database exception store adds
+  PII/token-retention and outage-reliability risk without replacing browser grouping or alerts.
 - Build the health/readiness checks, correlation/error references, configuration validation, and
   post-deployment smoke-test script in the product/repository. Use a dedicated internal smoke-test
   account and inbox; never use a pilot business or pilot user's account as a test fixture.
