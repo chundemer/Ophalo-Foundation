@@ -88,7 +88,7 @@ blocker, record it in the tracker and stop for a decision rather than expanding 
 
 | Order | Session | Scope and completion gate |
 |---|---|---|
-| 1.1 | GAP-028 — CSS token validation | Identify undefined token usage, establish the narrow validation guard, repair affected states, and add focused proof. |
+| 1.1 | GAP-028 — CSS token validation | **Complete** (`5dd45c7`). `BusinessSection.tsx` (`--ophalo-teal`) and `ShareLinkModal.tsx` (`--muted`) referenced undefined tokens; replaced with the approved `--keep-accent`/`--ophalo-canvas`. Added `web/ophalo-app/scripts/check-css-tokens.mjs`, wired into `build`, which fails on any undefined `var(--...)` reference in `ophalo-app/src` and on drift between `app.css`'s inlined `:root` block and `web/shared/styles/ophalo-tokens.css`. 6/6 new focused tests pass (`check-css-tokens.test.mjs`); confirmed the guard catches a reintroduced undefined-token regression. |
 | 1.2 | GAP-029 — Status language and badges | Centralize the locked status labels/variants and update the Request List, Request Detail, and Quick Capture surfaces with regression tests. |
 | 1.3 | GAP-030 / GAP-031 — Transient UI and error boundary | Make delayed copy/success feedback disposal-safe and add the root authenticated-workbench error boundary with recovery/reload coverage. |
 | 1.4 | GAP-032 / GAP-024 — Modal and focus contract | Build/adopt the shared modal primitive, then apply it only to the scoped Quick Capture and desktop call-handoff modals; verify keyboard, focus, Escape/backdrop, and in-flight behavior. |
