@@ -666,6 +666,11 @@ export default function IntakeForm({
           </KeepCardShell>
         </form>
 
+        <p className="mt-4 text-center text-xs text-muted-foreground">
+          Already have a request? Check the private link{" "}
+          {biz ? `${biz} sent you.` : "the business sent you."}
+        </p>
+
         <KeepPageFooter />
       </div>
     </main>
