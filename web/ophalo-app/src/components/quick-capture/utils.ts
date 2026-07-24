@@ -59,18 +59,3 @@ export function formatNaPhone(digits: string): string {
   if (d.length < 7) return `(${d.slice(0, 3)}) ${d.slice(3)}`;
   return `(${d.slice(0, 3)}) ${d.slice(3, 6)}-${d.slice(6)}`;
 }
-
-export function formatStatus(slug: string): string {
-  const map: Record<string, string> = {
-    received: "Received",
-    scheduled: "Scheduled",
-    in_progress: "Active",
-    pending_customer: "Waiting on Customer",
-    resolved: "Resolved",
-    closed: "Closed",
-    cancelled: "Cancelled",
-    spam: "Spam",
-    test: "Test",
-  };
-  return map[slug] ?? slug;
-}

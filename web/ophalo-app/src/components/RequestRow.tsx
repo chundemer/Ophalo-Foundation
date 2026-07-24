@@ -2,6 +2,7 @@ import type { ComponentType } from "react";
 import { AlertTriangle, Clock, MessageSquare, ChevronRight, UserRound, CheckCircle2, Share2, Phone } from "lucide-react";
 import { KeepBadge, type KeepBadgeVariant } from "./keep/KeepBadge";
 import type { KeepRequestSummary, KeepRequestAvailableItem, KeepQuickAction } from "../lib/apiClient";
+import { statusLabel, statusBadgeVariant } from "../lib/requestStatus";
 
 // Build 087 §4 action labels/dispatch — server-authoritative codes only.
 const ACTION_FOCUS_MAP: Record<string, string> = {
@@ -240,23 +241,8 @@ function secondaryAction(row: KeepRequestSummary, promoted: PromotedAction | nul
   return null;
 }
 
-function statusBadgeVariant(status: string): KeepBadgeVariant {
-  switch (status) {
-    case "in_progress": return "teal";
-    case "received":
-    case "scheduled": return "info";
-    case "resolved": return "success";
-    default: return "default";
-  }
-}
-
 function StatusBadge({ status }: { status: string }) {
-  const label = status === "in_progress"
-    ? "Active"
-    : status === "resolved"
-      ? "Work completed"
-      : status.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
-  return <KeepBadge variant={statusBadgeVariant(status)}>{label}</KeepBadge>;
+  return <KeepBadge variant={statusBadgeVariant(status)}>{statusLabel(status)}</KeepBadge>;
 }
 
 function exceptionVariant(tone: Tone): KeepBadgeVariant {

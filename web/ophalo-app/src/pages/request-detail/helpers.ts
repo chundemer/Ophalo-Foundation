@@ -1,5 +1,7 @@
-import { type KeepBadgeVariant } from "../../components/keep/KeepBadge";
 import { type KeepRequestDetailResult, type KeepRequestEventItem } from "../../lib/apiClient";
+import { statusLabel, statusBadgeVariant } from "../../lib/requestStatus";
+
+export { statusLabel, statusBadgeVariant };
 
 // Note: message_added label and treatment depend on actorType at render time —
 // "customer" → "Customer message" (teal); "account_user" → "Business update" (success/green).
@@ -96,19 +98,6 @@ export const FOLLOW_UP_REASON_LABELS: Record<string, string> = {
   third_party: "Third party",
   other: "Other",
 };
-
-export function statusLabel(status: string): string {
-  if (status === "in_progress") return "Active";
-  if (status === "resolved") return "Work completed";
-  return status.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
-}
-
-export function statusBadgeVariant(status: string): KeepBadgeVariant {
-  if (status === "in_progress") return "teal";
-  if (status.includes("needs") || status.includes("waiting") || status.includes("reply")) return "attention";
-  if (status === "resolved" || status === "closed" || status === "complete") return "success";
-  return "default";
-}
 
 export const FOCUS_RING =
   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-offset-2";

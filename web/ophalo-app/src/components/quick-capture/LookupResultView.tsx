@@ -1,5 +1,7 @@
 import type { PhoneLookupResult, PhoneLookupActiveRequest } from "../../lib/apiClient";
-import { formatStatus, formatNaPhone } from "./utils";
+import { formatNaPhone } from "./utils";
+import { statusLabel, statusBadgeVariant } from "../../lib/requestStatus";
+import { KeepBadge } from "../keep/KeepBadge";
 
 interface LookupResultProps {
   lookup: PhoneLookupResult;
@@ -90,9 +92,7 @@ function ActiveRequestCard({
       >
         <div className="flex items-center justify-between gap-2">
           <span className="text-xs font-mono text-slate-500">{request.referenceCode}</span>
-          <span className="text-xs rounded-full bg-slate-100 px-2 py-0.5 text-slate-600">
-            {formatStatus(request.status)}
-          </span>
+          <KeepBadge variant={statusBadgeVariant(request.status)}>{statusLabel(request.status)}</KeepBadge>
         </div>
         <p className="mt-1 text-sm text-slate-700 line-clamp-2">{request.description}</p>
       </button>
