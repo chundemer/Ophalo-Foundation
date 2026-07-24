@@ -1,7 +1,8 @@
-import { useState, useRef, useEffect } from "react";
+import { useState } from "react";
 import { Phone, Mail, X } from "lucide-react";
 import { FOCUS_RING } from "./helpers";
 import { CallHandoffQr } from "./CallHandoffQr";
+import { KeepModal } from "../../components/keep/KeepModal";
 
 interface CustomerContactStripProps {
   requestId: string;
@@ -107,61 +108,40 @@ interface CallQrModalProps {
 }
 
 function CallQrModal({ requestId, phone, customerName, onDone, onClose }: CallQrModalProps) {
-  const dialogRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    dialogRef.current?.focus();
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        e.preventDefault();
-        onClose();
-      }
-    };
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [onClose]);
-
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
-      onClick={onClose}
+    <KeepModal
+      onClose={onClose}
+      labelledBy="call-qr-heading"
+      overlayClassName="flex items-center justify-center px-4"
+      backdropClassName="bg-black/40"
+      panelClassName="bg-[var(--ophalo-card)] rounded-xl shadow-xl w-full max-w-xs p-5"
     >
-      <div
-        ref={dialogRef}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="call-qr-heading"
-        tabIndex={-1}
-        className="bg-[var(--ophalo-card)] rounded-xl shadow-xl w-full max-w-xs p-5 focus:outline-none"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between mb-1">
-          <h2 id="call-qr-heading" className="text-base font-semibold text-[var(--ophalo-ink)]">
-            Call {customerName}
-          </h2>
-          <button
-            type="button"
-            onClick={onClose}
-            className={`text-[var(--ophalo-muted)] hover:text-[var(--ophalo-ink)] p-1 rounded-md transition-colors ${FOCUS_RING}`}
-          >
-            <X className="h-4 w-4" />
-            <span className="sr-only">Close</span>
-          </button>
-        </div>
-        <p className="text-xs text-[var(--ophalo-muted)] mb-4">
-          Scan with your phone to call {phone}.
-        </p>
-        <div className="flex justify-center mb-4">
-          <CallHandoffQr requestId={requestId} size={160} />
-        </div>
+      <div className="flex items-center justify-between mb-1">
+        <h2 id="call-qr-heading" className="text-base font-semibold text-[var(--ophalo-ink)]">
+          Call {customerName}
+        </h2>
         <button
           type="button"
-          onClick={onDone}
-          className={`w-full rounded-lg border border-[var(--ophalo-border)] px-4 py-2 text-sm font-semibold text-[var(--ophalo-ink)] hover:bg-[var(--ophalo-canvas)] transition-colors ${FOCUS_RING}`}
+          onClick={onClose}
+          className={`text-[var(--ophalo-muted)] hover:text-[var(--ophalo-ink)] p-1 rounded-md transition-colors ${FOCUS_RING}`}
         >
-          Done — record this call
+          <X className="h-4 w-4" />
+          <span className="sr-only">Close</span>
         </button>
       </div>
-    </div>
+      <p className="text-xs text-[var(--ophalo-muted)] mb-4">
+        Scan with your phone to call {phone}.
+      </p>
+      <div className="flex justify-center mb-4">
+        <CallHandoffQr requestId={requestId} size={160} />
+      </div>
+      <button
+        type="button"
+        onClick={onDone}
+        className={`w-full rounded-lg border border-[var(--ophalo-border)] px-4 py-2 text-sm font-semibold text-[var(--ophalo-ink)] hover:bg-[var(--ophalo-canvas)] transition-colors ${FOCUS_RING}`}
+      >
+        Done — record this call
+      </button>
+    </KeepModal>
   );
 }

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState } from "react";
 import { X } from "lucide-react";
 import { type PhoneLookupResult } from "../lib/apiClient";
 import { type Stage, type CaptureFormDraft } from "./quick-capture/utils";
@@ -7,6 +7,7 @@ import { LookupGate } from "./quick-capture/LookupGate";
 import { LookupResultView } from "./quick-capture/LookupResultView";
 import { CaptureForm } from "./quick-capture/CaptureForm";
 import { SuccessPanel } from "./quick-capture/SuccessPanel";
+import { KeepModal } from "./keep/KeepModal";
 
 export interface QuickCaptureProps {
   onClose: () => void;
@@ -23,25 +24,6 @@ export interface QuickCaptureProps {
 
 export function QuickCapture({ onClose, onSelectRequest, isPastDue = false, isReadOnly = false, isOwnerOrAdmin = false, onNavigateSettings, followUpPrefill }: QuickCaptureProps) {
   const publicBaseUrl = import.meta.env.VITE_PUBLIC_BASE_URL as string;
-
-  const panelRef = useRef<HTMLDivElement>(null);
-  const previousFocusRef = useRef<HTMLElement | null>(null);
-
-  // Capture trigger element for focus restoration on unmount
-  useEffect(() => {
-    previousFocusRef.current = document.activeElement as HTMLElement;
-    panelRef.current?.focus();
-    return () => { previousFocusRef.current?.focus(); };
-  }, []);
-
-  // Escape to close
-  useEffect(() => {
-    function onKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") { e.preventDefault(); onClose(); }
-    }
-    document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
-  }, [onClose]);
 
   const [stage, setStage] = useState<Stage>(
     followUpPrefill
@@ -181,45 +163,33 @@ export function QuickCapture({ onClose, onSelectRequest, isPastDue = false, isRe
   // Desktop: slide-over right drawer
   // Mobile: full-screen sheet
   return (
-    <>
-      {/* Backdrop */}
-      <div
-        className="fixed inset-0 bg-black/30 z-40"
-        onClick={onClose}
-        aria-hidden="true"
-      />
-
-      {/* Panel */}
-      <div
-        ref={panelRef}
-        role="dialog"
-        aria-modal="true"
-        aria-label={title}
-        tabIndex={-1}
-        className={[
-          "fixed z-50 bg-white shadow-xl flex flex-col focus:outline-none",
-          "md:right-0 md:top-0 md:bottom-0 md:w-[420px] md:max-w-full",
-          "max-md:inset-0",
-        ].join(" ")}
-      >
-        {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200 shrink-0">
-          <h2 className="font-serif text-base font-semibold text-slate-900">{title}</h2>
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-md p-1 text-slate-400 hover:text-slate-600"
-            aria-label="Close"
-          >
-            <X className="h-5 w-5" />
-          </button>
-        </div>
-
-        {/* Body */}
-        <div className="flex-1 overflow-y-auto px-5 py-5">
-          {content}
-        </div>
+    <KeepModal
+      onClose={onClose}
+      label={title}
+      backdropClassName="bg-black/30"
+      panelClassName={[
+        "fixed z-50 bg-white shadow-xl flex flex-col",
+        "md:right-0 md:top-0 md:bottom-0 md:w-[420px] md:max-w-full",
+        "max-md:inset-0",
+      ].join(" ")}
+    >
+      {/* Header */}
+      <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200 shrink-0">
+        <h2 className="font-serif text-base font-semibold text-slate-900">{title}</h2>
+        <button
+          type="button"
+          onClick={onClose}
+          className="rounded-md p-1 text-slate-400 hover:text-slate-600"
+          aria-label="Close"
+        >
+          <X className="h-5 w-5" />
+        </button>
       </div>
-    </>
+
+      {/* Body */}
+      <div className="flex-1 overflow-y-auto px-5 py-5">
+        {content}
+      </div>
+    </KeepModal>
   );
 }
