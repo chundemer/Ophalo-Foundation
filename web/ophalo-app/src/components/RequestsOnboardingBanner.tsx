@@ -14,6 +14,7 @@ export function RequestsOnboardingBanner({
   onStartCapture,
 }: RequestsOnboardingBannerProps) {
   const requestPageReady = setup.businessInfoComplete && setup.createIntakePageComplete;
+  const firstRequestReady = setup.addFirstRequestComplete;
 
   const steps = [
     {
@@ -25,7 +26,7 @@ export function RequestsOnboardingBanner({
     {
       key: "first-request",
       label: "Add your first customer request",
-      done: setup.addFirstRequestComplete,
+      done: firstRequestReady,
       onClick: onStartCapture,
     },
     {
@@ -36,6 +37,12 @@ export function RequestsOnboardingBanner({
       optional: true,
     },
   ];
+
+  const primaryCta = !requestPageReady
+    ? { label: "Set up request page", onClick: () => onNavigateSettings("public-profile") }
+    : !firstRequestReady
+      ? { label: "Add your first request", onClick: onStartCapture }
+      : { label: "Invite your team", onClick: () => onNavigateSettings("team") };
 
   return (
     <div
@@ -54,10 +61,10 @@ export function RequestsOnboardingBanner({
         </div>
         <KeepButton
           variant="primary"
-          onClick={() => onNavigateSettings("public-profile")}
+          onClick={primaryCta.onClick}
           className="shrink-0"
         >
-          Set up request page
+          {primaryCta.label}
         </KeepButton>
       </div>
 

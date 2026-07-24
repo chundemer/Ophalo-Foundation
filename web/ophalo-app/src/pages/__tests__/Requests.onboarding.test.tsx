@@ -32,15 +32,21 @@ const emptyList: KeepRequestListResult = {
 };
 
 const incompleteSetup: KeepBusinessSetupResult = {
-  businessInfoComplete: true,
+  businessInfoComplete: false,
   addFirstRequestComplete: false,
   reviewCustomerPageComplete: false,
-  createIntakePageComplete: true,
+  createIntakePageComplete: false,
   shareIntakePageComplete: false,
   buildTeamComplete: false,
   useMobileComplete: false,
   deferredSteps: [],
   intendedTeamSize: null,
+};
+
+const requestPageReadySetup: KeepBusinessSetupResult = {
+  ...incompleteSetup,
+  businessInfoComplete: true,
+  createIntakePageComplete: true,
 };
 
 const completeSetup: KeepBusinessSetupResult = {
@@ -106,6 +112,18 @@ describe("Requests onboarding banner", () => {
     await user.click(cta);
 
     expect(onNavigateSettings).toHaveBeenCalledWith("public-profile");
+  });
+
+  it("advances the primary CTA to Quick Capture once the request page is set up", async () => {
+    mockGetGuidedSetup.mockResolvedValue(requestPageReadySetup);
+    const user = userEvent.setup();
+    const { onStartCapture, onNavigateSettings } = renderRequests("owner");
+
+    const cta = await screen.findByRole("button", { name: "Add your first request" });
+    await user.click(cta);
+
+    expect(onStartCapture).toHaveBeenCalled();
+    expect(onNavigateSettings).not.toHaveBeenCalled();
   });
 
   it("opens Quick Capture from the first-request checklist item", async () => {

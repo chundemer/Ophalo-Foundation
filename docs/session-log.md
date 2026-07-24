@@ -1,36 +1,19 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-07-23
+**Last updated:** 2026-07-24
 **Deployment posture:** Not pilot-ready.
 **Source of truth for acceptance criteria:** `docs/pilot-readiness-bug-tracker.md`.
 
-This log intentionally contains only outstanding work. Historical implementation evidence belongs in
-`docs/build-log/`; locked decisions belong in `docs/pilot-readiness-decision-questions.md` and the
-decision index.
+This log records current operational blockers and the active work queue. Historical implementation
+evidence belongs in `docs/build-log/`; locked decisions belong in
+`docs/pilot-readiness-decision-questions.md` and the decision index.
 
 ## Immediate Production Access And Reliability Blockers
 
-- **Provision and verify the first production smoke account.** The deployed database is empty, so
-  the existing-member **Sign in** flow cannot create a session. Use **Get started** (`/start`) with
-  a dedicated internal inbox to create the first account, receive/exchange its magic link, confirm
-  `/auth/me`, and load the authenticated Keep request list. Then test the normal Sign in flow with
-  that same account. Do not use a pilot account as a test fixture. Account/User rows are expected
-  only after link exchange; before then, validate the pending `account_auth_codes` record instead.
-  If `/start` reports success without an email, inspect its browser/API response, the pending code,
-  Railway configuration, and Resend delivery activity. The current sender can return a failed
-  delivery result without surfacing it to the browser or application log, so GAP-039/error-capture
-  work must make this diagnosable. Public DNS is delegated to Vercel; the Resend dashboard's
-  Cloudflare provider label is stale metadata, not active DNS control. Confirm that
-  `Resend__FromAddress` exactly uses the verified `mail.ophalo.com` subdomain (for example,
-  `OpHalo <no-reply@mail.ophalo.com>`) and that the deployed API key belongs to that Resend team.
-  The observed generic Sign in error also needs a Railway/browser correlation if it reproduces: an
-  unknown-email sign-in is expected to return neutral success, not a visible generic failure.
-- **GAP-039 (P0): production observability and pilot health.** Implement the locked low-cost
-  posture: retain Vercel Pro/Railway, use redacted free errors-only Sentry for browser/API unhandled
-  errors and release identity, add health/readiness/configuration checks, safe correlation/error
-  references, founder email alerts, and a post-deployment smoke-test script. No paid observability
-  add-on, paid uptime/incident tool, or persistent staging stack before revenue. Preserve token and
-  PII redaction.
+- **GAP-039b (P0): error capture and safe customer references.** Provision the free errors-only
+  Sentry browser/API projects and DSNs, then wire release identity, PII/token scrubbing, and safe
+  error references. Health/configuration checks and the smoke-test tool are complete; no paid
+  observability, replay, broad telemetry, or persistent staging environment before revenue.
 - **Verify deployed routing and release configuration.** The operator request list is served at
   `https://app.ophalo.com/`; `/keep/requests` currently produces a Vercel 404. Validate the
   intended public/deep-link contract, Vercel environment variables, DNS/domain/cookie topology, and
@@ -40,6 +23,10 @@ decision index.
   cache headers, iOS Safari, Android Chrome, and a non-`localhost` phone-reachable environment.
 - **GAP-016 (P0): complete phone-validation parity.** Native parity and the remaining manual
   browser/device verification are still required for the ADR-444 phone-input contract.
+- **Requests onboarding-banner progression.** The Owner/Admin banner now identifies setup work,
+  but its primary CTA remains “Set up request page” after that step is complete. Advance the CTA to
+  the next incomplete core action (Quick Capture for the first customer request), then hide the
+  banner after the public request page and first request are complete. Team remains optional.
 
 ## Open Product And Pilot-Readiness Work
 
@@ -70,28 +57,6 @@ decision index.
 - GAP-047 through GAP-051: make priority failures visible; preserve deliberate tracker-share intent;
   bound follow-up prefill; add same-customer related-work context; and finish consistent North
   American phone formatting.
-- **Complete.** First-visit Requests onboarding banner for Owner/Admin: `RequestsOnboardingBanner`
-  (new component) renders above the Requests heading via `api.getGuidedSetup()`, gated on
-  `businessInfoComplete && createIntakePageComplete && addFirstRequestComplete` (the real,
-  non-hardcoded fields). Primary CTA and the "public request page" checklist item route to
-  Settings `public-profile`; "Add your first customer request" opens Quick Capture; team invite is
-  shown as optional and never gates visibility. Operator/Viewer never see it (Viewer never mounts
-  `Requests`; Operator is excluded by role check). **Known limitation, unchanged:**
-  `reviewCustomerPageComplete` and `shareIntakePageComplete` remain hardcoded `false` server-side
-  (durable "link shared/viewed" events deferred to S22d) and are intentionally not used as
-  completion signals or claimed as "shared" anywhere in this banner.
-- **Complete.** Business-logo rendering fix on public customer pages and the Settings preview:
-  `KeepBusinessHeader` (`web/ophalo-web/src/components/keep/KeepPublicShell.tsx`) and the Settings
-  customer preview (`web/ophalo-app/src/pages/settings/PublicLinkSection.tsx`) now render the logo
-  with `object-contain` at a bounded `max-h`/`max-w` footprint instead of `object-cover`, so
-  horizontal wordmark logos are no longer cropped into a square/circle. No forced circular/square
-  treatment is applied to a successfully loaded logo; the initials fallback is unchanged (no logo
-  URL, or `onError`). `KeepBusinessHeader` gained local image-error state and is now a client
-  component (`"use client"`) to support the fallback; existing HTTPS-only URL safeguard preserved.
-  Rendering-only; no backend/schema change. **Known gap:** `web/ophalo-web` has no test runner
-  configured (no vitest/jest, no test script), so regression coverage for `KeepBusinessHeader` is
-  manual/visual only. Automated coverage was added only in `web/ophalo-app`
-  (`PublicLinkSection.logo.test.tsx`), where test infra already exists.
 
 ## Claude Work-Session Queue
 
@@ -108,9 +73,11 @@ blocker, record it in the tracker and stop for a decision rather than expanding 
 | 0.2 | GAP-039a — API readiness and safe diagnostics | **Complete** (`c8dd1e8`, `d7d0ee2`, `8b165b2`). Server-generated correlation IDs (`X-Correlation-Id` + log scope), minimal `/health/live` and `/health/ready` (no dependency/config detail in the public body; DB outage logged internally), fail-fast startup validation for required production config, and release identity (`RAILWAY_GIT_COMMIT_SHA`) in the log scope. Also fixed a live diagnosability gap: Resend delivery failures were silently discarded — now logged (status code in `ResendEmailSender`, auth-code ID in `StartAuthService`/`SignInAuthService`) without exposing PII. 896/896 integration tests pass. **Deployment note:** startup now fails fast if required config is missing — before the next deploy, confirm Railway sets `ConnectionStrings__DefaultConnection` (not only Railway's own `DATABASE_URL`, which this code does not read directly), `App__PublicBaseUrl`, `Resend__ApiKey`, and `Resend__FromAddress` (must be an address on the verified `mail.ophalo.com` domain, e.g. `OpHalo <no-reply@mail.ophalo.com>`). |
 | 0.3 | Email trust template foundation | **Complete** (`027cfdf`). Shared `AccountEmailLayout` (table-based HTML, retina logo + text fallback, single CTA, locked ADR-431 motto, Privacy/Terms/Contact footer, no tracking pixel/click tracking) applied to account-start, sign-in, and invite emails, each with distinct truthful intro copy (ADR-446). `IEmailSender.SendAsync` gained a `textBody` parameter so every account email now ships a real plain-text alternative, threaded through `ResendEmailSender`, `ConsoleEmailSender`, and all callers. Logo asset hosted at `https://www.ophalo.com/brand/ophalo-lockup-color.png`. 898/898 integration tests pass. Future customer-facing messages remain business-primary with OpHalo only as a quiet footer; out of scope here. |
 | 0.4 | GAP-039b — Error capture and safe customer references | Wire the selected free errors-only Sentry projects for browser/API unhandled errors, with release identity and PII/token scrubbing. Return/display a safe error reference where appropriate; do not add replay or broad telemetry. Requires the Sentry projects/DSNs before implementation. |
-| 0.5 | GAP-039c — Deploy smoke checks and runbook | **Complete.** Added `scripts/production-smoke-test.mjs` (dependency-free Node 20+ script), `scripts/production-smoke-test.test.mjs` (regression tests, `node --test`), and `docs/runbook/production-smoke-test.md`. Checks `/health/live`, `/health/ready`, triggers `/auth/signin` (routine mode only — see correction below), then `/auth/me` and `/keep/requests` (request-list load) using a session for the dedicated smoke account. Two modes, per Christian's direction: **routine** (default) uses a stored `SMOKE_SESSION_COOKIE` env var (local-secret only, never committed) so regular deploy checks don't need to read real email; **full end-to-end** (`--exchange-code=<code>`) exchanges an actual magic-link code copied from the smoke inbox, proving email delivery + `/auth/exchange` still work. Exit code `0` only if nothing failed; skips don't fail the run. **Correction (caught in review before this was truly done):** the first version always called `/auth/signin` before exchanging, which invalidates the account's previous unused sign-in code (single-active-code contract) — i.e. exchange-code mode was invalidating its own supplied code. Fixed: `/auth/signin` is now skipped entirely (recorded as `skip`, not silently omitted) when `--exchange-code` is supplied; the runbook now documents full mode as an explicit two-run process (separately trigger sign-in first, then exchange in a later invocation). Added `production-smoke-test.test.mjs` (3 tests, `node --test`, no dependencies) proving exchange-code mode never calls `/auth/signin` while routine mode still does. Verified locally against a mock HTTP server covering pass/fail/skip paths, both modes, the missing-env-var case, and this regression. **Not done:** still not run against the real production API — no deployed URL/credentials available in this session; Christian should run it once (routine mode with a freshly obtained `SMOKE_SESSION_COOKIE`, then the corrected full mode as two separate runs) before relying on it as a release gate. |
+| 0.5 | GAP-039c — Deploy smoke checks and runbook | **Complete** (`fd34af3`, corrected by `8b6f392`). Added the dependency-free Node smoke script, regression tests, and runbook. Routine mode checks health, sign-in trigger, `/auth/me`, and request-list load with a local-only smoke-session cookie; full mode uses a separately obtained email code and deliberately skips a new sign-in trigger so it cannot invalidate that code. Local mock coverage passes. First live script execution remains a non-blocking operational check; manual deployed-app smoke testing is complete. |
 | 0.6 | GAP-020 deployment verification | **Manual device task.** Complete the tracker’s real-device opaque call-handoff checks against the deployed, phone-reachable service; record evidence and any defects. |
-| 0.7 | Authenticated Sign in redirect consistency | **Complete.** Extracted `/start`'s session-check logic into a shared `useSessionRedirect` hook (`web/ophalo-web/src/lib/useSessionRedirect.ts`) and the checking/authenticated-spinner + transient-error-retry UI into a shared `SessionRedirectGate` component (`web/ophalo-web/src/components/auth/SessionRedirectGate.tsx`), both now used by `/start` and `/signin`. `/signin` now checks `/auth/me` on load and redirects to `NEXT_PUBLIC_APP_BASE_URL` when already authenticated, instead of always showing the form; unauthenticated and error behavior for both pages is byte-for-byte the same as `/start`'s prior implementation. `tsc --noEmit` and `next build` pass for `ophalo-web`. **Known gap:** `web/ophalo-web` still has no test runner (no vitest/jest, no test script — same gap noted in the logo-rendering session); regression coverage for this hook/gate is manual/code-review verification only, not automated. Live-browser verification of the authenticated-redirect path also was not performed this session — it requires the API running locally against a real session cookie; Christian should smoke-test `/signin` and `/start` with both a logged-in and logged-out browser session before/soon after next deploy. |
+| 0.7 | Authenticated Sign in redirect consistency | **Complete** (`b81cbb6`). `/start` and `/signin` now share the `/auth/me` redirect logic; an authenticated visitor to `/signin` goes to the app, while an unauthenticated visitor sees the sign-in form. Production browser verification on 2026-07-24 confirmed sign-in email delivery, authenticated redirect to Requests, and unauthenticated redirect from the app to Sign in. `ophalo-web` still has no test runner, so this retains manual regression coverage. |
+| 0.8 | Requests onboarding-banner next action | **Complete.** `RequestsOnboardingBanner`'s primary CTA now reflects the next incomplete core step: "Set up request page" → Settings `public-profile` while the request page isn't ready, then "Add your first request" → Quick Capture once it is. Banner-hide gating in `Requests.tsx` (both core steps complete, team optional) was already correct and untouched. `reviewCustomerPageComplete`/`shareIntakePageComplete` remain unused as completion signals. 6/6 focused tests pass (`Requests.onboarding.test.tsx`, updated fixtures + new CTA-progression test). |
+| 0.9 | Customer-page intent and hierarchy | Make the two public customer pages unmistakably different without changing the saved business logo/identity: the public-intake page is a **start-new-request** form; the private bearer-link page is an **existing-request tracking/status and message** page. Use explicit headlines, copy, layout, and primary action—not color alone. Intake should explain that submission creates a private tracking page. Tracker should lead with current status and make “Send an update or question” primary; share is secondary and cancellation remains visually separated. Do not promote the reference code as a normal customer-recovery mechanism. **Verified constraints:** authenticated staff have `GET /keep/requests/lookup?phone=` (canonical 10-digit phone; returns the matched customer plus up to three active requests); there is no dedicated name-lookup endpoint and no public customer lookup/recovery route. Preserve bearer-link privacy: customer copy should say to save the private link, and a lost-link recovery flow must not be invented in this session. Add any public recovery design only after an explicit privacy/security decision. |
 
 ### Phase 1 — Shared UI Safety Foundations
 
