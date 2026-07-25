@@ -42,7 +42,7 @@ sequencing at the end of this section.
 
 ### GAP-028 — Undefined CSS tokens silently break intended visual states
 
-**Status:** Open
+**Status:** Resolved — Session 1.1 (2026-07-24, `5dd45c7`)
 **Severity:** P1
 **Area:** `ophalo-app` token use and CI validation
 
@@ -57,9 +57,14 @@ approved neutral fill `--ophalo-canvas`. Add a repository check that compares ev
 inlined app token block synchronized with `web/shared/styles/ophalo-tokens.css` as part of that
 check or its existing synchronization verification.
 
+**Resolution:** Replaced both undefined tokens and added `scripts/check-css-tokens.mjs`, wired into
+the `ophalo-app` production build. The dependency-free check fails for an undefined token reference
+or drift between the inlined app `:root` block and `web/shared/styles/ophalo-tokens.css`; focused
+tests cover both guards.
+
 ### GAP-029 — Request-status labels and badge variants are inconsistent by surface
 
-**Status:** Open
+**Status:** Resolved — Session 1.2 (2026-07-24, `b1e67a4`)
 **Severity:** P1
 **Area:** `ophalo-app` request list, request detail, and Quick Capture
 
@@ -76,9 +81,15 @@ do not retain fallback substring heuristics. Lock the desired terminology and va
 unit tests, including received, scheduled, active (`in_progress`), waiting on customer,
 work completed, closed, cancelled, spam, and test.
 
+**Resolution:** `src/lib/requestStatus.ts` now provides the single label/variant map consumed by
+Request List, Request Detail, and Quick Capture. `in_progress` remains **Active**, `resolved`
+remains **Work completed**, `pending_customer` is **Pending Customer**, and Closed uses the success
+variant. The old local mappings and detail substring heuristic were removed; 20 focused tests cover
+all nine supported statuses and unknown-status fallbacks.
+
 ### GAP-030 — Transient copy/success UI can reject or update after disposal
 
-**Status:** Open
+**Status:** Resolved — Session 1.3 (2026-07-24, `101e9e9`)
 **Severity:** P1
 **Area:** `ophalo-app` clipboard actions and Request Detail success feedback
 
@@ -93,9 +104,15 @@ and clears it on unmount. Add equivalent cleanup for the feedback-review timer. 
 rejected clipboard paths plus timer disposal; do not claim React's removed unmounted-state warning
 is the defect—the defect is stale asynchronous UI work and missing failure handling.
 
+**Resolution:** `useCopyFeedback` now owns success/failure state and timer lifecycle for all six
+copy paths, including a guard against a clipboard promise settling after unmount. Clipboard failures
+now have non-disruptive visible/accessibility feedback rather than silent failures or unhandled
+rejections. The Request Detail review-success timer also clears on unmount; focused tests cover
+success, rejection, timer replacement, unmount, and post-unmount settlement.
+
 ### GAP-031 — A render exception can blank the authenticated workbench
 
-**Status:** Open
+**Status:** Resolved — Session 1.3 (2026-07-24, `101e9e9`)
 **Severity:** P1
 **Area:** `ophalo-app` application bootstrap
 
@@ -107,9 +124,14 @@ card. This finding applies to `ophalo-app`, not the separate public/customer `op
 retain normal query/API error states inside their existing components. Add a focused render-throw
 test that verifies the fallback and reload affordance.
 
+**Resolution:** `ErrorBoundary` now wraps `App` at bootstrap and renders only a plain recovery card
+with Reload; exception text, customer/request data, and stack details are never rendered. Focused
+tests prove normal render passthrough, render-throw recovery with no leaked detail, and the sole
+Reload affordance.
+
 ### GAP-032 — Shared modal/focus behavior and Request Detail seams remain incomplete
 
-**Status:** Open
+**Status:** Partially resolved — Session 1.4 scoped modal/focus foundation (2026-07-24, `d8574f2`)
 **Severity:** P1
 **Area:** `ophalo-app` form modals and Request Detail presentation architecture
 
@@ -127,6 +149,15 @@ policy to contact and service-location forms. Then extract `LogContactModal`,
 `ServiceLocationModal`, and the US-state data into `pages/request-detail/`, leaving
 `RequestDetail.tsx` as controller/orchestration code. Cover keyboard containment, trigger-focus
 restoration, and dirty-close behavior with tests.
+
+**Completed scope:** `KeepModal` now supplies dialog semantics, initial focus, Tab/Shift+Tab
+containment, Escape, explicit backdrop policy, and safe trigger-focus restoration. It is applied to
+Quick Capture and the desktop call-handoff modal with focused regression coverage.
+
+**Remaining / deliberately deferred:** dirty-form close confirmation (or disabled backdrop close)
+for Request Detail forms, broad extraction of Request Detail modal implementations/US-state data,
+and applying the primitive beyond the two scoped modals. Do not represent this gap as fully closed
+until that later, separately scoped work is completed.
 
 **Proposed bounded sequencing:**
 
@@ -1216,7 +1247,7 @@ description, source, and address.
 
 ### GAP-024 — Modal accessibility is incomplete for Quick Capture and desktop call handoff
 
-**Status:** Open
+**Status:** Resolved — Session 1.4 scoped modal/accessibility work (2026-07-24, `d8574f2`)
 **Severity:** P1
 **Area:** `ophalo-app` Quick Capture and Request Detail contact modal
 
@@ -1226,6 +1257,10 @@ when closed.
 
 **Required resolution:** Add a focus trap to both overlays and restore focus to the original trigger
 on every close path; retain Escape and initial-focus behavior.
+
+**Resolution:** Both overlays now use `KeepModal`; tests cover initial focus, Tab/Shift+Tab wrapping,
+Escape, backdrop policy, focus restoration, and safe no-op restoration when the prior trigger is
+removed or disabled.
 
 ### GAP-025 — Quick Capture does not recognize a customer found by request-list phone search
 
@@ -1475,13 +1510,24 @@ Expected fix:
 
 ### GAP-007 — Request-list quick actions lack complete row-level action contract
 
-**Status:** Resolved in S24g2 (2026-07-11)
+**Status:** Partially resolved — GAP-007a resolved (`de9a0c2`); GAP-007b preview remains (2026-07-24)
 **Severity:** P1
 **Area:** `OpHalo.Keep.Application` request list DTO/API; `ophalo-app` request list quick actions
 **Decision:** ADR-435
 
 S24 temporarily converted request-list quick actions into navigation/focus links because
 the end-to-end list/action contract is incomplete for executable row actions.
+
+**2026-07-24 amendment:** The row-level contract itself was completed in S24g2/S24g3: list rows
+now carry `version` and server-authored execution metadata, and eligible modal actions exist.
+However, routine Owner/Admin rows with no attention-driven recommendation rendered no action bar
+because the PWA incorrectly treated “no forced `Next:` cue” as “no permitted action.” **GAP-007a is
+resolved (`de9a0c2`):** routine rows without a `Next:` cue now render up to two server-authoritative
+actions, Update customer then Log contact, retaining server authority and the two-action cap.
+**GAP-007b remains:** add one safe
+server-selected latest-activity/description preview through a separately designed batch event-read
+and timestamp contract; see Phase 3.0b in `docs/session-log.md`. This is an implementation
+regression against ADR-435, not a reopened authorization or concurrency-contract decision.
 
 Current finding:
 
