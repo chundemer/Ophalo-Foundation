@@ -1061,4 +1061,197 @@ public sealed class KeepPersistenceProofTests : IClassFixture<PostgresFixture>, 
         Assert.Contains(persistedEvents, e => e.Id == winnerEvent.Id);
         Assert.DoesNotContain(persistedEvents, e => e.Id == loserEvent.Id);
     }
+
+    // --- GAP-007b: batch list-preview precedence, redaction, and bounded truncation ---
+
+    [Fact]
+    public async Task GetLatestPreviewEventsAsync_customer_message_beats_more_recent_business_update_and_contact()
+    {
+        Guid requestId;
+        await using (var seedCtx = CreateContext())
+        {
+            var customer = KeepCustomer.Create(AccountId, "Preview Customer", "0499777001");
+            seedCtx.Set<KeepCustomer>().Add(customer);
+            await seedCtx.SaveChangesAsync();
+
+            var request = KeepRequest.CreateFromCustomerIntake(
+                AccountId, customer.Id, "Preview Customer", "0499777001", null,
+                "Original description", "PREV0001", "prev-tok-001", Now, 60);
+            seedCtx.Set<KeepRequest>().Add(request);
+            seedCtx.Set<KeepRequestEvent>().Add(KeepRequestEvent.CreateRequestCreated(request.Id, AccountId, Now));
+            await seedCtx.SaveChangesAsync();
+
+            // Oldest: customer message. Newer: business update and external contact — both
+            // more recent, but precedence must still pick the customer message.
+            var customerMsg = request.AddCustomerMessage(
+                MessageIntent.GeneralMessage, "Can you come Tuesday?", 60, 240, 60, Now.AddMinutes(1));
+            Assert.True(customerMsg.IsSuccess);
+            seedCtx.Set<KeepRequestEvent>().Add(customerMsg.Value);
+            await seedCtx.SaveChangesAsync();
+
+            var businessUpdate = request.AddBusinessUpdate(
+                "We'll be there Wednesday instead", AccountOwnerAccountUserId, "Owner", Now.AddMinutes(2));
+            Assert.True(businessUpdate.IsSuccess);
+            seedCtx.Set<KeepRequestEvent>().Add(businessUpdate.Value);
+            await seedCtx.SaveChangesAsync();
+
+            var outboundContact = request.LogOutboundExternalContact(
+                CommunicationChannel.Phone, ExternalContactOutcome.SpokeWithCustomer, false, null,
+                AccountOwnerAccountUserId, "Owner", Now.AddMinutes(3));
+            Assert.True(outboundContact.IsSuccess);
+            seedCtx.Set<KeepRequestEvent>().Add(outboundContact.Value);
+            await seedCtx.SaveChangesAsync();
+
+            requestId = request.Id;
+        }
+
+        await using var ctx = CreateContext();
+        var sut = new OpHalo.Keep.Infrastructure.Persistence.KeepRequestListPersistence(
+            ctx, new OpHalo.Foundation.Infrastructure.Services.SystemClock());
+
+        var previews = await sut.GetLatestPreviewEventsAsync([requestId], CancellationToken.None);
+
+        var preview = previews[requestId];
+        Assert.Equal("customer_message", preview.PreviewSource);
+        Assert.Equal("Can you come Tuesday?", preview.PreviewText);
+        Assert.False(preview.PreviewTruncated);
+        Assert.Equal(Now.AddMinutes(1), preview.PreviewAtUtc);
+    }
+
+    [Fact]
+    public async Task GetLatestPreviewEventsAsync_falls_through_tiers_and_redacts_internal_and_bounds_text()
+    {
+        Guid requestId;
+        await using (var seedCtx = CreateContext())
+        {
+            var customer = KeepCustomer.Create(AccountId, "Preview Customer 2", "0499777002");
+            seedCtx.Set<KeepCustomer>().Add(customer);
+            await seedCtx.SaveChangesAsync();
+
+            var request = KeepRequest.CreateFromCustomerIntake(
+                AccountId, customer.Id, "Preview Customer 2", "0499777002", null,
+                "Original description two", "PREV0002", "prev-tok-002", Now, 60);
+            seedCtx.Set<KeepRequest>().Add(request);
+            seedCtx.Set<KeepRequestEvent>().Add(KeepRequestEvent.CreateRequestCreated(request.Id, AccountId, Now));
+            await seedCtx.SaveChangesAsync();
+
+            // Internal note must never surface as a preview, even though it's the latest event.
+            var internalNote = request.AddInternalNote(
+                "SSN 000-00-0000 do not share with customer", AccountOwnerAccountUserId, "Owner", Now.AddMinutes(1));
+            Assert.True(internalNote.IsSuccess);
+            seedCtx.Set<KeepRequestEvent>().Add(internalNote.Value);
+            await seedCtx.SaveChangesAsync();
+
+            // No customer message, no business update: external contact tier wins, label only.
+            var outboundContact = request.LogOutboundExternalContact(
+                CommunicationChannel.Phone, ExternalContactOutcome.SpokeWithCustomer, false, null,
+                AccountOwnerAccountUserId, "Owner", Now.AddMinutes(2));
+            Assert.True(outboundContact.IsSuccess);
+            seedCtx.Set<KeepRequestEvent>().Add(outboundContact.Value);
+            await seedCtx.SaveChangesAsync();
+
+            requestId = request.Id;
+        }
+
+        await using var ctx = CreateContext();
+        var sut = new OpHalo.Keep.Infrastructure.Persistence.KeepRequestListPersistence(
+            ctx, new OpHalo.Foundation.Infrastructure.Services.SystemClock());
+
+        var previews = await sut.GetLatestPreviewEventsAsync([requestId], CancellationToken.None);
+
+        var preview = previews[requestId];
+        Assert.Equal("external_contact", preview.PreviewSource);
+        Assert.Equal("Called customer", preview.PreviewText);
+        Assert.DoesNotContain("000-00-0000", preview.PreviewText);
+        Assert.Equal(Now.AddMinutes(2), preview.PreviewAtUtc);
+    }
+
+    [Fact]
+    public async Task GetLatestPreviewEventsAsync_bounds_message_text_server_side_and_marks_truncated()
+    {
+        Guid requestId;
+        var longMessage = new string('a', 4000);
+
+        await using (var seedCtx = CreateContext())
+        {
+            var customer = KeepCustomer.Create(AccountId, "Preview Customer 3", "0499777003");
+            seedCtx.Set<KeepCustomer>().Add(customer);
+            await seedCtx.SaveChangesAsync();
+
+            var request = KeepRequest.CreateFromCustomerIntake(
+                AccountId, customer.Id, "Preview Customer 3", "0499777003", null,
+                "Original description three", "PREV0003", "prev-tok-003", Now, 60);
+            seedCtx.Set<KeepRequest>().Add(request);
+            seedCtx.Set<KeepRequestEvent>().Add(KeepRequestEvent.CreateRequestCreated(request.Id, AccountId, Now));
+            await seedCtx.SaveChangesAsync();
+
+            var customerMsg = request.AddCustomerMessage(
+                MessageIntent.GeneralMessage, longMessage, 60, 240, 60, Now.AddMinutes(1));
+            Assert.True(customerMsg.IsSuccess);
+            seedCtx.Set<KeepRequestEvent>().Add(customerMsg.Value);
+            await seedCtx.SaveChangesAsync();
+
+            requestId = request.Id;
+        }
+
+        await using var ctx = CreateContext();
+        var sut = new OpHalo.Keep.Infrastructure.Persistence.KeepRequestListPersistence(
+            ctx, new OpHalo.Foundation.Infrastructure.Services.SystemClock());
+
+        var previews = await sut.GetLatestPreviewEventsAsync([requestId], CancellationToken.None);
+
+        var preview = previews[requestId];
+        Assert.Equal("customer_message", preview.PreviewSource);
+        Assert.True(preview.PreviewTruncated);
+        // Server-bounded to exactly 160 chars: never the full 4000-char body, regardless of
+        // how the client renders it.
+        Assert.Equal(160, preview.PreviewText!.Length);
+    }
+
+    [Fact]
+    public async Task GetLatestPreviewEventsAsync_business_update_beats_newer_external_contact_when_no_customer_message()
+    {
+        Guid requestId;
+        await using (var seedCtx = CreateContext())
+        {
+            var customer = KeepCustomer.Create(AccountId, "Preview Customer 4", "0499777004");
+            seedCtx.Set<KeepCustomer>().Add(customer);
+            await seedCtx.SaveChangesAsync();
+
+            var request = KeepRequest.CreateFromCustomerIntake(
+                AccountId, customer.Id, "Preview Customer 4", "0499777004", null,
+                "Original description four", "PREV0004", "prev-tok-004", Now, 60);
+            seedCtx.Set<KeepRequest>().Add(request);
+            seedCtx.Set<KeepRequestEvent>().Add(KeepRequestEvent.CreateRequestCreated(request.Id, AccountId, Now));
+            await seedCtx.SaveChangesAsync();
+
+            // No customer message at all. Business update is older; external contact is newer —
+            // precedence must still pick the business update over the more recent contact log.
+            var businessUpdate = request.AddBusinessUpdate(
+                "We'll swing by Thursday morning", AccountOwnerAccountUserId, "Owner", Now.AddMinutes(1));
+            Assert.True(businessUpdate.IsSuccess);
+            seedCtx.Set<KeepRequestEvent>().Add(businessUpdate.Value);
+            await seedCtx.SaveChangesAsync();
+
+            var outboundContact = request.LogOutboundExternalContact(
+                CommunicationChannel.Sms, null, false, "Texted a Thursday reminder",
+                AccountOwnerAccountUserId, "Owner", Now.AddMinutes(2));
+            Assert.True(outboundContact.IsSuccess);
+            seedCtx.Set<KeepRequestEvent>().Add(outboundContact.Value);
+            await seedCtx.SaveChangesAsync();
+
+            requestId = request.Id;
+        }
+
+        await using var ctx = CreateContext();
+        var sut = new OpHalo.Keep.Infrastructure.Persistence.KeepRequestListPersistence(
+            ctx, new OpHalo.Foundation.Infrastructure.Services.SystemClock());
+
+        var previews = await sut.GetLatestPreviewEventsAsync([requestId], CancellationToken.None);
+
+        var preview = previews[requestId];
+        Assert.Equal("business_update", preview.PreviewSource);
+        Assert.Equal("We'll swing by Thursday morning", preview.PreviewText);
+        Assert.Equal(Now.AddMinutes(1), preview.PreviewAtUtc);
+    }
 }

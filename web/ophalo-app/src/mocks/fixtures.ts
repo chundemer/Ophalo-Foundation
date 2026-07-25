@@ -328,6 +328,7 @@ export const mockRequestSummaries: KeepRequestSummary[] = [
       previewText: "Called customer, scheduled service visit for Thursday July 3rd at 9am.",
       previewSource: "external_contact",
       previewTruncated: false,
+      previewAtUtc: "2026-06-29T14:30:00Z",
     },
     participation: {
       responsibleCount: 1,
@@ -417,8 +418,9 @@ export const mockRequestSummaries: KeepRequestSummary[] = [
     },
     preview: {
       previewText: "Submitted via intake form.",
-      previewSource: "created_event",
+      previewSource: "original_description",
       previewTruncated: false,
+      previewAtUtc: "2026-06-30T07:40:00Z",
     },
     participation: {
       responsibleCount: 0,
@@ -521,6 +523,7 @@ export const mockRequestSummaries: KeepRequestSummary[] = [
       previewText: "Sent quote for $1,240 covering 3 faucet replacements and fixture installation.",
       previewSource: "business_update",
       previewTruncated: false,
+      previewAtUtc: "2026-06-27T15:30:00Z",
     },
     participation: {
       responsibleCount: 1,
@@ -608,9 +611,10 @@ export const mockRequestSummaries: KeepRequestSummary[] = [
       firstResponseOverdue: false,
     },
     preview: {
-      previewText: "Great service, very professional! Will definitely call again.",
-      previewSource: "customer_feedback",
+      previewText: "Thanks so much, the door works perfectly now!",
+      previewSource: "customer_message",
       previewTruncated: false,
+      previewAtUtc: "2026-06-30T08:00:00Z",
     },
     participation: {
       responsibleCount: 1,
@@ -698,7 +702,7 @@ export const mockRequestSummaries: KeepRequestSummary[] = [
       firstResponsePending: true,
       firstResponseOverdue: false,
     },
-    preview: { previewText: null, previewSource: null, previewTruncated: false },
+    preview: { previewText: null, previewSource: null, previewTruncated: false, previewAtUtc: null },
     participation: {
       responsibleCount: 0,
       watchingCount: 0,

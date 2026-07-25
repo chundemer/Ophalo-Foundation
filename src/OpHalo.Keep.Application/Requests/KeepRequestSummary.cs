@@ -62,10 +62,18 @@ public sealed record KeepRequestRankingInfo(
     DateTime? DueAtUtc,
     bool IsPostClose);
 
+/// <summary>
+/// Server-selected latest displayable activity preview for a list row (GAP-007b).
+/// PreviewSource is one of "customer_message", "business_update", "external_contact",
+/// or "original_description" — stable values the client uses to label the preview honestly.
+/// PreviewAtUtc is the source event's OccurredAtUtc, or CreatedAtUtc when falling back to
+/// original_description (no qualifying event exists).
+/// </summary>
 public sealed record KeepRequestPreviewInfo(
     string? PreviewText,
     string? PreviewSource,
-    bool PreviewTruncated);
+    bool PreviewTruncated,
+    DateTime? PreviewAtUtc);
 
 public sealed record KeepRequestActionsInfo(
     IReadOnlyList<KeepQuickAction> QuickActions,

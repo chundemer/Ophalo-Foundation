@@ -185,7 +185,9 @@ export function installMockApi(): void {
     } else if (params.view === "watching") {
       filtered = all.filter((r) => r.participation.currentUserParticipationType === "watching");
     } else if (params.view === "feedback_review") {
-      filtered = all.filter((r) => r.preview.previewSource === "customer_feedback");
+      // Demo-only stand-in: no fixture currently models isPostCloseFollowUp/feedbackWasResolved,
+      // so this pins to the one row previously used to populate this mock view.
+      filtered = all.filter((r) => r.id === "mock-req-004");
     } else if (params.view === "ready_to_close") {
       filtered = all.filter((r) => r.status === "resolved" && r.attention.attentionLevel === "normal");
     }
@@ -392,7 +394,7 @@ export function installMockApi(): void {
         firstResponsePending: true,
         firstResponseOverdue: false,
       },
-      preview: { previewText: null, previewSource: null, previewTruncated: false },
+      preview: { previewText: null, previewSource: null, previewTruncated: false, previewAtUtc: null },
       participation: {
         responsibleCount: 1,
         watchingCount: 0,

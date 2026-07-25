@@ -1,3 +1,4 @@
+using System.Linq.Expressions;
 using Microsoft.EntityFrameworkCore;
 using OpHalo.Foundation.Core.Entities.Accounts.Enums;
 using OpHalo.Foundation.Infrastructure.Persistence;
@@ -443,6 +444,146 @@ public sealed class KeepRequestListPersistence(OpHaloDbContext dbContext, IClock
                         ResponsibleIsStale: responsibleIsStale);
                 });
     }
+
+    // Bounded server-side truncation limit for preview text (matches the Available-list
+    // description preview convention). Applied at the SQL projection so no unbounded
+    // message body is ever loaded, regardless of how the client renders it.
+    private const int PreviewCharLimit = 160;
+
+    public async Task<Dictionary<Guid, KeepRequestPreviewInfo>> GetLatestPreviewEventsAsync(
+        IReadOnlyList<Guid> requestIds, CancellationToken ct)
+    {
+        var result = new Dictionary<Guid, KeepRequestPreviewInfo>();
+
+        // Tier 1: latest customer message. Each tier query asks the database for exactly one
+        // row per remaining request (GroupBy + OrderByDescending + First translates to a
+        // per-request top-1 subquery) — never a materialized per-row event history.
+        var customerMessages = await LatestPerRequestAsync(
+            requestIds,
+            e => e.EventType == KeepRequestEventType.MessageAdded
+                && e.Visibility == KeepRequestEventVisibility.All
+                && e.ActorType == ActorType.Customer,
+            ct);
+        foreach (var c in customerMessages)
+            result[c.RequestId] = new KeepRequestPreviewInfo(c.Content, "customer_message", c.WasTruncated, c.OccurredAtUtc);
+
+        // Tier 2: latest customer-visible staff reply — only for requests tier 1 didn't resolve.
+        var afterTier1 = requestIds.Where(id => !result.ContainsKey(id)).ToList();
+        if (afterTier1.Count > 0)
+        {
+            var businessUpdates = await LatestPerRequestAsync(
+                afterTier1,
+                e => e.EventType == KeepRequestEventType.MessageAdded
+                    && e.Visibility == KeepRequestEventVisibility.All
+                    && e.ActorType == ActorType.AccountUser,
+                ct);
+            foreach (var b in businessUpdates)
+                result[b.RequestId] = new KeepRequestPreviewInfo(b.Content, "business_update", b.WasTruncated, b.OccurredAtUtc);
+
+            // Tier 3: latest external-contact label — only for requests neither tier resolved.
+            var afterTier2 = afterTier1.Where(id => !result.ContainsKey(id)).ToList();
+            if (afterTier2.Count > 0)
+            {
+                var externalContacts = await LatestPerRequestAsync(
+                    afterTier2,
+                    e => e.EventType == KeepRequestEventType.ExternalContactLogged,
+                    ct);
+                foreach (var x in externalContacts)
+                    result[x.RequestId] = new KeepRequestPreviewInfo(
+                        BuildExternalContactLabel(x.ExternalContactDirection, x.CommunicationChannel),
+                        "external_contact", false, x.OccurredAtUtc);
+            }
+        }
+
+        return result;
+    }
+
+    // Only displayable event types are ever fetched — never a full per-row timeline.
+    // Visibility.All on MessageAdded excludes internal notes; ExternalContactLogged has
+    // no free-text Content field so its label is always derived, never event content.
+    // Content is cut to exactly PreviewCharLimit characters at the SQL projection so no
+    // unbounded message body is ever loaded, regardless of how the client renders it;
+    // WasTruncated is computed separately from the untruncated length.
+    //
+    // The database, not this process, picks the winner per request: a GroupBy+Max aggregate
+    // computes each request's latest OccurredAtUtc within the tier, then a join back to the
+    // event table fetches only that single winning row per request (classic "aggregate then
+    // join" pattern — GroupBy().Select(g => g.OrderBy().First()) does not reliably translate
+    // to SQL). The trailing in-memory GroupBy is a defensive tie-break for the practically
+    // impossible case of two events with the exact same timestamp, not a materialized history.
+    private async Task<List<PreviewEventCandidate>> LatestPerRequestAsync(
+        IReadOnlyList<Guid> requestIds,
+        Expression<Func<KeepRequestEvent, bool>> typeFilter,
+        CancellationToken ct)
+    {
+        var filtered = dbContext.Set<KeepRequestEvent>()
+            .AsNoTracking()
+            .Where(e => requestIds.Contains(e.RequestId))
+            .Where(typeFilter);
+
+        var latestPerRequest = filtered
+            .GroupBy(e => e.RequestId)
+            .Select(g => new { RequestId = g.Key, MaxOccurredAtUtc = g.Max(e => e.OccurredAtUtc) });
+
+        var rows = await filtered
+            .Join(latestPerRequest,
+                e => new { e.RequestId, e.OccurredAtUtc },
+                t => new { t.RequestId, OccurredAtUtc = t.MaxOccurredAtUtc },
+                (e, _) => e)
+            .Select(e => new PreviewEventCandidate(
+                e.RequestId,
+                e.EventType,
+                e.ActorType,
+                e.OccurredAtUtc,
+                e.Content != null && e.Content.Length > PreviewCharLimit
+                    ? e.Content.Substring(0, PreviewCharLimit)
+                    : e.Content,
+                e.Content != null && e.Content.Length > PreviewCharLimit,
+                e.ExternalContactDirection,
+                e.CommunicationChannel))
+            .ToListAsync(ct);
+
+        return rows.GroupBy(r => r.RequestId).Select(g => g.First()).ToList();
+    }
+
+    // ExternalContactDirection/CommunicationChannel are always set by
+    // KeepRequestEvent.CreateExternalContactLogged; null here indicates a data invariant
+    // violation, not a legitimate case to silently paper over.
+    private static string BuildExternalContactLabel(
+        ExternalContactDirection? direction, CommunicationChannel? channel)
+    {
+        if (direction is null)
+            throw new InvalidOperationException("ExternalContactLogged event missing ExternalContactDirection.");
+
+        return (direction.Value, channel) switch
+        {
+            (ExternalContactDirection.Outbound, CommunicationChannel.Phone)    => "Called customer",
+            (ExternalContactDirection.Outbound, CommunicationChannel.Sms)      => "Texted customer",
+            (ExternalContactDirection.Outbound, CommunicationChannel.Email)    => "Emailed customer",
+            (ExternalContactDirection.Outbound, CommunicationChannel.InPerson) => "Visited customer",
+            (ExternalContactDirection.Outbound, CommunicationChannel.InApp)    => "Contacted customer",
+            (ExternalContactDirection.Outbound, CommunicationChannel.Other)    => "Contacted customer",
+            (ExternalContactDirection.Outbound, null)                         => "Contacted customer",
+            (ExternalContactDirection.Inbound, CommunicationChannel.Phone)     => "Customer called",
+            (ExternalContactDirection.Inbound, CommunicationChannel.Sms)       => "Customer texted",
+            (ExternalContactDirection.Inbound, CommunicationChannel.Email)     => "Customer emailed",
+            (ExternalContactDirection.Inbound, CommunicationChannel.InPerson) => "Customer visited",
+            (ExternalContactDirection.Inbound, CommunicationChannel.InApp)    => "Customer made contact",
+            (ExternalContactDirection.Inbound, CommunicationChannel.Other)    => "Customer made contact",
+            (ExternalContactDirection.Inbound, null)                          => "Customer made contact",
+            _ => throw new InvalidOperationException($"Unknown ExternalContactDirection: {direction}.")
+        };
+    }
+
+    private sealed record PreviewEventCandidate(
+        Guid RequestId,
+        KeepRequestEventType EventType,
+        ActorType ActorType,
+        DateTime OccurredAtUtc,
+        string? Content,
+        bool WasTruncated,
+        ExternalContactDirection? ExternalContactDirection,
+        CommunicationChannel? CommunicationChannel);
 
     // Applies filter parameters common to both active and history queries.
     // ClosedFrom/ClosedTo are history-only and applied separately in GetHistoryRequestsAsync.

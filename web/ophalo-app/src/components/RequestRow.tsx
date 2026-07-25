@@ -300,6 +300,14 @@ function relativeTime(iso: string | null): string | null {
   return `${Math.floor(days / 7)}w ago`;
 }
 
+function previewSourceLabel(previewSource: string | null): string | null {
+  switch (previewSource) {
+    case "customer_message": return "Customer message";
+    case "business_update": return "Business update";
+    default: return null;
+  }
+}
+
 function timingChipText(
   label: string,
   displayLabel: string | null | undefined,
@@ -404,9 +412,17 @@ export function RequestRow({ row, onSelect, onSelectFocused, onActionClick, onSh
           )}
         </div>
 
-        {/* Preview text */}
+        {/* Preview text — honest source/time context; never for the description fallback */}
         {row.preview.previewText && (
-          <p className="keep-row-meta line-clamp-1 text-left">{row.preview.previewText}</p>
+          <p className="keep-row-meta line-clamp-1 text-left">
+            {row.preview.previewSource !== "original_description" && (
+              <span className="text-[var(--ophalo-muted)]">
+                {previewSourceLabel(row.preview.previewSource) && `${previewSourceLabel(row.preview.previewSource)} · `}
+                {relativeTime(row.preview.previewAtUtc)} ·{" "}
+              </span>
+            )}
+            {row.preview.previewText}
+          </p>
         )}
 
         {/* Context metadata — quiet, unbordered; no competing alert badges */}

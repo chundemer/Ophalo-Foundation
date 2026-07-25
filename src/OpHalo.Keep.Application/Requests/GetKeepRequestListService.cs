@@ -315,6 +315,8 @@ public sealed class GetKeepRequestListService(
                 .Select(r => ToSummary(r, role, canOperate, isOwnerOrAdmin, isOffSeason, nowUtc,
                     histParticipants.GetValueOrDefault(r.Id), normalizedView))
                 .ToList();
+
+            page = await ApplyPagePreviewsAsync(page, ct);
         }
         else
         {
@@ -384,6 +386,8 @@ public sealed class GetKeepRequestListService(
             var sliced = sorted.Take(limit + 1).ToList();
             hasMore = sliced.Count > limit;
             page = sliced.Take(limit).ToList();
+
+            page = await ApplyPagePreviewsAsync(page, ct);
         }
 
         // --- Next cursor ---
@@ -621,6 +625,25 @@ public sealed class GetKeepRequestListService(
 
     // --- Row mapping ---
 
+    // Batch preview lookup for only the already-sliced page (GAP-007b) — never per-row,
+    // never for the full candidate set used for ranking/sorting.
+    private async Task<IReadOnlyList<KeepRequestSummary>> ApplyPagePreviewsAsync(
+        IReadOnlyList<KeepRequestSummary> page, CancellationToken ct)
+    {
+        if (page.Count == 0)
+            return page;
+
+        var previews = await persistence.GetLatestPreviewEventsAsync(
+            page.Select(s => s.Id).ToList(), ct);
+
+        if (previews.Count == 0)
+            return page;
+
+        return page
+            .Select(s => previews.TryGetValue(s.Id, out var preview) ? s with { Preview = preview } : s)
+            .ToList();
+    }
+
     private static KeepRequestSummary ToSummary(
         KeepRequest r,
         AccountUserRole role,
@@ -698,7 +721,9 @@ public sealed class GetKeepRequestListService(
             DueAtUtc: dueAtUtc,
             IsPostClose: isPostClose);
 
-        var preview = new KeepRequestPreviewInfo(null, null, false);
+        // Default: original-description fallback. Overwritten only for the final sliced page
+        // via a batch preview lookup (GAP-007b); ranking/sorting never depends on preview content.
+        var preview = new KeepRequestPreviewInfo(r.Description, "original_description", false, r.CreatedAtUtc);
 
         // Evaluate action policy per request; list uses the decision for write affordances.
         // Phone/email presence, first-response-overdue suppression, and row context

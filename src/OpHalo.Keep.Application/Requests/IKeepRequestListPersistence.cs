@@ -83,6 +83,20 @@ public interface IKeepRequestListPersistence
     /// </summary>
     Task<Dictionary<Guid, KeepRequestParticipantSummary>> GetParticipantSummariesAsync(
         IReadOnlyList<Guid> requestIds, Guid currentAccountUserId, Guid accountId, CancellationToken ct);
+
+    /// <summary>
+    /// Returns a server-selected, redaction-safe activity preview for each request ID —
+    /// only for the caller's already-sliced page, never a per-row timeline fetch (GAP-007b).
+    /// Precedence per request: latest customer MessageAdded text; else latest customer-visible
+    /// (Visibility=All, ActorType=AccountUser) MessageAdded text; else a neutral, non-content
+    /// label derived from the latest ExternalContactLogged event. Requests with no qualifying
+    /// event are absent from the result; the caller falls back to the original description.
+    /// Message text is bounded server-side (never an unbounded body) and PreviewTruncated
+    /// reflects that bound truthfully. Internal notes, feedback comments, raw contact details,
+    /// and capability tokens are never selected.
+    /// </summary>
+    Task<Dictionary<Guid, KeepRequestPreviewInfo>> GetLatestPreviewEventsAsync(
+        IReadOnlyList<Guid> requestIds, CancellationToken ct);
 }
 
 /// <summary>Selects the active (non-history) view for GetActiveViewRequestsAsync (ADR-239).</summary>

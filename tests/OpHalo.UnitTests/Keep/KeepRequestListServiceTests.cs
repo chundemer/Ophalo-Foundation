@@ -600,7 +600,8 @@ public class KeepRequestListServiceTests
         Assert.Equal(6, summary.Ranking.RankingOrder);
         Assert.Equal("attention", summary.Ranking.Severity);
 
-        Assert.Null(summary.Preview.PreviewText);
+        Assert.Equal("Fix sink", summary.Preview.PreviewText);
+        Assert.Equal("original_description", summary.Preview.PreviewSource);
         Assert.False(summary.Preview.PreviewTruncated);
 
         Assert.Contains(summary.Actions.QuickActions, a => a.Code == "open_detail");
@@ -614,6 +615,75 @@ public class KeepRequestListServiceTests
         Assert.True(summary.CurrentUserNotification.Eligible);
         Assert.False(summary.CurrentUserNotification.Enabled);
         Assert.Equal("not_participating", summary.CurrentUserNotification.SuppressionReason);
+    }
+
+    [Fact]
+    public async Task Execute_applies_batch_preview_lookup_only_to_the_final_page()
+    {
+        var request = KeepRequest.CreateFromCustomerIntake(
+            AccountId, Guid.NewGuid(), "Alice", "555-9999", null, "Fix sink", "REF00001", "tok1", Now, 60);
+
+        var p = HappyPathPersistence([request]);
+        var previewAt = Now.AddHours(-1);
+        p.PreviewMap = new()
+        {
+            [request.Id] = new KeepRequestPreviewInfo("Can you come Tuesday?", "customer_message", false, previewAt)
+        };
+
+        var sut = BuildSut(p);
+        var result = await sut.ExecuteAsync();
+
+        Assert.True(result.IsSuccess);
+        var summary = Assert.Single(result.Value.Requests);
+
+        Assert.Equal("Can you come Tuesday?", summary.Preview.PreviewText);
+        Assert.Equal("customer_message", summary.Preview.PreviewSource);
+        Assert.Equal(previewAt, summary.Preview.PreviewAtUtc);
+    }
+
+    [Fact]
+    public async Task Execute_preview_lookup_receives_exactly_the_sliced_page_ids_not_all_candidates()
+    {
+        var r1 = KeepRequest.CreateFromCustomerIntake(
+            AccountId, Guid.NewGuid(), "Alice", "555-0001", null, "Job 1", "REF00001", "tok1", Now, 60);
+        var r2 = KeepRequest.CreateFromCustomerIntake(
+            AccountId, Guid.NewGuid(), "Bob", "555-0002", null, "Job 2", "REF00002", "tok2", Now.AddMinutes(1), 60);
+        var r3 = KeepRequest.CreateFromCustomerIntake(
+            AccountId, Guid.NewGuid(), "Carol", "555-0003", null, "Job 3", "REF00003", "tok3", Now.AddMinutes(2), 60);
+
+        var p = HappyPathPersistence([r1, r2, r3]);
+        var sut = BuildSut(p);
+
+        var result = await sut.ExecuteAsync(new KeepRequestListQuery(Limit: 2));
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(2, result.Value.Requests.Count);
+
+        // Exactly one batch lookup call, scoped to the two rows that survived slicing —
+        // never all three raw candidates used for ranking/sorting.
+        var lookupCall = Assert.Single(p.PreviewLookupCalls);
+        var returnedIds = result.Value.Requests.Select(r => r.Id).ToHashSet();
+        Assert.Equal(2, lookupCall.Count);
+        Assert.Equal(returnedIds, lookupCall.ToHashSet());
+    }
+
+    [Fact]
+    public async Task Execute_falls_back_to_description_when_no_preview_event_exists()
+    {
+        var request = KeepRequest.CreateFromCustomerIntake(
+            AccountId, Guid.NewGuid(), "Alice", "555-9999", null, "Fix sink", "REF00001", "tok1", Now, 60);
+
+        var p = HappyPathPersistence([request]);
+        // PreviewMap left empty — simulates no qualifying event for this request.
+
+        var sut = BuildSut(p);
+        var result = await sut.ExecuteAsync();
+
+        var summary = Assert.Single(result.Value.Requests);
+
+        Assert.Equal("Fix sink", summary.Preview.PreviewText);
+        Assert.Equal("original_description", summary.Preview.PreviewSource);
+        Assert.Equal(request.CreatedAtUtc, summary.Preview.PreviewAtUtc);
     }
 
     [Theory]
@@ -2286,6 +2356,16 @@ public class KeepRequestListServiceTests
         public Task<Dictionary<Guid, KeepRequestParticipantSummary>> GetParticipantSummariesAsync(
             IReadOnlyList<Guid> requestIds, Guid currentAccountUserId, Guid accountId, CancellationToken ct) =>
             Task.FromResult(ParticipantSummaryMap);
+
+        public Dictionary<Guid, KeepRequestPreviewInfo> PreviewMap { get; set; } = new();
+        public List<IReadOnlyList<Guid>> PreviewLookupCalls { get; } = new();
+
+        public Task<Dictionary<Guid, KeepRequestPreviewInfo>> GetLatestPreviewEventsAsync(
+            IReadOnlyList<Guid> requestIds, CancellationToken ct)
+        {
+            PreviewLookupCalls.Add(requestIds);
+            return Task.FromResult(PreviewMap);
+        }
     }
 
     private sealed class FakeUserAccessPolicy(bool permitted) : IUserAccessPolicy

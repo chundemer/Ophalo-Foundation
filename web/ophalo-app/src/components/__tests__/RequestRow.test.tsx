@@ -72,7 +72,12 @@ function buildRow(overrides: Partial<KeepRequestSummary> = {}): KeepRequestSumma
       firstResponsePending: false,
       firstResponseOverdue: false,
     },
-    preview: { previewText: "Customer needs a leak fixed.", previewSource: "description", previewTruncated: false },
+    preview: {
+      previewText: "Customer needs a leak fixed.",
+      previewSource: "original_description",
+      previewTruncated: false,
+      previewAtUtc: "2026-07-01T00:00:00Z",
+    },
     participation: {
       responsibleCount: 0,
       watchingCount: 0,
@@ -317,5 +322,71 @@ describe("RequestRow — Build 087 / GAP-027 locked row contract", () => {
 
     expect(screen.getByRole("button", { name: "Review request" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Share Link" })).not.toBeInTheDocument();
+  });
+
+  it("GAP-007b: labels a customer message with source and relative time", () => {
+    const row = buildRow({
+      preview: {
+        previewText: "Can you come Tuesday?",
+        previewSource: "customer_message",
+        previewTruncated: false,
+        previewAtUtc: new Date(Date.now() - 60 * 60_000).toISOString(),
+      },
+    });
+
+    render(<RequestRow row={row} onSelect={noop} />);
+
+    expect(screen.getByText(/Customer message · 1h ago ·/)).toBeInTheDocument();
+    expect(screen.getByText("Can you come Tuesday?")).toBeInTheDocument();
+  });
+
+  it("GAP-007b: labels a business update with source and relative time", () => {
+    const row = buildRow({
+      preview: {
+        previewText: "We'll be there Thursday.",
+        previewSource: "business_update",
+        previewTruncated: false,
+        previewAtUtc: new Date(Date.now() - 2 * 60 * 60_000).toISOString(),
+      },
+    });
+
+    render(<RequestRow row={row} onSelect={noop} />);
+
+    expect(screen.getByText(/Business update · 2h ago ·/)).toBeInTheDocument();
+    expect(screen.getByText("We'll be there Thursday.")).toBeInTheDocument();
+  });
+
+  it("GAP-007b: external-contact preview shows only a relative time, no source label — the label text is already neutral", () => {
+    const row = buildRow({
+      preview: {
+        previewText: "Called customer",
+        previewSource: "external_contact",
+        previewTruncated: false,
+        previewAtUtc: new Date(Date.now() - 2 * 60 * 60_000).toISOString(),
+      },
+    });
+
+    render(<RequestRow row={row} onSelect={noop} />);
+
+    expect(screen.getByText(/^2h ago ·/)).toBeInTheDocument();
+    expect(screen.getByText("Called customer")).toBeInTheDocument();
+    expect(screen.queryByText(/Customer message/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Business update/)).not.toBeInTheDocument();
+  });
+
+  it("GAP-007b: original-description fallback renders without a misleading relative time prefix", () => {
+    const row = buildRow({
+      preview: {
+        previewText: "Fix leak",
+        previewSource: "original_description",
+        previewTruncated: false,
+        previewAtUtc: "2020-01-01T00:00:00Z",
+      },
+    });
+
+    render(<RequestRow row={row} onSelect={noop} />);
+
+    expect(screen.getByText("Fix leak")).toBeInTheDocument();
+    expect(screen.queryByText(/ago ·/)).not.toBeInTheDocument();
   });
 });

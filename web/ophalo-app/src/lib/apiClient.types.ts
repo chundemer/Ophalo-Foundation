@@ -349,6 +349,7 @@ export interface KeepRequestPreviewInfo {
   previewText: string | null;
   previewSource: string | null;
   previewTruncated: boolean;
+  previewAtUtc: string | null;
 }
 
 export interface KeepRequestParticipationInfo {
