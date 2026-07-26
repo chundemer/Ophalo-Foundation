@@ -32,6 +32,10 @@ public class KeepRequestExternalContactTests
             MessageIntent.GeneralMessage, "Still waiting", 60, StandardMinutes, 60, t);
     }
 
+    // Arbitrary stand-in for the caller-computed next-business-day value (ADR-451); the
+    // timezone/weekend-skip computation itself lives in LogExternalContactService, not the domain.
+    static readonly DateTime NextBusinessDay = new(2026, 6, 18, 0, 0, 0, DateTimeKind.Utc);
+
     // -------------------------------------------------------------------
     // LogOutboundExternalContact — guard failures
     // -------------------------------------------------------------------
@@ -215,22 +219,48 @@ public class KeepRequestExternalContactTests
     // LogOutboundExternalContact — first response (ADR-198/213)
     // -------------------------------------------------------------------
 
-    [Theory]
-    [InlineData(ExternalContactOutcome.SpokeWithCustomer)]
-    [InlineData(ExternalContactOutcome.LeftVoicemail)]
-    public void Outbound_spoke_voicemail_sets_first_response_on_customer_origin(ExternalContactOutcome outcome)
+    [Fact]
+    public void Outbound_spoke_sets_first_response_on_customer_origin()
     {
         var request = NewCustomerRequest();
 
         var result = request.LogOutboundExternalContact(
-            CommunicationChannel.Phone, outcome, requiresBusinessFollowUp: false, summary: null,
-            ActorId, ActorName, Now);
+            CommunicationChannel.Phone, ExternalContactOutcome.SpokeWithCustomer,
+            requiresBusinessFollowUp: false, summary: null, ActorId, ActorName, Now);
 
         Assert.True(result.IsSuccess);
         Assert.Equal(Now, request.FirstRespondedAtUtc);
         Assert.Equal(ActorId, request.FirstResponderAccountUserId);
         Assert.Equal(result.Value!.Id, request.FirstResponseEventId);
         Assert.True(result.Value.ExternalContactSetFirstResponse);
+    }
+
+    [Fact]
+    public void Outbound_voicemail_never_sets_first_response_on_customer_origin()
+    {
+        // ADR-451 supersedes ADR-198/213: a detailed voicemail never counts as first response.
+        var request = NewCustomerRequest();
+
+        var result = request.LogOutboundExternalContact(
+            CommunicationChannel.Phone, ExternalContactOutcome.LeftVoicemail,
+            requiresBusinessFollowUp: false, summary: null, ActorId, ActorName, Now,
+            nextBusinessDayAttentionUtc: NextBusinessDay);
+
+        Assert.True(result.IsSuccess);
+        Assert.Null(request.FirstRespondedAtUtc);
+        Assert.Null(request.FirstResponderAccountUserId);
+        Assert.Null(request.FirstResponseEventId);
+        Assert.False(result.Value!.ExternalContactSetFirstResponse);
+    }
+
+    [Fact]
+    public void Outbound_voicemail_without_nextBusinessDay_throws()
+    {
+        var request = NewCustomerRequest();
+
+        Assert.Throws<ArgumentException>(() => request.LogOutboundExternalContact(
+            CommunicationChannel.Phone, ExternalContactOutcome.LeftVoicemail,
+            requiresBusinessFollowUp: false, summary: null, ActorId, ActorName, Now));
     }
 
     [Theory]
@@ -270,8 +300,11 @@ public class KeepRequestExternalContactTests
     {
         var request = NewCustomerRequest();
         var firstEventTime = Now.AddMinutes(-30);
-        // Record first response via a business update.
-        request.AddBusinessUpdate("Initial update", ActorId, ActorName, firstEventTime);
+        // Record first response via a prior confirmed outbound contact (ADR-198/213); a page-only
+        // business update no longer sets first response (ADR-451).
+        request.LogOutboundExternalContact(
+            CommunicationChannel.Phone, ExternalContactOutcome.SpokeWithCustomer,
+            requiresBusinessFollowUp: true, summary: null, ActorId, ActorName, firstEventTime);
         var originalFirstRespondedAt = request.FirstRespondedAtUtc;
         var originalFirstResponseEventId = request.FirstResponseEventId;
 
@@ -303,18 +336,16 @@ public class KeepRequestExternalContactTests
     // LogOutboundExternalContact — attention clearing (ADR-169/214)
     // -------------------------------------------------------------------
 
-    [Theory]
-    [InlineData(ExternalContactOutcome.SpokeWithCustomer)]
-    [InlineData(ExternalContactOutcome.LeftVoicemail)]
-    public void Outbound_spoke_voicemail_no_follow_up_clears_business_waiting(ExternalContactOutcome outcome)
+    [Fact]
+    public void Outbound_spoke_no_follow_up_clears_business_waiting()
     {
         var request = NewCustomerRequest();
         RaiseBusinessWaiting(request);
         Assert.NotEqual(AttentionLevel.None, request.AttentionLevel);
 
         var result = request.LogOutboundExternalContact(
-            CommunicationChannel.Phone, outcome, requiresBusinessFollowUp: false, summary: null,
-            ActorId, ActorName, Now.AddMinutes(5));
+            CommunicationChannel.Phone, ExternalContactOutcome.SpokeWithCustomer,
+            requiresBusinessFollowUp: false, summary: null, ActorId, ActorName, Now.AddMinutes(5));
 
         Assert.True(result.IsSuccess);
         Assert.Equal(AttentionLevel.None, request.AttentionLevel);
@@ -322,21 +353,77 @@ public class KeepRequestExternalContactTests
         Assert.True(result.Value!.ExternalContactClearedAttention);
     }
 
-    [Theory]
-    [InlineData(ExternalContactOutcome.SpokeWithCustomer)]
-    [InlineData(ExternalContactOutcome.LeftVoicemail)]
-    public void Outbound_spoke_voicemail_follow_up_needed_preserves_attention(ExternalContactOutcome outcome)
+    [Fact]
+    public void Outbound_spoke_follow_up_needed_preserves_attention()
     {
         var request = NewCustomerRequest();
         RaiseBusinessWaiting(request);
 
         var result = request.LogOutboundExternalContact(
-            CommunicationChannel.Phone, outcome, requiresBusinessFollowUp: true, summary: null,
-            ActorId, ActorName, Now.AddMinutes(5));
+            CommunicationChannel.Phone, ExternalContactOutcome.SpokeWithCustomer,
+            requiresBusinessFollowUp: true, summary: null, ActorId, ActorName, Now.AddMinutes(5));
 
         Assert.True(result.IsSuccess);
         Assert.NotEqual(AttentionLevel.None, request.AttentionLevel);
         Assert.False(result.Value!.ExternalContactClearedAttention);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Outbound_voicemail_never_clears_business_waiting_regardless_of_follow_up(
+        bool requiresBusinessFollowUp)
+    {
+        // ADR-451 supersedes ADR-169/214: a detailed voicemail never clears attention, even when
+        // requiresBusinessFollowUp = false. It preserves attention and creates a follow-up promise.
+        var request = NewCustomerRequest();
+        RaiseBusinessWaiting(request);
+        var attentionReasonBefore = request.AttentionReason;
+
+        var result = request.LogOutboundExternalContact(
+            CommunicationChannel.Phone, ExternalContactOutcome.LeftVoicemail,
+            requiresBusinessFollowUp, summary: null, ActorId, ActorName, Now.AddMinutes(5),
+            nextBusinessDayAttentionUtc: NextBusinessDay);
+
+        Assert.True(result.IsSuccess);
+        Assert.NotEqual(AttentionLevel.None, request.AttentionLevel);
+        Assert.Equal(WaitingDirection.Business, request.WaitingDirection);
+        Assert.Equal(attentionReasonBefore, request.AttentionReason);
+        Assert.Null(request.AttentionClearReason);
+        Assert.False(result.Value!.ExternalContactClearedAttention);
+        Assert.Equal(NextBusinessDay, request.NextAttentionAtUtc);
+    }
+
+    [Fact]
+    public void Outbound_voicemail_does_not_pull_a_later_existing_commitment_earlier()
+    {
+        var request = NewCustomerRequest();
+        RaiseBusinessWaiting(request);
+        var laterCommitment = NextBusinessDay.AddDays(5);
+        typeof(KeepRequest).GetProperty(nameof(KeepRequest.NextAttentionAtUtc))!
+            .SetValue(request, laterCommitment);
+
+        var result = request.LogOutboundExternalContact(
+            CommunicationChannel.Phone, ExternalContactOutcome.LeftVoicemail,
+            requiresBusinessFollowUp: false, summary: null, ActorId, ActorName, Now.AddMinutes(5),
+            nextBusinessDayAttentionUtc: NextBusinessDay);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(laterCommitment, request.NextAttentionAtUtc);
+    }
+
+    [Fact]
+    public void Outbound_voicemail_without_active_business_waiting_attention_does_not_set_next_attention()
+    {
+        var request = NewCustomerRequest();
+
+        var result = request.LogOutboundExternalContact(
+            CommunicationChannel.Phone, ExternalContactOutcome.LeftVoicemail,
+            requiresBusinessFollowUp: false, summary: null, ActorId, ActorName, Now.AddMinutes(5),
+            nextBusinessDayAttentionUtc: NextBusinessDay);
+
+        Assert.True(result.IsSuccess);
+        Assert.Null(request.NextAttentionAtUtc);
     }
 
     [Theory]

@@ -1039,9 +1039,10 @@ public sealed class KeepPersistenceProofTests : IClassFixture<PostgresFixture>, 
 
         Assert.Equal(winnerVersion, persisted.ConcurrencyVersion);
         Assert.Equal(Now.AddMinutes(1), persisted.LastBusinessActivityAt);
-        Assert.Equal(Now.AddMinutes(1), persisted.FirstRespondedAtUtc);
-        Assert.Equal(AccountOwnerAccountUserId, persisted.FirstResponderAccountUserId);
-        Assert.Equal(winnerEvent.Id, persisted.FirstResponseEventId);
+        // ADR-451: a page-only business update never sets first response.
+        Assert.Null(persisted.FirstRespondedAtUtc);
+        Assert.Null(persisted.FirstResponderAccountUserId);
+        Assert.Null(persisted.FirstResponseEventId);
 
         // Losing customer mutation rolled back: LastCustomerActivityAt stays at intake seed.
         Assert.Equal(Now, persisted.LastCustomerActivityAt);

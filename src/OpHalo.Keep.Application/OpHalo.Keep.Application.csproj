@@ -5,6 +5,10 @@
     <ProjectReference Include="..\OpHalo.Foundation.Application\OpHalo.Foundation.Application.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="OpHalo.UnitTests" />
+  </ItemGroup>
+
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>

@@ -242,8 +242,9 @@ public sealed class KeepRequest : BaseEntity
     /// Adds a customer-visible business update without changing status. Creates a MessageAdded
     /// event with Visibility=All, MessageIntent=BusinessUpdate, CommunicationChannel=InApp.
     /// Business-update message limit: 4000 characters. Not allowed on terminal requests.
-    /// Wires first-response when this is the first customer-visible contact on a customer-origin
-    /// request (D1).
+    /// Page-only: never sets first response and never clears business-waiting attention
+    /// (ADR-451). Customer-page publication, notification, and confirmed receipt are separate
+    /// facts; only a confirmed external contact (LogOutboundExternalContact) can satisfy them.
     /// </summary>
     public Result<KeepRequestEvent> AddBusinessUpdate(
         string message,
@@ -270,15 +271,6 @@ public sealed class KeepRequest : BaseEntity
         var messageEvent = KeepRequestEvent.CreateBusinessUpdateMessage(
             Id, AccountId, actorAccountUserId, actorDisplayName, trimmedMessage, nowUtc);
 
-        if (Origin == KeepRequestOrigin.Customer && FirstRespondedAtUtc is null)
-        {
-            FirstRespondedAtUtc = nowUtc;
-            FirstResponderAccountUserId = actorAccountUserId;
-            FirstResponseEventId = messageEvent.Id;
-        }
-
-        ClearBusinessWaitingAttention(actorAccountUserId, nowUtc);
-
         return Result<KeepRequestEvent>.Success(messageEvent);
     }
 
@@ -287,7 +279,9 @@ public sealed class KeepRequest : BaseEntity
     /// event with Visibility=All, MessageIntent=BusinessUpdate, CommunicationChannel=InApp.
     /// Business-update message limit: 4000 characters (not the 2000-char status-message limit).
     /// Validates the status transition using the same rules as ChangeStatus. Not allowed on
-    /// terminal requests. Wires first-response (D1).
+    /// terminal requests. Page-only: never sets first response and never clears business-waiting
+    /// attention (ADR-451); a terminal-status transition still clears all attention via
+    /// ClearAllAttentionForTerminal, which is a lifecycle effect, not a notification-integrity one.
     /// </summary>
     public Result<KeepRequestEvent> AddBusinessUpdateWithStatus(
         KeepRequestStatus newStatus,
@@ -331,15 +325,6 @@ public sealed class KeepRequest : BaseEntity
         // MessageIntent=BusinessUpdate, CommunicationChannel=InApp.
         var statusEvent = KeepRequestEvent.CreateStatusChanged(
             Id, AccountId, actorAccountUserId, actorDisplayName, newStatus, trimmedMessage, nowUtc);
-
-        if (Origin == KeepRequestOrigin.Customer && FirstRespondedAtUtc is null)
-        {
-            FirstRespondedAtUtc = nowUtc;
-            FirstResponderAccountUserId = actorAccountUserId;
-            FirstResponseEventId = statusEvent.Id;
-        }
-
-        ClearBusinessWaitingAttention(actorAccountUserId, nowUtc);
 
         return Result<KeepRequestEvent>.Success(statusEvent);
     }
@@ -631,9 +616,17 @@ public sealed class KeepRequest : BaseEntity
     /// Valid channels: Phone, Sms, Email. Outcome required for Phone only (ADR-168/203).
     /// RequiresBusinessFollowUp required for spoke/voicemail/SMS/email; must be null for
     /// no-answer/wrong-number (ADR-169/216). Summary required for SMS/Email (ADR-199).
-    /// Spoke/voicemail/SMS/email set first response on customer-origin requests that have none (ADR-198/213).
+    /// Spoke/SMS/email set first response on customer-origin requests that have none (ADR-198/213).
     /// When requiresBusinessFollowUp = false, clears eligible business-waiting attention with
     /// reason "external_contact_no_follow_up" (ADR-214). Not allowed on terminal requests (ADR-200).
+    /// ADR-451 supersedes ADR-169/198/213/214 for LeftVoicemail: a detailed voicemail never counts
+    /// as first response and never clears attention, regardless of requiresBusinessFollowUp. It
+    /// preserves the current lifecycle status and attention level, and ends the immediate
+    /// response-overdue escalation by advancing NextAttentionAtUtc to the next business day in the
+    /// account's timezone (nextBusinessDayAttentionUtc, required for this outcome) — unless
+    /// NextAttentionAtUtc already reflects a later deliberate commitment, which is never pulled
+    /// earlier. NextAttentionAtUtc remains a visible, editable follow-up promise; it is not a
+    /// substitute for clearing customer-waiting attention or first response.
     /// </summary>
     public Result<KeepRequestEvent> LogOutboundExternalContact(
         CommunicationChannel channel,
@@ -642,7 +635,8 @@ public sealed class KeepRequest : BaseEntity
         string? summary,
         Guid actorAccountUserId,
         string actorDisplayName,
-        DateTime nowUtc)
+        DateTime nowUtc,
+        DateTime? nextBusinessDayAttentionUtc = null)
     {
         if (nowUtc == default)
             throw new ArgumentException("nowUtc must be a valid UTC timestamp.", nameof(nowUtc));
@@ -658,16 +652,29 @@ public sealed class KeepRequest : BaseEntity
         if (validationError is not null)
             return Result<KeepRequestEvent>.Failure(validationError);
 
-        // Effect matrix (ADR-198).
+        bool isDetailedVoicemail = channel == CommunicationChannel.Phone
+            && outcome == ExternalContactOutcome.LeftVoicemail;
+
+        if (isDetailedVoicemail && nextBusinessDayAttentionUtc is null)
+            throw new ArgumentException(
+                "nextBusinessDayAttentionUtc is required for a LeftVoicemail outcome.",
+                nameof(nextBusinessDayAttentionUtc));
+
+        // Effect matrix (ADR-198, ADR-451 for LeftVoicemail).
         bool countsFirstResponse = channel == CommunicationChannel.Phone
-            ? outcome!.Value is ExternalContactOutcome.SpokeWithCustomer or ExternalContactOutcome.LeftVoicemail
+            ? outcome!.Value is ExternalContactOutcome.SpokeWithCustomer // LeftVoicemail excluded (ADR-451)
             : true; // Sms / Email always count first response
 
         bool setFirstResponse = countsFirstResponse
             && Origin == KeepRequestOrigin.Customer
             && FirstRespondedAtUtc is null;
 
-        bool clearAttention = requiresBusinessFollowUp == false
+        bool clearAttention = !isDetailedVoicemail
+            && requiresBusinessFollowUp == false
+            && AttentionLevel != AttentionLevel.None
+            && WaitingDirection == WaitingDirection.Business;
+
+        bool createsFollowUpPromise = isDetailedVoicemail
             && AttentionLevel != AttentionLevel.None
             && WaitingDirection == WaitingDirection.Business;
 
@@ -687,6 +694,14 @@ public sealed class KeepRequest : BaseEntity
             FirstRespondedAtUtc = nowUtc;
             FirstResponderAccountUserId = actorAccountUserId;
             FirstResponseEventId = contactEvent.Id;
+        }
+
+        if (createsFollowUpPromise)
+        {
+            // Never pull an already-later deliberate commitment earlier (ADR-451).
+            NextAttentionAtUtc = NextAttentionAtUtc is { } existing && existing > nextBusinessDayAttentionUtc!.Value
+                ? existing
+                : nextBusinessDayAttentionUtc!.Value;
         }
 
         if (clearAttention)

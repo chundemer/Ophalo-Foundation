@@ -41,6 +41,16 @@ Customer contact preference selects the suggested channel but never hard-blocks 
 alternative. Viewer is blocked. Existing server row authorization governs preparation and
 confirmation; confirmation belongs to the same authenticated user who prepared the handoff.
 
+## Supersession
+
+ADR-451 explicitly supersedes the voicemail contact-logging behaviors established in ADR-169,
+ADR-198, ADR-213, and ADR-214. `LeftVoicemail` no longer satisfies first-response SLAs or clears
+customer-waiting attention globally, in `LogOutboundExternalContact` and every other voicemail
+logging path — not only the update-notification confirmation flow. A detailed voicemail has one
+real-world meaning: it cannot count as a customer-informed first response in ordinary contact
+logging while being treated as unconfirmed in the notification flow. Implemented in GAP-052a
+(`src/OpHalo.Keep.Core/Entities/KeepRequest.cs`).
+
 ## Recovery And Scope
 
 If notification cannot be completed, Keep preserves the posted update and unresolved obligation,

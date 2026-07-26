@@ -30,6 +30,7 @@ public static class KeepServiceCollectionExtensions
         services.AddScoped<IKeepRequestListPersistence, KeepRequestListPersistence>();
         services.AddScoped<IKeepRequestDetailPersistence, EfKeepRequestDetailPersistence>();
         services.AddScoped<IKeepRequestOperatePersistence, EfKeepRequestOperatePersistence>();
+        services.AddScoped<IKeepAccountTimeZoneLookup, EfKeepAccountTimeZoneLookup>();
         services.AddScoped<IKeepSmsHandoffPersistence, EfKeepSmsHandoffPersistence>();
         services.AddScoped<IKeepIntakeSmsHandoffPersistence, EfKeepIntakeSmsHandoffPersistence>();
         services.AddScoped<IKeepCallHandoffPersistence, EfKeepCallHandoffPersistence>();

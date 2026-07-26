@@ -22,6 +22,7 @@ public sealed record LogExternalContactCommand(
 public sealed class LogExternalContactService(
     IKeepRequestOperatePersistence operatePersistence,
     IKeepRequestDetailPersistence readPersistence,
+    IKeepAccountTimeZoneLookup timeZoneLookup,
     ICurrentUser currentUser,
     IUserAccessPolicy userAccessPolicy,
     IAccountAccessPolicy accountAccessPolicy,
@@ -148,9 +149,17 @@ public sealed class LogExternalContactService(
             }
             else
             {
+                DateTime? nextBusinessDayAttentionUtc = null;
+                if (channel.Value == CommunicationChannel.Phone && outcome == ExternalContactOutcome.LeftVoicemail)
+                {
+                    var timeZoneId = await timeZoneLookup.GetAccountTimeZoneAsync(currentUser.AccountId, ct);
+                    nextBusinessDayAttentionUtc = ComputeNextBusinessDayUtc(nowUtc, timeZoneId);
+                }
+
                 domainResult = request.LogOutboundExternalContact(
                     channel.Value, outcome, command.RequiresBusinessFollowUp,
-                    command.Summary, currentUser.UserId, actorDisplayName, nowUtc);
+                    command.Summary, currentUser.UserId, actorDisplayName, nowUtc,
+                    nextBusinessDayAttentionUtc);
             }
         }
         else
@@ -220,6 +229,22 @@ public sealed class LogExternalContactService(
             "other"     => CommunicationChannel.Other,
             _           => null
         };
+
+    // ADR-451: the next business day (Mon-Fri) in the account's timezone, at local midnight,
+    // converted back to UTC. Falls back to UTC if the stored timezone id is missing/invalid —
+    // Account.TimeZone is validated as IANA at input (AuthEndpoints.IsValidIanaTimeZone).
+    internal static DateTime ComputeNextBusinessDayUtc(DateTime nowUtc, string? timeZoneId)
+    {
+        var timeZone = timeZoneId is not null && TimeZoneInfo.TryFindSystemTimeZoneById(timeZoneId, out var found)
+            ? found
+            : TimeZoneInfo.Utc;
+
+        var localDate = TimeZoneInfo.ConvertTimeFromUtc(nowUtc, timeZone).Date.AddDays(1);
+        while (localDate.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday)
+            localDate = localDate.AddDays(1);
+
+        return TimeZoneInfo.ConvertTimeToUtc(DateTime.SpecifyKind(localDate, DateTimeKind.Unspecified), timeZone);
+    }
 
     private static ExternalContactOutcome? ParseOutcome(string? outcome) =>
         outcome?.Trim().ToLowerInvariant() switch
