@@ -1,12 +1,24 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-07-24
+**Last updated:** 2026-07-26
 **Deployment posture:** Not pilot-ready.
 **Source of truth for acceptance criteria:** `docs/pilot-readiness-bug-tracker.md`.
 
 This log records current operational blockers and the active work queue. Historical implementation
 evidence belongs in `docs/build-log/`; locked decisions belong in
 `docs/pilot-readiness-decision-questions.md` and the decision index.
+
+## Product-Direction Context — Read, Do Not Expand Current Scope
+
+The first HVAC-contractor pilot discussion identified an emerging **asset-aware continuity**
+direction for Keep: future contractor workflows may link a known equipment asset, QR-based service
+intake, quote/approval, and retained work history. The complete discovery record is
+`docs/build-log/091-pilot-discussion-contractor-asset-workflow.md`.
+
+This is a staged product-direction decision, not authorization to expand the current implementation
+queue. Keep's active request-list recovery and pilot-readiness work remains the priority. Do not
+implement equipment assets, QR tagging, quotes, accounting/fleet replacement, property-manager
+subscriptions, or sensor telemetry unless a separately scoped session explicitly promotes it.
 
 ## Immediate Production Access And Reliability Blockers
 
@@ -31,12 +43,14 @@ evidence belongs in `docs/build-log/`; locked decisions belong in
   but its primary CTA remains “Set up request page” after that step is complete. Advance the CTA to
   the next incomplete core action (Quick Capture for the first customer request), then hide the
   banner after the public request page and first request are complete. Team remains optional.
-- **GAP-007 / Request List cockpit recovery (P1).** The list already receives server-authoritative
-  `version` and `quickActions` metadata, but routine Owner/Admin rows render no action bar because
-  the client treats “no forced `Next:` recommendation” as “no action.” This contradicts ADR-435:
-  the list is the speed/action cockpit, not a directory. The list also lacks the promised one-line
-  description preview and gives no useful latest-message/activity context beyond “Last touch.”
-  Complete the bounded contract/UI session defined in Phase 3.0 before further Request List polish.
+- **GAP-052 / customer-update notification integrity (P0).** A customer-page update currently can
+  record first response and clear business-waiting attention without notifying the customer. Build
+  090 defines the required domain/API and responsive-PWA decisions; no page-only prompt can close
+  this integrity gap.
+- **Request List operating-contract recovery (P1).** ADR-449 and ADR-450 lock truthful Owner/Admin
+  queue language/sections and row context. The existing safe activity-preview retrieval remains
+  useful, but activity must supplement—not replace—the original request summary; internal-note
+  presence requires a server-authorized cue without exposing note text.
 
 ## Open Product And Pilot-Readiness Work
 
@@ -90,6 +104,8 @@ blocker, record it in the tracker and stop for a decision rather than expanding 
 | 0.8 | Requests onboarding-banner next action | **Complete.** `RequestsOnboardingBanner`'s primary CTA now reflects the next incomplete core step: "Set up request page" → Settings `public-profile` while the request page isn't ready, then "Add your first request" → Quick Capture once it is. Banner-hide gating in `Requests.tsx` (both core steps complete, team optional) was already correct and untouched. `reviewCustomerPageComplete`/`shareIntakePageComplete` remain unused as completion signals. 6/6 focused tests pass (`Requests.onboarding.test.tsx`, updated fixtures + new CTA-progression test). |
 | 0.9 | Customer-page intent and hierarchy | **Narrowed after verification, complete.** Preflight found the core start-new-request vs. existing-request-tracking hierarchy (explicit headlines, copy, layout, primary action) was already implemented on both `IntakeForm.tsx` and the tracker (`TrackerStatusCard.tsx`/`TrackerActionCard.tsx`): "Send update or question" primary, share demoted, cancellation visually separated. Only gap: added intake-page reassurance copy — "Already have a request? Check the private link {Business} sent you." — placed low, below the submit CTA; does not imply a public recovery mechanism. **Deferred:** the reciprocal "start another request" link on the tracker page requires exposing a business intake slug/URL in the `/keep/r/{pageToken}` API response, which `CustomerPageData` does not currently carry; not added this session (no backend contract change without an explicit decision) and `websiteUrl` was not substituted. Revisit only after a deliberate API/privacy decision on exposing that field. |
 | 0.10 | Post-go-live workbench navigation UX | **Deferred as DEF-084.** Top-level app navigation currently remounts Requests, Getting Started, and Settings; this can look like a refresh and resets local page state. Requests queries have their own first-visit/loading and cached-return behavior. Do not change this during go-live stabilization. Revisit only with pilot evidence, preserving authentication/failure visibility and making an explicit decision before retaining unsaved Settings drafts. |
+| 0.11 | GAP-052a — Customer-update notification integrity: domain/API | **Next coding session — P0.** Implement ADR-451 / Build 090 Slice A before any PWA notification UI. A page-only update must no longer clear gated customer-waiting attention or first response. Add durable obligation/attestation audit, exhaustive reason/outcome policy, detailed-voicemail follow-up promise, authorization/concurrency handling, and focused domain/API proof. Owner/Admin completion test: a customer who has not been informed remains visible to the business; a real confirmed contact changes only the truthful state. |
+| 0.12 | GAP-052b — Customer-update notification integrity: responsive PWA | Build 090 Slice B after 0.11. Build Owner/Admin post → prepare → confirm/recover flow: opaque desktop SMS QR, direct mobile SMS, `mailto:`, mandatory visible page link, same-actor confirmation, preference guidance, cancellation/expiry recovery, and queue refresh. No platform sending, saved outbound drafts, templates, or multi-update workflow. Owner/Admin completion test: a busy owner can notify from the business's known channel without searching contacts, while Keep never mistakes a launch for a send. |
 
 ### Phase 1 — Shared UI Safety Foundations
 
@@ -114,10 +130,13 @@ blocker, record it in the tracker and stop for a decision rather than expanding 
 | Order | Session | Scope and completion gate |
 |---|---|---|
 | 3.0 | GAP-007a — Request List routine action recovery | **Complete** (`de9a0c2`). Routine non-terminal rows with no attention-driven promotion now retain no fabricated `Next:` cue but render up to two server-authoritative modal actions: **Update customer**, then **Log contact**. Existing attention/closeout/feedback promotion, server permission/concurrency authority, and the two-button cap are unchanged. Focused row tests cover both-action ordering and one-action/no-invention behavior; `tsc --noEmit`, full PWA tests, token check, and `git diff --check` pass. `add_internal_note` remains detail-accessible until a separately designed compact-menu pass. |
-| 3.0b | GAP-007b — Request List safe latest-activity preview | **Next Request List code session.** Do not fetch a timeline per row. Add a batch persistence/read-model seam to select the latest displayable event for the current list page, add a preview timestamp to the DTO, and return exactly one server-selected preview. Precedence: customer-message text; customer-visible business-update text; otherwise a neutral, non-content external-contact activity label; otherwise original request description. Never expose internal-note text, feedback-comment text, raw contact details, capability links/tokens, or private/internal event payloads. Apply existing role/row authorization before selecting event text; return stable source + timestamp so the client can label it honestly, and fall back cleanly for legacy/no-event rows. Add backend mapping/authorization/redaction/fallback tests and PWA preview rendering tests. Full history/event loading remains detail-owned. |
+| 3.0b | GAP-007b — Request List safe latest-activity retrieval | **Complete** (`9c35dec`). The bounded, server-selected activity-preview retrieval is available for each list page. ADR-450 supersedes only its prior display rule: original request context must remain stable; safe latest activity is secondary; note presence is a separate server-authorized cue. |
+| 3.0c | ADR-450 — Request List row-context contract | Add the bounded row read-model/DTO support for original-summary expansion, separate safe latest-activity context, and server-authorized internal-note presence. Preserve list authorization and exclude internal-note/feedback content. Owner/Admin completion test: the owner can understand the original need and see that team context exists without opening every request. |
+| 3.0d | ADR-449 — Owner/Admin work-queue hierarchy | Implement `Requests for {Business name}` / `All work` and server-authoritative Needs attention then Open work sections with zero-state disappearance, quiet section labels, and truthful page-scoped counts. Owner/Admin completion test: urgent customer promises are visible first without tab hopping, while calm work remains available and visually quieter. |
+| 3.0e | Customer-update template strategy | **Deferred decision.** Do not build starter, custom, or business-managed message templates while Request List recovery and GAP-052 notification integrity remain open. Revisit only after the Request List is working as locked and pilot evidence shows repeated owner-authored update language. |
 | 3.1 | GAP-041 / GAP-026 — First-load queue and search affordance | Remove the page-refresh-like first queue transition and make search discoverable without changing queue contracts. |
 | 3.2 | GAP-043 / GAP-044 — Paging and history | Verify the existing cursor model with realistic data, make its controls accessible, and expose authorized closed/cancelled history through the existing protected contract. |
-| 3.3 | GAP-045 / GAP-046 / GAP-027 — Queue orientation and filters | Replace opaque queue language, surface/recover applied filter state, and implement the separately locked row-hierarchy/lifecycle presentation decision. |
+| 3.3 | GAP-045 / GAP-046 / GAP-027 — Queue orientation and filters | Surface and recover applied filter state, complete the remaining queue-orientation/filter behavior, and retain the ADR-449 hierarchy already delivered in 3.0d. |
 
 ### Phase 4 — Request Detail Reliability And Continuity
 

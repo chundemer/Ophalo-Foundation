@@ -70,9 +70,11 @@ Retired (historical only — do not treat as current doctrine):
 
 ## Related References
 
-- `docs/reference/product/what-is-keep.md` — product positioning for Keep
-- `docs/reference/new-request-customer/new-request-model-v1.md` — operator-created request surface
-- `docs/reference/new-request-customer/customer-intake-decisions.md` — public intake decisions
-- `docs/reference/customer-request-page_6_2/customer-request-page-model-v1.md` — customer request page contract
-- `docs/reference/request-list_6_3/request-list-model-v1.md` — request list contract
-- `docs/reference/request-list_6_3/request-list-decisions.md` — request list styling and action decisions
+The former `docs/reference/` links in this section are retired; that directory is not present in
+this repository. Use the current decision index, pilot-readiness tracker, and relevant build logs
+for product-surface contracts and implementation history.
+
+- `docs/decisions/decision-index.md` — locked product and architecture decisions
+- `docs/pilot-readiness-bug-tracker.md` — current launch gaps and acceptance criteria
+- `docs/build-log/081-session-24-request-detail-2-column-workbench.md` — Request List / Detail
+  action-boundary history

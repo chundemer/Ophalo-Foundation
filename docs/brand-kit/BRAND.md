@@ -84,8 +84,9 @@ only the word "keep" takes the accent.
 
 - **Wordmark / logo:** Poppins SemiBold (600), outlined. Do not retype it in a
   live font — always use the supplied vector wordmark.
-- **Headings & UI:** Poppins.
-- **Body:** the app's system stack (see `globals.css`); ink color `#172033`.
+- **Headings:** Source Serif 4. Poppins is reserved for the supplied outlined wordmark;
+  do not use it as a live UI font.
+- **UI and body:** Inter/system stack; ink color `#172033`.
 
 ---
 

@@ -802,7 +802,7 @@ the business handled it—without a hidden route or technical intervention.
 **Status:** Open — V1 pre-deployment gate
 **Severity:** P1
 **Area:** `ophalo-app` Request List queue naming, owner orientation, and triage comprehension
-**Decision:** ADR-435; ADR-436; ADR-447
+**Decision:** ADR-435; ADR-436; ADR-447; ADR-449
 
 `Default Queue` is implementation language. On the first screen, a business owner sees a count and
 a stack of customer names but is not told whether this means all active work, only unassigned work,
@@ -811,10 +811,9 @@ surface and adds needless explanation/training burden.
 
 **Required resolution:**
 
-- Replace `Default Queue` with truthful owner-facing language such as `All active work` or
-  `Business queue`, selected only after confirming the server’s exact membership and ranking rules.
-  Add concise supporting copy that explains the scope and, where appropriate, that urgent or
-  overdue customer promises are surfaced first.
+- Replace `Default Queue` with the locked Owner/Admin label `All work`. Present the page as
+  `Requests for {Business name}` and add the locked supporting copy: `Open requests and feedback
+  requiring review, ranked with customer promises needing attention first.`
 - Keep the server authoritative for queue membership, ranking, action availability, and counts. Do
   not imply a manually curated assignment queue, guaranteed ordering, or a customer-service SLA
   that the product does not provide.
@@ -830,6 +829,22 @@ surface and adds needless explanation/training burden.
   and narrow/wide layouts.
 - Existing server selection/ranking, authorization, cursor, and quick-action behavior are unchanged
   and focused PWA checks pass.
+
+### GAP-052 — Customer-page updates can falsely resolve customer-waiting work
+
+**Status:** Open — P0 launch gate; design locked in ADR-451 / Build 090
+**Severity:** P0
+**Area:** `KeepRequest` domain attention/first-response effects; responsive PWA update notification
+**Decision:** ADR-451
+**Build plan:** `docs/build-log/090-customer-update-notification-integrity-decision.md`
+
+`AddBusinessUpdate` and `AddBusinessUpdateWithStatus` currently clear business-waiting attention
+and record first response while the PWA only posts the message to the customer request page. The
+customer may not know that page changed. This can remove active customer work from Needs Attention
+and misstate first-response performance.
+
+Implement Build 090 in its two bounded slices. Do not replace the domain rule with a page-only UI
+prompt, add backend SMS/broad automated email, save outbound message drafts, or claim delivery.
 
 ### GAP-046 — Request search and filters do not make the current result set sufficiently visible or recoverable
 
@@ -1510,10 +1525,10 @@ Expected fix:
 
 ### GAP-007 — Request-list quick actions lack complete row-level action contract
 
-**Status:** Partially resolved — GAP-007a resolved (`de9a0c2`); GAP-007b preview remains (2026-07-24)
+**Status:** Partially resolved — GAP-007a and safe activity retrieval complete; ADR-450 row-context presentation remains (2026-07-26)
 **Severity:** P1
 **Area:** `OpHalo.Keep.Application` request list DTO/API; `ophalo-app` request list quick actions
-**Decision:** ADR-435
+**Decision:** ADR-435; ADR-450
 
 S24 temporarily converted request-list quick actions into navigation/focus links because
 the end-to-end list/action contract is incomplete for executable row actions.
@@ -1524,10 +1539,11 @@ However, routine Owner/Admin rows with no attention-driven recommendation render
 because the PWA incorrectly treated “no forced `Next:` cue” as “no permitted action.” **GAP-007a is
 resolved (`de9a0c2`):** routine rows without a `Next:` cue now render up to two server-authoritative
 actions, Update customer then Log contact, retaining server authority and the two-action cap.
-**GAP-007b remains:** add one safe
-server-selected latest-activity/description preview through a separately designed batch event-read
-and timestamp contract; see Phase 3.0b in `docs/session-log.md`. This is an implementation
-regression against ADR-435, not a reopened authorization or concurrency-contract decision.
+**GAP-007b retrieval is complete (`9c35dec`):** the server-selected, safe latest-activity
+read-model is available for list pages. ADR-450 now governs presentation: the original request
+summary stays as stable row context, activity is secondary, and a server-authorized internal-note
+presence cue may not expose note text. See Phase 3.0c in `docs/session-log.md`.
+
 
 Current finding:
 

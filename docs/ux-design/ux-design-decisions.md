@@ -2,7 +2,7 @@
 
 **Status:** Active reference
 **Date:** 2026-06-04
-**Primary source:** `docs/reference/ux-design/ux-design-model-v1.md`
+**Primary source:** `docs/ux-design/ux-design-model-v1.md`
 
 ---
 
@@ -18,7 +18,7 @@ Use `ux-design-model-v1.md` for the active contract. Use this file for why the c
 
 ### UX Design Reference Supersedes The Old Brand Doc
 
-**Decision:** `docs/reference/ux-design/` is the active source of truth for OpHalo and Keep UX guidance.
+**Decision:** `docs/ux-design/` is the active source of truth for OpHalo and Keep UX guidance.
 
 `docs/v1/ophalo-brand-v1.2.md` is retired and retained only as a historical pointer.
 
@@ -455,13 +455,10 @@ wordmark-only. BRAND.md must be updated to match this contract.
 
 ## Open Gaps
 
-- **Type-and-color contract not yet applied in the app (ADR-368):** the contract
-  is locked in `model-v1`, and `--ophalo-accent` is tokenized in `globals.css`, but
-  the app still ships Inter headlines, the gold `--primary`, the old burnt-orange
-  attention value, and near-invisible marketing section contrast. Pending bounded
-  implementation: wire Source Serif headlines, map `--primary` to navy, update
-  `--ophalo-attention` to `#C8741A`, strengthen marketing section contrast, and
-  correct `brand-kit/BRAND.md` §5 to wordmark-only.
+- **Type-and-color documentation reconciliation:** the authenticated Keep app now uses Source Serif
+  4 headings, Inter UI/body text, navy primary, and `#C8741A` attention. This document and
+  `brand-kit/BRAND.md` are corrected to match that locked implementation. Marketing-surface
+  contrast remains subject to its own launch review.
 
 Implementation tracking lives in `docs/session-log.md`; the closed component recipes
 and migration checklist live in `keep-component-spec.md`. The retired
