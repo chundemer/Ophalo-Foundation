@@ -236,5 +236,16 @@ internal sealed class KeepRequestConfiguration : BaseEntityConfiguration<KeepReq
         builder.Property(x => x.NeedsShare)
             .IsRequired()
             .HasDefaultValue(false);
+
+        // Pending notification handoff (ADR-451, GAP-052a).
+        builder.Property(x => x.PendingNotificationRelatedEventId);
+
+        builder.Property(x => x.PendingNotificationChannel)
+            .HasConversion<string>()
+            .HasMaxLength(50);
+
+        builder.Property(x => x.PendingNotificationPreparedByAccountUserId);
+
+        builder.Property(x => x.PendingNotificationPreparedAtUtc);
     }
 }

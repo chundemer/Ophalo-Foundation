@@ -79,6 +79,9 @@ internal sealed class KeepRequestEventConfiguration : BaseEntityConfiguration<Ke
             .IsRequired()
             .HasDefaultValue(false);
 
+        // Notification confirmation link — present on NotificationConfirmed events only (ADR-451).
+        builder.Property(x => x.RelatedEventId);
+
         // Follow Up On / Planned For fields — present on FollowUpOnChanged / PlannedForChanged events only (ADR-337/338, P6b-1).
         builder.Property(x => x.FollowUpOnDate);
         builder.Property(x => x.FollowUpOnReason)

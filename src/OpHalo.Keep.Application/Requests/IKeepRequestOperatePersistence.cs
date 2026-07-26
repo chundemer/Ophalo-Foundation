@@ -41,6 +41,14 @@ public interface IKeepRequestOperatePersistence
     Task<KeepResponsePolicy?> GetResponsePolicyAsync(Guid accountId, CancellationToken ct);
 
     /// <summary>
+    /// True only if eventId is a same-request, same-account, customer-visible business update
+    /// (Visibility=All, MessageIntent=BusinessUpdate) — the required referential check before
+    /// PrepareUpdateNotification may link a notification obligation to it (ADR-451).
+    /// </summary>
+    Task<bool> IsCustomerVisibleBusinessUpdateEventAsync(
+        Guid requestId, Guid accountId, Guid eventId, CancellationToken ct);
+
+    /// <summary>
     /// Persists the mutated request and, when provided, the new event in a single
     /// SaveChangesAsync. Rotates ConcurrencyVersion immediately before saving; the pre-rotation
     /// value remains in the EF concurrency-token predicate. Returns <see cref="KeepRequestCommitResult.Committed"/>

@@ -400,6 +400,42 @@ public static class KeepEndpoints
             return result.IsSuccess ? Results.Ok(result.Value) : ErrorHttpMapper.ToHttpResult(result.Error);
         }).RequireAuthorization();
 
+        // Prepare update notification — authenticated, operator write (GAP-052a, ADR-451)
+        app.MapPost("/keep/requests/{requestId:guid}/notification-preparation", async (
+            Guid requestId,
+            HttpRequest httpRequest,
+            PrepareUpdateNotificationRequestBody body,
+            PrepareUpdateNotificationService service,
+            CancellationToken ct) =>
+        {
+            var versionResult = KeepRequestVersionHeader.Parse(httpRequest.Headers);
+            if (!versionResult.IsSuccess)
+                return ErrorHttpMapper.ToHttpResult(versionResult.Error);
+
+            var command = new PrepareUpdateNotificationCommand(
+                requestId, body.RelatedUpdateEventId, body.Channel, versionResult.Value);
+            var result = await service.ExecuteAsync(command, ct);
+            return result.IsSuccess ? Results.Ok(result.Value) : ErrorHttpMapper.ToHttpResult(result.Error);
+        }).RequireAuthorization();
+
+        // Confirm update notification — authenticated, operator write (GAP-052a, ADR-451)
+        app.MapPost("/keep/requests/{requestId:guid}/notification-confirmation", async (
+            Guid requestId,
+            HttpRequest httpRequest,
+            ConfirmUpdateNotificationRequestBody body,
+            ConfirmUpdateNotificationService service,
+            CancellationToken ct) =>
+        {
+            var versionResult = KeepRequestVersionHeader.Parse(httpRequest.Headers);
+            if (!versionResult.IsSuccess)
+                return ErrorHttpMapper.ToHttpResult(versionResult.Error);
+
+            var command = new ConfirmUpdateNotificationCommand(
+                requestId, body.RelatedUpdateEventId, body.Channel, versionResult.Value);
+            var result = await service.ExecuteAsync(command, ct);
+            return result.IsSuccess ? Results.Ok(result.Value) : ErrorHttpMapper.ToHttpResult(result.Error);
+        }).RequireAuthorization();
+
         // Acknowledge attention — authenticated, operator write (Phase 8-B2-gamma)
         app.MapPost("/keep/requests/{requestId:guid}/attention/acknowledge", async (
             Guid requestId,

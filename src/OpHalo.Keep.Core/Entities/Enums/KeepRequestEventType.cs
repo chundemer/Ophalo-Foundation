@@ -20,5 +20,7 @@ public enum KeepRequestEventType
     ServiceLocationChanged = 16,
     BusinessPriorityChanged = 17,
     FollowUpResolved = 18,
-    FeedbackReceived = 19
+    FeedbackReceived = 19,
+    NotificationConfirmed = 20,
+    NotificationPrepared = 21
 }

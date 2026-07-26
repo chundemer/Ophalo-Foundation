@@ -57,6 +57,8 @@ public static class KeepServiceCollectionExtensions
         services.AddScoped<AddInternalNoteService>();
         services.AddScoped<AcknowledgeAttentionService>();
         services.AddScoped<LogExternalContactService>();
+        services.AddScoped<PrepareUpdateNotificationService>();
+        services.AddScoped<ConfirmUpdateNotificationService>();
         services.AddScoped<ManageResponsibleService>();
         services.AddScoped<ManageWatcherService>();
         services.AddScoped<SelfWatchService>();

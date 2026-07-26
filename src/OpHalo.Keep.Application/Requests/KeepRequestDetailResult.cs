@@ -164,7 +164,8 @@ public sealed record KeepRequestEventItem(
     DateOnly? PlannedForDate,
     DateOnly? FollowUpOnDate,
     string? FollowUpOnReason,
-    bool? FeedbackWasResolved);
+    bool? FeedbackWasResolved,
+    Guid? RelatedEventId);
 
 /// <summary>
 /// Next/previous navigation context returned when the caller supplies a supported navView.

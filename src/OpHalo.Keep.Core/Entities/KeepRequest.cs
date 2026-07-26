@@ -36,6 +36,15 @@ public sealed class KeepRequest : BaseEntity
     // ADR-370: true when business-created and not yet shared via tracker link.
     public bool NeedsShare { get; private set; }
 
+    // --- Pending notification handoff (ADR-451, GAP-052a) ---
+    // Set by PrepareUpdateNotification; cleared on a matching ConfirmUpdateNotification. No
+    // separate SMS/email draft text is stored — only the obligation pointer, channel, and
+    // preparing actor, so the confirming actor and channel can be enforced against it.
+    public Guid? PendingNotificationRelatedEventId { get; private set; }
+    public CommunicationChannel? PendingNotificationChannel { get; private set; }
+    public Guid? PendingNotificationPreparedByAccountUserId { get; private set; }
+    public DateTime? PendingNotificationPreparedAtUtc { get; private set; }
+
     // Lifecycle timestamps.
     public DateTime? ExpiresAtUtc { get; private set; }
     public DateTime? TerminatedAtUtc { get; private set; }      // ADR-096: covers Closed, Cancelled, Spam, Test
@@ -669,10 +678,16 @@ public sealed class KeepRequest : BaseEntity
             && Origin == KeepRequestOrigin.Customer
             && FirstRespondedAtUtc is null;
 
+        // ADR-451: a call-back specifically requested by the customer is never satisfied by
+        // text/email — only a completed live call (Phone + SpokeWithCustomer) clears it.
+        bool satisfiesCallRequested = AttentionReason != Enums.AttentionReason.CallRequested
+            || (channel == CommunicationChannel.Phone && outcome == ExternalContactOutcome.SpokeWithCustomer);
+
         bool clearAttention = !isDetailedVoicemail
             && requiresBusinessFollowUp == false
             && AttentionLevel != AttentionLevel.None
-            && WaitingDirection == WaitingDirection.Business;
+            && WaitingDirection == WaitingDirection.Business
+            && satisfiesCallRequested;
 
         bool createsFollowUpPromise = isDetailedVoicemail
             && AttentionLevel != AttentionLevel.None
@@ -718,6 +733,145 @@ public sealed class KeepRequest : BaseEntity
         }
 
         return Result<KeepRequestEvent>.Success(contactEvent);
+    }
+
+    /// <summary>
+    /// Records that the owner prepared an Sms/Email notification handoff for a previously posted
+    /// customer-page update (<paramref name="relatedUpdateEventId"/>) — the durable obligation
+    /// record ConfirmUpdateNotification requires (ADR-451). Preparation alone never sets first
+    /// response, clears attention, or clears NeedsShare; it only records the pending obligation
+    /// (update, channel, preparing actor) so confirmation can enforce same-actor and channel
+    /// match. Re-preparing overwrites any prior pending obligation — Keep stores no separate
+    /// SMS/email draft text, only this pointer, so returning to the request regenerates a fresh
+    /// handoff. The caller (application layer) is responsible for verifying
+    /// <paramref name="relatedUpdateEventId"/> references a same-request, same-account,
+    /// customer-visible business update before calling this method — the aggregate has no
+    /// in-memory access to sibling events. Not allowed on terminal requests.
+    /// </summary>
+    public Result<KeepRequestEvent> PrepareUpdateNotification(
+        Guid relatedUpdateEventId,
+        CommunicationChannel channel,
+        Guid actorAccountUserId,
+        string actorDisplayName,
+        DateTime nowUtc)
+    {
+        if (nowUtc == default)
+            throw new ArgumentException("nowUtc must be a valid UTC timestamp.", nameof(nowUtc));
+        if (actorAccountUserId == Guid.Empty)
+            throw new ArgumentException("Actor account user ID is required.", nameof(actorAccountUserId));
+        if (string.IsNullOrWhiteSpace(actorDisplayName))
+            throw new ArgumentException("Actor display name is required.", nameof(actorDisplayName));
+
+        if (relatedUpdateEventId == Guid.Empty)
+            return Result<KeepRequestEvent>.Failure(KeepRequestErrors.NotificationRelatedEventRequired);
+        if (channel is not (CommunicationChannel.Sms or CommunicationChannel.Email))
+            return Result<KeepRequestEvent>.Failure(KeepRequestErrors.NotificationInvalidChannel);
+
+        if (IsTerminal)
+            return Result<KeepRequestEvent>.Failure(KeepRequestErrors.TerminalState);
+
+        var preparedEvent = KeepRequestEvent.CreateNotificationPrepared(
+            Id, AccountId, actorAccountUserId, actorDisplayName.Trim(),
+            channel, relatedUpdateEventId, nowUtc);
+
+        PendingNotificationRelatedEventId = relatedUpdateEventId;
+        PendingNotificationChannel = channel;
+        PendingNotificationPreparedByAccountUserId = actorAccountUserId;
+        PendingNotificationPreparedAtUtc = nowUtc;
+
+        return Result<KeepRequestEvent>.Success(preparedEvent);
+    }
+
+    /// <summary>
+    /// Records the owner's confirmation that a previously prepared notification handoff
+    /// (PrepareUpdateNotification) was sent to the customer via Sms or Email, including the
+    /// mandatory private page link. This is the only notification attestation (ADR-451);
+    /// preparation or OS-launch of the SMS/email draft alone never reaches this method. Requires
+    /// an unconfirmed pending obligation matching <paramref name="relatedUpdateEventId"/> and
+    /// <paramref name="channel"/>, prepared by this same <paramref name="actorAccountUserId"/> —
+    /// otherwise fails closed (NotificationNotPrepared / NotificationConfirmerMismatch). On
+    /// success, clears the pending obligation (blocking replay) and sets first response on
+    /// customer-origin requests that have none, and clears business-waiting attention — except
+    /// when the current AttentionReason is CallRequested, which only a completed live call can
+    /// satisfy. Also clears NeedsShare, since every confirmed notification includes the
+    /// request-page link. Not allowed on terminal requests.
+    /// </summary>
+    public Result<KeepRequestEvent> ConfirmUpdateNotification(
+        Guid relatedUpdateEventId,
+        CommunicationChannel channel,
+        Guid actorAccountUserId,
+        string actorDisplayName,
+        DateTime nowUtc)
+    {
+        if (nowUtc == default)
+            throw new ArgumentException("nowUtc must be a valid UTC timestamp.", nameof(nowUtc));
+        if (actorAccountUserId == Guid.Empty)
+            throw new ArgumentException("Actor account user ID is required.", nameof(actorAccountUserId));
+        if (string.IsNullOrWhiteSpace(actorDisplayName))
+            throw new ArgumentException("Actor display name is required.", nameof(actorDisplayName));
+
+        if (relatedUpdateEventId == Guid.Empty)
+            return Result<KeepRequestEvent>.Failure(KeepRequestErrors.NotificationRelatedEventRequired);
+        if (channel is not (CommunicationChannel.Sms or CommunicationChannel.Email))
+            return Result<KeepRequestEvent>.Failure(KeepRequestErrors.NotificationInvalidChannel);
+
+        if (IsTerminal)
+            return Result<KeepRequestEvent>.Failure(KeepRequestErrors.TerminalState);
+
+        // ADR-451: confirmation requires an unconfirmed prepared obligation for this exact
+        // update and channel — preparation/launch alone never reaches here, and a second confirm
+        // after this one clears the pointer, so replay fails closed.
+        if (PendingNotificationRelatedEventId != relatedUpdateEventId
+            || PendingNotificationChannel != channel)
+            return Result<KeepRequestEvent>.Failure(KeepRequestErrors.NotificationNotPrepared);
+
+        // ADR-451: the same authenticated user who prepared the handoff confirms it.
+        if (PendingNotificationPreparedByAccountUserId != actorAccountUserId)
+            return Result<KeepRequestEvent>.Failure(KeepRequestErrors.NotificationConfirmerMismatch);
+
+        bool setFirstResponse = Origin == KeepRequestOrigin.Customer && FirstRespondedAtUtc is null;
+
+        // ADR-451: a call-back specifically requested by the customer is never satisfied by
+        // text/email — only a completed live call clears it (see LogOutboundExternalContact).
+        bool clearAttention = AttentionReason != Enums.AttentionReason.CallRequested
+            && AttentionLevel != AttentionLevel.None
+            && WaitingDirection == WaitingDirection.Business;
+
+        LastBusinessActivityAt = nowUtc;
+
+        var confirmationEvent = KeepRequestEvent.CreateNotificationConfirmed(
+            Id, AccountId, actorAccountUserId, actorDisplayName.Trim(),
+            channel, relatedUpdateEventId, nowUtc);
+
+        PendingNotificationRelatedEventId = null;
+        PendingNotificationChannel = null;
+        PendingNotificationPreparedByAccountUserId = null;
+        PendingNotificationPreparedAtUtc = null;
+
+        if (setFirstResponse)
+        {
+            FirstRespondedAtUtc = nowUtc;
+            FirstResponderAccountUserId = actorAccountUserId;
+            FirstResponseEventId = confirmationEvent.Id;
+        }
+
+        if (clearAttention)
+        {
+            AttentionLevel = AttentionLevel.None;
+            WaitingDirection = WaitingDirection.None;
+            AttentionReason = null;
+            PriorityBand = PriorityBand.Standard;
+            AttentionSinceUtc = null;
+            NextAttentionAtUtc = null;
+            AttentionClearedAtUtc = nowUtc;
+            AttentionClearedByAccountUserId = actorAccountUserId;
+            AttentionClearReason = "notification_confirmed";
+        }
+
+        if (NeedsShare)
+            ClearNeedsShare();
+
+        return Result<KeepRequestEvent>.Success(confirmationEvent);
     }
 
     /// <summary>

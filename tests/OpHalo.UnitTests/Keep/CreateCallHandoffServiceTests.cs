@@ -261,6 +261,7 @@ public class CreateCallHandoffServiceTests
         }
 
         public Task<KeepResponsePolicy?> GetResponsePolicyAsync(Guid a, CancellationToken ct) => throw new NotImplementedException();
+        public Task<bool> IsCustomerVisibleBusinessUpdateEventAsync(Guid r, Guid a, Guid e, CancellationToken ct) => throw new NotImplementedException();
         public Task<List<KeepRequestParticipant>> GetParticipantsForUpdateAsync(Guid r, Guid a, CancellationToken ct) => throw new NotImplementedException();
         public Task<ParticipantTargetInfo?> GetParticipantTargetAsync(Guid u, Guid a, CancellationToken ct) => throw new NotImplementedException();
         public Task<IReadOnlyList<ParticipantCandidateRecord>> GetParticipantCandidatesAsync(Guid a, CancellationToken ct) => throw new NotImplementedException();

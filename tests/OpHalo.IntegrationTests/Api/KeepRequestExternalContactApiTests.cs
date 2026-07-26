@@ -48,6 +48,27 @@ public sealed class KeepRequestExternalContactApiTests : IClassFixture<KeepApiWe
     private Guid _closedRequestId;
     private Guid _closedRequestVersion;
 
+    // Notification-confirmation fixtures (ADR-451, GAP-052a) — each carries a posted business
+    // update (RelatedEventId) and raised business-waiting attention to confirm against.
+    private Guid _notifSmsRequestId;
+    private Guid _notifSmsRequestVersion;
+    private Guid _notifSmsRelatedEventId;
+    private Guid _notifEmailRequestId;
+    private Guid _notifEmailRequestVersion;
+    private Guid _notifEmailRelatedEventId;
+    private Guid _notifCallRequestedRequestId;
+    private Guid _notifCallRequestedRequestVersion;
+    private Guid _notifCallRequestedRelatedEventId;
+    private Guid _notifBusinessOriginRequestId;
+    private Guid _notifBusinessOriginRequestVersion;
+    private Guid _notifBusinessOriginRelatedEventId;
+    // Wrong-event-type fixture for prepare-time referential validation (not a BusinessUpdate).
+    private Guid _notifSmsRequestCreatedEventId;
+    // Terminal-guard fixture: closed request with a real business update posted before terminal.
+    private Guid _notifClosedRequestId;
+    private Guid _notifClosedRequestVersion;
+    private Guid _notifClosedRelatedEventId;
+
     // G7b: exact active unresolved-feedback review state (Owner + Admin success; Operator 403)
     private Guid _g7bRequestId;
     private Guid _g7bRequestVersion;
@@ -188,6 +209,91 @@ public sealed class KeepRequestExternalContactApiTests : IClassFixture<KeepApiWe
         await db.SaveChangesAsync();
         _closedRequestId = closedRequest.Id;
         _closedRequestVersion = closedRequest.ConcurrencyVersion;
+
+        // Closed request carrying a real business update, posted before terminal — for the
+        // notification-preparation terminal guard (must fail on IsTerminal, not on a bogus
+        // related-event lookup).
+        var notifClosedRequest = KeepRequest.CreateFromCustomerIntake(
+            _accountId, customer.Id, "John Customer", "0400000001", null,
+            "Notify-closed job", "EC-NCL", "ec_ncl_token", now, 60);
+        var notifClosedUpdate = notifClosedRequest.AddBusinessUpdate(
+            "On our way.", graph.Owner.Id, "owner@ec-tests.com", now);
+        Assert.True(notifClosedUpdate.IsSuccess);
+        notifClosedRequest.ChangeStatus(KeepRequestStatus.Resolved, null, graph.Owner.Id, "owner@ec-tests.com", now);
+        notifClosedRequest.ChangeStatus(KeepRequestStatus.Closed, null, graph.Owner.Id, "owner@ec-tests.com", now);
+        db.Set<KeepRequest>().Add(notifClosedRequest);
+        db.Set<KeepRequestEvent>().Add(
+            KeepRequestEvent.CreateRequestCreated(notifClosedRequest.Id, _accountId, now));
+        db.Set<KeepRequestEvent>().Add(notifClosedUpdate.Value!);
+        await db.SaveChangesAsync();
+        _notifClosedRequestId = notifClosedRequest.Id;
+        _notifClosedRequestVersion = notifClosedRequest.ConcurrencyVersion;
+        _notifClosedRelatedEventId = notifClosedUpdate.Value!.Id;
+
+        // --- Notification-confirmation fixtures (ADR-451, GAP-052a) ---
+        var notifSmsRequest = KeepRequest.CreateFromCustomerIntake(
+            _accountId, customer.Id, "John Customer", "0400000001", null,
+            "Notify-sms job", "EC-NSM", "ec_nsm_token", now, 60);
+        notifSmsRequest.AddCustomerMessage(MessageIntent.GeneralMessage, "Any update?", 60, 240, 60, now);
+        var notifSmsUpdate = notifSmsRequest.AddBusinessUpdate(
+            "We are on our way.", graph.Owner.Id, "owner@ec-tests.com", now);
+        Assert.True(notifSmsUpdate.IsSuccess);
+        var notifSmsCreatedEvent = KeepRequestEvent.CreateRequestCreated(notifSmsRequest.Id, _accountId, now);
+        db.Set<KeepRequest>().Add(notifSmsRequest);
+        db.Set<KeepRequestEvent>().Add(notifSmsCreatedEvent);
+        db.Set<KeepRequestEvent>().Add(notifSmsUpdate.Value!);
+        await db.SaveChangesAsync();
+        _notifSmsRequestCreatedEventId = notifSmsCreatedEvent.Id;
+        _notifSmsRequestId = notifSmsRequest.Id;
+        _notifSmsRequestVersion = notifSmsRequest.ConcurrencyVersion;
+        _notifSmsRelatedEventId = notifSmsUpdate.Value!.Id;
+
+        var notifEmailRequest = KeepRequest.CreateFromCustomerIntake(
+            _accountId, customer.Id, "John Customer", "0400000001", null,
+            "Notify-email job", "EC-NEM", "ec_nem_token", now, 60);
+        notifEmailRequest.AddCustomerMessage(MessageIntent.GeneralMessage, "Any update?", 60, 240, 60, now);
+        var notifEmailUpdate = notifEmailRequest.AddBusinessUpdate(
+            "We are on our way.", graph.Owner.Id, "owner@ec-tests.com", now);
+        Assert.True(notifEmailUpdate.IsSuccess);
+        db.Set<KeepRequest>().Add(notifEmailRequest);
+        db.Set<KeepRequestEvent>().Add(
+            KeepRequestEvent.CreateRequestCreated(notifEmailRequest.Id, _accountId, now));
+        db.Set<KeepRequestEvent>().Add(notifEmailUpdate.Value!);
+        await db.SaveChangesAsync();
+        _notifEmailRequestId = notifEmailRequest.Id;
+        _notifEmailRequestVersion = notifEmailRequest.ConcurrencyVersion;
+        _notifEmailRelatedEventId = notifEmailUpdate.Value!.Id;
+
+        var notifCallRequestedRequest = KeepRequest.CreateFromCustomerIntake(
+            _accountId, customer.Id, "John Customer", "0400000001", null,
+            "Notify-call job", "EC-NCR", "ec_ncr_token", now, 60);
+        notifCallRequestedRequest.AddCustomerMessage(MessageIntent.CallRequested, "Please call me", 60, 240, 60, now);
+        var notifCallRequestedUpdate = notifCallRequestedRequest.AddBusinessUpdate(
+            "We will call you shortly.", graph.Owner.Id, "owner@ec-tests.com", now);
+        Assert.True(notifCallRequestedUpdate.IsSuccess);
+        db.Set<KeepRequest>().Add(notifCallRequestedRequest);
+        db.Set<KeepRequestEvent>().Add(
+            KeepRequestEvent.CreateRequestCreated(notifCallRequestedRequest.Id, _accountId, now));
+        db.Set<KeepRequestEvent>().Add(notifCallRequestedUpdate.Value!);
+        await db.SaveChangesAsync();
+        _notifCallRequestedRequestId = notifCallRequestedRequest.Id;
+        _notifCallRequestedRequestVersion = notifCallRequestedRequest.ConcurrencyVersion;
+        _notifCallRequestedRelatedEventId = notifCallRequestedUpdate.Value!.Id;
+
+        var notifBusinessOriginRequest = KeepRequest.CreateByBusiness(
+            _accountId, customer.Id, "John Customer", "0400000001", null,
+            "Notify-business-origin job", "EC-NBO", "ec_nbo_token", now, KeepRequestSource.Phone);
+        var notifBusinessOriginUpdate = notifBusinessOriginRequest.AddBusinessUpdate(
+            "Job scheduled.", graph.Owner.Id, "owner@ec-tests.com", now);
+        Assert.True(notifBusinessOriginUpdate.IsSuccess);
+        db.Set<KeepRequest>().Add(notifBusinessOriginRequest);
+        db.Set<KeepRequestEvent>().Add(
+            KeepRequestEvent.CreateRequestCreated(notifBusinessOriginRequest.Id, _accountId, now));
+        db.Set<KeepRequestEvent>().Add(notifBusinessOriginUpdate.Value!);
+        await db.SaveChangesAsync();
+        _notifBusinessOriginRequestId = notifBusinessOriginRequest.Id;
+        _notifBusinessOriginRequestVersion = notifBusinessOriginRequest.ConcurrencyVersion;
+        _notifBusinessOriginRelatedEventId = notifBusinessOriginUpdate.Value!.Id;
 
         // G7b: Closed + negative feedback = exact active unresolved-feedback review state.
         _g7bPageToken = "ec_g7b_token";
@@ -691,6 +797,336 @@ public sealed class KeepRequestExternalContactApiTests : IClassFixture<KeepApiWe
         Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
         Assert.Equal("KeepRequest.TerminalState", body.GetProperty("code").GetString());
+    }
+
+    // =========================================================================
+    // Notification preparation (ADR-451, GAP-052a)
+    // =========================================================================
+
+    [Fact]
+    public async Task PostNotificationPreparation_Unauthenticated_Returns401()
+    {
+        var client = _factory.CreateClient();
+        var response = await client.PostAsJsonAsync(
+            $"/keep/requests/{_notifSmsRequestId}/notification-preparation",
+            new { relatedUpdateEventId = _notifSmsRelatedEventId, channel = "sms" });
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task PostNotificationPreparation_ViewerRole_Returns403()
+    {
+        var response = await AuthRequest(_viewerCookie, _notifSmsRequestVersion).PostAsJsonAsync(
+            $"/keep/requests/{_notifSmsRequestId}/notification-preparation",
+            new { relatedUpdateEventId = _notifSmsRelatedEventId, channel = "sms" });
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task PostNotificationPreparation_InvalidChannel_Returns400()
+    {
+        var response = await AuthRequest(_ownerCookie, _notifSmsRequestVersion).PostAsJsonAsync(
+            $"/keep/requests/{_notifSmsRequestId}/notification-preparation",
+            new { relatedUpdateEventId = _notifSmsRelatedEventId, channel = "phone" });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("KeepRequest.NotificationInvalidChannel", body.GetProperty("code").GetString());
+    }
+
+    [Fact]
+    public async Task PostNotificationPreparation_StaleVersion_Returns409_RequestChanged()
+    {
+        var response = await AuthRequest(_ownerCookie, Guid.NewGuid()).PostAsJsonAsync(
+            $"/keep/requests/{_notifSmsRequestId}/notification-preparation",
+            new { relatedUpdateEventId = _notifSmsRelatedEventId, channel = "sms" });
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("KeepRequest.RequestChanged", body.GetProperty("code").GetString());
+    }
+
+    [Fact]
+    public async Task PostNotificationPreparation_Terminal_Returns409()
+    {
+        // Uses a real, valid related event so the terminal guard — not the referential
+        // validation — is what actually rejects the request.
+        var response = await AuthRequest(_ownerCookie, _notifClosedRequestVersion).PostAsJsonAsync(
+            $"/keep/requests/{_notifClosedRequestId}/notification-preparation",
+            new { relatedUpdateEventId = _notifClosedRelatedEventId, channel = "sms" });
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("KeepRequest.TerminalState", body.GetProperty("code").GetString());
+    }
+
+    [Fact]
+    public async Task PostNotificationPreparation_RandomRelatedEventId_Returns400_NotFound()
+    {
+        var response = await AuthRequest(_ownerCookie, _notifSmsRequestVersion).PostAsJsonAsync(
+            $"/keep/requests/{_notifSmsRequestId}/notification-preparation",
+            new { relatedUpdateEventId = Guid.NewGuid(), channel = "sms" });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("KeepRequest.NotificationRelatedEventNotFound", body.GetProperty("code").GetString());
+    }
+
+    [Fact]
+    public async Task PostNotificationPreparation_WrongRequestRelatedEventId_Returns400_NotFound()
+    {
+        // _notifEmailRelatedEventId is a real, valid BusinessUpdate event — but on a different request.
+        var response = await AuthRequest(_ownerCookie, _notifSmsRequestVersion).PostAsJsonAsync(
+            $"/keep/requests/{_notifSmsRequestId}/notification-preparation",
+            new { relatedUpdateEventId = _notifEmailRelatedEventId, channel = "sms" });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("KeepRequest.NotificationRelatedEventNotFound", body.GetProperty("code").GetString());
+    }
+
+    [Fact]
+    public async Task PostNotificationPreparation_WrongEventTypeRelatedEventId_Returns400_NotFound()
+    {
+        // _notifSmsRequestCreatedEventId is a real event on the same request — but RequestCreated,
+        // not a customer-visible BusinessUpdate.
+        var response = await AuthRequest(_ownerCookie, _notifSmsRequestVersion).PostAsJsonAsync(
+            $"/keep/requests/{_notifSmsRequestId}/notification-preparation",
+            new { relatedUpdateEventId = _notifSmsRequestCreatedEventId, channel = "sms" });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("KeepRequest.NotificationRelatedEventNotFound", body.GetProperty("code").GetString());
+    }
+
+    [Fact]
+    public async Task PostNotificationPreparation_Succeeds_RecordsPreparedEvent_NoEffects()
+    {
+        var response = await AuthRequest(_ownerCookie, _notifSmsRequestVersion).PostAsJsonAsync(
+            $"/keep/requests/{_notifSmsRequestId}/notification-preparation",
+            new { relatedUpdateEventId = _notifSmsRelatedEventId, channel = "sms" });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        // Preparation alone never sets first response or clears attention.
+        Assert.Equal(JsonValueKind.Null, body.GetProperty("firstRespondedAtUtc").ValueKind);
+        Assert.NotEqual("none", body.GetProperty("attentionLevel").GetString());
+
+        var events = body.GetProperty("events").EnumerateArray().ToList();
+        var preparedEvent = events.Single(e =>
+            e.GetProperty("eventType").GetString() == "notification_prepared");
+        Assert.Equal("sms", preparedEvent.GetProperty("communicationChannel").GetString());
+        Assert.Equal(_notifSmsRelatedEventId.ToString(), preparedEvent.GetProperty("relatedEventId").GetString());
+    }
+
+    // =========================================================================
+    // Notification confirmation (ADR-451, GAP-052a)
+    // =========================================================================
+
+    private async Task<Guid> PrepareNotificationAsync(
+        string cookie, Guid requestId, Guid requestVersion, Guid relatedUpdateEventId, string channel)
+    {
+        var response = await AuthRequest(cookie, requestVersion).PostAsJsonAsync(
+            $"/keep/requests/{requestId}/notification-preparation",
+            new { relatedUpdateEventId, channel });
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        return Guid.Parse(body.GetProperty("version").GetString()!);
+    }
+
+    [Fact]
+    public async Task PostNotificationConfirmation_Unauthenticated_Returns401()
+    {
+        var client = _factory.CreateClient();
+        var response = await client.PostAsJsonAsync(
+            $"/keep/requests/{_notifSmsRequestId}/notification-confirmation",
+            new { relatedUpdateEventId = _notifSmsRelatedEventId, channel = "sms" });
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task PostNotificationConfirmation_ViewerRole_Returns403()
+    {
+        var response = await AuthRequest(_viewerCookie, _notifSmsRequestVersion).PostAsJsonAsync(
+            $"/keep/requests/{_notifSmsRequestId}/notification-confirmation",
+            new { relatedUpdateEventId = _notifSmsRelatedEventId, channel = "sms" });
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task PostNotificationConfirmation_InvalidChannel_Returns400()
+    {
+        var response = await AuthRequest(_ownerCookie, _notifSmsRequestVersion).PostAsJsonAsync(
+            $"/keep/requests/{_notifSmsRequestId}/notification-confirmation",
+            new { relatedUpdateEventId = _notifSmsRelatedEventId, channel = "phone" });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("KeepRequest.NotificationInvalidChannel", body.GetProperty("code").GetString());
+    }
+
+    [Fact]
+    public async Task PostNotificationConfirmation_StaleVersion_Returns409_RequestChanged()
+    {
+        var response = await AuthRequest(_ownerCookie, Guid.NewGuid()).PostAsJsonAsync(
+            $"/keep/requests/{_notifSmsRequestId}/notification-confirmation",
+            new { relatedUpdateEventId = _notifSmsRelatedEventId, channel = "sms" });
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("KeepRequest.RequestChanged", body.GetProperty("code").GetString());
+    }
+
+    [Fact]
+    public async Task PostNotificationConfirmation_Terminal_Returns409()
+    {
+        var response = await AuthRequest(_ownerCookie, _closedRequestVersion).PostAsJsonAsync(
+            $"/keep/requests/{_closedRequestId}/notification-confirmation",
+            new { relatedUpdateEventId = Guid.NewGuid(), channel = "sms" });
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("KeepRequest.TerminalState", body.GetProperty("code").GetString());
+    }
+
+    [Fact]
+    public async Task PostNotificationConfirmation_WithoutPreparation_Returns400_NotPrepared()
+    {
+        var response = await AuthRequest(_ownerCookie, _notifSmsRequestVersion).PostAsJsonAsync(
+            $"/keep/requests/{_notifSmsRequestId}/notification-confirmation",
+            new { relatedUpdateEventId = _notifSmsRelatedEventId, channel = "sms" });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("KeepRequest.NotificationNotPrepared", body.GetProperty("code").GetString());
+    }
+
+    [Fact]
+    public async Task PostNotificationConfirmation_DifferentActorThanPreparer_Returns400_ConfirmerMismatch()
+    {
+        var afterPrepareVersion = await PrepareNotificationAsync(
+            _ownerCookie, _notifSmsRequestId, _notifSmsRequestVersion, _notifSmsRelatedEventId, "sms");
+
+        // Admin (a different authorized actor on the same account) attempts to confirm what
+        // Owner prepared — ADR-451 requires the same actor for both steps.
+        var response = await AuthRequest(_adminCookie, afterPrepareVersion).PostAsJsonAsync(
+            $"/keep/requests/{_notifSmsRequestId}/notification-confirmation",
+            new { relatedUpdateEventId = _notifSmsRelatedEventId, channel = "sms" });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("KeepRequest.NotificationConfirmerMismatch", body.GetProperty("code").GetString());
+    }
+
+    [Fact]
+    public async Task PostNotificationConfirmation_Replay_Returns400_NotPrepared()
+    {
+        var afterPrepareVersion = await PrepareNotificationAsync(
+            _ownerCookie, _notifSmsRequestId, _notifSmsRequestVersion, _notifSmsRelatedEventId, "sms");
+
+        var firstConfirm = await AuthRequest(_ownerCookie, afterPrepareVersion).PostAsJsonAsync(
+            $"/keep/requests/{_notifSmsRequestId}/notification-confirmation",
+            new { relatedUpdateEventId = _notifSmsRelatedEventId, channel = "sms" });
+        Assert.Equal(HttpStatusCode.OK, firstConfirm.StatusCode);
+        var firstBody = await firstConfirm.Content.ReadFromJsonAsync<JsonElement>();
+        var afterConfirmVersion = Guid.Parse(firstBody.GetProperty("version").GetString()!);
+
+        var replay = await AuthRequest(_ownerCookie, afterConfirmVersion).PostAsJsonAsync(
+            $"/keep/requests/{_notifSmsRequestId}/notification-confirmation",
+            new { relatedUpdateEventId = _notifSmsRelatedEventId, channel = "sms" });
+
+        Assert.Equal(HttpStatusCode.BadRequest, replay.StatusCode);
+        var replayBody = await replay.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("KeepRequest.NotificationNotPrepared", replayBody.GetProperty("code").GetString());
+    }
+
+    [Fact]
+    public async Task PostNotificationConfirmation_Sms_SetsFirstResponseClearsAttentionAndNeedsShare()
+    {
+        var afterPrepareVersion = await PrepareNotificationAsync(
+            _ownerCookie, _notifSmsRequestId, _notifSmsRequestVersion, _notifSmsRelatedEventId, "sms");
+
+        var response = await AuthRequest(_ownerCookie, afterPrepareVersion).PostAsJsonAsync(
+            $"/keep/requests/{_notifSmsRequestId}/notification-confirmation",
+            new { relatedUpdateEventId = _notifSmsRelatedEventId, channel = "sms" });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.NotEqual(JsonValueKind.Null, body.GetProperty("firstRespondedAtUtc").ValueKind);
+        Assert.Equal("none", body.GetProperty("attentionLevel").GetString());
+
+        var events = body.GetProperty("events").EnumerateArray().ToList();
+        var confirmEvent = events.Single(e =>
+            e.GetProperty("eventType").GetString() == "notification_confirmed");
+
+        Assert.Equal("sms", confirmEvent.GetProperty("communicationChannel").GetString());
+        Assert.Equal(_notifSmsRelatedEventId.ToString(), confirmEvent.GetProperty("relatedEventId").GetString());
+    }
+
+    [Fact]
+    public async Task PostNotificationConfirmation_Email_SetsFirstResponseClearsAttention()
+    {
+        var afterPrepareVersion = await PrepareNotificationAsync(
+            _ownerCookie, _notifEmailRequestId, _notifEmailRequestVersion, _notifEmailRelatedEventId, "email");
+
+        var response = await AuthRequest(_ownerCookie, afterPrepareVersion).PostAsJsonAsync(
+            $"/keep/requests/{_notifEmailRequestId}/notification-confirmation",
+            new { relatedUpdateEventId = _notifEmailRelatedEventId, channel = "email" });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.NotEqual(JsonValueKind.Null, body.GetProperty("firstRespondedAtUtc").ValueKind);
+        Assert.Equal("none", body.GetProperty("attentionLevel").GetString());
+
+        var events = body.GetProperty("events").EnumerateArray().ToList();
+        var confirmEvent = events.Single(e =>
+            e.GetProperty("eventType").GetString() == "notification_confirmed");
+        Assert.Equal("email", confirmEvent.GetProperty("communicationChannel").GetString());
+    }
+
+    [Fact]
+    public async Task PostNotificationConfirmation_NeverSatisfiesCallRequested()
+    {
+        var afterPrepareVersion = await PrepareNotificationAsync(
+            _ownerCookie, _notifCallRequestedRequestId, _notifCallRequestedRequestVersion,
+            _notifCallRequestedRelatedEventId, "sms");
+
+        var response = await AuthRequest(_ownerCookie, afterPrepareVersion).PostAsJsonAsync(
+            $"/keep/requests/{_notifCallRequestedRequestId}/notification-confirmation",
+            new { relatedUpdateEventId = _notifCallRequestedRelatedEventId, channel = "sms" });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        // First response still counts (a text was genuinely sent), but the call-back obligation
+        // itself is not satisfied by text/email — attention remains (ADR-451).
+        Assert.NotEqual(JsonValueKind.Null, body.GetProperty("firstRespondedAtUtc").ValueKind);
+        Assert.NotEqual("none", body.GetProperty("attentionLevel").GetString());
+    }
+
+    [Fact]
+    public async Task PostNotificationConfirmation_BusinessOrigin_DoesNotSetFirstResponse_ClearsNeedsShare()
+    {
+        var afterPrepareVersion = await PrepareNotificationAsync(
+            _ownerCookie, _notifBusinessOriginRequestId, _notifBusinessOriginRequestVersion,
+            _notifBusinessOriginRelatedEventId, "sms");
+
+        var response = await AuthRequest(_ownerCookie, afterPrepareVersion).PostAsJsonAsync(
+            $"/keep/requests/{_notifBusinessOriginRequestId}/notification-confirmation",
+            new { relatedUpdateEventId = _notifBusinessOriginRelatedEventId, channel = "sms" });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(JsonValueKind.Null, body.GetProperty("firstRespondedAtUtc").ValueKind);
+        Assert.False(body.GetProperty("needsShare").GetBoolean());
     }
 
     // =========================================================================

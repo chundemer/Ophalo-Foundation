@@ -285,4 +285,20 @@ public static class KeepRequestErrors
 
     public static readonly Error ClassificationReasonTooLong =
         Error.Create("KeepRequest.ClassificationReasonTooLong", "The classification reason exceeds the maximum allowed length of 500 characters.");
+
+    // Notification preparation/confirmation errors (ADR-451, GAP-052a).
+    public static readonly Error NotificationInvalidChannel =
+        Error.Create("KeepRequest.NotificationInvalidChannel", "Notification channel must be 'sms' or 'email'.");
+
+    public static readonly Error NotificationRelatedEventRequired =
+        Error.Create("KeepRequest.NotificationRelatedEventRequired", "The posted update this notification is for is required.");
+
+    public static readonly Error NotificationRelatedEventNotFound =
+        Error.Create("KeepRequest.NotificationRelatedEventNotFound", "The related update was not found as a customer-visible business update on this request.");
+
+    public static readonly Error NotificationNotPrepared =
+        Error.Create("KeepRequest.NotificationNotPrepared", "No matching prepared notification is awaiting confirmation for this update and channel.");
+
+    public static readonly Error NotificationConfirmerMismatch =
+        Error.Create("KeepRequest.NotificationConfirmerMismatch", "Only the user who prepared this notification may confirm it.");
 }

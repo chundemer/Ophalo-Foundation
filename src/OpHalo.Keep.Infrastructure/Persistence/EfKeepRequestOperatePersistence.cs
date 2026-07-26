@@ -4,6 +4,7 @@ using OpHalo.Foundation.Infrastructure.Persistence;
 using OpHalo.Keep.Application.Abstractions;
 using OpHalo.Keep.Application.Requests;
 using OpHalo.Keep.Core.Entities;
+using OpHalo.Keep.Core.Entities.Enums;
 
 namespace OpHalo.Keep.Infrastructure.Persistence;
 
@@ -65,6 +66,16 @@ public sealed class EfKeepRequestOperatePersistence(OpHaloDbContext dbContext) :
         dbContext.Set<KeepResponsePolicy>()
             .AsNoTracking()
             .FirstOrDefaultAsync(p => p.AccountId == accountId, ct);
+
+    public Task<bool> IsCustomerVisibleBusinessUpdateEventAsync(
+        Guid requestId, Guid accountId, Guid eventId, CancellationToken ct) =>
+        dbContext.Set<KeepRequestEvent>()
+            .AsNoTracking()
+            .AnyAsync(e => e.Id == eventId
+                && e.RequestId == requestId
+                && e.AccountId == accountId
+                && e.Visibility == KeepRequestEventVisibility.All
+                && e.MessageIntent == MessageIntent.BusinessUpdate, ct);
 
     public async Task<KeepRequest?> GetVisibleRequestForUpdateAsync(
         Guid requestId, Guid accountId, Guid currentAccountUserId,

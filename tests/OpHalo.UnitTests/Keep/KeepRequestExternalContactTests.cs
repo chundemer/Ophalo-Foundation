@@ -36,6 +36,14 @@ public class KeepRequestExternalContactTests
     // timezone/weekend-skip computation itself lives in LogExternalContactService, not the domain.
     static readonly DateTime NextBusinessDay = new(2026, 6, 18, 0, 0, 0, DateTimeKind.Utc);
 
+    // Raise CallRequested business-waiting attention on the request (ADR-451 CallRequested row).
+    static void RaiseCallRequested(KeepRequest request, DateTime? since = null)
+    {
+        var t = since ?? Now;
+        request.AddCustomerMessage(
+            MessageIntent.CallRequested, "Please call me back", 60, StandardMinutes, 60, t);
+    }
+
     // -------------------------------------------------------------------
     // LogOutboundExternalContact — guard failures
     // -------------------------------------------------------------------
@@ -441,6 +449,42 @@ public class KeepRequestExternalContactTests
         Assert.True(result.IsSuccess);
         Assert.Equal(AttentionLevel.None, request.AttentionLevel);
         Assert.Equal("external_contact_no_follow_up", request.AttentionClearReason);
+        Assert.True(result.Value!.ExternalContactClearedAttention);
+    }
+
+    [Theory]
+    [InlineData(CommunicationChannel.Sms)]
+    [InlineData(CommunicationChannel.Email)]
+    public void Outbound_sms_email_never_satisfies_call_requested(CommunicationChannel channel)
+    {
+        // ADR-451: a customer-requested call-back is never satisfied by text/email, even when
+        // requiresBusinessFollowUp = false — only a completed live call clears it.
+        var request = NewCustomerRequest();
+        RaiseCallRequested(request);
+
+        var result = request.LogOutboundExternalContact(
+            channel, outcome: null, requiresBusinessFollowUp: false, summary: "Sent update",
+            ActorId, ActorName, Now.AddMinutes(5));
+
+        Assert.True(result.IsSuccess);
+        Assert.NotEqual(AttentionLevel.None, request.AttentionLevel);
+        Assert.Equal(AttentionReason.CallRequested, request.AttentionReason);
+        Assert.Null(request.AttentionClearReason);
+        Assert.False(result.Value!.ExternalContactClearedAttention);
+    }
+
+    [Fact]
+    public void Outbound_phone_spoke_still_clears_call_requested()
+    {
+        var request = NewCustomerRequest();
+        RaiseCallRequested(request);
+
+        var result = request.LogOutboundExternalContact(
+            CommunicationChannel.Phone, ExternalContactOutcome.SpokeWithCustomer,
+            requiresBusinessFollowUp: false, summary: null, ActorId, ActorName, Now.AddMinutes(5));
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(AttentionLevel.None, request.AttentionLevel);
         Assert.True(result.Value!.ExternalContactClearedAttention);
     }
 
@@ -930,5 +974,328 @@ public class KeepRequestExternalContactTests
 
         Assert.True(result.IsFailure);
         Assert.Equal(KeepRequestErrors.TerminalState.Code, result.Error.Code);
+    }
+
+    // -------------------------------------------------------------------
+    // PrepareUpdateNotification — durable obligation record (ADR-451, GAP-052a)
+    // -------------------------------------------------------------------
+
+    static readonly Guid OtherActorId = Guid.NewGuid();
+    const string OtherActorName = "Other Operator";
+
+    [Fact]
+    public void PrepareNotification_blocked_on_terminal_request()
+    {
+        var request = NewCustomerRequest();
+        request.ChangeStatus(KeepRequestStatus.Resolved, null, ActorId, ActorName, Now);
+        request.ChangeStatus(KeepRequestStatus.Closed, null, ActorId, ActorName, Now);
+
+        var result = request.PrepareUpdateNotification(
+            Guid.NewGuid(), CommunicationChannel.Sms, ActorId, ActorName, Now.AddMinutes(1));
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(KeepRequestErrors.TerminalState.Code, result.Error!.Code);
+    }
+
+    [Fact]
+    public void PrepareNotification_rejects_empty_related_event_id()
+    {
+        var request = NewCustomerRequest();
+
+        var result = request.PrepareUpdateNotification(
+            Guid.Empty, CommunicationChannel.Sms, ActorId, ActorName, Now.AddMinutes(1));
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(KeepRequestErrors.NotificationRelatedEventRequired.Code, result.Error!.Code);
+    }
+
+    [Theory]
+    [InlineData(CommunicationChannel.Phone)]
+    [InlineData(CommunicationChannel.InPerson)]
+    [InlineData(CommunicationChannel.Other)]
+    [InlineData(CommunicationChannel.InApp)]
+    public void PrepareNotification_rejects_non_sms_email_channel(CommunicationChannel channel)
+    {
+        var request = NewCustomerRequest();
+
+        var result = request.PrepareUpdateNotification(
+            Guid.NewGuid(), channel, ActorId, ActorName, Now.AddMinutes(1));
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(KeepRequestErrors.NotificationInvalidChannel.Code, result.Error!.Code);
+    }
+
+    [Fact]
+    public void PrepareNotification_records_pending_obligation_without_effects()
+    {
+        var request = NewCustomerRequest();
+        RaiseBusinessWaiting(request);
+        var attentionBefore = request.AttentionLevel;
+        var relatedEventId = Guid.NewGuid();
+
+        var result = request.PrepareUpdateNotification(
+            relatedEventId, CommunicationChannel.Sms, ActorId, ActorName, Now.AddMinutes(1));
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(relatedEventId, request.PendingNotificationRelatedEventId);
+        Assert.Equal(CommunicationChannel.Sms, request.PendingNotificationChannel);
+        Assert.Equal(ActorId, request.PendingNotificationPreparedByAccountUserId);
+        Assert.NotNull(request.PendingNotificationPreparedAtUtc);
+        // Preparation alone never applies effects.
+        Assert.Equal(attentionBefore, request.AttentionLevel);
+        Assert.Null(request.FirstRespondedAtUtc);
+    }
+
+    [Fact]
+    public void PrepareNotification_overwrites_prior_pending_obligation()
+    {
+        var request = NewCustomerRequest();
+        request.PrepareUpdateNotification(
+            Guid.NewGuid(), CommunicationChannel.Sms, ActorId, ActorName, Now.AddMinutes(1));
+        var secondEventId = Guid.NewGuid();
+
+        var result = request.PrepareUpdateNotification(
+            secondEventId, CommunicationChannel.Email, OtherActorId, OtherActorName, Now.AddMinutes(2));
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(secondEventId, request.PendingNotificationRelatedEventId);
+        Assert.Equal(CommunicationChannel.Email, request.PendingNotificationChannel);
+        Assert.Equal(OtherActorId, request.PendingNotificationPreparedByAccountUserId);
+    }
+
+    // -------------------------------------------------------------------
+    // ConfirmUpdateNotification — sole notification attestation (ADR-451, GAP-052a)
+    // -------------------------------------------------------------------
+
+    [Fact]
+    public void ConfirmNotification_blocked_on_terminal_request()
+    {
+        var request = NewCustomerRequest();
+        request.ChangeStatus(KeepRequestStatus.Resolved, null, ActorId, ActorName, Now);
+        request.ChangeStatus(KeepRequestStatus.Closed, null, ActorId, ActorName, Now);
+
+        var result = request.ConfirmUpdateNotification(
+            Guid.NewGuid(), CommunicationChannel.Sms, ActorId, ActorName, Now.AddMinutes(1));
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(KeepRequestErrors.TerminalState.Code, result.Error!.Code);
+    }
+
+    [Fact]
+    public void ConfirmNotification_rejects_empty_related_event_id()
+    {
+        var request = NewCustomerRequest();
+
+        var result = request.ConfirmUpdateNotification(
+            Guid.Empty, CommunicationChannel.Sms, ActorId, ActorName, Now.AddMinutes(1));
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(KeepRequestErrors.NotificationRelatedEventRequired.Code, result.Error!.Code);
+    }
+
+    [Theory]
+    [InlineData(CommunicationChannel.Phone)]
+    [InlineData(CommunicationChannel.InPerson)]
+    [InlineData(CommunicationChannel.Other)]
+    [InlineData(CommunicationChannel.InApp)]
+    public void ConfirmNotification_rejects_non_sms_email_channel(CommunicationChannel channel)
+    {
+        var request = NewCustomerRequest();
+
+        var result = request.ConfirmUpdateNotification(
+            Guid.NewGuid(), channel, ActorId, ActorName, Now.AddMinutes(1));
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(KeepRequestErrors.NotificationInvalidChannel.Code, result.Error!.Code);
+    }
+
+    [Fact]
+    public void ConfirmNotification_rejects_without_any_prepared_obligation()
+    {
+        var request = NewCustomerRequest();
+
+        var result = request.ConfirmUpdateNotification(
+            Guid.NewGuid(), CommunicationChannel.Sms, ActorId, ActorName, Now.AddMinutes(1));
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(KeepRequestErrors.NotificationNotPrepared.Code, result.Error!.Code);
+    }
+
+    [Fact]
+    public void ConfirmNotification_rejects_mismatched_related_event_id()
+    {
+        var request = NewCustomerRequest();
+        request.PrepareUpdateNotification(
+            Guid.NewGuid(), CommunicationChannel.Sms, ActorId, ActorName, Now.AddMinutes(1));
+
+        var result = request.ConfirmUpdateNotification(
+            Guid.NewGuid(), CommunicationChannel.Sms, ActorId, ActorName, Now.AddMinutes(2));
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(KeepRequestErrors.NotificationNotPrepared.Code, result.Error!.Code);
+    }
+
+    [Fact]
+    public void ConfirmNotification_rejects_mismatched_channel()
+    {
+        var request = NewCustomerRequest();
+        var relatedEventId = Guid.NewGuid();
+        request.PrepareUpdateNotification(
+            relatedEventId, CommunicationChannel.Sms, ActorId, ActorName, Now.AddMinutes(1));
+
+        var result = request.ConfirmUpdateNotification(
+            relatedEventId, CommunicationChannel.Email, ActorId, ActorName, Now.AddMinutes(2));
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(KeepRequestErrors.NotificationNotPrepared.Code, result.Error!.Code);
+    }
+
+    [Fact]
+    public void ConfirmNotification_rejects_different_confirming_actor()
+    {
+        // ADR-451: the same authenticated user who prepared the handoff confirms it.
+        var request = NewCustomerRequest();
+        var relatedEventId = Guid.NewGuid();
+        request.PrepareUpdateNotification(
+            relatedEventId, CommunicationChannel.Sms, ActorId, ActorName, Now.AddMinutes(1));
+
+        var result = request.ConfirmUpdateNotification(
+            relatedEventId, CommunicationChannel.Sms, OtherActorId, OtherActorName, Now.AddMinutes(2));
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(KeepRequestErrors.NotificationConfirmerMismatch.Code, result.Error!.Code);
+        // Rejected confirmation must not consume the pending obligation.
+        Assert.Equal(relatedEventId, request.PendingNotificationRelatedEventId);
+    }
+
+    [Fact]
+    public void ConfirmNotification_rejects_replay_after_prior_confirmation()
+    {
+        var request = NewCustomerRequest();
+        var relatedEventId = Guid.NewGuid();
+        request.PrepareUpdateNotification(
+            relatedEventId, CommunicationChannel.Sms, ActorId, ActorName, Now.AddMinutes(1));
+        var firstConfirm = request.ConfirmUpdateNotification(
+            relatedEventId, CommunicationChannel.Sms, ActorId, ActorName, Now.AddMinutes(2));
+        Assert.True(firstConfirm.IsSuccess);
+
+        var replay = request.ConfirmUpdateNotification(
+            relatedEventId, CommunicationChannel.Sms, ActorId, ActorName, Now.AddMinutes(3));
+
+        Assert.False(replay.IsSuccess);
+        Assert.Equal(KeepRequestErrors.NotificationNotPrepared.Code, replay.Error!.Code);
+    }
+
+    [Theory]
+    [InlineData(CommunicationChannel.Sms)]
+    [InlineData(CommunicationChannel.Email)]
+    public void ConfirmNotification_sets_first_response_and_clears_business_waiting(CommunicationChannel channel)
+    {
+        var request = NewCustomerRequest();
+        RaiseBusinessWaiting(request);
+        var relatedEventId = Guid.NewGuid();
+        request.PrepareUpdateNotification(relatedEventId, channel, ActorId, ActorName, Now.AddMinutes(4));
+
+        var result = request.ConfirmUpdateNotification(
+            relatedEventId, channel, ActorId, ActorName, Now.AddMinutes(5));
+
+        Assert.True(result.IsSuccess);
+        Assert.NotNull(request.FirstRespondedAtUtc);
+        Assert.Equal(ActorId, request.FirstResponderAccountUserId);
+        Assert.Equal(result.Value!.Id, request.FirstResponseEventId);
+        Assert.Equal(AttentionLevel.None, request.AttentionLevel);
+        Assert.Equal("notification_confirmed", request.AttentionClearReason);
+        Assert.Equal(channel, result.Value!.CommunicationChannel);
+        Assert.Equal(relatedEventId, result.Value!.RelatedEventId);
+        // Confirmed obligation is consumed.
+        Assert.Null(request.PendingNotificationRelatedEventId);
+        Assert.Null(request.PendingNotificationChannel);
+        Assert.Null(request.PendingNotificationPreparedByAccountUserId);
+    }
+
+    [Fact]
+    public void ConfirmNotification_never_satisfies_call_requested()
+    {
+        // ADR-451: only a completed live call satisfies a customer-requested call-back.
+        var request = NewCustomerRequest();
+        RaiseCallRequested(request);
+        var relatedEventId = Guid.NewGuid();
+        request.PrepareUpdateNotification(
+            relatedEventId, CommunicationChannel.Sms, ActorId, ActorName, Now.AddMinutes(4));
+
+        var result = request.ConfirmUpdateNotification(
+            relatedEventId, CommunicationChannel.Sms, ActorId, ActorName, Now.AddMinutes(5));
+
+        Assert.True(result.IsSuccess);
+        Assert.NotEqual(AttentionLevel.None, request.AttentionLevel);
+        Assert.Equal(AttentionReason.CallRequested, request.AttentionReason);
+        Assert.Null(request.AttentionClearReason);
+    }
+
+    [Fact]
+    public void ConfirmNotification_does_not_overwrite_existing_first_response()
+    {
+        var request = NewCustomerRequest();
+        RaiseBusinessWaiting(request);
+        request.LogOutboundExternalContact(
+            CommunicationChannel.Phone, ExternalContactOutcome.SpokeWithCustomer,
+            requiresBusinessFollowUp: false, summary: null, ActorId, ActorName, Now.AddMinutes(1));
+        var firstResponseAt = request.FirstRespondedAtUtc;
+        var relatedEventId = Guid.NewGuid();
+        request.PrepareUpdateNotification(
+            relatedEventId, CommunicationChannel.Sms, ActorId, ActorName, Now.AddMinutes(9));
+
+        var result = request.ConfirmUpdateNotification(
+            relatedEventId, CommunicationChannel.Sms, ActorId, ActorName, Now.AddMinutes(10));
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(firstResponseAt, request.FirstRespondedAtUtc);
+    }
+
+    [Fact]
+    public void ConfirmNotification_does_not_set_first_response_on_business_origin()
+    {
+        var request = NewBusinessRequest();
+        var relatedEventId = Guid.NewGuid();
+        request.PrepareUpdateNotification(
+            relatedEventId, CommunicationChannel.Sms, ActorId, ActorName, Now.AddMinutes(4));
+
+        var result = request.ConfirmUpdateNotification(
+            relatedEventId, CommunicationChannel.Sms, ActorId, ActorName, Now.AddMinutes(5));
+
+        Assert.True(result.IsSuccess);
+        Assert.Null(request.FirstRespondedAtUtc);
+    }
+
+    [Fact]
+    public void ConfirmNotification_clears_needs_share()
+    {
+        var request = NewBusinessRequest();
+        Assert.True(request.NeedsShare);
+        var relatedEventId = Guid.NewGuid();
+        request.PrepareUpdateNotification(
+            relatedEventId, CommunicationChannel.Sms, ActorId, ActorName, Now.AddMinutes(4));
+
+        var result = request.ConfirmUpdateNotification(
+            relatedEventId, CommunicationChannel.Sms, ActorId, ActorName, Now.AddMinutes(5));
+
+        Assert.True(result.IsSuccess);
+        Assert.False(request.NeedsShare);
+    }
+
+    [Fact]
+    public void ConfirmNotification_updates_last_business_activity()
+    {
+        var request = NewCustomerRequest();
+        var relatedEventId = Guid.NewGuid();
+        request.PrepareUpdateNotification(
+            relatedEventId, CommunicationChannel.Sms, ActorId, ActorName, Now.AddMinutes(4));
+        var confirmAt = Now.AddMinutes(5);
+
+        var result = request.ConfirmUpdateNotification(
+            relatedEventId, CommunicationChannel.Sms, ActorId, ActorName, confirmAt);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(confirmAt, request.LastBusinessActivityAt);
     }
 }

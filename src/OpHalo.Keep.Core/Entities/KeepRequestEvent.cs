@@ -62,6 +62,10 @@ public sealed class KeepRequestEvent : BaseEntity
     public bool ExternalContactSetFirstResponse { get; private set; }
     public bool ExternalContactClearedAttention { get; private set; }
 
+    // Present on NotificationConfirmed events only — links the confirmation to the customer-page
+    // update it attests was sent (ADR-451). CommunicationChannel carries Sms or Email.
+    public Guid? RelatedEventId { get; private set; }
+
     // Present on FeedbackReceived events only — records whether the customer said the request was resolved.
     public bool? FeedbackWasResolved { get; private set; }
 
@@ -459,6 +463,95 @@ public sealed class KeepRequestEvent : BaseEntity
             ExternalContactRequiresFollowUp = requiresFollowUp,
             ExternalContactSetFirstResponse = setFirstResponse,
             ExternalContactClearedAttention = clearedAttention
+        };
+    }
+
+    /// <summary>
+    /// Creates a NotificationConfirmed event — the sole attestation that a customer-page update
+    /// was sent to the customer via Sms or Email, including the mandatory page link (ADR-451).
+    /// Always Internal; preparation/launch alone never produces this event.
+    /// </summary>
+    public static KeepRequestEvent CreateNotificationConfirmed(
+        Guid requestId,
+        Guid accountId,
+        Guid actorAccountUserId,
+        string actorDisplayName,
+        CommunicationChannel channel,
+        Guid relatedEventId,
+        DateTime occurredAtUtc)
+    {
+        if (requestId == Guid.Empty)
+            throw new ArgumentException("Request ID is required.", nameof(requestId));
+        if (accountId == Guid.Empty)
+            throw new ArgumentException("Account ID is required.", nameof(accountId));
+        if (actorAccountUserId == Guid.Empty)
+            throw new ArgumentException("Actor account user ID is required.", nameof(actorAccountUserId));
+        if (string.IsNullOrWhiteSpace(actorDisplayName))
+            throw new ArgumentException("Actor display name is required.", nameof(actorDisplayName));
+        if (channel is not (Enums.CommunicationChannel.Sms or Enums.CommunicationChannel.Email))
+            throw new ArgumentException("Channel must be Sms or Email.", nameof(channel));
+        if (relatedEventId == Guid.Empty)
+            throw new ArgumentException("Related event ID is required.", nameof(relatedEventId));
+        if (occurredAtUtc == default)
+            throw new ArgumentException("occurredAtUtc must be a real timestamp.", nameof(occurredAtUtc));
+
+        return new KeepRequestEvent
+        {
+            RequestId = requestId,
+            AccountId = accountId,
+            EventType = KeepRequestEventType.NotificationConfirmed,
+            Visibility = KeepRequestEventVisibility.Internal,
+            ActorType = ActorType.AccountUser,
+            ActorAccountUserId = actorAccountUserId,
+            ActorDisplayName = actorDisplayName.Trim(),
+            CommunicationChannel = channel,
+            RelatedEventId = relatedEventId,
+            OccurredAtUtc = occurredAtUtc
+        };
+    }
+
+    /// <summary>
+    /// Creates a NotificationPrepared event — records that the owner prepared (but has not yet
+    /// confirmed) an Sms/Email notification handoff for a posted update (ADR-451). Preparation
+    /// alone never applies first-response/attention/NeedsShare effects; ActorAccountUserId
+    /// records who prepared it, for the same-actor confirmation check. Always Internal.
+    /// </summary>
+    public static KeepRequestEvent CreateNotificationPrepared(
+        Guid requestId,
+        Guid accountId,
+        Guid actorAccountUserId,
+        string actorDisplayName,
+        CommunicationChannel channel,
+        Guid relatedEventId,
+        DateTime occurredAtUtc)
+    {
+        if (requestId == Guid.Empty)
+            throw new ArgumentException("Request ID is required.", nameof(requestId));
+        if (accountId == Guid.Empty)
+            throw new ArgumentException("Account ID is required.", nameof(accountId));
+        if (actorAccountUserId == Guid.Empty)
+            throw new ArgumentException("Actor account user ID is required.", nameof(actorAccountUserId));
+        if (string.IsNullOrWhiteSpace(actorDisplayName))
+            throw new ArgumentException("Actor display name is required.", nameof(actorDisplayName));
+        if (channel is not (Enums.CommunicationChannel.Sms or Enums.CommunicationChannel.Email))
+            throw new ArgumentException("Channel must be Sms or Email.", nameof(channel));
+        if (relatedEventId == Guid.Empty)
+            throw new ArgumentException("Related event ID is required.", nameof(relatedEventId));
+        if (occurredAtUtc == default)
+            throw new ArgumentException("occurredAtUtc must be a real timestamp.", nameof(occurredAtUtc));
+
+        return new KeepRequestEvent
+        {
+            RequestId = requestId,
+            AccountId = accountId,
+            EventType = KeepRequestEventType.NotificationPrepared,
+            Visibility = KeepRequestEventVisibility.Internal,
+            ActorType = ActorType.AccountUser,
+            ActorAccountUserId = actorAccountUserId,
+            ActorDisplayName = actorDisplayName.Trim(),
+            CommunicationChannel = channel,
+            RelatedEventId = relatedEventId,
+            OccurredAtUtc = occurredAtUtc
         };
     }
 

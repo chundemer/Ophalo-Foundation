@@ -313,7 +313,8 @@ internal static class KeepRequestDetailMapper
             isPlannedFor ? e.PlannedForDate : null,
             isFollowUpOn ? e.FollowUpOnDate : null,
             isFollowUpOn && e.FollowUpOnReason.HasValue ? MapFollowUpReason(e.FollowUpOnReason.Value) : null,
-            isFeedbackReceived ? e.FeedbackWasResolved : null);
+            isFeedbackReceived ? e.FeedbackWasResolved : null,
+            e.RelatedEventId);
     }
 
     private static string MapOrigin(KeepRequestOrigin origin) => origin switch
@@ -412,6 +413,8 @@ internal static class KeepRequestDetailMapper
         KeepRequestEventType.BusinessPriorityChanged => "business_priority_changed",
         KeepRequestEventType.FollowUpResolved        => "follow_up_resolved",
         KeepRequestEventType.FeedbackReceived        => "feedback_received",
+        KeepRequestEventType.NotificationConfirmed   => "notification_confirmed",
+        KeepRequestEventType.NotificationPrepared    => "notification_prepared",
         _ => throw new InvalidOperationException($"Unknown KeepRequestEventType: {type}")
     };
 
