@@ -80,6 +80,10 @@ export const STATUS_OPTIONS = [
   { value: "resolved", label: "Work completed" },
 ];
 
+export function getStatusLabel(value: string): string {
+  return STATUS_OPTIONS.find((o) => o.value === value)?.label ?? STATUS_OPTIONS[0].label;
+}
+
 // --- GAP-044: History mode (Owner/Admin only) ---
 // Demoted, non-competing entry point — not a peer tab — into the existing protected
 // closed_history/cancelled_history/all_history contract. isHistory is already computed

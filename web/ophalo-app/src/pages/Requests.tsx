@@ -14,11 +14,42 @@ import {
   EMPTY_STATE,
   resolveHistoryDateParams,
   HISTORY_SCOPE_LABELS,
+  HISTORY_DATE_SCOPES,
   HISTORY_EMPTY_STATE,
+  getStatusLabel,
   type TabDef,
   type HistoryScope,
   type HistoryDateScope,
 } from "./requestsWorkspace";
+
+// GAP-046: submitted-criteria wording shared by the applied-criteria line, the filtered-empty
+// detail, and the live-region heading/range suffix — reports only submitted values, never draftQ.
+function operationalAppliedText(q: string, statusFilter: string): string {
+  const statusLabel = getStatusLabel(statusFilter);
+  if (q) return `Search “${q}” · Status: ${statusLabel}`;
+  if (statusFilter) return `Status: ${statusLabel}`;
+  return "All active statuses";
+}
+
+function historyAppliedText(q: string, scopeLabel: string, dateLabel: string): string {
+  if (q) return `Search “${q}” · ${scopeLabel} · ${dateLabel}`;
+  return `${scopeLabel} · ${dateLabel}`;
+}
+
+function operationalHeadingSuffix(q: string, statusFilter: string): string {
+  const statusLabel = getStatusLabel(statusFilter);
+  const parts: string[] = [];
+  if (q) parts.push(`for “${q}”`);
+  if (statusFilter) parts.push(`Status: ${statusLabel}`);
+  return parts.length > 0 ? ` ${parts.join(" · ")}` : "";
+}
+
+function historyHeadingSuffix(q: string, scopeLabel: string, dateLabel: string): string {
+  const parts: string[] = [];
+  if (q) parts.push(`for “${q}”`);
+  parts.push(scopeLabel, dateLabel);
+  return ` ${parts.join(" · ")}`;
+}
 
 interface RequestsProps {
   role: AccountRole;
@@ -111,6 +142,7 @@ export function Requests({
     cursorStack.current = [];
   }
 
+
   function submitSearch(e: React.FormEvent) {
     e.preventDefault();
     setQ(draftQ);
@@ -183,7 +215,46 @@ export function Requests({
   const serverListContext = isAvailableTab ? undefined : listQuery.data?.listContext;
   const presentAsHistory = serverListContext ? serverListContext.isHistory : historyMode;
   const contextLabel = presentAsHistory ? HISTORY_SCOPE_LABELS[historyScope] : activeTab.label;
-  const emptyState = presentAsHistory ? HISTORY_EMPTY_STATE[historyScope] : EMPTY_STATE[activeTab.id];
+
+  // GAP-046: submitted criteria only (never draftQ) — the single source of truth for the
+  // applied-criteria line, the filtered-empty state, and the live-region heading/range suffix.
+  const historyDateLabel = HISTORY_DATE_SCOPES.find((d) => d.id === historyDateScope)?.label ?? "All time";
+  const historyScopeLabel = HISTORY_SCOPE_LABELS[historyScope];
+  const criteriaActive = presentAsHistory
+    ? q !== "" || historyScope !== "all_history" || historyDateScope !== "all_time"
+    : q !== "" || statusFilter !== "";
+  const showAppliedLine = !isAvailableTab && (criteriaActive || draftQ !== q);
+  const appliedLineText = showAppliedLine
+    ? `Applied: ${presentAsHistory ? historyAppliedText(q, historyScopeLabel, historyDateLabel) : operationalAppliedText(q, statusFilter)}`
+    : null;
+  const criteriaHeadingSuffix = criteriaActive
+    ? (presentAsHistory ? historyHeadingSuffix(q, historyScopeLabel, historyDateLabel) : operationalHeadingSuffix(q, statusFilter))
+    : "";
+
+  const emptyState = criteriaActive
+    ? {
+        heading: presentAsHistory ? "No matching history" : "No matching requests",
+        detail: presentAsHistory
+          ? `No history matches ${historyAppliedText(q, historyScopeLabel, historyDateLabel)}.`
+          : `No requests match ${operationalAppliedText(q, statusFilter)}.`,
+        isFiltered: true,
+      }
+    : presentAsHistory
+      ? HISTORY_EMPTY_STATE[historyScope]
+      : EMPTY_STATE[activeTab.id];
+
+  // GAP-046: the criteria-aware empty state's recovery action. History preserves the selected
+  // scope/date — those aren't part of what a filtered-empty state is recovering from.
+  function clearFilters() {
+    setDraftQ("");
+    setQ("");
+    if (!presentAsHistory) {
+      setStatusFilter("");
+    }
+    setCursor(null);
+    cursorStack.current = [];
+    searchInputRef.current?.focus();
+  }
 
   const pageSubtitle = presentAsHistory
     ? "Closed and cancelled work — not part of your active queues."
@@ -215,7 +286,7 @@ export function Requests({
   const pageLimit = pageInfo?.limit ?? 50;
   const pageStartIndex = cursorStack.current.length * pageLimit;
   const rangeLabel = !isLoading && !isError && requests.length > 0
-    ? `Showing ${pageStartIndex + 1}–${pageStartIndex + requests.length}`
+    ? `Showing ${pageStartIndex + 1}–${pageStartIndex + requests.length}${criteriaHeadingSuffix ? ` results${criteriaHeadingSuffix}` : ""}`
     : "";
   // Always a meaningful label when rendered — never an empty heading sitting in the outline —
   // and the same stable node across loading→loaded so a pending focus call lands correctly.
@@ -225,7 +296,7 @@ export function Requests({
       ? ""
       : requests.length > 0
         ? rangeLabel
-        : emptyState.heading;
+        : `${emptyState.heading}${criteriaHeadingSuffix}`;
 
   // GAP-043: scroll the list region (not the window — it isn't the scroll container)
   // immediately on page change, but only move focus once the new page has actually
@@ -371,6 +442,7 @@ export function Requests({
           onStatusFilterChange={updateStatusFilter}
           showStalenessNotice={showStalenessNotice}
           onManualRefresh={manualRefresh}
+          appliedLineText={appliedLineText}
         />
 
         </div>{/* /max-w-6xl */}
@@ -386,6 +458,7 @@ export function Requests({
           isError,
           isForbidden,
           emptyState,
+          onClearFilters: clearFilters,
         }}
         rows={{
           itemCount: requests.length,

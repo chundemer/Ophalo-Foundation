@@ -9,7 +9,8 @@ interface RequestListHeadingState {
   isLoading: boolean;
   isError: boolean;
   isForbidden: boolean;
-  emptyState: { heading: string; detail: string };
+  emptyState: { heading: string; detail: string; isFiltered?: boolean };
+  onClearFilters: () => void;
 }
 
 interface RequestListRowsState {
@@ -48,7 +49,7 @@ export function RequestListContent({
   rows,
   pager,
 }: RequestListContentProps) {
-  const { headingText, isLoading, isError, isForbidden, emptyState } = heading;
+  const { headingText, isLoading, isError, isForbidden, emptyState, onClearFilters } = heading;
 
   return (
     <>
@@ -99,6 +100,15 @@ export function RequestListContent({
             <p className="text-[var(--ophalo-muted)] text-sm leading-relaxed">
               {emptyState.detail}
             </p>
+            {emptyState.isFiltered && (
+              <button
+                type="button"
+                onClick={onClearFilters}
+                className="mt-1 text-sm font-semibold text-[var(--keep-accent)] hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-offset-1 rounded"
+              >
+                Clear filters
+              </button>
+            )}
           </div>
         )}
 

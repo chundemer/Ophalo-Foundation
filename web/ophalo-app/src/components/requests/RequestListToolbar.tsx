@@ -15,6 +15,7 @@ interface RequestListToolbarProps {
   onStatusFilterChange: (value: string) => void;
   showStalenessNotice: boolean;
   onManualRefresh: () => void;
+  appliedLineText: string | null;
 }
 
 export function RequestListToolbar({
@@ -30,11 +31,13 @@ export function RequestListToolbar({
   onStatusFilterChange,
   showStalenessNotice,
   onManualRefresh,
+  appliedLineText,
 }: RequestListToolbarProps) {
   return (
     <>
       {/* Search + status filter — demoted utility row */}
       {!isAvailableTab && (
+        <>
         <div className="flex flex-wrap items-center gap-2 px-4 py-2 sm:px-6 border-t border-[var(--ophalo-border)]">
           <form onSubmit={onSubmitSearch} className="flex items-center gap-2 flex-1 min-w-[180px]">
             <div className="relative flex-1">
@@ -77,6 +80,13 @@ export function RequestListToolbar({
             </select>
           )}
         </div>
+        {/* GAP-046: quiet, informational — reports submitted criteria only, no action button */}
+        {appliedLineText && (
+          <div className="px-4 pb-2 sm:px-6 text-xs text-[var(--ophalo-muted)]">
+            {appliedLineText}
+          </div>
+        )}
+        </>
       )}
 
       {/* Staleness notice */}
