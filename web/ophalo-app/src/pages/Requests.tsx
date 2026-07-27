@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   RefreshCw, Search, ChevronLeft, ChevronRight,
-  AlertTriangle, CheckCircle2,
+  AlertTriangle, CheckCircle2, X,
 } from "lucide-react";
 import { api, type AccountRole, type RequestView, type KeepRequestViewCounts, type KeepRequestSummary, type KeepQuickAction } from "../lib/apiClient";
 import { RequestRow, AvailableRequestRow } from "../components/RequestRow";
@@ -81,6 +81,31 @@ const EMPTY_STATE: Record<TabId, { heading: string; detail: string }> = {
     detail: "Unassigned requests that are open to claim will appear here.",
   },
 };
+
+// GAP-041: a fixed, queue-agnostic skeleton — never the previous queue's real rows —
+// so a first-time queue selection keeps stable list-region geometry instead of
+// collapsing to a small "Loading…" blob.
+const SKELETON_ROW_COUNT = 5;
+
+function RequestRowSkeleton() {
+  const pulse = "animate-pulse motion-reduce:animate-none rounded bg-[var(--ophalo-canvas)]";
+  return (
+    <div aria-hidden="true" className="space-y-2">
+      {Array.from({ length: SKELETON_ROW_COUNT }).map((_, i) => (
+        <div
+          key={i}
+          className="rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-4 py-3 space-y-2"
+        >
+          <div className="flex items-center gap-2">
+            <div className={`h-4 w-28 ${pulse}`} />
+            <div className={`h-4 w-16 ${pulse}`} />
+          </div>
+          <div className={`h-3 w-2/3 ${pulse}`} />
+        </div>
+      ))}
+    </div>
+  );
+}
 
 const STATUS_OPTIONS = [
   { value: "", label: "All active statuses" },
@@ -176,6 +201,8 @@ export function Requests({
   const [statusFilter, setStatusFilter] = useState("");
   const [cursor, setCursor] = useState<string | null>(null);
   const cursorStack = useRef<(string | null)[]>([]);
+  const tabRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
 
   const isAvailableTab = activeTab.view === "available";
   const isOnFirstPage = cursor === null;
@@ -185,6 +212,38 @@ export function Requests({
     setQ("");
     setDraftQ("");
     setStatusFilter("");
+    setCursor(null);
+    cursorStack.current = [];
+  }
+
+  // GAP-041: roving-tabindex keyboard pattern — Left/Right/Home/End move focus and
+  // selection together; Enter/Space activation is native <button> behavior, unchanged.
+  function handleTabKeyDown(e: React.KeyboardEvent<HTMLButtonElement>, index: number) {
+    let nextIndex: number | null = null;
+    switch (e.key) {
+      case "ArrowRight":
+        nextIndex = (index + 1) % tabs.length;
+        break;
+      case "ArrowLeft":
+        nextIndex = (index - 1 + tabs.length) % tabs.length;
+        break;
+      case "Home":
+        nextIndex = 0;
+        break;
+      case "End":
+        nextIndex = tabs.length - 1;
+        break;
+      default:
+        return;
+    }
+    e.preventDefault();
+    selectTab(tabs[nextIndex]);
+    tabRefs.current[nextIndex]?.focus();
+  }
+
+  function clearSearch() {
+    setDraftQ("");
+    setQ("");
     setCursor(null);
     cursorStack.current = [];
   }
@@ -390,16 +449,19 @@ export function Requests({
         {/* Tab bar */}
         <div className="border-t border-[var(--ophalo-border)] overflow-x-auto">
           <div role="tablist" aria-label="Request queues" className="flex gap-0 px-4 sm:px-6 min-w-max">
-            {tabs.map((tab) => {
+            {tabs.map((tab, i) => {
               const count = countForTab(tab, viewCounts);
               const isActive = tab.view === activeTab.view;
               return (
                 <button
                   key={`${tab.id}-${tab.label}`}
+                  ref={(el) => { tabRefs.current[i] = el; }}
                   role="tab"
                   aria-selected={isActive}
+                  tabIndex={isActive ? 0 : -1}
                   type="button"
                   onClick={() => selectTab(tab)}
+                  onKeyDown={(e) => handleTabKeyDown(e, i)}
                   className={`flex items-center gap-1.5 px-3 py-4 text-sm border-b-2 whitespace-nowrap transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-inset ${
                     isActive
                       ? "font-semibold border-[var(--ophalo-navy)] text-[var(--ophalo-navy)]"
@@ -429,13 +491,27 @@ export function Requests({
               <div className="relative flex-1">
                 <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[var(--ophalo-muted)] pointer-events-none" />
                 <input
+                  ref={searchInputRef}
                   type="text"
                   value={draftQ}
                   onChange={(e) => setDraftQ(e.target.value)}
                   placeholder="Search requests…"
                   aria-label="Search requests"
-                  className="w-full pl-8 pr-3 py-1.5 text-sm border border-[var(--ophalo-border)] rounded-lg bg-[var(--ophalo-card)] text-[var(--ophalo-ink)] placeholder:text-[var(--ophalo-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-offset-1"
+                  className={`w-full pl-8 py-1.5 text-sm border border-[var(--ophalo-border)] rounded-lg bg-[var(--ophalo-card)] text-[var(--ophalo-ink)] placeholder:text-[var(--ophalo-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-offset-1 ${draftQ.length > 0 ? "pr-7" : "pr-3"}`}
                 />
+                {draftQ.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      clearSearch();
+                      searchInputRef.current?.focus();
+                    }}
+                    aria-label="Clear search"
+                    className="absolute right-1.5 top-1/2 -translate-y-1/2 p-1 rounded text-[var(--ophalo-muted)] hover:text-[var(--ophalo-ink)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)]"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                )}
               </div>
               <button type="submit" className="sr-only">Search</button>
             </form>
@@ -484,9 +560,10 @@ export function Requests({
       >
         <div className="max-w-6xl mx-auto w-full px-4 py-4 sm:px-6 sm:py-5">
         {isLoading && (
-          <div className="flex justify-center py-12">
-            <span className="text-[var(--ophalo-muted)] text-sm">Loading…</span>
-          </div>
+          <>
+            <span className="sr-only">Loading {activeTab.label} requests…</span>
+            <RequestRowSkeleton />
+          </>
         )}
 
         {isError && !(error instanceof ApiError && error.status === 403) && (
