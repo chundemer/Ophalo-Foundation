@@ -371,11 +371,11 @@ public sealed class AddBusinessUpdateTests : IClassFixture<KeepApiWebFactory>, I
     }
 
     // =========================================================================
-    // Test 12 — First-response wired on customer-origin request (D1)
+    // Test 12 — Page-only business update never wires first response (ADR-451)
     // =========================================================================
 
     [Fact]
-    public async Task AddBusinessUpdate_FirstContactOnCustomerOriginRequest_WiresFirstResponse()
+    public async Task AddBusinessUpdate_FirstContactOnCustomerOriginRequest_DoesNotWireFirstResponse()
     {
         // Fresh request so we know no prior first-response exists.
         Guid freshRequestId;
@@ -405,9 +405,11 @@ public sealed class AddBusinessUpdateTests : IClassFixture<KeepApiWebFactory>, I
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
-        Assert.Equal(JsonValueKind.String, body.GetProperty("firstRespondedAtUtc").ValueKind);
-        Assert.Equal(JsonValueKind.String, body.GetProperty("firstResponderAccountUserId").ValueKind);
-        Assert.Equal(JsonValueKind.String, body.GetProperty("firstResponseEventId").ValueKind);
+        // ADR-451: page-only business updates never set first response — confirmed
+        // channel-appropriate contact (call/email/text/external-contact log) is required.
+        Assert.Equal(JsonValueKind.Null, body.GetProperty("firstRespondedAtUtc").ValueKind);
+        Assert.Equal(JsonValueKind.Null, body.GetProperty("firstResponderAccountUserId").ValueKind);
+        Assert.Equal(JsonValueKind.Null, body.GetProperty("firstResponseEventId").ValueKind);
     }
 
     // =========================================================================

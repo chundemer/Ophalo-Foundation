@@ -411,8 +411,10 @@ public sealed class AcknowledgeAttentionTests : IClassFixture<KeepApiWebFactory>
     }
 
     [Fact]
-    public async Task BusinessUpdate_ClearsBusinessWaitingAttention()
+    public async Task BusinessUpdate_DoesNotClearBusinessWaitingAttention()
     {
+        // ADR-451: a page-only business update is not confirmed channel-appropriate contact,
+        // so it must preserve business-waiting attention exactly like a silent status change.
         var response = await AuthRequest(_ownerCookie, _attentionRequestVersion).PostAsJsonAsync(
             $"/keep/requests/{_attentionRequestId}/business-updates",
             new { message = "We are checking that ETA now." });
@@ -420,13 +422,13 @@ public sealed class AcknowledgeAttentionTests : IClassFixture<KeepApiWebFactory>
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
-        Assert.Equal("none", body.GetProperty("attentionLevel").GetString());
-        Assert.Equal("none", body.GetProperty("waitingDirection").GetString());
-        Assert.Equal(JsonValueKind.Null, body.GetProperty("attentionReason").ValueKind);
-        Assert.Equal(JsonValueKind.Null, body.GetProperty("attentionSinceUtc").ValueKind);
-        Assert.Equal(_ownerAccountUserId, body.GetProperty("attentionClearedByAccountUserId").GetGuid());
+        Assert.Equal("needs_attention", body.GetProperty("attentionLevel").GetString());
+        Assert.Equal("business", body.GetProperty("waitingDirection").GetString());
+        Assert.Equal("customer_message", body.GetProperty("attentionReason").GetString());
+        Assert.Equal(JsonValueKind.String, body.GetProperty("attentionSinceUtc").ValueKind);
+        Assert.Equal(JsonValueKind.Null, body.GetProperty("attentionClearedByAccountUserId").ValueKind);
         Assert.Equal(JsonValueKind.Null, body.GetProperty("attentionClearReason").ValueKind);
-        Assert.False(body.GetProperty("availableActions").GetProperty("canAcknowledgeAttention").GetBoolean());
+        Assert.True(body.GetProperty("availableActions").GetProperty("canAcknowledgeAttention").GetBoolean());
     }
 
     [Fact]
