@@ -19,6 +19,14 @@ public interface IKeepBusinessRequestPersistence
     Task<IReadOnlyList<KeepRequest>> FindActiveRequestsByCustomerIdAsync(
         Guid accountId, Guid customerId, int take, CancellationToken ct);
 
+    /// <summary>
+    /// Fallback for legacy/unbackfilled data: finds the most recent request whose stored
+    /// (unnormalized) CustomerPhone normalizes to <paramref name="canonicalPhone"/>, when no
+    /// KeepCustomer row exists for that phone. Read-only — never creates or links a customer.
+    /// </summary>
+    Task<KeepRequest?> FindMostRecentRequestByCustomerPhoneAsync(
+        Guid accountId, string canonicalPhone, CancellationToken ct);
+
     Task<bool> PageTokenExistsAsync(string pageToken, CancellationToken ct);
 
     Task<bool> ReferenceCodeExistsAsync(Guid accountId, string referenceCode, CancellationToken ct);

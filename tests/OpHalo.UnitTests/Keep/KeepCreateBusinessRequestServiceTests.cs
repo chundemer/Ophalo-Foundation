@@ -593,6 +593,10 @@ public class KeepCreateBusinessRequestServiceTests
         public Task<IReadOnlyList<KeepRequest>> FindActiveRequestsByCustomerIdAsync(
             Guid accountId, Guid customerId, int take, CancellationToken ct) =>
             Task.FromResult<IReadOnlyList<KeepRequest>>(Array.Empty<KeepRequest>());
+
+        public Task<KeepRequest?> FindMostRecentRequestByCustomerPhoneAsync(
+            Guid accountId, string canonicalPhone, CancellationToken ct) =>
+            Task.FromResult<KeepRequest?>(null);
     }
 
     private sealed class FakeUserAccessPolicy(bool permitted) : IUserAccessPolicy

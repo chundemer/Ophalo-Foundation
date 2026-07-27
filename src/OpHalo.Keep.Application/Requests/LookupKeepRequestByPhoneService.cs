@@ -14,6 +14,8 @@ namespace OpHalo.Keep.Application.Requests;
 
 public sealed record PhoneLookupCustomer(string Name, string Phone, string? Email);
 
+public sealed record PhoneLookupPrefill(string Name, string? Email);
+
 public sealed record PhoneLookupActiveRequest(
     Guid RequestId,
     string ReferenceCode,
@@ -23,6 +25,7 @@ public sealed record PhoneLookupActiveRequest(
 
 public sealed record PhoneLookupResult(
     PhoneLookupCustomer? Customer,
+    PhoneLookupPrefill? Prefill,
     IReadOnlyList<PhoneLookupActiveRequest> ActiveRequests,
     bool HasMoreActiveRequests);
 
@@ -96,8 +99,20 @@ public sealed class LookupKeepRequestByPhoneService(
             currentUser.AccountId, canonical, ct);
 
         if (customer is null)
+        {
+            // GAP-025: no KeepCustomer row yet, but legacy/unbackfilled requests may still carry
+            // this phone. Fall back to a read-only prefill so Quick Capture doesn't open blank —
+            // never creates or links a KeepCustomer here.
+            var legacyMatch = await businessRequestPersistence.FindMostRecentRequestByCustomerPhoneAsync(
+                currentUser.AccountId, canonical, ct);
+
+            var prefill = legacyMatch is null
+                ? null
+                : new PhoneLookupPrefill(legacyMatch.CustomerName, legacyMatch.CustomerEmail);
+
             return Result<PhoneLookupResult>.Success(
-                new PhoneLookupResult(null, Array.Empty<PhoneLookupActiveRequest>(), false));
+                new PhoneLookupResult(null, prefill, Array.Empty<PhoneLookupActiveRequest>(), false));
+        }
 
         // Fetch one extra to detect hasMoreActiveRequests without a separate count query.
         const int PageSize = 3;
@@ -111,7 +126,7 @@ public sealed class LookupKeepRequestByPhoneService(
         var activeRequests = page.Select(MapActiveRequest).ToList();
 
         return Result<PhoneLookupResult>.Success(
-            new PhoneLookupResult(lookupCustomer, activeRequests, hasMore));
+            new PhoneLookupResult(lookupCustomer, null, activeRequests, hasMore));
     }
 
     private static PhoneLookupActiveRequest MapActiveRequest(KeepRequest r) =>

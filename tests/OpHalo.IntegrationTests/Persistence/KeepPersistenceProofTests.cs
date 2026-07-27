@@ -799,6 +799,133 @@ public sealed class KeepPersistenceProofTests : IClassFixture<PostgresFixture>, 
         Assert.Single(requests);
     }
 
+    // -------------------------------------------------------------------------
+    // GAP-025 — FindMostRecentRequestByCustomerPhoneAsync legacy-phone fallback
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public async Task FindMostRecentRequestByCustomerPhone_finds_match_behind_many_newer_decoys_sharing_trailing_digits()
+    {
+        // Regression for a prior Take(50)-after-Contains(last4) implementation: seed 60 newer,
+        // same-account decoy requests whose CustomerPhone merely contains the same trailing 4
+        // digits (but isn't the same number), so a candidate-capped query would exclude the real
+        // match entirely. The real match is the oldest row.
+        const string targetCanonical = "5551234999";
+        await using (var seedCtx = CreateContext())
+        {
+            // KeepRequest.KeepCustomerId FKs to a real KeepCustomer row — the fallback under test
+            // reads only KeepRequest.CustomerPhone, so a single shared customer row is enough.
+            var customer = KeepCustomer.Create(AccountId, "Shared Customer", "5550000000");
+            seedCtx.Set<KeepCustomer>().Add(customer);
+            await seedCtx.SaveChangesAsync();
+
+            var target = KeepRequest.CreateByBusiness(
+                AccountId, customer.Id, "Legacy Larry", "(555) 123-4999", "larry@example.com",
+                "Old furnace job", "GAP025TARGET", "gap025-target-tok", Now, KeepRequestSource.Phone);
+            seedCtx.Set<KeepRequest>().Add(target);
+            await seedCtx.SaveChangesAsync();
+
+            for (var i = 0; i < 60; i++)
+            {
+                // Shares the trailing "4999" substring with the target but is a different number,
+                // and is seeded strictly newer so a recency-ordered Take(50) would rank ahead of it.
+                var decoy = KeepRequest.CreateByBusiness(
+                    AccountId, customer.Id, $"Decoy {i}", $"555-{i:D3}-4999", null,
+                    "Unrelated job", $"GAP025DECOY{i:D3}", $"gap025-decoy-tok-{i:D3}",
+                    Now.AddMinutes(i + 1), KeepRequestSource.Phone);
+                seedCtx.Set<KeepRequest>().Add(decoy);
+            }
+            await seedCtx.SaveChangesAsync();
+        }
+
+        await using var readCtx = CreateContext();
+        var sut = new OpHalo.Keep.Infrastructure.Persistence.KeepBusinessRequestPersistence(readCtx);
+
+        var match = await sut.FindMostRecentRequestByCustomerPhoneAsync(AccountId, targetCanonical, CancellationToken.None);
+
+        Assert.NotNull(match);
+        Assert.Equal("GAP025TARGET", match!.ReferenceCode);
+        Assert.Equal("Legacy Larry", match.CustomerName);
+    }
+
+    [Fact]
+    public async Task FindMostRecentRequestByCustomerPhone_matches_leading_country_code_and_is_account_scoped()
+    {
+        const string canonical = "5559998888";
+
+        await using (var seedCtx = CreateContext())
+        {
+            var ownedCustomer = KeepCustomer.Create(AccountId, "Owned Olivia", "5550000001");
+            var crossCustomer = KeepCustomer.Create(SecondAccountId, "Cross Cathy", "5550000002");
+            seedCtx.Set<KeepCustomer>().Add(ownedCustomer);
+            seedCtx.Set<KeepCustomer>().Add(crossCustomer);
+            await seedCtx.SaveChangesAsync();
+
+            // Own account, stored with a leading "1" country code — must still match.
+            var owned = KeepRequest.CreateByBusiness(
+                AccountId, ownedCustomer.Id, "Owned Olivia", "+1 (555) 999-8888", null,
+                "Job", "GAP025CC", "gap025-cc-tok", Now, KeepRequestSource.Phone);
+            seedCtx.Set<KeepRequest>().Add(owned);
+
+            // Other account, same phone — must not leak across accounts.
+            var crossAccount = KeepRequest.CreateByBusiness(
+                SecondAccountId, crossCustomer.Id, "Cross Cathy", "555-999-8888", null,
+                "Job", "GAP025XACCT", "gap025-xacct-tok", Now.AddMinutes(5), KeepRequestSource.Phone);
+            seedCtx.Set<KeepRequest>().Add(crossAccount);
+            await seedCtx.SaveChangesAsync();
+        }
+
+        await using var readCtx = CreateContext();
+        var sut = new OpHalo.Keep.Infrastructure.Persistence.KeepBusinessRequestPersistence(readCtx);
+
+        var match = await sut.FindMostRecentRequestByCustomerPhoneAsync(AccountId, canonical, CancellationToken.None);
+
+        Assert.NotNull(match);
+        Assert.Equal("GAP025CC", match!.ReferenceCode);
+    }
+
+    [Fact]
+    public async Task FindMostRecentRequestByCustomerPhone_matches_a_separator_PhoneNormalizer_strips_that_the_write_path_never_produces()
+    {
+        // Regression for a prior chained string.Replace(" ","").Replace("-","")... draft that only
+        // stripped the punctuation KeepRequestInputValidator happens to allow on write. PhoneNormalizer
+        // strips *every* non-ASCII-digit character, so a legacy row using an unanticipated separator
+        // (e.g. from a since-removed validation rule, an import, or a manual DB edit) must still match.
+        const string canonical = "5551234999";
+
+        await using (var seedCtx = CreateContext())
+        {
+            var customer = KeepCustomer.Create(AccountId, "Slash Sam", "5550000003");
+            seedCtx.Set<KeepCustomer>().Add(customer);
+            await seedCtx.SaveChangesAsync();
+
+            var legacy = KeepRequest.CreateByBusiness(
+                AccountId, customer.Id, "Slash Sam", "555/123/4999", null,
+                "Job", "GAP025SLASH", "gap025-slash-tok", Now, KeepRequestSource.Phone);
+            seedCtx.Set<KeepRequest>().Add(legacy);
+            await seedCtx.SaveChangesAsync();
+        }
+
+        await using var readCtx = CreateContext();
+        var sut = new OpHalo.Keep.Infrastructure.Persistence.KeepBusinessRequestPersistence(readCtx);
+
+        var match = await sut.FindMostRecentRequestByCustomerPhoneAsync(AccountId, canonical, CancellationToken.None);
+
+        Assert.NotNull(match);
+        Assert.Equal("GAP025SLASH", match!.ReferenceCode);
+    }
+
+    [Fact]
+    public async Task FindMostRecentRequestByCustomerPhone_returns_null_when_no_request_matches()
+    {
+        await using var readCtx = CreateContext();
+        var sut = new OpHalo.Keep.Infrastructure.Persistence.KeepBusinessRequestPersistence(readCtx);
+
+        var match = await sut.FindMostRecentRequestByCustomerPhoneAsync(AccountId, "5550001111", CancellationToken.None);
+
+        Assert.Null(match);
+    }
+
     // =========================================================================
     // G5b — Optimistic-concurrency race via two DbContexts
     // =========================================================================

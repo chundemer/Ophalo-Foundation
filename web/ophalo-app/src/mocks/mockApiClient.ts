@@ -230,6 +230,7 @@ export function installMockApi(): void {
         phone === "5555550100"
           ? { name: "Sarah Mitchell", phone, email: "sarah.mitchell@example.com" }
           : null,
+      prefill: null,
       activeRequests: [],
       hasMoreActiveRequests: false,
     });

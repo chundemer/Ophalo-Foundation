@@ -1118,8 +1118,11 @@ initial request creation. The omission path remains explicit and safe.
 
 ### GAP-018 — New Request leads with staff entry instead of customer self-service handoff
 
-**Status:** In progress — ADR-442/445 locked; R88f-a/b require correction before the PWA entry
-surface is implemented
+**Status:** Resolved. R88f-a/b/c shipped (`a834cbe`, `5d5f502`, `7c2917a`) — Owner/Admin New Request
+leads with `HandoffPanel` (customer self-service text handoff), backed by the corrected
+`CreateIntakeSmsHandoffService` contract (persists `CustomerPhone`, builds the
+`PublicBaseUrl/keep/s/{slug}` message); staff entry is the explicit fallback. Matches the locked
+ADR-442/445 contract; no further implementation remains open.
 **Severity:** P1
 **Area:** `ophalo-app` Quick Capture; public-intake link setup; secure SMS handoff
 
@@ -1298,7 +1301,27 @@ removed or disabled.
 
 ### GAP-025 — Quick Capture does not recognize a customer found by request-list phone search
 
-**Status:** Open
+**Status:** Complete (Session 2.3). `LookupKeepRequestByPhoneService` falls back to
+`IKeepBusinessRequestPersistence.FindMostRecentRequestByCustomerPhoneAsync` (account-scoped) when
+the canonical customer lookup misses, and returns a distinct `PhoneLookupResult.Prefill` (name/
+email) without creating or linking a `KeepCustomer` row — a locked decision (read-only prefill
+only, no backfill). Since `PhoneNormalizer` isn't SQL-translatable, the raw `CustomerPhone` is
+normalized in a raw-SQL `regexp_replace(customer_phone, '[^0-9]', '', 'g')` predicate (via
+`FromSqlInterpolated`, composed with `OrderByDescending`/`AsNoTracking`) so the SQL-side strip is
+digit-for-digit equivalent to `PhoneNormalizer` — matching every account-scoped row exactly, in the
+database, with no candidate cap. Two earlier drafts were caught in review and replaced before this
+was marked complete: a `Contains(last4-digits)` + `Take(50)` prefilter that could silently exclude a
+valid match behind 50+ newer same-account rows sharing those trailing digits, and a chained
+`string.Replace` punctuation strip that only removed the specific characters
+`KeepRequestInputValidator` allows on write and would miss a legacy value using an unanticipated
+separator (e.g. `555/123/4999`). Quick Capture (`QuickCapture.tsx`) carries the prefill straight
+into `CaptureForm` while keeping `customer: null`. 4 new focused service-level tests
+(`LookupKeepRequestByPhoneServiceTests.cs`) cover the legacy-match fallback, no-match case,
+customer-match short-circuit, and account isolation; 4 new persistence-level tests against real
+PostgreSQL (`KeepPersistenceProofTests.cs`) prove the fix directly, including the 60-decoy
+candidate-cap regression and the unanticipated-separator regression. Full backend Keep unit suite
+960/960, Keep persistence proof suite 34/34, frontend suite 144/144 passing, `tsc --noEmit` and
+`git diff --check` clean.
 **Severity:** P1
 **Area:** `ophalo-app` Quick Capture lookup; Keep customer/request identity data
 

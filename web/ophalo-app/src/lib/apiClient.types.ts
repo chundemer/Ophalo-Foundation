@@ -116,8 +116,14 @@ export interface PhoneLookupActiveRequest {
   lastActivityAtUtc: string | null;
 }
 
+export interface PhoneLookupPrefill {
+  name: string;
+  email: string | null;
+}
+
 export interface PhoneLookupResult {
   customer: PhoneLookupCustomer | null;
+  prefill: PhoneLookupPrefill | null;
   activeRequests: PhoneLookupActiveRequest[];
   hasMoreActiveRequests: boolean;
 }

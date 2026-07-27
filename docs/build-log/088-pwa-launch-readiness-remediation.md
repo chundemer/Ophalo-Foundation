@@ -1,6 +1,6 @@
 # Build Log 088 — PWA Launch Readiness Remediation
 
-**Status:** Active — R88f correction locked before remaining implementation  
+**Status:** Complete — R88f-a/b/c shipped (`a834cbe`, `5d5f502`, `7c2917a`); GAP-018 resolved
 **Date:** 2026-07-16  
 **Controlling decisions:** ADR-442, ADR-443, ADR-444, ADR-445
 

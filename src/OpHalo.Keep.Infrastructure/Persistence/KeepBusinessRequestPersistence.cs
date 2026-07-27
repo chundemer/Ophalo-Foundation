@@ -35,6 +35,29 @@ public sealed class KeepBusinessRequestPersistence(OpHaloDbContext dbContext) : 
         return results;
     }
 
+    public Task<KeepRequest?> FindMostRecentRequestByCustomerPhoneAsync(
+        Guid accountId, string canonicalPhone, CancellationToken ct)
+    {
+        // CustomerPhone is stored as the operator's raw typed text, not canonical digits, so it
+        // can't be matched with a direct equality filter. PhoneNormalizer strips every non-digit
+        // character (not just the punctuation KeepRequestInputValidator happens to allow on
+        // write), so matching it exactly requires the same digit-only normalization in SQL —
+        // regexp_replace(..., '[^0-9]', '', 'g'), not a chain of literal-character Replace calls,
+        // which would silently miss a legacy value using an unanticipated separator (e.g.
+        // "555/123/4999"). Every account-scoped row is evaluated exactly, in the database, with
+        // no candidate cap, so a valid match can never be excluded by a prefilter or limit.
+        var withCountryCode = "1" + canonicalPhone;
+
+        return dbContext.Set<KeepRequest>()
+            .FromSqlInterpolated($@"
+                SELECT * FROM keep_requests
+                WHERE account_id = {accountId}
+                  AND regexp_replace(customer_phone, '[^0-9]', '', 'g') IN ({canonicalPhone}, {withCountryCode})")
+            .AsNoTracking()
+            .OrderByDescending(r => r.CreatedAtUtc)
+            .FirstOrDefaultAsync(ct);
+    }
+
     public Task<bool> PageTokenExistsAsync(string pageToken, CancellationToken ct) =>
         dbContext.Set<KeepRequest>()
             .AsNoTracking()

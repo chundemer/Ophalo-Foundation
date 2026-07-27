@@ -39,6 +39,14 @@ export function QuickCapture({ onClose, onSelectRequest, isPastDue = false, isRe
       // Always show the result view when a customer is found — whether they have active requests
       // or not. "Customer match, no active requests → show customer name + Create New Request."
       setStage({ kind: "result", lookup: result, lockedPhone: phone });
+    } else if (result.prefill) {
+      // GAP-025: no KeepCustomer row, but a legacy request carries this phone — prefill identity
+      // fields directly rather than fabricating a customer-found result view.
+      setStage({
+        kind: "capture",
+        lockedPhone: phone,
+        prefill: { name: result.prefill.name, email: result.prefill.email ?? undefined },
+      });
     } else {
       // No match — advance directly to capture with locked phone, no prefill.
       setStage({ kind: "capture", lockedPhone: phone, prefill: null });
