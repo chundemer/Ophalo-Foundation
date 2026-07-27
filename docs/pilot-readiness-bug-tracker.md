@@ -1187,7 +1187,8 @@ clean; no lifecycle, permission, or optimistic-concurrency behavior changes as p
 
 ### GAP-020 — Desktop call QR exposes customer phone number
 
-**Status:** Open
+**Status:** Complete — Christian confirmed the desktop call-handoff QR scans and resolves
+correctly in production after the OPS-009 domain-config fix (`ce1ec40`), 2026-07-27.
 **Severity:** P0
 **Area:** `ophalo-app` Request Detail contact strip and external-contact modal
 
