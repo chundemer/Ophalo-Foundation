@@ -30,7 +30,7 @@ interface TabDef {
 }
 
 const ALL_TABS: TabDef[] = [
-  { id: "default",        label: "Default Queue",    view: "default",          roles: ["owner", "admin"] },
+  { id: "default",        label: "All work",         view: "default",          roles: ["owner", "admin"] },
   { id: "assigned_to_me", label: "Assigned to Me",   view: "assigned_to_me",   roles: ["owner", "admin"] },
   { id: "assigned_to_me", label: "My Promises",      view: "assigned_to_me",   roles: ["operator"] },
   { id: "needs_attention",label: "Needs Attention",  view: "needs_attention",  roles: ["owner", "admin", "operator"] },
@@ -231,6 +231,19 @@ export function Requests({
     !!setup &&
     !(setup.businessInfoComplete && setup.createIntakePageComplete && setup.addFirstRequestComplete);
 
+  // ADR-449: business-name page heading is an Owner/Admin work-queue contract only.
+  const businessSetupQuery = useQuery({
+    queryKey: ["setup"],
+    queryFn: api.getSetup,
+    enabled: isOwnerOrAdmin,
+    staleTime: 5 * 60_000,
+  });
+  const businessName = businessSetupQuery.data?.businessName ?? null;
+  const pageTitle = isOwnerOrAdmin && businessName ? `Requests for ${businessName}` : "Requests";
+  const pageSubtitle = isOwnerOrAdmin && activeTab.id === "default"
+    ? "Open requests and feedback requiring review, ranked with customer promises needing attention first."
+    : null;
+
   const latestCounts = listQuery.data?.viewCounts ?? null;
   useEffect(() => {
     onViewCountsUpdate(latestCounts);
@@ -295,6 +308,35 @@ export function Requests({
     void listQuery.refetch();
   }
 
+  // ADR-449: within "All work", split the already server-ranked page into a
+  // quiet Needs attention / Open work pair without resorting rows — rowContext
+  // is server-authoritative and RankingOrder already places attention rows first.
+  const isDefaultTab = activeTab.id === "default";
+  const defaultRows = !isAvailableTab ? (listQuery.data?.requests ?? []) : [];
+  const needsAttentionRows = isDefaultTab
+    ? defaultRows.filter((row) => row.rowContext === "needs_attention")
+    : [];
+  const openWorkRows = isDefaultTab
+    ? defaultRows.filter((row) => row.rowContext !== "needs_attention")
+    : [];
+
+  function renderRequestRow(row: KeepRequestSummary) {
+    // ADR-450: composite key mirrors the query key so RequestRow's local expansion
+    // state (originalSummary "Read full request") resets on any tab/filter/search/page
+    // change, even when the same request appears in two different result sets.
+    return (
+      <RequestRow
+        key={`${row.id}-${activeTab.view}-${statusFilter}-${q}-${cursor}`}
+        row={row}
+        onSelect={handleRowSelect}
+        onSelectFocused={handleRowSelectFocused}
+        onActionClick={handleActionClick}
+        onShareClick={setShareModalTarget}
+        showCloseoutCue={activeTab.id === "ready_to_close"}
+      />
+    );
+  }
+
   return (
     <div className="flex flex-col h-full bg-[var(--ophalo-canvas)]">
 
@@ -314,11 +356,13 @@ export function Requests({
             </div>
           )}
           <h1 className="keep-page-title tracking-tight">
-            Requests
+            {pageTitle}
           </h1>
-          <p className="mt-1 keep-page-subtitle">
-            Active requests that may need ownership, follow-up, or closeout.
-          </p>
+          {pageSubtitle && (
+            <p className="mt-1 keep-page-subtitle">
+              {pageSubtitle}
+            </p>
+          )}
           {summaryPills.length > 0 && (
             <div className="mt-3 flex flex-wrap gap-2">
               {summaryPills.map((pill) => {
@@ -475,12 +519,28 @@ export function Requests({
               ? (availableQuery.data?.requests ?? []).map((row) => (
                   <AvailableRequestRow key={row.requestId} row={row} onSelect={handleRowSelect} />
                 ))
-              : (listQuery.data?.requests ?? []).map((row) => (
-                  // ADR-450: composite key mirrors the query key so RequestRow's local expansion
-                  // state (originalSummary "Read full request") resets on any tab/filter/search/page
-                  // change, even when the same request appears in two different result sets.
-                  <RequestRow key={`${row.id}-${activeTab.view}-${statusFilter}-${q}-${cursor}`} row={row} onSelect={handleRowSelect} onSelectFocused={handleRowSelectFocused} onActionClick={handleActionClick} onShareClick={setShareModalTarget} showCloseoutCue={activeTab.id === "ready_to_close"} />
-                ))
+              : isDefaultTab
+                ? (
+                  <>
+                    {needsAttentionRows.length > 0 && (
+                      <div className="space-y-2">
+                        <h2 className="px-1 text-xs font-semibold uppercase tracking-wide text-[var(--ophalo-muted)]">
+                          Needs attention
+                        </h2>
+                        {needsAttentionRows.map(renderRequestRow)}
+                      </div>
+                    )}
+                    {openWorkRows.length > 0 && (
+                      <div className={`space-y-2 ${needsAttentionRows.length > 0 ? "mt-4" : ""}`}>
+                        <h2 className="px-1 text-xs font-semibold uppercase tracking-wide text-[var(--ophalo-muted)]">
+                          Open work
+                        </h2>
+                        {openWorkRows.map(renderRequestRow)}
+                      </div>
+                    )}
+                  </>
+                )
+                : (listQuery.data?.requests ?? []).map(renderRequestRow)
             }
           </div>
         )}

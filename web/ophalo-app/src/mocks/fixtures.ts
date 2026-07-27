@@ -313,6 +313,7 @@ export const mockRequestSummaries: KeepRequestSummary[] = [
     serviceCity: null,
     serviceState: null,
     serviceZip: null,
+    rowContext: "active_work",
     ranking: {
       rankingGroup: "active",
       rankingOrder: 9,
@@ -406,6 +407,7 @@ export const mockRequestSummaries: KeepRequestSummary[] = [
     serviceCity: "Memphis",
     serviceState: "TN",
     serviceZip: "38117",
+    rowContext: "needs_attention",
     ranking: {
       rankingGroup: "overdue_business_waiting",
       rankingOrder: 1,
@@ -505,6 +507,7 @@ export const mockRequestSummaries: KeepRequestSummary[] = [
     serviceCity: null,
     serviceState: null,
     serviceZip: null,
+    rowContext: "waiting_on_customer",
     ranking: {
       rankingGroup: "waiting_on_customer",
       rankingOrder: 7,
@@ -597,6 +600,7 @@ export const mockRequestSummaries: KeepRequestSummary[] = [
     serviceCity: null,
     serviceState: null,
     serviceZip: null,
+    rowContext: "active_work",
     ranking: {
       rankingGroup: "resolved_quiet",
       rankingOrder: 8,
@@ -690,6 +694,7 @@ export const mockRequestSummaries: KeepRequestSummary[] = [
     serviceCity: null,
     serviceState: null,
     serviceZip: null,
+    rowContext: "first_response",
     ranking: {
       rankingGroup: "first_response_pending",
       rankingOrder: 6,

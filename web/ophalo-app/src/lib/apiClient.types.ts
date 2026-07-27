@@ -443,6 +443,7 @@ export interface KeepRequestSummary {
   feedbackWasResolved: boolean | null;
   feedbackReviewAgeBucket: string | null;
   feedbackReviewDueAtUtc: string | null;
+  rowContext: string;
   ranking: KeepRequestRankingInfo;
   attention: KeepRequestAttentionInfo;
   originalSummary: KeepRequestOriginalSummaryInfo;

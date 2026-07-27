@@ -3,11 +3,12 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Requests } from "../Requests";
-import type { KeepBusinessSetupResult, KeepRequestListResult } from "../../lib/apiClient";
+import type { KeepBusinessSetupResult, KeepRequestListResult, KeepSetupResult } from "../../lib/apiClient";
 
 const mockGetRequests = vi.fn();
 const mockGetAvailableRequests = vi.fn();
 const mockGetGuidedSetup = vi.fn();
+const mockGetSetup = vi.fn();
 
 vi.mock("../../lib/apiClient", async () => {
   const actual = await vi.importActual<typeof import("../../lib/apiClient")>(
@@ -20,6 +21,7 @@ vi.mock("../../lib/apiClient", async () => {
       getRequests: (...args: unknown[]) => mockGetRequests(...args),
       getAvailableRequests: (...args: unknown[]) => mockGetAvailableRequests(...args),
       getGuidedSetup: (...args: unknown[]) => mockGetGuidedSetup(...args),
+      getSetup: (...args: unknown[]) => mockGetSetup(...args),
     },
   };
 });
@@ -56,6 +58,21 @@ const completeSetup: KeepBusinessSetupResult = {
   addFirstRequestComplete: true,
 };
 
+const mockBusinessSetup: KeepSetupResult = {
+  businessName: "Acme Plumbing",
+  timeZone: "America/Chicago",
+  customerFacingPhone: null,
+  customerFacingEmail: null,
+  logoUrl: null,
+  websiteUrl: null,
+  responsePolicy: {
+    firstResponseTargetMinutes: 60,
+    standardResponseTargetMinutes: 240,
+    priorityResponseTargetMinutes: 30,
+    statusCheckThresholdDays: 3,
+  },
+};
+
 function renderRequests(role: "owner" | "admin" | "operator" | "viewer" = "owner") {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const onNavigateSettings = vi.fn();
@@ -79,8 +96,10 @@ beforeEach(() => {
   mockGetRequests.mockReset();
   mockGetAvailableRequests.mockReset();
   mockGetGuidedSetup.mockReset();
+  mockGetSetup.mockReset();
   mockGetRequests.mockResolvedValue(emptyList);
   mockGetAvailableRequests.mockResolvedValue({ requests: [], pageInfo: emptyList.pageInfo });
+  mockGetSetup.mockResolvedValue(mockBusinessSetup);
 });
 
 describe("Requests onboarding banner", () => {
@@ -98,6 +117,7 @@ describe("Requests onboarding banner", () => {
     await waitFor(() => expect(screen.getByText("Requests")).toBeInTheDocument());
     expect(screen.queryByText("Set up your customer request page")).not.toBeInTheDocument();
     expect(mockGetGuidedSetup).not.toHaveBeenCalled();
+    expect(mockGetSetup).not.toHaveBeenCalled();
   });
 
   // Viewer never reaches the Requests page component: App.tsx renders AccessLimited

@@ -376,6 +376,7 @@ export function installMockApi(): void {
       serviceCity: null,
       serviceState: null,
       serviceZip: null,
+      rowContext: "first_response",
       ranking: {
         rankingGroup: "first_response_pending",
         rankingOrder: 6,

@@ -1409,6 +1409,28 @@ public class KeepRequestListServiceTests
     }
 
     [Fact]
+    public async Task Execute_rowContext_needs_attention_when_first_response_overdue()
+    {
+        // ADR-449 / Build 087: an overdue first response is the same urgent signal as any
+        // other needs_attention row (rankingGroup "overdue_business_waiting", order 1) and must
+        // not fall into the quieter first_response/Open work bucket.
+        var request = MakeRequest(firstResponseTargetMinutes: 60);
+        SetProp(request, nameof(KeepRequest.FirstResponseDueAtUtc), Now.AddMinutes(-60));
+        SetProp(request, nameof(KeepRequest.WaitingDirection), WaitingDirection.None);
+        SetProp(request, nameof(KeepRequest.AttentionLevel), AttentionLevel.None);
+
+        var p = HappyPathPersistence([request]);
+        var sut = BuildSut(p);
+        var result = await sut.ExecuteAsync();
+
+        Assert.True(result.IsSuccess);
+        var row = result.Value.Requests[0];
+        Assert.Equal("needs_attention", row.RowContext);
+        Assert.Equal("overdue_business_waiting", row.Ranking.RankingGroup);
+        Assert.True(row.Attention.FirstResponseOverdue);
+    }
+
+    [Fact]
     public async Task Execute_rowContext_waiting_on_customer_for_pending_customer_status()
     {
         var request = MakeRequest();

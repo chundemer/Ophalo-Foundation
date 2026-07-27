@@ -995,8 +995,10 @@ public sealed class GetKeepRequestListService(
         if (r.Status == KeepRequestStatus.Closed && r.FeedbackWasResolved == true) return "feedback_review";
         if (r.Status == KeepRequestStatus.Closed) return "closed_history";
         if (r.Status == KeepRequestStatus.Cancelled) return "cancelled_history";
-        if (r.AttentionLevel != AttentionLevel.None || isDueOrOverdueFollowUpOn) return "needs_attention";
-        if (firstResponsePending || firstResponseOverdue) return "first_response";
+        // ADR-449 / Build 087: an overdue first response is the same red/urgent signal as any
+        // other needs_attention row — it must not land in the quieter Open work bucket.
+        if (r.AttentionLevel != AttentionLevel.None || isDueOrOverdueFollowUpOn || firstResponseOverdue) return "needs_attention";
+        if (firstResponsePending) return "first_response";
         if (r.Status == KeepRequestStatus.PendingCustomer) return "waiting_on_customer";
         if (canSelfAssignFromList) return "unassigned_available";
         return "active_work";

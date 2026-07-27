@@ -50,6 +50,7 @@ function buildRow(overrides: Partial<KeepRequestSummary> = {}): KeepRequestSumma
     feedbackWasResolved: null,
     feedbackReviewAgeBucket: null,
     feedbackReviewDueAtUtc: null,
+    rowContext: "active_work",
     ranking: {
       rankingGroup: "active",
       rankingOrder: 9,
