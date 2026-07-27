@@ -6,6 +6,7 @@ import type {
   IntakeStatusResult,
   CreateIntakeSmsHandoffResult,
   CreateCallHandoffResult,
+  CreateSmsHandoffResult,
   KeepRequestViewCounts,
   KeepRequestSummary,
   KeepRequestDetailResult,
@@ -168,6 +169,15 @@ export function mockCallHandoff(): CreateCallHandoffResult {
   };
 }
 
+// GAP-052b / ADR-448: same opaque-handoff shape as the real notification SMS QR — never
+// encodes raw phone/message text — so the desktop text-notify QR is representative in demo mode.
+export function mockSmsHandoff(): CreateSmsHandoffResult {
+  return {
+    handoffUrl: "https://app.ophalo.com/keep/share-sms/mock-sms-token",
+    expiresAtUtc: new Date(Date.now() + 15 * 60_000).toISOString(),
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Shared validation + base available actions
 // ---------------------------------------------------------------------------
@@ -250,6 +260,7 @@ function ev(
     followUpOnDate: null,
     followUpOnReason: null,
     feedbackWasResolved: null,
+    relatedEventId: null,
     ...overrides,
   };
 }
@@ -823,6 +834,7 @@ export const mockRequestDetails: Record<string, KeepRequestDetailResult> = {
     availableActions: { ...OWNER_ACTIONS },
     validation: MOCK_VALIDATION,
     navigation: null,
+    pendingNotification: null,
   },
 
   "mock-req-002": {
@@ -898,6 +910,7 @@ export const mockRequestDetails: Record<string, KeepRequestDetailResult> = {
     availableActions: { ...OWNER_ACTIONS, canAcknowledgeAttention: true },
     validation: MOCK_VALIDATION,
     navigation: null,
+    pendingNotification: null,
   },
 
   "mock-req-003": {
@@ -1005,6 +1018,7 @@ export const mockRequestDetails: Record<string, KeepRequestDetailResult> = {
     availableActions: { ...OWNER_ACTIONS, canWatch: false, canUnwatch: true },
     validation: MOCK_VALIDATION,
     navigation: null,
+    pendingNotification: null,
   },
 
   "mock-req-004": {
@@ -1108,6 +1122,7 @@ export const mockRequestDetails: Record<string, KeepRequestDetailResult> = {
     availableActions: { ...OWNER_ACTIONS, canMarkFeedbackReviewed: true, canRecordShareIntent: false },
     validation: MOCK_VALIDATION,
     navigation: null,
+    pendingNotification: null,
   },
 
   "mock-req-005": {
@@ -1175,5 +1190,6 @@ export const mockRequestDetails: Record<string, KeepRequestDetailResult> = {
     availableActions: { ...OWNER_ACTIONS },
     validation: MOCK_VALIDATION,
     navigation: null,
+    pendingNotification: null,
   },
 };

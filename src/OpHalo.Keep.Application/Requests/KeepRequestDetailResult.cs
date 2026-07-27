@@ -67,7 +67,20 @@ public sealed record KeepRequestDetailResult(
     IReadOnlyList<KeepRequestEventItem> Events,
     AvailableActionsMetadata AvailableActions,
     ValidationHintsMetadata Validation,
-    KeepRequestNavigation? Navigation);
+    KeepRequestNavigation? Navigation,
+    PendingNotificationSummary? PendingNotification);
+
+/// <summary>
+/// Reload-recovery projection of KeepRequest's durable prepare/confirm obligation (ADR-451,
+/// GAP-052b). Null when there is no pending obligation. CanConfirmAsCurrentUser reflects the
+/// same-actor rule ConfirmUpdateNotification enforces server-side — it never exposes the raw
+/// preparer account-user ID, only whether the requesting user is the one who can confirm.
+/// </summary>
+public sealed record PendingNotificationSummary(
+    Guid RelatedUpdateEventId,
+    string Channel,
+    DateTime PreparedAtUtc,
+    bool CanConfirmAsCurrentUser);
 
 /// <summary>
 /// Server-computed UI metadata so the frontend can render action buttons and inline

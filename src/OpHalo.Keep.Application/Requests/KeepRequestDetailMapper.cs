@@ -47,6 +47,14 @@ internal static class KeepRequestDetailMapper
             ParticipationType: currentUserRow is null ? "none" : MapParticipationType(currentUserRow.ParticipationType),
             NotificationsEnabled: currentUserRow?.NotificationsEnabled);
 
+        var pendingNotification = request.PendingNotificationRelatedEventId is { } pendingRelatedEventId
+            ? new PendingNotificationSummary(
+                RelatedUpdateEventId: pendingRelatedEventId,
+                Channel: MapCommunicationChannel(request.PendingNotificationChannel!.Value),
+                PreparedAtUtc: request.PendingNotificationPreparedAtUtc!.Value,
+                CanConfirmAsCurrentUser: request.PendingNotificationPreparedByAccountUserId == currentUserId)
+            : null;
+
         return new(
         RequestId: request.Id,
         ReferenceCode: request.ReferenceCode,
@@ -110,7 +118,8 @@ internal static class KeepRequestDetailMapper
         Events: events.Select(MapEvent).ToList(),
         AvailableActions: availableActions,
         Validation: ValidationHints,
-        Navigation: navigation);
+        Navigation: navigation,
+        PendingNotification: pendingNotification);
     }
 
     /// <summary>

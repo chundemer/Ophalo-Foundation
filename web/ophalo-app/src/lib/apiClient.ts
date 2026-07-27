@@ -123,6 +123,8 @@ import type {
   ShareIntentMethod,
   CreateSmsHandoffResult,
   CreateCallHandoffResult,
+  UpdateNotificationBody,
+  PendingNotificationSummary,
   LogExternalContactBody,
   UpdateServiceLocationBody,
   KeepRequestRankingInfo,
@@ -174,6 +176,8 @@ export type {
   ShareIntentMethod,
   CreateSmsHandoffResult,
   CreateCallHandoffResult,
+  UpdateNotificationBody,
+  PendingNotificationSummary,
   LogExternalContactBody,
   UpdateServiceLocationBody,
   KeepRequestRankingInfo,
@@ -246,6 +250,18 @@ export const api = {
   createCallHandoff: (requestId: string) =>
     apiFetch<CreateCallHandoffResult>(`/keep/requests/${requestId}/call-handoff`, {
       method: "POST",
+    }),
+  prepareUpdateNotification: (requestId: string, body: UpdateNotificationBody, version: string) =>
+    apiFetch<KeepRequestDetailResult>(`/keep/requests/${requestId}/notification-preparation`, {
+      method: "POST",
+      headers: { "X-Keep-Request-Version": version },
+      body: JSON.stringify(body),
+    }),
+  confirmUpdateNotification: (requestId: string, body: UpdateNotificationBody, version: string) =>
+    apiFetch<KeepRequestDetailResult>(`/keep/requests/${requestId}/notification-confirmation`, {
+      method: "POST",
+      headers: { "X-Keep-Request-Version": version },
+      body: JSON.stringify(body),
     }),
   patchRequestStatus: (
     requestId: string,

@@ -10,6 +10,7 @@ import {
   RecommendedActionBadge,
 } from "./highlights";
 import { INPUT_CLS, statusLabel } from "./helpers";
+import { NotifyCustomerPanel } from "./NotifyCustomerPanel";
 
 // ---------------------------------------------------------------------------
 // Work Done card
@@ -372,6 +373,7 @@ export function BusinessUpdateSection({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [conflictDisabled, setConflictDisabled] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [justPostedEventId, setJustPostedEventId] = useState<string | null>(null);
 
   if (!canSendBusinessUpdate) return null;
 
@@ -421,6 +423,14 @@ export function BusinessUpdateSection({
       onDetailUpdated(updated);
       setMessage("");
       setSelectedStatus("");
+      // GAP-052b: a page-only update never notifies the customer by itself — surface the
+      // notify step only when this submission actually created a customer-visible message.
+      const postedMessageEvent = hasMessage
+        ? [...updated.events].reverse().find(
+            (e) => e.messageIntent === "business_update" && e.visibility === "all",
+          )
+        : undefined;
+      setJustPostedEventId(postedMessageEvent?.id ?? null);
     } catch (e) {
       if (e instanceof ApiError && e.status === 409) {
         setConflictDisabled(true);
@@ -523,6 +533,21 @@ export function BusinessUpdateSection({
     </form>
   );
 
+  // GAP-052b: resumes truthfully after reload/navigate-away via detail.pendingNotification —
+  // not only right after a fresh post in this session.
+  const notifyEventId = justPostedEventId ?? detail.pendingNotification?.relatedUpdateEventId ?? null;
+  const notifyPanel = notifyEventId && (
+    <div className="mt-3">
+      <NotifyCustomerPanel
+        requestId={requestId}
+        detail={detail}
+        relatedUpdateEventId={notifyEventId}
+        onDetailUpdated={onDetailUpdated}
+        onDone={() => setJustPostedEventId(null)}
+      />
+    </div>
+  );
+
   if (composerMode) {
     return (
       <div>
@@ -534,6 +559,7 @@ export function BusinessUpdateSection({
         )}
         {sharedErrorBlock}
         {sharedForm}
+        {notifyPanel}
       </div>
     );
   }
@@ -555,6 +581,7 @@ export function BusinessUpdateSection({
       )}
       {sharedErrorBlock}
       {sharedForm}
+      {notifyPanel}
     </div>
   );
 }

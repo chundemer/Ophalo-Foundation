@@ -11,6 +11,7 @@ import {
   MOCK_VALIDATION,
   OWNER_ACTIONS,
   mockCallHandoff,
+  mockSmsHandoff,
   mockIntake,
   mockIntakeSmsHandoff,
   mockMembers,
@@ -117,6 +118,7 @@ function appendEvent(
     followUpOnDate: event.followUpOnDate ?? null,
     followUpOnReason: event.followUpOnReason ?? null,
     feedbackWasResolved: event.feedbackWasResolved ?? null,
+    relatedEventId: event.relatedEventId ?? null,
   };
   return {
     ...d,
@@ -336,11 +338,13 @@ export function installMockApi(): void {
           followUpOnDate: null,
           followUpOnReason: null,
           feedbackWasResolved: null,
+          relatedEventId: null,
         },
       ],
       availableActions: { ...OWNER_ACTIONS },
       validation: MOCK_VALIDATION,
       navigation: null,
+      pendingNotification: null,
     };
 
     const summary: KeepRequestSummary = {
@@ -433,6 +437,52 @@ export function installMockApi(): void {
   };
 
   api.createCallHandoff = () => delay(mockCallHandoff());
+  api.createSmsHandoff = () => delay(mockSmsHandoff());
+
+  // GAP-052b / ADR-451: mock mirrors the durable prepare/confirm obligation — single mock
+  // user, so canConfirmAsCurrentUser is always true here (cross-actor mismatch is covered by
+  // component tests with controlled props, not the mock).
+  api.prepareUpdateNotification = (requestId, body, _version) => {
+    const d = getMockDetail(requestId);
+    if (!d) return Promise.reject(new Error("Mock: request not found"));
+    const updated: KeepRequestDetailResult = {
+      ...d,
+      version: crypto.randomUUID(),
+      pendingNotification: {
+        relatedUpdateEventId: body.relatedUpdateEventId,
+        channel: body.channel,
+        preparedAtUtc: new Date().toISOString(),
+        canConfirmAsCurrentUser: true,
+      },
+    };
+    updateMockDetail(requestId, updated);
+    return delay(withRoleActions(updated));
+  };
+
+  api.confirmUpdateNotification = (requestId, body, _version) => {
+    const d = getMockDetail(requestId);
+    if (!d) return Promise.reject(new Error("Mock: request not found"));
+    if (
+      d.pendingNotification?.relatedUpdateEventId !== body.relatedUpdateEventId
+      || d.pendingNotification.channel !== body.channel
+    ) {
+      return Promise.reject(
+        new ApiError(400, "KeepRequest.NotificationNotPrepared", "No matching prepared notification is awaiting confirmation."),
+      );
+    }
+    const updated = appendEvent(
+      { ...d, pendingNotification: null },
+      {
+        eventType: "NotificationConfirmed",
+        occurredAtUtc: new Date().toISOString(),
+        visibility: "internal",
+        communicationChannel: body.channel,
+        relatedEventId: body.relatedUpdateEventId,
+      },
+    );
+    updateMockDetail(requestId, updated);
+    return delay(withRoleActions(updated));
+  };
 
   // Mutations — all update local state so re-fetches show changes
 

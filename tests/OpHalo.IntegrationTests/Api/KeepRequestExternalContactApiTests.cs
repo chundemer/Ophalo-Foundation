@@ -920,6 +920,14 @@ public sealed class KeepRequestExternalContactApiTests : IClassFixture<KeepApiWe
             e.GetProperty("eventType").GetString() == "notification_prepared");
         Assert.Equal("sms", preparedEvent.GetProperty("communicationChannel").GetString());
         Assert.Equal(_notifSmsRelatedEventId.ToString(), preparedEvent.GetProperty("relatedEventId").GetString());
+
+        // GAP-052b: the reload-recovery projection reflects the durable pending obligation and
+        // never exposes the raw preparer account-user ID.
+        var pendingNotification = body.GetProperty("pendingNotification");
+        Assert.Equal(_notifSmsRelatedEventId.ToString(), pendingNotification.GetProperty("relatedUpdateEventId").GetString());
+        Assert.Equal("sms", pendingNotification.GetProperty("channel").GetString());
+        Assert.True(pendingNotification.GetProperty("canConfirmAsCurrentUser").GetBoolean());
+        Assert.False(pendingNotification.TryGetProperty("preparedByAccountUserId", out _));
     }
 
     // =========================================================================
@@ -1012,6 +1020,13 @@ public sealed class KeepRequestExternalContactApiTests : IClassFixture<KeepApiWe
         var afterPrepareVersion = await PrepareNotificationAsync(
             _ownerCookie, _notifSmsRequestId, _notifSmsRequestVersion, _notifSmsRelatedEventId, "sms");
 
+        // GAP-052b: Admin's own reload-recovery projection truthfully shows they cannot confirm
+        // what Owner prepared — the PWA uses this to render a non-confirmable state, not a
+        // generic error, before the actor ever attempts (and fails) to confirm.
+        var detailAsAdmin = await AuthRequest(_adminCookie).GetAsync($"/keep/requests/{_notifSmsRequestId}");
+        var detailBody = await detailAsAdmin.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.False(detailBody.GetProperty("pendingNotification").GetProperty("canConfirmAsCurrentUser").GetBoolean());
+
         // Admin (a different authorized actor on the same account) attempts to confirm what
         // Owner prepared — ADR-451 requires the same actor for both steps.
         var response = await AuthRequest(_adminCookie, afterPrepareVersion).PostAsJsonAsync(
@@ -1067,6 +1082,9 @@ public sealed class KeepRequestExternalContactApiTests : IClassFixture<KeepApiWe
 
         Assert.Equal("sms", confirmEvent.GetProperty("communicationChannel").GetString());
         Assert.Equal(_notifSmsRelatedEventId.ToString(), confirmEvent.GetProperty("relatedEventId").GetString());
+
+        // GAP-052b: confirmation clears the pending obligation — no stale recovery state survives.
+        Assert.Equal(JsonValueKind.Null, body.GetProperty("pendingNotification").ValueKind);
     }
 
     [Fact]

@@ -217,6 +217,7 @@ export interface KeepRequestEventItem {
   followUpOnDate: string | null;
   followUpOnReason: string | null;
   feedbackWasResolved: boolean | null;
+  relatedEventId: string | null;
 }
 
 export interface KeepRequestNavigation {
@@ -289,6 +290,16 @@ export interface KeepRequestDetailResult {
   availableActions: AvailableActionsMetadata;
   validation: ValidationHintsMetadata;
   navigation: KeepRequestNavigation | null;
+  pendingNotification: PendingNotificationSummary | null;
+}
+
+// GAP-052b / ADR-451: reload-recovery projection of the durable prepare/confirm obligation.
+// canConfirmAsCurrentUser reflects the same-actor rule the server enforces; no raw preparer ID.
+export interface PendingNotificationSummary {
+  relatedUpdateEventId: string;
+  channel: string;
+  preparedAtUtc: string;
+  canConfirmAsCurrentUser: boolean;
 }
 
 export type ShareIntentMethod = "sms_qr" | "email" | "whatsapp" | "copy_message" | "copy_link" | "manual_other";
@@ -301,6 +312,12 @@ export interface CreateSmsHandoffResult {
 export interface CreateCallHandoffResult {
   handoffUrl: string;
   expiresAtUtc: string;
+}
+
+// GAP-052b / ADR-451: Channel is "sms" or "email" — the only two permitted notification channels.
+export interface UpdateNotificationBody {
+  relatedUpdateEventId: string;
+  channel: string;
 }
 
 export interface LogExternalContactBody {
