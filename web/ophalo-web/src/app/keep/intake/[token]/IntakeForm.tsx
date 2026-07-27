@@ -100,8 +100,13 @@ function OptionalMark({ children = "Optional" }: { children?: string }) {
   return <span className="ml-1.5 text-xs font-normal text-muted-foreground">{children}</span>;
 }
 
+// ADR-444: a leading "1" (a typed or pasted "+1"/"1" country-code prefix) is dropped before
+// slicing to 10 digits — no NANP area code starts with 1, so this is unambiguous. Without this,
+// an 11-digit "+1"-prefixed paste would silently truncate the real last digit instead.
 function formatPhoneAsYouType(raw: string): string {
-  const digits = raw.replace(/\D/g, "").slice(0, 10);
+  let digits = raw.replace(/\D/g, "");
+  if (digits.startsWith("1")) digits = digits.slice(1);
+  digits = digits.slice(0, 10);
   if (digits.length === 0) return "";
   if (digits.length < 4) return `(${digits}`;
   if (digits.length < 7) return `(${digits.slice(0, 3)}) ${digits.slice(3)}`;
