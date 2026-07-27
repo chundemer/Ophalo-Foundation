@@ -151,7 +151,10 @@ public sealed class KeepCallHandoffApiTests : IClassFixture<KeepApiWebFactory>, 
         Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
         var body = await resp.Content.ReadFromJsonAsync<HandoffCreatedBody>(JsonOptions);
         Assert.NotNull(body);
-        Assert.Contains("/keep/share-call/", body!.HandoffUrl);
+        // handoffUrl must use App:PublicBaseUrl (https://test.ophalo.com), never the
+        // authenticated-app host — the resolver page is served by the public site, not app.*.
+        Assert.StartsWith("https://test.ophalo.com/keep/share-call/", body!.HandoffUrl);
+        Assert.DoesNotContain("app.ophalo.com", body.HandoffUrl!);
         // The opaque URL must never carry the raw customer phone.
         Assert.DoesNotContain(CustomerPhone, body.HandoffUrl!);
     }
@@ -216,7 +219,12 @@ public sealed class KeepCallHandoffApiTests : IClassFixture<KeepApiWebFactory>, 
         Assert.Equal(HttpStatusCode.OK, postResp.StatusCode);
         var created = await postResp.Content.ReadFromJsonAsync<SmsHandoffCreatedBody>(JsonOptions);
 
-        var token = created!.HandoffUrl!.Split('/').Last();
+        // handoffUrl must use App:PublicBaseUrl (https://test.ophalo.com), never the
+        // authenticated-app host — the resolver page is served by the public site, not app.*.
+        Assert.StartsWith("https://test.ophalo.com/keep/share-sms/", created!.HandoffUrl);
+        Assert.DoesNotContain("app.ophalo.com", created.HandoffUrl!);
+
+        var token = created.HandoffUrl!.Split('/').Last();
         var getResp = await _client.GetAsync($"/keep/share-sms/{token}");
 
         Assert.Equal(HttpStatusCode.OK, getResp.StatusCode);

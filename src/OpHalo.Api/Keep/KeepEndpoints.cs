@@ -282,15 +282,15 @@ public static class KeepEndpoints
             Guid requestId,
             SmsHandoffBody body,
             CreateSmsHandoffService service,
-            IConfiguration config,
+            IOptions<MagicLinkSettings> appSettings,
             CancellationToken ct) =>
         {
             var command = new CreateSmsHandoffCommand(requestId, body.MessageBody);
             var result = await service.ExecuteAsync(command, ct);
             if (!result.IsSuccess)
                 return ErrorHttpMapper.ToHttpResult(result.Error);
-            var appBaseUrl = config["App:AppBaseUrl"] ?? "https://app.ophalo.com";
-            var handoffUrl = $"{appBaseUrl}/keep/share-sms/{result.Value.RawToken}";
+            var publicBaseUrl = appSettings.Value.PublicBaseUrl.TrimEnd('/');
+            var handoffUrl = $"{publicBaseUrl}/keep/share-sms/{result.Value.RawToken}";
             return Results.Ok(new { handoffUrl, expiresAtUtc = result.Value.ExpiresAtUtc });
         }).RequireAuthorization();
 
@@ -317,15 +317,15 @@ public static class KeepEndpoints
         app.MapPost("/keep/requests/{requestId:guid}/call-handoff", async (
             Guid requestId,
             CreateCallHandoffService service,
-            IConfiguration config,
+            IOptions<MagicLinkSettings> appSettings,
             CancellationToken ct) =>
         {
             var command = new CreateCallHandoffCommand(requestId);
             var result = await service.ExecuteAsync(command, ct);
             if (!result.IsSuccess)
                 return ErrorHttpMapper.ToHttpResult(result.Error);
-            var appBaseUrl = config["App:AppBaseUrl"] ?? "https://app.ophalo.com";
-            var handoffUrl = $"{appBaseUrl}/keep/share-call/{result.Value.RawToken}";
+            var publicBaseUrl = appSettings.Value.PublicBaseUrl.TrimEnd('/');
+            var handoffUrl = $"{publicBaseUrl}/keep/share-call/{result.Value.RawToken}";
             return Results.Ok(new { handoffUrl, expiresAtUtc = result.Value.ExpiresAtUtc });
         }).RequireAuthorization();
 

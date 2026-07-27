@@ -30,9 +30,12 @@ contract for calling an already-known request's customer.
   replayed tokens. Invalid and expired cases are intentionally indistinguishable — no payload
   leakage. Sets `Cache-Control: no-store, private` and is rate-limited under the existing
   `public-intake` policy.
-- The QR payload contains only the opaque handoff URL (`{AppBaseUrl}/keep/share-call/{token}`),
+- The QR payload contains only the opaque handoff URL (`{App:PublicBaseUrl}/keep/share-call/{token}`),
   never the raw phone number, in any form: not in the QR image, route/query logs, telemetry,
-  clipboard state, durable client storage, or page titles.
+  clipboard state, durable client storage, or page titles. `App:PublicBaseUrl` resolves to the
+  public resolver host (`www.ophalo.com`), not the authenticated-app host (`app.ophalo.com`) —
+  the resolver page is served by `ophalo-web`, a separate deployment from the `ophalo-app` staff
+  application at `app.ophalo.com`.
 - The resolver page (owner's phone, reached by scanning the QR) launches or prepares the `tel:`
   action there. Scanning or launching a call handoff does not itself log an external contact, clear
   `Needs Share`, or claim a call was completed — contact logging remains a separate, explicit action

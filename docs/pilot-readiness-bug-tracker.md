@@ -846,6 +846,12 @@ and misstate first-response performance.
 Implement Build 090 in its two bounded slices. Do not replace the domain rule with a page-only UI
 prompt, add backend SMS/broad automated email, save outbound message drafts, or claim delivery.
 
+**OPS-008 (resolved):** the obligation-model migration (`AddNotificationPrepareConfirmObligation`,
+adds `pending_notification_*` columns to `keep_requests`) shipped in code (0.11b) but was not
+applied to production before deploy, causing a full request-list outage
+(`42703: column k.pending_notification_channel does not exist`) starting 2026-07-27. Migration has
+since been pushed to production; outage resolved. See `docs/session-log.md` 0.11b.
+
 ### GAP-046 — Request search and filters do not make the current result set sufficiently visible or recoverable
 
 **Status:** Open — V1 pre-deployment gate
@@ -1218,6 +1224,14 @@ deployed/staging URL, or a LAN-reachable host with `NEXT_PUBLIC_API_BASE_URL` an
    `Cache-Control: no-store, private`.
 8. Repeat the valid-token flow on both iOS Safari and Android Chrome, recording any dialer-launch
    differences and confirming the manual fallback remains usable.
+
+**OPS-009 (resolved):** step 1 device verification found scanning the desktop QR 404'd in
+production. Cause: `KeepEndpoints.cs` built both the SMS and call handoff URLs from
+`App:AppBaseUrl` (`app.ophalo.com`, the authenticated `ophalo-app` host) instead of
+`App:PublicBaseUrl` (`www.ophalo.com`, the `ophalo-web` host that actually serves
+`/keep/share-call` and `/keep/share-sms`). Fixed to use the existing `IOptions<MagicLinkSettings>`
+binding; dead `AppBaseUrl` config removed. Manual re-verification of this checklist against
+production is still required now that the fix is deployed. See `docs/session-log.md` 0.6.
 
 ### GAP-021 — Authenticated Quick Capture rejects ADR-444 country-code input
 
