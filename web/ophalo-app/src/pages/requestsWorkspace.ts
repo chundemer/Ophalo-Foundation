@@ -40,6 +40,29 @@ export function getTabsForRole(role: AccountRole): TabDef[] {
   });
 }
 
+// Session 3.5: a quiet, truthful description for each operational queue so its purpose is
+// clear without All work's command-center subtitle. `needs_attention` avoids "your" — Owner/
+// Admin/Viewer see it account-wide while Operator sees only their own MyWork scope (same tab,
+// different server scope by role, not by view).
+export function getQueueSubtitle(tabId: TabId, role: AccountRole): string | null {
+  switch (tabId) {
+    case "assigned_to_me":
+      return role === "operator"
+        ? "Your active customer promises — the requests assigned to you."
+        : "Requests currently assigned to you.";
+    case "needs_attention":
+      return "Requests with customer promises needing attention now.";
+    case "watching":
+      return "Requests you're watching.";
+    case "ready_to_close":
+      return "Resolved work ready for owner/admin closeout.";
+    case "feedback_review":
+      return "Closed requests with customer feedback awaiting review.";
+    default:
+      return null;
+  }
+}
+
 export const EMPTY_STATE: Record<TabId, { heading: string; detail: string }> = {
   default: {
     heading: "All promises covered",

@@ -11,6 +11,7 @@ import { RequestListContent } from "../components/requests/RequestListContent";
 import { ApiError } from "../lib/apiClient";
 import {
   getTabsForRole,
+  getQueueSubtitle,
   EMPTY_STATE,
   resolveHistoryDateParams,
   HISTORY_SCOPE_LABELS,
@@ -260,11 +261,15 @@ export function Requests({
     ? "Closed and cancelled work — not part of your active queues."
     : isOwnerOrAdmin && activeTab.id === "default"
       ? "Open requests and feedback requiring review, ranked with customer promises needing attention first."
-      : null;
+      : getQueueSubtitle(activeTab.id, role);
 
+  // Session 3.5: preserve the last known-good universal counts while an unvisited tab loads
+  // (React Query's `data` resets to undefined on a new queryKey) — never overwrite with null.
   const latestCounts = listQuery.data?.viewCounts ?? null;
   useEffect(() => {
-    onViewCountsUpdate(latestCounts);
+    if (latestCounts) {
+      onViewCountsUpdate(latestCounts);
+    }
   }, [latestCounts, onViewCountsUpdate]);
 
   const requests = isAvailableTab
