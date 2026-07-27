@@ -1,237 +1,24 @@
 import { useState, useRef, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
-import {
-  RefreshCw, Search, ChevronLeft, ChevronRight,
-  AlertTriangle, CheckCircle2, X,
-} from "lucide-react";
 import { api, type AccountRole, type RequestView, type KeepRequestViewCounts, type KeepRequestSummary, type KeepQuickAction } from "../lib/apiClient";
-import { RequestRow, AvailableRequestRow } from "../components/RequestRow";
+import { RequestRow } from "../components/RequestRow";
 import { RequestRowActionModal } from "../components/RequestRowActionModal";
 import { ShareLinkModal } from "../components/ShareLinkModal";
-import { RequestsOnboardingBanner } from "../components/RequestsOnboardingBanner";
+import { RequestsWorkspaceHeader } from "../components/requests/RequestsWorkspaceHeader";
+import { RequestQueueNavigation } from "../components/requests/RequestQueueNavigation";
+import { RequestListToolbar } from "../components/requests/RequestListToolbar";
+import { RequestListContent } from "../components/requests/RequestListContent";
 import { ApiError } from "../lib/apiClient";
-
-// --- Tab definitions ---
-
-type TabId =
-  | "default"
-  | "assigned_to_me"
-  | "needs_attention"
-  | "watching"
-  | "ready_to_close"
-  | "feedback_review"
-  | "available_work";
-
-interface TabDef {
-  id: TabId;
-  label: string;
-  view: RequestView | "available";
-  roles: AccountRole[];
-}
-
-const ALL_TABS: TabDef[] = [
-  { id: "default",        label: "All work",         view: "default",          roles: ["owner", "admin"] },
-  { id: "assigned_to_me", label: "Assigned to Me",   view: "assigned_to_me",   roles: ["owner", "admin"] },
-  { id: "assigned_to_me", label: "My Promises",      view: "assigned_to_me",   roles: ["operator"] },
-  { id: "needs_attention",label: "Needs Attention",  view: "needs_attention",  roles: ["owner", "admin", "operator"] },
-  { id: "watching",       label: "Watching",         view: "watching",         roles: ["owner", "admin", "operator"] },
-  { id: "ready_to_close", label: "Ready to Close",   view: "ready_to_close",   roles: ["owner", "admin"] },
-  { id: "feedback_review",label: "Feedback Review",  view: "feedback_review",  roles: ["owner", "admin"] },
-  { id: "available_work", label: "Available Work",   view: "available",        roles: ["operator"] },
-];
-
-function getTabsForRole(role: AccountRole): TabDef[] {
-  const seen = new Set<string>();
-  return ALL_TABS.filter((t) => {
-    if (!t.roles.includes(role)) return false;
-    const key = t.view;
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
-}
-
-const EMPTY_STATE: Record<TabId, { heading: string; detail: string }> = {
-  default: {
-    heading: "All promises covered",
-    detail: "No active work needs company-wide attention right now.",
-  },
-  assigned_to_me: {
-    heading: "Nothing assigned to you",
-    detail: "Active requests assigned to you will appear here.",
-  },
-  needs_attention: {
-    heading: "Nothing needs attention",
-    detail: "Customer-facing promises are inside their current follow-up window.",
-  },
-  watching: {
-    heading: "Not watching anything",
-    detail: "Requests you are watching will appear here.",
-  },
-  ready_to_close: {
-    heading: "Nothing ready to close",
-    detail: "Resolved work will appear here when it is ready for owner/admin closeout.",
-  },
-  feedback_review: {
-    heading: "No customer feedback",
-    detail: "Customer feedback will appear here after customers submit it.",
-  },
-  available_work: {
-    heading: "No available work",
-    detail: "Unassigned requests that are open to claim will appear here.",
-  },
-};
-
-// GAP-041: a fixed, queue-agnostic skeleton — never the previous queue's real rows —
-// so a first-time queue selection keeps stable list-region geometry instead of
-// collapsing to a small "Loading…" blob.
-const SKELETON_ROW_COUNT = 5;
-
-function RequestRowSkeleton() {
-  const pulse = "animate-pulse motion-reduce:animate-none rounded bg-[var(--ophalo-canvas)]";
-  return (
-    <div aria-hidden="true" className="space-y-2">
-      {Array.from({ length: SKELETON_ROW_COUNT }).map((_, i) => (
-        <div
-          key={i}
-          className="rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-4 py-3 space-y-2"
-        >
-          <div className="flex items-center gap-2">
-            <div className={`h-4 w-28 ${pulse}`} />
-            <div className={`h-4 w-16 ${pulse}`} />
-          </div>
-          <div className={`h-3 w-2/3 ${pulse}`} />
-        </div>
-      ))}
-    </div>
-  );
-}
-
-const STATUS_OPTIONS = [
-  { value: "", label: "All active statuses" },
-  { value: "received", label: "Received" },
-  { value: "scheduled", label: "Scheduled" },
-  { value: "in_progress", label: "Active" },
-  { value: "pending_customer", label: "Waiting on Customer" },
-  { value: "resolved", label: "Work completed" },
-];
-
-// --- GAP-044: History mode (Owner/Admin only) ---
-// Demoted, non-competing entry point — not a peer tab — into the existing protected
-// closed_history/cancelled_history/all_history contract. isHistory is already computed
-// server-side (KeepRequestListContext); this drives the UI from client navigation intent,
-// the same way activeTab already does for the operational queues.
-
-type HistoryScope = "closed_history" | "cancelled_history" | "all_history";
-type HistoryDateScope = "today" | "yesterday" | "this_week" | "all_time";
-
-const HISTORY_SCOPES: { id: HistoryScope; label: string }[] = [
-  { id: "all_history", label: "All" },
-  { id: "closed_history", label: "Closed" },
-  { id: "cancelled_history", label: "Cancelled" },
-];
-
-const HISTORY_DATE_SCOPES: { id: HistoryDateScope; label: string }[] = [
-  { id: "today", label: "Today" },
-  { id: "yesterday", label: "Yesterday" },
-  { id: "this_week", label: "This week" },
-  { id: "all_time", label: "All time" },
-];
-
-const HISTORY_SCOPE_LABELS: Record<HistoryScope, string> = {
-  all_history: "All history",
-  closed_history: "Closed history",
-  cancelled_history: "Cancelled history",
-};
-
-const HISTORY_EMPTY_STATE: Record<HistoryScope, { heading: string; detail: string }> = {
-  all_history: {
-    heading: "No history in this range",
-    detail: "Closed and cancelled requests will appear here.",
-  },
-  closed_history: {
-    heading: "No closed requests in this range",
-    detail: "Requests closed in this range will appear here.",
-  },
-  cancelled_history: {
-    heading: "No cancelled requests in this range",
-    detail: "Requests cancelled in this range will appear here.",
-  },
-};
-
-// closedShortcut only defines "yesterday"/"this_week" server-side (GetKeepRequestListService.
-// ResolveClosedShortcut). "Today" is sent as explicit closedFrom/closedTo using the same
-// UTC-midnight, exclusive-upper-bound convention as that server logic — no backend change.
-function resolveHistoryDateParams(
-  scope: HistoryDateScope,
-): { closedFrom?: string; closedTo?: string; closedShortcut?: string } {
-  if (scope === "all_time") return {};
-  if (scope === "yesterday") return { closedShortcut: "yesterday" };
-  if (scope === "this_week") return { closedShortcut: "this_week" };
-  const now = new Date();
-  const todayUtc = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
-  const tomorrowUtc = todayUtc + 24 * 60 * 60 * 1000;
-  return {
-    closedFrom: new Date(todayUtc).toISOString(),
-    closedTo: new Date(tomorrowUtc).toISOString(),
-  };
-}
-
-// --- Sidebar count helper ---
-
-function countForTab(tab: TabDef, counts: KeepRequestViewCounts | null): number | null {
-  if (!counts) return null;
-  switch (tab.id) {
-    case "default":         return counts.default;
-    case "assigned_to_me":  return counts.assignedToMe;
-    case "needs_attention": return counts.needsAttention;
-    case "watching":        return counts.watching;
-    case "ready_to_close":  return counts.readyToClose;
-    case "feedback_review": return counts.feedbackReview;
-    case "available_work":  return null;
-    default:                return null;
-  }
-}
-
-// --- Summary pills ---
-
-interface SummaryPill {
-  label: string;
-  count: number;
-  tabId: TabId;
-  icon: React.ReactNode;
-  variant: "attention" | "success";
-}
-
-function buildSummaryPills(
-  viewCounts: KeepRequestViewCounts | null,
-  tabs: TabDef[],
-): SummaryPill[] {
-  if (!viewCounts) return [];
-  const pills: SummaryPill[] = [];
-
-  if (viewCounts.needsAttention > 0 && tabs.some((t) => t.id === "needs_attention")) {
-    pills.push({
-      label: "Needs attention",
-      count: viewCounts.needsAttention,
-      tabId: "needs_attention",
-      icon: <AlertTriangle className="h-3 w-3" />,
-      variant: "attention",
-    });
-  }
-  if (viewCounts.readyToClose > 0 && tabs.some((t) => t.id === "ready_to_close")) {
-    pills.push({
-      label: "Ready to close",
-      count: viewCounts.readyToClose,
-      tabId: "ready_to_close",
-      icon: <CheckCircle2 className="h-3 w-3" />,
-      variant: "success",
-    });
-  }
-  return pills;
-}
-
-// --- Main component ---
+import {
+  getTabsForRole,
+  EMPTY_STATE,
+  resolveHistoryDateParams,
+  HISTORY_SCOPE_LABELS,
+  HISTORY_EMPTY_STATE,
+  type TabDef,
+  type HistoryScope,
+  type HistoryDateScope,
+} from "./requestsWorkspace";
 
 interface RequestsProps {
   role: AccountRole;
@@ -262,7 +49,6 @@ export function Requests({
   const [statusFilter, setStatusFilter] = useState("");
   const [cursor, setCursor] = useState<string | null>(null);
   const cursorStack = useRef<(string | null)[]>([]);
-  const tabRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const listRegionRef = useRef<HTMLDivElement | null>(null);
   const pageHeadingRef = useRef<HTMLHeadingElement | null>(null);
@@ -318,31 +104,6 @@ export function Requests({
     cursorStack.current = [];
   }
 
-  // GAP-041: roving-tabindex keyboard pattern — Left/Right/Home/End move focus and
-  // selection together; Enter/Space activation is native <button> behavior, unchanged.
-  function handleTabKeyDown(e: React.KeyboardEvent<HTMLButtonElement>, index: number) {
-    let nextIndex: number | null = null;
-    switch (e.key) {
-      case "ArrowRight":
-        nextIndex = (index + 1) % tabs.length;
-        break;
-      case "ArrowLeft":
-        nextIndex = (index - 1 + tabs.length) % tabs.length;
-        break;
-      case "Home":
-        nextIndex = 0;
-        break;
-      case "End":
-        nextIndex = tabs.length - 1;
-        break;
-      default:
-        return;
-    }
-    e.preventDefault();
-    selectTab(tabs[nextIndex]);
-    tabRefs.current[nextIndex]?.focus();
-  }
-
   function clearSearch() {
     setDraftQ("");
     setQ("");
@@ -353,6 +114,12 @@ export function Requests({
   function submitSearch(e: React.FormEvent) {
     e.preventDefault();
     setQ(draftQ);
+    setCursor(null);
+    cursorStack.current = [];
+  }
+
+  function updateStatusFilter(value: string) {
+    setStatusFilter(value);
     setCursor(null);
     cursorStack.current = [];
   }
@@ -440,6 +207,7 @@ export function Requests({
   const isLoading = isAvailableTab ? availableQuery.isLoading : listQuery.isLoading;
   const isError = isAvailableTab ? availableQuery.isError : listQuery.isError;
   const error = isAvailableTab ? availableQuery.error : listQuery.error;
+  const isForbidden = isError && error instanceof ApiError && error.status === 403;
 
   // GAP-043: a truthful numbered range, never "of N" — this cursor model has no server total.
   // Valid under the existing fixed-limit, short-final-page contract: only the last page can be
@@ -503,8 +271,6 @@ export function Requests({
     }
   }
 
-  const summaryPills = buildSummaryPills(viewCounts, tabs);
-
   function handleRowSelect(id: string) {
     const ids = isAvailableTab
       ? (availableQuery.data?.requests ?? []).map((r) => r.requestId)
@@ -565,326 +331,80 @@ export function Requests({
       <div className="shrink-0 bg-[var(--ophalo-card)] shadow-sm">
         <div className="max-w-6xl mx-auto w-full">
 
-        {/* H1 anchor + supporting copy + summary pills */}
-        <div className="px-4 pt-5 pb-4 sm:px-6 sm:pt-6">
-          {showOnboardingBanner && setup && (
-            <div className="mb-4">
-              <RequestsOnboardingBanner
-                setup={setup}
-                onNavigateSettings={onNavigateSettings}
-                onStartCapture={onStartCapture}
-              />
-            </div>
-          )}
-          <h1 className="keep-page-title tracking-tight">
-            {pageTitle}
-          </h1>
-          {pageSubtitle && (
-            <p className="mt-1 keep-page-subtitle">
-              {pageSubtitle}
-            </p>
-          )}
-          {summaryPills.length > 0 && (
-            <div className="mt-3 flex flex-wrap gap-2">
-              {summaryPills.map((pill) => {
-                const tab = tabs.find((t) => t.id === pill.tabId);
-                const colorCls = pill.variant === "attention"
-                  ? "border-[var(--ophalo-attention-bg)] bg-[var(--ophalo-attention-bg)] text-[var(--ophalo-attention)] hover:border-[var(--ophalo-attention)]"
-                  : "border-[var(--ophalo-success-bg)] bg-[var(--ophalo-success-bg)] text-[var(--ophalo-success)] hover:border-[var(--ophalo-success)]";
-                return (
-                  <button
-                    key={pill.label}
-                    type="button"
-                    onClick={() => tab && selectTab(tab)}
-                    className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-offset-2 ${colorCls}`}
-                  >
-                    {pill.icon}
-                    <span>{pill.count}</span>
-                    <span>{pill.label}</span>
-                  </button>
-                );
-              })}
-            </div>
-          )}
-        </div>
+        <RequestsWorkspaceHeader
+          showOnboardingBanner={showOnboardingBanner}
+          setup={setup}
+          onNavigateSettings={onNavigateSettings}
+          onStartCapture={onStartCapture}
+          pageTitle={pageTitle}
+          pageSubtitle={pageSubtitle}
+          viewCounts={viewCounts}
+          tabs={tabs}
+          onSelectTab={selectTab}
+        />
 
-        {/* Tab bar / History scope bar */}
-        <div className="border-t border-[var(--ophalo-border)] overflow-x-auto">
-          {!historyMode ? (
-            <div className="flex items-center justify-between gap-2 px-4 sm:px-6 min-w-max">
-              <div role="tablist" aria-label="Request queues" className="flex gap-0">
-                {tabs.map((tab, i) => {
-                  const count = countForTab(tab, viewCounts);
-                  const isActive = tab.view === activeTab.view;
-                  return (
-                    <button
-                      key={`${tab.id}-${tab.label}`}
-                      ref={(el) => { tabRefs.current[i] = el; }}
-                      role="tab"
-                      aria-selected={isActive}
-                      tabIndex={isActive ? 0 : -1}
-                      type="button"
-                      onClick={() => selectTab(tab)}
-                      onKeyDown={(e) => handleTabKeyDown(e, i)}
-                      className={`flex items-center gap-1.5 px-3 py-4 text-sm border-b-2 whitespace-nowrap transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-inset ${
-                        isActive
-                          ? "font-semibold border-[var(--ophalo-navy)] text-[var(--ophalo-navy)]"
-                          : "font-medium border-transparent text-[var(--ophalo-muted)] hover:text-[var(--ophalo-ink)] hover:border-[var(--ophalo-border)]"
-                      }`}
-                    >
-                      {tab.label}
-                      {count != null && count > 0 && (
-                        <span className={`rounded-full px-1.5 py-0.5 text-xs font-semibold ${
-                          isActive
-                            ? "bg-[var(--ophalo-navy)] text-white"
-                            : "bg-[var(--keep-accent-bg)] text-[var(--keep-accent)]"
-                        }`}>
-                          {count}
-                        </span>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-              {/* GAP-044: demoted, non-competing entry point — not styled as a peer tab. */}
-              {isOwnerOrAdmin && (
-                <button
-                  type="button"
-                  onClick={enterHistory}
-                  className="shrink-0 text-xs font-medium text-[var(--ophalo-muted)] hover:text-[var(--ophalo-ink)] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] rounded"
-                >
-                  History
-                </button>
-              )}
-            </div>
-          ) : (
-            <div className="flex flex-wrap items-center gap-3 px-4 py-3 sm:px-6">
-              <button
-                type="button"
-                onClick={exitHistory}
-                className="flex items-center gap-1 text-sm font-medium text-[var(--ophalo-muted)] hover:text-[var(--ophalo-ink)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] rounded"
-              >
-                <ChevronLeft className="h-4 w-4" />
-                Back to queues
-              </button>
-              <div role="group" aria-label="History scope" className="flex items-center gap-1">
-                {HISTORY_SCOPES.map((s) => (
-                  <button
-                    key={s.id}
-                    type="button"
-                    aria-pressed={historyScope === s.id}
-                    onClick={() => updateHistoryScope(s.id)}
-                    className={`px-2.5 py-1 text-xs font-semibold rounded-full border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] ${
-                      historyScope === s.id
-                        ? "border-[var(--ophalo-navy)] bg-[var(--ophalo-navy)] text-white"
-                        : "border-[var(--ophalo-border)] text-[var(--ophalo-muted)] hover:text-[var(--ophalo-ink)]"
-                    }`}
-                  >
-                    {s.label}
-                  </button>
-                ))}
-              </div>
-              <div role="group" aria-label="Date range" className="flex items-center gap-1">
-                {HISTORY_DATE_SCOPES.map((s) => (
-                  <button
-                    key={s.id}
-                    type="button"
-                    aria-pressed={historyDateScope === s.id}
-                    onClick={() => updateHistoryDateScope(s.id)}
-                    className={`px-2.5 py-1 text-xs font-medium rounded-full border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] ${
-                      historyDateScope === s.id
-                        ? "border-[var(--keep-accent)] bg-[var(--keep-accent-bg)] text-[var(--keep-accent)]"
-                        : "border-[var(--ophalo-border)] text-[var(--ophalo-muted)] hover:text-[var(--ophalo-ink)]"
-                    }`}
-                  >
-                    {s.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
+        <RequestQueueNavigation
+          tabs={tabs}
+          activeTab={activeTab}
+          viewCounts={viewCounts}
+          onSelectTab={selectTab}
+          historyMode={historyMode}
+          historyScope={historyScope}
+          historyDateScope={historyDateScope}
+          isOwnerOrAdmin={isOwnerOrAdmin}
+          onEnterHistory={enterHistory}
+          onExitHistory={exitHistory}
+          onUpdateHistoryScope={updateHistoryScope}
+          onUpdateHistoryDateScope={updateHistoryDateScope}
+        />
 
-        {/* Search + status filter — demoted utility row */}
-        {!isAvailableTab && (
-          <div className="flex flex-wrap items-center gap-2 px-4 py-2 sm:px-6 border-t border-[var(--ophalo-border)]">
-            <form onSubmit={submitSearch} className="flex items-center gap-2 flex-1 min-w-[180px]">
-              <div className="relative flex-1">
-                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[var(--ophalo-muted)] pointer-events-none" />
-                <input
-                  ref={searchInputRef}
-                  type="text"
-                  value={draftQ}
-                  onChange={(e) => setDraftQ(e.target.value)}
-                  placeholder={presentAsHistory ? "Search closed & cancelled history…" : "Search requests…"}
-                  aria-label="Search requests"
-                  className={`w-full pl-8 py-1.5 text-sm border border-[var(--ophalo-border)] rounded-lg bg-[var(--ophalo-card)] text-[var(--ophalo-ink)] placeholder:text-[var(--ophalo-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-offset-1 ${draftQ.length > 0 ? "pr-7" : "pr-3"}`}
-                />
-                {draftQ.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      clearSearch();
-                      searchInputRef.current?.focus();
-                    }}
-                    aria-label="Clear search"
-                    className="absolute right-1.5 top-1/2 -translate-y-1/2 p-1 rounded text-[var(--ophalo-muted)] hover:text-[var(--ophalo-ink)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)]"
-                  >
-                    <X className="h-3.5 w-3.5" />
-                  </button>
-                )}
-              </div>
-              <button type="submit" className="sr-only">Search</button>
-            </form>
-            {!historyMode && (
-              <select
-                value={statusFilter}
-                onChange={(e) => {
-                  setStatusFilter(e.target.value);
-                  setCursor(null);
-                  cursorStack.current = [];
-                }}
-                aria-label="Filter by status"
-                className="shrink-0 text-sm border border-[var(--ophalo-border)] rounded-lg px-2 py-1.5 bg-[var(--ophalo-card)] text-[var(--ophalo-ink)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-offset-1"
-              >
-                {STATUS_OPTIONS.map((o) => (
-                  <option key={o.value} value={o.value}>{o.label}</option>
-                ))}
-              </select>
-            )}
-          </div>
-        )}
-
-        {/* Staleness notice */}
-        {showStalenessNotice && (
-          <div className="flex items-center justify-between px-4 py-2 sm:px-6 bg-[var(--ophalo-attention-bg)] border-t border-[var(--ophalo-border)] text-xs text-[var(--ophalo-attention)]">
-            <span>Auto-refresh paused while viewing older results</span>
-            <button
-              type="button"
-              onClick={manualRefresh}
-              className="flex items-center gap-1 font-semibold hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-offset-1 rounded"
-            >
-              <RefreshCw className="h-3 w-3" />
-              Refresh
-            </button>
-          </div>
-        )}
+        <RequestListToolbar
+          isAvailableTab={isAvailableTab}
+          historyMode={historyMode}
+          presentAsHistory={presentAsHistory}
+          searchInputRef={searchInputRef}
+          draftQ={draftQ}
+          onDraftQChange={setDraftQ}
+          onSubmitSearch={submitSearch}
+          onClearSearch={clearSearch}
+          statusFilter={statusFilter}
+          onStatusFilterChange={updateStatusFilter}
+          showStalenessNotice={showStalenessNotice}
+          onManualRefresh={manualRefresh}
+        />
 
         </div>{/* /max-w-6xl */}
       </div>
 
-      {/* Content — scrollable, canvas background shows between cards */}
-      <div
-        ref={listRegionRef}
-        className="flex-1 overflow-y-auto"
-        role="region"
-        aria-label={`${contextLabel} requests`}
-        aria-live="polite"
-        aria-busy={isLoading}
-      >
-        <div className="max-w-6xl mx-auto w-full px-4 py-4 sm:px-6 sm:py-5">
-        {/* GAP-043: rendered whenever it has a meaningful label (loading/range/empty-state
-            heading, never a blank node in the outline) — the same DOM node persists across
-            the loading→loaded transition, so a pending post-page-change focus() lands once
-            the new page's real content, not the stale prior range, is in place. */}
-        {pageHeadingText && (
-          <h2
-            ref={pageHeadingRef}
-            tabIndex={-1}
-            className="mb-2 text-xs font-medium text-[var(--ophalo-muted)] outline-none"
-          >
-            {pageHeadingText}
-          </h2>
-        )}
-
-        {isLoading && <RequestRowSkeleton />}
-
-        {isError && !(error instanceof ApiError && error.status === 403) && (
-          <div className="flex flex-col items-center py-12 text-center gap-2">
-            <p className="text-[var(--ophalo-ink)] text-sm font-medium">Something went wrong</p>
-            <p className="text-[var(--ophalo-muted)] text-sm">Try refreshing the page.</p>
-          </div>
-        )}
-
-        {isError && error instanceof ApiError && error.status === 403 && (
-          <div className="flex justify-center py-12">
-            <p className="text-[var(--ophalo-muted)] text-sm">You don't have access to this view.</p>
-          </div>
-        )}
-
-        {!isLoading && !isError && requests.length === 0 && (
-          <div className="flex flex-col items-center justify-center py-16 text-center max-w-sm mx-auto gap-2">
-            <p className="text-[var(--ophalo-ink)] text-sm font-semibold">
-              {emptyState.heading}
-            </p>
-            <p className="text-[var(--ophalo-muted)] text-sm leading-relaxed">
-              {emptyState.detail}
-            </p>
-          </div>
-        )}
-
-        {!isLoading && !isError && requests.length > 0 && (
-          <div className="space-y-2">
-            {isAvailableTab
-              ? (availableQuery.data?.requests ?? []).map((row) => (
-                  <AvailableRequestRow key={row.requestId} row={row} onSelect={handleRowSelect} />
-                ))
-              : isDefaultTab
-                ? (
-                  <>
-                    {needsAttentionRows.length > 0 && (
-                      <div className="space-y-2">
-                        <h2 className="px-1 text-xs font-semibold uppercase tracking-wide text-[var(--ophalo-muted)]">
-                          Needs attention
-                        </h2>
-                        {needsAttentionRows.map(renderRequestRow)}
-                      </div>
-                    )}
-                    {openWorkRows.length > 0 && (
-                      <div className={`space-y-2 ${needsAttentionRows.length > 0 ? "mt-4" : ""}`}>
-                        <h2 className="px-1 text-xs font-semibold uppercase tracking-wide text-[var(--ophalo-muted)]">
-                          Open work
-                        </h2>
-                        {openWorkRows.map(renderRequestRow)}
-                      </div>
-                    )}
-                  </>
-                )
-                : (listQuery.data?.requests ?? []).map(renderRequestRow)
-            }
-          </div>
-        )}
-        </div>{/* /max-w-6xl */}
-      </div>
-
-      {/* Pagination */}
-      {!isLoading && !isError && (pageInfo?.hasMore || !isOnFirstPage) && (
-        <div className="shrink-0 border-t border-[var(--ophalo-border)] bg-[var(--ophalo-card)]">
-        <div className="max-w-6xl mx-auto w-full flex items-center justify-between px-4 py-3 sm:px-6">
-          <button
-            type="button"
-            onClick={goPrevPage}
-            disabled={isOnFirstPage}
-            className="flex items-center gap-1 text-sm text-[var(--ophalo-muted)] disabled:opacity-40 hover:text-[var(--ophalo-ink)] disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-offset-1 rounded"
-          >
-            <ChevronLeft className="h-4 w-4" />
-            Previous
-          </button>
-          {!pageInfo?.hasMore && (
-            <span className="text-xs text-[var(--ophalo-muted)]">End of results</span>
-          )}
-          <button
-            type="button"
-            onClick={goNextPage}
-            disabled={!pageInfo?.hasMore}
-            className="flex items-center gap-1 text-sm text-[var(--ophalo-muted)] disabled:opacity-40 hover:text-[var(--ophalo-ink)] disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-offset-1 rounded"
-          >
-            Next
-            <ChevronRight className="h-4 w-4" />
-          </button>
-        </div>{/* /max-w-6xl */}
-        </div>
-      )}
+      <RequestListContent
+        listRegionRef={listRegionRef}
+        pageHeadingRef={pageHeadingRef}
+        contextLabel={contextLabel}
+        heading={{
+          headingText: pageHeadingText,
+          isLoading,
+          isError,
+          isForbidden,
+          emptyState,
+        }}
+        rows={{
+          itemCount: requests.length,
+          isAvailableTab,
+          availableRequests: availableQuery.data?.requests ?? [],
+          onAvailableSelect: handleRowSelect,
+          requests: listQuery.data?.requests ?? [],
+          isDefaultTab,
+          needsAttentionRows,
+          openWorkRows,
+          renderRow: renderRequestRow,
+        }}
+        pager={{
+          hasMore: pageInfo?.hasMore ?? false,
+          isOnFirstPage,
+          onPrevPage: goPrevPage,
+          onNextPage: goNextPage,
+        }}
+      />
 
       {/* Row action modal */}
       {activeModalAction && (
