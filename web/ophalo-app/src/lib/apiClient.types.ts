@@ -511,7 +511,10 @@ export type RequestView =
   | "needs_attention"
   | "watching"
   | "ready_to_close"
-  | "feedback_review";
+  | "feedback_review"
+  | "closed_history"
+  | "cancelled_history"
+  | "all_history";
 
 export interface GetRequestsParams {
   view?: RequestView;
@@ -519,6 +522,11 @@ export interface GetRequestsParams {
   q?: string;
   cursor?: string;
   limit?: number;
+  // GAP-044: history-only date scope (ADR-258 TerminatedAtUtc window). closedShortcut and
+  // closedFrom/closedTo are mutually exclusive — the server rejects both being set.
+  closedFrom?: string;
+  closedTo?: string;
+  closedShortcut?: string;
 }
 
 export type FollowUpResolutionOutcome = "complete" | "move" | "keep_active";

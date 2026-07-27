@@ -223,6 +223,9 @@ export const api = {
     if (params.q) qs.set("q", params.q);
     if (params.cursor) qs.set("cursor", params.cursor);
     if (params.limit) qs.set("limit", String(params.limit));
+    if (params.closedFrom) qs.set("closedFrom", params.closedFrom);
+    if (params.closedTo) qs.set("closedTo", params.closedTo);
+    if (params.closedShortcut) qs.set("closedShortcut", params.closedShortcut);
     const query = qs.toString();
     return apiFetch<KeepRequestListResult>(
       `/keep/requests${query ? `?${query}` : ""}`,

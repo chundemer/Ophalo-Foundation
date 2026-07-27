@@ -114,7 +114,8 @@ describe("Requests — ADR-449 Owner/Admin work-queue hierarchy", () => {
 
     await screen.findByText(needsAttentionRow.customerName);
     const region = screen.getByRole("region", { name: "All work requests" });
-    const headings = within(region).getAllByRole("heading", { level: 2 });
+    // First h2 in the region is GAP-043's stable page-range heading ("Showing 1–2"), not a section label.
+    const headings = within(region).getAllByRole("heading", { level: 2 }).slice(1);
     expect(headings.map((h) => h.textContent)).toEqual(["Needs attention", "Open work"]);
 
     const needsSection = headings[0].parentElement!;
