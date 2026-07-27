@@ -1098,8 +1098,9 @@ closed.
 
 ### GAP-017 — Staff New Request cannot capture service location at creation
 
-**Status:** In progress — backend contract and disclosure are committed; incomplete-address client
-handling and native parity remain open
+**Status:** Resolved for `ophalo-app` (PWA) — backend contract, disclosure, and required-if-open
+client validation are committed (Session 2.2). Native parity remains open, blocked on the native app
+not yet existing.
 **Severity:** P1
 **Area:** `ophalo-app` Quick Capture; PWA create-request contract; Keep business-request command,
 service, and entity creation
@@ -1249,7 +1250,7 @@ before applying the UI gate, lookup request, and draft return path.
 
 ### GAP-022 — Optional service-address disclosure can silently discard entered data
 
-**Status:** Open
+**Status:** Resolved (Session 2.2, `CaptureForm.tsx`)
 **Severity:** P1
 **Area:** `ophalo-app` Quick Capture create form
 
@@ -1257,23 +1258,26 @@ before applying the UI gate, lookup request, and draft return path.
 the disclosure and enters city, state, ZIP, or line 2 without line 1, request creation succeeds
 without an address rather than surfacing the required-if-open condition.
 
-**Required resolution:** When the disclosure is open, require line 1, city, and state client-side;
-show associated field errors and submit all supplied address fields so server validation remains a
-backstop. Line 2 and ZIP remain optional.
+**Resolution:** When the disclosure is open, line 1, city, and state are required client-side;
+incomplete required fields show inline errors (on blur or a blocked submit attempt) and submission
+is blocked until satisfied. All supplied address fields then submit unconditionally; server
+validation remains the backstop.
 
 ### GAP-023 — Change-phone draft can conflict with the newly selected customer
 
-**Status:** Open
+**Status:** Resolved (Session 2.2, `CaptureForm.tsx`)
 **Severity:** P1
 **Area:** `ophalo-app` Quick Capture draft restoration
 
 **Verified cause:** After **Change**, a newly looked-up customer can supply a new name/email prefill,
 but the preserved draft takes precedence. The old name/email can then be displayed as read-only for
-the new phone/customer.
+the new phone/customer — including when the newly resolved customer has no email on file, where a
+prior customer's stale email was left populated.
 
-**Required resolution:** On a changed-phone lookup that resolves to a different customer, reset or
-explicitly confirm the identity fields while preserving request-specific draft fields such as
-description, source, and address.
+**Resolution:** Identity fields (name/email) now default to a resolved customer's prefill ahead of
+the preserved draft, and a non-null prefill is fully authoritative for both fields (empty string
+when the resolved customer has no email), never falling back to draft in that case. Request-specific
+draft fields — description, source, and address — are unaffected and still restore from the draft.
 
 ### GAP-024 — Modal accessibility is incomplete for Quick Capture and desktop call handoff
 

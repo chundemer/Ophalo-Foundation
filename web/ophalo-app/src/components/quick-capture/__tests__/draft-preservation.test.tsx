@@ -170,12 +170,12 @@ describe("CaptureForm.initialDraft", () => {
     expect(screen.getByPlaceholderText("ZIP")).toHaveValue("97201");
   });
 
-  it("initialDraft takes precedence over prefill", () => {
+  it("prefill takes precedence over a stale draft's identity fields (GAP-023), but draft still supplies non-identity fields", () => {
     const draft: CaptureFormDraft = {
       name: "Draft Name",
       email: "draft@example.com",
       description: "Draft desc",
-      source: "",
+      source: "walk_in",
       showAddress: false,
       addrLine1: "",
       addrLine2: "",
@@ -199,8 +199,149 @@ describe("CaptureForm.initialDraft", () => {
       </Wrapper>
     );
 
+    expect(screen.getByLabelText(/customer name/i)).toHaveValue("Prefill Name");
+    expect(screen.getByLabelText(/email/i)).toHaveValue("prefill@example.com");
+    expect(screen.getByLabelText(/description/i)).toHaveValue("Draft desc");
+    expect(screen.getByLabelText(/source/i)).toHaveValue("walk_in");
+  });
+
+  it("clears a stale draft email when the newly resolved customer (prefill) has no email", () => {
+    const draft: CaptureFormDraft = {
+      name: "Customer A",
+      email: "a@example.com",
+      description: "Draft desc",
+      source: "",
+      showAddress: false,
+      addrLine1: "",
+      addrLine2: "",
+      addrCity: "",
+      addrState: "",
+      addrZip: "",
+    };
+
+    render(
+      <Wrapper>
+        <CaptureForm
+          lockedPhone="5550003333"
+          prefill={{ name: "Customer B" }}
+          initialDraft={draft}
+          isPastDue={false}
+          isReadOnly={false}
+          onSuccess={vi.fn()}
+          onBack={vi.fn()}
+          onClose={vi.fn()}
+        />
+      </Wrapper>
+    );
+
+    expect(screen.getByLabelText(/customer name/i)).toHaveValue("Customer B");
+    expect(screen.getByLabelText(/email/i)).toHaveValue("");
+  });
+
+  it("falls back to the draft's identity fields when there is no prefill", () => {
+    const draft: CaptureFormDraft = {
+      name: "Draft Name",
+      email: "draft@example.com",
+      description: "",
+      source: "",
+      showAddress: false,
+      addrLine1: "",
+      addrLine2: "",
+      addrCity: "",
+      addrState: "",
+      addrZip: "",
+    };
+
+    render(
+      <Wrapper>
+        <CaptureForm
+          lockedPhone="5550002222"
+          prefill={null}
+          initialDraft={draft}
+          isPastDue={false}
+          isReadOnly={false}
+          onSuccess={vi.fn()}
+          onBack={vi.fn()}
+          onClose={vi.fn()}
+        />
+      </Wrapper>
+    );
+
     expect(screen.getByLabelText(/customer name/i)).toHaveValue("Draft Name");
     expect(screen.getByLabelText(/email/i)).toHaveValue("draft@example.com");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// CaptureForm isolation — GAP-022 required-if-open address
+// ---------------------------------------------------------------------------
+describe("CaptureForm address disclosure validation", () => {
+  it("does not submit and shows field errors when the disclosure is open but incomplete", async () => {
+    const user = userEvent.setup();
+
+    render(
+      <Wrapper>
+        <CaptureForm
+          lockedPhone="5551234567"
+          prefill={null}
+          isPastDue={false}
+          isReadOnly={false}
+          onSuccess={vi.fn()}
+          onBack={vi.fn()}
+          onClose={vi.fn()}
+        />
+      </Wrapper>
+    );
+
+    await user.type(screen.getByLabelText(/customer name/i), "Jane Doe");
+    await user.type(screen.getByLabelText(/description/i), "Needs an estimate");
+    await user.selectOptions(screen.getByLabelText(/source/i), "phone");
+
+    await user.click(screen.getByRole("button", { name: /\+ add service address/i }));
+    await user.type(screen.getByPlaceholderText("City"), "Springfield");
+    // line 1 and state left empty
+
+    await user.click(screen.getByRole("button", { name: /capture request/i }));
+
+    expect(mockCreate).not.toHaveBeenCalled();
+    expect(screen.getByText(/address line 1 is required/i)).toBeInTheDocument();
+  });
+
+  it("submits all supplied address fields once line 1, city, and state are filled", async () => {
+    const user = userEvent.setup();
+    mockCreate.mockResolvedValue({ requestId: "req-1", referenceCode: "REF-001", pageToken: "tok-abc" });
+
+    render(
+      <Wrapper>
+        <CaptureForm
+          lockedPhone="5551234567"
+          prefill={null}
+          isPastDue={false}
+          isReadOnly={false}
+          onSuccess={vi.fn()}
+          onBack={vi.fn()}
+          onClose={vi.fn()}
+        />
+      </Wrapper>
+    );
+
+    await user.type(screen.getByLabelText(/customer name/i), "Jane Doe");
+    await user.type(screen.getByLabelText(/description/i), "Needs an estimate");
+    await user.selectOptions(screen.getByLabelText(/source/i), "phone");
+
+    await user.click(screen.getByRole("button", { name: /\+ add service address/i }));
+    await user.type(screen.getByPlaceholderText("Address line 1"), "123 Main St");
+    await user.type(screen.getByPlaceholderText("City"), "Springfield");
+    await user.type(screen.getByPlaceholderText("State"), "IL");
+
+    await user.click(screen.getByRole("button", { name: /capture request/i }));
+
+    await waitFor(() => expect(mockCreate).toHaveBeenCalledOnce());
+    expect(mockCreate.mock.calls[0][0]).toMatchObject({
+      serviceAddressLine1: "123 Main St",
+      serviceCity: "Springfield",
+      serviceState: "IL",
+    });
   });
 });
 

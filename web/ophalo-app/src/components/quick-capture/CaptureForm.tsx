@@ -25,8 +25,12 @@ export function CaptureForm({
   onBack,
   onClose,
 }: CaptureFormProps) {
-  const [name, setName] = useState(initialDraft?.name ?? prefill?.name ?? "");
-  const [email, setEmail] = useState(initialDraft?.email ?? prefill?.email ?? "");
+  // Identity fields default to the resolved customer's prefill, not a preserved draft: after
+  // Change → a different customer's phone, the draft would otherwise show the old customer's
+  // name/email as read-only under the new phone (GAP-023). The prefill input is itself read-only
+  // when present, so this cannot discard a same-customer edit.
+  const [name, setName] = useState(prefill ? prefill.name ?? "" : initialDraft?.name ?? "");
+  const [email, setEmail] = useState(prefill ? prefill.email ?? "" : initialDraft?.email ?? "");
   const [description, setDescription] = useState(initialDraft?.description ?? prefill?.description ?? "");
   const [source, setSource] = useState<string>(initialDraft?.source ?? "");
   const [showAddress, setShowAddress] = useState(initialDraft?.showAddress ?? false);
@@ -35,10 +39,15 @@ export function CaptureForm({
   const [addrCity, setAddrCity] = useState(initialDraft?.addrCity ?? "");
   const [addrState, setAddrState] = useState(initialDraft?.addrState ?? "");
   const [addrZip, setAddrZip] = useState(initialDraft?.addrZip ?? "");
+  const [addressTouched, setAddressTouched] = useState(false);
 
   function buildDraft(): CaptureFormDraft {
     return { name, email, description, source, showAddress, addrLine1, addrLine2, addrCity, addrState, addrZip };
   }
+
+  // When the disclosure is open, line 1/city/state are required — an open disclosure with only
+  // some fields filled must not silently submit without an address (GAP-022).
+  const addressIncomplete = showAddress && (!addrLine1.trim() || !addrCity.trim() || !addrState.trim());
 
   const { mutate, isPending, error } = useMutation({
     mutationFn: () =>
@@ -48,11 +57,11 @@ export function CaptureForm({
         customerEmail: email.trim() || undefined,
         description: description.trim(),
         source,
-        ...(showAddress && addrLine1.trim() ? {
+        ...(showAddress ? {
           serviceAddressLine1: addrLine1.trim(),
           serviceAddressLine2: addrLine2.trim() || undefined,
-          serviceCity: addrCity.trim() || undefined,
-          serviceState: addrState.trim() || undefined,
+          serviceCity: addrCity.trim(),
+          serviceState: addrState.trim(),
           serviceZip: addrZip.trim() || undefined,
         } : {}),
       }),
@@ -70,6 +79,14 @@ export function CaptureForm({
     name.trim().length > 0 &&
     description.trim().length > 0 &&
     source.length > 0;
+
+  function handleSubmit() {
+    if (addressIncomplete) {
+      setAddressTouched(true);
+      return;
+    }
+    mutate();
+  }
 
   return (
     <div className="flex flex-col gap-4">
@@ -177,20 +194,27 @@ export function CaptureForm({
               <span className="text-sm font-medium text-slate-700">Service address</span>
               <button
                 type="button"
-                onClick={() => { setShowAddress(false); setAddrLine1(""); setAddrLine2(""); setAddrCity(""); setAddrState(""); setAddrZip(""); }}
+                onClick={() => { setShowAddress(false); setAddressTouched(false); setAddrLine1(""); setAddrLine2(""); setAddrCity(""); setAddrState(""); setAddrZip(""); }}
                 className="text-xs text-slate-400 hover:text-slate-600"
               >
                 Remove
               </button>
             </div>
-            <input
-              type="text"
-              value={addrLine1}
-              onChange={(e) => setAddrLine1(e.target.value)}
-              disabled={isReadOnly}
-              placeholder="Address line 1"
-              className="block w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500 disabled:bg-slate-50 disabled:text-slate-400"
-            />
+            <div>
+              <input
+                type="text"
+                value={addrLine1}
+                onChange={(e) => setAddrLine1(e.target.value)}
+                onBlur={() => setAddressTouched(true)}
+                disabled={isReadOnly}
+                placeholder="Address line 1"
+                aria-invalid={addressTouched && !addrLine1.trim()}
+                className="block w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500 disabled:bg-slate-50 disabled:text-slate-400"
+              />
+              {addressTouched && !addrLine1.trim() && (
+                <p className="mt-1 text-xs text-red-600">Address line 1 is required.</p>
+              )}
+            </div>
             <input
               type="text"
               value={addrLine2}
@@ -200,23 +224,37 @@ export function CaptureForm({
               className="block w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500 disabled:bg-slate-50 disabled:text-slate-400"
             />
             <div className="flex gap-2">
-              <input
-                type="text"
-                value={addrCity}
-                onChange={(e) => setAddrCity(e.target.value)}
-                disabled={isReadOnly}
-                placeholder="City"
-                className="block flex-1 rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500 disabled:bg-slate-50 disabled:text-slate-400"
-              />
-              <input
-                type="text"
-                value={addrState}
-                onChange={(e) => setAddrState(e.target.value)}
-                disabled={isReadOnly}
-                placeholder="State"
-                maxLength={2}
-                className="block w-16 rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500 disabled:bg-slate-50 disabled:text-slate-400"
-              />
+              <div className="flex-1">
+                <input
+                  type="text"
+                  value={addrCity}
+                  onChange={(e) => setAddrCity(e.target.value)}
+                  onBlur={() => setAddressTouched(true)}
+                  disabled={isReadOnly}
+                  placeholder="City"
+                  aria-invalid={addressTouched && !addrCity.trim()}
+                  className="block w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500 disabled:bg-slate-50 disabled:text-slate-400"
+                />
+                {addressTouched && !addrCity.trim() && (
+                  <p className="mt-1 text-xs text-red-600">Required.</p>
+                )}
+              </div>
+              <div className="w-16">
+                <input
+                  type="text"
+                  value={addrState}
+                  onChange={(e) => setAddrState(e.target.value)}
+                  onBlur={() => setAddressTouched(true)}
+                  disabled={isReadOnly}
+                  placeholder="State"
+                  maxLength={2}
+                  aria-invalid={addressTouched && !addrState.trim()}
+                  className="block w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500 disabled:bg-slate-50 disabled:text-slate-400"
+                />
+                {addressTouched && !addrState.trim() && (
+                  <p className="mt-1 text-xs text-red-600">Required.</p>
+                )}
+              </div>
               <input
                 type="text"
                 value={addrZip}
@@ -265,7 +303,7 @@ export function CaptureForm({
           <button
             type="button"
             disabled={!canSubmit}
-            onClick={() => mutate()}
+            onClick={handleSubmit}
             title={isReadOnly ? "Read-only permission" : undefined}
             className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-40 flex items-center gap-2"
           >
