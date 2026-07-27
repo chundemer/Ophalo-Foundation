@@ -498,6 +498,27 @@ public sealed class KeepRequestListPersistence(OpHaloDbContext dbContext, IClock
         return result;
     }
 
+    // ADR-450: durable, full-history EXISTS-only signal. accountId scopes the query against
+    // cross-account data corruption, matching GetParticipantSummariesAsync's convention.
+    // System events and feedback-review notes never count; only content-bearing, human-authored
+    // (ActorType.AccountUser) notes do. Never selects event content, actor detail, or timestamps.
+    public async Task<HashSet<Guid>> GetInternalNotePresenceAsync(
+        Guid accountId, IReadOnlyList<Guid> requestIds, CancellationToken ct)
+    {
+        var requestIdsWithNotes = await dbContext.Set<KeepRequestEvent>()
+            .AsNoTracking()
+            .Where(e => e.AccountId == accountId && requestIds.Contains(e.RequestId))
+            .Where(e => e.ActorType == ActorType.AccountUser
+                && (e.EventType == KeepRequestEventType.InternalNoteAdded
+                    || (e.EventType == KeepRequestEventType.ParticipationChanged
+                        && e.ParticipationInternalNote != null && e.ParticipationInternalNote != "")))
+            .Select(e => e.RequestId)
+            .Distinct()
+            .ToListAsync(ct);
+
+        return [.. requestIdsWithNotes];
+    }
+
     // Only displayable event types are ever fetched — never a full per-row timeline.
     // Visibility.All on MessageAdded excludes internal notes; ExternalContactLogged has
     // no free-text Content field so its label is always derived, never event content.

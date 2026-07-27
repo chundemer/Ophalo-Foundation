@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
-import { RequestRow } from "../RequestRow";
+import { render, screen, fireEvent } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { RequestRow, buildCollapsedSummary } from "../RequestRow";
 import type { KeepRequestSummary, KeepQuickAction } from "../../lib/apiClient";
 
 // GAP-027 / Build 087 §3-§5: one status pill, one deterministically-selected exception pill,
@@ -29,7 +30,6 @@ function buildRow(overrides: Partial<KeepRequestSummary> = {}): KeepRequestSumma
     customerName: "Jane Smith",
     customerPhone: "0412345678",
     customerEmail: "jane@example.com",
-    description: "Fix leak",
     lastCustomerActivityAtUtc: null,
     lastBusinessActivityAtUtc: null,
     createdAtUtc: "2026-07-01T00:00:00Z",
@@ -72,12 +72,9 @@ function buildRow(overrides: Partial<KeepRequestSummary> = {}): KeepRequestSumma
       firstResponsePending: false,
       firstResponseOverdue: false,
     },
-    preview: {
-      previewText: "Customer needs a leak fixed.",
-      previewSource: "original_description",
-      previewTruncated: false,
-      previewAtUtc: "2026-07-01T00:00:00Z",
-    },
+    originalSummary: { fullText: "Fix leak" },
+    latestActivity: null,
+    hasInternalNote: false,
     participation: {
       responsibleCount: 0,
       watchingCount: 0,
@@ -326,7 +323,7 @@ describe("RequestRow — Build 087 / GAP-027 locked row contract", () => {
 
   it("GAP-007b: labels a customer message with source and relative time", () => {
     const row = buildRow({
-      preview: {
+      latestActivity: {
         previewText: "Can you come Tuesday?",
         previewSource: "customer_message",
         previewTruncated: false,
@@ -342,7 +339,7 @@ describe("RequestRow — Build 087 / GAP-027 locked row contract", () => {
 
   it("GAP-007b: labels a business update with source and relative time", () => {
     const row = buildRow({
-      preview: {
+      latestActivity: {
         previewText: "We'll be there Thursday.",
         previewSource: "business_update",
         previewTruncated: false,
@@ -358,7 +355,7 @@ describe("RequestRow — Build 087 / GAP-027 locked row contract", () => {
 
   it("GAP-007b: external-contact preview shows only a relative time, no source label — the label text is already neutral", () => {
     const row = buildRow({
-      preview: {
+      latestActivity: {
         previewText: "Called customer",
         previewSource: "external_contact",
         previewTruncated: false,
@@ -374,19 +371,139 @@ describe("RequestRow — Build 087 / GAP-027 locked row contract", () => {
     expect(screen.queryByText(/Business update/)).not.toBeInTheDocument();
   });
 
-  it("GAP-007b: original-description fallback renders without a misleading relative time prefix", () => {
-    const row = buildRow({
-      preview: {
-        previewText: "Fix leak",
-        previewSource: "original_description",
-        previewTruncated: false,
-        previewAtUtc: "2020-01-01T00:00:00Z",
-      },
-    });
+  // --- ADR-450: original-summary context, expansion toggle, internal-note cue ---
+
+  it("ADR-450: renders the original summary as stable context and shows no latest-activity block when latestActivity is null", () => {
+    const row = buildRow({ latestActivity: null });
 
     render(<RequestRow row={row} onSelect={noop} />);
 
     expect(screen.getByText("Fix leak")).toBeInTheDocument();
     expect(screen.queryByText(/ago ·/)).not.toBeInTheDocument();
+  });
+
+  it("ADR-450: shows Read full request only when the collapsed form differs from the full text, and expands without navigating", () => {
+    const longText = "A".repeat(300);
+    const row = buildRow({ originalSummary: { fullText: longText } });
+    const onSelect = vi.fn();
+
+    render(<RequestRow row={row} onSelect={onSelect} />);
+
+    const toggle = screen.getByRole("button", { name: "Read full request" });
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+
+    fireEvent.click(toggle);
+
+    expect(onSelect).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "Show less" })).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByText(longText)).toBeInTheDocument();
+  });
+
+  it("ADR-450: no expansion toggle for short original summaries", () => {
+    const row = buildRow({ originalSummary: { fullText: "Short and simple request" } });
+
+    render(<RequestRow row={row} onSelect={noop} />);
+
+    expect(screen.queryByRole("button", { name: "Read full request" })).not.toBeInTheDocument();
+  });
+
+  it("ADR-450: shows a quiet Internal note cue only when hasInternalNote is true", () => {
+    const withNote = buildRow({ hasInternalNote: true });
+    const { rerender } = render(<RequestRow row={withNote} onSelect={noop} />);
+    expect(screen.getByText("Internal note")).toBeInTheDocument();
+
+    const withoutNote = buildRow({ hasInternalNote: false });
+    rerender(<RequestRow row={withoutNote} onSelect={noop} />);
+    expect(screen.queryByText("Internal note")).not.toBeInTheDocument();
+  });
+
+  it("ADR-450: keyboard activation (Enter) of the real toggle expands without navigating — no interactive ancestor to intercept it", async () => {
+    const user = userEvent.setup();
+    const longText = "B".repeat(300);
+    const row = buildRow({ originalSummary: { fullText: longText } });
+    const onSelect = vi.fn();
+
+    render(<RequestRow row={row} onSelect={onSelect} />);
+
+    // user-event simulates real browser keyboard-activation semantics (Tab focuses the button,
+    // Enter fires its native click), unlike a raw fireEvent.keyDown which jsdom does not
+    // translate into a click by itself. Default buildRow renders no quick-action bar, so the
+    // only two focusable elements are the nav button, then the toggle.
+    await user.tab(); // focuses the row-navigation button
+    await user.tab(); // focuses the Read full request toggle
+    expect(screen.getByRole("button", { name: "Read full request" })).toHaveFocus();
+    await user.keyboard("{Enter}");
+
+    expect(onSelect).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "Show less" })).toHaveAttribute("aria-expanded", "true");
+  });
+
+  it("ADR-450: expansion state resets when the row remounts under a different composite key (tab/filter/search/page change)", () => {
+    const longText = "C".repeat(300);
+    const row = buildRow({ id: "req-reset", originalSummary: { fullText: longText } });
+
+    const { rerender } = render(<RequestRow key="req-reset-tab-a" row={row} onSelect={noop} />);
+    fireEvent.click(screen.getByRole("button", { name: "Read full request" }));
+    expect(screen.getByRole("button", { name: "Show less" })).toBeInTheDocument();
+
+    // Simulate Requests.tsx's composite key changing (e.g. a tab/filter/search/cursor change)
+    // for the same underlying request — a key change forces React to unmount and remount, not
+    // just re-render with new props, exactly as key={`${row.id}-${activeTab.view}-...`} would.
+    rerender(<RequestRow key="req-reset-tab-b" row={row} onSelect={noop} />);
+
+    expect(screen.getByRole("button", { name: "Read full request" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Show less" })).not.toBeInTheDocument();
+  });
+});
+
+describe("buildCollapsedSummary — ADR-450 word-boundary/whitespace collapse", () => {
+  it("normalizes internal whitespace and newlines to single spaces", () => {
+    const { collapsed, showToggle } = buildCollapsedSummary("Line one\n\nLine   two\ttabbed");
+    expect(collapsed).toBe("Line one Line two tabbed");
+    expect(showToggle).toBe(true); // collapsed differs from the raw (un-normalized) full text
+  });
+
+  it("leaves short, already-normalized text untouched and does not show the toggle", () => {
+    const { collapsed, showToggle } = buildCollapsedSummary("Short and simple request");
+    expect(collapsed).toBe("Short and simple request");
+    expect(showToggle).toBe(false);
+  });
+
+  it("backs up to a word boundary instead of splitting a word mid-way", () => {
+    const words = Array.from({ length: 50 }, (_, i) => `word${i}`).join(" "); // well over 240 chars
+    const { collapsed, showToggle } = buildCollapsedSummary(words);
+
+    expect(showToggle).toBe(true);
+    expect(collapsed.endsWith("…")).toBe(true);
+    const withoutEllipsis = collapsed.slice(0, -1);
+    // Every character up to the cut must be a real prefix of the source text — i.e. the cut
+    // landed on a space, not mid-word.
+    expect(words.startsWith(withoutEllipsis)).toBe(true);
+    expect(words[withoutEllipsis.length]).toBe(" ");
+  });
+
+  it("caps the collapsed length at exactly 240 characters including the ellipsis", () => {
+    const singleWord = "A".repeat(300); // no spaces — cannot back up to a word boundary
+    const { collapsed, showToggle } = buildCollapsedSummary(singleWord);
+
+    expect(showToggle).toBe(true);
+    expect(collapsed.length).toBe(240);
+    expect(collapsed.endsWith("…")).toBe(true);
+  });
+
+  it("does not truncate text at exactly 240 characters", () => {
+    const exactly240 = "D".repeat(240);
+    const { collapsed, showToggle } = buildCollapsedSummary(exactly240);
+
+    expect(collapsed).toBe(exactly240);
+    expect(showToggle).toBe(false);
+  });
+
+  it("truncates text at 241 characters", () => {
+    const over = "E".repeat(241);
+    const { collapsed, showToggle } = buildCollapsedSummary(over);
+
+    expect(showToggle).toBe(true);
+    expect(collapsed.length).toBe(240);
   });
 });

@@ -273,6 +273,14 @@ public sealed class GetKeepRequestListService(
             accountSnapshot.Purpose,
             PermissionKeys.Keep.RequestsOperate);
 
+        // ADR-450: internal-note presence is gated by the same permission as adding notes.
+        // Viewers and any permission-denied state must not trigger the presence lookup at all.
+        var canViewInternalNotes = userAccessPolicy.IsPermitted(
+            userSnapshot.Role,
+            userSnapshot.MembershipStatus,
+            accountSnapshot.Purpose,
+            PermissionKeys.Keep.InternalNotesAdd);
+
         IReadOnlyList<KeepRequestSummary> page;
         bool hasMore;
         IReadOnlyList<KeepRequest> historyPageEntities = [];
@@ -316,7 +324,7 @@ public sealed class GetKeepRequestListService(
                     histParticipants.GetValueOrDefault(r.Id), normalizedView))
                 .ToList();
 
-            page = await ApplyPagePreviewsAsync(page, ct);
+            page = await ApplyPagePreviewsAsync(page, canViewInternalNotes, ct);
         }
         else
         {
@@ -387,7 +395,7 @@ public sealed class GetKeepRequestListService(
             hasMore = sliced.Count > limit;
             page = sliced.Take(limit).ToList();
 
-            page = await ApplyPagePreviewsAsync(page, ct);
+            page = await ApplyPagePreviewsAsync(page, canViewInternalNotes, ct);
         }
 
         // --- Next cursor ---
@@ -625,22 +633,32 @@ public sealed class GetKeepRequestListService(
 
     // --- Row mapping ---
 
-    // Batch preview lookup for only the already-sliced page (GAP-007b) — never per-row,
-    // never for the full candidate set used for ranking/sorting.
+    // Batch preview + internal-note-presence lookup for only the already-sliced page
+    // (GAP-007b/ADR-450) — never per-row, never for the full candidate set used for ranking/sorting.
     private async Task<IReadOnlyList<KeepRequestSummary>> ApplyPagePreviewsAsync(
-        IReadOnlyList<KeepRequestSummary> page, CancellationToken ct)
+        IReadOnlyList<KeepRequestSummary> page, bool canViewInternalNotes, CancellationToken ct)
     {
         if (page.Count == 0)
             return page;
 
-        var previews = await persistence.GetLatestPreviewEventsAsync(
-            page.Select(s => s.Id).ToList(), ct);
+        var requestIds = page.Select(s => s.Id).ToList();
 
-        if (previews.Count == 0)
+        var previews = await persistence.GetLatestPreviewEventsAsync(requestIds, ct);
+
+        // Permission-denied viewers never trigger the presence lookup at all (ADR-450).
+        var notePresence = canViewInternalNotes
+            ? await persistence.GetInternalNotePresenceAsync(currentUser.AccountId, requestIds, ct)
+            : [];
+
+        if (previews.Count == 0 && notePresence.Count == 0)
             return page;
 
         return page
-            .Select(s => previews.TryGetValue(s.Id, out var preview) ? s with { Preview = preview } : s)
+            .Select(s => s with
+            {
+                LatestActivity = previews.TryGetValue(s.Id, out var preview) ? preview : null,
+                HasInternalNote = notePresence.Contains(s.Id)
+            })
             .ToList();
     }
 
@@ -721,10 +739,6 @@ public sealed class GetKeepRequestListService(
             DueAtUtc: dueAtUtc,
             IsPostClose: isPostClose);
 
-        // Default: original-description fallback. Overwritten only for the final sliced page
-        // via a batch preview lookup (GAP-007b); ranking/sorting never depends on preview content.
-        var preview = new KeepRequestPreviewInfo(r.Description, "original_description", false, r.CreatedAtUtc);
-
         // Evaluate action policy per request; list uses the decision for write affordances.
         // Phone/email presence, first-response-overdue suppression, and row context
         // remain presentation conditions here (ADR-328).
@@ -772,7 +786,6 @@ public sealed class GetKeepRequestListService(
             CustomerName: r.CustomerName,
             CustomerPhone: r.CustomerPhone,
             CustomerEmail: r.CustomerEmail,
-            Description: r.Description,
             LastCustomerActivityAtUtc: r.LastCustomerActivityAt,
             LastBusinessActivityAtUtc: r.LastBusinessActivityAt,
             CreatedAtUtc: r.CreatedAtUtc,
@@ -783,7 +796,9 @@ public sealed class GetKeepRequestListService(
             RowContext: rowContext,
             Attention: attention,
             Ranking: ranking,
-            Preview: preview,
+            OriginalSummary: new KeepRequestOriginalSummaryInfo(r.Description),
+            LatestActivity: null,
+            HasInternalNote: false,
             Actions: actions,
             Participation: participationInfo,
             CurrentUserNotification: notificationInfo,

@@ -202,7 +202,7 @@ export function installMockApi(): void {
       filtered = filtered.filter(
         (r) =>
           r.customerName.toLowerCase().includes(q) ||
-          r.description.toLowerCase().includes(q) ||
+          r.originalSummary.fullText.toLowerCase().includes(q) ||
           r.referenceCode.toLowerCase().includes(q),
       );
     }
@@ -356,7 +356,6 @@ export function installMockApi(): void {
       customerName: body.customerName,
       customerPhone: body.customerPhone,
       customerEmail: body.customerEmail ?? null,
-      description: body.description,
       lastCustomerActivityAtUtc: null,
       lastBusinessActivityAtUtc: now,
       createdAtUtc: now,
@@ -399,7 +398,9 @@ export function installMockApi(): void {
         firstResponsePending: true,
         firstResponseOverdue: false,
       },
-      preview: { previewText: null, previewSource: null, previewTruncated: false, previewAtUtc: null },
+      originalSummary: { fullText: body.description },
+      latestActivity: null,
+      hasInternalNote: false,
       participation: {
         responsibleCount: 1,
         watchingCount: 0,

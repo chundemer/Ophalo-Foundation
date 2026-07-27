@@ -476,7 +476,10 @@ export function Requests({
                   <AvailableRequestRow key={row.requestId} row={row} onSelect={handleRowSelect} />
                 ))
               : (listQuery.data?.requests ?? []).map((row) => (
-                  <RequestRow key={row.id} row={row} onSelect={handleRowSelect} onSelectFocused={handleRowSelectFocused} onActionClick={handleActionClick} onShareClick={setShareModalTarget} showCloseoutCue={activeTab.id === "ready_to_close"} />
+                  // ADR-450: composite key mirrors the query key so RequestRow's local expansion
+                  // state (originalSummary "Read full request") resets on any tab/filter/search/page
+                  // change, even when the same request appears in two different result sets.
+                  <RequestRow key={`${row.id}-${activeTab.view}-${statusFilter}-${q}-${cursor}`} row={row} onSelect={handleRowSelect} onSelectFocused={handleRowSelectFocused} onActionClick={handleActionClick} onShareClick={setShareModalTarget} showCloseoutCue={activeTab.id === "ready_to_close"} />
                 ))
             }
           </div>

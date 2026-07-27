@@ -375,6 +375,10 @@ export interface KeepRequestPreviewInfo {
   previewAtUtc: string | null;
 }
 
+export interface KeepRequestOriginalSummaryInfo {
+  fullText: string;
+}
+
 export interface KeepRequestParticipationInfo {
   responsibleCount: number;
   watchingCount: number;
@@ -419,7 +423,6 @@ export interface KeepRequestSummary {
   customerName: string;
   customerPhone: string;
   customerEmail: string | null;
-  description: string;
   lastCustomerActivityAtUtc: string | null;
   lastBusinessActivityAtUtc: string | null;
   createdAtUtc: string;
@@ -442,7 +445,9 @@ export interface KeepRequestSummary {
   feedbackReviewDueAtUtc: string | null;
   ranking: KeepRequestRankingInfo;
   attention: KeepRequestAttentionInfo;
-  preview: KeepRequestPreviewInfo;
+  originalSummary: KeepRequestOriginalSummaryInfo;
+  latestActivity: KeepRequestPreviewInfo | null;
+  hasInternalNote: boolean;
   participation: KeepRequestParticipationInfo;
   actions: KeepRequestActionsInfo;
   timing?: KeepRequestTimingInfo;

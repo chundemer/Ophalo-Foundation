@@ -1382,4 +1382,168 @@ public sealed class KeepPersistenceProofTests : IClassFixture<PostgresFixture>, 
         Assert.Equal("We'll swing by Thursday morning", preview.PreviewText);
         Assert.Equal(Now.AddMinutes(1), preview.PreviewAtUtc);
     }
+
+    // --- ADR-450: internal-note-presence batch read ---
+
+    [Fact]
+    public async Task GetInternalNotePresenceAsync_true_for_internal_note_added_false_for_no_note()
+    {
+        Guid requestWithNote, requestWithoutNote;
+        await using (var seedCtx = CreateContext())
+        {
+            var customer1 = KeepCustomer.Create(AccountId, "Note Customer", "0499777010");
+            var customer2 = KeepCustomer.Create(AccountId, "No Note Customer", "0499777011");
+            seedCtx.Set<KeepCustomer>().AddRange(customer1, customer2);
+            await seedCtx.SaveChangesAsync();
+
+            var req1 = KeepRequest.CreateFromCustomerIntake(
+                AccountId, customer1.Id, "Note Customer", "0499777010", null,
+                "Has a note", "PREV0010", "prev-tok-010", Now, 60);
+            var req2 = KeepRequest.CreateFromCustomerIntake(
+                AccountId, customer2.Id, "No Note Customer", "0499777011", null,
+                "No note here", "PREV0011", "prev-tok-011", Now, 60);
+            seedCtx.Set<KeepRequest>().AddRange(req1, req2);
+            seedCtx.Set<KeepRequestEvent>().AddRange(
+                KeepRequestEvent.CreateRequestCreated(req1.Id, AccountId, Now),
+                KeepRequestEvent.CreateRequestCreated(req2.Id, AccountId, Now));
+            await seedCtx.SaveChangesAsync();
+
+            var note = req1.AddInternalNote(
+                "Keep an eye on this one", AccountOwnerAccountUserId, "Owner", Now.AddMinutes(1));
+            Assert.True(note.IsSuccess);
+            seedCtx.Set<KeepRequestEvent>().Add(note.Value);
+            await seedCtx.SaveChangesAsync();
+
+            requestWithNote = req1.Id;
+            requestWithoutNote = req2.Id;
+        }
+
+        await using var ctx = CreateContext();
+        var sut = new OpHalo.Keep.Infrastructure.Persistence.KeepRequestListPersistence(
+            ctx, new OpHalo.Foundation.Infrastructure.Services.SystemClock());
+
+        var presence = await sut.GetInternalNotePresenceAsync(
+            AccountId, [requestWithNote, requestWithoutNote], CancellationToken.None);
+
+        Assert.Contains(requestWithNote, presence);
+        Assert.DoesNotContain(requestWithoutNote, presence);
+    }
+
+    [Fact]
+    public async Task GetInternalNotePresenceAsync_true_for_nonempty_participation_internal_note()
+    {
+        Guid requestId;
+        await using (var seedCtx = CreateContext())
+        {
+            var customer = KeepCustomer.Create(AccountId, "Participation Note Customer", "0499777012");
+            seedCtx.Set<KeepCustomer>().Add(customer);
+            await seedCtx.SaveChangesAsync();
+
+            var request = KeepRequest.CreateFromCustomerIntake(
+                AccountId, customer.Id, "Participation Note Customer", "0499777012", null,
+                "Needs a follow-up", "PREV0012", "prev-tok-012", Now, 60);
+            seedCtx.Set<KeepRequest>().Add(request);
+            seedCtx.Set<KeepRequestEvent>().Add(KeepRequestEvent.CreateRequestCreated(request.Id, AccountId, Now));
+            await seedCtx.SaveChangesAsync();
+
+            var participationEvent = KeepRequestEvent.CreateParticipationChanged(
+                request.Id, AccountId, AccountOwnerAccountUserId, "Owner",
+                ParticipationAction.ResponsibleAssigned, AccountOwnerAccountUserId, "Owner",
+                previousResponsibleAccountUserId: null,
+                internalNote: "Assigning to myself, handling personally",
+                notificationIntentKind: null,
+                notificationIntendedRecipientAccountUserId: null,
+                occurredAtUtc: Now.AddMinutes(1));
+            seedCtx.Set<KeepRequestEvent>().Add(participationEvent);
+            await seedCtx.SaveChangesAsync();
+
+            requestId = request.Id;
+        }
+
+        await using var ctx = CreateContext();
+        var sut = new OpHalo.Keep.Infrastructure.Persistence.KeepRequestListPersistence(
+            ctx, new OpHalo.Foundation.Infrastructure.Services.SystemClock());
+
+        var presence = await sut.GetInternalNotePresenceAsync(AccountId, [requestId], CancellationToken.None);
+
+        Assert.Contains(requestId, presence);
+    }
+
+    [Fact]
+    public async Task GetInternalNotePresenceAsync_false_for_empty_participation_note_and_feedback_review_note()
+    {
+        Guid requestId;
+        await using (var seedCtx = CreateContext())
+        {
+            var customer = KeepCustomer.Create(AccountId, "No Content Note Customer", "0499777013");
+            seedCtx.Set<KeepCustomer>().Add(customer);
+            await seedCtx.SaveChangesAsync();
+
+            var request = KeepRequest.CreateFromCustomerIntake(
+                AccountId, customer.Id, "No Content Note Customer", "0499777013", null,
+                "Needs a check", "PREV0013", "prev-tok-013", Now, 60);
+            seedCtx.Set<KeepRequest>().Add(request);
+            seedCtx.Set<KeepRequestEvent>().Add(KeepRequestEvent.CreateRequestCreated(request.Id, AccountId, Now));
+            await seedCtx.SaveChangesAsync();
+
+            // ParticipationChanged with no internal-note text — must not count.
+            var participationEvent = KeepRequestEvent.CreateParticipationChanged(
+                request.Id, AccountId, AccountOwnerAccountUserId, "Owner",
+                ParticipationAction.WatcherAdded, AccountOwnerAccountUserId, "Owner",
+                previousResponsibleAccountUserId: null,
+                internalNote: null,
+                notificationIntentKind: null,
+                notificationIntendedRecipientAccountUserId: null,
+                occurredAtUtc: Now.AddMinutes(1));
+            seedCtx.Set<KeepRequestEvent>().Add(participationEvent);
+            await seedCtx.SaveChangesAsync();
+
+            requestId = request.Id;
+        }
+
+        await using var ctx = CreateContext();
+        var sut = new OpHalo.Keep.Infrastructure.Persistence.KeepRequestListPersistence(
+            ctx, new OpHalo.Foundation.Infrastructure.Services.SystemClock());
+
+        var presence = await sut.GetInternalNotePresenceAsync(AccountId, [requestId], CancellationToken.None);
+
+        Assert.DoesNotContain(requestId, presence);
+    }
+
+    [Fact]
+    public async Task GetInternalNotePresenceAsync_is_account_scoped()
+    {
+        Guid requestId;
+        await using (var seedCtx = CreateContext())
+        {
+            var customer = KeepCustomer.Create(AccountId, "Cross Account Note Customer", "0499777014");
+            seedCtx.Set<KeepCustomer>().Add(customer);
+            await seedCtx.SaveChangesAsync();
+
+            var request = KeepRequest.CreateFromCustomerIntake(
+                AccountId, customer.Id, "Cross Account Note Customer", "0499777014", null,
+                "Needs a check", "PREV0014", "prev-tok-014", Now, 60);
+            seedCtx.Set<KeepRequest>().Add(request);
+            seedCtx.Set<KeepRequestEvent>().Add(KeepRequestEvent.CreateRequestCreated(request.Id, AccountId, Now));
+            await seedCtx.SaveChangesAsync();
+
+            var note = request.AddInternalNote(
+                "Owned by AccountId, not SecondAccountId", AccountOwnerAccountUserId, "Owner", Now.AddMinutes(1));
+            Assert.True(note.IsSuccess);
+            seedCtx.Set<KeepRequestEvent>().Add(note.Value);
+            await seedCtx.SaveChangesAsync();
+
+            requestId = request.Id;
+        }
+
+        await using var ctx = CreateContext();
+        var sut = new OpHalo.Keep.Infrastructure.Persistence.KeepRequestListPersistence(
+            ctx, new OpHalo.Foundation.Infrastructure.Services.SystemClock());
+
+        // Querying under SecondAccountId must not see AccountId's internal note, even though
+        // the request ID is passed explicitly — the AccountId filter must win.
+        var presence = await sut.GetInternalNotePresenceAsync(SecondAccountId, [requestId], CancellationToken.None);
+
+        Assert.DoesNotContain(requestId, presence);
+    }
 }

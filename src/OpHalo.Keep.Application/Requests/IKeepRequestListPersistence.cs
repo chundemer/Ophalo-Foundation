@@ -90,13 +90,24 @@ public interface IKeepRequestListPersistence
     /// Precedence per request: latest customer MessageAdded text; else latest customer-visible
     /// (Visibility=All, ActorType=AccountUser) MessageAdded text; else a neutral, non-content
     /// label derived from the latest ExternalContactLogged event. Requests with no qualifying
-    /// event are absent from the result; the caller falls back to the original description.
-    /// Message text is bounded server-side (never an unbounded body) and PreviewTruncated
-    /// reflects that bound truthfully. Internal notes, feedback comments, raw contact details,
-    /// and capability tokens are never selected.
+    /// event are absent from the result; the caller renders LatestActivity as null (ADR-450 — no
+    /// original-description fallback). Message text is bounded server-side (never an unbounded
+    /// body) and PreviewTruncated reflects that bound truthfully. Internal notes, feedback
+    /// comments, raw contact details, and capability tokens are never selected.
     /// </summary>
     Task<Dictionary<Guid, KeepRequestPreviewInfo>> GetLatestPreviewEventsAsync(
         IReadOnlyList<Guid> requestIds, CancellationToken ct);
+
+    /// <summary>
+    /// Returns the subset of requestIds that have at least one qualifying human-authored internal
+    /// note (ADR-450/GAP-007): InternalNoteAdded, or a non-empty ParticipationInternalNote, with
+    /// ActorType == AccountUser. System events and feedback-review notes never count. A durable,
+    /// full-history EXISTS/presence-only signal — never event content, actor detail, or timestamps.
+    /// accountId scopes the query against cross-account data corruption, matching
+    /// GetParticipantSummariesAsync's convention. Only called for the caller's already-sliced page.
+    /// </summary>
+    Task<HashSet<Guid>> GetInternalNotePresenceAsync(
+        Guid accountId, IReadOnlyList<Guid> requestIds, CancellationToken ct);
 }
 
 /// <summary>Selects the active (non-history) view for GetActiveViewRequestsAsync (ADR-239).</summary>

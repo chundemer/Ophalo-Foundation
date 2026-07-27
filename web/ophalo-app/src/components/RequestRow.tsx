@@ -1,5 +1,5 @@
-import type { ComponentType } from "react";
-import { AlertTriangle, Clock, MessageSquare, ChevronRight, UserRound, CheckCircle2, Share2, Phone } from "lucide-react";
+import { useState, type ComponentType } from "react";
+import { AlertTriangle, Clock, MessageSquare, ChevronRight, UserRound, CheckCircle2, Share2, Phone, StickyNote } from "lucide-react";
 import { KeepBadge, type KeepBadgeVariant } from "./keep/KeepBadge";
 import type { KeepRequestSummary, KeepRequestAvailableItem, KeepQuickAction } from "../lib/apiClient";
 import { statusLabel, statusBadgeVariant } from "../lib/requestStatus";
@@ -300,6 +300,21 @@ function relativeTime(iso: string | null): string | null {
   return `${Math.floor(days / 7)}w ago`;
 }
 
+// ADR-450: collapsed form normalizes whitespace/newlines to single spaces and backs up to a
+// word boundary, capped at 240 characters INCLUDING the appended ellipsis (239 chars + "…").
+// showToggle is true whenever the collapsed presentation differs from the supplied full text
+// (including whitespace normalization) or exceeds 240 characters.
+export function buildCollapsedSummary(fullText: string): { collapsed: string; showToggle: boolean } {
+  const normalized = fullText.replace(/\s+/g, " ").trim();
+  let collapsed = normalized;
+  if (normalized.length > 240) {
+    const slice = normalized.slice(0, 239);
+    const lastSpace = slice.lastIndexOf(" ");
+    collapsed = (lastSpace > 0 ? slice.slice(0, lastSpace) : slice).trimEnd() + "…";
+  }
+  return { collapsed, showToggle: collapsed !== fullText };
+}
+
 function previewSourceLabel(previewSource: string | null): string | null {
   switch (previewSource) {
     case "customer_message": return "Customer message";
@@ -331,6 +346,8 @@ interface RequestRowProps {
 }
 
 export function RequestRow({ row, onSelect, onSelectFocused, onActionClick, onShareClick, showCloseoutCue }: RequestRowProps) {
+  const [expanded, setExpanded] = useState(false);
+  const { collapsed: collapsedSummary, showToggle: summaryTruncated } = buildCollapsedSummary(row.originalSummary.fullText);
   const lastTouch = relativeTime(row.lastBusinessActivityAtUtc ?? row.updatedAtUtc);
   const isClosedOrCancelled = row.status === "closed" || row.status === "cancelled";
   const isCalmCloseout = showCloseoutCue === true && row.status === "resolved" && !row.attention.attentionReason;
@@ -383,11 +400,11 @@ export function RequestRow({ row, onSelect, onSelectFocused, onActionClick, onSh
 
   return (
     <div className={`rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] hover:shadow-sm transition-shadow ${borderAccent}`}>
-      {/* Main clickable area — opens detail */}
+      {/* Row-navigation target — identity/status/exception only, no nested interactive content */}
       <button
         type="button"
         onClick={() => onSelect(row.id)}
-        className={`w-full text-left flex flex-col gap-2 px-4 pt-3 ${quickActionButtons.length > 0 ? "pb-2" : "pb-3"} ${FOCUS_RING} rounded-t-xl`}
+        className={`w-full text-left flex flex-col gap-2 px-4 pt-3 pb-2 ${FOCUS_RING} rounded-t-xl`}
       >
         {/* Identity: reference + customer name */}
         <div className="flex items-center justify-between gap-2">
@@ -411,61 +428,85 @@ export function RequestRow({ row, onSelect, onSelectFocused, onActionClick, onSh
             <span className="text-sm text-[var(--ophalo-muted)]">Next: {promoted.label}</span>
           )}
         </div>
-
-        {/* Preview text — honest source/time context; never for the description fallback */}
-        {row.preview.previewText && (
-          <p className="keep-row-meta line-clamp-1 text-left">
-            {row.preview.previewSource !== "original_description" && (
-              <span className="text-[var(--ophalo-muted)]">
-                {previewSourceLabel(row.preview.previewSource) && `${previewSourceLabel(row.preview.previewSource)} · `}
-                {relativeTime(row.preview.previewAtUtc)} ·{" "}
-              </span>
-            )}
-            {row.preview.previewText}
-          </p>
-        )}
-
-        {/* Context metadata — quiet, unbordered; no competing alert badges */}
-        <div className="keep-row-meta flex flex-wrap items-center gap-x-3 gap-y-1">
-          {row.participation.responsibleDisplayName && (
-            <span className="flex items-center gap-1">
-              <UserRound className="h-3 w-3" />
-              {row.participation.responsibleDisplayName}
-            </span>
-          )}
-          {row.participation.isUnassigned && (
-            <span>Unassigned</span>
-          )}
-          {lastTouch && <span>Last touch {lastTouch}</span>}
-          {row.source === "public_intake" ? (
-            <span>
-              Customer intake
-              {row.contactPreference === "text_message" && " · Prefers text"}
-              {row.contactPreference === "phone_call" && " · Prefers call"}
-              {row.contactPreference === "email" && " · Prefers email"}
-              {row.serviceCity && row.serviceState && (
-                <> · {row.serviceCity}, {row.serviceState}{row.serviceZip ? ` ${row.serviceZip}` : ""}</>
-              )}
-            </span>
-          ) : (
-            <span>Created by business</span>
-          )}
-          {followUpMeta && <span>{followUpMeta}</span>}
-          {plannedMeta && <span>{plannedMeta}</span>}
-          {row.feedbackWasResolved === true && !row.isPostCloseFollowUp && (
-            <span className="flex items-center gap-1">
-              <CheckCircle2 className="h-3 w-3" />
-              Customer confirmed resolved
-            </span>
-          )}
-          {row.businessPriority === "urgent" && (
-            <span>Internal priority: Urgent</span>
-          )}
-          {row.businessPriority === "soon" && (
-            <span>Internal priority: Soon</span>
-          )}
-        </div>
       </button>
+
+      {/* Original request context (ADR-450) — non-interactive region, sibling of the nav button.
+          Owns its own expansion control; clicking here does not navigate. */}
+      <div className="px-4">
+        <p className={`keep-row-meta text-left ${expanded ? "whitespace-pre-wrap break-words" : "line-clamp-2"}`}>
+          {expanded ? row.originalSummary.fullText : collapsedSummary}
+        </p>
+        {summaryTruncated && (
+          <button
+            type="button"
+            aria-expanded={expanded}
+            onClick={() => setExpanded((v) => !v)}
+            className={`text-xs font-medium text-[var(--keep-accent)] hover:underline ${FOCUS_RING} rounded`}
+          >
+            {expanded ? "Show less" : "Read full request"}
+          </button>
+        )}
+      </div>
+
+      {/* Latest activity (ADR-450) — visually secondary, never replaces original context */}
+      {row.latestActivity?.previewText && (
+        <div className="px-4 pt-1">
+          <p className="keep-row-meta line-clamp-1 text-left">
+            <span className="text-[var(--ophalo-muted)]">
+              {previewSourceLabel(row.latestActivity.previewSource) && `${previewSourceLabel(row.latestActivity.previewSource)} · `}
+              {relativeTime(row.latestActivity.previewAtUtc)} ·{" "}
+            </span>
+            {row.latestActivity.previewText}
+          </p>
+        </div>
+      )}
+
+      {/* Context metadata — quiet, unbordered; no competing alert badges */}
+      <div className={`keep-row-meta flex flex-wrap items-center gap-x-3 gap-y-1 px-4 pt-1 ${quickActionButtons.length > 0 ? "pb-2" : "pb-3"}`}>
+        {row.participation.responsibleDisplayName && (
+          <span className="flex items-center gap-1">
+            <UserRound className="h-3 w-3" />
+            {row.participation.responsibleDisplayName}
+          </span>
+        )}
+        {row.participation.isUnassigned && (
+          <span>Unassigned</span>
+        )}
+        {lastTouch && <span>Last touch {lastTouch}</span>}
+        {row.source === "public_intake" ? (
+          <span>
+            Customer intake
+            {row.contactPreference === "text_message" && " · Prefers text"}
+            {row.contactPreference === "phone_call" && " · Prefers call"}
+            {row.contactPreference === "email" && " · Prefers email"}
+            {row.serviceCity && row.serviceState && (
+              <> · {row.serviceCity}, {row.serviceState}{row.serviceZip ? ` ${row.serviceZip}` : ""}</>
+            )}
+          </span>
+        ) : (
+          <span>Created by business</span>
+        )}
+        {followUpMeta && <span>{followUpMeta}</span>}
+        {plannedMeta && <span>{plannedMeta}</span>}
+        {row.feedbackWasResolved === true && !row.isPostCloseFollowUp && (
+          <span className="flex items-center gap-1">
+            <CheckCircle2 className="h-3 w-3" />
+            Customer confirmed resolved
+          </span>
+        )}
+        {row.businessPriority === "urgent" && (
+          <span>Internal priority: Urgent</span>
+        )}
+        {row.businessPriority === "soon" && (
+          <span>Internal priority: Soon</span>
+        )}
+        {row.hasInternalNote && (
+          <span className="flex items-center gap-1 text-[var(--ophalo-muted)]">
+            <StickyNote className="h-3 w-3" />
+            Internal note
+          </span>
+        )}
+      </div>
 
       {/* Quick action bar — at most one promoted action and one relevant secondary (Build 087 §5) */}
       {quickActionButtons.length > 0 && (

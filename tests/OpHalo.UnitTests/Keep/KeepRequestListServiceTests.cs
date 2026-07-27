@@ -588,7 +588,7 @@ public class KeepRequestListServiceTests
         Assert.Equal("received", summary.Status);
         Assert.Equal("Alice", summary.CustomerName);
         Assert.Equal("555-9999", summary.CustomerPhone);
-        Assert.Equal("Fix sink", summary.Description);
+        Assert.Equal("Fix sink", summary.OriginalSummary.FullText);
         Assert.False(summary.IsTerminal);
         Assert.False(summary.IsPostCloseFollowUp);
 
@@ -600,9 +600,8 @@ public class KeepRequestListServiceTests
         Assert.Equal(6, summary.Ranking.RankingOrder);
         Assert.Equal("attention", summary.Ranking.Severity);
 
-        Assert.Equal("Fix sink", summary.Preview.PreviewText);
-        Assert.Equal("original_description", summary.Preview.PreviewSource);
-        Assert.False(summary.Preview.PreviewTruncated);
+        Assert.Null(summary.LatestActivity);
+        Assert.False(summary.HasInternalNote);
 
         Assert.Contains(summary.Actions.QuickActions, a => a.Code == "open_detail");
         Assert.Contains(summary.Actions.QuickActions, a => a.Code == "contact_customer");
@@ -636,9 +635,9 @@ public class KeepRequestListServiceTests
         Assert.True(result.IsSuccess);
         var summary = Assert.Single(result.Value.Requests);
 
-        Assert.Equal("Can you come Tuesday?", summary.Preview.PreviewText);
-        Assert.Equal("customer_message", summary.Preview.PreviewSource);
-        Assert.Equal(previewAt, summary.Preview.PreviewAtUtc);
+        Assert.Equal("Can you come Tuesday?", summary.LatestActivity!.PreviewText);
+        Assert.Equal("customer_message", summary.LatestActivity.PreviewSource);
+        Assert.Equal(previewAt, summary.LatestActivity.PreviewAtUtc);
     }
 
     [Fact]
@@ -668,22 +667,61 @@ public class KeepRequestListServiceTests
     }
 
     [Fact]
-    public async Task Execute_falls_back_to_description_when_no_preview_event_exists()
+    public async Task Execute_latest_activity_is_null_when_no_qualifying_event_exists()
     {
         var request = KeepRequest.CreateFromCustomerIntake(
             AccountId, Guid.NewGuid(), "Alice", "555-9999", null, "Fix sink", "REF00001", "tok1", Now, 60);
 
         var p = HappyPathPersistence([request]);
         // PreviewMap left empty — simulates no qualifying event for this request.
+        // ADR-450: no original-description fallback; LatestActivity stays null and
+        // OriginalSummary is populated independently from KeepRequest.Description.
 
         var sut = BuildSut(p);
         var result = await sut.ExecuteAsync();
 
         var summary = Assert.Single(result.Value.Requests);
 
-        Assert.Equal("Fix sink", summary.Preview.PreviewText);
-        Assert.Equal("original_description", summary.Preview.PreviewSource);
-        Assert.Equal(request.CreatedAtUtc, summary.Preview.PreviewAtUtc);
+        Assert.Null(summary.LatestActivity);
+        Assert.Equal("Fix sink", summary.OriginalSummary.FullText);
+    }
+
+    [Fact]
+    public async Task Execute_internal_note_presence_is_false_and_lookup_skipped_for_denied_viewer()
+    {
+        var request = KeepRequest.CreateFromCustomerIntake(
+            AccountId, Guid.NewGuid(), "Alice", "555-9999", null, "Fix sink", "REF00001", "tok1", Now, 60);
+
+        var p = HappyPathPersistence([request], role: AccountUserRole.Viewer);
+        p.InternalNotePresenceSet = [request.Id];
+
+        var sut = BuildSut(p);
+        var result = await sut.ExecuteAsync();
+
+        var summary = Assert.Single(result.Value.Requests);
+
+        Assert.False(summary.HasInternalNote);
+        Assert.Empty(p.InternalNotePresenceLookupCalls);
+    }
+
+    [Fact]
+    public async Task Execute_internal_note_presence_is_true_for_permitted_owner()
+    {
+        var request = KeepRequest.CreateFromCustomerIntake(
+            AccountId, Guid.NewGuid(), "Alice", "555-9999", null, "Fix sink", "REF00001", "tok1", Now, 60);
+
+        var p = HappyPathPersistence([request]);
+        p.InternalNotePresenceSet = [request.Id];
+
+        var sut = BuildSut(p);
+        var result = await sut.ExecuteAsync();
+
+        var summary = Assert.Single(result.Value.Requests);
+
+        Assert.True(summary.HasInternalNote);
+        var call = Assert.Single(p.InternalNotePresenceLookupCalls);
+        Assert.Equal(AccountId, call.AccountId);
+        Assert.Equal(request.Id, Assert.Single(call.RequestIds));
     }
 
     [Theory]
@@ -2366,6 +2404,16 @@ public class KeepRequestListServiceTests
             PreviewLookupCalls.Add(requestIds);
             return Task.FromResult(PreviewMap);
         }
+
+        public HashSet<Guid> InternalNotePresenceSet { get; set; } = new();
+        public List<(Guid AccountId, IReadOnlyList<Guid> RequestIds)> InternalNotePresenceLookupCalls { get; } = new();
+
+        public Task<HashSet<Guid>> GetInternalNotePresenceAsync(
+            Guid accountId, IReadOnlyList<Guid> requestIds, CancellationToken ct)
+        {
+            InternalNotePresenceLookupCalls.Add((accountId, requestIds));
+            return Task.FromResult(InternalNotePresenceSet);
+        }
     }
 
     private sealed class FakeUserAccessPolicy(bool permitted) : IUserAccessPolicy
@@ -2377,7 +2425,9 @@ public class KeepRequestListServiceTests
             string permissionKey)
         {
             if (!permitted) return false;
-            if (role == AccountUserRole.Viewer && permissionKey == PermissionKeys.Keep.RequestsOperate)
+            if (role == AccountUserRole.Viewer &&
+                (permissionKey == PermissionKeys.Keep.RequestsOperate
+                    || permissionKey == PermissionKeys.Keep.InternalNotesAdd))
                 return false;
             return true;
         }

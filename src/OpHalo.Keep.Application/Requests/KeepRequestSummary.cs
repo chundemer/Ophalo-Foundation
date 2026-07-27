@@ -8,7 +8,6 @@ public sealed record KeepRequestSummary(
     string CustomerName,
     string CustomerPhone,
     string? CustomerEmail,
-    string Description,
     DateTime? LastCustomerActivityAtUtc,
     DateTime? LastBusinessActivityAtUtc,
     DateTime CreatedAtUtc,
@@ -19,7 +18,9 @@ public sealed record KeepRequestSummary(
     string RowContext,
     KeepRequestAttentionInfo Attention,
     KeepRequestRankingInfo Ranking,
-    KeepRequestPreviewInfo Preview,
+    KeepRequestOriginalSummaryInfo OriginalSummary,
+    KeepRequestPreviewInfo? LatestActivity,
+    bool HasInternalNote,
     KeepRequestActionsInfo Actions,
     KeepRequestParticipationInfo Participation,
     KeepRequestNotificationInfo CurrentUserNotification,
@@ -63,11 +64,18 @@ public sealed record KeepRequestRankingInfo(
     bool IsPostClose);
 
 /// <summary>
-/// Server-selected latest displayable activity preview for a list row (GAP-007b).
-/// PreviewSource is one of "customer_message", "business_update", "external_contact",
-/// or "original_description" — stable values the client uses to label the preview honestly.
-/// PreviewAtUtc is the source event's OccurredAtUtc, or CreatedAtUtc when falling back to
-/// original_description (no qualifying event exists).
+/// Bounded original request description (ADR-450). Sourced directly from KeepRequest.Description
+/// at mapping time; not a separate persistence read. Stable row context shown before latest activity.
+/// </summary>
+public sealed record KeepRequestOriginalSummaryInfo(
+    string FullText);
+
+/// <summary>
+/// Server-selected latest displayable activity preview for a list row (GAP-007b/ADR-450).
+/// PreviewSource is one of "customer_message", "business_update", or "external_contact" — stable
+/// values the client uses to label the activity honestly. Null (the whole LatestActivity field on
+/// KeepRequestSummary, not this record) when no qualifying event exists; there is no
+/// original_description fallback.
 /// </summary>
 public sealed record KeepRequestPreviewInfo(
     string? PreviewText,

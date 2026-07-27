@@ -837,6 +837,80 @@ public sealed class KeepRequestListQueryApiTests : IClassFixture<KeepApiWebFacto
         }
     }
 
+    // =========================================================================
+    // ADR-450 — row-context contract: originalSummary/latestActivity/hasInternalNote
+    // =========================================================================
+
+    [Fact]
+    public async Task List_Row_ExposesOriginalSummaryAndOmitsDescriptionAndInternalNoteText()
+    {
+        var now = DateTime.UtcNow;
+        Guid requestId;
+
+        await using (var scope = _factory.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+            var accountId = (await db.Accounts.FirstAsync()).Id;
+            var owner = await db.AccountUsers.FirstAsync(u => u.AccountId == accountId && u.Role == AccountUserRole.Owner);
+            var customer = KeepCustomer.Create(accountId, "ADR450 Customer", "0499000450");
+            db.Set<KeepCustomer>().Add(customer);
+            await db.SaveChangesAsync();
+
+            var request = KeepRequest.CreateFromCustomerIntake(
+                accountId, customer.Id, "ADR450 Customer", "0499000450", null,
+                "Leaking pipe under the kitchen sink", "ADR450R1", "adr450_page_token", now, 60);
+            db.Set<KeepRequest>().Add(request);
+            db.Set<KeepRequestEvent>().Add(KeepRequestEvent.CreateRequestCreated(request.Id, accountId, now));
+            await db.SaveChangesAsync();
+
+            var note = request.AddInternalNote(
+                "Customer's SSN is 000-00-0000 — do not repeat to customer",
+                owner.Id, "4A Owner", now.AddMinutes(1));
+            Assert.True(note.IsSuccess);
+            db.Set<KeepRequestEvent>().Add(note.Value);
+            await db.SaveChangesAsync();
+
+            requestId = request.Id;
+        }
+
+        var ownerResponse = await GetAsync("/keep/requests");
+        Assert.Equal(HttpStatusCode.OK, ownerResponse.StatusCode);
+        var ownerBody = await ownerResponse.Content.ReadFromJsonAsync<JsonElement>();
+        var ownerRow = ownerBody.GetProperty("requests").EnumerateArray()
+            .First(r => r.GetProperty("id").GetGuid() == requestId);
+
+        Assert.False(ownerRow.TryGetProperty("description", out _),
+            "description must not appear on the list row — originalSummary replaces it.");
+        Assert.Equal("Leaking pipe under the kitchen sink",
+            ownerRow.GetProperty("originalSummary").GetProperty("fullText").GetString());
+        Assert.True(ownerRow.GetProperty("hasInternalNote").GetBoolean());
+
+        var rawJson = ownerBody.GetRawText();
+        Assert.DoesNotContain("SSN", rawJson);
+        Assert.DoesNotContain("000-00-0000", rawJson);
+        Assert.DoesNotContain("do not repeat to customer", rawJson);
+
+        var viewerResponse = await GetAsAsync("/keep/requests", _viewerCookie);
+        Assert.Equal(HttpStatusCode.OK, viewerResponse.StatusCode);
+        var viewerBody = await viewerResponse.Content.ReadFromJsonAsync<JsonElement>();
+        var viewerRow = viewerBody.GetProperty("requests").EnumerateArray()
+            .First(r => r.GetProperty("id").GetGuid() == requestId);
+
+        Assert.False(viewerRow.GetProperty("hasInternalNote").GetBoolean());
+    }
+
+    [Fact]
+    public async Task List_Row_LatestActivityIsNullWhenNoQualifyingEventExists()
+    {
+        var response = await GetAsync("/keep/requests");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        // Seeded rows in InitializeAsync have no message/business-update/external-contact events.
+        var row = body.GetProperty("requests").EnumerateArray().First();
+        Assert.Equal(JsonValueKind.Null, row.GetProperty("latestActivity").ValueKind);
+    }
+
     // --- Response DTOs ----------------------------------------------------------
 
     private sealed record ListResponseBody(
