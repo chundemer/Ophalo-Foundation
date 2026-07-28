@@ -1,38 +1,53 @@
 # Keep Product Positioning
 
-**Status:** Working product compass
-**Purpose:** Guide product decisions, implementation scope, and future marketing language.
+**Status:** Current product compass — updated 2026-07-28
+**Purpose:** Guide product decisions, implementation scope, packaging, and future marketing language.
+**Related direction:** Build 101 (contractor asset/workflow discovery), Build 102 (large-account
+Request List discussion), and Build 103 (modular capability packages).
 
 ## Core Promise
 
-Keep helps small service businesses make sure customer requests are visible, owned, followed up, and
-closed with confidence.
+Keep helps service contractors make sure every service need is known, owned, followed through, and
+closed with confidence—connected to the customer, property, and equipment involved.
 
 The short version:
 
 ```text
-No customer slips through the cracks.
+Know the work. Keep the promise.
 ```
+
+This is the working **Keep product line**. It expands the earlier customer-only shorthand, “No
+customer slips through the cracks,” without discarding its intent. The OpHalo parent tagline remains
+`See the gaps. Close them.` The locked public-page/footer motto remains unchanged until a separate
+brand/ADR decision changes it.
 
 The more useful product boundary:
 
 ```text
-Keep does not manage the work. Keep manages the promise.
+Keep does not manage every part of the work. Keep maintains the trusted record and promise around it.
 ```
 
 Before the job, during the wait, after the service, and even after the close, the question is:
 
 ```text
-Is the customer still confident someone has them?
+Do we know the asset, the work, and the promise well enough to act with confidence?
 ```
 
 ## What Keep Is
 
-Keep is a customer communication and follow-up command center for small service businesses.
+Keep is an asset-aware continuity and work-record platform for service contractors. It connects a
+service need to the people, property, equipment, work history, materials, and communication needed
+to resolve it responsibly.
+
+The core customer promise remains essential. The product direction now recognizes that a contractor
+cannot reliably keep that promise when the team cannot identify the exact equipment, understand the
+prior work, or retain what was done at the site.
 
 It helps the business answer:
 
 - Did a customer ask for help?
+- Which property, unit/location, and equipment asset is involved?
+- What work, diagnosis, materials, and warranty context already exist?
 - Did we acknowledge them quickly?
 - Does someone own the follow-up?
 - Is the customer waiting on us?
@@ -42,11 +57,16 @@ It helps the business answer:
 - Did the customer say it was actually resolved?
 - Is anything stale, forgotten, or unresolved?
 
-Keep turns scattered communication into a visible loop:
+Keep turns scattered work and communication into a visible, retained loop:
 
 ```text
-request -> acknowledgement -> ownership -> updates -> resolution -> feedback -> closeout
+service need -> known property/asset -> ownership -> diagnosis/work -> updates or approval
+-> completion -> retained history -> feedback/closeout
 ```
+
+Not every account needs every stage on day one. Keep Core already owns the request/continuity loop.
+Asset identity, QR labels, price-book materials, B2B property authorization, and accounting exchange
+are staged first-party capability packages, not claims that every current account already has them.
 
 For pilot, the request must be capturable by the business first. If a customer calls, texts, emails,
 leaves a voicemail, walks in, or comes through a referral, Keep should let the business create the
@@ -56,6 +76,32 @@ are then optional collaboration and confidence surfaces, not a prerequisite for 
 That distinction protects the core promise: Keep cannot become a secondary inbox for only the
 customers willing to fill out a form. The business hears about the need first; Keep captures it
 first; the customer page helps enrich, update, and close the loop afterward.
+
+## Current Direction and Capability Packages
+
+Keep remains one product, deployed and operated by OpHalo. It will grow through first-party,
+server-enforced capability packages rather than customer-specific forks or a third-party runtime
+plugin marketplace.
+
+```text
+Keep Core → Asset Operations → Price Book & Materials → B2B Property Workflow
+          → Accounting Exchange where the workflow justifies it
+```
+
+The packages represent complete customer outcomes, not isolated buttons:
+
+- **Keep Core:** a service need is captured, owned, communicated, followed up, and closed.
+- **Asset Operations:** a technician identifies the exact equipment, including via an assigned opaque
+  QR label, and sees permitted service history and warranty context.
+- **Price Book & Materials:** authorized staff import a controlled catalog and retain the exact
+  material/labor lines and price snapshot used on a work record.
+- **B2B Property Workflow:** contractor/property-manager work retains property, unit, authorization,
+  completion, and billing-handoff context.
+- **Accounting Exchange:** approved work crosses a reviewed, explicit boundary to accounting; it is
+  not a claim that Keep replaces QuickBooks.
+
+Account entitlement, user permission, and record/state policy remain distinct server-side gates for
+every package. A customer cannot access a capability merely because its UI is visible.
 
 ## Product Surfaces and Intended Users
 
@@ -120,28 +166,29 @@ PWA or Operator-mobile workspaces and expose only their intentionally limited pu
 
 ## What Keep Is Not
 
-Keep should not become a full field-service operating system.
+Keep should not become a generic full field-service or property-management operating system.
 
-Keep is not trying to replace ServiceTitan, Jobber, Housecall Pro, QuickBooks, dispatch calendars,
-estimating tools, payment systems, inventory systems, payroll, or fleet management.
+Keep is not trying to replace a customer's entire ServiceTitan, Jobber, Fleetmatics, QuickBooks,
+Accela, dispatch-calendar, payment, inventory, payroll, or fleet-management deployment.
 
 Those products help businesses run the work.
 
-Keep protects the communication promise around the work.
+Keep protects and retains the operational record and communication promise around the work.
 
 Features should be questioned when they drift into:
 
 - full scheduling/dispatch calendar ownership;
-- estimates and proposals;
-- invoices and payments;
+- general estimating/proposal software, invoices, payments, or tax calculation;
 - inventory;
 - payroll/time tracking;
 - route optimization;
 - technician productivity management;
 - broad CRM/marketing automation.
 
-Some lightweight context from those areas may be useful later, but Keep should not make them its
-center of gravity.
+Bounded capability is allowed where it completes the contractor's record: price-book items and
+material snapshots, asset-linked quote/approval context where validated, and reviewed accounting
+exchange. Keep does not become the source of truth for stock, payment collection, accounting ledgers,
+fleet GPS, routing, or a property manager's portfolio system.
 
 ## Why Businesses Need It
 
@@ -169,6 +216,9 @@ Keep is valuable when the business already has tools, but still lacks one truste
 - responsibility and routing;
 - unresolved feedback;
 - closeout and history.
+- equipment/service history and warranty context;
+- what material or labor was used on the work; and
+- a controlled handoff to the accounting or property-management system that remains authoritative.
 
 ## Differentiation
 
@@ -177,15 +227,19 @@ Keep's wedge is not "manage every part of a service business."
 Keep's wedge is:
 
 ```text
-Every customer request becomes trackable, visible, and followed up until the loop is closed.
+Every service need becomes a known, owned record—connected to the asset and followed through until
+the promise is closed.
 ```
 
 Different from full field-service platforms:
 
 - lighter onboarding;
 - works beside existing tools;
-- customer gets a personal request page immediately;
-- communication status is the main object, not invoices or jobs;
+- customer/property-manager communication stays connected to the actual work;
+- the technician can identify the exact asset and its permitted history instead of starting from
+  memory, a text thread, or an incomplete work order;
+- price/material context can be retained without turning Keep into inventory or accounting software;
+- customer gets a personal request page where the B2C workflow calls for it;
 - external calls/texts/emails can be logged without forcing all communication into one channel;
 - attention, feedback, and stale work are surfaced as operational promises, not just records.
 - V1 should feel fresh through refetch-after-write, focus/resume sync, pull-to-refresh, active
@@ -202,7 +256,8 @@ legal pads.
 The stronger wedge is:
 
 ```text
-Keep protects the revenue and reputation already at risk after a customer reaches out.
+Keep protects the revenue, reputation, and operational memory already at risk once service work
+begins.
 ```
 
 Small businesses spend real money and effort to make the phone ring: local SEO, referrals, wrapped
@@ -229,8 +284,8 @@ The owner problem is leakage:
 That makes Keep a defensive, economic product:
 
 ```text
-Keep helps protect leads, trust, reviews, repeat business, and follow-up discipline without
-replacing the software that runs the job.
+Keep helps protect leads, trust, reviews, repeat business, and service continuity without forcing a
+contractor to replace every system that runs the business.
 ```
 
 Use careful revenue language. Keep should not claim it definitely saved a specific job unless the
@@ -245,13 +300,13 @@ slip away after they contact you.
 ```
 
 ```text
-Keep works beside your existing field-service tools to protect the follow-up loop they still leave
-in texts, voicemails, memory, and phone tag.
+Keep gives your team a trusted record of the equipment, work, and customer promise that otherwise
+gets split across texts, memory, paper, and disconnected tools.
 ```
 
 ```text
-Keep does not replace Jobber, ServiceTitan, QuickBooks, or your calendar. It protects the customer
-promise around them.
+Keep does not ask you to replace every system. It gives your team the continuity layer around the
+equipment and work those systems do not keep connected.
 ```
 
 ## Proving Impact
@@ -309,11 +364,14 @@ reporting needs derived read models, background projections, pub/sub, SSE, or a 
 
 Strong fit:
 
-- small service businesses with inbound requests and slow or multi-step resolution;
+- service contractors with inbound requests and slow or multi-step resolution;
 - teams where office/admin staff and field operators share responsibility;
+- HVAC and other equipment/service businesses that need asset-specific service history;
+- contractors serving property managers that need property/unit/authorization context without
+  replacing the property manager's formal system;
 - businesses where missed follow-up can lose the customer quickly;
-- businesses not ready to migrate to a full field-service platform;
-- businesses using several tools but lacking one communication command center.
+- businesses not ready to migrate every workflow to a full field-service platform;
+- businesses using several tools but lacking one trustworthy continuity and work record.
 
 Likely early examples:
 
@@ -353,15 +411,16 @@ visibility, notification routing, or self-assign rules.
 Before adding a feature, ask:
 
 ```text
-Does this help prevent a customer from being forgotten, waiting too long, losing trust, or leaving
+Does this help the team identify the right service context, retain what happened, and prevent a
+customer or property partner from being forgotten, waiting too long, losing trust, or leaving
 without the business knowing?
 ```
 
 If yes, it may belong in Keep.
 
-If it primarily helps run labor, collect money, manage inventory, optimize schedules, or replace the
-business's operating system, it probably belongs later, outside Keep, or as a lightweight integration
-point.
+If it primarily tries to operate a general ledger, manage stock/procurement, optimize routes, run
+payroll, or replace the customer's operating system, it probably belongs outside Keep or at a narrow,
+explicit integration boundary.
 
 ## Pilot Scope Lock Posture
 
@@ -393,7 +452,8 @@ These are not a helpdesk product, public status page, roadmap portal, CMS, or fe
 They are lightweight pilot instrumentation so busy businesses can tell us what hurts before the
 moment disappears, and so we can tell them what changed without asking them to leave Keep.
 
-Current late-stage ideas are product-valid but should not reopen the pilot scope by default:
+Current late-stage ideas are product-valid but should not reopen the existing reliability/pilot scope
+by default:
 
 - request Snooze / Waiting Until for parts, booked-out contractors, weather, or third-party delays;
 - quick replies with promise-safe reminders;
@@ -404,13 +464,19 @@ Current late-stage ideas are product-valid but should not reopen the pilot scope
 Default posture from here:
 
 ```text
-build, deploy, test, onboard pilots, measure, then reopen scope with evidence.
+stabilize and prove Core → validate a bounded contractor workflow → productize reusable capability
+packages with evidence.
 ```
 
 ## Messaging Drafts
 
 Possible plain-language positioning:
 
+- "Know the work. Keep the promise."
+- "Keep gives contractors a trusted record of the equipment, work, and customer promise."
+- "Every service need is known, owned, and followed through."
+- "Scan the equipment, know the history, and keep the work moving."
+- "Keep the office, technician, customer, and property partner aligned around the same work."
 - "Keep makes sure every customer request is seen, owned, and followed up."
 - "Protect the leads you already paid to earn."
 - "Stop losing customers after they reach out."
@@ -430,6 +496,12 @@ For early pilots, learn:
 - Does external-contact logging reduce duplicate work and missed follow-up?
 - Does feedback review catch unresolved issues that would otherwise disappear?
 - Does the product feel lighter than a field-service platform?
+- Can a technician identify the right equipment and permitted service history faster than the current
+  text/paper/disconnected-tool workflow?
+- Does the price-book/material workflow reduce re-entry while preserving a trustworthy historical
+  record?
+- Does the B2B property workflow make contractor/property-manager coordination clearer without
+  requiring either party to abandon its existing system of record?
 - Where does assignment help, and where does it feel too heavy?
 - Which V1 notification types are urgent enough for native push?
 - Do refetch-after-write, focus/resume sync, pull-to-refresh, active polling, badges, and push make
