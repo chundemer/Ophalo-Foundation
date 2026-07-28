@@ -67,11 +67,17 @@ export function RequestListContent({
             heading, never a blank node in the outline) — the same DOM node persists across
             the loading→loaded transition, so a pending post-page-change focus() lands once
             the new page's real content, not the stale prior range, is in place. */}
+        {/* Session 3.5 follow-up: when the visible centered empty-state heading below already
+            carries this exact text, this node stays mounted only for its aria-live
+            announcement and post-page-change focus target — sr-only avoids a duplicate
+            visible heading. Loading/range text has no visible counterpart, so it stays shown. */}
         {headingText && (
           <h2
             ref={pageHeadingRef}
             tabIndex={-1}
-            className="mb-2 text-xs font-medium text-[var(--ophalo-muted)] outline-none"
+            className={`mb-2 text-xs font-medium text-[var(--ophalo-muted)] outline-none ${
+              !isLoading && !isError && rows.itemCount === 0 ? "sr-only" : ""
+            }`}
           >
             {headingText}
           </h2>

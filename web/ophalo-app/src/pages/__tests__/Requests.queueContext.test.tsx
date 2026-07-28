@@ -128,6 +128,18 @@ describe("Requests — GAP-027-adjacent queue subtitles (session 3.5)", () => {
     );
   });
 
+  it("never renders the All work subtitle on a non-All-work tab", async () => {
+    const ALL_WORK_SUBTITLE =
+      "Open requests and feedback requiring review, ranked with customer promises needing attention first.";
+    renderRequests("owner");
+    await screen.findByText("No active work needs company-wide attention right now.");
+
+    for (const tabName of ["Assigned to Me", "Needs Attention", "Watching", "Ready to Close", "Feedback Review"]) {
+      fireEvent.click(screen.getByRole("tab", { name: tabName }));
+      await waitFor(() => expect(screen.queryByText(ALL_WORK_SUBTITLE)).not.toBeInTheDocument());
+    }
+  });
+
   it("shows the Operator-specific My Promises subtitle, and the same Needs Attention/Watching subtitles", async () => {
     renderRequests("operator");
     await screen.findByRole("tab", { name: "My Promises" });
@@ -142,6 +154,45 @@ describe("Requests — GAP-027-adjacent queue subtitles (session 3.5)", () => {
 
     expect(screen.queryByRole("tab", { name: "Ready to Close" })).not.toBeInTheDocument();
     expect(screen.queryByRole("tab", { name: "Feedback Review" })).not.toBeInTheDocument();
+  });
+});
+
+describe("Requests — no duplicate empty-state heading (session 3.5 follow-up)", () => {
+  it("Assigned to Me: has its own header subtitle, and renders exactly one visible empty-state heading", async () => {
+    renderRequests("owner");
+    await screen.findByText("No active work needs company-wide attention right now.");
+
+    fireEvent.click(screen.getByRole("tab", { name: "Assigned to Me" }));
+    await waitFor(() => expect(screen.getByText("Requests currently assigned to you.")).toBeInTheDocument());
+
+    const matches = await screen.findAllByText("Nothing assigned to you");
+    expect(matches).toHaveLength(2);
+    const visible = matches.filter((el) => !el.className.includes("sr-only"));
+    const hidden = matches.filter((el) => el.className.includes("sr-only"));
+    expect(visible).toHaveLength(1);
+    expect(hidden).toHaveLength(1);
+    // The sr-only copy is the list-region heading/focus target; the visible one is the
+    // centered empty-state heading with its detail directly beneath.
+    expect(hidden[0].tagName).toBe("H2");
+    expect(screen.getByText("Active requests assigned to you will appear here.")).toBeInTheDocument();
+  });
+
+  it("Feedback Review: same no-duplication behavior for another operational queue", async () => {
+    renderRequests("owner");
+    await screen.findByText("No active work needs company-wide attention right now.");
+
+    fireEvent.click(screen.getByRole("tab", { name: "Feedback Review" }));
+    await waitFor(() =>
+      expect(screen.getByText("Closed requests with customer feedback awaiting review.")).toBeInTheDocument(),
+    );
+
+    const matches = await screen.findAllByText("No customer feedback");
+    expect(matches).toHaveLength(2);
+    const visible = matches.filter((el) => !el.className.includes("sr-only"));
+    const hidden = matches.filter((el) => el.className.includes("sr-only"));
+    expect(visible).toHaveLength(1);
+    expect(hidden).toHaveLength(1);
+    expect(hidden[0].tagName).toBe("H2");
   });
 });
 
