@@ -1,6 +1,6 @@
 import { useState, useMemo, useRef, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronLeft, ChevronRight, Phone, X } from "lucide-react";
+import { Phone, X } from "lucide-react";
 import {
   api,
   ApiError,
@@ -23,22 +23,12 @@ import {
   type AttentionHighlights,
   getAttentionResolutionHighlights,
 } from "./request-detail/highlights";
-import { type TimelineFilter, isCommunicationEvent, TimelineEvent } from "./request-detail/TimelineEvent";
-import { TodayPromiseBanner, DetailHero } from "./request-detail/DetailHero";
+import { type TimelineFilter, isCommunicationEvent } from "./request-detail/TimelineEvent";
 import { FollowUpResolutionPanel } from "./request-detail/FollowUpResolutionPanel";
-import { UnifiedComposer } from "./request-detail/UnifiedComposer";
-import {
-  OriginalRequestCard,
-  AttentionGuidanceCard,
-  ProminentFeedbackCard,
-} from "./request-detail/DetailPanels";
-import { CustomerContactStrip } from "./request-detail/CustomerContactStrip";
 import { CallHandoffQr } from "./request-detail/CallHandoffQr";
-import { RequestDetailDesktopLayout } from "./request-detail/RequestDetailDesktopLayout";
-import {
-  RequestDetailMobileActions,
-  RequestDetailMobileContext,
-} from "./request-detail/RequestDetailMobileLayout";
+import { RequestDetailHeader } from "./request-detail/RequestDetailHeader";
+import { RequestDetailStates } from "./request-detail/RequestDetailStates";
+import { RequestDetailContent } from "./request-detail/RequestDetailContent";
 
 // ---------------------------------------------------------------------------
 // Log external contact modal — controller-owned overlay
@@ -378,47 +368,6 @@ function ServiceLocationModal({ requestId, detail, onDetailUpdated, onClose }: S
 }
 
 // ---------------------------------------------------------------------------
-// Loading skeleton
-// ---------------------------------------------------------------------------
-
-function RequestDetailSkeleton() {
-  const pulse = "animate-pulse motion-reduce:animate-none rounded bg-[var(--ophalo-canvas)]";
-  return (
-    <div
-      aria-busy="true"
-      aria-label="Loading request details"
-      className="flex flex-1 min-h-0 overflow-hidden md:grid md:[grid-template-columns:minmax(0,7fr)_minmax(320px,3fr)]"
-    >
-      <div className="flex-1 md:flex-none overflow-y-auto px-4 md:px-6 py-5 space-y-4">
-        <div className="rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-5 py-5">
-          <div className="flex gap-2 mb-3">
-            <div className={`h-5 w-16 ${pulse}`} />
-            <div className={`h-5 w-24 ${pulse}`} />
-          </div>
-          <div className={`h-8 w-56 ${pulse}`} />
-        </div>
-        <div className="rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-5 py-4 space-y-3">
-          <div className="flex gap-2">
-            <div className={`h-8 w-36 ${pulse}`} />
-            <div className={`h-8 w-28 ${pulse}`} />
-          </div>
-          <div className={`h-24 w-full ${pulse}`} />
-        </div>
-        <div className="rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-5 py-4 space-y-3">
-          <div className={`h-4 w-20 ${pulse}`} />
-          <div className={`h-3 w-48 ${pulse}`} />
-        </div>
-      </div>
-      <div className="hidden md:flex md:flex-col border-l border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-4 py-5 gap-4">
-        <div className={`h-24 w-full ${pulse}`} />
-        <div className={`h-16 w-full ${pulse}`} />
-        <div className={`h-16 w-full ${pulse}`} />
-      </div>
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
 // RequestDetail page — controller
 // ---------------------------------------------------------------------------
 
@@ -544,13 +493,6 @@ export function RequestDetail({ requestId, focusPanel, onBack, prevId, nextId, o
     setServiceLocationModalOpen(true);
   }
 
-  const filterBtnCls = (active: boolean) =>
-    `flex-1 px-3 py-1.5 text-xs font-semibold transition-colors ${FOCUS_RING} ${
-      active
-        ? "bg-[var(--ophalo-navy)] text-white"
-        : "bg-[var(--ophalo-card)] text-[var(--ophalo-muted)] hover:text-[var(--ophalo-ink)]"
-    }`;
-
   return (
     <div className="flex flex-col h-full bg-[var(--ophalo-canvas)]">
       {/* Controller-owned overlays */}
@@ -604,229 +546,31 @@ export function RequestDetail({ requestId, focusPanel, onBack, prevId, nextId, o
         <NeedsShareBanner onOpenShareDrawer={() => setShareModalOpen(true)} />
       )}
 
-      {/* Back breadcrumb + queue navigation */}
-      <div className="flex items-center gap-2 px-4 py-3 bg-[var(--ophalo-card)] border-b border-[var(--ophalo-border)] shrink-0">
-        <button
-          type="button"
-          onClick={onBack}
-          className={`flex items-center gap-1 text-sm text-[var(--ophalo-muted)] hover:text-[var(--ophalo-ink)] -ml-1 transition-colors ${FOCUS_RING}`}
-        >
-          <ChevronLeft className="h-4 w-4" />
-          Requests
-        </button>
-        {detail && (
-          <span className="text-sm text-[var(--ophalo-muted)] font-mono ml-1">
-            {detail.referenceCode}
-          </span>
-        )}
-        {onNavigate && (prevId !== undefined || nextId !== undefined) && (
-          <div className="ml-auto flex items-center gap-1">
-            <button
-              type="button"
-              disabled={!prevId}
-              onClick={() => prevId && onNavigate(prevId)}
-              aria-label="Previous request"
-              className={`flex items-center gap-0.5 px-2 py-1 text-xs font-medium rounded text-[var(--ophalo-muted)] hover:text-[var(--ophalo-ink)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors ${FOCUS_RING}`}
-            >
-              <ChevronLeft className="h-3.5 w-3.5" />
-              Prev
-            </button>
-            <button
-              type="button"
-              disabled={!nextId}
-              onClick={() => nextId && onNavigate(nextId)}
-              aria-label="Next request"
-              className={`flex items-center gap-0.5 px-2 py-1 text-xs font-medium rounded text-[var(--ophalo-muted)] hover:text-[var(--ophalo-ink)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors ${FOCUS_RING}`}
-            >
-              Next
-              <ChevronRight className="h-3.5 w-3.5" />
-            </button>
-          </div>
-        )}
-      </div>
-
-      {/* Loading skeleton */}
-      {isLoading && <RequestDetailSkeleton />}
-
-      {/* Error */}
-      {isError && (
-        <div className="flex flex-1 flex-col items-center justify-center gap-3 px-4">
-          <span className="text-[var(--ophalo-muted)] text-sm text-center">
-            {error instanceof ApiError && error.status === 403
-              ? "You don't have access to this request."
-              : error instanceof ApiError && error.status === 404
-                ? "Request not found."
-                : "Something went wrong loading this request."}
-          </span>
-          {!(error instanceof ApiError && (error.status === 403 || error.status === 404)) && (
-            <button
-              type="button"
-              onClick={() => void refetch()}
-              disabled={isFetching}
-              className={`px-4 py-2 text-sm font-semibold rounded-lg border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] text-[var(--ophalo-ink)] hover:bg-[var(--ophalo-canvas)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${FOCUS_RING}`}
-            >
-              {isFetching ? "Retrying…" : "Retry"}
-            </button>
-          )}
-        </div>
-      )}
-
-      {/* Main content */}
-      {detail && (
-        <div className="flex flex-1 min-h-0 overflow-hidden md:grid md:[grid-template-columns:minmax(0,7fr)_minmax(320px,3fr)]">
-          {/* Left / main column — shared content with mobile layout injections */}
-          <div className="flex-1 md:flex-none overflow-y-auto px-4 md:px-6 py-5 space-y-4">
-            <TodayPromiseBanner
-              detail={detail}
-              onRecordFollowUp={() => setFollowUpPanelOpen(true)}
-            />
-
-            <DetailHero
-              detail={detail}
-              canRecordShareIntent={canShare}
-              needsShare={needsShareEffective}
-              onOpenShareDrawer={() => setShareModalOpen(true)}
-            />
-
-            <CustomerContactStrip
-              requestId={requestId}
-              phone={detail.customerPhone ?? null}
-              email={detail.customerEmail ?? null}
-              customerName={detail.customerName}
-              pageToken={detail.pageToken ?? null}
-              onContactLaunched={handleContactLaunched}
-            />
-
-            <OriginalRequestCard detail={detail} />
-
-            <AttentionGuidanceCard detail={detail} highlights={highlights} />
-
-            {/* Mobile: primary actions before the composer */}
-            <div className="md:hidden space-y-4">
-              <RequestDetailMobileActions
-                requestId={requestId}
-                detail={detail}
-                highlights={highlights}
-                showProminentFeedbackCard={showProminentFeedbackCard}
-                onDetailUpdated={handleDetailUpdated}
-                onContactLaunched={handleContactLaunched}
-                onEditLocation={handleOpenServiceLocation}
-                onRecordFollowUp={() => setFollowUpPanelOpen(true)}
-                onCreateFollowUp={() => setFollowUpCaptureOpen(true)}
-                onReviewSuccess={handleReviewSuccess}
-              />
-            </div>
-
-            {/* Unified composer */}
-            <div id="focus-panel-update">
-              <UnifiedComposer
-                requestId={requestId}
-                detail={detail}
-                onDetailUpdated={handleDetailUpdated}
-                customerUpdateDraft={businessUpdateDraft}
-                onCustomerUpdateDraftChange={setBusinessUpdateDraft}
-                customerUpdateDraftStatus={businessUpdateDraftStatus}
-                onCustomerUpdateDraftStatusChange={setBusinessUpdateDraftStatus}
-                highlight={highlights.sendUpdate}
-              />
-            </div>
-
-            {/* Prominent feedback — only when opened from Feedback Review with unreviewed negative feedback */}
-            {showProminentFeedbackCard && (
-              <ProminentFeedbackCard
-                requestId={requestId}
-                detail={detail}
-                onDetailUpdated={handleDetailUpdated}
-                onReviewSuccess={handleReviewSuccess}
-              />
-            )}
-
-            {/* Inline review success toast */}
-            {reviewSuccessMsg && (
-              <div
-                role="status"
-                aria-live="polite"
-                className="rounded-xl border border-[var(--ophalo-success)] bg-[var(--ophalo-success-bg)] px-4 py-3 text-sm text-[var(--ophalo-success)] font-medium"
-              >
-                {reviewSuccessMsg}
-              </div>
-            )}
-
-            {/* Activity timeline */}
-            <div className="rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-5 py-5">
-              <div className="flex items-center justify-between mb-4 gap-3">
-                <p className="text-base font-semibold text-[var(--ophalo-ink)] shrink-0">Activity</p>
-                <div
-                  className="flex rounded-lg border border-[var(--ophalo-border)] overflow-hidden shrink-0"
-                  role="group"
-                  aria-label="Activity filter"
-                >
-                  <button
-                    type="button"
-                    aria-pressed={timelineFilter === "communication"}
-                    onClick={() => setTimelineFilter("communication")}
-                    className={filterBtnCls(timelineFilter === "communication")}
-                  >
-                    Conversation &amp; notes
-                  </button>
-                  <button
-                    type="button"
-                    aria-pressed={timelineFilter === "all"}
-                    onClick={() => setTimelineFilter("all")}
-                    className={`border-l border-[var(--ophalo-border)] ${filterBtnCls(timelineFilter === "all")}`}
-                  >
-                    All activity
-                  </button>
-                </div>
-              </div>
-
-              {displayedEvents.length === 0 ? (
-                <p className="text-sm text-[var(--ophalo-muted)]">
-                  {timelineFilter === "communication"
-                    ? "No customer updates or internal notes yet."
-                    : "No activity yet."}
-                </p>
-              ) : (
-                <div className="relative space-y-2 border-l border-[var(--ophalo-border)] pl-3 ml-4">
-                  {displayedEvents.map((event, idx) => (
-                    <TimelineEvent key={event.id} event={event} isFirst={idx === 0} />
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Mobile: context panels after the timeline */}
-            <div className="md:hidden space-y-4 pb-6">
-              <RequestDetailMobileContext
-                requestId={requestId}
-                detail={detail}
-                highlights={highlights}
-                showProminentFeedbackCard={showProminentFeedbackCard}
-                onDetailUpdated={handleDetailUpdated}
-                onContactLaunched={handleContactLaunched}
-                onEditLocation={handleOpenServiceLocation}
-                onRecordFollowUp={() => setFollowUpPanelOpen(true)}
-                onCreateFollowUp={() => setFollowUpCaptureOpen(true)}
-                onReviewSuccess={handleReviewSuccess}
-              />
-            </div>
-          </div>
-
-          {/* Desktop sidebar */}
-          <RequestDetailDesktopLayout
-            requestId={requestId}
-            detail={detail}
-            highlights={highlights}
-            showProminentFeedbackCard={showProminentFeedbackCard}
-            onDetailUpdated={handleDetailUpdated}
-            onContactLaunched={handleContactLaunched}
-            onEditLocation={handleOpenServiceLocation}
-            onRecordFollowUp={() => setFollowUpPanelOpen(true)}
-            onCreateFollowUp={() => setFollowUpCaptureOpen(true)}
-            onReviewSuccess={handleReviewSuccess}
-          />
-        </div>
-      )}
+      <RequestDetailHeader onBack={onBack} referenceCode={detail?.referenceCode} prevId={prevId} nextId={nextId} onNavigate={onNavigate} />
+      <RequestDetailStates isLoading={isLoading} isError={isError} error={error} isFetching={isFetching} onRetry={() => void refetch()} />
+      {detail && <RequestDetailContent
+        requestId={requestId}
+        detail={detail}
+        highlights={highlights}
+        showProminentFeedbackCard={showProminentFeedbackCard}
+        onDetailUpdated={handleDetailUpdated}
+        onContactLaunched={handleContactLaunched}
+        onEditLocation={handleOpenServiceLocation}
+        onRecordFollowUp={() => setFollowUpPanelOpen(true)}
+        onCreateFollowUp={() => setFollowUpCaptureOpen(true)}
+        onReviewSuccess={handleReviewSuccess}
+        canRecordShareIntent={canShare}
+        needsShare={needsShareEffective}
+        onOpenShareDrawer={() => setShareModalOpen(true)}
+        customerUpdateDraft={businessUpdateDraft}
+        onCustomerUpdateDraftChange={setBusinessUpdateDraft}
+        customerUpdateDraftStatus={businessUpdateDraftStatus}
+        onCustomerUpdateDraftStatusChange={setBusinessUpdateDraftStatus}
+        reviewSuccessMsg={reviewSuccessMsg}
+        timelineFilter={timelineFilter}
+        onTimelineFilterChange={setTimelineFilter}
+        displayedEvents={displayedEvents}
+      />}
     </div>
   );
 }
