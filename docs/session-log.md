@@ -48,10 +48,15 @@ subscriptions, or sensor telemetry unless a separately scoped session explicitly
   but its primary CTA remains “Set up request page” after that step is complete. Advance the CTA to
   the next incomplete core action (Quick Capture for the first customer request), then hide the
   banner after the public request page and first request are complete. Team remains optional.
-- **GAP-052 / customer-update notification integrity (P0).** The safety gate, durable
+- **GAP-052 / customer-update notification integrity (P0) — Complete.** The safety gate, durable
   prepare/confirm contract, responsive PWA flow, and production migration are implemented and
-  committed (`94f61af`, `7c2f9e5`, `a1d9221`). Page-only updates no longer clear first response or
-  customer-waiting attention; remaining work is deployed workflow verification.
+  committed (`94f61af`, `7c2f9e5`, `a1d9221`). Deployed workflow verification performed manually
+  in production 2026-07-28: page-only update and detailed-voicemail no-clear behavior, voicemail
+  `NextAttentionAtUtc` advancement, `call_requested` text/email non-clear vs. completed-call clear,
+  and the full prepare→confirm flow (desktop QR, mobile direct `sms:`/`mailto:`, resume-after-reload)
+  all passed. Confirmer-mismatch (cross-teammate fail-closed) was not verified — only one teammate
+  account exists on the business; the server-side same-actor rule remains covered by the 0.11b
+  domain/integration test suite.
 - **Request List operating-contract recovery (P1).** ADR-449 and ADR-450 lock truthful Owner/Admin
   queue language/sections and row context. The existing safe activity-preview retrieval remains
   useful, but activity must supplement—not replace—the original request summary; internal-note
@@ -163,7 +168,7 @@ code row marked **Claude preflight required** does.
 
 | Order | Session | Scope and completion gate |
 |---|---|---|
-| 4.1 | GAP-019 — Request Detail decomposition | **Claude preflight required; Codex validation required before implementation.** Establish the component/presentation seams required for later detail work without changing behavior beyond the documented refactor guard. |
+| 4.1 | GAP-019 — Request Detail decomposition | **Build Log 096 preflight and Codex validation required before implementation.** A first-pass, frontend-only controller/presentation extraction: `RequestDetail.tsx` remains the only data/query/mutation/state/navigation controller; extracted pieces render props and invoke callbacks only. Establish the header, main-content/activity, and loading/error presentation seams without behavioral change. The two Request Detail form modals and `US_STATES` deliberately remain controller-owned: their eventual extraction follows the separately deferred GAP-032 dirty-close/modal-policy work, so 4.1 is not represented as the final `RequestDetail.tsx` shape. **Operational priority before beginning 4.1:** deployed GAP-052 verification is complete (2026-07-28); Phase 5.1 real-browser evidence remains outstanding and still precedes 4.1. |
 | 4.2 | GAP-047 / GAP-048 / GAP-049 — Mutations, sharing, and follow-up bounds | **Claude preflight required; Codex validation required before implementation.** Make priority failures visible, retain deliberate tracker-share intent for email, and bound follow-up prefill; cover optimistic/concurrency/error paths. |
 | 4.3 | GAP-050 / GAP-051 — Continuity and phone presentation | **Claude preflight required; Codex validation required before implementation.** Add compact same-customer related work and complete consistent North American phone display/entry without changing canonical storage. |
 | 4.4 | GAP-042 — Authenticated workspace identity | **Claude preflight required; Codex validation required before implementation.** Add restrained business-name context to Request List and Request Detail, with no public-route leakage or request-row repetition. |

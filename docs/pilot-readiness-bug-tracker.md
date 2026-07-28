@@ -832,7 +832,9 @@ surface and adds needless explanation/training burden.
 
 ### GAP-052 — Customer-page updates can falsely resolve customer-waiting work
 
-**Status:** Open — P0 launch gate; design locked in ADR-451 / Build 090
+**Status:** Complete — implemented (0.11/0.11b/0.12) and deployed workflow verified manually in
+production 2026-07-28 (confirmer-mismatch not exercised; only one teammate account exists, covered
+by 0.11b test suite instead). Design locked in ADR-451 / Build 090.
 **Severity:** P0
 **Area:** `KeepRequest` domain attention/first-response effects; responsive PWA update notification
 **Decision:** ADR-451
