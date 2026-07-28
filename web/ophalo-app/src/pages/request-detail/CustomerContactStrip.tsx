@@ -5,6 +5,7 @@ import { FOCUS_RING } from "./helpers";
 import { CallHandoffQr } from "./CallHandoffQr";
 import { KeepModal } from "../../components/keep/KeepModal";
 import { api } from "../../lib/apiClient";
+import { formatNaPhone } from "../../components/quick-capture/utils";
 
 interface CustomerContactStripProps {
   requestId: string;
@@ -159,7 +160,7 @@ function CallQrModal({ requestId, phone, customerName, onDone, onClose }: CallQr
         </button>
       </div>
       <p className="text-xs text-[var(--ophalo-muted)] mb-4">
-        Scan with your phone to call {phone}.
+        Scan with your phone to call {formatNaPhone(phone)}.
       </p>
       <div className="flex justify-center mb-4">
         <CallHandoffQr requestId={requestId} size={160} />
@@ -245,7 +246,7 @@ function TextQrModal({ requestId, phone, customerName, defaultMessage, onDone, o
         </button>
       </div>
       <p className="text-xs text-[var(--ophalo-muted)] mb-2">
-        Scan with your phone to open a text draft to {phone}.
+        Scan with your phone to open a text draft to {formatNaPhone(phone)}.
       </p>
       <textarea
         value={messageBody}

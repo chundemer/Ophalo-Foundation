@@ -4,6 +4,7 @@ import { api, ApiError, type KeepRequestDetailResult } from "../../lib/apiClient
 import { KeepButton } from "../../components/keep/KeepButton";
 import { KeepBadge } from "../../components/keep/KeepBadge";
 import { formatEventTime } from "./helpers";
+import { formatNaPhone } from "../../components/quick-capture/utils";
 
 type Channel = "sms" | "email";
 
@@ -175,7 +176,7 @@ export function NotifyCustomerPanel({
                     <p className="text-xs text-[var(--ophalo-muted)]">Preparing text link…</p>
                   )}
                   <p className="text-xs text-[var(--ophalo-muted)] text-center">
-                    Scan with your phone to open the text draft to {detail.customerPhone}.
+                    Scan with your phone to open the text draft to {formatNaPhone(detail.customerPhone)}.
                   </p>
                 </div>
                 {/* Mobile: direct sms: launch */}

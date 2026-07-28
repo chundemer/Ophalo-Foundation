@@ -179,6 +179,24 @@ describe("NotifyCustomerPanel — prepared phase (mine)", () => {
     expect(qr.getAttribute("data-value")).not.toContain(detail.customerPhone);
   });
 
+  it("formats the phone number in the desktop SMS QR caption (GAP-051 close-out)", async () => {
+    const detail = preparedDetail("sms");
+
+    render(
+      <NotifyCustomerPanel
+        requestId="req-77"
+        detail={detail}
+        relatedUpdateEventId="event-1"
+        onDetailUpdated={() => {}}
+        onDone={() => {}}
+      />
+    );
+
+    expect(
+      await screen.findByText("Scan with your phone to open the text draft to (555) 555-0101.")
+    ).toBeInTheDocument();
+  });
+
   it("email: renders a mailto: draft link including the private page link", () => {
     const detail = preparedDetail("email");
 

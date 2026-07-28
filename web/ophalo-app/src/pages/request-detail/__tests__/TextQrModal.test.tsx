@@ -10,11 +10,12 @@ import { CustomerContactStrip } from "../CustomerContactStrip";
 // flow does that (asserted via onContactLaunched).
 
 const mockCreateSmsHandoff = vi.fn();
+const mockCreateCallHandoff = vi.fn();
 
 vi.mock("../../../lib/apiClient", () => ({
   api: {
     createSmsHandoff: (...args: unknown[]) => mockCreateSmsHandoff(...args),
-    createCallHandoff: vi.fn(),
+    createCallHandoff: (...args: unknown[]) => mockCreateCallHandoff(...args),
   },
 }));
 
@@ -160,5 +161,37 @@ describe("CustomerContactStrip — Scan to text", () => {
       )}`
     );
     expect(mockCreateSmsHandoff).not.toHaveBeenCalled();
+  });
+});
+
+describe("QR caption phone formatting (GAP-051 close-out)", () => {
+  it("formats the phone number in the Scan-to-text caption", async () => {
+    mockCreateSmsHandoff.mockResolvedValue({
+      handoffUrl: "https://app.ophalo.com/keep/share-sms/strip-token",
+      expiresAtUtc: "2026-07-19T23:00:00Z",
+    });
+    const user = userEvent.setup();
+    renderStrip();
+
+    await user.click(screen.getByRole("button", { name: /Scan to text/i }));
+
+    expect(
+      screen.getByText("Scan with your phone to open a text draft to (555) 555-0101.")
+    ).toBeInTheDocument();
+  });
+
+  it("formats the phone number in the Scan-to-call caption", async () => {
+    mockCreateCallHandoff.mockResolvedValue({
+      handoffUrl: "https://app.ophalo.com/keep/share-call/strip-token",
+      expiresAtUtc: "2026-07-19T23:00:00Z",
+    });
+    const user = userEvent.setup();
+    renderStrip();
+
+    await user.click(screen.getByRole("button", { name: /Scan to call/i }));
+
+    expect(
+      screen.getByText("Scan with your phone to call (555) 555-0101.")
+    ).toBeInTheDocument();
   });
 });
