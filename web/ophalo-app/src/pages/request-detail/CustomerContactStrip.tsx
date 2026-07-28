@@ -34,17 +34,9 @@ export function CustomerContactStrip({
     ? `Here is a link to your private request page: ${customerPageUrl}`
     : "";
 
-  const emailHref = email
-    ? (() => {
-        const subject = encodeURIComponent("Your request page link");
-        const body = customerPageUrl
-          ? encodeURIComponent(
-              `Here is a link to your private request page:\n\n${customerPageUrl}`
-            )
-          : "";
-        return `mailto:${email}?subject=${subject}${body ? `&body=${body}` : ""}`;
-      })()
-    : null;
+  // Plain contact shortcut only — the tracker link is shared exclusively through
+  // ShareLinkModal's explicit prepare/confirm ceremony (GAP-048).
+  const emailHref = email ? `mailto:${email}` : null;
 
   return (
     <>

@@ -19,7 +19,7 @@ export interface QuickCaptureProps {
   // Intentional bypass of the phone lookup gate — used only by Create follow-up request.
   // The phone has already been verified by the original closed request; re-running the lookup
   // would surface that closed request and confuse the duplicate-detection UX.
-  followUpPrefill?: { phone: string; name?: string; email?: string; description?: string };
+  followUpPrefill?: { phone: string; name?: string; email?: string; description?: string; wasTruncated?: boolean };
 }
 
 export function QuickCapture({ onClose, onSelectRequest, isPastDue = false, isReadOnly = false, isOwnerOrAdmin = false, onNavigateSettings, followUpPrefill }: QuickCaptureProps) {

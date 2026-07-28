@@ -616,8 +616,14 @@ interface TriagePanelProps {
   onDetailUpdated: (updated: KeepRequestDetailResult) => void;
 }
 
+const PRIORITY_CONFLICT_MESSAGE =
+  "This request was updated by another team member. Refresh to see the latest priority.";
+
 export function TriagePanel({ detail, onDetailUpdated }: TriagePanelProps) {
   const [pendingPriority, setPendingPriority] = useState<string | null | undefined>(undefined);
+  const [prioritySubmitting, setPrioritySubmitting] = useState(false);
+  const [priorityConflictDisabled, setPriorityConflictDisabled] = useState(false);
+  const [priorityError, setPriorityError] = useState<string | null>(null);
   const canEdit = detail.availableActions.canAddInternalNote;
   const displayPriority = pendingPriority !== undefined ? pendingPriority : detail.businessPriority;
   const hasCustomerSignal = detail.source === "public_intake" &&
@@ -649,30 +655,44 @@ export function TriagePanel({ detail, onDetailUpdated }: TriagePanelProps) {
             <>
               <select
                 value={displayPriority ?? ""}
+                disabled={prioritySubmitting || priorityConflictDisabled}
                 onChange={async (e) => {
+                  if (prioritySubmitting || priorityConflictDisabled) return;
                   const val = e.target.value || null;
                   setPendingPriority(val);
+                  setPrioritySubmitting(true);
+                  setPriorityError(null);
                   try {
                     const updated = await api.setBusinessPriority(detail.requestId, val, detail.version);
                     onDetailUpdated(updated);
-                  } catch {
-                    // revert optimistic on error
+                  } catch (err) {
+                    if (err instanceof ApiError && err.status === 409) {
+                      setPriorityConflictDisabled(true);
+                      setPriorityError(PRIORITY_CONFLICT_MESSAGE);
+                    } else {
+                      setPriorityError("Could not save priority. Try again.");
+                    }
                   } finally {
                     setPendingPriority(undefined);
+                    setPrioritySubmitting(false);
                   }
                 }}
-                className="text-xs text-[var(--ophalo-ink)] bg-transparent border border-[var(--ophalo-border)] rounded px-2 py-0.5 focus:outline-none focus:ring-1 focus:ring-[var(--keep-accent)]"
+                className="text-xs text-[var(--ophalo-ink)] bg-transparent border border-[var(--ophalo-border)] rounded px-2 py-0.5 focus:outline-none focus:ring-1 focus:ring-[var(--keep-accent)] disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 <option value="">Not set</option>
                 <option value="routine">Routine</option>
                 <option value="soon">Soon</option>
                 <option value="urgent">Urgent</option>
               </select>
-              {!displayPriority && (
+              {priorityError ? (
+                <p className="text-xs text-[var(--ophalo-danger)] mt-1" role="alert">
+                  {priorityError}
+                </p>
+              ) : !displayPriority ? (
                 <p className="text-xs text-[var(--ophalo-muted)] mt-1">
                   Set priority to handle this ahead of routine work.
                 </p>
-              )}
+              ) : null}
             </>
           ) : (
             <span className="text-sm font-semibold text-[var(--ophalo-ink)]">

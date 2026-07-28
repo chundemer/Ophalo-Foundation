@@ -18,6 +18,7 @@ import {
   FOCUS_RING,
   STATUS_CONFLICT_MESSAGE,
   ALWAYS_HIDDEN_EVENT_TYPES,
+  buildFollowUpDescription,
 } from "./request-detail/helpers";
 import {
   type AttentionHighlights,
@@ -536,7 +537,10 @@ export function RequestDetail({ requestId, focusPanel, onBack, prevId, nextId, o
             phone: detail.customerPhone,
             name: detail.customerName,
             email: detail.customerEmail ?? undefined,
-            description: `Follow-up to closed request ${detail.referenceCode}: ${detail.description}`,
+            ...buildFollowUpDescription(
+              `Follow-up to closed request ${detail.referenceCode}: `,
+              detail.description,
+            ),
           }}
         />
       )}

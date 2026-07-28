@@ -17,7 +17,7 @@ export type Stage =
   | { kind: "handoff" }
   | { kind: "lookup" }
   | { kind: "result"; lookup: PhoneLookupResult; lockedPhone: string }
-  | { kind: "capture"; prefill: { name?: string; email?: string } | null; lockedPhone: string }
+  | { kind: "capture"; prefill: { name?: string; email?: string; description?: string; wasTruncated?: boolean } | null; lockedPhone: string }
   | { kind: "success"; requestId: string; referenceCode: string; pageToken: string; customerPhone: string; customerEmail: string | null; customerName: string };
 
 export const SOURCE_OPTIONS = [
@@ -29,6 +29,9 @@ export const SOURCE_OPTIONS = [
   { label: "Referral", value: "referral" },
   { label: "Other", value: "other" },
 ] as const;
+
+// Matches the .NET validator's string.Length (JS UTF-16 code units) description cap.
+export const DESCRIPTION_MAX_LENGTH = 4000;
 
 export function stripToDigits(raw: string): string {
   return raw.replace(/\D/g, "");

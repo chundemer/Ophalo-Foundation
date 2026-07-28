@@ -1,5 +1,6 @@
 import { type KeepRequestDetailResult, type KeepRequestEventItem } from "../../lib/apiClient";
 import { statusLabel, statusBadgeVariant } from "../../lib/requestStatus";
+import { DESCRIPTION_MAX_LENGTH } from "../../components/quick-capture/utils";
 
 export { statusLabel, statusBadgeVariant };
 
@@ -107,6 +108,30 @@ export const INPUT_CLS =
 
 export const STATUS_CONFLICT_MESSAGE =
   "This request has been updated by another team member. Copy your unsaved notes and refresh the workbench to load the latest history.";
+
+/**
+ * Builds a follow-up description that keeps `prefix + copiedText` within
+ * DESCRIPTION_MAX_LENGTH, truncating only the copied original text — never the prefix —
+ * at the last whitespace boundary within the available room, with a hard cut as fallback.
+ * Reserves room for an ellipsis whenever the copied text is actually cut.
+ */
+export function buildFollowUpDescription(
+  prefix: string,
+  originalText: string,
+): { description: string; wasTruncated: boolean } {
+  const available = DESCRIPTION_MAX_LENGTH - prefix.length;
+  if (originalText.length <= available) {
+    return { description: prefix + originalText, wasTruncated: false };
+  }
+
+  const ellipsis = "…";
+  const room = available - ellipsis.length;
+  const hardCut = originalText.slice(0, room);
+  const lastWhitespace = hardCut.search(/\s+\S*$/);
+  const cutText = lastWhitespace > 0 ? hardCut.slice(0, lastWhitespace) : hardCut;
+
+  return { description: prefix + cutText + ellipsis, wasTruncated: true };
+}
 
 // Always suppress these from the operator timeline (ADR-150)
 export const ALWAYS_HIDDEN_EVENT_TYPES = new Set(["customer_page_opened"]);

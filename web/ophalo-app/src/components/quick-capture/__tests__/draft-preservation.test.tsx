@@ -273,6 +273,53 @@ describe("CaptureForm.initialDraft", () => {
 });
 
 // ---------------------------------------------------------------------------
+// CaptureForm isolation — GAP-049 follow-up truncation notice
+// ---------------------------------------------------------------------------
+describe("CaptureForm follow-up truncation notice (GAP-049)", () => {
+  it("shows the truncation notice and caps the description textarea at 4000 when prefill.wasTruncated is true", () => {
+    render(
+      <Wrapper>
+        <CaptureForm
+          lockedPhone="5551234567"
+          prefill={{ description: "Follow-up to closed request KEEP-1234: shortened text…", wasTruncated: true }}
+          isPastDue={false}
+          isReadOnly={false}
+          onSuccess={vi.fn()}
+          onBack={vi.fn()}
+          onClose={vi.fn()}
+        />
+      </Wrapper>
+    );
+
+    expect(
+      screen.getByText(/the prior request description was shortened to fit/i)
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText(/description/i)).toHaveAttribute("maxLength", "4000");
+  });
+
+  it("does not show the truncation notice when prefill.wasTruncated is absent or false", () => {
+    render(
+      <Wrapper>
+        <CaptureForm
+          lockedPhone="5551234567"
+          prefill={{ description: "A normal, untruncated description." }}
+          isPastDue={false}
+          isReadOnly={false}
+          onSuccess={vi.fn()}
+          onBack={vi.fn()}
+          onClose={vi.fn()}
+        />
+      </Wrapper>
+    );
+
+    expect(
+      screen.queryByText(/the prior request description was shortened to fit/i)
+    ).not.toBeInTheDocument();
+    expect(screen.getByLabelText(/description/i)).toHaveAttribute("maxLength", "4000");
+  });
+});
+
+// ---------------------------------------------------------------------------
 // CaptureForm isolation — GAP-022 required-if-open address
 // ---------------------------------------------------------------------------
 describe("CaptureForm address disclosure validation", () => {

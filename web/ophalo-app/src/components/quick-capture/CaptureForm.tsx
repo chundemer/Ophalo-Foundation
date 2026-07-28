@@ -2,11 +2,11 @@ import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { AlertTriangle, Loader2 } from "lucide-react";
 import { api, ApiError } from "../../lib/apiClient";
-import { SOURCE_OPTIONS, formatNaPhone, type CaptureFormDraft } from "./utils";
+import { SOURCE_OPTIONS, formatNaPhone, DESCRIPTION_MAX_LENGTH, type CaptureFormDraft } from "./utils";
 
 interface CaptureFormProps {
   lockedPhone: string;
-  prefill: { name?: string; email?: string; description?: string } | null;
+  prefill: { name?: string; email?: string; description?: string; wasTruncated?: boolean } | null;
   initialDraft?: CaptureFormDraft;
   isPastDue: boolean;
   isReadOnly: boolean;
@@ -174,9 +174,15 @@ export function CaptureForm({
           value={description}
           onChange={(e) => setDescription(e.target.value)}
           disabled={isReadOnly}
+          maxLength={DESCRIPTION_MAX_LENGTH}
           placeholder="What does the customer need?"
           className="block w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500 disabled:bg-slate-50 disabled:text-slate-400 resize-none"
         />
+        {prefill?.wasTruncated && (
+          <p className="mt-1 text-xs text-slate-500">
+            The prior request description was shortened to fit. Please review before creating this follow-up.
+          </p>
+        )}
       </div>
 
       <div>
