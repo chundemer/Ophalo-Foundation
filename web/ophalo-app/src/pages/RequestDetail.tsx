@@ -574,6 +574,7 @@ export function RequestDetail({ requestId, focusPanel, onBack, prevId, nextId, o
         timelineFilter={timelineFilter}
         onTimelineFilterChange={setTimelineFilter}
         displayedEvents={displayedEvents}
+        onNavigate={onNavigate}
       />}
     </div>
   );

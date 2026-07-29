@@ -975,7 +975,8 @@ validated description limit and blocks the otherwise useful follow-up path with 
 
 ### GAP-050 — Request Detail does not reveal related work for a repeat customer
 
-**Status:** Open — V1 pre-deployment gate (promoted from DEF-050)
+**Status:** Complete — backend read path (4.3b) and frontend panel/navigation (4.3c) implemented;
+see `docs/session-log.md` Phase 4 rows 4.3b/4.3c.
 **Severity:** P1
 **Area:** `ophalo-app` Request Detail customer continuity and repeat-work context
 **Decision:** ADR-447

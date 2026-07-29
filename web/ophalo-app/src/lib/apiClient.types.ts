@@ -299,6 +299,18 @@ export interface KeepRequestDetailResult {
   pendingNotification: PendingNotificationSummary | null;
 }
 
+export interface KeepRequestRelatedWorkItem {
+  requestId: string;
+  referenceCode: string;
+  status: string;
+  lastActivityAtUtc: string;
+}
+
+export interface KeepRequestRelatedWorkResult {
+  totalCount: number;
+  items: KeepRequestRelatedWorkItem[];
+}
+
 // GAP-052b / ADR-451: reload-recovery projection of the durable prepare/confirm obligation.
 // canConfirmAsCurrentUser reflects the same-actor rule the server enforces; no raw preparer ID.
 export interface PendingNotificationSummary {

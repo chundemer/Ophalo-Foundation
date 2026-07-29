@@ -3,7 +3,7 @@ import { type TimelineFilter } from "./TimelineEvent";
 import { type RequestDetailLayoutProps, ProminentFeedbackCard, AttentionGuidanceCard } from "./DetailPanels";
 import { TodayPromiseBanner, DetailHero } from "./DetailHero";
 import { CustomerContactStrip } from "./CustomerContactStrip";
-import { OriginalRequestCard } from "./DetailPanels";
+import { OriginalRequestCard, RelatedWorkPanel } from "./DetailPanels";
 import { RequestDetailMobileActions, RequestDetailMobileContext } from "./RequestDetailMobileLayout";
 import { UnifiedComposer } from "./UnifiedComposer";
 import { RequestDetailDesktopLayout } from "./RequestDetailDesktopLayout";
@@ -22,6 +22,7 @@ interface RequestDetailContentProps extends RequestDetailLayoutProps {
   timelineFilter: TimelineFilter;
   onTimelineFilterChange: (filter: TimelineFilter) => void;
   displayedEvents: KeepRequestDetailResult["events"];
+  onNavigate?: (id: string) => void;
 }
 
 export function RequestDetailContent(props: RequestDetailContentProps) {
@@ -33,6 +34,7 @@ export function RequestDetailContent(props: RequestDetailContentProps) {
       <DetailHero detail={detail} canRecordShareIntent={props.canRecordShareIntent} needsShare={props.needsShare} onOpenShareDrawer={props.onOpenShareDrawer} />
       <CustomerContactStrip requestId={requestId} phone={detail.customerPhone ?? null} email={detail.customerEmail ?? null} customerName={detail.customerName} pageToken={detail.pageToken ?? null} onContactLaunched={onContactLaunched} />
       <OriginalRequestCard detail={detail} />
+      <RelatedWorkPanel requestId={requestId} onNavigate={props.onNavigate} />
       <AttentionGuidanceCard detail={detail} highlights={highlights} />
       <div className="md:hidden space-y-4"><RequestDetailMobileActions {...layoutProps} /></div>
       <div id="focus-panel-update"><UnifiedComposer requestId={requestId} detail={detail} onDetailUpdated={onDetailUpdated} customerUpdateDraft={props.customerUpdateDraft} onCustomerUpdateDraftChange={props.onCustomerUpdateDraftChange} customerUpdateDraftStatus={props.customerUpdateDraftStatus} onCustomerUpdateDraftStatusChange={props.onCustomerUpdateDraftStatusChange} highlight={highlights.sendUpdate} /></div>

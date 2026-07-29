@@ -121,6 +121,7 @@ import type {
   KeepRequestEventItem,
   KeepRequestNavigation,
   KeepRequestDetailResult,
+  KeepRequestRelatedWorkResult,
   ShareIntentMethod,
   CreateSmsHandoffResult,
   CreateCallHandoffResult,
@@ -175,6 +176,7 @@ export type {
   KeepRequestEventItem,
   KeepRequestNavigation,
   KeepRequestDetailResult,
+  KeepRequestRelatedWorkResult,
   ShareIntentMethod,
   CreateSmsHandoffResult,
   CreateCallHandoffResult,
@@ -242,6 +244,8 @@ export const api = {
   },
   getRequestDetail: (requestId: string) =>
     apiFetch<KeepRequestDetailResult>(`/keep/requests/${requestId}`),
+  getRelatedWork: (requestId: string) =>
+    apiFetch<KeepRequestRelatedWorkResult>(`/keep/requests/${requestId}/related-work`),
   recordShareIntent: (requestId: string, method: ShareIntentMethod) =>
     apiFetchVoid(`/keep/requests/${requestId}/share-intent`, {
       method: "POST",

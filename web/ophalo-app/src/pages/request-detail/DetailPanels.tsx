@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Copy, Check, AlertTriangle, Clock, Phone, Mail } from "lucide-react";
 import {
   api,
@@ -15,6 +16,8 @@ import {
   STATUS_CONFLICT_MESSAGE,
   formatDate,
   buildAttentionGuidance,
+  statusLabel,
+  statusBadgeVariant,
 } from "./helpers";
 import {
   type HighlightLevel,
@@ -404,6 +407,50 @@ export function OriginalRequestCard({ detail }: { detail: KeepRequestDetailResul
       <p className="text-sm leading-6 text-[var(--ophalo-ink)] whitespace-pre-wrap">
         {detail.description}
       </p>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Related work — compact same-customer continuity indicator (GAP-050)
+// ---------------------------------------------------------------------------
+
+interface RelatedWorkPanelProps {
+  requestId: string;
+  onNavigate?: (id: string) => void;
+}
+
+export function RelatedWorkPanel({ requestId, onNavigate }: RelatedWorkPanelProps) {
+  const { data } = useQuery({
+    queryKey: ["request-related-work", requestId],
+    queryFn: () => api.getRelatedWork(requestId),
+    enabled: Boolean(onNavigate),
+  });
+
+  if (!onNavigate || !data || data.totalCount === 0) return null;
+
+  return (
+    <div className="rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-5 py-4">
+      <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ophalo-muted)] mb-2">
+        Related work for this customer ({data.totalCount})
+      </p>
+      <ul className="space-y-1.5">
+        {data.items.map((item) => (
+          <li key={item.requestId}>
+            <button
+              type="button"
+              onClick={() => onNavigate(item.requestId)}
+              className={`w-full flex items-center justify-between gap-3 rounded-lg px-2 py-1.5 text-left text-sm hover:bg-[var(--ophalo-canvas)] ${FOCUS_RING}`}
+            >
+              <span className="text-[var(--ophalo-ink)]">{item.referenceCode}</span>
+              <span className="flex items-center gap-2 text-xs text-[var(--ophalo-muted)]">
+                <KeepBadge variant={statusBadgeVariant(item.status)}>{statusLabel(item.status)}</KeepBadge>
+                {formatDate(item.lastActivityAtUtc)}
+              </span>
+            </button>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
