@@ -199,15 +199,13 @@ export function Requests({
     !!setup &&
     !(setup.businessInfoComplete && setup.createIntakePageComplete && setup.addFirstRequestComplete);
 
-  // ADR-449: business-name page heading is an Owner/Admin work-queue contract only.
-  const businessSetupQuery = useQuery({
-    queryKey: ["setup"],
-    queryFn: api.getSetup,
-    enabled: isOwnerOrAdmin,
-    staleTime: 5 * 60_000,
-  });
-  const businessName = businessSetupQuery.data?.businessName ?? null;
-  const pageTitle = isOwnerOrAdmin && businessName ? `Requests for ${businessName}` : "Requests";
+  // GAP-042: businessName is minimal authenticated workspace-shell context, sourced from the
+  // shared ["me"] cache (populated at app-shell mount) rather than a List-specific query — so
+  // the title is available on first paint and Owner/Admin/Operator all see it identically.
+  const meQuery = useQuery({ queryKey: ["me"], queryFn: api.getMe });
+  const canSeeBusinessIdentity = isOwnerOrAdmin || role === "operator";
+  const businessName = meQuery.data?.businessName ?? null;
+  const pageTitle = canSeeBusinessIdentity && businessName ? `Requests for ${businessName}` : "Requests";
 
   // GAP-044: presentation (labels/subtitle/empty-state/row-split) is driven by the server's
   // own listContext.isHistory once a response has loaded — historyMode is only the client's

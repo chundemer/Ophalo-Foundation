@@ -40,12 +40,18 @@ public interface IMemberManagementPersistence
     Task CommitAsync(AccountUser target, CancellationToken cancellationToken);
 
     /// <summary>
-    /// Returns the current role for the given AccountUser. Used by GET /auth/me to include
-    /// role in the session identity response without adding it as a long-lived session claim.
-    /// Returns null when the AccountUser is not found.
+    /// Returns the role and account business name for the given AccountUser, scoped to the
+    /// active account. Used by GET /auth/me for the session identity response (role) and the
+    /// authenticated-workspace-shell context (businessName) — without adding either as a
+    /// long-lived session claim. Returns null when no AccountUser exists for the given ID
+    /// within the given account (mismatched or missing workspace identity).
     /// </summary>
-    Task<AccountUserRole?> GetAccountUserRoleAsync(Guid accountUserId, CancellationToken ct);
+    Task<AuthenticatedWorkspaceIdentity?> GetAuthenticatedWorkspaceIdentityAsync(
+        Guid accountUserId, Guid accountId, CancellationToken ct);
 }
+
+/// <summary>Role and business name for GET /auth/me's workspace-shell context (GAP-042).</summary>
+public sealed record AuthenticatedWorkspaceIdentity(AccountUserRole Role, string? BusinessName);
 
 /// <summary>Context for member list operations.</summary>
 public sealed record MemberListContext(

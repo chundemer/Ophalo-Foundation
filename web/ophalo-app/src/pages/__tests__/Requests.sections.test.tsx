@@ -13,6 +13,7 @@ const mockGetRequests = vi.fn();
 const mockGetAvailableRequests = vi.fn();
 const mockGetGuidedSetup = vi.fn();
 const mockGetSetup = vi.fn();
+const mockGetMe = vi.fn();
 
 vi.mock("../../lib/apiClient", async () => {
   const actual = await vi.importActual<typeof import("../../lib/apiClient")>(
@@ -26,6 +27,7 @@ vi.mock("../../lib/apiClient", async () => {
       getAvailableRequests: (...args: unknown[]) => mockGetAvailableRequests(...args),
       getGuidedSetup: (...args: unknown[]) => mockGetGuidedSetup(...args),
       getSetup: (...args: unknown[]) => mockGetSetup(...args),
+      getMe: (...args: unknown[]) => mockGetMe(...args),
     },
   };
 });
@@ -87,9 +89,18 @@ beforeEach(() => {
   mockGetAvailableRequests.mockReset();
   mockGetGuidedSetup.mockReset();
   mockGetSetup.mockReset();
+  mockGetMe.mockReset();
   mockGetAvailableRequests.mockResolvedValue({ requests: [], pageInfo: { limit: 50, hasMore: false, nextCursor: null } });
   mockGetGuidedSetup.mockResolvedValue(completeGuidedSetup);
   mockGetSetup.mockResolvedValue(mockBusinessSetup);
+  mockGetMe.mockResolvedValue({
+    accountUserId: "mock-user-1",
+    accountId: "mock-account-1",
+    isAuthenticated: true,
+    isVerified: true,
+    accountRole: "owner",
+    businessName: "Acme Plumbing",
+  });
 });
 
 describe("Requests — ADR-449 Owner/Admin work-queue hierarchy", () => {
@@ -154,11 +165,11 @@ describe("Requests — ADR-449 Owner/Admin work-queue hierarchy", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("keeps the plain Requests heading for an Operator and never fetches setup", async () => {
+  it("shows the business-name heading for an Operator too, sourced from [\"me\"], never fetches setup (GAP-042)", async () => {
     mockGetRequests.mockResolvedValue(listResult([]));
     renderRequests("operator");
 
-    expect(await screen.findByRole("heading", { name: "Requests" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Requests for Acme Plumbing" })).toBeInTheDocument();
     expect(mockGetSetup).not.toHaveBeenCalled();
   });
 });

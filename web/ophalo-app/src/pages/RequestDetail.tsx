@@ -409,6 +409,10 @@ export function RequestDetail({ requestId, focusPanel, onBack, prevId, nextId, o
     queryFn: () => api.getRequestDetail(requestId),
   });
 
+  // GAP-042: businessName is minimal authenticated workspace-shell context, sourced from the
+  // shared ["me"] cache — every role that can reach Detail (Viewer included, via direct link).
+  const meQuery = useQuery({ queryKey: ["me"], queryFn: api.getMe });
+
   const needsShareEffective = !shareCleared && (detail?.needsShare ?? false);
   const canShare = detail?.availableActions.canRecordShareIntent ?? false;
 
@@ -550,7 +554,7 @@ export function RequestDetail({ requestId, focusPanel, onBack, prevId, nextId, o
         <NeedsShareBanner onOpenShareDrawer={() => setShareModalOpen(true)} />
       )}
 
-      <RequestDetailHeader onBack={onBack} referenceCode={detail?.referenceCode} prevId={prevId} nextId={nextId} onNavigate={onNavigate} />
+      <RequestDetailHeader onBack={onBack} referenceCode={detail?.referenceCode} businessName={meQuery.data?.businessName} prevId={prevId} nextId={nextId} onNavigate={onNavigate} />
       <RequestDetailStates isLoading={isLoading} isError={isError} error={error} isFetching={isFetching} onRetry={() => void refetch()} />
       {detail && <RequestDetailContent
         requestId={requestId}

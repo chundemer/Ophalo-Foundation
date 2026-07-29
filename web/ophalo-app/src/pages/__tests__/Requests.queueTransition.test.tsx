@@ -16,6 +16,7 @@ const mockGetRequests = vi.fn();
 const mockGetAvailableRequests = vi.fn();
 const mockGetGuidedSetup = vi.fn();
 const mockGetSetup = vi.fn();
+const mockGetMe = vi.fn();
 
 vi.mock("../../lib/apiClient", async () => {
   const actual = await vi.importActual<typeof import("../../lib/apiClient")>(
@@ -29,6 +30,7 @@ vi.mock("../../lib/apiClient", async () => {
       getAvailableRequests: (...args: unknown[]) => mockGetAvailableRequests(...args),
       getGuidedSetup: (...args: unknown[]) => mockGetGuidedSetup(...args),
       getSetup: (...args: unknown[]) => mockGetSetup(...args),
+      getMe: (...args: unknown[]) => mockGetMe(...args),
     },
   };
 });
@@ -96,9 +98,20 @@ beforeEach(() => {
   mockGetAvailableRequests.mockReset();
   mockGetGuidedSetup.mockReset();
   mockGetSetup.mockReset();
+  mockGetMe.mockReset();
   mockGetAvailableRequests.mockResolvedValue({ requests: [], pageInfo: { limit: 50, hasMore: false, nextCursor: null } });
   mockGetGuidedSetup.mockResolvedValue(completeGuidedSetup);
   mockGetSetup.mockResolvedValue(mockBusinessSetup);
+  // GAP-042: ["me"] resolves independently of the list response — this is what proves the
+  // GAP-041 first-load skeleton contract still holds when the title source moves off the list.
+  mockGetMe.mockResolvedValue({
+    accountUserId: "mock-user-1",
+    accountId: "mock-account-1",
+    isAuthenticated: true,
+    isVerified: true,
+    accountRole: "owner",
+    businessName: "Acme Plumbing",
+  });
 });
 
 describe("Requests — GAP-041 queue-transition stability", () => {

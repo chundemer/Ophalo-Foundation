@@ -124,6 +124,25 @@ public sealed class AuthApiTests : IClassFixture<KeepApiWebFactory>, IAsyncLifet
         Assert.True(body.IsAuthenticated);
         Assert.True(body.IsVerified);
         Assert.Equal("owner", body.AccountRole);
+        Assert.Equal("Auth Test Co", body.BusinessName);
+    }
+
+    [Fact]
+    public async Task GetAuthenticatedWorkspaceIdentityAsync_CrossAccountAccountUserId_ReturnsNull()
+    {
+        // GAP-042: an AccountUserId that is real but belongs to a different account must not
+        // resolve — proves the persistence method matches both IDs, not just the AccountUserId,
+        // so it can never leak another account's businessName.
+        var (otherAccountUserId, _) = await SeedMinimalAccountAsync("other@auth-api-tests.com");
+
+        await using var scope = _factory.CreateScope();
+        var members = scope.ServiceProvider
+            .GetRequiredService<OpHalo.Foundation.Application.Members.IMemberManagementPersistence>();
+
+        var identity = await members.GetAuthenticatedWorkspaceIdentityAsync(
+            otherAccountUserId, _accountId, CancellationToken.None);
+
+        Assert.Null(identity);
     }
 
     [Fact]
@@ -405,5 +424,6 @@ public sealed class AuthApiTests : IClassFixture<KeepApiWebFactory>, IAsyncLifet
         Guid AccountId,
         bool IsAuthenticated,
         bool IsVerified,
-        string AccountRole);
+        string AccountRole,
+        string? BusinessName);
 }

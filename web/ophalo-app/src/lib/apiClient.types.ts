@@ -6,6 +6,7 @@ export interface MeResponse {
   isAuthenticated: boolean;
   isVerified: boolean;
   accountRole: AccountRole;
+  businessName: string | null;
 }
 
 export interface OnboardingChecklist {

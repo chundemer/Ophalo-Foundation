@@ -149,13 +149,15 @@ public sealed class EfMemberManagementPersistence(OpHaloDbContext db) : IMemberM
         await tx.CommitAsync(cancellationToken);
     }
 
-    public async Task<AccountUserRole?> GetAccountUserRoleAsync(Guid accountUserId, CancellationToken ct)
+    public async Task<AuthenticatedWorkspaceIdentity?> GetAuthenticatedWorkspaceIdentityAsync(
+        Guid accountUserId, Guid accountId, CancellationToken ct)
     {
         var row = await db.AccountUsers
             .AsNoTracking()
-            .Where(au => au.Id == accountUserId)
-            .Select(au => new { au.Role })
+            .Where(au => au.Id == accountUserId && au.AccountId == accountId)
+            .Select(au => new { au.Role, au.Account.BusinessName })
             .FirstOrDefaultAsync(ct);
-        return row?.Role;
+
+        return row is null ? null : new AuthenticatedWorkspaceIdentity(row.Role, row.BusinessName);
     }
 }

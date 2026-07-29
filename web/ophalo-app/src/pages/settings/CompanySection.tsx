@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { api, type KeepSetupResult, ApiError } from "../../lib/apiClient";
+import { api, type KeepSetupResult, type MeResponse, ApiError } from "../../lib/apiClient";
 import { normalizeNaPhoneInput, formatNaPhone } from "../../components/quick-capture/utils";
 
 const ALL_TIMEZONES: string[] = (() => {
@@ -60,6 +60,11 @@ export function CompanySection({ draft, onDraftChange }: CompanySectionProps) {
         websiteUrl: draft.websiteUrl.trim() || null,
       });
       queryClient.setQueryData(["setup"], updated);
+      // GAP-042: keep the workspace-shell ["me"] cache in sync immediately (no title flicker),
+      // then invalidate to reconfirm server authority.
+      queryClient.setQueryData(["me"], (prev: MeResponse | undefined) =>
+        prev ? { ...prev, businessName: updated.businessName } : prev);
+      void queryClient.invalidateQueries({ queryKey: ["me"] });
       setSaved(true);
     } catch (err) {
       if (err instanceof ApiError) {

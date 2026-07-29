@@ -130,8 +130,9 @@ public static class AuthEndpoints
         IMemberManagementPersistence members,
         CancellationToken ct)
     {
-        var role = await members.GetAccountUserRoleAsync(currentUser.UserId, ct);
-        var accountRole = role switch
+        var identity = await members.GetAuthenticatedWorkspaceIdentityAsync(
+            currentUser.UserId, currentUser.AccountId, ct);
+        var accountRole = identity?.Role switch
         {
             AccountUserRole.Owner    => "owner",
             AccountUserRole.Admin    => "admin",
@@ -146,7 +147,8 @@ public static class AuthEndpoints
             accountId = currentUser.AccountId,
             isAuthenticated = currentUser.IsAuthenticated,
             isVerified = currentUser.IsVerified,
-            accountRole
+            accountRole,
+            businessName = identity?.BusinessName
         });
     }
 
