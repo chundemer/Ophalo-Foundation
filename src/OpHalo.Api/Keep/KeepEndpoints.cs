@@ -230,6 +230,17 @@ public static class KeepEndpoints
             return result.IsSuccess ? Results.Ok(result.Value) : ErrorHttpMapper.ToHttpResult(result.Error);
         }).RequireAuthorization();
 
+        // GAP-050: compact related-work indicator — a dedicated read so mutation responses
+        // never carry (and therefore never stale-overwrite) this data in the frontend cache.
+        app.MapGet("/keep/requests/{requestId:guid}/related-work", async (
+            Guid requestId,
+            GetKeepRequestRelatedWorkService service,
+            CancellationToken ct) =>
+        {
+            var result = await service.ExecuteAsync(requestId, ct);
+            return result.IsSuccess ? Results.Ok(result.Value) : ErrorHttpMapper.ToHttpResult(result.Error);
+        }).RequireAuthorization();
+
         // Change request status — authenticated, operator write (Phase 8-B2-alpha)
         app.MapPatch("/keep/requests/{requestId:guid}/status", async (
             Guid requestId,

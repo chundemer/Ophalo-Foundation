@@ -178,4 +178,55 @@ public sealed class EfKeepRequestDetailPersistence(OpHaloDbContext dbContext) : 
             .Select(r => r.Id)
             .ToList();
     }
+
+    public async Task<KeepRequestRelatedWorkQueryResult> GetOtherCustomerRequestsAsync(
+        Guid keepCustomerId,
+        Guid excludeRequestId,
+        Guid accountId,
+        Guid currentAccountUserId,
+        KeepRequestVisibilityScope scope,
+        int take,
+        CancellationToken ct)
+    {
+        var scopedQuery = KeepRequestRowQueryFactory.Apply(
+            dbContext.Set<KeepRequest>().AsNoTracking(),
+            scope, accountId, currentAccountUserId, dbContext);
+
+        var filtered = scopedQuery.Where(r => r.KeepCustomerId == keepCustomerId
+                     && r.Id != excludeRequestId
+                     && r.Status != KeepRequestStatus.Cancelled
+                     && r.Status != KeepRequestStatus.Spam
+                     && r.Status != KeepRequestStatus.Test);
+
+        var totalCount = await filtered.CountAsync(ct);
+
+        // Max(CreatedAtUtc, LastBusinessActivityAt, LastCustomerActivityAt) expressed as nested
+        // comparisons (not Enumerable.Max, which does not translate) so ranking, the deterministic
+        // Id tie-break, and the `take` cap all execute in the database — never a full in-memory
+        // materialization of every related request for a prolific customer.
+        var items = await filtered
+            .Select(r => new
+            {
+                r.Id,
+                r.ReferenceCode,
+                r.Status,
+                LatestActivityAtUtc =
+                    r.LastCustomerActivityAt.HasValue && r.LastCustomerActivityAt.Value > r.CreatedAtUtc
+                        ? (r.LastBusinessActivityAt.HasValue && r.LastBusinessActivityAt.Value > r.LastCustomerActivityAt.Value
+                            ? r.LastBusinessActivityAt.Value
+                            : r.LastCustomerActivityAt.Value)
+                        : (r.LastBusinessActivityAt.HasValue && r.LastBusinessActivityAt.Value > r.CreatedAtUtc
+                            ? r.LastBusinessActivityAt.Value
+                            : r.CreatedAtUtc)
+            })
+            .OrderByDescending(x => x.LatestActivityAtUtc)
+            .ThenBy(x => x.Id)
+            .Take(take)
+            .ToListAsync(ct);
+
+        return new KeepRequestRelatedWorkQueryResult(
+            totalCount,
+            items.Select(x => new KeepRequestRelatedWorkRow(
+                x.Id, x.ReferenceCode, x.Status, x.LatestActivityAtUtc)).ToList());
+    }
 }

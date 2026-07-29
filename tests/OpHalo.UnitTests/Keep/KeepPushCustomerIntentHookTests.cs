@@ -224,6 +224,9 @@ public class KeepPushCustomerIntentHookTests
         public Task<string?> GetAccountBusinessNameAsync(Guid a, CancellationToken ct) => throw new NotImplementedException();
         public Task<IReadOnlyList<KeepRequestEvent>> GetCustomerVisibleEventsAsync(Guid r, CancellationToken ct) => throw new NotImplementedException();
         public Task<IReadOnlyList<Guid>> GetReadyToCloseNavigationIdsAsync(Guid a, CancellationToken ct) => throw new NotImplementedException();
+        public Task<KeepRequestRelatedWorkQueryResult> GetOtherCustomerRequestsAsync(
+            Guid keepCustomerId, Guid excludeRequestId, Guid a, Guid u, KeepRequestVisibilityScope s, int take, CancellationToken ct) =>
+            throw new NotImplementedException();
     }
 
     private sealed class FakeCustomerPersistence(

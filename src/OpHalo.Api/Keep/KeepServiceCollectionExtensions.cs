@@ -50,6 +50,7 @@ public static class KeepServiceCollectionExtensions
             return new HmacKeepRequestListCursorProtector(Convert.FromBase64String(keyBase64));
         });
         services.AddScoped<GetKeepRequestDetailService>();
+        services.AddScoped<GetKeepRequestRelatedWorkService>();
         services.AddScoped<GetKeepCustomerPageService>();
         services.AddScoped<ChangeKeepRequestStatusService>();
         services.AddScoped<ClassifyKeepRequestService>();

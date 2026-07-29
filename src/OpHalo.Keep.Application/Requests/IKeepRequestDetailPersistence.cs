@@ -67,7 +67,42 @@ public interface IKeepRequestDetailPersistence
     /// Used by the detail service to compute next/previous navigation.
     /// </summary>
     Task<IReadOnlyList<Guid>> GetReadyToCloseNavigationIdsAsync(Guid accountId, CancellationToken ct);
+
+    /// <summary>
+    /// Returns other requests for the same customer (GAP-050), scoped identically to detail
+    /// visibility (AccountWide or MyWork), excluding excludeRequestId, Cancelled, Spam, and Test.
+    /// Ranking (Max(CreatedAtUtc, LastBusinessActivityAt, LastCustomerActivityAt) DESC, Id ASC
+    /// tie-break) and the `take` cap are pushed into the query itself — TotalCount reflects the
+    /// full eligible set, Items only the capped page — so an unusually prolific customer cannot
+    /// turn this compact indicator into an unbounded in-memory read.
+    /// </summary>
+    Task<KeepRequestRelatedWorkQueryResult> GetOtherCustomerRequestsAsync(
+        Guid keepCustomerId,
+        Guid excludeRequestId,
+        Guid accountId,
+        Guid currentAccountUserId,
+        KeepRequestVisibilityScope scope,
+        int take,
+        CancellationToken ct);
 }
+
+/// <summary>
+/// GAP-050 related-work query result: an exact total over the full scoped/filtered set, and only
+/// the top `take` rows already ranked by latest-activity.
+/// </summary>
+public sealed record KeepRequestRelatedWorkQueryResult(
+    int TotalCount,
+    IReadOnlyList<KeepRequestRelatedWorkRow> Items);
+
+/// <summary>
+/// A ranked, already-capped row for GAP-050 related-work. LatestActivityAtUtc is computed by the
+/// query itself (Max of CreatedAtUtc/LastBusinessActivityAt/LastCustomerActivityAt).
+/// </summary>
+public sealed record KeepRequestRelatedWorkRow(
+    Guid RequestId,
+    string ReferenceCode,
+    KeepRequestStatus Status,
+    DateTime LatestActivityAtUtc);
 
 /// <summary>
 /// Participant data joined with AccountUser for operator display.

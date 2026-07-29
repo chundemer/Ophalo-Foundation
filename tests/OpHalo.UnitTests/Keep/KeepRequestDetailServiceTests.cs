@@ -376,6 +376,11 @@ public class KeepRequestDetailServiceTests
 
         public Task<IReadOnlyList<Guid>> GetReadyToCloseNavigationIdsAsync(Guid accountId, CancellationToken ct) =>
             Task.FromResult(NavigationIds);
+
+        public Task<KeepRequestRelatedWorkQueryResult> GetOtherCustomerRequestsAsync(
+            Guid keepCustomerId, Guid excludeRequestId, Guid accountId, Guid currentAccountUserId,
+            KeepRequestVisibilityScope scope, int take, CancellationToken ct) =>
+            throw new NotImplementedException();
     }
 
     private sealed class FakeCurrentUser(Guid userId, Guid accountId) : ICurrentUser
