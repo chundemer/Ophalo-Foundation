@@ -683,25 +683,19 @@ confirmation before Coding Session 1
 1. ~~Core-to-module attention contract shape~~ — **Resolved, ADR-463**: `KeepRequestWorkSignal`.
 2. ~~Per-account entitlement grant mechanism~~ — **Resolved, ADR-462**:
    `AccountCapabilityPackageEnrollment` + `AccountFeatureAccessResolver`.
-3. **Repeated field visits after `OfficeReviewed`** — does a later technician visit on the same
-   request create a new `ProposedScope` row (this record's assumption), or does the existing one
-   reopen to `Draft`? Build 107 does not say.
-4. **Post-approval edit resubmission behavior** — does creating a new `QuoteRevision` after
-   `Approved` return `OfficeQuote.Status` to `Draft` (requiring explicit resubmission, this record's
-   assumption) or directly to `SubmittedForApproval`? Build 107's "returns it to approval" is
-   ambiguous between the two.
-5. **One active assembly per primary catalog item** — should `(AccountId, PrimaryCatalogItemId)` be
-   unique among `Active` `OfferingAssembly` rows, so a technician selecting a primary offering never
-   faces an ambiguous "which assembly" choice? Build 107 says the same item may appear in multiple
-   offerings, but does not say whether more than one of those can be *primary* and *active*
-   simultaneously.
-6. **Exact rounding policy** — both the midpoint rounding rule (banker's/`ToEven` vs. traditional
-   round-half-up) and the total-computation order (sum of already-rounded `QuoteLine.LineTotal`
-   values, this record's recommendation, vs. rounding a single unrounded sum) are undecided and must
-   come from business/accounting policy, not this document. Affects cent-level totals.
-7. **Multi-currency** — the model above assumes one currency per account for the MVP; confirm this
-   is acceptable or whether the pilot contractor requires multi-currency (unlikely, but not
-   explicitly ruled out in Build 107).
+3. ~~Repeated field visits after `OfficeReviewed`~~ — **Resolved, ADR-464**: a later visit always
+   creates a new `ProposedScope` row; the reviewed row is never reopened.
+4. ~~Post-approval edit resubmission behavior~~ — **Resolved, ADR-465**: a new `QuoteRevision` after
+   `Approved` returns `OfficeQuote.Status` to `Draft`, requiring explicit resubmission.
+5. ~~One active assembly per primary catalog item~~ — **Resolved, ADR-466**:
+   `(AccountId, PrimaryCatalogItemId)` is unique among `Active` `OfferingAssembly` rows.
+6. ~~Exact rounding policy~~ — **Resolved, ADR-467**: round-half-up per `QuoteLine.LineTotal`;
+   `QuoteRevision.TotalAmount` is the sum of already-rounded lines.
+7. ~~Multi-currency~~ — **Resolved, ADR-468**: one currency per account for MVP, confirmed;
+   multi-currency remains deferred.
+
+All seven of this section's open questions are now resolved (ADR-462 through ADR-468); see
+build-log/109 for the Session 0 preflight record.
 
 ## Recommended coding-session breakdown after this preflight is approved
 
