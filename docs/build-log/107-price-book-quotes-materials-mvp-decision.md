@@ -4,8 +4,8 @@
 **Date:** 2026-07-30
 **Scope:** Multi-trade, entitlement-controlled price-book, field proposed-scope capture,
 office-owned quote review, and actual-material history capability
-**Related:** Build 101; Build 103; Build 104; ADR-453; ADR-454; ADR-455; ADR-456; ADR-457;
-ADR-458; ADR-459; ADR-460
+**Related:** Build 101; Build 103; Build 104; Build 108; ADR-453; ADR-454; ADR-455; ADR-456;
+ADR-457; ADR-458; ADR-459; ADR-460; ADR-461
 
 ## Why this decision exists
 
@@ -175,6 +175,56 @@ Every assembly declares one explicit price treatment:
 This explicit treatment prevents double charging when a published equipment/package price already
 includes standard materials or labor. Advanced nested assemblies, conditional components,
 compatibility engines, automatic selection, and option-pricing remain deferred.
+
+### Technician field escape ladder
+
+Field item selection is a progressive escape ladder, not a single search box or a flat catalog
+browser. Each rung is tried in order; a technician only drops to the next rung when the current one
+does not have what they need. All rungs are equally subject to the field pricing rule: no rung ever
+shows price, cost, margin, tax, inventory, or formula/import detail.
+
+```text
+1. Primary offering
+2. Common Items
+3. Client-configured Categories
+4. Deterministic Name/SKU/Alias Search
+5. Always-available Off-Catalog Item
+```
+
+1. **Primary offering.** The technician selects one recognizable primary work/equipment offering
+   (for example "50-gallon water-heater replacement"). Selecting it expands the office-defined
+   default associated items for that offering/assembly (see Static associated-item assemblies,
+   above). This is the fastest path for recognizable, pre-configured jobs and requires no catalog
+   knowledge from the technician.
+2. **Common Items.** A short, office-curated list of items used often enough to deserve one-tap
+   access without a named offering or a search — for example frequently added materials that do
+   not belong to a specific assembly. Configuration requirement: Owner/Admin marks specific catalog
+   items as "Common" (an account-scoped, orderable flag on the catalog item), independent of
+   category or assembly membership; the list must stay short by product convention (a long "common"
+   list defeats its purpose) but the MVP does not need a hard enforced cap.
+3. **Client-configured Categories.** Trade-specific groupings the office defines to browse the
+   catalog when neither the primary offering nor Common Items has the item — for example
+   "Refrigerant," "Fittings," "Water Heaters" for HVAC/plumbing, or trade-equivalent categories for
+   electrical, roofing, or landscaping. Configuration requirement: catalog category is an
+   account-owned, free-text-named entity (see Proposed entities in Build 108) with items assigned
+   to zero or one category; categories are client-configured, never a fixed trade taxonomy shipped
+   by Keep.
+4. **Deterministic Name/SKU/Alias Search.** A search box over the published catalog matched by
+   exact/prefix/substring text against display name, SKU/external key, and technician-facing
+   aliases/search terms — never AI/fuzzy/semantic matching. Configuration requirement: catalog
+   items may carry zero or more alias/search-term strings (for example a common trade nickname or
+   an alternate part name) that the office maintains as part of catalog data; search must return
+   deterministic, explainable matches so a technician is never given a machine-guessed physical
+   part.
+5. **Always-available Off-Catalog Item.** When none of the first four rungs has the item, the
+   technician can always add a one-off off-catalog line: description and quantity required,
+   receipt/photo optional. It never blocks the workflow, and it always requires office review before
+   any catalog promotion (see Actual work and ad-hoc materials, below).
+
+The ladder is deliberately generic: no rung is trade-specific, no rung is hard-coded to a fixed
+category list, and every rung composes with the same server-side price-hiding and authorization
+rules. The full data model for Common Items marking, category ownership, and alias/search-term
+storage is detailed in Build 108's ERD preflight.
 
 ### Actual work and ad-hoc materials
 
