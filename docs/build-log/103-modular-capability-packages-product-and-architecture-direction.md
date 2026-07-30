@@ -4,7 +4,7 @@
 **Date:** 2026-07-28
 **Scope:** Product packaging and implementation architecture for customer-requested operational
 capabilities
-**Related:** Build 101; Build 102; Foundation feature/entitlement model
+**Related:** Build 101; Build 102; Build 104; Build 105; Build 106; Foundation feature/entitlement model
 
 ## Customer signal
 
@@ -107,7 +107,9 @@ a productized package when it has:
 5. a bounded implementation/readiness gate appropriate to the risk.
 
 The first customer may still justify building a capability when it is strategic, but the build must
-be designed as a reusable module rather than a customer-specific fork.
+be designed as a reusable module rather than a customer-specific fork. Build 104's launch date does
+not weaken this rule: a temporary pilot branch, unguarded endpoint, account-specific schema, or
+test-only shortcut is not an acceptable implementation.
 
 ## Sequencing
 

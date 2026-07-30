@@ -4,7 +4,7 @@
 **Date:** 2026-07-28
 **Scope:** HVAC contractor B2C/B2B work-record direction; price-book import; QuickBooks exchange;
 equipment QR identity and history
-**Related:** Build 091; property-manager scalability review; Fleetmatics retirement discovery
+**Related:** Build 091; Build 102; Build 103; Build 104; Build 105; Fleetmatics retirement discovery
 
 ## Why this record exists
 
@@ -18,9 +18,93 @@ coordinate with the customer or property manager, and exchange the approved fina
 the accounting system.
 
 This expands the direction recorded in Build 091. It does not supersede current production
-reliability gates, nor authorize an unbounded field-service-management rebuild.
+reliability gates, nor authorize an unbounded field-service-management rebuild. Build 104 controls
+the four-week contractor-launch target: only customer-confirmed Day-1 B2B facts may be promoted
+into bounded production slices; price-book, accounting, QR, and asset work remain separate unless
+the customer establishes a hard launch dependency.
+
+## Decisions locked 2026-07-29
+
+The first contractor rollout is a deliberately narrow Keep wedge, not a comprehensive Fleetmatics
+or field-service-management replacement. Keep should be exceptionally reliable at the workflows it
+does own; it should not accumulate unrelated platform responsibilities merely to claim feature
+parity.
+
+- **Price-book import and material assignment are Day-1 requirements.** The implementation must
+  retain the safe staging, mapping, validation, explicit-publish, version-audit, and historical-line
+  snapshot rules below. The current price sheet cannot be published until the contractor supplies
+  its column meanings and confirms the import mapping.
+- **Equipment QR identity and retained asset history are deferred until customer testing begins.**
+  Do not make QR labels, scanning, asset records, warranty history, or replacement/lost-label flows
+  a launch gate. Capture real customer feedback first, then decide the bounded Asset Operations
+  package.
+- **QuickBooks is not a Day-1 full integration.** The observed problem is that payment received in
+  QuickBooks is not reliably reflected in the operating software. Explore a narrow, explicit
+  payment-status reconciliation aid after the actual handoff and source-of-truth rules are known;
+  do not commit to two-way sync, payment processing, invoice creation, or a general accounting
+  interface.
+
+### Day-1 accounting reconciliation queue
+
+The initial solution is a manual, internal reconciliation workflow in Keep. It works independently
+of whether the contractor uses QuickBooks Desktop, QuickBooks Online, another accounting product,
+or a manual ledger; it is not an import, API integration, or financial ledger.
+
+When authorized office staff mark work completed, it enters the **Needs Invoicing** queue. The
+office workflow is deliberately two-step:
+
+```text
+Work completed
+  -> Needs Invoicing
+  -> Mark Invoiced (required accounting-system invoice/reference number)
+  -> Invoiced — Pending Payment
+  -> Mark Reconciled (payment/outcome confirmed in the accounting system)
+  -> Reconciled
+```
+
+`Reconciled` means staff confirmed the accounting outcome in the accounting system; Keep makes no
+claim about a customer balance, collection, payment amount, partial payment, credit, write-off, or
+financial finality. The queue and its state are internal-only and must not alter customer-visible
+work status or the customer page.
+
+For each transition Keep records the internal state, action time, and acting staff user. `Mark
+Invoiced` records the contractor-provided accounting-system invoice/reference number. The first
+slice must provide a dedicated Reconciliation queue/filter so office staff can clear Needs
+Invoicing and Invoiced — Pending Payment work without mixing it into technician dispatch views.
+
+This deliberately avoids Day-1 CSV matching/import and API synchronization. Those approaches need
+stable cross-system identifiers, idempotency, duplicate handling, partial-payment/credit semantics,
+unmatched-record resolution, reconciliation audit, and retry/support operations. They remain later
+work only if the manual queue proves useful and the customer establishes a repeatable, reviewable
+handoff.
 
 ## The two workflows must remain distinct
+
+### Locked 2026-07-29 — request work context and workflow signals
+
+Every Keep request must carry a first-class **work context**. It is operational workflow state, not
+a loose tag, and controls the required qualification facts, available internal prompts, and
+attention/reconciliation signals:
+
+- **B2C** — an individual customer is the requester and ordinarily the service recipient/payer.
+- **B2B** — any commercial or business customer, including property-management work. The requester,
+  service location, site contact, authorization holder, and billing entity may be different.
+- **Unclassified** — permitted only when new public intake cannot reliably establish the context.
+  Authorized staff must classify it before dispatch or entry into the accounting reconciliation
+  workflow. Authenticated staff capture should select B2C or B2B rather than create unclassified
+  work.
+
+Both contexts use the core Keep accountability loop: capture, ownership, customer-safe/internal
+updates, evidence, completion, and retained history. Their operational signals remain distinct:
+
+| B2C | B2B |
+|---|---|
+| customer contact, reply/update/promise, and closeout signals | requester/business, property/site and unit/location, site-contact, authorization (PO/work order/not-to-exceed when applicable), invoicing, and reconciliation signals |
+| customer-safe communication and feedback posture | separate requester, service-site, and billing-party context where the workflow requires it |
+
+This does **not** authorize a property-management platform. B2B fields become production fields
+only when the contractor confirms that they are needed to receive, dispatch, complete, invoice, or
+reconcile work, along with their visibility, search, and audit rules.
 
 ### B2C — residential/customer work
 

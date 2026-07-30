@@ -8,7 +8,7 @@ This log records current operational blockers and the active work queue. Histori
 evidence belongs in `docs/build-log/`; locked decisions belong in
 `docs/pilot-readiness-decision-questions.md` and the decision index.
 
-## Product-Direction Context — Read, Do Not Expand Current Scope
+## Product-Direction Context — Launch Planning, Not Blanket Implementation Authority
 
 The first HVAC-contractor pilot discussion identified an emerging **asset-aware continuity**
 direction for Keep: future contractor workflows may link a known equipment asset, QR-based service
@@ -16,9 +16,12 @@ intake, quote/approval, and retained work history. The complete discovery record
 `docs/build-log/091-pilot-discussion-contractor-asset-workflow.md`.
 
 This is a staged product-direction decision, not authorization to expand the current implementation
-queue. Keep's active request-list recovery and pilot-readiness work remains the priority. Do not
-implement equipment assets, QR tagging, quotes, accounting/fleet replacement, property-manager
-subscriptions, or sensor telemetry unless a separately scoped session explicitly promotes it.
+queue. The first contractor now has a Fleetmatics-retirement-driven, mixed public/B2B launch target
+in roughly four weeks with one-week contingency. Build 104 controls the launch lanes; Build 105
+controls photo evidence; Build 106 controls reliability/release evidence. Do not implement equipment
+assets, QR tagging, quotes, accounting/fleet replacement, property-manager subscriptions, sensor
+telemetry, or any customer-specific shortcut unless a separately scoped session explicitly promotes
+it through these records.
 
 ## Immediate Production Access And Reliability Blockers
 

@@ -4,7 +4,7 @@
 **Date:** 2026-07-28
 **Scope:** Authenticated Request List freshness, own-write visibility, polling, and large-account
 capacity
-**Related:** Build 092–096; Build 101; ADR-449; ADR-450
+**Related:** Build 092–096; Build 101; Build 103; Build 104; Build 106; ADR-449; ADR-450
 
 ## Why this needs a separate decision
 
@@ -19,7 +19,9 @@ Request List accurate and responsive for many users and large active-work volume
 ranking, counting, or transmitting far more data than the current screen needs.
 
 This document is intentionally separate from the contractor asset/price-book discussion in Build
-101. Request List capacity is a platform concern that affects every authenticated workflow.
+101. Request List capacity is a platform concern that affects every authenticated workflow. Under
+Build 104, the first contractor pilot supplies a measured baseline; it is not evidence for a
+property-manager portfolio commitment.
 
 ## Current implementation — factual baseline
 
