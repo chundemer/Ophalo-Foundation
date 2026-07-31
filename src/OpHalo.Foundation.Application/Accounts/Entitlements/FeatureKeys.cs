@@ -39,5 +39,14 @@ public static class FeatureKeys
         public const string MobilePush = "keep.mobile_push";
         public const string RequestSubscriptions = "keep.request_subscriptions";
         public const string Insights = "keep.insights";
+
+        /// <summary>
+        /// Price Book, Quotes & Materials capability package (ADR-462). Unlike the plan-derived
+        /// keys above, this one may also be granted per-account via
+        /// <see cref="Core.Entities.Accounts.AccountCapabilityPackageEnrollment"/> — resolve
+        /// account-aware access through <c>AccountFeatureAccessResolver</c>, not this policy alone.
+        /// </summary>
+        public const string PriceBookQuotesMaterials =
+            Core.Entities.Accounts.CapabilityPackageFeatureKeys.PriceBookQuotesMaterials;
     }
 }

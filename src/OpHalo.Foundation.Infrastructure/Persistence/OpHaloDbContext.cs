@@ -43,6 +43,7 @@ public sealed class OpHaloDbContext(
     public DbSet<AccountUserDevice> AccountUserDevices => Set<AccountUserDevice>();
     public DbSet<User> Users => Set<User>();
     public DbSet<AccountEntitlements> AccountEntitlements => Set<AccountEntitlements>();
+    public DbSet<AccountCapabilityPackageEnrollment> AccountCapabilityPackageEnrollments => Set<AccountCapabilityPackageEnrollment>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
