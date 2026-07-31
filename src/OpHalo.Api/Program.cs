@@ -25,6 +25,7 @@ using OpHalo.Foundation.Application.Push;
 using OpHalo.Foundation.Core.Constants;
 using OpHalo.Foundation.Infrastructure.Auth;
 using OpHalo.Foundation.Infrastructure.Devices;
+using OpHalo.Foundation.Infrastructure.Entitlements;
 using OpHalo.Foundation.Infrastructure.Email;
 using OpHalo.Foundation.Infrastructure.Members;
 using OpHalo.Foundation.Infrastructure.Persistence;
@@ -109,6 +110,8 @@ builder.Services.AddKeepServices();
 builder.Services.AddSingleton<IAccountAccessPolicy, AccountAccessPolicy>();
 builder.Services.AddSingleton<IUserAccessPolicy, UserAccessPolicy>();
 builder.Services.AddSingleton<IFeatureAccessPolicy, FeatureAccessPolicy>();
+builder.Services.AddScoped<IAccountFeatureAccessResolver, AccountFeatureAccessResolver>();
+builder.Services.AddScoped<IAccountCapabilityPackageEnrollmentPersistence, EfAccountCapabilityPackageEnrollmentPersistence>();
 
 // --- Auth services ---
 builder.Services.Configure<MagicLinkSettings>(builder.Configuration.GetSection("App"));

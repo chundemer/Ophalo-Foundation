@@ -39,10 +39,29 @@ explicit fan-out that callers use instead of the raw policy:
 - `internal.entitlements.manage` (existing) is the correct internal-only authority for
   enroll/disable/reenable. No new permission key is introduced.
 
+## Composition Order And Scope Boundary
+
+The resolver is account-aware for **entitlement** only — plan or enrollment. It never duplicates
+commercial-standing/lifecycle blocking (Suspended, Closed, Expired, Canceled, trial expiry, OffSeason
+write restrictions), which remains the existing `IAccountAccessPolicy` gate, evaluated outside this
+resolver. The two compose in this fixed order, each a distinct, non-overlapping concern:
+
+```text
+account access gate (IAccountAccessPolicy) → account-aware feature resolver
+  (AccountFeatureAccessResolver) → user permission (IUserAccessPolicy) → request/state policy
+```
+
+Within the resolver's own narrow scope, the only fail-closed case it owns is a **missing account
+entitlement/context** — not a "blocked account" in the commercial-standing sense. If the resolver has
+no valid `AccountPlan`/entitlement context to evaluate against, it returns `false` even when an
+active capability-package enrollment exists for that account. This is a data-availability guard
+(no context to reason about), not a business-rule duplication of `IAccountAccessPolicy`.
+
 ## Test Obligations
 
 `AccountFeatureAccessResolver` must be covered for: plan-only access, enrollment-only access,
-disabled-enrollment access, unknown feature key, and blocked-account access.
+disabled-enrollment access, unknown feature key, and enrollment-exists-but-account-context-missing
+(fails closed to `false`).
 
 ## Rationale
 
