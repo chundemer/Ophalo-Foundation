@@ -73,8 +73,18 @@ internal sealed class CatalogItemConfiguration : BaseEntityConfiguration<Catalog
             .HasForeignKey(x => x.AccountId)
             .OnDelete(DeleteBehavior.Restrict);
 
-        // CategoryId/CurrentPriceBookVersionLineId/SourceActualWorkLineId are deliberately
-        // unconstrained (no HasOne/FK) — their target tables do not exist yet (Sessions 2b/2d and
-        // a later actual-work session). Added when those sessions land.
+        // Composite FK to CatalogCategory(AccountId, Id) — prevents a catalog item referencing a
+        // category from a different account (Session 2b; matches the pattern established in
+        // AccountUserDeviceConfiguration). CategoryId itself stays nullable: a category is
+        // optional per item.
+        builder.HasOne<CatalogCategory>()
+            .WithMany()
+            .HasForeignKey(x => new { x.AccountId, x.CategoryId })
+            .HasPrincipalKey(c => new { c.AccountId, c.Id })
+            .OnDelete(DeleteBehavior.Restrict);
+
+        // CurrentPriceBookVersionLineId/SourceActualWorkLineId are deliberately unconstrained (no
+        // HasOne/FK) — their target tables do not exist yet (Session 2d and a later actual-work
+        // session). Added when those sessions land.
     }
 }
