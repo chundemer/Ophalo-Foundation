@@ -1,3 +1,4 @@
+using System.Linq;
 using OpHalo.Foundation.Core.Entities.Accounts.Enums;
 using OpHalo.Foundation.Core.Entities.Accounts.Errors;
 using OpHalo.Foundation.Core.Entities.Shared;
@@ -118,6 +119,13 @@ public static class CapabilityPackageFeatureKeys
     {
         PriceBookQuotesMaterials
     };
+
+    /// <summary>
+    /// Deterministic (ordinal-sorted) registered feature keys, for status/listing surfaces.
+    /// Not the membership check itself — use <see cref="IsAllowed"/> for that.
+    /// </summary>
+    public static IReadOnlyList<string> All { get; } =
+        AllowList.OrderBy(key => key, StringComparer.Ordinal).ToArray();
 
     public static bool IsAllowed(string? featureKey) =>
         !string.IsNullOrWhiteSpace(featureKey) && AllowList.Contains(featureKey);

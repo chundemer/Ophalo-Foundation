@@ -112,6 +112,8 @@ builder.Services.AddSingleton<IUserAccessPolicy, UserAccessPolicy>();
 builder.Services.AddSingleton<IFeatureAccessPolicy, FeatureAccessPolicy>();
 builder.Services.AddScoped<IAccountFeatureAccessResolver, AccountFeatureAccessResolver>();
 builder.Services.AddScoped<IAccountCapabilityPackageEnrollmentPersistence, EfAccountCapabilityPackageEnrollmentPersistence>();
+builder.Services.AddScoped<IAccountAccessSnapshotPersistence, EfFoundationAccountAccessSnapshotPersistence>();
+builder.Services.AddScoped<GetAccountCapabilityPackageStatusService>();
 
 // --- Auth services ---
 builder.Services.Configure<MagicLinkSettings>(builder.Configuration.GetSection("App"));

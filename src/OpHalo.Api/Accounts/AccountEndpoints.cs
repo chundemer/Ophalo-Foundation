@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Http;
 using OpHalo.Api.Auth;
 using OpHalo.Api.Helpers;
+using OpHalo.Foundation.Application.Accounts.Entitlements;
 using OpHalo.Foundation.Application.Auth;
 using OpHalo.Foundation.Application.Members;
 using OpHalo.Foundation.Core.Constants;
@@ -24,6 +25,9 @@ public static class AccountEndpoints
         app.MapPost("/accounts/me/members/{accountUserId}/suspend", Suspend).RequireAuthorization();
         app.MapPost("/accounts/me/members/{accountUserId}/reactivate", Reactivate).RequireAuthorization();
         app.MapDelete("/accounts/me/members/{accountUserId}", Remove).RequireAuthorization();
+
+        // Capability-package status (Session 1c — ADR-462)
+        app.MapGet("/accounts/me/capability-packages", GetCapabilityPackageStatus).RequireAuthorization();
     }
 
     // -------------------------------------------------------------------------
@@ -103,6 +107,21 @@ public static class AccountEndpoints
         bool includeRemoved = false)
     {
         var result = await service.ListMembersAsync(includeRemoved, ct);
+
+        return result.IsFailure
+            ? ErrorHttpMapper.ToHttpResult(result.Error)
+            : Results.Ok(result.Value);
+    }
+
+    // -------------------------------------------------------------------------
+    // GET /accounts/me/capability-packages
+    // -------------------------------------------------------------------------
+
+    private static async Task<IResult> GetCapabilityPackageStatus(
+        GetAccountCapabilityPackageStatusService service,
+        CancellationToken ct)
+    {
+        var result = await service.ExecuteAsync(ct);
 
         return result.IsFailure
             ? ErrorHttpMapper.ToHttpResult(result.Error)
