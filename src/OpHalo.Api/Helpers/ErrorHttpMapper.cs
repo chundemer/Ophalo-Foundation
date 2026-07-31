@@ -126,6 +126,12 @@ public static class ErrorHttpMapper
             var c when c == "KeepRequest.ExpectedVersionInvalid"  => (StatusCodes.Status400BadRequest, "Bad request.", null),
             var c when c == "KeepRequest.RequestChanged"          => (StatusCodes.Status409Conflict, "Conflict.", null),
 
+            // --- CatalogItem concurrency/uniqueness conflicts (Session 2a.2) ---
+            var c when c == "CatalogItem.VersionMismatch"         => (StatusCodes.Status409Conflict, "Conflict.", null),
+            var c when c == "CatalogItem.ExternalKeyAlreadyExists" => (StatusCodes.Status409Conflict, "Conflict.", null),
+            var c when c == "CatalogItem.ExpectedVersionRequired" => (StatusCodes.Status400BadRequest, "Bad request.", null),
+            var c when c == "CatalogItem.ExpectedVersionInvalid"  => (StatusCodes.Status400BadRequest, "Bad request.", null),
+
             // --- Request list query validation errors (ADR-257/258, Sessions 4A/4B) ---
             var c when c == "KeepRequest.RequestListInvalidView"              => (StatusCodes.Status400BadRequest, "Bad request.", null),
             var c when c == "KeepRequest.RequestListViewNotYetAvailable"      => (StatusCodes.Status400BadRequest, "Bad request.", null),

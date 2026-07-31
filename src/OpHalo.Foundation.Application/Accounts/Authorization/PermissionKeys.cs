@@ -43,6 +43,9 @@ public static class PermissionKeys
         public const string InternalNotesAdd = "keep.internal_notes.add";
         public const string InsightsView = "keep.insights.view";
         public const string SettingsManage = "keep.settings.manage";
+
+        /// <summary>Price Book, Quotes &amp; Materials catalog maintenance (Session 2a.2).</summary>
+        public const string PriceBookCatalogManage = "keep.pricebook.catalog.manage";
     }
 
     // internal.* keys require AccountPurpose.Internal (see InternalPrefix). Broader

@@ -1,0 +1,203 @@
+using OpHalo.Keep.Core.Entities;
+using OpHalo.Keep.Core.Entities.Enums;
+using OpHalo.Keep.Core.Errors;
+using OpHalo.SharedKernel.Results;
+using Xunit;
+
+namespace OpHalo.UnitTests.Keep;
+
+/// <summary>
+/// Locks the CatalogItem lifecycle (build-log/108, Session 2a.1): CreateDraft validation,
+/// Draft/Inactive -&gt; Active -&gt; Inactive transitions, and concurrency-token rotation.
+/// </summary>
+public class CatalogItemTests
+{
+    static readonly Guid AccountId = Guid.CreateVersion7();
+    static readonly Guid Actor = Guid.CreateVersion7();
+
+    static Result<CatalogItem> Draft(
+        string displayName = "Water Heater Install",
+        string unitOfMeasure = "each",
+        string currency = "USD",
+        string? externalKey = null,
+        Guid? categoryId = null,
+        bool isCommonItem = false) =>
+        CatalogItem.CreateDraft(
+            AccountId, CatalogItemType.Service, displayName, unitOfMeasure, currency,
+            externalKey, categoryId, isCommonItem, Actor);
+
+    // --- CreateDraft ---
+
+    [Fact]
+    public void CreateDraft_with_valid_fields_succeeds_as_Draft()
+    {
+        var result = Draft(externalKey: " SKU-1 ", isCommonItem: true);
+
+        Assert.True(result.IsSuccess);
+        var item = result.Value;
+        Assert.Equal(AccountId, item.AccountId);
+        Assert.Equal(CatalogItemType.Service, item.Type);
+        Assert.Equal("Water Heater Install", item.DisplayName);
+        Assert.Equal("each", item.UnitOfMeasure);
+        Assert.Equal("USD", item.Currency);
+        Assert.Equal("SKU-1", item.ExternalKey);
+        Assert.True(item.IsCommonItem);
+        Assert.Equal(CatalogItemActiveState.Draft, item.ActiveState);
+        Assert.Equal(Actor, item.CreatedByUserId);
+        Assert.NotEqual(Guid.Empty, item.ConcurrencyVersion);
+    }
+
+    [Fact]
+    public void CreateDraft_with_no_external_key_leaves_it_null()
+    {
+        var result = Draft();
+
+        Assert.True(result.IsSuccess);
+        Assert.Null(result.Value.ExternalKey);
+    }
+
+    [Fact]
+    public void CreateDraft_lowercases_currency_to_upper_invariant()
+    {
+        var result = Draft(currency: "usd");
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal("USD", result.Value.Currency);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void CreateDraft_with_blank_display_name_fails(string displayName)
+    {
+        var result = Draft(displayName: displayName);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(CatalogItemErrors.DisplayNameRequired, result.Error);
+    }
+
+    [Fact]
+    public void CreateDraft_with_display_name_over_200_chars_fails()
+    {
+        var result = Draft(displayName: new string('x', 201));
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(CatalogItemErrors.DisplayNameTooLong, result.Error);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void CreateDraft_with_blank_unit_of_measure_fails(string unitOfMeasure)
+    {
+        var result = Draft(unitOfMeasure: unitOfMeasure);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(CatalogItemErrors.UnitOfMeasureRequired, result.Error);
+    }
+
+    [Theory]
+    [InlineData("US")]
+    [InlineData("USDD")]
+    [InlineData("12D")]
+    [InlineData("")]
+    public void CreateDraft_with_invalid_currency_fails(string currency)
+    {
+        var result = Draft(currency: currency);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(CatalogItemErrors.InvalidCurrency, result.Error);
+    }
+
+    [Fact]
+    public void CreateDraft_with_empty_account_id_throws()
+    {
+        Assert.Throws<ArgumentException>(() => CatalogItem.CreateDraft(
+            Guid.Empty, CatalogItemType.Service, "x", "each", "USD", null, null, false, Actor));
+    }
+
+    [Fact]
+    public void CreateDraft_with_empty_actor_throws()
+    {
+        Assert.Throws<ArgumentException>(() => CatalogItem.CreateDraft(
+            AccountId, CatalogItemType.Service, "x", "each", "USD", null, null, false, Guid.Empty));
+    }
+
+    // --- Activate / Inactivate ---
+
+    [Fact]
+    public void Activate_from_Draft_succeeds_and_rotates_concurrency_version()
+    {
+        var item = Draft().Value;
+        var before = item.ConcurrencyVersion;
+
+        var result = item.Activate();
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(CatalogItemActiveState.Active, item.ActiveState);
+        Assert.NotEqual(before, item.ConcurrencyVersion);
+    }
+
+    [Fact]
+    public void Activate_when_already_Active_fails()
+    {
+        var item = Draft().Value;
+        item.Activate();
+
+        var result = item.Activate();
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(CatalogItemErrors.AlreadyActive, result.Error);
+    }
+
+    [Fact]
+    public void Activate_from_Inactive_succeeds()
+    {
+        var item = Draft().Value;
+        item.Activate();
+        item.Inactivate();
+
+        var result = item.Activate();
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(CatalogItemActiveState.Active, item.ActiveState);
+    }
+
+    [Fact]
+    public void Inactivate_from_Active_succeeds_and_rotates_concurrency_version()
+    {
+        var item = Draft().Value;
+        item.Activate();
+        var before = item.ConcurrencyVersion;
+
+        var result = item.Inactivate();
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(CatalogItemActiveState.Inactive, item.ActiveState);
+        Assert.NotEqual(before, item.ConcurrencyVersion);
+    }
+
+    [Fact]
+    public void Inactivate_from_Draft_fails_NotActive()
+    {
+        var item = Draft().Value;
+
+        var result = item.Inactivate();
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(CatalogItemErrors.NotActive, result.Error);
+    }
+
+    [Fact]
+    public void Inactivate_when_already_Inactive_fails_NotActive()
+    {
+        var item = Draft().Value;
+        item.Activate();
+        item.Inactivate();
+
+        var result = item.Inactivate();
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(CatalogItemErrors.NotActive, result.Error);
+    }
+}

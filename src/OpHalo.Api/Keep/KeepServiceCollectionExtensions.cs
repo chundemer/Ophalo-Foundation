@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Configuration;
 using OpHalo.Keep.Application.IntakeSetup;
 using OpHalo.Keep.Application.Notifications;
+using OpHalo.Keep.Application.PriceBook;
 using OpHalo.Keep.Application.PublicIntake;
 using OpHalo.Keep.Application.Requests;
 using OpHalo.Keep.Application.Services;
@@ -82,6 +83,11 @@ public static class KeepServiceCollectionExtensions
         services.AddScoped<IKeepBadgePersistence, EfKeepBadgePersistence>();
         services.AddSingleton<KeepPushCandidateService>();
         services.AddScoped<IKeepPushNotifier, KeepPushNotifier>();
+
+        // Price Book, Quotes & Materials — catalog items (Session 2a.1/2a.2)
+        services.AddScoped<ICatalogItemPersistence, EfCatalogItemPersistence>();
+        services.AddScoped<CatalogItemLifecycleService>();
+        services.AddScoped<CatalogItemApiService>();
 
         return services;
     }

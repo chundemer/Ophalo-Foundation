@@ -48,6 +48,7 @@ public static class RolePermissions
         PermissionKeys.Account.NotificationsManage,
         PermissionKeys.Account.AuditView,
         PermissionKeys.Keep.SettingsManage,
+        PermissionKeys.Keep.PriceBookCatalogManage,
     ];
 
     static readonly string[] OwnerBase =

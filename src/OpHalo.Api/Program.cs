@@ -299,6 +299,7 @@ app.MapHealthChecks("/health/ready", new HealthCheckOptions
 
 // --- Routes ---
 app.MapKeepEndpoints();
+app.MapPriceBookEndpoints();
 
 app.MapAuthEndpoints();
 app.MapAccountEndpoints();

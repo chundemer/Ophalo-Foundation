@@ -27,8 +27,20 @@ it through these records.
 the capability-package foundation only: `AccountCapabilityPackageEnrollment` entity/persistence, the
 account-aware `AccountFeatureAccessResolver`, and a generic Owner/Admin `GET
 /accounts/me/capability-packages` status read. No price-book, catalog, offering, proposed-scope, or
-quote tables exist yet (build-log/109). A separately scoped preflight is required before any Session
-2 batch (catalog/offering/quote schema) begins.
+quote tables exist yet. Session 2 mechanical preflight (build-log/110) split Build 108's "Catalog and
+import" slice; Session 2a was itself over the 8-production-file gate as a single end-to-end batch and
+is split into 2a.1 and 2a.2. **2a.1 — CatalogItem foundation is complete** (entity, two enums, errors,
+persistence interface/EF implementation/configuration, lifecycle service; table
+`keep_pricebook_catalog_items`; migration applied). 31/31 focused unit tests pass, full solution
+builds clean, architecture tests 14/14 pass, `git diff --check` clean. Review found and fixed two
+pre-migration issues: wrong table name, and an unhandled external-key race (now translated to
+`CatalogItemErrors.ExternalKeyAlreadyExists` via a caught unique-constraint violation, with a
+regression test). **Next approved batch: 2a.2 — CatalogItem API delivery** (endpoints, permission
+key, role grant, DI/route registration; integration tests for account-isolation and stale-version
+409). Then 2b — categories/aliases; 2c — import staging/validation; 2d — versioned atomic publish.
+2c/2d were blocked on two implementation decisions, now locked: import object storage (ADR-469) and publish
+concurrency (ADR-470). 2b–2d each still need their own mechanical preflight before implementation
+begins.
 
 ## Immediate Production Access And Reliability Blockers
 
