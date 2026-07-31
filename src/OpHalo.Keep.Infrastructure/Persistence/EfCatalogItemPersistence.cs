@@ -10,6 +10,7 @@ public sealed class EfCatalogItemPersistence(OpHaloDbContext dbContext) : ICatal
 {
     public Task<CatalogItem?> GetByIdAsync(Guid accountId, Guid catalogItemId, CancellationToken ct) =>
         dbContext.Set<CatalogItem>()
+            .Include(x => x.Aliases)
             .FirstOrDefaultAsync(x => x.AccountId == accountId && x.Id == catalogItemId, ct);
 
     public Task<bool> ExternalKeyExistsAsync(Guid accountId, string externalKey, CancellationToken ct) =>

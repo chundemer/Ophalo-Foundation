@@ -172,6 +172,114 @@ public class CatalogItemLifecycleServiceTests
         Assert.Equal(CatalogItemErrors.NotActive, result.Error);
     }
 
+    // --- Aliases (Session 2b.2) ---
+
+    [Fact]
+    public async Task AddAliasAsync_with_correct_expected_version_succeeds()
+    {
+        var persistence = new FakeCatalogItemPersistence();
+        var sut = new CatalogItemLifecycleService(persistence);
+        var created = (await sut.CreateDraftAsync(Command(), CancellationToken.None)).Value;
+
+        var result = await sut.AddAliasAsync(
+            AccountId, created.Id, created.ConcurrencyVersion, "Drain Tray", Actor, CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        Assert.Single(persistence.Items[0].Aliases);
+        Assert.Equal("Drain Tray", result.Value.AliasText);
+    }
+
+    [Fact]
+    public async Task AddAliasAsync_for_unknown_item_fails_NotFound()
+    {
+        var persistence = new FakeCatalogItemPersistence();
+        var sut = new CatalogItemLifecycleService(persistence);
+
+        var result = await sut.AddAliasAsync(
+            AccountId, Guid.CreateVersion7(), Guid.NewGuid(), "Drain Tray", Actor, CancellationToken.None);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(CatalogItemErrors.NotFound, result.Error);
+    }
+
+    [Fact]
+    public async Task AddAliasAsync_with_stale_expected_version_fails_VersionMismatch()
+    {
+        var persistence = new FakeCatalogItemPersistence();
+        var sut = new CatalogItemLifecycleService(persistence);
+        var created = (await sut.CreateDraftAsync(Command(), CancellationToken.None)).Value;
+
+        var result = await sut.AddAliasAsync(
+            AccountId, created.Id, Guid.NewGuid(), "Drain Tray", Actor, CancellationToken.None);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(CatalogItemErrors.VersionMismatch, result.Error);
+    }
+
+    [Fact]
+    public async Task AddAliasAsync_with_duplicate_text_fails_and_does_not_commit()
+    {
+        var persistence = new FakeCatalogItemPersistence();
+        var sut = new CatalogItemLifecycleService(persistence);
+        var created = (await sut.CreateDraftAsync(Command(), CancellationToken.None)).Value;
+        await sut.AddAliasAsync(
+            AccountId, created.Id, created.ConcurrencyVersion, "Drain Tray", Actor, CancellationToken.None);
+
+        var result = await sut.AddAliasAsync(
+            AccountId, created.Id, persistence.Items[0].ConcurrencyVersion, "drain tray", Actor, CancellationToken.None);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(CatalogItemErrors.AliasAlreadyExists, result.Error);
+        Assert.Single(persistence.Items[0].Aliases);
+    }
+
+    [Fact]
+    public async Task InactivateAliasAsync_from_Active_succeeds()
+    {
+        var persistence = new FakeCatalogItemPersistence();
+        var sut = new CatalogItemLifecycleService(persistence);
+        var created = (await sut.CreateDraftAsync(Command(), CancellationToken.None)).Value;
+        var alias = (await sut.AddAliasAsync(
+            AccountId, created.Id, created.ConcurrencyVersion, "Drain Tray", Actor, CancellationToken.None)).Value;
+        var afterAdd = persistence.Items[0].ConcurrencyVersion;
+
+        var result = await sut.InactivateAliasAsync(AccountId, created.Id, alias.Id, afterAdd, CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(CatalogActiveState.Inactive, persistence.Items[0].Aliases.Single().ActiveState);
+    }
+
+    [Fact]
+    public async Task InactivateAliasAsync_with_unknown_alias_id_fails_AliasNotFound()
+    {
+        var persistence = new FakeCatalogItemPersistence();
+        var sut = new CatalogItemLifecycleService(persistence);
+        var created = (await sut.CreateDraftAsync(Command(), CancellationToken.None)).Value;
+
+        var result = await sut.InactivateAliasAsync(
+            AccountId, created.Id, Guid.CreateVersion7(), created.ConcurrencyVersion, CancellationToken.None);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(CatalogItemErrors.AliasNotFound, result.Error);
+    }
+
+    [Fact]
+    public async Task ActivateAliasAsync_from_Inactive_succeeds()
+    {
+        var persistence = new FakeCatalogItemPersistence();
+        var sut = new CatalogItemLifecycleService(persistence);
+        var created = (await sut.CreateDraftAsync(Command(), CancellationToken.None)).Value;
+        var alias = (await sut.AddAliasAsync(
+            AccountId, created.Id, created.ConcurrencyVersion, "Drain Tray", Actor, CancellationToken.None)).Value;
+        await sut.InactivateAliasAsync(AccountId, created.Id, alias.Id, persistence.Items[0].ConcurrencyVersion, CancellationToken.None);
+        var afterInactivate = persistence.Items[0].ConcurrencyVersion;
+
+        var result = await sut.ActivateAliasAsync(AccountId, created.Id, alias.Id, afterInactivate, CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(CatalogActiveState.Active, persistence.Items[0].Aliases.Single().ActiveState);
+    }
+
     sealed class FakeCatalogItemPersistence : ICatalogItemPersistence
     {
         public List<CatalogItem> Items { get; } = [];

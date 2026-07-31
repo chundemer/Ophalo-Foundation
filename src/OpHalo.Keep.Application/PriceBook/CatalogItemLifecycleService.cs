@@ -61,6 +61,37 @@ public sealed class CatalogItemLifecycleService(ICatalogItemPersistence persiste
     public Task<Result> InactivateAsync(Guid accountId, Guid catalogItemId, Guid expectedVersion, CancellationToken ct) =>
         ApplyTransitionAsync(accountId, catalogItemId, expectedVersion, item => item.Inactivate(), ct);
 
+    public async Task<Result<CatalogItemAlias>> AddAliasAsync(
+        Guid accountId,
+        Guid catalogItemId,
+        Guid expectedVersion,
+        string aliasText,
+        Guid createdByUserId,
+        CancellationToken ct)
+    {
+        var item = await persistence.GetByIdAsync(accountId, catalogItemId, ct);
+        if (item is null)
+            return Result<CatalogItemAlias>.Failure(CatalogItemErrors.NotFound);
+
+        if (item.ConcurrencyVersion != expectedVersion)
+            return Result<CatalogItemAlias>.Failure(CatalogItemErrors.VersionMismatch);
+
+        var addResult = item.AddAlias(aliasText, createdByUserId);
+        if (addResult.IsFailure)
+            return addResult;
+
+        var commitResult = await persistence.CommitAsync(item, ct);
+        return commitResult == CatalogItemCommitResult.Conflict
+            ? Result<CatalogItemAlias>.Failure(CatalogItemErrors.VersionMismatch)
+            : addResult;
+    }
+
+    public Task<Result> ActivateAliasAsync(Guid accountId, Guid catalogItemId, Guid aliasId, Guid expectedVersion, CancellationToken ct) =>
+        ApplyTransitionAsync(accountId, catalogItemId, expectedVersion, item => item.ActivateAlias(aliasId), ct);
+
+    public Task<Result> InactivateAliasAsync(Guid accountId, Guid catalogItemId, Guid aliasId, Guid expectedVersion, CancellationToken ct) =>
+        ApplyTransitionAsync(accountId, catalogItemId, expectedVersion, item => item.InactivateAlias(aliasId), ct);
+
     private async Task<Result> ApplyTransitionAsync(
         Guid accountId,
         Guid catalogItemId,

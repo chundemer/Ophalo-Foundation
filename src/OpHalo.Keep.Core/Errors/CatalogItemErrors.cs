@@ -39,4 +39,22 @@ public static class CatalogItemErrors
 
     public static readonly Error ExpectedVersionInvalid =
         Error.Create("CatalogItem.ExpectedVersionInvalid", "The expected catalog item version is not a valid version value.");
+
+    public static readonly Error AliasTextRequired =
+        Error.Create("CatalogItem.AliasTextRequired", "Alias text is required.");
+
+    public static readonly Error AliasTextTooLong =
+        Error.Create("CatalogItem.AliasTextTooLong", "Alias text must not exceed 200 characters.");
+
+    public static readonly Error AliasAlreadyExists =
+        Error.Create("CatalogItem.AliasAlreadyExists", "This catalog item already has an alias with this text.");
+
+    public static readonly Error AliasNotFound =
+        Error.Create("CatalogItem.AliasNotFound", "Catalog item alias not found.");
+
+    public static readonly Error AliasAlreadyActive =
+        Error.Create("CatalogItem.AliasAlreadyActive", "This alias is already active.");
+
+    public static readonly Error AliasNotActive =
+        Error.Create("CatalogItem.AliasNotActive", "Only an active alias can be made inactive.");
 }

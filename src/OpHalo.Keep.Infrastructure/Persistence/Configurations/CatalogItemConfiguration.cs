@@ -68,6 +68,17 @@ internal sealed class CatalogItemConfiguration : BaseEntityConfiguration<Catalog
         builder.HasIndex(x => x.AccountId)
             .HasFilter("is_common_item = true");
 
+        // Alternate key — supports the composite FK from CatalogItemAlias.CatalogItemId, which
+        // must reference (AccountId, Id) to prevent cross-account alias assignment (Session 2b.2;
+        // matches the pattern established for CatalogCategory in CatalogCategoryConfiguration).
+        builder.HasAlternateKey(x => new { x.AccountId, x.Id })
+            .HasName("ak_keep_pricebook_catalog_items_account_id");
+
+        // Aliases is exposed as a read-only collection backed by a private field with no public
+        // Add — EF must mutate through the field rather than a settable property/collection API.
+        builder.Navigation(x => x.Aliases)
+            .UsePropertyAccessMode(PropertyAccessMode.Field);
+
         builder.HasOne<Account>()
             .WithMany()
             .HasForeignKey(x => x.AccountId)

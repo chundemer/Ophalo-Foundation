@@ -24,23 +24,29 @@ telemetry, or any customer-specific shortcut unless a separately scoped session 
 it through these records.
 
 **Price Book, Quotes & Materials — Coding Session 1 complete.** Sessions 1a–1c (ADR-462) delivered
-the capability-package foundation only: `AccountCapabilityPackageEnrollment` entity/persistence, the
+the capability-package foundation: `AccountCapabilityPackageEnrollment` entity/persistence, the
 account-aware `AccountFeatureAccessResolver`, and a generic Owner/Admin `GET
-/accounts/me/capability-packages` status read. No price-book, catalog, offering, proposed-scope, or
-quote tables exist yet. Session 2 mechanical preflight (build-log/110) split Build 108's "Catalog and
-import" slice; Session 2a was itself over the 8-production-file gate as a single end-to-end batch and
-is split into 2a.1 and 2a.2. **2a.1 — CatalogItem foundation is complete** (entity, two enums, errors,
-persistence interface/EF implementation/configuration, lifecycle service; table
-`keep_pricebook_catalog_items`; migration applied). 31/31 focused unit tests pass, full solution
-builds clean, architecture tests 14/14 pass, `git diff --check` clean. Review found and fixed two
-pre-migration issues: wrong table name, and an unhandled external-key race (now translated to
-`CatalogItemErrors.ExternalKeyAlreadyExists` via a caught unique-constraint violation, with a
-regression test). **Next approved batch: 2a.2 — CatalogItem API delivery** (endpoints, permission
-key, role grant, DI/route registration; integration tests for account-isolation and stale-version
-409). Then 2b — categories/aliases; 2c — import staging/validation; 2d — versioned atomic publish.
-2c/2d were blocked on two implementation decisions, now locked: import object storage (ADR-469) and publish
-concurrency (ADR-470). 2b–2d each still need their own mechanical preflight before implementation
-begins.
+/accounts/me/capability-packages` status read.
+
+**Session 2 progress:**
+
+- **2a.1 — CatalogItem foundation:** complete and migrated. `CatalogItem`, its lifecycle/persistence
+  stack, and `keep_pricebook_catalog_items` are in place. Review corrected the table name and ensured
+  a concurrent SKU collision maps to `CatalogItemErrors.ExternalKeyAlreadyExists`.
+- **2a.2 — CatalogItem API delivery:** complete. The feature/permission/user gate is enforced before
+  catalog mutations; create, activate, and inactivate routes use the locked version-header contract.
+  A tightly coupled one-file gate exception (9 rather than 8 production files) is recorded in
+  [Build Log 110](build-log/110-price-book-quotes-materials-session-2-preflight.md).
+- **2b.1 — CatalogCategory foundation + CatalogItem FK:** complete and migrated. Categories use the
+  shared `CatalogActiveState`, have independent optimistic concurrency, and the nullable composite
+  `(AccountId, CategoryId)` FK prevents cross-account category assignment.
+- **2b.2 — CatalogItemAlias foundation:** next; requires its own mechanical preflight. Aliases are
+  owned children of `CatalogItem`, use `CatalogActiveState`, and mutate through the parent aggregate
+  and its concurrency token.
+- **2b.3 — Category and alias API delivery:** follows 2b.2 and requires its own mechanical preflight.
+- **2c — Import staging/validation** and **2d — versioned atomic publish:** follow their own
+  mechanical preflights. Their prerequisites are locked by ADR-469 (private import object storage)
+  and ADR-470 (module-owned account publish lock).
 
 ## Immediate Production Access And Reliability Blockers
 

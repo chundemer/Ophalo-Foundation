@@ -200,4 +200,134 @@ public class CatalogItemTests
         Assert.True(result.IsFailure);
         Assert.Equal(CatalogItemErrors.NotActive, result.Error);
     }
+
+    // --- Aliases (Session 2b.2) ---
+
+    [Fact]
+    public void AddAlias_with_valid_text_succeeds_as_Active_and_rotates_concurrency_version()
+    {
+        var item = Draft().Value;
+        var before = item.ConcurrencyVersion;
+
+        var result = item.AddAlias(" Hot Water Tank ", Actor);
+
+        Assert.True(result.IsSuccess);
+        var alias = result.Value;
+        Assert.Equal("Hot Water Tank", alias.AliasText);
+        Assert.Equal("hot water tank", alias.NormalizedAliasText);
+        Assert.Equal(CatalogActiveState.Active, alias.ActiveState);
+        Assert.Equal(item.AccountId, alias.AccountId);
+        Assert.Equal(item.Id, alias.CatalogItemId);
+        Assert.Contains(alias, item.Aliases);
+        Assert.NotEqual(before, item.ConcurrencyVersion);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void AddAlias_with_blank_text_fails(string aliasText)
+    {
+        var item = Draft().Value;
+
+        var result = item.AddAlias(aliasText, Actor);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(CatalogItemErrors.AliasTextRequired, result.Error);
+    }
+
+    [Fact]
+    public void AddAlias_with_empty_actor_throws()
+    {
+        var item = Draft().Value;
+
+        Assert.Throws<ArgumentException>(() => item.AddAlias("Hot Water Tank", Guid.Empty));
+    }
+
+    [Fact]
+    public void AddAlias_with_text_over_200_chars_fails()
+    {
+        var item = Draft().Value;
+
+        var result = item.AddAlias(new string('x', 201), Actor);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(CatalogItemErrors.AliasTextTooLong, result.Error);
+    }
+
+    [Fact]
+    public void AddAlias_with_duplicate_text_case_insensitive_fails()
+    {
+        var item = Draft().Value;
+        item.AddAlias("Hot Water Tank", Actor);
+
+        var result = item.AddAlias(" hot water tank ", Actor);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(CatalogItemErrors.AliasAlreadyExists, result.Error);
+    }
+
+    [Fact]
+    public void InactivateAlias_from_Active_succeeds_and_rotates_item_concurrency_version()
+    {
+        var item = Draft().Value;
+        var alias = item.AddAlias("Hot Water Tank", Actor).Value;
+        var before = item.ConcurrencyVersion;
+
+        var result = item.InactivateAlias(alias.Id);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(CatalogActiveState.Inactive, alias.ActiveState);
+        Assert.NotEqual(before, item.ConcurrencyVersion);
+    }
+
+    [Fact]
+    public void InactivateAlias_when_already_Inactive_fails()
+    {
+        var item = Draft().Value;
+        var alias = item.AddAlias("Hot Water Tank", Actor).Value;
+        item.InactivateAlias(alias.Id);
+
+        var result = item.InactivateAlias(alias.Id);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(CatalogItemErrors.AliasNotActive, result.Error);
+    }
+
+    [Fact]
+    public void ActivateAlias_from_Inactive_succeeds_and_rotates_item_concurrency_version()
+    {
+        var item = Draft().Value;
+        var alias = item.AddAlias("Hot Water Tank", Actor).Value;
+        item.InactivateAlias(alias.Id);
+        var before = item.ConcurrencyVersion;
+
+        var result = item.ActivateAlias(alias.Id);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(CatalogActiveState.Active, alias.ActiveState);
+        Assert.NotEqual(before, item.ConcurrencyVersion);
+    }
+
+    [Fact]
+    public void ActivateAlias_when_already_Active_fails()
+    {
+        var item = Draft().Value;
+        var alias = item.AddAlias("Hot Water Tank", Actor).Value;
+
+        var result = item.ActivateAlias(alias.Id);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(CatalogItemErrors.AliasAlreadyActive, result.Error);
+    }
+
+    [Fact]
+    public void ActivateAlias_with_unknown_id_fails_AliasNotFound()
+    {
+        var item = Draft().Value;
+
+        var result = item.ActivateAlias(Guid.CreateVersion7());
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(CatalogItemErrors.AliasNotFound, result.Error);
+    }
 }

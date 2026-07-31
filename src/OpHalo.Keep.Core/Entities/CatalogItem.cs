@@ -54,6 +54,15 @@ public sealed class CatalogItem : BaseEntity
     /// </summary>
     public Guid ConcurrencyVersion { get; private set; } = Guid.NewGuid();
 
+    private readonly List<CatalogItemAlias> _aliases = [];
+
+    /// <summary>
+    /// Search/lookup terms for this item (Session 2b.2). Owned children: created, activated, and
+    /// inactivated only through this aggregate, guarded by <see cref="ConcurrencyVersion"/> rather
+    /// than a token of their own.
+    /// </summary>
+    public IReadOnlyCollection<CatalogItemAlias> Aliases => _aliases;
+
     private const int MaxDisplayNameLength = 200;
     private const int MaxUnitOfMeasureLength = 50;
 
@@ -128,6 +137,48 @@ public sealed class CatalogItem : BaseEntity
             return Result.Failure(CatalogItemErrors.NotActive);
 
         ActiveState = CatalogItemActiveState.Inactive;
+        ConcurrencyVersion = Guid.NewGuid();
+        return Result.Success();
+    }
+
+    public Result<CatalogItemAlias> AddAlias(string aliasText, Guid createdByUserId)
+    {
+        var createResult = CatalogItemAlias.Create(AccountId, Id, aliasText, createdByUserId);
+        if (createResult.IsFailure)
+            return createResult;
+
+        if (_aliases.Any(a => a.NormalizedAliasText == createResult.Value.NormalizedAliasText))
+            return Result<CatalogItemAlias>.Failure(CatalogItemErrors.AliasAlreadyExists);
+
+        _aliases.Add(createResult.Value);
+        ConcurrencyVersion = Guid.NewGuid();
+        return createResult;
+    }
+
+    public Result ActivateAlias(Guid aliasId)
+    {
+        var alias = _aliases.FirstOrDefault(a => a.Id == aliasId);
+        if (alias is null)
+            return Result.Failure(CatalogItemErrors.AliasNotFound);
+
+        var result = alias.Activate();
+        if (result.IsFailure)
+            return result;
+
+        ConcurrencyVersion = Guid.NewGuid();
+        return Result.Success();
+    }
+
+    public Result InactivateAlias(Guid aliasId)
+    {
+        var alias = _aliases.FirstOrDefault(a => a.Id == aliasId);
+        if (alias is null)
+            return Result.Failure(CatalogItemErrors.AliasNotFound);
+
+        var result = alias.Inactivate();
+        if (result.IsFailure)
+            return result;
+
         ConcurrencyVersion = Guid.NewGuid();
         return Result.Success();
     }
