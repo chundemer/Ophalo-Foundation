@@ -23,6 +23,13 @@ assets, QR tagging, quotes, accounting/fleet replacement, property-manager subsc
 telemetry, or any customer-specific shortcut unless a separately scoped session explicitly promotes
 it through these records.
 
+**Price Book, Quotes & Materials — Coding Session 1 complete.** Sessions 1a–1c (ADR-462) delivered
+the capability-package foundation only: `AccountCapabilityPackageEnrollment` entity/persistence, the
+account-aware `AccountFeatureAccessResolver`, and a generic Owner/Admin `GET
+/accounts/me/capability-packages` status read. No price-book, catalog, offering, proposed-scope, or
+quote tables exist yet (build-log/109). A separately scoped preflight is required before any Session
+2 batch (catalog/offering/quote schema) begins.
+
 ## Immediate Production Access And Reliability Blockers
 
 - **GAP-039b (P0): error capture and safe customer references.** Use Sentry's free errors-only
