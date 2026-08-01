@@ -1,6 +1,6 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-07-27
+**Last updated:** 2026-08-01
 **Deployment posture:** Not pilot-ready.
 **Source of truth for acceptance criteria:** `docs/pilot-readiness-bug-tracker.md`.
 
@@ -40,13 +40,21 @@ account-aware `AccountFeatureAccessResolver`, and a generic Owner/Admin `GET
 - **2b.1 — CatalogCategory foundation + CatalogItem FK:** complete and migrated. Categories use the
   shared `CatalogActiveState`, have independent optimistic concurrency, and the nullable composite
   `(AccountId, CategoryId)` FK prevents cross-account category assignment.
-- **2b.2 — CatalogItemAlias foundation:** next; requires its own mechanical preflight. Aliases are
-  owned children of `CatalogItem`, use `CatalogActiveState`, and mutate through the parent aggregate
-  and its concurrency token.
-- **2b.3 — Category and alias API delivery:** follows 2b.2 and requires its own mechanical preflight.
-- **2c — Import staging/validation** and **2d — versioned atomic publish:** follow their own
-  mechanical preflights. Their prerequisites are locked by ADR-469 (private import object storage)
-  and ADR-470 (module-owned account publish lock).
+- **2b.2 — CatalogItemAlias foundation:** complete and migrated. Aliases are owned children of
+  `CatalogItem` (own table, no independent `ConcurrencyVersion`), created/activated/inactivated only
+  through the parent aggregate, which rotates its own token on every alias mutation.
+- **2b.3 — Category and alias API delivery:** complete. `CatalogCategoryApiService` and
+  `CatalogItemApiService`'s new alias methods share the existing `PriceBookCatalogManage` gate — one
+  entitlement, not per-entity. Alias routes nest under the catalog item. Review found two blockers,
+  both fixed: `CatalogItem.Alias*` errors needed explicit `ErrorHttpMapper` entries (the `Alias`
+  segment breaks the generic `.NotFound`/`.AlreadyActive`/`.NotActive` suffix matches — the new
+  generic `.NotActive` rule also corrects `CatalogItem.NotActive`, shipped in 2a.2 as an unmapped
+  400, to 409); and every activate/inactivate route now returns 200 with the rotated
+  `ConcurrencyVersion` instead of 204, since a client had no way to make a second versioned mutation
+  without a separate read.
+- **2c — Import staging/validation** and **2d — versioned atomic publish:** next; each needs its own
+  mechanical preflight before implementation begins. Their prerequisites are locked by ADR-469
+  (private import object storage) and ADR-470 (module-owned account publish lock).
 
 ## Immediate Production Access And Reliability Blockers
 
