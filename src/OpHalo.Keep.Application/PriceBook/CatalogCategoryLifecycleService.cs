@@ -45,13 +45,13 @@ public sealed class CatalogCategoryLifecycleService(ICatalogCategoryPersistence 
             : createResult;
     }
 
-    public Task<Result> ActivateAsync(Guid accountId, Guid categoryId, Guid expectedVersion, CancellationToken ct) =>
+    public Task<Result<Guid>> ActivateAsync(Guid accountId, Guid categoryId, Guid expectedVersion, CancellationToken ct) =>
         ApplyTransitionAsync(accountId, categoryId, expectedVersion, category => category.Activate(), ct);
 
-    public Task<Result> InactivateAsync(Guid accountId, Guid categoryId, Guid expectedVersion, CancellationToken ct) =>
+    public Task<Result<Guid>> InactivateAsync(Guid accountId, Guid categoryId, Guid expectedVersion, CancellationToken ct) =>
         ApplyTransitionAsync(accountId, categoryId, expectedVersion, category => category.Inactivate(), ct);
 
-    private async Task<Result> ApplyTransitionAsync(
+    private async Task<Result<Guid>> ApplyTransitionAsync(
         Guid accountId,
         Guid categoryId,
         Guid expectedVersion,
@@ -60,18 +60,18 @@ public sealed class CatalogCategoryLifecycleService(ICatalogCategoryPersistence 
     {
         var category = await persistence.GetByIdAsync(accountId, categoryId, ct);
         if (category is null)
-            return Result.Failure(CatalogCategoryErrors.NotFound);
+            return Result<Guid>.Failure(CatalogCategoryErrors.NotFound);
 
         if (category.ConcurrencyVersion != expectedVersion)
-            return Result.Failure(CatalogCategoryErrors.VersionMismatch);
+            return Result<Guid>.Failure(CatalogCategoryErrors.VersionMismatch);
 
         var transitionResult = transition(category);
         if (transitionResult.IsFailure)
-            return transitionResult;
+            return Result<Guid>.Failure(transitionResult.Error);
 
         var commitResult = await persistence.CommitAsync(category, ct);
         return commitResult == CatalogCategoryCommitResult.Conflict
-            ? Result.Failure(CatalogCategoryErrors.VersionMismatch)
-            : Result.Success();
+            ? Result<Guid>.Failure(CatalogCategoryErrors.VersionMismatch)
+            : Result<Guid>.Success(category.ConcurrencyVersion);
     }
 }

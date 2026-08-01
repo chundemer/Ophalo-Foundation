@@ -132,6 +132,20 @@ public static class ErrorHttpMapper
             var c when c == "CatalogItem.ExpectedVersionRequired" => (StatusCodes.Status400BadRequest, "Bad request.", null),
             var c when c == "CatalogItem.ExpectedVersionInvalid"  => (StatusCodes.Status400BadRequest, "Bad request.", null),
 
+            // --- CatalogCategory concurrency/uniqueness conflicts (Session 2b.3) ---
+            var c when c == "CatalogCategory.VersionMismatch"         => (StatusCodes.Status409Conflict, "Conflict.", null),
+            var c when c == "CatalogCategory.NameAlreadyExists"       => (StatusCodes.Status409Conflict, "Conflict.", null),
+            var c when c == "CatalogCategory.ExpectedVersionRequired" => (StatusCodes.Status400BadRequest, "Bad request.", null),
+            var c when c == "CatalogCategory.ExpectedVersionInvalid"  => (StatusCodes.Status400BadRequest, "Bad request.", null),
+
+            // --- CatalogItemAlias conflicts (Session 2b.3) — the Alias segment breaks the
+            // generic .NotFound/.AlreadyActive/.NotActive suffix matches below, so these need
+            // explicit entries.
+            var c when c == "CatalogItem.AliasAlreadyExists" => (StatusCodes.Status409Conflict, "Conflict.", null),
+            var c when c == "CatalogItem.AliasAlreadyActive" => (StatusCodes.Status409Conflict, "Conflict.", null),
+            var c when c == "CatalogItem.AliasNotActive"     => (StatusCodes.Status409Conflict, "Conflict.", null),
+            var c when c == "CatalogItem.AliasNotFound"      => (StatusCodes.Status404NotFound, "Resource not found.", null),
+
             // --- Request list query validation errors (ADR-257/258, Sessions 4A/4B) ---
             var c when c == "KeepRequest.RequestListInvalidView"              => (StatusCodes.Status400BadRequest, "Bad request.", null),
             var c when c == "KeepRequest.RequestListViewNotYetAvailable"      => (StatusCodes.Status400BadRequest, "Bad request.", null),
@@ -251,6 +265,12 @@ public static class ErrorHttpMapper
             var c when c.EndsWith(".AlreadyActedOn") => (StatusCodes.Status409Conflict, "Conflict.", null),
 
             var c when c.EndsWith(".AlreadyActive") => (StatusCodes.Status409Conflict, "Conflict.", null),
+
+            // Session 2b.3: a repeated inactivate is a state conflict, not malformed input.
+            // Covers CatalogItem/CatalogCategory/CatalogItemAlias .NotActive; also corrects
+            // CatalogItem.NotActive (shipped in 2a.2), which previously fell through to the
+            // default 400 for lack of a matching rule.
+            var c when c.EndsWith(".NotActive") => (StatusCodes.Status409Conflict, "Conflict.", null),
 
             var c when c.EndsWith(".AlreadySuspended") => (StatusCodes.Status409Conflict, "Conflict.", null),
 

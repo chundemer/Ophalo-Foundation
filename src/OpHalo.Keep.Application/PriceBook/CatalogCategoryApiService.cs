@@ -4,29 +4,23 @@ using OpHalo.Foundation.Application.Accounts.Authorization;
 using OpHalo.Foundation.Application.Accounts.Entitlements;
 using OpHalo.Foundation.Core.Entities.Accounts;
 using OpHalo.Keep.Core.Entities;
-using OpHalo.Keep.Core.Entities.Enums;
 using OpHalo.SharedKernel.Abstractions;
 using OpHalo.SharedKernel.Results;
 
 namespace OpHalo.Keep.Application.PriceBook;
 
-public sealed record CreateCatalogItemApiCommand(
-    CatalogItemType Type,
-    string DisplayName,
-    string UnitOfMeasure,
-    string Currency,
-    string? ExternalKey,
-    Guid? CategoryId,
-    bool IsCommonItem);
+public sealed record CreateCatalogCategoryApiCommand(string Name, int DisplayOrder);
 
 /// <summary>
-/// API-facing orchestration for <see cref="CatalogItem"/> mutations (Session 2a.2). Owns the
-/// full auth-stack composition — <see cref="CatalogItemLifecycleService"/> deliberately does
-/// not — then delegates the actual lifecycle transition to it. Locked gate order (ADR-462):
-/// account access gate → account-aware feature resolver → user permission → lifecycle operation.
+/// API-facing orchestration for <see cref="CatalogCategory"/> mutations (Session 2b.3). Owns the
+/// full auth-stack composition — <see cref="CatalogCategoryLifecycleService"/> deliberately does
+/// not — then delegates the actual lifecycle transition to it. Same locked gate order as
+/// <see cref="CatalogItemApiService"/> (ADR-462): account access gate → account-aware feature
+/// resolver → user permission → lifecycle operation. Catalog category maintenance shares
+/// CatalogItem's <c>PriceBookCatalogManage</c> permission — it is not a separate entitlement.
 /// </summary>
-public sealed class CatalogItemApiService(
-    CatalogItemLifecycleService lifecycleService,
+public sealed class CatalogCategoryApiService(
+    CatalogCategoryLifecycleService lifecycleService,
     IAccountAccessSnapshotPersistence snapshotPersistence,
     ICurrentUser currentUser,
     IAccountAccessPolicy accountAccessPolicy,
@@ -40,71 +34,33 @@ public sealed class CatalogItemApiService(
     private static readonly Error Forbidden =
         Error.Create("auth.forbidden", "You do not have permission to perform this action.");
 
-    public async Task<Result<CatalogItem>> CreateDraftAsync(CreateCatalogItemApiCommand command, CancellationToken ct)
+    public async Task<Result<CatalogCategory>> CreateAsync(CreateCatalogCategoryApiCommand command, CancellationToken ct)
     {
         var gate = await AuthorizeAsync(ct);
         if (gate.IsFailure)
-            return Result<CatalogItem>.Failure(gate.Error);
+            return Result<CatalogCategory>.Failure(gate.Error);
 
-        return await lifecycleService.CreateDraftAsync(
-            new CreateCatalogItemCommand(
-                currentUser.AccountId,
-                command.Type,
-                command.DisplayName,
-                command.UnitOfMeasure,
-                command.Currency,
-                command.ExternalKey,
-                command.CategoryId,
-                command.IsCommonItem,
-                currentUser.UserId),
+        return await lifecycleService.CreateAsync(
+            new CreateCatalogCategoryCommand(currentUser.AccountId, command.Name, command.DisplayOrder, currentUser.UserId),
             ct);
     }
 
-    public async Task<Result<Guid>> ActivateAsync(Guid catalogItemId, Guid expectedVersion, CancellationToken ct)
+    public async Task<Result<Guid>> ActivateAsync(Guid categoryId, Guid expectedVersion, CancellationToken ct)
     {
         var gate = await AuthorizeAsync(ct);
         if (gate.IsFailure)
             return Result<Guid>.Failure(gate.Error);
 
-        return await lifecycleService.ActivateAsync(currentUser.AccountId, catalogItemId, expectedVersion, ct);
+        return await lifecycleService.ActivateAsync(currentUser.AccountId, categoryId, expectedVersion, ct);
     }
 
-    public async Task<Result<Guid>> InactivateAsync(Guid catalogItemId, Guid expectedVersion, CancellationToken ct)
+    public async Task<Result<Guid>> InactivateAsync(Guid categoryId, Guid expectedVersion, CancellationToken ct)
     {
         var gate = await AuthorizeAsync(ct);
         if (gate.IsFailure)
             return Result<Guid>.Failure(gate.Error);
 
-        return await lifecycleService.InactivateAsync(currentUser.AccountId, catalogItemId, expectedVersion, ct);
-    }
-
-    public async Task<Result<AddCatalogItemAliasResult>> AddAliasAsync(
-        Guid catalogItemId, Guid expectedVersion, string aliasText, CancellationToken ct)
-    {
-        var gate = await AuthorizeAsync(ct);
-        if (gate.IsFailure)
-            return Result<AddCatalogItemAliasResult>.Failure(gate.Error);
-
-        return await lifecycleService.AddAliasAsync(
-            currentUser.AccountId, catalogItemId, expectedVersion, aliasText, currentUser.UserId, ct);
-    }
-
-    public async Task<Result<Guid>> ActivateAliasAsync(Guid catalogItemId, Guid aliasId, Guid expectedVersion, CancellationToken ct)
-    {
-        var gate = await AuthorizeAsync(ct);
-        if (gate.IsFailure)
-            return Result<Guid>.Failure(gate.Error);
-
-        return await lifecycleService.ActivateAliasAsync(currentUser.AccountId, catalogItemId, aliasId, expectedVersion, ct);
-    }
-
-    public async Task<Result<Guid>> InactivateAliasAsync(Guid catalogItemId, Guid aliasId, Guid expectedVersion, CancellationToken ct)
-    {
-        var gate = await AuthorizeAsync(ct);
-        if (gate.IsFailure)
-            return Result<Guid>.Failure(gate.Error);
-
-        return await lifecycleService.InactivateAliasAsync(currentUser.AccountId, catalogItemId, aliasId, expectedVersion, ct);
+        return await lifecycleService.InactivateAsync(currentUser.AccountId, categoryId, expectedVersion, ct);
     }
 
     private async Task<Result> AuthorizeAsync(CancellationToken ct)

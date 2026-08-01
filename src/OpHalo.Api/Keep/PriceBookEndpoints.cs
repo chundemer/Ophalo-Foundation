@@ -50,7 +50,7 @@ public static class PriceBookEndpoints
                 return ErrorHttpMapper.ToHttpResult(versionResult.Error);
 
             var result = await service.ActivateAsync(catalogItemId, versionResult.Value, ct);
-            return result.IsSuccess ? Results.NoContent() : ErrorHttpMapper.ToHttpResult(result.Error);
+            return result.IsSuccess ? Results.Ok(new CatalogItemTransitionResponse(result.Value)) : ErrorHttpMapper.ToHttpResult(result.Error);
         }).RequireAuthorization();
 
         app.MapPatch("/keep/pricebook/catalog-items/{catalogItemId:guid}/inactivate", async (
@@ -64,9 +64,107 @@ public static class PriceBookEndpoints
                 return ErrorHttpMapper.ToHttpResult(versionResult.Error);
 
             var result = await service.InactivateAsync(catalogItemId, versionResult.Value, ct);
-            return result.IsSuccess ? Results.NoContent() : ErrorHttpMapper.ToHttpResult(result.Error);
+            return result.IsSuccess ? Results.Ok(new CatalogItemTransitionResponse(result.Value)) : ErrorHttpMapper.ToHttpResult(result.Error);
+        }).RequireAuthorization();
+
+        app.MapPost("/keep/pricebook/catalog-items/{catalogItemId:guid}/aliases", async (
+            Guid catalogItemId,
+            AddCatalogItemAliasBody body,
+            HttpRequest httpRequest,
+            CatalogItemApiService service,
+            CancellationToken ct) =>
+        {
+            var versionResult = CatalogItemVersionHeader.Parse(httpRequest.Headers);
+            if (!versionResult.IsSuccess)
+                return ErrorHttpMapper.ToHttpResult(versionResult.Error);
+
+            var result = await service.AddAliasAsync(catalogItemId, versionResult.Value, body.AliasText ?? string.Empty, ct);
+            return result.IsSuccess ? Results.Ok(ToResponse(result.Value)) : ErrorHttpMapper.ToHttpResult(result.Error);
+        }).RequireAuthorization();
+
+        app.MapPatch("/keep/pricebook/catalog-items/{catalogItemId:guid}/aliases/{aliasId:guid}/activate", async (
+            Guid catalogItemId,
+            Guid aliasId,
+            HttpRequest httpRequest,
+            CatalogItemApiService service,
+            CancellationToken ct) =>
+        {
+            var versionResult = CatalogItemVersionHeader.Parse(httpRequest.Headers);
+            if (!versionResult.IsSuccess)
+                return ErrorHttpMapper.ToHttpResult(versionResult.Error);
+
+            var result = await service.ActivateAliasAsync(catalogItemId, aliasId, versionResult.Value, ct);
+            return result.IsSuccess ? Results.Ok(new CatalogItemAliasTransitionResponse(result.Value)) : ErrorHttpMapper.ToHttpResult(result.Error);
+        }).RequireAuthorization();
+
+        app.MapPatch("/keep/pricebook/catalog-items/{catalogItemId:guid}/aliases/{aliasId:guid}/inactivate", async (
+            Guid catalogItemId,
+            Guid aliasId,
+            HttpRequest httpRequest,
+            CatalogItemApiService service,
+            CancellationToken ct) =>
+        {
+            var versionResult = CatalogItemVersionHeader.Parse(httpRequest.Headers);
+            if (!versionResult.IsSuccess)
+                return ErrorHttpMapper.ToHttpResult(versionResult.Error);
+
+            var result = await service.InactivateAliasAsync(catalogItemId, aliasId, versionResult.Value, ct);
+            return result.IsSuccess ? Results.Ok(new CatalogItemAliasTransitionResponse(result.Value)) : ErrorHttpMapper.ToHttpResult(result.Error);
+        }).RequireAuthorization();
+
+        app.MapPost("/keep/pricebook/catalog-categories", async (
+            CreateCatalogCategoryBody body,
+            CatalogCategoryApiService service,
+            CancellationToken ct) =>
+        {
+            var command = new CreateCatalogCategoryApiCommand(body.Name ?? string.Empty, body.DisplayOrder);
+
+            var result = await service.CreateAsync(command, ct);
+            return result.IsSuccess ? Results.Ok(ToResponse(result.Value)) : ErrorHttpMapper.ToHttpResult(result.Error);
+        }).RequireAuthorization();
+
+        app.MapPatch("/keep/pricebook/catalog-categories/{categoryId:guid}/activate", async (
+            Guid categoryId,
+            HttpRequest httpRequest,
+            CatalogCategoryApiService service,
+            CancellationToken ct) =>
+        {
+            var versionResult = CatalogCategoryVersionHeader.Parse(httpRequest.Headers);
+            if (!versionResult.IsSuccess)
+                return ErrorHttpMapper.ToHttpResult(versionResult.Error);
+
+            var result = await service.ActivateAsync(categoryId, versionResult.Value, ct);
+            return result.IsSuccess ? Results.Ok(new CatalogCategoryTransitionResponse(result.Value)) : ErrorHttpMapper.ToHttpResult(result.Error);
+        }).RequireAuthorization();
+
+        app.MapPatch("/keep/pricebook/catalog-categories/{categoryId:guid}/inactivate", async (
+            Guid categoryId,
+            HttpRequest httpRequest,
+            CatalogCategoryApiService service,
+            CancellationToken ct) =>
+        {
+            var versionResult = CatalogCategoryVersionHeader.Parse(httpRequest.Headers);
+            if (!versionResult.IsSuccess)
+                return ErrorHttpMapper.ToHttpResult(versionResult.Error);
+
+            var result = await service.InactivateAsync(categoryId, versionResult.Value, ct);
+            return result.IsSuccess ? Results.Ok(new CatalogCategoryTransitionResponse(result.Value)) : ErrorHttpMapper.ToHttpResult(result.Error);
         }).RequireAuthorization();
     }
+
+    private static CatalogItemAliasResponse ToResponse(AddCatalogItemAliasResult result) => new(
+        result.Alias.Id,
+        result.Alias.CatalogItemId,
+        result.Alias.AliasText,
+        result.Alias.ActiveState.ToString(),
+        result.CatalogItemConcurrencyVersion);
+
+    private static CatalogCategoryResponse ToResponse(CatalogCategory category) => new(
+        category.Id,
+        category.Name,
+        category.DisplayOrder,
+        category.ActiveState.ToString(),
+        category.ConcurrencyVersion);
 
     private static CatalogItemResponse ToResponse(CatalogItem item) => new(
         item.Id,
@@ -109,3 +207,27 @@ internal sealed record CatalogItemResponse(
     bool IsCommonItem,
     string ActiveState,
     Guid ConcurrencyVersion);
+
+internal sealed record CatalogItemTransitionResponse(Guid ConcurrencyVersion);
+
+internal sealed record AddCatalogItemAliasBody(string? AliasText);
+
+internal sealed record CatalogItemAliasResponse(
+    Guid Id,
+    Guid CatalogItemId,
+    string AliasText,
+    string ActiveState,
+    Guid CatalogItemConcurrencyVersion);
+
+internal sealed record CatalogItemAliasTransitionResponse(Guid CatalogItemConcurrencyVersion);
+
+internal sealed record CreateCatalogCategoryBody(string? Name, int DisplayOrder);
+
+internal sealed record CatalogCategoryResponse(
+    Guid Id,
+    string Name,
+    int DisplayOrder,
+    string ActiveState,
+    Guid ConcurrencyVersion);
+
+internal sealed record CatalogCategoryTransitionResponse(Guid ConcurrencyVersion);

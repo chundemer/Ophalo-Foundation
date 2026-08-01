@@ -186,7 +186,8 @@ public class CatalogItemLifecycleServiceTests
 
         Assert.True(result.IsSuccess);
         Assert.Single(persistence.Items[0].Aliases);
-        Assert.Equal("Drain Tray", result.Value.AliasText);
+        Assert.Equal("Drain Tray", result.Value.Alias.AliasText);
+        Assert.Equal(persistence.Items[0].ConcurrencyVersion, result.Value.CatalogItemConcurrencyVersion);
     }
 
     [Fact]
@@ -240,7 +241,7 @@ public class CatalogItemLifecycleServiceTests
         var sut = new CatalogItemLifecycleService(persistence);
         var created = (await sut.CreateDraftAsync(Command(), CancellationToken.None)).Value;
         var alias = (await sut.AddAliasAsync(
-            AccountId, created.Id, created.ConcurrencyVersion, "Drain Tray", Actor, CancellationToken.None)).Value;
+            AccountId, created.Id, created.ConcurrencyVersion, "Drain Tray", Actor, CancellationToken.None)).Value.Alias;
         var afterAdd = persistence.Items[0].ConcurrencyVersion;
 
         var result = await sut.InactivateAliasAsync(AccountId, created.Id, alias.Id, afterAdd, CancellationToken.None);
@@ -270,7 +271,7 @@ public class CatalogItemLifecycleServiceTests
         var sut = new CatalogItemLifecycleService(persistence);
         var created = (await sut.CreateDraftAsync(Command(), CancellationToken.None)).Value;
         var alias = (await sut.AddAliasAsync(
-            AccountId, created.Id, created.ConcurrencyVersion, "Drain Tray", Actor, CancellationToken.None)).Value;
+            AccountId, created.Id, created.ConcurrencyVersion, "Drain Tray", Actor, CancellationToken.None)).Value.Alias;
         await sut.InactivateAliasAsync(AccountId, created.Id, alias.Id, persistence.Items[0].ConcurrencyVersion, CancellationToken.None);
         var afterInactivate = persistence.Items[0].ConcurrencyVersion;
 

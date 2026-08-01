@@ -89,6 +89,11 @@ public static class KeepServiceCollectionExtensions
         services.AddScoped<CatalogItemLifecycleService>();
         services.AddScoped<CatalogItemApiService>();
 
+        // Price Book, Quotes & Materials — catalog categories (Session 2b.1/2b.3)
+        services.AddScoped<ICatalogCategoryPersistence, EfCatalogCategoryPersistence>();
+        services.AddScoped<CatalogCategoryLifecycleService>();
+        services.AddScoped<CatalogCategoryApiService>();
+
         return services;
     }
 }
