@@ -91,13 +91,30 @@ account-aware `AccountFeatureAccessResolver`, and a generic Owner/Admin `GET
     enumerate every proposed-field validation rule, its resulting `Valid`/`Warning`/`Error` status,
     and the exact condition that permits the import to become `Validated`; stop for a product
     decision if Build 108/ADRs do not define a rule.
-  - **2c.2 — Private R2 upload and CSV staging (later; not authorized by 2c.1).** First provision
-    the private Cloudflare R2 bucket, least-privilege credentials, endpoint configuration, size/row
-    limits, and explicit CORS origins/methods/headers. Then add the R2-backed
-    `IBusinessDocumentStorage` adapter and the authorized upload → parse → staged-import completion
-    flow in a separate preflighted batch. V1 accepts UTF-8 CSV with optional BOM only; reject
-    unsupported/ambiguous legacy encodings and XLSX. Store the source object before creating the
-    import; never use local disk, database blobs, public URLs, nullable keys, or placeholders.
+  - **2c.2a — `IBusinessDocumentStorage` seam and R2 adapter: complete.** `IBusinessDocumentStorage`
+    (Foundation.Application) plus its R2 production adapter and a Development-only local-disk fake
+    (Foundation.Infrastructure) are in place (commit `e3eb142`). Opaque key generation/validation is
+    centralized in `BusinessDocumentObjectKey` so `DeleteBestEffortAsync` can never act on a key not
+    generated for the given account/purpose. DI registration is fail-closed: local disk is wired only
+    in Development when R2 config is absent; every other environment throws at startup without real
+    R2 configuration. `AWSSDK.S3` added to Foundation.Infrastructure. Locked for the next batch:
+    5 MiB max source file size, 5,000 max data rows (streamed enforcement, not trusted
+    `Content-Length`); R2 bucket CORS restricted to `https://app.ophalo.com` (prod) and
+    `http://localhost:5173` / `http://localhost:3000` (local dev), no wildcards, `www.ophalo.com`
+    excluded; V1 upload is an authenticated multipart POST to the .NET API which streams to R2 (no
+    presigned URLs/callback in this batch, Vercel not in the data path); upload stages `Pending` rows
+    without synchronously invoking 2c.1b validation; `DocumentPurpose` defines only
+    `PriceBookImport`.
+  - **2c.2b — CSV parser and upload orchestration (later; not yet preflighted).** Add the CSV parser,
+    the upload orchestration service (store to R2 via 2c.2a's seam → create `PriceBookImport` →
+    parse/`AddRow` per row → commit; best-effort R2 cleanup via `DeleteBestEffortAsync` if staging
+    fails after the object write), and the authenticated upload endpoint, against the locked limits/
+    CORS/transport/validation decisions above. Requires the R2 bucket, credentials, and CORS policy
+    provisioned against the approved 2c.2a seam before implementation/integration testing — real R2
+    configuration is a hard runtime prerequisite, not a placeholder or local-disk fallback. V1 accepts
+    UTF-8 CSV with optional BOM only; reject unsupported/ambiguous legacy encodings and XLSX. Store
+    the source object before creating the import; never use local disk, database blobs, public URLs,
+    nullable keys, or placeholders in production.
   - **2c.3 — Import review API/UI (later; separately scoped).** Do not assume endpoints or UI are
     free just because 2c.1 services exist. A later preflight must define Owner/Admin authorization,
     list/detail/read contracts, validation display, correction/skip/accept interactions, retry and
