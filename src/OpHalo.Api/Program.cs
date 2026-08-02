@@ -161,8 +161,12 @@ else
 var r2Settings = builder.Configuration.GetSection("R2").Get<R2Settings>()
     ?? new R2Settings();
 
-// Dev-only local-disk fallback when R2 is not configured. Every other environment requires real
-// R2 configuration; there is no placeholder or silent local-disk fallback outside Development.
+// Dev-only local-disk fallback when R2 is not configured. Outside Development, register the real
+// R2 adapter only when configured. No feature consumes IBusinessDocumentStorage yet (2c.2b), so an
+// unconfigured non-Development environment simply does not register the service — it must not crash
+// process startup for a service nothing resolves. Once 2c.2b adds an upload feature, that feature
+// must fail closed at its own request boundary if IBusinessDocumentStorage isn't registered; startup
+// itself must never require R2 again.
 if (builder.Environment.IsDevelopment() && !r2Settings.IsConfigured)
 {
     builder.Services.AddSingleton<IBusinessDocumentStorage, LocalDiskBusinessDocumentStorage>();
@@ -171,11 +175,6 @@ else if (r2Settings.IsConfigured)
 {
     builder.Services.AddSingleton(r2Settings);
     builder.Services.AddSingleton<IBusinessDocumentStorage, R2BusinessDocumentStorage>();
-}
-else
-{
-    throw new InvalidOperationException(
-        "R2 configuration is required outside Development. Set the \"R2\" configuration section.");
 }
 
 // --- Auth ---
