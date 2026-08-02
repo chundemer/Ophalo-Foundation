@@ -1,6 +1,6 @@
 # ADR-469 — Price-Book Import Object Storage
 
-**Status:** Locked
+**Status:** Superseded by ADR-471
 **Date:** 2026-07-31
 **Related:** build-log/108, build-log/110, ADR-458
 
@@ -14,6 +14,11 @@ generic cross-module blob service. Retention: an uploaded source file is kept fo
 remains reproducible/auditable; it is never deleted by any module action. No public/unauthenticated
 URL is ever issued — every read goes through an authorized server-side fetch, matching the existing
 account-isolation posture for every other module resource.
+
+> **Superseded:** ADR-471 replaces this ADR's module-specific storage-abstraction decision with a
+> shared, application-owned business-document storage seam backed by private Cloudflare R2. The
+> opaque-key, no-database-blob, no-public-URL, and import-lifetime-retention constraints remain in
+> force.
 
 ## Rationale
 

@@ -5,7 +5,7 @@
 **Scope:** Mechanical implementation preflight for Build 108's "Catalog and import" coding-session
 slice; confirms no price-book code exists yet, checks the proposed slice against the repository's
 batch-size gate, and surfaces two implementation-level decisions the ERD preflight left unspecified
-**Related:** Build 108; build-log/109; ADR-453 through ADR-470
+**Related:** Build 108; build-log/109; ADR-453 through ADR-471
 
 ## Correction (2026-07-31, same day)
 
@@ -56,6 +56,51 @@ way its entities are grouped. It is split into three independently-verifiable co
   `PriceBookAccountState` row (module-owned, not a new field on Foundation's `Account`). A competing
   publish/override against a stale lock version fails closed with a concurrency conflict and must
   retry.
+
+## Storage and 2c.1 scope clarification (2026-08-01)
+
+ADR-471 supersedes ADR-469's module-specific storage-seam direction: production business documents
+will use a **private Cloudflare R2 bucket** through an application-owned, S3-compatible .NET
+`IBusinessDocumentStorage` seam. Local filesystem storage is not a pilot/production fallback;
+Vercel hosts the web frontend and is not this API's document-storage backend. The inherited ADR-469
+rules remain: opaque DB key only, no DB blob, no public URL, and import source retained for the row's
+lifetime.
+
+Session **2c.1** is deliberately limited to `PriceBookImport`/`PriceBookImportRow` staging,
+validation, lifecycle, and exception-resolution behavior. It does **not** implement an upload route,
+R2 adapter/provisioning, CSV parsing, XLSX support, or presigned URLs. Upload/parsing is a subsequent
+preflighted slice. `SourceFileObjectKey` remains required/non-null in 2c.1; tests use opaque test
+keys, never a nullable schema or a production placeholder. The later V1 upload contract is UTF-8 CSV
+(optional BOM) only, rejecting unsupported legacy encodings rather than silently corrupting values.
+V1 exports stream incrementally from paged/streamed authoritative data through the .NET API, never
+from a fully materialized CSV buffer. The R2 provisioning slice must also establish narrow
+origin/method/header CORS rules for later presigned browser uploads; wildcard origins are prohibited.
+
+## 2c.1a implementation decisions (2026-08-02)
+
+The following choices close the remaining import-row implementation questions and are binding for
+the 2c.1a domain/schema batch:
+
+- `PriceBookImportRow` is a `PriceBookImport` aggregate-owned child, analogous to
+  `CatalogItemAlias` for creation and lifecycle ownership, but validation is expressly permitted to
+  load and persist a row directly through row-domain transition methods. Never load thousands of rows
+  merely to change one validation outcome. A row has no independent `ConcurrencyVersion`; import
+  lifecycle/publish remains parent-governed.
+- Configure an explicit `PriceBookImportId` FK from row to import and `WithMany(i => i.Rows)`;
+  index `PriceBookImportId` and `(PriceBookImportId, ValidationStatus)`; retain the ERD's unique
+  `(ImportId, RowNumber)` constraint and account-scoped FK/isolation protections. The owned
+  parent/row relationship uses `DeleteBehavior.Cascade` (account relationships remain restricted).
+- Raw import values are staging-tolerant: `ProposedType` is nullable raw `string?`, never
+  `CatalogItemType`; all proposed monetary/labor values are nullable `decimal?`
+  (`ProposedCost`, `ProposedSellPrice`, `ProposedSourceLaborHours`,
+  `ProposedSourceConsumablesAllowance`, `ProposedSourceTaxAmount`).
+- Model `ValidationMessages` as an entity-owned collection of strings, exposed read-only and backed
+  by a private list. Map it to one PostgreSQL `jsonb` column with an EF Core JSON value converter and
+  a `ValueComparer` for reliable change tracking. Validation messages must preserve offending raw
+  input for parsing failures; a null parsed value alone is not sufficient exception-review context.
+
+This does not authorize validation rules, parser behavior, or the validation/exception-resolution
+application service; those remain 2c.1b.
 
 ## Outcome
 

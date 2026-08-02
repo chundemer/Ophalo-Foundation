@@ -52,9 +52,64 @@ account-aware `AccountFeatureAccessResolver`, and a generic Owner/Admin `GET
   400, to 409); and every activate/inactivate route now returns 200 with the rotated
   `ConcurrencyVersion` instead of 204, since a client had no way to make a second versioned mutation
   without a separate read.
-- **2c — Import staging/validation** and **2d — versioned atomic publish:** next; each needs its own
-  mechanical preflight before implementation begins. Their prerequisites are locked by ADR-469
-  (private import object storage) and ADR-470 (module-owned account publish lock).
+- **2c — Import staging/validation: mandatory coding sequence.** Each sub-slice requires the normal
+  Claude mechanical preflight and Codex validation before implementation. Preserve the hard gate of
+  at most eight hand-written production files and three independent mutation-handler families per
+  slice; tests and the generated migration are outside that count. Do not merge these slices merely
+  because they touch the same aggregate.
+  - **2c.1a — Import/row schema and domain foundation.** Add `PriceBookImport` and
+    `PriceBookImportRow`; their three explicit enums (`PriceBookImportStatus`, row validation status,
+    and exception resolution); EF configurations/migration; and aggregate-owned factory/transition
+    methods only. Persist every ERD field from Build 108, including `(ImportId, RowNumber)` unique
+    enforcement and account-scoped FKs. `SourceFileObjectKey` is required/non-null from the first
+    migration and test fixtures use valid opaque test keys. This slice owns only staging/row-domain
+    invariants and the `Staged → Validated` / pre-publish `Discarded` mechanics; it does not implement
+    publish mutations, API routes, storage, parsing, or an upload-created import.
+    - **Implementation decisions locked (2026-08-02).** `PriceBookImportRow` is an aggregate-owned
+      child: the import creates rows and governs import lifecycle/publish boundaries, while a later
+      validation service may query and persist individual rows through row-domain transition methods
+      without loading the complete import. Rows have no independent `ConcurrencyVersion`. The EF
+      relationship uses an explicit `PriceBookImportId` FK, an index on that FK, and a composite
+      `(PriceBookImportId, ValidationStatus)` index for exception-review queries. The import-to-row
+      FK cascades on deletion; preserve account isolation with account-scoped relationships/FKs.
+    - Proposed monetary/labor source values (`ProposedCost`, `ProposedSellPrice`,
+      `ProposedSourceLaborHours`, `ProposedSourceConsumablesAllowance`, and
+      `ProposedSourceTaxAmount`) are nullable `decimal?` staging values. `ProposedType` is nullable
+      raw `string?`, not `CatalogItemType`, so unsupported or misspelled source values can be staged
+      and corrected before catalog mapping.
+    - `ValidationMessages` is a domain-facing, strongly typed collection of strings (expose an
+      `IReadOnlyCollection<string>` backed by a private list; do not expose a publicly mutable list).
+      Persist it as one PostgreSQL `jsonb` column with an EF JSON value converter **and a
+      `ValueComparer`** so in-place collection changes are detected. Validation messages for parse
+      failures must retain the offending raw input (for example, the raw sell-price text), since a
+      null parsed decimal cannot explain the failure to the exception-review user.
+  - **2c.1b — Validation and exception-resolution service.** Add the bounded application service,
+    persistence seam/EF implementation, errors, and focused tests needed to validate existing staged
+    rows and record the locked `Unresolved → Accepted | Skipped | Corrected` outcomes. Validation
+    must operate only on already-created proposed-field rows; it may not infer a parser, accept raw
+    bytes, invent column mapping, create catalog/category records, or publish. The preflight must
+    enumerate every proposed-field validation rule, its resulting `Valid`/`Warning`/`Error` status,
+    and the exact condition that permits the import to become `Validated`; stop for a product
+    decision if Build 108/ADRs do not define a rule.
+  - **2c.2 — Private R2 upload and CSV staging (later; not authorized by 2c.1).** First provision
+    the private Cloudflare R2 bucket, least-privilege credentials, endpoint configuration, size/row
+    limits, and explicit CORS origins/methods/headers. Then add the R2-backed
+    `IBusinessDocumentStorage` adapter and the authorized upload → parse → staged-import completion
+    flow in a separate preflighted batch. V1 accepts UTF-8 CSV with optional BOM only; reject
+    unsupported/ambiguous legacy encodings and XLSX. Store the source object before creating the
+    import; never use local disk, database blobs, public URLs, nullable keys, or placeholders.
+  - **2c.3 — Import review API/UI (later; separately scoped).** Do not assume endpoints or UI are
+    free just because 2c.1 services exist. A later preflight must define Owner/Admin authorization,
+    list/detail/read contracts, validation display, correction/skip/accept interactions, retry and
+    discard behavior, and all account-isolation/concurrency tests.
+  - **2d — Versioned atomic publish (separate after 2c validation).** Owns `Validated → Published`
+    or `PublishFailed`, version/line creation, catalog pointer updates, and ADR-470's serializable
+    account publish lock. It must not be folded into 2c.1 or the R2/upload slice.
+
+  ADR-471 locks the eventual production document backend as private Cloudflare R2 through the shared
+  .NET `IBusinessDocumentStorage` seam; local disk is not a pilot/production option. Import source
+  objects remain for the `PriceBookImport` row lifetime. V1 exports are a later capability and must
+  incrementally stream authoritative data rather than buffer a full CSV; they are not persisted.
 
 ## Immediate Production Access And Reliability Blockers
 
