@@ -260,24 +260,8 @@ public class PriceBookImportTests
 
     // --- PriceBookImportRow exception resolution ---
 
-    [Theory]
-    [InlineData(PriceBookImportRowExceptionResolution.Accepted)]
-    [InlineData(PriceBookImportRowExceptionResolution.Skipped)]
-    [InlineData(PriceBookImportRowExceptionResolution.Corrected)]
-    public void Resolve_from_Error_succeeds(PriceBookImportRowExceptionResolution resolution)
-    {
-        var import = StagedImport().Value;
-        var row = Row(import).Value;
-        row.MarkError(["bad value"]);
-
-        var result = ResolveWith(row, resolution);
-
-        Assert.True(result.IsSuccess);
-        Assert.Equal(resolution, row.ExceptionResolution);
-    }
-
     [Fact]
-    public void Resolve_from_Warning_succeeds()
+    public void ResolveAccepted_from_Warning_succeeds()
     {
         var import = StagedImport().Value;
         var row = Row(import).Value;
@@ -287,6 +271,20 @@ public class PriceBookImportTests
 
         Assert.True(result.IsSuccess);
         Assert.Equal(PriceBookImportRowExceptionResolution.Accepted, row.ExceptionResolution);
+    }
+
+    [Fact]
+    public void ResolveAccepted_from_Error_fails_RowErrorCannotBeAccepted()
+    {
+        var import = StagedImport().Value;
+        var row = Row(import).Value;
+        row.MarkError(["bad value"]);
+
+        var result = row.ResolveAccepted();
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(PriceBookImportErrors.RowErrorCannotBeAccepted, result.Error);
+        Assert.Equal(PriceBookImportRowExceptionResolution.Unresolved, row.ExceptionResolution);
     }
 
     [Fact]
@@ -316,21 +314,39 @@ public class PriceBookImportTests
         Assert.Equal(PriceBookImportRowExceptionResolution.Unresolved, row.ExceptionResolution);
     }
 
-    static Result ResolveWith(PriceBookImportRow row, PriceBookImportRowExceptionResolution resolution) =>
-        resolution switch
-        {
-            PriceBookImportRowExceptionResolution.Accepted => row.ResolveAccepted(),
-            PriceBookImportRowExceptionResolution.Skipped => row.ResolveSkipped(),
-            PriceBookImportRowExceptionResolution.Corrected => row.ResolveCorrected(),
-            _ => throw new ArgumentOutOfRangeException(nameof(resolution)),
-        };
+    [Theory]
+    [InlineData("Warning")]
+    [InlineData("Error")]
+    public void ResolveSkipped_from_Warning_or_Error_succeeds(string status)
+    {
+        var import = StagedImport().Value;
+        var row = Row(import).Value;
+        if (status == "Warning") row.MarkWarning(["needs review"]); else row.MarkError(["bad value"]);
+
+        var result = row.ResolveSkipped();
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(PriceBookImportRowExceptionResolution.Skipped, row.ExceptionResolution);
+    }
+
+    [Fact]
+    public void ResolveSkipped_on_Pending_row_fails_RowHasNoException()
+    {
+        var import = StagedImport().Value;
+        var row = Row(import).Value;
+
+        var result = row.ResolveSkipped();
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(PriceBookImportErrors.RowHasNoException, result.Error);
+    }
 
     [Fact]
     public void ResolveAccepted_when_already_resolved_fails()
     {
         var import = StagedImport().Value;
         var row = Row(import).Value;
-        row.MarkError(["bad value"]);
+        row.MarkWarning(["needs review"]);
         row.ResolveAccepted();
 
         var result = row.ResolveSkipped();
@@ -338,5 +354,120 @@ public class PriceBookImportTests
         Assert.True(result.IsFailure);
         Assert.Equal(PriceBookImportErrors.RowExceptionAlreadyResolved, result.Error);
         Assert.Equal(PriceBookImportRowExceptionResolution.Accepted, row.ExceptionResolution);
+    }
+
+    // --- PriceBookImportRow.ApplyCorrection ---
+
+    static Result ApplyValidCorrection(PriceBookImportRow row, PriceBookImportRowValidationStatus revalidatedStatus, IEnumerable<string>? messages = null) =>
+        row.ApplyCorrection(
+            "Material", "Corrected Name", "CU-99", "Plumbing", "ft",
+            2.00m, 4.00m, "USD", null, null, null, null,
+            revalidatedStatus, messages ?? []);
+
+    [Fact]
+    public void ApplyCorrection_with_Valid_revalidation_succeeds_and_replaces_values()
+    {
+        var import = StagedImport().Value;
+        var row = Row(import).Value;
+        row.MarkError(["bad value"]);
+
+        var result = ApplyValidCorrection(row, PriceBookImportRowValidationStatus.Valid);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(PriceBookImportRowValidationStatus.Valid, row.ValidationStatus);
+        Assert.Equal(PriceBookImportRowExceptionResolution.Corrected, row.ExceptionResolution);
+        Assert.Equal("Corrected Name", row.ProposedDisplayName);
+        Assert.Equal("CU-99", row.ProposedExternalKey);
+        Assert.Empty(row.ValidationMessages);
+    }
+
+    [Fact]
+    public void ApplyCorrection_with_Warning_revalidation_succeeds_and_keeps_messages()
+    {
+        var import = StagedImport().Value;
+        var row = Row(import).Value;
+        row.MarkError(["bad value"]);
+
+        var result = ApplyValidCorrection(row, PriceBookImportRowValidationStatus.Warning, ["still needs a look"]);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(PriceBookImportRowValidationStatus.Warning, row.ValidationStatus);
+        Assert.Equal(PriceBookImportRowExceptionResolution.Corrected, row.ExceptionResolution);
+        Assert.Equal(["still needs a look"], row.ValidationMessages);
+    }
+
+    [Fact]
+    public void ApplyCorrection_with_Warning_revalidation_and_no_messages_fails()
+    {
+        var import = StagedImport().Value;
+        var row = Row(import).Value;
+        row.MarkError(["bad value"]);
+
+        var result = ApplyValidCorrection(row, PriceBookImportRowValidationStatus.Warning, []);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(PriceBookImportErrors.RowValidationMessagesRequired, result.Error);
+        Assert.Equal(PriceBookImportRowExceptionResolution.Unresolved, row.ExceptionResolution);
+    }
+
+    [Fact]
+    public void ApplyCorrection_with_Error_revalidation_fails_and_leaves_row_unchanged()
+    {
+        var import = StagedImport().Value;
+        var row = Row(import).Value;
+        row.MarkError(["original error"]);
+
+        var result = ApplyValidCorrection(row, PriceBookImportRowValidationStatus.Error, ["still bad"]);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(PriceBookImportErrors.RowCorrectionStillInvalid, result.Error);
+        Assert.Equal(PriceBookImportRowExceptionResolution.Unresolved, row.ExceptionResolution);
+        Assert.Equal(PriceBookImportRowValidationStatus.Error, row.ValidationStatus);
+        Assert.Equal(["original error"], row.ValidationMessages);
+        Assert.NotEqual("Corrected Name", row.ProposedDisplayName);
+    }
+
+    [Fact]
+    public void ApplyCorrection_on_Pending_row_fails_RowHasNoException()
+    {
+        var import = StagedImport().Value;
+        var row = Row(import).Value;
+
+        var result = ApplyValidCorrection(row, PriceBookImportRowValidationStatus.Valid);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(PriceBookImportErrors.RowHasNoException, result.Error);
+    }
+
+    [Fact]
+    public void ApplyCorrection_with_Pending_revalidation_status_throws()
+    {
+        var import = StagedImport().Value;
+        var row = Row(import).Value;
+        row.MarkError(["bad value"]);
+
+        Assert.Throws<ArgumentException>(() => ApplyValidCorrection(row, PriceBookImportRowValidationStatus.Pending));
+    }
+
+    [Fact]
+    public void ApplyCorrection_with_out_of_range_revalidation_status_throws()
+    {
+        var import = StagedImport().Value;
+        var row = Row(import).Value;
+        row.MarkError(["bad value"]);
+        var outOfRange = (PriceBookImportRowValidationStatus)99;
+
+        Assert.Throws<ArgumentException>(() => ApplyValidCorrection(row, outOfRange));
+    }
+
+    [Fact]
+    public void ApplyCorrection_with_Valid_revalidation_and_nonempty_messages_throws()
+    {
+        var import = StagedImport().Value;
+        var row = Row(import).Value;
+        row.MarkError(["bad value"]);
+
+        Assert.Throws<ArgumentException>(() =>
+            ApplyValidCorrection(row, PriceBookImportRowValidationStatus.Valid, ["should not be here"]));
     }
 }

@@ -134,18 +134,107 @@ public sealed class PriceBookImportRow : BaseEntity
     public Result MarkError(IEnumerable<string> messages) =>
         SetValidationResult(PriceBookImportRowValidationStatus.Error, messages);
 
-    public Result ResolveAccepted() => Resolve(PriceBookImportRowExceptionResolution.Accepted);
+    /// <summary>Valid only for a <c>Warning</c> row — an <c>Error</c> row is structurally
+    /// unpublishable and must be skipped or corrected, never accepted as-is.</summary>
+    public Result ResolveAccepted()
+    {
+        var eligibility = CheckExceptionEligibility();
+        if (eligibility is not null)
+            return eligibility;
 
-    public Result ResolveSkipped() => Resolve(PriceBookImportRowExceptionResolution.Skipped);
+        if (ValidationStatus == PriceBookImportRowValidationStatus.Error)
+            return Result.Failure(PriceBookImportErrors.RowErrorCannotBeAccepted);
 
-    public Result ResolveCorrected() => Resolve(PriceBookImportRowExceptionResolution.Corrected);
+        ExceptionResolution = PriceBookImportRowExceptionResolution.Accepted;
+        return Result.Success();
+    }
+
+    /// <summary>Valid for either a <c>Warning</c> or an <c>Error</c> row — the row is excluded from
+    /// future publish, so no revalidation is needed.</summary>
+    public Result ResolveSkipped()
+    {
+        var eligibility = CheckExceptionEligibility();
+        if (eligibility is not null)
+            return eligibility;
+
+        ExceptionResolution = PriceBookImportRowExceptionResolution.Skipped;
+        return Result.Success();
+    }
+
+    /// <summary>
+    /// Replaces this row's proposed values with corrected ones and records the caller-supplied
+    /// revalidation outcome (<paramref name="revalidatedStatus"/>/<paramref name="revalidationMessages"/>) —
+    /// computed by the caller against the new values, since only the caller (an application service)
+    /// can reach persistence for duplicate/mapped-item checks. If that outcome is still <c>Error</c>,
+    /// the correction is rejected and this row is left completely unchanged: no partial field writes,
+    /// no dishonest <c>Corrected</c> flip on a row that is still structurally invalid.
+    /// </summary>
+    public Result ApplyCorrection(
+        string? proposedType,
+        string? proposedDisplayName,
+        string? proposedExternalKey,
+        string? proposedCategoryLabel,
+        string? proposedUnitOfMeasure,
+        decimal? proposedCost,
+        decimal? proposedSellPrice,
+        string? proposedCurrency,
+        decimal? proposedSourceLaborHours,
+        decimal? proposedSourceConsumablesAllowance,
+        decimal? proposedSourceTaxAmount,
+        Guid? mappedCatalogItemId,
+        PriceBookImportRowValidationStatus revalidatedStatus,
+        IEnumerable<string> revalidationMessages)
+    {
+        var eligibility = CheckExceptionEligibility();
+        if (eligibility is not null)
+            return eligibility;
+
+        if (revalidatedStatus == PriceBookImportRowValidationStatus.Error)
+            return Result.Failure(PriceBookImportErrors.RowCorrectionStillInvalid);
+        if (revalidatedStatus != PriceBookImportRowValidationStatus.Valid
+            && revalidatedStatus != PriceBookImportRowValidationStatus.Warning)
+        {
+            // Covers Pending and any out-of-range value from an unchecked enum cast — a correction
+            // can only land on Valid or Warning; every other value is a caller bug, not a domain
+            // outcome to represent.
+            throw new ArgumentException("Revalidated status must be Valid or Warning.", nameof(revalidatedStatus));
+        }
+
+        var normalizedMessages = NormalizeMessages(revalidationMessages);
+        if (revalidatedStatus == PriceBookImportRowValidationStatus.Warning && normalizedMessages.Count == 0)
+            return Result.Failure(PriceBookImportErrors.RowValidationMessagesRequired);
+        if (revalidatedStatus == PriceBookImportRowValidationStatus.Valid && normalizedMessages.Count > 0)
+        {
+            throw new ArgumentException(
+                "A Valid revalidation result must not carry messages.", nameof(revalidationMessages));
+        }
+
+        MappedCatalogItemId = mappedCatalogItemId;
+        ProposedType = Trim(proposedType);
+        ProposedDisplayName = Trim(proposedDisplayName);
+        ProposedExternalKey = Trim(proposedExternalKey);
+        ProposedCategoryLabel = Trim(proposedCategoryLabel);
+        ProposedUnitOfMeasure = Trim(proposedUnitOfMeasure);
+        ProposedCost = proposedCost;
+        ProposedSellPrice = proposedSellPrice;
+        ProposedCurrency = string.IsNullOrWhiteSpace(proposedCurrency)
+            ? null
+            : proposedCurrency.Trim().ToUpperInvariant();
+        ProposedSourceLaborHours = proposedSourceLaborHours;
+        ProposedSourceConsumablesAllowance = proposedSourceConsumablesAllowance;
+        ProposedSourceTaxAmount = proposedSourceTaxAmount;
+
+        ValidationStatus = revalidatedStatus;
+        _validationMessages.Clear();
+        _validationMessages.AddRange(normalizedMessages);
+
+        ExceptionResolution = PriceBookImportRowExceptionResolution.Corrected;
+        return Result.Success();
+    }
 
     private Result SetValidationResult(PriceBookImportRowValidationStatus status, IEnumerable<string> messages)
     {
-        var normalizedMessages = (messages ?? [])
-            .Select(m => m?.Trim() ?? string.Empty)
-            .Where(m => m.Length > 0)
-            .ToList();
+        var normalizedMessages = NormalizeMessages(messages);
         if (normalizedMessages.Count == 0)
             return Result.Failure(PriceBookImportErrors.RowValidationMessagesRequired);
 
@@ -155,7 +244,9 @@ public sealed class PriceBookImportRow : BaseEntity
         return Result.Success();
     }
 
-    private Result Resolve(PriceBookImportRowExceptionResolution resolution)
+    /// <summary>Null when the row is an unresolved exception (<c>Warning</c>/<c>Error</c>,
+    /// <c>ExceptionResolution</c> still <c>Unresolved</c>); otherwise the failure to return.</summary>
+    private Result? CheckExceptionEligibility()
     {
         if (ValidationStatus != PriceBookImportRowValidationStatus.Warning
             && ValidationStatus != PriceBookImportRowValidationStatus.Error)
@@ -164,9 +255,14 @@ public sealed class PriceBookImportRow : BaseEntity
         if (ExceptionResolution != PriceBookImportRowExceptionResolution.Unresolved)
             return Result.Failure(PriceBookImportErrors.RowExceptionAlreadyResolved);
 
-        ExceptionResolution = resolution;
-        return Result.Success();
+        return null;
     }
+
+    private static List<string> NormalizeMessages(IEnumerable<string> messages) =>
+        (messages ?? [])
+            .Select(m => m?.Trim() ?? string.Empty)
+            .Where(m => m.Length > 0)
+            .ToList();
 
     private static string? Trim(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 }

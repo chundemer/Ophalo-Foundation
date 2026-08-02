@@ -94,6 +94,11 @@ public static class KeepServiceCollectionExtensions
         services.AddScoped<CatalogCategoryLifecycleService>();
         services.AddScoped<CatalogCategoryApiService>();
 
+        // Price Book, Quotes & Materials — import validation (Session 2c.1b)
+        services.AddScoped<IPriceBookImportPersistence, EfPriceBookImportPersistence>();
+        services.AddScoped<IPriceBookImportRowPersistence, EfPriceBookImportRowPersistence>();
+        services.AddScoped<PriceBookImportValidationService>();
+
         return services;
     }
 }
