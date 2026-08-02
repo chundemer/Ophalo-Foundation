@@ -13,6 +13,7 @@ using OpHalo.Api.Diagnostics;
 using OpHalo.Api.Helpers;
 using OpHalo.Api.Keep;
 using OpHalo.Foundation.Application.Abstractions.Messaging;
+using OpHalo.Foundation.Application.Abstractions.Storage;
 using OpHalo.Foundation.Application.Abstractions.Security;
 using OpHalo.Foundation.Application.Accounts.Access;
 using OpHalo.Foundation.Application.Accounts.Authorization;
@@ -27,6 +28,7 @@ using OpHalo.Foundation.Infrastructure.Auth;
 using OpHalo.Foundation.Infrastructure.Devices;
 using OpHalo.Foundation.Infrastructure.Entitlements;
 using OpHalo.Foundation.Infrastructure.Email;
+using OpHalo.Foundation.Infrastructure.Storage;
 using OpHalo.Foundation.Infrastructure.Members;
 using OpHalo.Foundation.Infrastructure.Persistence;
 using OpHalo.Foundation.Infrastructure.Push;
@@ -153,6 +155,27 @@ else
         httpClient.BaseAddress = new Uri("https://api.resend.com");
         httpClient.DefaultRequestHeaders.Add("Authorization", $"Bearer {resendSettings.ApiKey}");
     });
+}
+
+// --- Business document storage (ADR-471) ---
+var r2Settings = builder.Configuration.GetSection("R2").Get<R2Settings>()
+    ?? new R2Settings();
+
+// Dev-only local-disk fallback when R2 is not configured. Every other environment requires real
+// R2 configuration; there is no placeholder or silent local-disk fallback outside Development.
+if (builder.Environment.IsDevelopment() && !r2Settings.IsConfigured)
+{
+    builder.Services.AddSingleton<IBusinessDocumentStorage, LocalDiskBusinessDocumentStorage>();
+}
+else if (r2Settings.IsConfigured)
+{
+    builder.Services.AddSingleton(r2Settings);
+    builder.Services.AddSingleton<IBusinessDocumentStorage, R2BusinessDocumentStorage>();
+}
+else
+{
+    throw new InvalidOperationException(
+        "R2 configuration is required outside Development. Set the \"R2\" configuration section.");
 }
 
 // --- Auth ---
