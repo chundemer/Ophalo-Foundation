@@ -7,5 +7,4 @@ namespace OpHalo.Foundation.Application.Abstractions.Storage;
 /// </summary>
 public enum DocumentPurpose
 {
-    PriceBookImport,
 }

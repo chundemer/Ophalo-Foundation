@@ -32,7 +32,6 @@ internal static class BusinessDocumentObjectKey
 
     private static string PurposeSegment(DocumentPurpose purpose) => purpose switch
     {
-        DocumentPurpose.PriceBookImport => "price-book-import",
         _ => throw new ArgumentOutOfRangeException(nameof(purpose), purpose, "Unknown document purpose."),
     };
 }

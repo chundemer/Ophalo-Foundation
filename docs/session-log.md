@@ -1,6 +1,6 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-08-01
+**Last updated:** 2026-08-02
 **Deployment posture:** Not pilot-ready.
 **Source of truth for acceptance criteria:** `docs/pilot-readiness-bug-tracker.md`.
 
@@ -83,14 +83,17 @@ account-aware `AccountFeatureAccessResolver`, and a generic Owner/Admin `GET
       `ValueComparer`** so in-place collection changes are detected. Validation messages for parse
       failures must retain the offending raw input (for example, the raw sell-price text), since a
       null parsed decimal cannot explain the failure to the exception-review user.
-  - **2c.1b — Validation and exception-resolution service.** Add the bounded application service,
-    persistence seam/EF implementation, errors, and focused tests needed to validate existing staged
-    rows and record the locked `Unresolved → Accepted | Skipped | Corrected` outcomes. Validation
-    must operate only on already-created proposed-field rows; it may not infer a parser, accept raw
-    bytes, invent column mapping, create catalog/category records, or publish. The preflight must
-    enumerate every proposed-field validation rule, its resulting `Valid`/`Warning`/`Error` status,
-    and the exact condition that permits the import to become `Validated`; stop for a product
-    decision if Build 108/ADRs do not define a rule.
+  - **2c.1b — Validation and exception-resolution service: complete.** `PriceBookImportValidationService`
+    (commit `84d89b0`) implements the per-field validation rule engine (type/name/UOM/external-key/
+    sell-price/currency/mapped-item), row-scale-safe persistence (single-row loads, count/projection
+    queries, never the parent's full row set), and the locked Warning-only-`Accepted` /
+    Warning-or-Error-`Skipped` / revalidated-`Corrected` exception-resolution policy.
+    `PriceBookImportRow.ApplyCorrection` replaces the prior bare `ResolveCorrected()` flip with an
+    atomic, caller-revalidated correction. Row mutations check the parent import's lifecycle (`Staged`
+    for validation; `Staged`/`Validated` for resolution/correction, rejecting `Discarded`/`Published`/
+    `PublishFailed` with a dedicated error), and `ApplyCorrection` rejects any revalidated status other
+    than `Valid`/`Warning` (including out-of-range enum casts) and rejects a `Valid` result carrying
+    messages.
   - **2c.2a — `IBusinessDocumentStorage` seam and R2 adapter: complete.** `IBusinessDocumentStorage`
     (Foundation.Application) plus its R2 production adapter and a Development-only local-disk fake
     (Foundation.Infrastructure) are in place (commit `e3eb142`). Opaque key generation/validation is
@@ -105,28 +108,50 @@ account-aware `AccountFeatureAccessResolver`, and a generic Owner/Admin `GET
     presigned URLs/callback in this batch, Vercel not in the data path); upload stages `Pending` rows
     without synchronously invoking 2c.1b validation; `DocumentPurpose` defines only
     `PriceBookImport`.
-  - **2c.2b — CSV parser and upload orchestration (later; not yet preflighted).** Add the CSV parser,
-    the upload orchestration service (store to R2 via 2c.2a's seam → create `PriceBookImport` →
-    parse/`AddRow` per row → commit; best-effort R2 cleanup via `DeleteBestEffortAsync` if staging
-    fails after the object write), and the authenticated upload endpoint, against the locked limits/
-    CORS/transport/validation decisions above. Requires the R2 bucket, credentials, and CORS policy
-    provisioned against the approved 2c.2a seam before implementation/integration testing — real R2
-    configuration is a hard runtime prerequisite, not a placeholder or local-disk fallback. V1 accepts
-    UTF-8 CSV with optional BOM only; reject unsupported/ambiguous legacy encodings and XLSX. Store
-    the source object before creating the import; never use local disk, database blobs, public URLs,
-    nullable keys, or placeholders in production.
-  - **2c.3 — Import review API/UI (later; separately scoped).** Do not assume endpoints or UI are
-    free just because 2c.1 services exist. A later preflight must define Owner/Admin authorization,
-    list/detail/read contracts, validation display, correction/skip/accept interactions, retry and
-    discard behavior, and all account-isolation/concurrency tests.
-  - **2d — Versioned atomic publish (separate after 2c validation).** Owns `Validated → Published`
-    or `PublishFailed`, version/line creation, catalog pointer updates, and ADR-470's serializable
-    account publish lock. It must not be folded into 2c.1 or the R2/upload slice.
+  - **2c.2b / 2c.3 — CSV upload, parser, and import review: deferred from MVP (2026-08-02).**
+    ADR-472 records the product pivot: price-book data is entered and curated directly in Keep;
+    generic contractor CSV ingestion is not a pilot capability. Do not implement the parser,
+    upload endpoint, import-review UI, `OpenReadAsync` solely for CSV, CsvHelper, import limits, or
+    CSV-specific R2 retention/cleanup behavior. A bounded cleanup session now removes the existing
+    unexposed import entities, validation/persistence surface, tests, and schema before pilot, using
+    the deployment-history-safe migration strategy in ADR-472. A later evidence-led revisit starts
+    with one documented Ophalo template and review, never arbitrary spreadsheet ingestion.
+  - **2c.cleanup — remove deferred import foundation: complete (2026-08-02).** Deployment audit
+    confirmed `20260802101257_PriceBookImport` (committed in `65feb71`) was unshared — production
+    Postgres `__OpHaloMigrationsHistory` had `0` rows for it and both import tables were absent — so
+    the migration, its designer, and the matching `OpHaloDbContextModelSnapshot.cs` blocks were
+    removed outright rather than forward-dropped. Removed all import-specific entities/enums/errors,
+    EF configuration, persistence interfaces/implementations, `PriceBookImportValidationService`, DI
+    registrations, and the `DocumentPurpose.PriceBookImport` branch (`DocumentPurpose` is now an
+    empty enum pending the image slice's own purpose value). `IBusinessDocumentStorage`, the R2
+    adapter, and the development storage fake are preserved unchanged for 2d/image work.
+    `LocalDiskBusinessDocumentStorageTests.cs` was also removed — it only exercised the generic seam
+    using `DocumentPurpose.PriceBookImport` as a stand-in value and could not compile against an
+    empty enum; the image-storage session should add fresh seam tests once a real purpose value
+    exists. No import tables, purpose branch, or public import route remain. Full suite green: 1309
+    unit, 14 architecture, 983 integration; build and `git diff --check` clean. See ADR-472 and
+    DEF-087.
+  - **2d — Direct price entry and versioned atomic publish (next price-book preflight).** Re-scope
+    the planned publish slice around Owner/Admin direct price entry rather than an import. It owns
+    version/line creation, catalog pointer updates, and ADR-470's serializable account publish lock;
+    define the direct-edit draft/review experience before implementation. ADR-473 locks the V1
+    workflow: an existing Keep request is the quote boundary; a technician may capture proposed
+    scope and an Owner/Admin may start the quote from that request; office alone owns price edits and
+    internal approval; quotes are single-option and tax-included; labor is a normal Service catalog
+    item; and off-catalog entries are single-use. Preserve the existing internal `Draft →
+    SubmittedForApproval → Approved` lifecycle—there is no V1 customer `Sent`/`Accepted`/`Declined`
+    state, signature, delivery link, tax calculation, or free-standing quote. It must not revive CSV
+    upload as an implementation shortcut.
+  - **Pilot-required image storage (separate preflight, after import cleanup).** R2 remains required: price-book import
+    is deferred, not private document storage. The next storage slice defines image metadata,
+    account authorization, bounded direct API multipart upload, image type/size validation, purpose
+    keys, retrieval/display, and pilot retention. Equipment/work images—not CSV—are the first
+    production use of the R2 seam.
 
-  ADR-471 locks the eventual production document backend as private Cloudflare R2 through the shared
-  .NET `IBusinessDocumentStorage` seam; local disk is not a pilot/production option. Import source
-  objects remain for the `PriceBookImport` row lifetime. V1 exports are a later capability and must
-  incrementally stream authoritative data rather than buffer a full CSV; they are not persisted.
+  ADR-471 locks the production document backend as private Cloudflare R2 through the shared .NET
+  `IBusinessDocumentStorage` seam; local disk is not a pilot/production option. V1 exports are a
+  later capability and must incrementally stream authoritative data rather than buffer a full CSV;
+  they are not persisted.
 
 ## Immediate Production Access And Reliability Blockers
 

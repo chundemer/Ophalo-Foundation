@@ -144,3 +144,11 @@ unchanged, 14/14 architecture tests pass, full solution build clean, `git diff -
 
 Sessions 2b–2d remain scoped above but not yet preflighted individually; each requires its own
 mechanical preflight before implementation begins, per the Session and Scope Protocol.
+
+## Product-direction update (2026-08-02)
+
+ADR-472 supersedes this build log's prospective CSV-upload direction for MVP. The already implemented
+2c.1 import staging/validation foundation is not exposed, but 2c.2b CSV parsing/upload and 2c.3 import
+review are deferred. Price-book onboarding instead proceeds through direct catalog and
+offering/assembly entry; a later export provides portability. ADR-471's R2 storage direction remains
+active because pilot images require it, under a separate attachment/image preflight.
