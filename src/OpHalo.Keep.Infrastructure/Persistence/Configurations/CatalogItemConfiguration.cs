@@ -94,8 +94,18 @@ internal sealed class CatalogItemConfiguration : BaseEntityConfiguration<Catalog
             .HasPrincipalKey(c => new { c.AccountId, c.Id })
             .OnDelete(DeleteBehavior.Restrict);
 
-        // CurrentPriceBookVersionLineId/SourceActualWorkLineId are deliberately unconstrained (no
-        // HasOne/FK) — their target tables do not exist yet (Session 2d and a later actual-work
-        // session). Added when those sessions land.
+        // Composite FK to PriceBookVersionLine(AccountId, Id) — prevents a catalog item pointing
+        // at a price-book line from a different account (build-log/111). Stays nullable: a
+        // newly-created item has no published price until its first publish. Restrict, not
+        // Cascade/SetNull — a price-book line is an immutable snapshot and must never be deleted
+        // out from under the catalog item currently pointing at it.
+        builder.HasOne<PriceBookVersionLine>()
+            .WithMany()
+            .HasForeignKey(x => new { x.AccountId, x.CurrentPriceBookVersionLineId })
+            .HasPrincipalKey(l => new { l.AccountId, l.Id })
+            .OnDelete(DeleteBehavior.Restrict);
+
+        // SourceActualWorkLineId is deliberately unconstrained (no HasOne/FK) — its target table
+        // does not exist yet (a later actual-work session). Added when that session lands.
     }
 }

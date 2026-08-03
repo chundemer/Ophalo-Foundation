@@ -1,0 +1,33 @@
+using OpHalo.SharedKernel.Results;
+
+namespace OpHalo.Keep.Core.Errors;
+
+public static class PriceBookVersionErrors
+{
+    public static readonly Error NotFound =
+        Error.Create("PriceBookVersion.NotFound", "Price book version not found.");
+
+    public static readonly Error AlreadySuperseded =
+        Error.Create("PriceBookVersion.AlreadySuperseded", "This price book version has already been superseded.");
+
+    public static readonly Error DisplayNameSnapshotRequired =
+        Error.Create("PriceBookVersion.DisplayNameSnapshotRequired", "Display name snapshot is required.");
+
+    public static readonly Error DisplayNameSnapshotTooLong =
+        Error.Create("PriceBookVersion.DisplayNameSnapshotTooLong", "Display name snapshot must not exceed 200 characters.");
+
+    public static readonly Error UnitOfMeasureSnapshotRequired =
+        Error.Create("PriceBookVersion.UnitOfMeasureSnapshotRequired", "Unit of measure snapshot is required.");
+
+    public static readonly Error UnitOfMeasureSnapshotTooLong =
+        Error.Create("PriceBookVersion.UnitOfMeasureSnapshotTooLong", "Unit of measure snapshot must not exceed 50 characters.");
+
+    public static readonly Error InvalidCurrencySnapshot =
+        Error.Create("PriceBookVersion.InvalidCurrencySnapshot", "Currency snapshot must be a 3-letter ISO 4217 code.");
+
+    public static readonly Error CostSnapshotMustNotBeNegative =
+        Error.Create("PriceBookVersion.CostSnapshotMustNotBeNegative", "Cost snapshot must not be negative.");
+
+    public static readonly Error SellPriceSnapshotMustNotBeNegative =
+        Error.Create("PriceBookVersion.SellPriceSnapshotMustNotBeNegative", "Sell price snapshot must not be negative.");
+}

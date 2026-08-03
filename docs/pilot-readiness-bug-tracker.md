@@ -3,7 +3,7 @@
 **Created:** 2026-07-02
 **Purpose:** Live tracker for pilot-blocking or pilot-relevant bugs/gaps discovered during Session 14.
 **Source:** Promoted from the Pre-S14e bug register in `docs/build-log/068-session-14-ophalo-web-front-door.md`.
-**Current active items:** GAP-016 through GAP-033 and GAP-037 through GAP-051 — New Request
+**Current active items:** GAP-016 through GAP-033, GAP-037 through GAP-051, and GAP-053 — New Request
 launch blockers, public-intake trust/continuity work, account-start conversion work, public-link/
 profile safety, pilot value/support/observability/marketing gates, authenticated-workspace identity
 and list-scale/history/readability readiness, request-detail reliability/customer-continuity work,
@@ -853,6 +853,38 @@ adds `pending_notification_*` columns to `keep_requests`) shipped in code (0.11b
 applied to production before deploy, causing a full request-list outage
 (`42703: column k.pending_notification_channel does not exist`) starting 2026-07-27. Migration has
 since been pushed to production; outage resolved. See `docs/session-log.md` 0.11b.
+
+### GAP-053 — Needs Attention reverses the canonical request-row communication action order
+
+**Status:** Open
+**Severity:** P2
+**Area:** `ophalo-app` Request List row-action presentation across queue sections
+**Decision:** GAP-007a; ADR-450
+
+**Observed (2026-08-02):** In the **Needs Attention** section, an eligible row renders
+`Log contact` followed by `Update customer`. The same eligible action pair in **Open Work** renders
+the locked canonical order: `Update customer` followed by `Log contact`.
+
+This is an action-priority and muscle-memory inconsistency on the primary triage surface. GAP-007a
+already locked the intended fallback order as **Update customer, then Log contact**; a Needs
+Attention cue must not reverse that order merely because its row receives different visual treatment.
+
+**Required resolution:**
+
+- Render eligible `Update customer` / `Log contact` actions in the same canonical order in every
+  request-list queue and section, including Needs Attention, Open Work, narrow/mobile layouts, and
+  any row variant with attention treatment.
+- Preserve server authority over which actions are available and retain the existing two-action cap;
+  this is presentation ordering only, not a client-side action-policy rewrite.
+- Consolidate or share the ordering rule so queue-specific markup cannot drift again.
+
+**Acceptance criteria:**
+
+- A row offering both actions always presents **Update customer** before **Log contact**, regardless
+  of queue/section or responsive layout.
+- Keyboard/focus order matches the visible order.
+- Focused PWA regression coverage renders the equivalent pair in Needs Attention and Open Work and
+  asserts identical visible and DOM action order.
 
 ### GAP-046 — Request search and filters do not make the current result set sufficiently visible or recoverable
 
