@@ -9,8 +9,15 @@ namespace OpHalo.Keep.Application.PriceBook;
 /// </summary>
 public interface IPriceBookVersionPersistence
 {
-    /// <summary>The account's current <c>Published</c> version, with its <see cref="PriceBookVersion.Lines"/> loaded.</summary>
-    Task<PriceBookVersion?> GetCurrentPublishedAsync(Guid accountId, CancellationToken ct);
+    /// <summary>
+    /// The current <c>Published</c> version for this specific <c>CatalogItem</c>, with its
+    /// <see cref="PriceBookVersion.Lines"/> loaded. A version is superseded only by a later
+    /// publish for the same item (not by any other item's publish), so at most one <c>Published</c>
+    /// version can exist per (account, catalog item) pair; that invariant is enforced by
+    /// <c>SingleOrDefaultAsync</c> failing closed rather than returning an arbitrary row if it is
+    /// ever violated.
+    /// </summary>
+    Task<PriceBookVersion?> GetCurrentPublishedAsync(Guid accountId, Guid catalogItemId, CancellationToken ct);
 
     /// <summary>The account's highest existing <c>VersionNumber</c>, or 0 if none exist — feeds the next publish's number.</summary>
     Task<int> GetLatestVersionNumberAsync(Guid accountId, CancellationToken ct);

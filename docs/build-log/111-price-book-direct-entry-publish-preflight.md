@@ -67,10 +67,11 @@ one serializable transaction:
 
 1. Read (or lazily create) `PriceBookAccountState`, compare `PublishLockVersion` against the caller's expected
    value; conflict → fail closed, caller re-reads and retries (ADR-470).
-2. Mark the account's prior `Published` `PriceBookVersion` as `Superseded`, increment
-   `PriceBookVersion.VersionNumber`, and insert the new `Published` `PriceBookVersion` (`SourceImportId = null`)
-   with its single `PriceBookVersionLine`, snapshotting the item's current header fields plus the new
-   Cost/SellPrice.
+2. Mark the prior `Published` `PriceBookVersion` **for that `CatalogItem`** as `Superseded`, increment the
+   account-wide `PriceBookVersion.VersionNumber`, and insert the new `Published` `PriceBookVersion`
+   (`SourceImportId = null`) with its single `PriceBookVersionLine`, snapshotting the item's current header
+   fields plus the new Cost/SellPrice. A `PriceBookVersion` has one line in V1, so version status is scoped by
+   that line's catalog item; it must never supersede another item's current price.
 3. Repoint `CatalogItem.CurrentPriceBookVersionLineId` to the new line.
 4. Insert the `ManualPriceOverride` audit row (old/new values, actor, reason).
 5. Bump `PriceBookAccountState.PublishLockVersion`.

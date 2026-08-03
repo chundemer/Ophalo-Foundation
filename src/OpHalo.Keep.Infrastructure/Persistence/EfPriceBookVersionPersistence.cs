@@ -8,10 +8,13 @@ namespace OpHalo.Keep.Infrastructure.Persistence;
 
 public sealed class EfPriceBookVersionPersistence(OpHaloDbContext dbContext) : IPriceBookVersionPersistence
 {
-    public Task<PriceBookVersion?> GetCurrentPublishedAsync(Guid accountId, CancellationToken ct) =>
+    public Task<PriceBookVersion?> GetCurrentPublishedAsync(Guid accountId, Guid catalogItemId, CancellationToken ct) =>
         dbContext.Set<PriceBookVersion>()
             .Include(x => x.Lines)
-            .FirstOrDefaultAsync(x => x.AccountId == accountId && x.Status == PriceBookVersionStatus.Published, ct);
+            .Where(x => x.AccountId == accountId
+                && x.Status == PriceBookVersionStatus.Published
+                && x.Lines.Any(l => l.CatalogItemId == catalogItemId))
+            .SingleOrDefaultAsync(ct);
 
     public async Task<int> GetLatestVersionNumberAsync(Guid accountId, CancellationToken ct)
     {

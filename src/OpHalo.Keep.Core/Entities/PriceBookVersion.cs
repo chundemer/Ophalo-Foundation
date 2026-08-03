@@ -13,7 +13,7 @@ namespace OpHalo.Keep.Core.Entities;
 /// re-adding it if import ever returns. Owns exactly one <see cref="PriceBookVersionLine"/> in
 /// this batch, because V1 direct entry publishes one <see cref="CatalogItem"/> per transaction.
 /// Never edited after creation except the single <see cref="Supersede"/> transition performed
-/// when a later version publishes for the same account.
+/// when a later version publishes for the same <see cref="CatalogItem"/>.
 /// </summary>
 public sealed class PriceBookVersion : BaseEntity
 {
@@ -92,8 +92,8 @@ public sealed class PriceBookVersion : BaseEntity
 
     /// <summary>
     /// Marks this version superseded because a new version has just published for the same
-    /// account (ADR-470's publish transaction performs this on the prior <c>Published</c> row
-    /// before inserting the new one).
+    /// <c>CatalogItem</c> (ADR-470's publish transaction performs this on the prior
+    /// <c>Published</c> row for that item before inserting the new one).
     /// </summary>
     public Result Supersede()
     {
