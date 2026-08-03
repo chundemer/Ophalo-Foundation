@@ -99,6 +99,15 @@ it does not require inventing a new mechanism.
    entries for the new stable lock-conflict error. Integration tests: account isolation, competing-publish
    conflict (ADR-470 regression), and correct-path 200.
 
+   **Mechanical-preflight decisions (2026-08-03):** The publish path uses a dedicated
+   `IPriceBookPublishPersistence`/EF implementation as its one atomic boundary; it must open a literal
+   `IsolationLevel.Serializable` database transaction and own the account-lock read/bump, catalog pointer
+   repoint, prior version supersession for the *same catalog item*, version/line insert, and audit insert.
+   The separate 2d.1c per-entity adapters remain unregistered and are not composed by this path. The catalog
+   pointer domain method does not bump `CatalogItem.ConcurrencyVersion` (ADR-470). The tightly-coupled mutation
+   requires nine production files—one over the normal gate and approved as the documented 2a.2-style exception;
+   integration tests remain outside that count.
+
 Each session gets its own mechanical preflight per the Session and Scope Protocol before implementation starts.
 
 ## Decisions confirmed for 2d.1
