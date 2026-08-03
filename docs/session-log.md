@@ -131,17 +131,23 @@ account-aware `AccountFeatureAccessResolver`, and a generic Owner/Admin `GET
     exists. No import tables, purpose branch, or public import route remain. Full suite green: 1309
     unit, 14 architecture, 983 integration; build and `git diff --check` clean. See ADR-472 and
     DEF-087.
-  - **2d — Direct price entry and versioned atomic publish (next price-book preflight).** Re-scope
+  - **2d — Direct price entry and versioned atomic publish: complete** (`b5fcf3a`). Re-scoped
     the planned publish slice around Owner/Admin direct price entry rather than an import. It owns
-    version/line creation, catalog pointer updates, and ADR-470's serializable account publish lock;
-    define the direct-edit draft/review experience before implementation. ADR-473 locks the V1
+    version/line creation, catalog pointer updates, and ADR-470's serializable account publish lock.
+    ADR-473 locks the V1
     workflow: an existing Keep request is the quote boundary; a technician may capture proposed
     scope and an Owner/Admin may start the quote from that request; office alone owns price edits and
     internal approval; quotes are single-option and tax-included; labor is a normal Service catalog
     item; and off-catalog entries are single-use. Preserve the existing internal `Draft →
     SubmittedForApproval → Approved` lifecycle—there is no V1 customer `Sent`/`Accepted`/`Declined`
     state, signature, delivery link, tax calculation, or free-standing quote. It must not revive CSV
-    upload as an implementation shortcut.
+    upload as an implementation shortcut. Build Log 111 records the completed 2d.1–2d.2 delivery.
+  - **2e — Price Book catalog workspace UI (next preflight).** Build the entitled Owner/Admin
+    workspace before further price-book or image work: top-level Price Book navigation, catalog
+    search/read APIs, Catalog Items list and responsive item drawer, direct price entry, categories,
+    aliases, and lifecycle controls. The locked product/UI decisions and explicit non-goals are in
+    Build Log 112. Offerings & Packages is decided product scope but is a separate functional slice;
+    do not ship an empty/disabled tab.
   - **Pilot-required image storage (separate preflight, after import cleanup).** R2 remains required: price-book import
     is deferred, not private document storage. The next storage slice defines image metadata,
     account authorization, bounded direct API multipart upload, image type/size validation, purpose
