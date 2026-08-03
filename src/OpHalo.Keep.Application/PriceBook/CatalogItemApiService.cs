@@ -19,6 +19,8 @@ public sealed record CreateCatalogItemApiCommand(
     Guid? CategoryId,
     bool IsCommonItem);
 
+public sealed record PublishCatalogItemPriceApiCommand(decimal? Cost, decimal? SellPrice, string Reason);
+
 /// <summary>
 /// API-facing orchestration for <see cref="CatalogItem"/> mutations (Session 2a.2). Owns the
 /// full auth-stack composition — <see cref="CatalogItemLifecycleService"/> deliberately does
@@ -27,6 +29,7 @@ public sealed record CreateCatalogItemApiCommand(
 /// </summary>
 public sealed class CatalogItemApiService(
     CatalogItemLifecycleService lifecycleService,
+    PriceBookPublishService publishService,
     IAccountAccessSnapshotPersistence snapshotPersistence,
     ICurrentUser currentUser,
     IAccountAccessPolicy accountAccessPolicy,
@@ -105,6 +108,24 @@ public sealed class CatalogItemApiService(
             return Result<Guid>.Failure(gate.Error);
 
         return await lifecycleService.InactivateAliasAsync(currentUser.AccountId, catalogItemId, aliasId, expectedVersion, ct);
+    }
+
+    public async Task<Result<PublishCatalogItemPriceResult>> PublishPriceAsync(
+        Guid catalogItemId, PublishCatalogItemPriceApiCommand command, CancellationToken ct)
+    {
+        var gate = await AuthorizeAsync(ct);
+        if (gate.IsFailure)
+            return Result<PublishCatalogItemPriceResult>.Failure(gate.Error);
+
+        return await publishService.PublishAsync(
+            new PublishCatalogItemPriceCommand(
+                currentUser.AccountId,
+                catalogItemId,
+                command.Cost,
+                command.SellPrice,
+                command.Reason,
+                currentUser.UserId),
+            ct);
     }
 
     private async Task<Result> AuthorizeAsync(CancellationToken ct)

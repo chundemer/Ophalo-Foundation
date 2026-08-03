@@ -135,6 +135,9 @@ public static class ErrorHttpMapper
             // --- CatalogCategory concurrency/uniqueness conflicts (Session 2b.3) ---
             var c when c == "CatalogCategory.VersionMismatch"         => (StatusCodes.Status409Conflict, "Conflict.", null),
             var c when c == "CatalogCategory.NameAlreadyExists"       => (StatusCodes.Status409Conflict, "Conflict.", null),
+
+            // --- Price book publish lock conflict (Session 2d.2, ADR-470) ---
+            var c when c == "PriceBookVersion.PublishLockConflict" => (StatusCodes.Status409Conflict, "Conflict.", null),
             var c when c == "CatalogCategory.ExpectedVersionRequired" => (StatusCodes.Status400BadRequest, "Bad request.", null),
             var c when c == "CatalogCategory.ExpectedVersionInvalid"  => (StatusCodes.Status400BadRequest, "Bad request.", null),
 

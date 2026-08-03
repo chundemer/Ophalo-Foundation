@@ -1,6 +1,6 @@
 # Build Log 111 — Price Book, Quotes & Materials: Session 2d Preflight (Direct Price Entry and Versioned Publish)
 
-**Status:** 2d.1c complete — 2d.2 mechanical preflight next
+**Status:** 2d.2 complete — direct-entry price publish delivered
 **Date:** 2026-08-02
 **Scope:** Turns ADR-472's pivot (direct catalog entry, no CSV import) and ADR-470's locked publish-concurrency
 mechanism into a buildable plan for the office direct price-entry/publish flow. Not an implementation session.

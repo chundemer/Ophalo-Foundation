@@ -183,6 +183,20 @@ public sealed class CatalogItem : BaseEntity
         return Result.Success();
     }
 
+    /// <summary>
+    /// Repoints the "current price" pointer to a newly published <c>PriceBookVersionLine</c>
+    /// (ADR-470, build-log/111). Deliberately does not rotate <see cref="ConcurrencyVersion"/> —
+    /// a publish transaction's concurrency guard is the account-scoped publish lock, not this
+    /// item's own token, which stays reserved for its non-publish mutations.
+    /// </summary>
+    public void ApplyPublishedPrice(Guid priceBookVersionLineId)
+    {
+        if (priceBookVersionLineId == Guid.Empty)
+            throw new ArgumentException("PriceBookVersionLineId must not be empty.", nameof(priceBookVersionLineId));
+
+        CurrentPriceBookVersionLineId = priceBookVersionLineId;
+    }
+
     private static bool IsValidCurrencyCode(string? currency) =>
         currency is { Length: 3 } && currency.All(c => c is >= 'A' and <= 'Z' or >= 'a' and <= 'z');
 }

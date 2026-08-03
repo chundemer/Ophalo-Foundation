@@ -89,6 +89,13 @@ public static class KeepServiceCollectionExtensions
         services.AddScoped<CatalogItemLifecycleService>();
         services.AddScoped<CatalogItemApiService>();
 
+        // Price Book, Quotes & Materials — direct-entry publish (Session 2d.2, ADR-470). The
+        // separate 2d.1c per-entity adapters (IPriceBookAccountStatePersistence,
+        // IPriceBookVersionPersistence, IManualPriceOverridePersistence) are not registered —
+        // this is the only path that writes those tables, and it owns their whole transaction.
+        services.AddScoped<IPriceBookPublishPersistence, EfPriceBookPublishPersistence>();
+        services.AddScoped<PriceBookPublishService>();
+
         // Price Book, Quotes & Materials — catalog categories (Session 2b.1/2b.3)
         services.AddScoped<ICatalogCategoryPersistence, EfCatalogCategoryPersistence>();
         services.AddScoped<CatalogCategoryLifecycleService>();

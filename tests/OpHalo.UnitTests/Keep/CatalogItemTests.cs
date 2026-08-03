@@ -330,4 +330,27 @@ public class CatalogItemTests
         Assert.True(result.IsFailure);
         Assert.Equal(CatalogItemErrors.AliasNotFound, result.Error);
     }
+
+    // --- ApplyPublishedPrice ---
+
+    [Fact]
+    public void ApplyPublishedPrice_sets_pointer_and_leaves_concurrency_version_unchanged()
+    {
+        var item = Draft().Value;
+        var before = item.ConcurrencyVersion;
+        var lineId = Guid.CreateVersion7();
+
+        item.ApplyPublishedPrice(lineId);
+
+        Assert.Equal(lineId, item.CurrentPriceBookVersionLineId);
+        Assert.Equal(before, item.ConcurrencyVersion);
+    }
+
+    [Fact]
+    public void ApplyPublishedPrice_with_empty_id_throws()
+    {
+        var item = Draft().Value;
+
+        Assert.Throws<ArgumentException>(() => item.ApplyPublishedPrice(Guid.Empty));
+    }
 }

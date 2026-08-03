@@ -30,4 +30,11 @@ public static class PriceBookVersionErrors
 
     public static readonly Error SellPriceSnapshotMustNotBeNegative =
         Error.Create("PriceBookVersion.SellPriceSnapshotMustNotBeNegative", "Sell price snapshot must not be negative.");
+
+    /// <summary>
+    /// A competing publish/manual-override transaction won the race against the account-scoped
+    /// publish lock (ADR-470). The caller must retry the publish against current state.
+    /// </summary>
+    public static readonly Error PublishLockConflict =
+        Error.Create("PriceBookVersion.PublishLockConflict", "This price book was just updated by another publish. Please retry.");
 }

@@ -67,6 +67,25 @@ public static class PriceBookEndpoints
             return result.IsSuccess ? Results.Ok(new CatalogItemTransitionResponse(result.Value)) : ErrorHttpMapper.ToHttpResult(result.Error);
         }).RequireAuthorization();
 
+        app.MapPost("/keep/pricebook/catalog-items/{catalogItemId:guid}/publish-price", async (
+            Guid catalogItemId,
+            PublishCatalogItemPriceBody body,
+            CatalogItemApiService service,
+            CancellationToken ct) =>
+        {
+            var command = new PublishCatalogItemPriceApiCommand(body.Cost, body.SellPrice, body.Reason ?? string.Empty);
+
+            var result = await service.PublishPriceAsync(catalogItemId, command, ct);
+            return result.IsSuccess
+                ? Results.Ok(new PublishCatalogItemPriceResponse(
+                    result.Value.VersionNumber,
+                    result.Value.PriceBookVersionId,
+                    result.Value.PriceBookVersionLineId,
+                    result.Value.Cost,
+                    result.Value.SellPrice))
+                : ErrorHttpMapper.ToHttpResult(result.Error);
+        }).RequireAuthorization();
+
         app.MapPost("/keep/pricebook/catalog-items/{catalogItemId:guid}/aliases", async (
             Guid catalogItemId,
             AddCatalogItemAliasBody body,
@@ -209,6 +228,15 @@ internal sealed record CatalogItemResponse(
     Guid ConcurrencyVersion);
 
 internal sealed record CatalogItemTransitionResponse(Guid ConcurrencyVersion);
+
+internal sealed record PublishCatalogItemPriceBody(decimal? Cost, decimal? SellPrice, string? Reason);
+
+internal sealed record PublishCatalogItemPriceResponse(
+    int VersionNumber,
+    Guid PriceBookVersionId,
+    Guid PriceBookVersionLineId,
+    decimal? Cost,
+    decimal? SellPrice);
 
 internal sealed record AddCatalogItemAliasBody(string? AliasText);
 
