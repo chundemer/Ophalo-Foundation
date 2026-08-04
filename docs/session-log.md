@@ -73,8 +73,34 @@ account-aware `AccountFeatureAccessResolver`, and a generic Owner/Admin `GET
   multi-match, active/inactive filtering, match rank/reason, browse- and search-mode cursor walks
   (including a same-DisplayName Id tie-break), cursor/fingerprint-mismatch rejection, cross-account
   404, and entitlement/role gate denial. Full regression clean (14 architecture tests, `git diff
-  --check`); the one pre-existing 2e.2 concurrent-create flake is outside this read-only slice. The
-  next action is 2e.4 — workspace shell and navigation (build-log/113).
+  --check`); the one pre-existing 2e.2 concurrent-create flake is outside this read-only slice.
+
+  **2e.4 — Workspace shell and navigation: complete.** `web/ophalo-app` (the authenticated
+  operator dashboard — `web/ophalo-web` is public-only and untouched) gains a `pricebook` route,
+  entitled desktop nav entries (sidebar and workbench top-bar), and a `GET
+  /accounts/me/capability-packages`-backed entitlement check scoped to Owner/Admin only (avoids a
+  guaranteed 403 for other roles). Closed a real pre-existing gap found during preflight: no mobile
+  overflow/hamburger navigation existed anywhere in the app — Settings and Getting Started weren't
+  reachable on mobile either, outside contextual links — so build-log/112's "mobile hamburger/
+  overflow navigation alongside Requests" requirement had no mechanism to hang off. Added one
+  shared `MobileNavMenu` (reuses the existing `KeepModal` primitive for focus-trap/Escape/focus
+  restoration) plus a new mobile-only top bar (logo + hamburger, present on every route since none
+  existed before) — this is a visible layout change to the existing Requests/Detail mobile views,
+  not scope creep: it's what "shared App-level" mechanism means. Caught and fixed a real layout bug
+  before commit: the shell container wasn't `flex-col` for non-workbench routes, so the new mobile
+  bar and content would have rendered side-by-side rather than stacked.
+  `pages/PriceBook.tsx` renders the list shell only (default active items — search/filter/paging
+  are 2e.7): role-denied, unentitled-plan, entitlement-check-loading, and a **distinct retryable
+  entitlement-check-error state** (added after review — a failed `capability-packages` fetch must
+  not be reported as "not included in your plan"), plus catalog loading/error/empty/list states,
+  rendering `NoStandalonePrice` as "No standalone price" per build-log/112. No creation drawer, no
+  item detail, no actions column. New: `MobileNavMenu`, `PriceBook`, catalog/capability types and
+  client functions in `apiClient.ts`/`apiClient.types.ts`. 19 new frontend tests (nav-item
+  role/entitlement matrix, mobile menu rendering/dismissal, Price Book states including the
+  entitlement-error/plan-denied distinction). `tsc --noEmit`, the CSS-token check, the production
+  build, and the full vitest suite (234 tests) are all clean. Not yet visually verified in a live
+  browser session against a running backend — flagged, not silently skipped. The next action is
+  2e.5 — Create-and-activate drawer (build-log/113).
 
   ADR-474, ADR-475, and the `keep-product-positioning.md`/`deferred-topics.md` changes alongside
   this work are Christian's, made outside this implementation session and left untouched.

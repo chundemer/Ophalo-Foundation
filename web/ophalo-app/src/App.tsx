@@ -8,8 +8,13 @@ import { Requests } from "./pages/Requests";
 import { RequestDetail } from "./pages/RequestDetail";
 import { AccessLimited } from "./pages/AccessLimited";
 import { Settings } from "./pages/Settings";
-import { Plus, Inbox, Settings as SettingsIcon } from "lucide-react";
+import { PriceBook } from "./pages/PriceBook";
+import { MobileNavMenu } from "./components/layout/MobileNavMenu";
+import { Plus, Inbox, Settings as SettingsIcon, Tag, Menu } from "lucide-react";
 import { api, type AccountRole, type KeepRequestViewCounts } from "./lib/apiClient";
+
+// ADR-462: AccountCapabilityPackageEnrollment.FeatureKeys.PriceBookQuotesMaterials.
+const PRICE_BOOK_FEATURE_KEY = "keep.price_book_quotes_materials";
 
 // Shell-level access flags (isReadOnly, isPastDue) are intentionally not derived here.
 // GET /keep/setup/onboarding checks Keep.SettingsManage before account access, so Operators
@@ -22,6 +27,7 @@ type AppRoute =
   | { page: "home" }
   | { page: "requests" }
   | { page: "settings"; section?: "public-profile" | "policy" | "team" }
+  | { page: "pricebook" }
   | { page: "detail"; requestId: string; focusPanel?: string };
 
 interface RequestNavContext {
@@ -31,21 +37,28 @@ interface RequestNavContext {
 function getRouteFromLocation(): AppRoute {
   const match = window.location.hash.match(/^#\/request\/(.+)$/);
   if (match?.[1]) return { page: "detail", requestId: match[1] };
+  if (window.location.hash === "#/pricebook") return { page: "pricebook" };
   return { page: "requests" };
 }
 
-interface NavItem {
-  id: "home" | "requests" | "settings";
+export interface NavItem {
+  id: "home" | "requests" | "settings" | "pricebook";
   label: string;
   icon: React.ReactNode;
 }
 
-function getNavItems(role: AccountRole): NavItem[] {
+// Build 112: Price Book is a first-class top-level item, visible only to an Owner/Admin whose
+// account carries the PriceBookQuotesMaterials entitlement — `entitled` is the client-side
+// discovery check only; every catalog API remains the authority.
+export function getNavItems(role: AccountRole, entitled: boolean): NavItem[] {
   const items: NavItem[] = [
     { id: "requests", label: "Requests", icon: <Inbox className="h-4 w-4" /> },
   ];
   if (role === "owner" || role === "admin") {
     items.push({ id: "home", label: "Getting Started", icon: null });
+    if (entitled) {
+      items.push({ id: "pricebook", label: "Price Book", icon: <Tag className="h-4 w-4" /> });
+    }
     items.push({ id: "settings", label: "Settings", icon: <SettingsIcon className="h-4 w-4" /> });
   }
   return items;
@@ -83,16 +96,38 @@ function AppShell() {
   });
 
   const role: AccountRole = me?.accountRole ?? "unknown";
-  const navItems = getNavItems(role);
+  const isOwnerOrAdmin = role === "owner" || role === "admin";
+
+  // Owner/Admin-gated server-side (ADR-462) — only fetched for roles that can call it, so an
+  // Operator/Viewer never issues a request that's guaranteed to 403.
+  const {
+    data: capabilityPackages,
+    isLoading: capabilityLoading,
+    isError: capabilityError,
+    refetch: refetchCapabilities,
+  } = useQuery({
+    queryKey: ["capabilityPackages"],
+    queryFn: api.getCapabilityPackages,
+    enabled: isOwnerOrAdmin,
+    staleTime: 5 * 60 * 1000,
+  });
+  const priceBookEntitled =
+    capabilityPackages?.some((c) => c.featureKey === PRICE_BOOK_FEATURE_KEY && c.enabled) ?? false;
+
+  const navItems = getNavItems(role, priceBookEntitled);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   function navigate(newRoute: AppRoute) {
     const base = window.location.pathname + window.location.search;
     if (newRoute.page === "detail") {
       history.pushState(null, "", `${base}#/request/${newRoute.requestId}`);
+    } else if (newRoute.page === "pricebook") {
+      history.pushState(null, "", `${base}#/pricebook`);
     } else {
       history.pushState(null, "", base);
     }
     setRoute(newRoute);
+    setMobileMenuOpen(false);
   }
 
   function openCapture() {
@@ -124,15 +159,46 @@ function AppShell() {
       ? navContext.requestIds[currentNavIdx + 1]
       : undefined;
 
-  const activeNavId: "home" | "requests" | "settings" =
+  const activeNavId: NavItem["id"] =
     route.page === "home" ? "home"
     : route.page === "settings" ? "settings"
+    : route.page === "pricebook" ? "pricebook"
     : "requests";
 
-  const isWorkbench = route.page === "requests" || route.page === "detail";
+  const isWorkbench = route.page === "requests" || route.page === "detail" || route.page === "pricebook";
 
+  // Mobile is always column (top bar above content); desktop non-workbench switches to a row
+  // (sidebar beside content) — workbench stays column at every size (header above main).
   return (
-    <div className={`flex min-h-screen bg-[var(--ophalo-canvas)] ${isWorkbench ? "flex-col" : ""}`}>
+    <div className={`flex flex-col min-h-screen bg-[var(--ophalo-canvas)] ${isWorkbench ? "" : "md:flex-row"}`}>
+      {/* Top bar — mobile only, all routes: logo + hamburger trigger for MobileNavMenu. */}
+      {role !== "unknown" && (
+        <header className="md:hidden flex items-center justify-between px-4 h-14 shrink-0 bg-[var(--ophalo-card)] border-b border-[var(--ophalo-border)]">
+          <button
+            type="button"
+            onClick={() => navigate({ page: "requests" })}
+            aria-label="Go to requests"
+            className="flex items-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-offset-2 rounded"
+          >
+            <img
+              src="/brand/ophalo-keep-lockup-color.svg"
+              alt="OpHalo Keep"
+              className="h-7 w-auto"
+              draggable={false}
+            />
+          </button>
+          <button
+            type="button"
+            onClick={() => setMobileMenuOpen(true)}
+            aria-label="Open navigation menu"
+            aria-expanded={mobileMenuOpen}
+            className="flex items-center justify-center h-9 w-9 rounded-md text-[var(--ophalo-muted)] hover:bg-[var(--ophalo-canvas)] hover:text-[var(--ophalo-ink)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-offset-2"
+          >
+            <Menu className="h-5 w-5" />
+          </button>
+        </header>
+      )}
+
       {/* Left sidebar — desktop, non-workbench routes only */}
       {!isWorkbench && (
         <aside className="hidden md:flex md:flex-col md:w-56 lg:w-64 md:shrink-0 bg-[var(--ophalo-card)] border-r border-[var(--ophalo-border)]">
@@ -253,6 +319,20 @@ function AppShell() {
                 >
                   Getting Started
                 </button>
+                {priceBookEntitled && (
+                  <button
+                    type="button"
+                    onClick={() => navigate({ page: "pricebook" })}
+                    className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-offset-2 ${
+                      activeNavId === "pricebook"
+                        ? "bg-[var(--keep-accent-bg)] text-[var(--ophalo-navy)] font-semibold"
+                        : "text-[var(--ophalo-muted)] hover:bg-[var(--ophalo-canvas)] hover:text-[var(--ophalo-ink)]"
+                    }`}
+                  >
+                    <Tag className="h-4 w-4" />
+                    Price Book
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => navigate({ page: "settings" })}
@@ -304,6 +384,15 @@ function AppShell() {
           />
         )}
         {route.page === "settings" && <Settings callerRole={role} scrollToSection={route.section} />}
+        {route.page === "pricebook" && (
+          <PriceBook
+            role={role}
+            entitled={priceBookEntitled}
+            entitlementLoading={isOwnerOrAdmin && capabilityLoading}
+            entitlementError={isOwnerOrAdmin && capabilityError}
+            onRetryEntitlement={() => void refetchCapabilities()}
+          />
+        )}
         {route.page === "detail" && (
           <RequestDetail
             requestId={route.requestId}
@@ -335,6 +424,18 @@ function AppShell() {
           onSelectRequest={(id) => { selectRequest(id); setCaptureOpen(false); }}
           isOwnerOrAdmin={role === "owner" || role === "admin"}
           onNavigateSettings={navigateToSettings}
+        />
+      )}
+
+      {/* Mobile overflow nav — the only mobile-discoverable path to Getting Started, Settings,
+          and Price Book (Session 2e.4, build-log/112: no manually-known URL required). */}
+      {mobileMenuOpen && (
+        <MobileNavMenu
+          items={navItems}
+          activeId={activeNavId}
+          roleLabel={roleLabel(role)}
+          onNavigate={(id) => navigate({ page: id })}
+          onClose={() => setMobileMenuOpen(false)}
         />
       )}
     </div>

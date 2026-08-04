@@ -542,6 +542,61 @@ export interface GetRequestsParams {
   closedShortcut?: string;
 }
 
+export interface CapabilityPackageStatus {
+  featureKey: string;
+  enabled: boolean;
+}
+
+// Price Book, Quotes & Materials — bounded catalog reads (Session 2e.3, build-log/113).
+export interface CatalogItemResponse {
+  id: string;
+  type: string;
+  displayName: string;
+  externalKey: string | null;
+  categoryId: string | null;
+  unitOfMeasure: string;
+  currency: string;
+  isCommonItem: boolean;
+  activeState: string;
+  concurrencyVersion: string;
+}
+
+export interface CatalogItemListRowResponse {
+  item: CatalogItemResponse;
+  currentPricingMode: string | null;
+  currentSellPrice: number | null;
+  matchRank: string;
+  matchReason: string | null;
+}
+
+export interface CatalogItemListResult {
+  items: CatalogItemListRowResponse[];
+  limit: number;
+  hasMore: boolean;
+  nextCursor: string | null;
+}
+
+export interface CatalogCategoryResponse {
+  id: string;
+  name: string;
+  displayOrder: number;
+  activeState: string;
+  concurrencyVersion: string;
+}
+
+export interface CatalogCategoryListResult {
+  categories: CatalogCategoryResponse[];
+}
+
+export interface GetCatalogItemsParams {
+  search?: string;
+  type?: string;
+  categoryId?: string;
+  status?: string;
+  cursor?: string;
+  limit?: number;
+}
+
 export type FollowUpResolutionOutcome = "complete" | "move" | "keep_active";
 export type FollowUpCompletionReason =
   | "customer_contacted"

@@ -146,6 +146,10 @@ import type {
   RequestView,
   GetRequestsParams,
   ResolveFollowUpBody,
+  CapabilityPackageStatus,
+  CatalogItemListResult,
+  CatalogCategoryListResult,
+  GetCatalogItemsParams,
 } from "./apiClient.types";
 
 export type {
@@ -201,6 +205,10 @@ export type {
   RequestView,
   GetRequestsParams,
   ResolveFollowUpBody,
+  CapabilityPackageStatus,
+  CatalogItemListResult,
+  CatalogCategoryListResult,
+  GetCatalogItemsParams,
 };
 
 export type { FollowUpResolutionOutcome, FollowUpCompletionReason } from "./apiClient.types";
@@ -242,6 +250,25 @@ export const api = {
       `/keep/requests/available${query ? `?${query}` : ""}`,
     );
   },
+  // Owner/Admin-gated (ADR-462): only call when accountRole is owner or admin, else 403.
+  getCapabilityPackages: () =>
+    apiFetch<CapabilityPackageStatus[]>("/accounts/me/capability-packages"),
+  // Price Book, Quotes & Materials — bounded catalog reads (Session 2e.3, build-log/113).
+  getCatalogItems: (params: GetCatalogItemsParams = {}) => {
+    const qs = new URLSearchParams();
+    if (params.search) qs.set("search", params.search);
+    if (params.type) qs.set("type", params.type);
+    if (params.categoryId) qs.set("categoryId", params.categoryId);
+    if (params.status) qs.set("status", params.status);
+    if (params.cursor) qs.set("cursor", params.cursor);
+    if (params.limit) qs.set("limit", String(params.limit));
+    const query = qs.toString();
+    return apiFetch<CatalogItemListResult>(
+      `/keep/pricebook/catalog-items${query ? `?${query}` : ""}`,
+    );
+  },
+  getCatalogCategories: () =>
+    apiFetch<CatalogCategoryListResult>("/keep/pricebook/catalog-categories"),
   getRequestDetail: (requestId: string) =>
     apiFetch<KeepRequestDetailResult>(`/keep/requests/${requestId}`),
   getRelatedWork: (requestId: string) =>
