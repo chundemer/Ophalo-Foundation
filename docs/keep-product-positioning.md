@@ -93,8 +93,9 @@ The packages represent complete customer outcomes, not isolated buttons:
 - **Keep Core:** a service need is captured, owned, communicated, followed up, and closed.
 - **Asset Operations:** a technician identifies the exact equipment, including via an assigned opaque
   QR label, and sees permitted service history and warranty context.
-- **Price Book & Materials:** authorized staff import a controlled catalog and retain the exact
-  material/labor lines and price snapshot used on a work record.
+- **Price Book & Materials:** authorized staff maintain a controlled catalog and retain the exact
+  material/labor lines and price snapshot used on a work record. Reusable scope recipes grow from
+  real, approved work rather than requiring an abstract bundle library at onboarding.
 - **B2B Property Workflow:** contractor/property-manager work retains property, unit, authorization,
   completion, and billing-handoff context.
 - **Accounting Exchange:** approved work crosses a reviewed, explicit boundary to accounting; it is
@@ -102,6 +103,22 @@ The packages represent complete customer outcomes, not isolated buttons:
 
 Account entitlement, user permission, and record/state policy remain distinct server-side gates for
 every package. A customer cannot access a capability merely because its UI is visible.
+
+### Scope Recipe Direction
+
+For Price Book & Materials, Keep is deliberately avoiding traditional package sprawl. A business
+first scopes a real request with recognizable catalog/labor lines; an Owner/Admin can then save a
+useful selection as a reusable scope recipe. Reusing that recipe expands it into ordinary,
+editable lines and preserves immutable source/grouping snapshots on the submitted scope or quote.
+
+This makes catalog search the reliable early and uncommon-work fallback, while repeated work becomes
+progressively faster: catalog search and primary offerings → common items/basic assemblies →
+reusable recipes → evidence-backed anchors, modifiers, and guided condition checks. It does not
+require a contractor to configure every job permutation before the first quote, and it does not
+change V1's office-controlled, internal-only quote boundary. A customer-facing quote is a planned
+next-stage capability that will use the same stored grouping to present a concise scope summary;
+delivery, customer decision/approval, PDF, signature, and multi-option proposal workflows remain
+separately sequenced until the internal quote foundation is proven.
 
 ## Product Surfaces and Intended Users
 
