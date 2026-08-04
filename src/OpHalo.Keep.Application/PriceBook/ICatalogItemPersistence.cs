@@ -17,12 +17,12 @@ public interface ICatalogItemPersistence
 {
     Task<CatalogItem?> GetByIdAsync(Guid accountId, Guid catalogItemId, CancellationToken ct);
 
-    Task<bool> ExternalKeyExistsAsync(Guid accountId, string externalKey, CancellationToken ct);
+    Task<bool> NormalizedExternalKeyExistsAsync(Guid accountId, string normalizedExternalKey, CancellationToken ct);
 
     /// <summary>
     /// Persists a newly created item. Returns <see cref="CatalogItemCommitResult.Conflict"/>
     /// instead of throwing when a concurrent insert already claimed the same
-    /// (AccountId, ExternalKey) pair — the application-level pre-check in
+    /// (AccountId, NormalizedExternalKey) pair — the application-level pre-check in
     /// <c>CatalogItemLifecycleService</c> narrows this to the common case, but the database's
     /// unique index is the actual race guard.
     /// </summary>

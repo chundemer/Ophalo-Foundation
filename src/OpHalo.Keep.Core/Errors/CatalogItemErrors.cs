@@ -25,6 +25,9 @@ public static class CatalogItemErrors
     public static readonly Error ExternalKeyAlreadyExists =
         Error.Create("CatalogItem.ExternalKeyAlreadyExists", "A catalog item with this SKU already exists.");
 
+    public static readonly Error InvalidExternalKey =
+        Error.Create("CatalogItem.InvalidExternalKey", "SKU must contain at least one letter or number.");
+
     public static readonly Error AlreadyActive =
         Error.Create("CatalogItem.AlreadyActive", "This catalog item is already active.");
 

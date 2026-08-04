@@ -13,9 +13,9 @@ public sealed class EfCatalogItemPersistence(OpHaloDbContext dbContext) : ICatal
             .Include(x => x.Aliases)
             .FirstOrDefaultAsync(x => x.AccountId == accountId && x.Id == catalogItemId, ct);
 
-    public Task<bool> ExternalKeyExistsAsync(Guid accountId, string externalKey, CancellationToken ct) =>
+    public Task<bool> NormalizedExternalKeyExistsAsync(Guid accountId, string normalizedExternalKey, CancellationToken ct) =>
         dbContext.Set<CatalogItem>()
-            .AnyAsync(x => x.AccountId == accountId && x.ExternalKey == externalKey, ct);
+            .AnyAsync(x => x.AccountId == accountId && x.NormalizedExternalKey == normalizedExternalKey, ct);
 
     public async Task<CatalogItemCommitResult> AddAsync(CatalogItem item, CancellationToken ct)
     {

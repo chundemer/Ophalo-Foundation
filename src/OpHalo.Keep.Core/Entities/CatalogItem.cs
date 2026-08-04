@@ -1,4 +1,5 @@
 using OpHalo.Foundation.Core.Entities.Shared;
+using OpHalo.Keep.Core.Domain;
 using OpHalo.Keep.Core.Entities.Enums;
 using OpHalo.Keep.Core.Errors;
 using OpHalo.SharedKernel.Results;
@@ -20,8 +21,14 @@ public sealed class CatalogItem : BaseEntity
 
     public string DisplayName { get; private set; } = string.Empty;
 
-    /// <summary>Contractor-supplied SKU/code. Unique per account where present.</summary>
+    /// <summary>Contractor-supplied SKU/code, preserved verbatim for display. Unique per account
+    /// where present, via <see cref="NormalizedExternalKey"/>.</summary>
     public string? ExternalKey { get; private set; }
+
+    /// <summary>Canonical form of <see cref="ExternalKey"/> (<see cref="SkuNormalizer"/>) — the
+    /// actual account-wide uniqueness/search key, so <c>cop34</c>, <c>COP-34</c>, and <c>cop 34</c>
+    /// cannot occupy different items (build-log/112).</summary>
+    public string? NormalizedExternalKey { get; private set; }
 
     /// <summary>FK to <c>CatalogCategory</c>, added in Session 2b — unconstrained until then.</summary>
     public Guid? CategoryId { get; private set; }
@@ -105,6 +112,14 @@ public sealed class CatalogItem : BaseEntity
 
         var trimmedExternalKey = string.IsNullOrWhiteSpace(externalKey) ? null : externalKey.Trim();
 
+        string? normalizedExternalKey = null;
+        if (trimmedExternalKey is not null)
+        {
+            normalizedExternalKey = SkuNormalizer.Normalize(trimmedExternalKey);
+            if (normalizedExternalKey.Length == 0)
+                return Result<CatalogItem>.Failure(CatalogItemErrors.InvalidExternalKey);
+        }
+
         return Result<CatalogItem>.Success(new CatalogItem
         {
             CreatedByUserId = createdByUserId,
@@ -112,6 +127,7 @@ public sealed class CatalogItem : BaseEntity
             Type = type,
             DisplayName = trimmedDisplayName,
             ExternalKey = trimmedExternalKey,
+            NormalizedExternalKey = normalizedExternalKey,
             CategoryId = categoryId,
             UnitOfMeasure = trimmedUnitOfMeasure,
             Currency = currency.ToUpperInvariant(),

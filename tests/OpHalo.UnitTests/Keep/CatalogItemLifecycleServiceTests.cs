@@ -290,8 +290,8 @@ public class CatalogItemLifecycleServiceTests
         public Task<CatalogItem?> GetByIdAsync(Guid accountId, Guid catalogItemId, CancellationToken ct) =>
             Task.FromResult(Items.FirstOrDefault(x => x.AccountId == accountId && x.Id == catalogItemId));
 
-        public Task<bool> ExternalKeyExistsAsync(Guid accountId, string externalKey, CancellationToken ct) =>
-            Task.FromResult(Items.Any(x => x.AccountId == accountId && x.ExternalKey == externalKey));
+        public Task<bool> NormalizedExternalKeyExistsAsync(Guid accountId, string normalizedExternalKey, CancellationToken ct) =>
+            Task.FromResult(Items.Any(x => x.AccountId == accountId && x.NormalizedExternalKey == normalizedExternalKey));
 
         public Task<CatalogItemCommitResult> AddAsync(CatalogItem item, CancellationToken ct)
         {

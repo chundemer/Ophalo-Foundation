@@ -1,6 +1,6 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-08-02
+**Last updated:** 2026-08-03
 **Deployment posture:** Not pilot-ready.
 **Source of truth for acceptance criteria:** `docs/pilot-readiness-bug-tracker.md`.
 
@@ -29,6 +29,12 @@ account-aware `AccountFeatureAccessResolver`, and a generic Owner/Admin `GET
 /accounts/me/capability-packages` status read.
 
 **Session 2 progress:**
+
+- **2e — Catalog workspace UI:** planned and decision-locked in Build 112; Build 113 breaks the
+  work into bounded implementation slices. 2e.0 preflight split 2e.1 into 2e.1a (canonical SKU
+  foundation) and 2e.1b (pricing-mode foundation) because 2e.1b's only caller,
+  `EfPriceBookPublishPersistence`, pushed the combined slice past the 8-production-file gate.
+  2e.1a is now in progress; no catalog UI/API implementation has begun.
 
 - **2a.1 — CatalogItem foundation:** complete and migrated. `CatalogItem`, its lifecycle/persistence
   stack, and `keep_pricebook_catalog_items` are in place. Review corrected the table name and ensured
@@ -146,9 +152,9 @@ account-aware `AccountFeatureAccessResolver`, and a generic Owner/Admin `GET
     workspace before further price-book or image work: top-level Price Book navigation, catalog
     search/read APIs, Catalog Items list and responsive item drawer, direct price entry, categories,
     aliases, and lifecycle controls. The locked product/UI decisions and explicit non-goals are in
-    Build Log 112. Offerings & Packages is decided product scope but is a separate functional slice;
-    do not ship an empty/disabled tab.
-  - **Pilot-required image storage (separate preflight, after import cleanup).** R2 remains required: price-book import
+    Build Log 112; the bounded execution sequence is Build Log 113. Offerings & Packages is decided
+    product scope but is a separate functional slice; do not ship an empty/disabled tab.
+  - **Pilot-required image storage (separate preflight, after catalog workspace).** R2 remains required: price-book import
     is deferred, not private document storage. The next storage slice defines image metadata,
     account authorization, bounded direct API multipart upload, image type/size validation, purpose
     keys, retrieval/display, and pilot retention. Equipment/work images—not CSV—are the first

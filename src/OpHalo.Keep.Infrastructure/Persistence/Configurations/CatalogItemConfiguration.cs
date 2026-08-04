@@ -27,6 +27,9 @@ internal sealed class CatalogItemConfiguration : BaseEntityConfiguration<Catalog
         builder.Property(x => x.ExternalKey)
             .HasMaxLength(200);
 
+        builder.Property(x => x.NormalizedExternalKey)
+            .HasMaxLength(200);
+
         builder.Property(x => x.CategoryId);
 
         builder.Property(x => x.UnitOfMeasure)
@@ -58,10 +61,13 @@ internal sealed class CatalogItemConfiguration : BaseEntityConfiguration<Catalog
             .IsConcurrencyToken()
             .ValueGeneratedNever();
 
-        // build-log/108: (AccountId, ExternalKey) unique where ExternalKey is present.
-        builder.HasIndex(x => new { x.AccountId, x.ExternalKey })
+        // build-log/112: (AccountId, NormalizedExternalKey) unique where present — ExternalKey
+        // itself stays raw display text; the canonical normalized form is the actual uniqueness
+        // and search key so values like "cop34", "COP-34", and "cop 34" cannot occupy different
+        // items.
+        builder.HasIndex(x => new { x.AccountId, x.NormalizedExternalKey })
             .IsUnique()
-            .HasFilter("external_key IS NOT NULL");
+            .HasFilter("normalized_external_key IS NOT NULL");
 
         builder.HasIndex(x => new { x.AccountId, x.ActiveState, x.CategoryId });
 

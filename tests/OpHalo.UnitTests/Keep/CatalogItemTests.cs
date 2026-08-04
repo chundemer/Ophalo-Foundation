@@ -54,6 +54,41 @@ public class CatalogItemTests
 
         Assert.True(result.IsSuccess);
         Assert.Null(result.Value.ExternalKey);
+        Assert.Null(result.Value.NormalizedExternalKey);
+    }
+
+    [Theory]
+    [InlineData("cop34")]
+    [InlineData("COP-34")]
+    [InlineData("cop 34")]
+    [InlineData(" COP_34 ")]
+    public void CreateDraft_normalizes_equivalent_external_keys_to_the_same_canonical_form(string externalKey)
+    {
+        var result = Draft(externalKey: externalKey);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal("cop34", result.Value.NormalizedExternalKey);
+    }
+
+    [Fact]
+    public void CreateDraft_preserves_the_raw_external_key_for_display()
+    {
+        var result = Draft(externalKey: " COP-34 ");
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal("COP-34", result.Value.ExternalKey);
+    }
+
+    [Theory]
+    [InlineData("---")]
+    [InlineData("___")]
+    [InlineData("!!!")]
+    public void CreateDraft_with_external_key_that_normalizes_to_empty_fails(string externalKey)
+    {
+        var result = Draft(externalKey: externalKey);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(CatalogItemErrors.InvalidExternalKey, result.Error);
     }
 
     [Fact]

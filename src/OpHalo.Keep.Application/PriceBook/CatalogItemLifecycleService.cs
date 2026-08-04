@@ -1,3 +1,4 @@
+using OpHalo.Keep.Core.Domain;
 using OpHalo.Keep.Core.Entities;
 using OpHalo.Keep.Core.Entities.Enums;
 using OpHalo.Keep.Core.Errors;
@@ -33,10 +34,14 @@ public sealed class CatalogItemLifecycleService(ICatalogItemPersistence persiste
 {
     public async Task<Result<CatalogItem>> CreateDraftAsync(CreateCatalogItemCommand command, CancellationToken ct)
     {
-        if (!string.IsNullOrWhiteSpace(command.ExternalKey) &&
-            await persistence.ExternalKeyExistsAsync(command.AccountId, command.ExternalKey.Trim(), ct))
+        if (!string.IsNullOrWhiteSpace(command.ExternalKey))
         {
-            return Result<CatalogItem>.Failure(CatalogItemErrors.ExternalKeyAlreadyExists);
+            var normalizedExternalKey = SkuNormalizer.Normalize(command.ExternalKey.Trim());
+            if (normalizedExternalKey.Length > 0 &&
+                await persistence.NormalizedExternalKeyExistsAsync(command.AccountId, normalizedExternalKey, ct))
+            {
+                return Result<CatalogItem>.Failure(CatalogItemErrors.ExternalKeyAlreadyExists);
+            }
         }
 
         var createResult = CatalogItem.CreateDraft(
