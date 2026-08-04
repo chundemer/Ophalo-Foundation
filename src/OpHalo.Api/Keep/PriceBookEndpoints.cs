@@ -175,7 +175,61 @@ public static class PriceBookEndpoints
             var result = await service.InactivateAsync(categoryId, versionResult.Value, ct);
             return result.IsSuccess ? Results.Ok(new CatalogCategoryTransitionResponse(result.Value)) : ErrorHttpMapper.ToHttpResult(result.Error);
         }).RequireAuthorization();
+
+        app.MapGet("/keep/pricebook/catalog-items", async (
+            HttpRequest httpRequest,
+            CatalogReadApiService service,
+            CancellationToken ct) =>
+        {
+            var (query, bindError) = PriceBookCatalogQueryBinding.Bind(httpRequest.Query);
+            if (bindError is not null)
+                return bindError;
+
+            var result = await service.ListItemsAsync(query!, ct);
+            return result.IsSuccess ? Results.Ok(ToResponse(result.Value)) : ErrorHttpMapper.ToHttpResult(result.Error);
+        }).RequireAuthorization();
+
+        app.MapGet("/keep/pricebook/catalog-items/{catalogItemId:guid}", async (
+            Guid catalogItemId,
+            CatalogReadApiService service,
+            CancellationToken ct) =>
+        {
+            var result = await service.GetItemDetailAsync(catalogItemId, ct);
+            return result.IsSuccess ? Results.Ok(ToResponse(result.Value)) : ErrorHttpMapper.ToHttpResult(result.Error);
+        }).RequireAuthorization();
+
+        app.MapGet("/keep/pricebook/catalog-categories", async (
+            CatalogReadApiService service,
+            CancellationToken ct) =>
+        {
+            var result = await service.GetCategoryChoicesAsync(ct);
+            return result.IsSuccess
+                ? Results.Ok(new CatalogCategoryListResponse(result.Value.Select(ToResponse).ToList()))
+                : ErrorHttpMapper.ToHttpResult(result.Error);
+        }).RequireAuthorization();
     }
+
+    private static CatalogItemListResponse ToResponse(CatalogItemListPage page) => new(
+        page.Items.Select(ToResponse).ToList(),
+        page.Limit,
+        page.HasMore,
+        page.NextCursor);
+
+    private static CatalogItemListRowResponse ToResponse(CatalogItemListRow row) => new(
+        ToResponse(row.Item),
+        row.CurrentPriceLine?.PricingMode.ToString(),
+        row.CurrentPriceLine?.SellPriceSnapshot,
+        row.MatchRank.ToString(),
+        row.MatchReason?.ToString());
+
+    private static CatalogItemDetailResponse ToResponse(CatalogItemDetail detail) => new(
+        ToResponse(detail.Item),
+        detail.Item.Aliases
+            .Select(a => new CatalogItemAliasSummaryResponse(a.Id, a.AliasText, a.ActiveState.ToString()))
+            .ToList(),
+        detail.Category is null ? null : ToResponse(detail.Category),
+        detail.CurrentPriceLine?.PricingMode.ToString(),
+        detail.CurrentPriceLine?.SellPriceSnapshot);
 
     private static CatalogItemAliasResponse ToResponse(AddCatalogItemAliasResult result) => new(
         result.Alias.Id,
@@ -278,3 +332,27 @@ internal sealed record CatalogCategoryResponse(
     Guid ConcurrencyVersion);
 
 internal sealed record CatalogCategoryTransitionResponse(Guid ConcurrencyVersion);
+
+internal sealed record CatalogItemListResponse(
+    IReadOnlyList<CatalogItemListRowResponse> Items,
+    int Limit,
+    bool HasMore,
+    string? NextCursor);
+
+internal sealed record CatalogItemListRowResponse(
+    CatalogItemResponse Item,
+    string? CurrentPricingMode,
+    decimal? CurrentSellPrice,
+    string MatchRank,
+    string? MatchReason);
+
+internal sealed record CatalogItemDetailResponse(
+    CatalogItemResponse Item,
+    IReadOnlyList<CatalogItemAliasSummaryResponse> Aliases,
+    CatalogCategoryResponse? Category,
+    string? CurrentPricingMode,
+    decimal? CurrentSellPrice);
+
+internal sealed record CatalogItemAliasSummaryResponse(Guid Id, string AliasText, string ActiveState);
+
+internal sealed record CatalogCategoryListResponse(IReadOnlyList<CatalogCategoryResponse> Categories);

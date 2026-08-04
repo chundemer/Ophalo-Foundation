@@ -52,8 +52,29 @@ account-aware `AccountFeatureAccessResolver`, and a generic Owner/Admin `GET
   scheduling plus pre-warmed connections) from ~50% to ~19/20 passing locally, but retains the same
   class of real-Postgres-timing flakiness the existing `PriceBookPublishApiTests` concurrency tests
   already carry — not fully eliminated without test-only synchronization hooks in production code,
-  which was out of this batch's scope. The next action is the 2e.3 mechanical preflight (bounded
-  catalog read contract); no catalog UI has begun.
+  which was out of this batch's scope.
+
+  **2e.3 — Catalog read contract: complete.** `GET /keep/pricebook/catalog-items` (list/search),
+  `GET /keep/pricebook/catalog-items/{id}` (detail), and `GET /keep/pricebook/catalog-categories`
+  (choices) are read-only, account-scoped, and cursor-paged. Search matches DisplayName,
+  canonical-normalized SKU, and active aliases; each result reports why it matched
+  (DisplayName/ExternalKey/Alias precedence) and rows are ordered (MatchRank, DisplayName, Id) —
+  the locked total order that the signed keyset cursor carries end to end, with a fingerprint over
+  search/type/category/status (excluding limit/cursor) so a cursor from a different filter shape is
+  rejected. The auth gate reuses `CatalogItemApiService`'s 3-gate composition (ADR-462) except gate
+  1 denies only `IsBlocked`, not `IsReadOnly` — matching every other pure-read service in this
+  codebase, so an OffSeason account can still browse its price book. Query-shape validation
+  (limit/type/status/cursor/unknown-param) is handled as API-layer `ValidationProblem` responses
+  rather than named Core errors — a deliberate, reviewed choice since this is transport-layer
+  parsing, not a domain error contract. New: `ICatalogReadPersistence`/`EfCatalogReadPersistence`,
+  `CatalogItemListCursor` (reuses the existing `IKeepRequestListCursorProtector` — its HMAC signing
+  carries no KeepRequest-specific payload knowledge), `CatalogReadApiService`,
+  `PriceBookCatalogQueryBinding`. 15 new integration tests cover canonical-SKU search, shared-alias
+  multi-match, active/inactive filtering, match rank/reason, browse- and search-mode cursor walks
+  (including a same-DisplayName Id tie-break), cursor/fingerprint-mismatch rejection, cross-account
+  404, and entitlement/role gate denial. Full regression clean (14 architecture tests, `git diff
+  --check`); the one pre-existing 2e.2 concurrent-create flake is outside this read-only slice. The
+  next action is 2e.4 — workspace shell and navigation (build-log/113).
 
   ADR-474, ADR-475, and the `keep-product-positioning.md`/`deferred-topics.md` changes alongside
   this work are Christian's, made outside this implementation session and left untouched.

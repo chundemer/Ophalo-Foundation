@@ -107,6 +107,12 @@ public static class KeepServiceCollectionExtensions
         services.AddScoped<CatalogCategoryLifecycleService>();
         services.AddScoped<CatalogCategoryApiService>();
 
+        // Price Book, Quotes & Materials — bounded catalog reads (Session 2e.3, build-log/113).
+        // Reuses IKeepRequestListCursorProtector (registered above) — its HMAC signing is generic
+        // string signing with no KeepRequest-specific payload knowledge.
+        services.AddScoped<ICatalogReadPersistence, EfCatalogReadPersistence>();
+        services.AddScoped<CatalogReadApiService>();
+
         return services;
     }
 }
