@@ -26,10 +26,11 @@ public class PriceBookVersionTests
         string unitOfMeasure = "each",
         string currency = "USD",
         decimal? cost = 60m,
-        decimal? sellPrice = 120m) =>
+        decimal? sellPrice = 120m,
+        PriceBookLinePricingMode pricingMode = PriceBookLinePricingMode.StandalonePrice) =>
         PriceBookVersion.CreatePublished(
             AccountId, versionNumber, Actor, PublishedAtUtc, CatalogItemId,
-            displayName, type, unitOfMeasure, currency, cost, sellPrice);
+            displayName, type, unitOfMeasure, currency, cost, sellPrice, pricingMode);
 
     // --- CreatePublished: version ---
 
@@ -57,6 +58,7 @@ public class PriceBookVersionTests
         Assert.Equal("USD", line.CurrencySnapshot);
         Assert.Equal(60m, line.CostSnapshot);
         Assert.Equal(120m, line.SellPriceSnapshot);
+        Assert.Equal(PriceBookLinePricingMode.StandalonePrice, line.PricingMode);
     }
 
     [Fact]
@@ -64,7 +66,8 @@ public class PriceBookVersionTests
     {
         var result = PriceBookVersion.CreatePublished(
             AccountId, 1, Actor, PublishedAtUtc, CatalogItemId,
-            " Sump Pump ", CatalogItemType.Material, " each ", "usd", 60m, 120m);
+            " Sump Pump ", CatalogItemType.Material, " each ", "usd", 60m, 120m,
+            PriceBookLinePricingMode.StandalonePrice);
 
         Assert.True(result.IsSuccess);
         var line = Assert.Single(result.Value.Lines);
@@ -74,14 +77,15 @@ public class PriceBookVersionTests
     }
 
     [Fact]
-    public void CreatePublished_allows_null_cost_and_sell_price_for_a_package_only_item()
+    public void CreatePublished_allows_null_cost_and_sell_price_with_explicit_NoStandalonePrice()
     {
-        var result = Version(cost: null, sellPrice: null);
+        var result = Version(cost: null, sellPrice: null, pricingMode: PriceBookLinePricingMode.NoStandalonePrice);
 
         Assert.True(result.IsSuccess);
         var line = Assert.Single(result.Value.Lines);
         Assert.Null(line.CostSnapshot);
         Assert.Null(line.SellPriceSnapshot);
+        Assert.Equal(PriceBookLinePricingMode.NoStandalonePrice, line.PricingMode);
     }
 
     [Fact]
@@ -89,7 +93,8 @@ public class PriceBookVersionTests
     {
         Assert.Throws<ArgumentException>(() =>
             PriceBookVersion.CreatePublished(
-                Guid.Empty, 1, Actor, PublishedAtUtc, CatalogItemId, "x", CatalogItemType.Material, "each", "USD", null, null));
+                Guid.Empty, 1, Actor, PublishedAtUtc, CatalogItemId, "x", CatalogItemType.Material, "each", "USD", null, null,
+                PriceBookLinePricingMode.NoStandalonePrice));
     }
 
     [Theory]
@@ -105,7 +110,8 @@ public class PriceBookVersionTests
     {
         Assert.Throws<ArgumentException>(() =>
             PriceBookVersion.CreatePublished(
-                AccountId, 1, Guid.Empty, PublishedAtUtc, CatalogItemId, "x", CatalogItemType.Material, "each", "USD", null, null));
+                AccountId, 1, Guid.Empty, PublishedAtUtc, CatalogItemId, "x", CatalogItemType.Material, "each", "USD", null, null,
+                PriceBookLinePricingMode.NoStandalonePrice));
     }
 
     // --- CreatePublished: line validation propagation ---
@@ -178,6 +184,32 @@ public class PriceBookVersionTests
 
         Assert.True(result.IsFailure);
         Assert.Equal(PriceBookVersionErrors.SellPriceSnapshotMustNotBeNegative, result.Error);
+    }
+
+    // --- CreatePublished: pricing-mode invariant ---
+
+    [Fact]
+    public void CreatePublished_StandalonePrice_with_null_sell_price_fails()
+    {
+        var result = Version(sellPrice: null, pricingMode: PriceBookLinePricingMode.StandalonePrice);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(PriceBookVersionErrors.StandalonePriceRequiresSellPrice, result.Error);
+    }
+
+    [Fact]
+    public void CreatePublished_NoStandalonePrice_with_non_null_sell_price_fails()
+    {
+        var result = Version(sellPrice: 120m, pricingMode: PriceBookLinePricingMode.NoStandalonePrice);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(PriceBookVersionErrors.NoStandalonePriceRequiresNullSellPrice, result.Error);
+    }
+
+    [Fact]
+    public void CreatePublished_with_undefined_pricing_mode_throws()
+    {
+        Assert.Throws<ArgumentException>(() => Version(pricingMode: (PriceBookLinePricingMode)999));
     }
 
     // --- Supersede ---

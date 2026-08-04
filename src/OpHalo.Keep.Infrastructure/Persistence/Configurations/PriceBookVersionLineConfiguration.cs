@@ -44,6 +44,11 @@ internal sealed class PriceBookVersionLineConfiguration : BaseEntityConfiguratio
         builder.Property(x => x.SellPriceSnapshot)
             .HasPrecision(19, 4);
 
+        builder.Property(x => x.PricingMode)
+            .HasConversion<string>()
+            .HasMaxLength(50)
+            .IsRequired();
+
         // build-log/108: (PriceBookVersionId, CatalogItemId) unique — a catalog item appears at
         // most once per version.
         builder.HasIndex(x => new { x.PriceBookVersionId, x.CatalogItemId })

@@ -34,7 +34,12 @@ account-aware `AccountFeatureAccessResolver`, and a generic Owner/Admin `GET
   work into bounded implementation slices. 2e.0 preflight split 2e.1 into 2e.1a (canonical SKU
   foundation) and 2e.1b (pricing-mode foundation) because 2e.1b's only caller,
   `EfPriceBookPublishPersistence`, pushed the combined slice past the 8-production-file gate.
-  2e.1a is now in progress; no catalog UI/API implementation has begun.
+  Both are complete: `CatalogItem.NormalizedExternalKey` (ASCII-normalized, unique per account,
+  rejects an all-punctuation key) and `PriceBookVersionLine.PricingMode`
+  (`StandalonePrice`/`NoStandalonePrice`, invariant-enforced against Sell Price) are migrated and
+  backfilled, with domain, API, and migration-backfill test coverage. The next action is the 2e.2
+  mechanical preflight (atomic Create-and-Activate API); no catalog UI/API implementation has
+  begun.
 
 - **2a.1 — CatalogItem foundation:** complete and migrated. `CatalogItem`, its lifecycle/persistence
   stack, and `keep_pricebook_catalog_items` are in place. Review corrected the table name and ensured

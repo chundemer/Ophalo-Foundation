@@ -32,6 +32,8 @@ public sealed class PriceBookVersionLine : BaseEntity
 
     public decimal? SellPriceSnapshot { get; private set; }
 
+    public PriceBookLinePricingMode PricingMode { get; private set; }
+
     private const int MaxDisplayNameLength = 200;
     private const int MaxUnitOfMeasureLength = 50;
 
@@ -48,7 +50,8 @@ public sealed class PriceBookVersionLine : BaseEntity
         string unitOfMeasureSnapshot,
         string currencySnapshot,
         decimal? costSnapshot,
-        decimal? sellPriceSnapshot)
+        decimal? sellPriceSnapshot,
+        PriceBookLinePricingMode pricingMode)
     {
         if (accountId == Guid.Empty)
             throw new ArgumentException("AccountId must not be empty.", nameof(accountId));
@@ -58,6 +61,8 @@ public sealed class PriceBookVersionLine : BaseEntity
             throw new ArgumentException("CatalogItemId must not be empty.", nameof(catalogItemId));
         if (!Enum.IsDefined(typeSnapshot))
             throw new ArgumentException("TypeSnapshot must be a defined CatalogItemType value.", nameof(typeSnapshot));
+        if (!Enum.IsDefined(pricingMode))
+            throw new ArgumentException("PricingMode must be a defined PriceBookLinePricingMode value.", nameof(pricingMode));
 
         var trimmedDisplayName = displayNameSnapshot?.Trim() ?? string.Empty;
         if (trimmedDisplayName.Length == 0)
@@ -79,6 +84,11 @@ public sealed class PriceBookVersionLine : BaseEntity
         if (sellPriceSnapshot is < 0)
             return Result<PriceBookVersionLine>.Failure(PriceBookVersionErrors.SellPriceSnapshotMustNotBeNegative);
 
+        if (pricingMode == PriceBookLinePricingMode.StandalonePrice && sellPriceSnapshot is null)
+            return Result<PriceBookVersionLine>.Failure(PriceBookVersionErrors.StandalonePriceRequiresSellPrice);
+        if (pricingMode == PriceBookLinePricingMode.NoStandalonePrice && sellPriceSnapshot is not null)
+            return Result<PriceBookVersionLine>.Failure(PriceBookVersionErrors.NoStandalonePriceRequiresNullSellPrice);
+
         return Result<PriceBookVersionLine>.Success(new PriceBookVersionLine
         {
             AccountId = accountId,
@@ -90,6 +100,7 @@ public sealed class PriceBookVersionLine : BaseEntity
             CurrencySnapshot = currencySnapshot.ToUpperInvariant(),
             CostSnapshot = costSnapshot,
             SellPriceSnapshot = sellPriceSnapshot,
+            PricingMode = pricingMode,
         });
     }
 

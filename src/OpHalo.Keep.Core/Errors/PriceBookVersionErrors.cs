@@ -31,6 +31,12 @@ public static class PriceBookVersionErrors
     public static readonly Error SellPriceSnapshotMustNotBeNegative =
         Error.Create("PriceBookVersion.SellPriceSnapshotMustNotBeNegative", "Sell price snapshot must not be negative.");
 
+    public static readonly Error StandalonePriceRequiresSellPrice =
+        Error.Create("PriceBookVersion.StandalonePriceRequiresSellPrice", "A standalone price requires a sell price.");
+
+    public static readonly Error NoStandalonePriceRequiresNullSellPrice =
+        Error.Create("PriceBookVersion.NoStandalonePriceRequiresNullSellPrice", "An item with no standalone price must not have a sell price.");
+
     /// <summary>
     /// A competing publish/manual-override transaction won the race against the account-scoped
     /// publish lock (ADR-470). The caller must retry the publish against current state.

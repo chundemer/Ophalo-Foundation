@@ -59,10 +59,37 @@ public sealed class PriceBookPublishApiTests : IClassFixture<KeepApiWebFactory>,
         var reloaded = await db.Set<CatalogItem>().FirstAsync(x => x.Id == item.Id);
         Assert.Equal(lineId, reloaded.CurrentPriceBookVersionLineId);
 
+        var line = await db.Set<PriceBookVersionLine>().SingleAsync(x => x.Id == lineId);
+        Assert.Equal(PriceBookLinePricingMode.StandalonePrice, line.PricingMode);
+
         var lockRow = await db.Set<PriceBookAccountState>().SingleAsync(x => x.AccountId == accountId);
         Assert.NotEqual(Guid.Empty, lockRow.PublishLockVersion);
 
         Assert.Single(db.Set<ManualPriceOverride>().Where(x => x.AccountId == accountId));
+    }
+
+    [Fact]
+    public async Task Publish_WithNullSellPrice_PersistsNoStandalonePrice()
+    {
+        var (accountId, ownerId, _) = await SeedAccountAsync("publish-no-standalone");
+        await EnrollAsync(accountId, ownerId);
+        var item = await SeedCatalogItemAsync(accountId, ownerId);
+        var cookie = await GetCookieAsync(ownerId, accountId);
+
+        var response = await AuthRequest(cookie).PostAsJsonAsync(
+            $"/keep/pricebook/catalog-items/{item.Id}/publish-price",
+            new { cost = 60m, sellPrice = (decimal?)null, reason = "Package-only reference item" });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        var lineId = body.GetProperty("priceBookVersionLineId").GetGuid();
+        Assert.Equal(JsonValueKind.Null, body.GetProperty("sellPrice").ValueKind);
+
+        await using var scope = _factory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+        var line = await db.Set<PriceBookVersionLine>().SingleAsync(x => x.Id == lineId);
+        Assert.Equal(PriceBookLinePricingMode.NoStandalonePrice, line.PricingMode);
+        Assert.Null(line.SellPriceSnapshot);
     }
 
     [Fact]

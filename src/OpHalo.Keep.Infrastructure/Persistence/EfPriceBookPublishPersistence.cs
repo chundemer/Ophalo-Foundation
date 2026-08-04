@@ -60,6 +60,13 @@ public sealed class EfPriceBookPublishPersistence(OpHaloDbContext dbContext, ICl
             .Select(x => (int?)x.VersionNumber)
             .MaxAsync(ct) ?? 0);
 
+        // Legacy publish route has no explicit pricing-mode input yet (build-log/113, 2e.1b) — a
+        // supplied Sell Price means StandalonePrice, its absence means NoStandalonePrice. 2e.2's
+        // atomic creation API will make this an explicit caller input.
+        var pricingMode = command.SellPrice is not null
+            ? PriceBookLinePricingMode.StandalonePrice
+            : PriceBookLinePricingMode.NoStandalonePrice;
+
         var versionResult = PriceBookVersion.CreatePublished(
             command.AccountId,
             nextVersionNumber,
@@ -71,7 +78,8 @@ public sealed class EfPriceBookPublishPersistence(OpHaloDbContext dbContext, ICl
             catalogItem.UnitOfMeasure,
             catalogItem.Currency,
             command.Cost,
-            command.SellPrice);
+            command.SellPrice,
+            pricingMode);
         if (versionResult.IsFailure)
             return Result<PublishCatalogItemPriceResult>.Failure(versionResult.Error);
 

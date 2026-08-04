@@ -54,7 +54,8 @@ public sealed class PriceBookVersion : BaseEntity
         string unitOfMeasureSnapshot,
         string currencySnapshot,
         decimal? costSnapshot,
-        decimal? sellPriceSnapshot)
+        decimal? sellPriceSnapshot,
+        PriceBookLinePricingMode pricingMode)
     {
         if (accountId == Guid.Empty)
             throw new ArgumentException("AccountId must not be empty.", nameof(accountId));
@@ -82,7 +83,8 @@ public sealed class PriceBookVersion : BaseEntity
             unitOfMeasureSnapshot,
             currencySnapshot,
             costSnapshot,
-            sellPriceSnapshot);
+            sellPriceSnapshot,
+            pricingMode);
         if (lineResult.IsFailure)
             return Result<PriceBookVersion>.Failure(lineResult.Error);
 
