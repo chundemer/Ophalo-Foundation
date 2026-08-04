@@ -15,8 +15,8 @@ public static class PriceBookEndpoints
 {
     public static void MapPriceBookEndpoints(this IEndpointRouteBuilder app)
     {
-        app.MapPost("/keep/pricebook/catalog-items", async (
-            CreateCatalogItemBody body,
+        app.MapPost("/keep/pricebook/catalog-items/create-and-activate", async (
+            CreateAndActivateCatalogItemBody body,
             CatalogItemApiService service,
             CancellationToken ct) =>
         {
@@ -26,31 +26,37 @@ public static class PriceBookEndpoints
                 return ValidationProblem("Type must be one of Material, Equipment, Service, Fee.", "Validation.TypeInvalid");
             }
 
-            var command = new CreateCatalogItemApiCommand(
+            if (!Enum.TryParse<PriceBookLinePricingMode>(body.PricingMode, ignoreCase: true, out var pricingMode) ||
+                !Enum.IsDefined(pricingMode))
+            {
+                return ValidationProblem(
+                    "PricingMode must be StandalonePrice or NoStandalonePrice.", "Validation.PricingModeInvalid");
+            }
+
+            var command = new CreateAndActivateCatalogItemApiCommand(
                 type,
                 body.DisplayName ?? string.Empty,
                 body.UnitOfMeasure ?? string.Empty,
                 body.Currency ?? string.Empty,
                 body.ExternalKey,
                 body.CategoryId,
-                body.IsCommonItem);
+                body.IsCommonItem,
+                body.InitialAliasTexts ?? [],
+                pricingMode,
+                body.Cost,
+                body.SellPrice);
 
-            var result = await service.CreateDraftAsync(command, ct);
-            return result.IsSuccess ? Results.Ok(ToResponse(result.Value)) : ErrorHttpMapper.ToHttpResult(result.Error);
-        }).RequireAuthorization();
-
-        app.MapPatch("/keep/pricebook/catalog-items/{catalogItemId:guid}/activate", async (
-            Guid catalogItemId,
-            HttpRequest httpRequest,
-            CatalogItemApiService service,
-            CancellationToken ct) =>
-        {
-            var versionResult = CatalogItemVersionHeader.Parse(httpRequest.Headers);
-            if (!versionResult.IsSuccess)
-                return ErrorHttpMapper.ToHttpResult(versionResult.Error);
-
-            var result = await service.ActivateAsync(catalogItemId, versionResult.Value, ct);
-            return result.IsSuccess ? Results.Ok(new CatalogItemTransitionResponse(result.Value)) : ErrorHttpMapper.ToHttpResult(result.Error);
+            var result = await service.CreateAndActivateAsync(command, ct);
+            return result.IsSuccess
+                ? Results.Ok(new CreateAndActivateCatalogItemResponse(
+                    ToResponse(result.Value.Item),
+                    result.Value.VersionNumber,
+                    result.Value.PriceBookVersionId,
+                    result.Value.PriceBookVersionLineId,
+                    result.Value.Cost,
+                    result.Value.SellPrice,
+                    result.Value.PricingMode.ToString()))
+                : ErrorHttpMapper.ToHttpResult(result.Error);
         }).RequireAuthorization();
 
         app.MapPatch("/keep/pricebook/catalog-items/{catalogItemId:guid}/inactivate", async (
@@ -206,14 +212,27 @@ public static class PriceBookEndpoints
             extensions: new Dictionary<string, object?> { ["code"] = code });
 }
 
-internal sealed record CreateCatalogItemBody(
+internal sealed record CreateAndActivateCatalogItemBody(
     string? Type,
     string? DisplayName,
     string? UnitOfMeasure,
     string? Currency,
     string? ExternalKey,
     Guid? CategoryId,
-    bool IsCommonItem);
+    bool IsCommonItem,
+    List<string>? InitialAliasTexts,
+    string? PricingMode,
+    decimal? Cost,
+    decimal? SellPrice);
+
+internal sealed record CreateAndActivateCatalogItemResponse(
+    CatalogItemResponse Item,
+    int VersionNumber,
+    Guid PriceBookVersionId,
+    Guid PriceBookVersionLineId,
+    decimal? Cost,
+    decimal? SellPrice,
+    string PricingMode);
 
 internal sealed record CatalogItemResponse(
     Guid Id,

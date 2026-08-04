@@ -96,6 +96,12 @@ public static class KeepServiceCollectionExtensions
         services.AddScoped<IPriceBookPublishPersistence, EfPriceBookPublishPersistence>();
         services.AddScoped<PriceBookPublishService>();
 
+        // Price Book, Quotes & Materials — atomic Save & activate (build-log/112, Session 2e.2).
+        // The sole item-creation path exposed in Session 2e; shares the ADR-470 account lock and
+        // VersionNumber sequence with the publish path above.
+        services.AddScoped<ICatalogItemCreateAndActivatePersistence, EfCatalogItemCreateAndActivatePersistence>();
+        services.AddScoped<CatalogItemCreateAndActivateService>();
+
         // Price Book, Quotes & Materials — catalog categories (Session 2b.1/2b.3)
         services.AddScoped<ICatalogCategoryPersistence, EfCatalogCategoryPersistence>();
         services.AddScoped<CatalogCategoryLifecycleService>();

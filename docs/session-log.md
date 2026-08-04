@@ -37,9 +37,26 @@ account-aware `AccountFeatureAccessResolver`, and a generic Owner/Admin `GET
   Both are complete: `CatalogItem.NormalizedExternalKey` (ASCII-normalized, unique per account,
   rejects an all-punctuation key) and `PriceBookVersionLine.PricingMode`
   (`StandalonePrice`/`NoStandalonePrice`, invariant-enforced against Sell Price) are migrated and
-  backfilled, with domain, API, and migration-backfill test coverage. The next action is the 2e.2
-  mechanical preflight (atomic Create-and-Activate API); no catalog UI/API implementation has
-  begun.
+  backfilled, with domain, API, and migration-backfill test coverage.
+
+  **2e.2 — Atomic creation API: complete.** `POST /keep/pricebook/catalog-items/create-and-activate`
+  is now the sole item-creation path; the prior draft-create and draft-activate routes and their
+  `CatalogItemApiService` methods were removed, not just left unused, so a direct API caller can no
+  longer reach a Draft outcome. The transaction needs an intentional two-phase save: `CatalogItem`
+  and its own `PriceBookVersionLine` each hold a FK back to the other (the item's current-price
+  pointer; the line's composite FK to the item), so EF cannot insert both in one `SaveChanges` call.
+  It inserts with a null price pointer first, then repoints and saves again inside the same
+  serializable transaction — matching the existing Account/AccountUser ADR-019 pattern. Full
+  regression is clean (1,364 unit tests, 14 architecture tests, both integration suites, `git diff
+  --check`). Reported honestly: the new concurrent-create race test was improved (thread-pool
+  scheduling plus pre-warmed connections) from ~50% to ~19/20 passing locally, but retains the same
+  class of real-Postgres-timing flakiness the existing `PriceBookPublishApiTests` concurrency tests
+  already carry — not fully eliminated without test-only synchronization hooks in production code,
+  which was out of this batch's scope. The next action is the 2e.3 mechanical preflight (bounded
+  catalog read contract); no catalog UI has begun.
+
+  ADR-474, ADR-475, and the `keep-product-positioning.md`/`deferred-topics.md` changes alongside
+  this work are Christian's, made outside this implementation session and left untouched.
 
 - **2a.1 — CatalogItem foundation:** complete and migrated. `CatalogItem`, its lifecycle/persistence
   stack, and `keep_pricebook_catalog_items` are in place. Review corrected the table name and ensured

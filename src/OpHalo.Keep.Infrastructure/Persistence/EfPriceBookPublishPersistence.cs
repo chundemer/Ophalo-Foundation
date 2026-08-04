@@ -1,6 +1,5 @@
 using System.Data;
 using Microsoft.EntityFrameworkCore;
-using Npgsql;
 using OpHalo.Foundation.Infrastructure.Persistence;
 using OpHalo.Keep.Application.PriceBook;
 using OpHalo.Keep.Core.Entities;
@@ -115,33 +114,12 @@ public sealed class EfPriceBookPublishPersistence(OpHaloDbContext dbContext, ICl
             await dbContext.SaveChangesAsync(ct);
             await tx.CommitAsync(ct);
         }
-        catch (Exception ex) when (IsLockConflict(ex))
+        catch (Exception ex) when (PriceBookLockConflict.IsLockConflict(ex))
         {
             return Result<PublishCatalogItemPriceResult>.Failure(PriceBookVersionErrors.PublishLockConflict);
         }
 
         return Result<PublishCatalogItemPriceResult>.Success(new PublishCatalogItemPriceResult(
             newVersion.VersionNumber, newVersion.Id, newLine.Id, newLine.CostSnapshot, newLine.SellPriceSnapshot));
-    }
-
-    // Walks the exception chain for the account-lock's concurrency-token mismatch
-    // (DbUpdateConcurrencyException), the narrower race where two concurrent first-ever publishes
-    // for the same account both try to lazily create the lock row (unique violation), or a
-    // Serializable-isolation conflict (Postgres SqlState 40001). A single filtered catch is
-    // needed rather than one per exception type because EF Core's execution strategy re-wraps a
-    // transient-shaped DbUpdateException in an InvalidOperationException rather than letting it
-    // surface directly — confirmed via the concurrent-publish integration test.
-    private static bool IsLockConflict(Exception ex)
-    {
-        for (var current = ex; current is not null; current = current.InnerException)
-        {
-            if (current is DbUpdateConcurrencyException)
-                return true;
-            if (current is PostgresException pg &&
-                (pg.SqlState == PostgresErrorCodes.UniqueViolation || pg.SqlState == PostgresErrorCodes.SerializationFailure))
-                return true;
-        }
-
-        return false;
     }
 }

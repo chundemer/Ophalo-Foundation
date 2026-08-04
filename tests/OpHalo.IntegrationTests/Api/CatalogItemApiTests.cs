@@ -17,12 +17,15 @@ namespace OpHalo.IntegrationTests.Api;
 
 /// <summary>
 /// HTTP integration tests for Session 2a.2's CatalogItem endpoints:
-///   POST /keep/pricebook/catalog-items
-///   POST /keep/pricebook/catalog-items/{id}/activate
-///   POST /keep/pricebook/catalog-items/{id}/inactivate
+///   PATCH /keep/pricebook/catalog-items/{id}/inactivate
+///   POST /keep/pricebook/catalog-items/{id}/aliases
+///   PATCH /keep/pricebook/catalog-items/{id}/aliases/{aliasId}/activate
+///   PATCH /keep/pricebook/catalog-items/{id}/aliases/{aliasId}/inactivate
 ///
-/// Covers cross-account row isolation, stale-ConcurrencyVersion 409, and the
-/// account-aware entitlement gate (ADR-462: enrollment required, plan alone is not enough).
+/// Session 2e.2 removed the separate draft-create/draft-activate endpoints these tests used to
+/// cover — Save &amp; activate (<see cref="CatalogItemCreateAndActivateApiTests"/>) is now the
+/// sole item-creation path. Covers cross-account row isolation, stale-ConcurrencyVersion 409, and
+/// the account-aware entitlement gate (ADR-462: enrollment required, plan alone is not enough).
 /// </summary>
 public sealed class CatalogItemApiTests : IClassFixture<KeepApiWebFactory>, IAsyncLifetime
 {
@@ -38,145 +41,16 @@ public sealed class CatalogItemApiTests : IClassFixture<KeepApiWebFactory>, IAsy
     public Task DisposeAsync() => Task.CompletedTask;
 
     [Fact]
-    public async Task Create_WithoutEntitlement_Returns403()
+    public async Task Inactivate_CorrectVersion_Returns200WithNewVersion()
     {
-        var (accountId, ownerId, _) = await SeedAccountAsync("no-entitlement");
+        var (accountId, ownerId, _) = await SeedAccountAsync("inactivate-ok");
+        await EnrollAsync(accountId, ownerId);
         var cookie = await GetCookieAsync(ownerId, accountId);
 
-        var response = await AuthRequest(cookie).PostAsJsonAsync(
-            "/keep/pricebook/catalog-items",
-            new { type = "Material", displayName = "Filter", unitOfMeasure = "each", currency = "USD" });
-
-        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
-    }
-
-    [Fact]
-    public async Task Create_OperatorWithEntitlement_Returns403()
-    {
-        var (accountId, ownerId, _) = await SeedAccountAsync("operator-denied");
-        await EnrollAsync(accountId, ownerId);
-        var (operatorId, _) = await SeedActiveMemberAsync(accountId, "operator@operator-denied.com", AccountUserRole.Operator);
-        var cookie = await GetCookieAsync(operatorId, accountId);
-
-        var response = await AuthRequest(cookie).PostAsJsonAsync(
-            "/keep/pricebook/catalog-items",
-            new { type = "Material", displayName = "Filter", unitOfMeasure = "each", currency = "USD" });
-
-        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
-    }
-
-    [Fact]
-    public async Task Create_AdminWithEntitlement_Returns200AndPersists()
-    {
-        var (accountId, ownerId, _) = await SeedAccountAsync("admin-create");
-        await EnrollAsync(accountId, ownerId);
-        var (adminId, _) = await SeedActiveMemberAsync(accountId, "admin@admin-create.com", AccountUserRole.Admin);
-        var cookie = await GetCookieAsync(adminId, accountId);
-
-        var response = await AuthRequest(cookie).PostAsJsonAsync(
-            "/keep/pricebook/catalog-items",
-            new { type = "Material", displayName = "Filter", unitOfMeasure = "each", currency = "USD" });
-
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
-        Assert.Equal("Filter", body.GetProperty("displayName").GetString());
-        Assert.Equal("Draft", body.GetProperty("activeState").GetString());
-
-        await using var scope = _factory.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
-        Assert.Single(db.Set<CatalogItem>().Where(x => x.AccountId == accountId));
-    }
-
-    [Fact]
-    public async Task Activate_CrossAccountId_Returns404()
-    {
-        var (accountA, ownerA, _) = await SeedAccountAsync("cross-a");
-        await EnrollAsync(accountA, ownerA);
-        var cookieA = await GetCookieAsync(ownerA, accountA);
-
-        var (accountB, ownerB, _) = await SeedAccountAsync("cross-b");
-        await EnrollAsync(accountB, ownerB);
-        var cookieB = await GetCookieAsync(ownerB, accountB);
-
-        var itemInB = await SeedCatalogItemAsync(accountB, ownerB);
+        var item = await SeedActiveCatalogItemAsync(accountId, ownerId);
 
         var response = await PatchWithVersionAsync(
-            AuthRequest(cookieA), $"/keep/pricebook/catalog-items/{itemInB.Id}/activate", itemInB.ConcurrencyVersion);
-
-        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
-
-        // The row in B is untouched by the failed cross-account attempt from A.
-        _ = cookieB;
-        await using var scope = _factory.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
-        var reloaded = await db.Set<CatalogItem>().FindAsync(itemInB.Id);
-        Assert.Equal(CatalogItemActiveState.Draft, reloaded!.ActiveState);
-    }
-
-    [Fact]
-    public async Task Activate_StaleConcurrencyVersion_Returns409()
-    {
-        var (accountId, ownerId, _) = await SeedAccountAsync("stale-version");
-        await EnrollAsync(accountId, ownerId);
-        var cookie = await GetCookieAsync(ownerId, accountId);
-
-        var item = await SeedCatalogItemAsync(accountId, ownerId);
-        var staleVersion = Guid.NewGuid();
-        Assert.NotEqual(staleVersion, item.ConcurrencyVersion);
-
-        var response = await PatchWithVersionAsync(
-            AuthRequest(cookie), $"/keep/pricebook/catalog-items/{item.Id}/activate", staleVersion);
-
-        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
-    }
-
-    [Fact]
-    public async Task Activate_MissingVersionHeader_Returns400()
-    {
-        var (accountId, ownerId, _) = await SeedAccountAsync("missing-header");
-        await EnrollAsync(accountId, ownerId);
-        var cookie = await GetCookieAsync(ownerId, accountId);
-
-        var item = await SeedCatalogItemAsync(accountId, ownerId);
-
-        var response = await PatchWithVersionAsync(
-            AuthRequest(cookie), $"/keep/pricebook/catalog-items/{item.Id}/activate", version: null);
-
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
-        Assert.Equal("CatalogItem.ExpectedVersionRequired", body.GetProperty("code").GetString());
-    }
-
-    [Fact]
-    public async Task Activate_MalformedVersionHeader_Returns400()
-    {
-        var (accountId, ownerId, _) = await SeedAccountAsync("malformed-header");
-        await EnrollAsync(accountId, ownerId);
-        var cookie = await GetCookieAsync(ownerId, accountId);
-
-        var item = await SeedCatalogItemAsync(accountId, ownerId);
-
-        var request = new HttpRequestMessage(HttpMethod.Patch, $"/keep/pricebook/catalog-items/{item.Id}/activate");
-        request.Headers.Add(CatalogItemVersionHeader.HeaderName, "not-a-guid");
-
-        var response = await AuthRequest(cookie).SendAsync(request);
-
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
-        Assert.Equal("CatalogItem.ExpectedVersionInvalid", body.GetProperty("code").GetString());
-    }
-
-    [Fact]
-    public async Task Activate_CorrectVersion_Returns200WithNewVersion()
-    {
-        var (accountId, ownerId, _) = await SeedAccountAsync("activate-ok");
-        await EnrollAsync(accountId, ownerId);
-        var cookie = await GetCookieAsync(ownerId, accountId);
-
-        var item = await SeedCatalogItemAsync(accountId, ownerId);
-
-        var response = await PatchWithVersionAsync(
-            AuthRequest(cookie), $"/keep/pricebook/catalog-items/{item.Id}/activate", item.ConcurrencyVersion);
+            AuthRequest(cookie), $"/keep/pricebook/catalog-items/{item.Id}/inactivate", item.ConcurrencyVersion);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
@@ -186,42 +60,8 @@ public sealed class CatalogItemApiTests : IClassFixture<KeepApiWebFactory>, IAsy
         await using var scope = _factory.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
         var reloaded = await db.Set<CatalogItem>().FindAsync(item.Id);
-        Assert.Equal(CatalogItemActiveState.Active, reloaded!.ActiveState);
-        Assert.Equal(newVersion, reloaded.ConcurrencyVersion);
-    }
-
-    [Fact]
-    public async Task Activate_ThenInactivate_UsingOnlyReturnedTokens_Succeeds()
-    {
-        // The client never re-reads the item; each mutation's response token is the only
-        // input to the next PATCH's version header (Session 2b.3 review: a 204 response gave
-        // the client no way to make the next versioned mutation without a separate read).
-        var (accountId, ownerId, _) = await SeedAccountAsync("sequential-item-mutation");
-        await EnrollAsync(accountId, ownerId);
-        var cookie = await GetCookieAsync(ownerId, accountId);
-
-        var item = await SeedCatalogItemAsync(accountId, ownerId);
-
-        var activate = await PatchWithVersionAsync(
-            AuthRequest(cookie), $"/keep/pricebook/catalog-items/{item.Id}/activate", item.ConcurrencyVersion);
-        Assert.Equal(HttpStatusCode.OK, activate.StatusCode);
-        var afterActivateVersion = (await activate.Content.ReadFromJsonAsync<JsonElement>())
-            .GetProperty("concurrencyVersion").GetGuid();
-
-        var inactivate = await PatchWithVersionAsync(
-            AuthRequest(cookie), $"/keep/pricebook/catalog-items/{item.Id}/inactivate", afterActivateVersion);
-        Assert.Equal(HttpStatusCode.OK, inactivate.StatusCode);
-        var afterInactivateVersion = (await inactivate.Content.ReadFromJsonAsync<JsonElement>())
-            .GetProperty("concurrencyVersion").GetGuid();
-
-        Assert.NotEqual(item.ConcurrencyVersion, afterActivateVersion);
-        Assert.NotEqual(afterActivateVersion, afterInactivateVersion);
-
-        await using var scope = _factory.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
-        var reloaded = await db.Set<CatalogItem>().FindAsync(item.Id);
         Assert.Equal(CatalogItemActiveState.Inactive, reloaded!.ActiveState);
-        Assert.Equal(afterInactivateVersion, reloaded.ConcurrencyVersion);
+        Assert.Equal(newVersion, reloaded.ConcurrencyVersion);
     }
 
     [Fact]
@@ -233,15 +73,10 @@ public sealed class CatalogItemApiTests : IClassFixture<KeepApiWebFactory>, IAsy
         await EnrollAsync(accountId, ownerId);
         var cookie = await GetCookieAsync(ownerId, accountId);
 
-        var item = await SeedCatalogItemAsync(accountId, ownerId);
-        var activate = await PatchWithVersionAsync(
-            AuthRequest(cookie), $"/keep/pricebook/catalog-items/{item.Id}/activate", item.ConcurrencyVersion);
-        Assert.Equal(HttpStatusCode.OK, activate.StatusCode);
-        var afterActivateVersion = (await activate.Content.ReadFromJsonAsync<JsonElement>())
-            .GetProperty("concurrencyVersion").GetGuid();
+        var item = await SeedActiveCatalogItemAsync(accountId, ownerId);
 
         var inactivate = await PatchWithVersionAsync(
-            AuthRequest(cookie), $"/keep/pricebook/catalog-items/{item.Id}/inactivate", afterActivateVersion);
+            AuthRequest(cookie), $"/keep/pricebook/catalog-items/{item.Id}/inactivate", item.ConcurrencyVersion);
         Assert.Equal(HttpStatusCode.OK, inactivate.StatusCode);
         var afterInactivateVersion = (await inactivate.Content.ReadFromJsonAsync<JsonElement>())
             .GetProperty("concurrencyVersion").GetGuid();
@@ -441,29 +276,6 @@ public sealed class CatalogItemApiTests : IClassFixture<KeepApiWebFactory>, IAsy
         return (graph.Account.Id, graph.Owner.Id, ownerCookie);
     }
 
-    private async Task<(Guid AccountUserId, Guid UserId)> SeedActiveMemberAsync(
-        Guid accountId, string email, AccountUserRole role)
-    {
-        var now = DateTime.UtcNow;
-        await using var scope = _factory.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
-
-        var user = User.CreateVerified(email, null, now);
-        var member = AccountUser.CreateOwner(accountId, user.Id, user.Email, user.Email);
-        db.Users.Add(user);
-        db.AccountUsers.Add(member);
-        await db.SaveChangesAsync();
-
-        if (role != AccountUserRole.Owner)
-        {
-            await db.AccountUsers
-                .Where(au => au.Id == member.Id)
-                .ExecuteUpdateAsync(s => s.SetProperty(au => au.Role, role));
-        }
-
-        return (member.Id, user.Id);
-    }
-
     private async Task EnrollAsync(Guid accountId, Guid changedByAccountUserId)
     {
         var now = DateTime.UtcNow;
@@ -489,6 +301,26 @@ public sealed class CatalogItemApiTests : IClassFixture<KeepApiWebFactory>, IAsy
         db.Set<CatalogItem>().Add(createResult.Value);
         await db.SaveChangesAsync();
         return createResult.Value;
+    }
+
+    // Session 2e.2: Draft is no longer reachable through the public API (Save & activate is the
+    // sole creation path), so tests exercising Active-only transitions (e.g. Inactivate) seed
+    // Active directly the same way EfCatalogItemCreateAndActivatePersistence does — CreateDraft
+    // then an in-memory Activate before the row is ever persisted.
+    private async Task<CatalogItem> SeedActiveCatalogItemAsync(Guid accountId, Guid createdByUserId)
+    {
+        var createResult = CatalogItem.CreateDraft(
+            accountId, CatalogItemType.Material, "Seeded Item", "each", "USD",
+            externalKey: null, categoryId: null, isCommonItem: false, createdByUserId);
+        Assert.True(createResult.IsSuccess);
+        var item = createResult.Value;
+        Assert.True(item.Activate().IsSuccess);
+
+        await using var scope = _factory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+        db.Set<CatalogItem>().Add(item);
+        await db.SaveChangesAsync();
+        return item;
     }
 
     private async Task<string> GetCookieAsync(Guid accountUserId, Guid accountId)

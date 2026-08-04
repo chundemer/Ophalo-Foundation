@@ -10,14 +10,18 @@ using OpHalo.SharedKernel.Results;
 
 namespace OpHalo.Keep.Application.PriceBook;
 
-public sealed record CreateCatalogItemApiCommand(
+public sealed record CreateAndActivateCatalogItemApiCommand(
     CatalogItemType Type,
     string DisplayName,
     string UnitOfMeasure,
     string Currency,
     string? ExternalKey,
     Guid? CategoryId,
-    bool IsCommonItem);
+    bool IsCommonItem,
+    IReadOnlyList<string> InitialAliasTexts,
+    PriceBookLinePricingMode PricingMode,
+    decimal? Cost,
+    decimal? SellPrice);
 
 public sealed record PublishCatalogItemPriceApiCommand(decimal? Cost, decimal? SellPrice, string Reason);
 
@@ -29,6 +33,7 @@ public sealed record PublishCatalogItemPriceApiCommand(decimal? Cost, decimal? S
 /// </summary>
 public sealed class CatalogItemApiService(
     CatalogItemLifecycleService lifecycleService,
+    CatalogItemCreateAndActivateService createAndActivateService,
     PriceBookPublishService publishService,
     IAccountAccessSnapshotPersistence snapshotPersistence,
     ICurrentUser currentUser,
@@ -43,14 +48,15 @@ public sealed class CatalogItemApiService(
     private static readonly Error Forbidden =
         Error.Create("auth.forbidden", "You do not have permission to perform this action.");
 
-    public async Task<Result<CatalogItem>> CreateDraftAsync(CreateCatalogItemApiCommand command, CancellationToken ct)
+    public async Task<Result<CreateAndActivateCatalogItemResult>> CreateAndActivateAsync(
+        CreateAndActivateCatalogItemApiCommand command, CancellationToken ct)
     {
         var gate = await AuthorizeAsync(ct);
         if (gate.IsFailure)
-            return Result<CatalogItem>.Failure(gate.Error);
+            return Result<CreateAndActivateCatalogItemResult>.Failure(gate.Error);
 
-        return await lifecycleService.CreateDraftAsync(
-            new CreateCatalogItemCommand(
+        return await createAndActivateService.CreateAndActivateAsync(
+            new CreateAndActivateCatalogItemCommand(
                 currentUser.AccountId,
                 command.Type,
                 command.DisplayName,
@@ -59,17 +65,12 @@ public sealed class CatalogItemApiService(
                 command.ExternalKey,
                 command.CategoryId,
                 command.IsCommonItem,
+                command.InitialAliasTexts,
+                command.PricingMode,
+                command.Cost,
+                command.SellPrice,
                 currentUser.UserId),
             ct);
-    }
-
-    public async Task<Result<Guid>> ActivateAsync(Guid catalogItemId, Guid expectedVersion, CancellationToken ct)
-    {
-        var gate = await AuthorizeAsync(ct);
-        if (gate.IsFailure)
-            return Result<Guid>.Failure(gate.Error);
-
-        return await lifecycleService.ActivateAsync(currentUser.AccountId, catalogItemId, expectedVersion, ct);
     }
 
     public async Task<Result<Guid>> InactivateAsync(Guid catalogItemId, Guid expectedVersion, CancellationToken ct)
