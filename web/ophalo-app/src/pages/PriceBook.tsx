@@ -10,6 +10,7 @@ interface PriceBookProps {
   entitlementLoading: boolean;
   entitlementError: boolean;
   onRetryEntitlement: () => void;
+  onSelectItem: (catalogItemId: string) => void;
 }
 
 const TYPE_LABELS: Record<string, string> = {
@@ -33,7 +34,14 @@ function formatPrice(row: { currentPricingMode: string | null; currentSellPrice:
  * direct-access handling, and the list shell (default active items only — search/filter/pager
  * controls are 2e.7). No creation drawer, no item detail, no actions column yet.
  */
-export function PriceBook({ role, entitled, entitlementLoading, entitlementError, onRetryEntitlement }: PriceBookProps) {
+export function PriceBook({
+  role,
+  entitled,
+  entitlementLoading,
+  entitlementError,
+  onRetryEntitlement,
+  onSelectItem,
+}: PriceBookProps) {
   const isOwnerOrAdmin = role === "owner" || role === "admin";
   const queryClient = useQueryClient();
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -208,8 +216,16 @@ export function PriceBook({ role, entitled, entitlementLoading, entitlementError
               </thead>
               <tbody>
                 {data.items.map((row) => (
-                  <tr key={row.item.id} className="border-b border-[var(--ophalo-border)] last:border-0">
-                    <td className="py-2.5 pr-4 text-[var(--ophalo-ink)] font-medium">{row.item.displayName}</td>
+                  <tr key={row.item.id} className="border-b border-[var(--ophalo-border)] last:border-0 hover:bg-[var(--ophalo-canvas)]">
+                    <td className="py-2.5 pr-4 text-[var(--ophalo-ink)] font-medium">
+                      <button
+                        type="button"
+                        onClick={() => onSelectItem(row.item.id)}
+                        className="text-left hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] rounded"
+                      >
+                        {row.item.displayName}
+                      </button>
+                    </td>
                     <td className="py-2.5 pr-4 text-[var(--ophalo-muted)]">{row.item.externalKey ?? "—"}</td>
                     <td className="py-2.5 pr-4 text-[var(--ophalo-muted)]">
                       {TYPE_LABELS[row.item.type] ?? row.item.type}

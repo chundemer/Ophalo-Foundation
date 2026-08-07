@@ -171,6 +171,23 @@ account-aware `AccountFeatureAccessResolver`, and a generic Owner/Admin `GET
   auto-advance). These are frontend workflow refinements, not new catalog, pricing, or taxonomy
   capabilities.
 
+  **2e.6 split and 2e.6a detail delivery (2026-08-07):** the original Active-item maintenance row
+  is intentionally split to preserve the 8-production-file / 3-mutation-family gate: **2e.6a** is
+  read-only item detail and derived profitability; **2e.6b** is the one new header-update family;
+  **2e.6c** is existing alias-management UI plus thin Reactivate API wiring; and **2e.6d** is the
+  existing later-price publish UI and its ADR-470 conflict handling. Do not recombine these slices.
+  2e.6a is implemented and verified, awaiting its commit: it adds the `#/pricebook/:id` detail
+  route, keyboard-accessible list-to-detail navigation, header/category/current price/alias display,
+  and Owner/Admin-only gross profit, margin, and markup from immutable current Cost/Sell snapshots.
+  The preflight found and closed a read-contract omission: detail now returns `CurrentCost` alongside
+  Current Sell Price and pricing mode; no persistence/service/mutation work was needed. Direct URLs
+  use the same role, entitlement loading/error, and plan-denied guards as the Price Book list before
+  requesting data. Zero rules remain locked: show gross profit when both values exist; margin is
+  unavailable at zero Sell Price; markup is unavailable at zero Cost; and no standalone price leaves
+  profitability unavailable. Focused frontend/integration checks, `tsc --noEmit`, CSS-token check,
+  production build, and review are clean. The next implementation preflight after committing is
+  **2e.6b — header update only**.
+
   ADR-474, ADR-475, and the `keep-product-positioning.md`/`deferred-topics.md` changes alongside
   this work are Christian's, made outside this implementation session and left untouched.
 

@@ -295,6 +295,7 @@ public sealed class CatalogReadApiTests : IClassFixture<KeepApiWebFactory>, IAsy
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
         Assert.Equal(itemId, body.GetProperty("item").GetProperty("id").GetGuid());
         Assert.Equal(250m, body.GetProperty("currentSellPrice").GetDecimal());
+        Assert.Equal(125m, body.GetProperty("currentCost").GetDecimal());
         Assert.Equal("StandalonePrice", body.GetProperty("currentPricingMode").GetString());
         var aliases = body.GetProperty("aliases").EnumerateArray().ToList();
         Assert.Contains(aliases, a => a.GetProperty("aliasText").GetString() == "dt-alias");

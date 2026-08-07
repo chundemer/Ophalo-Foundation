@@ -151,6 +151,7 @@ import type {
   CatalogCategoryListResult,
   GetCatalogItemsParams,
   CatalogCategoryResponse,
+  CatalogItemDetailResult,
   CreateAndActivateCatalogItemBody,
   CreateAndActivateCatalogItemResult,
   CreateCatalogCategoryBody,
@@ -214,6 +215,7 @@ export type {
   CatalogCategoryListResult,
   GetCatalogItemsParams,
   CatalogCategoryResponse,
+  CatalogItemDetailResult,
   CreateAndActivateCatalogItemBody,
   CreateAndActivateCatalogItemResult,
   CreateCatalogCategoryBody,
@@ -277,6 +279,9 @@ export const api = {
   },
   getCatalogCategories: () =>
     apiFetch<CatalogCategoryListResult>("/keep/pricebook/catalog-categories"),
+  // Session 2e.6a, build-log/113: read-only item detail.
+  getCatalogItem: (catalogItemId: string) =>
+    apiFetch<CatalogItemDetailResult>(`/keep/pricebook/catalog-items/${catalogItemId}`),
   // Session 2e.5, build-log/113: atomic creation drawer.
   createCatalogItem: (body: CreateAndActivateCatalogItemBody) =>
     apiFetch<CreateAndActivateCatalogItemResult>("/keep/pricebook/catalog-items/create-and-activate", {

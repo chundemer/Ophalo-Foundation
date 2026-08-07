@@ -9,6 +9,7 @@ import { RequestDetail } from "./pages/RequestDetail";
 import { AccessLimited } from "./pages/AccessLimited";
 import { Settings } from "./pages/Settings";
 import { PriceBook } from "./pages/PriceBook";
+import { CatalogItemDetail } from "./pages/CatalogItemDetail";
 import { MobileNavMenu } from "./components/layout/MobileNavMenu";
 import { Plus, Inbox, Settings as SettingsIcon, Tag, Menu } from "lucide-react";
 import { api, type AccountRole, type KeepRequestViewCounts } from "./lib/apiClient";
@@ -28,6 +29,7 @@ type AppRoute =
   | { page: "requests" }
   | { page: "settings"; section?: "public-profile" | "policy" | "team" }
   | { page: "pricebook" }
+  | { page: "pricebook-item"; catalogItemId: string }
   | { page: "detail"; requestId: string; focusPanel?: string };
 
 interface RequestNavContext {
@@ -37,6 +39,8 @@ interface RequestNavContext {
 function getRouteFromLocation(): AppRoute {
   const match = window.location.hash.match(/^#\/request\/(.+)$/);
   if (match?.[1]) return { page: "detail", requestId: match[1] };
+  const itemMatch = window.location.hash.match(/^#\/pricebook\/(.+)$/);
+  if (itemMatch?.[1]) return { page: "pricebook-item", catalogItemId: itemMatch[1] };
   if (window.location.hash === "#/pricebook") return { page: "pricebook" };
   return { page: "requests" };
 }
@@ -123,6 +127,8 @@ function AppShell() {
       history.pushState(null, "", `${base}#/request/${newRoute.requestId}`);
     } else if (newRoute.page === "pricebook") {
       history.pushState(null, "", `${base}#/pricebook`);
+    } else if (newRoute.page === "pricebook-item") {
+      history.pushState(null, "", `${base}#/pricebook/${newRoute.catalogItemId}`);
     } else {
       history.pushState(null, "", base);
     }
@@ -162,10 +168,11 @@ function AppShell() {
   const activeNavId: NavItem["id"] =
     route.page === "home" ? "home"
     : route.page === "settings" ? "settings"
-    : route.page === "pricebook" ? "pricebook"
+    : route.page === "pricebook" || route.page === "pricebook-item" ? "pricebook"
     : "requests";
 
-  const isWorkbench = route.page === "requests" || route.page === "detail" || route.page === "pricebook";
+  const isWorkbench =
+    route.page === "requests" || route.page === "detail" || route.page === "pricebook" || route.page === "pricebook-item";
 
   // Mobile is always column (top bar above content); desktop non-workbench switches to a row
   // (sidebar beside content) — workbench stays column at every size (header above main).
@@ -391,6 +398,18 @@ function AppShell() {
             entitlementLoading={isOwnerOrAdmin && capabilityLoading}
             entitlementError={isOwnerOrAdmin && capabilityError}
             onRetryEntitlement={() => void refetchCapabilities()}
+            onSelectItem={(catalogItemId) => navigate({ page: "pricebook-item", catalogItemId })}
+          />
+        )}
+        {route.page === "pricebook-item" && (
+          <CatalogItemDetail
+            catalogItemId={route.catalogItemId}
+            role={role}
+            entitled={priceBookEntitled}
+            entitlementLoading={isOwnerOrAdmin && capabilityLoading}
+            entitlementError={isOwnerOrAdmin && capabilityError}
+            onRetryEntitlement={() => void refetchCapabilities()}
+            onBack={() => navigate({ page: "pricebook" })}
           />
         )}
         {route.page === "detail" && (

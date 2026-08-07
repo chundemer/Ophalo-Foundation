@@ -229,7 +229,8 @@ public static class PriceBookEndpoints
             .ToList(),
         detail.Category is null ? null : ToResponse(detail.Category),
         detail.CurrentPriceLine?.PricingMode.ToString(),
-        detail.CurrentPriceLine?.SellPriceSnapshot);
+        detail.CurrentPriceLine?.SellPriceSnapshot,
+        detail.CurrentPriceLine?.CostSnapshot);
 
     private static CatalogItemAliasResponse ToResponse(AddCatalogItemAliasResult result) => new(
         result.Alias.Id,
@@ -351,7 +352,8 @@ internal sealed record CatalogItemDetailResponse(
     IReadOnlyList<CatalogItemAliasSummaryResponse> Aliases,
     CatalogCategoryResponse? Category,
     string? CurrentPricingMode,
-    decimal? CurrentSellPrice);
+    decimal? CurrentSellPrice,
+    decimal? CurrentCost);
 
 internal sealed record CatalogItemAliasSummaryResponse(Guid Id, string AliasText, string ActiveState);
 

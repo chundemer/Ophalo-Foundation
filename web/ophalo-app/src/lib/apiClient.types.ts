@@ -576,6 +576,22 @@ export interface CatalogItemListResult {
   nextCursor: string | null;
 }
 
+export interface CatalogItemAliasSummaryResponse {
+  id: string;
+  aliasText: string;
+  activeState: string;
+}
+
+// Session 2e.6a, build-log/113: read-only item detail.
+export interface CatalogItemDetailResult {
+  item: CatalogItemResponse;
+  aliases: CatalogItemAliasSummaryResponse[];
+  category: CatalogCategoryResponse | null;
+  currentPricingMode: string | null;
+  currentSellPrice: number | null;
+  currentCost: number | null;
+}
+
 export interface CatalogCategoryResponse {
   id: string;
   name: string;

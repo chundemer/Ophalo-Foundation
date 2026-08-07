@@ -32,6 +32,7 @@ function renderPriceBook(props: Partial<React.ComponentProps<typeof PriceBook>> 
         entitlementLoading={false}
         entitlementError={false}
         onRetryEntitlement={vi.fn()}
+        onSelectItem={vi.fn()}
         {...props}
       />
     </QueryClientProvider>,
@@ -159,6 +160,18 @@ describe("PriceBook", () => {
     await waitFor(() => expect(screen.getByText("Condensate Pump")).toBeInTheDocument());
     expect(screen.getByText("COP-34")).toBeInTheDocument();
     expect(screen.getByText("$249.99")).toBeInTheDocument();
+  });
+
+  it("clicking a catalog row navigates to that item's detail", async () => {
+    const user = userEvent.setup();
+    mockGetCatalogItems.mockResolvedValue(oneItem);
+    const onSelectItem = vi.fn();
+    renderPriceBook({ onSelectItem });
+
+    await waitFor(() => expect(screen.getByText("Condensate Pump")).toBeInTheDocument());
+    await user.click(screen.getByRole("button", { name: "Condensate Pump" }));
+
+    expect(onSelectItem).toHaveBeenCalledWith("item-1");
   });
 
   it("renders 'No standalone price' rather than $0.00 or blank", async () => {
