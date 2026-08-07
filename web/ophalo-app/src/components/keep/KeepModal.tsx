@@ -117,7 +117,7 @@ export function KeepModal({
         aria-label={label}
         aria-labelledby={labelledBy}
         tabIndex={-1}
-        className={`relative focus:outline-none ${panelClassName}`}
+        className={`focus:outline-none ${panelClassName}`}
         onClick={stopPropagation}
       >
         {children}
