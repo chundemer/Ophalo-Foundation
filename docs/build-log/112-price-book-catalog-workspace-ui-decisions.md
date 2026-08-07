@@ -53,8 +53,15 @@ authorize implementation beyond a validated Session 2e preflight.
   It renders an item with `NoStandalonePrice` as **No standalone price**, never `$0.00` or a blank
   price. It does not yet carry a package-usage column, because offerings do not exist.
 - A fresh, unfiltered catalog has a dedicated onboarding empty state—not a generic no-results
-  message—with one primary action, **Create your first item**, and brief guidance that clean display
-  names plus SKU/aliases make future field lookup fast. Filtered no-results states remain distinct.
+  message. Filtered no-results states remain distinct.
+- **Amendment (2026-08-05, catalog empty-state refinement):** after a successful default list read
+  that returns zero items, hide the page-header catalog-create CTA and show one bounded, centered
+  onboarding panel instead. Its title is **Your catalog is empty**; its body is **Start with the
+  parts, services, and fees you use most.**; and its one primary action is **Add your first catalog
+  item**. That action opens the same create drawer as the normal page action. When one or more
+  items exist, restore the page-header action as **Add catalog item** and do not duplicate it in the
+  list body. Loading and error states must not claim that the catalog is empty. Do not introduce
+  templates, invoices, package selection, accounting hooks, or unrelated workflow promises.
 - Create and edit use a desktop slide-over drawer so list filters and scroll position persist. On
   viewports below 768px, the same editor is full-screen.
 - Include **Save & add another**. It retains category, type, UOM, currency, and the chosen price
@@ -86,11 +93,34 @@ authorize implementation beyond a validated Session 2e preflight.
   constraint; a duplicate conflict causes a refetch and selection of the existing category before
   the item mutation is issued. Do not retry an already-submitted item mutation merely because
   category creation raced.
-- ADR-468's single account currency is shown read-only beside pricing fields. The UI must not imply
-  that currency is selectable per item.
+- **Amendment (2026-08-06, Build Log 114):** the initial native category selector is adequate only
+  for a small pilot list. Session 2e.7 replaces it with an accessible searchable combobox shared
+  with category filtering: Owner/Admin can search/select a business-owned category, clear to **No
+  category**, and create a new category only when its normalized name has no exact existing match.
+  This improves entry and browsing at 10–20+ categories without imposing a seeded taxonomy.
+- ADR-468's single account currency is not selectable per item.
 - UOM is V1 free text: required, trimmed, and limited to 50 characters. It is a human-facing unit
   label, not a conversion/math engine, account-managed taxonomy, or enum. The UI may suggest common
   values without restricting entry.
+- **Amendment (2026-08-05, 2e.5 drawer refinement):** default a new item's free-text UOM to
+  `each` and offer quick-fill suggestions (`each`, `hour`, `ft`, `sq ft`, `gal`, `lb`, `box`,
+  `lot`). A suggestion only writes that literal text into the editable field; it does not normalize,
+  canonicalize, or constrain a contractor's custom value. Unit taxonomy, conversion, reporting, and
+  accounting/procurement mapping remain deferred rather than being smuggled into catalog entry.
+- The creation drawer's primary flow is Name, Type/Category, UOM, and pricing. SKU and the one
+  optional initial alias are visibly grouped as **Codes & search (optional)**, not hidden behind an
+  accordion. Use plain-language `Search keyword / shorthand` copy that promises one searchable term,
+  not a tag system. `IsCommonItem` must not claim a current quick-list behavior that is not yet
+  rendered for field users.
+- The price-mode control may be expressed as a checkbox such as **This item doesn't have its own
+  sell price**. Checked means `PricingMode=NoStandalonePrice` and the request must send
+  `SellPrice=null` — never zero. Unchecked means `StandalonePrice` and a sell price is required.
+- Cost and Sell Price may share a desktop row and stack on mobile. Per ADR-468's 2026-08-05
+  amendment, the initial pilot is deliberately USD-only while no server-owned account-currency read
+  exists: the creation request sends `USD`, pricing uses `$` prefixes, and the drawer quietly states
+  **Prices in USD**. Currency is neither selectable nor rendered as a full form control. A
+  server-owned account-currency setting is required before any non-USD pilot account is supported;
+  do not invent client `AccountContext` data in this slice.
 - `IsCommonItem` is the Owner/Admin-curated flag for Build 108's future field-selection **Common
   Items** rung. It is independent of categories and offerings, has no MVP hard cap, and does not
   grant field roles access to this administration workspace.
@@ -122,6 +152,11 @@ authorize implementation beyond a validated Session 2e preflight.
 - When Cost is present and Sell Price is lower, the drawer shows a prominent below-cost warning and
   requires an explicit confirmation to save or publish. It remains permitted because below-cost
   pricing can be intentional; there is no automatic margin, markup, or pricing-rule engine.
+- **Amendment (2026-08-06, Build Log 114):** active-item/current-price detail may show Owner/Admin
+  users read-only gross profit (`Sell Price - Cost`), margin percentage (`gross profit / Sell Price`),
+  and markup percentage (`gross profit / Cost`) when both snapshot inputs exist. This is a derived
+  visibility aid, not stored data or a target-margin/markup pricing control. It remains hidden from
+  field roles; omit unavailable values and never divide by zero.
 - The ordinary primary action is **Save & activate** and must be atomic: create the item, create its
   initial price version (or explicit no-standalone-price version), and activate it in one server-side
   serializable transaction. Its price-audit reason is system-owned: `Initial catalog price`; do not
@@ -163,6 +198,12 @@ domain-event/outbox mechanism.
   values, and move focus to the first invalid field after submit. Category normalization/race
   recovery remains silent when it can resolve to the existing category; it must not discard the
   item form or show a misleading failure.
+- **Save & add another** retains Type, Category, UOM, the read-only account currency, and selected
+  pricing mode; it clears display name, SKU, alias, Cost, Sell Price, and any below-cost
+  confirmation, then focuses Display Name. `Ctrl+Enter`/`Cmd+Enter` invokes that same action from
+  any drawer field. Inline category entry and discard confirmation must have their own accessible
+  labels and correctly confined focus; a failed category-refresh recovery must expose a retryable
+  error rather than silently stalling.
 - On an item-header concurrency conflict, preserve the drawer's entered values and show a clear,
   non-destructive reload-and-review path. On an ADR-470 account publish-lock conflict, do not
   automatically replay the attempted price change; show that another price update completed and

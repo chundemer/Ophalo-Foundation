@@ -102,6 +102,65 @@ account-aware `AccountFeatureAccessResolver`, and a generic Owner/Admin `GET
   browser session against a running backend — flagged, not silently skipped. The next action is
   2e.5 — Create-and-activate drawer (build-log/113).
 
+  **2e.5 — Create-and-activate drawer: correction/refinement pass applied; not accepted yet.**
+  `CatalogItemDrawer.tsx` now matches Build 112's owner-friendly direction: visual order is Name;
+  Type + Category (paired desktop row); UOM (defaulted to `each`, with literal-value quick-fill
+  chips each/hour/ft/sq ft/gal/lb/box/lot replacing the prior datalist); a fieldset-grouped, visible
+  "Codes & search (optional)" section holding SKU and the renamed "Search keyword / shorthand" alias
+  field; and a plain-language "This item doesn't have its own sell price" checkbox replacing the
+  abstract pricing-mode buttons (checked → `NoStandalonePrice` with `sellPrice: null`, never `0`).
+  Save & add another retention, Ctrl/Cmd+Enter, first-invalid-field focus with value preservation,
+  the accessible category input label, the contained discard-confirm focus trap, and the retryable
+  category-refetch-failure recovery were already correct in the prior pass and are unchanged. 18
+  frontend tests cover the above plus both keyboard shortcuts and null-serialization.
+  **Currency:** Christian explicitly chose the USD-only pilot posture over the alternatives (a
+  server-owned currency source, or blocking completion) — recorded as an ADR-468 amendment. The
+  drawer's hard-coded `"USD"` is now a deliberate, documented decision rather than an unresolved
+  gap; a server-owned account-currency setting remains required before non-USD pilot accounts are
+  supported, out of 2e.5 scope. Per Christian's follow-up, the dedicated read-only Currency field
+  was removed in favor of a quiet "Prices in USD" note plus `$` prefixes on Cost and Sell Price —
+  de-emphasized while staying honest about the approved USD-only pilot posture. 19 frontend tests.
+  The first real-browser pass also found and corrected a drawer-layout defect: its form body must
+  scroll independently while a non-shrinking footer stays reachable and pinned to the viewport on
+  both desktop drawer and mobile full-screen presentations. The next refinement is now locked in
+  Build 112: a successful zero-item catalog view hides the duplicate page-header action and shows
+  one contextual **Add your first catalog item** onboarding action; populated views use the header's
+  **Add catalog item** action. This is deliberately local page behavior, not authorization to
+  redesign the global app shell. `tsc --noEmit`, the CSS-token check, and `git diff --check` are
+  clean. **Session handoff (2026-08-06):** 2e.5 implementation is complete, but its real-app
+  browser verification remains a required manual acceptance checkpoint: use an entitled Owner/Admin
+  account to verify empty and populated states on desktop and mobile, the reachable drawer footer,
+  create-and-refresh behavior, and keyboard/error paths. Do not use a temporary mocked preview as
+  the acceptance substitute. That checkpoint may run alongside the next mechanical preflight; the
+  next implementation session is **2e.6 — Active-item maintenance**.
+
+  **Price Book model alignment (2026-08-06):** the pilot furnace-install workbook was verified
+  against the locked decision index and Sessions 2e/Build 112–113 delivery status. No new
+  client-specific pricing architecture was adopted: the one catalog-item form remains correct;
+  ADR-457's already-decided, not-yet-built static associated-item assemblies own standard
+  consumables and component breakdown; and the workbook's purchase-side tax does not authorize a
+  sales-tax engine. Dynamic pricing formulas remain deferred. Build Log 114 adds one bounded
+  2e.6 follow-up: render owner/admin-only, read-only gross profit, margin %, and markup % from
+  existing Cost/Sell Price snapshots when derivable. It introduces no schema field, persisted
+  calculation, automatic price, or field-role cost/margin exposure.
+
+  **Category governance clarification (2026-08-06):** categories remain optional account-owned
+  browse labels under ADR-461, with no seeded trade taxonomy. The current API can create and
+  activate/inactivate categories but does not yet provide a category-management UI, rename, item
+  counts, or safe unassignment on inactivation. Build Log 114/DEF-091 lock a later dedicated
+  Owner/Admin maintenance slice: category filtering remains in 2e.7; rename, assigned-item count,
+  and confirmed inactivation follow separately. Inactivation must atomically clear `CategoryId` on
+  all currently assigned catalog items, hide the inactive category from future assignment, preserve
+  immutable history, and never restore assignments automatically on reactivation. Do not add merge
+  or bulk reassignment without pilot evidence.
+
+  **Scalable category selection (2026-08-06):** pilot testing found the native category dropdown
+  adequate for a short list but cumbersome for a business with 10–20 or more categories. Build Log
+  114 now schedules a single accessible searchable category combobox in 2e.7, shared between
+  catalog entry/edit and the category filter. It keeps No category explicit and creates a new
+  category only after a normalized exact-match check. This is a workflow refinement, not a seeded
+  trade taxonomy or new pricing capability.
+
   ADR-474, ADR-475, and the `keep-product-positioning.md`/`deferred-topics.md` changes alongside
   this work are Christian's, made outside this implementation session and left untouched.
 

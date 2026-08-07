@@ -150,6 +150,10 @@ import type {
   CatalogItemListResult,
   CatalogCategoryListResult,
   GetCatalogItemsParams,
+  CatalogCategoryResponse,
+  CreateAndActivateCatalogItemBody,
+  CreateAndActivateCatalogItemResult,
+  CreateCatalogCategoryBody,
 } from "./apiClient.types";
 
 export type {
@@ -209,6 +213,10 @@ export type {
   CatalogItemListResult,
   CatalogCategoryListResult,
   GetCatalogItemsParams,
+  CatalogCategoryResponse,
+  CreateAndActivateCatalogItemBody,
+  CreateAndActivateCatalogItemResult,
+  CreateCatalogCategoryBody,
 };
 
 export type { FollowUpResolutionOutcome, FollowUpCompletionReason } from "./apiClient.types";
@@ -269,6 +277,17 @@ export const api = {
   },
   getCatalogCategories: () =>
     apiFetch<CatalogCategoryListResult>("/keep/pricebook/catalog-categories"),
+  // Session 2e.5, build-log/113: atomic creation drawer.
+  createCatalogItem: (body: CreateAndActivateCatalogItemBody) =>
+    apiFetch<CreateAndActivateCatalogItemResult>("/keep/pricebook/catalog-items/create-and-activate", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  createCatalogCategory: (body: CreateCatalogCategoryBody) =>
+    apiFetch<CatalogCategoryResponse>("/keep/pricebook/catalog-categories", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
   getRequestDetail: (requestId: string) =>
     apiFetch<KeepRequestDetailResult>(`/keep/requests/${requestId}`),
   getRelatedWork: (requestId: string) =>

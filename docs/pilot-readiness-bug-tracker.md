@@ -3,7 +3,7 @@
 **Created:** 2026-07-02
 **Purpose:** Live tracker for pilot-blocking or pilot-relevant bugs/gaps discovered during Session 14.
 **Source:** Promoted from the Pre-S14e bug register in `docs/build-log/068-session-14-ophalo-web-front-door.md`.
-**Current active items:** GAP-016 through GAP-033, GAP-037 through GAP-051, and GAP-053 — New Request
+**Current active items:** GAP-016 through GAP-033, GAP-037 through GAP-051, and GAP-053 through GAP-054 — New Request
 launch blockers, public-intake trust/continuity work, account-start conversion work, public-link/
 profile safety, pilot value/support/observability/marketing gates, authenticated-workspace identity
 and list-scale/history/readability readiness, request-detail reliability/customer-continuity work,
@@ -885,6 +885,33 @@ Attention cue must not reverse that order merely because its row receives differ
 - Keyboard/focus order matches the visible order.
 - Focused PWA regression coverage renders the equivalent pair in Needs Attention and Open Work and
   asserts identical visible and DOM action order.
+
+### GAP-054 — Authenticated app-shell navigation and action hierarchy needs a pre-go-live review
+
+**Status:** Open — V1 pre-deployment gate
+**Severity:** P2
+**Area:** `ophalo-app` authenticated desktop and mobile shell/navigation
+
+**Observed (2026-08-05):** Price Book's first real-browser review exposed visual competition between
+the global **New Request** action and a page-local catalog-create action, along with broader questions
+about role/profile placement, active-route treatment, and desktop/mobile navigation parity. The local
+catalog zero-state now has a bounded remedy, but it must not silently become a global-shell redesign.
+
+**Required resolution:**
+
+- Before pilot launch, manually review the authenticated shell on desktop and mobile: global versus
+  page-local primary-action hierarchy, role/profile grouping, active-route treatment, and navigation
+  discoverability for each role and entitled workspace.
+- Make only evidence-backed shared-shell changes. Preserve page-specific zero, loading, error, and
+  populated-state behavior rather than forcing all workspace actions into one global pattern.
+- Exercise keyboard/focus behavior and narrow viewport layouts as part of that review.
+
+**Acceptance criteria:**
+
+- No authenticated screen presents competing primary actions without a clear task hierarchy.
+- Owner/Admin and field-role navigation remains discoverable, role-appropriate, and keyboard usable
+  on supported desktop and mobile viewports.
+- Any shared-shell changes have focused regression coverage and a recorded browser verification.
 
 ### GAP-046 — Request search and filters do not make the current result set sufficiently visible or recoverable
 

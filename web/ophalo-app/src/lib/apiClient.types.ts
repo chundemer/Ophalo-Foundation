@@ -588,6 +588,36 @@ export interface CatalogCategoryListResult {
   categories: CatalogCategoryResponse[];
 }
 
+// Session 2e.5, build-log/113: atomic creation drawer.
+export interface CreateAndActivateCatalogItemBody {
+  type: string;
+  displayName: string;
+  unitOfMeasure: string;
+  currency: string;
+  externalKey?: string | null;
+  categoryId?: string | null;
+  isCommonItem: boolean;
+  initialAliasTexts?: string[];
+  pricingMode: string;
+  cost?: number | null;
+  sellPrice?: number | null;
+}
+
+export interface CreateAndActivateCatalogItemResult {
+  item: CatalogItemResponse;
+  versionNumber: number;
+  priceBookVersionId: string;
+  priceBookVersionLineId: string;
+  cost: number | null;
+  sellPrice: number | null;
+  pricingMode: string;
+}
+
+export interface CreateCatalogCategoryBody {
+  name: string;
+  displayOrder: number;
+}
+
 export interface GetCatalogItemsParams {
   search?: string;
   type?: string;
