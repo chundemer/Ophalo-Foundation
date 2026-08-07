@@ -161,6 +161,16 @@ account-aware `AccountFeatureAccessResolver`, and a generic Owner/Admin `GET
   category only after a normalized exact-match check. This is a workflow refinement, not a seeded
   trade taxonomy or new pricing capability.
 
+  **2e.5 acceptance and 2e.7 drawer refinement (2026-08-07):** manual browser acceptance is now
+  complete for the committed 2e.5 drawer batch (`7603430`); the next implementation session remains
+  **2e.6 — Active-item maintenance**. Review of the real desktop drawer locked follow-up work in
+  Build Logs 112–114 for 2e.7: replace the category select/reveal flow with a stable-layout,
+  searchable creatable combobox; disable every item-save path while category creation or race
+  recovery is pending; pair Cost and Sell Price on desktop while stacking them on mobile; and keep
+  `Common item` truthful (no invented quick-add label) and UOM quick-fill non-disruptive (no focus
+  auto-advance). These are frontend workflow refinements, not new catalog, pricing, or taxonomy
+  capabilities.
+
   ADR-474, ADR-475, and the `keep-product-positioning.md`/`deferred-topics.md` changes alongside
   this work are Christian's, made outside this implementation session and left untouched.
 

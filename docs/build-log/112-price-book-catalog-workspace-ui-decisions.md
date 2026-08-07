@@ -98,6 +98,13 @@ authorize implementation beyond a validated Session 2e preflight.
   with category filtering: Owner/Admin can search/select a business-owned category, clear to **No
   category**, and create a new category only when its normalized name has no exact existing match.
   This improves entry and browsing at 10–20+ categories without imposing a seeded taxonomy.
+- **Amendment (2026-08-07, drawer polish and category safety):** the 2e.7 creatable category
+  combobox is the sole category entry control — selecting **Create "[name]"** begins creation and
+  then selects the resulting or race-resolved category. It must not reveal a second nested input or
+  reflow Type from its desktop half-width column. While category creation or duplicate-race recovery
+  is pending, **Save & activate**, **Save & add another**, and `Ctrl/Cmd+Enter` are disabled; an item
+  mutation must never run with a null/stale category merely because its requested category has not
+  resolved. A category remains optional when the user explicitly chooses **No category**.
 - ADR-468's single account currency is not selectable per item.
 - UOM is V1 free text: required, trimmed, and limited to 50 characters. It is a human-facing unit
   label, not a conversion/math engine, account-managed taxonomy, or enum. The UI may suggest common
@@ -115,7 +122,9 @@ authorize implementation beyond a validated Session 2e preflight.
 - The price-mode control may be expressed as a checkbox such as **This item doesn't have its own
   sell price**. Checked means `PricingMode=NoStandalonePrice` and the request must send
   `SellPrice=null` — never zero. Unchecked means `StandalonePrice` and a sell price is required.
-- Cost and Sell Price may share a desktop row and stack on mobile. Per ADR-468's 2026-08-05
+- Cost and Sell Price share a desktop row and stack on mobile when standalone pricing is selected,
+  so an owner can assess the cost-to-sell relationship at a glance. The no-standalone-price control
+  sits with the Sell Price choice and hides/clears that field when selected. Per ADR-468's 2026-08-05
   amendment, the initial pilot is deliberately USD-only while no server-owned account-currency read
   exists: the creation request sends `USD`, pricing uses `$` prefixes, and the drawer quietly states
   **Prices in USD**. Currency is neither selectable nor rendered as a full form control. A
@@ -123,7 +132,11 @@ authorize implementation beyond a validated Session 2e preflight.
   do not invent client `AccountContext` data in this slice.
 - `IsCommonItem` is the Owner/Admin-curated flag for Build 108's future field-selection **Common
   Items** rung. It is independent of categories and offerings, has no MVP hard cap, and does not
-  grant field roles access to this administration workspace.
+  grant field roles access to this administration workspace. It may sit beside Type/Category to
+  improve grouping, but its label must not claim a present-day quick-add or pinning behavior.
+- Selecting a UOM quick-fill writes only that literal value into the editable UOM field. It must not
+  automatically move focus to pricing: the owner may want to refine the unit, and normal Tab order
+  remains the predictable speed-entry path.
 
 ## Item edits, pricing, and lifecycle
 

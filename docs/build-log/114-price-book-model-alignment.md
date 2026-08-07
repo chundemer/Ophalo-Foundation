@@ -73,6 +73,15 @@ formula engine, a tax engine, or an assembly implementation within the current c
    creation only when the entered normalized name does not exactly match an existing category. This
    is a browse/entry refinement only: it adds no seeded taxonomy or pricing behavior.
 
+9. **2e.7 drawer interaction refinements are bounded.** The creatable category combobox must
+   preserve the desktop Type/Category grid rather than expanding into a separate nested creation
+   form. Item creation is unavailable while category creation or duplicate-race resolution is
+   pending, preventing an intended category from being silently omitted. Cost and Sell Price share
+   a desktop row and stack on mobile; this is visual comparison support only, not a margin rule.
+   `Common item` may be grouped nearer Type/Category but must not be renamed to imply an already
+   available Quick Add/pinning feature. UOM quick-fill remains literal-value fill with no automatic
+   focus jump.
+
 ## Delivery boundary
 
 Finish Session 2e's catalog-item work and manual verification as planned. Scope the separately
