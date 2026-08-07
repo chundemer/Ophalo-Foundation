@@ -172,6 +172,7 @@ export function CatalogItemDrawer({ categories, onCategoriesChanged, onClose, on
   const saveAndAddAnotherRef = useRef(false);
   const fieldRefs = useRef<Partial<Record<keyof FormState, HTMLInputElement | null>>>({});
   const belowCostCheckboxRef = useRef<HTMLInputElement>(null);
+  const newCategoryNameRef = useRef<HTMLInputElement>(null);
   const keepEditingRef = useRef<HTMLButtonElement>(null);
   const discardRef = useRef<HTMLButtonElement>(null);
   const previousFocusRef = useRef<Element | null>(null);
@@ -249,6 +250,13 @@ export function CatalogItemDrawer({ categories, onCategoriesChanged, onClose, on
       setCategoryError("Couldn't add that category. Try again.");
     },
   });
+
+  // The item request captures `form.categoryId` at submit time — while the "+ Add new category…"
+  // input is open (typed, blank, in flight, or stuck on an unresolved name conflict), that field
+  // hasn't caught up yet. Saving here would silently create the item without the category the
+  // user intended, or with "No category" the user never actually chose.
+  const categoryPending =
+    showNewCategoryInput || createCategoryMutation.isPending || categoryConflictName !== null;
 
   const createItemMutation = useMutation({
     mutationFn: () =>
@@ -382,6 +390,13 @@ export function CatalogItemDrawer({ categories, onCategoriesChanged, onClose, on
 
   function submit(addAnother: boolean) {
     if (createItemMutation.isPending) return;
+    if (categoryPending) {
+      if (showNewCategoryInput && !createCategoryMutation.isPending) {
+        setCategoryError("Enter and add the category, or choose No category before saving.");
+      }
+      newCategoryNameRef.current?.focus();
+      return;
+    }
     if (!validateBeforeSubmit()) return;
     saveAndAddAnotherRef.current = addAnother;
     createItemMutation.mutate();
@@ -506,6 +521,7 @@ export function CatalogItemDrawer({ categories, onCategoriesChanged, onClose, on
               {showNewCategoryInput && (
                 <div className="flex w-full items-center gap-2">
                   <input
+                    ref={newCategoryNameRef}
                     type="text"
                     aria-label="New category name"
                     value={newCategoryName}
@@ -759,14 +775,14 @@ export function CatalogItemDrawer({ categories, onCategoriesChanged, onClose, on
           <button
             type="button"
             onClick={(e) => handleSubmit(e, true)}
-            disabled={isPending}
+            disabled={isPending || categoryPending}
             className={`text-sm font-medium text-[var(--keep-accent)] hover:underline disabled:opacity-50 rounded ${FOCUS_RING}`}
           >
             Save &amp; add another
           </button>
           <button
             type="submit"
-            disabled={isPending}
+            disabled={isPending || categoryPending}
             className={`px-4 py-2 rounded-lg text-sm font-medium bg-[var(--ophalo-navy)] text-white
               hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed ${FOCUS_RING}`}
           >
