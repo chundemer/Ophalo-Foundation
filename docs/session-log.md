@@ -206,8 +206,8 @@ account-aware `AccountFeatureAccessResolver`, and a generic Owner/Admin `GET
   clean. 12 files changed (within the batch gate: 1 mutation family, 8 production files, 12 total
   including tests).
 
-  **2e.6c — alias management, Reactivate, and Inactivate: complete, awaiting commit
-  (2026-08-07).** Adds `CatalogItemApiService.ActivateAsync` and `PATCH
+  **2e.6c — alias management, Reactivate, and Inactivate: complete (2026-08-07, commit
+  6e72ba7).** Adds `CatalogItemApiService.ActivateAsync` and `PATCH
   /keep/pricebook/catalog-items/{id}/activate` (thin wrapper over the already-existing domain
   `CatalogItem.Activate()`/`CatalogItemLifecycleService.ActivateAsync`, mirroring `/inactivate`
   exactly — no new domain rule or error contract). On the frontend, wires up the alias
