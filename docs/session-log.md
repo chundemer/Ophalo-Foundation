@@ -272,12 +272,30 @@ account-aware `AccountFeatureAccessResolver`, and a generic Owner/Admin `GET
   `CatalogItemDetail.test.tsx` covering the guided reason picker, Other requiring typed text, the
   Advanced-options toggle, the no-op disable/enable transition, below-cost confirmation, and the
   conflict/draft-preservation guarantee); the backend unit suite is clean (1,379 tests); the 2
-  new/updated `PriceBookPublishApiTests` pass (6/6 in the file); `git diff --check` is clean. The
-  next implementation preflight after committing is **2e.7 — Lifecycle and operating-speed
-  polish**.
+  new/updated `PriceBookPublishApiTests` pass (6/6 in the file); `git diff --check` is clean.
 
   ADR-474, ADR-475, and the `keep-product-positioning.md`/`deferred-topics.md` changes alongside
   this work are Christian's, made outside this implementation session and left untouched.
+
+  **2e.7 split and 2e.7a delivery (2026-08-08, commit 9ce75be).** 2e.7 — Lifecycle and
+  operating-speed polish — is split into **2e.7a** (list search/filter/pagination), **2e.7b**
+  (shared searchable/creatable category combobox, replacing the drawer's native select and reused
+  read-only in the list filter), and **2e.7c** (drawer Cost/Sell Price desktop pairing, keyboard-
+  shortcuts help, accessibility polish); do not recombine these slices. 2e.7a is frontend-only: the
+  search/categoryId/status/cursor query params were already fully supported server-side
+  (`CatalogReadApiService`, `PriceBookCatalogQueryBinding`) but unused by `PriceBook.tsx`. Adds
+  debounced (300ms) search, an active-categories-only filter dropdown, an Active/Inactive status
+  toggle, and Prev/Next pagination via a client cursor stack; any filter change resets to page one.
+  Review caught that the unfiltered list defaults to `status=Active` server-side, so a catalog
+  holding only inactive items would render the misleading "Your catalog is empty" onboarding
+  zero-state; fixed with a conditional zero-item-limit probe against `status=Inactive`, fired only
+  when the unfiltered active list comes back empty, distinguishing that case into its own
+  "No active items" state (header CTA stays visible, one-click switch to the Inactive filter). 2
+  files changed (both frontend, no new mutation family). Verified: `tsc --noEmit`, CSS-token check,
+  and the production build are clean; the frontend suite is clean (301 tests, 22 in
+  `PriceBook.test.tsx`); `git diff --check` is clean. Not yet visually verified in a live browser
+  session — flagged, not silently skipped. The next implementation preflight is **2e.7b — shared
+  category combobox**.
 
 - **2a.1 — CatalogItem foundation:** complete and migrated. `CatalogItem`, its lifecycle/persistence
   stack, and `keep_pricebook_catalog_items` are in place. Review corrected the table name and ensured
