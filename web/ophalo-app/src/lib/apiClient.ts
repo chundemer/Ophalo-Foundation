@@ -161,6 +161,8 @@ import type {
   AddCatalogItemAliasBody,
   AddCatalogItemAliasResult,
   CatalogItemAliasTransitionResult,
+  PublishCatalogItemPriceBody,
+  PublishCatalogItemPriceResult,
   CreateCatalogCategoryBody,
 } from "./apiClient.types";
 
@@ -232,6 +234,8 @@ export type {
   AddCatalogItemAliasBody,
   AddCatalogItemAliasResult,
   CatalogItemAliasTransitionResult,
+  PublishCatalogItemPriceBody,
+  PublishCatalogItemPriceResult,
   CreateCatalogCategoryBody,
 };
 
@@ -336,6 +340,13 @@ export const api = {
       `/keep/pricebook/catalog-items/${catalogItemId}/aliases/${aliasId}/inactivate`,
       { method: "PATCH", headers: { "X-Keep-CatalogItem-Version": version } },
     ),
+  // Session 2e.6d, build-log/113: later price publish. No version header — see
+  // PublishCatalogItemPriceBody.
+  publishCatalogItemPrice: (catalogItemId: string, body: PublishCatalogItemPriceBody) =>
+    apiFetch<PublishCatalogItemPriceResult>(`/keep/pricebook/catalog-items/${catalogItemId}/publish-price`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
   createCatalogCategory: (body: CreateCatalogCategoryBody) =>
     apiFetch<CatalogCategoryResponse>("/keep/pricebook/catalog-categories", {
       method: "POST",

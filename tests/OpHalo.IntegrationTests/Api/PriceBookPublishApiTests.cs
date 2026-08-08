@@ -111,6 +111,28 @@ public sealed class PriceBookPublishApiTests : IClassFixture<KeepApiWebFactory>,
     }
 
     [Fact]
+    public async Task Publish_WhenCatalogItemInactive_Returns409()
+    {
+        var (accountId, ownerId, _) = await SeedAccountAsync("publish-inactive-item");
+        await EnrollAsync(accountId, ownerId);
+        var item = await SeedInactiveCatalogItemAsync(accountId, ownerId);
+        var cookie = await GetCookieAsync(ownerId, accountId);
+
+        var response = await AuthRequest(cookie).PostAsJsonAsync(
+            $"/keep/pricebook/catalog-items/{item.Id}/publish-price",
+            new { cost = 10m, sellPrice = 20m, reason = "Should not publish while inactive" });
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("PriceBookVersion.CatalogItemNotActive", body.GetProperty("code").GetString());
+
+        await using var scope = _factory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+        Assert.Empty(db.Set<PriceBookVersion>().Where(x => x.AccountId == accountId));
+        Assert.Empty(db.Set<ManualPriceOverride>().Where(x => x.AccountId == accountId));
+    }
+
+    [Fact]
     public async Task Publish_TwoConcurrentPublishesForSameItem_ExactlyOneWins()
     {
         var (accountId, ownerId, _) = await SeedAccountAsync("publish-race");
@@ -290,18 +312,40 @@ public sealed class PriceBookPublishApiTests : IClassFixture<KeepApiWebFactory>,
         await db.SaveChangesAsync();
     }
 
+    // Session 2e.6d, build-log/113: publish now requires an Active item (Draft is unreachable
+    // through the public API since 2e.2 anyway — every real item is already Active by the time
+    // this endpoint applies), so every existing success-path test needs an Active seed. Mirrors
+    // CatalogItemApiTests.SeedActiveCatalogItemAsync's Draft-then-in-memory-Activate pattern.
     private async Task<CatalogItem> SeedCatalogItemAsync(Guid accountId, Guid createdByUserId)
     {
         var createResult = CatalogItem.CreateDraft(
             accountId, CatalogItemType.Material, "Seeded Item", "each", "USD",
             externalKey: null, categoryId: null, isCommonItem: false, createdByUserId);
         Assert.True(createResult.IsSuccess);
+        Assert.True(createResult.Value.Activate().IsSuccess);
 
         await using var scope = _factory.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
         db.Set<CatalogItem>().Add(createResult.Value);
         await db.SaveChangesAsync();
         return createResult.Value;
+    }
+
+    private async Task<CatalogItem> SeedInactiveCatalogItemAsync(Guid accountId, Guid createdByUserId)
+    {
+        var createResult = CatalogItem.CreateDraft(
+            accountId, CatalogItemType.Material, "Seeded Item", "each", "USD",
+            externalKey: null, categoryId: null, isCommonItem: false, createdByUserId);
+        Assert.True(createResult.IsSuccess);
+        var item = createResult.Value;
+        Assert.True(item.Activate().IsSuccess);
+        Assert.True(item.Inactivate().IsSuccess);
+
+        await using var scope = _factory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+        db.Set<CatalogItem>().Add(item);
+        await db.SaveChangesAsync();
+        return item;
     }
 
     private async Task<string> GetCookieAsync(Guid accountUserId, Guid accountId)

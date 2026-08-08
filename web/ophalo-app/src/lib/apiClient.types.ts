@@ -662,6 +662,22 @@ export interface CatalogItemAliasTransitionResult {
   catalogItemConcurrencyVersion: string;
 }
 
+// Session 2e.6d, build-log/113: later price publish. No version header — ADR-470's
+// account-scoped publish lock is the concurrency mechanism here, not CatalogItem.ConcurrencyVersion.
+export interface PublishCatalogItemPriceBody {
+  cost: number | null;
+  sellPrice: number | null;
+  reason: string;
+}
+
+export interface PublishCatalogItemPriceResult {
+  versionNumber: number;
+  priceBookVersionId: string;
+  priceBookVersionLineId: string;
+  cost: number | null;
+  sellPrice: number | null;
+}
+
 export interface CreateCatalogCategoryBody {
   name: string;
   displayOrder: number;

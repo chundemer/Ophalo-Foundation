@@ -138,6 +138,7 @@ public static class ErrorHttpMapper
 
             // --- Price book publish lock conflict (Session 2d.2, ADR-470) ---
             var c when c == "PriceBookVersion.PublishLockConflict" => (StatusCodes.Status409Conflict, "Conflict.", null),
+            var c when c == "PriceBookVersion.CatalogItemNotActive" => (StatusCodes.Status409Conflict, "Conflict.", null),
             var c when c == "CatalogCategory.ExpectedVersionRequired" => (StatusCodes.Status400BadRequest, "Bad request.", null),
             var c when c == "CatalogCategory.ExpectedVersionInvalid"  => (StatusCodes.Status400BadRequest, "Bad request.", null),
 

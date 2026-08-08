@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Tag } from "lucide-react";
 import { api, ApiError, type AccountRole, type CatalogItemResponse } from "../lib/apiClient";
+import { CatalogItemPricePublishForm } from "./CatalogItemPricePublishForm";
 
 const INPUT_CLS =
   "w-full rounded-lg border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] text-base text-[var(--ophalo-ink)] px-3 py-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-offset-1";
@@ -41,8 +42,8 @@ const TYPE_LABELS: Record<string, string> = {
   Fee: "Fee",
 };
 
-function formatCurrency(value: number): string {
-  return value.toLocaleString(undefined, { style: "currency", currency: "USD" });
+function formatCurrency(value: number, currency: string): string {
+  return value.toLocaleString(undefined, { style: "currency", currency });
 }
 
 function formatPercent(value: number): string {
@@ -55,7 +56,15 @@ function formatPercent(value: number): string {
  * Cost or SellPrice makes all three unavailable. A zero Cost keeps gross profit/margin valid but
  * makes markup unavailable (division by zero); a zero SellPrice makes margin unavailable.
  */
-function ProfitabilityPanel({ cost, sellPrice }: { cost: number | null; sellPrice: number | null }) {
+function ProfitabilityPanel({
+  cost,
+  sellPrice,
+  currency,
+}: {
+  cost: number | null;
+  sellPrice: number | null;
+  currency: string;
+}) {
   if (cost == null || sellPrice == null) {
     return (
       <p className="text-sm text-[var(--ophalo-muted)]">
@@ -72,7 +81,7 @@ function ProfitabilityPanel({ cost, sellPrice }: { cost: number | null; sellPric
     <dl className="grid grid-cols-3 gap-4">
       <div>
         <dt className="text-xs font-medium text-[var(--ophalo-muted)]">Gross profit</dt>
-        <dd className="text-sm text-[var(--ophalo-ink)] font-medium">{formatCurrency(grossProfit)}</dd>
+        <dd className="text-sm text-[var(--ophalo-ink)] font-medium">{formatCurrency(grossProfit, currency)}</dd>
       </div>
       <div>
         <dt className="text-xs font-medium text-[var(--ophalo-muted)]">Margin</dt>
@@ -371,6 +380,11 @@ export function CatalogItemDetail({
     addAliasMutation.mutate(newAliasText.trim());
   }
 
+  // Session 2e.6d, build-log/113: later price publish. The form itself (draft state, validation,
+  // below-cost confirmation, mutation/conflict handling, cache invalidation) lives in
+  // CatalogItemPricePublishForm — only the trigger and open/closed state stay here.
+  const [showPublishForm, setShowPublishForm] = useState(false);
+
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!form || updateHeaderMutation.isPending) return;
@@ -539,6 +553,16 @@ export function CatalogItemDetail({
                     </button>
                   </div>
                 )}
+                {data.item.activeState === "Active" && !showPublishForm && (
+                  <button
+                    type="button"
+                    onClick={() => setShowPublishForm(true)}
+                    disabled={itemBusy}
+                    className="rounded-lg border border-[var(--ophalo-border)] px-3 py-1.5 text-sm font-medium text-[var(--ophalo-ink)] hover:bg-[var(--ophalo-canvas)] disabled:opacity-60"
+                  >
+                    Update price
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={startEditing}
@@ -587,20 +611,20 @@ export function CatalogItemDetail({
                 <dd className="text-sm text-[var(--ophalo-ink)]">
                   {data.currentPricingMode === "NoStandalonePrice" || data.currentSellPrice == null
                     ? "No standalone price"
-                    : formatCurrency(data.currentSellPrice)}
+                    : formatCurrency(data.currentSellPrice, data.item.currency)}
                 </dd>
               </div>
               <div>
                 <dt className="text-xs font-medium text-[var(--ophalo-muted)]">Cost</dt>
                 <dd className="text-sm text-[var(--ophalo-ink)]">
-                  {data.currentCost != null ? formatCurrency(data.currentCost) : "—"}
+                  {data.currentCost != null ? formatCurrency(data.currentCost, data.item.currency) : "—"}
                 </dd>
               </div>
             </dl>
 
             <div>
               <h2 className="text-sm font-semibold text-[var(--ophalo-ink)] mb-2">Profitability</h2>
-              <ProfitabilityPanel cost={data.currentCost} sellPrice={data.currentSellPrice} />
+              <ProfitabilityPanel cost={data.currentCost} sellPrice={data.currentSellPrice} currency={data.item.currency} />
             </div>
 
             <div>
@@ -670,6 +694,17 @@ export function CatalogItemDetail({
                 </button>
               </form>
             </div>
+
+            {showPublishForm && (
+              <CatalogItemPricePublishForm
+                catalogItemId={catalogItemId}
+                currency={data.item.currency}
+                currentCost={data.currentCost}
+                currentSellPrice={data.currentSellPrice}
+                currentPricingMode={data.currentPricingMode}
+                onClose={() => setShowPublishForm(false)}
+              />
+            )}
           </div>
         )}
 

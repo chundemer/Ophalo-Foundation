@@ -14,6 +14,7 @@ const mockInactivateCatalogItem = vi.fn();
 const mockAddCatalogItemAlias = vi.fn();
 const mockActivateCatalogItemAlias = vi.fn();
 const mockInactivateCatalogItemAlias = vi.fn();
+const mockPublishCatalogItemPrice = vi.fn();
 
 vi.mock("../../lib/apiClient", async () => {
   const actual = await vi.importActual<typeof import("../../lib/apiClient")>("../../lib/apiClient");
@@ -29,6 +30,7 @@ vi.mock("../../lib/apiClient", async () => {
       addCatalogItemAlias: (...args: unknown[]) => mockAddCatalogItemAlias(...args),
       activateCatalogItemAlias: (...args: unknown[]) => mockActivateCatalogItemAlias(...args),
       inactivateCatalogItemAlias: (...args: unknown[]) => mockInactivateCatalogItemAlias(...args),
+      publishCatalogItemPrice: (...args: unknown[]) => mockPublishCatalogItemPrice(...args),
     },
   };
 });
@@ -51,7 +53,7 @@ function renderDetail(props: Partial<React.ComponentProps<typeof CatalogItemDeta
       />
     </QueryClientProvider>,
   );
-  return { ...utils, onBack, onRetryEntitlement };
+  return { ...utils, onBack, onRetryEntitlement, queryClient };
 }
 
 const baseItem: CatalogItemDetailResult = {
@@ -90,6 +92,7 @@ describe("CatalogItemDetail", () => {
     mockAddCatalogItemAlias.mockReset();
     mockActivateCatalogItemAlias.mockReset();
     mockInactivateCatalogItemAlias.mockReset();
+    mockPublishCatalogItemPrice.mockReset();
   });
 
   it("shows a loading state before the fetch resolves", () => {
@@ -540,5 +543,219 @@ describe("CatalogItemDetail", () => {
     resolveRefetch!(refreshed);
 
     await waitFor(() => expect(screen.getByRole("button", { name: "Edit" })).toBeEnabled());
+  });
+
+  it("updates a price with a guided reason, no version header, refreshing item and list caches", async () => {
+    const user = userEvent.setup();
+    const updated: CatalogItemDetailResult = {
+      ...baseItem,
+      currentCost: 100,
+      currentSellPrice: 300,
+    };
+    mockGetCatalogItem.mockResolvedValueOnce(baseItem).mockResolvedValue(updated);
+    mockPublishCatalogItemPrice.mockResolvedValue({
+      versionNumber: 2,
+      priceBookVersionId: "pbv-2",
+      priceBookVersionLineId: "pbvl-2",
+      cost: 100,
+      sellPrice: 300,
+    });
+    const { queryClient } = renderDetail();
+    queryClient.setQueryData(["catalogItems"], { items: [] });
+
+    await waitFor(() => expect(screen.getByText("Condensate Pump")).toBeInTheDocument());
+    await user.click(screen.getByRole("button", { name: "Update price" }));
+
+    const sellPriceInput = screen.getByLabelText("Sell price") as HTMLInputElement;
+    const costInput = screen.getByLabelText("Internal cost (optional)") as HTMLInputElement;
+    // Prefilled from the current price; Sell price renders before Cost.
+    expect(sellPriceInput.value).toBe("250");
+    expect(costInput.value).toBe("125");
+
+    await user.clear(sellPriceInput);
+    await user.type(sellPriceInput, "300");
+    await user.clear(costInput);
+    await user.type(costInput, "100");
+    await user.selectOptions(screen.getByLabelText("Why are you updating this?"), "supplier-cost-changed");
+    await user.click(screen.getByRole("button", { name: "Update price" }));
+
+    await waitFor(() => expect(mockPublishCatalogItemPrice).toHaveBeenCalledWith(
+      "item-1",
+      { cost: 100, sellPrice: 300, reason: "Supplier cost changed" },
+    ));
+    // No version/token argument — ADR-470's lock is account-scoped, not item-scoped.
+    expect(mockPublishCatalogItemPrice.mock.calls[0]).toHaveLength(2);
+
+    await waitFor(() => expect(screen.queryByRole("button", { name: "Cancel" })).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("$300.00")).toBeInTheDocument());
+    expect(queryClient.getQueryState(["catalogItems"])?.isInvalidated).toBe(true);
+  });
+
+  it("requires typed text when Other is selected as the reason", async () => {
+    const user = userEvent.setup();
+    mockGetCatalogItem.mockResolvedValue(baseItem);
+    mockPublishCatalogItemPrice.mockResolvedValue({
+      versionNumber: 2,
+      priceBookVersionId: "pbv-2",
+      priceBookVersionLineId: "pbvl-2",
+      cost: 125,
+      sellPrice: 275,
+    });
+    renderDetail();
+
+    await waitFor(() => expect(screen.getByText("Condensate Pump")).toBeInTheDocument());
+    await user.click(screen.getByRole("button", { name: "Update price" }));
+
+    const sellPriceInput = screen.getByLabelText("Sell price") as HTMLInputElement;
+    await user.clear(sellPriceInput);
+    await user.type(sellPriceInput, "275");
+    await user.selectOptions(screen.getByLabelText("Why are you updating this?"), "other");
+    await user.click(screen.getByRole("button", { name: "Update price" }));
+
+    expect(screen.getByText("Enter a reason.")).toBeInTheDocument();
+    expect(mockPublishCatalogItemPrice).not.toHaveBeenCalled();
+
+    await user.type(screen.getByLabelText("Reason"), "Vendor rebate ended");
+    await user.click(screen.getByRole("button", { name: "Update price" }));
+
+    await waitFor(() => expect(mockPublishCatalogItemPrice).toHaveBeenCalledWith(
+      "item-1",
+      { cost: 125, sellPrice: 275, reason: "Vendor rebate ended" },
+    ));
+  });
+
+  it("keeps No standalone price inside collapsed Advanced options and preserves clear-sell-price behavior", async () => {
+    const user = userEvent.setup();
+    mockGetCatalogItem.mockResolvedValue(baseItem);
+    mockPublishCatalogItemPrice.mockResolvedValue({
+      versionNumber: 2,
+      priceBookVersionId: "pbv-2",
+      priceBookVersionLineId: "pbvl-2",
+      cost: 125,
+      sellPrice: null,
+    });
+    renderDetail();
+
+    await waitFor(() => expect(screen.getByText("Condensate Pump")).toBeInTheDocument());
+    await user.click(screen.getByRole("button", { name: "Update price" }));
+
+    // Collapsed by default since the item currently has a standalone sell price.
+    expect(screen.getByText("Advanced options").closest("details")).not.toHaveAttribute("open");
+    await user.click(screen.getByText("Advanced options"));
+
+    await user.click(screen.getByLabelText(/This item doesn't have its own sell price/));
+    expect(screen.queryByLabelText("Sell price")).not.toBeInTheDocument();
+
+    await user.selectOptions(screen.getByLabelText("Why are you updating this?"), "correcting-a-price");
+    await user.click(screen.getByRole("button", { name: "Update price" }));
+
+    await waitFor(() => expect(mockPublishCatalogItemPrice).toHaveBeenCalledWith(
+      "item-1",
+      { cost: 125, sellPrice: null, reason: "Correcting a price" },
+    ));
+  });
+
+  it("disables Update price when nothing changed, enabling only after a real price change", async () => {
+    const user = userEvent.setup();
+    mockGetCatalogItem.mockResolvedValue(baseItem);
+    renderDetail();
+
+    await waitFor(() => expect(screen.getByText("Condensate Pump")).toBeInTheDocument());
+    await user.click(screen.getByRole("button", { name: "Update price" }));
+
+    // Selecting a reason alone — with no price/mode change — must not enable Update price.
+    await user.selectOptions(screen.getByLabelText("Why are you updating this?"), "promotion-or-seasonal-pricing");
+    expect(screen.getByRole("button", { name: "Update price" })).toBeDisabled();
+    expect(screen.getByText("Change a price or pricing option to update this item.")).toBeInTheDocument();
+
+    const sellPriceInput = screen.getByLabelText("Sell price") as HTMLInputElement;
+    await user.clear(sellPriceInput);
+    await user.type(sellPriceInput, "260");
+
+    expect(screen.getByRole("button", { name: "Update price" })).toBeEnabled();
+    expect(
+      screen.queryByText("Change a price or pricing option to update this item."),
+    ).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Update price" }));
+
+    await waitFor(() => expect(mockPublishCatalogItemPrice).toHaveBeenCalledWith(
+      "item-1",
+      { cost: 125, sellPrice: 260, reason: "Promotion or seasonal pricing" },
+    ));
+  });
+
+  it("blocks the update on a below-cost price until explicitly confirmed", async () => {
+    const user = userEvent.setup();
+    mockGetCatalogItem.mockResolvedValue(baseItem);
+    mockPublishCatalogItemPrice.mockResolvedValue({
+      versionNumber: 2,
+      priceBookVersionId: "pbv-2",
+      priceBookVersionLineId: "pbvl-2",
+      cost: 125,
+      sellPrice: 50,
+    });
+    renderDetail();
+
+    await waitFor(() => expect(screen.getByText("Condensate Pump")).toBeInTheDocument());
+    await user.click(screen.getByRole("button", { name: "Update price" }));
+
+    const sellPriceInput = screen.getByLabelText("Sell price") as HTMLInputElement;
+    await user.clear(sellPriceInput);
+    await user.type(sellPriceInput, "50");
+    await user.selectOptions(screen.getByLabelText("Why are you updating this?"), "correcting-a-price");
+    await user.click(screen.getByRole("button", { name: "Update price" }));
+
+    expect(screen.getByText(/Sell price is below cost/)).toBeInTheDocument();
+    expect(mockPublishCatalogItemPrice).not.toHaveBeenCalled();
+
+    await user.click(screen.getByLabelText("I understand this item is priced below cost"));
+    await user.click(screen.getByRole("button", { name: "Update price" }));
+
+    await waitFor(() => expect(mockPublishCatalogItemPrice).toHaveBeenCalledWith(
+      "item-1",
+      { cost: 125, sellPrice: 50, reason: "Correcting a price" },
+    ));
+  });
+
+  it("holds the draft and does not auto-resubmit on a pricing conflict", async () => {
+    const user = userEvent.setup();
+    const refreshedAfterConflict: CatalogItemDetailResult = {
+      ...baseItem,
+      currentCost: 130,
+      currentSellPrice: 260,
+    };
+    mockGetCatalogItem.mockResolvedValueOnce(baseItem).mockResolvedValue(refreshedAfterConflict);
+    mockPublishCatalogItemPrice.mockRejectedValueOnce(
+      new ApiError(409, "PriceBookVersion.PublishLockConflict", "conflict"),
+    );
+    renderDetail();
+
+    await waitFor(() => expect(screen.getByText("Condensate Pump")).toBeInTheDocument());
+    await user.click(screen.getByRole("button", { name: "Update price" }));
+
+    const sellPriceInput = screen.getByLabelText("Sell price") as HTMLInputElement;
+    await user.clear(sellPriceInput);
+    await user.type(sellPriceInput, "275");
+    await user.selectOptions(screen.getByLabelText("Why are you updating this?"), "correcting-a-price");
+    await user.click(screen.getByRole("button", { name: "Update price" }));
+
+    await waitFor(() =>
+      expect(
+        screen.getByText(
+          "Someone else updated pricing a moment ago. We refreshed the latest price—review your changes and try again.",
+        ),
+      ).toBeInTheDocument(),
+    );
+    // No mention of locks, versions, or replay in the surfaced copy.
+    expect(screen.queryByText(/lock/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/version/i)).not.toBeInTheDocument();
+    expect(mockPublishCatalogItemPrice).toHaveBeenCalledTimes(1);
+    // The draft is retained exactly as typed — no automatic resubmit, no clearing.
+    expect((screen.getByLabelText("Sell price") as HTMLInputElement).value).toBe("275");
+    expect((screen.getByLabelText("Internal cost (optional)") as HTMLInputElement).value).toBe("125");
+
+    await waitFor(() => expect(mockGetCatalogItem).toHaveBeenCalledTimes(2));
+    expect(mockPublishCatalogItemPrice).toHaveBeenCalledTimes(1);
   });
 });

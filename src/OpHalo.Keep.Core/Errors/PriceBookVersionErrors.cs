@@ -43,4 +43,12 @@ public static class PriceBookVersionErrors
     /// </summary>
     public static readonly Error PublishLockConflict =
         Error.Create("PriceBookVersion.PublishLockConflict", "This price book was just updated by another publish. Please retry.");
+
+    /// <summary>
+    /// Session 2e.6d, build-log/113: Build 113's active-item-maintenance scope for later price
+    /// publish assumes an already-active item; an Inactive item must be reactivated first rather
+    /// than accepting a price publish while hidden from selection.
+    /// </summary>
+    public static readonly Error CatalogItemNotActive =
+        Error.Create("PriceBookVersion.CatalogItemNotActive", "Only an active catalog item can have a price published.");
 }

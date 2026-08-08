@@ -232,8 +232,49 @@ account-aware `AccountFeatureAccessResolver`, and a generic Owner/Admin `GET
   through their refetch, and an inactivate-then-reactivate round trip proving each step uses the
   freshly refreshed `concurrencyVersion`); the backend unit suite is clean (1,379 tests); the
   2 new backend integration tests for `/activate` pass (13/13 in the file); `git diff --check` is
-  clean. The next implementation preflight after committing is **2e.6d — later-price publish UI
-  and its ADR-470 conflict handling**.
+  clean.
+
+  **2e.6d — later price update (server: publish) and its ADR-470 conflict handling: complete
+  (2026-08-07).** Wires the `POST /keep/pricebook/catalog-items/{id}/publish-price` endpoint
+  (backend-complete since Build 111/2e.1b, previously had no frontend caller) into a dedicated
+  `CatalogItemPricePublishForm` component. Review added one backend rule the original endpoint
+  lacked: publish now requires an Active item, rejecting an Inactive one with the new
+  `PriceBookVersion.CatalogItemNotActive` (409) from `EfPriceBookPublishPersistence`, mapped
+  explicitly in `ErrorHttpMapper`. Existing `PriceBookPublishApiTests` seeds were updated to an
+  Active item to match (Draft has been unreachable through the public API since 2e.2 anyway); a
+  new `Publish_WhenCatalogItemInactive_Returns409` test proves the rejection leaves no
+  `PriceBookVersion`/`ManualPriceOverride` row behind. No version header on this endpoint — ADR-470's
+  lock is account-scoped (`PriceBookAccountState`), not `CatalogItem.ConcurrencyVersion`, so a
+  manual retry is always safe.
+
+  A second review pass reworked the UI for a small-business owner rather than a price-book
+  operator: the user-facing action is "Update price" throughout (internal names — the API method,
+  mutation, `PublishLockConflict` — stay publish-oriented since that's what the server actually
+  does); Sell Price is the first, visually primary field; Cost is "Internal cost (optional)" with
+  "customers do not see this" helper text; the "no standalone price" toggle moved into a collapsed
+  Advanced options section; the free-text audit reason became a required guided picker (Supplier
+  cost changed / Correcting a price / Promotion or seasonal pricing / Other, the last revealing a
+  required, 500-char-limited text input); and a no-op guard compares the proposed Cost/Sell
+  Price/pricing mode against the values loaded when the form opened, disabling Update price with an
+  explanatory message unless one of those three actually changed (a reason change alone can never
+  submit a duplicate immutable price version). The below-cost confirmation gate, currency-aware
+  `$`-style prefixes (via `Intl.NumberFormat`, respecting the item's actual currency instead of a
+  hardcoded USD — `ProfitabilityPanel` and the read-only Sell price/Cost display were also
+  corrected to use it), server error-code mapping, conflict-triggers-a-refetch-with-the-draft-
+  preserved behavior, and the no-auto-resubmit rule are all unchanged; the conflict message was
+  reworded to "Someone else updated pricing a moment ago. We refreshed the latest price—review your
+  changes and try again." with no mention of locks, versions, or replay. The extraction also cut
+  `CatalogItemDetail.tsx` from 1,073 to 812 lines — it now owns only the "Update price" trigger and
+  open/closed state, passing the item's current price data and id into the form component.
+  8 files changed (6 production, 2 test — 1 new mutation-family rule tightened on an existing
+  endpoint, no new family; well within the batch gate). Verified: `tsc --noEmit`, CSS-token check,
+  and the production build are clean; the frontend suite is clean (294 tests, 30 of them in
+  `CatalogItemDetail.test.tsx` covering the guided reason picker, Other requiring typed text, the
+  Advanced-options toggle, the no-op disable/enable transition, below-cost confirmation, and the
+  conflict/draft-preservation guarantee); the backend unit suite is clean (1,379 tests); the 2
+  new/updated `PriceBookPublishApiTests` pass (6/6 in the file); `git diff --check` is clean. The
+  next implementation preflight after committing is **2e.7 — Lifecycle and operating-speed
+  polish**.
 
   ADR-474, ADR-475, and the `keep-product-positioning.md`/`deferred-topics.md` changes alongside
   this work are Christian's, made outside this implementation session and left untouched.

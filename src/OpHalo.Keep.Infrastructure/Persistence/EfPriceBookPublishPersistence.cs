@@ -32,6 +32,8 @@ public sealed class EfPriceBookPublishPersistence(OpHaloDbContext dbContext, ICl
             .FirstOrDefaultAsync(x => x.AccountId == command.AccountId && x.Id == command.CatalogItemId, ct);
         if (catalogItem is null)
             return Result<PublishCatalogItemPriceResult>.Failure(CatalogItemErrors.NotFound);
+        if (catalogItem.ActiveState != CatalogItemActiveState.Active)
+            return Result<PublishCatalogItemPriceResult>.Failure(PriceBookVersionErrors.CatalogItemNotActive);
 
         var priorVersion = await dbContext.Set<PriceBookVersion>()
             .Include(x => x.Lines)
