@@ -326,14 +326,19 @@ public sealed class CatalogReadApiTests : IClassFixture<KeepApiWebFactory>, IAsy
     }
 
     [Fact]
-    public async Task Categories_ReturnsActiveOnlyOrderedByDisplayOrder()
+    public async Task Categories_ReturnsActiveOnlyOrderedByNameCaseInsensitive()
     {
+        // build-log/114 (2e.7b scale/ordering correction): DisplayOrder reflects creation order,
+        // not the A-Z order an Owner/Admin expects, so create these deliberately out of both
+        // display-order and byte-case order to prove the fix reads case-insensitive Name order,
+        // not DisplayOrder or naive ASCII ordering.
         var (accountId, ownerId, cookie) = await SeedAccountAsync("categories-ok");
         await EnrollAsync(accountId, ownerId);
 
-        var secondId = await CreateCategoryAsync(cookie, "Second", displayOrder: 2);
-        var firstId = await CreateCategoryAsync(cookie, "First", displayOrder: 1);
-        var inactiveId = await CreateCategoryAsync(cookie, "Inactive One", displayOrder: 0);
+        var zebraId = await CreateCategoryAsync(cookie, "Zebra", displayOrder: 0);
+        var appleId = await CreateCategoryAsync(cookie, "apple", displayOrder: 1);
+        var mangoId = await CreateCategoryAsync(cookie, "Mango", displayOrder: 2);
+        var inactiveId = await CreateCategoryAsync(cookie, "Aardvark", displayOrder: 3);
         await InactivateCategoryAsync(cookie, inactiveId);
 
         var response = await AuthRequest(cookie).GetAsync("/keep/pricebook/catalog-categories");
@@ -344,7 +349,7 @@ public sealed class CatalogReadApiTests : IClassFixture<KeepApiWebFactory>, IAsy
             .Select(x => x.GetProperty("id").GetGuid())
             .ToList();
 
-        Assert.Equal([firstId, secondId], ids);
+        Assert.Equal([appleId, mangoId, zebraId], ids);
         Assert.DoesNotContain(inactiveId, ids);
     }
 

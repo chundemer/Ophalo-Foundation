@@ -177,12 +177,18 @@ public sealed class EfCatalogReadPersistence(OpHaloDbContext dbContext) : ICatal
         return new CatalogItemDetail(item, category, priceLine);
     }
 
+    // build-log/114 (2e.7b scale/ordering correction, 2026-08-08): DisplayOrder reflects creation
+    // order (new categories just get the next value, and there is no ordering-management UI), not
+    // the A-Z order an Owner/Admin expects once an account has 15-50 categories. NormalizedName is
+    // already the lowercase-invariant form backing the (AccountId, NormalizedName) uniqueness
+    // constraint, so ordering by it is both case-insensitive and, given that uniqueness, already
+    // fully deterministic; Id is added as a defensive tie-breaker regardless.
     public async Task<IReadOnlyList<CatalogCategory>> GetActiveCategoriesAsync(Guid accountId, CancellationToken ct) =>
         await dbContext.Set<CatalogCategory>()
             .AsNoTracking()
             .Where(c => c.AccountId == accountId && c.ActiveState == CatalogActiveState.Active)
-            .OrderBy(c => c.DisplayOrder)
-            .ThenBy(c => c.Name)
+            .OrderBy(c => c.NormalizedName)
+            .ThenBy(c => c.Id)
             .ToListAsync(ct);
 
     private async Task<Dictionary<Guid, PriceBookVersionLine>> LoadPriceLinesAsync(

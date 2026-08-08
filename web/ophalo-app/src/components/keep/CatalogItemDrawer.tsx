@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { KeepModal } from "./KeepModal";
+import { CategoryCombobox } from "./CategoryCombobox";
 import {
   api,
   ApiError,
@@ -23,8 +24,6 @@ const TYPE_OPTIONS = [
 ];
 
 const UOM_SUGGESTIONS = ["each", "hour", "ft", "sq ft", "gal", "lb", "box", "lot"];
-
-const NEW_CATEGORY_VALUE = "__new__";
 
 const FOCUS_RING =
   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-offset-1";
@@ -152,27 +151,26 @@ const FIELD_ERROR_MESSAGES: Partial<Record<string, string>> = {
 };
 
 /**
- * Catalog item creation drawer (Session 2e.5, build-log/113): the responsive New Item drawer —
- * desktop side drawer / mobile full screen. Single creation outcome (atomic Save & activate, no
- * Save Draft), dirty-dismiss protection, inline category creation with race-safe fallback to an
- * existing category, and a below-cost confirmation gate. Save & add another resets the form and
- * keeps the drawer open.
+ * Catalog item creation drawer (Session 2e.5/2e.7b, build-log/113/114): the responsive New Item
+ * drawer — desktop side drawer / mobile full screen. Single creation outcome (atomic Save &
+ * activate, no Save Draft), dirty-dismiss protection, a shared searchable/creatable category
+ * combobox (`CategoryCombobox`) with race-safe fallback to an existing category, and a below-cost
+ * confirmation gate. Save & add another resets the form and keeps the drawer open.
  */
 export function CatalogItemDrawer({ categories, onCategoriesChanged, onClose, onCreated }: CatalogItemDrawerProps) {
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [generalError, setGeneralError] = useState<string | null>(null);
   const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
-  const [showNewCategoryInput, setShowNewCategoryInput] = useState(false);
-  const [newCategoryName, setNewCategoryName] = useState("");
-  const [categoryError, setCategoryError] = useState<string | null>(null);
-  const [categoryConflictName, setCategoryConflictName] = useState<string | null>(null);
+  // Reported by CategoryCombobox: true from the start of a category-create attempt until it
+  // resolves (success, or an error/conflict still awaiting retry) — blocks item save so it can
+  // never fire against an uncommitted category intent.
+  const [categoryPending, setCategoryPending] = useState(false);
   const [belowCostConfirmed, setBelowCostConfirmed] = useState(false);
   const [savedAndAddedAnotherMessage, setSavedAndAddedAnotherMessage] = useState<string | null>(null);
   const saveAndAddAnotherRef = useRef(false);
   const fieldRefs = useRef<Partial<Record<keyof FormState, HTMLInputElement | null>>>({});
   const belowCostCheckboxRef = useRef<HTMLInputElement>(null);
-  const newCategoryNameRef = useRef<HTMLInputElement>(null);
   const keepEditingRef = useRef<HTMLButtonElement>(null);
   const discardRef = useRef<HTMLButtonElement>(null);
   const previousFocusRef = useRef<Element | null>(null);
@@ -182,18 +180,7 @@ export function CatalogItemDrawer({ categories, onCategoriesChanged, onClose, on
     if (key) fieldRefs.current[key]?.focus();
   }
 
-  // Selecting a just-created/just-resolved category shouldn't wait on the parent's `categories`
-  // prop to catch up (it updates on its own query-invalidation schedule) — fall back to the
-  // category object the create/resolve call itself returned.
-  const [resolvedCategory, setResolvedCategory] = useState<CatalogCategoryResponse | null>(null);
-
-  const dirty = isDirty(form) || newCategoryName.trim() !== "";
-
-  const selectedCategory = useMemo(() => {
-    const fromProp = categories.find((c) => c.id === form.categoryId) ?? null;
-    if (fromProp) return fromProp;
-    return resolvedCategory && resolvedCategory.id === form.categoryId ? resolvedCategory : null;
-  }, [categories, form.categoryId, resolvedCategory]);
+  const dirty = isDirty(form);
 
   const costValue = form.cost.trim() === "" ? null : Number(form.cost);
   const sellPriceValue = form.sellPrice.trim() === "" ? null : Number(form.sellPrice);
@@ -204,59 +191,6 @@ export function CatalogItemDrawer({ categories, onCategoriesChanged, onClose, on
     !Number.isNaN(costValue) &&
     !Number.isNaN(sellPriceValue) &&
     sellPriceValue < costValue;
-
-  // build-log/112: a duplicate-name conflict causes a refetch and selection of the existing
-  // category — do not surface this as a failure. Fetches directly (rather than depending on the
-  // parent's `categories` prop catching up on its own schedule) so a failed refetch surfaces a
-  // retryable error instead of leaving the drawer silently stuck.
-  async function resolveCategoryConflict(name: string) {
-    try {
-      const fresh = await api.getCatalogCategories();
-      onCategoriesChanged();
-      const match = fresh.categories.find((c) => c.name.trim().toLowerCase() === name.trim().toLowerCase());
-      if (match) {
-        setForm((prev) => ({ ...prev, categoryId: match.id }));
-        setResolvedCategory(match);
-        setShowNewCategoryInput(false);
-        setNewCategoryName("");
-        setCategoryError(null);
-        setCategoryConflictName(null);
-      } else {
-        setCategoryError("Another category with this name exists, but we couldn't find it. Try again.");
-        setCategoryConflictName(name);
-      }
-    } catch {
-      setCategoryError("Couldn't confirm the category. Try again.");
-      setCategoryConflictName(name);
-    }
-  }
-
-  const createCategoryMutation = useMutation({
-    mutationFn: (name: string) => api.createCatalogCategory({ name, displayOrder: categories.length }),
-    onSuccess: (category) => {
-      setForm((prev) => ({ ...prev, categoryId: category.id }));
-      setResolvedCategory(category);
-      setShowNewCategoryInput(false);
-      setNewCategoryName("");
-      setCategoryError(null);
-      setCategoryConflictName(null);
-      onCategoriesChanged();
-    },
-    onError: (err, name) => {
-      if (err instanceof ApiError && err.code === "CatalogCategory.NameAlreadyExists") {
-        void resolveCategoryConflict(name);
-        return;
-      }
-      setCategoryError("Couldn't add that category. Try again.");
-    },
-  });
-
-  // The item request captures `form.categoryId` at submit time — while the "+ Add new category…"
-  // input is open (typed, blank, in flight, or stuck on an unresolved name conflict), that field
-  // hasn't caught up yet. Saving here would silently create the item without the category the
-  // user intended, or with "No category" the user never actually chose.
-  const categoryPending =
-    showNewCategoryInput || createCategoryMutation.isPending || categoryConflictName !== null;
 
   const createItemMutation = useMutation({
     mutationFn: () =>
@@ -281,9 +215,6 @@ export function CatalogItemDrawer({ categories, onCategoriesChanged, onClose, on
         setFieldErrors({});
         setGeneralError(null);
         setBelowCostConfirmed(false);
-        setShowNewCategoryInput(false);
-        setNewCategoryName("");
-        setCategoryError(null);
         fieldRefs.current.displayName?.focus();
       } else {
         onClose();
@@ -354,21 +285,6 @@ export function CatalogItemDrawer({ categories, onCategoriesChanged, onClose, on
     onClose();
   }
 
-  function handleAddCategory() {
-    const trimmed = newCategoryName.trim();
-    if (!trimmed) return;
-    // build-log/112: trim and compare normalized names against loaded categories first.
-    const existing = categories.find((c) => c.name.trim().toLowerCase() === trimmed.toLowerCase());
-    if (existing) {
-      setForm((prev) => ({ ...prev, categoryId: existing.id }));
-      setShowNewCategoryInput(false);
-      setNewCategoryName("");
-      setCategoryError(null);
-      return;
-    }
-    createCategoryMutation.mutate(trimmed);
-  }
-
   function validateBeforeSubmit(): boolean {
     const errors: FieldErrors = {};
     if (!form.displayName.trim()) errors.displayName = "Name is required.";
@@ -390,13 +306,10 @@ export function CatalogItemDrawer({ categories, onCategoriesChanged, onClose, on
 
   function submit(addAnother: boolean) {
     if (createItemMutation.isPending) return;
-    if (categoryPending) {
-      if (showNewCategoryInput && !createCategoryMutation.isPending) {
-        setCategoryError("Enter and add the category, or choose No category before saving.");
-      }
-      newCategoryNameRef.current?.focus();
-      return;
-    }
+    // The Save buttons are already disabled while categoryPending, but Ctrl/Cmd+Enter calls
+    // submit() directly — guard here too so a fast keyboard shortcut can't race an in-flight or
+    // stuck category creation.
+    if (categoryPending) return;
     if (!validateBeforeSubmit()) return;
     saveAndAddAnotherRef.current = addAnother;
     createItemMutation.mutate();
@@ -490,75 +403,20 @@ export function CatalogItemDrawer({ categories, onCategoriesChanged, onClose, on
               </select>
             </div>
 
-            <div className={`flex flex-col gap-1.5 ${showNewCategoryInput ? "sm:col-span-2" : ""}`}>
+            <div className="flex flex-col gap-1.5">
               <label className="text-sm font-medium text-[var(--ophalo-ink)]" htmlFor="ci-category">
                 Category <span className="text-[var(--ophalo-muted)] font-normal">(optional)</span>
               </label>
-              <select
+              <CategoryCombobox
                 id="ci-category"
-                value={form.categoryId ?? (showNewCategoryInput ? NEW_CATEGORY_VALUE : "")}
-                onChange={(e) => {
-                  if (e.target.value === NEW_CATEGORY_VALUE) {
-                    setForm((prev) => ({ ...prev, categoryId: null }));
-                    setShowNewCategoryInput(true);
-                  } else {
-                    setForm((prev) => ({ ...prev, categoryId: e.target.value || null }));
-                    setShowNewCategoryInput(false);
-                    setNewCategoryName("");
-                  }
-                }}
-                className={INPUT_CLS}
+                categories={categories}
+                currentCategoryId={form.categoryId}
+                onSelect={(categoryId) => setForm((prev) => ({ ...prev, categoryId }))}
+                creatable
                 disabled={isPending}
-              >
-                <option value="">No category</option>
-                {categories.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-                <option value={NEW_CATEGORY_VALUE}>+ Add new category…</option>
-              </select>
-              {showNewCategoryInput && (
-                <div className="flex w-full items-center gap-2">
-                  <input
-                    ref={newCategoryNameRef}
-                    type="text"
-                    aria-label="New category name"
-                    value={newCategoryName}
-                    onChange={(e) => setNewCategoryName(e.target.value)}
-                    placeholder="New category name"
-                    maxLength={100}
-                    className={`${INPUT_CLS} min-w-0 flex-1`}
-                    disabled={createCategoryMutation.isPending || isPending}
-                  />
-                  <button
-                    type="button"
-                    onClick={handleAddCategory}
-                    disabled={!newCategoryName.trim() || createCategoryMutation.isPending || isPending}
-                    className={`shrink-0 px-3 py-2 rounded-lg text-sm font-medium bg-[var(--ophalo-navy)] text-white
-                      hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed ${FOCUS_RING}`}
-                  >
-                    {createCategoryMutation.isPending ? "Adding…" : "Add"}
-                  </button>
-                </div>
-              )}
-              {selectedCategory && (
-                <span className="text-sm text-[var(--ophalo-muted)]">Selected: {selectedCategory.name}</span>
-              )}
-              {categoryError && (
-                <div className="flex items-center gap-2">
-                  <span className="text-sm text-[var(--ophalo-danger)]">{categoryError}</span>
-                  {categoryConflictName && (
-                    <button
-                      type="button"
-                      onClick={() => void resolveCategoryConflict(categoryConflictName)}
-                      className={`text-sm font-medium text-[var(--keep-accent)] hover:underline ${FOCUS_RING}`}
-                    >
-                      Try again
-                    </button>
-                  )}
-                </div>
-              )}
+                onCategoriesChanged={onCategoriesChanged}
+                onPendingChange={setCategoryPending}
+              />
             </div>
           </div>
 

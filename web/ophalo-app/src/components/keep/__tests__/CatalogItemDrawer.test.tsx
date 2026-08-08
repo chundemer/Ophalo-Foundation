@@ -149,7 +149,8 @@ describe("CatalogItemDrawer", () => {
     const { onClose } = renderDrawer();
 
     await user.selectOptions(screen.getByLabelText("Type"), "Equipment");
-    await user.selectOptions(screen.getByLabelText(/Category/), "cat-1");
+    await user.click(screen.getByLabelText(/Category/));
+    await user.click(screen.getByRole("option", { name: "Refrigerant" }));
     await user.click(screen.getByRole("checkbox", { name: "This item doesn't have its own sell price" }));
     await user.type(screen.getByLabelText("Name"), "Condensate Pump");
     await user.type(screen.getByLabelText(/SKU \/ internal code/), "CP20");
@@ -167,7 +168,7 @@ describe("CatalogItemDrawer", () => {
 
     // Retained: category, type, UOM, and price mode (build-log/112).
     expect(screen.getByLabelText("Type")).toHaveValue("Equipment");
-    expect(screen.getByLabelText(/Category/)).toHaveValue("cat-1");
+    expect(screen.getByLabelText(/Category/)).toHaveValue("Refrigerant");
     expect(screen.getByLabelText("Unit of measure")).toHaveValue("each");
     expect(screen.getByRole("checkbox", { name: "This item doesn't have its own sell price" })).toBeChecked();
 
@@ -340,7 +341,7 @@ describe("CatalogItemDrawer", () => {
     expect(screen.queryByText("Discard your changes to this item?")).not.toBeInTheDocument();
   });
 
-  it("inline category creation selects the new category and refreshes the list", async () => {
+  it("inline category creation (via the shared CategoryCombobox) selects the new category and refreshes the list", async () => {
     const user = userEvent.setup();
     mockCreateCatalogCategory.mockResolvedValue({
       id: "cat-2",
@@ -351,12 +352,12 @@ describe("CatalogItemDrawer", () => {
     });
     const { onCategoriesChanged } = renderDrawer();
 
-    await user.selectOptions(screen.getByLabelText(/Category/), "+ Add new category…");
-    await user.type(screen.getByLabelText("New category name"), "Compressors");
-    await user.click(screen.getByRole("button", { name: "Add" }));
+    await user.type(screen.getByLabelText(/Category/), "Compressors");
+    await user.click(screen.getByText('+ Create "Compressors"'));
 
     await waitFor(() => expect(mockCreateCatalogCategory).toHaveBeenCalledWith({ name: "Compressors", displayOrder: 1 }));
     await waitFor(() => expect(onCategoriesChanged).toHaveBeenCalled());
+    await waitFor(() => expect(screen.getByLabelText(/Category/)).toHaveValue("Compressors"));
   });
 
   it("a category-name race resolves by refetching directly and selecting the match, without an error", async () => {
@@ -372,12 +373,11 @@ describe("CatalogItemDrawer", () => {
     });
     const { onCategoriesChanged } = renderDrawer();
 
-    await user.selectOptions(screen.getByLabelText(/Category/), "+ Add new category…");
-    await user.type(screen.getByLabelText("New category name"), "Compressors");
-    await user.click(screen.getByRole("button", { name: "Add" }));
+    await user.type(screen.getByLabelText(/Category/), "Compressors");
+    await user.click(screen.getByText('+ Create "Compressors"'));
 
     await waitFor(() => expect(mockGetCatalogCategories).toHaveBeenCalled());
-    await waitFor(() => expect(screen.getByText("Selected: Compressors")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByLabelText(/Category/)).toHaveValue("Compressors"));
     expect(onCategoriesChanged).toHaveBeenCalled();
     expect(screen.queryByText(/couldn't add that category/i)).not.toBeInTheDocument();
   });
@@ -396,57 +396,57 @@ describe("CatalogItemDrawer", () => {
     });
     renderDrawer();
 
-    await user.selectOptions(screen.getByLabelText(/Category/), "+ Add new category…");
-    await user.type(screen.getByLabelText("New category name"), "Compressors");
-    await user.click(screen.getByRole("button", { name: "Add" }));
+    await user.type(screen.getByLabelText(/Category/), "Compressors");
+    await user.click(screen.getByText('+ Create "Compressors"'));
 
     await waitFor(() => expect(screen.getByText("Couldn't confirm the category. Try again.")).toBeInTheDocument());
 
     await user.click(screen.getByRole("button", { name: "Try again" }));
-    await waitFor(() => expect(screen.getByText("Selected: Compressors")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByLabelText(/Category/)).toHaveValue("Compressors"));
   });
 
-  it("disables Save & activate and Save & add another while a new category name is unresolved", async () => {
+  it("disables Save & activate and Save & add another while a new category is being created", async () => {
     const user = userEvent.setup();
+    mockCreateCatalogCategory.mockReturnValue(new Promise(() => {}));
     renderDrawer();
 
     await fillRequiredFields(user);
-    await user.selectOptions(screen.getByLabelText(/Category/), "+ Add new category…");
-    await user.type(screen.getByLabelText("New category name"), "Compressors");
+    await user.type(screen.getByLabelText(/Category/), "Compressors");
+    await user.click(screen.getByText('+ Create "Compressors"'));
 
-    expect(screen.getByRole("button", { name: /^save & activate$/i })).toBeDisabled();
+    await waitFor(() => expect(screen.getByRole("button", { name: /^save & activate$/i })).toBeDisabled());
     expect(screen.getByRole("button", { name: /^save & add another$/i })).toBeDisabled();
   });
 
-  it("blocks Ctrl+Enter save while a new category name is unresolved, with an inline error", async () => {
+  it("blocks Ctrl+Enter save while a new category is mid-creation, so it can never race an uncommitted category", async () => {
     const user = userEvent.setup();
+    mockCreateCatalogCategory.mockReturnValue(new Promise(() => {}));
     renderDrawer();
 
     await fillRequiredFields(user);
-    await user.selectOptions(screen.getByLabelText(/Category/), "+ Add new category…");
-    await user.type(screen.getByLabelText("New category name"), "Compressors");
-    await user.keyboard("{Control>}{Enter}{/Control}");
-
-    expect(mockCreateCatalogItem).not.toHaveBeenCalled();
-    expect(screen.getByText("Enter and add the category, or choose No category before saving.")).toBeInTheDocument();
-    expect(screen.getByLabelText("New category name")).toHaveFocus();
-  });
-
-  it("blocks save when the new-category input is opened but left blank", async () => {
-    const user = userEvent.setup();
-    renderDrawer();
-
-    await fillRequiredFields(user);
-    await user.selectOptions(screen.getByLabelText(/Category/), "+ Add new category…");
-
-    expect(screen.getByRole("button", { name: /^save & activate$/i })).toBeDisabled();
-    expect(screen.getByRole("button", { name: /^save & add another$/i })).toBeDisabled();
+    await user.type(screen.getByLabelText(/Category/), "Compressors");
+    await user.click(screen.getByText('+ Create "Compressors"'));
+    await waitFor(() => expect(screen.getByText("Adding…")).toBeInTheDocument());
 
     await user.keyboard("{Control>}{Enter}{/Control}");
 
     expect(mockCreateCatalogItem).not.toHaveBeenCalled();
-    expect(screen.getByText("Enter and add the category, or choose No category before saving.")).toBeInTheDocument();
-    expect(screen.getByLabelText("New category name")).toHaveFocus();
+  });
+
+  it("typing a category name without committing it never blocks or silently affects save", async () => {
+    const user = userEvent.setup();
+    mockCreateCatalogItem.mockResolvedValue(createdResult);
+    renderDrawer();
+
+    await fillRequiredFields(user);
+    // The user starts typing a new category but never presses Enter or clicks Create.
+    await user.type(screen.getByLabelText(/Category/), "Compressors");
+    await user.click(screen.getByRole("button", { name: /save & activate/i }));
+
+    await waitFor(() => expect(mockCreateCatalogItem).toHaveBeenCalledWith(
+      expect.objectContaining({ categoryId: null }),
+    ));
+    expect(mockCreateCatalogCategory).not.toHaveBeenCalled();
   });
 
   it("keeps Save & activate disabled while the new category is being created, then releases it once resolved", async () => {
@@ -457,9 +457,8 @@ describe("CatalogItemDrawer", () => {
     const { onClose } = renderDrawer();
 
     await fillRequiredFields(user);
-    await user.selectOptions(screen.getByLabelText(/Category/), "+ Add new category…");
-    await user.type(screen.getByLabelText("New category name"), "Compressors");
-    await user.click(screen.getByRole("button", { name: "Add" }));
+    await user.type(screen.getByLabelText(/Category/), "Compressors");
+    await user.click(screen.getByText('+ Create "Compressors"'));
 
     await waitFor(() => expect(screen.getByRole("button", { name: /^save & activate$/i })).toBeDisabled());
     expect(mockCreateCatalogItem).not.toHaveBeenCalled();
@@ -467,7 +466,7 @@ describe("CatalogItemDrawer", () => {
 
     resolveCreate({ id: "cat-2", name: "Compressors", displayOrder: 1, activeState: "Active", concurrencyVersion: "v1" });
 
-    await waitFor(() => expect(screen.getByText("Selected: Compressors")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByLabelText(/Category/)).toHaveValue("Compressors"));
     await waitFor(() => expect(screen.getByRole("button", { name: /^save & activate$/i })).toBeEnabled());
   });
 });

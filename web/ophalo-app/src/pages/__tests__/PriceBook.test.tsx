@@ -224,12 +224,14 @@ describe("PriceBook", () => {
     await waitFor(() => expect(screen.getByText("Condensate Pump")).toBeInTheDocument());
     mockGetCatalogItems.mockClear();
 
-    await user.selectOptions(screen.getByLabelText("Filter by category"), "cat-1");
+    await user.click(screen.getByLabelText("Filter by category"));
+    await user.click(screen.getByRole("option", { name: "Pumps" }));
 
     await waitFor(() => expect(mockGetCatalogItems).toHaveBeenCalledWith({ categoryId: "cat-1" }));
   });
 
   it("does not offer an inactive category as a filter option", async () => {
+    const user = userEvent.setup();
     mockGetCatalogCategories.mockResolvedValue({
       categories: [{ id: "cat-2", name: "Retired", displayOrder: 0, activeState: "Inactive", concurrencyVersion: "v1" }],
     });
@@ -237,6 +239,7 @@ describe("PriceBook", () => {
     renderPriceBook();
 
     await waitFor(() => expect(screen.getByText("Condensate Pump")).toBeInTheDocument());
+    await user.click(screen.getByLabelText("Filter by category"));
     expect(screen.queryByRole("option", { name: "Retired" })).not.toBeInTheDocument();
   });
 

@@ -8,6 +8,7 @@ import type { CatalogItemDetailResult } from "../../lib/apiClient";
 
 const mockGetCatalogItem = vi.fn();
 const mockGetCatalogCategories = vi.fn();
+const mockCreateCatalogCategory = vi.fn();
 const mockUpdateCatalogItemHeader = vi.fn();
 const mockReactivateCatalogItem = vi.fn();
 const mockInactivateCatalogItem = vi.fn();
@@ -24,6 +25,7 @@ vi.mock("../../lib/apiClient", async () => {
       ...actual.api,
       getCatalogItem: (...args: unknown[]) => mockGetCatalogItem(...args),
       getCatalogCategories: (...args: unknown[]) => mockGetCatalogCategories(...args),
+      createCatalogCategory: (...args: unknown[]) => mockCreateCatalogCategory(...args),
       updateCatalogItemHeader: (...args: unknown[]) => mockUpdateCatalogItemHeader(...args),
       reactivateCatalogItem: (...args: unknown[]) => mockReactivateCatalogItem(...args),
       inactivateCatalogItem: (...args: unknown[]) => mockInactivateCatalogItem(...args),
@@ -86,6 +88,7 @@ describe("CatalogItemDetail", () => {
         { id: "cat-2", name: "Fittings", displayOrder: 1, activeState: "Active", concurrencyVersion: "v1" },
       ],
     });
+    mockCreateCatalogCategory.mockReset();
     mockUpdateCatalogItemHeader.mockReset();
     mockReactivateCatalogItem.mockReset();
     mockInactivateCatalogItem.mockReset();
@@ -221,6 +224,106 @@ describe("CatalogItemDetail", () => {
     await waitFor(() => expect(mockUpdateCatalogItemHeader).toHaveBeenCalledWith(
       "item-1",
       { displayName: "Condensate Pump Mk2", externalKey: "COP-34", categoryId: "cat-1", isCommonItem: false },
+      "v1",
+    ));
+  });
+
+  it("editing the header offers the same shared, creatable CategoryCombobox as the create drawer", async () => {
+    const user = userEvent.setup();
+    mockGetCatalogItem.mockResolvedValue(baseItem);
+    mockUpdateCatalogItemHeader.mockResolvedValue({ concurrencyVersion: "v2" });
+    renderDetail();
+
+    await waitFor(() => expect(screen.getByText("Condensate Pump")).toBeInTheDocument());
+    await user.click(screen.getByRole("button", { name: "Edit" }));
+
+    const categoryField = screen.getByLabelText("Category");
+    expect(categoryField).toHaveValue("Refrigerant");
+    await user.click(categoryField);
+    await user.click(screen.getByRole("option", { name: "Fittings" }));
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => expect(mockUpdateCatalogItemHeader).toHaveBeenCalledWith(
+      "item-1",
+      { displayName: "Condensate Pump", externalKey: "COP-34", categoryId: "cat-2", isCommonItem: false },
+      "v1",
+    ));
+  });
+
+  it("creating a category from the edit form blocks Save until it resolves, then saves the header with the new category", async () => {
+    const user = userEvent.setup();
+    mockGetCatalogItem.mockResolvedValue(baseItem);
+    mockUpdateCatalogItemHeader.mockResolvedValue({ concurrencyVersion: "v2" });
+    let resolveCreate: (v: unknown) => void = () => {};
+    mockCreateCatalogCategory.mockReturnValue(new Promise((resolve) => (resolveCreate = resolve)));
+    renderDetail();
+
+    await waitFor(() => expect(screen.getByText("Condensate Pump")).toBeInTheDocument());
+    await user.click(screen.getByRole("button", { name: "Edit" }));
+
+    await user.clear(screen.getByLabelText("Category"));
+    await user.type(screen.getByLabelText("Category"), "Ductwork");
+    await user.click(screen.getByText('+ Create "Ductwork"'));
+
+    await waitFor(() => expect(screen.getByRole("button", { name: "Save" })).toBeDisabled());
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    expect(mockUpdateCatalogItemHeader).not.toHaveBeenCalled();
+
+    resolveCreate({ id: "cat-3", name: "Ductwork", displayOrder: 2, activeState: "Active", concurrencyVersion: "v1" });
+    await waitFor(() => expect(screen.getByLabelText("Category")).toHaveValue("Ductwork"));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Save" })).toBeEnabled());
+
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(mockUpdateCatalogItemHeader).toHaveBeenCalledWith(
+      "item-1",
+      { displayName: "Condensate Pump", externalKey: "COP-34", categoryId: "cat-3", isCommonItem: false },
+      "v1",
+    ));
+  });
+
+  it("a category-name race in the edit form resolves by selecting the concurrently created category, and preserves the rest of the edited draft", async () => {
+    const user = userEvent.setup();
+    mockGetCatalogItem.mockResolvedValue(baseItem);
+    mockUpdateCatalogItemHeader.mockResolvedValue({ concurrencyVersion: "v2" });
+    mockCreateCatalogCategory.mockRejectedValue(
+      new ApiError(409, "CatalogCategory.NameAlreadyExists", "conflict"),
+    );
+    // The parent's initial load reflects only cat-1/cat-2 — "Ductwork" is created concurrently by
+    // someone else and only surfaces once the combobox's own conflict-recovery refetch runs.
+    mockGetCatalogCategories.mockResolvedValueOnce({
+      categories: [
+        { id: "cat-1", name: "Refrigerant", displayOrder: 0, activeState: "Active", concurrencyVersion: "v1" },
+        { id: "cat-2", name: "Fittings", displayOrder: 1, activeState: "Active", concurrencyVersion: "v1" },
+      ],
+    });
+    mockGetCatalogCategories.mockResolvedValue({
+      categories: [
+        { id: "cat-1", name: "Refrigerant", displayOrder: 0, activeState: "Active", concurrencyVersion: "v1" },
+        { id: "cat-2", name: "Fittings", displayOrder: 1, activeState: "Active", concurrencyVersion: "v1" },
+        { id: "cat-3", name: "Ductwork", displayOrder: 2, activeState: "Active", concurrencyVersion: "v1" },
+      ],
+    });
+    renderDetail();
+
+    await waitFor(() => expect(screen.getByText("Condensate Pump")).toBeInTheDocument());
+    await user.click(screen.getByRole("button", { name: "Edit" }));
+
+    // Preserve the rest of the edited draft while the category race resolves in the background.
+    const nameInput = screen.getByLabelText("Name") as HTMLInputElement;
+    await user.clear(nameInput);
+    await user.type(nameInput, "Condensate Pump Mk2");
+    await user.clear(screen.getByLabelText("Category"));
+    await user.type(screen.getByLabelText("Category"), "Ductwork");
+    await user.click(screen.getByText('+ Create "Ductwork"'));
+
+    await waitFor(() => expect(screen.getByLabelText("Category")).toHaveValue("Ductwork"));
+    expect(screen.queryByText(/couldn't add that category/i)).not.toBeInTheDocument();
+    expect((screen.getByLabelText("Name") as HTMLInputElement).value).toBe("Condensate Pump Mk2");
+
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(mockUpdateCatalogItemHeader).toHaveBeenCalledWith(
+      "item-1",
+      { displayName: "Condensate Pump Mk2", externalKey: "COP-34", categoryId: "cat-3", isCommonItem: false },
       "v1",
     ));
   });

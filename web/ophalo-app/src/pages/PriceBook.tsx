@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus, Tag } from "lucide-react";
 import { api, ApiError, type AccountRole, type GetCatalogItemsParams } from "../lib/apiClient";
 import { CatalogItemDrawer } from "../components/keep/CatalogItemDrawer";
+import { CategoryCombobox } from "../components/keep/CategoryCombobox";
 
 const SEARCH_DEBOUNCE_MS = 300;
 
@@ -244,20 +245,16 @@ export function PriceBook({
         <label className="sr-only" htmlFor="catalog-category-filter">
           Filter by category
         </label>
-        <select
-          id="catalog-category-filter"
-          value={categoryFilter ?? ""}
-          onChange={(e) => setCategoryFilter(e.target.value || null)}
-          className="px-3 py-1.5 rounded-lg border border-[var(--ophalo-border)] text-sm
-            focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)]"
-        >
-          <option value="">All categories</option>
-          {activeCategories.map((category) => (
-            <option key={category.id} value={category.id}>
-              {category.name}
-            </option>
-          ))}
-        </select>
+        <div className="w-full sm:w-56">
+          <CategoryCombobox
+            id="catalog-category-filter"
+            categories={activeCategories}
+            currentCategoryId={categoryFilter}
+            onSelect={setCategoryFilter}
+            noneLabel="All categories"
+            placeholder="All categories"
+          />
+        </div>
 
         <div className="inline-flex rounded-lg border border-[var(--ophalo-border)] p-0.5" role="group" aria-label="Filter by status">
           {(["Active", "Inactive"] as const).map((option) => (

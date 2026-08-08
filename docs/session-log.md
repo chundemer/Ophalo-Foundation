@@ -297,6 +297,129 @@ account-aware `AccountFeatureAccessResolver`, and a generic Owner/Admin `GET
   session — flagged, not silently skipped. The next implementation preflight is **2e.7b — shared
   category combobox**.
 
+  **Catalog-entry review follow-up (2026-08-08):** owner/admin workflow review confirms the 2e.7
+  sequence without expansion: 2e.7b owns the stable-layout searchable/creatable category combobox;
+  2e.7c owns the desktop Cost/Sell Price pairing and shortcuts/accessibility polish. UOM quick-fill
+  remains a literal-value fill with no automatic focus jump, because surprise focus movement risks
+  fast-entry mistakes. A future advisory **Similar catalog items** assist is recorded as DEF-092,
+  not added to either next slice: it must use a bounded server search rather than the visible page
+  or an unbounded local catalog, be debounced and capped, link to inspection, and never block save
+  or present a similarity as a duplicate.
+
+  **2e.7b category-combobox UX correction — locked before acceptance (2026-08-08):** the initial
+  shared combobox implementation technically supports creation after typing, but its empty
+  `No category` presentation makes that path undiscoverable to a busy Owner/Admin. Correct it as a
+  guided searchable combobox, without a second form, separate create button, layout shift, or
+  automatic category creation:
+
+  - With no committed category, the input placeholder is **`Search or create category…`**. The
+    create/edit forms retain the visible `Category (optional)` label; the list filter retains its
+    distinct browse meaning (`All categories`) and remains select-only.
+  - On focus with an empty query, retain the normal actionable options (`No category` first, then
+    existing categories), and append a visually quiet, **non-selectable** footer separated from
+    those options: **`💡 Type a new name to create category`**. It is discovery guidance, not a
+    second action or an option keyboard navigation can accidentally choose. Equivalent concise
+    instruction must be exposed to assistive technology.
+  - When the typed normalized value is not an exact existing category, replace ordinary no-match
+    presentation with one clear, visually prominent option: **`+ Create "{entered name}"`**. It is
+    the default highlighted option, uses the Price Book accent/primary-action treatment rather than
+    looking like an ordinary category row, and is created only after an explicit click or Enter.
+  - Enter invokes the highlighted create option (or selects an existing/no-category option when
+    that is highlighted). **Tab never creates or changes a category**: it follows normal combobox
+    focus traversal, because a fast data-entry Tab must not persist an accidental typo. Escape
+    closes the popup and restores the last committed selection without creating or changing
+    anything.
+  - Preserve the existing exact-normalized-match reuse, 409 refetch-and-select race recovery, and
+    pending gate. From the start of a create attempt until it resolves, every item-save path
+    (including Ctrl/Cmd+Enter) remains disabled; an error/conflict keeps the item draft and intended
+    category recoverable rather than silently omitting it.
+
+  This is a correction within 2e.7b's existing frontend-only scope, not a new mutation family or
+  authorization to add category management. Validate it in focused component and create/edit
+  consumer tests, then visually verify the empty, exact-match, no-match/create, pending, error,
+  Escape, Enter, and Tab paths on desktop and mobile before accepting/committing the batch.
+
+  **2e.7b scale and ordering acceptance correction — required before commit (2026-08-08):** do
+  not accept the combobox merely because its small-list tests pass. Owner/Admin category choice
+  must remain predictable with 15–50 account categories. The current category-choice read orders
+  by persisted `DisplayOrder` then Name; because the direct-entry MVP assigns new categories the
+  next display-order value and provides no ordering-management UI, this presents effective creation
+  order rather than the A–Z ordering an owner expects. Correct this at the authoritative read
+  contract, **not** with divergent frontend sorts: change the active-category query to stable,
+  case-insensitive alphabetical Name ordering with a deterministic tie-breaker, and add the focused
+  persistence/API proof. This is a bounded backend read-path correction (no mutation family),
+  expressly approved as necessary to complete the 2e.7b owner workflow.
+
+  The popup must also be structurally bounded rather than relying on one scrolling list:
+
+  - Pin the actionable **No category** choice at the top of the popup.
+  - Put only ordinary existing-category rows in a vertically scrollable region capped at roughly
+    240–256px (`max-h-60`/`max-h-64`), so a long account list cannot overrun the drawer/mobile
+    viewport or obscure its action footer.
+  - Keep the non-selectable `💡 Type a new name to create category` discovery footer fixed below
+    that scroll region. When a typed name has no exact normalized match, replace that footer with
+    the prominent **`+ Create "{entered name}"`** action so it remains visible without scrolling;
+    it must not be appended after potentially many partial-match rows.
+  - Preserve the locked keyboard rule: the fixed create action is default-highlighted and Enter or
+    click invokes it; Tab only traverses focus and never creates/changes a category; Escape restores
+    the last committed selection. Keep a semantically valid WAI-ARIA combobox/listbox structure as
+    the visual regions are separated.
+  - Verify popover placement and clipping when the control is near the drawer/mobile viewport's
+    lower edge; the popup must not be hidden behind or push the pinned form footer.
+
+  Required proof before 2e.7b acceptance: focused tests for mixed-case A–Z category ordering, the
+  pinned No-category/create-footer behavior with a 15+ (preferably 50) category fixture, exact/
+  partial/no-match filtering, and keyboard selection; live entitled-app desktop and mobile checks
+  at empty, one, 15, and 50 categories, including the lower-edge popup placement. Do not commit or
+  describe 2e.7b as complete until this correction and visual checkpoint are recorded.
+
+  **2e.7b complete (2026-08-08).** `CategoryCombobox` (`components/keep/CategoryCombobox.tsx`) is
+  the shared searchable combobox: `CatalogItemDrawer` (create) and `CatalogItemDetail`'s header-edit
+  form both use it in creatable mode with the identical exact-match/409-race-recovery/pending-gate
+  contract; `PriceBook`'s category filter uses it select-only. Guided-discovery correction applied:
+  `Search or create category…` placeholder when creatable, a non-selectable `💡 Type a new name to
+  create category` hint on empty-query focus (always exposed to AT via `aria-describedby`, visible
+  footer or `sr-only` fallback), the create action as the default-highlighted option even over
+  partial category matches, and Tab/blur reverting to the last committed selection without ever
+  creating or changing anything (Escape does the same).
+
+  Scale/ordering correction applied: `EfCatalogReadPersistence.GetActiveCategoriesAsync` now orders
+  by `NormalizedName` (case-insensitive, already unique per account) then `Id`, replacing the old
+  `DisplayOrder`-then-Name read that effectively showed creation order; `CatalogReadApiTests`'
+  ordering test was rewritten (`Categories_ReturnsActiveOnlyOrderedByNameCaseInsensitive`) with
+  names deliberately out of both display-order and byte-case order to actually prove it. The popup
+  is now three structurally distinct regions rather than one scrolling list: "No category" pinned
+  above, ordinary category rows in a `max-h-60` (~240px) scrollable middle, and the create action
+  pinned below — proven with a 50-category fixture (`CategoryCombobox.test.tsx`'s "2e.7b scale
+  correction" suite: pinned rows structurally outside the scroll region, height cap present, create
+  action reachable and default-highlighted regardless of partial-match count, both No category and
+  Create reachable by keyboard alone).
+
+  Two additional correctness issues were caught and fixed during this pass, before any browser
+  check: (1) the create option's highlight used `bg-[var(--keep-accent)]/10`, a Tailwind opacity
+  modifier on a `var()`-based arbitrary color that Tailwind 3.4 cannot resolve — confirmed via the
+  compiled CSS output that it emitted no rule at all, so the highlight silently never rendered;
+  replaced with the existing `--keep-accent-bg` token. (2) the draft-text sync effect depended only
+  on `currentCategoryId`, so a `categories` query resolving after `currentCategoryId` was already
+  set (e.g. opening Edit before the categories fetch lands) left the field showing blank forever
+  despite a real category being selected; it now also depends on `selectedCategory?.name`.
+
+  Manual browser acceptance (desktop and mobile, entitled app) confirmed at 0, 1, 15, and 50
+  categories: pinned No category/create-action reachability, the scrollable middle region, and
+  popover placement/clipping at the drawer/mobile viewport's lower edge all behave per the
+  correction above.
+
+  Verified: frontend `tsc --noEmit`, CSS-token check, full vitest suite (328/328), and the
+  production build are clean. Backend `dotnet build` is clean; `CatalogReadApiTests` (15/15) and
+  the broader `Catalog*` integration/unit suites are clean aside from the pre-existing, separately
+  documented flaky `CatalogItemCreateAndActivateApiTests.Create_TwoConcurrentCreatesInSameAccount_
+  ExactlyOneWins` (confirmed passing in isolation; unrelated to this batch, not a 2e.7b regression).
+  `git diff --check` is clean. Batch: `CategoryCombobox.tsx` + test (new), `CatalogItemDrawer.tsx`,
+  `CatalogItemDetail.tsx`, `PriceBook.tsx` + their tests, plus the two pre-approved backend files
+  (`EfCatalogReadPersistence.cs`, `CatalogReadApiTests.cs`) — no new mutation family. The next
+  implementation preflight is **2e.7c — Cost/Sell Price desktop pairing, keyboard-shortcuts help,
+  accessibility polish**.
+
 - **2a.1 — CatalogItem foundation:** complete and migrated. `CatalogItem`, its lifecycle/persistence
   stack, and `keep_pricebook_catalog_items` are in place. Review corrected the table name and ensured
   a concurrent SKU collision maps to `CatalogItemErrors.ExternalKeyAlreadyExists`.

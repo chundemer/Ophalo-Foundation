@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Tag } from "lucide-react";
 import { api, ApiError, type AccountRole, type CatalogItemResponse } from "../lib/apiClient";
 import { CatalogItemPricePublishForm } from "./CatalogItemPricePublishForm";
+import { CategoryCombobox } from "../components/keep/CategoryCombobox";
 
 const INPUT_CLS =
   "w-full rounded-lg border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] text-base text-[var(--ophalo-ink)] px-3 py-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-offset-1";
@@ -143,6 +144,10 @@ export function CatalogItemDetail({
   const [conflictRefreshPending, setConflictRefreshPending] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<{ displayName?: string; externalKey?: string; categoryId?: string }>({});
+  // Reported by CategoryCombobox (Session 2e.7b, build-log/114): true from the start of a
+  // category-create attempt until it resolves — blocks Save so it can never fire against an
+  // uncommitted category intent, matching the create-drawer's contract.
+  const [categoryPending, setCategoryPending] = useState(false);
 
   function startEditing() {
     if (!data || itemBusy) return;
@@ -150,6 +155,7 @@ export function CatalogItemDetail({
     setConflictDraft(null);
     setFormError(null);
     setFieldErrors({});
+    setCategoryPending(false);
     setIsEditing(true);
   }
 
@@ -158,6 +164,7 @@ export function CatalogItemDetail({
     setForm(null);
     setFormError(null);
     setFieldErrors({});
+    setCategoryPending(false);
   }
 
   const updateHeaderMutation = useMutation({
@@ -387,7 +394,7 @@ export function CatalogItemDetail({
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!form || updateHeaderMutation.isPending) return;
+    if (!form || updateHeaderMutation.isPending || categoryPending) return;
     setFieldErrors({});
     setFormError(null);
     updateHeaderMutation.mutate(form);
@@ -749,22 +756,21 @@ export function CatalogItemDetail({
                 <label htmlFor="header-category" className="text-xs font-medium text-[var(--ophalo-muted)]">
                   Category
                 </label>
-                <select
-                  id="header-category"
-                  value={form.categoryId}
-                  onChange={(e) => setForm({ ...form, categoryId: e.target.value })}
-                  disabled={updateHeaderMutation.isPending}
-                  className={`mt-1 ${INPUT_CLS} ${fieldErrors.categoryId ? ERROR_INPUT_CLS : ""}`}
-                >
-                  <option value="">No category</option>
-                  {(categoriesQuery.data?.categories ?? [])
-                    .filter((c) => c.activeState === "Active" || c.id === data.category?.id)
-                    .map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name}
-                      </option>
-                    ))}
-                </select>
+                <div className="mt-1">
+                  <CategoryCombobox
+                    id="header-category"
+                    categories={(categoriesQuery.data?.categories ?? []).filter(
+                      (c) => c.activeState === "Active" || c.id === data.category?.id,
+                    )}
+                    currentCategoryId={form.categoryId === "" ? null : form.categoryId}
+                    onSelect={(categoryId) => setForm({ ...form, categoryId: categoryId ?? "" })}
+                    creatable
+                    disabled={updateHeaderMutation.isPending}
+                    invalid={!!fieldErrors.categoryId}
+                    onCategoriesChanged={() => void queryClient.invalidateQueries({ queryKey: ["catalogCategories"] })}
+                    onPendingChange={setCategoryPending}
+                  />
+                </div>
                 {fieldErrors.categoryId && (
                   <p className="mt-1 text-xs text-[var(--ophalo-danger)]">{fieldErrors.categoryId}</p>
                 )}
@@ -790,7 +796,7 @@ export function CatalogItemDetail({
             <div className="flex items-center gap-3">
               <button
                 type="submit"
-                disabled={updateHeaderMutation.isPending}
+                disabled={updateHeaderMutation.isPending || categoryPending}
                 className="rounded-lg bg-[var(--keep-accent)] px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
               >
                 {updateHeaderMutation.isPending ? "Saving…" : "Save"}
