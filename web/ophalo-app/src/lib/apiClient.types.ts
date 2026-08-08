@@ -629,6 +629,18 @@ export interface CreateAndActivateCatalogItemResult {
   pricingMode: string;
 }
 
+// Session 2e.6b, build-log/113: header-only update.
+export interface UpdateCatalogItemHeaderBody {
+  displayName: string;
+  externalKey?: string | null;
+  categoryId?: string | null;
+  isCommonItem: boolean;
+}
+
+export interface UpdateCatalogItemHeaderResult {
+  concurrencyVersion: string;
+}
+
 export interface CreateCatalogCategoryBody {
   name: string;
   displayOrder: number;

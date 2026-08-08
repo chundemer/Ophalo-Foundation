@@ -1,6 +1,28 @@
-import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Tag } from "lucide-react";
-import { api, ApiError, type AccountRole } from "../lib/apiClient";
+import { api, ApiError, type AccountRole, type CatalogItemResponse } from "../lib/apiClient";
+
+const INPUT_CLS =
+  "w-full rounded-lg border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] text-base text-[var(--ophalo-ink)] px-3 py-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-offset-1";
+
+const ERROR_INPUT_CLS = "border-[var(--ophalo-danger)]";
+
+interface HeaderFormState {
+  displayName: string;
+  externalKey: string;
+  categoryId: string;
+  isCommonItem: boolean;
+}
+
+function toFormState(item: CatalogItemResponse): HeaderFormState {
+  return {
+    displayName: item.displayName,
+    externalKey: item.externalKey ?? "",
+    categoryId: item.categoryId ?? "",
+    isCommonItem: item.isCommonItem,
+  };
+}
 
 interface CatalogItemDetailProps {
   catalogItemId: string;
@@ -84,6 +106,7 @@ export function CatalogItemDetail({
   onBack,
 }: CatalogItemDetailProps) {
   const isOwnerOrAdmin = role === "owner" || role === "admin";
+  const queryClient = useQueryClient();
 
   const { data, isLoading, isError, error } = useQuery({
     queryKey: ["catalogItem", catalogItemId],
@@ -91,6 +114,110 @@ export function CatalogItemDetail({
     enabled: isOwnerOrAdmin && entitled,
     retry: false,
   });
+
+  const categoriesQuery = useQuery({
+    queryKey: ["catalogCategories"],
+    queryFn: () => api.getCatalogCategories(),
+    enabled: isOwnerOrAdmin && entitled,
+  });
+
+  const [isEditing, setIsEditing] = useState(false);
+  const [form, setForm] = useState<HeaderFormState | null>(null);
+  // Set instead of the form itself when a save hits a version conflict (build-log/113, review
+  // 2026-08-07): the form unmounts and the read-only view refreshes to the concurrent editor's
+  // latest values, so a resave can't silently overwrite them. Re-entering Edit restores this draft
+  // as the deliberate, explicit retry.
+  const [conflictDraft, setConflictDraft] = useState<HeaderFormState | null>(null);
+  // True from the moment a conflict is detected until the refetch it triggers lands. Edit stays
+  // disabled for this window so a fast double-click can't reopen the form and resave against the
+  // still-stale `data.item.concurrencyVersion` before the refreshed item is actually rendered.
+  const [conflictRefreshPending, setConflictRefreshPending] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<{ displayName?: string; externalKey?: string; categoryId?: string }>({});
+
+  function startEditing() {
+    if (!data || conflictRefreshPending) return;
+    setForm(conflictDraft ?? toFormState(data.item));
+    setConflictDraft(null);
+    setFormError(null);
+    setFieldErrors({});
+    setIsEditing(true);
+  }
+
+  function cancelEditing() {
+    setIsEditing(false);
+    setForm(null);
+    setFormError(null);
+    setFieldErrors({});
+  }
+
+  const updateHeaderMutation = useMutation({
+    mutationFn: (input: HeaderFormState) => {
+      if (!data) throw new Error("Catalog item not loaded.");
+      return api.updateCatalogItemHeader(
+        catalogItemId,
+        {
+          displayName: input.displayName.trim(),
+          externalKey: input.externalKey.trim() === "" ? null : input.externalKey.trim(),
+          categoryId: input.categoryId === "" ? null : input.categoryId,
+          isCommonItem: input.isCommonItem,
+        },
+        data.item.concurrencyVersion,
+      );
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["catalogItem", catalogItemId] });
+      setConflictDraft(null);
+      cancelEditing();
+    },
+    onError: (err: unknown, input) => {
+      if (err instanceof ApiError && err.code === "CatalogItem.VersionMismatch") {
+        setConflictDraft(input);
+        setIsEditing(false);
+        setForm(null);
+        setFormError(null);
+        setFieldErrors({});
+        setConflictRefreshPending(true);
+        void queryClient.invalidateQueries({ queryKey: ["catalogItem", catalogItemId] }).then(() => {
+          setConflictRefreshPending(false);
+        });
+        return;
+      }
+      if (err instanceof ApiError && err.code === "CatalogItem.DisplayNameRequired") {
+        setFieldErrors({ displayName: "Display name is required." });
+        return;
+      }
+      if (err instanceof ApiError && err.code === "CatalogItem.DisplayNameTooLong") {
+        setFieldErrors({ displayName: "Display name must not exceed 200 characters." });
+        return;
+      }
+      if (err instanceof ApiError && err.code === "CatalogItem.InvalidExternalKey") {
+        setFieldErrors({ externalKey: "SKU must contain at least one letter or number." });
+        return;
+      }
+      if (err instanceof ApiError && err.code === "CatalogItem.ExternalKeyAlreadyExists") {
+        setFieldErrors({ externalKey: "A catalog item with this SKU already exists." });
+        return;
+      }
+      if (err instanceof ApiError && err.code === "CatalogCategory.NotFound") {
+        setFieldErrors({ categoryId: "This category no longer exists. Reload and pick another." });
+        return;
+      }
+      if (err instanceof ApiError && err.code === "CatalogCategory.NotActive") {
+        setFieldErrors({ categoryId: "This category is no longer active. Reload and pick another." });
+        return;
+      }
+      setFormError("Could not save changes. Try again.");
+    },
+  });
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!form || updateHeaderMutation.isPending) return;
+    setFieldErrors({});
+    setFormError(null);
+    updateHeaderMutation.mutate(form);
+  }
 
   // Mirrors PriceBook's guard order (build-log/113): a direct #/pricebook/:id URL must resolve
   // the same role/entitlement gates as arriving via the list, not fall through to the query and
@@ -199,15 +326,33 @@ export function CatalogItemDetail({
           </div>
         )}
 
-        {!isLoading && !isError && data && (
+        {!isLoading && !isError && data && !isEditing && (
           <div className="max-w-2xl space-y-6">
-            <div>
-              <h1 className="keep-page-title tracking-tight">{data.item.displayName}</h1>
-              <p className="mt-1 keep-page-subtitle">
-                {TYPE_LABELS[data.item.type] ?? data.item.type}
-                {data.category ? ` · ${data.category.name}` : ""}
-              </p>
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h1 className="keep-page-title tracking-tight">{data.item.displayName}</h1>
+                <p className="mt-1 keep-page-subtitle">
+                  {TYPE_LABELS[data.item.type] ?? data.item.type}
+                  {data.category ? ` · ${data.category.name}` : ""}
+                  {data.item.isCommonItem ? " · Common item" : ""}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={startEditing}
+                disabled={conflictRefreshPending}
+                className="shrink-0 rounded-lg border border-[var(--ophalo-border)] px-3 py-1.5 text-sm font-medium text-[var(--ophalo-ink)] hover:bg-[var(--ophalo-canvas)] disabled:opacity-60"
+              >
+                {conflictRefreshPending ? "Refreshing…" : "Edit"}
+              </button>
             </div>
+
+            {conflictDraft && (
+              <div className="rounded-lg border border-[var(--ophalo-danger)] p-3 text-sm text-[var(--ophalo-danger)]">
+                This item was changed by someone else while you were editing. We kept your unsaved
+                edits — review the latest values below, then Edit to re-apply them.
+              </div>
+            )}
 
             <dl className="grid grid-cols-2 sm:grid-cols-3 gap-4 rounded-xl border border-[var(--ophalo-border)] p-4">
               <div>
@@ -261,6 +406,105 @@ export function CatalogItemDetail({
               )}
             </div>
           </div>
+        )}
+
+        {!isLoading && !isError && data && isEditing && form && (
+          <form onSubmit={handleSubmit} className="max-w-2xl space-y-6">
+            <div className="rounded-xl border border-[var(--ophalo-border)] p-4 space-y-4">
+              <div>
+                <label htmlFor="header-display-name" className="text-xs font-medium text-[var(--ophalo-muted)]">
+                  Name
+                </label>
+                <input
+                  id="header-display-name"
+                  type="text"
+                  value={form.displayName}
+                  onChange={(e) => setForm({ ...form, displayName: e.target.value })}
+                  disabled={updateHeaderMutation.isPending}
+                  className={`mt-1 ${INPUT_CLS} ${fieldErrors.displayName ? ERROR_INPUT_CLS : ""}`}
+                />
+                {fieldErrors.displayName && (
+                  <p className="mt-1 text-xs text-[var(--ophalo-danger)]">{fieldErrors.displayName}</p>
+                )}
+              </div>
+
+              <div>
+                <label htmlFor="header-external-key" className="text-xs font-medium text-[var(--ophalo-muted)]">
+                  SKU
+                </label>
+                <input
+                  id="header-external-key"
+                  type="text"
+                  value={form.externalKey}
+                  onChange={(e) => setForm({ ...form, externalKey: e.target.value })}
+                  disabled={updateHeaderMutation.isPending}
+                  className={`mt-1 ${INPUT_CLS} ${fieldErrors.externalKey ? ERROR_INPUT_CLS : ""}`}
+                />
+                {fieldErrors.externalKey && (
+                  <p className="mt-1 text-xs text-[var(--ophalo-danger)]">{fieldErrors.externalKey}</p>
+                )}
+              </div>
+
+              <div>
+                <label htmlFor="header-category" className="text-xs font-medium text-[var(--ophalo-muted)]">
+                  Category
+                </label>
+                <select
+                  id="header-category"
+                  value={form.categoryId}
+                  onChange={(e) => setForm({ ...form, categoryId: e.target.value })}
+                  disabled={updateHeaderMutation.isPending}
+                  className={`mt-1 ${INPUT_CLS} ${fieldErrors.categoryId ? ERROR_INPUT_CLS : ""}`}
+                >
+                  <option value="">No category</option>
+                  {(categoriesQuery.data?.categories ?? [])
+                    .filter((c) => c.activeState === "Active" || c.id === data.category?.id)
+                    .map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
+                </select>
+                {fieldErrors.categoryId && (
+                  <p className="mt-1 text-xs text-[var(--ophalo-danger)]">{fieldErrors.categoryId}</p>
+                )}
+              </div>
+
+              <label className="flex items-center gap-2 text-sm text-[var(--ophalo-ink)]">
+                <input
+                  type="checkbox"
+                  checked={form.isCommonItem}
+                  onChange={(e) => setForm({ ...form, isCommonItem: e.target.checked })}
+                  disabled={updateHeaderMutation.isPending}
+                />
+                Common item
+              </label>
+            </div>
+
+            {formError && (
+              <div className="rounded-lg border border-[var(--ophalo-danger)] p-3 text-sm text-[var(--ophalo-danger)]">
+                {formError}
+              </div>
+            )}
+
+            <div className="flex items-center gap-3">
+              <button
+                type="submit"
+                disabled={updateHeaderMutation.isPending}
+                className="rounded-lg bg-[var(--keep-accent)] px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
+              >
+                {updateHeaderMutation.isPending ? "Saving…" : "Save"}
+              </button>
+              <button
+                type="button"
+                onClick={cancelEditing}
+                disabled={updateHeaderMutation.isPending}
+                className="rounded-lg border border-[var(--ophalo-border)] px-4 py-2 text-sm font-medium text-[var(--ophalo-ink)]"
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
         )}
       </div>
     </div>

@@ -26,7 +26,7 @@ public class CatalogItemLifecycleServiceTests
     public async Task CreateDraftAsync_persists_and_returns_the_new_item()
     {
         var persistence = new FakeCatalogItemPersistence();
-        var sut = new CatalogItemLifecycleService(persistence);
+        var sut = new CatalogItemLifecycleService(persistence, new FakeCatalogCategoryPersistence());
 
         var result = await sut.CreateDraftAsync(Command(), CancellationToken.None);
 
@@ -39,7 +39,7 @@ public class CatalogItemLifecycleServiceTests
     public async Task CreateDraftAsync_with_duplicate_external_key_in_account_fails()
     {
         var persistence = new FakeCatalogItemPersistence();
-        var sut = new CatalogItemLifecycleService(persistence);
+        var sut = new CatalogItemLifecycleService(persistence, new FakeCatalogCategoryPersistence());
         await sut.CreateDraftAsync(Command(externalKey: "SKU-1"), CancellationToken.None);
 
         var result = await sut.CreateDraftAsync(Command(externalKey: "SKU-1"), CancellationToken.None);
@@ -53,7 +53,7 @@ public class CatalogItemLifecycleServiceTests
     public async Task CreateDraftAsync_with_same_external_key_in_different_account_succeeds()
     {
         var persistence = new FakeCatalogItemPersistence();
-        var sut = new CatalogItemLifecycleService(persistence);
+        var sut = new CatalogItemLifecycleService(persistence, new FakeCatalogCategoryPersistence());
         var existing = CatalogItem.CreateDraft(
             OtherAccountId, CatalogItemType.Material, "Other", "each", "USD", "SKU-1", null, false, Actor).Value;
         persistence.Items.Add(existing);
@@ -71,7 +71,7 @@ public class CatalogItemLifecycleServiceTests
         // succeed, and the loser's DbUpdateException must translate to the same domain error as
         // the pre-check, not escape as an unhandled exception.
         var persistence = new FakeCatalogItemPersistence { ForceConflictOnNextAdd = true };
-        var sut = new CatalogItemLifecycleService(persistence);
+        var sut = new CatalogItemLifecycleService(persistence, new FakeCatalogCategoryPersistence());
 
         var result = await sut.CreateDraftAsync(Command(externalKey: "SKU-1"), CancellationToken.None);
 
@@ -81,10 +81,141 @@ public class CatalogItemLifecycleServiceTests
     }
 
     [Fact]
+    public async Task UpdateHeaderAsync_with_correct_expected_version_updates_mutable_fields()
+    {
+        var persistence = new FakeCatalogItemPersistence();
+        var sut = new CatalogItemLifecycleService(persistence, new FakeCatalogCategoryPersistence());
+        var created = (await sut.CreateDraftAsync(Command(), CancellationToken.None)).Value;
+        var originalVersion = created.ConcurrencyVersion;
+
+        var result = await sut.UpdateHeaderAsync(
+            new UpdateCatalogItemHeaderCommand(AccountId, created.Id, originalVersion, "New Name", "SKU-9", null, true),
+            CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal("New Name", persistence.Items[0].DisplayName);
+        Assert.Equal("SKU-9", persistence.Items[0].ExternalKey);
+        Assert.True(persistence.Items[0].IsCommonItem);
+        Assert.NotEqual(originalVersion, persistence.Items[0].ConcurrencyVersion);
+    }
+
+    [Fact]
+    public async Task UpdateHeaderAsync_with_stale_expected_version_fails_VersionMismatch()
+    {
+        var persistence = new FakeCatalogItemPersistence();
+        var sut = new CatalogItemLifecycleService(persistence, new FakeCatalogCategoryPersistence());
+        var created = (await sut.CreateDraftAsync(Command(), CancellationToken.None)).Value;
+
+        var result = await sut.UpdateHeaderAsync(
+            new UpdateCatalogItemHeaderCommand(AccountId, created.Id, Guid.NewGuid(), "New Name", null, null, false),
+            CancellationToken.None);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(CatalogItemErrors.VersionMismatch, result.Error);
+    }
+
+    [Fact]
+    public async Task UpdateHeaderAsync_for_unknown_item_fails_NotFound()
+    {
+        var persistence = new FakeCatalogItemPersistence();
+        var sut = new CatalogItemLifecycleService(persistence, new FakeCatalogCategoryPersistence());
+
+        var result = await sut.UpdateHeaderAsync(
+            new UpdateCatalogItemHeaderCommand(AccountId, Guid.CreateVersion7(), Guid.NewGuid(), "New Name", null, null, false),
+            CancellationToken.None);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(CatalogItemErrors.NotFound, result.Error);
+    }
+
+    [Fact]
+    public async Task UpdateHeaderAsync_to_a_SKU_already_used_by_another_item_fails()
+    {
+        var persistence = new FakeCatalogItemPersistence();
+        var sut = new CatalogItemLifecycleService(persistence, new FakeCatalogCategoryPersistence());
+        await sut.CreateDraftAsync(Command(externalKey: "SKU-1"), CancellationToken.None);
+        var created = (await sut.CreateDraftAsync(Command(externalKey: "SKU-2"), CancellationToken.None)).Value;
+
+        var result = await sut.UpdateHeaderAsync(
+            new UpdateCatalogItemHeaderCommand(AccountId, created.Id, created.ConcurrencyVersion, "Drain Pan", "SKU-1", null, false),
+            CancellationToken.None);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(CatalogItemErrors.ExternalKeyAlreadyExists, result.Error);
+    }
+
+    [Fact]
+    public async Task UpdateHeaderAsync_keeping_its_own_unchanged_SKU_succeeds()
+    {
+        var persistence = new FakeCatalogItemPersistence();
+        var sut = new CatalogItemLifecycleService(persistence, new FakeCatalogCategoryPersistence());
+        var created = (await sut.CreateDraftAsync(Command(externalKey: "SKU-1"), CancellationToken.None)).Value;
+
+        var result = await sut.UpdateHeaderAsync(
+            new UpdateCatalogItemHeaderCommand(AccountId, created.Id, created.ConcurrencyVersion, "Drain Pan", "SKU-1", null, false),
+            CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+    }
+
+    [Fact]
+    public async Task UpdateHeaderAsync_to_a_nonexistent_category_fails_CatalogCategoryNotFound()
+    {
+        var persistence = new FakeCatalogItemPersistence();
+        var sut = new CatalogItemLifecycleService(persistence, new FakeCatalogCategoryPersistence());
+        var created = (await sut.CreateDraftAsync(Command(), CancellationToken.None)).Value;
+
+        var result = await sut.UpdateHeaderAsync(
+            new UpdateCatalogItemHeaderCommand(AccountId, created.Id, created.ConcurrencyVersion, "Drain Pan", null, Guid.CreateVersion7(), false),
+            CancellationToken.None);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(CatalogCategoryErrors.NotFound, result.Error);
+    }
+
+    [Fact]
+    public async Task UpdateHeaderAsync_to_an_existing_category_succeeds()
+    {
+        var persistence = new FakeCatalogItemPersistence();
+        var categoryPersistence = new FakeCatalogCategoryPersistence();
+        var category = CatalogCategory.Create(AccountId, "Fittings", 0, Actor).Value;
+        categoryPersistence.Categories.Add(category);
+        var sut = new CatalogItemLifecycleService(persistence, categoryPersistence);
+        var created = (await sut.CreateDraftAsync(Command(), CancellationToken.None)).Value;
+
+        var result = await sut.UpdateHeaderAsync(
+            new UpdateCatalogItemHeaderCommand(AccountId, created.Id, created.ConcurrencyVersion, "Drain Pan", null, category.Id, false),
+            CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(category.Id, persistence.Items[0].CategoryId);
+    }
+
+    [Fact]
+    public async Task UpdateHeaderAsync_to_an_inactive_category_fails_CatalogCategoryNotActive()
+    {
+        var persistence = new FakeCatalogItemPersistence();
+        var categoryPersistence = new FakeCatalogCategoryPersistence();
+        var category = CatalogCategory.Create(AccountId, "Fittings", 0, Actor).Value;
+        category.Inactivate();
+        categoryPersistence.Categories.Add(category);
+        var sut = new CatalogItemLifecycleService(persistence, categoryPersistence);
+        var created = (await sut.CreateDraftAsync(Command(), CancellationToken.None)).Value;
+
+        var result = await sut.UpdateHeaderAsync(
+            new UpdateCatalogItemHeaderCommand(AccountId, created.Id, created.ConcurrencyVersion, "Drain Pan", null, category.Id, false),
+            CancellationToken.None);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(CatalogCategoryErrors.NotActive, result.Error);
+        Assert.Null(persistence.Items[0].CategoryId);
+    }
+
+    [Fact]
     public async Task ActivateAsync_with_correct_expected_version_succeeds()
     {
         var persistence = new FakeCatalogItemPersistence();
-        var sut = new CatalogItemLifecycleService(persistence);
+        var sut = new CatalogItemLifecycleService(persistence, new FakeCatalogCategoryPersistence());
         var created = (await sut.CreateDraftAsync(Command(), CancellationToken.None)).Value;
 
         var result = await sut.ActivateAsync(AccountId, created.Id, created.ConcurrencyVersion, CancellationToken.None);
@@ -97,7 +228,7 @@ public class CatalogItemLifecycleServiceTests
     public async Task ActivateAsync_for_unknown_item_fails_NotFound()
     {
         var persistence = new FakeCatalogItemPersistence();
-        var sut = new CatalogItemLifecycleService(persistence);
+        var sut = new CatalogItemLifecycleService(persistence, new FakeCatalogCategoryPersistence());
 
         var result = await sut.ActivateAsync(AccountId, Guid.CreateVersion7(), Guid.NewGuid(), CancellationToken.None);
 
@@ -109,7 +240,7 @@ public class CatalogItemLifecycleServiceTests
     public async Task ActivateAsync_for_item_in_a_different_account_fails_NotFound()
     {
         var persistence = new FakeCatalogItemPersistence();
-        var sut = new CatalogItemLifecycleService(persistence);
+        var sut = new CatalogItemLifecycleService(persistence, new FakeCatalogCategoryPersistence());
         var created = (await sut.CreateDraftAsync(Command(), CancellationToken.None)).Value;
 
         var result = await sut.ActivateAsync(OtherAccountId, created.Id, created.ConcurrencyVersion, CancellationToken.None);
@@ -122,7 +253,7 @@ public class CatalogItemLifecycleServiceTests
     public async Task ActivateAsync_with_stale_expected_version_fails_VersionMismatch()
     {
         var persistence = new FakeCatalogItemPersistence();
-        var sut = new CatalogItemLifecycleService(persistence);
+        var sut = new CatalogItemLifecycleService(persistence, new FakeCatalogCategoryPersistence());
         var created = (await sut.CreateDraftAsync(Command(), CancellationToken.None)).Value;
 
         var result = await sut.ActivateAsync(AccountId, created.Id, Guid.NewGuid(), CancellationToken.None);
@@ -135,7 +266,7 @@ public class CatalogItemLifecycleServiceTests
     public async Task ActivateAsync_surfaces_a_true_commit_conflict_as_VersionMismatch()
     {
         var persistence = new FakeCatalogItemPersistence { ForceConflictOnNextCommit = true };
-        var sut = new CatalogItemLifecycleService(persistence);
+        var sut = new CatalogItemLifecycleService(persistence, new FakeCatalogCategoryPersistence());
         var created = (await sut.CreateDraftAsync(Command(), CancellationToken.None)).Value;
 
         var result = await sut.ActivateAsync(AccountId, created.Id, created.ConcurrencyVersion, CancellationToken.None);
@@ -148,7 +279,7 @@ public class CatalogItemLifecycleServiceTests
     public async Task InactivateAsync_from_Active_succeeds()
     {
         var persistence = new FakeCatalogItemPersistence();
-        var sut = new CatalogItemLifecycleService(persistence);
+        var sut = new CatalogItemLifecycleService(persistence, new FakeCatalogCategoryPersistence());
         var created = (await sut.CreateDraftAsync(Command(), CancellationToken.None)).Value;
         await sut.ActivateAsync(AccountId, created.Id, created.ConcurrencyVersion, CancellationToken.None);
         var activeVersion = persistence.Items[0].ConcurrencyVersion;
@@ -163,7 +294,7 @@ public class CatalogItemLifecycleServiceTests
     public async Task InactivateAsync_from_Draft_fails_NotActive()
     {
         var persistence = new FakeCatalogItemPersistence();
-        var sut = new CatalogItemLifecycleService(persistence);
+        var sut = new CatalogItemLifecycleService(persistence, new FakeCatalogCategoryPersistence());
         var created = (await sut.CreateDraftAsync(Command(), CancellationToken.None)).Value;
 
         var result = await sut.InactivateAsync(AccountId, created.Id, created.ConcurrencyVersion, CancellationToken.None);
@@ -178,7 +309,7 @@ public class CatalogItemLifecycleServiceTests
     public async Task AddAliasAsync_with_correct_expected_version_succeeds()
     {
         var persistence = new FakeCatalogItemPersistence();
-        var sut = new CatalogItemLifecycleService(persistence);
+        var sut = new CatalogItemLifecycleService(persistence, new FakeCatalogCategoryPersistence());
         var created = (await sut.CreateDraftAsync(Command(), CancellationToken.None)).Value;
 
         var result = await sut.AddAliasAsync(
@@ -194,7 +325,7 @@ public class CatalogItemLifecycleServiceTests
     public async Task AddAliasAsync_for_unknown_item_fails_NotFound()
     {
         var persistence = new FakeCatalogItemPersistence();
-        var sut = new CatalogItemLifecycleService(persistence);
+        var sut = new CatalogItemLifecycleService(persistence, new FakeCatalogCategoryPersistence());
 
         var result = await sut.AddAliasAsync(
             AccountId, Guid.CreateVersion7(), Guid.NewGuid(), "Drain Tray", Actor, CancellationToken.None);
@@ -207,7 +338,7 @@ public class CatalogItemLifecycleServiceTests
     public async Task AddAliasAsync_with_stale_expected_version_fails_VersionMismatch()
     {
         var persistence = new FakeCatalogItemPersistence();
-        var sut = new CatalogItemLifecycleService(persistence);
+        var sut = new CatalogItemLifecycleService(persistence, new FakeCatalogCategoryPersistence());
         var created = (await sut.CreateDraftAsync(Command(), CancellationToken.None)).Value;
 
         var result = await sut.AddAliasAsync(
@@ -221,7 +352,7 @@ public class CatalogItemLifecycleServiceTests
     public async Task AddAliasAsync_with_duplicate_text_fails_and_does_not_commit()
     {
         var persistence = new FakeCatalogItemPersistence();
-        var sut = new CatalogItemLifecycleService(persistence);
+        var sut = new CatalogItemLifecycleService(persistence, new FakeCatalogCategoryPersistence());
         var created = (await sut.CreateDraftAsync(Command(), CancellationToken.None)).Value;
         await sut.AddAliasAsync(
             AccountId, created.Id, created.ConcurrencyVersion, "Drain Tray", Actor, CancellationToken.None);
@@ -238,7 +369,7 @@ public class CatalogItemLifecycleServiceTests
     public async Task InactivateAliasAsync_from_Active_succeeds()
     {
         var persistence = new FakeCatalogItemPersistence();
-        var sut = new CatalogItemLifecycleService(persistence);
+        var sut = new CatalogItemLifecycleService(persistence, new FakeCatalogCategoryPersistence());
         var created = (await sut.CreateDraftAsync(Command(), CancellationToken.None)).Value;
         var alias = (await sut.AddAliasAsync(
             AccountId, created.Id, created.ConcurrencyVersion, "Drain Tray", Actor, CancellationToken.None)).Value.Alias;
@@ -254,7 +385,7 @@ public class CatalogItemLifecycleServiceTests
     public async Task InactivateAliasAsync_with_unknown_alias_id_fails_AliasNotFound()
     {
         var persistence = new FakeCatalogItemPersistence();
-        var sut = new CatalogItemLifecycleService(persistence);
+        var sut = new CatalogItemLifecycleService(persistence, new FakeCatalogCategoryPersistence());
         var created = (await sut.CreateDraftAsync(Command(), CancellationToken.None)).Value;
 
         var result = await sut.InactivateAliasAsync(
@@ -268,7 +399,7 @@ public class CatalogItemLifecycleServiceTests
     public async Task ActivateAliasAsync_from_Inactive_succeeds()
     {
         var persistence = new FakeCatalogItemPersistence();
-        var sut = new CatalogItemLifecycleService(persistence);
+        var sut = new CatalogItemLifecycleService(persistence, new FakeCatalogCategoryPersistence());
         var created = (await sut.CreateDraftAsync(Command(), CancellationToken.None)).Value;
         var alias = (await sut.AddAliasAsync(
             AccountId, created.Id, created.ConcurrencyVersion, "Drain Tray", Actor, CancellationToken.None)).Value.Alias;
@@ -315,5 +446,25 @@ public class CatalogItemLifecycleServiceTests
 
             return Task.FromResult(CatalogItemCommitResult.Committed);
         }
+    }
+
+    sealed class FakeCatalogCategoryPersistence : ICatalogCategoryPersistence
+    {
+        public List<CatalogCategory> Categories { get; } = [];
+
+        public Task<CatalogCategory?> GetByIdAsync(Guid accountId, Guid categoryId, CancellationToken ct) =>
+            Task.FromResult(Categories.FirstOrDefault(x => x.AccountId == accountId && x.Id == categoryId));
+
+        public Task<bool> NameExistsAsync(Guid accountId, string normalizedName, CancellationToken ct) =>
+            Task.FromResult(Categories.Any(x => x.AccountId == accountId && x.NormalizedName == normalizedName));
+
+        public Task<CatalogCategoryCommitResult> AddAsync(CatalogCategory category, CancellationToken ct)
+        {
+            Categories.Add(category);
+            return Task.FromResult(CatalogCategoryCommitResult.Committed);
+        }
+
+        public Task<CatalogCategoryCommitResult> CommitAsync(CatalogCategory category, CancellationToken ct) =>
+            Task.FromResult(CatalogCategoryCommitResult.Committed);
     }
 }

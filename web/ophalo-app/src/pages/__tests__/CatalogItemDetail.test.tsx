@@ -1,11 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { CatalogItemDetail } from "../CatalogItemDetail";
 import { ApiError } from "../../lib/apiClient";
 import type { CatalogItemDetailResult } from "../../lib/apiClient";
 
 const mockGetCatalogItem = vi.fn();
+const mockGetCatalogCategories = vi.fn();
+const mockUpdateCatalogItemHeader = vi.fn();
 
 vi.mock("../../lib/apiClient", async () => {
   const actual = await vi.importActual<typeof import("../../lib/apiClient")>("../../lib/apiClient");
@@ -14,6 +17,8 @@ vi.mock("../../lib/apiClient", async () => {
     api: {
       ...actual.api,
       getCatalogItem: (...args: unknown[]) => mockGetCatalogItem(...args),
+      getCatalogCategories: (...args: unknown[]) => mockGetCatalogCategories(...args),
+      updateCatalogItemHeader: (...args: unknown[]) => mockUpdateCatalogItemHeader(...args),
     },
   };
 });
@@ -62,6 +67,14 @@ const baseItem: CatalogItemDetailResult = {
 describe("CatalogItemDetail", () => {
   beforeEach(() => {
     mockGetCatalogItem.mockReset();
+    mockGetCatalogCategories.mockReset();
+    mockGetCatalogCategories.mockResolvedValue({
+      categories: [
+        { id: "cat-1", name: "Refrigerant", displayOrder: 0, activeState: "Active", concurrencyVersion: "v1" },
+        { id: "cat-2", name: "Fittings", displayOrder: 1, activeState: "Active", concurrencyVersion: "v1" },
+      ],
+    });
+    mockUpdateCatalogItemHeader.mockReset();
   });
 
   it("shows a loading state before the fetch resolves", () => {
@@ -170,5 +183,115 @@ describe("CatalogItemDetail", () => {
     expect(screen.getAllByText("$100.00")).toHaveLength(2);
     expect(screen.getByText("100%")).toBeInTheDocument();
     expect(screen.getAllByText("Unavailable")).toHaveLength(1);
+  });
+
+  it("editing the header pre-fills the form and saves the mutable fields with the current version", async () => {
+    const user = userEvent.setup();
+    mockGetCatalogItem.mockResolvedValue(baseItem);
+    mockUpdateCatalogItemHeader.mockResolvedValue({ concurrencyVersion: "v2" });
+    renderDetail();
+
+    await waitFor(() => expect(screen.getByText("Condensate Pump")).toBeInTheDocument());
+    await user.click(screen.getByRole("button", { name: "Edit" }));
+
+    const nameInput = screen.getByLabelText("Name") as HTMLInputElement;
+    expect(nameInput.value).toBe("Condensate Pump");
+    await user.clear(nameInput);
+    await user.type(nameInput, "Condensate Pump Mk2");
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => expect(mockUpdateCatalogItemHeader).toHaveBeenCalledWith(
+      "item-1",
+      { displayName: "Condensate Pump Mk2", externalKey: "COP-34", categoryId: "cat-1", isCommonItem: false },
+      "v1",
+    ));
+  });
+
+  it("a version conflict on save shows the refreshed values read-only, then restores the draft on re-Edit and saves with the fresh version", async () => {
+    const user = userEvent.setup();
+    const updatedByOtherEditor: CatalogItemDetailResult = {
+      ...baseItem,
+      item: { ...baseItem.item, displayName: "Condensate Pump (renamed by teammate)", concurrencyVersion: "v2" },
+    };
+    mockGetCatalogItem.mockResolvedValueOnce(baseItem).mockResolvedValue(updatedByOtherEditor);
+    mockUpdateCatalogItemHeader
+      .mockRejectedValueOnce(new ApiError(409, "CatalogItem.VersionMismatch", "conflict"))
+      .mockResolvedValue({ concurrencyVersion: "v3" });
+    renderDetail();
+
+    await waitFor(() => expect(screen.getByText("Condensate Pump")).toBeInTheDocument());
+    await user.click(screen.getByRole("button", { name: "Edit" }));
+
+    const nameInput = screen.getByLabelText("Name") as HTMLInputElement;
+    await user.clear(nameInput);
+    await user.type(nameInput, "Condensate Pump Mk2");
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    // Conflict: the form unmounts, and the read-only view shows the teammate's latest value —
+    // the user must see it before any resave, not resubmit blind against a stale form.
+    await waitFor(() =>
+      expect(screen.getByText("Condensate Pump (renamed by teammate)")).toBeInTheDocument(),
+    );
+    expect(screen.getByText(/This item was changed by someone else/)).toBeInTheDocument();
+    expect(screen.queryByLabelText("Name")).not.toBeInTheDocument();
+
+    // Re-entering Edit restores the unsaved draft rather than re-seeding from the refreshed item.
+    await user.click(screen.getByRole("button", { name: "Edit" }));
+    const restoredNameInput = screen.getByLabelText("Name") as HTMLInputElement;
+    expect(restoredNameInput.value).toBe("Condensate Pump Mk2");
+
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => expect(mockUpdateCatalogItemHeader).toHaveBeenLastCalledWith(
+      "item-1",
+      { displayName: "Condensate Pump Mk2", externalKey: "COP-34", categoryId: "cat-1", isCommonItem: false },
+      "v2",
+    ));
+  });
+
+  it("disables Edit until the conflict-triggered refetch lands, blocking a resave against the stale version", async () => {
+    const user = userEvent.setup();
+    const updatedByOtherEditor: CatalogItemDetailResult = {
+      ...baseItem,
+      item: { ...baseItem.item, displayName: "Condensate Pump (renamed by teammate)", concurrencyVersion: "v2" },
+    };
+    let resolveRefetch: (value: CatalogItemDetailResult) => void;
+    const deferredRefetch = new Promise<CatalogItemDetailResult>((resolve) => {
+      resolveRefetch = resolve;
+    });
+    mockGetCatalogItem.mockResolvedValueOnce(baseItem).mockReturnValueOnce(deferredRefetch);
+    mockUpdateCatalogItemHeader
+      .mockRejectedValueOnce(new ApiError(409, "CatalogItem.VersionMismatch", "conflict"))
+      .mockResolvedValue({ concurrencyVersion: "v3" });
+    renderDetail();
+
+    await waitFor(() => expect(screen.getByText("Condensate Pump")).toBeInTheDocument());
+    await user.click(screen.getByRole("button", { name: "Edit" }));
+
+    const nameInput = screen.getByLabelText("Name") as HTMLInputElement;
+    await user.clear(nameInput);
+    await user.type(nameInput, "Condensate Pump Mk2");
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    const editButton = await screen.findByRole("button", { name: "Refreshing…" });
+    expect(editButton).toBeDisabled();
+
+    await user.click(editButton);
+    expect(mockUpdateCatalogItemHeader).toHaveBeenCalledTimes(1);
+    expect(screen.queryByLabelText("Name")).not.toBeInTheDocument();
+
+    resolveRefetch!(updatedByOtherEditor);
+
+    await waitFor(() => expect(screen.getByRole("button", { name: "Edit" })).toBeEnabled());
+    expect(screen.getByText("Condensate Pump (renamed by teammate)")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Edit" }));
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => expect(mockUpdateCatalogItemHeader).toHaveBeenLastCalledWith(
+      "item-1",
+      { displayName: "Condensate Pump Mk2", externalKey: "COP-34", categoryId: "cat-1", isCommonItem: false },
+      "v2",
+    ));
   });
 });

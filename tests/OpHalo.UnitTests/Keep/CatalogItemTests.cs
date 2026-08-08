@@ -158,6 +158,84 @@ public class CatalogItemTests
             AccountId, CatalogItemType.Service, "x", "each", "USD", null, null, false, Guid.Empty));
     }
 
+    // --- UpdateHeader ---
+
+    [Fact]
+    public void UpdateHeader_with_valid_fields_updates_and_rotates_concurrency_version()
+    {
+        var item = Draft(externalKey: "SKU-1").Value;
+        var originalVersion = item.ConcurrencyVersion;
+        var categoryId = Guid.CreateVersion7();
+
+        var result = item.UpdateHeader("New Name", " SKU-2 ", categoryId, true);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal("New Name", item.DisplayName);
+        Assert.Equal("SKU-2", item.ExternalKey);
+        Assert.Equal(categoryId, item.CategoryId);
+        Assert.True(item.IsCommonItem);
+        Assert.NotEqual(originalVersion, item.ConcurrencyVersion);
+    }
+
+    [Fact]
+    public void UpdateHeader_does_not_change_Type_UnitOfMeasure_or_Currency()
+    {
+        var item = Draft().Value;
+
+        item.UpdateHeader("New Name", null, null, false);
+
+        Assert.Equal(CatalogItemType.Service, item.Type);
+        Assert.Equal("each", item.UnitOfMeasure);
+        Assert.Equal("USD", item.Currency);
+    }
+
+    [Fact]
+    public void UpdateHeader_clearing_the_external_key_succeeds()
+    {
+        var item = Draft(externalKey: "SKU-1").Value;
+
+        var result = item.UpdateHeader("Water Heater Install", null, null, false);
+
+        Assert.True(result.IsSuccess);
+        Assert.Null(item.ExternalKey);
+        Assert.Null(item.NormalizedExternalKey);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void UpdateHeader_with_blank_display_name_fails(string displayName)
+    {
+        var item = Draft().Value;
+
+        var result = item.UpdateHeader(displayName, null, null, false);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(CatalogItemErrors.DisplayNameRequired, result.Error);
+    }
+
+    [Fact]
+    public void UpdateHeader_with_display_name_over_200_chars_fails()
+    {
+        var item = Draft().Value;
+
+        var result = item.UpdateHeader(new string('a', 201), null, null, false);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(CatalogItemErrors.DisplayNameTooLong, result.Error);
+    }
+
+    [Fact]
+    public void UpdateHeader_with_external_key_that_normalizes_to_empty_fails()
+    {
+        var item = Draft().Value;
+
+        var result = item.UpdateHeader("Water Heater Install", "---", null, false);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(CatalogItemErrors.InvalidExternalKey, result.Error);
+    }
+
     // --- Activate / Inactivate ---
 
     [Fact]

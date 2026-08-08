@@ -24,13 +24,24 @@ public sealed record CreateCatalogItemCommand(
 /// </summary>
 public sealed record AddCatalogItemAliasResult(CatalogItemAlias Alias, Guid CatalogItemConcurrencyVersion);
 
+public sealed record UpdateCatalogItemHeaderCommand(
+    Guid AccountId,
+    Guid CatalogItemId,
+    Guid ExpectedVersion,
+    string DisplayName,
+    string? ExternalKey,
+    Guid? CategoryId,
+    bool IsCommonItem);
+
 /// <summary>
 /// Orchestrates <see cref="CatalogItem"/> create/activate/inactivate against persistence. Deliberately
 /// takes <c>accountId</c> and actor ids as plain parameters rather than resolving them itself —
 /// current-user/permission/entitlement gating is composed by the caller (endpoint layer, Session
 /// 2a.2), keeping this service testable without any auth wiring.
 /// </summary>
-public sealed class CatalogItemLifecycleService(ICatalogItemPersistence persistence)
+public sealed class CatalogItemLifecycleService(
+    ICatalogItemPersistence persistence,
+    ICatalogCategoryPersistence categoryPersistence)
 {
     public async Task<Result<CatalogItem>> CreateDraftAsync(CreateCatalogItemCommand command, CancellationToken ct)
     {
@@ -96,6 +107,45 @@ public sealed class CatalogItemLifecycleService(ICatalogItemPersistence persiste
         return commitResult == CatalogItemCommitResult.Conflict
             ? Result<AddCatalogItemAliasResult>.Failure(CatalogItemErrors.VersionMismatch)
             : Result<AddCatalogItemAliasResult>.Success(new AddCatalogItemAliasResult(addResult.Value, item.ConcurrencyVersion));
+    }
+
+    public async Task<Result<Guid>> UpdateHeaderAsync(UpdateCatalogItemHeaderCommand command, CancellationToken ct)
+    {
+        var item = await persistence.GetByIdAsync(command.AccountId, command.CatalogItemId, ct);
+        if (item is null)
+            return Result<Guid>.Failure(CatalogItemErrors.NotFound);
+
+        if (item.ConcurrencyVersion != command.ExpectedVersion)
+            return Result<Guid>.Failure(CatalogItemErrors.VersionMismatch);
+
+        if (!string.IsNullOrWhiteSpace(command.ExternalKey))
+        {
+            var normalizedExternalKey = SkuNormalizer.Normalize(command.ExternalKey.Trim());
+            if (normalizedExternalKey.Length > 0 &&
+                normalizedExternalKey != item.NormalizedExternalKey &&
+                await persistence.NormalizedExternalKeyExistsAsync(command.AccountId, normalizedExternalKey, ct))
+            {
+                return Result<Guid>.Failure(CatalogItemErrors.ExternalKeyAlreadyExists);
+            }
+        }
+
+        if (command.CategoryId is { } categoryId && categoryId != item.CategoryId)
+        {
+            var category = await categoryPersistence.GetByIdAsync(command.AccountId, categoryId, ct);
+            if (category is null)
+                return Result<Guid>.Failure(CatalogCategoryErrors.NotFound);
+            if (category.ActiveState != CatalogActiveState.Active)
+                return Result<Guid>.Failure(CatalogCategoryErrors.NotActive);
+        }
+
+        var updateResult = item.UpdateHeader(command.DisplayName, command.ExternalKey, command.CategoryId, command.IsCommonItem);
+        if (updateResult.IsFailure)
+            return Result<Guid>.Failure(updateResult.Error);
+
+        var commitResult = await persistence.CommitAsync(item, ct);
+        return commitResult == CatalogItemCommitResult.Conflict
+            ? Result<Guid>.Failure(CatalogItemErrors.VersionMismatch)
+            : Result<Guid>.Success(item.ConcurrencyVersion);
     }
 
     public Task<Result<Guid>> ActivateAliasAsync(Guid accountId, Guid catalogItemId, Guid aliasId, Guid expectedVersion, CancellationToken ct) =>

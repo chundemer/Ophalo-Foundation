@@ -147,6 +147,7 @@ import type {
   GetRequestsParams,
   ResolveFollowUpBody,
   CapabilityPackageStatus,
+  CatalogItemResponse,
   CatalogItemListResult,
   CatalogCategoryListResult,
   GetCatalogItemsParams,
@@ -154,6 +155,8 @@ import type {
   CatalogItemDetailResult,
   CreateAndActivateCatalogItemBody,
   CreateAndActivateCatalogItemResult,
+  UpdateCatalogItemHeaderBody,
+  UpdateCatalogItemHeaderResult,
   CreateCatalogCategoryBody,
 } from "./apiClient.types";
 
@@ -211,6 +214,7 @@ export type {
   GetRequestsParams,
   ResolveFollowUpBody,
   CapabilityPackageStatus,
+  CatalogItemResponse,
   CatalogItemListResult,
   CatalogCategoryListResult,
   GetCatalogItemsParams,
@@ -218,6 +222,8 @@ export type {
   CatalogItemDetailResult,
   CreateAndActivateCatalogItemBody,
   CreateAndActivateCatalogItemResult,
+  UpdateCatalogItemHeaderBody,
+  UpdateCatalogItemHeaderResult,
   CreateCatalogCategoryBody,
 };
 
@@ -286,6 +292,13 @@ export const api = {
   createCatalogItem: (body: CreateAndActivateCatalogItemBody) =>
     apiFetch<CreateAndActivateCatalogItemResult>("/keep/pricebook/catalog-items/create-and-activate", {
       method: "POST",
+      body: JSON.stringify(body),
+    }),
+  // Session 2e.6b, build-log/113: header-only update.
+  updateCatalogItemHeader: (catalogItemId: string, body: UpdateCatalogItemHeaderBody, version: string) =>
+    apiFetch<UpdateCatalogItemHeaderResult>(`/keep/pricebook/catalog-items/${catalogItemId}`, {
+      method: "PATCH",
+      headers: { "X-Keep-CatalogItem-Version": version },
       body: JSON.stringify(body),
     }),
   createCatalogCategory: (body: CreateCatalogCategoryBody) =>

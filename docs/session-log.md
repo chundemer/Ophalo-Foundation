@@ -1,6 +1,6 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-08-03
+**Last updated:** 2026-08-07
 **Deployment posture:** Not pilot-ready.
 **Source of truth for acceptance criteria:** `docs/pilot-readiness-bug-tracker.md`.
 
@@ -185,8 +185,27 @@ account-aware `AccountFeatureAccessResolver`, and a generic Owner/Admin `GET
   requesting data. Zero rules remain locked: show gross profit when both values exist; margin is
   unavailable at zero Sell Price; markup is unavailable at zero Cost; and no standalone price leaves
   profitability unavailable. Focused frontend/integration checks, `tsc --noEmit`, CSS-token check,
-  production build, and review are clean. The next implementation preflight after committing is
-  **2e.6b — header update only**.
+  production build, and review are clean. 2e.6a is committed (6167f53).
+
+  **2e.6b — header update: complete, awaiting commit (2026-08-07).** Adds the single
+  `PATCH`-style header-update mutation (`updateCatalogItemHeader`) for display name, external
+  key/SKU, category, and common-item flag, gated by the existing optimistic
+  `concurrencyVersion` header contract. Domain, application, and API layers enforce the same
+  validation already locked for creation (`DisplayNameRequired`/`TooLong`,
+  `InvalidExternalKey`/`ExternalKeyAlreadyExists`, `CatalogCategory.NotFound`/`NotActive`), plus
+  `CatalogItem.VersionMismatch` on a stale `concurrencyVersion`. On the frontend, a version
+  conflict unmounts the edit form, refreshes the read-only view to the concurrent editor's latest
+  values via query invalidation, and disables Edit (`conflictRefreshPending`, showing
+  "Refreshing…") for the window between conflict detection and the refetch landing, so a fast
+  double-click can't reopen the form and resave against the still-stale version. Re-entering Edit
+  after the refresh restores the user's unsaved draft rather than re-seeding from the refreshed
+  item. Focused unit (75), integration (26 passing; the pre-existing `ExactlyOneWins` concurrency
+  test from 2e.2 remains its documented flaky self and is unrelated to this slice), and frontend
+  (15, including a deferred-promise regression test proving the disabled/"Refreshing…" window and
+  that a click during it does not re-trigger the mutation) suites are clean; `tsc --noEmit` is
+  clean. 12 files changed (within the batch gate: 1 mutation family, 8 production files, 12 total
+  including tests). The next implementation preflight after committing is **2e.6c — alias
+  management UI plus thin Reactivate API wiring**.
 
   ADR-474, ADR-475, and the `keep-product-positioning.md`/`deferred-topics.md` changes alongside
   this work are Christian's, made outside this implementation session and left untouched.

@@ -90,6 +90,103 @@ public sealed class CatalogItemApiTests : IClassFixture<KeepApiWebFactory>, IAsy
     }
 
     [Fact]
+    public async Task UpdateHeader_CorrectVersion_Returns200AndPersistsMutableFieldsOnly()
+    {
+        var (accountId, ownerId, _) = await SeedAccountAsync("header-update-ok");
+        await EnrollAsync(accountId, ownerId);
+        var cookie = await GetCookieAsync(ownerId, accountId);
+
+        var item = await SeedCatalogItemAsync(accountId, ownerId);
+
+        var request = new HttpRequestMessage(HttpMethod.Patch, $"/keep/pricebook/catalog-items/{item.Id}");
+        request.Headers.Add(CatalogItemVersionHeader.HeaderName, item.ConcurrencyVersion.ToString("D"));
+        request.Content = JsonContent.Create(new { displayName = "Renamed Item", externalKey = "SKU-42", categoryId = (string?)null, isCommonItem = true });
+
+        var response = await AuthRequest(cookie).SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        var newVersion = body.GetProperty("concurrencyVersion").GetGuid();
+        Assert.NotEqual(item.ConcurrencyVersion, newVersion);
+
+        await using var scope = _factory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+        var reloaded = await db.Set<CatalogItem>().FindAsync(item.Id);
+        Assert.Equal("Renamed Item", reloaded!.DisplayName);
+        Assert.Equal("SKU-42", reloaded.ExternalKey);
+        Assert.True(reloaded.IsCommonItem);
+        Assert.Equal(CatalogItemType.Material, reloaded.Type);
+        Assert.Equal("each", reloaded.UnitOfMeasure);
+        Assert.Equal(newVersion, reloaded.ConcurrencyVersion);
+    }
+
+    [Fact]
+    public async Task UpdateHeader_StaleVersion_Returns409()
+    {
+        var (accountId, ownerId, _) = await SeedAccountAsync("header-update-stale");
+        await EnrollAsync(accountId, ownerId);
+        var cookie = await GetCookieAsync(ownerId, accountId);
+
+        var item = await SeedCatalogItemAsync(accountId, ownerId);
+
+        var request = new HttpRequestMessage(HttpMethod.Patch, $"/keep/pricebook/catalog-items/{item.Id}");
+        request.Headers.Add(CatalogItemVersionHeader.HeaderName, Guid.NewGuid().ToString("D"));
+        request.Content = JsonContent.Create(new { displayName = "Renamed Item", isCommonItem = false });
+
+        var response = await AuthRequest(cookie).SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("CatalogItem.VersionMismatch", body.GetProperty("code").GetString());
+    }
+
+    [Fact]
+    public async Task UpdateHeader_ToAnInactiveCategory_Returns409AndDoesNotAssignIt()
+    {
+        var (accountId, ownerId, _) = await SeedAccountAsync("header-update-inactive-category");
+        await EnrollAsync(accountId, ownerId);
+        var cookie = await GetCookieAsync(ownerId, accountId);
+
+        var item = await SeedCatalogItemAsync(accountId, ownerId);
+        var category = await SeedInactiveCatalogCategoryAsync(accountId, ownerId);
+
+        var request = new HttpRequestMessage(HttpMethod.Patch, $"/keep/pricebook/catalog-items/{item.Id}");
+        request.Headers.Add(CatalogItemVersionHeader.HeaderName, item.ConcurrencyVersion.ToString("D"));
+        request.Content = JsonContent.Create(new { displayName = "Renamed Item", categoryId = category.Id, isCommonItem = false });
+
+        var response = await AuthRequest(cookie).SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("CatalogCategory.NotActive", body.GetProperty("code").GetString());
+
+        await using var scope = _factory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+        var reloaded = await db.Set<CatalogItem>().FindAsync(item.Id);
+        Assert.Null(reloaded!.CategoryId);
+    }
+
+    [Fact]
+    public async Task UpdateHeader_CrossAccountId_Returns404()
+    {
+        var (accountA, ownerA, _) = await SeedAccountAsync("header-update-cross-a");
+        await EnrollAsync(accountA, ownerA);
+        var cookieA = await GetCookieAsync(ownerA, accountA);
+
+        var (accountB, ownerB, _) = await SeedAccountAsync("header-update-cross-b");
+        await EnrollAsync(accountB, ownerB);
+        var itemInB = await SeedCatalogItemAsync(accountB, ownerB);
+
+        var request = new HttpRequestMessage(HttpMethod.Patch, $"/keep/pricebook/catalog-items/{itemInB.Id}");
+        request.Headers.Add(CatalogItemVersionHeader.HeaderName, itemInB.ConcurrencyVersion.ToString("D"));
+        request.Content = JsonContent.Create(new { displayName = "Renamed Item", isCommonItem = false });
+
+        var response = await AuthRequest(cookieA).SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
     public async Task AddAlias_CorrectVersion_Returns200WithAliasAndNewItemVersion()
     {
         var (accountId, ownerId, _) = await SeedAccountAsync("alias-add-ok");
@@ -321,6 +418,20 @@ public sealed class CatalogItemApiTests : IClassFixture<KeepApiWebFactory>, IAsy
         db.Set<CatalogItem>().Add(item);
         await db.SaveChangesAsync();
         return item;
+    }
+
+    private async Task<CatalogCategory> SeedInactiveCatalogCategoryAsync(Guid accountId, Guid createdByUserId)
+    {
+        var createResult = CatalogCategory.Create(accountId, "Seeded Category", 0, createdByUserId);
+        Assert.True(createResult.IsSuccess);
+        var category = createResult.Value;
+        Assert.True(category.Inactivate().IsSuccess);
+
+        await using var scope = _factory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+        db.Set<CatalogCategory>().Add(category);
+        await db.SaveChangesAsync();
+        return category;
     }
 
     private async Task<string> GetCookieAsync(Guid accountUserId, Guid accountId)

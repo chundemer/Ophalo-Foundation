@@ -25,6 +25,12 @@ public sealed record CreateAndActivateCatalogItemApiCommand(
 
 public sealed record PublishCatalogItemPriceApiCommand(decimal? Cost, decimal? SellPrice, string Reason);
 
+public sealed record UpdateCatalogItemHeaderApiCommand(
+    string DisplayName,
+    string? ExternalKey,
+    Guid? CategoryId,
+    bool IsCommonItem);
+
 /// <summary>
 /// API-facing orchestration for <see cref="CatalogItem"/> mutations (Session 2a.2). Owns the
 /// full auth-stack composition — <see cref="CatalogItemLifecycleService"/> deliberately does
@@ -80,6 +86,25 @@ public sealed class CatalogItemApiService(
             return Result<Guid>.Failure(gate.Error);
 
         return await lifecycleService.InactivateAsync(currentUser.AccountId, catalogItemId, expectedVersion, ct);
+    }
+
+    public async Task<Result<Guid>> UpdateHeaderAsync(
+        Guid catalogItemId, UpdateCatalogItemHeaderApiCommand command, Guid expectedVersion, CancellationToken ct)
+    {
+        var gate = await AuthorizeAsync(ct);
+        if (gate.IsFailure)
+            return Result<Guid>.Failure(gate.Error);
+
+        return await lifecycleService.UpdateHeaderAsync(
+            new UpdateCatalogItemHeaderCommand(
+                currentUser.AccountId,
+                catalogItemId,
+                expectedVersion,
+                command.DisplayName,
+                command.ExternalKey,
+                command.CategoryId,
+                command.IsCommonItem),
+            ct);
     }
 
     public async Task<Result<AddCatalogItemAliasResult>> AddAliasAsync(

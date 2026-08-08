@@ -73,6 +73,24 @@ public static class PriceBookEndpoints
             return result.IsSuccess ? Results.Ok(new CatalogItemTransitionResponse(result.Value)) : ErrorHttpMapper.ToHttpResult(result.Error);
         }).RequireAuthorization();
 
+        app.MapPatch("/keep/pricebook/catalog-items/{catalogItemId:guid}", async (
+            Guid catalogItemId,
+            UpdateCatalogItemHeaderBody body,
+            HttpRequest httpRequest,
+            CatalogItemApiService service,
+            CancellationToken ct) =>
+        {
+            var versionResult = CatalogItemVersionHeader.Parse(httpRequest.Headers);
+            if (!versionResult.IsSuccess)
+                return ErrorHttpMapper.ToHttpResult(versionResult.Error);
+
+            var command = new UpdateCatalogItemHeaderApiCommand(
+                body.DisplayName ?? string.Empty, body.ExternalKey, body.CategoryId, body.IsCommonItem);
+
+            var result = await service.UpdateHeaderAsync(catalogItemId, command, versionResult.Value, ct);
+            return result.IsSuccess ? Results.Ok(new CatalogItemTransitionResponse(result.Value)) : ErrorHttpMapper.ToHttpResult(result.Error);
+        }).RequireAuthorization();
+
         app.MapPost("/keep/pricebook/catalog-items/{catalogItemId:guid}/publish-price", async (
             Guid catalogItemId,
             PublishCatalogItemPriceBody body,
@@ -302,6 +320,12 @@ internal sealed record CatalogItemResponse(
     Guid ConcurrencyVersion);
 
 internal sealed record CatalogItemTransitionResponse(Guid ConcurrencyVersion);
+
+internal sealed record UpdateCatalogItemHeaderBody(
+    string? DisplayName,
+    string? ExternalKey,
+    Guid? CategoryId,
+    bool IsCommonItem);
 
 internal sealed record PublishCatalogItemPriceBody(decimal? Cost, decimal? SellPrice, string? Reason);
 

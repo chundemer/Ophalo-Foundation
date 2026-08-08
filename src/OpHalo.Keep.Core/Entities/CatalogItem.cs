@@ -200,6 +200,39 @@ public sealed class CatalogItem : BaseEntity
     }
 
     /// <summary>
+    /// Updates the mutable header fields only (Session 2e.6b, build-log/112). Type, UnitOfMeasure,
+    /// and Currency are excluded — deliberately not accepted as parameters. SKU and length rules
+    /// mirror <see cref="CreateDraft"/>. Callers must pre-check SKU/category uniqueness and
+    /// category existence against persistence; this method only enforces in-aggregate invariants.
+    /// </summary>
+    public Result UpdateHeader(string displayName, string? externalKey, Guid? categoryId, bool isCommonItem)
+    {
+        var trimmedDisplayName = displayName?.Trim() ?? string.Empty;
+        if (trimmedDisplayName.Length == 0)
+            return Result.Failure(CatalogItemErrors.DisplayNameRequired);
+        if (trimmedDisplayName.Length > MaxDisplayNameLength)
+            return Result.Failure(CatalogItemErrors.DisplayNameTooLong);
+
+        var trimmedExternalKey = string.IsNullOrWhiteSpace(externalKey) ? null : externalKey.Trim();
+
+        string? normalizedExternalKey = null;
+        if (trimmedExternalKey is not null)
+        {
+            normalizedExternalKey = SkuNormalizer.Normalize(trimmedExternalKey);
+            if (normalizedExternalKey.Length == 0)
+                return Result.Failure(CatalogItemErrors.InvalidExternalKey);
+        }
+
+        DisplayName = trimmedDisplayName;
+        ExternalKey = trimmedExternalKey;
+        NormalizedExternalKey = normalizedExternalKey;
+        CategoryId = categoryId;
+        IsCommonItem = isCommonItem;
+        ConcurrencyVersion = Guid.NewGuid();
+        return Result.Success();
+    }
+
+    /// <summary>
     /// Repoints the "current price" pointer to a newly published <c>PriceBookVersionLine</c>
     /// (ADR-470, build-log/111). Deliberately does not rotate <see cref="ConcurrencyVersion"/> —
     /// a publish transaction's concurrency guard is the account-scoped publish lock, not this

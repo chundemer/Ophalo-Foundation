@@ -20,7 +20,7 @@ public static class CatalogCategoryErrors
         Error.Create("CatalogCategory.AlreadyActive", "This category is already active.");
 
     public static readonly Error NotActive =
-        Error.Create("CatalogCategory.NotActive", "Only an active category can be made inactive.");
+        Error.Create("CatalogCategory.NotActive", "This category is not active.");
 
     public static readonly Error VersionMismatch =
         Error.Create("CatalogCategory.VersionMismatch", "This category was changed by someone else. Reload and try again.");
