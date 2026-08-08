@@ -73,6 +73,20 @@ public static class PriceBookEndpoints
             return result.IsSuccess ? Results.Ok(new CatalogItemTransitionResponse(result.Value)) : ErrorHttpMapper.ToHttpResult(result.Error);
         }).RequireAuthorization();
 
+        app.MapPatch("/keep/pricebook/catalog-items/{catalogItemId:guid}/activate", async (
+            Guid catalogItemId,
+            HttpRequest httpRequest,
+            CatalogItemApiService service,
+            CancellationToken ct) =>
+        {
+            var versionResult = CatalogItemVersionHeader.Parse(httpRequest.Headers);
+            if (!versionResult.IsSuccess)
+                return ErrorHttpMapper.ToHttpResult(versionResult.Error);
+
+            var result = await service.ActivateAsync(catalogItemId, versionResult.Value, ct);
+            return result.IsSuccess ? Results.Ok(new CatalogItemTransitionResponse(result.Value)) : ErrorHttpMapper.ToHttpResult(result.Error);
+        }).RequireAuthorization();
+
         app.MapPatch("/keep/pricebook/catalog-items/{catalogItemId:guid}", async (
             Guid catalogItemId,
             UpdateCatalogItemHeaderBody body,

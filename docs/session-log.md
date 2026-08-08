@@ -187,7 +187,7 @@ account-aware `AccountFeatureAccessResolver`, and a generic Owner/Admin `GET
   profitability unavailable. Focused frontend/integration checks, `tsc --noEmit`, CSS-token check,
   production build, and review are clean. 2e.6a is committed (6167f53).
 
-  **2e.6b — header update: complete, awaiting commit (2026-08-07).** Adds the single
+  **2e.6b — header update: complete (2026-08-07, commit 19e49de).** Adds the single
   `PATCH`-style header-update mutation (`updateCatalogItemHeader`) for display name, external
   key/SKU, category, and common-item flag, gated by the existing optimistic
   `concurrencyVersion` header contract. Domain, application, and API layers enforce the same
@@ -204,8 +204,36 @@ account-aware `AccountFeatureAccessResolver`, and a generic Owner/Admin `GET
   (15, including a deferred-promise regression test proving the disabled/"Refreshing…" window and
   that a click during it does not re-trigger the mutation) suites are clean; `tsc --noEmit` is
   clean. 12 files changed (within the batch gate: 1 mutation family, 8 production files, 12 total
-  including tests). The next implementation preflight after committing is **2e.6c — alias
-  management UI plus thin Reactivate API wiring**.
+  including tests).
+
+  **2e.6c — alias management, Reactivate, and Inactivate: complete, awaiting commit
+  (2026-08-07).** Adds `CatalogItemApiService.ActivateAsync` and `PATCH
+  /keep/pricebook/catalog-items/{id}/activate` (thin wrapper over the already-existing domain
+  `CatalogItem.Activate()`/`CatalogItemLifecycleService.ActivateAsync`, mirroring `/inactivate`
+  exactly — no new domain rule or error contract). On the frontend, wires up the alias
+  add/activate/inactivate endpoints that already existed server-side since 2a.2 but had no client
+  caller, adds a Reactivate action for a non-Active item, and — after review caught that Reactivate
+  had no way to ever be reachable — adds an Inactivate action for an Active item, gated by an
+  inline "Confirm inactivate"/"Cancel" step (mirrors `TeamSection`'s suspend/remove pattern) since
+  it is a one-click action with real consequence for anyone currently searching the catalog.
+  Reactivate/Inactivate/alias-add/alias-activate/alias-inactivate share one `itemBusy` pending
+  gate with the existing `conflictRefreshPending`: every one of them disables Edit and every
+  alias/lifecycle control until its triggered refetch actually lands, including on
+  `VersionMismatch`, `AlreadyActive`, and `NotActive` conflicts — not just until the mutation call
+  resolves, which was a bug caught and fixed mid-session via a failing regression test. Alias-add
+  failures preserve the typed alias text rather than clearing it. Reactivate/Inactivate success
+  also invalidates the `catalogItems` list query so its Status column stays in sync (the list has
+  no active-only filter yet; that is 2e.7's job). No backend change was needed for Inactivate — it
+  reuses the existing 2a.2 `/inactivate` endpoint, so this batch stays at 1 new mutation family
+  (Reactivate) and 7 files changed (well within the 8-production-file / 12-total gate). Verified:
+  `tsc --noEmit`, CSS-token check, and the production build are clean; the frontend suite is clean
+  (288 tests, including 9 new/extended tests covering alias add/activate/inactivate,
+  Reactivate/Inactivate success, `AlreadyActive`/`NotActive`/`VersionMismatch` conflicts held
+  through their refetch, and an inactivate-then-reactivate round trip proving each step uses the
+  freshly refreshed `concurrencyVersion`); the backend unit suite is clean (1,379 tests); the
+  2 new backend integration tests for `/activate` pass (13/13 in the file); `git diff --check` is
+  clean. The next implementation preflight after committing is **2e.6d — later-price publish UI
+  and its ADR-470 conflict handling**.
 
   ADR-474, ADR-475, and the `keep-product-positioning.md`/`deferred-topics.md` changes alongside
   this work are Christian's, made outside this implementation session and left untouched.

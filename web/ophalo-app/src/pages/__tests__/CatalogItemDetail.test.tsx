@@ -9,6 +9,11 @@ import type { CatalogItemDetailResult } from "../../lib/apiClient";
 const mockGetCatalogItem = vi.fn();
 const mockGetCatalogCategories = vi.fn();
 const mockUpdateCatalogItemHeader = vi.fn();
+const mockReactivateCatalogItem = vi.fn();
+const mockInactivateCatalogItem = vi.fn();
+const mockAddCatalogItemAlias = vi.fn();
+const mockActivateCatalogItemAlias = vi.fn();
+const mockInactivateCatalogItemAlias = vi.fn();
 
 vi.mock("../../lib/apiClient", async () => {
   const actual = await vi.importActual<typeof import("../../lib/apiClient")>("../../lib/apiClient");
@@ -19,6 +24,11 @@ vi.mock("../../lib/apiClient", async () => {
       getCatalogItem: (...args: unknown[]) => mockGetCatalogItem(...args),
       getCatalogCategories: (...args: unknown[]) => mockGetCatalogCategories(...args),
       updateCatalogItemHeader: (...args: unknown[]) => mockUpdateCatalogItemHeader(...args),
+      reactivateCatalogItem: (...args: unknown[]) => mockReactivateCatalogItem(...args),
+      inactivateCatalogItem: (...args: unknown[]) => mockInactivateCatalogItem(...args),
+      addCatalogItemAlias: (...args: unknown[]) => mockAddCatalogItemAlias(...args),
+      activateCatalogItemAlias: (...args: unknown[]) => mockActivateCatalogItemAlias(...args),
+      inactivateCatalogItemAlias: (...args: unknown[]) => mockInactivateCatalogItemAlias(...args),
     },
   };
 });
@@ -75,6 +85,11 @@ describe("CatalogItemDetail", () => {
       ],
     });
     mockUpdateCatalogItemHeader.mockReset();
+    mockReactivateCatalogItem.mockReset();
+    mockInactivateCatalogItem.mockReset();
+    mockAddCatalogItemAlias.mockReset();
+    mockActivateCatalogItemAlias.mockReset();
+    mockInactivateCatalogItemAlias.mockReset();
   });
 
   it("shows a loading state before the fetch resolves", () => {
@@ -293,5 +308,237 @@ describe("CatalogItemDetail", () => {
       { displayName: "Condensate Pump Mk2", externalKey: "COP-34", categoryId: "cat-1", isCommonItem: false },
       "v2",
     ));
+  });
+
+  it("reactivates an inactive item and re-enables Edit once the refresh lands", async () => {
+    const user = userEvent.setup();
+    const inactiveItem: CatalogItemDetailResult = {
+      ...baseItem,
+      item: { ...baseItem.item, activeState: "Inactive" },
+    };
+    const reactivatedItem: CatalogItemDetailResult = {
+      ...baseItem,
+      item: { ...baseItem.item, activeState: "Active", concurrencyVersion: "v2" },
+    };
+    mockGetCatalogItem.mockResolvedValueOnce(inactiveItem).mockResolvedValue(reactivatedItem);
+    mockReactivateCatalogItem.mockResolvedValue({ concurrencyVersion: "v2" });
+    renderDetail();
+
+    const reactivateButton = await screen.findByRole("button", { name: "Reactivate" });
+    await user.click(reactivateButton);
+
+    await waitFor(() => expect(mockReactivateCatalogItem).toHaveBeenCalledWith("item-1", "v1"));
+    await waitFor(() => expect(screen.queryByRole("button", { name: "Reactivate" })).not.toBeInTheDocument());
+    expect(screen.getByRole("button", { name: "Edit" })).toBeEnabled();
+  });
+
+  it("shows an already-active conflict and refreshes without crashing", async () => {
+    const user = userEvent.setup();
+    const inactiveItem: CatalogItemDetailResult = {
+      ...baseItem,
+      item: { ...baseItem.item, activeState: "Inactive" },
+    };
+    mockGetCatalogItem.mockResolvedValueOnce(inactiveItem).mockResolvedValue(baseItem);
+    mockReactivateCatalogItem.mockRejectedValueOnce(new ApiError(409, "CatalogItem.AlreadyActive", "conflict"));
+    renderDetail();
+
+    const reactivateButton = await screen.findByRole("button", { name: "Reactivate" });
+    await user.click(reactivateButton);
+
+    await waitFor(() => expect(screen.getByText("This item is already active.")).toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByRole("button", { name: "Reactivate" })).not.toBeInTheDocument());
+  });
+
+  it("inactivates an active item after confirmation", async () => {
+    const user = userEvent.setup();
+    const inactivatedItem: CatalogItemDetailResult = {
+      ...baseItem,
+      item: { ...baseItem.item, activeState: "Inactive", concurrencyVersion: "v2" },
+    };
+    mockGetCatalogItem.mockResolvedValueOnce(baseItem).mockResolvedValue(inactivatedItem);
+    mockInactivateCatalogItem.mockResolvedValue({ concurrencyVersion: "v2" });
+    renderDetail();
+
+    await waitFor(() => expect(screen.getByText("Condensate Pump")).toBeInTheDocument());
+    // Clicking Inactivate alone must not fire the mutation — it only reveals the confirmation.
+    await user.click(screen.getByRole("button", { name: "Inactivate" }));
+    expect(mockInactivateCatalogItem).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole("button", { name: "Confirm inactivate" }));
+
+    await waitFor(() => expect(mockInactivateCatalogItem).toHaveBeenCalledWith("item-1", "v1"));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Reactivate" })).toBeInTheDocument());
+    expect(screen.queryByRole("button", { name: "Inactivate" })).not.toBeInTheDocument();
+  });
+
+  it("holds Inactivate disabled through a version conflict until the refetch lands", async () => {
+    const user = userEvent.setup();
+    const refreshed: CatalogItemDetailResult = {
+      ...baseItem,
+      item: { ...baseItem.item, concurrencyVersion: "v2" },
+    };
+    let resolveRefetch: (value: CatalogItemDetailResult) => void;
+    const deferredRefetch = new Promise<CatalogItemDetailResult>((resolve) => {
+      resolveRefetch = resolve;
+    });
+    mockGetCatalogItem.mockResolvedValueOnce(baseItem).mockReturnValueOnce(deferredRefetch);
+    mockInactivateCatalogItem.mockRejectedValueOnce(new ApiError(409, "CatalogItem.VersionMismatch", "conflict"));
+    renderDetail();
+
+    await waitFor(() => expect(screen.getByText("Condensate Pump")).toBeInTheDocument());
+    await user.click(screen.getByRole("button", { name: "Inactivate" }));
+    await user.click(screen.getByRole("button", { name: "Confirm inactivate" }));
+
+    await waitFor(() =>
+      expect(screen.getByText("This item was changed elsewhere. Refreshing…")).toBeInTheDocument(),
+    );
+    expect(screen.getByRole("button", { name: "Refreshing…" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Inactivate" })).toBeDisabled();
+
+    resolveRefetch!(refreshed);
+
+    await waitFor(() => expect(screen.getByRole("button", { name: "Edit" })).toBeEnabled());
+    expect(screen.getByRole("button", { name: "Inactivate" })).toBeEnabled();
+  });
+
+  it("inactivate-then-reactivate round trip returns the item to Active with the latest version", async () => {
+    const user = userEvent.setup();
+    const inactivatedItem: CatalogItemDetailResult = {
+      ...baseItem,
+      item: { ...baseItem.item, activeState: "Inactive", concurrencyVersion: "v2" },
+    };
+    const reactivatedItem: CatalogItemDetailResult = {
+      ...baseItem,
+      item: { ...baseItem.item, activeState: "Active", concurrencyVersion: "v3" },
+    };
+    mockGetCatalogItem
+      .mockResolvedValueOnce(baseItem)
+      .mockResolvedValueOnce(inactivatedItem)
+      .mockResolvedValue(reactivatedItem);
+    mockInactivateCatalogItem.mockResolvedValue({ concurrencyVersion: "v2" });
+    mockReactivateCatalogItem.mockResolvedValue({ concurrencyVersion: "v3" });
+    renderDetail();
+
+    await waitFor(() => expect(screen.getByText("Condensate Pump")).toBeInTheDocument());
+    await user.click(screen.getByRole("button", { name: "Inactivate" }));
+    await user.click(screen.getByRole("button", { name: "Confirm inactivate" }));
+
+    const reactivateButton = await screen.findByRole("button", { name: "Reactivate" });
+    await waitFor(() => expect(mockInactivateCatalogItem).toHaveBeenCalledWith("item-1", "v1"));
+    await user.click(reactivateButton);
+
+    await waitFor(() => expect(mockReactivateCatalogItem).toHaveBeenCalledWith("item-1", "v2"));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Inactivate" })).toBeInTheDocument());
+  });
+
+  it("adds an alias, clearing the input on success", async () => {
+    const user = userEvent.setup();
+    const withNewAlias: CatalogItemDetailResult = {
+      ...baseItem,
+      aliases: [...baseItem.aliases, { id: "alias-2", aliasText: "cond pump", activeState: "Active" }],
+      item: { ...baseItem.item, concurrencyVersion: "v2" },
+    };
+    mockGetCatalogItem.mockResolvedValueOnce(baseItem).mockResolvedValue(withNewAlias);
+    mockAddCatalogItemAlias.mockResolvedValue({
+      id: "alias-2",
+      catalogItemId: "item-1",
+      aliasText: "cond pump",
+      activeState: "Active",
+      catalogItemConcurrencyVersion: "v2",
+    });
+    renderDetail();
+
+    await waitFor(() => expect(screen.getByText("Condensate Pump")).toBeInTheDocument());
+    const aliasInput = screen.getByLabelText("New alias") as HTMLInputElement;
+    await user.type(aliasInput, "cond pump");
+    await user.click(screen.getByRole("button", { name: "Add" }));
+
+    await waitFor(() => expect(mockAddCatalogItemAlias).toHaveBeenCalledWith(
+      "item-1", { aliasText: "cond pump" }, "v1",
+    ));
+    await waitFor(() => expect(screen.getByText("cond pump")).toBeInTheDocument());
+    expect((screen.getByLabelText("New alias") as HTMLInputElement).value).toBe("");
+  });
+
+  it("preserves the typed alias text when adding an alias fails", async () => {
+    const user = userEvent.setup();
+    mockGetCatalogItem.mockResolvedValue(baseItem);
+    mockAddCatalogItemAlias.mockRejectedValueOnce(
+      new ApiError(409, "CatalogItem.AliasAlreadyExists", "conflict"),
+    );
+    renderDetail();
+
+    await waitFor(() => expect(screen.getByText("Condensate Pump")).toBeInTheDocument());
+    const aliasInput = screen.getByLabelText("New alias") as HTMLInputElement;
+    await user.type(aliasInput, "condensate pump");
+    await user.click(screen.getByRole("button", { name: "Add" }));
+
+    await waitFor(() =>
+      expect(screen.getByText("This catalog item already has an alias with this text.")).toBeInTheDocument(),
+    );
+    expect(aliasInput.value).toBe("condensate pump");
+  });
+
+  it("deactivates and reactivates an existing alias, using the refreshed version on each step", async () => {
+    const user = userEvent.setup();
+    const deactivated: CatalogItemDetailResult = {
+      ...baseItem,
+      aliases: [{ ...baseItem.aliases[0], activeState: "Inactive" }],
+      item: { ...baseItem.item, concurrencyVersion: "v2" },
+    };
+    const reactivated: CatalogItemDetailResult = {
+      ...baseItem,
+      aliases: [{ ...baseItem.aliases[0], activeState: "Active" }],
+      item: { ...baseItem.item, concurrencyVersion: "v3" },
+    };
+    mockGetCatalogItem
+      .mockResolvedValueOnce(baseItem)
+      .mockResolvedValueOnce(deactivated)
+      .mockResolvedValue(reactivated);
+    mockInactivateCatalogItemAlias.mockResolvedValue({ catalogItemConcurrencyVersion: "v2" });
+    mockActivateCatalogItemAlias.mockResolvedValue({ catalogItemConcurrencyVersion: "v3" });
+    renderDetail();
+
+    await waitFor(() => expect(screen.getByText("Condensate Pump")).toBeInTheDocument());
+    await user.click(screen.getByRole("button", { name: "Deactivate" }));
+
+    await waitFor(() => expect(mockInactivateCatalogItemAlias).toHaveBeenCalledWith("item-1", "alias-1", "v1"));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Activate" })).toBeInTheDocument());
+
+    await user.click(screen.getByRole("button", { name: "Activate" }));
+
+    await waitFor(() => expect(mockActivateCatalogItemAlias).toHaveBeenCalledWith("item-1", "alias-1", "v2"));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Deactivate" })).toBeInTheDocument());
+  });
+
+  it("disables Edit and alias controls until an alias version conflict's refetch lands", async () => {
+    const user = userEvent.setup();
+    const refreshed: CatalogItemDetailResult = {
+      ...baseItem,
+      item: { ...baseItem.item, concurrencyVersion: "v2" },
+    };
+    let resolveRefetch: (value: CatalogItemDetailResult) => void;
+    const deferredRefetch = new Promise<CatalogItemDetailResult>((resolve) => {
+      resolveRefetch = resolve;
+    });
+    mockGetCatalogItem.mockResolvedValueOnce(baseItem).mockReturnValueOnce(deferredRefetch);
+    mockInactivateCatalogItemAlias.mockRejectedValueOnce(
+      new ApiError(409, "CatalogItem.VersionMismatch", "conflict"),
+    );
+    renderDetail();
+
+    await waitFor(() => expect(screen.getByText("Condensate Pump")).toBeInTheDocument());
+    // The seeded alias is Active, so its toggle reads "Deactivate", which calls
+    // inactivateCatalogItemAlias — exercising the shared version-conflict handling.
+    await user.click(screen.getByRole("button", { name: "Deactivate" }));
+
+    await waitFor(() =>
+      expect(screen.getByText("This item was changed elsewhere. Refreshing…")).toBeInTheDocument(),
+    );
+    expect(screen.getByRole("button", { name: "Refreshing…" })).toBeDisabled();
+
+    resolveRefetch!(refreshed);
+
+    await waitFor(() => expect(screen.getByRole("button", { name: "Edit" })).toBeEnabled());
   });
 });

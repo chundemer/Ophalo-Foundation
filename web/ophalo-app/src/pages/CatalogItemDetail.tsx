@@ -136,7 +136,7 @@ export function CatalogItemDetail({
   const [fieldErrors, setFieldErrors] = useState<{ displayName?: string; externalKey?: string; categoryId?: string }>({});
 
   function startEditing() {
-    if (!data || conflictRefreshPending) return;
+    if (!data || itemBusy) return;
     setForm(conflictDraft ?? toFormState(data.item));
     setConflictDraft(null);
     setFormError(null);
@@ -210,6 +210,166 @@ export function CatalogItemDetail({
       setFormError("Could not save changes. Try again.");
     },
   });
+
+  // Session 2e.6c, build-log/113: reactivate and alias-management wiring. Both stay pending
+  // (blocking Edit and every alias control) until the refetch they trigger lands, for the same
+  // reason as conflictRefreshPending above — the next action must never fire against the
+  // now-stale `data.item.concurrencyVersion`.
+  const [reactivatePending, setReactivatePending] = useState(false);
+  const [reactivateError, setReactivateError] = useState<string | null>(null);
+  const [inactivatePending, setInactivatePending] = useState(false);
+  const [inactivateError, setInactivateError] = useState<string | null>(null);
+  const [confirmInactivate, setConfirmInactivate] = useState(false);
+  const [aliasActionPending, setAliasActionPending] = useState(false);
+  const [aliasFieldError, setAliasFieldError] = useState<string | null>(null);
+  const [newAliasText, setNewAliasText] = useState("");
+  const itemBusy = conflictRefreshPending || reactivatePending || inactivatePending || aliasActionPending;
+
+  const reactivateMutation = useMutation({
+    mutationFn: () => {
+      if (!data) throw new Error("Catalog item not loaded.");
+      return api.reactivateCatalogItem(catalogItemId, data.item.concurrencyVersion);
+    },
+    onMutate: () => {
+      setReactivateError(null);
+      setReactivatePending(true);
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["catalogItem", catalogItemId] }).then(() => {
+        setReactivatePending(false);
+      });
+      void queryClient.invalidateQueries({ queryKey: ["catalogItems"] });
+    },
+    onError: (err: unknown) => {
+      if (err instanceof ApiError && (err.code === "CatalogItem.VersionMismatch" || err.code === "CatalogItem.AlreadyActive")) {
+        setReactivateError(
+          err.code === "CatalogItem.AlreadyActive"
+            ? "This item is already active."
+            : "This item was changed elsewhere. Refreshing…",
+        );
+        void queryClient.invalidateQueries({ queryKey: ["catalogItem", catalogItemId] }).then(() => {
+          setReactivatePending(false);
+        });
+        return;
+      }
+      setReactivatePending(false);
+      setReactivateError("Could not reactivate this item. Try again.");
+    },
+  });
+
+  // Removes the item from future selection (search/create-quote pickers) without deleting its
+  // history; Reactivate above is the only way back. Requires an explicit inline confirmation
+  // (matches TeamSection's suspend/remove pattern) since it's a one-click action with real
+  // consequence for anyone currently searching the catalog.
+  const inactivateMutation = useMutation({
+    mutationFn: () => {
+      if (!data) throw new Error("Catalog item not loaded.");
+      return api.inactivateCatalogItem(catalogItemId, data.item.concurrencyVersion);
+    },
+    onMutate: () => {
+      setInactivateError(null);
+      setConfirmInactivate(false);
+      setInactivatePending(true);
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["catalogItem", catalogItemId] }).then(() => {
+        setInactivatePending(false);
+      });
+      void queryClient.invalidateQueries({ queryKey: ["catalogItems"] });
+    },
+    onError: (err: unknown) => {
+      if (err instanceof ApiError && (err.code === "CatalogItem.VersionMismatch" || err.code === "CatalogItem.NotActive")) {
+        setInactivateError(
+          err.code === "CatalogItem.NotActive"
+            ? "This item is already inactive."
+            : "This item was changed elsewhere. Refreshing…",
+        );
+        void queryClient.invalidateQueries({ queryKey: ["catalogItem", catalogItemId] }).then(() => {
+          setInactivatePending(false);
+        });
+        return;
+      }
+      setInactivatePending(false);
+      setInactivateError("Could not inactivate this item. Try again.");
+    },
+  });
+
+  const addAliasMutation = useMutation({
+    mutationFn: (aliasText: string) => {
+      if (!data) throw new Error("Catalog item not loaded.");
+      return api.addCatalogItemAlias(catalogItemId, { aliasText }, data.item.concurrencyVersion);
+    },
+    onMutate: () => {
+      setAliasFieldError(null);
+      setAliasActionPending(true);
+    },
+    onSuccess: () => {
+      setNewAliasText("");
+      void queryClient.invalidateQueries({ queryKey: ["catalogItem", catalogItemId] }).then(() => {
+        setAliasActionPending(false);
+      });
+    },
+    onError: (err: unknown) => {
+      // Deliberately does not clear newAliasText: the user's typed alias is preserved so a
+      // transient failure (or a version conflict) does not force them to retype it.
+      if (err instanceof ApiError && err.code === "CatalogItem.VersionMismatch") {
+        setAliasFieldError("This item was changed elsewhere. Refreshing…");
+        void queryClient.invalidateQueries({ queryKey: ["catalogItem", catalogItemId] }).then(() => {
+          setAliasActionPending(false);
+        });
+        return;
+      }
+      setAliasActionPending(false);
+      if (err instanceof ApiError && err.code === "CatalogItem.AliasTextRequired") {
+        setAliasFieldError("Alias text is required.");
+        return;
+      }
+      if (err instanceof ApiError && err.code === "CatalogItem.AliasTextTooLong") {
+        setAliasFieldError("Alias text must not exceed 200 characters.");
+        return;
+      }
+      if (err instanceof ApiError && err.code === "CatalogItem.AliasAlreadyExists") {
+        setAliasFieldError("This catalog item already has an alias with this text.");
+        return;
+      }
+      setAliasFieldError("Could not add this alias. Try again.");
+    },
+  });
+
+  const aliasTransitionMutation = useMutation({
+    mutationFn: (vars: { aliasId: string; action: "activate" | "inactivate" }) => {
+      if (!data) throw new Error("Catalog item not loaded.");
+      return vars.action === "activate"
+        ? api.activateCatalogItemAlias(catalogItemId, vars.aliasId, data.item.concurrencyVersion)
+        : api.inactivateCatalogItemAlias(catalogItemId, vars.aliasId, data.item.concurrencyVersion);
+    },
+    onMutate: () => {
+      setAliasFieldError(null);
+      setAliasActionPending(true);
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["catalogItem", catalogItemId] }).then(() => {
+        setAliasActionPending(false);
+      });
+    },
+    onError: (err: unknown) => {
+      if (err instanceof ApiError && err.code === "CatalogItem.VersionMismatch") {
+        setAliasFieldError("This item was changed elsewhere. Refreshing…");
+        void queryClient.invalidateQueries({ queryKey: ["catalogItem", catalogItemId] }).then(() => {
+          setAliasActionPending(false);
+        });
+        return;
+      }
+      setAliasActionPending(false);
+      setAliasFieldError("Could not update this alias. Try again.");
+    },
+  });
+
+  function handleAddAlias(e: React.FormEvent) {
+    e.preventDefault();
+    if (!data || itemBusy || addAliasMutation.isPending || newAliasText.trim() === "") return;
+    addAliasMutation.mutate(newAliasText.trim());
+  }
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -337,15 +497,70 @@ export function CatalogItemDetail({
                   {data.item.isCommonItem ? " · Common item" : ""}
                 </p>
               </div>
-              <button
-                type="button"
-                onClick={startEditing}
-                disabled={conflictRefreshPending}
-                className="shrink-0 rounded-lg border border-[var(--ophalo-border)] px-3 py-1.5 text-sm font-medium text-[var(--ophalo-ink)] hover:bg-[var(--ophalo-canvas)] disabled:opacity-60"
-              >
-                {conflictRefreshPending ? "Refreshing…" : "Edit"}
-              </button>
+              <div className="flex shrink-0 items-center gap-2">
+                {data.item.activeState !== "Active" && (
+                  <button
+                    type="button"
+                    onClick={() => reactivateMutation.mutate()}
+                    disabled={itemBusy || reactivateMutation.isPending}
+                    className="rounded-lg border border-[var(--ophalo-border)] px-3 py-1.5 text-sm font-medium text-[var(--ophalo-ink)] hover:bg-[var(--ophalo-canvas)] disabled:opacity-60"
+                  >
+                    {reactivatePending ? "Reactivating…" : "Reactivate"}
+                  </button>
+                )}
+                {data.item.activeState === "Active" && !confirmInactivate && (
+                  <button
+                    type="button"
+                    onClick={() => setConfirmInactivate(true)}
+                    disabled={itemBusy}
+                    className="rounded-lg border border-[var(--ophalo-border)] px-3 py-1.5 text-sm font-medium text-[var(--ophalo-ink)] hover:bg-[var(--ophalo-canvas)] disabled:opacity-60"
+                  >
+                    Inactivate
+                  </button>
+                )}
+                {data.item.activeState === "Active" && confirmInactivate && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-[var(--ophalo-muted)]">Remove from selection?</span>
+                    <button
+                      type="button"
+                      onClick={() => inactivateMutation.mutate()}
+                      disabled={itemBusy || inactivateMutation.isPending}
+                      className="rounded-lg border border-[var(--ophalo-danger)] px-3 py-1.5 text-sm font-medium text-[var(--ophalo-danger)] hover:bg-[var(--ophalo-canvas)] disabled:opacity-60"
+                    >
+                      {inactivatePending ? "Inactivating…" : "Confirm inactivate"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setConfirmInactivate(false)}
+                      disabled={itemBusy}
+                      className="text-sm text-[var(--ophalo-muted)] hover:underline disabled:opacity-60"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                )}
+                <button
+                  type="button"
+                  onClick={startEditing}
+                  disabled={itemBusy}
+                  className="rounded-lg border border-[var(--ophalo-border)] px-3 py-1.5 text-sm font-medium text-[var(--ophalo-ink)] hover:bg-[var(--ophalo-canvas)] disabled:opacity-60"
+                >
+                  {itemBusy ? "Refreshing…" : "Edit"}
+                </button>
+              </div>
             </div>
+
+            {reactivateError && (
+              <div className="rounded-lg border border-[var(--ophalo-danger)] p-3 text-sm text-[var(--ophalo-danger)]">
+                {reactivateError}
+              </div>
+            )}
+
+            {inactivateError && (
+              <div className="rounded-lg border border-[var(--ophalo-danger)] p-3 text-sm text-[var(--ophalo-danger)]">
+                {inactivateError}
+              </div>
+            )}
 
             {conflictDraft && (
               <div className="rounded-lg border border-[var(--ophalo-danger)] p-3 text-sm text-[var(--ophalo-danger)]">
@@ -394,16 +609,66 @@ export function CatalogItemDetail({
                 <p className="text-sm text-[var(--ophalo-muted)]">No search aliases yet.</p>
               ) : (
                 <ul className="text-sm text-[var(--ophalo-ink)] space-y-1">
-                  {data.aliases.map((alias) => (
-                    <li key={alias.id}>
-                      {alias.aliasText}
-                      {alias.activeState !== "Active" && (
-                        <span className="text-[var(--ophalo-muted)]"> (inactive)</span>
-                      )}
-                    </li>
-                  ))}
+                  {data.aliases.map((alias) => {
+                    const isThisAliasPending =
+                      aliasTransitionMutation.isPending && aliasTransitionMutation.variables?.aliasId === alias.id;
+                    return (
+                      <li key={alias.id} className="flex items-center justify-between gap-3">
+                        <span>
+                          {alias.aliasText}
+                          {alias.activeState !== "Active" && (
+                            <span className="text-[var(--ophalo-muted)]"> (inactive)</span>
+                          )}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            aliasTransitionMutation.mutate({
+                              aliasId: alias.id,
+                              action: alias.activeState === "Active" ? "inactivate" : "activate",
+                            })
+                          }
+                          disabled={itemBusy || isThisAliasPending}
+                          className="shrink-0 text-xs font-medium text-[var(--keep-accent)] hover:underline disabled:opacity-60 disabled:no-underline"
+                        >
+                          {isThisAliasPending
+                            ? "Working…"
+                            : alias.activeState === "Active"
+                              ? "Deactivate"
+                              : "Activate"}
+                        </button>
+                      </li>
+                    );
+                  })}
                 </ul>
               )}
+
+              <form onSubmit={handleAddAlias} className="mt-3 flex items-start gap-2">
+                <div className="flex-1">
+                  <label htmlFor="new-alias-text" className="sr-only">
+                    New alias
+                  </label>
+                  <input
+                    id="new-alias-text"
+                    type="text"
+                    placeholder="Add a search alias"
+                    value={newAliasText}
+                    onChange={(e) => setNewAliasText(e.target.value)}
+                    disabled={itemBusy || addAliasMutation.isPending}
+                    className={INPUT_CLS}
+                  />
+                  {aliasFieldError && (
+                    <p className="mt-1 text-xs text-[var(--ophalo-danger)]">{aliasFieldError}</p>
+                  )}
+                </div>
+                <button
+                  type="submit"
+                  disabled={itemBusy || addAliasMutation.isPending || newAliasText.trim() === ""}
+                  className="shrink-0 rounded-lg border border-[var(--ophalo-border)] px-3 py-2 text-sm font-medium text-[var(--ophalo-ink)] hover:bg-[var(--ophalo-canvas)] disabled:opacity-60"
+                >
+                  {addAliasMutation.isPending ? "Adding…" : "Add"}
+                </button>
+              </form>
             </div>
           </div>
         )}

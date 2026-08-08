@@ -90,6 +90,47 @@ public sealed class CatalogItemApiTests : IClassFixture<KeepApiWebFactory>, IAsy
     }
 
     [Fact]
+    public async Task Activate_CorrectVersion_Returns200WithNewVersion()
+    {
+        var (accountId, ownerId, _) = await SeedAccountAsync("activate-ok");
+        await EnrollAsync(accountId, ownerId);
+        var cookie = await GetCookieAsync(ownerId, accountId);
+
+        var item = await SeedInactiveCatalogItemAsync(accountId, ownerId);
+
+        var response = await PatchWithVersionAsync(
+            AuthRequest(cookie), $"/keep/pricebook/catalog-items/{item.Id}/activate", item.ConcurrencyVersion);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        var newVersion = body.GetProperty("concurrencyVersion").GetGuid();
+        Assert.NotEqual(item.ConcurrencyVersion, newVersion);
+
+        await using var scope = _factory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+        var reloaded = await db.Set<CatalogItem>().FindAsync(item.Id);
+        Assert.Equal(CatalogItemActiveState.Active, reloaded!.ActiveState);
+        Assert.Equal(newVersion, reloaded.ConcurrencyVersion);
+    }
+
+    [Fact]
+    public async Task Activate_WhenAlreadyActive_Returns409()
+    {
+        var (accountId, ownerId, _) = await SeedAccountAsync("repeat-activate");
+        await EnrollAsync(accountId, ownerId);
+        var cookie = await GetCookieAsync(ownerId, accountId);
+
+        var item = await SeedActiveCatalogItemAsync(accountId, ownerId);
+
+        var response = await PatchWithVersionAsync(
+            AuthRequest(cookie), $"/keep/pricebook/catalog-items/{item.Id}/activate", item.ConcurrencyVersion);
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("CatalogItem.AlreadyActive", body.GetProperty("code").GetString());
+    }
+
+    [Fact]
     public async Task UpdateHeader_CorrectVersion_Returns200AndPersistsMutableFieldsOnly()
     {
         var (accountId, ownerId, _) = await SeedAccountAsync("header-update-ok");
@@ -412,6 +453,25 @@ public sealed class CatalogItemApiTests : IClassFixture<KeepApiWebFactory>, IAsy
         Assert.True(createResult.IsSuccess);
         var item = createResult.Value;
         Assert.True(item.Activate().IsSuccess);
+
+        await using var scope = _factory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+        db.Set<CatalogItem>().Add(item);
+        await db.SaveChangesAsync();
+        return item;
+    }
+
+    // Mirrors SeedActiveCatalogItemAsync: Draft then an in-memory Activate/Inactivate before the
+    // row is ever persisted, since Draft itself is not reachable through the public API.
+    private async Task<CatalogItem> SeedInactiveCatalogItemAsync(Guid accountId, Guid createdByUserId)
+    {
+        var createResult = CatalogItem.CreateDraft(
+            accountId, CatalogItemType.Material, "Seeded Item", "each", "USD",
+            externalKey: null, categoryId: null, isCommonItem: false, createdByUserId);
+        Assert.True(createResult.IsSuccess);
+        var item = createResult.Value;
+        Assert.True(item.Activate().IsSuccess);
+        Assert.True(item.Inactivate().IsSuccess);
 
         await using var scope = _factory.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();

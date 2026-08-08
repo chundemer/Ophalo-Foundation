@@ -641,6 +641,27 @@ export interface UpdateCatalogItemHeaderResult {
   concurrencyVersion: string;
 }
 
+// Session 2e.6c, build-log/113: reactivate and alias-management wiring.
+export interface CatalogItemTransitionResult {
+  concurrencyVersion: string;
+}
+
+export interface AddCatalogItemAliasBody {
+  aliasText: string;
+}
+
+export interface AddCatalogItemAliasResult {
+  id: string;
+  catalogItemId: string;
+  aliasText: string;
+  activeState: string;
+  catalogItemConcurrencyVersion: string;
+}
+
+export interface CatalogItemAliasTransitionResult {
+  catalogItemConcurrencyVersion: string;
+}
+
 export interface CreateCatalogCategoryBody {
   name: string;
   displayOrder: number;

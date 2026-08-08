@@ -157,6 +157,10 @@ import type {
   CreateAndActivateCatalogItemResult,
   UpdateCatalogItemHeaderBody,
   UpdateCatalogItemHeaderResult,
+  CatalogItemTransitionResult,
+  AddCatalogItemAliasBody,
+  AddCatalogItemAliasResult,
+  CatalogItemAliasTransitionResult,
   CreateCatalogCategoryBody,
 } from "./apiClient.types";
 
@@ -224,6 +228,10 @@ export type {
   CreateAndActivateCatalogItemResult,
   UpdateCatalogItemHeaderBody,
   UpdateCatalogItemHeaderResult,
+  CatalogItemTransitionResult,
+  AddCatalogItemAliasBody,
+  AddCatalogItemAliasResult,
+  CatalogItemAliasTransitionResult,
   CreateCatalogCategoryBody,
 };
 
@@ -301,6 +309,33 @@ export const api = {
       headers: { "X-Keep-CatalogItem-Version": version },
       body: JSON.stringify(body),
     }),
+  // Session 2e.6c, build-log/113: reactivate, inactivate, and alias-management wiring.
+  reactivateCatalogItem: (catalogItemId: string, version: string) =>
+    apiFetch<CatalogItemTransitionResult>(`/keep/pricebook/catalog-items/${catalogItemId}/activate`, {
+      method: "PATCH",
+      headers: { "X-Keep-CatalogItem-Version": version },
+    }),
+  inactivateCatalogItem: (catalogItemId: string, version: string) =>
+    apiFetch<CatalogItemTransitionResult>(`/keep/pricebook/catalog-items/${catalogItemId}/inactivate`, {
+      method: "PATCH",
+      headers: { "X-Keep-CatalogItem-Version": version },
+    }),
+  addCatalogItemAlias: (catalogItemId: string, body: AddCatalogItemAliasBody, version: string) =>
+    apiFetch<AddCatalogItemAliasResult>(`/keep/pricebook/catalog-items/${catalogItemId}/aliases`, {
+      method: "POST",
+      headers: { "X-Keep-CatalogItem-Version": version },
+      body: JSON.stringify(body),
+    }),
+  activateCatalogItemAlias: (catalogItemId: string, aliasId: string, version: string) =>
+    apiFetch<CatalogItemAliasTransitionResult>(
+      `/keep/pricebook/catalog-items/${catalogItemId}/aliases/${aliasId}/activate`,
+      { method: "PATCH", headers: { "X-Keep-CatalogItem-Version": version } },
+    ),
+  inactivateCatalogItemAlias: (catalogItemId: string, aliasId: string, version: string) =>
+    apiFetch<CatalogItemAliasTransitionResult>(
+      `/keep/pricebook/catalog-items/${catalogItemId}/aliases/${aliasId}/inactivate`,
+      { method: "PATCH", headers: { "X-Keep-CatalogItem-Version": version } },
+    ),
   createCatalogCategory: (body: CreateCatalogCategoryBody) =>
     apiFetch<CatalogCategoryResponse>("/keep/pricebook/catalog-categories", {
       method: "POST",

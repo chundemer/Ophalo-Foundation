@@ -88,6 +88,15 @@ public sealed class CatalogItemApiService(
         return await lifecycleService.InactivateAsync(currentUser.AccountId, catalogItemId, expectedVersion, ct);
     }
 
+    public async Task<Result<Guid>> ActivateAsync(Guid catalogItemId, Guid expectedVersion, CancellationToken ct)
+    {
+        var gate = await AuthorizeAsync(ct);
+        if (gate.IsFailure)
+            return Result<Guid>.Failure(gate.Error);
+
+        return await lifecycleService.ActivateAsync(currentUser.AccountId, catalogItemId, expectedVersion, ct);
+    }
+
     public async Task<Result<Guid>> UpdateHeaderAsync(
         Guid catalogItemId, UpdateCatalogItemHeaderApiCommand command, Guid expectedVersion, CancellationToken ct)
     {
