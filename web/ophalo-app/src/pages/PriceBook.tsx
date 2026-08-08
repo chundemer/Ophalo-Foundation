@@ -1,8 +1,10 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus, Tag } from "lucide-react";
-import { api, ApiError, type AccountRole } from "../lib/apiClient";
+import { api, ApiError, type AccountRole, type GetCatalogItemsParams } from "../lib/apiClient";
 import { CatalogItemDrawer } from "../components/keep/CatalogItemDrawer";
+
+const SEARCH_DEBOUNCE_MS = 300;
 
 interface PriceBookProps {
   role: AccountRole;
@@ -30,9 +32,9 @@ function formatPrice(row: { currentPricingMode: string | null; currentSellPrice:
 }
 
 /**
- * Price Book workspace shell (Session 2e.4, build-log/113): route, entitled nav, unavailable
- * direct-access handling, and the list shell (default active items only — search/filter/pager
- * controls are 2e.7). No creation drawer, no item detail, no actions column yet.
+ * Price Book workspace shell (Session 2e.4/2e.7, build-log/113): route, entitled nav, unavailable
+ * direct-access handling, and the list with debounced search, category/status filters, and
+ * Prev/Next pagination against the already-server-supported query params.
  */
 export function PriceBook({
   role,
@@ -46,17 +48,82 @@ export function PriceBook({
   const queryClient = useQueryClient();
   const [drawerOpen, setDrawerOpen] = useState(false);
 
+  const [searchInput, setSearchInput] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
+  const [statusFilter, setStatusFilter] = useState<"Active" | "Inactive">("Active");
+  // Cursor visited to reach each page; index 0's cursor is always undefined (first page).
+  const [pageCursors, setPageCursors] = useState<(string | undefined)[]>([undefined]);
+  const [pageIndex, setPageIndex] = useState(0);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(searchInput), SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+  }, [searchInput]);
+
+  // A filter/search change invalidates the page cursors gathered under the old query, so it
+  // always resets back to page one rather than silently reusing a stale cursor.
+  useEffect(() => {
+    setPageCursors([undefined]);
+    setPageIndex(0);
+  }, [debouncedSearch, categoryFilter, statusFilter]);
+
+  const hasActiveFilters =
+    debouncedSearch.trim() !== "" || categoryFilter !== null || statusFilter !== "Active";
+
+  const clearFilters = () => {
+    setSearchInput("");
+    setDebouncedSearch("");
+    setCategoryFilter(null);
+    setStatusFilter("Active");
+  };
+
+  const queryParams: GetCatalogItemsParams = {};
+  const trimmedSearch = debouncedSearch.trim();
+  if (trimmedSearch) queryParams.search = trimmedSearch;
+  if (categoryFilter) queryParams.categoryId = categoryFilter;
+  if (statusFilter !== "Active") queryParams.status = statusFilter;
+  const activeCursor = pageCursors[pageIndex];
+  if (activeCursor) queryParams.cursor = activeCursor;
+
   const { data, isLoading, isError, error, refetch } = useQuery({
-    queryKey: ["catalogItems"],
-    queryFn: () => api.getCatalogItems({}),
+    queryKey: ["catalogItems", trimmedSearch, categoryFilter, statusFilter, activeCursor ?? null],
+    queryFn: () => api.getCatalogItems(queryParams),
     enabled: isOwnerOrAdmin && entitled,
   });
 
   const { data: categoriesData } = useQuery({
     queryKey: ["catalogCategories"],
     queryFn: () => api.getCatalogCategories(),
-    enabled: isOwnerOrAdmin && entitled && drawerOpen,
+    enabled: isOwnerOrAdmin && entitled,
   });
+
+  const activeCategories = (categoriesData?.categories ?? []).filter((c) => c.activeState === "Active");
+
+  // The unfiltered list defaults to status=Active server-side, so a zero-item result there does
+  // not by itself mean the catalog is empty — it could hold only inactive items. Only probe for
+  // that once the unfiltered active list has actually come back empty, so we don't fire an extra
+  // request on every normal load.
+  const zeroStateCheckEnabled =
+    isOwnerOrAdmin && entitled && !!data && data.items.length === 0 && !hasActiveFilters;
+  const { data: inactiveCheckData, isLoading: inactiveCheckLoading } = useQuery({
+    queryKey: ["catalogItems", "inactiveCheck"],
+    queryFn: () => api.getCatalogItems({ status: "Inactive", limit: 1 }),
+    enabled: zeroStateCheckEnabled,
+  });
+  const zeroStateResolving = zeroStateCheckEnabled && inactiveCheckLoading;
+  const hasOnlyInactiveItems =
+    zeroStateCheckEnabled && !inactiveCheckLoading && (inactiveCheckData?.items.length ?? 0) > 0;
+
+  const handleNextPage = () => {
+    if (!data?.nextCursor) return;
+    setPageCursors((prev) => [...prev.slice(0, pageIndex + 1), data.nextCursor ?? undefined]);
+    setPageIndex((i) => i + 1);
+  };
+
+  const handlePrevPage = () => {
+    setPageIndex((i) => Math.max(0, i - 1));
+  };
 
   if (role === "unknown") {
     return (
@@ -130,9 +197,12 @@ export function PriceBook({
   }
 
   // build-log/112/113 (2e.5 zero-state CTA refinement): the header CTA is suppressed only once a
-  // successful response proves the catalog is empty — loading/error states keep showing it, since
-  // we can't yet claim there's nothing to add to.
-  const showHeaderCta = !(data && data.items.length === 0);
+  // successful response proves the catalog itself (not just the current filters, and not just its
+  // default-Active view) is empty — loading/error/still-resolving states keep showing it, since we
+  // can't yet claim there's nothing to add to.
+  const isTrulyEmpty = zeroStateCheckEnabled && !zeroStateResolving && !hasOnlyInactiveItems;
+  const isFilteredEmpty = !!data && data.items.length === 0 && hasActiveFilters;
+  const showHeaderCta = !isTrulyEmpty;
 
   return (
     <div className="flex-1 min-w-0 flex flex-col">
@@ -157,8 +227,69 @@ export function PriceBook({
         )}
       </div>
 
+      <div className="px-4 sm:px-6 pb-4 flex flex-wrap items-center gap-3">
+        <label className="sr-only" htmlFor="catalog-search">
+          Search catalog
+        </label>
+        <input
+          id="catalog-search"
+          type="search"
+          value={searchInput}
+          onChange={(e) => setSearchInput(e.target.value)}
+          placeholder="Search by name, SKU, or keyword"
+          className="w-full sm:w-64 px-3 py-1.5 rounded-lg border border-[var(--ophalo-border)] text-sm
+            focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)]"
+        />
+
+        <label className="sr-only" htmlFor="catalog-category-filter">
+          Filter by category
+        </label>
+        <select
+          id="catalog-category-filter"
+          value={categoryFilter ?? ""}
+          onChange={(e) => setCategoryFilter(e.target.value || null)}
+          className="px-3 py-1.5 rounded-lg border border-[var(--ophalo-border)] text-sm
+            focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)]"
+        >
+          <option value="">All categories</option>
+          {activeCategories.map((category) => (
+            <option key={category.id} value={category.id}>
+              {category.name}
+            </option>
+          ))}
+        </select>
+
+        <div className="inline-flex rounded-lg border border-[var(--ophalo-border)] p-0.5" role="group" aria-label="Filter by status">
+          {(["Active", "Inactive"] as const).map((option) => (
+            <button
+              key={option}
+              type="button"
+              aria-pressed={statusFilter === option}
+              onClick={() => setStatusFilter(option)}
+              className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${
+                statusFilter === option
+                  ? "bg-[var(--ophalo-navy)] text-white"
+                  : "text-[var(--ophalo-muted)] hover:text-[var(--ophalo-ink)]"
+              }`}
+            >
+              {option}
+            </button>
+          ))}
+        </div>
+
+        {hasActiveFilters && (
+          <button
+            type="button"
+            onClick={clearFilters}
+            className="text-sm font-medium text-[var(--keep-accent)] hover:underline"
+          >
+            Clear filters
+          </button>
+        )}
+      </div>
+
       <div className="flex-1 min-w-0 px-4 sm:px-6 pb-6">
-        {isLoading && (
+        {(isLoading || zeroStateResolving) && (
           <div className="flex flex-1 items-center justify-center py-16">
             <span className="text-[var(--ophalo-muted)] text-sm">Loading…</span>
           </div>
@@ -179,7 +310,7 @@ export function PriceBook({
           </div>
         )}
 
-        {!isLoading && !isError && data && data.items.length === 0 && (
+        {!isLoading && !isError && isTrulyEmpty && (
           <div className="flex flex-1 items-center justify-center py-16">
             <div className="max-w-sm w-full rounded-xl border border-[var(--ophalo-border)] px-6 py-8 text-center">
               <Tag className="mx-auto mb-3 h-8 w-8 text-[var(--ophalo-muted)]" />
@@ -196,6 +327,44 @@ export function PriceBook({
               >
                 <Plus className="h-4 w-4" />
                 Add your first catalog item
+              </button>
+            </div>
+          </div>
+        )}
+
+        {!isLoading && !isError && hasOnlyInactiveItems && (
+          <div className="flex flex-1 items-center justify-center py-16">
+            <div className="max-w-sm w-full rounded-xl border border-[var(--ophalo-border)] px-6 py-8 text-center">
+              <Tag className="mx-auto mb-3 h-8 w-8 text-[var(--ophalo-muted)]" />
+              <h2 className="text-[var(--ophalo-ink)] text-base font-semibold mb-1">No active items</h2>
+              <p className="text-[var(--ophalo-muted)] text-sm mb-4">
+                Every item in your catalog is currently inactive.
+              </p>
+              <button
+                type="button"
+                onClick={() => setStatusFilter("Inactive")}
+                className="text-sm font-medium text-[var(--keep-accent)] hover:underline"
+              >
+                View inactive items
+              </button>
+            </div>
+          </div>
+        )}
+
+        {!isLoading && !isError && isFilteredEmpty && (
+          <div className="flex flex-1 items-center justify-center py-16">
+            <div className="max-w-sm w-full rounded-xl border border-[var(--ophalo-border)] px-6 py-8 text-center">
+              <Tag className="mx-auto mb-3 h-8 w-8 text-[var(--ophalo-muted)]" />
+              <h2 className="text-[var(--ophalo-ink)] text-base font-semibold mb-1">No items match your filters</h2>
+              <p className="text-[var(--ophalo-muted)] text-sm mb-4">
+                Try a different search term, or clear your filters to see the full catalog.
+              </p>
+              <button
+                type="button"
+                onClick={clearFilters}
+                className="text-sm font-medium text-[var(--keep-accent)] hover:underline"
+              >
+                Clear filters
               </button>
             </div>
           </div>
@@ -237,6 +406,31 @@ export function PriceBook({
                 ))}
               </tbody>
             </table>
+          </div>
+        )}
+
+        {!isLoading && !isError && data && data.items.length > 0 && (pageIndex > 0 || data.hasMore) && (
+          <div className="flex items-center justify-end gap-3 pt-4">
+            <button
+              type="button"
+              onClick={handlePrevPage}
+              disabled={pageIndex === 0}
+              className="px-3 py-1.5 rounded-lg text-sm font-medium border border-[var(--ophalo-border)]
+                disabled:opacity-40 disabled:cursor-not-allowed hover:bg-[var(--ophalo-canvas)]
+                focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)]"
+            >
+              Previous
+            </button>
+            <button
+              type="button"
+              onClick={handleNextPage}
+              disabled={!data.hasMore}
+              className="px-3 py-1.5 rounded-lg text-sm font-medium border border-[var(--ophalo-border)]
+                disabled:opacity-40 disabled:cursor-not-allowed hover:bg-[var(--ophalo-canvas)]
+                focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)]"
+            >
+              Next
+            </button>
           </div>
         )}
       </div>

@@ -3,7 +3,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { PriceBook } from "../PriceBook";
-import type { CatalogItemListResult } from "../../lib/apiClient";
+import type { CatalogItemListResult, GetCatalogItemsParams } from "../../lib/apiClient";
 
 const mockGetCatalogItems = vi.fn();
 const mockGetCatalogCategories = vi.fn();
@@ -199,6 +199,107 @@ describe("PriceBook", () => {
     await waitFor(() => expect(screen.getByText("Try again")).toBeInTheDocument());
   });
 
+  it("debounces search input and queries with the trimmed term", async () => {
+    const user = userEvent.setup();
+    mockGetCatalogItems.mockResolvedValue(oneItem);
+    renderPriceBook();
+
+    await waitFor(() => expect(screen.getByText("Condensate Pump")).toBeInTheDocument());
+    mockGetCatalogItems.mockClear();
+
+    await user.type(screen.getByLabelText("Search catalog"), "pump");
+    expect(mockGetCatalogItems).not.toHaveBeenCalled();
+
+    await waitFor(() => expect(mockGetCatalogItems).toHaveBeenCalledWith({ search: "pump" }), { timeout: 1000 });
+  });
+
+  it("filters by category and resets to page one", async () => {
+    const user = userEvent.setup();
+    mockGetCatalogCategories.mockResolvedValue({
+      categories: [{ id: "cat-1", name: "Pumps", displayOrder: 0, activeState: "Active", concurrencyVersion: "v1" }],
+    });
+    mockGetCatalogItems.mockResolvedValue(oneItem);
+    renderPriceBook();
+
+    await waitFor(() => expect(screen.getByText("Condensate Pump")).toBeInTheDocument());
+    mockGetCatalogItems.mockClear();
+
+    await user.selectOptions(screen.getByLabelText("Filter by category"), "cat-1");
+
+    await waitFor(() => expect(mockGetCatalogItems).toHaveBeenCalledWith({ categoryId: "cat-1" }));
+  });
+
+  it("does not offer an inactive category as a filter option", async () => {
+    mockGetCatalogCategories.mockResolvedValue({
+      categories: [{ id: "cat-2", name: "Retired", displayOrder: 0, activeState: "Inactive", concurrencyVersion: "v1" }],
+    });
+    mockGetCatalogItems.mockResolvedValue(oneItem);
+    renderPriceBook();
+
+    await waitFor(() => expect(screen.getByText("Condensate Pump")).toBeInTheDocument());
+    expect(screen.queryByRole("option", { name: "Retired" })).not.toBeInTheDocument();
+  });
+
+  it("toggling to Inactive status queries with status=Inactive", async () => {
+    const user = userEvent.setup();
+    mockGetCatalogItems.mockResolvedValue(oneItem);
+    renderPriceBook();
+
+    await waitFor(() => expect(screen.getByText("Condensate Pump")).toBeInTheDocument());
+    mockGetCatalogItems.mockClear();
+
+    await user.click(screen.getByRole("button", { name: "Inactive" }));
+
+    await waitFor(() => expect(mockGetCatalogItems).toHaveBeenCalledWith({ status: "Inactive" }));
+  });
+
+  it("shows a filtered-empty state distinct from the true zero-state, keeping the header CTA", async () => {
+    const user = userEvent.setup();
+    mockGetCatalogItems.mockResolvedValue(oneItem);
+    renderPriceBook();
+    await waitFor(() => expect(screen.getByText("Condensate Pump")).toBeInTheDocument());
+
+    mockGetCatalogItems.mockResolvedValue({ items: [], limit: 50, hasMore: false, nextCursor: null });
+    await user.type(screen.getByLabelText("Search catalog"), "nonexistent");
+
+    await waitFor(() => expect(screen.getByText("No items match your filters")).toBeInTheDocument());
+    expect(screen.queryByText("Your catalog is empty")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Add catalog item" })).toBeInTheDocument();
+
+    const clearButtons = screen.getAllByRole("button", { name: "Clear filters" });
+    await user.click(clearButtons[0]);
+    expect(screen.getByLabelText("Search catalog")).toHaveValue("");
+  });
+
+  it("paginates with Prev/Next using the returned cursor", async () => {
+    const user = userEvent.setup();
+    mockGetCatalogItems.mockResolvedValueOnce({ ...oneItem, hasMore: true, nextCursor: "cursor-2" });
+    renderPriceBook();
+
+    await waitFor(() => expect(screen.getByText("Condensate Pump")).toBeInTheDocument());
+    const nextButton = screen.getByRole("button", { name: "Next" });
+    const prevButton = screen.getByRole("button", { name: "Previous" });
+    expect(prevButton).toBeDisabled();
+    expect(nextButton).not.toBeDisabled();
+
+    mockGetCatalogItems.mockResolvedValueOnce({
+      items: [{ ...oneItem.items[0], item: { ...oneItem.items[0].item, id: "item-2", displayName: "Second Item" } }],
+      limit: 50,
+      hasMore: false,
+      nextCursor: null,
+    });
+    await user.click(nextButton);
+
+    await waitFor(() => expect(mockGetCatalogItems).toHaveBeenLastCalledWith({ cursor: "cursor-2" }));
+    await waitFor(() => expect(screen.getByText("Second Item")).toBeInTheDocument());
+    expect(screen.getByRole("button", { name: "Next" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Previous" })).not.toBeDisabled();
+
+    mockGetCatalogItems.mockResolvedValueOnce({ ...oneItem, hasMore: true, nextCursor: "cursor-2" });
+    await user.click(screen.getByRole("button", { name: "Previous" }));
+    await waitFor(() => expect(mockGetCatalogItems).toHaveBeenLastCalledWith({}));
+  });
+
   it("opens the catalog item drawer and refreshes the catalog list after a successful create", async () => {
     const user = userEvent.setup();
     mockGetCatalogItems.mockResolvedValue({ items: [], limit: 50, hasMore: false, nextCursor: null });
@@ -224,8 +325,14 @@ describe("PriceBook", () => {
     });
     renderPriceBook();
 
+    // The default-Active list comes back empty, then the zero-state check confirms no inactive
+    // items exist either before the true empty-state onboarding renders.
     await waitFor(() => expect(screen.getByText("Your catalog is empty")).toBeInTheDocument());
-    expect(mockGetCatalogItems).toHaveBeenCalledTimes(1);
+    expect(mockGetCatalogItems).toHaveBeenCalledWith({});
+    expect(mockGetCatalogItems).toHaveBeenCalledWith({ status: "Inactive", limit: 1 });
+    const callsBeforeCreate = mockGetCatalogItems.mock.calls.filter(
+      ([params]) => JSON.stringify(params) === JSON.stringify({}),
+    ).length;
 
     await user.click(screen.getByRole("button", { name: /add your first catalog item/i }));
     expect(screen.getByRole("dialog", { name: "New catalog item" })).toBeInTheDocument();
@@ -236,6 +343,36 @@ describe("PriceBook", () => {
 
     await waitFor(() => expect(mockCreateCatalogItem).toHaveBeenCalled());
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "New catalog item" })).not.toBeInTheDocument());
-    await waitFor(() => expect(mockGetCatalogItems).toHaveBeenCalledTimes(2));
+    await waitFor(() => {
+      const callsAfterCreate = mockGetCatalogItems.mock.calls.filter(
+        ([params]) => JSON.stringify(params) === JSON.stringify({}),
+      ).length;
+      expect(callsAfterCreate).toBeGreaterThan(callsBeforeCreate);
+    });
+  });
+
+  it("shows a distinct 'no active items' state (not the onboarding zero-state) when the catalog has only inactive items", async () => {
+    const user = userEvent.setup();
+    mockGetCatalogItems.mockImplementation((params: GetCatalogItemsParams = {}) => {
+      if (params.status === "Inactive") {
+        return Promise.resolve({
+          items: [{ ...oneItem.items[0], item: { ...oneItem.items[0].item, activeState: "Inactive" } }],
+          limit: params.limit ?? 50,
+          hasMore: false,
+          nextCursor: null,
+        });
+      }
+      return Promise.resolve({ items: [], limit: 50, hasMore: false, nextCursor: null });
+    });
+    renderPriceBook();
+
+    await waitFor(() => expect(screen.getByText("No active items")).toBeInTheDocument());
+    expect(screen.queryByText("Your catalog is empty")).not.toBeInTheDocument();
+    // The catalog isn't empty, so the header CTA stays available.
+    expect(screen.getByRole("button", { name: "Add catalog item" })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "View inactive items" }));
+    await waitFor(() => expect(screen.getByText("Condensate Pump")).toBeInTheDocument());
+    expect(screen.getByRole("button", { name: "Inactive" })).toHaveAttribute("aria-pressed", "true");
   });
 });
