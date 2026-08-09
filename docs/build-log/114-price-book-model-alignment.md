@@ -82,6 +82,16 @@ formula engine, a tax engine, or an assembly implementation within the current c
    available Quick Add/pinning feature. UOM quick-fill remains literal-value fill with no automatic
    focus jump.
 
+10. **Potential duplicate awareness is a later, non-blocking entry assist.** Pilot use may justify
+    showing a small, debounced set of **Similar catalog items** while an Owner/Admin enters a new
+    display name. It must be advisory, never prevent saving, and clearly distinguish similarity
+    from a duplicate: related materials may intentionally have similar names, sizes, brands, or
+    prices. Do not scan only the currently rendered catalog page or load the full catalog into the
+    browser; that would miss paged/filtered items and produce misleading confidence. A later
+    evidence-led slice may use the bounded server search read path, cap the results, and offer a
+    direct way to inspect an existing item. It is not part of 2e.7b's category-combobox work or
+    2e.7c's layout/accessibility polish.
+
 ## Delivery boundary
 
 Finish Session 2e's catalog-item work and manual verification as planned. Scope the separately
