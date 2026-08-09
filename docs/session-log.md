@@ -1,6 +1,6 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-08-08
+**Last updated:** 2026-08-09
 **Deployment posture:** Not pilot-ready.
 **Source of truth for acceptance criteria:** `docs/pilot-readiness-bug-tracker.md`.
 
@@ -30,7 +30,12 @@ account-aware `AccountFeatureAccessResolver`, and a generic Owner/Admin `GET
 
 **Session 2 progress:**
 
-- **2e — Catalog workspace UI:** planned and decision-locked in Build 112; Build 113 breaks the
+- **2e — Catalog workspace UI: complete (2026-08-09).** Build 112 locked the product/UI boundary;
+  Build 113 supplied the bounded implementation and completion-verification sequence. The next
+  code slice is the separately preflighted pilot image-storage work; do not reopen 2e for image
+  work, an empty Offerings & Packages tab, or deferred catalog refinements.
+
+  The completed 2e record follows. Build 113 broke the
   work into bounded implementation slices. 2e.0 preflight split 2e.1 into 2e.1a (canonical SKU
   foundation) and 2e.1b (pricing-mode foundation) because 2e.1b's only caller,
   `EfPriceBookPublishPersistence`, pushed the combined slice past the 8-production-file gate.
@@ -457,6 +462,16 @@ account-aware `AccountFeatureAccessResolver`, and a generic Owner/Admin `GET
   (the `/`-from-a-button correction and the accessible-name/tooltip additions) — flagged, not
   silently skipped.
 
+  **2e.8 — Completion verification and handoff: complete (2026-08-09).** The outstanding live
+  browser re-verification was completed after the final 2e.7c fixes: the `/` shortcut works from a
+  focused button after closing the shortcuts dialog without stealing text-entry keystrokes, and the
+  shortcuts control has a clear accessible name and hover/keyboard-focus tooltip. The entitled
+  Owner/Admin Price Book workflow was rechecked on desktop and mobile, including the final
+  interaction/accessibility polish and the required happy-path and conflict/error coverage.
+  Proportionate automated checks, the frontend production build, and `git diff --check` were also
+  completed. Build 112/113 boundaries and the deferred topics remain unchanged: 2e is closed with
+  no image-storage scope added. The next coding action is a separate pilot image-storage preflight.
+
 - **2a.1 — CatalogItem foundation:** complete and migrated. `CatalogItem`, its lifecycle/persistence
   stack, and `keep_pricebook_catalog_items` are in place. Review corrected the table name and ensured
   a concurrent SKU collision maps to `CatalogItemErrors.ExternalKeyAlreadyExists`.
@@ -569,14 +584,14 @@ account-aware `AccountFeatureAccessResolver`, and a generic Owner/Admin `GET
     SubmittedForApproval → Approved` lifecycle—there is no V1 customer `Sent`/`Accepted`/`Declined`
     state, signature, delivery link, tax calculation, or free-standing quote. It must not revive CSV
     upload as an implementation shortcut. Build Log 111 records the completed 2d.1–2d.2 delivery.
-  - **2e — Price Book catalog workspace UI (next preflight).** Build the entitled Owner/Admin
-    workspace before further price-book or image work: top-level Price Book navigation, catalog
-    search/read APIs, Catalog Items list and responsive item drawer, direct price entry, categories,
-    aliases, and lifecycle controls. The locked product/UI decisions and explicit non-goals are in
-    Build Log 112; the bounded execution sequence is Build Log 113. Offerings & Packages is decided
-    product scope but is a separate functional slice; do not ship an empty/disabled tab.
-  - **Pilot-required image storage (separate preflight, after catalog workspace).** R2 remains required: price-book import
-    is deferred, not private document storage. The next storage slice defines image metadata,
+  - **2e — Price Book catalog workspace UI: complete (2026-08-09).** The entitled Owner/Admin
+    workspace now includes top-level Price Book navigation, bounded catalog reads, a responsive
+    Catalog Items list and item drawer, direct price entry, categories, aliases, lifecycle controls,
+    and final desktop/mobile accessibility and interaction verification. Build Logs 112 and 113
+    remain the locked decision and execution records. Offerings & Packages remains a separate
+    functional slice; do not ship an empty/disabled tab.
+  - **Pilot-required image storage (next preflight).** R2 remains required: price-book import is
+    deferred, not private document storage. The next storage slice defines image metadata,
     account authorization, bounded direct API multipart upload, image type/size validation, purpose
     keys, retrieval/display, and pilot retention. Equipment/work images—not CSV—are the first
     production use of the R2 seam.
