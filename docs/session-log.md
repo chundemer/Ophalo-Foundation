@@ -1,6 +1,6 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-08-07
+**Last updated:** 2026-08-08
 **Deployment posture:** Not pilot-ready.
 **Source of truth for acceptance criteria:** `docs/pilot-readiness-bug-tracker.md`.
 
@@ -416,9 +416,46 @@ account-aware `AccountFeatureAccessResolver`, and a generic Owner/Admin `GET
   ExactlyOneWins` (confirmed passing in isolation; unrelated to this batch, not a 2e.7b regression).
   `git diff --check` is clean. Batch: `CategoryCombobox.tsx` + test (new), `CatalogItemDrawer.tsx`,
   `CatalogItemDetail.tsx`, `PriceBook.tsx` + their tests, plus the two pre-approved backend files
-  (`EfCatalogReadPersistence.cs`, `CatalogReadApiTests.cs`) — no new mutation family. The next
-  implementation preflight is **2e.7c — Cost/Sell Price desktop pairing, keyboard-shortcuts help,
-  accessibility polish**.
+  (`EfCatalogReadPersistence.cs`, `CatalogReadApiTests.cs`) — no new mutation family.
+
+  **2e.7c — Cost/Sell Price desktop pairing, keyboard-shortcuts help, accessibility polish:
+  complete (2026-08-08).** In `CatalogItemDrawer.tsx`, Cost and Sell Price now share the same
+  `grid-cols-1 sm:grid-cols-2` pairing already used for Type/Category (stacked on mobile, paired
+  on desktop); the "no standalone price" checkbox moved above the pair since it gates Sell
+  Price's visibility. All 6 field-error spans now have an `id`, with their inputs wired to
+  `aria-describedby` only when the error is present; every other interactive control already used
+  the shared `FOCUS_RING` class, so no other focus-visible gaps were found. `PriceBook.tsx` adds a
+  page-level "Keyboard shortcuts" button opening an accessible dialog (built on `KeepModal`, so
+  focus-trap/Escape/focus-restoration are inherited, not reimplemented) documenting all four
+  locked shortcuts (Cmd/Ctrl+Enter, Escape, `/`, `n`), plus the `/` (focus search) and `n` (new
+  item) list-level handlers themselves — both were previously undocumented-and-unimplemented, not
+  just undocumented. `/` uses a narrow `isTypingTarget` guard (input/textarea/select/
+  contenteditable only) so it still fires from a focused button or link — e.g. right after closing
+  the shortcuts dialog, a bug caught and fixed mid-session; `n` uses a stricter
+  `isEditableOrInteractiveTarget` guard that also backs off from any button/link/interactive-role
+  element, so a stray `n` can never accidentally create an item. Both are silenced while the
+  drawer or the shortcuts dialog is open.
+
+  Manual mobile review (428px) surfaced three corrections folded into this same slice: the
+  6-column catalog table was unreadable at mobile widths (values wrapping into fragments), so
+  mobile now gets a compact card list (`<ul>`/`<li>`, one full-width tappable card per item with
+  an explicit `aria-label="View {displayName}"` rather than relying on its concatenated child
+  text) prioritizing Name, Type/UOM, Sell price or "No standalone price", and Status — SKU is
+  dropped as low-value on the compact card; desktop table is unchanged, now wrapped in
+  `hidden sm:block` alongside the `sm:hidden` card list. The global sticky "New Request"
+  quick-capture FAB (`App.tsx`) was unconditionally shown except on the request-detail route,
+  which put it directly next to Price Book's own "Add catalog item" action with an unrelated
+  label — it's now also hidden on `pricebook`/`pricebook-item` routes. The page header reflows to
+  `flex-col` below `sm` so the title/description read at full width before the action row (now
+  including the shortcuts button, with a hover/keyboard-focus tooltip since a bare icon isn't
+  self-explanatory), instead of competing side-by-side and wrapping awkwardly.
+
+  3 production files changed (`App.tsx`, `CatalogItemDrawer.tsx`, `PriceBook.tsx`), 2 test files —
+  no new mutation family, frontend-only. Verified: `tsc --noEmit`, CSS-token check, and the
+  production build are clean; the frontend suite is clean (337 tests, up from 328). `git diff
+  --check` is clean. Not independently re-confirmed in a live browser after the last two fixes
+  (the `/`-from-a-button correction and the accessible-name/tooltip additions) — flagged, not
+  silently skipped.
 
 - **2a.1 — CatalogItem foundation:** complete and migrated. `CatalogItem`, its lifecycle/persistence
   stack, and `keep_pricebook_catalog_items` are in place. Review corrected the table name and ensured

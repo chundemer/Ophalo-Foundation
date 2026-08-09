@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { PriceBook } from "../PriceBook";
@@ -124,7 +124,7 @@ describe("PriceBook", () => {
     mockGetCatalogItems.mockResolvedValue(oneItem);
     renderPriceBook();
 
-    await waitFor(() => expect(screen.getByText("Condensate Pump")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getAllByText("Condensate Pump").length).toBeGreaterThan(0));
     expect(screen.getByRole("button", { name: "Add catalog item" })).toBeInTheDocument();
     expect(screen.queryByText("Your catalog is empty")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /add your first catalog item/i })).not.toBeInTheDocument();
@@ -157,21 +157,48 @@ describe("PriceBook", () => {
     mockGetCatalogItems.mockResolvedValue(oneItem);
     renderPriceBook();
 
-    await waitFor(() => expect(screen.getByText("Condensate Pump")).toBeInTheDocument());
-    expect(screen.getByText("COP-34")).toBeInTheDocument();
-    expect(screen.getByText("$249.99")).toBeInTheDocument();
+    await waitFor(() => expect(screen.getAllByText("Condensate Pump").length).toBeGreaterThan(0));
+    const table = within(screen.getByRole("table"));
+    expect(table.getByText("COP-34")).toBeInTheDocument();
+    expect(table.getByText("$249.99")).toBeInTheDocument();
   });
 
-  it("clicking a catalog row navigates to that item's detail", async () => {
+  it("clicking a catalog row (desktop table) navigates to that item's detail", async () => {
     const user = userEvent.setup();
     mockGetCatalogItems.mockResolvedValue(oneItem);
     const onSelectItem = vi.fn();
     renderPriceBook({ onSelectItem });
 
-    await waitFor(() => expect(screen.getByText("Condensate Pump")).toBeInTheDocument());
-    await user.click(screen.getByRole("button", { name: "Condensate Pump" }));
+    await waitFor(() => expect(screen.getAllByText("Condensate Pump").length).toBeGreaterThan(0));
+    await user.click(within(screen.getByRole("table")).getByRole("button", { name: "Condensate Pump" }));
 
     expect(onSelectItem).toHaveBeenCalledWith("item-1");
+  });
+
+  it("clicking a catalog card (mobile list) navigates to that item's detail", async () => {
+    const user = userEvent.setup();
+    mockGetCatalogItems.mockResolvedValue(oneItem);
+    const onSelectItem = vi.fn();
+    renderPriceBook({ onSelectItem });
+
+    await waitFor(() => expect(screen.getAllByText("Condensate Pump").length).toBeGreaterThan(0));
+    await user.click(within(screen.getByRole("list")).getByRole("button", { name: /Condensate Pump/ }));
+
+    expect(onSelectItem).toHaveBeenCalledWith("item-1");
+  });
+
+  it("the mobile card list shows Name, Type/UOM, Sell price, and Status", async () => {
+    mockGetCatalogItems.mockResolvedValue(oneItem);
+    renderPriceBook();
+
+    await waitFor(() => expect(screen.getAllByText("Condensate Pump").length).toBeGreaterThan(0));
+    const card = within(screen.getByRole("list"));
+    expect(card.getByText("Condensate Pump")).toBeInTheDocument();
+    expect(card.getByText(/Material.*each/)).toBeInTheDocument();
+    expect(card.getByText("$249.99")).toBeInTheDocument();
+    expect(card.getByText("Active")).toBeInTheDocument();
+    // SKU is dropped from the compact mobile card as a low-value/redundant field.
+    expect(card.queryByText("COP-34")).not.toBeInTheDocument();
   });
 
   it("renders 'No standalone price' rather than $0.00 or blank", async () => {
@@ -189,7 +216,7 @@ describe("PriceBook", () => {
     });
     renderPriceBook();
 
-    await waitFor(() => expect(screen.getByText("No standalone price")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getAllByText("No standalone price").length).toBeGreaterThan(0));
   });
 
   it("shows an error state with a retry action when the fetch fails", async () => {
@@ -204,7 +231,7 @@ describe("PriceBook", () => {
     mockGetCatalogItems.mockResolvedValue(oneItem);
     renderPriceBook();
 
-    await waitFor(() => expect(screen.getByText("Condensate Pump")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getAllByText("Condensate Pump").length).toBeGreaterThan(0));
     mockGetCatalogItems.mockClear();
 
     await user.type(screen.getByLabelText("Search catalog"), "pump");
@@ -221,7 +248,7 @@ describe("PriceBook", () => {
     mockGetCatalogItems.mockResolvedValue(oneItem);
     renderPriceBook();
 
-    await waitFor(() => expect(screen.getByText("Condensate Pump")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getAllByText("Condensate Pump").length).toBeGreaterThan(0));
     mockGetCatalogItems.mockClear();
 
     await user.click(screen.getByLabelText("Filter by category"));
@@ -238,7 +265,7 @@ describe("PriceBook", () => {
     mockGetCatalogItems.mockResolvedValue(oneItem);
     renderPriceBook();
 
-    await waitFor(() => expect(screen.getByText("Condensate Pump")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getAllByText("Condensate Pump").length).toBeGreaterThan(0));
     await user.click(screen.getByLabelText("Filter by category"));
     expect(screen.queryByRole("option", { name: "Retired" })).not.toBeInTheDocument();
   });
@@ -248,7 +275,7 @@ describe("PriceBook", () => {
     mockGetCatalogItems.mockResolvedValue(oneItem);
     renderPriceBook();
 
-    await waitFor(() => expect(screen.getByText("Condensate Pump")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getAllByText("Condensate Pump").length).toBeGreaterThan(0));
     mockGetCatalogItems.mockClear();
 
     await user.click(screen.getByRole("button", { name: "Inactive" }));
@@ -260,7 +287,7 @@ describe("PriceBook", () => {
     const user = userEvent.setup();
     mockGetCatalogItems.mockResolvedValue(oneItem);
     renderPriceBook();
-    await waitFor(() => expect(screen.getByText("Condensate Pump")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getAllByText("Condensate Pump").length).toBeGreaterThan(0));
 
     mockGetCatalogItems.mockResolvedValue({ items: [], limit: 50, hasMore: false, nextCursor: null });
     await user.type(screen.getByLabelText("Search catalog"), "nonexistent");
@@ -279,7 +306,7 @@ describe("PriceBook", () => {
     mockGetCatalogItems.mockResolvedValueOnce({ ...oneItem, hasMore: true, nextCursor: "cursor-2" });
     renderPriceBook();
 
-    await waitFor(() => expect(screen.getByText("Condensate Pump")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getAllByText("Condensate Pump").length).toBeGreaterThan(0));
     const nextButton = screen.getByRole("button", { name: "Next" });
     const prevButton = screen.getByRole("button", { name: "Previous" });
     expect(prevButton).toBeDisabled();
@@ -294,7 +321,7 @@ describe("PriceBook", () => {
     await user.click(nextButton);
 
     await waitFor(() => expect(mockGetCatalogItems).toHaveBeenLastCalledWith({ cursor: "cursor-2" }));
-    await waitFor(() => expect(screen.getByText("Second Item")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getAllByText("Second Item").length).toBeGreaterThan(0));
     expect(screen.getByRole("button", { name: "Next" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Previous" })).not.toBeDisabled();
 
@@ -375,7 +402,93 @@ describe("PriceBook", () => {
     expect(screen.getByRole("button", { name: "Add catalog item" })).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "View inactive items" }));
-    await waitFor(() => expect(screen.getByText("Condensate Pump")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getAllByText("Condensate Pump").length).toBeGreaterThan(0));
     expect(screen.getByRole("button", { name: "Inactive" })).toHaveAttribute("aria-pressed", "true");
+  });
+
+  describe("2e.7c keyboard shortcuts", () => {
+    it("opens and closes the shortcuts dialog listing all four locked shortcuts", async () => {
+      const user = userEvent.setup();
+      mockGetCatalogItems.mockResolvedValue(oneItem);
+      renderPriceBook();
+      await waitFor(() => expect(screen.getAllByText("Condensate Pump").length).toBeGreaterThan(0));
+
+      await user.click(screen.getByRole("button", { name: "Keyboard shortcuts" }));
+      const dialog = screen.getByRole("dialog", { name: "Keyboard shortcuts" });
+      expect(dialog).toBeInTheDocument();
+      expect(screen.getByText(/save & add another/i)).toBeInTheDocument();
+      expect(screen.getByText(/close or cancel safely/i)).toBeInTheDocument();
+      expect(screen.getByText(/focus catalog search/i)).toBeInTheDocument();
+      expect(screen.getByText(/open new item/i)).toBeInTheDocument();
+
+      await user.keyboard("{Escape}");
+      expect(screen.queryByRole("dialog", { name: "Keyboard shortcuts" })).not.toBeInTheDocument();
+    });
+
+    it("'/' focuses the catalog search input", async () => {
+      const user = userEvent.setup();
+      mockGetCatalogItems.mockResolvedValue(oneItem);
+      renderPriceBook();
+      await waitFor(() => expect(screen.getAllByText("Condensate Pump").length).toBeGreaterThan(0));
+
+      await user.keyboard("/");
+      expect(screen.getByLabelText("Search catalog")).toHaveFocus();
+    });
+
+    it("'n' opens the New item drawer when focus is not in an editable control", async () => {
+      const user = userEvent.setup();
+      mockGetCatalogItems.mockResolvedValue(oneItem);
+      renderPriceBook();
+      await waitFor(() => expect(screen.getAllByText("Condensate Pump").length).toBeGreaterThan(0));
+
+      await user.keyboard("n");
+      expect(screen.getByRole("dialog", { name: "New catalog item" })).toBeInTheDocument();
+    });
+
+    it("'n' typed into the search input does not open the drawer", async () => {
+      const user = userEvent.setup();
+      mockGetCatalogItems.mockResolvedValue(oneItem);
+      renderPriceBook();
+      await waitFor(() => expect(screen.getAllByText("Condensate Pump").length).toBeGreaterThan(0));
+
+      await user.click(screen.getByLabelText("Search catalog"));
+      await user.keyboard("n");
+      expect(screen.queryByRole("dialog", { name: "New catalog item" })).not.toBeInTheDocument();
+      expect(screen.getByLabelText("Search catalog")).toHaveValue("n");
+    });
+
+    it("'/' typed while the drawer is open does not steal focus from the drawer", async () => {
+      const user = userEvent.setup();
+      mockGetCatalogItems.mockResolvedValue(oneItem);
+      renderPriceBook();
+      await waitFor(() => expect(screen.getAllByText("Condensate Pump").length).toBeGreaterThan(0));
+
+      await user.click(screen.getByRole("button", { name: "Add catalog item" }));
+      expect(screen.getByRole("dialog", { name: "New catalog item" })).toBeInTheDocument();
+      await user.keyboard("/");
+      expect(screen.getByLabelText("Search catalog")).not.toHaveFocus();
+    });
+
+    it("'/' still focuses search when a non-typing control (e.g. the shortcuts button) has focus", async () => {
+      const user = userEvent.setup();
+      mockGetCatalogItems.mockResolvedValue(oneItem);
+      renderPriceBook();
+      await waitFor(() => expect(screen.getAllByText("Condensate Pump").length).toBeGreaterThan(0));
+
+      screen.getByRole("button", { name: "Keyboard shortcuts" }).focus();
+      await user.keyboard("/");
+      expect(screen.getByLabelText("Search catalog")).toHaveFocus();
+    });
+
+    it("'n' does not open the drawer while a non-typing control (e.g. the shortcuts button) has focus", async () => {
+      const user = userEvent.setup();
+      mockGetCatalogItems.mockResolvedValue(oneItem);
+      renderPriceBook();
+      await waitFor(() => expect(screen.getAllByText("Condensate Pump").length).toBeGreaterThan(0));
+
+      screen.getByRole("button", { name: "Keyboard shortcuts" }).focus();
+      await user.keyboard("n");
+      expect(screen.queryByRole("dialog", { name: "New catalog item" })).not.toBeInTheDocument();
+    });
   });
 });

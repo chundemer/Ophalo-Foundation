@@ -424,8 +424,10 @@ function AppShell() {
         )}
       </main>
 
-      {/* Sticky FAB — mobile only */}
-      {route.page !== "detail" && (
+      {/* Sticky FAB — mobile only. Session 2e.7c: hidden on Price Book routes, which have their
+          own "Add catalog item" action — showing global "New Request" there let an owner create
+          the wrong thing. */}
+      {route.page !== "detail" && route.page !== "pricebook" && route.page !== "pricebook-item" && (
         <button
           type="button"
           onClick={openCapture}

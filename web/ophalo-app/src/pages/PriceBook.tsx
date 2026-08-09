@@ -1,11 +1,33 @@
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus, Tag } from "lucide-react";
+import { Keyboard, Plus, Tag } from "lucide-react";
 import { api, ApiError, type AccountRole, type GetCatalogItemsParams } from "../lib/apiClient";
 import { CatalogItemDrawer } from "../components/keep/CatalogItemDrawer";
 import { CategoryCombobox } from "../components/keep/CategoryCombobox";
+import { KeepModal } from "../components/keep/KeepModal";
 
 const SEARCH_DEBOUNCE_MS = 300;
+
+const INTERACTIVE_ROLES = new Set(["button", "link", "textbox", "combobox", "listbox", "menu", "dialog", "slider", "spinbutton"]);
+
+// 2e.7c: "/" only needs to avoid stealing a keystroke someone is actually typing/editing — it's
+// fine to fire from a focused button or link (e.g. right after closing the shortcuts dialog).
+function isTypingTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof Element)) return false;
+  return !!target.closest('input, textarea, select, [contenteditable]:not([contenteditable="false"])');
+}
+
+// "n" stays conservative: it also backs off from any interactive control (buttons, links,
+// interactive-role elements) so a stray "n" over a button can never accidentally create an item.
+function isEditableOrInteractiveTarget(target: EventTarget | null): boolean {
+  if (isTypingTarget(target)) return true;
+  if (!(target instanceof Element)) return false;
+  const el = target.closest("button, a[href]");
+  if (el) return true;
+  const roleEl = target.closest("[role]");
+  const role = roleEl?.getAttribute("role");
+  return !!role && INTERACTIVE_ROLES.has(role);
+}
 
 interface PriceBookProps {
   role: AccountRole;
@@ -48,6 +70,7 @@ export function PriceBook({
   const isOwnerOrAdmin = role === "owner" || role === "admin";
   const queryClient = useQueryClient();
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
 
   const [searchInput, setSearchInput] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -61,6 +84,30 @@ export function PriceBook({
     const timer = setTimeout(() => setDebouncedSearch(searchInput), SEARCH_DEBOUNCE_MS);
     return () => clearTimeout(timer);
   }, [searchInput]);
+
+  // 2e.7c: list-level "/" (focus search) and "n" (new item) shortcuts. Both stay silent while
+  // the create drawer or the shortcuts dialog is open (each owns its own keyboard handling) or a
+  // modifier key is held. "/" only backs off while actually typing/editing — it's fine to fire
+  // from a focused button or link, e.g. right after closing the shortcuts dialog. "n" stays
+  // conservative and also backs off from any interactive control, so it can never accidentally
+  // create an item.
+  useEffect(() => {
+    if (drawerOpen || shortcutsOpen) return;
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.key === "/") {
+        if (isTypingTarget(e.target)) return;
+        e.preventDefault();
+        document.getElementById("catalog-search")?.focus();
+      } else if (e.key === "n") {
+        if (isEditableOrInteractiveTarget(e.target)) return;
+        e.preventDefault();
+        setDrawerOpen(true);
+      }
+    }
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [drawerOpen, shortcutsOpen]);
 
   // A filter/search change invalidates the page cursors gathered under the old query, so it
   // always resets back to page one rather than silently reusing a stale cursor.
@@ -207,25 +254,50 @@ export function PriceBook({
 
   return (
     <div className="flex-1 min-w-0 flex flex-col">
-      <div className="px-4 pt-5 pb-4 sm:px-6 sm:pt-6 flex items-start justify-between gap-4">
+      <div className="px-4 pt-5 pb-4 sm:px-6 sm:pt-6 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
         <div>
           <h1 className="keep-page-title tracking-tight">Price Book</h1>
           <p className="mt-1 keep-page-subtitle">
             Build your catalog of materials, equipment, services, and fees.
           </p>
         </div>
-        {showHeaderCta && (
-          <button
-            type="button"
-            onClick={() => setDrawerOpen(true)}
-            className="shrink-0 inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium
-              bg-[var(--ophalo-navy)] text-white hover:opacity-90 transition-opacity
-              focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-offset-1"
-          >
-            <Plus className="h-4 w-4" />
-            Add catalog item
-          </button>
-        )}
+        <div className="shrink-0 flex items-center gap-2">
+          <div className="relative group">
+            <button
+              type="button"
+              onClick={() => setShortcutsOpen(true)}
+              aria-label="Keyboard shortcuts"
+              className="inline-flex items-center justify-center h-9 w-9 rounded-lg border border-[var(--ophalo-border)]
+                text-[var(--ophalo-muted)] hover:text-[var(--ophalo-ink)] hover:bg-[var(--ophalo-canvas)] transition-colors
+                focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-offset-1"
+            >
+              <Keyboard className="h-4 w-4" />
+            </button>
+            {/* Visible on hover AND keyboard focus — a title attribute only shows on mouse
+                hover, which leaves keyboard/touch users without the label the icon alone can't
+                convey. */}
+            <span
+              role="tooltip"
+              className="pointer-events-none absolute left-1/2 top-full z-10 mt-1.5 -translate-x-1/2 whitespace-nowrap
+                rounded-md bg-[var(--ophalo-ink)] px-2 py-1 text-xs font-medium text-white opacity-0
+                transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
+            >
+              Keyboard shortcuts
+            </span>
+          </div>
+          {showHeaderCta && (
+            <button
+              type="button"
+              onClick={() => setDrawerOpen(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium
+                bg-[var(--ophalo-navy)] text-white hover:opacity-90 transition-opacity
+                focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-offset-1"
+            >
+              <Plus className="h-4 w-4" />
+              Add catalog item
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="px-4 sm:px-6 pb-4 flex flex-wrap items-center gap-3">
@@ -368,42 +440,75 @@ export function PriceBook({
         )}
 
         {!isLoading && !isError && data && data.items.length > 0 && (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-left text-xs font-medium text-[var(--ophalo-muted)] border-b border-[var(--ophalo-border)]">
-                  <th className="py-2 pr-4">Name</th>
-                  <th className="py-2 pr-4">SKU</th>
-                  <th className="py-2 pr-4">Type</th>
-                  <th className="py-2 pr-4">UOM</th>
-                  <th className="py-2 pr-4">Sell price</th>
-                  <th className="py-2 pr-4">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.items.map((row) => (
-                  <tr key={row.item.id} className="border-b border-[var(--ophalo-border)] last:border-0 hover:bg-[var(--ophalo-canvas)]">
-                    <td className="py-2.5 pr-4 text-[var(--ophalo-ink)] font-medium">
-                      <button
-                        type="button"
-                        onClick={() => onSelectItem(row.item.id)}
-                        className="text-left hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] rounded"
-                      >
-                        {row.item.displayName}
-                      </button>
-                    </td>
-                    <td className="py-2.5 pr-4 text-[var(--ophalo-muted)]">{row.item.externalKey ?? "—"}</td>
-                    <td className="py-2.5 pr-4 text-[var(--ophalo-muted)]">
-                      {TYPE_LABELS[row.item.type] ?? row.item.type}
-                    </td>
-                    <td className="py-2.5 pr-4 text-[var(--ophalo-muted)]">{row.item.unitOfMeasure}</td>
-                    <td className="py-2.5 pr-4 text-[var(--ophalo-ink)]">{formatPrice(row)}</td>
-                    <td className="py-2.5 pr-4 text-[var(--ophalo-muted)]">{row.item.activeState}</td>
+          <>
+            {/* 2e.7c: the 6-column table is unreadable at mobile widths (values wrap into
+                fragments), so mobile gets a compact card list — Name, Type/UOM, Sell price or
+                "No standalone price", and Status. Desktop table is unchanged. */}
+            <div className="hidden sm:block overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left text-xs font-medium text-[var(--ophalo-muted)] border-b border-[var(--ophalo-border)]">
+                    <th className="py-2 pr-4">Name</th>
+                    <th className="py-2 pr-4">SKU</th>
+                    <th className="py-2 pr-4">Type</th>
+                    <th className="py-2 pr-4">UOM</th>
+                    <th className="py-2 pr-4">Sell price</th>
+                    <th className="py-2 pr-4">Status</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {data.items.map((row) => (
+                    <tr key={row.item.id} className="border-b border-[var(--ophalo-border)] last:border-0 hover:bg-[var(--ophalo-canvas)]">
+                      <td className="py-2.5 pr-4 text-[var(--ophalo-ink)] font-medium">
+                        <button
+                          type="button"
+                          onClick={() => onSelectItem(row.item.id)}
+                          className="text-left hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] rounded"
+                        >
+                          {row.item.displayName}
+                        </button>
+                      </td>
+                      <td className="py-2.5 pr-4 text-[var(--ophalo-muted)]">{row.item.externalKey ?? "—"}</td>
+                      <td className="py-2.5 pr-4 text-[var(--ophalo-muted)]">
+                        {TYPE_LABELS[row.item.type] ?? row.item.type}
+                      </td>
+                      <td className="py-2.5 pr-4 text-[var(--ophalo-muted)]">{row.item.unitOfMeasure}</td>
+                      <td className="py-2.5 pr-4 text-[var(--ophalo-ink)]">{formatPrice(row)}</td>
+                      <td className="py-2.5 pr-4 text-[var(--ophalo-muted)]">{row.item.activeState}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <ul className="sm:hidden flex flex-col gap-2">
+              {data.items.map((row) => (
+                <li key={row.item.id}>
+                  <button
+                    type="button"
+                    onClick={() => onSelectItem(row.item.id)}
+                    aria-label={`View ${row.item.displayName}`}
+                    className="w-full text-left rounded-lg border border-[var(--ophalo-border)] px-3 py-3
+                      flex flex-col gap-1 hover:bg-[var(--ophalo-canvas)]
+                      focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)]"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <span className="text-[var(--ophalo-ink)] font-medium">{row.item.displayName}</span>
+                      <span className="shrink-0 text-xs font-medium text-[var(--ophalo-muted)]">
+                        {row.item.activeState}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between gap-2 text-sm">
+                      <span className="text-[var(--ophalo-muted)]">
+                        {TYPE_LABELS[row.item.type] ?? row.item.type} · {row.item.unitOfMeasure}
+                      </span>
+                      <span className="text-[var(--ophalo-ink)] font-medium text-right">{formatPrice(row)}</span>
+                    </div>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </>
         )}
 
         {!isLoading && !isError && data && data.items.length > 0 && (pageIndex > 0 || data.hasMore) && (
@@ -431,6 +536,51 @@ export function PriceBook({
           </div>
         )}
       </div>
+
+      {shortcutsOpen && (
+        <KeepModal
+          onClose={() => setShortcutsOpen(false)}
+          label="Keyboard shortcuts"
+          overlayClassName="flex items-center justify-center px-4"
+          backdropClassName="bg-black/30"
+          panelClassName="max-w-sm w-full rounded-xl bg-[var(--ophalo-card)] shadow-xl p-5 flex flex-col gap-4"
+        >
+          <div className="flex items-center justify-between">
+            <h2 className="font-serif text-lg font-semibold text-[var(--ophalo-ink)]">Keyboard shortcuts</h2>
+            <button
+              type="button"
+              onClick={() => setShortcutsOpen(false)}
+              className="text-sm text-[var(--ophalo-muted)] hover:text-[var(--ophalo-ink)] rounded
+                focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-offset-1"
+            >
+              Close
+            </button>
+          </div>
+          <dl className="flex flex-col gap-3 text-sm">
+            {[
+              { keys: ["Ctrl/Cmd", "Enter"], description: "Save & add another (in the item form)" },
+              { keys: ["Esc"], description: "Close or cancel safely" },
+              { keys: ["/"], description: "Focus catalog search" },
+              { keys: ["n"], description: "Open New item (when not typing in a field)" },
+            ].map(({ keys, description }) => (
+              <div key={description} className="flex items-center justify-between gap-4">
+                <dt className="flex items-center gap-1">
+                  {keys.map((k) => (
+                    <kbd
+                      key={k}
+                      className="px-1.5 py-0.5 rounded border border-[var(--ophalo-border)] bg-[var(--ophalo-canvas)]
+                        text-xs font-medium text-[var(--ophalo-ink)]"
+                    >
+                      {k}
+                    </kbd>
+                  ))}
+                </dt>
+                <dd className="text-[var(--ophalo-muted)] text-right">{description}</dd>
+              </div>
+            ))}
+          </dl>
+        </KeepModal>
+      )}
 
       {drawerOpen && (
         <CatalogItemDrawer

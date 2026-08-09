@@ -107,8 +107,12 @@ describe("CatalogItemDrawer", () => {
     await user.type(screen.getByLabelText("Sell price"), "100");
     await user.click(screen.getByRole("button", { name: /save & activate/i }));
 
-    expect(screen.getByText("Name is required.")).toBeInTheDocument();
-    expect(screen.getByLabelText("Name")).toHaveFocus();
+    const nameError = screen.getByText("Name is required.");
+    expect(nameError).toBeInTheDocument();
+    const nameInput = screen.getByLabelText("Name");
+    expect(nameInput).toHaveFocus();
+    // 2e.7c: the error is programmatically associated with its field, not just visually adjacent.
+    expect(nameInput).toHaveAttribute("aria-describedby", nameError.id);
     expect(mockCreateCatalogItem).not.toHaveBeenCalled();
   });
 

@@ -377,9 +377,12 @@ export function CatalogItemDrawer({ categories, onCategoriesChanged, onClose, on
               maxLength={200}
               className={`${INPUT_CLS} ${fieldErrors.displayName ? ERROR_INPUT_CLS : ""}`}
               disabled={isPending}
+              aria-describedby={fieldErrors.displayName ? "ci-display-name-error" : undefined}
             />
             {fieldErrors.displayName && (
-              <span className="text-sm text-[var(--ophalo-danger)]">{fieldErrors.displayName}</span>
+              <span id="ci-display-name-error" className="text-sm text-[var(--ophalo-danger)]">
+                {fieldErrors.displayName}
+              </span>
             )}
           </div>
 
@@ -436,6 +439,7 @@ export function CatalogItemDrawer({ categories, onCategoriesChanged, onClose, on
               maxLength={50}
               className={`${INPUT_CLS} ${fieldErrors.unitOfMeasure ? ERROR_INPUT_CLS : ""}`}
               disabled={isPending}
+              aria-describedby={fieldErrors.unitOfMeasure ? "ci-uom-error" : undefined}
             />
             <div className="flex flex-wrap gap-1.5" role="group" aria-label="Unit of measure quick fill">
               {UOM_SUGGESTIONS.map((u) => (
@@ -455,7 +459,9 @@ export function CatalogItemDrawer({ categories, onCategoriesChanged, onClose, on
               ))}
             </div>
             {fieldErrors.unitOfMeasure && (
-              <span className="text-sm text-[var(--ophalo-danger)]">{fieldErrors.unitOfMeasure}</span>
+              <span id="ci-uom-error" className="text-sm text-[var(--ophalo-danger)]">
+                {fieldErrors.unitOfMeasure}
+              </span>
             )}
           </div>
 
@@ -479,9 +485,12 @@ export function CatalogItemDrawer({ categories, onCategoriesChanged, onClose, on
                   placeholder="e.g. CP20"
                   className={`${INPUT_CLS} ${fieldErrors.externalKey ? ERROR_INPUT_CLS : ""}`}
                   disabled={isPending}
+                  aria-describedby={fieldErrors.externalKey ? "ci-sku-error" : undefined}
                 />
                 {fieldErrors.externalKey && (
-                  <span className="text-sm text-[var(--ophalo-danger)]">{fieldErrors.externalKey}</span>
+                  <span id="ci-sku-error" className="text-sm text-[var(--ophalo-danger)]">
+                    {fieldErrors.externalKey}
+                  </span>
                 )}
               </div>
 
@@ -501,9 +510,12 @@ export function CatalogItemDrawer({ categories, onCategoriesChanged, onClose, on
                   maxLength={200}
                   className={`${INPUT_CLS} ${fieldErrors.aliasText ? ERROR_INPUT_CLS : ""}`}
                   disabled={isPending}
+                  aria-describedby={fieldErrors.aliasText ? "ci-alias-error" : undefined}
                 />
                 {fieldErrors.aliasText && (
-                  <span className="text-sm text-[var(--ophalo-danger)]">{fieldErrors.aliasText}</span>
+                  <span id="ci-alias-error" className="text-sm text-[var(--ophalo-danger)]">
+                    {fieldErrors.aliasText}
+                  </span>
                 )}
               </div>
             </div>
@@ -525,35 +537,6 @@ export function CatalogItemDrawer({ categories, onCategoriesChanged, onClose, on
             <span className="text-xs text-[var(--ophalo-muted)]">Prices in {ACCOUNT_CURRENCY}</span>
           </div>
 
-          <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium text-[var(--ophalo-ink)]" htmlFor="ci-cost">
-              Cost <span className="text-[var(--ophalo-muted)] font-normal">(optional)</span>
-            </label>
-            <div className="relative">
-              <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-[var(--ophalo-muted)]">
-                $
-              </span>
-              <input
-                id="ci-cost"
-                ref={(el) => {
-                  fieldRefs.current.cost = el;
-                }}
-                type="number"
-                inputMode="decimal"
-                min={0}
-                step="0.01"
-                value={form.cost}
-                onChange={(e) => {
-                  updateField("cost", e.target.value);
-                  setBelowCostConfirmed(false);
-                }}
-                className={`${INPUT_CLS} pl-6 ${fieldErrors.cost ? ERROR_INPUT_CLS : ""}`}
-                disabled={isPending}
-              />
-            </div>
-            {fieldErrors.cost && <span className="text-sm text-[var(--ophalo-danger)]">{fieldErrors.cost}</span>}
-          </div>
-
           <label className="flex items-center gap-2 text-sm text-[var(--ophalo-ink)]">
             <input
               type="checkbox"
@@ -573,38 +556,77 @@ export function CatalogItemDrawer({ categories, onCategoriesChanged, onClose, on
             This item doesn&apos;t have its own sell price
           </label>
 
-          {form.pricingMode === "StandalonePrice" && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium text-[var(--ophalo-ink)]" htmlFor="ci-sell-price">
-                Sell price
+              <label className="text-sm font-medium text-[var(--ophalo-ink)]" htmlFor="ci-cost">
+                Cost <span className="text-[var(--ophalo-muted)] font-normal">(optional)</span>
               </label>
               <div className="relative">
                 <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-[var(--ophalo-muted)]">
                   $
                 </span>
                 <input
-                  id="ci-sell-price"
+                  id="ci-cost"
                   ref={(el) => {
-                    fieldRefs.current.sellPrice = el;
+                    fieldRefs.current.cost = el;
                   }}
                   type="number"
                   inputMode="decimal"
                   min={0}
                   step="0.01"
-                  value={form.sellPrice}
+                  value={form.cost}
                   onChange={(e) => {
-                    updateField("sellPrice", e.target.value);
+                    updateField("cost", e.target.value);
                     setBelowCostConfirmed(false);
                   }}
-                  className={`${INPUT_CLS} pl-6 ${fieldErrors.sellPrice ? ERROR_INPUT_CLS : ""}`}
+                  className={`${INPUT_CLS} pl-6 ${fieldErrors.cost ? ERROR_INPUT_CLS : ""}`}
                   disabled={isPending}
+                  aria-describedby={fieldErrors.cost ? "ci-cost-error" : undefined}
                 />
               </div>
-              {fieldErrors.sellPrice && (
-                <span className="text-sm text-[var(--ophalo-danger)]">{fieldErrors.sellPrice}</span>
+              {fieldErrors.cost && (
+                <span id="ci-cost-error" className="text-sm text-[var(--ophalo-danger)]">
+                  {fieldErrors.cost}
+                </span>
               )}
             </div>
-          )}
+
+            {form.pricingMode === "StandalonePrice" && (
+              <div className="flex flex-col gap-1.5">
+                <label className="text-sm font-medium text-[var(--ophalo-ink)]" htmlFor="ci-sell-price">
+                  Sell price
+                </label>
+                <div className="relative">
+                  <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-[var(--ophalo-muted)]">
+                    $
+                  </span>
+                  <input
+                    id="ci-sell-price"
+                    ref={(el) => {
+                      fieldRefs.current.sellPrice = el;
+                    }}
+                    type="number"
+                    inputMode="decimal"
+                    min={0}
+                    step="0.01"
+                    value={form.sellPrice}
+                    onChange={(e) => {
+                      updateField("sellPrice", e.target.value);
+                      setBelowCostConfirmed(false);
+                    }}
+                    className={`${INPUT_CLS} pl-6 ${fieldErrors.sellPrice ? ERROR_INPUT_CLS : ""}`}
+                    disabled={isPending}
+                    aria-describedby={fieldErrors.sellPrice ? "ci-sell-price-error" : undefined}
+                  />
+                </div>
+                {fieldErrors.sellPrice && (
+                  <span id="ci-sell-price-error" className="text-sm text-[var(--ophalo-danger)]">
+                    {fieldErrors.sellPrice}
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
 
           {showBelowCostWarning && (
             <div className="rounded-lg px-3 py-2 bg-[var(--ophalo-attention-bg)] text-[var(--ophalo-attention)] flex flex-col gap-2">
