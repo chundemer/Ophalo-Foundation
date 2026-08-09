@@ -32,8 +32,10 @@ account-aware `AccountFeatureAccessResolver`, and a generic Owner/Admin `GET
 
 - **2e — Catalog workspace UI: complete (2026-08-09).** Build 112 locked the product/UI boundary;
   Build 113 supplied the bounded implementation and completion-verification sequence. The next
-  code slice is the separately preflighted pilot image-storage work; do not reopen 2e for image
-  work, an empty Offerings & Packages tab, or deferred catalog refinements.
+  code preflight is Session 3.0 in Build 117: reconcile the Offering/Assembly, technician proposed
+  scope (including off-catalog capture), office review/catalog curation, quote, and actual-work
+  contracts into bounded coding slices. Image storage is paused; do not reopen 2e for image work,
+  an empty Offerings & Packages tab, or deferred catalog refinements.
 
   The completed 2e record follows. Build 113 broke the
   work into bounded implementation slices. 2e.0 preflight split 2e.1 into 2e.1a (canonical SKU
@@ -470,7 +472,8 @@ account-aware `AccountFeatureAccessResolver`, and a generic Owner/Admin `GET
   interaction/accessibility polish and the required happy-path and conflict/error coverage.
   Proportionate automated checks, the frontend production build, and `git diff --check` were also
   completed. Build 112/113 boundaries and the deferred topics remain unchanged: 2e is closed with
-  no image-storage scope added. The next coding action is a separate pilot image-storage preflight.
+  no image-storage scope added. The next coding action is the Session 3.0 Price Book continuation
+  preflight in Build Log 117; image storage is paused pending that work.
 
 - **2a.1 — CatalogItem foundation:** complete and migrated. `CatalogItem`, its lifecycle/persistence
   stack, and `keep_pricebook_catalog_items` are in place. Review corrected the table name and ensured
@@ -590,7 +593,13 @@ account-aware `AccountFeatureAccessResolver`, and a generic Owner/Admin `GET
     and final desktop/mobile accessibility and interaction verification. Build Logs 112 and 113
     remain the locked decision and execution records. Offerings & Packages remains a separate
     functional slice; do not ship an empty/disabled tab.
-  - **Pilot-required image storage (next preflight).** R2 remains required: price-book import is
+  - **Price Book continuation (next preflight).** Build Log 117 breaks the unimplemented
+    Offering/Assembly foundation, technician proposed scope and off-catalog capture, office
+    review/catalog curation, internal quote foundation, actual-work/material records, and entitled
+    web/mobile workflows into independently gated Session 3 slices. This completes the locked
+    internal Price Book capability; it does not authorize customer quote delivery, dynamic pricing,
+    or technician pricing authority.
+  - **Pilot-required image storage (paused, after Price Book continuation).** R2 remains required: price-book import is
     deferred, not private document storage. The next storage slice defines image metadata,
     account authorization, bounded direct API multipart upload, image type/size validation, purpose
     keys, retrieval/display, and pilot retention. Equipment/work images—not CSV—are the first
