@@ -46,6 +46,11 @@ public static class PermissionKeys
 
         /// <summary>Price Book, Quotes &amp; Materials catalog maintenance (Session 2a.2).</summary>
         public const string PriceBookCatalogManage = "keep.pricebook.catalog.manage";
+
+        /// <summary>Field-captured proposed-scope create/edit/submit (ADR-480, Session 3.3b) —
+        /// one of three independent gates on every ProposedScope mutation, alongside
+        /// RequestsOperate and the Price Book entitlement.</summary>
+        public const string ScopeCapture = "keep.pricebook.scope.capture";
     }
 
     // internal.* keys require AccountPurpose.Internal (see InternalPrefix). Broader

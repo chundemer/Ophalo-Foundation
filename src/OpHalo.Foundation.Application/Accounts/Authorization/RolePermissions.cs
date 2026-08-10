@@ -38,6 +38,7 @@ public static class RolePermissions
         PermissionKeys.Keep.UpdatesSend,
         PermissionKeys.Keep.CustomerMessagesSend,
         PermissionKeys.Keep.InternalNotesAdd,
+        PermissionKeys.Keep.ScopeCapture,
     ];
 
     static readonly string[] AdminBase =

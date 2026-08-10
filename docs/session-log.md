@@ -177,6 +177,65 @@ account-aware `AccountFeatureAccessResolver`, and a generic Owner/Admin `GET
   three-gate API surface: create/edit/submit endpoints, permission registration, and the
   terminal-request precondition extended to create/edit, not just submit).
 
+- **3.3b: complete (2026-08-10).** ADR-480 three-gate API surface implemented: create/edit/submit
+  endpoints, `keep.pricebook.scope.capture` permission registration, and the terminal-request
+  precondition extended to create/edit.
+
+  Post-implementation review found two authorization gaps, both fixed:
+  - `EditProposedScopeService.LoadForEditAsync` checked version before request visibility/terminal
+    state, so a stale token on a same-account scope an Operator can't see under MyWork leaked
+    existence via 409 instead of 404. Reordered: visibility/terminal now checked first.
+  - `ProposedScopeApiService.SubmitAsync` computed the MyWork/AccountWide visibility gate and then
+    discarded it before delegating to `SubmitProposedScopeService`, so any account member could
+    submit any scope in the account regardless of request participation. Fixed by adding
+    `EditProposedScopeService.VerifyRequestVisibleAsync` (visibility-only, no version/terminal —
+    those stay owned by the atomic submit persistence) and calling it before delegating to submit.
+
+  Two new regression tests (real Postgres, seeded Operator with no participation on the request):
+  `Submit_ForAScopeOnARequestTheOperatorCannotSee_Returns404`,
+  `UpdateLine_ForAScopeOnARequestTheOperatorCannotSee_WithAStaleVersion_Returns404NotConflict`
+  (sends a wrong version too, to prove visibility is checked before version/conflict).
+
+  Verification: build 0 errors; 1456/1456 unit; 14/14 architecture; 19/19 new/updated integration
+  (`ProposedScopeApiTests` + `ProposedScopeVersionHeaderTests`); `git diff --check` clean. Shared
+  regression sweep (OfferingAssembly/CatalogItem/CatalogCategory/ProposedScope, 131 tests) run
+  twice: 130/131 both times, same single failure —
+  `CatalogItemCreateAndActivateApiTests.Create_TwoConcurrentCreatesInSameAccount_ExactlyOneWins`,
+  a pre-existing timing-sensitive concurrency race test untouched by this change. Passes in
+  isolation; documented as existing flake, not a regression.
+
+  Decisions locked for this batch:
+  - `ProposedScopeApiService` is the **single** ADR-480 three-gate owner (`RequestsOperate` +
+    Price Book entitlement + `scope.capture`) for every mutation, **including submit**.
+    `SubmitProposedScopeService` stays exactly as 3.3a.2 left it — thin, auth-free, unmodified —
+    so gates are never evaluated twice.
+  - Terminal-request check for create/edit is a plain account-scoped `KeepRequest.IsTerminal`
+    read (no `FOR UPDATE` lock — unlike submit, create/edit aren't racing a second write), owned
+    by the new `CreateProposedScopeService`/`EditProposedScopeService` (Application layer).
+    `IProposedScopePersistence` stays request-unaware, ordinary aggregate persistence only.
+  - **Finding, resolved:** unlike `OfferingAssembly`, `ProposedScope` has no header-level mutable
+    field to PATCH (`RequestId` fixed at creation, `Status` only changes via `Submit`) — so there
+    is no header-PATCH endpoint in this batch, only line add/update/remove. Endpoint set: `POST
+    .../create`, `POST .../{id}/lines`, `PATCH .../{id}/lines/{lineId}`, `DELETE
+    .../{id}/lines/{lineId}`, `POST .../{id}/submit`.
+
+  File-level gate (8 production files, 1 mutation family, within cap):
+  - New: `ProposedScopeVersionHeader.cs` (`X-Keep-ProposedScope-Version`, mirrors
+    `OfferingAssemblyVersionHeader`; needs new `ProposedScopeErrors.ExpectedVersionRequired`/
+    `ExpectedVersionInvalid`), `ProposedScopeEndpoints.cs`, `ProposedScopeApiService.cs`,
+    `CreateProposedScopeService.cs`, `EditProposedScopeService.cs`.
+  - Modified: `PermissionKeys.cs` (add `ScopeCapture`), `RolePermissions.cs` (add to
+    `OperatorBase`), DI registration file. `SubmitProposedScopeService.cs` is NOT modified.
+
+  Reference templates identified: `OfferingAssemblyApiService.cs` (gate-composition shape,
+  `AuthorizeAsync` helper — note it's a 2-gate example, ProposedScope's is 3-gate, no exact
+  sibling to copy verbatim), `OfferingAssemblyVersionHeader.cs`, `EfProposedScopePersistence.cs`
+  (existing, unmodified), `IKeepRequestOperatePersistence`-style account-scoped read for the
+  terminal check (exact read method still to be selected at implementation time — not yet
+  resolved which existing seam or new method supplies the account-scoped `KeepRequest` read).
+
+  No code written yet. Next step: implementation against this gate.
+
   The completed 2e record follows. Build 113 broke the
   work into bounded implementation slices. 2e.0 preflight split 2e.1 into 2e.1a (canonical SKU
   foundation) and 2e.1b (pricing-mode foundation) because 2e.1b's only caller,

@@ -122,6 +122,16 @@ public static class KeepServiceCollectionExtensions
         // Reuses IKeepRequestListCursorProtector (registered above).
         services.AddScoped<OfferingAssemblyReadApiService>();
 
+        // Price Book, Quotes & Materials — proposed-scope create/edit/submit API (Session 3.3b).
+        // IProposedScopePersistence/IProposedScopeSubmissionPersistence/SubmitProposedScopeService
+        // were introduced in 3.3a but had no caller until this batch wired them up.
+        services.AddScoped<IProposedScopePersistence, EfProposedScopePersistence>();
+        services.AddScoped<IProposedScopeSubmissionPersistence, EfProposedScopeSubmissionPersistence>();
+        services.AddScoped<SubmitProposedScopeService>();
+        services.AddScoped<CreateProposedScopeService>();
+        services.AddScoped<EditProposedScopeService>();
+        services.AddScoped<ProposedScopeApiService>();
+
         return services;
     }
 }

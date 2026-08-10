@@ -144,6 +144,17 @@ public static class ErrorHttpMapper
             var c when c == "OfferingAssembly.ItemNotFound"      => (StatusCodes.Status404NotFound, "Resource not found.", null),
             var c when c == "OfferingAssembly.ItemAlreadyExists" => (StatusCodes.Status409Conflict, "Conflict.", null),
 
+            // --- ProposedScope concurrency/state conflicts (Session 3.3b) ---
+            var c when c == "ProposedScope.VersionMismatch"           => (StatusCodes.Status409Conflict, "Conflict.", null),
+            var c when c == "ProposedScope.DraftAlreadyOpenForRequest" => (StatusCodes.Status409Conflict, "Conflict.", null),
+            var c when c == "ProposedScope.NotDraft"                  => (StatusCodes.Status409Conflict, "Conflict.", null),
+            var c when c == "ProposedScope.ExpectedVersionRequired"   => (StatusCodes.Status400BadRequest, "Bad request.", null),
+            var c when c == "ProposedScope.ExpectedVersionInvalid"    => (StatusCodes.Status400BadRequest, "Bad request.", null),
+
+            // --- ProposedScopeLine conflicts (Session 3.3b) — the Line segment breaks the generic
+            // .NotFound suffix match below, same reason OfferingAssembly.ItemNotFound needed one.
+            var c when c == "ProposedScope.LineNotFound" => (StatusCodes.Status404NotFound, "Resource not found.", null),
+
             // --- CatalogCategory concurrency/uniqueness conflicts (Session 2b.3) ---
             var c when c == "CatalogCategory.VersionMismatch"         => (StatusCodes.Status409Conflict, "Conflict.", null),
             var c when c == "CatalogCategory.NameAlreadyExists"       => (StatusCodes.Status409Conflict, "Conflict.", null),

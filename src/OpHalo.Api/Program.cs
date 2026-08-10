@@ -323,6 +323,7 @@ app.MapHealthChecks("/health/ready", new HealthCheckOptions
 app.MapKeepEndpoints();
 app.MapPriceBookEndpoints();
 app.MapOfferingAssemblyEndpoints();
+app.MapProposedScopeEndpoints();
 
 app.MapAuthEndpoints();
 app.MapAccountEndpoints();

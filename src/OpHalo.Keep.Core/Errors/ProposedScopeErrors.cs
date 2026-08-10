@@ -16,6 +16,12 @@ public static class ProposedScopeErrors
     public static readonly Error DraftAlreadyOpenForRequest =
         Error.Create("ProposedScope.DraftAlreadyOpenForRequest", "This request already has an open draft scope.");
 
+    public static readonly Error ExpectedVersionRequired =
+        Error.Create("ProposedScope.ExpectedVersionRequired", "An expected proposed scope version is required.");
+
+    public static readonly Error ExpectedVersionInvalid =
+        Error.Create("ProposedScope.ExpectedVersionInvalid", "The expected proposed scope version is not a valid version value.");
+
     public static readonly Error LineNotFound =
         Error.Create("ProposedScope.LineNotFound", "Proposed scope line not found.");
 
