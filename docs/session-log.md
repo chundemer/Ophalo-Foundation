@@ -101,8 +101,19 @@ account-aware `AccountFeatureAccessResolver`, and a generic Owner/Admin `GET
   + 14/14 architecture tests (independently re-run and confirmed), `git diff --check` clean.
 
   3.2 (Offering/Assembly office management) is now fully complete: create, activate/inactivate,
-  list, detail with eligibility reasons, and live header/item editing. The next code preflight is
-  **Session 3.3** (proposed-scope and review-signal foundation) in Build Log 117.
+  list, detail with eligibility reasons, and live header/item editing.
+
+- **3.3 pre-work — two authority/snapshot decisions locked (2026-08-10), no code yet.** ADR-480:
+  new `keep.pricebook.scope.capture` permission in `RolePermissions.OperatorBase` (Admin/Owner
+  hold it automatically via the existing role composition); every `ProposedScope` mutation
+  requires three independent gates — `RequestsOperate`, Price Book entitlement (ADR-462), and the
+  new capture permission — not one combined key. ADR-481: extends ADR-479 down to
+  `ProposedScopeLine` — its snapshot fields and initial `Quantity` are captured once at line
+  creation and never live-recomputed from the catalog/assembly on a later Draft read/edit,
+  correcting build-log/108's "recomputed live" ERD text, which predates and conflicts with
+  ADR-479. Full reconciliation record in [Build Log 117](build-log/117-price-book-continuation-coding-plan.md).
+  The next code preflight is **Session 3.3** (proposed-scope and review-signal foundation),
+  reading these two ADRs alongside build-log/108's `ProposedScope`/`ProposedScopeLine` ERD.
 
   The completed 2e record follows. Build 113 broke the
   work into bounded implementation slices. 2e.0 preflight split 2e.1 into 2e.1a (canonical SKU
