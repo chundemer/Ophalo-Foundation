@@ -1,10 +1,10 @@
 # ADR-477 — Field-Presentable Pricing and Policy-Approved Quotes
 
-**Status:** Proposed — requires explicit promotion decision  
+**Status:** Deferred — not implementation authority
 **Date:** 2026-08-09  
 **Related:** ADR-461; ADR-465; ADR-473; ADR-475; Build Logs 108, 114, 117
 
-## Proposed decision
+## Deferred proposal
 
 Field users remain price-blind while diagnosing and constructing a proposed scope by default:
 they do not see cost, margin, markup, pricing formulas, tax internals, or unrestricted catalog
@@ -17,11 +17,11 @@ standalone CatalogItem is eligible only with `StandalonePrice`; an assembly is e
 its configured price treatment yields one complete, customer-safe total. `NoStandalonePrice`
 items cannot be field-presentable.
 
-This capability must be separately and explicitly enabled at the account level before any
+This capability would need separate, explicit account-level enablement before any
 field-presentable configuration or Operator presentation is available. It is not implied merely by
-the account's general Price Book entitlement or by setting an item-level flag. Session 3.0 must
-choose the exact capability/permission key, default posture, and Owner/Admin configuration surface
-using ADR-460 and the existing `AccountFeatureAccessResolver` pattern.
+the account's general Price Book entitlement or by setting an item-level flag. A later promotion
+must choose the exact capability/permission key, default posture, and Owner/Admin configuration
+surface using ADR-460 and the existing `AccountFeatureAccessResolver` pattern.
 
 An Operator may select any authorized scope item, but may use **Present price** only when every
 line in the scope is field-presentable and pre-priced. The presentation shows customer-safe
@@ -71,8 +71,9 @@ price-book changes.
 - This is staff-mediated field presentation, not customer-facing quote delivery. ADR-475's
   customer delivery, decision, signature, and acceptance work remains deferred.
 
-## Promotion gate
+## Reconsideration gate
 
-Do not implement this proposal until the product owner explicitly decides to promote it into the
-current Price Book sequence. That decision must also lock the account-level gate described above
-and preserve ADR-460's non-blocking authorization-constraint warning on the policy-approved path.
+Do not implement this proposal in the current Price Book sequence. Reconsider only when pilot
+evidence shows that routine on-site flat-rate presentation is necessary. Any later promotion must
+lock the account-level gate described above and preserve ADR-460's non-blocking
+authorization-constraint warning on the policy-approved path.
