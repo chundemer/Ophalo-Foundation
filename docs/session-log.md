@@ -112,8 +112,37 @@ account-aware `AccountFeatureAccessResolver`, and a generic Owner/Admin `GET
   creation and never live-recomputed from the catalog/assembly on a later Draft read/edit,
   correcting build-log/108's "recomputed live" ERD text, which predates and conflicts with
   ADR-479. Full reconciliation record in [Build Log 117](build-log/117-price-book-continuation-coding-plan.md).
-  The next code preflight is **Session 3.3** (proposed-scope and review-signal foundation),
-  reading these two ADRs alongside build-log/108's `ProposedScope`/`ProposedScopeLine` ERD.
+
+- **3.3a.1 — ProposedScope/ProposedScopeLine domain/schema: complete (2026-08-10).**
+  `ProposedScope` (`Draft`/`SubmittedToOffice`/`OfficeReviewed`, one open `Draft` per request via a
+  partial unique index on `RequestId`, composite FK to `KeepRequest(AccountId, Id)` — account-safe
+  at the database level, no post-load tenant check) and `ProposedScopeLine`
+  (`PrimaryOffering`/`AssociatedItem`/`KnownCatalogItem`/`OffCatalogItem`, ADR-481 snapshot fields
+  captured once at line creation) plus their EF configuration and migration
+  (`20260810144838_ProposedScopeAndLine`). `ProposedScopeLine`'s parent FK uses `ClientCascade`
+  from the start — applying the 3.2b `OfferingAssemblyItem` lesson upfront rather than
+  rediscovering it. `Submit()` is a pure status transition only, no `KeepRequestWorkSignal` side
+  effect — that coordination is a separate atomic persistence concern, Session 3.3a.2. No
+  persistence interface, no API, and no terminal-request precondition yet — all deferred to
+  3.3a.2/3.3b per explicit correction during preflight.
+
+  Three line-level data invariants corrected during implementation, not independently ADR'd (same
+  granularity as `OfferingAssembly`'s own item-level rules): (1) `Quantity`/`OffCatalogQuantity`
+  are the same logical value for an off-catalog line, never independently caller-managed — required
+  equal at creation, kept in sync by `Update`; (2) `UnitOfMeasureSnapshot` is required for every
+  catalog-referencing line type and empty for `OffCatalogItem`; (3) `IsException`/
+  `DefaultQuantitySnapshot` are `AssociatedItem`-only — `PrimaryOffering` (the original design had
+  wrongly grouped it with `AssociatedItem`) gets neither.
+
+  7 production files, 2 migration files, 1 test file. 36 unit tests, full unit suite 1456/1456,
+  14/14 architecture tests, 53/53 focused integration tests (proving the migration applies cleanly
+  against real PostgreSQL with no pending-model-changes warning), `git diff --check` clean.
+
+  The next code preflight is **Session 3.3a.2** (`KeepRequestWorkSignal` foundation plus the
+  atomic submit/signal-reconciliation persistence operation — a dedicated
+  `IProposedScopeSubmissionPersistence`/EF implementation owning one transaction, not an
+  Application-layer `IDbContextTransaction` across two ordinary persistence adapters), reading
+  ADR-463/480/481 alongside this entry.
 
   The completed 2e record follows. Build 113 broke the
   work into bounded implementation slices. 2e.0 preflight split 2e.1 into 2e.1a (canonical SKU
