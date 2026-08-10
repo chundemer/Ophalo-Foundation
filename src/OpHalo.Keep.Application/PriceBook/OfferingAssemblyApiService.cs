@@ -19,6 +19,12 @@ public sealed record CreateOfferingAssemblyWithItemsApiCommand(
     PriceTreatment PriceTreatment,
     IReadOnlyList<CreateOfferingAssemblyWithItemsApiItem> Items);
 
+public sealed record UpdateOfferingAssemblyHeaderApiCommand(Guid PrimaryCatalogItemId, string Name, PriceTreatment PriceTreatment);
+
+public sealed record AddOfferingAssemblyItemApiCommand(Guid CatalogItemId, decimal DefaultQuantity, bool IsOptional, int DisplayOrder);
+
+public sealed record UpdateOfferingAssemblyItemApiCommand(decimal DefaultQuantity, bool IsOptional, int DisplayOrder);
+
 /// <summary>
 /// API-facing orchestration for <see cref="OfferingAssembly"/> mutations (Session 3.2a.1). Owns
 /// the full auth-stack composition — <see cref="OfferingAssemblyLifecycleService"/> deliberately
@@ -77,6 +83,57 @@ public sealed class OfferingAssemblyApiService(
             return Result<Guid>.Failure(gate.Error);
 
         return await lifecycleService.InactivateAsync(currentUser.AccountId, offeringAssemblyId, expectedVersion, ct);
+    }
+
+    public async Task<Result<Guid>> UpdateHeaderAsync(
+        Guid offeringAssemblyId, UpdateOfferingAssemblyHeaderApiCommand command, Guid expectedVersion, CancellationToken ct)
+    {
+        var gate = await AuthorizeAsync(ct);
+        if (gate.IsFailure)
+            return Result<Guid>.Failure(gate.Error);
+
+        return await lifecycleService.UpdateHeaderAsync(
+            new UpdateOfferingAssemblyHeaderCommand(
+                currentUser.AccountId, offeringAssemblyId, expectedVersion,
+                command.PrimaryCatalogItemId, command.Name, command.PriceTreatment),
+            ct);
+    }
+
+    public async Task<Result<AddOfferingAssemblyItemResult>> AddItemAsync(
+        Guid offeringAssemblyId, AddOfferingAssemblyItemApiCommand command, Guid expectedVersion, CancellationToken ct)
+    {
+        var gate = await AuthorizeAsync(ct);
+        if (gate.IsFailure)
+            return Result<AddOfferingAssemblyItemResult>.Failure(gate.Error);
+
+        return await lifecycleService.AddItemAsync(
+            new AddOfferingAssemblyItemCommand(
+                currentUser.AccountId, offeringAssemblyId, expectedVersion,
+                command.CatalogItemId, command.DefaultQuantity, command.IsOptional, command.DisplayOrder, currentUser.UserId),
+            ct);
+    }
+
+    public async Task<Result<Guid>> UpdateItemAsync(
+        Guid offeringAssemblyId, Guid itemId, UpdateOfferingAssemblyItemApiCommand command, Guid expectedVersion, CancellationToken ct)
+    {
+        var gate = await AuthorizeAsync(ct);
+        if (gate.IsFailure)
+            return Result<Guid>.Failure(gate.Error);
+
+        return await lifecycleService.UpdateItemAsync(
+            new UpdateOfferingAssemblyItemCommand(
+                currentUser.AccountId, offeringAssemblyId, expectedVersion, itemId,
+                command.DefaultQuantity, command.IsOptional, command.DisplayOrder),
+            ct);
+    }
+
+    public async Task<Result<Guid>> RemoveItemAsync(Guid offeringAssemblyId, Guid itemId, Guid expectedVersion, CancellationToken ct)
+    {
+        var gate = await AuthorizeAsync(ct);
+        if (gate.IsFailure)
+            return Result<Guid>.Failure(gate.Error);
+
+        return await lifecycleService.RemoveItemAsync(currentUser.AccountId, offeringAssemblyId, expectedVersion, itemId, ct);
     }
 
     private async Task<Result> AuthorizeAsync(CancellationToken ct)

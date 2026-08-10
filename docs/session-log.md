@@ -45,8 +45,64 @@ account-aware `AccountFeatureAccessResolver`, and a generic Owner/Admin `GET
   `OfferingAssembly`/`OfferingAssemblyItem` entities, persistence, EF configuration, and the
   ADR-479 computed-eligibility read are migrated (`20260810075949_OfferingAssembly`). 22 domain
   unit tests, 12 integration tests against real PostgreSQL, 14/14 architecture tests, `git diff
-  --check` clean. No API/service layer or technician workflow yet — that is 3.2. The next code
-  preflight is **Session 3.2** (Offering/Assembly office management API/workbench) in Build Log 117.
+  --check` clean. No API/service layer or technician workflow yet — that was 3.2.
+
+- **3.2a.1 — Offering/Assembly create/activate/inactivate API: complete (2026-08-10, commit
+  `3d67c1e`).** `OfferingAssemblyLifecycleService`/`OfferingAssemblyApiService`/
+  `OfferingAssemblyEndpoints` deliver atomic `POST .../create-with-items` (one aggregate build,
+  one `AddAsync`; existence-checks referenced catalog items; no eligibility check at create time
+  per ADR-479) and `PATCH .../activate` / `.../inactivate` behind the strict
+  `X-Keep-OfferingAssembly-Version` header contract (dedicated parser + test file, matching
+  `CatalogItemVersionHeader`). Same ADR-462 mutation gate as `CatalogItemApiService`. 8 production
+  files (at the batch-size cap), 1 mutation family, 11 total changed files. 9 unit + 29
+  integration (7 header + 10 API + 12 existing 3.1 eligibility) + 14/14 architecture tests, `git
+  diff --check` clean.
+
+- **3.2a.2 — Offering/Assembly bounded reads: complete (2026-08-10, commit `165cc3f`).**
+  `OfferingAssemblyReadApiService` delivers cursor-paged `GET .../offering-assemblies` (signed,
+  status-bound fingerprint, name-then-id order, batched `isOperationallyEligible` per row — one
+  projection query per page, never per row) and `GET .../offering-assemblies/{id}` (full item
+  lines plus `eligibilityReasons`: `AssemblyInactive` short-circuits to the sole reason;
+  otherwise `PrimaryItemInactive`/`PrimaryItemMissingStandalonePrice` then per-component
+  `ComponentInactive`/`ComponentMissingStandalonePrice` — the latter only under `Summed`, never
+  `AllInclusive`). `IsOperationallyEligibleAsync` (3.1, locked-tested) is untouched; the new
+  `GetEligibilityAsync` is additive. Same read-only ADR-462 gate as `CatalogReadApiService`
+  (Blocked-only denial). 6 production files, zero mutation families, 8 total changed files. 42/42
+  focused OfferingAssembly integration tests (13 read incl. cursor status-fingerprint binding,
+  no-status-param-returns-all default, and the full eligibility-reason taxonomy), 31 unit, 14/14
+  architecture tests, `git diff --check` clean.
+
+  3.2a is now fully complete (create, activate/inactivate, list, detail — no live editing yet).
+
+- **3.2b — Offering/Assembly live editing: complete (2026-08-10).** Adds `PATCH
+  .../offering-assemblies/{id}` (header/primary/price-treatment update, existence-checks the new
+  primary), `POST .../items` (add — returns `{itemId, concurrencyVersion}` so a client can chain
+  the next sequential edit without a detail read), `PATCH .../items/{itemId}` (update — also how a
+  reorder step is expressed; no bulk reorder endpoint), and `DELETE .../items/{itemId}` (remove),
+  all behind the existing `X-Keep-OfferingAssembly-Version` contract. Conflict recovery is
+  client-side only (409 → re-fetch `GET .../{id}` → retry) — no dedicated repair endpoint or
+  custom 409 diff payload.
+
+  Fixed two real defects surfaced during this batch, not anticipated in the preflight: (1)
+  `OfferingAssemblyCommitResult` collapsed a stale-version race and the ADR-466 active-primary-
+  item collision into one generic `Conflict`, so reactivating an assembly or re-pointing its
+  primary into another assembly's claimed primary was misreported as `VersionMismatch` — split
+  into `Committed` / `ConcurrencyConflict` / `PrimaryCatalogItemAlreadyClaimed`, proven against
+  real Postgres. (2) `OfferingAssemblyItem`'s FK to its parent was `DeleteBehavior.Restrict`,
+  which never mattered until `RemoveItem` — the first genuine removal path for that owned
+  collection — made it unreachable (EF tried to null a required FK instead of deleting the
+  orphan); changed to `ClientCascade`
+  (migration `20260810104220_OfferingAssemblyItemClientCascadeDelete`: a real FK-action change,
+  `RESTRICT` to Postgres's default `NO ACTION` — both remain non-cascading at the database level;
+  `ClientCascade` only changes EF's own change-tracker behavior for the in-app removal path).
+
+  7 production files (existing 3.2a files plus the FK config) + 2 migration files, 1 mutation
+  family, comfortably within the batch-size cap. 19 unit + 33 focused API/persistence integration
+  + 14/14 architecture tests (independently re-run and confirmed), `git diff --check` clean.
+
+  3.2 (Offering/Assembly office management) is now fully complete: create, activate/inactivate,
+  list, detail with eligibility reasons, and live header/item editing. The next code preflight is
+  **Session 3.3** (proposed-scope and review-signal foundation) in Build Log 117.
 
   The completed 2e record follows. Build 113 broke the
   work into bounded implementation slices. 2e.0 preflight split 2e.1 into 2e.1a (canonical SKU

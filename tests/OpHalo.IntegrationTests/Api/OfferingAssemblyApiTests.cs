@@ -16,15 +16,18 @@ using Xunit;
 namespace OpHalo.IntegrationTests.Api;
 
 /// <summary>
-/// HTTP integration tests for Session 3.2a.1's OfferingAssembly endpoints:
-///   POST /keep/pricebook/offering-assemblies/create-with-items
-///   PATCH /keep/pricebook/offering-assemblies/{id}/activate
-///   PATCH /keep/pricebook/offering-assemblies/{id}/inactivate
+/// HTTP integration tests for the OfferingAssembly mutation endpoints:
+///   POST /keep/pricebook/offering-assemblies/create-with-items (Session 3.2a.1)
+///   PATCH /keep/pricebook/offering-assemblies/{id}/activate, .../inactivate (Session 3.2a.1)
+///   PATCH /keep/pricebook/offering-assemblies/{id} — header/primary/price-treatment (3.2b)
+///   POST/PATCH/DELETE .../{id}/items[/{itemId}] — add/update/remove associated items (3.2b)
 ///
 /// Covers the atomic create-with-items contract, the referenced-catalog-item existence
-/// pre-check, the ADR-466 active-primary-item uniqueness conflict, the strict version-header
-/// contract on activate/inactivate (creates carry no header), cross-account row isolation, and
-/// the account-aware entitlement gate (ADR-462).
+/// pre-check, the strict version-header contract (creates carry no header), cross-account row
+/// isolation, the account-aware entitlement gate (ADR-462), and — the Session 3.2b fix — that an
+/// ADR-466 active-primary-item collision reached via <c>Activate</c> (reactivation) or the header
+/// update (re-pointing the primary) reports <c>PrimaryCatalogItemAlreadyClaimed</c>, not the
+/// generic <c>VersionMismatch</c> an ordinary stale-version race gets.
 /// </summary>
 public sealed class OfferingAssemblyApiTests : IClassFixture<KeepApiWebFactory>, IAsyncLifetime
 {
@@ -254,6 +257,269 @@ public sealed class OfferingAssemblyApiTests : IClassFixture<KeepApiWebFactory>,
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
+    [Fact]
+    public async Task Activate_WhenReactivationCollidesWithAnotherActiveAssemblysPrimary_Returns409WithPrimaryClaimedCode()
+    {
+        // Locks the Session 3.2b bug fix against the real Postgres unique index: a reactivation
+        // blocked by ADR-466 must not be reported as the generic VersionMismatch.
+        var (accountId, ownerId, _) = await SeedAccountAsync("activate-primary-collision");
+        await EnrollAsync(accountId, ownerId);
+        var cookie = await GetCookieAsync(ownerId, accountId);
+        var sharedPrimary = await SeedActiveCatalogItemAsync(accountId, ownerId, "Shared Primary");
+
+        var claimant = await AuthRequest(cookie).PostAsJsonAsync(
+            "/keep/pricebook/offering-assemblies/create-with-items",
+            new { primaryCatalogItemId = sharedPrimary.Id, name = "Claimant", priceTreatment = "Summed", items = Array.Empty<object>() });
+        Assert.Equal(HttpStatusCode.OK, claimant.StatusCode);
+
+        var contender = await SeedInactiveAssemblyWithPrimaryAsync(accountId, ownerId, sharedPrimary.Id);
+
+        var response = await PatchWithVersionAsync(
+            AuthRequest(cookie), $"/keep/pricebook/offering-assemblies/{contender.Id}/activate", contender.ConcurrencyVersion);
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("OfferingAssembly.PrimaryCatalogItemAlreadyClaimed", body.GetProperty("code").GetString());
+    }
+
+    [Fact]
+    public async Task UpdateHeader_CorrectVersion_Returns200AndPersistsRenameRepriceRepoint()
+    {
+        var (accountId, ownerId, _) = await SeedAccountAsync("header-ok");
+        await EnrollAsync(accountId, ownerId);
+        var cookie = await GetCookieAsync(ownerId, accountId);
+        var assembly = await SeedActiveAssemblyAsync(accountId, ownerId);
+        var newPrimary = await SeedActiveCatalogItemAsync(accountId, ownerId, "New Primary");
+
+        var request = new HttpRequestMessage(HttpMethod.Patch, $"/keep/pricebook/offering-assemblies/{assembly.Id}")
+        {
+            Content = JsonContent.Create(new { primaryCatalogItemId = newPrimary.Id, name = "Renamed Offering", priceTreatment = "AllInclusive" }),
+        };
+        request.Headers.Add(OfferingAssemblyVersionHeader.HeaderName, assembly.ConcurrencyVersion.ToString("D"));
+        var response = await AuthRequest(cookie).SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        await using var scope = _factory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+        var reloaded = await db.Set<OfferingAssembly>().FindAsync(assembly.Id);
+        Assert.Equal("Renamed Offering", reloaded!.Name);
+        Assert.Equal(newPrimary.Id, reloaded.PrimaryCatalogItemId);
+        Assert.Equal(PriceTreatment.AllInclusive, reloaded.PriceTreatment);
+    }
+
+    [Fact]
+    public async Task UpdateHeader_WithUnknownNewPrimary_Returns404()
+    {
+        var (accountId, ownerId, _) = await SeedAccountAsync("header-unknown-primary");
+        await EnrollAsync(accountId, ownerId);
+        var cookie = await GetCookieAsync(ownerId, accountId);
+        var assembly = await SeedActiveAssemblyAsync(accountId, ownerId);
+
+        var request = new HttpRequestMessage(HttpMethod.Patch, $"/keep/pricebook/offering-assemblies/{assembly.Id}")
+        {
+            Content = JsonContent.Create(new { primaryCatalogItemId = Guid.NewGuid(), name = "Renamed", priceTreatment = "Summed" }),
+        };
+        request.Headers.Add(OfferingAssemblyVersionHeader.HeaderName, assembly.ConcurrencyVersion.ToString("D"));
+        var response = await AuthRequest(cookie).SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("CatalogItem.NotFound", body.GetProperty("code").GetString());
+    }
+
+    [Fact]
+    public async Task UpdateHeader_WhenRepointingCollidesWithAnotherActiveAssemblysPrimary_Returns409WithPrimaryClaimedCode()
+    {
+        var (accountId, ownerId, _) = await SeedAccountAsync("header-primary-collision");
+        await EnrollAsync(accountId, ownerId);
+        var cookie = await GetCookieAsync(ownerId, accountId);
+
+        var claimedPrimary = await SeedActiveCatalogItemAsync(accountId, ownerId, "Claimed Primary");
+        var claimant = await AuthRequest(cookie).PostAsJsonAsync(
+            "/keep/pricebook/offering-assemblies/create-with-items",
+            new { primaryCatalogItemId = claimedPrimary.Id, name = "Claimant", priceTreatment = "Summed", items = Array.Empty<object>() });
+        Assert.Equal(HttpStatusCode.OK, claimant.StatusCode);
+
+        var mover = await SeedActiveAssemblyAsync(accountId, ownerId);
+
+        var request = new HttpRequestMessage(HttpMethod.Patch, $"/keep/pricebook/offering-assemblies/{mover.Id}")
+        {
+            Content = JsonContent.Create(new { primaryCatalogItemId = claimedPrimary.Id, name = mover.Name, priceTreatment = "Summed" }),
+        };
+        request.Headers.Add(OfferingAssemblyVersionHeader.HeaderName, mover.ConcurrencyVersion.ToString("D"));
+        var response = await AuthRequest(cookie).SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("OfferingAssembly.PrimaryCatalogItemAlreadyClaimed", body.GetProperty("code").GetString());
+    }
+
+    [Fact]
+    public async Task AddItem_ReturnsItemIdAndNewAssemblyVersionForTheNextSequentialEdit()
+    {
+        var (accountId, ownerId, _) = await SeedAccountAsync("add-item-ok");
+        await EnrollAsync(accountId, ownerId);
+        var cookie = await GetCookieAsync(ownerId, accountId);
+        var assembly = await SeedActiveAssemblyAsync(accountId, ownerId);
+        var labor = await SeedActiveCatalogItemAsync(accountId, ownerId, "Labor");
+
+        var request = new HttpRequestMessage(HttpMethod.Post, $"/keep/pricebook/offering-assemblies/{assembly.Id}/items")
+        {
+            Content = JsonContent.Create(new { catalogItemId = labor.Id, defaultQuantity = 2m, isOptional = false, displayOrder = 0 }),
+        };
+        request.Headers.Add(OfferingAssemblyVersionHeader.HeaderName, assembly.ConcurrencyVersion.ToString("D"));
+        var response = await AuthRequest(cookie).SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        var itemId = body.GetProperty("itemId").GetGuid();
+        var newVersion = body.GetProperty("concurrencyVersion").GetGuid();
+        Assert.NotEqual(assembly.ConcurrencyVersion, newVersion);
+
+        // The returned version immediately drives the next sequential edit — no detail read needed.
+        var reorder = new HttpRequestMessage(HttpMethod.Patch, $"/keep/pricebook/offering-assemblies/{assembly.Id}/items/{itemId}")
+        {
+            Content = JsonContent.Create(new { defaultQuantity = 2m, isOptional = false, displayOrder = 1 }),
+        };
+        reorder.Headers.Add(OfferingAssemblyVersionHeader.HeaderName, newVersion.ToString("D"));
+        var reorderResponse = await AuthRequest(cookie).SendAsync(reorder);
+        Assert.Equal(HttpStatusCode.OK, reorderResponse.StatusCode);
+    }
+
+    [Fact]
+    public async Task AddItem_WithUnknownCatalogItem_Returns404()
+    {
+        var (accountId, ownerId, _) = await SeedAccountAsync("add-item-unknown");
+        await EnrollAsync(accountId, ownerId);
+        var cookie = await GetCookieAsync(ownerId, accountId);
+        var assembly = await SeedActiveAssemblyAsync(accountId, ownerId);
+
+        var request = new HttpRequestMessage(HttpMethod.Post, $"/keep/pricebook/offering-assemblies/{assembly.Id}/items")
+        {
+            Content = JsonContent.Create(new { catalogItemId = Guid.NewGuid(), defaultQuantity = 1m, isOptional = false, displayOrder = 0 }),
+        };
+        request.Headers.Add(OfferingAssemblyVersionHeader.HeaderName, assembly.ConcurrencyVersion.ToString("D"));
+        var response = await AuthRequest(cookie).SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("CatalogItem.NotFound", body.GetProperty("code").GetString());
+    }
+
+    [Fact]
+    public async Task AddItem_AlreadyAssociated_Returns409()
+    {
+        var (accountId, ownerId, _) = await SeedAccountAsync("add-item-duplicate");
+        await EnrollAsync(accountId, ownerId);
+        var cookie = await GetCookieAsync(ownerId, accountId);
+        var assembly = await SeedActiveAssemblyAsync(accountId, ownerId);
+        var labor = await SeedActiveCatalogItemAsync(accountId, ownerId, "Labor");
+
+        var first = new HttpRequestMessage(HttpMethod.Post, $"/keep/pricebook/offering-assemblies/{assembly.Id}/items")
+        {
+            Content = JsonContent.Create(new { catalogItemId = labor.Id, defaultQuantity = 1m, isOptional = false, displayOrder = 0 }),
+        };
+        first.Headers.Add(OfferingAssemblyVersionHeader.HeaderName, assembly.ConcurrencyVersion.ToString("D"));
+        var firstResponse = await AuthRequest(cookie).SendAsync(first);
+        Assert.Equal(HttpStatusCode.OK, firstResponse.StatusCode);
+        var newVersion = (await firstResponse.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("concurrencyVersion").GetGuid();
+
+        var second = new HttpRequestMessage(HttpMethod.Post, $"/keep/pricebook/offering-assemblies/{assembly.Id}/items")
+        {
+            Content = JsonContent.Create(new { catalogItemId = labor.Id, defaultQuantity = 1m, isOptional = false, displayOrder = 1 }),
+        };
+        second.Headers.Add(OfferingAssemblyVersionHeader.HeaderName, newVersion.ToString("D"));
+        var response = await AuthRequest(cookie).SendAsync(second);
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("OfferingAssembly.ItemAlreadyExists", body.GetProperty("code").GetString());
+    }
+
+    [Fact]
+    public async Task UpdateItem_CorrectVersion_Returns200AndPersistsChanges()
+    {
+        var (accountId, ownerId, _) = await SeedAccountAsync("update-item-ok");
+        await EnrollAsync(accountId, ownerId);
+        var cookie = await GetCookieAsync(ownerId, accountId);
+        var (assembly, itemId) = await SeedActiveAssemblyWithItemAsync(accountId, ownerId);
+
+        var request = new HttpRequestMessage(HttpMethod.Patch, $"/keep/pricebook/offering-assemblies/{assembly.Id}/items/{itemId}")
+        {
+            Content = JsonContent.Create(new { defaultQuantity = 4m, isOptional = true, displayOrder = 2 }),
+        };
+        request.Headers.Add(OfferingAssemblyVersionHeader.HeaderName, assembly.ConcurrencyVersion.ToString("D"));
+        var response = await AuthRequest(cookie).SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        await using var scope = _factory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+        var reloaded = await db.Set<OfferingAssembly>().Include(x => x.Items).SingleAsync(x => x.Id == assembly.Id);
+        var item = reloaded.Items.Single(i => i.Id == itemId);
+        Assert.Equal(4m, item.DefaultQuantity);
+        Assert.True(item.IsOptional);
+        Assert.Equal(2, item.DisplayOrder);
+    }
+
+    [Fact]
+    public async Task UpdateItem_UnknownItemId_Returns404()
+    {
+        var (accountId, ownerId, _) = await SeedAccountAsync("update-item-unknown");
+        await EnrollAsync(accountId, ownerId);
+        var cookie = await GetCookieAsync(ownerId, accountId);
+        var assembly = await SeedActiveAssemblyAsync(accountId, ownerId);
+
+        var request = new HttpRequestMessage(HttpMethod.Patch, $"/keep/pricebook/offering-assemblies/{assembly.Id}/items/{Guid.NewGuid()}")
+        {
+            Content = JsonContent.Create(new { defaultQuantity = 1m, isOptional = false, displayOrder = 0 }),
+        };
+        request.Headers.Add(OfferingAssemblyVersionHeader.HeaderName, assembly.ConcurrencyVersion.ToString("D"));
+        var response = await AuthRequest(cookie).SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("OfferingAssembly.ItemNotFound", body.GetProperty("code").GetString());
+    }
+
+    [Fact]
+    public async Task RemoveItem_CorrectVersion_Returns200AndPersistsRemoval()
+    {
+        var (accountId, ownerId, _) = await SeedAccountAsync("remove-item-ok");
+        await EnrollAsync(accountId, ownerId);
+        var cookie = await GetCookieAsync(ownerId, accountId);
+        var (assembly, itemId) = await SeedActiveAssemblyWithItemAsync(accountId, ownerId);
+
+        var request = new HttpRequestMessage(HttpMethod.Delete, $"/keep/pricebook/offering-assemblies/{assembly.Id}/items/{itemId}");
+        request.Headers.Add(OfferingAssemblyVersionHeader.HeaderName, assembly.ConcurrencyVersion.ToString("D"));
+        var response = await AuthRequest(cookie).SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        await using var scope = _factory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+        var reloaded = await db.Set<OfferingAssembly>().Include(x => x.Items).SingleAsync(x => x.Id == assembly.Id);
+        Assert.Empty(reloaded.Items);
+    }
+
+    [Fact]
+    public async Task RemoveItem_UnknownItemId_Returns404()
+    {
+        var (accountId, ownerId, _) = await SeedAccountAsync("remove-item-unknown");
+        await EnrollAsync(accountId, ownerId);
+        var cookie = await GetCookieAsync(ownerId, accountId);
+        var assembly = await SeedActiveAssemblyAsync(accountId, ownerId);
+
+        var request = new HttpRequestMessage(HttpMethod.Delete, $"/keep/pricebook/offering-assemblies/{assembly.Id}/items/{Guid.NewGuid()}");
+        request.Headers.Add(OfferingAssemblyVersionHeader.HeaderName, assembly.ConcurrencyVersion.ToString("D"));
+        var response = await AuthRequest(cookie).SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("OfferingAssembly.ItemNotFound", body.GetProperty("code").GetString());
+    }
+
     // =========================================================================
     // Helpers
     // =========================================================================
@@ -360,7 +626,15 @@ public sealed class OfferingAssemblyApiTests : IClassFixture<KeepApiWebFactory>,
     private async Task<OfferingAssembly> SeedInactiveAssemblyAsync(Guid accountId, Guid createdByUserId)
     {
         var primary = await SeedActiveCatalogItemAsync(accountId, createdByUserId, "Seeded Primary");
-        var createResult = OfferingAssembly.Create(accountId, primary.Id, "Seeded Offering", PriceTreatment.Summed, createdByUserId);
+        return await SeedInactiveAssemblyWithPrimaryAsync(accountId, createdByUserId, primary.Id);
+    }
+
+    // Seeds an Inactive row directly, bypassing the create endpoint's uniqueness check, so it can
+    // share a primary with an already-Active assembly — the only way to set up the ADR-466
+    // reactivation collision this file locks (Session 3.2b).
+    private async Task<OfferingAssembly> SeedInactiveAssemblyWithPrimaryAsync(Guid accountId, Guid createdByUserId, Guid primaryCatalogItemId)
+    {
+        var createResult = OfferingAssembly.Create(accountId, primaryCatalogItemId, "Seeded Offering", PriceTreatment.Summed, createdByUserId);
         Assert.True(createResult.IsSuccess);
         var assembly = createResult.Value;
         Assert.True(assembly.Inactivate().IsSuccess);
@@ -370,5 +644,22 @@ public sealed class OfferingAssemblyApiTests : IClassFixture<KeepApiWebFactory>,
         db.Set<OfferingAssembly>().Add(assembly);
         await db.SaveChangesAsync();
         return assembly;
+    }
+
+    private async Task<(OfferingAssembly Assembly, Guid ItemId)> SeedActiveAssemblyWithItemAsync(Guid accountId, Guid createdByUserId)
+    {
+        var primary = await SeedActiveCatalogItemAsync(accountId, createdByUserId, "Seeded Primary");
+        var item = await SeedActiveCatalogItemAsync(accountId, createdByUserId, "Seeded Item");
+        var createResult = OfferingAssembly.Create(accountId, primary.Id, "Seeded Offering", PriceTreatment.Summed, createdByUserId);
+        Assert.True(createResult.IsSuccess);
+        var assembly = createResult.Value;
+        var addItemResult = assembly.AddItem(item.Id, 1m, false, 0, createdByUserId);
+        Assert.True(addItemResult.IsSuccess);
+
+        await using var scope = _factory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+        db.Set<OfferingAssembly>().Add(assembly);
+        await db.SaveChangesAsync();
+        return (assembly, addItemResult.Value.Id);
     }
 }

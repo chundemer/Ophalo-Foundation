@@ -256,7 +256,7 @@ public sealed class OfferingAssemblyEligibilityTests : IClassFixture<PostgresFix
         var secondResult = await secondPersistence.AddAsync(second, CancellationToken.None);
 
         Assert.Equal(OfferingAssemblyCommitResult.Committed, firstResult);
-        Assert.Equal(OfferingAssemblyCommitResult.Conflict, secondResult);
+        Assert.Equal(OfferingAssemblyCommitResult.PrimaryCatalogItemAlreadyClaimed, secondResult);
     }
 
     [Fact]

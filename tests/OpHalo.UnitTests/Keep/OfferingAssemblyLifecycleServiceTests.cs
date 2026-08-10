@@ -7,10 +7,12 @@ using Xunit;
 namespace OpHalo.UnitTests.Keep;
 
 /// <summary>
-/// Locks OfferingAssemblyLifecycleService (Session 3.2a.1): atomic create-with-items,
-/// activate/inactivate orchestration, account-scoped lookup, referenced-catalog-item existence
-/// pre-check, and expected-version conflict handling. No current-user/permission/entitlement
-/// gating here — that composes at the endpoint layer (OfferingAssemblyApiService).
+/// Locks OfferingAssemblyLifecycleService: atomic create-with-items, activate/inactivate
+/// orchestration (Session 3.2a.1), header/item live-edit orchestration (Session 3.2b),
+/// account-scoped lookup, referenced-catalog-item existence pre-check, and the distinct
+/// ConcurrencyConflict/PrimaryCatalogItemAlreadyClaimed commit-result mapping (Session 3.2b fixed
+/// a bug where both collapsed into a single VersionMismatch). No current-user/permission/
+/// entitlement gating here — that composes at the endpoint layer (OfferingAssemblyApiService).
 /// </summary>
 public class OfferingAssemblyLifecycleServiceTests
 {
@@ -169,7 +171,7 @@ public class OfferingAssemblyLifecycleServiceTests
         var created = (await sut.CreateWithItemsAsync(
             new CreateOfferingAssemblyWithItemsCommand(AccountId, primary.Id, "Name", PriceTreatment.Summed, [], Actor),
             CancellationToken.None)).Value;
-        assemblies.ForceConflictOnNextCommit = true;
+        assemblies.ForceConcurrencyConflictOnNextCommit = true;
 
         var result = await sut.InactivateAsync(AccountId, created.Id, created.ConcurrencyVersion, CancellationToken.None);
 
@@ -177,10 +179,202 @@ public class OfferingAssemblyLifecycleServiceTests
         Assert.Equal(OfferingAssemblyErrors.VersionMismatch, result.Error);
     }
 
+    [Fact]
+    public async Task ActivateAsync_when_reactivation_collides_with_another_active_assemblys_primary_fails_with_PrimaryCatalogItemAlreadyClaimed()
+    {
+        // Locks the Session 3.2b bug fix: this must not be reported as VersionMismatch.
+        var (assemblies, catalogItems, sut) = Build();
+        var primary = SeedCatalogItem(catalogItems, AccountId, "Control Board");
+        var created = (await sut.CreateWithItemsAsync(
+            new CreateOfferingAssemblyWithItemsCommand(AccountId, primary.Id, "Name", PriceTreatment.Summed, [], Actor),
+            CancellationToken.None)).Value;
+        created.Inactivate();
+        assemblies.ForcePrimaryClaimedOnNextCommit = true;
+
+        var result = await sut.ActivateAsync(AccountId, created.Id, created.ConcurrencyVersion, CancellationToken.None);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(OfferingAssemblyErrors.PrimaryCatalogItemAlreadyClaimed, result.Error);
+    }
+
+    [Fact]
+    public async Task UpdateHeaderAsync_renames_reprices_and_repoints_the_primary()
+    {
+        var (assemblies, catalogItems, sut) = Build();
+        var originalPrimary = SeedCatalogItem(catalogItems, AccountId, "Control Board");
+        var newPrimary = SeedCatalogItem(catalogItems, AccountId, "New Board");
+        var created = (await sut.CreateWithItemsAsync(
+            new CreateOfferingAssemblyWithItemsCommand(AccountId, originalPrimary.Id, "Name", PriceTreatment.Summed, [], Actor),
+            CancellationToken.None)).Value;
+
+        var result = await sut.UpdateHeaderAsync(
+            new UpdateOfferingAssemblyHeaderCommand(
+                AccountId, created.Id, created.ConcurrencyVersion, newPrimary.Id, "New Name", PriceTreatment.AllInclusive),
+            CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(newPrimary.Id, created.PrimaryCatalogItemId);
+        Assert.Equal("New Name", created.Name);
+        Assert.Equal(PriceTreatment.AllInclusive, created.PriceTreatment);
+    }
+
+    [Fact]
+    public async Task UpdateHeaderAsync_with_an_unknown_new_primary_fails_without_mutating()
+    {
+        var (assemblies, catalogItems, sut) = Build();
+        var originalPrimary = SeedCatalogItem(catalogItems, AccountId, "Control Board");
+        var created = (await sut.CreateWithItemsAsync(
+            new CreateOfferingAssemblyWithItemsCommand(AccountId, originalPrimary.Id, "Name", PriceTreatment.Summed, [], Actor),
+            CancellationToken.None)).Value;
+
+        var result = await sut.UpdateHeaderAsync(
+            new UpdateOfferingAssemblyHeaderCommand(
+                AccountId, created.Id, created.ConcurrencyVersion, Guid.CreateVersion7(), "New Name", PriceTreatment.Summed),
+            CancellationToken.None);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(CatalogItemErrors.NotFound, result.Error);
+        Assert.Equal(originalPrimary.Id, created.PrimaryCatalogItemId);
+    }
+
+    [Fact]
+    public async Task UpdateHeaderAsync_when_repointing_collides_with_another_assemblys_primary_fails_with_PrimaryCatalogItemAlreadyClaimed()
+    {
+        var (assemblies, catalogItems, sut) = Build();
+        var originalPrimary = SeedCatalogItem(catalogItems, AccountId, "Control Board");
+        var claimedPrimary = SeedCatalogItem(catalogItems, AccountId, "Claimed Board");
+        var created = (await sut.CreateWithItemsAsync(
+            new CreateOfferingAssemblyWithItemsCommand(AccountId, originalPrimary.Id, "Name", PriceTreatment.Summed, [], Actor),
+            CancellationToken.None)).Value;
+        assemblies.ForcePrimaryClaimedOnNextCommit = true;
+
+        var result = await sut.UpdateHeaderAsync(
+            new UpdateOfferingAssemblyHeaderCommand(
+                AccountId, created.Id, created.ConcurrencyVersion, claimedPrimary.Id, "Name", PriceTreatment.Summed),
+            CancellationToken.None);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(OfferingAssemblyErrors.PrimaryCatalogItemAlreadyClaimed, result.Error);
+    }
+
+    [Fact]
+    public async Task AddItemAsync_returns_the_new_item_id_and_the_new_assembly_version()
+    {
+        var (assemblies, catalogItems, sut) = Build();
+        var primary = SeedCatalogItem(catalogItems, AccountId, "Control Board");
+        var labor = SeedCatalogItem(catalogItems, AccountId, "Labor");
+        var created = (await sut.CreateWithItemsAsync(
+            new CreateOfferingAssemblyWithItemsCommand(AccountId, primary.Id, "Name", PriceTreatment.Summed, [], Actor),
+            CancellationToken.None)).Value;
+
+        var versionBeforeAdd = created.ConcurrencyVersion;
+
+        var result = await sut.AddItemAsync(
+            new AddOfferingAssemblyItemCommand(AccountId, created.Id, versionBeforeAdd, labor.Id, 2m, false, 0, Actor),
+            CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        Assert.NotEqual(versionBeforeAdd, result.Value.AssemblyConcurrencyVersion);
+        Assert.Equal(created.ConcurrencyVersion, result.Value.AssemblyConcurrencyVersion);
+        Assert.Contains(created.Items, i => i.Id == result.Value.ItemId && i.CatalogItemId == labor.Id);
+    }
+
+    [Fact]
+    public async Task AddItemAsync_with_an_unknown_catalog_item_fails_without_mutating()
+    {
+        var (assemblies, catalogItems, sut) = Build();
+        var primary = SeedCatalogItem(catalogItems, AccountId, "Control Board");
+        var created = (await sut.CreateWithItemsAsync(
+            new CreateOfferingAssemblyWithItemsCommand(AccountId, primary.Id, "Name", PriceTreatment.Summed, [], Actor),
+            CancellationToken.None)).Value;
+
+        var result = await sut.AddItemAsync(
+            new AddOfferingAssemblyItemCommand(AccountId, created.Id, created.ConcurrencyVersion, Guid.CreateVersion7(), 1m, false, 0, Actor),
+            CancellationToken.None);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(CatalogItemErrors.NotFound, result.Error);
+        Assert.Empty(created.Items);
+    }
+
+    [Fact]
+    public async Task UpdateItemAsync_updates_quantity_optional_and_display_order()
+    {
+        var (assemblies, catalogItems, sut) = Build();
+        var primary = SeedCatalogItem(catalogItems, AccountId, "Control Board");
+        var labor = SeedCatalogItem(catalogItems, AccountId, "Labor");
+        var created = (await sut.CreateWithItemsAsync(
+            new CreateOfferingAssemblyWithItemsCommand(AccountId, primary.Id, "Name", PriceTreatment.Summed,
+                [new CreateOfferingAssemblyItemInput(labor.Id, 1m, false, 0)], Actor),
+            CancellationToken.None)).Value;
+        var itemId = created.Items.Single().Id;
+
+        var result = await sut.UpdateItemAsync(
+            new UpdateOfferingAssemblyItemCommand(AccountId, created.Id, created.ConcurrencyVersion, itemId, 5m, true, 3),
+            CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        var item = created.Items.Single();
+        Assert.Equal(5m, item.DefaultQuantity);
+        Assert.True(item.IsOptional);
+        Assert.Equal(3, item.DisplayOrder);
+    }
+
+    [Fact]
+    public async Task UpdateItemAsync_for_an_unknown_item_id_fails_with_ItemNotFound()
+    {
+        var (assemblies, catalogItems, sut) = Build();
+        var primary = SeedCatalogItem(catalogItems, AccountId, "Control Board");
+        var created = (await sut.CreateWithItemsAsync(
+            new CreateOfferingAssemblyWithItemsCommand(AccountId, primary.Id, "Name", PriceTreatment.Summed, [], Actor),
+            CancellationToken.None)).Value;
+
+        var result = await sut.UpdateItemAsync(
+            new UpdateOfferingAssemblyItemCommand(AccountId, created.Id, created.ConcurrencyVersion, Guid.CreateVersion7(), 1m, false, 0),
+            CancellationToken.None);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(OfferingAssemblyErrors.ItemNotFound, result.Error);
+    }
+
+    [Fact]
+    public async Task RemoveItemAsync_removes_the_item()
+    {
+        var (assemblies, catalogItems, sut) = Build();
+        var primary = SeedCatalogItem(catalogItems, AccountId, "Control Board");
+        var labor = SeedCatalogItem(catalogItems, AccountId, "Labor");
+        var created = (await sut.CreateWithItemsAsync(
+            new CreateOfferingAssemblyWithItemsCommand(AccountId, primary.Id, "Name", PriceTreatment.Summed,
+                [new CreateOfferingAssemblyItemInput(labor.Id, 1m, false, 0)], Actor),
+            CancellationToken.None)).Value;
+        var itemId = created.Items.Single().Id;
+
+        var result = await sut.RemoveItemAsync(AccountId, created.Id, created.ConcurrencyVersion, itemId, CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        Assert.Empty(created.Items);
+    }
+
+    [Fact]
+    public async Task RemoveItemAsync_with_a_wrong_account_id_resolves_to_NotFound()
+    {
+        var (assemblies, catalogItems, sut) = Build();
+        var primary = SeedCatalogItem(catalogItems, AccountId, "Control Board");
+        var created = (await sut.CreateWithItemsAsync(
+            new CreateOfferingAssemblyWithItemsCommand(AccountId, primary.Id, "Name", PriceTreatment.Summed, [], Actor),
+            CancellationToken.None)).Value;
+
+        var result = await sut.RemoveItemAsync(OtherAccountId, created.Id, created.ConcurrencyVersion, Guid.CreateVersion7(), CancellationToken.None);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(OfferingAssemblyErrors.NotFound, result.Error);
+    }
+
     sealed class FakeOfferingAssemblyPersistence : IOfferingAssemblyPersistence
     {
         public List<OfferingAssembly> Assemblies { get; } = [];
-        public bool ForceConflictOnNextCommit { get; set; }
+        public bool ForceConcurrencyConflictOnNextCommit { get; set; }
+        public bool ForcePrimaryClaimedOnNextCommit { get; set; }
         public bool ForceConflictOnNextAdd { get; set; }
 
         public Task<OfferingAssembly?> GetByIdAsync(Guid accountId, Guid offeringAssemblyId, CancellationToken ct) =>
@@ -191,7 +385,7 @@ public class OfferingAssemblyLifecycleServiceTests
             if (ForceConflictOnNextAdd)
             {
                 ForceConflictOnNextAdd = false;
-                return Task.FromResult(OfferingAssemblyCommitResult.Conflict);
+                return Task.FromResult(OfferingAssemblyCommitResult.PrimaryCatalogItemAlreadyClaimed);
             }
 
             Assemblies.Add(assembly);
@@ -200,10 +394,16 @@ public class OfferingAssemblyLifecycleServiceTests
 
         public Task<OfferingAssemblyCommitResult> CommitAsync(OfferingAssembly assembly, CancellationToken ct)
         {
-            if (ForceConflictOnNextCommit)
+            if (ForceConcurrencyConflictOnNextCommit)
             {
-                ForceConflictOnNextCommit = false;
-                return Task.FromResult(OfferingAssemblyCommitResult.Conflict);
+                ForceConcurrencyConflictOnNextCommit = false;
+                return Task.FromResult(OfferingAssemblyCommitResult.ConcurrencyConflict);
+            }
+
+            if (ForcePrimaryClaimedOnNextCommit)
+            {
+                ForcePrimaryClaimedOnNextCommit = false;
+                return Task.FromResult(OfferingAssemblyCommitResult.PrimaryCatalogItemAlreadyClaimed);
             }
 
             return Task.FromResult(OfferingAssemblyCommitResult.Committed);

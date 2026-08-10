@@ -3,10 +3,17 @@ using OpHalo.Keep.Core.Entities.Enums;
 
 namespace OpHalo.Keep.Application.PriceBook;
 
+/// <summary>
+/// Distinct commit outcomes (Session 3.2b) — collapsing these into one generic "Conflict" made an
+/// ADR-466 active-primary-item collision on <c>Activate</c>/repoint indistinguishable from an
+/// ordinary stale-version race, so a reactivation blocked by another assembly's claimed primary
+/// item was misreported as "changed by someone else."
+/// </summary>
 public enum OfferingAssemblyCommitResult
 {
     Committed,
-    Conflict,
+    ConcurrencyConflict,
+    PrimaryCatalogItemAlreadyClaimed,
 }
 
 /// <summary>Account-scoped offering/assembly list filters (Session 3.2a.2). AccountId is a
@@ -79,18 +86,20 @@ public interface IOfferingAssemblyPersistence
     Task<OfferingAssembly?> GetByIdAsync(Guid accountId, Guid offeringAssemblyId, CancellationToken ct);
 
     /// <summary>
-    /// Persists a newly created assembly. Returns <see cref="OfferingAssemblyCommitResult.Conflict"/>
-    /// instead of throwing when a concurrent insert already claimed the same
-    /// (AccountId, PrimaryCatalogItemId) pair among <c>Active</c> rows (ADR-466) — the database's
-    /// partial unique index is the actual race guard.
+    /// Persists a newly created assembly. Returns
+    /// <see cref="OfferingAssemblyCommitResult.PrimaryCatalogItemAlreadyClaimed"/> instead of
+    /// throwing when a concurrent insert already claimed the same (AccountId, PrimaryCatalogItemId)
+    /// pair among <c>Active</c> rows (ADR-466) — the database's partial unique index is the actual
+    /// race guard.
     /// </summary>
     Task<OfferingAssemblyCommitResult> AddAsync(OfferingAssembly assembly, CancellationToken ct);
 
     /// <summary>
     /// Saves mutations to an assembly already loaded via <see cref="GetByIdAsync"/> (tracked).
-    /// Returns <see cref="OfferingAssemblyCommitResult.Conflict"/> instead of throwing when the row
-    /// changed since it was loaded (EF concurrency-token mismatch), or when reactivating /
-    /// re-pointing the primary item collides with another account's active row for that primary
+    /// Returns <see cref="OfferingAssemblyCommitResult.ConcurrencyConflict"/> instead of throwing
+    /// when the row changed since it was loaded (EF concurrency-token mismatch), or
+    /// <see cref="OfferingAssemblyCommitResult.PrimaryCatalogItemAlreadyClaimed"/> when reactivating
+    /// / re-pointing the primary item collides with another account's active row for that primary
     /// item (ADR-466).
     /// </summary>
     Task<OfferingAssemblyCommitResult> CommitAsync(OfferingAssembly assembly, CancellationToken ct);

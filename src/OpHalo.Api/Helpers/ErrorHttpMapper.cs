@@ -138,6 +138,12 @@ public static class ErrorHttpMapper
             var c when c == "OfferingAssembly.ExpectedVersionRequired"        => (StatusCodes.Status400BadRequest, "Bad request.", null),
             var c when c == "OfferingAssembly.ExpectedVersionInvalid"         => (StatusCodes.Status400BadRequest, "Bad request.", null),
 
+            // --- OfferingAssemblyItem conflicts (Session 3.2b) — the Item segment breaks the
+            // generic .NotFound/.AlreadyActive/.NotActive suffix matches below, same reason
+            // CatalogItemAlias needed explicit entries.
+            var c when c == "OfferingAssembly.ItemNotFound"      => (StatusCodes.Status404NotFound, "Resource not found.", null),
+            var c when c == "OfferingAssembly.ItemAlreadyExists" => (StatusCodes.Status409Conflict, "Conflict.", null),
+
             // --- CatalogCategory concurrency/uniqueness conflicts (Session 2b.3) ---
             var c when c == "CatalogCategory.VersionMismatch"         => (StatusCodes.Status409Conflict, "Conflict.", null),
             var c when c == "CatalogCategory.NameAlreadyExists"       => (StatusCodes.Status409Conflict, "Conflict.", null),

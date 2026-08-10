@@ -9,9 +9,11 @@ namespace OpHalo.Api.Keep;
 
 /// <summary>
 /// Price Book, Quotes &amp; Materials — offering/assembly office-management endpoints: mutations
-/// (Session 3.2a.1: create-with-items, activate, inactivate) and bounded reads (Session 3.2a.2:
-/// list, detail with eligibility reasons). Thin: route mapping and request/response shaping only.
-/// Auth-stack composition lives in <see cref="OfferingAssemblyApiService"/> (mutations) and
+/// (Session 3.2a.1: create-with-items, activate, inactivate; Session 3.2b: header/primary/price-
+/// treatment update, item add/update/remove — a multi-item reorder is expressed as sequential
+/// item-update calls, no bulk endpoint) and bounded reads (Session 3.2a.2: list, detail with
+/// eligibility reasons). Thin: route mapping and request/response shaping only. Auth-stack
+/// composition lives in <see cref="OfferingAssemblyApiService"/> (mutations) and
 /// <see cref="OfferingAssemblyReadApiService"/> (reads).
 /// </summary>
 public static class OfferingAssemblyEndpoints
@@ -64,6 +66,78 @@ public static class OfferingAssemblyEndpoints
                 return ErrorHttpMapper.ToHttpResult(versionResult.Error);
 
             var result = await service.InactivateAsync(offeringAssemblyId, versionResult.Value, ct);
+            return result.IsSuccess ? Results.Ok(new OfferingAssemblyTransitionResponse(result.Value)) : ErrorHttpMapper.ToHttpResult(result.Error);
+        }).RequireAuthorization();
+
+        app.MapPatch("/keep/pricebook/offering-assemblies/{offeringAssemblyId:guid}", async (
+            Guid offeringAssemblyId,
+            UpdateOfferingAssemblyHeaderBody body,
+            HttpRequest httpRequest,
+            OfferingAssemblyApiService service,
+            CancellationToken ct) =>
+        {
+            var versionResult = OfferingAssemblyVersionHeader.Parse(httpRequest.Headers);
+            if (!versionResult.IsSuccess)
+                return ErrorHttpMapper.ToHttpResult(versionResult.Error);
+
+            if (!Enum.TryParse<PriceTreatment>(body.PriceTreatment, ignoreCase: true, out var priceTreatment) ||
+                !Enum.IsDefined(priceTreatment))
+            {
+                return ValidationProblem("PriceTreatment must be Summed or AllInclusive.", "Validation.PriceTreatmentInvalid");
+            }
+
+            var command = new UpdateOfferingAssemblyHeaderApiCommand(body.PrimaryCatalogItemId, body.Name ?? string.Empty, priceTreatment);
+            var result = await service.UpdateHeaderAsync(offeringAssemblyId, command, versionResult.Value, ct);
+            return result.IsSuccess ? Results.Ok(new OfferingAssemblyTransitionResponse(result.Value)) : ErrorHttpMapper.ToHttpResult(result.Error);
+        }).RequireAuthorization();
+
+        app.MapPost("/keep/pricebook/offering-assemblies/{offeringAssemblyId:guid}/items", async (
+            Guid offeringAssemblyId,
+            AddOfferingAssemblyItemBody body,
+            HttpRequest httpRequest,
+            OfferingAssemblyApiService service,
+            CancellationToken ct) =>
+        {
+            var versionResult = OfferingAssemblyVersionHeader.Parse(httpRequest.Headers);
+            if (!versionResult.IsSuccess)
+                return ErrorHttpMapper.ToHttpResult(versionResult.Error);
+
+            var command = new AddOfferingAssemblyItemApiCommand(body.CatalogItemId, body.DefaultQuantity, body.IsOptional, body.DisplayOrder);
+            var result = await service.AddItemAsync(offeringAssemblyId, command, versionResult.Value, ct);
+            return result.IsSuccess
+                ? Results.Ok(new OfferingAssemblyItemAddedResponse(result.Value.ItemId, result.Value.AssemblyConcurrencyVersion))
+                : ErrorHttpMapper.ToHttpResult(result.Error);
+        }).RequireAuthorization();
+
+        app.MapPatch("/keep/pricebook/offering-assemblies/{offeringAssemblyId:guid}/items/{itemId:guid}", async (
+            Guid offeringAssemblyId,
+            Guid itemId,
+            UpdateOfferingAssemblyItemBody body,
+            HttpRequest httpRequest,
+            OfferingAssemblyApiService service,
+            CancellationToken ct) =>
+        {
+            var versionResult = OfferingAssemblyVersionHeader.Parse(httpRequest.Headers);
+            if (!versionResult.IsSuccess)
+                return ErrorHttpMapper.ToHttpResult(versionResult.Error);
+
+            var command = new UpdateOfferingAssemblyItemApiCommand(body.DefaultQuantity, body.IsOptional, body.DisplayOrder);
+            var result = await service.UpdateItemAsync(offeringAssemblyId, itemId, command, versionResult.Value, ct);
+            return result.IsSuccess ? Results.Ok(new OfferingAssemblyTransitionResponse(result.Value)) : ErrorHttpMapper.ToHttpResult(result.Error);
+        }).RequireAuthorization();
+
+        app.MapDelete("/keep/pricebook/offering-assemblies/{offeringAssemblyId:guid}/items/{itemId:guid}", async (
+            Guid offeringAssemblyId,
+            Guid itemId,
+            HttpRequest httpRequest,
+            OfferingAssemblyApiService service,
+            CancellationToken ct) =>
+        {
+            var versionResult = OfferingAssemblyVersionHeader.Parse(httpRequest.Headers);
+            if (!versionResult.IsSuccess)
+                return ErrorHttpMapper.ToHttpResult(versionResult.Error);
+
+            var result = await service.RemoveItemAsync(offeringAssemblyId, itemId, versionResult.Value, ct);
             return result.IsSuccess ? Results.Ok(new OfferingAssemblyTransitionResponse(result.Value)) : ErrorHttpMapper.ToHttpResult(result.Error);
         }).RequireAuthorization();
 
@@ -199,6 +273,14 @@ internal sealed record OfferingAssemblyResponse(
     IReadOnlyList<OfferingAssemblyItemResponse> Items);
 
 internal sealed record OfferingAssemblyTransitionResponse(Guid ConcurrencyVersion);
+
+internal sealed record UpdateOfferingAssemblyHeaderBody(Guid PrimaryCatalogItemId, string? Name, string? PriceTreatment);
+
+internal sealed record AddOfferingAssemblyItemBody(Guid CatalogItemId, decimal DefaultQuantity, bool IsOptional, int DisplayOrder);
+
+internal sealed record OfferingAssemblyItemAddedResponse(Guid ItemId, Guid ConcurrencyVersion);
+
+internal sealed record UpdateOfferingAssemblyItemBody(decimal DefaultQuantity, bool IsOptional, int DisplayOrder);
 
 internal sealed record OfferingAssemblyListResponse(
     IReadOnlyList<OfferingAssemblyListRowResponse> Items, int Limit, bool HasMore, string? NextCursor);

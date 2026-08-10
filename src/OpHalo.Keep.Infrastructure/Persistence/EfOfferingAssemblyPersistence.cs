@@ -25,7 +25,7 @@ public sealed class EfOfferingAssemblyPersistence(OpHaloDbContext dbContext) : I
         }
         catch (DbUpdateException ex) when (IsUniqueConstraintViolation(ex))
         {
-            return OfferingAssemblyCommitResult.Conflict;
+            return OfferingAssemblyCommitResult.PrimaryCatalogItemAlreadyClaimed;
         }
     }
 
@@ -38,11 +38,14 @@ public sealed class EfOfferingAssemblyPersistence(OpHaloDbContext dbContext) : I
         }
         catch (DbUpdateConcurrencyException)
         {
-            return OfferingAssemblyCommitResult.Conflict;
+            return OfferingAssemblyCommitResult.ConcurrencyConflict;
         }
         catch (DbUpdateException ex) when (IsUniqueConstraintViolation(ex))
         {
-            return OfferingAssemblyCommitResult.Conflict;
+            // The ConcurrencyVersion check above already intercepts any race on this same row, so
+            // a bare unique-constraint violation reaching here can only be the cross-row ADR-466
+            // active-primary-item index — no constraint-name disambiguation needed (Session 3.2b).
+            return OfferingAssemblyCommitResult.PrimaryCatalogItemAlreadyClaimed;
         }
     }
 
