@@ -118,6 +118,10 @@ public static class KeepServiceCollectionExtensions
         services.AddScoped<OfferingAssemblyLifecycleService>();
         services.AddScoped<OfferingAssemblyApiService>();
 
+        // Price Book, Quotes & Materials — offering/assembly bounded reads (Session 3.2a.2).
+        // Reuses IKeepRequestListCursorProtector (registered above).
+        services.AddScoped<OfferingAssemblyReadApiService>();
+
         return services;
     }
 }

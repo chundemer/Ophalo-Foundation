@@ -211,6 +211,16 @@ public class OfferingAssemblyLifecycleServiceTests
 
         public Task<bool> IsOperationallyEligibleAsync(Guid accountId, Guid offeringAssemblyId, CancellationToken ct) =>
             Task.FromResult(false);
+
+        public Task<IReadOnlyList<OfferingAssemblyListRow>> ListAsync(
+            Guid accountId, OfferingAssemblyListFilters filters, OfferingAssemblyListCursorPosition? cursor, int fetchCount, CancellationToken ct) =>
+            throw new NotSupportedException("Not exercised by OfferingAssemblyLifecycleServiceTests.");
+
+        public Task<OfferingAssemblyDetail?> GetDetailAsync(Guid accountId, Guid offeringAssemblyId, CancellationToken ct) =>
+            throw new NotSupportedException("Not exercised by OfferingAssemblyLifecycleServiceTests.");
+
+        public Task<OfferingAssemblyEligibility> GetEligibilityAsync(Guid accountId, Guid offeringAssemblyId, CancellationToken ct) =>
+            throw new NotSupportedException("Not exercised by OfferingAssemblyLifecycleServiceTests.");
     }
 
     sealed class FakeCatalogItemPersistence : ICatalogItemPersistence

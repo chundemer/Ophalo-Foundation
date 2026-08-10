@@ -1,4 +1,5 @@
 using OpHalo.Keep.Core.Entities;
+using OpHalo.Keep.Core.Entities.Enums;
 
 namespace OpHalo.Keep.Application.PriceBook;
 
@@ -7,6 +8,66 @@ public enum OfferingAssemblyCommitResult
     Committed,
     Conflict,
 }
+
+/// <summary>Account-scoped offering/assembly list filters (Session 3.2a.2). AccountId is a
+/// separate persistence parameter, never part of this record. <c>ActiveState</c> null means
+/// "all" — the only filter this slice supports (no search/type yet).</summary>
+public sealed record OfferingAssemblyListFilters(CatalogActiveState? ActiveState);
+
+/// <summary>Last-row keyset position for resuming a list page (Name, Id — the locked total order,
+/// Session 3.2a.2 build discussion). No rank: this slice has no search term.</summary>
+public sealed record OfferingAssemblyListCursorPosition(string Name, Guid LastId);
+
+public sealed record OfferingAssemblyListRow(
+    Guid Id,
+    string Name,
+    Guid PrimaryCatalogItemId,
+    string PrimaryCatalogItemDisplayName,
+    PriceTreatment PriceTreatment,
+    CatalogActiveState ActiveState,
+    Guid ConcurrencyVersion,
+    bool IsOperationallyEligible);
+
+public sealed record OfferingAssemblyDetailItem(
+    Guid Id,
+    Guid CatalogItemId,
+    string CatalogItemDisplayName,
+    decimal DefaultQuantity,
+    bool IsOptional,
+    int DisplayOrder);
+
+public sealed record OfferingAssemblyDetail(
+    Guid Id,
+    string Name,
+    Guid PrimaryCatalogItemId,
+    string PrimaryCatalogItemDisplayName,
+    PriceTreatment PriceTreatment,
+    CatalogActiveState ActiveState,
+    Guid ConcurrencyVersion,
+    IReadOnlyList<OfferingAssemblyDetailItem> Items,
+    OfferingAssemblyEligibility Eligibility);
+
+/// <summary>Locked reason taxonomy (Session 3.2a.2): if the assembly itself is inactive, that is
+/// the only reason reported — it is the first actionable fix, so primary/component checks never
+/// run. <see cref="ComponentMissingStandalonePrice"/> only applies under
+/// <see cref="Keep.Core.Entities.Enums.PriceTreatment.Summed"/>; a component may carry
+/// <c>NoStandalonePrice</c> under <see cref="Keep.Core.Entities.Enums.PriceTreatment.AllInclusive"/>
+/// without being a reason.</summary>
+public enum OfferingAssemblyEligibilityReasonCode
+{
+    AssemblyInactive,
+    PrimaryItemInactive,
+    PrimaryItemMissingStandalonePrice,
+    ComponentInactive,
+    ComponentMissingStandalonePrice,
+}
+
+/// <summary><see cref="ComponentCatalogItemId"/> is set only for the two Component* codes — there
+/// can be more than one associated item, so the reason must identify which one failed.</summary>
+public sealed record OfferingAssemblyEligibilityReason(
+    OfferingAssemblyEligibilityReasonCode Code, Guid? ComponentCatalogItemId = null);
+
+public sealed record OfferingAssemblyEligibility(bool IsEligible, IReadOnlyList<OfferingAssemblyEligibilityReason> Reasons);
 
 /// <summary>
 /// Persistence seam for <see cref="OfferingAssembly"/>. Every read is scoped by
@@ -45,4 +106,30 @@ public interface IOfferingAssemblyPersistence
     /// fail-closed read convention.
     /// </summary>
     Task<bool> IsOperationallyEligibleAsync(Guid accountId, Guid offeringAssemblyId, CancellationToken ct);
+
+    /// <summary>
+    /// Returns up to <paramref name="fetchCount"/> rows ordered by (Name, Id) ascending,
+    /// optionally starting after <paramref name="cursor"/>. Fetch one extra row over the caller's
+    /// page size so the caller can detect HasMore without a second query. Computes
+    /// <c>IsOperationallyEligible</c> for the whole page with one batched catalog-item/price-line
+    /// projection — never one query per row (Session 3.2a.2).
+    /// </summary>
+    Task<IReadOnlyList<OfferingAssemblyListRow>> ListAsync(
+        Guid accountId,
+        OfferingAssemblyListFilters filters,
+        OfferingAssemblyListCursorPosition? cursor,
+        int fetchCount,
+        CancellationToken ct);
+
+    /// <summary>Full item lines (ordered by DisplayOrder then Id) plus the detailed eligibility
+    /// reasons (Session 3.2a.2). Returns <c>null</c> for an unknown/cross-account id.</summary>
+    Task<OfferingAssemblyDetail?> GetDetailAsync(Guid accountId, Guid offeringAssemblyId, CancellationToken ct);
+
+    /// <summary>
+    /// Additive alongside <see cref="IsOperationallyEligibleAsync"/> (Session 3.2a.2, unchanged):
+    /// same eligibility predicate, but with the specific reasons an assembly is not eligible.
+    /// Returns <c>IsEligible: false</c> with no reasons for an unknown/cross-account id, matching
+    /// this seam's fail-closed read convention.
+    /// </summary>
+    Task<OfferingAssemblyEligibility> GetEligibilityAsync(Guid accountId, Guid offeringAssemblyId, CancellationToken ct);
 }

@@ -105,6 +105,212 @@ public sealed class EfOfferingAssemblyPersistence(OpHaloDbContext dbContext) : I
         return assembly.ItemCatalogItemIds.All(id => IsEligibleCatalogItem(id, requireStandalonePriceForItems));
     }
 
+    public async Task<IReadOnlyList<OfferingAssemblyListRow>> ListAsync(
+        Guid accountId,
+        OfferingAssemblyListFilters filters,
+        OfferingAssemblyListCursorPosition? cursor,
+        int fetchCount,
+        CancellationToken ct)
+    {
+        IQueryable<OfferingAssembly> baseQuery = dbContext.Set<OfferingAssembly>()
+            .AsNoTracking()
+            .Where(x => x.AccountId == accountId);
+
+        if (filters.ActiveState.HasValue)
+            baseQuery = baseQuery.Where(x => x.ActiveState == filters.ActiveState.Value);
+
+        if (cursor is not null)
+        {
+            var cursorName = cursor.Name;
+            var cursorId = cursor.LastId;
+            baseQuery = baseQuery.Where(x =>
+                x.Name.CompareTo(cursorName) > 0 ||
+                (x.Name == cursorName && x.Id.CompareTo(cursorId) > 0));
+        }
+
+        var headers = await baseQuery
+            .OrderBy(x => x.Name)
+            .ThenBy(x => x.Id)
+            .Select(x => new
+            {
+                x.Id,
+                x.Name,
+                x.PrimaryCatalogItemId,
+                x.PriceTreatment,
+                x.ActiveState,
+                x.ConcurrencyVersion,
+                ItemCatalogItemIds = x.Items.Select(i => i.CatalogItemId).ToList(),
+            })
+            .Take(fetchCount)
+            .ToListAsync(ct);
+
+        if (headers.Count == 0)
+            return [];
+
+        // One batched projection over every primary + component catalog item across the whole
+        // page — never a per-row query (Session 3.2a.2 locked design rule).
+        var allCatalogItemIds = headers
+            .SelectMany(h => h.ItemCatalogItemIds.Append(h.PrimaryCatalogItemId))
+            .Distinct()
+            .ToList();
+        var lookup = await LoadCatalogItemLookupAsync(accountId, allCatalogItemIds, ct);
+
+        return headers
+            .Select(h => new OfferingAssemblyListRow(
+                h.Id,
+                h.Name,
+                h.PrimaryCatalogItemId,
+                lookup.TryGetValue(h.PrimaryCatalogItemId, out var primaryInfo) ? primaryInfo.DisplayName : string.Empty,
+                h.PriceTreatment,
+                h.ActiveState,
+                h.ConcurrencyVersion,
+                ComputeEligibility(h.ActiveState, h.PriceTreatment, h.PrimaryCatalogItemId, h.ItemCatalogItemIds, lookup).IsEligible))
+            .ToList();
+    }
+
+    public async Task<OfferingAssemblyDetail?> GetDetailAsync(Guid accountId, Guid offeringAssemblyId, CancellationToken ct)
+    {
+        var assembly = await dbContext.Set<OfferingAssembly>()
+            .AsNoTracking()
+            .Include(x => x.Items)
+            .FirstOrDefaultAsync(x => x.AccountId == accountId && x.Id == offeringAssemblyId, ct);
+        if (assembly is null)
+            return null;
+
+        var orderedItems = assembly.Items.OrderBy(i => i.DisplayOrder).ThenBy(i => i.Id).ToList();
+        var itemCatalogItemIds = orderedItems.Select(i => i.CatalogItemId).ToList();
+        var allCatalogItemIds = itemCatalogItemIds.Append(assembly.PrimaryCatalogItemId).Distinct().ToList();
+
+        var lookup = await LoadCatalogItemLookupAsync(accountId, allCatalogItemIds, ct);
+
+        var eligibility = ComputeEligibility(
+            assembly.ActiveState, assembly.PriceTreatment, assembly.PrimaryCatalogItemId, itemCatalogItemIds, lookup);
+
+        return new OfferingAssemblyDetail(
+            assembly.Id,
+            assembly.Name,
+            assembly.PrimaryCatalogItemId,
+            lookup.TryGetValue(assembly.PrimaryCatalogItemId, out var primaryInfo) ? primaryInfo.DisplayName : string.Empty,
+            assembly.PriceTreatment,
+            assembly.ActiveState,
+            assembly.ConcurrencyVersion,
+            orderedItems
+                .Select(i => new OfferingAssemblyDetailItem(
+                    i.Id, i.CatalogItemId,
+                    lookup.TryGetValue(i.CatalogItemId, out var itemInfo) ? itemInfo.DisplayName : string.Empty,
+                    i.DefaultQuantity, i.IsOptional, i.DisplayOrder))
+                .ToList(),
+            eligibility);
+    }
+
+    public async Task<OfferingAssemblyEligibility> GetEligibilityAsync(Guid accountId, Guid offeringAssemblyId, CancellationToken ct)
+    {
+        var assembly = await dbContext.Set<OfferingAssembly>()
+            .AsNoTracking()
+            .Where(a => a.AccountId == accountId && a.Id == offeringAssemblyId)
+            .Select(a => new
+            {
+                a.ActiveState,
+                a.PriceTreatment,
+                a.PrimaryCatalogItemId,
+                ItemCatalogItemIds = a.Items.Select(i => i.CatalogItemId).ToList(),
+            })
+            .FirstOrDefaultAsync(ct);
+
+        if (assembly is null)
+            return new OfferingAssemblyEligibility(false, []);
+
+        var allCatalogItemIds = assembly.ItemCatalogItemIds.Append(assembly.PrimaryCatalogItemId).Distinct().ToList();
+        var lookup = await LoadCatalogItemLookupAsync(accountId, allCatalogItemIds, ct);
+
+        return ComputeEligibility(
+            assembly.ActiveState, assembly.PriceTreatment, assembly.PrimaryCatalogItemId, assembly.ItemCatalogItemIds, lookup);
+    }
+
+    private sealed record CatalogItemLookupInfo(string DisplayName, CatalogItemActiveState ActiveState, bool HasStandalonePrice);
+
+    // One batched projection over the given catalog-item ids — covers eligibility (ActiveState,
+    // HasStandalonePrice) and display names in the same round trip, never a per-row/per-field
+    // query (Session 3.2a.2 locked design rule).
+    private async Task<Dictionary<Guid, CatalogItemLookupInfo>> LoadCatalogItemLookupAsync(
+        Guid accountId, IReadOnlyList<Guid> catalogItemIds, CancellationToken ct)
+    {
+        if (catalogItemIds.Count == 0)
+            return new Dictionary<Guid, CatalogItemLookupInfo>();
+
+        var catalogItems = await dbContext.Set<CatalogItem>()
+            .AsNoTracking()
+            .Where(c => c.AccountId == accountId && catalogItemIds.Contains(c.Id))
+            .Select(c => new { c.Id, c.DisplayName, c.ActiveState, c.CurrentPriceBookVersionLineId })
+            .ToListAsync(ct);
+
+        var priceLineIds = catalogItems
+            .Where(c => c.CurrentPriceBookVersionLineId.HasValue)
+            .Select(c => c.CurrentPriceBookVersionLineId!.Value)
+            .Distinct()
+            .ToList();
+
+        var standalonePriceLineIds = priceLineIds.Count == 0
+            ? []
+            : await dbContext.Set<PriceBookVersionLine>()
+                .AsNoTracking()
+                .Where(l => l.AccountId == accountId
+                    && priceLineIds.Contains(l.Id)
+                    && l.PricingMode == PriceBookLinePricingMode.StandalonePrice)
+                .Select(l => l.Id)
+                .ToListAsync(ct);
+
+        return catalogItems.ToDictionary(
+            c => c.Id,
+            c => new CatalogItemLookupInfo(
+                c.DisplayName,
+                c.ActiveState,
+                c.CurrentPriceBookVersionLineId.HasValue && standalonePriceLineIds.Contains(c.CurrentPriceBookVersionLineId.Value)));
+    }
+
+    // Shared eligibility computation for List/Detail/GetEligibilityAsync (Session 3.2a.2).
+    // Deliberately separate from IsOperationallyEligibleAsync above, which stays untouched — it
+    // already carries its own locked integration-test suite (Session 3.1).
+    private static OfferingAssemblyEligibility ComputeEligibility(
+        CatalogActiveState assemblyActiveState,
+        PriceTreatment priceTreatment,
+        Guid primaryCatalogItemId,
+        IReadOnlyList<Guid> itemCatalogItemIdsInOrder,
+        IReadOnlyDictionary<Guid, CatalogItemLookupInfo> catalogItemLookup)
+    {
+        if (assemblyActiveState != CatalogActiveState.Active)
+            return new OfferingAssemblyEligibility(
+                false, [new OfferingAssemblyEligibilityReason(OfferingAssemblyEligibilityReasonCode.AssemblyInactive)]);
+
+        var reasons = new List<OfferingAssemblyEligibilityReason>();
+
+        if (!catalogItemLookup.TryGetValue(primaryCatalogItemId, out var primary) ||
+            primary.ActiveState != CatalogItemActiveState.Active)
+        {
+            reasons.Add(new OfferingAssemblyEligibilityReason(OfferingAssemblyEligibilityReasonCode.PrimaryItemInactive));
+        }
+        else if (!primary.HasStandalonePrice)
+        {
+            reasons.Add(new OfferingAssemblyEligibilityReason(OfferingAssemblyEligibilityReasonCode.PrimaryItemMissingStandalonePrice));
+        }
+
+        var requireStandalonePriceForItems = priceTreatment == PriceTreatment.Summed;
+        foreach (var itemId in itemCatalogItemIdsInOrder)
+        {
+            if (!catalogItemLookup.TryGetValue(itemId, out var component) ||
+                component.ActiveState != CatalogItemActiveState.Active)
+            {
+                reasons.Add(new OfferingAssemblyEligibilityReason(OfferingAssemblyEligibilityReasonCode.ComponentInactive, itemId));
+            }
+            else if (requireStandalonePriceForItems && !component.HasStandalonePrice)
+            {
+                reasons.Add(new OfferingAssemblyEligibilityReason(OfferingAssemblyEligibilityReasonCode.ComponentMissingStandalonePrice, itemId));
+            }
+        }
+
+        return new OfferingAssemblyEligibility(reasons.Count == 0, reasons);
+    }
+
     private static bool IsUniqueConstraintViolation(DbUpdateException ex) =>
         ex.InnerException is PostgresException pgEx && pgEx.SqlState == PostgresErrorCodes.UniqueViolation;
 }

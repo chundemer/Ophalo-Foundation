@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Primitives;
 using OpHalo.Api.Helpers;
 using OpHalo.Keep.Application.PriceBook;
 using OpHalo.Keep.Core.Entities;
@@ -7,10 +8,11 @@ using OpHalo.Keep.Core.Entities.Enums;
 namespace OpHalo.Api.Keep;
 
 /// <summary>
-/// Price Book, Quotes &amp; Materials — offering/assembly office-management endpoints (Session
-/// 3.2a.1: create-with-items, activate, inactivate). Thin: route mapping and request/response
-/// shaping only. All auth-stack composition lives in <see cref="OfferingAssemblyApiService"/>.
-/// List/detail reads are a separate slice (3.2a.2).
+/// Price Book, Quotes &amp; Materials — offering/assembly office-management endpoints: mutations
+/// (Session 3.2a.1: create-with-items, activate, inactivate) and bounded reads (Session 3.2a.2:
+/// list, detail with eligibility reasons). Thin: route mapping and request/response shaping only.
+/// Auth-stack composition lives in <see cref="OfferingAssemblyApiService"/> (mutations) and
+/// <see cref="OfferingAssemblyReadApiService"/> (reads).
 /// </summary>
 public static class OfferingAssemblyEndpoints
 {
@@ -64,7 +66,96 @@ public static class OfferingAssemblyEndpoints
             var result = await service.InactivateAsync(offeringAssemblyId, versionResult.Value, ct);
             return result.IsSuccess ? Results.Ok(new OfferingAssemblyTransitionResponse(result.Value)) : ErrorHttpMapper.ToHttpResult(result.Error);
         }).RequireAuthorization();
+
+        app.MapGet("/keep/pricebook/offering-assemblies", async (
+            HttpRequest httpRequest,
+            OfferingAssemblyReadApiService service,
+            CancellationToken ct) =>
+        {
+            var (query, bindError) = BindListQuery(httpRequest.Query);
+            if (bindError is not null)
+                return bindError;
+
+            var result = await service.ListAsync(query!, ct);
+            return result.IsSuccess ? Results.Ok(ToResponse(result.Value)) : ErrorHttpMapper.ToHttpResult(result.Error);
+        }).RequireAuthorization();
+
+        app.MapGet("/keep/pricebook/offering-assemblies/{offeringAssemblyId:guid}", async (
+            Guid offeringAssemblyId,
+            OfferingAssemblyReadApiService service,
+            CancellationToken ct) =>
+        {
+            var result = await service.GetDetailAsync(offeringAssemblyId, ct);
+            return result.IsSuccess ? Results.Ok(ToResponse(result.Value)) : ErrorHttpMapper.ToHttpResult(result.Error);
+        }).RequireAuthorization();
     }
+
+    private static readonly HashSet<string> KnownListParams = new(StringComparer.OrdinalIgnoreCase) { "status", "limit", "cursor" };
+
+    private static (ListOfferingAssembliesApiQuery? Query, IResult? Error) BindListQuery(IQueryCollection query)
+    {
+        var normalized = new Dictionary<string, StringValues>(StringComparer.OrdinalIgnoreCase);
+        foreach (var key in query.Keys)
+        {
+            if (!normalized.TryAdd(key, query[key]))
+                return (null, ValidationProblem("A query parameter was supplied more than once.", "Validation.DuplicateParameter"));
+        }
+
+        foreach (var key in normalized.Keys)
+        {
+            if (!KnownListParams.Contains(key))
+                return (null, ValidationProblem("One or more query parameters are not recognized.", "Validation.UnknownParameter"));
+        }
+
+        foreach (var (_, values) in normalized)
+        {
+            if (values.Count > 1)
+                return (null, ValidationProblem("A query parameter was supplied more than once.", "Validation.DuplicateParameter"));
+        }
+
+        int? limit = null;
+        if (normalized.TryGetValue("limit", out var limitVals))
+        {
+            if (!int.TryParse(limitVals[0], out var parsedLimit))
+                return (null, ValidationProblem("Limit must be an integer.", "Validation.LimitInvalid"));
+            limit = parsedLimit;
+        }
+
+        return (new ListOfferingAssembliesApiQuery(
+            Status: normalized.TryGetValue("status", out var statusVals) ? statusVals[0] : null,
+            Limit: limit,
+            Cursor: normalized.TryGetValue("cursor", out var cursorVals) ? cursorVals[0] : null), null);
+    }
+
+    private static OfferingAssemblyListResponse ToResponse(OfferingAssemblyListPage page) => new(
+        page.Items.Select(ToResponse).ToList(), page.Limit, page.HasMore, page.NextCursor);
+
+    private static OfferingAssemblyListRowResponse ToResponse(OfferingAssemblyListRow row) => new(
+        row.Id,
+        row.Name,
+        row.PrimaryCatalogItemId,
+        row.PrimaryCatalogItemDisplayName,
+        row.PriceTreatment.ToString(),
+        row.ActiveState.ToString(),
+        row.ConcurrencyVersion,
+        row.IsOperationallyEligible);
+
+    private static OfferingAssemblyDetailResponse ToResponse(OfferingAssemblyDetail detail) => new(
+        detail.Id,
+        detail.Name,
+        detail.PrimaryCatalogItemId,
+        detail.PrimaryCatalogItemDisplayName,
+        detail.PriceTreatment.ToString(),
+        detail.ActiveState.ToString(),
+        detail.ConcurrencyVersion,
+        detail.Items
+            .Select(i => new OfferingAssemblyDetailItemResponse(
+                i.Id, i.CatalogItemId, i.CatalogItemDisplayName, i.DefaultQuantity, i.IsOptional, i.DisplayOrder))
+            .ToList(),
+        detail.Eligibility.IsEligible,
+        detail.Eligibility.Reasons
+            .Select(r => new OfferingAssemblyEligibilityReasonResponse(r.Code.ToString(), r.ComponentCatalogItemId))
+            .ToList());
 
     private static OfferingAssemblyResponse ToResponse(OfferingAssembly assembly) => new(
         assembly.Id,
@@ -108,3 +199,33 @@ internal sealed record OfferingAssemblyResponse(
     IReadOnlyList<OfferingAssemblyItemResponse> Items);
 
 internal sealed record OfferingAssemblyTransitionResponse(Guid ConcurrencyVersion);
+
+internal sealed record OfferingAssemblyListResponse(
+    IReadOnlyList<OfferingAssemblyListRowResponse> Items, int Limit, bool HasMore, string? NextCursor);
+
+internal sealed record OfferingAssemblyListRowResponse(
+    Guid Id,
+    string Name,
+    Guid PrimaryCatalogItemId,
+    string PrimaryCatalogItemDisplayName,
+    string PriceTreatment,
+    string ActiveState,
+    Guid ConcurrencyVersion,
+    bool IsOperationallyEligible);
+
+internal sealed record OfferingAssemblyDetailItemResponse(
+    Guid Id, Guid CatalogItemId, string CatalogItemDisplayName, decimal DefaultQuantity, bool IsOptional, int DisplayOrder);
+
+internal sealed record OfferingAssemblyEligibilityReasonResponse(string Code, Guid? ComponentCatalogItemId);
+
+internal sealed record OfferingAssemblyDetailResponse(
+    Guid Id,
+    string Name,
+    Guid PrimaryCatalogItemId,
+    string PrimaryCatalogItemDisplayName,
+    string PriceTreatment,
+    string ActiveState,
+    Guid ConcurrencyVersion,
+    IReadOnlyList<OfferingAssemblyDetailItemResponse> Items,
+    bool IsOperationallyEligible,
+    IReadOnlyList<OfferingAssemblyEligibilityReasonResponse> EligibilityReasons);
