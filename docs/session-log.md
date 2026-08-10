@@ -138,11 +138,44 @@ account-aware `AccountFeatureAccessResolver`, and a generic Owner/Admin `GET
   14/14 architecture tests, 53/53 focused integration tests (proving the migration applies cleanly
   against real PostgreSQL with no pending-model-changes warning), `git diff --check` clean.
 
-  The next code preflight is **Session 3.3a.2** (`KeepRequestWorkSignal` foundation plus the
-  atomic submit/signal-reconciliation persistence operation — a dedicated
-  `IProposedScopeSubmissionPersistence`/EF implementation owning one transaction, not an
-  Application-layer `IDbContextTransaction` across two ordinary persistence adapters), reading
-  ADR-463/480/481 alongside this entry.
+- **3.3a.2 — KeepRequestWorkSignal foundation and atomic submit/signal: complete (2026-08-10).**
+  `KeepRequestWorkSignal` (ADR-463, Core-owned entity + `SourceModuleKey`/`SignalKey` registry —
+  no public mutation method yet, since its only writer this batch is a native upsert, not tracked
+  mutation) plus `IProposedScopePersistence`/`EfProposedScopePersistence` (ordinary create/edit,
+  mirrors `IOfferingAssemblyPersistence`'s shape) and the dedicated
+  `IProposedScopeSubmissionPersistence`/`EfProposedScopeSubmissionPersistence` owning the entire
+  submit transaction directly against `OpHaloDbContext` — never an Application-layer
+  `IDbContextTransaction` across two ordinary adapters, matching
+  `EfCatalogItemCreateAndActivatePersistence`'s pattern. `SubmitProposedScopeService` stays thin:
+  no auth (ADR-480's three-gate wiring is 3.3b), no transaction, just maps the persistence
+  outcome. Migration `20260810153619_KeepRequestWorkSignal`.
+
+  Inside the one transaction: `SELECT ... FOR UPDATE` locks the `KeepRequest` row before the
+  terminal-state check (`Closed`/`Cancelled`/`Spam`/`Test` reject submission), the tracked
+  `ProposedScope`'s version/status gate the pure `Submit()` domain transition, then a native
+  Postgres upsert (`INSERT ... ON CONFLICT ... DO UPDATE ... WHERE resolved_at_utc IS NOT NULL`)
+  raises or reopens the ADR-463 signal in one round trip — no application-level retry loop, and
+  an already-active row is left completely untouched (not even `ConcurrencyVersion`/
+  `UpdatedAtUtc` bump) rather than merely preserving `RaisedAtUtc`. Review caught that first cut
+  only preserved `RaisedAtUtc` while still bumping the rest, and that the terminal check's
+  `AsNoTracking` read had no protection against a concurrent terminal transition landing between
+  the check and commit — fixed with the `WHERE` clause and the `FOR UPDATE` lock respectively,
+  both proven by new tests (full-row-immutability assertion; a real two-transaction race proving
+  `SubmitAsync` observes a terminal transition that commits while it waits on the lock).
+
+  One intentional divergence from the interface shape sketched at preflight: `SubmitAsync` derives
+  `RequestId` from the loaded `ProposedScope` rather than taking it as a separate caller-supplied
+  parameter — safer (no caller-supplied id can mismatch the scope's actual request) and simpler,
+  approved as a sound simplification during review.
+
+  7 production files, 2 migration files, 1 test file, one mutation family. 1456/1456 full unit
+  suite, 66/66 focused integration tests (13 `ProposedScope`/signal, including the row-lock race,
+  stable across repeated runs), 14/14 architecture tests, `git diff --check` clean.
+
+  3.3a (`ProposedScope`/`ProposedScopeLine`/`KeepRequestWorkSignal` domain and persistence
+  foundation) is now fully complete. The next code preflight is **Session 3.3b** (the ADR-480
+  three-gate API surface: create/edit/submit endpoints, permission registration, and the
+  terminal-request precondition extended to create/edit, not just submit).
 
   The completed 2e record follows. Build 113 broke the
   work into bounded implementation slices. 2e.0 preflight split 2e.1 into 2e.1a (canonical SKU
