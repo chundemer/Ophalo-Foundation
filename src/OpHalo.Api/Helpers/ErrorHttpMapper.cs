@@ -132,6 +132,12 @@ public static class ErrorHttpMapper
             var c when c == "CatalogItem.ExpectedVersionRequired" => (StatusCodes.Status400BadRequest, "Bad request.", null),
             var c when c == "CatalogItem.ExpectedVersionInvalid"  => (StatusCodes.Status400BadRequest, "Bad request.", null),
 
+            // --- OfferingAssembly concurrency/uniqueness conflicts (Session 3.2a.1) ---
+            var c when c == "OfferingAssembly.VersionMismatch"                => (StatusCodes.Status409Conflict, "Conflict.", null),
+            var c when c == "OfferingAssembly.PrimaryCatalogItemAlreadyClaimed" => (StatusCodes.Status409Conflict, "Conflict.", null),
+            var c when c == "OfferingAssembly.ExpectedVersionRequired"        => (StatusCodes.Status400BadRequest, "Bad request.", null),
+            var c when c == "OfferingAssembly.ExpectedVersionInvalid"         => (StatusCodes.Status400BadRequest, "Bad request.", null),
+
             // --- CatalogCategory concurrency/uniqueness conflicts (Session 2b.3) ---
             var c when c == "CatalogCategory.VersionMismatch"         => (StatusCodes.Status409Conflict, "Conflict.", null),
             var c when c == "CatalogCategory.NameAlreadyExists"       => (StatusCodes.Status409Conflict, "Conflict.", null),

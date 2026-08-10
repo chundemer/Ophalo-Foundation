@@ -22,6 +22,12 @@ public static class OfferingAssemblyErrors
     public static readonly Error VersionMismatch =
         Error.Create("OfferingAssembly.VersionMismatch", "This offering/assembly was changed by someone else. Reload and try again.");
 
+    public static readonly Error ExpectedVersionRequired =
+        Error.Create("OfferingAssembly.ExpectedVersionRequired", "An expected offering/assembly version is required.");
+
+    public static readonly Error ExpectedVersionInvalid =
+        Error.Create("OfferingAssembly.ExpectedVersionInvalid", "The expected offering/assembly version is not a valid version value.");
+
     public static readonly Error PrimaryCatalogItemRequired =
         Error.Create("OfferingAssembly.PrimaryCatalogItemRequired", "A primary catalog item is required.");
 

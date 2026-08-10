@@ -113,6 +113,11 @@ public static class KeepServiceCollectionExtensions
         services.AddScoped<ICatalogReadPersistence, EfCatalogReadPersistence>();
         services.AddScoped<CatalogReadApiService>();
 
+        // Price Book, Quotes & Materials — offering/assembly office management (Session 3.2a.1).
+        services.AddScoped<IOfferingAssemblyPersistence, EfOfferingAssemblyPersistence>();
+        services.AddScoped<OfferingAssemblyLifecycleService>();
+        services.AddScoped<OfferingAssemblyApiService>();
+
         return services;
     }
 }
