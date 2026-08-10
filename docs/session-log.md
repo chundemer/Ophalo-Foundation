@@ -1,6 +1,6 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-08-09
+**Last updated:** 2026-08-10
 **Deployment posture:** Not pilot-ready.
 **Source of truth for acceptance criteria:** `docs/pilot-readiness-bug-tracker.md`.
 
@@ -31,11 +31,22 @@ account-aware `AccountFeatureAccessResolver`, and a generic Owner/Admin `GET
 **Session 2 progress:**
 
 - **2e — Catalog workspace UI: complete (2026-08-09).** Build 112 locked the product/UI boundary;
-  Build 113 supplied the bounded implementation and completion-verification sequence. The next
-  code preflight is Session 3.0 in Build 117: reconcile the Offering/Assembly, technician proposed
-  scope (including off-catalog capture), office review/catalog curation, quote, and actual-work
-  contracts into bounded coding slices. Image storage is paused; do not reopen 2e for image work,
-  an empty Offerings & Packages tab, or deferred catalog refinements.
+  Build 113 supplied the bounded implementation and completion-verification sequence. Image storage
+  is paused; do not reopen 2e for image work, an empty Offerings & Packages tab, or deferred catalog
+  refinements.
+
+- **Session 3.0 — Continuation preflight and reconciliation: complete (2026-08-09, commit
+  `3ef30d9`).** ADR-478 (quote direct-cost snapshots and Owner/Admin margin visibility) and ADR-479
+  (live `OfferingAssembly` lifecycle and computed operational eligibility) are locked; ADR-477
+  (field-presentable pricing) moved to Deferred pending pilot evidence (DEF-093). Full reconciliation
+  record and sequencing in [Build Log 117](build-log/117-price-book-continuation-coding-plan.md).
+
+- **3.1 — Offering/Assembly domain foundation: complete (2026-08-10, commit `6f7047e`).**
+  `OfferingAssembly`/`OfferingAssemblyItem` entities, persistence, EF configuration, and the
+  ADR-479 computed-eligibility read are migrated (`20260810075949_OfferingAssembly`). 22 domain
+  unit tests, 12 integration tests against real PostgreSQL, 14/14 architecture tests, `git diff
+  --check` clean. No API/service layer or technician workflow yet — that is 3.2. The next code
+  preflight is **Session 3.2** (Offering/Assembly office management API/workbench) in Build Log 117.
 
   The completed 2e record follows. Build 113 broke the
   work into bounded implementation slices. 2e.0 preflight split 2e.1 into 2e.1a (canonical SKU
@@ -472,8 +483,8 @@ account-aware `AccountFeatureAccessResolver`, and a generic Owner/Admin `GET
   interaction/accessibility polish and the required happy-path and conflict/error coverage.
   Proportionate automated checks, the frontend production build, and `git diff --check` were also
   completed. Build 112/113 boundaries and the deferred topics remain unchanged: 2e is closed with
-  no image-storage scope added. The next coding action is the Session 3.0 Price Book continuation
-  preflight in Build Log 117; image storage is paused pending that work.
+  no image-storage scope added; image storage remains paused until the Session 3 Price Book
+  foundation completes (see Session 3.0/3.1 status above).
 
 - **2a.1 — CatalogItem foundation:** complete and migrated. `CatalogItem`, its lifecycle/persistence
   stack, and `keep_pricebook_catalog_items` are in place. Review corrected the table name and ensured
