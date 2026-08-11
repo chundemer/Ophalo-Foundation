@@ -771,6 +771,16 @@ export interface OfferingAssemblyListResult {
   nextCursor: string | null;
 }
 
+export interface ActiveAssemblyDependency {
+  id: string;
+  name: string;
+}
+
+export interface ActiveAssemblyDependenciesResult {
+  count: number;
+  assemblies: ActiveAssemblyDependency[];
+}
+
 export interface OfferingAssemblyDetailItemResponse {
   id: string;
   catalogItemId: string;

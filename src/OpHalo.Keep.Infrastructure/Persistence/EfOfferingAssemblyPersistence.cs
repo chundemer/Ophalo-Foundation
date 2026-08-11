@@ -230,6 +230,17 @@ public sealed class EfOfferingAssemblyPersistence(OpHaloDbContext dbContext) : I
             assembly.ActiveState, assembly.PriceTreatment, assembly.PrimaryCatalogItemId, assembly.ItemCatalogItemIds, lookup);
     }
 
+    public async Task<IReadOnlyList<OfferingAssemblyDependencyRow>> ListActiveAssembliesReferencingCatalogItemAsync(
+        Guid accountId, Guid catalogItemId, CancellationToken ct) =>
+        await dbContext.Set<OfferingAssembly>()
+            .AsNoTracking()
+            .Where(a => a.AccountId == accountId
+                && a.ActiveState == CatalogActiveState.Active
+                && (a.PrimaryCatalogItemId == catalogItemId || a.Items.Any(i => i.CatalogItemId == catalogItemId)))
+            .OrderBy(a => a.Name).ThenBy(a => a.Id)
+            .Select(a => new OfferingAssemblyDependencyRow(a.Id, a.Name))
+            .ToListAsync(ct);
+
     private sealed record CatalogItemLookupInfo(string DisplayName, CatalogItemActiveState ActiveState, bool HasStandalonePrice);
 
     // One batched projection over the given catalog-item ids — covers eligibility (ActiveState,

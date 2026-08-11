@@ -111,6 +111,20 @@ public sealed class OfferingAssemblyReadApiService(
             : Result<OfferingAssemblyDetail>.Success(detail);
     }
 
+    /// <summary>Session 3.2d: active assemblies referencing a catalog item (primary or associated),
+    /// for the catalog-item pre-inactivation confirmation. Same Owner/Admin gate as every other
+    /// read on this service — reused as-is, no new gate logic.</summary>
+    public async Task<Result<IReadOnlyList<OfferingAssemblyDependencyRow>>> GetActiveAssemblyDependenciesAsync(
+        Guid catalogItemId, CancellationToken ct)
+    {
+        var gate = await AuthorizeAsync(ct);
+        if (gate.IsFailure)
+            return Result<IReadOnlyList<OfferingAssemblyDependencyRow>>.Failure(gate.Error);
+
+        var rows = await persistence.ListActiveAssembliesReferencingCatalogItemAsync(currentUser.AccountId, catalogItemId, ct);
+        return Result<IReadOnlyList<OfferingAssemblyDependencyRow>>.Success(rows);
+    }
+
     private async Task<Result> AuthorizeAsync(CancellationToken ct)
     {
         if (!currentUser.IsAuthenticated)

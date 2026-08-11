@@ -16,6 +16,7 @@ const mockAddCatalogItemAlias = vi.fn();
 const mockActivateCatalogItemAlias = vi.fn();
 const mockInactivateCatalogItemAlias = vi.fn();
 const mockPublishCatalogItemPrice = vi.fn();
+const mockGetActiveAssemblyDependencies = vi.fn();
 
 vi.mock("../../lib/apiClient", async () => {
   const actual = await vi.importActual<typeof import("../../lib/apiClient")>("../../lib/apiClient");
@@ -33,6 +34,7 @@ vi.mock("../../lib/apiClient", async () => {
       activateCatalogItemAlias: (...args: unknown[]) => mockActivateCatalogItemAlias(...args),
       inactivateCatalogItemAlias: (...args: unknown[]) => mockInactivateCatalogItemAlias(...args),
       publishCatalogItemPrice: (...args: unknown[]) => mockPublishCatalogItemPrice(...args),
+      getActiveAssemblyDependencies: (...args: unknown[]) => mockGetActiveAssemblyDependencies(...args),
     },
   };
 });
@@ -96,6 +98,8 @@ describe("CatalogItemDetail", () => {
     mockActivateCatalogItemAlias.mockReset();
     mockInactivateCatalogItemAlias.mockReset();
     mockPublishCatalogItemPrice.mockReset();
+    mockGetActiveAssemblyDependencies.mockReset();
+    mockGetActiveAssemblyDependencies.mockResolvedValue({ count: 0, assemblies: [] });
   });
 
   it("shows a loading state before the fetch resolves", () => {
@@ -475,6 +479,91 @@ describe("CatalogItemDetail", () => {
     await waitFor(() => expect(mockInactivateCatalogItem).toHaveBeenCalledWith("item-1", "v1"));
     await waitFor(() => expect(screen.getByRole("button", { name: "Reactivate" })).toBeInTheDocument());
     expect(screen.queryByRole("button", { name: "Inactivate" })).not.toBeInTheDocument();
+  });
+
+  it("keeps the normal confirmation path when no assemblies depend on the item", async () => {
+    const user = userEvent.setup();
+    mockGetCatalogItem.mockResolvedValue(baseItem);
+    mockGetActiveAssemblyDependencies.mockResolvedValue({ count: 0, assemblies: [] });
+    renderDetail();
+
+    await waitFor(() => expect(screen.getByText("Condensate Pump")).toBeInTheDocument());
+    await user.click(screen.getByRole("button", { name: "Inactivate" }));
+
+    await waitFor(() => expect(mockGetActiveAssemblyDependencies).toHaveBeenCalledWith("item-1"));
+    await waitFor(() => expect(screen.getByText("Remove from selection?")).toBeInTheDocument());
+    expect(screen.getByRole("button", { name: "Confirm inactivate" })).toBeEnabled();
+  });
+
+  it("names the affected assemblies and warns they become unavailable for new selection", async () => {
+    const user = userEvent.setup();
+    mockGetCatalogItem.mockResolvedValue(baseItem);
+    mockGetActiveAssemblyDependencies.mockResolvedValue({
+      count: 2,
+      assemblies: [
+        { id: "assembly-1", name: "Seasonal Tune-Up" },
+        { id: "assembly-2", name: "Full System Replacement" },
+      ],
+    });
+    renderDetail();
+
+    await waitFor(() => expect(screen.getByText("Condensate Pump")).toBeInTheDocument());
+    await user.click(screen.getByRole("button", { name: "Inactivate" }));
+
+    await waitFor(() => expect(screen.getByText("Seasonal Tune-Up")).toBeInTheDocument());
+    expect(screen.getByText("Full System Replacement")).toBeInTheDocument();
+    expect(screen.getByText(/unavailable for new selection/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Confirm inactivate" })).toBeEnabled();
+  });
+
+  it("does not allow a blind inactivation when the dependency check fails", async () => {
+    const user = userEvent.setup();
+    mockGetCatalogItem.mockResolvedValue(baseItem);
+    mockGetActiveAssemblyDependencies.mockRejectedValue(new Error("network error"));
+    renderDetail();
+
+    await waitFor(() => expect(screen.getByText("Condensate Pump")).toBeInTheDocument());
+    await user.click(screen.getByRole("button", { name: "Inactivate" }));
+
+    await waitFor(() =>
+      expect(screen.getByText(/Couldn't check whether this item is used/)).toBeInTheDocument(),
+    );
+    expect(screen.getByRole("button", { name: "Confirm inactivate" })).toBeDisabled();
+    expect(mockInactivateCatalogItem).not.toHaveBeenCalled();
+  });
+
+  it("keeps Confirm inactivate disabled while a reopened confirmation is still refetching stale-cached dependencies", async () => {
+    const user = userEvent.setup();
+    mockGetCatalogItem.mockResolvedValue(baseItem);
+    let resolveSecondFetch: (value: { count: number; assemblies: { id: string; name: string }[] }) => void;
+    const deferredSecondFetch = new Promise<{ count: number; assemblies: { id: string; name: string }[] }>((resolve) => {
+      resolveSecondFetch = resolve;
+    });
+    mockGetActiveAssemblyDependencies
+      .mockResolvedValueOnce({ count: 0, assemblies: [] })
+      .mockReturnValueOnce(deferredSecondFetch);
+    renderDetail();
+
+    await waitFor(() => expect(screen.getByText("Condensate Pump")).toBeInTheDocument());
+
+    // First open resolves normally.
+    await user.click(screen.getByRole("button", { name: "Inactivate" }));
+    await waitFor(() => expect(screen.getByText("Remove from selection?")).toBeInTheDocument());
+
+    // Cancel, then reopen — React Query serves the cached (stale) result immediately
+    // (isLoading false) while a background refetch is still in flight (isFetching true).
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+    await user.click(screen.getByRole("button", { name: "Inactivate" }));
+
+    await waitFor(() => expect(mockGetActiveAssemblyDependencies).toHaveBeenCalledTimes(2));
+    expect(screen.getByRole("button", { name: "Confirm inactivate" })).toBeDisabled();
+
+    await user.click(screen.getByRole("button", { name: "Confirm inactivate" }));
+    expect(mockInactivateCatalogItem).not.toHaveBeenCalled();
+
+    resolveSecondFetch!({ count: 0, assemblies: [] });
+
+    await waitFor(() => expect(screen.getByRole("button", { name: "Confirm inactivate" })).toBeEnabled());
   });
 
   it("holds Inactivate disabled through a version conflict until the refetch lands", async () => {

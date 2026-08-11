@@ -76,6 +76,10 @@ public sealed record OfferingAssemblyEligibilityReason(
 
 public sealed record OfferingAssemblyEligibility(bool IsEligible, IReadOnlyList<OfferingAssemblyEligibilityReason> Reasons);
 
+/// <summary>One active assembly referencing a catalog item, for the pre-inactivation dependency
+/// check (Session 3.2d).</summary>
+public sealed record OfferingAssemblyDependencyRow(Guid Id, string Name);
+
 /// <summary>
 /// Persistence seam for <see cref="OfferingAssembly"/>. Every read is scoped by
 /// <c>accountId</c> directly in the query, never filtered after load, so a cross-account id can
@@ -141,4 +145,15 @@ public interface IOfferingAssemblyPersistence
     /// this seam's fail-closed read convention.
     /// </summary>
     Task<OfferingAssemblyEligibility> GetEligibilityAsync(Guid accountId, Guid offeringAssemblyId, CancellationToken ct);
+
+    /// <summary>
+    /// Session 3.2d: the active assemblies (only <c>Active</c> — an already-inactive assembly is
+    /// not a reason to block inactivation) that reference <paramref name="catalogItemId"/> as
+    /// either the primary item or an associated item, for the catalog-item pre-inactivation
+    /// confirmation. Distinct by assembly id even when an item is both primary and associated
+    /// elsewhere is not possible (ADR-466 forbids that combination), but a defensive Distinct
+    /// keeps the contract simple. Ordered by Name then Id, matching the list read's ordering.
+    /// </summary>
+    Task<IReadOnlyList<OfferingAssemblyDependencyRow>> ListActiveAssembliesReferencingCatalogItemAsync(
+        Guid accountId, Guid catalogItemId, CancellationToken ct);
 }

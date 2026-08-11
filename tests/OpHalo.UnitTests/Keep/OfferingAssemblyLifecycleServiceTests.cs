@@ -421,6 +421,10 @@ public class OfferingAssemblyLifecycleServiceTests
 
         public Task<OfferingAssemblyEligibility> GetEligibilityAsync(Guid accountId, Guid offeringAssemblyId, CancellationToken ct) =>
             throw new NotSupportedException("Not exercised by OfferingAssemblyLifecycleServiceTests.");
+
+        public Task<IReadOnlyList<OfferingAssemblyDependencyRow>> ListActiveAssembliesReferencingCatalogItemAsync(
+            Guid accountId, Guid catalogItemId, CancellationToken ct) =>
+            throw new NotSupportedException("Not exercised by OfferingAssemblyLifecycleServiceTests.");
     }
 
     sealed class FakeCatalogItemPersistence : ICatalogItemPersistence

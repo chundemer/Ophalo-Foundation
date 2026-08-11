@@ -175,6 +175,33 @@ account-aware `AccountFeatureAccessResolver`, and a generic Owner/Admin `GET
   3.2d (catalog-item inactivation dependency check) is the immediate next session, no deployment
   before it lands.**
 
+- **3.2d — catalog-item inactivation dependency check: complete (2026-08-10).** New
+  `IOfferingAssemblyPersistence.ListActiveAssembliesReferencingCatalogItemAsync` (EF: account-scoped,
+  `Active`-only, matches both `PrimaryCatalogItemId` and associated `Items[].CatalogItemId`),
+  `OfferingAssemblyReadApiService.GetActiveAssemblyDependenciesAsync` (reuses the existing Owner/
+  Admin `AuthorizeAsync` gate, no new gate logic), and
+  `GET /keep/pricebook/catalog-items/{catalogItemId}/active-assembly-dependencies` on
+  `OfferingAssemblyEndpoints.cs`, returning `{ count, assemblies: [{ id, name }] }`.
+  `CatalogItemDetail.tsx`'s inline pre-inactivation confirmation now names the affected active
+  assemblies and states they become unavailable for new selection; `Confirm inactivate` stays
+  disabled while the dependency read is loading, refetching (including a reopened confirmation
+  serving stale cached data in the background — gated on `isFetching`, not `isLoading`, to close a
+  fail-closed gap caught in review), or has failed, so a failed read can never allow a blind
+  inactivation.
+
+  7 production files (`IOfferingAssemblyPersistence.cs`, `EfOfferingAssemblyPersistence.cs`,
+  `OfferingAssemblyReadApiService.cs`, `OfferingAssemblyEndpoints.cs`, `apiClient.ts`,
+  `apiClient.types.ts`, `CatalogItemDetail.tsx`) + 3 test files. `dotnet build` and `tsc --noEmit`
+  clean; `git diff --check` clean. Backend: 18/18 focused read-suite integration tests (5 new,
+  covering active-only filtering, primary + associated-item references, account scoping, the
+  Owner/Admin gate, and the `count` field), 41/41 unit, 14/14 architecture. Frontend: 359/359 (39
+  files), including a regression test proving the mutation cannot fire during a background refetch
+  of stale cached dependency data.
+
+  **Guardrail closed: 3.2c and 3.2d together are the complete Offering/Assembly office-management
+  delivery.** Ready for Christian's normal manual acceptance; this record does not itself authorize
+  deployment.
+
 - **3.3 pre-work — two authority/snapshot decisions locked (2026-08-10), no code yet.** ADR-480:
   new `keep.pricebook.scope.capture` permission in `RolePermissions.OperatorBase` (Admin/Owner
   hold it automatically via the existing role composition); every `ProposedScope` mutation

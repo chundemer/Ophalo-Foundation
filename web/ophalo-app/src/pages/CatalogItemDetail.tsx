@@ -241,6 +241,15 @@ export function CatalogItemDetail({
   const [newAliasText, setNewAliasText] = useState("");
   const itemBusy = conflictRefreshPending || reactivatePending || inactivatePending || aliasActionPending;
 
+  // Session 3.2d: which active offerings/assemblies reference this item, fetched only while the
+  // inline inactivate confirmation is open. A failed read must not allow a blind inactivation, so
+  // Confirm inactivate stays disabled (not just unwarned) until this resolves successfully.
+  const assemblyDependenciesQuery = useQuery({
+    queryKey: ["catalogItemActiveAssemblyDependencies", catalogItemId],
+    queryFn: () => api.getActiveAssemblyDependencies(catalogItemId),
+    enabled: confirmInactivate,
+  });
+
   const reactivateMutation = useMutation({
     mutationFn: () => {
       if (!data) throw new Error("Catalog item not loaded.");
@@ -541,11 +550,20 @@ export function CatalogItemDetail({
                 )}
                 {data.item.activeState === "Active" && confirmInactivate && (
                   <div className="flex items-center gap-2">
-                    <span className="text-sm text-[var(--ophalo-muted)]">Remove from selection?</span>
+                    <span className="text-sm text-[var(--ophalo-muted)]">
+                      {assemblyDependenciesQuery.isFetching
+                        ? "Checking offerings/assemblies…"
+                        : "Remove from selection?"}
+                    </span>
                     <button
                       type="button"
                       onClick={() => inactivateMutation.mutate()}
-                      disabled={itemBusy || inactivateMutation.isPending}
+                      disabled={
+                        itemBusy ||
+                        inactivateMutation.isPending ||
+                        assemblyDependenciesQuery.isFetching ||
+                        assemblyDependenciesQuery.isError
+                      }
                       className="rounded-lg border border-[var(--ophalo-danger)] px-3 py-1.5 text-sm font-medium text-[var(--ophalo-danger)] hover:bg-[var(--ophalo-canvas)] disabled:opacity-60"
                     >
                       {inactivatePending ? "Inactivating…" : "Confirm inactivate"}
@@ -592,6 +610,38 @@ export function CatalogItemDetail({
                 {inactivateError}
               </div>
             )}
+
+            {confirmInactivate && assemblyDependenciesQuery.isError && (
+              <div className="rounded-lg border border-[var(--ophalo-danger)] p-3 text-sm text-[var(--ophalo-danger)]">
+                Couldn't check whether this item is used by any offerings/assemblies.{" "}
+                <button
+                  type="button"
+                  onClick={() => void assemblyDependenciesQuery.refetch()}
+                  className="font-medium underline"
+                >
+                  Try again
+                </button>{" "}
+                before inactivating.
+              </div>
+            )}
+
+            {confirmInactivate &&
+              !assemblyDependenciesQuery.isLoading &&
+              !assemblyDependenciesQuery.isError &&
+              (assemblyDependenciesQuery.data?.assemblies.length ?? 0) > 0 && (
+                <div className="rounded-lg border border-[var(--ophalo-border)] bg-[var(--ophalo-canvas)] p-3 text-sm text-[var(--ophalo-ink)]">
+                  This item is used by{" "}
+                  {assemblyDependenciesQuery.data!.assemblies.map((a, i) => (
+                    <span key={a.id}>
+                      {i > 0 ? ", " : ""}
+                      <span className="font-medium">{a.name}</span>
+                    </span>
+                  ))}
+                  . Inactivating it will make{" "}
+                  {assemblyDependenciesQuery.data!.assemblies.length === 1 ? "that assembly" : "those assemblies"}{" "}
+                  unavailable for new selection.
+                </div>
+              )}
 
             {conflictDraft && (
               <div className="rounded-lg border border-[var(--ophalo-danger)] p-3 text-sm text-[var(--ophalo-danger)]">

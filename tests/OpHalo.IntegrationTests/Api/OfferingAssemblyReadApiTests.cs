@@ -339,6 +339,100 @@ public sealed class OfferingAssemblyReadApiTests : IClassFixture<KeepApiWebFacto
     }
 
     // =========================================================================
+    // Session 3.2d — GET /keep/pricebook/catalog-items/{catalogItemId}/active-assembly-dependencies
+    // =========================================================================
+
+    [Fact]
+    public async Task Dependencies_OnlyReturnsActiveAssemblies()
+    {
+        var (accountId, ownerId, cookie) = await SeedAccountAsync("deps-active-only");
+        await EnrollAsync(accountId, ownerId);
+
+        var (primaryId, _) = await CreateCatalogItemAsync(cookie, "Shared Primary", "StandalonePrice");
+        var (assemblyId, version) = await CreateAssemblyWithVersionAsync(cookie, primaryId, "Retiring Offering", "Summed", []);
+        var inactivateResponse = await PatchWithVersionAsync(
+            AuthRequest(cookie), $"/keep/pricebook/offering-assemblies/{assemblyId}/inactivate", version);
+        Assert.Equal(HttpStatusCode.OK, inactivateResponse.StatusCode);
+
+        var response = await AuthRequest(cookie).GetAsync($"/keep/pricebook/catalog-items/{primaryId}/active-assembly-dependencies");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(0, body.GetProperty("count").GetInt32());
+        Assert.Empty(body.GetProperty("assemblies").EnumerateArray());
+    }
+
+    [Fact]
+    public async Task Dependencies_IncludesBothPrimaryAndAssociatedItemReferences()
+    {
+        var (accountId, ownerId, cookie) = await SeedAccountAsync("deps-primary-and-associated");
+        await EnrollAsync(accountId, ownerId);
+
+        var (sharedItemId, _) = await CreateCatalogItemAsync(cookie, "Shared Component", "StandalonePrice");
+        var (otherPrimaryId, _) = await CreateCatalogItemAsync(cookie, "Other Primary", "StandalonePrice");
+
+        var asPrimaryAssemblyId = await CreateAssemblyAsync(cookie, sharedItemId, "Primary-Use Offering", "Summed", []);
+        var asAssociatedAssemblyId = await CreateAssemblyAsync(
+            cookie, otherPrimaryId, "Associated-Use Offering", "Summed",
+            [(sharedItemId, 1m, false, 0)]);
+
+        var response = await AuthRequest(cookie).GetAsync($"/keep/pricebook/catalog-items/{sharedItemId}/active-assembly-dependencies");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        var ids = body.GetProperty("assemblies").EnumerateArray().Select(x => x.GetProperty("id").GetGuid()).ToList();
+        Assert.Contains(asPrimaryAssemblyId, ids);
+        Assert.Contains(asAssociatedAssemblyId, ids);
+        Assert.Equal(2, ids.Count);
+        Assert.Equal(2, body.GetProperty("count").GetInt32());
+    }
+
+    [Fact]
+    public async Task Dependencies_ForItemWithNoReferences_ReturnsEmpty()
+    {
+        var (accountId, ownerId, cookie) = await SeedAccountAsync("deps-none");
+        await EnrollAsync(accountId, ownerId);
+
+        var (unreferencedId, _) = await CreateCatalogItemAsync(cookie, "Unreferenced Item", "StandalonePrice");
+
+        var response = await AuthRequest(cookie).GetAsync($"/keep/pricebook/catalog-items/{unreferencedId}/active-assembly-dependencies");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(0, body.GetProperty("count").GetInt32());
+        Assert.Empty(body.GetProperty("assemblies").EnumerateArray());
+    }
+
+    [Fact]
+    public async Task Dependencies_AreScopedToTheCallingAccount()
+    {
+        var (accountA, ownerA, cookieA) = await SeedAccountAsync("deps-cross-a");
+        await EnrollAsync(accountA, ownerA);
+        var (primaryId, _) = await CreateCatalogItemAsync(cookieA, "Account A Primary", "StandalonePrice");
+        await CreateAssemblyAsync(cookieA, primaryId, "Account A Offering", "Summed", []);
+
+        var (accountB, ownerB, cookieB) = await SeedAccountAsync("deps-cross-b");
+        await EnrollAsync(accountB, ownerB);
+
+        var response = await AuthRequest(cookieB).GetAsync($"/keep/pricebook/catalog-items/{primaryId}/active-assembly-dependencies");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(0, body.GetProperty("count").GetInt32());
+        Assert.Empty(body.GetProperty("assemblies").EnumerateArray());
+    }
+
+    [Fact]
+    public async Task Dependencies_WithoutEntitlement_Returns403()
+    {
+        var (accountId, ownerId, cookie) = await SeedAccountAsync("deps-no-entitlement");
+
+        var response = await AuthRequest(cookie).GetAsync($"/keep/pricebook/catalog-items/{Guid.NewGuid()}/active-assembly-dependencies");
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    // =========================================================================
     // Helpers
     // =========================================================================
 

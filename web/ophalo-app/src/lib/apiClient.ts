@@ -175,6 +175,7 @@ import type {
   OfferingAssemblyListResult,
   OfferingAssemblyDetailResult,
   GetOfferingAssembliesParams,
+  ActiveAssemblyDependenciesResult,
 } from "./apiClient.types";
 
 export type {
@@ -259,6 +260,7 @@ export type {
   OfferingAssemblyListResult,
   OfferingAssemblyDetailResult,
   GetOfferingAssembliesParams,
+  ActiveAssemblyDependenciesResult,
 };
 
 export type { FollowUpResolutionOutcome, FollowUpCompletionReason } from "./apiClient.types";
@@ -387,6 +389,11 @@ export const api = {
   },
   getOfferingAssembly: (offeringAssemblyId: string) =>
     apiFetch<OfferingAssemblyDetailResult>(`/keep/pricebook/offering-assemblies/${offeringAssemblyId}`),
+  // Active-assembly dependency check for the catalog-item pre-inactivation confirmation (Session 3.2d).
+  getActiveAssemblyDependencies: (catalogItemId: string) =>
+    apiFetch<ActiveAssemblyDependenciesResult>(
+      `/keep/pricebook/catalog-items/${catalogItemId}/active-assembly-dependencies`,
+    ),
   createOfferingAssembly: (body: CreateOfferingAssemblyWithItemsBody) =>
     apiFetch<OfferingAssemblyResponse>("/keep/pricebook/offering-assemblies/create-with-items", {
       method: "POST",

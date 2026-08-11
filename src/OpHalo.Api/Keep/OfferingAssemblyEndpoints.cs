@@ -162,6 +162,17 @@ public static class OfferingAssemblyEndpoints
             var result = await service.GetDetailAsync(offeringAssemblyId, ct);
             return result.IsSuccess ? Results.Ok(ToResponse(result.Value)) : ErrorHttpMapper.ToHttpResult(result.Error);
         }).RequireAuthorization();
+
+        app.MapGet("/keep/pricebook/catalog-items/{catalogItemId:guid}/active-assembly-dependencies", async (
+            Guid catalogItemId,
+            OfferingAssemblyReadApiService service,
+            CancellationToken ct) =>
+        {
+            var result = await service.GetActiveAssemblyDependenciesAsync(catalogItemId, ct);
+            return result.IsSuccess
+                ? Results.Ok(ToResponse(result.Value))
+                : ErrorHttpMapper.ToHttpResult(result.Error);
+        }).RequireAuthorization();
     }
 
     private static readonly HashSet<string> KnownListParams = new(StringComparer.OrdinalIgnoreCase) { "status", "limit", "cursor" };
@@ -230,6 +241,9 @@ public static class OfferingAssemblyEndpoints
         detail.Eligibility.Reasons
             .Select(r => new OfferingAssemblyEligibilityReasonResponse(r.Code.ToString(), r.ComponentCatalogItemId))
             .ToList());
+
+    private static ActiveAssemblyDependenciesResponse ToResponse(IReadOnlyList<OfferingAssemblyDependencyRow> rows) => new(
+        rows.Count, rows.Select(r => new ActiveAssemblyDependencyResponse(r.Id, r.Name)).ToList());
 
     private static OfferingAssemblyResponse ToResponse(OfferingAssembly assembly) => new(
         assembly.Id,
@@ -311,3 +325,7 @@ internal sealed record OfferingAssemblyDetailResponse(
     IReadOnlyList<OfferingAssemblyDetailItemResponse> Items,
     bool IsOperationallyEligible,
     IReadOnlyList<OfferingAssemblyEligibilityReasonResponse> EligibilityReasons);
+
+internal sealed record ActiveAssemblyDependencyResponse(Guid Id, string Name);
+
+internal sealed record ActiveAssemblyDependenciesResponse(int Count, IReadOnlyList<ActiveAssemblyDependencyResponse> Assemblies);
