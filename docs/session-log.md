@@ -109,6 +109,72 @@ account-aware `AccountFeatureAccessResolver`, and a generic Owner/Admin `GET
   is tracked as **3.2c** and is a hard dependency for 3.4 (per build-log/117's own `3.2, 3.3 → 3.4`
   dependency line) — do not start 3.4 until 3.2c is complete.
 
+  **3.2c/3.2d preflight locked (2026-08-10), no code yet.** Nav: `PriceBook.tsx` gains tabs
+  ("Catalog Items" / "Offerings & Assemblies") — one Owner/Admin price-book workspace, not a
+  separate top-level route. Build-log/112's deferred usage-count/link and the quote-block
+  behavior stay out of scope; the catalog-item-inactivation hazard (build-log/112: "inactivation
+  must warn about active offering usage") is in scope but split by the file-count gate:
+  - **3.2c — workbench UI.** New `OfferingAssemblyDrawer.tsx` (create), `OfferingAssemblyDetail.tsx`
+    (view/edit/activate/inactivate/items), `CatalogItemPicker.tsx` (shared primary/associated-item
+    search, reused by both); modified `PriceBook.tsx` (tabs), `apiClient.ts`/`apiClient.types.ts`
+    (assembly CRUD calls), `App.tsx` (assembly detail route). Wires the existing 3.2a/3.2b API only
+    — no backend changes. 8 production files.
+  - **3.2d — catalog-item inactivation dependency check, immediately next.** New account-scoped,
+    Owner/Admin-gated, active-assemblies-only read covering both primary and associated-item
+    references (`IOfferingAssemblyPersistence.ListActiveAssembliesReferencingCatalogItemAsync`,
+    `EfOfferingAssemblyPersistence`, `OfferingAssemblyReadApiService`, new
+    `GET /keep/pricebook/catalog-items/{catalogItemId}/active-assembly-dependencies` on
+    `OfferingAssemblyEndpoints.cs`) plus `CatalogItemDetail.tsx`'s pre-inactivation confirmation
+    (not `CatalogItemDrawer.tsx`, which is create-only) naming the consequence — those assemblies
+    become unavailable for new selection — before the existing inactivate call. Purpose-built to
+    the inactivation path only; not a general usage-count/link feature.
+  - **Guardrail: 3.2c and 3.2d are one functional delivery.** Do not treat 3.2c as released,
+    manually accepted, or pilot-used on its own — no deployment between the two sessions.
+
+  **3.2c — workbench UI: complete (2026-08-10), not released.** New `OfferingAssemblyDrawer.tsx`
+  (create), `OfferingAssemblyDetail.tsx` (view/edit/activate/inactivate/items, eligibility-reasons
+  display), `CatalogItemPicker.tsx` (shared server-search picker, reused by both — the catalog is
+  bounded/cursor-paged so it searches on typed input rather than holding it in memory, unlike
+  `CategoryCombobox`'s in-memory list). `PriceBook.tsx` gains the locked "Catalog Items" /
+  "Offerings & Assemblies" tabs; `App.tsx` gains the `pricebook-assembly` route
+  (`#/pricebook/assembly/:id`, checked before the item-detail route since its own pattern is a
+  superset). `apiClient.ts`/`apiClient.types.ts` gain the full assembly CRUD surface. Wires only
+  the existing 3.2a/3.2b API — no backend changes in this slice.
+
+  Independent review of the first pass found four real gaps, all fixed before this entry: (1) the
+  assemblies list queried `status: "Active"` only, so an inactivated assembly had no UI path back
+  to reactivation — added an Active/Inactive status filter mirroring the catalog-items toggle;
+  (2) header/item mutations in `OfferingAssemblyDetail.tsx` invalidated only the detail query, so
+  the list could show a stale name/primary/price-treatment/eligibility after an edit — folded list
+  invalidation into the shared `invalidateDetail()` used by every mutation; (3) the creation
+  drawer's per-row associated-item exclusion list only ever contained the primary item, so a user
+  could pick the same component twice and hit a raw backend error — replaced the static exclusion
+  list with a per-row `excludeIdsForRow()` that also excludes every other row's current selection;
+  (4) the only test change was a required-prop fixup, no real coverage of the new surface — added
+  three focused suites: `PriceBook.assemblies.test.tsx` (tab isolation, list render, row
+  navigation, eligibility badge, the Active/Inactive filter reaching an inactivated assembly,
+  filter-scoped empty states), `OfferingAssemblyDrawer.test.tsx` (primary-exclusion, the
+  duplicate-prevention regression case, submit payload shape, required-field validation),
+  `OfferingAssemblyDetail.test.tsx` (render, eligibility-reasons display, header edit invalidates
+  both detail and list queries, version-conflict recovery, activate/inactivate incl. the inline
+  confirm gate, item removal invalidates the list).
+
+  A second review pass found two more real gaps, both fixed: (5) the assemblies list never
+  requested a second page — no cursor/page state and no Previous/Next controls, so an account with
+  more than a page of active or inactive assemblies had no way to reach the rest — added
+  independent per-status cursor/page state (`assemblyPagination`, keyed by `Active`/`Inactive`, so
+  switching the status filter doesn't lose the other status's page position, unlike the
+  catalog-items list which resets pagination on any filter change) plus Prev/Next controls mirroring
+  the catalog list's; (6) the desktop assembly rows were bare clickable `<tr>` elements, unreachable
+  by keyboard — replaced with the catalog table's own pattern, a `<button>` around the name cell.
+  Two new regression tests cover both (`PriceBook.assemblies.test.tsx`: cross-status page-position
+  independence via Prev/Next, and keyboard Enter-to-navigate on the name button).
+
+  7 production files + 4 test files. `tsc --noEmit` clean; full frontend suite 355/355 (39 files,
+  18 new), no regressions; `git diff --check` clean. **Not released per the guardrail above —
+  3.2d (catalog-item inactivation dependency check) is the immediate next session, no deployment
+  before it lands.**
+
 - **3.3 pre-work — two authority/snapshot decisions locked (2026-08-10), no code yet.** ADR-480:
   new `keep.pricebook.scope.capture` permission in `RolePermissions.OperatorBase` (Admin/Owner
   hold it automatically via the existing role composition); every `ProposedScope` mutation

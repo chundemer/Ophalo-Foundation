@@ -33,6 +33,7 @@ function renderPriceBook(props: Partial<React.ComponentProps<typeof PriceBook>> 
         entitlementError={false}
         onRetryEntitlement={vi.fn()}
         onSelectItem={vi.fn()}
+        onSelectAssembly={vi.fn()}
         {...props}
       />
     </QueryClientProvider>,

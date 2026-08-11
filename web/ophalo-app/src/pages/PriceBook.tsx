@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Keyboard, Plus, Tag } from "lucide-react";
+import { Keyboard, Package, Plus, Tag } from "lucide-react";
 import { api, ApiError, type AccountRole, type GetCatalogItemsParams } from "../lib/apiClient";
 import { CatalogItemDrawer } from "../components/keep/CatalogItemDrawer";
+import { OfferingAssemblyDrawer } from "../components/keep/OfferingAssemblyDrawer";
 import { CategoryCombobox } from "../components/keep/CategoryCombobox";
 import { KeepModal } from "../components/keep/KeepModal";
 
@@ -36,6 +37,7 @@ interface PriceBookProps {
   entitlementError: boolean;
   onRetryEntitlement: () => void;
   onSelectItem: (catalogItemId: string) => void;
+  onSelectAssembly: (offeringAssemblyId: string) => void;
 }
 
 const TYPE_LABELS: Record<string, string> = {
@@ -66,11 +68,56 @@ export function PriceBook({
   entitlementError,
   onRetryEntitlement,
   onSelectItem,
+  onSelectAssembly,
 }: PriceBookProps) {
   const isOwnerOrAdmin = role === "owner" || role === "admin";
   const queryClient = useQueryClient();
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [assemblyDrawerOpen, setAssemblyDrawerOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  // Session 3.2c: one Owner/Admin price-book workspace, tabbed rather than a separate route —
+  // build-log/117's "Offering & Packages tab" placeholder, now built.
+  const [activeTab, setActiveTab] = useState<"items" | "assemblies">("items");
+  const [assemblyStatusFilter, setAssemblyStatusFilter] = useState<"Active" | "Inactive">("Active");
+  // Independent cursor/page state per status — switching the Active/Inactive filter must not
+  // lose the other status's page position, unlike the catalog-items list which resets on any
+  // filter change.
+  const [assemblyPagination, setAssemblyPagination] = useState<
+    Record<"Active" | "Inactive", { cursors: (string | undefined)[]; index: number }>
+  >({
+    Active: { cursors: [undefined], index: 0 },
+    Inactive: { cursors: [undefined], index: 0 },
+  });
+  const assemblyPage = assemblyPagination[assemblyStatusFilter];
+  const assemblyActiveCursor = assemblyPage.cursors[assemblyPage.index];
+
+  const assembliesQuery = useQuery({
+    queryKey: ["offeringAssemblies", assemblyStatusFilter, assemblyActiveCursor ?? null],
+    queryFn: () => api.getOfferingAssemblies({ status: assemblyStatusFilter, cursor: assemblyActiveCursor }),
+    enabled: isOwnerOrAdmin && entitled && activeTab === "assemblies",
+  });
+
+  const handleAssemblyNextPage = () => {
+    if (!assembliesQuery.data?.nextCursor) return;
+    const nextCursor = assembliesQuery.data.nextCursor;
+    setAssemblyPagination((prev) => {
+      const cur = prev[assemblyStatusFilter];
+      return {
+        ...prev,
+        [assemblyStatusFilter]: {
+          cursors: [...cur.cursors.slice(0, cur.index + 1), nextCursor],
+          index: cur.index + 1,
+        },
+      };
+    });
+  };
+
+  const handleAssemblyPrevPage = () => {
+    setAssemblyPagination((prev) => {
+      const cur = prev[assemblyStatusFilter];
+      return { ...prev, [assemblyStatusFilter]: { ...cur, index: Math.max(0, cur.index - 1) } };
+    });
+  };
 
   const [searchInput, setSearchInput] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -285,7 +332,7 @@ export function PriceBook({
               Keyboard shortcuts
             </span>
           </div>
-          {showHeaderCta && (
+          {activeTab === "items" && showHeaderCta && (
             <button
               type="button"
               onClick={() => setDrawerOpen(true)}
@@ -297,9 +344,49 @@ export function PriceBook({
               Add catalog item
             </button>
           )}
+          {activeTab === "assemblies" && (
+            <button
+              type="button"
+              onClick={() => setAssemblyDrawerOpen(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium
+                bg-[var(--ophalo-navy)] text-white hover:opacity-90 transition-opacity
+                focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-offset-1"
+            >
+              <Plus className="h-4 w-4" />
+              Add assembly
+            </button>
+          )}
         </div>
       </div>
 
+      <div className="px-4 sm:px-6 pb-2" role="tablist" aria-label="Price Book sections">
+        <div className="inline-flex rounded-lg border border-[var(--ophalo-border)] p-0.5">
+          {(
+            [
+              { key: "items", label: "Catalog Items" },
+              { key: "assemblies", label: "Offerings & Assemblies" },
+            ] as const
+          ).map((tab) => (
+            <button
+              key={tab.key}
+              type="button"
+              role="tab"
+              aria-selected={activeTab === tab.key}
+              onClick={() => setActiveTab(tab.key)}
+              className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                activeTab === tab.key
+                  ? "bg-[var(--ophalo-navy)] text-white"
+                  : "text-[var(--ophalo-muted)] hover:text-[var(--ophalo-ink)]"
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {activeTab === "items" && (
+      <>
       <div className="px-4 sm:px-6 pb-4 flex flex-wrap items-center gap-3">
         <label className="sr-only" htmlFor="catalog-search">
           Search catalog
@@ -536,6 +623,187 @@ export function PriceBook({
           </div>
         )}
       </div>
+      </>
+      )}
+
+      {activeTab === "assemblies" && (
+        <div className="px-4 sm:px-6 pb-4 flex flex-wrap items-center gap-3">
+          <div className="inline-flex rounded-lg border border-[var(--ophalo-border)] p-0.5" role="group" aria-label="Filter by status">
+            {(["Active", "Inactive"] as const).map((option) => (
+              <button
+                key={option}
+                type="button"
+                aria-pressed={assemblyStatusFilter === option}
+                onClick={() => setAssemblyStatusFilter(option)}
+                className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${
+                  assemblyStatusFilter === option
+                    ? "bg-[var(--ophalo-navy)] text-white"
+                    : "text-[var(--ophalo-muted)] hover:text-[var(--ophalo-ink)]"
+                }`}
+              >
+                {option}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {activeTab === "assemblies" && (
+        <div className="flex-1 min-w-0 px-4 sm:px-6 pb-6">
+          {assembliesQuery.isLoading && (
+            <div className="flex flex-1 items-center justify-center py-16">
+              <span className="text-[var(--ophalo-muted)] text-sm">Loading…</span>
+            </div>
+          )}
+
+          {assembliesQuery.isError && (
+            <div className="flex flex-col items-center justify-center py-16 text-center">
+              <p className="text-[var(--ophalo-muted)] text-sm mb-3">Couldn't load your offerings/assemblies.</p>
+              <button
+                type="button"
+                onClick={() => void assembliesQuery.refetch()}
+                className="text-sm font-medium text-[var(--keep-accent)] hover:underline"
+              >
+                Try again
+              </button>
+            </div>
+          )}
+
+          {!assembliesQuery.isLoading && !assembliesQuery.isError && (assembliesQuery.data?.items.length ?? 0) === 0 && (
+            <div className="flex flex-1 items-center justify-center py-16">
+              <div className="max-w-sm w-full rounded-xl border border-[var(--ophalo-border)] px-6 py-8 text-center">
+                <Package className="mx-auto mb-3 h-8 w-8 text-[var(--ophalo-muted)]" />
+                <h2 className="text-[var(--ophalo-ink)] text-base font-semibold mb-1">
+                  {assemblyStatusFilter === "Active" ? "No active offerings/assemblies" : "No inactive offerings/assemblies"}
+                </h2>
+                <p className="text-[var(--ophalo-muted)] text-sm mb-4">
+                  {assemblyStatusFilter === "Active"
+                    ? "Build a static bundle of catalog items around one primary offering."
+                    : "Nothing has been inactivated."}
+                </p>
+                {assemblyStatusFilter === "Active" && (
+                  <button
+                    type="button"
+                    onClick={() => setAssemblyDrawerOpen(true)}
+                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium
+                      bg-[var(--ophalo-navy)] text-white hover:opacity-90 transition-opacity
+                      focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-offset-1"
+                  >
+                    <Plus className="h-4 w-4" />
+                    Add your first assembly
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+
+          {!assembliesQuery.isLoading && !assembliesQuery.isError && (assembliesQuery.data?.items.length ?? 0) > 0 && (
+            <>
+              <div className="hidden sm:block overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-left text-xs font-medium text-[var(--ophalo-muted)] border-b border-[var(--ophalo-border)]">
+                      <th className="py-2 pr-4">Name</th>
+                      <th className="py-2 pr-4">Primary item</th>
+                      <th className="py-2 pr-4">Price treatment</th>
+                      <th className="py-2 pr-4">Status</th>
+                      <th className="py-2 pr-4">Eligible</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {assembliesQuery.data!.items.map((row) => (
+                      <tr
+                        key={row.id}
+                        className="border-b border-[var(--ophalo-border)] last:border-0 hover:bg-[var(--ophalo-canvas)]"
+                      >
+                        <td className="py-2.5 pr-4 text-[var(--ophalo-ink)] font-medium">
+                          <button
+                            type="button"
+                            onClick={() => onSelectAssembly(row.id)}
+                            className="text-left hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] rounded"
+                          >
+                            {row.name}
+                          </button>
+                        </td>
+                        <td className="py-2 pr-4 text-[var(--ophalo-muted)]">{row.primaryCatalogItemDisplayName}</td>
+                        <td className="py-2 pr-4 text-[var(--ophalo-muted)]">
+                          {row.priceTreatment === "Summed" ? "Summed" : "All-inclusive"}
+                        </td>
+                        <td className="py-2 pr-4 text-[var(--ophalo-muted)]">{row.activeState}</td>
+                        <td className="py-2 pr-4">
+                          {row.isOperationallyEligible ? (
+                            <span className="text-[var(--ophalo-muted)]">Yes</span>
+                          ) : (
+                            <span className="rounded-full bg-[var(--ophalo-attention-bg)] px-2 py-0.5 text-xs font-medium text-[var(--ophalo-attention)]">
+                              Needs review
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <ul className="sm:hidden flex flex-col gap-2">
+                {assembliesQuery.data!.items.map((row) => (
+                  <li key={row.id}>
+                    <button
+                      type="button"
+                      onClick={() => onSelectAssembly(row.id)}
+                      aria-label={`View ${row.name}`}
+                      className="w-full text-left rounded-lg border border-[var(--ophalo-border)] px-3 py-3
+                        flex flex-col gap-1 hover:bg-[var(--ophalo-canvas)]
+                        focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)]"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <span className="text-[var(--ophalo-ink)] font-medium">{row.name}</span>
+                        <span className="shrink-0 text-xs font-medium text-[var(--ophalo-muted)]">{row.activeState}</span>
+                      </div>
+                      <div className="flex items-center justify-between gap-2 text-sm">
+                        <span className="text-[var(--ophalo-muted)]">{row.primaryCatalogItemDisplayName}</span>
+                        {!row.isOperationallyEligible && (
+                          <span className="rounded-full bg-[var(--ophalo-attention-bg)] px-2 py-0.5 text-xs font-medium text-[var(--ophalo-attention)]">
+                            Needs review
+                          </span>
+                        )}
+                      </div>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+
+          {!assembliesQuery.isLoading &&
+            !assembliesQuery.isError &&
+            (assembliesQuery.data?.items.length ?? 0) > 0 &&
+            (assemblyPage.index > 0 || assembliesQuery.data?.hasMore) && (
+              <div className="flex items-center justify-end gap-3 pt-4">
+                <button
+                  type="button"
+                  onClick={handleAssemblyPrevPage}
+                  disabled={assemblyPage.index === 0}
+                  className="px-3 py-1.5 rounded-lg text-sm font-medium border border-[var(--ophalo-border)]
+                    disabled:opacity-40 disabled:cursor-not-allowed hover:bg-[var(--ophalo-canvas)]
+                    focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)]"
+                >
+                  Previous
+                </button>
+                <button
+                  type="button"
+                  onClick={handleAssemblyNextPage}
+                  disabled={!assembliesQuery.data?.hasMore}
+                  className="px-3 py-1.5 rounded-lg text-sm font-medium border border-[var(--ophalo-border)]
+                    disabled:opacity-40 disabled:cursor-not-allowed hover:bg-[var(--ophalo-canvas)]
+                    focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)]"
+                >
+                  Next
+                </button>
+              </div>
+            )}
+        </div>
+      )}
 
       {shortcutsOpen && (
         <KeepModal
@@ -588,6 +856,13 @@ export function PriceBook({
           onCategoriesChanged={() => void queryClient.invalidateQueries({ queryKey: ["catalogCategories"] })}
           onClose={() => setDrawerOpen(false)}
           onCreated={() => void queryClient.invalidateQueries({ queryKey: ["catalogItems"] })}
+        />
+      )}
+
+      {assemblyDrawerOpen && (
+        <OfferingAssemblyDrawer
+          onClose={() => setAssemblyDrawerOpen(false)}
+          onCreated={() => void queryClient.invalidateQueries({ queryKey: ["offeringAssemblies"] })}
         />
       )}
     </div>

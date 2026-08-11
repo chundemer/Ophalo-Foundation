@@ -148,6 +148,7 @@ import type {
   ResolveFollowUpBody,
   CapabilityPackageStatus,
   CatalogItemResponse,
+  CatalogItemListRowResponse,
   CatalogItemListResult,
   CatalogCategoryListResult,
   GetCatalogItemsParams,
@@ -164,6 +165,16 @@ import type {
   PublishCatalogItemPriceBody,
   PublishCatalogItemPriceResult,
   CreateCatalogCategoryBody,
+  OfferingAssemblyResponse,
+  OfferingAssemblyTransitionResult,
+  CreateOfferingAssemblyWithItemsBody,
+  UpdateOfferingAssemblyHeaderBody,
+  AddOfferingAssemblyItemBody,
+  OfferingAssemblyItemAddedResult,
+  UpdateOfferingAssemblyItemBody,
+  OfferingAssemblyListResult,
+  OfferingAssemblyDetailResult,
+  GetOfferingAssembliesParams,
 } from "./apiClient.types";
 
 export type {
@@ -221,6 +232,7 @@ export type {
   ResolveFollowUpBody,
   CapabilityPackageStatus,
   CatalogItemResponse,
+  CatalogItemListRowResponse,
   CatalogItemListResult,
   CatalogCategoryListResult,
   GetCatalogItemsParams,
@@ -237,6 +249,16 @@ export type {
   PublishCatalogItemPriceBody,
   PublishCatalogItemPriceResult,
   CreateCatalogCategoryBody,
+  OfferingAssemblyResponse,
+  OfferingAssemblyTransitionResult,
+  CreateOfferingAssemblyWithItemsBody,
+  UpdateOfferingAssemblyHeaderBody,
+  AddOfferingAssemblyItemBody,
+  OfferingAssemblyItemAddedResult,
+  UpdateOfferingAssemblyItemBody,
+  OfferingAssemblyListResult,
+  OfferingAssemblyDetailResult,
+  GetOfferingAssembliesParams,
 };
 
 export type { FollowUpResolutionOutcome, FollowUpCompletionReason } from "./apiClient.types";
@@ -352,6 +374,61 @@ export const api = {
       method: "POST",
       body: JSON.stringify(body),
     }),
+  // Price Book, Quotes & Materials — Offering/Assembly office management (Session 3.2c).
+  getOfferingAssemblies: (params: GetOfferingAssembliesParams = {}) => {
+    const qs = new URLSearchParams();
+    if (params.status) qs.set("status", params.status);
+    if (params.cursor) qs.set("cursor", params.cursor);
+    if (params.limit) qs.set("limit", String(params.limit));
+    const query = qs.toString();
+    return apiFetch<OfferingAssemblyListResult>(
+      `/keep/pricebook/offering-assemblies${query ? `?${query}` : ""}`,
+    );
+  },
+  getOfferingAssembly: (offeringAssemblyId: string) =>
+    apiFetch<OfferingAssemblyDetailResult>(`/keep/pricebook/offering-assemblies/${offeringAssemblyId}`),
+  createOfferingAssembly: (body: CreateOfferingAssemblyWithItemsBody) =>
+    apiFetch<OfferingAssemblyResponse>("/keep/pricebook/offering-assemblies/create-with-items", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  activateOfferingAssembly: (offeringAssemblyId: string, version: string) =>
+    apiFetch<OfferingAssemblyTransitionResult>(`/keep/pricebook/offering-assemblies/${offeringAssemblyId}/activate`, {
+      method: "PATCH",
+      headers: { "X-Keep-OfferingAssembly-Version": version },
+    }),
+  inactivateOfferingAssembly: (offeringAssemblyId: string, version: string) =>
+    apiFetch<OfferingAssemblyTransitionResult>(`/keep/pricebook/offering-assemblies/${offeringAssemblyId}/inactivate`, {
+      method: "PATCH",
+      headers: { "X-Keep-OfferingAssembly-Version": version },
+    }),
+  updateOfferingAssemblyHeader: (offeringAssemblyId: string, body: UpdateOfferingAssemblyHeaderBody, version: string) =>
+    apiFetch<OfferingAssemblyTransitionResult>(`/keep/pricebook/offering-assemblies/${offeringAssemblyId}`, {
+      method: "PATCH",
+      headers: { "X-Keep-OfferingAssembly-Version": version },
+      body: JSON.stringify(body),
+    }),
+  addOfferingAssemblyItem: (offeringAssemblyId: string, body: AddOfferingAssemblyItemBody, version: string) =>
+    apiFetch<OfferingAssemblyItemAddedResult>(`/keep/pricebook/offering-assemblies/${offeringAssemblyId}/items`, {
+      method: "POST",
+      headers: { "X-Keep-OfferingAssembly-Version": version },
+      body: JSON.stringify(body),
+    }),
+  updateOfferingAssemblyItem: (
+    offeringAssemblyId: string,
+    itemId: string,
+    body: UpdateOfferingAssemblyItemBody,
+    version: string,
+  ) =>
+    apiFetch<OfferingAssemblyTransitionResult>(
+      `/keep/pricebook/offering-assemblies/${offeringAssemblyId}/items/${itemId}`,
+      { method: "PATCH", headers: { "X-Keep-OfferingAssembly-Version": version }, body: JSON.stringify(body) },
+    ),
+  removeOfferingAssemblyItem: (offeringAssemblyId: string, itemId: string, version: string) =>
+    apiFetch<OfferingAssemblyTransitionResult>(
+      `/keep/pricebook/offering-assemblies/${offeringAssemblyId}/items/${itemId}`,
+      { method: "DELETE", headers: { "X-Keep-OfferingAssembly-Version": version } },
+    ),
   getRequestDetail: (requestId: string) =>
     apiFetch<KeepRequestDetailResult>(`/keep/requests/${requestId}`),
   getRelatedWork: (requestId: string) =>

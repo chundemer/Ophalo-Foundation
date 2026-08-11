@@ -692,6 +692,118 @@ export interface GetCatalogItemsParams {
   limit?: number;
 }
 
+// Price Book, Quotes & Materials — Offering/Assembly office management (Session 3.2c).
+export interface OfferingAssemblyItemResponse {
+  id: string;
+  catalogItemId: string;
+  defaultQuantity: number;
+  isOptional: boolean;
+  displayOrder: number;
+}
+
+export interface OfferingAssemblyResponse {
+  id: string;
+  primaryCatalogItemId: string;
+  name: string;
+  priceTreatment: string;
+  activeState: string;
+  concurrencyVersion: string;
+  items: OfferingAssemblyItemResponse[];
+}
+
+export interface OfferingAssemblyTransitionResult {
+  concurrencyVersion: string;
+}
+
+export interface CreateOfferingAssemblyWithItemsItemBody {
+  catalogItemId: string;
+  defaultQuantity: number;
+  isOptional: boolean;
+  displayOrder: number;
+}
+
+export interface CreateOfferingAssemblyWithItemsBody {
+  primaryCatalogItemId: string;
+  name: string;
+  priceTreatment: string;
+  items: CreateOfferingAssemblyWithItemsItemBody[];
+}
+
+export interface UpdateOfferingAssemblyHeaderBody {
+  primaryCatalogItemId: string;
+  name: string;
+  priceTreatment: string;
+}
+
+export interface AddOfferingAssemblyItemBody {
+  catalogItemId: string;
+  defaultQuantity: number;
+  isOptional: boolean;
+  displayOrder: number;
+}
+
+export interface OfferingAssemblyItemAddedResult {
+  itemId: string;
+  concurrencyVersion: string;
+}
+
+export interface UpdateOfferingAssemblyItemBody {
+  defaultQuantity: number;
+  isOptional: boolean;
+  displayOrder: number;
+}
+
+export interface OfferingAssemblyListRowResponse {
+  id: string;
+  name: string;
+  primaryCatalogItemId: string;
+  primaryCatalogItemDisplayName: string;
+  priceTreatment: string;
+  activeState: string;
+  concurrencyVersion: string;
+  isOperationallyEligible: boolean;
+}
+
+export interface OfferingAssemblyListResult {
+  items: OfferingAssemblyListRowResponse[];
+  limit: number;
+  hasMore: boolean;
+  nextCursor: string | null;
+}
+
+export interface OfferingAssemblyDetailItemResponse {
+  id: string;
+  catalogItemId: string;
+  catalogItemDisplayName: string;
+  defaultQuantity: number;
+  isOptional: boolean;
+  displayOrder: number;
+}
+
+export interface OfferingAssemblyEligibilityReasonResponse {
+  code: string;
+  componentCatalogItemId: string | null;
+}
+
+export interface OfferingAssemblyDetailResult {
+  id: string;
+  name: string;
+  primaryCatalogItemId: string;
+  primaryCatalogItemDisplayName: string;
+  priceTreatment: string;
+  activeState: string;
+  concurrencyVersion: string;
+  items: OfferingAssemblyDetailItemResponse[];
+  isOperationallyEligible: boolean;
+  eligibilityReasons: OfferingAssemblyEligibilityReasonResponse[];
+}
+
+export interface GetOfferingAssembliesParams {
+  status?: string;
+  cursor?: string;
+  limit?: number;
+}
+
 export type FollowUpResolutionOutcome = "complete" | "move" | "keep_active";
 export type FollowUpCompletionReason =
   | "customer_contacted"

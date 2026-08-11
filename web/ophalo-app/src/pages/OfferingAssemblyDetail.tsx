@@ -1,0 +1,648 @@
+import { useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { ArrowLeft, Package } from "lucide-react";
+import { api, ApiError, type AccountRole, type OfferingAssemblyDetailResult } from "../lib/apiClient";
+import { CatalogItemPicker } from "../components/keep/CatalogItemPicker";
+
+const INPUT_CLS =
+  "w-full rounded-lg border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] text-base text-[var(--ophalo-ink)] px-3 py-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-offset-1";
+
+const ERROR_INPUT_CLS = "border-[var(--ophalo-danger)]";
+
+const ELIGIBILITY_REASON_LABELS: Record<string, string> = {
+  AssemblyInactive: "This assembly is inactive.",
+  PrimaryItemInactive: "The primary catalog item is inactive.",
+  PrimaryItemMissingStandalonePrice: "The primary catalog item has no standalone price.",
+  ComponentInactive: "An associated item is inactive.",
+  ComponentMissingStandalonePrice: "An associated item has no standalone price.",
+};
+
+interface HeaderFormState {
+  primaryCatalogItemId: string;
+  primaryCatalogItemDisplayName: string;
+  name: string;
+  priceTreatment: "Summed" | "AllInclusive";
+}
+
+function toFormState(item: OfferingAssemblyDetailResult): HeaderFormState {
+  return {
+    primaryCatalogItemId: item.primaryCatalogItemId,
+    primaryCatalogItemDisplayName: item.primaryCatalogItemDisplayName,
+    name: item.name,
+    priceTreatment: item.priceTreatment as "Summed" | "AllInclusive",
+  };
+}
+
+interface OfferingAssemblyDetailProps {
+  offeringAssemblyId: string;
+  role: AccountRole;
+  entitled: boolean;
+  entitlementLoading: boolean;
+  entitlementError: boolean;
+  onRetryEntitlement: () => void;
+  onBack: () => void;
+}
+
+/**
+ * Offering/Assembly detail page (Session 3.2c): view/edit header, activate/inactivate, and
+ * item add/update/remove, wired to the existing 3.2a/3.2b API. Mirrors CatalogItemDetail.tsx's
+ * shell (entitlement gates, version-conflict recovery pattern) — no new backend work in this
+ * slice.
+ */
+export function OfferingAssemblyDetail({
+  offeringAssemblyId,
+  role,
+  entitled,
+  entitlementLoading,
+  entitlementError,
+  onRetryEntitlement,
+  onBack,
+}: OfferingAssemblyDetailProps) {
+  const isOwnerOrAdmin = role === "owner" || role === "admin";
+  const queryClient = useQueryClient();
+
+  const { data, isLoading, isError, error } = useQuery({
+    queryKey: ["offeringAssembly", offeringAssemblyId],
+    queryFn: () => api.getOfferingAssembly(offeringAssemblyId),
+    enabled: isOwnerOrAdmin && entitled,
+    retry: false,
+  });
+
+  // The list row shows name, primary item, price treatment, active state, and eligibility — all
+  // of which a header edit, item add/update/remove, or activate/inactivate can change, so every
+  // mutation here invalidates both queries together rather than leaving the list to go stale.
+  function invalidateDetail() {
+    return Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["offeringAssembly", offeringAssemblyId] }),
+      queryClient.invalidateQueries({ queryKey: ["offeringAssemblies"] }),
+    ]);
+  }
+
+  const [isEditing, setIsEditing] = useState(false);
+  const [form, setForm] = useState<HeaderFormState | null>(null);
+  const [conflictDraft, setConflictDraft] = useState<HeaderFormState | null>(null);
+  const [conflictRefreshPending, setConflictRefreshPending] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<{ name?: string; primary?: string }>({});
+
+  const [activatePending, setActivatePending] = useState(false);
+  const [activateError, setActivateError] = useState<string | null>(null);
+  const [inactivatePending, setInactivatePending] = useState(false);
+  const [inactivateError, setInactivateError] = useState<string | null>(null);
+  const [confirmInactivate, setConfirmInactivate] = useState(false);
+  const [itemActionPending, setItemActionPending] = useState(false);
+  const [itemActionError, setItemActionError] = useState<string | null>(null);
+  const [showAddItem, setShowAddItem] = useState(false);
+  const [newItemCatalogItemId, setNewItemCatalogItemId] = useState<string | null>(null);
+  const [newItemDisplayName, setNewItemDisplayName] = useState<string | null>(null);
+  const [newItemQuantity, setNewItemQuantity] = useState("1");
+  const [newItemOptional, setNewItemOptional] = useState(false);
+
+  const itemBusy = conflictRefreshPending || activatePending || inactivatePending || itemActionPending;
+
+  function startEditing() {
+    if (!data || itemBusy) return;
+    setForm(conflictDraft ?? toFormState(data));
+    setConflictDraft(null);
+    setFormError(null);
+    setFieldErrors({});
+    setIsEditing(true);
+  }
+
+  function cancelEditing() {
+    setIsEditing(false);
+    setForm(null);
+    setFormError(null);
+    setFieldErrors({});
+  }
+
+  const updateHeaderMutation = useMutation({
+    mutationFn: (input: HeaderFormState) => {
+      if (!data) throw new Error("Offering/assembly not loaded.");
+      return api.updateOfferingAssemblyHeader(
+        offeringAssemblyId,
+        { primaryCatalogItemId: input.primaryCatalogItemId, name: input.name.trim(), priceTreatment: input.priceTreatment },
+        data.concurrencyVersion,
+      );
+    },
+    onSuccess: () => {
+      void invalidateDetail();
+      setConflictDraft(null);
+      cancelEditing();
+    },
+    onError: (err: unknown, input) => {
+      if (err instanceof ApiError && err.code === "OfferingAssembly.VersionMismatch") {
+        setConflictDraft(input);
+        setIsEditing(false);
+        setForm(null);
+        setFormError(null);
+        setFieldErrors({});
+        setConflictRefreshPending(true);
+        void invalidateDetail().then(() => setConflictRefreshPending(false));
+        return;
+      }
+      if (err instanceof ApiError && (err.code === "OfferingAssembly.NameRequired" || err.code === "OfferingAssembly.NameTooLong")) {
+        setFieldErrors({ name: err.code === "OfferingAssembly.NameRequired" ? "Name is required." : "Name must not exceed 200 characters." });
+        return;
+      }
+      if (
+        err instanceof ApiError &&
+        (err.code === "OfferingAssembly.PrimaryCatalogItemRequired" ||
+          err.code === "OfferingAssembly.PrimaryCatalogItemAlreadyClaimed" ||
+          err.code === "OfferingAssembly.PrimaryCatalogItemAlreadyAssociated")
+      ) {
+        setFieldErrors({ primary: err.message });
+        return;
+      }
+      setFormError("Could not save changes. Try again.");
+    },
+  });
+
+  const activateMutation = useMutation({
+    mutationFn: () => {
+      if (!data) throw new Error("Offering/assembly not loaded.");
+      return api.activateOfferingAssembly(offeringAssemblyId, data.concurrencyVersion);
+    },
+    onMutate: () => {
+      setActivateError(null);
+      setActivatePending(true);
+    },
+    onSuccess: () => {
+      void invalidateDetail().then(() => setActivatePending(false));
+    },
+    onError: (err: unknown) => {
+      if (err instanceof ApiError && (err.code === "OfferingAssembly.VersionMismatch" || err.code === "OfferingAssembly.AlreadyActive")) {
+        setActivateError(err.code === "OfferingAssembly.AlreadyActive" ? "This assembly is already active." : "This assembly was changed elsewhere. Refreshing…");
+        void invalidateDetail().then(() => setActivatePending(false));
+        return;
+      }
+      setActivatePending(false);
+      setActivateError("Could not activate this assembly. Try again.");
+    },
+  });
+
+  const inactivateMutation = useMutation({
+    mutationFn: () => {
+      if (!data) throw new Error("Offering/assembly not loaded.");
+      return api.inactivateOfferingAssembly(offeringAssemblyId, data.concurrencyVersion);
+    },
+    onMutate: () => {
+      setInactivateError(null);
+      setConfirmInactivate(false);
+      setInactivatePending(true);
+    },
+    onSuccess: () => {
+      void invalidateDetail().then(() => setInactivatePending(false));
+    },
+    onError: (err: unknown) => {
+      if (err instanceof ApiError && (err.code === "OfferingAssembly.VersionMismatch" || err.code === "OfferingAssembly.NotActive")) {
+        setInactivateError(err.code === "OfferingAssembly.NotActive" ? "This assembly is already inactive." : "This assembly was changed elsewhere. Refreshing…");
+        void invalidateDetail().then(() => setInactivatePending(false));
+        return;
+      }
+      setInactivatePending(false);
+      setInactivateError("Could not inactivate this assembly. Try again.");
+    },
+  });
+
+  const addItemMutation = useMutation({
+    mutationFn: () => {
+      if (!data || !newItemCatalogItemId) throw new Error("No catalog item selected.");
+      return api.addOfferingAssemblyItem(
+        offeringAssemblyId,
+        {
+          catalogItemId: newItemCatalogItemId,
+          defaultQuantity: Number(newItemQuantity),
+          isOptional: newItemOptional,
+          displayOrder: data.items.length,
+        },
+        data.concurrencyVersion,
+      );
+    },
+    onMutate: () => {
+      setItemActionError(null);
+      setItemActionPending(true);
+    },
+    onSuccess: () => {
+      void invalidateDetail().then(() => setItemActionPending(false));
+      setShowAddItem(false);
+      setNewItemCatalogItemId(null);
+      setNewItemDisplayName(null);
+      setNewItemQuantity("1");
+      setNewItemOptional(false);
+    },
+    onError: (err: unknown) => {
+      if (err instanceof ApiError && err.code === "OfferingAssembly.VersionMismatch") {
+        setItemActionError("This assembly was changed elsewhere. Refreshing…");
+        void invalidateDetail().then(() => setItemActionPending(false));
+        return;
+      }
+      setItemActionPending(false);
+      setItemActionError(err instanceof ApiError ? err.message : "Could not add this item. Try again.");
+    },
+  });
+
+  const updateItemMutation = useMutation({
+    mutationFn: (input: { itemId: string; defaultQuantity: number; isOptional: boolean; displayOrder: number }) => {
+      if (!data) throw new Error("Offering/assembly not loaded.");
+      return api.updateOfferingAssemblyItem(
+        offeringAssemblyId,
+        input.itemId,
+        { defaultQuantity: input.defaultQuantity, isOptional: input.isOptional, displayOrder: input.displayOrder },
+        data.concurrencyVersion,
+      );
+    },
+    onMutate: () => {
+      setItemActionError(null);
+      setItemActionPending(true);
+    },
+    onSuccess: () => void invalidateDetail().then(() => setItemActionPending(false)),
+    onError: (err: unknown) => {
+      if (err instanceof ApiError && err.code === "OfferingAssembly.VersionMismatch") {
+        setItemActionError("This assembly was changed elsewhere. Refreshing…");
+        void invalidateDetail().then(() => setItemActionPending(false));
+        return;
+      }
+      setItemActionPending(false);
+      setItemActionError(err instanceof ApiError ? err.message : "Could not update this item. Try again.");
+    },
+  });
+
+  const removeItemMutation = useMutation({
+    mutationFn: (itemId: string) => {
+      if (!data) throw new Error("Offering/assembly not loaded.");
+      return api.removeOfferingAssemblyItem(offeringAssemblyId, itemId, data.concurrencyVersion);
+    },
+    onMutate: () => {
+      setItemActionError(null);
+      setItemActionPending(true);
+    },
+    onSuccess: () => void invalidateDetail().then(() => setItemActionPending(false)),
+    onError: (err: unknown) => {
+      if (err instanceof ApiError && err.code === "OfferingAssembly.VersionMismatch") {
+        setItemActionError("This assembly was changed elsewhere. Refreshing…");
+        void invalidateDetail().then(() => setItemActionPending(false));
+        return;
+      }
+      setItemActionPending(false);
+      setItemActionError(err instanceof ApiError ? err.message : "Could not remove this item. Try again.");
+    },
+  });
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!form || updateHeaderMutation.isPending) return;
+    setFieldErrors({});
+    setFormError(null);
+    updateHeaderMutation.mutate(form);
+  }
+
+  if (role === "unknown") {
+    return (
+      <div className="flex flex-1 items-center justify-center">
+        <span className="text-[var(--ophalo-muted)] text-sm">Loading…</span>
+      </div>
+    );
+  }
+
+  if (!isOwnerOrAdmin) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-[var(--ophalo-canvas)]">
+        <div className="max-w-sm text-center px-6">
+          <Package className="mx-auto mb-4 h-8 w-8 text-[var(--ophalo-muted)]" />
+          <h1 className="font-serif text-xl font-semibold text-[var(--ophalo-ink)] mb-2">
+            Price Book isn't available for your role
+          </h1>
+          <p className="text-[var(--ophalo-muted)] text-sm leading-relaxed">
+            Contact your account owner if you need access to pricing.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (entitlementLoading) {
+    return (
+      <div className="flex flex-1 items-center justify-center">
+        <span className="text-[var(--ophalo-muted)] text-sm">Loading…</span>
+      </div>
+    );
+  }
+
+  if (entitlementError) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-[var(--ophalo-canvas)]">
+        <div className="max-w-sm text-center px-6">
+          <Package className="mx-auto mb-4 h-8 w-8 text-[var(--ophalo-muted)]" />
+          <h1 className="font-serif text-xl font-semibold text-[var(--ophalo-ink)] mb-2">
+            Couldn't check Price Book access
+          </h1>
+          <p className="text-[var(--ophalo-muted)] text-sm leading-relaxed mb-4">
+            We weren't able to confirm your plan's Price Book access. This is usually temporary.
+          </p>
+          <button type="button" onClick={onRetryEntitlement} className="text-sm font-medium text-[var(--keep-accent)] hover:underline">
+            Try again
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!entitled) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-[var(--ophalo-canvas)]">
+        <div className="max-w-sm text-center px-6">
+          <Package className="mx-auto mb-4 h-8 w-8 text-[var(--ophalo-muted)]" />
+          <h1 className="font-serif text-xl font-semibold text-[var(--ophalo-ink)] mb-2">
+            Price Book isn't included in your plan
+          </h1>
+          <p className="text-[var(--ophalo-muted)] text-sm leading-relaxed">
+            Talk to your account owner about enabling Price Book, Quotes &amp; Materials.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex-1 min-w-0 flex flex-col">
+      <div className="px-4 pt-5 pb-4 sm:px-6 sm:pt-6">
+        <button type="button" onClick={onBack} className="inline-flex items-center gap-1.5 text-sm font-medium text-[var(--keep-accent)] hover:underline mb-3">
+          <ArrowLeft className="h-4 w-4" />
+          Back to Price Book
+        </button>
+      </div>
+
+      <div className="flex-1 min-w-0 px-4 sm:px-6 pb-6">
+        {isLoading && (
+          <div className="flex flex-1 items-center justify-center py-16">
+            <span className="text-[var(--ophalo-muted)] text-sm">Loading…</span>
+          </div>
+        )}
+
+        {isError && error instanceof ApiError && error.status === 404 && (
+          <div className="flex flex-col items-center justify-center py-16 text-center">
+            <Package className="mb-3 h-8 w-8 text-[var(--ophalo-muted)]" />
+            <p className="text-[var(--ophalo-ink)] text-sm font-medium">This offering/assembly couldn't be found.</p>
+          </div>
+        )}
+
+        {isError && !(error instanceof ApiError && error.status === 404) && (
+          <div className="flex flex-col items-center justify-center py-16 text-center">
+            <p className="text-[var(--ophalo-muted)] text-sm">Couldn't load this offering/assembly.</p>
+          </div>
+        )}
+
+        {!isLoading && !isError && data && !isEditing && (
+          <div className="max-w-2xl space-y-6">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h1 className="keep-page-title tracking-tight">{data.name}</h1>
+                <p className="mt-1 keep-page-subtitle">
+                  Primary: {data.primaryCatalogItemDisplayName} · {data.priceTreatment === "Summed" ? "Summed" : "All-inclusive"}
+                </p>
+                {!data.isOperationallyEligible && (
+                  <div className="mt-2 inline-flex items-center gap-1 rounded-full bg-[var(--ophalo-attention-bg)] px-2 py-0.5 text-xs font-medium text-[var(--ophalo-attention)]">
+                    Needs review
+                  </div>
+                )}
+              </div>
+              <div className="flex shrink-0 items-center gap-2">
+                {data.activeState !== "Active" && !activatePending && (
+                  <button
+                    type="button"
+                    onClick={() => activateMutation.mutate()}
+                    disabled={itemBusy}
+                    className="rounded-lg border border-[var(--ophalo-border)] px-3 py-1.5 text-sm font-medium text-[var(--ophalo-ink)] hover:bg-[var(--ophalo-canvas)] disabled:opacity-60"
+                  >
+                    Activate
+                  </button>
+                )}
+                {activatePending && <span className="text-sm text-[var(--ophalo-muted)]">Activating…</span>}
+                {data.activeState === "Active" && !confirmInactivate && (
+                  <button
+                    type="button"
+                    onClick={() => setConfirmInactivate(true)}
+                    disabled={itemBusy}
+                    className="rounded-lg border border-[var(--ophalo-border)] px-3 py-1.5 text-sm font-medium text-[var(--ophalo-ink)] hover:bg-[var(--ophalo-canvas)] disabled:opacity-60"
+                  >
+                    Inactivate
+                  </button>
+                )}
+                {data.activeState === "Active" && confirmInactivate && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-[var(--ophalo-muted)]">Remove from selection?</span>
+                    <button
+                      type="button"
+                      onClick={() => inactivateMutation.mutate()}
+                      disabled={itemBusy || inactivateMutation.isPending}
+                      className="rounded-lg border border-[var(--ophalo-danger)] px-3 py-1.5 text-sm font-medium text-[var(--ophalo-danger)] hover:bg-[var(--ophalo-canvas)] disabled:opacity-60"
+                    >
+                      {inactivatePending ? "Inactivating…" : "Confirm inactivate"}
+                    </button>
+                    <button type="button" onClick={() => setConfirmInactivate(false)} disabled={itemBusy} className="text-sm text-[var(--ophalo-muted)] hover:underline disabled:opacity-60">
+                      Cancel
+                    </button>
+                  </div>
+                )}
+                {!confirmInactivate && (
+                  <button
+                    type="button"
+                    onClick={startEditing}
+                    disabled={itemBusy}
+                    className="rounded-lg bg-[var(--keep-accent)] px-3 py-1.5 text-sm font-medium text-white hover:opacity-90 disabled:opacity-60"
+                  >
+                    Edit
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {activateError && <p className="text-sm text-[var(--ophalo-danger)]">{activateError}</p>}
+            {inactivateError && <p className="text-sm text-[var(--ophalo-danger)]">{inactivateError}</p>}
+
+            {data.eligibilityReasons.length > 0 && (
+              <div className="rounded-lg border border-[var(--ophalo-attention)] bg-[var(--ophalo-attention-bg)] p-3 space-y-1">
+                {data.eligibilityReasons.map((reason, idx) => (
+                  <p key={idx} className="text-sm text-[var(--ophalo-attention)]">
+                    {ELIGIBILITY_REASON_LABELS[reason.code] ?? reason.code}
+                  </p>
+                ))}
+              </div>
+            )}
+
+            <section>
+              <div className="flex items-center justify-between mb-2">
+                <h2 className="text-sm font-medium text-[var(--ophalo-ink)]">Associated items</h2>
+                {!showAddItem && (
+                  <button
+                    type="button"
+                    onClick={() => setShowAddItem(true)}
+                    disabled={itemBusy}
+                    className="text-sm font-medium text-[var(--keep-accent)] hover:underline disabled:opacity-60"
+                  >
+                    + Add item
+                  </button>
+                )}
+              </div>
+
+              {itemActionError && <p className="text-sm text-[var(--ophalo-danger)] mb-2">{itemActionError}</p>}
+
+              <div className="space-y-2">
+                {data.items.map((it) => (
+                  <div key={it.id} className="flex items-center gap-3 rounded-lg border border-[var(--ophalo-border)] p-2">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-[var(--ophalo-ink)] truncate">{it.catalogItemDisplayName}</p>
+                    </div>
+                    <label className="flex items-center gap-1 text-sm text-[var(--ophalo-muted)]">
+                      Qty
+                      <input
+                        type="number"
+                        min="0.01"
+                        step="any"
+                        defaultValue={it.defaultQuantity}
+                        disabled={itemBusy}
+                        onBlur={(e) => {
+                          const value = Number(e.target.value);
+                          if (!Number.isNaN(value) && value !== it.defaultQuantity) {
+                            updateItemMutation.mutate({ itemId: it.id, defaultQuantity: value, isOptional: it.isOptional, displayOrder: it.displayOrder });
+                          }
+                        }}
+                        className={`${INPUT_CLS} w-20`}
+                      />
+                    </label>
+                    <label className="flex items-center gap-1 text-sm text-[var(--ophalo-muted)]">
+                      <input
+                        type="checkbox"
+                        checked={it.isOptional}
+                        disabled={itemBusy}
+                        onChange={(e) =>
+                          updateItemMutation.mutate({ itemId: it.id, defaultQuantity: it.defaultQuantity, isOptional: e.target.checked, displayOrder: it.displayOrder })
+                        }
+                      />
+                      Optional
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => removeItemMutation.mutate(it.id)}
+                      disabled={itemBusy}
+                      className="text-sm text-[var(--ophalo-danger)] hover:underline disabled:opacity-60"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ))}
+                {data.items.length === 0 && !showAddItem && <p className="text-sm text-[var(--ophalo-muted)]">No associated items yet.</p>}
+              </div>
+
+              {showAddItem && (
+                <div className="mt-2 rounded-lg border border-[var(--ophalo-border)] p-2 space-y-2">
+                  <CatalogItemPicker
+                    id="assembly-add-item"
+                    selectedItemId={newItemCatalogItemId}
+                    selectedItemDisplayName={newItemDisplayName}
+                    excludeIds={[data.primaryCatalogItemId, ...data.items.map((it) => it.catalogItemId)]}
+                    onSelect={(row) => {
+                      setNewItemCatalogItemId(row.item.id);
+                      setNewItemDisplayName(row.item.displayName);
+                    }}
+                  />
+                  <div className="flex items-center gap-3">
+                    <label className="flex items-center gap-1 text-sm text-[var(--ophalo-muted)]">
+                      Qty
+                      <input type="number" min="0.01" step="any" value={newItemQuantity} onChange={(e) => setNewItemQuantity(e.target.value)} className={`${INPUT_CLS} w-20`} />
+                    </label>
+                    <label className="flex items-center gap-1 text-sm text-[var(--ophalo-muted)]">
+                      <input type="checkbox" checked={newItemOptional} onChange={(e) => setNewItemOptional(e.target.checked)} />
+                      Optional
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => addItemMutation.mutate()}
+                      disabled={!newItemCatalogItemId || itemBusy}
+                      className="ml-auto rounded-lg bg-[var(--keep-accent)] px-3 py-1.5 text-sm font-medium text-white hover:opacity-90 disabled:opacity-60"
+                    >
+                      Add
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowAddItem(false);
+                        setNewItemCatalogItemId(null);
+                        setNewItemDisplayName(null);
+                      }}
+                      className="text-sm text-[var(--ophalo-muted)] hover:underline"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
+            </section>
+          </div>
+        )}
+
+        {!isLoading && !isError && data && isEditing && form && (
+          <form onSubmit={handleSubmit} className="max-w-2xl space-y-4">
+            {formError && (
+              <div className="rounded-lg bg-[var(--ophalo-danger-bg)] px-3 py-2 text-sm text-[var(--ophalo-danger)]">{formError}</div>
+            )}
+            <div>
+              <label htmlFor="assembly-edit-name" className="block text-sm font-medium text-[var(--ophalo-ink)] mb-1">
+                Name
+              </label>
+              <input
+                id="assembly-edit-name"
+                type="text"
+                value={form.name}
+                onChange={(e) => setForm({ ...form, name: e.target.value })}
+                className={`${INPUT_CLS} ${fieldErrors.name ? ERROR_INPUT_CLS : ""}`}
+              />
+              {fieldErrors.name && <p className="mt-1 text-sm text-[var(--ophalo-danger)]">{fieldErrors.name}</p>}
+            </div>
+            <div>
+              <label htmlFor="assembly-edit-primary" className="block text-sm font-medium text-[var(--ophalo-ink)] mb-1">
+                Primary catalog item
+              </label>
+              <CatalogItemPicker
+                id="assembly-edit-primary"
+                selectedItemId={form.primaryCatalogItemId}
+                selectedItemDisplayName={form.primaryCatalogItemDisplayName}
+                onSelect={(row) => setForm({ ...form, primaryCatalogItemId: row.item.id, primaryCatalogItemDisplayName: row.item.displayName })}
+                invalid={!!fieldErrors.primary}
+              />
+              {fieldErrors.primary && <p className="mt-1 text-sm text-[var(--ophalo-danger)]">{fieldErrors.primary}</p>}
+            </div>
+            <div>
+              <span className="block text-sm font-medium text-[var(--ophalo-ink)] mb-1">Price treatment</span>
+              <div className="flex gap-4">
+                {(["Summed", "AllInclusive"] as const).map((option) => (
+                  <label key={option} className="flex items-center gap-2 text-sm text-[var(--ophalo-ink)]">
+                    <input type="radio" name="priceTreatmentEdit" checked={form.priceTreatment === option} onChange={() => setForm({ ...form, priceTreatment: option })} />
+                    {option === "Summed" ? "Summed" : "All-inclusive"}
+                  </label>
+                ))}
+              </div>
+            </div>
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={cancelEditing}
+                className="rounded-lg border border-[var(--ophalo-border)] px-3 py-1.5 text-sm font-medium text-[var(--ophalo-ink)] hover:bg-[var(--ophalo-canvas)]"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={updateHeaderMutation.isPending}
+                className="rounded-lg bg-[var(--keep-accent)] px-3 py-1.5 text-sm font-medium text-white hover:opacity-90 disabled:opacity-60"
+              >
+                {updateHeaderMutation.isPending ? "Saving…" : "Save"}
+              </button>
+            </div>
+          </form>
+        )}
+      </div>
+    </div>
+  );
+}
