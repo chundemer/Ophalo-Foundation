@@ -100,8 +100,14 @@ account-aware `AccountFeatureAccessResolver`, and a generic Owner/Admin `GET
   family, comfortably within the batch-size cap. 19 unit + 33 focused API/persistence integration
   + 14/14 architecture tests (independently re-run and confirmed), `git diff --check` clean.
 
-  3.2 (Offering/Assembly office management) is now fully complete: create, activate/inactivate,
-  list, detail with eligibility reasons, and live header/item editing.
+  3.2's API/persistence layer (create, activate/inactivate, list, detail with eligibility reasons,
+  live header/item editing) is complete. **Correction (2026-08-10):** build-log/117 defines 3.2 as
+  "Authorized Owner/Admin API and workbench surface" — the Owner/Admin workbench UI was never
+  built; `web/ophalo-app` has no route, API-client wrapper, list, detail, or editor for
+  offerings/assemblies (only catalog items). Session-log previously mismarked 3.2 "fully complete"
+  without checking the promised UI against the frontend; this entry corrects that. The workbench UI
+  is tracked as **3.2c** and is a hard dependency for 3.4 (per build-log/117's own `3.2, 3.3 → 3.4`
+  dependency line) — do not start 3.4 until 3.2c is complete.
 
 - **3.3 pre-work — two authority/snapshot decisions locked (2026-08-10), no code yet.** ADR-480:
   new `keep.pricebook.scope.capture` permission in `RolePermissions.OperatorBase` (Admin/Owner
