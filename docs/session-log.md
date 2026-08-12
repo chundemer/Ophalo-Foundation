@@ -897,6 +897,14 @@ account-aware `AccountFeatureAccessResolver`, and a generic Owner/Admin `GET
     web/mobile workflows into independently gated Session 3 slices. This completes the locked
     internal Price Book capability; it does not authorize customer quote delivery, dynamic pricing,
     or technician pricing authority.
+  - **Price Book delivery-status clarification (2026-08-12).** The initial **Catalog Items**
+    workspace (2e) is complete and closed. The later **Offerings & Assemblies**
+    office-management delivery (3.2c + 3.2d) is also complete and ready for normal manual
+    acceptance; it is not an unfinished part of the initial catalog workspace. The broader
+    Price Book continuation—Proposed Scope, request-bound internal quote work, actual-work
+    records, and related workflows—remains separately scoped future capability. The PWA UI
+    quality program is therefore a presentation/usability correction of complete Catalog Items
+    and Assemblies workflows, not completion work for missing Price Book fundamentals.
   - **Pilot-required image storage (paused, after Price Book continuation).** R2 remains required: price-book import is
     deferred, not private document storage. The next storage slice defines image metadata,
     account authorization, bounded direct API multipart upload, image type/size validation, purpose

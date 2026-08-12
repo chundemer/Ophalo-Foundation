@@ -1,5 +1,5 @@
 import { useState, type ComponentType } from "react";
-import { AlertTriangle, Clock, MessageSquare, ChevronRight, UserRound, CheckCircle2, Share2, Phone, StickyNote } from "lucide-react";
+import { AlertTriangle, Clock, MessageSquare, ChevronRight, UserRound, CheckCircle2, Share2, Phone, StickyNote, MapPin } from "lucide-react";
 import { KeepBadge, type KeepBadgeVariant } from "./keep/KeepBadge";
 import type { KeepRequestSummary, KeepRequestAvailableItem, KeepQuickAction } from "../lib/apiClient";
 import { statusLabel, statusBadgeVariant } from "../lib/requestStatus";
@@ -470,21 +470,32 @@ export function RequestRow({ row, onSelect, onSelectFocused, onActionClick, onSh
           </span>
         )}
         {row.participation.isUnassigned && (
-          <span>Unassigned</span>
+          <span className="inline-flex items-center gap-1 rounded-md bg-[var(--ophalo-canvas)] px-1.5 py-0.5 text-[var(--ophalo-muted)]">
+            <UserRound className="h-3 w-3" />
+            Unassigned
+          </span>
         )}
-        {lastTouch && <span>Last touch {lastTouch}</span>}
+        {lastTouch && (
+          <span className="inline-flex items-center gap-1">
+            <Clock className="h-3 w-3" />
+            Last touch {lastTouch}
+          </span>
+        )}
         {row.source === "public_intake" ? (
-          <span>
+          <span className="inline-flex items-center gap-1">
             Customer intake
             {row.contactPreference === "text_message" && " · Prefers text"}
             {row.contactPreference === "phone_call" && " · Prefers call"}
             {row.contactPreference === "email" && " · Prefers email"}
-            {row.serviceCity && row.serviceState && (
-              <> · {row.serviceCity}, {row.serviceState}{row.serviceZip ? ` ${row.serviceZip}` : ""}</>
-            )}
           </span>
         ) : (
           <span>Created by business</span>
+        )}
+        {row.serviceCity && row.serviceState && (
+          <span className="inline-flex items-center gap-1">
+            <MapPin className="h-3 w-3" />
+            {row.serviceCity}, {row.serviceState}{row.serviceZip ? ` ${row.serviceZip}` : ""}
+          </span>
         )}
         {followUpMeta && <span>{followUpMeta}</span>}
         {plannedMeta && <span>{plannedMeta}</span>}

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Keyboard, Package, Plus, Tag } from "lucide-react";
+import { ChevronRight, Keyboard, Package, Plus, Search, Tag } from "lucide-react";
 import { api, ApiError, type AccountRole, type GetCatalogItemsParams } from "../lib/apiClient";
 import { CatalogItemDrawer } from "../components/keep/CatalogItemDrawer";
 import { OfferingAssemblyDrawer } from "../components/keep/OfferingAssemblyDrawer";
@@ -54,6 +54,26 @@ function formatPrice(row: { currentPricingMode: string | null; currentSellPrice:
     return "No standalone price";
   }
   return row.currentSellPrice.toLocaleString(undefined, { style: "currency", currency: "USD" });
+}
+
+function isStandalonePrice(row: { currentPricingMode: string | null; currentSellPrice: number | null }): boolean {
+  return row.currentPricingMode !== "NoStandalonePrice" && row.currentSellPrice != null;
+}
+
+function StatusBadge({ status }: { status: string }) {
+  const isActive = status === "Active";
+  return (
+    <span
+      className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-xs font-medium ${
+        isActive
+          ? "border-[color:var(--keep-accent)]/20 bg-[var(--keep-accent-bg)] text-[var(--keep-accent-hover)]"
+          : "border-[var(--ophalo-border)] bg-[var(--ophalo-canvas)] text-[var(--ophalo-muted)]"
+      }`}
+    >
+      <span className={`h-1.5 w-1.5 rounded-full ${isActive ? "bg-[var(--keep-accent)]" : "bg-[var(--ophalo-muted)]"}`} />
+      {status}
+    </span>
+  );
 }
 
 /**
@@ -301,10 +321,10 @@ export function PriceBook({
 
   return (
     <div className="flex-1 min-w-0 flex flex-col">
-      <div className="px-4 pt-5 pb-4 sm:px-6 sm:pt-6 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+      <div className="mx-auto w-full max-w-[1440px] px-4 pt-6 pb-5 sm:px-6 sm:pt-8 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
         <div>
           <h1 className="keep-page-title tracking-tight">Price Book</h1>
-          <p className="mt-1 keep-page-subtitle">
+          <p className="mt-1.5 keep-page-subtitle">
             Build your catalog of materials, equipment, services, and fees.
           </p>
         </div>
@@ -359,8 +379,8 @@ export function PriceBook({
         </div>
       </div>
 
-      <div className="px-4 sm:px-6 pb-2" role="tablist" aria-label="Price Book sections">
-        <div className="inline-flex rounded-lg border border-[var(--ophalo-border)] p-0.5">
+      <div className="mx-auto w-full max-w-[1440px] px-4 sm:px-6" role="tablist" aria-label="Price Book sections">
+        <div className="flex gap-5 border-b border-[var(--ophalo-border)]" >
           {(
             [
               { key: "items", label: "Catalog Items" },
@@ -373,10 +393,10 @@ export function PriceBook({
               role="tab"
               aria-selected={activeTab === tab.key}
               onClick={() => setActiveTab(tab.key)}
-              className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+              className={`relative -mb-px px-0.5 py-3 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-offset-2 ${
                 activeTab === tab.key
-                  ? "bg-[var(--ophalo-navy)] text-white"
-                  : "text-[var(--ophalo-muted)] hover:text-[var(--ophalo-ink)]"
+                  ? "border-b-2 border-[var(--keep-accent)] text-[var(--ophalo-navy)]"
+                  : "border-b-2 border-transparent text-[var(--ophalo-muted)] hover:text-[var(--ophalo-ink)]"
               }`}
             >
               {tab.label}
@@ -387,19 +407,23 @@ export function PriceBook({
 
       {activeTab === "items" && (
       <>
-      <div className="px-4 sm:px-6 pb-4 flex flex-wrap items-center gap-3">
+      <div className="mx-auto w-full max-w-[1440px] px-4 pt-4 pb-3 sm:px-6">
+      <div className="flex flex-wrap items-center gap-3 rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] p-3 shadow-sm">
         <label className="sr-only" htmlFor="catalog-search">
           Search catalog
         </label>
-        <input
-          id="catalog-search"
-          type="search"
-          value={searchInput}
-          onChange={(e) => setSearchInput(e.target.value)}
-          placeholder="Search by name, SKU, or keyword"
-          className="w-full sm:w-64 px-3 py-1.5 rounded-lg border border-[var(--ophalo-border)] text-sm
-            focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)]"
-        />
+        <div className="relative w-full sm:w-72">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--ophalo-muted)]" />
+          <input
+            id="catalog-search"
+            type="search"
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            placeholder="Search by name, SKU, or keyword"
+            className="w-full rounded-lg border border-[var(--ophalo-border)] py-2 pl-9 pr-3 text-sm text-[var(--ophalo-ink)] placeholder:text-[var(--ophalo-muted)]
+              focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)]"
+          />
+        </div>
 
         <label className="sr-only" htmlFor="catalog-category-filter">
           Filter by category
@@ -415,7 +439,7 @@ export function PriceBook({
           />
         </div>
 
-        <div className="inline-flex rounded-lg border border-[var(--ophalo-border)] p-0.5" role="group" aria-label="Filter by status">
+        <div className="inline-flex rounded-lg border border-[var(--ophalo-border)] bg-[var(--ophalo-canvas)] p-0.5" role="group" aria-label="Filter by status">
           {(["Active", "Inactive"] as const).map((option) => (
             <button
               key={option}
@@ -443,8 +467,9 @@ export function PriceBook({
           </button>
         )}
       </div>
+      </div>
 
-      <div className="flex-1 min-w-0 px-4 sm:px-6 pb-6">
+      <div className="mx-auto flex-1 min-w-0 w-full max-w-[1440px] px-4 sm:px-6 pb-8">
         {(isLoading || zeroStateResolving) && (
           <div className="flex flex-1 items-center justify-center py-16">
             <span className="text-[var(--ophalo-muted)] text-sm">Loading…</span>
@@ -528,25 +553,35 @@ export function PriceBook({
 
         {!isLoading && !isError && data && data.items.length > 0 && (
           <>
-            {/* 2e.7c: the 6-column table is unreadable at mobile widths (values wrap into
+            {/* 2e.7c: the desktop table is unreadable at mobile widths (values wrap into
                 fragments), so mobile gets a compact card list — Name, Type/UOM, Sell price or
                 "No standalone price", and Status. Desktop table is unchanged. */}
-            <div className="hidden sm:block overflow-x-auto">
+            <div className="hidden sm:block overflow-x-auto rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] shadow-sm">
               <table className="w-full text-sm">
+                <colgroup>
+                  <col className="w-[32%]" />
+                  <col className="w-[12%]" />
+                  <col className="w-[13%]" />
+                  <col className="w-[10%]" />
+                  <col className="w-[20%]" />
+                  <col className="w-[13%]" />
+                  <col className="w-10" />
+                </colgroup>
                 <thead>
-                  <tr className="text-left text-xs font-medium text-[var(--ophalo-muted)] border-b border-[var(--ophalo-border)]">
-                    <th className="py-2 pr-4">Name</th>
-                    <th className="py-2 pr-4">SKU</th>
-                    <th className="py-2 pr-4">Type</th>
-                    <th className="py-2 pr-4">UOM</th>
-                    <th className="py-2 pr-4">Sell price</th>
-                    <th className="py-2 pr-4">Status</th>
+                  <tr className="border-b border-[var(--ophalo-border)] bg-[var(--ophalo-canvas)] text-left text-[11px] font-semibold uppercase tracking-wider text-[var(--ophalo-muted)]">
+                    <th className="px-4 py-3">Name</th>
+                    <th className="px-4 py-3">SKU</th>
+                    <th className="px-4 py-3">Type</th>
+                    <th className="px-4 py-3">UOM</th>
+                    <th className="px-4 py-3">Sell price</th>
+                    <th className="px-4 py-3">Status</th>
+                    <th className="px-3 py-3"><span className="sr-only">Open item</span></th>
                   </tr>
                 </thead>
                 <tbody>
                   {data.items.map((row) => (
-                    <tr key={row.item.id} className="border-b border-[var(--ophalo-border)] last:border-0 hover:bg-[var(--ophalo-canvas)]">
-                      <td className="py-2.5 pr-4 text-[var(--ophalo-ink)] font-medium">
+                    <tr key={row.item.id} className="group border-b border-[var(--ophalo-border)] last:border-0 transition-colors hover:bg-[var(--keep-accent-bg)]/35">
+                      <td className="px-4 py-3.5 text-[var(--ophalo-ink)] font-semibold">
                         <button
                           type="button"
                           onClick={() => onSelectItem(row.item.id)}
@@ -555,41 +590,51 @@ export function PriceBook({
                           {row.item.displayName}
                         </button>
                       </td>
-                      <td className="py-2.5 pr-4 text-[var(--ophalo-muted)]">{row.item.externalKey ?? "—"}</td>
-                      <td className="py-2.5 pr-4 text-[var(--ophalo-muted)]">
+                      <td className="px-4 py-3.5 text-[var(--ophalo-muted)]">{row.item.externalKey ?? "—"}</td>
+                      <td className="px-4 py-3.5 text-[var(--ophalo-muted)]">
                         {TYPE_LABELS[row.item.type] ?? row.item.type}
                       </td>
-                      <td className="py-2.5 pr-4 text-[var(--ophalo-muted)]">{row.item.unitOfMeasure}</td>
-                      <td className="py-2.5 pr-4 text-[var(--ophalo-ink)]">{formatPrice(row)}</td>
-                      <td className="py-2.5 pr-4 text-[var(--ophalo-muted)]">{row.item.activeState}</td>
+                      <td className="px-4 py-3.5 text-[var(--ophalo-muted)]">{row.item.unitOfMeasure}</td>
+                      <td className={`px-4 py-3.5 ${isStandalonePrice(row) ? "font-semibold text-[var(--ophalo-ink)]" : "italic text-[var(--ophalo-muted)]"}`}>
+                        {formatPrice(row)}
+                      </td>
+                      <td className="px-4 py-3.5"><StatusBadge status={row.item.activeState} /></td>
+                      <td className="px-3 py-3.5 text-right">
+                        <button
+                          type="button"
+                          onClick={() => onSelectItem(row.item.id)}
+                          aria-label={`Open ${row.item.displayName}`}
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-md text-[var(--ophalo-muted)] opacity-0 transition-all hover:bg-[var(--ophalo-card)] hover:text-[var(--ophalo-navy)] group-hover:opacity-100 focus:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)]"
+                        >
+                          <ChevronRight className="h-4 w-4" />
+                        </button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
 
-            <ul className="sm:hidden flex flex-col gap-2">
+            <ul className="sm:hidden flex flex-col gap-2.5">
               {data.items.map((row) => (
                 <li key={row.item.id}>
                   <button
                     type="button"
                     onClick={() => onSelectItem(row.item.id)}
                     aria-label={`View ${row.item.displayName}`}
-                    className="w-full text-left rounded-lg border border-[var(--ophalo-border)] px-3 py-3
-                      flex flex-col gap-1 hover:bg-[var(--ophalo-canvas)]
+                    className="w-full text-left rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-3.5 py-3.5 shadow-sm
+                      flex flex-col gap-2 hover:bg-[var(--keep-accent-bg)]/35
                       focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)]"
                   >
                     <div className="flex items-start justify-between gap-2">
                       <span className="text-[var(--ophalo-ink)] font-medium">{row.item.displayName}</span>
-                      <span className="shrink-0 text-xs font-medium text-[var(--ophalo-muted)]">
-                        {row.item.activeState}
-                      </span>
+                      <StatusBadge status={row.item.activeState} />
                     </div>
                     <div className="flex items-center justify-between gap-2 text-sm">
                       <span className="text-[var(--ophalo-muted)]">
                         {TYPE_LABELS[row.item.type] ?? row.item.type} · {row.item.unitOfMeasure}
                       </span>
-                      <span className="text-[var(--ophalo-ink)] font-medium text-right">{formatPrice(row)}</span>
+                      <span className={`text-right ${isStandalonePrice(row) ? "font-semibold text-[var(--ophalo-ink)]" : "italic text-[var(--ophalo-muted)]"}`}>{formatPrice(row)}</span>
                     </div>
                   </button>
                 </li>
@@ -627,8 +672,9 @@ export function PriceBook({
       )}
 
       {activeTab === "assemblies" && (
-        <div className="px-4 sm:px-6 pb-4 flex flex-wrap items-center gap-3">
-          <div className="inline-flex rounded-lg border border-[var(--ophalo-border)] p-0.5" role="group" aria-label="Filter by status">
+        <div className="mx-auto w-full max-w-[1440px] px-4 pt-4 pb-3 sm:px-6">
+          <div className="flex flex-wrap items-center gap-3 rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] p-3 shadow-sm">
+          <div className="inline-flex rounded-lg border border-[var(--ophalo-border)] bg-[var(--ophalo-canvas)] p-0.5" role="group" aria-label="Filter by status">
             {(["Active", "Inactive"] as const).map((option) => (
               <button
                 key={option}
@@ -645,11 +691,12 @@ export function PriceBook({
               </button>
             ))}
           </div>
+          </div>
         </div>
       )}
 
       {activeTab === "assemblies" && (
-        <div className="flex-1 min-w-0 px-4 sm:px-6 pb-6">
+        <div className="mx-auto flex-1 min-w-0 w-full max-w-[1440px] px-4 sm:px-6 pb-8">
           {assembliesQuery.isLoading && (
             <div className="flex flex-1 items-center justify-center py-16">
               <span className="text-[var(--ophalo-muted)] text-sm">Loading…</span>
@@ -671,7 +718,7 @@ export function PriceBook({
 
           {!assembliesQuery.isLoading && !assembliesQuery.isError && (assembliesQuery.data?.items.length ?? 0) === 0 && (
             <div className="flex flex-1 items-center justify-center py-16">
-              <div className="max-w-sm w-full rounded-xl border border-[var(--ophalo-border)] px-6 py-8 text-center">
+              <div className="max-w-sm w-full rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-6 py-8 text-center shadow-sm">
                 <Package className="mx-auto mb-3 h-8 w-8 text-[var(--ophalo-muted)]" />
                 <h2 className="text-[var(--ophalo-ink)] text-base font-semibold mb-1">
                   {assemblyStatusFilter === "Active" ? "No active offerings/assemblies" : "No inactive offerings/assemblies"}
@@ -699,24 +746,25 @@ export function PriceBook({
 
           {!assembliesQuery.isLoading && !assembliesQuery.isError && (assembliesQuery.data?.items.length ?? 0) > 0 && (
             <>
-              <div className="hidden sm:block overflow-x-auto">
+              <div className="hidden sm:block overflow-x-auto rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] shadow-sm">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="text-left text-xs font-medium text-[var(--ophalo-muted)] border-b border-[var(--ophalo-border)]">
-                      <th className="py-2 pr-4">Name</th>
-                      <th className="py-2 pr-4">Primary item</th>
-                      <th className="py-2 pr-4">Price treatment</th>
-                      <th className="py-2 pr-4">Status</th>
-                      <th className="py-2 pr-4">Eligible</th>
+                    <tr className="border-b border-[var(--ophalo-border)] bg-[var(--ophalo-canvas)] text-left text-[11px] font-semibold uppercase tracking-wider text-[var(--ophalo-muted)]">
+                      <th className="px-4 py-3">Name</th>
+                      <th className="px-4 py-3">Primary item</th>
+                      <th className="px-4 py-3">Price treatment</th>
+                      <th className="px-4 py-3">Status</th>
+                      <th className="px-4 py-3">Eligibility</th>
+                      <th className="px-3 py-3"><span className="sr-only">Open assembly</span></th>
                     </tr>
                   </thead>
                   <tbody>
                     {assembliesQuery.data!.items.map((row) => (
                       <tr
                         key={row.id}
-                        className="border-b border-[var(--ophalo-border)] last:border-0 hover:bg-[var(--ophalo-canvas)]"
+                        className="group border-b border-[var(--ophalo-border)] last:border-0 transition-colors hover:bg-[var(--keep-accent-bg)]/35"
                       >
-                        <td className="py-2.5 pr-4 text-[var(--ophalo-ink)] font-medium">
+                        <td className="px-4 py-3.5 text-[var(--ophalo-ink)] font-semibold">
                           <button
                             type="button"
                             onClick={() => onSelectAssembly(row.id)}
@@ -725,19 +773,29 @@ export function PriceBook({
                             {row.name}
                           </button>
                         </td>
-                        <td className="py-2 pr-4 text-[var(--ophalo-muted)]">{row.primaryCatalogItemDisplayName}</td>
-                        <td className="py-2 pr-4 text-[var(--ophalo-muted)]">
+                        <td className="px-4 py-3.5 text-[var(--ophalo-muted)]">{row.primaryCatalogItemDisplayName}</td>
+                        <td className="px-4 py-3.5 text-[var(--ophalo-muted)]">
                           {row.priceTreatment === "Summed" ? "Summed" : "All-inclusive"}
                         </td>
-                        <td className="py-2 pr-4 text-[var(--ophalo-muted)]">{row.activeState}</td>
-                        <td className="py-2 pr-4">
+                        <td className="px-4 py-3.5"><StatusBadge status={row.activeState} /></td>
+                        <td className="px-4 py-3.5">
                           {row.isOperationallyEligible ? (
-                            <span className="text-[var(--ophalo-muted)]">Yes</span>
+                            <span className="text-[var(--ophalo-success)]">Ready to use</span>
                           ) : (
-                            <span className="rounded-full bg-[var(--ophalo-attention-bg)] px-2 py-0.5 text-xs font-medium text-[var(--ophalo-attention)]">
+                            <span className="inline-flex rounded-full bg-[var(--ophalo-attention-bg)] px-2 py-0.5 text-xs font-medium text-[var(--ophalo-attention)]">
                               Needs review
                             </span>
                           )}
+                        </td>
+                        <td className="px-3 py-3.5 text-right">
+                          <button
+                            type="button"
+                            onClick={() => onSelectAssembly(row.id)}
+                            aria-label={`Open ${row.name}`}
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-md text-[var(--ophalo-muted)] opacity-0 transition-all hover:bg-[var(--ophalo-card)] hover:text-[var(--ophalo-navy)] group-hover:opacity-100 focus:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)]"
+                          >
+                            <ChevronRight className="h-4 w-4" />
+                          </button>
                         </td>
                       </tr>
                     ))}
@@ -745,20 +803,20 @@ export function PriceBook({
                 </table>
               </div>
 
-              <ul className="sm:hidden flex flex-col gap-2">
+              <ul className="sm:hidden flex flex-col gap-2.5">
                 {assembliesQuery.data!.items.map((row) => (
                   <li key={row.id}>
                     <button
                       type="button"
                       onClick={() => onSelectAssembly(row.id)}
                       aria-label={`View ${row.name}`}
-                      className="w-full text-left rounded-lg border border-[var(--ophalo-border)] px-3 py-3
-                        flex flex-col gap-1 hover:bg-[var(--ophalo-canvas)]
+                      className="w-full text-left rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-3.5 py-3.5 shadow-sm
+                        flex flex-col gap-2 hover:bg-[var(--keep-accent-bg)]/35
                         focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)]"
                     >
                       <div className="flex items-start justify-between gap-2">
-                        <span className="text-[var(--ophalo-ink)] font-medium">{row.name}</span>
-                        <span className="shrink-0 text-xs font-medium text-[var(--ophalo-muted)]">{row.activeState}</span>
+                        <span className="text-[var(--ophalo-ink)] font-semibold">{row.name}</span>
+                        <StatusBadge status={row.activeState} />
                       </div>
                       <div className="flex items-center justify-between gap-2 text-sm">
                         <span className="text-[var(--ophalo-muted)]">{row.primaryCatalogItemDisplayName}</span>

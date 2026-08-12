@@ -27,6 +27,7 @@ places is how sessions drift — do not do it.
 | **Specification** | `keep-component-spec.md` | Closed component recipes to the class, foundation scales (type/elevation/radius/spacing), composition structure, state/feedback patterns |
 | **Review gate** | `keep-review-rubric.md` | Whether a screen is production-ready: visual judgment, readiness checklist, and the public-availability release gate |
 | **Rationale** | `ux-design-decisions.md` | The locked decisions and *why* behind the system (ADR log) |
+| **Correction program** | `pwa-ui-quality-system.md` | Current PWA UI issue inventory, pending decisions, rollout order, and implementation authorization |
 
 ### Precedence — when two docs disagree
 
@@ -60,6 +61,7 @@ and the other is the bug — fix it in the same change, do not average them.
 | `keep-component-spec.md` | You need the closed component recipes, foundation scales, composition structure, or state patterns before building or polishing a Keep surface |
 | `keep-review-rubric.md` | You need to judge whether a surface is too plain / over-designed and whether it clears the production + release gate |
 | `ux-design-decisions.md` | You need the locked decisions and rationale behind the system |
+| `pwa-ui-quality-system.md` | You are correcting authenticated PWA UI quality and need the pending decision register before implementation |
 
 Retired (historical only — do not treat as current doctrine):
 
