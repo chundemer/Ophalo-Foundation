@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronRight, Keyboard, Package, Plus, Search, Tag } from "lucide-react";
+import { ChevronRight, Keyboard, Package, Plus, Search, Tag, X } from "lucide-react";
 import { api, ApiError, type AccountRole, type GetCatalogItemsParams } from "../lib/apiClient";
 import { CatalogItemDrawer } from "../components/keep/CatalogItemDrawer";
 import { OfferingAssemblyDrawer } from "../components/keep/OfferingAssemblyDrawer";
@@ -185,6 +185,10 @@ export function PriceBook({
 
   const hasActiveFilters =
     debouncedSearch.trim() !== "" || categoryFilter !== null || statusFilter !== "Active";
+  const activeFilterCount =
+    (debouncedSearch.trim() !== "" ? 1 : 0) +
+    (categoryFilter !== null ? 1 : 0) +
+    (statusFilter !== "Active" ? 1 : 0);
 
   const clearFilters = () => {
     setSearchInput("");
@@ -214,6 +218,24 @@ export function PriceBook({
   });
 
   const activeCategories = (categoriesData?.categories ?? []).filter((c) => c.activeState === "Active");
+
+  // PWA UI-quality correction (2026-08-12): truthful, context-specific language over a bare
+  // count wherever the active filters reduce to a single describable phrase; falls back to a
+  // count once search is involved, since a search term isn't safe to paraphrase as a noun phrase.
+  const activeCategoryName = categoryFilter
+    ? activeCategories.find((c) => c.id === categoryFilter)?.name ?? null
+    : null;
+  const filterSummaryText = (() => {
+    if (!hasActiveFilters) return "";
+    const statusWord = statusFilter === "Active" ? "active" : "inactive";
+    if (trimmedSearch) {
+      return `${activeFilterCount} ${activeFilterCount === 1 ? "filter" : "filters"} active`;
+    }
+    if (activeCategoryName) {
+      return `Showing ${statusWord} catalog items in ${activeCategoryName}`;
+    }
+    return `Showing ${statusWord} catalog items`;
+  })();
 
   // The unfiltered list defaults to status=Active server-side, so a zero-item result there does
   // not by itself mean the catalog is empty — it could hold only inactive items. Only probe for
@@ -416,13 +438,27 @@ export function PriceBook({
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--ophalo-muted)]" />
           <input
             id="catalog-search"
-            type="search"
+            type="text"
+            inputMode="search"
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
             placeholder="Search by name, SKU, or keyword"
-            className="w-full rounded-lg border border-[var(--ophalo-border)] py-2 pl-9 pr-3 text-sm text-[var(--ophalo-ink)] placeholder:text-[var(--ophalo-muted)]
-              focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)]"
+            className={`w-full rounded-lg border border-[var(--ophalo-border)] py-2 pl-9 text-sm text-[var(--ophalo-ink)] placeholder:text-[var(--ophalo-muted)]
+              focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] ${searchInput ? "pr-9" : "pr-3"}`}
           />
+          {searchInput && (
+            <button
+              type="button"
+              onClick={() => {
+                setSearchInput("");
+                setDebouncedSearch("");
+              }}
+              aria-label="Clear catalog search"
+              className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-[var(--ophalo-muted)] hover:text-[var(--ophalo-ink)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)]"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          )}
         </div>
 
         <label className="sr-only" htmlFor="catalog-category-filter">
@@ -458,13 +494,18 @@ export function PriceBook({
         </div>
 
         {hasActiveFilters && (
-          <button
-            type="button"
-            onClick={clearFilters}
-            className="text-sm font-medium text-[var(--keep-accent)] hover:underline"
-          >
-            Clear filters
-          </button>
+          <div className="flex items-center gap-2" aria-label={`${activeFilterCount} active filters`}>
+            <span className="inline-flex items-center rounded-full border border-[var(--keep-accent)]/20 bg-[var(--keep-accent-bg)] px-2.5 py-1 text-xs font-semibold text-[var(--keep-accent-hover)]">
+              {filterSummaryText}
+            </span>
+            <button
+              type="button"
+              onClick={clearFilters}
+              className="rounded-md px-2 py-1 text-sm font-semibold text-[var(--keep-accent-hover)] hover:bg-[var(--keep-accent-bg)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)]"
+            >
+              Reset all
+            </button>
+          </div>
         )}
       </div>
       </div>
@@ -533,7 +574,7 @@ export function PriceBook({
         )}
 
         {!isLoading && !isError && isFilteredEmpty && (
-          <div className="flex flex-1 items-center justify-center py-16">
+          <div className="flex flex-1 items-center justify-center pt-8 pb-16">
             <div className="max-w-sm w-full rounded-xl border border-[var(--ophalo-border)] px-6 py-8 text-center">
               <Tag className="mx-auto mb-3 h-8 w-8 text-[var(--ophalo-muted)]" />
               <h2 className="text-[var(--ophalo-ink)] text-base font-semibold mb-1">No items match your filters</h2>
@@ -553,6 +594,12 @@ export function PriceBook({
 
         {!isLoading && !isError && data && data.items.length > 0 && (
           <>
+            {/* PWA UI-quality correction (2026-08-12): current-page count only — the catalog
+                read has no total, just a cursor and hasMore, so "Showing 1-50" would overclaim. */}
+            <p className="mb-2 text-sm text-[var(--ophalo-muted)]">
+              {data.items.length} {data.items.length === 1 ? "catalog item" : "catalog items"}
+            </p>
+
             {/* 2e.7c: the desktop table is unreadable at mobile widths (values wrap into
                 fragments), so mobile gets a compact card list — Name, Type/UOM, Sell price or
                 "No standalone price", and Status. Desktop table is unchanged. */}

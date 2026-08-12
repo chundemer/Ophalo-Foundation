@@ -297,9 +297,88 @@ describe("PriceBook", () => {
     expect(screen.queryByText("Your catalog is empty")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Add catalog item" })).toBeInTheDocument();
 
-    const clearButtons = screen.getAllByRole("button", { name: "Clear filters" });
-    await user.click(clearButtons[0]);
+    await user.click(screen.getByRole("button", { name: "Reset all" }));
     expect(screen.getByLabelText("Search catalog")).toHaveValue("");
+  });
+
+  it("shows applied-filter count and supports one-click search clearing", async () => {
+    const user = userEvent.setup();
+    mockGetCatalogItems.mockResolvedValue(oneItem);
+    renderPriceBook();
+
+    await waitFor(() => expect(screen.getAllByText("Condensate Pump").length).toBeGreaterThan(0));
+    await user.type(screen.getByLabelText("Search catalog"), "pump");
+    await waitFor(() => expect(screen.getByText("1 filter active")).toBeInTheDocument());
+
+    await user.click(screen.getByRole("button", { name: "Clear catalog search" }));
+    expect(screen.getByLabelText("Search catalog")).toHaveValue("");
+    await waitFor(() => expect(screen.queryByText("1 filter active")).not.toBeInTheDocument());
+  });
+
+  it("shows only one clear affordance for an active search — the custom accessible button, not a native search-input cancel icon", async () => {
+    const user = userEvent.setup();
+    mockGetCatalogItems.mockResolvedValue(oneItem);
+    renderPriceBook();
+
+    await waitFor(() => expect(screen.getAllByText("Condensate Pump").length).toBeGreaterThan(0));
+    const searchInput = screen.getByLabelText("Search catalog");
+    expect(searchInput).toHaveAttribute("type", "text");
+    expect(searchInput).toHaveAttribute("inputMode", "search");
+
+    await user.type(searchInput, "pump");
+    expect(screen.getAllByRole("button", { name: "Clear catalog search" })).toHaveLength(1);
+  });
+
+  it("describes a category-only filter with a truthful sentence instead of a bare count", async () => {
+    const user = userEvent.setup();
+    mockGetCatalogCategories.mockResolvedValue({
+      categories: [{ id: "cat-1", name: "Warranty", displayOrder: 0, activeState: "Active", concurrencyVersion: "v1" }],
+    });
+    mockGetCatalogItems.mockResolvedValue(oneItem);
+    renderPriceBook();
+
+    await waitFor(() => expect(screen.getAllByText("Condensate Pump").length).toBeGreaterThan(0));
+    await user.click(screen.getByLabelText("Filter by category"));
+    await user.click(screen.getByRole("option", { name: "Warranty" }));
+
+    await waitFor(() =>
+      expect(screen.getByText("Showing active catalog items in Warranty")).toBeInTheDocument(),
+    );
+    expect(screen.getByRole("button", { name: "Reset all" })).toBeInTheDocument();
+  });
+
+  it("describes a status-only filter change with a truthful sentence", async () => {
+    const user = userEvent.setup();
+    mockGetCatalogItems.mockResolvedValue(oneItem);
+    renderPriceBook();
+
+    await waitFor(() => expect(screen.getAllByText("Condensate Pump").length).toBeGreaterThan(0));
+    await user.click(screen.getByRole("button", { name: "Inactive" }));
+
+    await waitFor(() =>
+      expect(screen.getByText("Showing inactive catalog items")).toBeInTheDocument(),
+    );
+  });
+
+  it("shows a singular populated-result count for one catalog item", async () => {
+    mockGetCatalogItems.mockResolvedValue(oneItem);
+    renderPriceBook();
+
+    await waitFor(() => expect(screen.getByText("1 catalog item")).toBeInTheDocument());
+  });
+
+  it("shows a plural populated-result count for multiple catalog items", async () => {
+    const twoItems: CatalogItemListResult = {
+      ...oneItem,
+      items: [
+        oneItem.items[0],
+        { ...oneItem.items[0], item: { ...oneItem.items[0].item, id: "item-2", displayName: "Filter Drier" } },
+      ],
+    };
+    mockGetCatalogItems.mockResolvedValue(twoItems);
+    renderPriceBook();
+
+    await waitFor(() => expect(screen.getByText("2 catalog items")).toBeInTheDocument());
   });
 
   it("paginates with Prev/Next using the returned cursor", async () => {

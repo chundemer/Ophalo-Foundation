@@ -905,6 +905,18 @@ account-aware `AccountFeatureAccessResolver`, and a generic Owner/Admin `GET
     records, and related workflows—remains separately scoped future capability. The PWA UI
     quality program is therefore a presentation/usability correction of complete Catalog Items
     and Assemblies workflows, not completion work for missing Price Book fundamentals.
+  - **PWA UI-quality correction — collaborative workflow begins (2026-08-12).** Christian and
+    Codex first decide the bounded desktop/PWA change and review its visual effect with realistic
+    data. Claude implements the approved code change. Codex then validates implementation against
+    the agreed decision, existing behavior, tests, accessibility, and the UI-quality contract;
+    Christian reviews the resulting real screen before the next change. The first surface is
+    **Price Book: Catalog Items**, selected as the calibration workspace because it contains a
+    clear page CTA, tabs, filters, data grid, and differentiated states with less workflow
+    complexity than Requests. First candidate pass: desktop page-shell rhythm, filter-state
+    clarity, table/row scan affordances, and CTA hierarchy; verify visually before applying the
+    shared data-workspace pattern to Offerings & Assemblies or beginning Requests work. The
+    correction is presentation/usability only: no catalog behavior, server contract, or mobile
+    redesign is authorized by this pass.
   - **Pilot-required image storage (paused, after Price Book continuation).** R2 remains required: price-book import is
     deferred, not private document storage. The next storage slice defines image metadata,
     account authorization, bounded direct API multipart upload, image type/size validation, purpose

@@ -267,16 +267,21 @@ function AppShell() {
               </button>
             ))}
           </nav>
-          <div className="px-3 pb-4">
-            <KeepButton
-              variant="primary"
-              onClick={openCapture}
-              className="w-full gap-2"
-            >
-              <Plus className="h-4 w-4" />
-              New Request
-            </KeepButton>
-          </div>
+          {/* D2: Price Book owns its contextual create action. Requests remains one navigation
+              click away, but a second global create button would compete with catalog/assembly
+              creation in this desktop workspace. */}
+          {activeNavId !== "pricebook" && (
+            <div className="px-3 pb-4">
+              <KeepButton
+                variant="primary"
+                onClick={openCapture}
+                className="w-full gap-2"
+              >
+                <Plus className="h-4 w-4" />
+                New Request
+              </KeepButton>
+            </div>
+          )}
           {role !== "unknown" && (
             <div className="px-4 py-3 border-t border-[var(--ophalo-border)]">
               <p className="text-xs text-[var(--ophalo-muted)]">{roleLabel(role)}</p>
@@ -368,10 +373,18 @@ function AppShell() {
             {role !== "unknown" && (
               <span className="text-xs text-[var(--ophalo-muted)] font-medium">{roleLabel(role)}</span>
             )}
-            <KeepButton variant="primary" onClick={openCapture} className="gap-1.5">
-              <Plus className="h-4 w-4" />
-              New Request
-            </KeepButton>
+            {/* PWA UI-quality correction (2026-08-12): Price Book, Catalog Item Detail, and
+                Offering/Assembly Detail each carry their own dominant contextual CTA — a second
+                global "New Request" competes with it, so it's dropped only on those three routes.
+                Requests stays one click away via the nav pill above. */}
+            {route.page !== "pricebook" &&
+              route.page !== "pricebook-item" &&
+              route.page !== "pricebook-assembly" && (
+              <KeepButton variant="primary" onClick={openCapture} className="gap-1.5">
+                <Plus className="h-4 w-4" />
+                New Request
+              </KeepButton>
+            )}
           </div>
         </header>
       )}
