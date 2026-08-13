@@ -38,6 +38,10 @@ interface PriceBookProps {
   onRetryEntitlement: () => void;
   onSelectItem: (catalogItemId: string) => void;
   onSelectAssembly: (offeringAssemblyId: string) => void;
+  // App.tsx owns the URL (`#/pricebook` / `#/pricebook?tab=assemblies`) as the source of truth;
+  // these are optional so existing callers/tests default to the Catalog Items tab uncontrolled.
+  activeTab?: "items" | "assemblies";
+  onTabChange?: (tab: "items" | "assemblies") => void;
 }
 
 const TYPE_LABELS: Record<string, string> = {
@@ -89,15 +93,22 @@ export function PriceBook({
   onRetryEntitlement,
   onSelectItem,
   onSelectAssembly,
+  activeTab: activeTabProp,
+  onTabChange,
 }: PriceBookProps) {
   const isOwnerOrAdmin = role === "owner" || role === "admin";
   const queryClient = useQueryClient();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [assemblyDrawerOpen, setAssemblyDrawerOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
-  // Session 3.2c: one Owner/Admin price-book workspace, tabbed rather than a separate route —
-  // build-log/117's "Offering & Packages tab" placeholder, now built.
-  const [activeTab, setActiveTab] = useState<"items" | "assemblies">("items");
+  // App.tsx's URL is the source of truth when it controls this (`activeTabProp`). This
+  // uncontrolled fallback exists only for callers (tests, standalone usage) that don't pass it.
+  const [uncontrolledTab, setUncontrolledTab] = useState<"items" | "assemblies">("items");
+  const activeTab = activeTabProp ?? uncontrolledTab;
+  function selectTab(tab: "items" | "assemblies") {
+    if (onTabChange) onTabChange(tab);
+    else setUncontrolledTab(tab);
+  }
   const [assemblyStatusFilter, setAssemblyStatusFilter] = useState<"Active" | "Inactive">("Active");
   // Independent cursor/page state per status — switching the Active/Inactive filter must not
   // lose the other status's page position, unlike the catalog-items list which resets on any
@@ -423,7 +434,7 @@ export function PriceBook({
               type="button"
               role="tab"
               aria-selected={activeTab === tab.key}
-              onClick={() => setActiveTab(tab.key)}
+              onClick={() => selectTab(tab.key)}
               className={`relative -mb-px px-0.5 py-3 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-offset-2 ${
                 activeTab === tab.key
                   ? "border-b-2 border-[var(--keep-accent)] text-[var(--ophalo-navy)]"

@@ -29,7 +29,7 @@ type AppRoute =
   | { page: "home" }
   | { page: "requests" }
   | { page: "settings"; section?: "public-profile" | "policy" | "team" }
-  | { page: "pricebook" }
+  | { page: "pricebook"; tab?: "items" | "assemblies" }
   | { page: "pricebook-item"; catalogItemId: string }
   | { page: "pricebook-assembly"; offeringAssemblyId: string }
   | { page: "detail"; requestId: string; focusPanel?: string };
@@ -39,15 +39,22 @@ interface RequestNavContext {
 }
 
 function getRouteFromLocation(): AppRoute {
-  const match = window.location.hash.match(/^#\/request\/(.+)$/);
+  const hash = window.location.hash;
+  const match = hash.match(/^#\/request\/(.+)$/);
   if (match?.[1]) return { page: "detail", requestId: match[1] };
+  // Split the Price Book path from its query string before matching detail routes — otherwise
+  // `#/pricebook?tab=assemblies` would fail every `#/pricebook/...` pattern and fall through.
+  const [hashPath, hashQuery] = hash.split("?");
   // Checked before the generic item-detail pattern below — its broader `(.+)` would otherwise
   // also match "assembly/<id>".
-  const assemblyMatch = window.location.hash.match(/^#\/pricebook\/assembly\/(.+)$/);
+  const assemblyMatch = hashPath.match(/^#\/pricebook\/assembly\/(.+)$/);
   if (assemblyMatch?.[1]) return { page: "pricebook-assembly", offeringAssemblyId: assemblyMatch[1] };
-  const itemMatch = window.location.hash.match(/^#\/pricebook\/(.+)$/);
+  const itemMatch = hashPath.match(/^#\/pricebook\/(.+)$/);
   if (itemMatch?.[1]) return { page: "pricebook-item", catalogItemId: itemMatch[1] };
-  if (window.location.hash === "#/pricebook") return { page: "pricebook" };
+  if (hashPath === "#/pricebook") {
+    const tab = new URLSearchParams(hashQuery ?? "").get("tab");
+    return { page: "pricebook", tab: tab === "assemblies" ? "assemblies" : "items" };
+  }
   return { page: "requests" };
 }
 
@@ -132,7 +139,8 @@ function AppShell() {
     if (newRoute.page === "detail") {
       history.pushState(null, "", `${base}#/request/${newRoute.requestId}`);
     } else if (newRoute.page === "pricebook") {
-      history.pushState(null, "", `${base}#/pricebook`);
+      const suffix = newRoute.tab === "assemblies" ? "#/pricebook?tab=assemblies" : "#/pricebook";
+      history.pushState(null, "", `${base}${suffix}`);
     } else if (newRoute.page === "pricebook-item") {
       history.pushState(null, "", `${base}#/pricebook/${newRoute.catalogItemId}`);
     } else if (newRoute.page === "pricebook-assembly") {
@@ -425,6 +433,8 @@ function AppShell() {
             onRetryEntitlement={() => void refetchCapabilities()}
             onSelectItem={(catalogItemId) => navigate({ page: "pricebook-item", catalogItemId })}
             onSelectAssembly={(offeringAssemblyId) => navigate({ page: "pricebook-assembly", offeringAssemblyId })}
+            activeTab={route.tab ?? "items"}
+            onTabChange={(tab) => navigate({ page: "pricebook", tab })}
           />
         )}
         {route.page === "pricebook-item" && (
@@ -435,7 +445,7 @@ function AppShell() {
             entitlementLoading={isOwnerOrAdmin && capabilityLoading}
             entitlementError={isOwnerOrAdmin && capabilityError}
             onRetryEntitlement={() => void refetchCapabilities()}
-            onBack={() => navigate({ page: "pricebook" })}
+            onBack={() => navigate({ page: "pricebook", tab: "items" })}
           />
         )}
         {route.page === "pricebook-assembly" && (
@@ -446,7 +456,7 @@ function AppShell() {
             entitlementLoading={isOwnerOrAdmin && capabilityLoading}
             entitlementError={isOwnerOrAdmin && capabilityError}
             onRetryEntitlement={() => void refetchCapabilities()}
-            onBack={() => navigate({ page: "pricebook" })}
+            onBack={() => navigate({ page: "pricebook", tab: "assemblies" })}
           />
         )}
         {route.page === "detail" && (

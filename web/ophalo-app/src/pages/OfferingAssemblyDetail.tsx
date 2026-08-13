@@ -369,7 +369,7 @@ export function OfferingAssemblyDetail({
       <div className="px-4 pt-5 pb-4 sm:px-6 sm:pt-6">
         <button type="button" onClick={onBack} className="inline-flex items-center gap-1.5 text-sm font-medium text-[var(--keep-accent)] hover:underline mb-3">
           <ArrowLeft className="h-4 w-4" />
-          Back to Price Book
+          Back to Assemblies
         </button>
       </div>
 
