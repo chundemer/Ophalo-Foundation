@@ -917,6 +917,16 @@ account-aware `AccountFeatureAccessResolver`, and a generic Owner/Admin `GET
     shared data-workspace pattern to Offerings & Assemblies or beginning Requests work. The
     correction is presentation/usability only: no catalog behavior, server contract, or mobile
     redesign is authorized by this pass.
+  - **Price Book Catalog Items — approved first correction baseline (2026-08-12).** Visual
+    review approved the single contextual catalog CTA, global-New-Request suppression on Price
+    Book routes, bounded filter/table surfaces, truthful current-page result count, visible
+    applied-filter/reset state, and one custom search-clear affordance. Long catalogs revealed
+    that a CTA-only sticky control would be incomplete: users also need search, filters, status,
+    and Price Book section navigation while browsing. The approved follow-up is one CSS-native
+    sticky workspace bar containing tabs, filters, active-filter context/reset, and the
+    contextual create action; no scroll-triggered JavaScript pop-in bar. A table-footer “Add
+    another catalog item” affordance is intentionally deferred until the sticky pattern is
+    reviewed with paginated data. Full rule: `docs/ux-design/pwa-ui-quality-system.md` D6.
   - **Pilot-required image storage (paused, after Price Book continuation).** R2 remains required: price-book import is
     deferred, not private document storage. The next storage slice defines image metadata,
     account authorization, bounded direct API multipart upload, image type/size validation, purpose

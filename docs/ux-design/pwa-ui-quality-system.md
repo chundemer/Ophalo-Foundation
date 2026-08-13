@@ -155,7 +155,7 @@ Removing the global utility from Price Book does not remove access to Requests: 
 
 ### D6. Data-workspace pattern: Price Book and Assemblies
 
-**Status:** Needs decision
+**Status:** Partially locked — Price Book workspace controls, 2026-08-12
 
 **Question:** What common data-grid/list pattern should catalog, assemblies, and future administrative collections use?
 
@@ -164,6 +164,18 @@ Removing the global utility from Price Book does not remove access to Requests: 
 **Reasoning:** Price Book should communicate a managed operational catalog rather than a static export. Reusing the pattern prevents Catalog Items and Assemblies from drifting apart.
 
 **Decision must specify:** mandatory columns/row actions, responsive behavior to defer or retain, table versus card-list threshold, and whether assemblies need an always-visible explanatory cue.
+
+**Approved Catalog Items correction baseline (desktop/PWA):**
+
+- Price Book has one contextual dominant CTA: **Add catalog item** on Catalog Items and **Add assembly** on Offerings & Assemblies. The global desktop New Request utility is absent on Price Book routes; Requests remains primary navigation.
+- The populated Catalog Items view provides a truthful current-page result count, a bounded table surface, readable table headers, row-open affordance, price emphasis, and semantic status badges.
+- A populated search field has one custom accessible clear control; native browser search-cancel UI must not create a duplicate affordance.
+- Applied filters remain visible with a Reset all recovery path; filtered-empty content explicitly explains that filters produced no results.
+- For long desktop lists, Price Book uses one CSS-native **sticky workspace bar**, not a conditional JavaScript pop-in CTA. It keeps the user’s active workspace controls available while the page title/subtitle scroll away.
+- The sticky workspace bar includes Price Book section tabs, search, category, status, applied-filter context/reset, and the contextual create CTA. It must sit below persistent global navigation when that navigation is sticky; its actual offset must use the application’s established header height/token, not a magic number.
+- Do not add a table-footer “Add another catalog item” action in this pass. Reconsider it only after reviewing the sticky workspace bar with a paginated catalog.
+
+**Deferred within D6:** Assemblies-specific explanatory guidance, exact table/footer pagination treatment, and mobile adaptation remain open.
 
 ### D7. Search, filters, and result context
 
