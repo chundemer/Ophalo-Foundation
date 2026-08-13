@@ -102,6 +102,15 @@ export function KeepModal({
     e.stopPropagation();
   }
 
+  // Callers that don't specify their own position utility (fixed/absolute/relative/
+  // sticky/static) need a default so the panel stays a positioned element and paints
+  // above the (position: absolute) backdrop sibling. Callers that do specify one (e.g.
+  // slide-over drawers using `fixed`) must not have it overridden — see GAP-024 fix
+  // 9f09764 for why a hardcoded `relative` broke those.
+  const hasPositionClass = /(^|\s)(static|fixed|absolute|relative|sticky)(\s|$)/.test(
+    panelClassName,
+  );
+
   return (
     <div
       className={`fixed inset-0 z-40 ${overlayClassName}`}
@@ -117,7 +126,7 @@ export function KeepModal({
         aria-label={label}
         aria-labelledby={labelledBy}
         tabIndex={-1}
-        className={`focus:outline-none ${panelClassName}`}
+        className={`${hasPositionClass ? "" : "relative"} focus:outline-none ${panelClassName}`}
         onClick={stopPropagation}
       >
         {children}
