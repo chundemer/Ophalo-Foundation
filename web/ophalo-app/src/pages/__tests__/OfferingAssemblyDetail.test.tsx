@@ -38,6 +38,7 @@ function renderDetail(props: Partial<React.ComponentProps<typeof OfferingAssembl
   const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
   const onBack = vi.fn();
   const onRetryEntitlement = vi.fn();
+  const onSelectCatalogItem = vi.fn();
   const utils = render(
     <QueryClientProvider client={queryClient}>
       <OfferingAssemblyDetail
@@ -48,11 +49,12 @@ function renderDetail(props: Partial<React.ComponentProps<typeof OfferingAssembl
         entitlementError={false}
         onRetryEntitlement={onRetryEntitlement}
         onBack={onBack}
+        onSelectCatalogItem={onSelectCatalogItem}
         {...props}
       />
     </QueryClientProvider>,
   );
-  return { ...utils, onBack, onRetryEntitlement, queryClient, invalidateSpy };
+  return { ...utils, onBack, onRetryEntitlement, onSelectCatalogItem, queryClient, invalidateSpy };
 }
 
 const baseAssembly: OfferingAssemblyDetailResult = {
@@ -68,6 +70,14 @@ const baseAssembly: OfferingAssemblyDetailResult = {
   ],
   isOperationallyEligible: true,
   eligibilityReasons: [],
+  pricing: {
+    priceStatus: "Priced",
+    calculatedSellPrice: 100,
+    marginStatus: "Ready",
+    missingCostLineCount: 0,
+    priceReasons: [],
+    marginReasons: [],
+  },
 };
 
 function invalidatedOfferingAssemblies(spy: ReturnType<typeof vi.spyOn>): boolean {
@@ -109,6 +119,52 @@ describe("OfferingAssemblyDetail", () => {
 
     await waitFor(() => expect(screen.getAllByText("Needs review").length).toBeGreaterThan(0));
     expect(screen.getByText("An associated item is inactive.")).toBeInTheDocument();
+  });
+
+  it("renders separate actionable price and margin groups, and marks every affected associated item", async () => {
+    mockGetOfferingAssembly.mockResolvedValue({
+      ...baseAssembly,
+      items: [
+        { id: "line-price", catalogItemId: "item-price", catalogItemDisplayName: "Price item", defaultQuantity: 1, isOptional: false, displayOrder: 0 },
+        { id: "line-margin", catalogItemId: "item-margin", catalogItemDisplayName: "Margin item", defaultQuantity: 1, isOptional: false, displayOrder: 1 },
+        { id: "line-both", catalogItemId: "item-both", catalogItemDisplayName: "Both item", defaultQuantity: 1, isOptional: false, displayOrder: 2 },
+      ],
+      pricing: {
+        priceStatus: "NeedsReview",
+        calculatedSellPrice: null,
+        marginStatus: "NeedsCostReview",
+        missingCostLineCount: 2,
+        priceReasons: [
+          { code: "RequiredComponentMissingStandaloneSellPrice", catalogItemId: "item-price", catalogItemDisplayName: "Price item" },
+          { code: "RequiredComponentMissingStandaloneSellPrice", catalogItemId: "item-both", catalogItemDisplayName: "Both item" },
+        ],
+        marginReasons: [
+          { code: "RequiredComponentMissingBusinessCost", catalogItemId: "item-margin", catalogItemDisplayName: "Margin item" },
+          { code: "RequiredComponentMissingBusinessCost", catalogItemId: "item-both", catalogItemDisplayName: "Both item" },
+        ],
+      },
+    });
+    const user = userEvent.setup();
+    const { onSelectCatalogItem } = renderDetail();
+
+    await screen.findAllByText("Price needs review");
+    expect(screen.getByText("Margin needs cost review (2)")).toBeInTheDocument();
+    expect(screen.getByText("Price")).toBeInTheDocument();
+    expect(screen.getByText("Margin")).toBeInTheDocument();
+    expect(screen.getAllByText("Price needs review")).toHaveLength(3);
+    expect(screen.getAllByText("Margin needs cost review")).toHaveLength(2);
+
+    // Margin reasons are explicitly cost-oriented ("Review cost"), distinct from price reasons
+    // ("Review price") — a generic "Review" no longer tells the operator which fix to make.
+    const priceReviewButtons = screen.getAllByRole("button", { name: "Review price" });
+    const marginReviewButtons = screen.getAllByRole("button", { name: "Review cost" });
+    expect(priceReviewButtons).toHaveLength(2);
+    expect(marginReviewButtons).toHaveLength(2);
+
+    await user.click(priceReviewButtons[0]);
+    await user.click(marginReviewButtons[0]);
+    expect(onSelectCatalogItem).toHaveBeenNthCalledWith(1, "item-price", "price");
+    expect(onSelectCatalogItem).toHaveBeenNthCalledWith(2, "item-margin", "margin");
   });
 
   it("saving a header edit calls updateOfferingAssemblyHeader and invalidates both the detail and list queries", async () => {

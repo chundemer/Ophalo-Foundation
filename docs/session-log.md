@@ -1,6 +1,6 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-08-10
+**Last updated:** 2026-08-13
 **Deployment posture:** Not pilot-ready.
 **Source of truth for acceptance criteria:** `docs/pilot-readiness-bug-tracker.md`.
 
@@ -927,6 +927,74 @@ account-aware `AccountFeatureAccessResolver`, and a generic Owner/Admin `GET
     contextual create action; no scroll-triggered JavaScript pop-in bar. A table-footer “Add
     another catalog item” affordance is intentionally deferred until the sticky pattern is
     reviewed with paginated data. Full rule: `docs/ux-design/pwa-ui-quality-system.md` D6.
+  - **Price Book Assemblies — Step 2 pricing-summary preflight authorized (2026-08-13, no code
+    yet).** Step 1 URL-addressable Price Book tabs/contextual assembly return is complete and
+    deployed: `#/pricebook` is the canonical Catalog Items route;
+    `#/pricebook?tab=assemblies` is the Assemblies route; Assembly Detail returns through
+    **Back to Assemblies**. Step 2 is a backend/API-first preflight for an authoritative
+    Owner/Admin Assembly Detail pricing summary. It must propose a read-model extension (preferred)
+    versus a dedicated endpoint, exact DTOs, query/projection approach, test plan, and migration
+    requirement; do not implement code in the preflight.
+
+    Locked pricing rules: (1) **Summed** price is the current standalone sell price of the primary
+    item plus each required associated item’s current standalone sell price multiplied by its
+    quantity; (2) a missing standalone sell price on the primary or any required Summed associated
+    item yields **Price needs review**, never a silent $0 total; (3) **All-inclusive** package price
+    is the primary item’s current standalone sell price—there is no separate assembly override-price
+    field; (4) a missing standalone price on that primary yields **Price needs review**; (5) pricing
+    is server calculated from authoritative current price data, never recomputed by the frontend.
+
+    Locked cost posture: catalog business cost remains optional and never blocks catalog/assembly
+    creation, activation, or price completeness. Missing cost is a separate Owner/Admin
+    profitability signal—e.g. **Margin needs cost review**—and must not be represented as a
+    price failure. The preflight must identify required versus optional line treatment, authoritative
+    missing-cost count/read shape, and whether phase one shows only readiness or also gross-profit,
+    margin, and markup values. Optional-line presentation, including whether to show a separate
+    optional-add-ons total, remains an explicit unresolved product decision; it must not be assumed
+    or silently included in the base calculated sell price.
+  - **Assemblies editor-containment direction (2026-08-13, implementation deferred).** Create
+    remains a list-context-preserving slide-over drawer; existing assembly management remains the
+    Assembly Detail page because it also owns lifecycle, eligibility, items, and the planned
+    pricing/profitability summary. These are containment choices for one workflow—not separate
+    editor concepts. After Step 2 establishes the final detail hierarchy, Edit must converge with
+    creation on the same anatomy: Name → Primary catalog item → Price treatment → Associated items
+    → Save/cancel and validation. Inactivate stays outside edit mode. Do not convert management to
+    a drawer merely for visual symmetry. Full rule: `docs/ux-design/pwa-ui-quality-system.md` D6.
+  - **Assemblies Step 2 pricing-summary contract review (2026-08-13).** Approved the preflight's
+    existing-Assembly-Detail-endpoint extension, server-authoritative calculation, nested summary
+    object, and no-migration posture. Corrected one material margin rule: all-inclusive package
+    *customer price* is primary-only, but margin readiness/cost basis includes primary plus every
+    required associated item for both price treatments. Project `PricingMode`, `SellPriceSnapshot`,
+    and `CostSnapshot` independently for every current referenced line—NoStandalonePrice may still
+    carry business cost. Optional items are excluded from phase-one totals/readiness. The summary
+    returns structured, catalog-item-linked review reasons so lifecycle eligibility, price
+    completeness, and margin completeness remain distinct and actionable. Repair navigation uses
+    the existing hash router (`#/pricebook/{itemId}?returnToAssembly={assemblyId}`) rather than a
+    new path scheme; no inline catalog editing on Assembly Detail. Delivery is split: backend/read
+    contract + types/tests first, then a separately reviewed Assembly Detail repair UI batch. Full
+    contract: `docs/ux-design/pwa-ui-quality-system.md` D6.
+  - **Assemblies Step 2 pricing-summary — Batch 1 and Batch 2 complete (2026-08-13).** Batch 1
+    (backend/read contract): `OfferingAssemblyDetail` gained a server-computed `Pricing` summary
+    (`AssemblyPriceStatus`, `AssemblyMarginStatus`, structured item-linked `AssemblyPricingReason`s)
+    on the existing Assembly Detail endpoint; no migration; `LoadCatalogItemLookupAsync` now
+    projects `SellPriceSnapshot`/`CostSnapshot` independently of `PricingMode`, and
+    `HasStandalonePrice` requires a non-null `SellPriceSnapshot`. Summed price reasons are
+    exhaustive (primary and every required component checked independently; a missing primary
+    price no longer short-circuits component checks). 66 integration tests pass. Batch 2 (repair
+    UI): Assembly Detail renders the pricing/margin summary and separate Lifecycle/Price/Margin
+    issue groups with catalog-item-linked review links (**Review price** / **Review cost** —
+    explicitly cost- vs. price-oriented, not generic); the repair loop uses the existing hash
+    router (`#/pricebook/{catalogItemId}?returnToAssembly={assemblyId}&returnToAssemblyReason=...`)
+    with `Back to assembly` returning via a real remount/refetch, never cache invalidation from the
+    Catalog Item mutation. Catalog Item Detail's price-publish CTA is renamed **Update pricing &
+    cost** (it edits both fields); a contextual banner appears only when arrived via a review link.
+    Follow-up UX fix (2026-08-13): the publish form's save action was below the fold — the form now
+    renders directly after the item header/summary (before Profitability/Aliases) and its
+    Cancel/Update actions sit in a sticky bottom-of-viewport bar that is the form's last child, so
+    normal document flow keeps it from ever covering the reason selector, error text, or below-cost
+    confirmation. No new mutation path; existing audited-publish semantics (required reason,
+    validation, below-cost confirmation, query invalidation) are unchanged. 387 frontend tests pass;
+    `tsc --noEmit` and `git diff --check` clean. No backend files touched in the UX fix.
   - **Pilot-required image storage (paused, after Price Book continuation).** R2 remains required: price-book import is
     deferred, not private document storage. The next storage slice defines image metadata,
     account authorization, bounded direct API multipart upload, image type/size validation, purpose

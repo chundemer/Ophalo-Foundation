@@ -177,6 +177,75 @@ Removing the global utility from Price Book does not remove access to Requests: 
 
 **Deferred within D6:** Assemblies-specific explanatory guidance, exact table/footer pagination treatment, and mobile adaptation remain open.
 
+**Assemblies creation/editing relationship (direction locked; implementation deferred until Step 2
+pricing-summary work is resolved):**
+
+- **Create** remains a slide-over drawer launched from the Assemblies workspace, preserving the
+  list context for fast office entry.
+- **Existing assembly management** remains an Assembly Detail page because it owns lifecycle,
+  eligibility, associated-item management, and the future pricing/profitability summary.
+- This is one product workflow expressed at two containment levels, not two different editor
+  concepts. Both must share the same learnable editor anatomy: **Name → Primary catalog item →
+  Price treatment → Associated items → Save/cancel and validation**.
+- On the detail page, **Edit** must enter an explicit Edit offering/assembly mode using the same
+  field labels, section order, catalog-picker behavior, price-treatment explanation, and validation
+  language as creation. Lifecycle controls such as Inactivate remain outside that editor mode.
+- Do not convert existing management into a drawer merely for visual symmetry. The future header
+  pricing/margin summary establishes the final detail-page hierarchy before this convergence is
+  implemented.
+
+**Assembly Detail pricing-summary preflight (Step 2, authorized 2026-08-13; no implementation yet):**
+
+- Price summaries are Owner/Admin header context and must be delivered by an authoritative backend
+  read model, not frontend price arithmetic.
+- For **Summed**, base calculated sell price is the current standalone sell price of the primary
+  item plus every required associated item’s current standalone sell price × quantity. A missing
+  standalone sell price on any required line yields **Price needs review**, never $0.00.
+- For **All-inclusive**, package price is the current standalone sell price of the primary item.
+  No separate assembly override/package-price field exists or is implied. A missing standalone
+  price on the primary yields **Price needs review**.
+- Business cost remains optional: missing cost never blocks catalog/assembly creation, activation,
+  or customer-price completeness. It produces a distinct Owner/Admin profitability state such as
+  **Margin needs cost review**, never a price error.
+- The preflight must propose DTO/query/test boundaries and identify whether the existing Assembly
+  Detail endpoint is extended or a dedicated summary endpoint is warranted. It must also surface,
+  without deciding, optional-line totals and whether the first release displays only margin
+  readiness/missing-cost count or full gross-profit/margin/markup values.
+
+**Step 2 preflight review — implementation contract (locked 2026-08-13):**
+
+- Extend the existing Owner/Admin Assembly Detail endpoint/read model; do not create a dedicated
+  pricing-summary endpoint. The summary is detail-header context and uses the same referenced
+  catalog-item set already loaded for assembly eligibility.
+- No migration is required. Project the current price line for every referenced item—its pricing
+  mode, sell-price snapshot, and cost snapshot. Cost must be projected independently of whether a
+  line has `StandalonePrice`; a `NoStandalonePrice` item may still carry business cost.
+- Add one nested, server-computed pricing-summary object to Assembly Detail. It owns price status,
+  nullable calculated sell price, margin status, missing-cost count, and structured price/margin
+  review reasons. The frontend must not derive arithmetic or review reasons from individual lines.
+- **Summed:** calculated customer sell price includes primary + every required associated item ×
+  quantity. Missing standalone sell price on any of those lines is **Price needs review**.
+- **All-inclusive:** package price is the primary item’s standalone sell price; associated sell
+  prices are not part of the customer package price. Missing primary standalone sell price is
+  **Price needs review**. No separate package-price override field is introduced.
+- For **both** price treatments, margin readiness includes the primary and every required
+  associated item. All-inclusive component costs are included in the cost basis even though their
+  sell prices are not separately charged. Missing cost yields **Margin needs cost review** and
+  never changes price completeness or activation eligibility.
+- Optional associated items are excluded from phase-one calculated price, missing-cost count, and
+  totals. Do not add optional-add-on totals in this release.
+- Review reasons must identify the affected catalog item by ID and display name. Keep lifecycle
+  eligibility, price completeness, and margin completeness as separate issue groups.
+- The repair loop is URL-addressable in the app’s existing hash router:
+  `#/pricebook/{catalogItemId}?returnToAssembly={assemblyId}` →
+  `#/pricebook/assembly/{assemblyId}`. Item Detail uses **Back to assembly** as the safe default
+  label; an assembly name may be used only when authoritatively available. On return, Assembly
+  Detail refetches the server detail summary. Do not introduce inline Catalog Item editing on
+  Assembly Detail.
+- Deliver in two reviewable batches: **(1) backend/read contract and API/frontend types with
+  tests; no visible UI**, then **(2) Assembly Detail repair UI** (header summary, grouped linked
+  reasons, per-row indicators, and repair-loop navigation).
+
 ### D7. Search, filters, and result context
 
 **Status:** Needs decision

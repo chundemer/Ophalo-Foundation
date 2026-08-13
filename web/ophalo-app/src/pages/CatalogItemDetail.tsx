@@ -34,6 +34,15 @@ interface CatalogItemDetailProps {
   entitlementError: boolean;
   onRetryEntitlement: () => void;
   onBack: () => void;
+  /** Repair-loop return context (Step 2 Batch 2, 2026-08-13): "Back to Price Book" when arrived
+   * normally, "Back to assembly" when arrived via an assembly's pricing/margin review link. No
+   * catalog-item editing is added here — the existing publish form (Internal cost/Sell price
+   * fields) is the correct mutation path; this page only relabels its CTA and adds contextual
+   * copy pointing at it. */
+  backLabel?: string;
+  /** Set only alongside a recognized returnToAssembly — which review link (price vs. margin)
+   * brought the operator here, so the contextual banner names the right fix. */
+  returnToAssemblyReason?: "price" | "margin";
 }
 
 const TYPE_LABELS: Record<string, string> = {
@@ -114,6 +123,8 @@ export function CatalogItemDetail({
   entitlementError,
   onRetryEntitlement,
   onBack,
+  backLabel = "Back to Price Book",
+  returnToAssemblyReason,
 }: CatalogItemDetailProps) {
   const isOwnerOrAdmin = role === "owner" || role === "admin";
   const queryClient = useQueryClient();
@@ -492,7 +503,7 @@ export function CatalogItemDetail({
           className="inline-flex items-center gap-1.5 text-sm font-medium text-[var(--keep-accent)] hover:underline mb-3"
         >
           <ArrowLeft className="h-4 w-4" />
-          Back to Price Book
+          {backLabel}
         </button>
       </div>
 
@@ -585,7 +596,7 @@ export function CatalogItemDetail({
                     disabled={itemBusy}
                     className="rounded-lg border border-[var(--ophalo-border)] px-3 py-1.5 text-sm font-medium text-[var(--ophalo-ink)] hover:bg-[var(--ophalo-canvas)] disabled:opacity-60"
                   >
-                    Update price
+                    Update pricing &amp; cost
                   </button>
                 )}
                 <button
@@ -650,6 +661,25 @@ export function CatalogItemDetail({
               </div>
             )}
 
+            {/* Repair-loop contextual guidance (Step 2 Batch 2, 2026-08-13): points at the
+                existing publish form's Internal cost / Sell price fields — no new mutation path,
+                no inline editing here. */}
+            {returnToAssemblyReason && !showPublishForm && (
+              <div className="rounded-lg border border-[var(--ophalo-attention)] bg-[var(--ophalo-attention-bg)] p-3 text-sm text-[var(--ophalo-attention)]">
+                {returnToAssemblyReason === "margin"
+                  ? "This item needs an internal cost to complete the assembly's margin review."
+                  : "This item needs a standalone sell price to complete the assembly's price review."}{" "}
+                <button
+                  type="button"
+                  onClick={() => setShowPublishForm(true)}
+                  disabled={itemBusy || data.item.activeState !== "Active"}
+                  className="font-medium underline disabled:opacity-60"
+                >
+                  Update pricing &amp; cost
+                </button>
+              </div>
+            )}
+
             <dl className="grid grid-cols-2 sm:grid-cols-3 gap-4 rounded-xl border border-[var(--ophalo-border)] p-4">
               <div>
                 <dt className="text-xs font-medium text-[var(--ophalo-muted)]">SKU</dt>
@@ -678,6 +708,21 @@ export function CatalogItemDetail({
                 </dd>
               </div>
             </dl>
+
+            {/* The repair/edit form is the first actionable content once opened — directly after
+                the header/summary, before Profitability and Aliases — so an owner arriving via
+                the assembly cost-repair link (or clicking Update pricing & cost normally) doesn't
+                have to scroll past unrelated alias management to reach it (2026-08-13). */}
+            {showPublishForm && (
+              <CatalogItemPricePublishForm
+                catalogItemId={catalogItemId}
+                currency={data.item.currency}
+                currentCost={data.currentCost}
+                currentSellPrice={data.currentSellPrice}
+                currentPricingMode={data.currentPricingMode}
+                onClose={() => setShowPublishForm(false)}
+              />
+            )}
 
             <div>
               <h2 className="text-sm font-semibold text-[var(--ophalo-ink)] mb-2">Profitability</h2>
@@ -751,17 +796,6 @@ export function CatalogItemDetail({
                 </button>
               </form>
             </div>
-
-            {showPublishForm && (
-              <CatalogItemPricePublishForm
-                catalogItemId={catalogItemId}
-                currency={data.item.currency}
-                currentCost={data.currentCost}
-                currentSellPrice={data.currentSellPrice}
-                currentPricingMode={data.currentPricingMode}
-                onClose={() => setShowPublishForm(false)}
-              />
-            )}
           </div>
         )}
 

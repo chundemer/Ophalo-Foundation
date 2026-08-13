@@ -24,6 +24,7 @@ const mockGetCatalogCategories = vi.fn();
 const mockGetCatalogItem = vi.fn();
 const mockGetOfferingAssembly = vi.fn();
 const mockGetOfferingAssemblies = vi.fn();
+const mockPublishCatalogItemPrice = vi.fn();
 
 vi.mock("./lib/apiClient", async () => {
   const actual = await vi.importActual<typeof import("./lib/apiClient")>("./lib/apiClient");
@@ -38,17 +39,20 @@ vi.mock("./lib/apiClient", async () => {
       getCatalogItem: (...args: unknown[]) => mockGetCatalogItem(...args),
       getOfferingAssembly: (...args: unknown[]) => mockGetOfferingAssembly(...args),
       getOfferingAssemblies: (...args: unknown[]) => mockGetOfferingAssemblies(...args),
+      publishCatalogItemPrice: (...args: unknown[]) => mockPublishCatalogItemPrice(...args),
     },
   };
 });
 
 function renderApp() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return render(
+  const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
+  const utils = render(
     <QueryClientProvider client={queryClient}>
       <App />
     </QueryClientProvider>,
   );
+  return { ...utils, queryClient, invalidateSpy };
 }
 
 // PWA UI-quality correction (2026-08-12): the global desktop "New Request" CTA must not compete
@@ -206,6 +210,14 @@ describe("App — Price Book tab URL synchronization", () => {
       items: [],
       isOperationallyEligible: true,
       eligibilityReasons: [],
+      pricing: {
+        priceStatus: "Priced",
+        calculatedSellPrice: 100,
+        marginStatus: "Ready",
+        missingCostLineCount: 0,
+        priceReasons: [],
+        marginReasons: [],
+      },
     });
     renderApp();
     const user = userEvent.setup();
@@ -214,6 +226,223 @@ describe("App — Price Book tab URL synchronization", () => {
     await user.click(backButton);
 
     await waitFor(() => expect(window.location.hash).toBe("#/pricebook?tab=assemblies"));
+  });
+});
+
+// Repair-loop routing (Step 2 Batch 2, 2026-08-13): the existing hash router, not an invented
+// path — `#/pricebook/{catalogItemId}?returnToAssembly={assemblyId}` back to
+// `#/pricebook/assembly/{assemblyId}`, with the return context parsed via URLSearchParams from
+// the existing hash query portion.
+describe("App — Assembly repair-loop routing", () => {
+  const assemblyId = "a0b1c2d3-e4f5-4a67-8b9c-0d1e2f3a4b5c";
+  const assembly = {
+    id: assemblyId,
+    name: "Test Assembly",
+    primaryCatalogItemId: "item-1",
+    primaryCatalogItemDisplayName: "Primary Item",
+    priceTreatment: "Summed" as const,
+    activeState: "Active",
+    concurrencyVersion: "v1",
+    items: [],
+    isOperationallyEligible: false,
+    eligibilityReasons: [],
+    pricing: {
+      priceStatus: "NeedsReview",
+      calculatedSellPrice: null,
+      marginStatus: "Ready",
+      missingCostLineCount: 0,
+      priceReasons: [{ code: "PrimaryMissingStandaloneSellPrice", catalogItemId: "item-1", catalogItemDisplayName: "Primary Item" }],
+      marginReasons: [],
+    },
+  };
+
+  const catalogItem = {
+    item: {
+      id: "item-1",
+      type: "Material",
+      displayName: "Primary Item",
+      externalKey: null,
+      categoryId: null,
+      unitOfMeasure: "each",
+      currency: "USD",
+      isCommonItem: false,
+      activeState: "Active",
+      concurrencyVersion: "v1",
+    },
+    aliases: [],
+    category: null,
+    currentPricingMode: "NoStandalonePrice",
+    currentSellPrice: null,
+    currentCost: null,
+  };
+
+  beforeEach(() => {
+    window.location.hash = "";
+    mockGetMe.mockReset().mockResolvedValue({
+      accountUserId: "u1",
+      accountId: "a1",
+      isAuthenticated: true,
+      isVerified: true,
+      accountRole: "owner",
+      businessName: "Acme HVAC",
+    });
+    mockGetCapabilityPackages.mockReset().mockResolvedValue([
+      { featureKey: "keep.price_book_quotes_materials", enabled: true },
+    ]);
+    mockGetCatalogItems.mockReset().mockResolvedValue({ items: [], limit: 50, hasMore: false, nextCursor: null });
+    mockGetCatalogCategories.mockReset().mockResolvedValue({ categories: [] });
+    mockGetOfferingAssemblies.mockReset().mockResolvedValue({ items: [], limit: 50, hasMore: false, nextCursor: null });
+    mockGetCatalogItem.mockReset().mockResolvedValue(catalogItem);
+    mockGetOfferingAssembly.mockReset().mockResolvedValue(assembly);
+  });
+
+  it("direct #/pricebook/{id}?returnToAssembly={assemblyId} shows 'Back to assembly' and returns to the assembly URL", async () => {
+    window.location.hash = `#/pricebook/item-1?returnToAssembly=${assemblyId}`;
+    renderApp();
+    const user = userEvent.setup();
+
+    const backButton = await screen.findByRole("button", { name: /Back to assembly/ });
+    await user.click(backButton);
+
+    await waitFor(() => expect(window.location.hash).toBe(`#/pricebook/assembly/${assemblyId}`));
+  });
+
+  it("ignores an absent/empty/unrecognized returnToAssembly and keeps Catalog Items as the back destination", async () => {
+    window.location.hash = "#/pricebook/item-1?returnToAssembly=not-an-assembly-id";
+    renderApp();
+    const user = userEvent.setup();
+
+    const backButton = await screen.findByRole("button", { name: /Back to Price Book/ });
+    await user.click(backButton);
+
+    await waitFor(() => expect(window.location.hash).toBe("#/pricebook"));
+  });
+
+  it("clicking a price reason's 'Review price' link navigates to the affected catalog item with return context", async () => {
+    window.location.hash = `#/pricebook/assembly/${assemblyId}`;
+    renderApp();
+    const user = userEvent.setup();
+
+    await user.click(await screen.findByRole("button", { name: "Review price" }));
+
+    await waitFor(() =>
+      expect(window.location.hash).toBe(`#/pricebook/item-1?returnToAssembly=${assemblyId}&returnToAssemblyReason=price`),
+    );
+    await screen.findByRole("button", { name: /Back to assembly/ });
+  });
+
+  it("clicking a margin reason's 'Review cost' link routes with returnToAssemblyReason=margin and shows cost-repair guidance", async () => {
+    window.location.hash = `#/pricebook/assembly/${assemblyId}`;
+    mockGetOfferingAssembly.mockResolvedValue({
+      ...assembly,
+      pricing: {
+        priceStatus: "Priced",
+        calculatedSellPrice: 100,
+        marginStatus: "NeedsCostReview",
+        missingCostLineCount: 1,
+        priceReasons: [],
+        marginReasons: [{ code: "PrimaryMissingBusinessCost", catalogItemId: "item-1", catalogItemDisplayName: "Primary Item" }],
+      },
+    });
+    renderApp();
+    const user = userEvent.setup();
+
+    await user.click(await screen.findByRole("button", { name: "Review cost" }));
+
+    await waitFor(() =>
+      expect(window.location.hash).toBe(`#/pricebook/item-1?returnToAssembly=${assemblyId}&returnToAssemblyReason=margin`),
+    );
+    await screen.findByRole("button", { name: /Back to assembly/ });
+    // Renamed CTA (the form edits both sell price and internal cost) and the margin-specific
+    // contextual banner pointing at it — no inline catalog editing was added to get here.
+    expect(
+      screen.getByText("This item needs an internal cost to complete the assembly's margin review."),
+    ).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: "Update pricing & cost" }).length).toBeGreaterThan(0);
+  });
+
+  it("remounts Assembly Detail and refetches its stale server summary on return from Catalog Item Detail", async () => {
+    // Correction (2026-08-13): the repair loop must not rely on Catalog Item Detail mutations
+    // invalidating the offering-assembly query — it must prove that navigating away and back
+    // remounts Assembly Detail and issues a fresh fetch, surfacing whatever the server now
+    // returns for that id.
+    window.location.hash = `#/pricebook/assembly/${assemblyId}`;
+    mockGetOfferingAssembly.mockResolvedValueOnce(assembly).mockResolvedValueOnce({
+      ...assembly,
+      pricing: {
+        priceStatus: "Priced",
+        calculatedSellPrice: 100,
+        marginStatus: "Ready",
+        missingCostLineCount: 0,
+        priceReasons: [],
+        marginReasons: [],
+      },
+    });
+    renderApp();
+    const user = userEvent.setup();
+
+    await screen.findByText("Price needs review");
+    expect(mockGetOfferingAssembly).toHaveBeenCalledTimes(1);
+
+    await user.click(await screen.findByRole("button", { name: "Review price" }));
+    await screen.findByRole("button", { name: /Back to assembly/ });
+
+    await user.click(screen.getByRole("button", { name: /Back to assembly/ }));
+
+    await waitFor(() => expect(mockGetOfferingAssembly).toHaveBeenCalledTimes(2));
+    await screen.findByText("$100.00");
+    expect(screen.queryByText("Price needs review")).not.toBeInTheDocument();
+  });
+
+  it("publishing a cost from the margin repair link invalidates catalog item/list queries, and returning remounts/refetches the assembly and removes the margin issue", async () => {
+    window.location.hash = `#/pricebook/assembly/${assemblyId}`;
+    mockGetOfferingAssembly.mockResolvedValueOnce({
+      ...assembly,
+      pricing: {
+        priceStatus: "Priced",
+        calculatedSellPrice: 100,
+        marginStatus: "NeedsCostReview",
+        missingCostLineCount: 1,
+        priceReasons: [],
+        marginReasons: [{ code: "PrimaryMissingBusinessCost", catalogItemId: "item-1", catalogItemDisplayName: "Primary Item" }],
+      },
+    }).mockResolvedValueOnce({
+      ...assembly,
+      pricing: {
+        priceStatus: "Priced",
+        calculatedSellPrice: 100,
+        marginStatus: "Ready",
+        missingCostLineCount: 0,
+        priceReasons: [],
+        marginReasons: [],
+      },
+    });
+    mockPublishCatalogItemPrice.mockResolvedValue({});
+    const { invalidateSpy } = renderApp();
+    const user = userEvent.setup();
+
+    await screen.findByText("Margin needs cost review (1)");
+    expect(mockGetOfferingAssembly).toHaveBeenCalledTimes(1);
+
+    await user.click(await screen.findByRole("button", { name: "Review cost" }));
+    const updateButtons = await screen.findAllByRole("button", { name: "Update pricing & cost" });
+    await user.click(updateButtons[0]);
+
+    await user.type(await screen.findByLabelText("Internal cost (optional)"), "50");
+    await user.selectOptions(screen.getByLabelText("Why are you updating this?"), "promotion-or-seasonal-pricing");
+    await user.click(screen.getByRole("button", { name: "Update pricing & cost" }));
+
+    await waitFor(() => expect(mockPublishCatalogItemPrice).toHaveBeenCalledTimes(1));
+    await waitFor(() =>
+      expect(invalidateSpy.mock.calls.some(([arg]) => (arg as { queryKey?: unknown[] })?.queryKey?.[0] === "catalogItem")).toBe(true),
+    );
+    expect(invalidateSpy.mock.calls.some(([arg]) => (arg as { queryKey?: unknown[] })?.queryKey?.[0] === "catalogItems")).toBe(true);
+
+    await user.click(await screen.findByRole("button", { name: /Back to assembly/ }));
+
+    await waitFor(() => expect(mockGetOfferingAssembly).toHaveBeenCalledTimes(2));
+    await screen.findByText("Ready");
+    expect(screen.queryByText(/Margin needs cost review/)).not.toBeInTheDocument();
   });
 });
 

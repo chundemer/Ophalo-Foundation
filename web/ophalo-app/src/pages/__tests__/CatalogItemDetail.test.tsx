@@ -756,7 +756,7 @@ describe("CatalogItemDetail", () => {
     queryClient.setQueryData(["catalogItems"], { items: [] });
 
     await waitFor(() => expect(screen.getByText("Condensate Pump")).toBeInTheDocument());
-    await user.click(screen.getByRole("button", { name: "Update price" }));
+    await user.click(screen.getByRole("button", { name: "Update pricing & cost" }));
 
     const sellPriceInput = screen.getByLabelText("Sell price") as HTMLInputElement;
     const costInput = screen.getByLabelText("Internal cost (optional)") as HTMLInputElement;
@@ -769,7 +769,7 @@ describe("CatalogItemDetail", () => {
     await user.clear(costInput);
     await user.type(costInput, "100");
     await user.selectOptions(screen.getByLabelText("Why are you updating this?"), "supplier-cost-changed");
-    await user.click(screen.getByRole("button", { name: "Update price" }));
+    await user.click(screen.getByRole("button", { name: "Update pricing & cost" }));
 
     await waitFor(() => expect(mockPublishCatalogItemPrice).toHaveBeenCalledWith(
       "item-1",
@@ -796,19 +796,19 @@ describe("CatalogItemDetail", () => {
     renderDetail();
 
     await waitFor(() => expect(screen.getByText("Condensate Pump")).toBeInTheDocument());
-    await user.click(screen.getByRole("button", { name: "Update price" }));
+    await user.click(screen.getByRole("button", { name: "Update pricing & cost" }));
 
     const sellPriceInput = screen.getByLabelText("Sell price") as HTMLInputElement;
     await user.clear(sellPriceInput);
     await user.type(sellPriceInput, "275");
     await user.selectOptions(screen.getByLabelText("Why are you updating this?"), "other");
-    await user.click(screen.getByRole("button", { name: "Update price" }));
+    await user.click(screen.getByRole("button", { name: "Update pricing & cost" }));
 
     expect(screen.getByText("Enter a reason.")).toBeInTheDocument();
     expect(mockPublishCatalogItemPrice).not.toHaveBeenCalled();
 
     await user.type(screen.getByLabelText("Reason"), "Vendor rebate ended");
-    await user.click(screen.getByRole("button", { name: "Update price" }));
+    await user.click(screen.getByRole("button", { name: "Update pricing & cost" }));
 
     await waitFor(() => expect(mockPublishCatalogItemPrice).toHaveBeenCalledWith(
       "item-1",
@@ -829,7 +829,7 @@ describe("CatalogItemDetail", () => {
     renderDetail();
 
     await waitFor(() => expect(screen.getByText("Condensate Pump")).toBeInTheDocument());
-    await user.click(screen.getByRole("button", { name: "Update price" }));
+    await user.click(screen.getByRole("button", { name: "Update pricing & cost" }));
 
     // Collapsed by default since the item currently has a standalone sell price.
     expect(screen.getByText("Advanced options").closest("details")).not.toHaveAttribute("open");
@@ -839,7 +839,7 @@ describe("CatalogItemDetail", () => {
     expect(screen.queryByLabelText("Sell price")).not.toBeInTheDocument();
 
     await user.selectOptions(screen.getByLabelText("Why are you updating this?"), "correcting-a-price");
-    await user.click(screen.getByRole("button", { name: "Update price" }));
+    await user.click(screen.getByRole("button", { name: "Update pricing & cost" }));
 
     await waitFor(() => expect(mockPublishCatalogItemPrice).toHaveBeenCalledWith(
       "item-1",
@@ -847,34 +847,66 @@ describe("CatalogItemDetail", () => {
     ));
   });
 
-  it("disables Update price when nothing changed, enabling only after a real price change", async () => {
+  it("disables Update pricing & cost when nothing changed, enabling only after a real price change", async () => {
     const user = userEvent.setup();
     mockGetCatalogItem.mockResolvedValue(baseItem);
     renderDetail();
 
     await waitFor(() => expect(screen.getByText("Condensate Pump")).toBeInTheDocument());
-    await user.click(screen.getByRole("button", { name: "Update price" }));
+    await user.click(screen.getByRole("button", { name: "Update pricing & cost" }));
 
-    // Selecting a reason alone — with no price/mode change — must not enable Update price.
+    // Selecting a reason alone — with no price/mode change — must not enable Update pricing & cost.
     await user.selectOptions(screen.getByLabelText("Why are you updating this?"), "promotion-or-seasonal-pricing");
-    expect(screen.getByRole("button", { name: "Update price" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Update pricing & cost" })).toBeDisabled();
     expect(screen.getByText("Change a price or pricing option to update this item.")).toBeInTheDocument();
 
     const sellPriceInput = screen.getByLabelText("Sell price") as HTMLInputElement;
     await user.clear(sellPriceInput);
     await user.type(sellPriceInput, "260");
 
-    expect(screen.getByRole("button", { name: "Update price" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Update pricing & cost" })).toBeEnabled();
     expect(
       screen.queryByText("Change a price or pricing option to update this item."),
     ).not.toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "Update price" }));
+    await user.click(screen.getByRole("button", { name: "Update pricing & cost" }));
 
     await waitFor(() => expect(mockPublishCatalogItemPrice).toHaveBeenCalledWith(
       "item-1",
       { cost: 125, sellPrice: 260, reason: "Promotion or seasonal pricing" },
     ));
+  });
+
+  it("renders the pricing & cost form before the Aliases section, directly after the header/summary, when open", async () => {
+    const user = userEvent.setup();
+    mockGetCatalogItem.mockResolvedValue(baseItem);
+    renderDetail();
+
+    await waitFor(() => expect(screen.getByText("Condensate Pump")).toBeInTheDocument());
+    await user.click(screen.getByRole("button", { name: "Update pricing & cost" }));
+
+    const formHeading = await screen.findByRole("heading", { name: "Update pricing & cost" });
+    const aliasesHeading = screen.getByRole("heading", { name: "Aliases" });
+    // DOCUMENT_POSITION_FOLLOWING on aliasesHeading (relative to formHeading) means the form
+    // comes first — the repair form must be the first actionable content, not placed after
+    // unrelated alias management.
+    expect(formHeading.compareDocumentPosition(aliasesHeading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("shows a sticky save bar with Cancel and Update pricing & cost while the form is open", async () => {
+    const user = userEvent.setup();
+    mockGetCatalogItem.mockResolvedValue(baseItem);
+    renderDetail();
+
+    await waitFor(() => expect(screen.getByText("Condensate Pump")).toBeInTheDocument());
+    await user.click(screen.getByRole("button", { name: "Update pricing & cost" }));
+
+    const submitButton = await screen.findByRole("button", { name: "Update pricing & cost" });
+    const cancelButton = screen.getByRole("button", { name: "Cancel" });
+    const bar = submitButton.closest(".sticky");
+    expect(bar).not.toBeNull();
+    expect(bar).toContainElement(cancelButton);
+    expect(bar?.className).toContain("bottom-0");
   });
 
   it("blocks the update on a below-cost price until explicitly confirmed", async () => {
@@ -890,19 +922,19 @@ describe("CatalogItemDetail", () => {
     renderDetail();
 
     await waitFor(() => expect(screen.getByText("Condensate Pump")).toBeInTheDocument());
-    await user.click(screen.getByRole("button", { name: "Update price" }));
+    await user.click(screen.getByRole("button", { name: "Update pricing & cost" }));
 
     const sellPriceInput = screen.getByLabelText("Sell price") as HTMLInputElement;
     await user.clear(sellPriceInput);
     await user.type(sellPriceInput, "50");
     await user.selectOptions(screen.getByLabelText("Why are you updating this?"), "correcting-a-price");
-    await user.click(screen.getByRole("button", { name: "Update price" }));
+    await user.click(screen.getByRole("button", { name: "Update pricing & cost" }));
 
     expect(screen.getByText(/Sell price is below cost/)).toBeInTheDocument();
     expect(mockPublishCatalogItemPrice).not.toHaveBeenCalled();
 
     await user.click(screen.getByLabelText("I understand this item is priced below cost"));
-    await user.click(screen.getByRole("button", { name: "Update price" }));
+    await user.click(screen.getByRole("button", { name: "Update pricing & cost" }));
 
     await waitFor(() => expect(mockPublishCatalogItemPrice).toHaveBeenCalledWith(
       "item-1",
@@ -924,13 +956,13 @@ describe("CatalogItemDetail", () => {
     renderDetail();
 
     await waitFor(() => expect(screen.getByText("Condensate Pump")).toBeInTheDocument());
-    await user.click(screen.getByRole("button", { name: "Update price" }));
+    await user.click(screen.getByRole("button", { name: "Update pricing & cost" }));
 
     const sellPriceInput = screen.getByLabelText("Sell price") as HTMLInputElement;
     await user.clear(sellPriceInput);
     await user.type(sellPriceInput, "275");
     await user.selectOptions(screen.getByLabelText("Why are you updating this?"), "correcting-a-price");
-    await user.click(screen.getByRole("button", { name: "Update price" }));
+    await user.click(screen.getByRole("button", { name: "Update pricing & cost" }));
 
     await waitFor(() =>
       expect(

@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Package } from "lucide-react";
 import { api, ApiError, type AccountRole, type OfferingAssemblyDetailResult } from "../lib/apiClient";
 import { CatalogItemPicker } from "../components/keep/CatalogItemPicker";
+import { KeepBadge } from "../components/keep/KeepBadge";
 
 const INPUT_CLS =
   "w-full rounded-lg border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] text-base text-[var(--ophalo-ink)] px-3 py-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-offset-1";
@@ -16,6 +17,23 @@ const ELIGIBILITY_REASON_LABELS: Record<string, string> = {
   ComponentInactive: "An associated item is inactive.",
   ComponentMissingStandalonePrice: "An associated item has no standalone price.",
 };
+
+// Step 2 Batch 2 (2026-08-13): server-authoritative pricing/margin summary presentation. The
+// frontend only labels and links the reasons the server already computed — it never derives
+// price, cost, counts, or review status itself.
+const PRICE_REASON_LABELS: Record<string, string> = {
+  PrimaryMissingStandaloneSellPrice: "The primary item has no standalone sell price.",
+  RequiredComponentMissingStandaloneSellPrice: "A required associated item has no standalone sell price.",
+};
+
+const MARGIN_REASON_LABELS: Record<string, string> = {
+  PrimaryMissingBusinessCost: "The primary item has no business cost on file.",
+  RequiredComponentMissingBusinessCost: "A required associated item has no business cost on file.",
+};
+
+function formatCurrency(value: number): string {
+  return value.toLocaleString(undefined, { style: "currency", currency: "USD" });
+}
 
 interface HeaderFormState {
   primaryCatalogItemId: string;
@@ -41,6 +59,10 @@ interface OfferingAssemblyDetailProps {
   entitlementError: boolean;
   onRetryEntitlement: () => void;
   onBack: () => void;
+  /** Repair-loop navigation (Step 2 Batch 2, 2026-08-13): routes to the affected catalog item
+   * with return context, never edits the catalog item inline here. The reason kind lets the
+   * catalog item page show cost- vs. price-specific contextual guidance without re-deriving it. */
+  onSelectCatalogItem: (catalogItemId: string, reasonKind: "price" | "margin") => void;
 }
 
 /**
@@ -57,6 +79,7 @@ export function OfferingAssemblyDetail({
   entitlementError,
   onRetryEntitlement,
   onBack,
+  onSelectCatalogItem,
 }: OfferingAssemblyDetailProps) {
   const isOwnerOrAdmin = role === "owner" || role === "admin";
   const queryClient = useQueryClient();
@@ -461,12 +484,80 @@ export function OfferingAssemblyDetail({
             {activateError && <p className="text-sm text-[var(--ophalo-danger)]">{activateError}</p>}
             {inactivateError && <p className="text-sm text-[var(--ophalo-danger)]">{inactivateError}</p>}
 
+            {/* Owner/Admin pricing/margin header context (Step 2, 2026-08-13): server-authoritative
+                only — this reads data.pricing verbatim, it never computes a price, cost, count, or
+                review status itself. */}
+            <div className="flex flex-wrap items-center gap-x-6 gap-y-2 rounded-lg border border-[var(--ophalo-border)] p-3">
+              <div>
+                <p className="text-xs font-medium text-[var(--ophalo-muted)]">Calculated sell price</p>
+                {data.pricing.priceStatus === "Priced" && data.pricing.calculatedSellPrice !== null ? (
+                  <p className="text-lg font-semibold text-[var(--ophalo-ink)]">{formatCurrency(data.pricing.calculatedSellPrice)}</p>
+                ) : (
+                  <p className="text-sm font-medium text-[var(--ophalo-attention)]">Price needs review</p>
+                )}
+              </div>
+              <div>
+                <p className="text-xs font-medium text-[var(--ophalo-muted)]">Margin readiness</p>
+                {data.pricing.marginStatus === "Ready" ? (
+                  <p className="text-sm font-medium text-[var(--ophalo-ink)]">Ready</p>
+                ) : (
+                  <p className="text-sm font-medium text-[var(--ophalo-attention)]">
+                    Margin needs cost review ({data.pricing.missingCostLineCount})
+                  </p>
+                )}
+              </div>
+            </div>
+
             {data.eligibilityReasons.length > 0 && (
               <div className="rounded-lg border border-[var(--ophalo-attention)] bg-[var(--ophalo-attention-bg)] p-3 space-y-1">
+                <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ophalo-attention)]">Lifecycle</p>
                 {data.eligibilityReasons.map((reason, idx) => (
                   <p key={idx} className="text-sm text-[var(--ophalo-attention)]">
                     {ELIGIBILITY_REASON_LABELS[reason.code] ?? reason.code}
                   </p>
+                ))}
+              </div>
+            )}
+
+            {/* Price and margin issues are kept as separate groups from each other and from
+                lifecycle eligibility above — a missing cost is never presented as a price error,
+                and neither collapses into one generic warning (locked contract). */}
+            {data.pricing.priceReasons.length > 0 && (
+              <div className="rounded-lg border border-[var(--ophalo-attention)] bg-[var(--ophalo-attention-bg)] p-3 space-y-1">
+                <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ophalo-attention)]">Price</p>
+                {data.pricing.priceReasons.map((reason, idx) => (
+                  <div key={idx} className="flex items-center justify-between gap-2">
+                    <p className="text-sm text-[var(--ophalo-attention)]">
+                      {PRICE_REASON_LABELS[reason.code] ?? reason.code} ({reason.catalogItemDisplayName})
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => onSelectCatalogItem(reason.catalogItemId, "price")}
+                      className="shrink-0 text-sm font-medium text-[var(--keep-accent)] hover:underline"
+                    >
+                      Review price
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {data.pricing.marginReasons.length > 0 && (
+              <div className="rounded-lg border border-[var(--ophalo-border)] bg-[var(--ophalo-canvas)] p-3 space-y-1">
+                <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ophalo-muted)]">Margin</p>
+                {data.pricing.marginReasons.map((reason, idx) => (
+                  <div key={idx} className="flex items-center justify-between gap-2">
+                    <p className="text-sm text-[var(--ophalo-muted)]">
+                      {MARGIN_REASON_LABELS[reason.code] ?? reason.code} ({reason.catalogItemDisplayName})
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => onSelectCatalogItem(reason.catalogItemId, "margin")}
+                      className="shrink-0 text-sm font-medium text-[var(--keep-accent)] hover:underline"
+                    >
+                      Review cost
+                    </button>
+                  </div>
                 ))}
               </div>
             )}
@@ -489,10 +580,19 @@ export function OfferingAssemblyDetail({
               {itemActionError && <p className="text-sm text-[var(--ophalo-danger)] mb-2">{itemActionError}</p>}
 
               <div className="space-y-2">
-                {data.items.map((it) => (
+                {data.items.map((it) => {
+                  const hasPriceIssue = data.pricing.priceReasons.some((r) => r.catalogItemId === it.catalogItemId);
+                  const hasMarginIssue = data.pricing.marginReasons.some((r) => r.catalogItemId === it.catalogItemId);
+                  return (
                   <div key={it.id} className="flex items-center gap-3 rounded-lg border border-[var(--ophalo-border)] p-2">
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-[var(--ophalo-ink)] truncate">{it.catalogItemDisplayName}</p>
+                      {(hasPriceIssue || hasMarginIssue) && (
+                        <div className="mt-1 flex flex-wrap gap-1">
+                          {hasPriceIssue && <KeepBadge variant="attention">Price needs review</KeepBadge>}
+                          {hasMarginIssue && <KeepBadge variant="attention">Margin needs cost review</KeepBadge>}
+                        </div>
+                      )}
                     </div>
                     <label className="flex items-center gap-1 text-sm text-[var(--ophalo-muted)]">
                       Qty
@@ -531,7 +631,8 @@ export function OfferingAssemblyDetail({
                       Remove
                     </button>
                   </div>
-                ))}
+                  );
+                })}
                 {data.items.length === 0 && !showAddItem && <p className="text-sm text-[var(--ophalo-muted)]">No associated items yet.</p>}
               </div>
 

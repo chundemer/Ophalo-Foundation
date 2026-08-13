@@ -30,12 +30,18 @@ type AppRoute =
   | { page: "requests" }
   | { page: "settings"; section?: "public-profile" | "policy" | "team" }
   | { page: "pricebook"; tab?: "items" | "assemblies" }
-  | { page: "pricebook-item"; catalogItemId: string }
+  | { page: "pricebook-item"; catalogItemId: string; returnToAssembly?: string; returnToAssemblyReason?: "price" | "margin" }
   | { page: "pricebook-assembly"; offeringAssemblyId: string }
   | { page: "detail"; requestId: string; focusPanel?: string };
 
 interface RequestNavContext {
   requestIds: string[];
+}
+
+// Assembly endpoint identifiers are GUIDs. Keeping the return context to that shape prevents a
+// hand-authored or malformed hash from replacing the normal, safe Catalog Items back target.
+function isOfferingAssemblyId(value: string | null): value is string {
+  return value !== null && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
 }
 
 function getRouteFromLocation(): AppRoute {
@@ -50,7 +56,25 @@ function getRouteFromLocation(): AppRoute {
   const assemblyMatch = hashPath.match(/^#\/pricebook\/assembly\/(.+)$/);
   if (assemblyMatch?.[1]) return { page: "pricebook-assembly", offeringAssemblyId: assemblyMatch[1] };
   const itemMatch = hashPath.match(/^#\/pricebook\/(.+)$/);
-  if (itemMatch?.[1]) return { page: "pricebook-item", catalogItemId: itemMatch[1] };
+  if (itemMatch?.[1]) {
+    // Repair-loop return context (Step 2 Batch 2, 2026-08-13): an absent, empty, or unrecognized
+    // returnToAssembly is safely ignored — Catalog Items remains the normal back destination.
+    // returnToAssemblyReason only matters alongside a recognized returnToAssembly — an
+    // unrecognized value safely falls back to no contextual guidance rather than a bad label.
+    const params = new URLSearchParams(hashQuery ?? "");
+    const returnToAssembly = params.get("returnToAssembly");
+    const returnToAssemblyReason = params.get("returnToAssemblyReason");
+    const validReturn = isOfferingAssemblyId(returnToAssembly);
+    return {
+      page: "pricebook-item",
+      catalogItemId: itemMatch[1],
+      returnToAssembly: validReturn ? returnToAssembly : undefined,
+      returnToAssemblyReason:
+        validReturn && (returnToAssemblyReason === "price" || returnToAssemblyReason === "margin")
+          ? returnToAssemblyReason
+          : undefined,
+    };
+  }
   if (hashPath === "#/pricebook") {
     const tab = new URLSearchParams(hashQuery ?? "").get("tab");
     return { page: "pricebook", tab: tab === "assemblies" ? "assemblies" : "items" };
@@ -142,7 +166,13 @@ function AppShell() {
       const suffix = newRoute.tab === "assemblies" ? "#/pricebook?tab=assemblies" : "#/pricebook";
       history.pushState(null, "", `${base}${suffix}`);
     } else if (newRoute.page === "pricebook-item") {
-      history.pushState(null, "", `${base}#/pricebook/${newRoute.catalogItemId}`);
+      let suffix = `#/pricebook/${newRoute.catalogItemId}`;
+      if (newRoute.returnToAssembly) {
+        const query = new URLSearchParams({ returnToAssembly: newRoute.returnToAssembly });
+        if (newRoute.returnToAssemblyReason) query.set("returnToAssemblyReason", newRoute.returnToAssemblyReason);
+        suffix += `?${query.toString()}`;
+      }
+      history.pushState(null, "", `${base}${suffix}`);
     } else if (newRoute.page === "pricebook-assembly") {
       history.pushState(null, "", `${base}#/pricebook/assembly/${newRoute.offeringAssemblyId}`);
     } else {
@@ -445,7 +475,13 @@ function AppShell() {
             entitlementLoading={isOwnerOrAdmin && capabilityLoading}
             entitlementError={isOwnerOrAdmin && capabilityError}
             onRetryEntitlement={() => void refetchCapabilities()}
-            onBack={() => navigate({ page: "pricebook", tab: "items" })}
+            onBack={() =>
+              route.returnToAssembly
+                ? navigate({ page: "pricebook-assembly", offeringAssemblyId: route.returnToAssembly })
+                : navigate({ page: "pricebook", tab: "items" })
+            }
+            backLabel={route.returnToAssembly ? "Back to assembly" : "Back to Price Book"}
+            returnToAssemblyReason={route.returnToAssembly ? route.returnToAssemblyReason : undefined}
           />
         )}
         {route.page === "pricebook-assembly" && (
@@ -457,6 +493,14 @@ function AppShell() {
             entitlementError={isOwnerOrAdmin && capabilityError}
             onRetryEntitlement={() => void refetchCapabilities()}
             onBack={() => navigate({ page: "pricebook", tab: "assemblies" })}
+            onSelectCatalogItem={(catalogItemId, reasonKind) =>
+              navigate({
+                page: "pricebook-item",
+                catalogItemId,
+                returnToAssembly: route.offeringAssemblyId,
+                returnToAssemblyReason: reasonKind,
+              })
+            }
           />
         )}
         {route.page === "detail" && (

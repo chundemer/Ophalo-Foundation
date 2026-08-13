@@ -189,6 +189,8 @@ public sealed class EfOfferingAssemblyPersistence(OpHaloDbContext dbContext) : I
         var eligibility = ComputeEligibility(
             assembly.ActiveState, assembly.PriceTreatment, assembly.PrimaryCatalogItemId, itemCatalogItemIds, lookup);
 
+        var pricing = ComputePricing(assembly.PriceTreatment, assembly.PrimaryCatalogItemId, orderedItems, lookup);
+
         return new OfferingAssemblyDetail(
             assembly.Id,
             assembly.Name,
@@ -203,7 +205,8 @@ public sealed class EfOfferingAssemblyPersistence(OpHaloDbContext dbContext) : I
                     lookup.TryGetValue(i.CatalogItemId, out var itemInfo) ? itemInfo.DisplayName : string.Empty,
                     i.DefaultQuantity, i.IsOptional, i.DisplayOrder))
                 .ToList(),
-            eligibility);
+            eligibility,
+            pricing);
     }
 
     public async Task<OfferingAssemblyEligibility> GetEligibilityAsync(Guid accountId, Guid offeringAssemblyId, CancellationToken ct)
@@ -241,11 +244,19 @@ public sealed class EfOfferingAssemblyPersistence(OpHaloDbContext dbContext) : I
             .Select(a => new OfferingAssemblyDependencyRow(a.Id, a.Name))
             .ToListAsync(ct);
 
-    private sealed record CatalogItemLookupInfo(string DisplayName, CatalogItemActiveState ActiveState, bool HasStandalonePrice);
+    /// <summary><see cref="SellPrice"/> and <see cref="Cost"/> are read independently of pricing
+    /// mode (Step 2, 2026-08-13): a <c>NoStandalonePrice</c> item may still carry a valid business
+    /// cost, so cost must never be gated behind <see cref="HasStandalonePrice"/>.</summary>
+    private sealed record CatalogItemLookupInfo(
+        string DisplayName,
+        CatalogItemActiveState ActiveState,
+        bool HasStandalonePrice,
+        decimal? SellPrice,
+        decimal? Cost);
 
     // One batched projection over the given catalog-item ids — covers eligibility (ActiveState,
-    // HasStandalonePrice) and display names in the same round trip, never a per-row/per-field
-    // query (Session 3.2a.2 locked design rule).
+    // HasStandalonePrice), pricing-summary inputs (SellPrice, Cost), and display names in the same
+    // round trip, never a per-row/per-field query (Session 3.2a.2 locked design rule).
     private async Task<Dictionary<Guid, CatalogItemLookupInfo>> LoadCatalogItemLookupAsync(
         Guid accountId, IReadOnlyList<Guid> catalogItemIds, CancellationToken ct)
     {
@@ -264,22 +275,33 @@ public sealed class EfOfferingAssemblyPersistence(OpHaloDbContext dbContext) : I
             .Distinct()
             .ToList();
 
-        var standalonePriceLineIds = priceLineIds.Count == 0
+        // No PricingMode filter here — cost must be readable for NoStandalonePrice lines too.
+        var priceLines = priceLineIds.Count == 0
             ? []
             : await dbContext.Set<PriceBookVersionLine>()
                 .AsNoTracking()
-                .Where(l => l.AccountId == accountId
-                    && priceLineIds.Contains(l.Id)
-                    && l.PricingMode == PriceBookLinePricingMode.StandalonePrice)
-                .Select(l => l.Id)
+                .Where(l => l.AccountId == accountId && priceLineIds.Contains(l.Id))
+                .Select(l => new { l.Id, l.PricingMode, l.SellPriceSnapshot, l.CostSnapshot })
                 .ToListAsync(ct);
+        var priceLineById = priceLines.ToDictionary(l => l.Id);
 
         return catalogItems.ToDictionary(
             c => c.Id,
-            c => new CatalogItemLookupInfo(
-                c.DisplayName,
-                c.ActiveState,
-                c.CurrentPriceBookVersionLineId.HasValue && standalonePriceLineIds.Contains(c.CurrentPriceBookVersionLineId.Value)));
+            c =>
+            {
+                var priceLine = c.CurrentPriceBookVersionLineId.HasValue
+                    ? priceLineById.GetValueOrDefault(c.CurrentPriceBookVersionLineId.Value)
+                    : null;
+                var hasStandalonePrice = priceLine is not null
+                    && priceLine.PricingMode == PriceBookLinePricingMode.StandalonePrice
+                    && priceLine.SellPriceSnapshot is not null;
+                return new CatalogItemLookupInfo(
+                    c.DisplayName,
+                    c.ActiveState,
+                    hasStandalonePrice,
+                    hasStandalonePrice ? priceLine!.SellPriceSnapshot : null,
+                    priceLine?.CostSnapshot);
+            });
     }
 
     // Shared eligibility computation for List/Detail/GetEligibilityAsync (Session 3.2a.2).
@@ -323,6 +345,88 @@ public sealed class EfOfferingAssemblyPersistence(OpHaloDbContext dbContext) : I
         }
 
         return new OfferingAssemblyEligibility(reasons.Count == 0, reasons);
+    }
+
+    /// <summary>Step 2 phase-one pricing summary (2026-08-13). Price and margin are independent
+    /// axes computed over the same required-line set (primary + non-optional associated items) —
+    /// including All-inclusive components in the margin set even though they are not separately
+    /// charged to the customer. Optional lines are excluded from both. A missing display name in
+    /// <paramref name="catalogItemLookup"/> falls back to empty string, matching every other
+    /// lookup miss in this file.</summary>
+    private static OfferingAssemblyPricingSummary ComputePricing(
+        PriceTreatment priceTreatment,
+        Guid primaryCatalogItemId,
+        IReadOnlyList<OfferingAssemblyItem> itemsInOrder,
+        IReadOnlyDictionary<Guid, CatalogItemLookupInfo> catalogItemLookup)
+    {
+        catalogItemLookup.TryGetValue(primaryCatalogItemId, out var primary);
+        var primaryDisplayName = primary?.DisplayName ?? string.Empty;
+
+        var requiredItems = itemsInOrder.Where(i => !i.IsOptional).ToList();
+
+        // Every required line is inspected independently and unconditionally — a missing primary
+        // price must never short-circuit required-component checks, so every applicable reason is
+        // always reported together (2026-08-13 correction).
+        var priceReasons = new List<AssemblyPricingReason>();
+        var primarySellPrice = primary?.SellPrice;
+        if (primarySellPrice is null)
+        {
+            priceReasons.Add(new AssemblyPricingReason(
+                AssemblyPricingReasonCode.PrimaryMissingStandaloneSellPrice, primaryCatalogItemId, primaryDisplayName));
+        }
+
+        decimal componentTotal = 0m;
+        if (priceTreatment == PriceTreatment.Summed)
+        {
+            foreach (var item in requiredItems)
+            {
+                catalogItemLookup.TryGetValue(item.CatalogItemId, out var component);
+                if (component?.SellPrice is not decimal componentSellPrice)
+                {
+                    priceReasons.Add(new AssemblyPricingReason(
+                        AssemblyPricingReasonCode.RequiredComponentMissingStandaloneSellPrice,
+                        item.CatalogItemId, component?.DisplayName ?? string.Empty));
+                    continue;
+                }
+
+                componentTotal += componentSellPrice * item.DefaultQuantity;
+            }
+        }
+        // AllInclusive: associated-item sell prices are irrelevant — package price is the
+        // primary's standalone price only, never a sum, never an override field.
+
+        var priceStatus = priceReasons.Count == 0 ? AssemblyPriceStatus.Priced : AssemblyPriceStatus.NeedsReview;
+        decimal? calculatedSellPrice = priceStatus == AssemblyPriceStatus.NeedsReview
+            ? null
+            : priceTreatment == PriceTreatment.AllInclusive
+                ? primarySellPrice
+                : primarySellPrice + componentTotal;
+
+        // Margin readiness always covers primary + every required associated item, regardless of
+        // PriceTreatment — an All-inclusive component's cost still matters to profitability even
+        // though it is not separately charged to the customer.
+        var marginReasons = new List<AssemblyPricingReason>();
+        if (primary?.Cost is null)
+        {
+            marginReasons.Add(new AssemblyPricingReason(
+                AssemblyPricingReasonCode.PrimaryMissingBusinessCost, primaryCatalogItemId, primaryDisplayName));
+        }
+
+        foreach (var item in requiredItems)
+        {
+            catalogItemLookup.TryGetValue(item.CatalogItemId, out var component);
+            if (component?.Cost is null)
+            {
+                marginReasons.Add(new AssemblyPricingReason(
+                    AssemblyPricingReasonCode.RequiredComponentMissingBusinessCost,
+                    item.CatalogItemId, component?.DisplayName ?? string.Empty));
+            }
+        }
+
+        var marginStatus = marginReasons.Count == 0 ? AssemblyMarginStatus.Ready : AssemblyMarginStatus.NeedsCostReview;
+
+        return new OfferingAssemblyPricingSummary(
+            priceStatus, calculatedSellPrice, marginStatus, marginReasons.Count, priceReasons, marginReasons);
     }
 
     private static bool IsUniqueConstraintViolation(DbUpdateException ex) =>

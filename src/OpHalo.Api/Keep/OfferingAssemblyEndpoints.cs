@@ -240,7 +240,19 @@ public static class OfferingAssemblyEndpoints
         detail.Eligibility.IsEligible,
         detail.Eligibility.Reasons
             .Select(r => new OfferingAssemblyEligibilityReasonResponse(r.Code.ToString(), r.ComponentCatalogItemId))
-            .ToList());
+            .ToList(),
+        ToResponse(detail.Pricing));
+
+    private static OfferingAssemblyPricingResponse ToResponse(OfferingAssemblyPricingSummary pricing) => new(
+        pricing.PriceStatus.ToString(),
+        pricing.CalculatedSellPrice,
+        pricing.MarginStatus.ToString(),
+        pricing.MissingCostLineCount,
+        pricing.PriceReasons.Select(ToResponse).ToList(),
+        pricing.MarginReasons.Select(ToResponse).ToList());
+
+    private static AssemblyPricingReasonResponse ToResponse(AssemblyPricingReason reason) => new(
+        reason.Code.ToString(), reason.CatalogItemId, reason.CatalogItemDisplayName);
 
     private static ActiveAssemblyDependenciesResponse ToResponse(IReadOnlyList<OfferingAssemblyDependencyRow> rows) => new(
         rows.Count, rows.Select(r => new ActiveAssemblyDependencyResponse(r.Id, r.Name)).ToList());
@@ -314,6 +326,19 @@ internal sealed record OfferingAssemblyDetailItemResponse(
 
 internal sealed record OfferingAssemblyEligibilityReasonResponse(string Code, Guid? ComponentCatalogItemId);
 
+internal sealed record AssemblyPricingReasonResponse(string Code, Guid CatalogItemId, string CatalogItemDisplayName);
+
+/// <summary>Step 2 phase-one pricing summary (2026-08-13): server-authoritative only. Price and
+/// margin are independent — a NeedsCostReview MarginStatus never implies PriceStatus is
+/// NeedsReview, and never blocks activation.</summary>
+internal sealed record OfferingAssemblyPricingResponse(
+    string PriceStatus,
+    decimal? CalculatedSellPrice,
+    string MarginStatus,
+    int MissingCostLineCount,
+    IReadOnlyList<AssemblyPricingReasonResponse> PriceReasons,
+    IReadOnlyList<AssemblyPricingReasonResponse> MarginReasons);
+
 internal sealed record OfferingAssemblyDetailResponse(
     Guid Id,
     string Name,
@@ -324,7 +349,8 @@ internal sealed record OfferingAssemblyDetailResponse(
     Guid ConcurrencyVersion,
     IReadOnlyList<OfferingAssemblyDetailItemResponse> Items,
     bool IsOperationallyEligible,
-    IReadOnlyList<OfferingAssemblyEligibilityReasonResponse> EligibilityReasons);
+    IReadOnlyList<OfferingAssemblyEligibilityReasonResponse> EligibilityReasons,
+    OfferingAssemblyPricingResponse Pricing);
 
 internal sealed record ActiveAssemblyDependencyResponse(Guid Id, string Name);
 

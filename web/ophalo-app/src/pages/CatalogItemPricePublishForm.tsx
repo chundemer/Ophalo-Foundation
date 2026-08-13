@@ -55,16 +55,18 @@ interface CatalogItemPricePublishFormProps {
 }
 
 /**
- * "Update price" (Session 2e.6d, build-log/113; owner-UX simplification pass, 2026-08-07): the
- * server operation is still a later ADR-470 price publish — a new immutable, audited price-book
- * version — but the UI presents it as a plain price update, since that's the mental model a
- * small-business owner has (they're changing what the customer pays, not managing a price book).
+ * "Update pricing & cost" (Session 2e.6d, build-log/113; owner-UX simplification pass,
+ * 2026-08-07; renamed 2026-08-13 — the form edits both customer sell price and internal cost, and
+ * the assembly margin repair loop links here for the cost field specifically): the server
+ * operation is still a later ADR-470 price publish — a new immutable, audited price-book version —
+ * but the UI presents it as a plain update, since that's the mental model a small-business owner
+ * has (they're changing what the customer pays and what it costs them, not managing a price book).
  * Deliberately kept separate from CatalogItemDetail's conflictRefreshPending/itemBusy gate — this
  * endpoint takes no version token (ADR-470's lock is account-scoped, not
  * CatalogItem.ConcurrencyVersion), so a manual retry is always safe and does not need to wait on a
  * refetch the way header/alias/lifecycle actions do. On any error, including a lock conflict, the
  * whole draft is retained and never resubmitted automatically — the owner must explicitly re-click
- * Update price.
+ * Update pricing & cost.
  */
 export function CatalogItemPricePublishForm({
   catalogItemId,
@@ -136,7 +138,7 @@ export function CatalogItemPricePublishForm({
     },
     onError: (err: unknown) => {
       // Never resubmit automatically, on a conflict or otherwise — always retain the whole draft
-      // and require the owner to explicitly re-click Update price.
+      // and require the owner to explicitly re-click Update pricing & cost.
       if (err instanceof ApiError && err.code === "PriceBookVersion.PublishLockConflict") {
         setFormError(
           "Someone else updated pricing a moment ago. We refreshed the latest price—review your changes and try again.",
@@ -217,7 +219,7 @@ export function CatalogItemPricePublishForm({
 
   return (
     <form onSubmit={handleSubmit} className="rounded-xl border border-[var(--ophalo-border)] p-4 space-y-4">
-      <h2 className="text-sm font-semibold text-[var(--ophalo-ink)]">Update price</h2>
+      <h2 className="text-sm font-semibold text-[var(--ophalo-ink)]">Update pricing &amp; cost</h2>
 
       {form.pricingMode === "StandalonePrice" && (
         <div>
@@ -367,13 +369,24 @@ export function CatalogItemPricePublishForm({
         </p>
       )}
 
-      <div className="flex items-center gap-3">
+      {!publishPriceMutation.isPending && noPriceChange && (
+        <p className="text-xs text-[var(--ophalo-muted)]">Change a price or pricing option to update this item.</p>
+      )}
+
+      {/* Sticky save bar (2026-08-13): the reason selector and save action previously sat below
+          the fold, forcing a scroll before an owner arriving from the assembly cost-repair link
+          could finish the fix. This is the form's last child and normal document flow is
+          untouched above it — sticky's own geometry keeps it from ever covering the reason
+          selector, error text, or below-cost confirmation as they scroll past. The negative
+          margin/matching padding bleeds it to the card's edges so it reads as a docked bar rather
+          than a floating box, while `rounded-b-xl` keeps the card's corner radius intact. */}
+      <div className="sticky bottom-0 -mx-4 -mb-4 rounded-b-xl border-t border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-4 py-3 flex items-center gap-3">
         <button
           type="submit"
           disabled={publishPriceMutation.isPending || noPriceChange}
           className="rounded-lg bg-[var(--keep-accent)] px-3 py-1.5 text-sm font-medium text-white disabled:opacity-60"
         >
-          {publishPriceMutation.isPending ? "Updating…" : "Update price"}
+          {publishPriceMutation.isPending ? "Updating…" : "Update pricing & cost"}
         </button>
         <button
           type="button"
@@ -384,10 +397,6 @@ export function CatalogItemPricePublishForm({
           Cancel
         </button>
       </div>
-
-      {!publishPriceMutation.isPending && noPriceChange && (
-        <p className="text-xs text-[var(--ophalo-muted)]">Change a price or pricing option to update this item.</p>
-      )}
     </form>
   );
 }

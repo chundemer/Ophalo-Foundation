@@ -52,7 +52,41 @@ public sealed record OfferingAssemblyDetail(
     CatalogActiveState ActiveState,
     Guid ConcurrencyVersion,
     IReadOnlyList<OfferingAssemblyDetailItem> Items,
-    OfferingAssemblyEligibility Eligibility);
+    OfferingAssemblyEligibility Eligibility,
+    OfferingAssemblyPricingSummary Pricing);
+
+/// <summary>Step 2 pricing-summary phase one (2026-08-13): server-authoritative only, never
+/// recomputed by the frontend. <see cref="AssemblyPriceStatus.NeedsReview"/> and
+/// <see cref="AssemblyMarginStatus.NeedsCostReview"/> are independent axes — a missing cost never
+/// changes <see cref="OfferingAssemblyPricingSummary.PriceStatus"/> and never blocks activation.
+/// Optional lines (<c>IsOptional == true</c>) are excluded from the calculated total, the
+/// missing-cost count, and every reason in phase one.</summary>
+public enum AssemblyPriceStatus { Priced, NeedsReview }
+
+public enum AssemblyMarginStatus { Ready, NeedsCostReview }
+
+/// <summary><see cref="RequiredComponentMissingStandaloneSellPrice"/> and
+/// <see cref="RequiredComponentMissingBusinessCost"/> apply to a required (non-optional) associated
+/// item under either <see cref="PriceTreatment"/> — margin readiness includes All-inclusive
+/// component cost even though those components are not separately charged to the customer.</summary>
+public enum AssemblyPricingReasonCode
+{
+    PrimaryMissingStandaloneSellPrice,
+    RequiredComponentMissingStandaloneSellPrice,
+    PrimaryMissingBusinessCost,
+    RequiredComponentMissingBusinessCost,
+}
+
+public sealed record AssemblyPricingReason(
+    AssemblyPricingReasonCode Code, Guid CatalogItemId, string CatalogItemDisplayName);
+
+public sealed record OfferingAssemblyPricingSummary(
+    AssemblyPriceStatus PriceStatus,
+    decimal? CalculatedSellPrice,
+    AssemblyMarginStatus MarginStatus,
+    int MissingCostLineCount,
+    IReadOnlyList<AssemblyPricingReason> PriceReasons,
+    IReadOnlyList<AssemblyPricingReason> MarginReasons);
 
 /// <summary>Locked reason taxonomy (Session 3.2a.2): if the assembly itself is inactive, that is
 /// the only reason reported — it is the first actionable fix, so primary/component checks never

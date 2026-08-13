@@ -328,6 +328,195 @@ public sealed class OfferingAssemblyReadApiTests : IClassFixture<KeepApiWebFacto
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
+    // =========================================================================
+    // Pricing summary (Step 2, 2026-08-13) — server-authoritative, phase one:
+    // margin readiness + missing-cost count only, no gross-profit/margin/markup values.
+    // =========================================================================
+
+    [Fact]
+    public async Task Pricing_Summed_Complete_ReturnsCalculatedSellPriceAndMarginReady()
+    {
+        var (accountId, ownerId, cookie) = await SeedAccountAsync("pricing-summed-complete");
+        await EnrollAsync(accountId, ownerId);
+
+        var (primaryId, _) = await CreateCatalogItemAsync(cookie, "Furnace Inspection", "StandalonePrice", cost: 50m, sellPrice: 100m);
+        var (componentId, _) = await CreateCatalogItemAsync(cookie, "Filter", "StandalonePrice", cost: 20m, sellPrice: 40m);
+        var assemblyId = await CreateAssemblyAsync(cookie, primaryId, "Furnace Tune-Up", "Summed",
+            [(componentId, 2m, false, 0)]);
+
+        var response = await AuthRequest(cookie).GetAsync($"/keep/pricebook/offering-assemblies/{assemblyId}");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var pricing = (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("pricing");
+        Assert.Equal("Priced", pricing.GetProperty("priceStatus").GetString());
+        Assert.Equal(180m, pricing.GetProperty("calculatedSellPrice").GetDecimal()); // 100 + 40*2
+        Assert.Equal("Ready", pricing.GetProperty("marginStatus").GetString());
+        Assert.Equal(0, pricing.GetProperty("missingCostLineCount").GetInt32());
+        Assert.Empty(pricing.GetProperty("priceReasons").EnumerateArray());
+        Assert.Empty(pricing.GetProperty("marginReasons").EnumerateArray());
+    }
+
+    [Fact]
+    public async Task Pricing_Summed_MissingRequiredComponentPrice_ReturnsNeedsReviewNeverZero()
+    {
+        var (accountId, ownerId, cookie) = await SeedAccountAsync("pricing-summed-missing-required");
+        await EnrollAsync(accountId, ownerId);
+
+        var (primaryId, _) = await CreateCatalogItemAsync(cookie, "Furnace Inspection", "StandalonePrice", cost: 50m, sellPrice: 100m);
+        var (componentId, _) = await CreateCatalogItemAsync(cookie, "Reference Filter", "NoStandalonePrice", cost: 20m, sellPrice: null);
+        var assemblyId = await CreateAssemblyAsync(cookie, primaryId, "Furnace Tune-Up", "Summed",
+            [(componentId, 1m, false, 0)]);
+
+        var response = await AuthRequest(cookie).GetAsync($"/keep/pricebook/offering-assemblies/{assemblyId}");
+
+        var pricing = (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("pricing");
+        Assert.Equal("NeedsReview", pricing.GetProperty("priceStatus").GetString());
+        Assert.Equal(JsonValueKind.Null, pricing.GetProperty("calculatedSellPrice").ValueKind);
+        var reasons = pricing.GetProperty("priceReasons").EnumerateArray().ToList();
+        Assert.Single(reasons);
+        Assert.Equal("RequiredComponentMissingStandaloneSellPrice", reasons[0].GetProperty("code").GetString());
+        Assert.Equal(componentId, reasons[0].GetProperty("catalogItemId").GetGuid());
+        Assert.Equal("Reference Filter", reasons[0].GetProperty("catalogItemDisplayName").GetString());
+        // Cost was supplied for both lines — margin is a separate axis and stays ready.
+        Assert.Equal("Ready", pricing.GetProperty("marginStatus").GetString());
+    }
+
+    [Fact]
+    public async Task Pricing_Summed_PrimaryAndRequiredComponentBothMissingPrice_ReturnsBothReasonsExhaustively()
+    {
+        // 2026-08-13 correction: a missing primary price must never short-circuit required-
+        // component checks — every applicable reason is reported together, never just the first.
+        var (accountId, ownerId, cookie) = await SeedAccountAsync("pricing-summed-both-missing");
+        await EnrollAsync(accountId, ownerId);
+
+        var (primaryId, _) = await CreateCatalogItemAsync(cookie, "Reference Primary", "NoStandalonePrice", cost: 50m, sellPrice: null);
+        var (componentId, _) = await CreateCatalogItemAsync(cookie, "Reference Filter", "NoStandalonePrice", cost: 20m, sellPrice: null);
+        var assemblyId = await CreateAssemblyAsync(cookie, primaryId, "Furnace Tune-Up", "Summed",
+            [(componentId, 1m, false, 0)]);
+
+        var response = await AuthRequest(cookie).GetAsync($"/keep/pricebook/offering-assemblies/{assemblyId}");
+
+        var pricing = (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("pricing");
+        Assert.Equal("NeedsReview", pricing.GetProperty("priceStatus").GetString());
+        Assert.Equal(JsonValueKind.Null, pricing.GetProperty("calculatedSellPrice").ValueKind);
+        var reasons = pricing.GetProperty("priceReasons").EnumerateArray().ToList();
+        Assert.Equal(2, reasons.Count);
+        Assert.Equal("PrimaryMissingStandaloneSellPrice", reasons[0].GetProperty("code").GetString());
+        Assert.Equal(primaryId, reasons[0].GetProperty("catalogItemId").GetGuid());
+        Assert.Equal("RequiredComponentMissingStandaloneSellPrice", reasons[1].GetProperty("code").GetString());
+        Assert.Equal(componentId, reasons[1].GetProperty("catalogItemId").GetGuid());
+    }
+
+    [Fact]
+    public async Task Pricing_Summed_OptionalLineExcludedFromTotalAndCount()
+    {
+        var (accountId, ownerId, cookie) = await SeedAccountAsync("pricing-summed-optional-excluded");
+        await EnrollAsync(accountId, ownerId);
+
+        var (primaryId, _) = await CreateCatalogItemAsync(cookie, "Furnace Inspection", "StandalonePrice", cost: 50m, sellPrice: 100m);
+        var (optionalId, _) = await CreateCatalogItemAsync(cookie, "Optional Add-on", "NoStandalonePrice", cost: null, sellPrice: null);
+        var assemblyId = await CreateAssemblyAsync(cookie, primaryId, "Furnace Tune-Up", "Summed",
+            [(optionalId, 1m, true, 0)]);
+
+        var response = await AuthRequest(cookie).GetAsync($"/keep/pricebook/offering-assemblies/{assemblyId}");
+
+        var pricing = (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("pricing");
+        Assert.Equal("Priced", pricing.GetProperty("priceStatus").GetString());
+        Assert.Equal(100m, pricing.GetProperty("calculatedSellPrice").GetDecimal());
+        Assert.Equal("Ready", pricing.GetProperty("marginStatus").GetString());
+        Assert.Equal(0, pricing.GetProperty("missingCostLineCount").GetInt32());
+        Assert.Empty(pricing.GetProperty("priceReasons").EnumerateArray());
+        Assert.Empty(pricing.GetProperty("marginReasons").EnumerateArray());
+    }
+
+    [Fact]
+    public async Task Pricing_AllInclusive_Complete_UsesOnlyPrimarySellPrice()
+    {
+        var (accountId, ownerId, cookie) = await SeedAccountAsync("pricing-allinclusive-complete");
+        await EnrollAsync(accountId, ownerId);
+
+        var (primaryId, _) = await CreateCatalogItemAsync(cookie, "Package Primary", "StandalonePrice", cost: 60m, sellPrice: 250m);
+        var (componentId, _) = await CreateCatalogItemAsync(cookie, "Included Part", "StandalonePrice", cost: 30m, sellPrice: 999m);
+        var assemblyId = await CreateAssemblyAsync(cookie, primaryId, "Package", "AllInclusive",
+            [(componentId, 1m, false, 0)]);
+
+        var response = await AuthRequest(cookie).GetAsync($"/keep/pricebook/offering-assemblies/{assemblyId}");
+
+        var pricing = (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("pricing");
+        Assert.Equal("Priced", pricing.GetProperty("priceStatus").GetString());
+        // Component's 999 sell price is irrelevant under AllInclusive — package price is the
+        // primary's standalone price only, never a sum, never an override field.
+        Assert.Equal(250m, pricing.GetProperty("calculatedSellPrice").GetDecimal());
+    }
+
+    [Fact]
+    public async Task Pricing_AllInclusive_MissingPrimaryPrice_ReturnsNeedsReview()
+    {
+        var (accountId, ownerId, cookie) = await SeedAccountAsync("pricing-allinclusive-missing-primary");
+        await EnrollAsync(accountId, ownerId);
+
+        var (primaryId, _) = await CreateCatalogItemAsync(cookie, "Package Primary", "NoStandalonePrice", cost: 60m, sellPrice: null);
+        var assemblyId = await CreateAssemblyAsync(cookie, primaryId, "Package", "AllInclusive", []);
+
+        var response = await AuthRequest(cookie).GetAsync($"/keep/pricebook/offering-assemblies/{assemblyId}");
+
+        var pricing = (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("pricing");
+        Assert.Equal("NeedsReview", pricing.GetProperty("priceStatus").GetString());
+        Assert.Equal(JsonValueKind.Null, pricing.GetProperty("calculatedSellPrice").ValueKind);
+        var reasons = pricing.GetProperty("priceReasons").EnumerateArray().ToList();
+        Assert.Single(reasons);
+        Assert.Equal("PrimaryMissingStandaloneSellPrice", reasons[0].GetProperty("code").GetString());
+        Assert.Equal(primaryId, reasons[0].GetProperty("catalogItemId").GetGuid());
+    }
+
+    [Fact]
+    public async Task Pricing_AllInclusive_RequiredComponentMissingCost_StillFlagsMarginNeedsCostReview()
+    {
+        // ADR-479/D6: an All-inclusive component isn't separately charged to the customer, but its
+        // cost still matters to Owner/Admin profitability — margin readiness covers it regardless
+        // of PriceTreatment.
+        var (accountId, ownerId, cookie) = await SeedAccountAsync("pricing-allinclusive-component-cost");
+        await EnrollAsync(accountId, ownerId);
+
+        var (primaryId, _) = await CreateCatalogItemAsync(cookie, "Package Primary", "StandalonePrice", cost: 60m, sellPrice: 250m);
+        var (componentId, _) = await CreateCatalogItemAsync(cookie, "Included Part", "NoStandalonePrice", cost: null, sellPrice: null);
+        var assemblyId = await CreateAssemblyAsync(cookie, primaryId, "Package", "AllInclusive",
+            [(componentId, 1m, false, 0)]);
+
+        var response = await AuthRequest(cookie).GetAsync($"/keep/pricebook/offering-assemblies/{assemblyId}");
+
+        var pricing = (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("pricing");
+        // Price is unaffected by the component's missing cost/price — AllInclusive prices only the primary.
+        Assert.Equal("Priced", pricing.GetProperty("priceStatus").GetString());
+        Assert.Equal("NeedsCostReview", pricing.GetProperty("marginStatus").GetString());
+        Assert.Equal(1, pricing.GetProperty("missingCostLineCount").GetInt32());
+        var reasons = pricing.GetProperty("marginReasons").EnumerateArray().ToList();
+        Assert.Single(reasons);
+        Assert.Equal("RequiredComponentMissingBusinessCost", reasons[0].GetProperty("code").GetString());
+        Assert.Equal(componentId, reasons[0].GetProperty("catalogItemId").GetGuid());
+    }
+
+    [Fact]
+    public async Task Pricing_MissingCostNeverBlocksPriceStatus_CostAndPriceAreIndependentAxes()
+    {
+        var (accountId, ownerId, cookie) = await SeedAccountAsync("pricing-cost-independent");
+        await EnrollAsync(accountId, ownerId);
+
+        var (primaryId, _) = await CreateCatalogItemAsync(cookie, "Furnace Inspection", "StandalonePrice", cost: null, sellPrice: 100m);
+        var assemblyId = await CreateAssemblyAsync(cookie, primaryId, "Furnace Tune-Up", "Summed", []);
+
+        var response = await AuthRequest(cookie).GetAsync($"/keep/pricebook/offering-assemblies/{assemblyId}");
+
+        var pricing = (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("pricing");
+        Assert.Equal("Priced", pricing.GetProperty("priceStatus").GetString());
+        Assert.Equal(100m, pricing.GetProperty("calculatedSellPrice").GetDecimal());
+        Assert.Equal("NeedsCostReview", pricing.GetProperty("marginStatus").GetString());
+        Assert.Equal(1, pricing.GetProperty("missingCostLineCount").GetInt32());
+        var reasons = pricing.GetProperty("marginReasons").EnumerateArray().ToList();
+        Assert.Single(reasons);
+        Assert.Equal("PrimaryMissingBusinessCost", reasons[0].GetProperty("code").GetString());
+    }
+
     [Fact]
     public async Task List_WithoutEntitlement_Returns403()
     {
@@ -436,7 +625,16 @@ public sealed class OfferingAssemblyReadApiTests : IClassFixture<KeepApiWebFacto
     // Helpers
     // =========================================================================
 
-    private async Task<(Guid Id, Guid ConcurrencyVersion)> CreateCatalogItemAsync(string cookie, string displayName, string pricingMode)
+    private Task<(Guid Id, Guid ConcurrencyVersion)> CreateCatalogItemAsync(string cookie, string displayName, string pricingMode) =>
+        CreateCatalogItemAsync(cookie, displayName, pricingMode,
+            cost: pricingMode == "StandalonePrice" ? 50m : (decimal?)null,
+            sellPrice: pricingMode == "StandalonePrice" ? 100m : (decimal?)null);
+
+    // Step 2 pricing summary (2026-08-13): cost is optional independently of pricingMode — a
+    // NoStandalonePrice item may still carry a real business cost, and a StandalonePrice item may
+    // still be missing one. Callers that need to isolate that axis use this overload directly.
+    private async Task<(Guid Id, Guid ConcurrencyVersion)> CreateCatalogItemAsync(
+        string cookie, string displayName, string pricingMode, decimal? cost, decimal? sellPrice)
     {
         var response = await AuthRequest(cookie).PostAsJsonAsync(
             "/keep/pricebook/catalog-items/create-and-activate",
@@ -447,8 +645,8 @@ public sealed class OfferingAssemblyReadApiTests : IClassFixture<KeepApiWebFacto
                 unitOfMeasure = "each",
                 currency = "USD",
                 pricingMode,
-                cost = pricingMode == "StandalonePrice" ? 50m : (decimal?)null,
-                sellPrice = pricingMode == "StandalonePrice" ? 100m : (decimal?)null,
+                cost,
+                sellPrice,
             });
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);

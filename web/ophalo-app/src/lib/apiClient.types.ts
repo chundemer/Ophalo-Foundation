@@ -795,6 +795,24 @@ export interface OfferingAssemblyEligibilityReasonResponse {
   componentCatalogItemId: string | null;
 }
 
+export interface AssemblyPricingReasonResult {
+  code: string;
+  catalogItemId: string;
+  catalogItemDisplayName: string;
+}
+
+// Step 2 phase-one pricing summary (2026-08-13): server-authoritative only — never recompute
+// price, cost, counts, or reasons on the frontend. priceStatus and marginStatus are independent
+// axes; a NeedsCostReview marginStatus never implies priceStatus is NeedsReview.
+export interface OfferingAssemblyPricingResult {
+  priceStatus: string;
+  calculatedSellPrice: number | null;
+  marginStatus: string;
+  missingCostLineCount: number;
+  priceReasons: AssemblyPricingReasonResult[];
+  marginReasons: AssemblyPricingReasonResult[];
+}
+
 export interface OfferingAssemblyDetailResult {
   id: string;
   name: string;
@@ -806,6 +824,7 @@ export interface OfferingAssemblyDetailResult {
   items: OfferingAssemblyDetailItemResponse[];
   isOperationallyEligible: boolean;
   eligibilityReasons: OfferingAssemblyEligibilityReasonResponse[];
+  pricing: OfferingAssemblyPricingResult;
 }
 
 export interface GetOfferingAssembliesParams {
