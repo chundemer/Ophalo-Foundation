@@ -233,10 +233,10 @@ public class GetAccountCapabilityPackageStatusServiceTests
                 : null);
         }
 
-        public Task AddAsync(AccountCapabilityPackageEnrollment enrollment_, CancellationToken cancellationToken) =>
-            Task.CompletedTask;
+        public Task<AccountCapabilityPackageEnrollmentCommitResult> AddAsync(AccountCapabilityPackageEnrollment enrollment_, CancellationToken cancellationToken) =>
+            Task.FromResult(AccountCapabilityPackageEnrollmentCommitResult.Committed);
 
-        public Task CommitAsync(AccountCapabilityPackageEnrollment enrollment_, CancellationToken cancellationToken) =>
-            Task.CompletedTask;
+        public Task<AccountCapabilityPackageEnrollmentCommitResult> CommitAsync(AccountCapabilityPackageEnrollment enrollment_, CancellationToken cancellationToken) =>
+            Task.FromResult(AccountCapabilityPackageEnrollmentCommitResult.Committed);
     }
 }

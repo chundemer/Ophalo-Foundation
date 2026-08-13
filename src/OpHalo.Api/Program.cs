@@ -116,6 +116,8 @@ builder.Services.AddScoped<IAccountFeatureAccessResolver, AccountFeatureAccessRe
 builder.Services.AddScoped<IAccountCapabilityPackageEnrollmentPersistence, EfAccountCapabilityPackageEnrollmentPersistence>();
 builder.Services.AddScoped<IAccountAccessSnapshotPersistence, EfFoundationAccountAccessSnapshotPersistence>();
 builder.Services.AddScoped<GetAccountCapabilityPackageStatusService>();
+builder.Services.AddScoped<InternalCapabilityPackageEnrollmentService>();
+builder.Services.AddScoped<InternalCapabilityPackageEnrollmentApiService>();
 
 // --- Auth services ---
 builder.Services.Configure<MagicLinkSettings>(builder.Configuration.GetSection("App"));
@@ -328,6 +330,7 @@ app.MapProposedScopeEndpoints();
 app.MapAuthEndpoints();
 app.MapAccountEndpoints();
 app.MapAccountDeviceEndpoints();
+app.MapInternalEntitlementsEndpoints();
 app.MapBadgeEndpoints();
 
 app.Run();
