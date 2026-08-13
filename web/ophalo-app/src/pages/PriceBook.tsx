@@ -374,11 +374,13 @@ export function PriceBook({
               Keyboard shortcuts
             </span>
           </div>
+          {/* Desktop (sm+) uses the sticky workspace bar's copy of this CTA below instead — kept
+              here, unhidden, only for narrow/mobile widths where nothing is sticky. */}
           {activeTab === "items" && showHeaderCta && (
             <button
               type="button"
               onClick={() => setDrawerOpen(true)}
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium
+              className="sm:hidden inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium
                 bg-[var(--ophalo-navy)] text-white hover:opacity-90 transition-opacity
                 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-offset-1"
             >
@@ -390,7 +392,7 @@ export function PriceBook({
             <button
               type="button"
               onClick={() => setAssemblyDrawerOpen(true)}
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium
+              className="sm:hidden inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium
                 bg-[var(--ophalo-navy)] text-white hover:opacity-90 transition-opacity
                 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-offset-1"
             >
@@ -401,6 +403,13 @@ export function PriceBook({
         </div>
       </div>
 
+      {/* Sticky desktop workspace bar (approved UX decision, 2026-08-12): one CSS-native
+          `position: sticky` region — no JS/IntersectionObserver pop-in — holding the tabs,
+          filter toolbar, and contextual create CTA so they stay reachable on long lists. Scoped
+          to sm+ only; below `sm` the block stays in normal flow exactly as before, since the
+          global app header (App.tsx) is not itself sticky today, there's no header-height offset
+          to track — `top-0` pins directly under the viewport edge. */}
+      <div className="sm:sticky sm:top-0 sm:z-20 sm:bg-[var(--ophalo-canvas)] sm:border-b sm:border-[var(--ophalo-border)] sm:shadow-sm">
       <div className="mx-auto w-full max-w-[1440px] px-4 sm:px-6" role="tablist" aria-label="Price Book sections">
         <div className="flex gap-5 border-b border-[var(--ophalo-border)]" >
           {(
@@ -428,9 +437,8 @@ export function PriceBook({
       </div>
 
       {activeTab === "items" && (
-      <>
-      <div className="mx-auto w-full max-w-[1440px] px-4 pt-4 pb-3 sm:px-6">
-      <div className="flex flex-wrap items-center gap-3 rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] p-3 shadow-sm">
+      <div className="mx-auto w-full max-w-[1440px] px-4 py-3 sm:px-6 flex flex-wrap items-center gap-3">
+      <div className="flex flex-1 flex-wrap items-center gap-3 rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] p-3 shadow-sm">
         <label className="sr-only" htmlFor="catalog-search">
           Search catalog
         </label>
@@ -508,8 +516,59 @@ export function PriceBook({
           </div>
         )}
       </div>
+      {/* Desktop-only copy of the contextual CTA — the mobile copy above (title row) stays put,
+          since this pass doesn't relocate anything below `sm`. */}
+      {showHeaderCta && (
+        <button
+          type="button"
+          onClick={() => setDrawerOpen(true)}
+          className="hidden sm:inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium
+            bg-[var(--ophalo-navy)] text-white hover:opacity-90 transition-opacity
+            focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-offset-1"
+        >
+          <Plus className="h-4 w-4" />
+          Add catalog item
+        </button>
+      )}
+      </div>
+      )}
+
+      {activeTab === "assemblies" && (
+        <div className="mx-auto w-full max-w-[1440px] px-4 py-3 sm:px-6 flex flex-wrap items-center gap-3">
+          <div className="flex flex-1 flex-wrap items-center gap-3 rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] p-3 shadow-sm">
+          <div className="inline-flex rounded-lg border border-[var(--ophalo-border)] bg-[var(--ophalo-canvas)] p-0.5" role="group" aria-label="Filter by status">
+            {(["Active", "Inactive"] as const).map((option) => (
+              <button
+                key={option}
+                type="button"
+                aria-pressed={assemblyStatusFilter === option}
+                onClick={() => setAssemblyStatusFilter(option)}
+                className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${
+                  assemblyStatusFilter === option
+                    ? "bg-[var(--ophalo-navy)] text-white"
+                    : "text-[var(--ophalo-muted)] hover:text-[var(--ophalo-ink)]"
+                }`}
+              >
+                {option}
+              </button>
+            ))}
+          </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setAssemblyDrawerOpen(true)}
+            className="hidden sm:inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium
+              bg-[var(--ophalo-navy)] text-white hover:opacity-90 transition-opacity
+              focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-offset-1"
+          >
+            <Plus className="h-4 w-4" />
+            Add assembly
+          </button>
+        </div>
+      )}
       </div>
 
+      {activeTab === "items" && (
       <div className="mx-auto flex-1 min-w-0 w-full max-w-[1440px] px-4 sm:px-6 pb-8">
         {(isLoading || zeroStateResolving) && (
           <div className="flex flex-1 items-center justify-center py-16">
@@ -715,31 +774,6 @@ export function PriceBook({
           </div>
         )}
       </div>
-      </>
-      )}
-
-      {activeTab === "assemblies" && (
-        <div className="mx-auto w-full max-w-[1440px] px-4 pt-4 pb-3 sm:px-6">
-          <div className="flex flex-wrap items-center gap-3 rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] p-3 shadow-sm">
-          <div className="inline-flex rounded-lg border border-[var(--ophalo-border)] bg-[var(--ophalo-canvas)] p-0.5" role="group" aria-label="Filter by status">
-            {(["Active", "Inactive"] as const).map((option) => (
-              <button
-                key={option}
-                type="button"
-                aria-pressed={assemblyStatusFilter === option}
-                onClick={() => setAssemblyStatusFilter(option)}
-                className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${
-                  assemblyStatusFilter === option
-                    ? "bg-[var(--ophalo-navy)] text-white"
-                    : "text-[var(--ophalo-muted)] hover:text-[var(--ophalo-ink)]"
-                }`}
-              >
-                {option}
-              </button>
-            ))}
-          </div>
-          </div>
-        </div>
       )}
 
       {activeTab === "assemblies" && (

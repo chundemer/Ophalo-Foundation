@@ -126,9 +126,30 @@ describe("PriceBook", () => {
     renderPriceBook();
 
     await waitFor(() => expect(screen.getAllByText("Condensate Pump").length).toBeGreaterThan(0));
-    expect(screen.getByRole("button", { name: "Add catalog item" })).toBeInTheDocument();
+    // Exactly two: the mobile-width copy (title row) and the sm+ sticky-workspace-bar copy —
+    // one semantic control shown once per breakpoint, never both at once on the same viewport.
+    expect(screen.getAllByRole("button", { name: "Add catalog item" })).toHaveLength(2);
     expect(screen.queryByText("Your catalog is empty")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /add your first catalog item/i })).not.toBeInTheDocument();
+  });
+
+  it("workspace controls (search, category filter, status filter) render as one semantic set — not duplicated by the sticky desktop bar", async () => {
+    mockGetCatalogItems.mockResolvedValue(oneItem);
+    const { container } = renderPriceBook();
+
+    await waitFor(() => expect(screen.getAllByText("Condensate Pump").length).toBeGreaterThan(0));
+    expect(screen.getAllByLabelText("Search catalog")).toHaveLength(1);
+    expect(screen.getAllByLabelText("Filter by category")).toHaveLength(1);
+    expect(screen.getAllByRole("group", { name: "Filter by status" })).toHaveLength(1);
+    expect(screen.getAllByRole("tab", { name: "Catalog Items" })).toHaveLength(1);
+
+    // The tabs + toolbar live in one CSS-native `position: sticky` region (sm+ only) — no
+    // JS/IntersectionObserver pop-in, and nothing forces sticky behavior below `sm`.
+    const stickyBar = container.querySelector(".sm\\:sticky");
+    expect(stickyBar).not.toBeNull();
+    expect(stickyBar).toHaveClass("sm:top-0");
+    expect(stickyBar?.querySelector('[role="tablist"]')).not.toBeNull();
+    expect(stickyBar?.contains(screen.getByLabelText("Search catalog"))).toBe(true);
   });
 
   it("both the header and empty-state CTAs open the same drawer", async () => {
@@ -295,7 +316,7 @@ describe("PriceBook", () => {
 
     await waitFor(() => expect(screen.getByText("No items match your filters")).toBeInTheDocument());
     expect(screen.queryByText("Your catalog is empty")).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Add catalog item" })).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: "Add catalog item" }).length).toBeGreaterThan(0);
 
     await user.click(screen.getByRole("button", { name: "Reset all" }));
     expect(screen.getByLabelText("Search catalog")).toHaveValue("");
@@ -479,7 +500,7 @@ describe("PriceBook", () => {
     await waitFor(() => expect(screen.getByText("No active items")).toBeInTheDocument());
     expect(screen.queryByText("Your catalog is empty")).not.toBeInTheDocument();
     // The catalog isn't empty, so the header CTA stays available.
-    expect(screen.getByRole("button", { name: "Add catalog item" })).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: "Add catalog item" }).length).toBeGreaterThan(0);
 
     await user.click(screen.getByRole("button", { name: "View inactive items" }));
     await waitFor(() => expect(screen.getAllByText("Condensate Pump").length).toBeGreaterThan(0));
@@ -543,7 +564,7 @@ describe("PriceBook", () => {
       renderPriceBook();
       await waitFor(() => expect(screen.getAllByText("Condensate Pump").length).toBeGreaterThan(0));
 
-      await user.click(screen.getByRole("button", { name: "Add catalog item" }));
+      await user.click(screen.getAllByRole("button", { name: "Add catalog item" })[0]);
       expect(screen.getByRole("dialog", { name: "New catalog item" })).toBeInTheDocument();
       await user.keyboard("/");
       expect(screen.getByLabelText("Search catalog")).not.toHaveFocus();

@@ -107,6 +107,24 @@ describe("PriceBook — Offerings & Assemblies tab", () => {
     expect(onSelectAssembly).toHaveBeenCalledWith("assembly-1");
   });
 
+  it("the Add assembly CTA renders as one semantic control (mobile-width + sm+ sticky-bar copy), and the status filter stays singular", async () => {
+    const user = userEvent.setup();
+    mockGetOfferingAssemblies.mockResolvedValue(activeAssemblies);
+    const { container } = renderPriceBook();
+
+    await user.click(screen.getByRole("tab", { name: "Offerings & Assemblies" }));
+    await waitFor(() => expect(screen.getAllByText("Furnace Tune-Up").length).toBeGreaterThan(0));
+
+    // Exactly two: the mobile-width copy (title row) and the sm+ sticky-workspace-bar copy —
+    // one semantic control shown once per breakpoint, matching the Catalog Items CTA pattern.
+    expect(screen.getAllByRole("button", { name: "Add assembly" })).toHaveLength(2);
+    expect(screen.getAllByRole("group", { name: "Filter by status" })).toHaveLength(1);
+
+    const stickyBar = container.querySelector(".sm\\:sticky");
+    expect(stickyBar).not.toBeNull();
+    expect(stickyBar?.querySelector('[role="tablist"]')).not.toBeNull();
+  });
+
   it("an assembly with no eligibility carries a Needs review badge in the list", async () => {
     const user = userEvent.setup();
     mockGetOfferingAssemblies.mockResolvedValue({
