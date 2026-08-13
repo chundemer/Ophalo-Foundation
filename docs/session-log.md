@@ -23,10 +23,14 @@ assets, QR tagging, quotes, accounting/fleet replacement, property-manager subsc
 telemetry, or any customer-specific shortcut unless a separately scoped session explicitly promotes
 it through these records.
 
-**Price Book, Quotes & Materials — Coding Session 1 complete.** Sessions 1a–1c (ADR-462) delivered
-the capability-package foundation: `AccountCapabilityPackageEnrollment` entity/persistence, the
-account-aware `AccountFeatureAccessResolver`, and a generic Owner/Admin `GET
-/accounts/me/capability-packages` status read.
+**Price Book, Quotes & Materials — entitlement foundation and operator enrollment path complete;
+live enablement not yet performed.** Sessions 1a–1c (ADR-462) delivered the
+`AccountCapabilityPackageEnrollment` entity/persistence, the account-aware
+`AccountFeatureAccessResolver`, and a generic Owner/Admin `GET /accounts/me/capability-packages`
+status read. The internal operator enrollment path (below) now closes the gap. Christian still
+needs to actually call it to grant the founder's live account
+`keep.price_book_quotes_materials` before the blocked desktop/narrow-mobile acceptance pass of
+Catalog Items, Assemblies, and the price/cost repair loop can run.
 
 **Session 2 progress:**
 
@@ -40,6 +44,33 @@ account-aware `AccountFeatureAccessResolver`, and a generic Owner/Admin `GET
   (live `OfferingAssembly` lifecycle and computed operational eligibility) are locked; ADR-477
   (field-presentable pricing) moved to Deferred pending pilot evidence (DEF-093). Full reconciliation
   record and sequencing in [Build Log 117](build-log/117-price-book-continuation-coding-plan.md).
+
+- **Internal capability-package enrollment operator path: complete (2026-08-13, commit
+  `6ea62a5`).** `InternalCapabilityPackageEnrollmentService`/`InternalCapabilityPackageEnrollmentApiService`/
+  `InternalEntitlementsEndpoints` deliver `GET`/`POST .../enroll`/`.../disable`/`.../reenable` under
+  `/internal/accounts/{accountId}/capability-packages/{featureKey}`, gated on
+  `internal.entitlements.manage` (authenticated → caller's own Internal-purpose account + role →
+  target account exists; target's commercial state is deliberately not consulted — this is an
+  operator tool, not a request/service-delivery action). Enroll only ever creates the first row for
+  an (AccountId, FeatureKey) pair; Disable/Reenable require the caller's expected concurrency token
+  and never force-transition. The two real database races (concurrent Enroll on the same pair; a
+  stale Disable/Reenable commit) are translated at the persistence seam
+  (`AccountCapabilityPackageEnrollmentCommitResult`) into 409s (`EnrollmentAlreadyExists` /
+  `VersionMismatch`) instead of leaking as 500s. 42 unit tests, 21 integration tests (including 2
+  real-PostgreSQL persistence-race tests), 14/14 architecture tests, `git diff --check` clean. Not
+  yet called against the founder's live account — see the blocker note above.
+
+- **Next functional Price Book task — technician proposed-scope capture (Session 3.4).** The
+  request-bound `ProposedScope`/line domain, three-gate mutation API, snapshot rules, and submit
+  work-signal foundation are complete through Session 3.3b; the missing piece is the field-facing
+  web/PWA workflow. Preflight and then build a price-blind technician job-detail surface where an
+  on-site technician can select an office-built offering/assembly or known catalog item, adjust
+  visible required-material/labor quantities and exceptions, add notes, use an always-available
+  off-catalog description/quantity escape hatch, and submit the proposed scope to office. It must
+  never expose or allow edits to sell price, cost, margin, tax, inventory, or pricing formulas.
+  Submitted scope is not a quote and does not alter an approved quote. This is selection of
+  required work/materials for office review; recording actual consumed work/materials remains the
+  distinct later Session 3.8 workflow.
 
 - **3.1 — Offering/Assembly domain foundation: complete (2026-08-10, commit `6f7047e`).**
   `OfferingAssembly`/`OfferingAssemblyItem` entities, persistence, EF configuration, and the
@@ -333,7 +364,8 @@ account-aware `AccountFeatureAccessResolver`, and a generic Owner/Admin `GET
   terminal check (exact read method still to be selected at implementation time — not yet
   resolved which existing seam or new method supplies the account-scoped `KeepRequest` read).
 
-  No code written yet. Next step: implementation against this gate.
+  This completed implementation is the API foundation for the later field-facing Session 3.4
+  proposed-scope capture workflow; it did not include a technician UI.
 
   The completed 2e record follows. Build 113 broke the
   work into bounded implementation slices. 2e.0 preflight split 2e.1 into 2e.1a (canonical SKU
@@ -994,8 +1026,10 @@ account-aware `AccountFeatureAccessResolver`, and a generic Owner/Admin `GET
     normal document flow keeps it from ever covering the reason selector, error text, or below-cost
     confirmation. No new mutation path; existing audited-publish semantics (required reason,
     validation, below-cost confirmation, query invalidation) are unchanged. 387 frontend tests pass;
-    `tsc --noEmit` and `git diff --check` clean. No backend files touched in the UX fix.
-  - **Pilot-required image storage (paused, after Price Book continuation).** R2 remains required: price-book import is
+    `tsc --noEmit` and `git diff --check` clean. No backend files touched in the UX fix. The work
+    is committed and pushed, but live acceptance remains blocked until the internal entitlement
+    operator path can enable Price Book for the founder account.
+  - **Pilot-required image storage (paused until Price Book live acceptance).** R2 remains required: price-book import is
     deferred, not private document storage. The next storage slice defines image metadata,
     account authorization, bounded direct API multipart upload, image type/size validation, purpose
     keys, retrieval/display, and pilot retention. Equipment/work images—not CSV—are the first
