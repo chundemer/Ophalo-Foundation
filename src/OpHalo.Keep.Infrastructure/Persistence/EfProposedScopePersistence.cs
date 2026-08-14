@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using OpHalo.Foundation.Infrastructure.Persistence;
 using OpHalo.Keep.Application.PriceBook;
 using OpHalo.Keep.Core.Entities;
+using OpHalo.Keep.Core.Entities.Enums;
 using Npgsql;
 
 namespace OpHalo.Keep.Infrastructure.Persistence;
@@ -12,6 +13,24 @@ public sealed class EfProposedScopePersistence(OpHaloDbContext dbContext) : IPro
         dbContext.Set<ProposedScope>()
             .Include(x => x.Lines)
             .FirstOrDefaultAsync(x => x.AccountId == accountId && x.Id == proposedScopeId, ct);
+
+    public async Task<ProposedScope?> GetCurrentForRequestAsync(Guid accountId, Guid requestId, CancellationToken ct)
+    {
+        var draft = await dbContext.Set<ProposedScope>()
+            .Include(x => x.Lines)
+            .FirstOrDefaultAsync(
+                x => x.AccountId == accountId && x.RequestId == requestId && x.Status == ProposedScopeStatus.Draft,
+                ct);
+        if (draft is not null)
+            return draft;
+
+        return await dbContext.Set<ProposedScope>()
+            .Include(x => x.Lines)
+            .Where(x => x.AccountId == accountId && x.RequestId == requestId)
+            .OrderByDescending(x => x.CreatedAtUtc)
+            .ThenByDescending(x => x.Id)
+            .FirstOrDefaultAsync(ct);
+    }
 
     public async Task<ProposedScopeCommitResult> AddAsync(ProposedScope scope, CancellationToken ct)
     {

@@ -19,6 +19,26 @@ public static class ProposedScopeEndpoints
 {
     public static void MapProposedScopeEndpoints(this IEndpointRouteBuilder app)
     {
+        app.MapGet("/keep/pricebook/proposed-scopes/by-request/{requestId:guid}", async (
+            Guid requestId,
+            ProposedScopeReadApiService readService,
+            CancellationToken ct) =>
+        {
+            var result = await readService.GetCurrentForRequestAsync(requestId, ct);
+            return result.IsSuccess
+                ? Results.Ok(ToCurrentForRequestResponse(result.Value))
+                : ErrorHttpMapper.ToHttpResult(result.Error);
+        }).RequireAuthorization();
+
+        app.MapGet("/keep/pricebook/proposed-scopes/{proposedScopeId:guid}", async (
+            Guid proposedScopeId,
+            ProposedScopeReadApiService readService,
+            CancellationToken ct) =>
+        {
+            var result = await readService.GetByIdAsync(proposedScopeId, ct);
+            return result.IsSuccess ? Results.Ok(ToDetailResponse(result.Value)) : ErrorHttpMapper.ToHttpResult(result.Error);
+        }).RequireAuthorization();
+
         app.MapPost("/keep/pricebook/proposed-scopes/create", async (
             CreateProposedScopeBody body,
             ProposedScopeApiService service,
@@ -108,6 +128,38 @@ public static class ProposedScopeEndpoints
     private static ProposedScopeResponse ToResponse(ProposedScope scope) => new(
         scope.Id, scope.RequestId, scope.Status.ToString(), scope.ConcurrencyVersion);
 
+    private static CurrentProposedScopeForRequestResponse ToCurrentForRequestResponse(CurrentProposedScopeForRequestResult result) =>
+        result.HasScope
+            ? new CurrentProposedScopeForRequestResponse(result.Scope!.Status.ToString(), ToDetailResponse(result.Scope))
+            : new CurrentProposedScopeForRequestResponse("NoScopeYet", null);
+
+    private static ProposedScopeDetailResponse ToDetailResponse(ProposedScope scope) => new(
+        scope.Id,
+        scope.RequestId,
+        scope.Status.ToString(),
+        scope.ConcurrencyVersion,
+        scope.Lines
+            .OrderBy(l => l.DisplayOrder)
+            .ThenBy(l => l.Id)
+            .Select(ToLineResponse)
+            .ToArray());
+
+    private static ProposedScopeLineResponse ToLineResponse(ProposedScopeLine line) => new(
+        line.Id,
+        line.LineType.ToString(),
+        line.CatalogItemId,
+        line.OfferingAssemblyId,
+        line.Quantity,
+        line.IsException,
+        line.OffCatalogDescription,
+        line.OffCatalogQuantity,
+        line.Note,
+        line.DisplayOrder,
+        line.DisplayNameSnapshot,
+        line.UnitOfMeasureSnapshot,
+        line.OfferingAssemblyNameSnapshot,
+        line.DefaultQuantitySnapshot);
+
     private static IResult ValidationProblem(string detail, string code) =>
         Results.Problem(
             statusCode: StatusCodes.Status400BadRequest,
@@ -120,6 +172,30 @@ public static class ProposedScopeEndpoints
 internal sealed record CreateProposedScopeBody(Guid RequestId);
 
 internal sealed record ProposedScopeResponse(Guid Id, Guid RequestId, string Status, Guid ConcurrencyVersion);
+
+/// <summary>State is <c>"NoScopeYet"</c> (Scope null) or the current scope's <c>Status</c> — never
+/// an ambiguous 200-with-null-body without a state tag (Session 3.4a wire-contract
+/// correction).</summary>
+internal sealed record CurrentProposedScopeForRequestResponse(string State, ProposedScopeDetailResponse? Scope);
+
+internal sealed record ProposedScopeDetailResponse(
+    Guid Id, Guid RequestId, string Status, Guid ConcurrencyVersion, IReadOnlyList<ProposedScopeLineResponse> Lines);
+
+internal sealed record ProposedScopeLineResponse(
+    Guid Id,
+    string LineType,
+    Guid? CatalogItemId,
+    Guid? OfferingAssemblyId,
+    decimal Quantity,
+    bool IsException,
+    string? OffCatalogDescription,
+    decimal? OffCatalogQuantity,
+    string? Note,
+    int DisplayOrder,
+    string DisplayNameSnapshot,
+    string? UnitOfMeasureSnapshot,
+    string? OfferingAssemblyNameSnapshot,
+    decimal? DefaultQuantitySnapshot);
 
 internal sealed record AddProposedScopeLineBody(
     string LineType,

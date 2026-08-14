@@ -28,6 +28,14 @@ public interface IProposedScopePersistence
     Task<ProposedScope?> GetByIdAsync(Guid accountId, Guid proposedScopeId, CancellationToken ct);
 
     /// <summary>
+    /// Returns the request's open <c>Draft</c> if one exists; otherwise the single most recent
+    /// <c>SubmittedToOffice</c>/<c>OfficeReviewed</c> row (by <c>CreatedAtUtc</c> descending); null
+    /// if the request has no proposed scope at all. No full history — Session 3.4's locked scope-
+    /// display contract (build-log/118, decision 3).
+    /// </summary>
+    Task<ProposedScope?> GetCurrentForRequestAsync(Guid accountId, Guid requestId, CancellationToken ct);
+
+    /// <summary>
     /// Persists a newly created scope. Returns
     /// <see cref="ProposedScopeCommitResult.DraftAlreadyOpenForRequest"/> instead of throwing when
     /// a concurrent insert already claimed the open <c>Draft</c> slot for this request.

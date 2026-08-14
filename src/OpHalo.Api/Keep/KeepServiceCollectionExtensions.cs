@@ -132,6 +132,9 @@ public static class KeepServiceCollectionExtensions
         services.AddScoped<EditProposedScopeService>();
         services.AddScoped<ProposedScopeApiService>();
 
+        // Price Book, Quotes & Materials — proposed-scope read API (Session 3.4a).
+        services.AddScoped<ProposedScopeReadApiService>();
+
         return services;
     }
 }
