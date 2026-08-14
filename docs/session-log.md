@@ -1,6 +1,6 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-08-14 (3.4d)
+**Last updated:** 2026-08-14 (3.4e)
 **Deployment posture:** Not pilot-ready.
 **Source of truth for acceptance criteria:** `docs/pilot-readiness-bug-tracker.md`.
 
@@ -160,8 +160,40 @@ database, and use production only for entitlement, navigation, and real-business
   `LineType` 400, gates → visibility → act ordering for an invisible scope, missing-version-header
   400, retired-route 404 pinning the no-reachable-window requirement) — 18/18 `ProposedScopeApiTests`,
   154/154 across the full `ProposedScope`/`CatalogItem`/`OfferingAssembly` regression set, 14/14
-  architecture tests, `git diff --check` clean. Next: start 3.4e (atomic `expand-assembly`) on
-  explicit go-ahead.
+  architecture tests, `git diff --check` clean.
+
+- **3.4e — Atomic `expand-assembly`: complete (2026-08-14).** New
+  `FieldExpandAssemblyApiService`/`IOfferingAssemblyExpansionPersistence`/
+  `EfOfferingAssemblyExpansionPersistence` deliver `POST /keep/pricebook/proposed-scopes/{id}/
+  expand-assembly`, the sole path for `PrimaryOffering`/`AssociatedItem` lines (build-log/118
+  "Assembly-expansion locking protocol"). One atomic transaction, corrected during preflight to a
+  dedicated persistence seam (not composed locks) so lock/recheck/append/commit share one
+  `DbContext`: (1) `SELECT ... FOR UPDATE` locks the `ProposedScope` row, version/status-checked;
+  (2) `SELECT ... FOR UPDATE` locks the `OfferingAssembly` row, then every referenced `CatalogItem`
+  (primary + associated items) in ascending id order; (3) ADR-479 eligibility is recomputed from
+  those locked rows (reuses `IOfferingAssemblyPersistence.IsOperationallyEligibleAsync` against the
+  same scoped `DbContext`, so it reads the just-locked state, not a pre-transaction snapshot); (4)
+  every submitted exclusion id is validated as a current *optional* associated-item id — unknown or
+  required-item ids reject as `ProposedScope.ExpandExclusionItemInvalid` with zero lines written;
+  (5) only then are `PrimaryOffering` + non-excluded `AssociatedItem` lines appended at
+  `MAX(DisplayOrder)+10, +20, ...` and the scope's version bumped once. Ineligible-at-recheck rejects
+  as `ProposedScope.ExpandAssemblyNotOperationallyEligible` (409), always with zero writes.
+  `EditProposedScopeService.ExpandAssemblyAsync` is a thin passthrough mapping the seam's outcome
+  enum, matching `SubmitProposedScopeService`'s relationship to
+  `IProposedScopeSubmissionPersistence`. Gate composition/row-visibility ordering restates
+  `FieldProposedScopeSelectionApiService`'s exactly. 8 production files (3 new), 1 mutation family,
+  10 total changed files. 14 new integration tests: 8 persistence-level (happy path, display-order
+  continuation, optional-item exclusion, unknown/required-item invalid exclusion, ineligible-at-lock
+  rejection, stale-version conflict, and the two-transaction race proof — a
+  `PostScopeLockHook` test seam pauses the transaction right after the scope lock to deactivate the
+  primary item on a second connection before the assembly/catalog-item locks are taken, proving the
+  recheck reads that just-committed change) plus 6 API-level (happy path, unknown-assembly 404,
+  ineligible-assembly 409, no-entitlement 403, Viewer-role 403, gates → visibility → act ordering for
+  an invisible scope, missing-version-header 400) — 25/25 `ProposedScopeApiTests`, 8/8 new
+  `OfferingAssemblyExpansionPersistenceTests`, 168/169 across the full `ProposedScope`/`CatalogItem`/
+  `OfferingAssembly` regression set (1 unrelated pre-existing flake, confirmed passing in isolation),
+  14/14 architecture tests, `git diff --check` clean. Next: 3.4f (frontend entry point + ladder
+  selection) on explicit go-ahead.
 
 - **3.1 — Offering/Assembly domain foundation: complete (2026-08-10, commit `6f7047e`).**
   `OfferingAssembly`/`OfferingAssemblyItem` entities, persistence, EF configuration, and the

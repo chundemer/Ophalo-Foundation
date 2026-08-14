@@ -79,6 +79,24 @@ public static class ProposedScopeEndpoints
                 : ErrorHttpMapper.ToHttpResult(result.Error);
         }).RequireAuthorization();
 
+        app.MapPost("/keep/pricebook/proposed-scopes/{proposedScopeId:guid}/expand-assembly", async (
+            Guid proposedScopeId,
+            ExpandAssemblyBody body,
+            HttpRequest httpRequest,
+            FieldExpandAssemblyApiService service,
+            CancellationToken ct) =>
+        {
+            var versionResult = ProposedScopeVersionHeader.Parse(httpRequest.Headers);
+            if (!versionResult.IsSuccess)
+                return ErrorHttpMapper.ToHttpResult(versionResult.Error);
+
+            var command = new ExpandAssemblyApiCommand(body.OfferingAssemblyId, body.ExcludedOptionalItemIds ?? []);
+            var result = await service.ExpandAssemblyAsync(proposedScopeId, command, versionResult.Value, ct);
+            return result.IsSuccess
+                ? Results.Ok(new ExpandAssemblyResponse(result.Value.LineIds, result.Value.ScopeConcurrencyVersion))
+                : ErrorHttpMapper.ToHttpResult(result.Error);
+        }).RequireAuthorization();
+
         app.MapPatch("/keep/pricebook/proposed-scopes/{proposedScopeId:guid}/lines/{lineId:guid}", async (
             Guid proposedScopeId,
             Guid lineId,
@@ -206,6 +224,10 @@ internal sealed record FieldSelectProposedScopeLineBody(
     string? Note);
 
 internal sealed record ProposedScopeLineAddedResponse(Guid LineId, Guid ConcurrencyVersion);
+
+internal sealed record ExpandAssemblyBody(Guid OfferingAssemblyId, IReadOnlyCollection<Guid>? ExcludedOptionalItemIds);
+
+internal sealed record ExpandAssemblyResponse(IReadOnlyList<Guid> LineIds, Guid ConcurrencyVersion);
 
 internal sealed record UpdateProposedScopeLineBody(decimal Quantity, bool IsException, string? Note, int DisplayOrder);
 

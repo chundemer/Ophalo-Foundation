@@ -167,6 +167,10 @@ public static class ErrorHttpMapper
             var c when c == "ProposedScope.LineOffCatalogDescriptionInvalidCharacters" => (StatusCodes.Status400BadRequest, "Bad request.", null),
             var c when c == "ProposedScope.FieldSelectLineTypeInvalid" => (StatusCodes.Status400BadRequest, "Bad request.", null),
 
+            // --- expand-assembly (Session 3.4e) ---
+            var c when c == "ProposedScope.ExpandAssemblyNotOperationallyEligible" => (StatusCodes.Status409Conflict, "Conflict.", null),
+            var c when c == "ProposedScope.ExpandExclusionItemInvalid" => (StatusCodes.Status400BadRequest, "Bad request.", null),
+
             // --- CatalogCategory concurrency/uniqueness conflicts (Session 2b.3) ---
             var c when c == "CatalogCategory.VersionMismatch"         => (StatusCodes.Status409Conflict, "Conflict.", null),
             var c when c == "CatalogCategory.NameAlreadyExists"       => (StatusCodes.Status409Conflict, "Conflict.", null),

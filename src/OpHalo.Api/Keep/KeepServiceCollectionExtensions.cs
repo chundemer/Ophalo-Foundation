@@ -147,6 +147,11 @@ public static class KeepServiceCollectionExtensions
         // EditProposedScopeService/ICatalogReadPersistence (registered above).
         services.AddScoped<FieldProposedScopeSelectionApiService>();
 
+        // Price Book, Quotes & Materials — atomic expand-assembly (Session 3.4e). Reuses
+        // EditProposedScopeService/IOfferingAssemblyPersistence (registered above).
+        services.AddScoped<IOfferingAssemblyExpansionPersistence, EfOfferingAssemblyExpansionPersistence>();
+        services.AddScoped<FieldExpandAssemblyApiService>();
+
         return services;
     }
 }

@@ -76,6 +76,21 @@ public sealed record AppendProposedScopeLineCommand(
     string? UnitOfMeasureSnapshot,
     Guid CreatedByUserId);
 
+/// <summary>Assembly-expansion command (Session 3.4e): the caller supplies only raw selection
+/// intent (which assembly, which optional items to exclude) — the server resolves everything else
+/// (line snapshots, display order) from the row-locked assembly/catalog-item state.</summary>
+public sealed record ExpandAssemblyCommand(
+    Guid AccountId,
+    Guid ProposedScopeId,
+    Guid ExpectedVersion,
+    Guid OfferingAssemblyId,
+    IReadOnlyCollection<Guid> ExcludedOptionalItemIds,
+    Guid CreatedByUserId);
+
+/// <summary>Every line id created by the expansion (PrimaryOffering first, then each non-excluded
+/// AssociatedItem) plus the parent's post-mutation ConcurrencyVersion.</summary>
+public sealed record ExpandAssemblyResultValue(IReadOnlyList<Guid> LineIds, Guid ScopeConcurrencyVersion);
+
 /// <summary>
 /// Orchestrates <see cref="ProposedScope"/> line add/update/remove (Session 3.3b). Deliberately
 /// takes accountId/actor ids as plain parameters — auth-stack composition (ADR-480's three gates)
@@ -87,7 +102,8 @@ public sealed record AppendProposedScopeLineCommand(
 /// </summary>
 public sealed class EditProposedScopeService(
     IProposedScopePersistence persistence,
-    IKeepRequestDetailPersistence requestPersistence)
+    IKeepRequestDetailPersistence requestPersistence,
+    IOfferingAssemblyExpansionPersistence expansionPersistence)
 {
     public async Task<Result<AddProposedScopeLineResult>> AddLineAsync(AddProposedScopeLineCommand command, CancellationToken ct)
     {
@@ -177,6 +193,33 @@ public sealed class EditProposedScopeService(
         return transitionResult.IsSuccess
             ? Result<AddProposedScopeLineResult>.Success(new AddProposedScopeLineResult(addResult.Value.Id, transitionResult.Value))
             : Result<AddProposedScopeLineResult>.Failure(transitionResult.Error);
+    }
+
+    /// <summary>
+    /// Atomic assembly expansion (Session 3.4e): thin passthrough to
+    /// <see cref="IOfferingAssemblyExpansionPersistence"/>, which owns the entire lock/recheck/
+    /// append transaction (build-log/118 "Assembly-expansion locking protocol") — this method only
+    /// maps its outcome to a <see cref="Result{TValue}"/>, matching <c>SubmitProposedScopeService</c>'s
+    /// relationship to <c>IProposedScopeSubmissionPersistence</c>.
+    /// </summary>
+    public async Task<Result<ExpandAssemblyResultValue>> ExpandAssemblyAsync(ExpandAssemblyCommand command, CancellationToken ct)
+    {
+        var outcome = await expansionPersistence.ExpandAsync(
+            command.AccountId, command.ProposedScopeId, command.ExpectedVersion, command.OfferingAssemblyId,
+            command.ExcludedOptionalItemIds, command.CreatedByUserId, ct);
+
+        return outcome.Result switch
+        {
+            ExpandAssemblyResult.Committed =>
+                Result<ExpandAssemblyResultValue>.Success(new ExpandAssemblyResultValue(outcome.LineIds!, outcome.ConcurrencyVersion!.Value)),
+            ExpandAssemblyResult.ScopeNotFound => Result<ExpandAssemblyResultValue>.Failure(ProposedScopeErrors.NotFound),
+            ExpandAssemblyResult.NotDraft => Result<ExpandAssemblyResultValue>.Failure(ProposedScopeErrors.NotDraft),
+            ExpandAssemblyResult.AssemblyNotFound => Result<ExpandAssemblyResultValue>.Failure(OfferingAssemblyErrors.NotFound),
+            ExpandAssemblyResult.AssemblyNotOperationallyEligible =>
+                Result<ExpandAssemblyResultValue>.Failure(ProposedScopeErrors.ExpandAssemblyNotOperationallyEligible),
+            ExpandAssemblyResult.InvalidExclusion => Result<ExpandAssemblyResultValue>.Failure(ProposedScopeErrors.ExpandExclusionItemInvalid),
+            _ => Result<ExpandAssemblyResultValue>.Failure(ProposedScopeErrors.VersionMismatch),
+        };
     }
 
     /// <summary>

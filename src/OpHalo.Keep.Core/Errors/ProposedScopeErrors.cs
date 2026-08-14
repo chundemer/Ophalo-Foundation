@@ -80,4 +80,16 @@ public static class ProposedScopeErrors
     /// originate from <c>expand-assembly</c> (Session 3.4e).</summary>
     public static readonly Error FieldSelectLineTypeInvalid =
         Error.Create("ProposedScope.FieldSelectLineTypeInvalid", "LineType must be KnownCatalogItem or OffCatalogItem.");
+
+    /// <summary>Expand-assembly (Session 3.4e): the ADR-479 operational-eligibility predicate,
+    /// recomputed from the row-locked assembly/catalog-item state inside the expansion transaction,
+    /// failed — the assembly went Inactive or a referenced catalog item lost Active state/its
+    /// required price since the caller's own pre-transaction read. Zero lines are ever written.</summary>
+    public static readonly Error ExpandAssemblyNotOperationallyEligible =
+        Error.Create("ProposedScope.ExpandAssemblyNotOperationallyEligible", "This offering/assembly can no longer be selected.");
+
+    /// <summary>Expand-assembly (Session 3.4e): a submitted exclusion id does not name a current
+    /// optional associated item on this assembly — either unknown or a required item's id.</summary>
+    public static readonly Error ExpandExclusionItemInvalid =
+        Error.Create("ProposedScope.ExpandExclusionItemInvalid", "One or more excluded items are not optional items on this offering/assembly.");
 }

@@ -10,8 +10,10 @@ using OpHalo.Foundation.Core.Entities.Accounts.Enums;
 using OpHalo.Foundation.Core.Entities.Users;
 using OpHalo.Foundation.Core.Helpers;
 using OpHalo.Foundation.Infrastructure.Persistence;
+using OpHalo.Keep.Application.PriceBook;
 using OpHalo.Keep.Core.Entities;
 using OpHalo.Keep.Core.Entities.Enums;
+using OpHalo.Keep.Infrastructure.Persistence;
 using Xunit;
 
 namespace OpHalo.IntegrationTests.Api;
@@ -331,6 +333,162 @@ public sealed class ProposedScopeApiTests : IClassFixture<KeepApiWebFactory>, IA
     }
 
     [Fact]
+    public async Task ExpandAssembly_ReturnsOkAndPersistsPrimaryAndAssociatedItemLines()
+    {
+        var (accountId, ownerId, _) = await SeedAccountAsync("expand-assembly-ok");
+        await EnrollAsync(accountId, ownerId);
+        var cookie = await GetCookieAsync(ownerId, accountId);
+        var (scopeId, version) = await SeedDraftScopeAsync(accountId, ownerId);
+        var primary = await SeedPricedCatalogItemAsync(accountId, ownerId, "Furnace");
+        var child = await SeedPricedCatalogItemAsync(accountId, ownerId, "Filter");
+        var assemblyId = await SeedAssemblyAsync(accountId, ownerId, primary.Id, (child.Id, false));
+
+        var request = new HttpRequestMessage(HttpMethod.Post, $"/keep/pricebook/proposed-scopes/{scopeId}/expand-assembly")
+        {
+            Content = JsonContent.Create(new { offeringAssemblyId = assemblyId, excludedOptionalItemIds = Array.Empty<Guid>() }),
+        };
+        request.Headers.Add(ProposedScopeVersionHeader.HeaderName, version.ToString("D"));
+        var response = await AuthRequest(cookie).SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(2, body.GetProperty("lineIds").GetArrayLength());
+        var newVersion = body.GetProperty("concurrencyVersion").GetGuid();
+        Assert.NotEqual(version, newVersion);
+
+        await using var scope = _factory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+        var reloaded = await db.Set<ProposedScope>().Include(x => x.Lines).SingleAsync(x => x.Id == scopeId);
+        Assert.Equal(2, reloaded.Lines.Count);
+        Assert.Contains(reloaded.Lines, l => l.LineType == ProposedScopeLineType.PrimaryOffering && l.CatalogItemId == primary.Id);
+        Assert.Contains(reloaded.Lines, l => l.LineType == ProposedScopeLineType.AssociatedItem && l.CatalogItemId == child.Id);
+    }
+
+    [Fact]
+    public async Task ExpandAssembly_UnknownAssemblyId_Returns404()
+    {
+        var (accountId, ownerId, _) = await SeedAccountAsync("expand-assembly-unknown");
+        await EnrollAsync(accountId, ownerId);
+        var cookie = await GetCookieAsync(ownerId, accountId);
+        var (scopeId, version) = await SeedDraftScopeAsync(accountId, ownerId);
+
+        var request = new HttpRequestMessage(HttpMethod.Post, $"/keep/pricebook/proposed-scopes/{scopeId}/expand-assembly")
+        {
+            Content = JsonContent.Create(new { offeringAssemblyId = Guid.NewGuid(), excludedOptionalItemIds = Array.Empty<Guid>() }),
+        };
+        request.Headers.Add(ProposedScopeVersionHeader.HeaderName, version.ToString("D"));
+        var response = await AuthRequest(cookie).SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("OfferingAssembly.NotFound", body.GetProperty("code").GetString());
+    }
+
+    [Fact]
+    public async Task ExpandAssembly_IneligibleAssembly_Returns409()
+    {
+        var (accountId, ownerId, _) = await SeedAccountAsync("expand-assembly-ineligible");
+        await EnrollAsync(accountId, ownerId);
+        var cookie = await GetCookieAsync(ownerId, accountId);
+        var (scopeId, version) = await SeedDraftScopeAsync(accountId, ownerId);
+        // Active but unpriced - fails ADR-479's required-standalone-price-for-primary rule.
+        var primary = await SeedActiveCatalogItemAsync(accountId, ownerId, "Unpriced Furnace");
+        var assemblyId = await SeedAssemblyAsync(accountId, ownerId, primary.Id);
+
+        var request = new HttpRequestMessage(HttpMethod.Post, $"/keep/pricebook/proposed-scopes/{scopeId}/expand-assembly")
+        {
+            Content = JsonContent.Create(new { offeringAssemblyId = assemblyId, excludedOptionalItemIds = Array.Empty<Guid>() }),
+        };
+        request.Headers.Add(ProposedScopeVersionHeader.HeaderName, version.ToString("D"));
+        var response = await AuthRequest(cookie).SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("ProposedScope.ExpandAssemblyNotOperationallyEligible", body.GetProperty("code").GetString());
+
+        await using var scope = _factory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+        Assert.False(await db.Set<ProposedScopeLine>().AnyAsync(l => l.ProposedScopeId == scopeId));
+    }
+
+    [Fact]
+    public async Task ExpandAssembly_WithoutEntitlement_Returns403()
+    {
+        var (accountId, ownerId, _) = await SeedAccountAsync("expand-assembly-no-entitlement");
+        var cookie = await GetCookieAsync(ownerId, accountId);
+        var (scopeId, version) = await SeedDraftScopeAsync(accountId, ownerId);
+
+        var request = new HttpRequestMessage(HttpMethod.Post, $"/keep/pricebook/proposed-scopes/{scopeId}/expand-assembly")
+        {
+            Content = JsonContent.Create(new { offeringAssemblyId = Guid.NewGuid(), excludedOptionalItemIds = Array.Empty<Guid>() }),
+        };
+        request.Headers.Add(ProposedScopeVersionHeader.HeaderName, version.ToString("D"));
+        var response = await AuthRequest(cookie).SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task ExpandAssembly_ViewerRole_Returns403()
+    {
+        // Gate 3 (RequestsOperate AND ScopeCapture): Viewer holds neither.
+        var (accountId, ownerId, _) = await SeedAccountAsync("expand-assembly-viewer");
+        await EnrollAsync(accountId, ownerId);
+        var viewerId = await SeedViewerAsync(accountId, "expand-assembly-viewer");
+        var viewerCookie = await GetCookieAsync(viewerId, accountId);
+        var (scopeId, version) = await SeedDraftScopeAsync(accountId, ownerId);
+
+        var request = new HttpRequestMessage(HttpMethod.Post, $"/keep/pricebook/proposed-scopes/{scopeId}/expand-assembly")
+        {
+            Content = JsonContent.Create(new { offeringAssemblyId = Guid.NewGuid(), excludedOptionalItemIds = Array.Empty<Guid>() }),
+        };
+        request.Headers.Add(ProposedScopeVersionHeader.HeaderName, version.ToString("D"));
+        var response = await AuthRequest(viewerCookie).SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task ExpandAssembly_ForAScopeOnARequestTheOperatorCannotSee_Returns404()
+    {
+        // Guards the locked gates -> request visibility -> act ordering (build-log/118): visibility
+        // must be checked before the assembly is resolved.
+        var (accountId, ownerId, _) = await SeedAccountAsync("expand-assembly-operator-mywork");
+        await EnrollAsync(accountId, ownerId);
+        var operatorId = await SeedOperatorAsync(accountId, "expand-assembly-operator-mywork");
+        var operatorCookie = await GetCookieAsync(operatorId, accountId);
+        var (scopeId, version) = await SeedDraftScopeAsync(accountId, ownerId);
+
+        var request = new HttpRequestMessage(HttpMethod.Post, $"/keep/pricebook/proposed-scopes/{scopeId}/expand-assembly")
+        {
+            Content = JsonContent.Create(new { offeringAssemblyId = Guid.NewGuid(), excludedOptionalItemIds = Array.Empty<Guid>() }),
+        };
+        request.Headers.Add(ProposedScopeVersionHeader.HeaderName, version.ToString("D"));
+        var response = await AuthRequest(operatorCookie).SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("KeepRequest.NotFound", body.GetProperty("code").GetString());
+    }
+
+    [Fact]
+    public async Task ExpandAssembly_WithoutVersionHeader_Returns400()
+    {
+        var (accountId, ownerId, _) = await SeedAccountAsync("expand-assembly-no-header");
+        await EnrollAsync(accountId, ownerId);
+        var cookie = await GetCookieAsync(ownerId, accountId);
+        var (scopeId, _) = await SeedDraftScopeAsync(accountId, ownerId);
+
+        var response = await AuthRequest(cookie).PostAsJsonAsync(
+            $"/keep/pricebook/proposed-scopes/{scopeId}/expand-assembly",
+            new { offeringAssemblyId = Guid.NewGuid(), excludedOptionalItemIds = Array.Empty<Guid>() });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("ProposedScope.ExpectedVersionRequired", body.GetProperty("code").GetString());
+    }
+
+    [Fact]
     public async Task RetiredRawAddLineRoute_Returns404()
     {
         // Session 3.4d retired POST .../{id}/lines rather than re-gating it (build-log/118: no
@@ -554,6 +712,24 @@ public sealed class ProposedScopeApiTests : IClassFixture<KeepApiWebFactory>, IA
         return member.Id;
     }
 
+    private async Task<Guid> SeedViewerAsync(Guid accountId, string slug)
+    {
+        var now = DateTime.UtcNow;
+        var email = $"viewer@{slug}.com";
+        var user = User.CreateVerified(email, null, now);
+        var member = AccountUser.CreatePendingInvite(
+            accountId, email, EmailNormalizer.Normalize(email), AccountUserRole.Viewer,
+            inviteTokenHash: $"{slug}_viewer_hash", inviteExpiresAtUtc: now.AddDays(7), nowUtc: now);
+        member.Activate(user.Id, now);
+
+        await using var scope = _factory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+        db.Users.Add(user);
+        db.AccountUsers.Add(member);
+        await db.SaveChangesAsync();
+        return member.Id;
+    }
+
     private async Task EnrollAsync(Guid accountId, Guid changedByAccountUserId)
     {
         var now = DateTime.UtcNow;
@@ -617,6 +793,68 @@ public sealed class ProposedScopeApiTests : IClassFixture<KeepApiWebFactory>, IA
         db.Set<CatalogItem>().Add(item);
         await db.SaveChangesAsync();
         return item;
+    }
+
+    private int _versionCounter;
+
+    private async Task<CatalogItem> SeedPricedCatalogItemAsync(Guid accountId, Guid createdByUserId, string displayName)
+    {
+        var item = await SeedActiveCatalogItemAsync(accountId, createdByUserId, displayName);
+
+        await using var scope = _factory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+
+        var versionId = Guid.NewGuid();
+        var versionNumber = Interlocked.Increment(ref _versionCounter);
+        var nowUtc = DateTime.UtcNow;
+        await db.Database.ExecuteSqlInterpolatedAsync($"""
+            INSERT INTO keep_pricebook_versions (
+                id, account_id, version_number, source_import_id,
+                published_at_utc, published_by_account_user_id, status,
+                created_at_utc, updated_at_utc)
+            VALUES (
+                {versionId}, {accountId}, {versionNumber}, NULL,
+                {nowUtc}, {createdByUserId}, 'Published',
+                {nowUtc}, {nowUtc})
+            """);
+
+        var lineId = Guid.NewGuid();
+        await db.Database.ExecuteSqlInterpolatedAsync($"""
+            INSERT INTO keep_pricebook_version_lines (
+                id, account_id, price_book_version_id, catalog_item_id,
+                display_name_snapshot, type_snapshot, unit_of_measure_snapshot, currency_snapshot,
+                cost_snapshot, sell_price_snapshot, pricing_mode,
+                created_at_utc, updated_at_utc)
+            VALUES (
+                {lineId}, {accountId}, {versionId}, {item.Id},
+                {item.DisplayName}, 'Material', 'each', 'USD',
+                60, 100, 'StandalonePrice',
+                {nowUtc}, {nowUtc})
+            """);
+
+        await db.Database.ExecuteSqlInterpolatedAsync($"""
+            UPDATE keep_pricebook_catalog_items
+            SET current_price_book_version_line_id = {lineId}
+            WHERE id = {item.Id}
+            """);
+
+        return item;
+    }
+
+    private async Task<Guid> SeedAssemblyAsync(
+        Guid accountId, Guid createdByUserId, Guid primaryCatalogItemId, params (Guid CatalogItemId, bool IsOptional)[] items)
+    {
+        var assembly = OfferingAssembly.Create(
+            accountId, primaryCatalogItemId, "Test Assembly " + Guid.NewGuid(), PriceTreatment.AllInclusive, createdByUserId).Value;
+        for (var i = 0; i < items.Length; i++)
+            Assert.True(assembly.AddItem(items[i].CatalogItemId, 1, items[i].IsOptional, i, createdByUserId).IsSuccess);
+
+        await using var scope = _factory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+        var persistence = new EfOfferingAssemblyPersistence(db);
+        var commitResult = await persistence.AddAsync(assembly, CancellationToken.None);
+        Assert.Equal(OfferingAssemblyCommitResult.Committed, commitResult);
+        return assembly.Id;
     }
 
     private async Task<(Guid ScopeId, Guid ConcurrencyVersion)> SeedDraftScopeAsync(Guid accountId, Guid createdByUserId)
