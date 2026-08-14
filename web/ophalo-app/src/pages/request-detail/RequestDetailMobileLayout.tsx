@@ -2,6 +2,8 @@ import { KeepButton } from "../../components/keep/KeepButton";
 import { WorkDoneCard, CloseRequestCard } from "./BusinessSection";
 import { TimingPanel } from "./TimingPanel";
 import { TeamSection } from "./TeamSection";
+import { ProposedScopeCard } from "./ProposedScopeCard";
+import { type ProposedScopeCaptureState } from "./useProposedScopeCapture";
 import {
   type RequestDetailLayoutProps,
   LogContactCard,
@@ -14,6 +16,11 @@ import {
   SourceMetaPanel,
 } from "./DetailPanels";
 
+interface RequestDetailMobileActionsProps extends RequestDetailLayoutProps {
+  proposedScopeCaptureState: ProposedScopeCaptureState;
+  onStartProposedScopeCapture: () => void;
+}
+
 // Primary actions inserted before the composer in the mobile stack.
 export function RequestDetailMobileActions({
   requestId,
@@ -24,10 +31,13 @@ export function RequestDetailMobileActions({
   onContactLaunched,
   onCreateFollowUp,
   onReviewSuccess,
-}: RequestDetailLayoutProps) {
+  proposedScopeCaptureState,
+  onStartProposedScopeCapture,
+}: RequestDetailMobileActionsProps) {
   return (
     <>
       <WorkDoneCard requestId={requestId} detail={detail} onDetailUpdated={onDetailUpdated} />
+      <ProposedScopeCard state={proposedScopeCaptureState} onStartCapture={onStartProposedScopeCapture} />
       <CloseRequestCard requestId={requestId} detail={detail} onDetailUpdated={onDetailUpdated} />
       <LogContactCard
         detail={detail}

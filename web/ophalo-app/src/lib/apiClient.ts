@@ -176,6 +176,10 @@ import type {
   OfferingAssemblyDetailResult,
   GetOfferingAssembliesParams,
   ActiveAssemblyDependenciesResult,
+  CurrentProposedScopeForRequestResult,
+  ProposedScopeDetailResult,
+  CreateProposedScopeBody,
+  ProposedScopeResult,
 } from "./apiClient.types";
 
 export type {
@@ -261,6 +265,10 @@ export type {
   OfferingAssemblyDetailResult,
   GetOfferingAssembliesParams,
   ActiveAssemblyDependenciesResult,
+  CurrentProposedScopeForRequestResult,
+  ProposedScopeDetailResult,
+  CreateProposedScopeBody,
+  ProposedScopeResult,
 };
 
 export type { FollowUpResolutionOutcome, FollowUpCompletionReason } from "./apiClient.types";
@@ -683,4 +691,16 @@ export const api = {
     apiFetch<KeepBusinessSetupResult>("/keep/setup/guided"),
   deferSetupStep: (step: number) =>
     apiFetchVoid(`/keep/setup/guided/defer/${step}`, { method: "POST" }),
+  // Session 3.4f-1, build-log/118: proposed-scope entry-point availability probe + draft lifecycle.
+  getCurrentProposedScopeForRequest: (requestId: string) =>
+    apiFetch<CurrentProposedScopeForRequestResult>(
+      `/keep/pricebook/proposed-scopes/by-request/${requestId}`,
+    ),
+  getProposedScope: (proposedScopeId: string) =>
+    apiFetch<ProposedScopeDetailResult>(`/keep/pricebook/proposed-scopes/${proposedScopeId}`),
+  createProposedScope: (body: CreateProposedScopeBody) =>
+    apiFetch<ProposedScopeResult>("/keep/pricebook/proposed-scopes/create", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
 };

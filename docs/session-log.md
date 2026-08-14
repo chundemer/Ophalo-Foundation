@@ -1,6 +1,6 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-08-14 (3.4e)
+**Last updated:** 2026-08-14 (3.4f-1)
 **Deployment posture:** Not pilot-ready.
 **Source of truth for acceptance criteria:** `docs/pilot-readiness-bug-tracker.md`.
 
@@ -194,6 +194,42 @@ database, and use production only for entitlement, navigation, and real-business
   `OfferingAssembly` regression set (1 unrelated pre-existing flake, confirmed passing in isolation),
   14/14 architecture tests, `git diff --check` clean. Next: 3.4f (frontend entry point + ladder
   selection) on explicit go-ahead.
+
+- **3.4f preflight (2026-08-14): split into 3.4f-1/3.4f-2, locked.** Backend contract (3.4a–3.4e)
+  confirmed stable; no frontend Price Book client code exists yet (`apiClient.ts`/`.types.ts` have no
+  `proposed-scope` references). Preflight confirmed `RequestDetailContent.tsx` mounts both
+  `RequestDetailDesktopLayout` and the mobile actions/context blocks simultaneously (CSS-toggled via
+  `md:hidden`/`hidden md:flex`, not conditional mounts), so probe/draft/modal state must be hoisted
+  into one hook shared by both, not owned per-layout. Selection/expansion endpoints return only
+  `{id, status, version}` (no lines), so the ladder must re-fetch `GET .../proposed-scopes/{id}` after
+  every commit rather than optimistically append. ADR-461's five-rung ladder is fixed order
+  (Primary Offering → Common Items → Categories → Search → Off-Catalog), progressive with an explicit
+  "not here" advance, never free-jump tabs or AI/fuzzy matched. The originally proposed single-batch
+  file list (13 touched files) exceeded the hard batch-size gate (8 production / 12 total), so 3.4f is
+  split:
+  - **3.4f-1 — Entry point + draft-lifecycle wiring: complete (2026-08-14).** `apiClient.ts`/
+    `.types.ts` gained `getCurrentProposedScopeForRequest`/`getProposedScope`/`createProposedScope`
+    (field-select/expand-assembly/field-catalog/field-assembly client methods deferred to 3.4f-2,
+    where the rungs that call them are built). `useProposedScopeCapture.ts` is hoisted once in
+    `RequestDetailContent.tsx` and passed into both `RequestDetailDesktopLayout` and
+    `RequestDetailMobileActions` — confirmed those two trees mount simultaneously (CSS-toggled via
+    `md:hidden`/`hidden md:flex`, not conditional), so a per-layout hook would have double-probed.
+    States: `hidden` (403, renders nothing), `no-scope` ("Capture proposed scope" CTA → creates
+    draft, opens modal), `draft` ("Resume proposed scope" CTA → opens modal, no create call),
+    `submitted` (`SubmittedToOffice`/`OfficeReviewed` → read-only status + "Capture new proposed
+    scope"). `refetchScope()` is exposed for 3.4f-2 to call after every ladder mutation/409/timeout.
+    `ProposedScopeCard.tsx` renders in both action stacks, near `WorkDoneCard`, before
+    `CloseRequestCard`. `ProposedScopeCaptureModal.tsx` is a stub (lists existing lines, no ladder) —
+    3.4f-2 fills it in. 8 production files (3 new), 1 test file, 9 total changed files (+session-log).
+    7 new `useProposedScopeCapture` tests (403 hide, no-scope, draft-resume, submitted, create-draft-
+    then-open, resume-without-create, refetch-replaces-state) — 394/394 full frontend suite, `tsc
+    --noEmit` clean, `git diff --check` clean. Next: 3.4f-2 (`ProposedScopeCaptureModal` + the 5 rung
+    components) on explicit go-ahead.
+  - **3.4f-2 (not started):** `ProposedScopeCaptureModal.tsx` + the 5 rung components
+    (`PrimaryOfferingRung`, `CommonItemsRung`, `CategorySearchRung`, `GlobalSearchRung`,
+    `OffCatalogRung`), filling in the modal 3.4f-1 stubbed. Immediate-commit-per-pick, re-fetch on
+    success, narrow 409/timeout reconciliation (re-fetch + non-blocking "scope refreshed" notice, no
+    auto-retry). Line edit/remove, submit, and full recovery UI stay out of scope — deferred to 3.4g.
 
 - **3.1 — Offering/Assembly domain foundation: complete (2026-08-10, commit `6f7047e`).**
   `OfferingAssembly`/`OfferingAssemblyItem` entities, persistence, EF configuration, and the

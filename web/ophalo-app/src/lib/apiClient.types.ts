@@ -847,3 +847,47 @@ export interface ResolveFollowUpBody {
   newDate?: string | null;
   newFollowUpReason?: string | null;
 }
+
+// Session 3.4f-1, build-log/118: proposed-scope entry-point + draft-lifecycle probe.
+// State is "NoScopeYet" or the scope's Status ("Draft" | "SubmittedToOffice" | "OfficeReviewed" |
+// others) — never an ambiguous null-body-only response.
+export interface ProposedScopeLineResponse {
+  id: string;
+  lineType: string;
+  catalogItemId: string | null;
+  offeringAssemblyId: string | null;
+  quantity: number;
+  isException: boolean;
+  offCatalogDescription: string | null;
+  offCatalogQuantity: number | null;
+  note: string | null;
+  displayOrder: number;
+  displayNameSnapshot: string;
+  unitOfMeasureSnapshot: string | null;
+  offeringAssemblyNameSnapshot: string | null;
+  defaultQuantitySnapshot: number | null;
+}
+
+export interface ProposedScopeDetailResult {
+  id: string;
+  requestId: string;
+  status: string;
+  concurrencyVersion: string;
+  lines: ProposedScopeLineResponse[];
+}
+
+export interface CurrentProposedScopeForRequestResult {
+  state: string;
+  scope: ProposedScopeDetailResult | null;
+}
+
+export interface CreateProposedScopeBody {
+  requestId: string;
+}
+
+export interface ProposedScopeResult {
+  id: string;
+  requestId: string;
+  status: string;
+  concurrencyVersion: string;
+}
