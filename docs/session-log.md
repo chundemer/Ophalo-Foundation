@@ -1,6 +1,6 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-08-13
+**Last updated:** 2026-08-14
 **Deployment posture:** Not pilot-ready.
 **Source of truth for acceptance criteria:** `docs/pilot-readiness-bug-tracker.md`.
 
@@ -91,8 +91,26 @@ database, and use production only for entitlement, navigation, and real-business
   most-recent-only, entitlement 403, MyWork 404 both endpoints, unknown-id 404, display-order
   round-trip with a wire-level price-key-absence sweep, Operator-role regression 403 against the
   existing Admin-gated catalog/assembly reads) — 41/41 `ProposedScope*` integration tests, 14/14
-  architecture tests, `git diff --check` clean. Next: start 3.4b (field-safe catalog read API) on
-  explicit go-ahead.
+  architecture tests, `git diff --check` clean.
+
+- **3.4b — Field-safe catalog read API: complete (2026-08-14).** New
+  `FieldCatalogReadApiService` delivers `GET /keep/pricebook/field/catalog-items{,/{id}}` and
+  `/field/catalog-categories` beside the existing Admin-gated `CatalogReadApiService`/
+  `PriceBookEndpoints` surface, not inside a loosened version of it. Gate 3 is `RequestsOperate`
+  AND `ScopeCapture` (ADR-480), not `PriceBookCatalogManage`; gate 1/2 (Blocked-only account
+  access, then Price Book entitlement) match `CatalogReadApiService` exactly — catalog data is
+  account-wide, so there is no row-visibility step. Reads are forced to `IsCommonItem = true` and
+  `ActiveState.Active`; `ICatalogReadPersistence.CatalogItemListFilters` gained an optional
+  `IsCommonItem` filter (shared EF implementation, additive for the existing Admin path), and the
+  keyset-cursor fingerprint now includes it so a cursor from one query shape can't validate against
+  the other. Every field response type (`FieldCatalogItemResponse`, etc.) structurally omits
+  price/margin fields — a leak would be a compile error, not a runtime discipline. 5 production
+  files, zero mutation families, 6 total changed files. 10 new integration tests (`IsCommonItem`/
+  Active-only scope, price-free wire sweep on list and detail, non-common-item detail 404, Gate 1
+  Blocked-account 403, Gate 3 Viewer-role 403 — Operator holds `RequestsOperate` and `ScopeCapture`
+  together, so Viewer, which holds neither, is the reachable proof the check denies — Operator-role
+  regression 403 against the existing Admin-gated catalog endpoints) — 14/14 architecture tests,
+  `git diff --check` clean. Next: start 3.4c (field-safe assembly read API) on explicit go-ahead.
 
 - **3.1 — Offering/Assembly domain foundation: complete (2026-08-10, commit `6f7047e`).**
   `OfferingAssembly`/`OfferingAssemblyItem` entities, persistence, EF configuration, and the

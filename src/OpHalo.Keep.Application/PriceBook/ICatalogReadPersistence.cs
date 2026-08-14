@@ -28,7 +28,8 @@ public sealed record CatalogItemListFilters(
     string? SearchTerm,
     CatalogItemType? Type,
     Guid? CategoryId,
-    CatalogItemActiveState ActiveState);
+    CatalogItemActiveState ActiveState,
+    bool? IsCommonItem = null);
 
 /// <summary>Last-row keyset position for resuming a list page (rank, DisplayName, Id — the
 /// locked total order, build-log/112/113).</summary>

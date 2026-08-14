@@ -33,6 +33,8 @@ public sealed class EfCatalogReadPersistence(OpHaloDbContext dbContext) : ICatal
             baseQuery = baseQuery.Where(x => x.Type == filters.Type.Value);
         if (filters.CategoryId.HasValue)
             baseQuery = baseQuery.Where(x => x.CategoryId == filters.CategoryId.Value);
+        if (filters.IsCommonItem.HasValue)
+            baseQuery = baseQuery.Where(x => x.IsCommonItem == filters.IsCommonItem.Value);
 
         return string.IsNullOrWhiteSpace(filters.SearchTerm)
             ? SearchBrowseAsync(baseQuery, cursor, fetchCount, accountId, ct)

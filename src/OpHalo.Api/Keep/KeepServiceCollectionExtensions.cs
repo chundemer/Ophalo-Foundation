@@ -135,6 +135,10 @@ public static class KeepServiceCollectionExtensions
         // Price Book, Quotes & Materials — proposed-scope read API (Session 3.4a).
         services.AddScoped<ProposedScopeReadApiService>();
 
+        // Price Book, Quotes & Materials — field-safe catalog read API (Session 3.4b). Reuses
+        // ICatalogReadPersistence/IKeepRequestListCursorProtector (registered above).
+        services.AddScoped<FieldCatalogReadApiService>();
+
         return services;
     }
 }

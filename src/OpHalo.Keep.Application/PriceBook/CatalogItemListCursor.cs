@@ -58,7 +58,8 @@ public static class CatalogItemListCursor
     }
 
     /// <summary>
-    /// SHA-256 fingerprint of every scope-affecting filter (search, type, category, status).
+    /// SHA-256 fingerprint of every scope-affecting filter (search, type, category, status,
+    /// common-item flag).
     /// Excludes limit and cursor, so equivalent filter combinations produce the same fingerprint
     /// and a cursor issued for one query is rejected when reused with a different one.
     /// </summary>
@@ -70,6 +71,7 @@ public static class CatalogItemListCursor
             type = filters.Type?.ToString() ?? string.Empty,
             categoryId = filters.CategoryId?.ToString() ?? string.Empty,
             status = filters.ActiveState.ToString(),
+            isCommonItem = filters.IsCommonItem?.ToString() ?? string.Empty,
         };
         var json = JsonSerializer.Serialize(canonical, JsonOptions);
         var hash = SHA256.HashData(Encoding.UTF8.GetBytes(json));
