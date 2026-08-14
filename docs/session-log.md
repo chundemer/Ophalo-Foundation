@@ -1,6 +1,6 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-08-14 (3.4c)
+**Last updated:** 2026-08-14 (3.4d)
 **Deployment posture:** Not pilot-ready.
 **Source of truth for acceptance criteria:** `docs/pilot-readiness-bug-tracker.md`.
 
@@ -134,8 +134,34 @@ database, and use production only for entitlement, navigation, and real-business
   eligible assembly, cross-surface cursor rejection both directions, Gate 1 Blocked-account 403,
   Gate 3 Viewer-role 403, Operator-role regression 403 against both the existing Admin-gated list
   and detail endpoints) — 112/112 across the full offering-assembly/catalog/proposed-scope
-  regression set, 14/14 architecture tests, `git diff --check` clean. Next: start 3.4d
-  (server-authoritative `field-select` + retirement of raw `AddLine`) on explicit go-ahead.
+  regression set, 14/14 architecture tests, `git diff --check` clean.
+
+- **3.4d — Server-authoritative `field-select` + retirement of raw `AddLine`: complete
+  (2026-08-14).** New `FieldProposedScopeSelectionApiService`/`FieldSelectProposedScopeLineApiCommand`
+  deliver `POST /keep/pricebook/proposed-scopes/{id}/field-select` (`KnownCatalogItem` or
+  `OffCatalogItem` only); the raw, caller-trusted `POST .../{id}/lines` and
+  `ProposedScopeApiService.AddLineAsync`/`AddProposedScopeLineApiCommand` are removed in the same
+  commit, not re-gated. Gate composition restates `ProposedScopeApiService`'s three-gate mutation
+  stack exactly (not inherited by reference, per build-log/118); row visibility
+  (`EditProposedScopeService.VerifyRequestVisibleAsync`) is checked before any catalog-item
+  resolution, so an invisible scope 404s before a referenced item's existence/active state is ever
+  evaluated. `KnownCatalogItem` resolves the account-owned, Active `CatalogItem` server-side
+  (`ICatalogReadPersistence.GetItemDetailAsync`) and builds `DisplayNameSnapshot`/
+  `UnitOfMeasureSnapshot` itself; an unknown/cross-account/inactive id folds into one
+  `ProposedScope.LineCatalogItemNotFound` 404. `OffCatalogDescription` is stored full/unchanged (up
+  to the existing 500-char limit); only `DisplayNameSnapshot` is server-derived from it (trim → reject
+  any C0/C1 control character → truncate to 200 chars). New `EditProposedScopeService.
+  AppendFieldLineAsync`/`AppendProposedScopeLineCommand` computes `MAX(DisplayOrder)+10` (10 if none)
+  from the same loaded/tracked scope inside the visibility/version-checked load, before commit — the
+  field command never accepts a client-supplied `DisplayOrder`. 6 production files (1 new), 1
+  mutation family, 8 total changed files. 8 new/repointed integration tests (server-resolved
+  snapshot + computed display-order round-trip, off-catalog full-description preservation with
+  truncated-snapshot derivation, unknown-catalog-item 404, control-character rejection, disallowed
+  `LineType` 400, gates → visibility → act ordering for an invisible scope, missing-version-header
+  400, retired-route 404 pinning the no-reachable-window requirement) — 18/18 `ProposedScopeApiTests`,
+  154/154 across the full `ProposedScope`/`CatalogItem`/`OfferingAssembly` regression set, 14/14
+  architecture tests, `git diff --check` clean. Next: start 3.4e (atomic `expand-assembly`) on
+  explicit go-ahead.
 
 - **3.1 — Offering/Assembly domain foundation: complete (2026-08-10, commit `6f7047e`).**
   `OfferingAssembly`/`OfferingAssemblyItem` entities, persistence, EF configuration, and the

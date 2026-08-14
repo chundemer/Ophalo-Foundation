@@ -1,3 +1,4 @@
+using System.Linq;
 using OpHalo.Keep.Application.Requests;
 using OpHalo.Keep.Core.Entities;
 using OpHalo.Keep.Core.Entities.Enums;
@@ -52,6 +53,28 @@ public sealed record RemoveProposedScopeLineCommand(
     Guid ExpectedVersion,
     Guid CurrentAccountUserId,
     KeepRequestVisibilityScope Scope);
+
+/// <summary>Field-select command (Session 3.4d, build-log/118 decision 5): no
+/// <c>DisplayOrder</c> — <see cref="EditProposedScopeService.AppendFieldLineAsync"/> always computes
+/// it server-side from the loaded scope's current lines. Never <c>PrimaryOffering</c>/
+/// <c>AssociatedItem</c> (those are <c>expand-assembly</c>-only, Session 3.4e); no
+/// <c>OfferingAssemblyId</c>/<c>OfferingAssemblyNameSnapshot</c>/<c>DefaultQuantitySnapshot</c>/
+/// <c>IsException</c> for the same reason.</summary>
+public sealed record AppendProposedScopeLineCommand(
+    Guid AccountId,
+    Guid ProposedScopeId,
+    Guid ExpectedVersion,
+    Guid CurrentAccountUserId,
+    KeepRequestVisibilityScope Scope,
+    ProposedScopeLineType LineType,
+    Guid? CatalogItemId,
+    decimal Quantity,
+    string? OffCatalogDescription,
+    decimal? OffCatalogQuantity,
+    string? Note,
+    string DisplayNameSnapshot,
+    string? UnitOfMeasureSnapshot,
+    Guid CreatedByUserId);
 
 /// <summary>
 /// Orchestrates <see cref="ProposedScope"/> line add/update/remove (Session 3.3b). Deliberately
@@ -120,6 +143,40 @@ public sealed class EditProposedScopeService(
             return Result<Guid>.Failure(removeResult.Error);
 
         return ToTransitionResult(await persistence.CommitAsync(scope, ct), scope);
+    }
+
+    /// <summary>
+    /// Field-select append (Session 3.4d): appends a single <c>KnownCatalogItem</c>/
+    /// <c>OffCatalogItem</c> line at <c>MAX(DisplayOrder) + 10</c> across the scope's current lines
+    /// (10 if none), computed from the same tracked <see cref="ProposedScope"/> loaded by
+    /// <see cref="LoadForEditAsync"/> — inside the same visibility/version-checked load as the
+    /// append itself, so the computed slot can never race a concurrent line add. A removed line's
+    /// slot is never reused, since <c>MAX</c> only ever grows.
+    /// </summary>
+    public async Task<Result<AddProposedScopeLineResult>> AppendFieldLineAsync(AppendProposedScopeLineCommand command, CancellationToken ct)
+    {
+        var loadResult = await LoadForEditAsync(
+            command.AccountId, command.ProposedScopeId, command.ExpectedVersion,
+            command.CurrentAccountUserId, command.Scope, ct);
+        if (loadResult.IsFailure)
+            return Result<AddProposedScopeLineResult>.Failure(loadResult.Error);
+
+        var scope = loadResult.Value;
+        var displayOrder = scope.Lines.Count == 0 ? 10 : scope.Lines.Max(l => l.DisplayOrder) + 10;
+
+        var addResult = scope.AddLine(
+            command.LineType, command.CatalogItemId, offeringAssemblyId: null, command.Quantity,
+            isException: false, command.OffCatalogDescription, command.OffCatalogQuantity, command.Note,
+            displayOrder, command.DisplayNameSnapshot, command.UnitOfMeasureSnapshot,
+            offeringAssemblyNameSnapshot: null, defaultQuantitySnapshot: null, command.CreatedByUserId);
+        if (addResult.IsFailure)
+            return Result<AddProposedScopeLineResult>.Failure(addResult.Error);
+
+        var commitResult = await persistence.CommitAsync(scope, ct);
+        var transitionResult = ToTransitionResult(commitResult, scope);
+        return transitionResult.IsSuccess
+            ? Result<AddProposedScopeLineResult>.Success(new AddProposedScopeLineResult(addResult.Value.Id, transitionResult.Value))
+            : Result<AddProposedScopeLineResult>.Failure(transitionResult.Error);
     }
 
     /// <summary>

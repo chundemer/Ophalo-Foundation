@@ -63,4 +63,21 @@ public static class ProposedScopeErrors
 
     public static readonly Error LineDefaultQuantitySnapshotMustBeEmpty =
         Error.Create("ProposedScope.LineDefaultQuantitySnapshotMustBeEmpty", "Only an associated item line can carry a default quantity.");
+
+    /// <summary>Field-select (Session 3.4d): the referenced <c>CatalogItemId</c> does not resolve to
+    /// an account-owned, Active catalog item — unknown id, cross-account id, and inactive id are all
+    /// folded into this single 404, never distinguished on the wire.</summary>
+    public static readonly Error LineCatalogItemNotFound =
+        Error.Create("ProposedScope.LineCatalogItemNotFound", "Catalog item not found.");
+
+    /// <summary>Field-select (Session 3.4d): the off-catalog description, after trimming, contains a
+    /// C0/C1 control character (0x00–0x1F, 0x7F–0x9F, including embedded tab/newline/CR).</summary>
+    public static readonly Error LineOffCatalogDescriptionInvalidCharacters =
+        Error.Create("ProposedScope.LineOffCatalogDescriptionInvalidCharacters", "The description contains characters that are not allowed.");
+
+    /// <summary>Field-select (Session 3.4d): only <c>KnownCatalogItem</c>/<c>OffCatalogItem</c> may
+    /// be posted through <c>field-select</c> — <c>PrimaryOffering</c>/<c>AssociatedItem</c> only ever
+    /// originate from <c>expand-assembly</c> (Session 3.4e).</summary>
+    public static readonly Error FieldSelectLineTypeInvalid =
+        Error.Create("ProposedScope.FieldSelectLineTypeInvalid", "LineType must be KnownCatalogItem or OffCatalogItem.");
 }

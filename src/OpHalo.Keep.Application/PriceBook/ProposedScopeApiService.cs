@@ -14,31 +14,20 @@ namespace OpHalo.Keep.Application.PriceBook;
 
 public sealed record CreateProposedScopeApiCommand(Guid RequestId);
 
-public sealed record AddProposedScopeLineApiCommand(
-    ProposedScopeLineType LineType,
-    Guid? CatalogItemId,
-    Guid? OfferingAssemblyId,
-    decimal Quantity,
-    bool IsException,
-    string? OffCatalogDescription,
-    decimal? OffCatalogQuantity,
-    string? Note,
-    int DisplayOrder,
-    string DisplayNameSnapshot,
-    string? UnitOfMeasureSnapshot,
-    string? OfferingAssemblyNameSnapshot,
-    decimal? DefaultQuantitySnapshot);
-
 public sealed record UpdateProposedScopeLineApiCommand(decimal Quantity, bool IsException, string? Note, int DisplayOrder);
 
 /// <summary>
-/// API-facing orchestration for every <see cref="ProposedScope"/> mutation (Session 3.3b),
-/// including submit — the single ADR-480 three-gate owner: <c>RequestsOperate</c> (B2 operator
-/// gate) + Price Book entitlement (ADR-462) + <c>ScopeCapture</c> (ADR-480). Gate 1/2 mirror
-/// <see cref="OfferingAssemblyApiService"/> exactly; gate 3 checks two permissions instead of one,
-/// since ProposedScope capture is gated on both the general operator-write permission and the
-/// dedicated scope-capture permission. <see cref="SubmitProposedScopeService"/> stays exactly as
-/// Session 3.3a.2 left it — thin, auth-free — so gates are never evaluated twice.
+/// API-facing orchestration for create/update-line/remove-line/submit on <see cref="ProposedScope"/>
+/// (Session 3.3b) — the single ADR-480 three-gate owner for those mutations:
+/// <c>RequestsOperate</c> (B2 operator gate) + Price Book entitlement (ADR-462) +
+/// <c>ScopeCapture</c> (ADR-480). Gate 1/2 mirror <see cref="OfferingAssemblyApiService"/> exactly;
+/// gate 3 checks two permissions instead of one, since ProposedScope capture is gated on both the
+/// general operator-write permission and the dedicated scope-capture permission.
+/// <see cref="SubmitProposedScopeService"/> stays exactly as Session 3.3a.2 left it — thin, auth-free
+/// — so gates are never evaluated twice. Line-add is not here: the raw, caller-trusted add was
+/// retired in Session 3.4d and replaced by <see cref="FieldProposedScopeSelectionApiService"/>
+/// (field-select), which restates this same three-gate stack rather than reusing it by reference
+/// (build-log/118).
 /// </summary>
 public sealed class ProposedScopeApiService(
     CreateProposedScopeService createService,
@@ -66,23 +55,6 @@ public sealed class ProposedScopeApiService(
         return await createService.CreateAsync(
             new CreateProposedScopeCommand(
                 currentUser.AccountId, command.RequestId, currentUser.UserId, gate.Value, currentUser.UserId),
-            ct);
-    }
-
-    public async Task<Result<AddProposedScopeLineResult>> AddLineAsync(
-        Guid proposedScopeId, AddProposedScopeLineApiCommand command, Guid expectedVersion, CancellationToken ct)
-    {
-        var gate = await AuthorizeAsync(ct);
-        if (gate.IsFailure)
-            return Result<AddProposedScopeLineResult>.Failure(gate.Error);
-
-        return await editService.AddLineAsync(
-            new AddProposedScopeLineCommand(
-                currentUser.AccountId, proposedScopeId, expectedVersion, currentUser.UserId, gate.Value,
-                command.LineType, command.CatalogItemId, command.OfferingAssemblyId, command.Quantity,
-                command.IsException, command.OffCatalogDescription, command.OffCatalogQuantity, command.Note,
-                command.DisplayOrder, command.DisplayNameSnapshot, command.UnitOfMeasureSnapshot,
-                command.OfferingAssemblyNameSnapshot, command.DefaultQuantitySnapshot, currentUser.UserId),
             ct);
     }
 

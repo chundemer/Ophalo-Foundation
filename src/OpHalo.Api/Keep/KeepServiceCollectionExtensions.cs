@@ -143,6 +143,10 @@ public static class KeepServiceCollectionExtensions
         // IOfferingAssemblyPersistence/IKeepRequestListCursorProtector (registered above).
         services.AddScoped<FieldOfferingAssemblyReadApiService>();
 
+        // Price Book, Quotes & Materials — server-authoritative field-select (Session 3.4d). Reuses
+        // EditProposedScopeService/ICatalogReadPersistence (registered above).
+        services.AddScoped<FieldProposedScopeSelectionApiService>();
+
         return services;
     }
 }

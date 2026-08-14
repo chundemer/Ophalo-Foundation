@@ -161,6 +161,12 @@ public static class ErrorHttpMapper
             // .NotFound suffix match below, same reason OfferingAssembly.ItemNotFound needed one.
             var c when c == "ProposedScope.LineNotFound" => (StatusCodes.Status404NotFound, "Resource not found.", null),
 
+            // --- Field-select (Session 3.4d) — same Line-segment reasoning for the 404; the other
+            // two are client-input rejections, mapped 400.
+            var c when c == "ProposedScope.LineCatalogItemNotFound" => (StatusCodes.Status404NotFound, "Resource not found.", null),
+            var c when c == "ProposedScope.LineOffCatalogDescriptionInvalidCharacters" => (StatusCodes.Status400BadRequest, "Bad request.", null),
+            var c when c == "ProposedScope.FieldSelectLineTypeInvalid" => (StatusCodes.Status400BadRequest, "Bad request.", null),
+
             // --- CatalogCategory concurrency/uniqueness conflicts (Session 2b.3) ---
             var c when c == "CatalogCategory.VersionMismatch"         => (StatusCodes.Status409Conflict, "Conflict.", null),
             var c when c == "CatalogCategory.NameAlreadyExists"       => (StatusCodes.Status409Conflict, "Conflict.", null),

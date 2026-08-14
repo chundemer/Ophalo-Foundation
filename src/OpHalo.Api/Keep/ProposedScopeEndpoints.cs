@@ -7,13 +7,17 @@ using OpHalo.Keep.Core.Entities.Enums;
 namespace OpHalo.Api.Keep;
 
 /// <summary>
-/// Price Book, Quotes &amp; Materials — field-captured proposed-scope endpoints (Session 3.3b):
-/// create, line add/update/remove, and submit — every mutation behind the same ADR-480 three-gate
-/// auth stack. <see cref="ProposedScope"/> has no header-mutable field (RequestId fixed at
-/// creation, Status only changes via submit), so there is no header-PATCH endpoint, only line
-/// operations; a reorder step is expressed as a line-update call, no bulk reorder endpoint. Thin:
-/// route mapping and request/response shaping only. Auth-stack composition lives in
-/// <see cref="ProposedScopeApiService"/>.
+/// Price Book, Quotes &amp; Materials — field-captured proposed-scope endpoints: create, field-select/
+/// update/remove line, and submit — every mutation behind the ADR-480 three-gate auth stack.
+/// <see cref="ProposedScope"/> has no header-mutable field (RequestId fixed at creation, Status only
+/// changes via submit), so there is no header-PATCH endpoint, only line operations; a reorder step is
+/// expressed as a line-update call, no bulk reorder endpoint. Thin: route mapping and
+/// request/response shaping only. Auth-stack composition lives in <see cref="ProposedScopeApiService"/>
+/// (create/update/remove/submit) and <see cref="FieldProposedScopeSelectionApiService"/>
+/// (field-select). The raw, caller-trusted <c>POST .../lines</c> endpoint (Session 3.3b) was retired
+/// in Session 3.4d (build-log/118) — <c>field-select</c> is the only technician-reachable path to add
+/// a <c>KnownCatalogItem</c>/<c>OffCatalogItem</c> line; <c>expand-assembly</c> (Session 3.4e) is the
+/// only path for a <c>PrimaryOffering</c>/<c>AssociatedItem</c> line.
 /// </summary>
 public static class ProposedScopeEndpoints
 {
@@ -49,11 +53,11 @@ public static class ProposedScopeEndpoints
             return result.IsSuccess ? Results.Ok(ToResponse(result.Value)) : ErrorHttpMapper.ToHttpResult(result.Error);
         }).RequireAuthorization();
 
-        app.MapPost("/keep/pricebook/proposed-scopes/{proposedScopeId:guid}/lines", async (
+        app.MapPost("/keep/pricebook/proposed-scopes/{proposedScopeId:guid}/field-select", async (
             Guid proposedScopeId,
-            AddProposedScopeLineBody body,
+            FieldSelectProposedScopeLineBody body,
             HttpRequest httpRequest,
-            ProposedScopeApiService service,
+            FieldProposedScopeSelectionApiService service,
             CancellationToken ct) =>
         {
             var versionResult = ProposedScopeVersionHeader.Parse(httpRequest.Headers);
@@ -61,16 +65,13 @@ public static class ProposedScopeEndpoints
                 return ErrorHttpMapper.ToHttpResult(versionResult.Error);
 
             if (!Enum.TryParse<ProposedScopeLineType>(body.LineType, ignoreCase: true, out var lineType) ||
-                !Enum.IsDefined(lineType))
+                lineType is not (ProposedScopeLineType.KnownCatalogItem or ProposedScopeLineType.OffCatalogItem))
             {
-                return ValidationProblem("LineType must be PrimaryOffering, AssociatedItem, KnownCatalogItem, or OffCatalogItem.", "Validation.LineTypeInvalid");
+                return ValidationProblem("LineType must be KnownCatalogItem or OffCatalogItem.", "Validation.LineTypeInvalid");
             }
 
-            var command = new AddProposedScopeLineApiCommand(
-                lineType, body.CatalogItemId, body.OfferingAssemblyId, body.Quantity, body.IsException,
-                body.OffCatalogDescription, body.OffCatalogQuantity, body.Note, body.DisplayOrder,
-                body.DisplayNameSnapshot ?? string.Empty, body.UnitOfMeasureSnapshot,
-                body.OfferingAssemblyNameSnapshot, body.DefaultQuantitySnapshot);
+            var command = new FieldSelectProposedScopeLineApiCommand(
+                lineType, body.CatalogItemId, body.Quantity, body.OffCatalogDescription, body.Note);
 
             var result = await service.AddLineAsync(proposedScopeId, command, versionResult.Value, ct);
             return result.IsSuccess
@@ -197,20 +198,12 @@ internal sealed record ProposedScopeLineResponse(
     string? OfferingAssemblyNameSnapshot,
     decimal? DefaultQuantitySnapshot);
 
-internal sealed record AddProposedScopeLineBody(
+internal sealed record FieldSelectProposedScopeLineBody(
     string LineType,
     Guid? CatalogItemId,
-    Guid? OfferingAssemblyId,
     decimal Quantity,
-    bool IsException,
     string? OffCatalogDescription,
-    decimal? OffCatalogQuantity,
-    string? Note,
-    int DisplayOrder,
-    string? DisplayNameSnapshot,
-    string? UnitOfMeasureSnapshot,
-    string? OfferingAssemblyNameSnapshot,
-    decimal? DefaultQuantitySnapshot);
+    string? Note);
 
 internal sealed record ProposedScopeLineAddedResponse(Guid LineId, Guid ConcurrencyVersion);
 

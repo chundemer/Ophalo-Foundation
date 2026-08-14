@@ -17,16 +17,19 @@ using Xunit;
 namespace OpHalo.IntegrationTests.Api;
 
 /// <summary>
-/// HTTP integration tests for the ProposedScope mutation endpoints (Session 3.3b):
+/// HTTP integration tests for the ProposedScope mutation endpoints:
 ///   POST /keep/pricebook/proposed-scopes/create
-///   POST/PATCH/DELETE .../{id}/lines[/{lineId}]
+///   POST .../{id}/field-select (Session 3.4d — replaces the retired raw POST .../{id}/lines)
+///   PATCH/DELETE .../{id}/lines/{lineId}
 ///   POST .../{id}/submit
 ///
 /// Covers the ADR-480 three-gate composition (account access, Price Book entitlement,
 /// RequestsOperate + ScopeCapture permissions), the strict version-header contract (create carries
 /// no header), the terminal-request precondition extended to create and every line edit (not just
-/// submit — 3.3a.2 already proves the persistence-level submit/signal behavior directly), and the
-/// one-open-draft-per-request race surfaced through the API.
+/// submit — 3.3a.2 already proves the persistence-level submit/signal behavior directly), the
+/// one-open-draft-per-request race surfaced through the API, and (3.4d) field-select's
+/// server-authoritative catalog-item resolution, server-derived off-catalog display-name snapshot,
+/// server-computed display order, and the retired-endpoint's gates -> visibility -> act ordering.
 /// </summary>
 public sealed class ProposedScopeApiTests : IClassFixture<KeepApiWebFactory>, IAsyncLifetime
 {
@@ -112,31 +115,23 @@ public sealed class ProposedScopeApiTests : IClassFixture<KeepApiWebFactory>, IA
     }
 
     [Fact]
-    public async Task AddLine_KnownCatalogItem_ReturnsOkAndPersistsTheLine()
+    public async Task FieldSelect_KnownCatalogItem_ReturnsOkAndPersistsTheLineWithServerResolvedSnapshotAndDisplayOrder()
     {
-        var (accountId, ownerId, _) = await SeedAccountAsync("add-line-ok");
+        var (accountId, ownerId, _) = await SeedAccountAsync("field-select-known-ok");
         await EnrollAsync(accountId, ownerId);
         var cookie = await GetCookieAsync(ownerId, accountId);
         var (scopeId, version) = await SeedDraftScopeAsync(accountId, ownerId);
         var catalogItem = await SeedActiveCatalogItemAsync(accountId, ownerId, "Labor");
 
-        var request = new HttpRequestMessage(HttpMethod.Post, $"/keep/pricebook/proposed-scopes/{scopeId}/lines")
+        var request = new HttpRequestMessage(HttpMethod.Post, $"/keep/pricebook/proposed-scopes/{scopeId}/field-select")
         {
             Content = JsonContent.Create(new
             {
                 lineType = "KnownCatalogItem",
                 catalogItemId = catalogItem.Id,
-                offeringAssemblyId = (Guid?)null,
                 quantity = 2m,
-                isException = false,
                 offCatalogDescription = (string?)null,
-                offCatalogQuantity = (decimal?)null,
                 note = (string?)null,
-                displayOrder = 0,
-                displayNameSnapshot = catalogItem.DisplayName,
-                unitOfMeasureSnapshot = "each",
-                offeringAssemblyNameSnapshot = (string?)null,
-                defaultQuantitySnapshot = (decimal?)null,
             }),
         };
         request.Headers.Add(ProposedScopeVersionHeader.HeaderName, version.ToString("D"));
@@ -154,33 +149,222 @@ public sealed class ProposedScopeApiTests : IClassFixture<KeepApiWebFactory>, IA
         var line = reloaded.Lines.Single(l => l.Id == lineId);
         Assert.Equal(catalogItem.Id, line.CatalogItemId);
         Assert.Equal(2m, line.Quantity);
+        Assert.Equal(catalogItem.DisplayName, line.DisplayNameSnapshot);
+        Assert.Equal("each", line.UnitOfMeasureSnapshot);
+        Assert.Equal(10, line.DisplayOrder);
     }
 
     [Fact]
-    public async Task AddLine_WithoutVersionHeader_Returns400()
+    public async Task FieldSelect_OffCatalogItem_PreservesFullDescriptionAndDerivesTruncatedDisplayNameSnapshot()
     {
-        var (accountId, ownerId, _) = await SeedAccountAsync("add-line-no-header");
+        var (accountId, ownerId, _) = await SeedAccountAsync("field-select-off-catalog-ok");
+        await EnrollAsync(accountId, ownerId);
+        var cookie = await GetCookieAsync(ownerId, accountId);
+        var (scopeId, version) = await SeedDraftScopeAsync(accountId, ownerId);
+
+        var fullDescription = "  " + new string('x', 260) + "  ";
+
+        var request = new HttpRequestMessage(HttpMethod.Post, $"/keep/pricebook/proposed-scopes/{scopeId}/field-select")
+        {
+            Content = JsonContent.Create(new
+            {
+                lineType = "OffCatalogItem",
+                catalogItemId = (Guid?)null,
+                quantity = 1m,
+                offCatalogDescription = fullDescription,
+                note = (string?)null,
+            }),
+        };
+        request.Headers.Add(ProposedScopeVersionHeader.HeaderName, version.ToString("D"));
+        var response = await AuthRequest(cookie).SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        var lineId = body.GetProperty("lineId").GetGuid();
+
+        await using var scope = _factory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+        var reloaded = await db.Set<ProposedScope>().Include(x => x.Lines).SingleAsync(x => x.Id == scopeId);
+        var line = reloaded.Lines.Single(l => l.Id == lineId);
+        Assert.Equal(fullDescription, line.OffCatalogDescription);
+        Assert.Equal(1m, line.OffCatalogQuantity);
+        Assert.Equal(200, line.DisplayNameSnapshot.Length);
+        Assert.Equal(new string('x', 200), line.DisplayNameSnapshot);
+    }
+
+    [Fact]
+    public async Task FieldSelect_UnknownCatalogItemId_Returns404()
+    {
+        var (accountId, ownerId, _) = await SeedAccountAsync("field-select-unknown-item");
+        await EnrollAsync(accountId, ownerId);
+        var cookie = await GetCookieAsync(ownerId, accountId);
+        var (scopeId, version) = await SeedDraftScopeAsync(accountId, ownerId);
+
+        var request = new HttpRequestMessage(HttpMethod.Post, $"/keep/pricebook/proposed-scopes/{scopeId}/field-select")
+        {
+            Content = JsonContent.Create(new
+            {
+                lineType = "KnownCatalogItem",
+                catalogItemId = Guid.NewGuid(),
+                quantity = 1m,
+                offCatalogDescription = (string?)null,
+                note = (string?)null,
+            }),
+        };
+        request.Headers.Add(ProposedScopeVersionHeader.HeaderName, version.ToString("D"));
+        var response = await AuthRequest(cookie).SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("ProposedScope.LineCatalogItemNotFound", body.GetProperty("code").GetString());
+    }
+
+    [Fact]
+    public async Task FieldSelect_OffCatalogDescriptionWithControlCharacter_Returns400()
+    {
+        var (accountId, ownerId, _) = await SeedAccountAsync("field-select-control-char");
+        await EnrollAsync(accountId, ownerId);
+        var cookie = await GetCookieAsync(ownerId, accountId);
+        var (scopeId, version) = await SeedDraftScopeAsync(accountId, ownerId);
+
+        var request = new HttpRequestMessage(HttpMethod.Post, $"/keep/pricebook/proposed-scopes/{scopeId}/field-select")
+        {
+            Content = JsonContent.Create(new
+            {
+                lineType = "OffCatalogItem",
+                catalogItemId = (Guid?)null,
+                quantity = 1m,
+                offCatalogDescription = "leaky pipe\tunder sink",
+                note = (string?)null,
+            }),
+        };
+        request.Headers.Add(ProposedScopeVersionHeader.HeaderName, version.ToString("D"));
+        var response = await AuthRequest(cookie).SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("ProposedScope.LineOffCatalogDescriptionInvalidCharacters", body.GetProperty("code").GetString());
+    }
+
+    [Fact]
+    public async Task FieldSelect_PrimaryOfferingLineType_Returns400()
+    {
+        var (accountId, ownerId, _) = await SeedAccountAsync("field-select-line-type-invalid");
+        await EnrollAsync(accountId, ownerId);
+        var cookie = await GetCookieAsync(ownerId, accountId);
+        var (scopeId, version) = await SeedDraftScopeAsync(accountId, ownerId);
+
+        var request = new HttpRequestMessage(HttpMethod.Post, $"/keep/pricebook/proposed-scopes/{scopeId}/field-select")
+        {
+            Content = JsonContent.Create(new
+            {
+                lineType = "PrimaryOffering",
+                catalogItemId = (Guid?)null,
+                quantity = 1m,
+                offCatalogDescription = (string?)null,
+                note = (string?)null,
+            }),
+        };
+        request.Headers.Add(ProposedScopeVersionHeader.HeaderName, version.ToString("D"));
+        var response = await AuthRequest(cookie).SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("Validation.LineTypeInvalid", body.GetProperty("code").GetString());
+    }
+
+    [Fact]
+    public async Task FieldSelect_ForAScopeOnARequestTheOperatorCannotSee_WithAnUnknownCatalogItem_Returns404NotCatalogItemNotFound()
+    {
+        // Guards the locked gates -> request visibility -> act ordering (build-log/118): visibility
+        // must be checked before the catalog item is resolved, so an invisible scope 404s as
+        // KeepRequest.NotFound rather than leaking whether the referenced item exists.
+        var (accountId, ownerId, _) = await SeedAccountAsync("field-select-operator-mywork");
+        await EnrollAsync(accountId, ownerId);
+        var operatorId = await SeedOperatorAsync(accountId, "field-select-operator-mywork");
+        var operatorCookie = await GetCookieAsync(operatorId, accountId);
+
+        var (scopeId, version) = await SeedDraftScopeAsync(accountId, ownerId);
+
+        var request = new HttpRequestMessage(HttpMethod.Post, $"/keep/pricebook/proposed-scopes/{scopeId}/field-select")
+        {
+            Content = JsonContent.Create(new
+            {
+                lineType = "KnownCatalogItem",
+                catalogItemId = Guid.NewGuid(),
+                quantity = 1m,
+                offCatalogDescription = (string?)null,
+                note = (string?)null,
+            }),
+        };
+        request.Headers.Add(ProposedScopeVersionHeader.HeaderName, version.ToString("D"));
+        var response = await AuthRequest(operatorCookie).SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("KeepRequest.NotFound", body.GetProperty("code").GetString());
+    }
+
+    [Fact]
+    public async Task FieldSelect_WithoutVersionHeader_Returns400()
+    {
+        var (accountId, ownerId, _) = await SeedAccountAsync("field-select-no-header");
         await EnrollAsync(accountId, ownerId);
         var cookie = await GetCookieAsync(ownerId, accountId);
         var (scopeId, _) = await SeedDraftScopeAsync(accountId, ownerId);
         var catalogItem = await SeedActiveCatalogItemAsync(accountId, ownerId, "Labor");
 
         var response = await AuthRequest(cookie).PostAsJsonAsync(
-            $"/keep/pricebook/proposed-scopes/{scopeId}/lines",
+            $"/keep/pricebook/proposed-scopes/{scopeId}/field-select",
             new
             {
                 lineType = "KnownCatalogItem",
                 catalogItemId = catalogItem.Id,
                 quantity = 1m,
-                isException = false,
-                displayOrder = 0,
-                displayNameSnapshot = catalogItem.DisplayName,
-                unitOfMeasureSnapshot = "each",
+                offCatalogDescription = (string?)null,
+                note = (string?)null,
             });
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
         Assert.Equal("ProposedScope.ExpectedVersionRequired", body.GetProperty("code").GetString());
+    }
+
+    [Fact]
+    public async Task RetiredRawAddLineRoute_Returns404()
+    {
+        // Session 3.4d retired POST .../{id}/lines rather than re-gating it (build-log/118: no
+        // legitimate caller exists yet). This pins the route absence itself, not just field-select's
+        // presence, so a future accidental reintroduction of the caller-trusted endpoint fails here.
+        var (accountId, ownerId, _) = await SeedAccountAsync("retired-raw-add-line");
+        await EnrollAsync(accountId, ownerId);
+        var cookie = await GetCookieAsync(ownerId, accountId);
+        var (scopeId, version) = await SeedDraftScopeAsync(accountId, ownerId);
+        var catalogItem = await SeedActiveCatalogItemAsync(accountId, ownerId, "Labor");
+
+        var request = new HttpRequestMessage(HttpMethod.Post, $"/keep/pricebook/proposed-scopes/{scopeId}/lines")
+        {
+            Content = JsonContent.Create(new
+            {
+                lineType = "KnownCatalogItem",
+                catalogItemId = catalogItem.Id,
+                offeringAssemblyId = (Guid?)null,
+                quantity = 1m,
+                isException = false,
+                offCatalogDescription = (string?)null,
+                offCatalogQuantity = (decimal?)null,
+                note = (string?)null,
+                displayOrder = 0,
+                displayNameSnapshot = catalogItem.DisplayName,
+                unitOfMeasureSnapshot = "each",
+                offeringAssemblyNameSnapshot = (string?)null,
+                defaultQuantitySnapshot = (decimal?)null,
+            }),
+        };
+        request.Headers.Add(ProposedScopeVersionHeader.HeaderName, version.ToString("D"));
+        var response = await AuthRequest(cookie).SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
     [Fact]
