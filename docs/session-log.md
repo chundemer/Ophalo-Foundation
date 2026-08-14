@@ -24,13 +24,13 @@ telemetry, or any customer-specific shortcut unless a separately scoped session 
 it through these records.
 
 **Price Book, Quotes & Materials — entitlement foundation and operator enrollment path complete;
-live enablement not yet performed.** Sessions 1a–1c (ADR-462) delivered the
+founder live access verified.** Sessions 1a–1c (ADR-462) delivered the
 `AccountCapabilityPackageEnrollment` entity/persistence, the account-aware
 `AccountFeatureAccessResolver`, and a generic Owner/Admin `GET /accounts/me/capability-packages`
-status read. The internal operator enrollment path (below) now closes the gap. Christian still
-needs to actually call it to grant the founder's live account
-`keep.price_book_quotes_materials` before the blocked desktop/narrow-mobile acceptance pass of
-Catalog Items, Assemblies, and the price/cost repair loop can run.
+status read. The founder's live account is now enrolled for
+`keep.price_book_quotes_materials` and production Price Book access is confirmed. Do not add dummy
+catalog/assembly data to that account: run full mutable acceptance locally against a disposable
+database, and use production only for entitlement, navigation, and real-business-data checks.
 
 **Session 2 progress:**
 
@@ -57,20 +57,42 @@ Catalog Items, Assemblies, and the price/cost repair loop can run.
   stale Disable/Reenable commit) are translated at the persistence seam
   (`AccountCapabilityPackageEnrollmentCommitResult`) into 409s (`EnrollmentAlreadyExists` /
   `VersionMismatch`) instead of leaking as 500s. 42 unit tests, 21 integration tests (including 2
-  real-PostgreSQL persistence-race tests), 14/14 architecture tests, `git diff --check` clean. Not
-  yet called against the founder's live account — see the blocker note above.
+  real-PostgreSQL persistence-race tests), 14/14 architecture tests, `git diff --check` clean.
+  Founder live enrollment and Price Book access were verified on 2026-08-13. The temporary
+  Railway-query bootstrap procedure and the future internal-operator API procedure are recorded in
+  `docs/runbook/capability-package-enrollment.md`.
 
-- **Next functional Price Book task — technician proposed-scope capture (Session 3.4).** The
-  request-bound `ProposedScope`/line domain, three-gate mutation API, snapshot rules, and submit
-  work-signal foundation are complete through Session 3.3b; the missing piece is the field-facing
-  web/PWA workflow. Preflight and then build a price-blind technician job-detail surface where an
-  on-site technician can select an office-built offering/assembly or known catalog item, adjust
-  visible required-material/labor quantities and exceptions, add notes, use an always-available
-  off-catalog description/quantity escape hatch, and submit the proposed scope to office. It must
-  never expose or allow edits to sell price, cost, margin, tax, inventory, or pricing formulas.
-  Submitted scope is not a quote and does not alter an approved quote. This is selection of
-  required work/materials for office review; recording actual consumed work/materials remains the
-  distinct later Session 3.8 workflow.
+- **Session 3.4 preflight: locked (2026-08-13), implementation not started.** Technician
+  proposed-scope field capture (price-blind, web/PWA). Full preflight, locked decisions, retired
+  endpoint, assembly-expansion locking protocol, and the 3.4a–3.4g session map are in
+  [Build Log 118](build-log/118-proposed-scope-field-capture-preflight.md). Headline decisions:
+  a new by-request `ProposedScope` read doubles as the client's entitlement probe (no new
+  `AvailableActionsMetadata` flag); two new server-authoritative endpoints
+  (`field-select`, `expand-assembly`) replace client-supplied catalog/assembly snapshots, and raw
+  `POST .../lines` is retired from the technician-reachable surface rather than re-gated; assembly
+  expansion is atomic with an explicit row-locking protocol (scope → assembly → catalog items,
+  ascending id order, eligibility re-checked under lock); display order is always server-computed
+  (`max+10`); off-catalog text is trimmed/control-char-rejected/200-char-truncated server-side,
+  Unicode preserved; scope display shows the open Draft or, if none, only the single most recent
+  submitted/reviewed scope — no history (that's Session 3.5).
+
+- **3.4a — `ProposedScope` read API: complete (2026-08-14, commit `ced8b6b`).**
+  `ProposedScopeReadApiService` delivers `GET .../proposed-scopes/by-request/{requestId}` (200,
+  `{state, scope}` — `state` is `"NoScopeYet"` with `scope: null`, or the scope's own `Status`; the
+  open `Draft` takes precedence over any older `SubmittedToOffice`/`OfficeReviewed` row, otherwise
+  the single most recent one by `CreatedAtUtc` — no history) and `GET .../proposed-scopes/{id}`
+  (404 folds together missing/cross-account scope and MyWork-invisible request, never a 403 that
+  would confirm the row exists). Read-only account-access gate (Blocked-only denies; `ReadOnly`
+  e.g. OffSeason may still read) — this doubles as the capture entry point's entitlement probe per
+  build-log/118 decision 1, no `AvailableActionsMetadata` flag added. Response lines are ordered by
+  `DisplayOrder` then `Id`; `GetCurrentForRequestAsync`'s most-recent-only tiebreak is
+  `CreatedAtUtc` then `Id` descending for determinism. 5 production files, zero mutation families,
+  6 total changed files. 9 new integration tests (NoScopeYet state tag, Draft precedence,
+  most-recent-only, entitlement 403, MyWork 404 both endpoints, unknown-id 404, display-order
+  round-trip with a wire-level price-key-absence sweep, Operator-role regression 403 against the
+  existing Admin-gated catalog/assembly reads) — 41/41 `ProposedScope*` integration tests, 14/14
+  architecture tests, `git diff --check` clean. Next: start 3.4b (field-safe catalog read API) on
+  explicit go-ahead.
 
 - **3.1 — Offering/Assembly domain foundation: complete (2026-08-10, commit `6f7047e`).**
   `OfferingAssembly`/`OfferingAssemblyItem` entities, persistence, EF configuration, and the
