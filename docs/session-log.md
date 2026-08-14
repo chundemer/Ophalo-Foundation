@@ -1,6 +1,6 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-08-14
+**Last updated:** 2026-08-14 (3.4c)
 **Deployment posture:** Not pilot-ready.
 **Source of truth for acceptance criteria:** `docs/pilot-readiness-bug-tracker.md`.
 
@@ -110,7 +110,32 @@ database, and use production only for entitlement, navigation, and real-business
   Blocked-account 403, Gate 3 Viewer-role 403 — Operator holds `RequestsOperate` and `ScopeCapture`
   together, so Viewer, which holds neither, is the reachable proof the check denies — Operator-role
   regression 403 against the existing Admin-gated catalog endpoints) — 14/14 architecture tests,
-  `git diff --check` clean. Next: start 3.4c (field-safe assembly read API) on explicit go-ahead.
+  `git diff --check` clean.
+
+- **3.4c — Field-safe assembly read API: complete (2026-08-14).** New
+  `FieldOfferingAssemblyReadApiService` delivers `GET /keep/pricebook/field/offering-assemblies{,/{id}}`
+  beside the existing Admin-gated `OfferingAssemblyReadApiService`/`OfferingAssemblyEndpoints`
+  surface. Gate 3 is `RequestsOperate` AND `ScopeCapture`, matching 3.4b; reads are scoped to
+  `ActiveState.Active` and `OfferingAssemblyListRow.IsOperationallyEligible` (ADR-479). Two
+  pagination-correctness points, called out explicitly because build-log/118 had already flagged
+  this bug class twice: (1) `IsOperationallyEligible` is computed in-memory after the SQL page
+  fetch (joined catalog-item price lookups), so `ListAsync` reuses
+  `IOfferingAssemblyPersistence.ListAsync` unmodified and computes `HasMore`/`NextCursor` from the
+  raw fetched page *before* filtering to eligible rows for the returned `Items` — a page can be
+  sparse or empty with `HasMore: true` rather than ever skipping an eligible row further down the
+  sequence; (2) an Admin `?status=Active` cursor and this list's cursor would otherwise carry an
+  identical fingerprint (same raw filter shape), so `OfferingAssemblyListCursor.ComputeFingerprint`
+  gained a `fieldOperationallyEligible` discriminator parameter (default `false`, Admin call site
+  unchanged) making the two surfaces' cursors mutually rejected. Field DTOs omit `PriceTreatment`
+  and the whole pricing summary; detail 404s for Inactive/ineligible assemblies. 5 production
+  files, zero mutation families, 6 total changed files. 12 new integration tests (eligible/
+  Active-only list scope, price-free wire sweep on list and detail, ineligible/Inactive detail
+  404, sparse-page cursor walk proving `HasMore: true` with an empty page still reaches every
+  eligible assembly, cross-surface cursor rejection both directions, Gate 1 Blocked-account 403,
+  Gate 3 Viewer-role 403, Operator-role regression 403 against both the existing Admin-gated list
+  and detail endpoints) — 112/112 across the full offering-assembly/catalog/proposed-scope
+  regression set, 14/14 architecture tests, `git diff --check` clean. Next: start 3.4d
+  (server-authoritative `field-select` + retirement of raw `AddLine`) on explicit go-ahead.
 
 - **3.1 — Offering/Assembly domain foundation: complete (2026-08-10, commit `6f7047e`).**
   `OfferingAssembly`/`OfferingAssemblyItem` entities, persistence, EF configuration, and the

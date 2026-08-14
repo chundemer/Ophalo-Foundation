@@ -327,6 +327,7 @@ app.MapPriceBookEndpoints();
 app.MapOfferingAssemblyEndpoints();
 app.MapProposedScopeEndpoints();
 app.MapFieldCatalogEndpoints();
+app.MapFieldOfferingAssemblyEndpoints();
 
 app.MapAuthEndpoints();
 app.MapAccountEndpoints();

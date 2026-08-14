@@ -139,6 +139,10 @@ public static class KeepServiceCollectionExtensions
         // ICatalogReadPersistence/IKeepRequestListCursorProtector (registered above).
         services.AddScoped<FieldCatalogReadApiService>();
 
+        // Price Book, Quotes & Materials — field-safe assembly read API (Session 3.4c). Reuses
+        // IOfferingAssemblyPersistence/IKeepRequestListCursorProtector (registered above).
+        services.AddScoped<FieldOfferingAssemblyReadApiService>();
+
         return services;
     }
 }

@@ -56,15 +56,26 @@ public static class OfferingAssemblyListCursor
     }
 
     /// <summary>
-    /// SHA-256 fingerprint of every scope-affecting filter (status only, this slice). Excludes
-    /// limit and cursor, so equivalent filter combinations produce the same fingerprint and a
-    /// cursor issued for one query is rejected when reused with a different one.
+    /// SHA-256 fingerprint of every scope-affecting filter (status, plus the field-safe
+    /// operationally-eligible scope discriminator — Session 3.4b). Excludes limit and cursor, so
+    /// equivalent filter combinations produce the same fingerprint and a cursor issued for one
+    /// query is rejected when reused with a different one.
     /// </summary>
-    public static string ComputeFingerprint(OfferingAssemblyListFilters filters)
+    /// <param name="fieldOperationallyEligible">
+    /// True only for <c>FieldOfferingAssemblyReadApiService</c>'s list (Session 3.4c). Both the
+    /// Admin and field lists query the same raw <c>ActiveState.Active</c> SQL page (the field
+    /// service applies its <c>IsOperationallyEligible</c> filter after the fetch, so it can't be
+    /// expressed as a SQL predicate) — without this discriminator, an Admin <c>?status=Active</c>
+    /// cursor and a field-list cursor would carry an identical fingerprint despite the two
+    /// endpoints returning different result sets, letting a cursor minted on one endpoint resume
+    /// pagination on the other and silently skip rows only that endpoint would have shown.
+    /// </param>
+    public static string ComputeFingerprint(OfferingAssemblyListFilters filters, bool fieldOperationallyEligible = false)
     {
         var canonical = new
         {
             status = filters.ActiveState?.ToString() ?? string.Empty,
+            fieldOperationallyEligible,
         };
         var json = JsonSerializer.Serialize(canonical, JsonOptions);
         var hash = SHA256.HashData(Encoding.UTF8.GetBytes(json));
