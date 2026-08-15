@@ -1,6 +1,6 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-08-15 (unified scope-composer Session 3 config/field-read API complete)
+**Last updated:** 2026-08-15 (unified scope-composer Session 4a EmptySubmit complete; Session 4b Undo-delete next)
 **Deployment posture:** Not pilot-ready.
 **Source of truth for acceptance criteria:** `docs/pilot-readiness-bug-tracker.md`.
 
@@ -161,8 +161,39 @@ slots and its response type carries no price/eligibility field. 16 new integrati
 `DuplicateOrder`, config-read later-ineligible row with persisted state unchanged, field-read
 omission + price-free wire check, viewer-denied, operator config-endpoint regression, and explicit
 blocked-account/no-entitlement denial for all three endpoints), 14/14 architecture tests,
-`git diff --check` clean. Next: Session 4 (`EmptySubmit` + Undo-delete) on explicit go-ahead —
-build-log/119 has it preflighted.
+`git diff --check` clean.
+
+**Unified scope-composer Session 4a — EmptySubmit: complete (2026-08-15, commit `3a7e013`).**
+`ProposedScope.Submit()` rejects a zero-line scope with `ProposedScopeErrors.EmptySubmit` (422 via
+`ErrorHttpMapper`), wired through `EfProposedScopeSubmissionPersistence` (distinguished from the
+prior defensive-only `VersionMismatch` fallback) and `SubmitProposedScopeService`. 37/37
+`ProposedScopeTests` (2 new/fixed), 26/26 `ProposedScopeApiTests` (1 new: `Submit_WithZeroLines_
+Returns422`), 14/14 architecture tests, `git diff --check` clean. 6 production files, 2 test files.
+
+**Unified scope-composer Session 4b — Undo-delete: next, not yet started.** Locked design
+(build-log/119 decision 1) plus this session's routing/cleanup decisions:
+- New `RemovedProposedScopeLineSnapshot` Core entity (full line field snapshot + `RemovedAtUtc`,
+  keyed `(ProposedScopeId, LineId)`); `ProposedScopeLine` gets an internal `Restore` factory.
+- `ProposedScope.RemoveLine` returns the removed snapshot instead of bare `Result`;
+  new `ProposedScope.RestoreLine(snapshot, nowUtc)` enforces the 5-second server-authoritative
+  expiry window, rejects if the original line id is already present
+  (`ProposedScopeErrors.RestoreLineAlreadyExists` — a second restore after success is a real
+  conflict, never a silent no-op), and bumps `ConcurrencyVersion` on both delete and restore.
+- New `ProposedScopeErrors.RestoreExpired` / `RestoreLineAlreadyExists`.
+- New EF configuration + migration for `keep_pricebook_removed_scope_line_snapshots` (unique index
+  on `(ProposedScopeId, LineId)`) — migration to be generated/applied by Christian, not Claude.
+- `IProposedScopePersistence`/`EfProposedScopePersistence`: add snapshot read + a commit-with-
+  snapshot write, single `SaveChangesAsync` covering both the scope and the snapshot row (no
+  explicit transaction needed — both tracked in one `DbContext`).
+- On successful restore, hard-delete the consumed snapshot row in the same transaction — no
+  consumed-flag audit row.
+- New endpoint: `POST /keep/pricebook/proposed-scopes/{proposedScopeId}/lines/{lineId}/restore`,
+  same version-header contract as the existing line-mutation endpoints.
+- `EditProposedScopeService`/`ProposedScopeApiService`/`ProposedScopeEndpoints` updated accordingly.
+- Estimated ~9 production files, ~13-14 total with tests — at/slightly past the 8-file production
+  cap and 12-file total cap. Re-slice before starting if the final count holds above eight
+  production files; preserve atomic delete-plus-snapshot persistence within whichever slice changes
+  deletion.
 
 **Session 2 progress:**
 
