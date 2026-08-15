@@ -1,6 +1,6 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-08-14 (3.4g)
+**Last updated:** 2026-08-15 (unified scope-composer Session 1 server contract locked)
 **Deployment posture:** Not pilot-ready.
 **Source of truth for acceptance criteria:** `docs/pilot-readiness-bug-tracker.md`.
 
@@ -31,6 +31,120 @@ status read. The founder's live account is now enrolled for
 `keep.price_book_quotes_materials` and production Price Book access is confirmed. Do not add dummy
 catalog/assembly data to that account: run full mutable acceptance locally against a disposable
 database, and use production only for entitlement, navigation, and real-business-data checks.
+
+**Scope-capture UX reset: locked (2026-08-14); pause the five-rung implementation.**
+[ADR-482](decisions/ADR-482-unified-technician-scope-composer.md) supersedes ADR-461's fixed
+Primary Offering → Common Items → Categories → Search → Off-Catalog escape ladder. Technician
+scope capture must become a single, touch-first composer with deterministic catalog search, an
+always-available direct custom-item action, and optional Primary Offering/Common Item accelerators
+on the first screen—no steps, `Not here` progression, or forced catalog classification. The current
+scope must be editable inline and remain price-blind; ADR-480 authority, office review, off-catalog
+promotion policy, snapshots, and submit/concurrency invariants remain unchanged. Scope is now a
+primary request-work action, not another right-panel Request Details card. Pause further work that
+extends or polishes the existing ladder; next work is a focused unified-composer preflight and
+replacement. Do **not** broaden that work into a general Request Details or request-queue redesign:
+those concerns are explicitly deferred until scope capture is complete and reviewed.
+
+**Scope-composer interaction contract: locked (2026-08-15).**
+[ADR-483](decisions/ADR-483-field-scope-composer-interaction-and-quick-actions.md) fixes the
+remaining V1 behavior before redesign: every new draft begins empty; known catalog selection,
+office-curated Quick scope actions, and explicit custom-item creation are coequal first-screen
+paths; typing never itself creates a custom line. Assemblies are optional one-tap anchors that
+immediately expand to independently editable Draft lines, never auto-populated or opaque bundles.
+Quick actions are a small tenant-managed ordered set, not every active catalog item/assembly and
+not request-type/trade inference. Decimal/unit-safe quantity editing, immediate removal with
+recoverable Undo where feasible, and price blindness remain required. Next is a focused scope
+composer UI-design/preflight discussion; no implementation resumes until that design is locked.
+
+**Scope-composer validation and connection-recovery boundary: locked (2026-08-15).**
+[ADR-484](decisions/ADR-484-field-scope-validation-and-connection-recovery.md) adds seven required
+phone-sized acceptance journeys: explicit assembly-plus-delta, direct custom item, clean-slate
+scope, draft-line remove/Undo, decimal quantity, safe connection-interruption recovery, and
+concurrent Draft/request-state recovery. V1 remains server-authoritative: failed mutations are
+clearly unsaved and require explicit retry/reconciliation. It does **not** promise offline durable
+drafts, a local mutation queue, or automatic reconnect replay; offline-first requires separate
+pilot evidence and a dedicated design decision. Assembly results are editable Draft default lines,
+and office quote pricing never mutates the submitted proposed-scope snapshot.
+
+**Scope-composer completion and touch contract: locked (2026-08-15).**
+[ADR-485](decisions/ADR-485-field-scope-composer-completion-and-touch-contract.md) finalizes the
+remaining V1 behavior: Owner/Admin explicitly orders at most six Quick scope actions; assembly
+selection adds all default items as editable Draft lines; repeated additions stay separate; and
+server submission requires one or more lines. `Submit scope to office` means the technician's
+scope is ready for office review, not that work is physically complete or ready for billing; the
+field outcome is `Submitted to office — awaiting review`. Draft deletion has a five-second,
+versioned Undo. The composer must meet its phone-first 44px touch target, focus, keyboard,
+sticky-submit, and accessible-label requirements. UI redesign may now proceed against ADR-482–485.
+
+**Unified scope-composer redesign — approved implementation map (2026-08-15).** Work proceeds
+sequentially; it is not authority to reopen the broader Request Details, request-queue,
+classification/archetype, billing, or offline-first workstreams.
+
+1. **Technical preflight — no production code.** Lock the concrete data/API shapes for ordered
+   Quick scope actions, price-free deterministic field search, default-only assembly expansion,
+   server-enforced nonempty submit, and the server-authoritative Undo-delete protocol. Undo is a
+   real backend contract: after deletion, a client cannot safely reconstruct an assembly-derived
+   line's snapshot/provenance from its own state.
+2. **Quick scope action domain and persistence.** Add tenant-owned zero-to-six ordered action
+   configuration, eligibility/invariant rules, migration, and focused domain/persistence tests.
+3. **Quick scope action management and field-read APIs.** Add Owner/Admin configuration reads and
+   writes plus the price-free field read of only the configured ordered actions, with existing
+   entitlement/permission gates and integration coverage.
+4. **Field mutation contract updates.** Server-reject empty submission; align deterministic field
+   search with the unified composer; replace technician optional-item exclusion with default-only
+   expansion; add versioned delete Undo/restore; prove snapshot/provenance, terminal-request, and
+   concurrency behavior.
+5. **Unified composer frontend.** Replace the five-rung modal with a live Draft list, unified
+   search/type input, explicit custom-item action, Quick scope actions, one-tap default assembly
+   expansion, and sticky Draft/submit/read-only states. Do not delete ladder code until this
+   replacement's focused tests pass.
+6. **Draft-line interaction and mobile accessibility.** Deliver decimal quantity/note editing,
+   immediate five-second delete Undo, failure/conflict recovery, focus/keyboard behavior, 44px
+   touch targets, and accessible labels. Validate ADR-484's seven phone-sized field journeys.
+7. **Primary action placement and legacy cleanup.** Promote Capture/Resume/View scope from the
+   right-panel card treatment into the agreed primary request-work action location, then remove
+   retired ladder code, calls, tests, and stale implementation wording. Run complete frontend and
+   backend regressions.
+
+**Required review gate:** after sessions 1–4 and before Session 5 frontend replacement, review the
+real Quick scope action and Undo contracts. The frontend must consume those authoritative contracts,
+not invent temporary shortcut or client-reconstruction behavior.
+
+**Unified scope-composer Session 1 server contract: locked (2026-08-15; no production code).**
+[Build Log 119](build-log/119-unified-scope-composer-session-1-server-contract-preflight.md) records
+the preflight reconciliation and closes its three open decisions: Undo expiry is server-authoritative
+(a retained removed-line snapshot is restorable for only five seconds and both delete/restore advance
+the scope version); Quick actions use one account-owned polymorphic ordered-slot entity with exactly
+one Catalog Item or Offering Assembly target; and a later-ineligible configured target remains an
+Owner/Admin-visible repair item but is omitted from the price-free field read. Session 2 must also
+add `ProposedScopeErrors.EmptySubmit` and reject server-side submission with zero lines. Existing
+field search and default-only atomic assembly expansion are reused unchanged.
+
+**Unified scope-composer Session 2 — Quick scope action domain/persistence: complete
+(2026-08-15).** Persistence/domain-only, per build-log/119's Batch 2 scoping — no endpoints, API
+DTOs, or frontend changes; nothing is wired into `KeepServiceCollectionExtensions` yet, matching the
+Session 3.1 precedent of shipping persistence ahead of its first API consumer. New
+`QuickScopeAction` entity (`Core/Entities/QuickScopeAction.cs`) enforces exactly one of
+`CatalogItemId`/`OfferingAssemblyId` and `Order` in `[1, 6]` in `Create`; the cross-row invariants
+(at most six slots, distinct order, distinct target) live in a separate
+`QuickScopeActionSetValidator` since a single row can't see its siblings. No stored eligibility/
+lifecycle field — per build-log/119, eligibility stays a read-time computed concern for the Session 3
+configuration-write service, never written onto this entity. `IQuickScopeActionPersistence`/
+`EfQuickScopeActionPersistence` add `ListForAccountAsync` and an atomic `ReplaceSetAsync`
+(delete-all-then-insert in one transaction), translating unique-index violations into
+`OrderConflict`/`TargetConflict` and the exclusive-target check-constraint violation into
+`ExclusiveTargetViolation`. EF configuration adds `ck_keep_pricebook_quick_scope_actions_exclusive_
+target` (a database backstop behind `Create`'s own in-domain check, proven independently by a
+raw-SQL test that bypasses the domain factory) plus three unique indexes: `(AccountId, Order)` and
+one partial index per target column. Migration `20260815114134_QuickScopeAction` adds
+`keep_pricebook_quick_scope_actions` only — applied to the local dev database; snapshot diff is
+purely additive. 19 new domain unit tests (`QuickScopeActionTests`,
+`QuickScopeActionSetValidatorTests`), 9 new integration tests against real PostgreSQL
+(`QuickScopeActionPersistenceTests` — happy-path replace/list, full-set replacement, empty-set
+clear, order/target conflict translation, cross-account isolation, both check-constraint directions
+via raw SQL), 14/14 architecture tests, `git diff --check` clean. Next: Session 3 (Quick scope
+action Owner/Admin configuration API + price-free field read) or Session 4 (`EmptySubmit` +
+Undo-delete) on explicit go-ahead — build-log/119 has both preflighted.
 
 **Session 2 progress:**
 
