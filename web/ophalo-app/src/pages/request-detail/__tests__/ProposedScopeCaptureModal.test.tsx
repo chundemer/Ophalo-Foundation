@@ -11,6 +11,9 @@ const mockGetFieldCatalogItems = vi.fn();
 const mockGetFieldCatalogCategories = vi.fn();
 const mockFieldSelectProposedScopeLine = vi.fn();
 const mockExpandProposedScopeAssembly = vi.fn();
+const mockUpdateProposedScopeLine = vi.fn();
+const mockRemoveProposedScopeLine = vi.fn();
+const mockSubmitProposedScope = vi.fn();
 
 vi.mock("../../../lib/apiClient", async () => {
   const actual = await vi.importActual<typeof import("../../../lib/apiClient")>("../../../lib/apiClient");
@@ -24,6 +27,9 @@ vi.mock("../../../lib/apiClient", async () => {
       getFieldCatalogCategories: (...args: unknown[]) => mockGetFieldCatalogCategories(...args),
       fieldSelectProposedScopeLine: (...args: unknown[]) => mockFieldSelectProposedScopeLine(...args),
       expandProposedScopeAssembly: (...args: unknown[]) => mockExpandProposedScopeAssembly(...args),
+      updateProposedScopeLine: (...args: unknown[]) => mockUpdateProposedScopeLine(...args),
+      removeProposedScopeLine: (...args: unknown[]) => mockRemoveProposedScopeLine(...args),
+      submitProposedScope: (...args: unknown[]) => mockSubmitProposedScope(...args),
     },
   };
 });
@@ -42,7 +48,7 @@ function renderModal(overrides: Partial<React.ComponentProps<typeof ProposedScop
   const onRefetch = vi.fn().mockResolvedValue(undefined);
   const utils = render(
     <QueryClientProvider client={queryClient}>
-      <ProposedScopeCaptureModal scope={scope} onClose={onClose} onRefetch={onRefetch} {...overrides} />
+      <ProposedScopeCaptureModal scope={scope} readOnly={false} onClose={onClose} onRefetch={onRefetch} {...overrides} />
     </QueryClientProvider>,
   );
   return { ...utils, onClose, onRefetch };
@@ -203,5 +209,158 @@ describe("ProposedScopeCaptureModal", () => {
       ),
     );
     await waitFor(() => expect(onRefetch).toHaveBeenCalled());
+  });
+
+  it("edits a line's quantity via update-line and re-fetches", async () => {
+    const scopeWithLine: ProposedScopeDetailResult = {
+      ...scope,
+      lines: [
+        {
+          id: "line-1",
+          lineType: "KnownCatalogItem",
+          catalogItemId: "item-1",
+          offeringAssemblyId: null,
+          quantity: 2,
+          isException: false,
+          offCatalogDescription: null,
+          offCatalogQuantity: null,
+          note: null,
+          displayOrder: 10,
+          displayNameSnapshot: "Filter",
+          unitOfMeasureSnapshot: "each",
+          offeringAssemblyNameSnapshot: null,
+          defaultQuantitySnapshot: null,
+        },
+      ],
+    };
+    mockUpdateProposedScopeLine.mockResolvedValueOnce({ concurrencyVersion: "v2" });
+
+    const user = userEvent.setup();
+    const { onRefetch } = renderModal({ scope: scopeWithLine });
+
+    await user.click(screen.getByRole("button", { name: "Edit" }));
+    const quantityInput = screen.getByLabelText(/Quantity/);
+    await user.clear(quantityInput);
+    await user.type(quantityInput, "5");
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() =>
+      expect(mockUpdateProposedScopeLine).toHaveBeenCalledWith(
+        "scope-1",
+        "line-1",
+        { quantity: 5, isException: false, note: null, displayOrder: 10 },
+        "v1",
+      ),
+    );
+    await waitFor(() => expect(onRefetch).toHaveBeenCalled());
+  });
+
+  it("removes a line via remove-line and re-fetches", async () => {
+    const scopeWithLine: ProposedScopeDetailResult = {
+      ...scope,
+      lines: [
+        {
+          id: "line-1",
+          lineType: "KnownCatalogItem",
+          catalogItemId: "item-1",
+          offeringAssemblyId: null,
+          quantity: 2,
+          isException: false,
+          offCatalogDescription: null,
+          offCatalogQuantity: null,
+          note: null,
+          displayOrder: 10,
+          displayNameSnapshot: "Filter",
+          unitOfMeasureSnapshot: "each",
+          offeringAssemblyNameSnapshot: null,
+          defaultQuantitySnapshot: null,
+        },
+      ],
+    };
+    mockRemoveProposedScopeLine.mockResolvedValueOnce({ concurrencyVersion: "v2" });
+
+    const user = userEvent.setup();
+    const { onRefetch } = renderModal({ scope: scopeWithLine });
+
+    await user.click(screen.getByRole("button", { name: "Remove" }));
+
+    await waitFor(() => expect(mockRemoveProposedScopeLine).toHaveBeenCalledWith("scope-1", "line-1", "v1"));
+    await waitFor(() => expect(onRefetch).toHaveBeenCalled());
+  });
+
+  it("disables Submit when the scope has no lines", () => {
+    renderModal({ scope: { ...scope, lines: [] } });
+
+    expect(screen.getByRole("button", { name: "Submit to office" })).toBeDisabled();
+    expect(screen.getByText("Add at least one line before submitting.")).toBeInTheDocument();
+  });
+
+  it("submits successfully when the scope has at least one line", async () => {
+    const scopeWithLine: ProposedScopeDetailResult = {
+      ...scope,
+      lines: [
+        {
+          id: "line-1",
+          lineType: "OffCatalogItem",
+          catalogItemId: null,
+          offeringAssemblyId: null,
+          quantity: 1,
+          isException: false,
+          offCatalogDescription: "Custom part",
+          offCatalogQuantity: 1,
+          note: null,
+          displayOrder: 10,
+          displayNameSnapshot: "Custom part",
+          unitOfMeasureSnapshot: null,
+          offeringAssemblyNameSnapshot: null,
+          defaultQuantitySnapshot: null,
+        },
+      ],
+    };
+    mockSubmitProposedScope.mockResolvedValueOnce({ concurrencyVersion: "v2" });
+
+    const user = userEvent.setup();
+    const { onRefetch } = renderModal({ scope: scopeWithLine });
+
+    const submitButton = screen.getByRole("button", { name: "Submit to office" });
+    expect(submitButton).not.toBeDisabled();
+    await user.click(submitButton);
+
+    await waitFor(() => expect(mockSubmitProposedScope).toHaveBeenCalledWith("scope-1", "v1"));
+    await waitFor(() => expect(screen.getByText("Submitted to office.")).toBeInTheDocument());
+    await waitFor(() => expect(onRefetch).toHaveBeenCalled());
+  });
+
+  it("renders read-only with no rungs, edit/remove, or submit controls", async () => {
+    const scopeWithLine: ProposedScopeDetailResult = {
+      ...scope,
+      status: "SubmittedToOffice",
+      lines: [
+        {
+          id: "line-1",
+          lineType: "OffCatalogItem",
+          catalogItemId: null,
+          offeringAssemblyId: null,
+          quantity: 1,
+          isException: false,
+          offCatalogDescription: "Custom part",
+          offCatalogQuantity: 1,
+          note: null,
+          displayOrder: 10,
+          displayNameSnapshot: "Custom part",
+          unitOfMeasureSnapshot: null,
+          offeringAssemblyNameSnapshot: null,
+          defaultQuantitySnapshot: null,
+        },
+      ],
+    };
+    renderModal({ scope: scopeWithLine, readOnly: true });
+
+    expect(screen.getByText("Proposed scope — Submitted to office")).toBeInTheDocument();
+    expect(screen.getByText("Custom part")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Edit" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Remove" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Submit to office" })).not.toBeInTheDocument();
+    expect(screen.queryByText(/Step 1 of 5/)).not.toBeInTheDocument();
   });
 });

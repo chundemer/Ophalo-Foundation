@@ -1,6 +1,6 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-08-14 (3.4f-2)
+**Last updated:** 2026-08-14 (3.4g)
 **Deployment posture:** Not pilot-ready.
 **Source of truth for acceptance criteria:** `docs/pilot-readiness-bug-tracker.md`.
 
@@ -253,8 +253,42 @@ database, and use production only for entitlement, navigation, and real-business
     progression via Back/"Not here", Common Items commit + re-fetch, Off-Catalog required-description
     validation + commit, 409 reconciliation notice with no auto-retry, Primary Offering expand with an
     excluded optional item) — 399/399 full frontend suite (was 394/394), `tsc --noEmit` clean, `git
-    diff --check` clean. Next: 3.4g (line edit/remove, submit, full recovery UI) on explicit
-    go-ahead.
+    diff --check` clean.
+
+  - **3.4g — Draft line edit/remove, submit, read-only view: complete (2026-08-14).** Backend
+    (`ProposedScopeApiService.UpdateLineAsync`/`RemoveLineAsync`/`SubmitAsync`) predates the 3.4
+    series (Session 3.3b) and needed no changes — this batch is frontend-only. Preflight locked three
+    open calls: (1) a full read-only "View scope" mode on the same modal for
+    `SubmittedToOffice`/`OfficeReviewed` scopes, with complete line detail (the existing
+    `ProposedScopeDetailResponse` already always carries full `Lines` regardless of status, so no new
+    read endpoint was needed) rather than the card's line-count summary alone; (2) reorder deferred —
+    `PATCH` is full-field (`Quantity`/`IsException`/`Note`/`DisplayOrder` together, no partial-update,
+    no bulk-reorder endpoint), so every edit always echoes back the line's existing `DisplayOrder`
+    unchanged; (3) Submit is disabled client-side with an "Add at least one line before submitting"
+    hint when `scope.lines.length === 0`, even though the server itself places no domain validation on
+    an empty submit. `ProposedScopeCaptureModal.tsx` gained a `readOnly` prop and an inline
+    `ProposedScopeLineRow` (Edit → Quantity/Note inputs, plus an `IsException` checkbox shown only for
+    `AssociatedItem` lines per `LineIsExceptionOnlyForAssociatedItem` — never for
+    `KnownCatalogItem`/`OffCatalogItem`/`PrimaryOffering` — and a Remove action) beside the existing
+    ladder, plus a Submit button. `useProposedScopeCapture.ts` gained `startView()` (opens the modal
+    read-only for a `submitted` scope, creates nothing, distinct from `startCapture()`'s no-scope/
+    resume branches); `ProposedScopeCard.tsx` gained a "View scope" action beside "Capture new" for
+    the submitted/reviewed state; `RequestDetailContent.tsx`/`RequestDetailDesktopLayout.tsx`/
+    `RequestDetailMobileLayout.tsx` thread `onStartProposedScopeView` and loosen the modal-render gate
+    from `status === "draft"` only to also cover `"submitted"` (computing `readOnly` from status).
+    Update/remove/submit reuse 3.4f-2's exact reconciliation contract unchanged — a 409
+    (`VersionMismatch`/`NotDraft`/`KeepRequest.TerminalState`) or any non-`ApiError` failure re-fetches
+    plus shows a non-blocking notice, no auto-retry; a successful submit shows a "Submitted to office."
+    notice and the modal transitions to its read-only branch in place (same instance, no remount, no
+    forced close) as the parent's state flips. `apiClient.ts`/`.types.ts` gained
+    `updateProposedScopeLine`/`removeProposedScopeLine`/`submitProposedScope` client methods. 8
+    production files (at the 8-file hard gate, not over it), 2 test files, 10 total changed files
+    (+session-log). 5 new `ProposedScopeCaptureModal` tests (line edit, line remove, Submit disabled
+    at zero lines, successful submit, full read-only rendering with no rungs/edit/remove/submit
+    controls) + 2 new `useProposedScopeCapture` tests (`startView` opens read-only without creating,
+    no-op outside `submitted`) — 406/406 full frontend suite (was 399/399), `tsc --noEmit` clean, `git
+    diff --check` clean. This closes the 3.4a–3.4g technician proposed-scope capture session map from
+    build-log/118: capture → edit/exception → submit → office-facing read-only review, end to end.
 
 - **3.1 — Offering/Assembly domain foundation: complete (2026-08-10, commit `6f7047e`).**
   `OfferingAssembly`/`OfferingAssemblyItem` entities, persistence, EF configuration, and the

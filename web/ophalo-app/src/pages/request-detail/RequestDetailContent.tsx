@@ -34,6 +34,7 @@ export function RequestDetailContent(props: RequestDetailContentProps) {
   const proposedScopeCaptureProps = {
     proposedScopeCaptureState: proposedScopeCapture.state,
     onStartProposedScopeCapture: () => void proposedScopeCapture.startCapture(),
+    onStartProposedScopeView: proposedScopeCapture.startView,
   };
   return <div className="flex flex-1 min-h-0 overflow-hidden md:grid md:[grid-template-columns:minmax(0,7fr)_minmax(320px,3fr)]">
     <div className="flex-1 md:flex-none overflow-y-auto px-4 md:px-6 py-5 space-y-4">
@@ -51,12 +52,14 @@ export function RequestDetailContent(props: RequestDetailContentProps) {
       <div className="md:hidden space-y-4 pb-6"><RequestDetailMobileContext {...layoutProps} /></div>
     </div>
     <RequestDetailDesktopLayout {...layoutProps} {...proposedScopeCaptureProps} />
-    {proposedScopeCapture.isModalOpen && proposedScopeCapture.state.status === "draft" && (
-      <ProposedScopeCaptureModal
-        scope={proposedScopeCapture.state.scope}
-        onClose={proposedScopeCapture.closeModal}
-        onRefetch={proposedScopeCapture.refetchScope}
-      />
-    )}
+    {proposedScopeCapture.isModalOpen &&
+      (proposedScopeCapture.state.status === "draft" || proposedScopeCapture.state.status === "submitted") && (
+        <ProposedScopeCaptureModal
+          scope={proposedScopeCapture.state.scope}
+          readOnly={proposedScopeCapture.state.status !== "draft"}
+          onClose={proposedScopeCapture.closeModal}
+          onRefetch={proposedScopeCapture.refetchScope}
+        />
+      )}
   </div>;
 }

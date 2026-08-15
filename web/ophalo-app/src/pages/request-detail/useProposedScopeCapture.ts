@@ -76,7 +76,14 @@ export function useProposedScopeCapture(requestId: string) {
     }
   }, [state, requestId]);
 
+  // Session 3.4g: opens the modal read-only against an already-submitted/reviewed scope — never
+  // creates anything, unlike startCapture's no-scope/submitted branches.
+  const startView = useCallback(() => {
+    if (state.status !== "submitted") return;
+    setIsModalOpen(true);
+  }, [state]);
+
   const closeModal = useCallback(() => setIsModalOpen(false), []);
 
-  return { state, isModalOpen, startCapture, closeModal, refetchScope };
+  return { state, isModalOpen, startCapture, startView, closeModal, refetchScope };
 }

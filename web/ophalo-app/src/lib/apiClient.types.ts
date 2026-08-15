@@ -989,3 +989,16 @@ export interface GetFieldOfferingAssembliesParams {
   limit?: number;
   cursor?: string;
 }
+
+// Session 3.4g, build-log/118: draft line edit/remove + submit — the same three mutations
+// ProposedScopeApiService has offered since Session 3.3b, wired to the frontend for the first time.
+export interface UpdateProposedScopeLineBody {
+  quantity: number;
+  isException: boolean;
+  note?: string | null;
+  displayOrder: number;
+}
+
+export interface ProposedScopeTransitionResult {
+  concurrencyVersion: string;
+}

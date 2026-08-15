@@ -19,6 +19,7 @@ import {
 interface RequestDetailMobileActionsProps extends RequestDetailLayoutProps {
   proposedScopeCaptureState: ProposedScopeCaptureState;
   onStartProposedScopeCapture: () => void;
+  onStartProposedScopeView: () => void;
 }
 
 // Primary actions inserted before the composer in the mobile stack.
@@ -33,11 +34,16 @@ export function RequestDetailMobileActions({
   onReviewSuccess,
   proposedScopeCaptureState,
   onStartProposedScopeCapture,
+  onStartProposedScopeView,
 }: RequestDetailMobileActionsProps) {
   return (
     <>
       <WorkDoneCard requestId={requestId} detail={detail} onDetailUpdated={onDetailUpdated} />
-      <ProposedScopeCard state={proposedScopeCaptureState} onStartCapture={onStartProposedScopeCapture} />
+      <ProposedScopeCard
+        state={proposedScopeCaptureState}
+        onStartCapture={onStartProposedScopeCapture}
+        onStartView={onStartProposedScopeView}
+      />
       <CloseRequestCard requestId={requestId} detail={detail} onDetailUpdated={onDetailUpdated} />
       <LogContactCard
         detail={detail}

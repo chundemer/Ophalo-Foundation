@@ -178,6 +178,7 @@ import type {
   ActiveAssemblyDependenciesResult,
   CurrentProposedScopeForRequestResult,
   ProposedScopeDetailResult,
+  ProposedScopeLineResponse,
   CreateProposedScopeBody,
   ProposedScopeResult,
   FieldSelectProposedScopeLineBody,
@@ -195,6 +196,8 @@ import type {
   FieldOfferingAssemblyDetailItemResponse,
   FieldOfferingAssemblyDetailResult,
   GetFieldOfferingAssembliesParams,
+  UpdateProposedScopeLineBody,
+  ProposedScopeTransitionResult,
 } from "./apiClient.types";
 
 export type {
@@ -282,6 +285,7 @@ export type {
   ActiveAssemblyDependenciesResult,
   CurrentProposedScopeForRequestResult,
   ProposedScopeDetailResult,
+  ProposedScopeLineResponse,
   CreateProposedScopeBody,
   ProposedScopeResult,
   FieldSelectProposedScopeLineBody,
@@ -299,6 +303,8 @@ export type {
   FieldOfferingAssemblyDetailItemResponse,
   FieldOfferingAssemblyDetailResult,
   GetFieldOfferingAssembliesParams,
+  UpdateProposedScopeLineBody,
+  ProposedScopeTransitionResult,
 };
 
 export type { FollowUpResolutionOutcome, FollowUpCompletionReason } from "./apiClient.types";
@@ -769,4 +775,21 @@ export const api = {
   },
   getFieldOfferingAssembly: (offeringAssemblyId: string) =>
     apiFetch<FieldOfferingAssemblyDetailResult>(`/keep/pricebook/field/offering-assemblies/${offeringAssemblyId}`),
+  // Session 3.4g, build-log/118: draft line edit/remove + submit.
+  updateProposedScopeLine: (proposedScopeId: string, lineId: string, body: UpdateProposedScopeLineBody, version: string) =>
+    apiFetch<ProposedScopeTransitionResult>(`/keep/pricebook/proposed-scopes/${proposedScopeId}/lines/${lineId}`, {
+      method: "PATCH",
+      headers: { "X-Keep-ProposedScope-Version": version },
+      body: JSON.stringify(body),
+    }),
+  removeProposedScopeLine: (proposedScopeId: string, lineId: string, version: string) =>
+    apiFetch<ProposedScopeTransitionResult>(`/keep/pricebook/proposed-scopes/${proposedScopeId}/lines/${lineId}`, {
+      method: "DELETE",
+      headers: { "X-Keep-ProposedScope-Version": version },
+    }),
+  submitProposedScope: (proposedScopeId: string, version: string) =>
+    apiFetch<ProposedScopeTransitionResult>(`/keep/pricebook/proposed-scopes/${proposedScopeId}/submit`, {
+      method: "POST",
+      headers: { "X-Keep-ProposedScope-Version": version },
+    }),
 };

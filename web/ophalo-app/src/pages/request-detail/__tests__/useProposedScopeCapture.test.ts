@@ -136,4 +136,30 @@ describe("useProposedScopeCapture", () => {
     expect(mockGetProposedScope).toHaveBeenCalledWith("scope-1");
     expect(result.current.state).toEqual({ status: "draft", scope: refreshed });
   });
+
+  it("startView opens the modal read-only for a submitted scope without creating anything", async () => {
+    const scope = draftScope({ status: "SubmittedToOffice" });
+    mockGetCurrentProposedScopeForRequest.mockResolvedValueOnce({ state: "SubmittedToOffice", scope });
+    const { result } = renderHook(() => useProposedScopeCapture("request-1"));
+    await waitFor(() => expect(result.current.state.status).toBe("submitted"));
+
+    act(() => {
+      result.current.startView();
+    });
+
+    expect(result.current.isModalOpen).toBe(true);
+    expect(mockCreateProposedScope).not.toHaveBeenCalled();
+  });
+
+  it("startView is a no-op outside the submitted state", async () => {
+    mockGetCurrentProposedScopeForRequest.mockResolvedValueOnce({ state: "NoScopeYet", scope: null });
+    const { result } = renderHook(() => useProposedScopeCapture("request-1"));
+    await waitFor(() => expect(result.current.state.status).toBe("no-scope"));
+
+    act(() => {
+      result.current.startView();
+    });
+
+    expect(result.current.isModalOpen).toBe(false);
+  });
 });

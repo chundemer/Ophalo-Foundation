@@ -19,6 +19,7 @@ import {
 interface RequestDetailDesktopLayoutProps extends RequestDetailLayoutProps {
   proposedScopeCaptureState: ProposedScopeCaptureState;
   onStartProposedScopeCapture: () => void;
+  onStartProposedScopeView: () => void;
 }
 
 export function RequestDetailDesktopLayout({
@@ -34,12 +35,17 @@ export function RequestDetailDesktopLayout({
   onReviewSuccess,
   proposedScopeCaptureState,
   onStartProposedScopeCapture,
+  onStartProposedScopeView,
 }: RequestDetailDesktopLayoutProps) {
   return (
     <aside className="hidden md:flex md:flex-col border-l border-[var(--ophalo-border)] bg-[var(--ophalo-card)] overflow-y-auto px-4 py-5 gap-4">
       {/* Actions group */}
       <WorkDoneCard requestId={requestId} detail={detail} onDetailUpdated={onDetailUpdated} />
-      <ProposedScopeCard state={proposedScopeCaptureState} onStartCapture={onStartProposedScopeCapture} />
+      <ProposedScopeCard
+        state={proposedScopeCaptureState}
+        onStartCapture={onStartProposedScopeCapture}
+        onStartView={onStartProposedScopeView}
+      />
       <div id="focus-panel-closeout">
         <CloseRequestCard requestId={requestId} detail={detail} onDetailUpdated={onDetailUpdated} />
       </div>

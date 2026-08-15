@@ -4,6 +4,7 @@ import { type ProposedScopeCaptureState } from "./useProposedScopeCapture";
 interface ProposedScopeCardProps {
   state: ProposedScopeCaptureState;
   onStartCapture: () => void;
+  onStartView: () => void;
 }
 
 const SUBMITTED_STATUS_LABEL: Record<string, string> = {
@@ -16,7 +17,7 @@ const SUBMITTED_STATUS_LABEL: Record<string, string> = {
  * decision, build-log/118) rather than rendering an error — loading/error states also render
  * nothing so a transient probe failure never blocks the rest of the request-detail cards.
  */
-export function ProposedScopeCard({ state, onStartCapture }: ProposedScopeCardProps) {
+export function ProposedScopeCard({ state, onStartCapture, onStartView }: ProposedScopeCardProps) {
   if (state.status === "loading" || state.status === "hidden" || state.status === "error") {
     return null;
   }
@@ -58,9 +59,14 @@ export function ProposedScopeCard({ state, onStartCapture }: ProposedScopeCardPr
       <p className="text-xs text-[var(--ophalo-muted)] mb-3">
         {statusLabel} — {state.scope.lines.length} item{state.scope.lines.length === 1 ? "" : "s"}.
       </p>
-      <KeepButton variant="secondary" onClick={onStartCapture} className="w-full">
-        Capture new proposed scope
-      </KeepButton>
+      <div className="flex gap-2">
+        <KeepButton variant="secondary" onClick={onStartView} className="flex-1">
+          View scope
+        </KeepButton>
+        <KeepButton variant="secondary" onClick={onStartCapture} className="flex-1">
+          Capture new
+        </KeepButton>
+      </div>
     </div>
   );
 }
