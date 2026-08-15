@@ -1,6 +1,6 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-08-14 (3.4f-1)
+**Last updated:** 2026-08-14 (3.4f-2)
 **Deployment posture:** Not pilot-ready.
 **Source of truth for acceptance criteria:** `docs/pilot-readiness-bug-tracker.md`.
 
@@ -225,11 +225,36 @@ database, and use production only for entitlement, navigation, and real-business
     then-open, resume-without-create, refetch-replaces-state) — 394/394 full frontend suite, `tsc
     --noEmit` clean, `git diff --check` clean. Next: 3.4f-2 (`ProposedScopeCaptureModal` + the 5 rung
     components) on explicit go-ahead.
-  - **3.4f-2 (not started):** `ProposedScopeCaptureModal.tsx` + the 5 rung components
-    (`PrimaryOfferingRung`, `CommonItemsRung`, `CategorySearchRung`, `GlobalSearchRung`,
-    `OffCatalogRung`), filling in the modal 3.4f-1 stubbed. Immediate-commit-per-pick, re-fetch on
-    success, narrow 409/timeout reconciliation (re-fetch + non-blocking "scope refreshed" notice, no
-    auto-retry). Line edit/remove, submit, and full recovery UI stay out of scope — deferred to 3.4g.
+  - **3.4f-2 — Escape-ladder modal + rungs: complete (2026-08-14).** `ProposedScopeCaptureModal.tsx`
+    now hosts ADR-461's fixed-order, progressive ladder (`PrimaryOfferingRung`, `CommonItemsRung`,
+    `CategorySearchRung`, `GlobalSearchRung`, `OffCatalogRung`) with an explicit "Not here"/"Back"
+    stepper, never free-jump tabs. Common Items/Categories/Search all read the same price-free,
+    server-forced-common-items endpoint (Session 3.4b) — they differ only in query shape (unfiltered
+    browse, categoryId-scoped browse via `field/catalog-categories`, debounced free-text search);
+    Primary Offering browses the price-free eligibility-filtered assembly list (Session 3.4c, no
+    server search — client-side filter over the loaded page) and expands via `expand-assembly` with
+    an optional-item include/exclude checklist built from the assembly detail read. Every pick is
+    immediate-commit (`field-select`/`expand-assembly`), followed by the parent hook's
+    `refetchScope()` — mutation responses carry only `{id/lineIds, concurrencyVersion}`, never lines.
+    A 409 (`VersionMismatch`/`NotDraft`/`ExpandAssemblyNotOperationallyEligible`) or any non-`ApiError`
+    (network/timeout) failure takes the same narrow reconciliation path: re-fetch plus a non-blocking
+    in-modal notice, no auto-retry — never distinguished further client-side. `apiClient.ts`/
+    `.types.ts` gained the field-select/expand-assembly mutation client methods and the
+    field-catalog-items/-categories/field-offering-assemblies read methods. Line edit/remove, submit,
+    and full recovery UI stay out of scope — deferred to 3.4g.
+    **Batch-gate note:** the file list is 9 production files, one over the stated 8-file hard gate —
+    `RequestDetailContent.tsx` needed a 1-line prop addition (`onRefetch={proposedScopeCapture.refetchScope}`)
+    at its existing `ProposedScopeCaptureModal` render call so the modal could reach the hook's
+    already-exposed `refetchScope`. Christian approved this as a deliberate, documented exception:
+    the change threads existing 3.4f-1 hook behavior through one already-touched render call, not new
+    logic or a new layer, and splitting it into a separate session would have left the completed
+    ladder unable to meet its locked reconciliation requirement. 9 production files, 1 test file, 10
+    total changed files (+session-log). 5 new `ProposedScopeCaptureModal` tests (ladder step
+    progression via Back/"Not here", Common Items commit + re-fetch, Off-Catalog required-description
+    validation + commit, 409 reconciliation notice with no auto-retry, Primary Offering expand with an
+    excluded optional item) — 399/399 full frontend suite (was 394/394), `tsc --noEmit` clean, `git
+    diff --check` clean. Next: 3.4g (line edit/remove, submit, full recovery UI) on explicit
+    go-ahead.
 
 - **3.1 — Offering/Assembly domain foundation: complete (2026-08-10, commit `6f7047e`).**
   `OfferingAssembly`/`OfferingAssemblyItem` entities, persistence, EF configuration, and the

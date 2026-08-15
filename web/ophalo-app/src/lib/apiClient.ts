@@ -180,6 +180,21 @@ import type {
   ProposedScopeDetailResult,
   CreateProposedScopeBody,
   ProposedScopeResult,
+  FieldSelectProposedScopeLineBody,
+  ProposedScopeLineAddedResult,
+  ExpandAssemblyBody,
+  ExpandAssemblyResult,
+  FieldCatalogItemResponse,
+  FieldCatalogItemListRowResponse,
+  FieldCatalogItemListResult,
+  FieldCatalogCategoryResponse,
+  FieldCatalogCategoryListResult,
+  GetFieldCatalogItemsParams,
+  FieldOfferingAssemblyListRowResponse,
+  FieldOfferingAssemblyListResult,
+  FieldOfferingAssemblyDetailItemResponse,
+  FieldOfferingAssemblyDetailResult,
+  GetFieldOfferingAssembliesParams,
 } from "./apiClient.types";
 
 export type {
@@ -269,6 +284,21 @@ export type {
   ProposedScopeDetailResult,
   CreateProposedScopeBody,
   ProposedScopeResult,
+  FieldSelectProposedScopeLineBody,
+  ProposedScopeLineAddedResult,
+  ExpandAssemblyBody,
+  ExpandAssemblyResult,
+  FieldCatalogItemResponse,
+  FieldCatalogItemListRowResponse,
+  FieldCatalogItemListResult,
+  FieldCatalogCategoryResponse,
+  FieldCatalogCategoryListResult,
+  GetFieldCatalogItemsParams,
+  FieldOfferingAssemblyListRowResponse,
+  FieldOfferingAssemblyListResult,
+  FieldOfferingAssemblyDetailItemResponse,
+  FieldOfferingAssemblyDetailResult,
+  GetFieldOfferingAssembliesParams,
 };
 
 export type { FollowUpResolutionOutcome, FollowUpCompletionReason } from "./apiClient.types";
@@ -703,4 +733,40 @@ export const api = {
       method: "POST",
       body: JSON.stringify(body),
     }),
+  // Session 3.4f-2, build-log/118: escape-ladder mutations (field-select/expand-assembly) and the
+  // price-free field reads the five rungs browse/search against.
+  fieldSelectProposedScopeLine: (proposedScopeId: string, body: FieldSelectProposedScopeLineBody, version: string) =>
+    apiFetch<ProposedScopeLineAddedResult>(`/keep/pricebook/proposed-scopes/${proposedScopeId}/field-select`, {
+      method: "POST",
+      headers: { "X-Keep-ProposedScope-Version": version },
+      body: JSON.stringify(body),
+    }),
+  expandProposedScopeAssembly: (proposedScopeId: string, body: ExpandAssemblyBody, version: string) =>
+    apiFetch<ExpandAssemblyResult>(`/keep/pricebook/proposed-scopes/${proposedScopeId}/expand-assembly`, {
+      method: "POST",
+      headers: { "X-Keep-ProposedScope-Version": version },
+      body: JSON.stringify(body),
+    }),
+  getFieldCatalogItems: (params: GetFieldCatalogItemsParams = {}) => {
+    const qs = new URLSearchParams();
+    if (params.search) qs.set("search", params.search);
+    if (params.categoryId) qs.set("categoryId", params.categoryId);
+    if (params.limit) qs.set("limit", String(params.limit));
+    if (params.cursor) qs.set("cursor", params.cursor);
+    const query = qs.toString();
+    return apiFetch<FieldCatalogItemListResult>(`/keep/pricebook/field/catalog-items${query ? `?${query}` : ""}`);
+  },
+  getFieldCatalogCategories: () =>
+    apiFetch<FieldCatalogCategoryListResult>("/keep/pricebook/field/catalog-categories"),
+  getFieldOfferingAssemblies: (params: GetFieldOfferingAssembliesParams = {}) => {
+    const qs = new URLSearchParams();
+    if (params.limit) qs.set("limit", String(params.limit));
+    if (params.cursor) qs.set("cursor", params.cursor);
+    const query = qs.toString();
+    return apiFetch<FieldOfferingAssemblyListResult>(
+      `/keep/pricebook/field/offering-assemblies${query ? `?${query}` : ""}`,
+    );
+  },
+  getFieldOfferingAssembly: (offeringAssemblyId: string) =>
+    apiFetch<FieldOfferingAssemblyDetailResult>(`/keep/pricebook/field/offering-assemblies/${offeringAssemblyId}`),
 };

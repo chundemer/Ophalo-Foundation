@@ -891,3 +891,101 @@ export interface ProposedScopeResult {
   status: string;
   concurrencyVersion: string;
 }
+
+// Session 3.4f-2, build-log/118: escape-ladder mutations + the price-free field reads they consume.
+export interface FieldSelectProposedScopeLineBody {
+  lineType: "KnownCatalogItem" | "OffCatalogItem";
+  catalogItemId?: string | null;
+  quantity: number;
+  offCatalogDescription?: string | null;
+  note?: string | null;
+}
+
+export interface ProposedScopeLineAddedResult {
+  lineId: string;
+  concurrencyVersion: string;
+}
+
+export interface ExpandAssemblyBody {
+  offeringAssemblyId: string;
+  excludedOptionalItemIds?: string[];
+}
+
+export interface ExpandAssemblyResult {
+  lineIds: string[];
+  concurrencyVersion: string;
+}
+
+export interface FieldCatalogItemResponse {
+  id: string;
+  type: string;
+  displayName: string;
+  externalKey: string | null;
+  categoryId: string | null;
+  unitOfMeasure: string;
+}
+
+export interface FieldCatalogItemListRowResponse {
+  item: FieldCatalogItemResponse;
+  matchRank: string;
+  matchReason: string | null;
+}
+
+export interface FieldCatalogItemListResult {
+  items: FieldCatalogItemListRowResponse[];
+  limit: number;
+  hasMore: boolean;
+  nextCursor: string | null;
+}
+
+export interface FieldCatalogCategoryResponse {
+  id: string;
+  name: string;
+}
+
+export interface FieldCatalogCategoryListResult {
+  categories: FieldCatalogCategoryResponse[];
+}
+
+export interface GetFieldCatalogItemsParams {
+  search?: string;
+  categoryId?: string;
+  limit?: number;
+  cursor?: string;
+}
+
+export interface FieldOfferingAssemblyListRowResponse {
+  id: string;
+  name: string;
+  primaryCatalogItemId: string;
+  primaryCatalogItemDisplayName: string;
+}
+
+export interface FieldOfferingAssemblyListResult {
+  items: FieldOfferingAssemblyListRowResponse[];
+  limit: number;
+  hasMore: boolean;
+  nextCursor: string | null;
+}
+
+export interface FieldOfferingAssemblyDetailItemResponse {
+  id: string;
+  catalogItemId: string;
+  catalogItemDisplayName: string;
+  defaultQuantity: number;
+  isOptional: boolean;
+  displayOrder: number;
+}
+
+export interface FieldOfferingAssemblyDetailResult {
+  id: string;
+  name: string;
+  primaryCatalogItemId: string;
+  primaryCatalogItemDisplayName: string;
+  items: FieldOfferingAssemblyDetailItemResponse[];
+}
+
+export interface GetFieldOfferingAssembliesParams {
+  limit?: number;
+  cursor?: string;
+}

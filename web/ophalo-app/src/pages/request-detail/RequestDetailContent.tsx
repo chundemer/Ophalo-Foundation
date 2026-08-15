@@ -52,7 +52,11 @@ export function RequestDetailContent(props: RequestDetailContentProps) {
     </div>
     <RequestDetailDesktopLayout {...layoutProps} {...proposedScopeCaptureProps} />
     {proposedScopeCapture.isModalOpen && proposedScopeCapture.state.status === "draft" && (
-      <ProposedScopeCaptureModal scope={proposedScopeCapture.state.scope} onClose={proposedScopeCapture.closeModal} />
+      <ProposedScopeCaptureModal
+        scope={proposedScopeCapture.state.scope}
+        onClose={proposedScopeCapture.closeModal}
+        onRefetch={proposedScopeCapture.refetchScope}
+      />
     )}
   </div>;
 }
