@@ -10,6 +10,11 @@ public enum ProposedScopeSubmissionResult
     /// obligation.</summary>
     RequestTerminal,
 
+    /// <summary>Session 4a: the scope has zero lines. <c>ProposedScope.Submit</c>'s
+    /// <c>EmptySubmit</c> domain failure, surfaced distinctly from <see cref="VersionMismatch"/>
+    /// rather than folded into it.</summary>
+    EmptySubmit,
+
     /// <summary>The row changed since the caller last read it (EF concurrency-token mismatch), or
     /// — defensively, not expected to actually occur given the version check already gates entry
     /// to the domain transition — the scope was no longer <c>Draft</c> when submission ran.</summary>

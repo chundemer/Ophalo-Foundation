@@ -380,9 +380,10 @@ public class ProposedScopeTests
     public void AddLine_when_not_Draft_fails()
     {
         var scope = New().Value;
+        AddKnownCatalogItemLine(scope);
         scope.Submit(DateTime.UtcNow);
 
-        var result = AddKnownCatalogItemLine(scope);
+        var result = AddKnownCatalogItemLine(scope, displayOrder: 1);
 
         Assert.True(result.IsFailure);
         Assert.Equal(ProposedScopeErrors.NotDraft, result.Error);
@@ -527,11 +528,26 @@ public class ProposedScopeTests
     public void Submit_an_already_submitted_scope_fails()
     {
         var scope = New().Value;
+        AddKnownCatalogItemLine(scope);
         scope.Submit(DateTime.UtcNow);
 
         var result = scope.Submit(DateTime.UtcNow);
 
         Assert.True(result.IsFailure);
         Assert.Equal(ProposedScopeErrors.NotDraft, result.Error);
+    }
+
+    [Fact]
+    public void Submit_a_scope_with_zero_lines_fails()
+    {
+        var scope = New().Value;
+        var priorVersion = scope.ConcurrencyVersion;
+
+        var result = scope.Submit(DateTime.UtcNow);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(ProposedScopeErrors.EmptySubmit, result.Error);
+        Assert.Equal(ProposedScopeStatus.Draft, scope.Status);
+        Assert.Equal(priorVersion, scope.ConcurrencyVersion);
     }
 }

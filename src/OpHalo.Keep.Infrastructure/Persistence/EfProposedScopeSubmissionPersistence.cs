@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using OpHalo.Foundation.Infrastructure.Persistence;
 using OpHalo.Keep.Application.PriceBook;
 using OpHalo.Keep.Core.Entities;
+using OpHalo.Keep.Core.Errors;
 
 namespace OpHalo.Keep.Infrastructure.Persistence;
 
@@ -51,12 +52,18 @@ public sealed class EfProposedScopeSubmissionPersistence(OpHaloDbContext dbConte
         if (request.IsTerminal)
             return new ProposedScopeSubmissionOutcome(ProposedScopeSubmissionResult.RequestTerminal);
 
-        // Defensive only: unreachable in practice, since the version check above already proves
-        // nothing has mutated this row since it was loaded — Submit's only failure mode is "not
-        // Draft," and ConcurrencyVersion changes on every mutation including a prior Submit.
+        // Submit's only failure modes are EmptySubmit (a real, reachable business rule — the
+        // version check does not guard against an empty line list) and "not Draft" (defensive
+        // only: unreachable in practice, since the version check above already proves nothing has
+        // mutated this row since it was loaded, and ConcurrencyVersion changes on every mutation
+        // including a prior Submit).
         var submitResult = scope.Submit(submittedAtUtc);
         if (submitResult.IsFailure)
-            return new ProposedScopeSubmissionOutcome(ProposedScopeSubmissionResult.VersionMismatch);
+        {
+            return submitResult.Error == ProposedScopeErrors.EmptySubmit
+                ? new ProposedScopeSubmissionOutcome(ProposedScopeSubmissionResult.EmptySubmit)
+                : new ProposedScopeSubmissionOutcome(ProposedScopeSubmissionResult.VersionMismatch);
+        }
 
         try
         {

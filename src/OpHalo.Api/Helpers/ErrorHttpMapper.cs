@@ -157,6 +157,11 @@ public static class ErrorHttpMapper
             var c when c == "ProposedScope.ExpectedVersionRequired"   => (StatusCodes.Status400BadRequest, "Bad request.", null),
             var c when c == "ProposedScope.ExpectedVersionInvalid"    => (StatusCodes.Status400BadRequest, "Bad request.", null),
 
+            // Session 4a: submitting a scope with zero lines — an unprocessable-content rule on
+            // the current state, not a concurrency conflict, matching the 422 precedent used for
+            // other current-content validation failures.
+            var c when c == "ProposedScope.EmptySubmit" => (StatusCodes.Status422UnprocessableEntity, "Unprocessable entity.", null),
+
             // --- ProposedScopeLine conflicts (Session 3.3b) — the Line segment breaks the generic
             // .NotFound suffix match below, same reason OfferingAssembly.ItemNotFound needed one.
             var c when c == "ProposedScope.LineNotFound" => (StatusCodes.Status404NotFound, "Resource not found.", null),

@@ -22,6 +22,11 @@ public static class ProposedScopeErrors
     public static readonly Error ExpectedVersionInvalid =
         Error.Create("ProposedScope.ExpectedVersionInvalid", "The expected proposed scope version is not a valid version value.");
 
+    /// <summary>Session 4a (build-log/119, decision 2): a scope with zero lines cannot be
+    /// submitted for office review.</summary>
+    public static readonly Error EmptySubmit =
+        Error.Create("ProposedScope.EmptySubmit", "At least one line is required before this scope can be submitted.");
+
     public static readonly Error LineNotFound =
         Error.Create("ProposedScope.LineNotFound", "Proposed scope line not found.");
 

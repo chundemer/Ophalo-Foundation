@@ -23,6 +23,7 @@ public sealed class SubmitProposedScopeService(IProposedScopeSubmissionPersisten
             ProposedScopeSubmissionResult.Committed => Result<Guid>.Success(outcome.ConcurrencyVersion!.Value),
             ProposedScopeSubmissionResult.NotFound => Result<Guid>.Failure(ProposedScopeErrors.NotFound),
             ProposedScopeSubmissionResult.RequestTerminal => Result<Guid>.Failure(KeepRequestErrors.TerminalState),
+            ProposedScopeSubmissionResult.EmptySubmit => Result<Guid>.Failure(ProposedScopeErrors.EmptySubmit),
             _ => Result<Guid>.Failure(ProposedScopeErrors.VersionMismatch),
         };
     }

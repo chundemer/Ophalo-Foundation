@@ -141,6 +141,8 @@ public sealed class ProposedScope : BaseEntity
     {
         if (Status != ProposedScopeStatus.Draft)
             return Result.Failure(ProposedScopeErrors.NotDraft);
+        if (_lines.Count == 0)
+            return Result.Failure(ProposedScopeErrors.EmptySubmit);
 
         Status = ProposedScopeStatus.SubmittedToOffice;
         SubmittedAtUtc = submittedAtUtc;

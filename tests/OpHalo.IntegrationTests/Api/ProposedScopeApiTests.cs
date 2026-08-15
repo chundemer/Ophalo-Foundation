@@ -568,7 +568,7 @@ public sealed class ProposedScopeApiTests : IClassFixture<KeepApiWebFactory>, IA
         var (accountId, ownerId, _) = await SeedAccountAsync("submit-ok");
         await EnrollAsync(accountId, ownerId);
         var cookie = await GetCookieAsync(ownerId, accountId);
-        var (scopeId, version) = await SeedDraftScopeAsync(accountId, ownerId);
+        var (scopeId, _, version) = await SeedDraftScopeWithLineAsync(accountId, ownerId);
 
         var request = new HttpRequestMessage(HttpMethod.Post, $"/keep/pricebook/proposed-scopes/{scopeId}/submit");
         request.Headers.Add(ProposedScopeVersionHeader.HeaderName, version.ToString("D"));
@@ -580,6 +580,28 @@ public sealed class ProposedScopeApiTests : IClassFixture<KeepApiWebFactory>, IA
         var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
         var reloaded = await db.Set<ProposedScope>().FindAsync(scopeId);
         Assert.Equal(ProposedScopeStatus.SubmittedToOffice, reloaded!.Status);
+    }
+
+    [Fact]
+    public async Task Submit_WithZeroLines_Returns422()
+    {
+        var (accountId, ownerId, _) = await SeedAccountAsync("submit-empty");
+        await EnrollAsync(accountId, ownerId);
+        var cookie = await GetCookieAsync(ownerId, accountId);
+        var (scopeId, version) = await SeedDraftScopeAsync(accountId, ownerId);
+
+        var request = new HttpRequestMessage(HttpMethod.Post, $"/keep/pricebook/proposed-scopes/{scopeId}/submit");
+        request.Headers.Add(ProposedScopeVersionHeader.HeaderName, version.ToString("D"));
+        var response = await AuthRequest(cookie).SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("ProposedScope.EmptySubmit", body.GetProperty("code").GetString());
+
+        await using var scope = _factory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+        var reloaded = await db.Set<ProposedScope>().FindAsync(scopeId);
+        Assert.Equal(ProposedScopeStatus.Draft, reloaded!.Status);
     }
 
     [Fact]
