@@ -152,6 +152,14 @@ public static class KeepServiceCollectionExtensions
         services.AddScoped<IOfferingAssemblyExpansionPersistence, EfOfferingAssemblyExpansionPersistence>();
         services.AddScoped<FieldExpandAssemblyApiService>();
 
+        // Price Book, Quotes & Materials — Quick scope action configuration + field read (Session
+        // 3, build-log/119). IQuickScopeActionPersistence was added in Session 2 with no consumer
+        // until this batch. Reuses ICatalogReadPersistence/IOfferingAssemblyPersistence (registered
+        // above) to resolve each configured slot's target display name and current eligibility.
+        services.AddScoped<IQuickScopeActionPersistence, EfQuickScopeActionPersistence>();
+        services.AddScoped<QuickScopeActionConfigApiService>();
+        services.AddScoped<QuickScopeActionFieldReadApiService>();
+
         return services;
     }
 }

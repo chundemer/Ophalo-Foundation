@@ -171,6 +171,9 @@ public static class ErrorHttpMapper
             var c when c == "ProposedScope.ExpandAssemblyNotOperationallyEligible" => (StatusCodes.Status409Conflict, "Conflict.", null),
             var c when c == "ProposedScope.ExpandExclusionItemInvalid" => (StatusCodes.Status400BadRequest, "Bad request.", null),
 
+            // --- Quick scope action configuration (Session 3, build-log/119) ---
+            var c when c == "QuickScopeAction.TargetNotEligible" => (StatusCodes.Status409Conflict, "Conflict.", null),
+
             // --- CatalogCategory concurrency/uniqueness conflicts (Session 2b.3) ---
             var c when c == "CatalogCategory.VersionMismatch"         => (StatusCodes.Status409Conflict, "Conflict.", null),
             var c when c == "CatalogCategory.NameAlreadyExists"       => (StatusCodes.Status409Conflict, "Conflict.", null),

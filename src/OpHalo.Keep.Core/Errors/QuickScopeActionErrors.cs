@@ -21,4 +21,10 @@ public static class QuickScopeActionErrors
 
     public static readonly Error DuplicateTarget =
         Error.Create("QuickScopeAction.DuplicateTarget", "Each catalog item or offering/assembly may be configured as a quick scope action only once.");
+
+    public static readonly Error TargetNotFound =
+        Error.Create("QuickScopeAction.TargetNotFound", "The selected catalog item or offering/assembly could not be found.");
+
+    public static readonly Error TargetNotEligible =
+        Error.Create("QuickScopeAction.TargetNotEligible", "The selected catalog item or offering/assembly is not currently eligible to be configured as a quick scope action.");
 }

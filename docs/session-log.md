@@ -1,6 +1,6 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-08-15 (unified scope-composer Session 1 server contract locked)
+**Last updated:** 2026-08-15 (unified scope-composer Session 3 config/field-read API complete)
 **Deployment posture:** Not pilot-ready.
 **Source of truth for acceptance criteria:** `docs/pilot-readiness-bug-tracker.md`.
 
@@ -142,9 +142,27 @@ purely additive. 19 new domain unit tests (`QuickScopeActionTests`,
 `QuickScopeActionSetValidatorTests`), 9 new integration tests against real PostgreSQL
 (`QuickScopeActionPersistenceTests` — happy-path replace/list, full-set replacement, empty-set
 clear, order/target conflict translation, cross-account isolation, both check-constraint directions
-via raw SQL), 14/14 architecture tests, `git diff --check` clean. Next: Session 3 (Quick scope
-action Owner/Admin configuration API + price-free field read) or Session 4 (`EmptySubmit` +
-Undo-delete) on explicit go-ahead — build-log/119 has both preflighted.
+via raw SQL), 14/14 architecture tests, `git diff --check` clean.
+
+**Unified scope-composer Session 3 — Quick scope action configuration/field-read API: complete
+(2026-08-15).** `QuickScopeActionConfigApiService` delivers Owner/Admin
+`GET`/`PUT /keep/pricebook/quick-scope-actions` (gate: account access → Price Book entitlement →
+`PriceBookCatalogManage`); `QuickScopeActionFieldReadApiService` delivers the technician
+`GET /keep/pricebook/field/quick-scope-actions` (gate: account access → Price Book entitlement →
+`RequestsOperate` + `ScopeCapture`), matching build-log/119's two authorization stacks exactly.
+`ReplaceAsync` is the only mutation (whole-set replace, no per-slot endpoints) and validates each
+proposed target is currently an Active Common `CatalogItem` or an Active/operationally-eligible
+`OfferingAssembly` before persisting (`QuickScopeActionErrors.TargetNotFound`/`TargetNotEligible`,
+409 on the latter) — eligibility is never written onto the entity, only computed at read time.
+Owner/Admin reads include every configured slot with a resolved `IsEligible` flag so a
+later-ineligible target stays visible for explicit repair; the field read silently omits ineligible
+slots and its response type carries no price/eligibility field. 16 new integration tests
+(replace happy path, Operator-denied write, inactive/non-Common target 409, `TooManySlots`,
+`DuplicateOrder`, config-read later-ineligible row with persisted state unchanged, field-read
+omission + price-free wire check, viewer-denied, operator config-endpoint regression, and explicit
+blocked-account/no-entitlement denial for all three endpoints), 14/14 architecture tests,
+`git diff --check` clean. Next: Session 4 (`EmptySubmit` + Undo-delete) on explicit go-ahead —
+build-log/119 has it preflighted.
 
 **Session 2 progress:**
 
