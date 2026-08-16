@@ -2,8 +2,6 @@ import { KeepButton } from "../../components/keep/KeepButton";
 import { WorkDoneCard, CloseRequestCard } from "./BusinessSection";
 import { TimingPanel } from "./TimingPanel";
 import { TeamSection } from "./TeamSection";
-import { ProposedScopeCard } from "./ProposedScopeCard";
-import { type ProposedScopeCaptureState } from "./useProposedScopeCapture";
 import {
   type RequestDetailLayoutProps,
   LogContactCard,
@@ -16,11 +14,7 @@ import {
   SourceMetaPanel,
 } from "./DetailPanels";
 
-interface RequestDetailDesktopLayoutProps extends RequestDetailLayoutProps {
-  proposedScopeCaptureState: ProposedScopeCaptureState;
-  onStartProposedScopeCapture: () => void;
-  onStartProposedScopeView: () => void;
-}
+type RequestDetailDesktopLayoutProps = RequestDetailLayoutProps;
 
 export function RequestDetailDesktopLayout({
   requestId,
@@ -33,19 +27,11 @@ export function RequestDetailDesktopLayout({
   onRecordFollowUp,
   onCreateFollowUp,
   onReviewSuccess,
-  proposedScopeCaptureState,
-  onStartProposedScopeCapture,
-  onStartProposedScopeView,
 }: RequestDetailDesktopLayoutProps) {
   return (
     <aside className="hidden md:flex md:flex-col border-l border-[var(--ophalo-border)] bg-[var(--ophalo-card)] overflow-y-auto px-4 py-5 gap-4">
       {/* Actions group */}
       <WorkDoneCard requestId={requestId} detail={detail} onDetailUpdated={onDetailUpdated} />
-      <ProposedScopeCard
-        state={proposedScopeCaptureState}
-        onStartCapture={onStartProposedScopeCapture}
-        onStartView={onStartProposedScopeView}
-      />
       <div id="focus-panel-closeout">
         <CloseRequestCard requestId={requestId} detail={detail} onDetailUpdated={onDetailUpdated} />
       </div>

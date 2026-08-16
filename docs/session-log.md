@@ -1,7 +1,8 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-08-16 (unified scope-composer Session 5D line editing/delete-Undo/submit
-complete; snapshot-retention cleanup remains a required maintenance follow-up)
+**Last updated:** 2026-08-16 (ADR-486 polymorphic field-scope search locked; unified scope-composer
+Session 5E primary-action placement and ladder removal complete; snapshot-retention cleanup remains
+a required maintenance follow-up)
 **Deployment posture:** Not pilot-ready.
 **Source of truth for acceptance criteria:** `docs/pilot-readiness-bug-tracker.md`.
 
@@ -76,6 +77,16 @@ scope is ready for office review, not that work is physically complete or ready 
 field outcome is `Submitted to office — awaiting review`. Draft deletion has a five-second,
 versioned Undo. The composer must meet its phone-first 44px touch target, focus, keyboard,
 sticky-submit, and accessible-label requirements. UI redesign may now proceed against ADR-482–485.
+
+**Polymorphic field-scope search: locked (2026-08-16).**
+[ADR-486](decisions/ADR-486-polymorphic-field-scope-search.md) corrects a field-friction gap in
+the initial composer contract: text search must find every Active catalog item and every Active,
+operationally eligible assembly, not just Common Items or the zero-to-six Quick action set. Quick
+actions remain pinned accelerators. Search results are grouped as Matching assemblies, Matching
+catalog items, then the always-last Custom item action; a successful empty result explicitly says
+`No Price Book matches`. Selection reuses the existing server-validated `field-select` and
+default-only atomic `expand-assembly` mutations. [Build Log 121](build-log/121-polymorphic-field-scope-search-implementation-handoff.md)
+is the implementation handoff; do not silently treat a search failure as an empty result.
 
 **Unified scope-composer redesign — approved implementation map (2026-08-15).** Work proceeds
 sequentially; it is not authority to reopen the broader Request Details, request-queue,
@@ -273,10 +284,18 @@ and a dedicated decision.
   tests, 162/162 across the full `request-detail`/`keep` focused suite, `tsc --noEmit` and
   `git diff --check` clean. Manual iOS Safari/Android Chrome keyboard-open check still outstanding,
   alongside 5B/5C's. Full details in Build Log 120.
-- **Next batch: Session 5E — Primary action placement, legacy removal, and release gate**, per Build
-  Log 120 (move Capture/Resume/View scope to the primary request-work location; remove the five-rung
-  ladder and its superseded tests only after replacement coverage is green; run complete frontend and
-  backend regressions).
+- **Session 5E — Primary action placement, legacy removal, and release gate: complete (2026-08-16).**
+  `ProposedScopeCard` moved to directly below `DetailHero` (both desktop and mobile flows, out of the
+  desktop right-rail and mobile actions stack); the modal branch now renders `ProposedScopeComposer`
+  wired to `useProposedScopeCapture`'s existing `conflictNotice`/`reconcileAfterConflict`/
+  `retryReconciliation`/`clearConflictNotice`/`refetchScope` — no hook changes needed. Removed
+  `ProposedScopeCaptureModal` and all five rung components (`GlobalSearchRung`, `CategorySearchRung`,
+  `OffCatalogRung`, `CommonItemsRung`, `PrimaryOfferingRung`) plus the superseded
+  `ProposedScopeCaptureModal.test.tsx`; no other reachable references to the ladder remain anywhere
+  in `web/`. 4 files modified, 7 deleted. Full frontend suite 431/431, focused request-detail/keep
+  suite 152/152, `tsc --noEmit` and `git diff --check` clean. No backend/API contract changed, so no
+  backend regression was required for this batch. Unified composer (`ProposedScopeComposer`) is now
+  the sole scope-entry surface, satisfying the Session 5 exit gate.
 
 **Undo-delete snapshot retention: required maintenance follow-up (locked 2026-08-16).**
 `keep_pricebook_removed_scope_line_snapshots` is transient recovery state, not an audit table.

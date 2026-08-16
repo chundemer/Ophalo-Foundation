@@ -25,10 +25,9 @@ interface ProposedScopeComposerProps {
 }
 
 /**
- * Session 5B/5C/5D, build-log/120: the ADR-482/483 replacement surface — shell, Quick actions,
- * unified search+add, live Draft with edit/remove/Undo, and submit. Built alongside
- * `ProposedScopeCaptureModal`'s five-rung ladder, which stays fully intact and unreachable from here
- * until Session 5E's cutover and rung removal.
+ * Session 5A–5E, build-log/120: the ADR-482/483 replacement surface — shell, Quick actions,
+ * unified search+add, live Draft with edit/remove/Undo, and submit. The sole scope-entry surface
+ * as of Session 5E; the prior five-rung ladder is removed.
  *
  * Fixed `100dvh` full-screen presentation on phone; a constrained centered dialog from `md:` up,
  * per the locked shared implementation rules — the page behind never becomes the active scroller.
@@ -75,7 +74,7 @@ export function ProposedScopeComposer({
       backdropClassName="bg-black/40"
       panelClassName={
         "fixed inset-0 h-[100dvh] w-full flex flex-col bg-[var(--ophalo-card)] " +
-        "md:static md:h-auto md:max-h-[85vh] md:w-full md:max-w-lg md:rounded-xl md:shadow-xl"
+        "md:relative md:h-auto md:max-h-[85vh] md:w-full md:max-w-lg md:rounded-xl md:shadow-xl"
       }
     >
       <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--ophalo-border)] shrink-0">
