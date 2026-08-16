@@ -1,6 +1,6 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-08-15 (unified scope-composer Session 4b Slice 1 undo-delete domain/persistence complete; Session 4b Slice 2 restore endpoint next)
+**Last updated:** 2026-08-16 (Undo-delete snapshot-retention operational requirement locked)
 **Deployment posture:** Not pilot-ready.
 **Source of truth for acceptance criteria:** `docs/pilot-readiness-bug-tracker.md`.
 
@@ -219,6 +219,14 @@ no new endpoint.
 - `ProposedScopeEndpoints`: new `POST /keep/pricebook/proposed-scopes/{proposedScopeId}/lines/
   {lineId}/restore`, same version-header contract as the existing line-mutation endpoints.
 - Estimated 3 production files, ~5 total with tests — comfortably under the batch-size gate.
+
+**Undo-delete snapshot retention: required maintenance follow-up (locked 2026-08-16).**
+`keep_pricebook_removed_scope_line_snapshots` is transient recovery state, not an audit table.
+Successful restore deletes its consumed row atomically; a scheduled, bounded cleanup must delete
+unrestored rows older than five minutes at least hourly, record deleted-row count/failure outcome,
+and remain outside the field-mutation hot path. The service-side five-second `RemovedAtUtc` check
+remains the sole expiration authority. This maintenance slice is required before Undo-delete is
+production-complete; full contract in [Build Log 119](build-log/119-unified-scope-composer-session-1-server-contract-preflight.md).
 
 **Session 2 progress:**
 

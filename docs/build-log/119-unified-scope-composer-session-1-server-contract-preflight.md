@@ -43,6 +43,15 @@ Expired records may be cleaned up asynchronously, but cleanup is not correctness
 restore operation always checks `RemovedAtUtc` itself. This preserves the five-second rule even if
 the cleanup job is delayed.
 
+**Retention operational requirement.** Removed-line snapshots are transient recovery state, not an
+audit log. A scheduled cleanup must delete rows whose `RemovedAtUtc` is older than five minutes,
+running at least hourly. The five-minute buffer is operational slack only; it never extends the
+five-second restore window. Successful restore already deletes its consumed snapshot in the same
+transaction. Cleanup must be bounded/batched and emit its deleted-row count and failure outcome so
+retention failures are discoverable. It is a separate maintenance slice and must be delivered before
+the Undo-delete feature is treated as production-complete; it must not be placed on the field
+mutation hot path or used to determine whether a restore is expired.
+
 ### 2. Empty scopes cannot submit
 
 `ProposedScope.Submit()` gains the domain invariant that `_lines.Count` must be greater than zero.
