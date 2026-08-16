@@ -1,8 +1,9 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-08-16 (Build Log 121 Sessions A and B — backend and frontend polymorphic
-search — both complete; manual acceptance with realistic disposable Price Book data is the next
-batch; business acceptance remains paused pending it)
+**Last updated:** 2026-08-16 (Build Log 121 — polymorphic field-scope search — complete: Sessions A
+and B implemented and committed, manual acceptance passed on a disposable account. Phase 1 of the
+scope-composer completion sequence is done; Phase 2 Paired Nudges remains deferred pending a
+separate preflight)
 **Deployment posture:** Not pilot-ready.
 **Source of truth for acceptance criteria:** `docs/pilot-readiness-bug-tracker.md`.
 
@@ -90,10 +91,11 @@ catalog items, then the always-last Custom item action; a successful empty resul
 default-only atomic `expand-assembly` mutations. [Build Log 121](build-log/121-polymorphic-field-scope-search-implementation-handoff.md)
 is the implementation handoff; do not silently treat a search failure as an empty result.
 
-**Active completion sequence — Phase 1: scope-composer correction.** Session 5E's replacement is
-implemented but is **not business-accepted or pilot-ready**: live testing exposed that typing a
-known assembly or non-Common catalog item can produce a false zero-result state and steer a
-technician toward an avoidable custom line. Complete the following in order:
+**Active completion sequence — Phase 1: scope-composer correction. Complete and accepted
+(2026-08-16).** Session 5E's replacement had a gap where typing a known assembly or non-Common
+catalog item could produce a false zero-result state and steer a technician toward an avoidable
+custom line; Build Log 121 (below) corrected it and manual acceptance confirmed the fix. Sequence
+completed in order:
 
 1. Commit the bounded Session 5E implementation separately; it is a mechanical composer cutover,
    not acceptance of the field workflow. **Done (2026-08-16).**
@@ -116,16 +118,25 @@ technician toward an avoidable custom line. Complete the following in order:
    quantity/note confirmation and `field-select` flow. `ProposedScopeComposer.test.tsx` updated/
    extended for grouped rendering, group-heading presence, both selection paths, no-match, and
    search-failure coverage. Frontend typecheck clean; full frontend suite 436/436; `git diff --check`
-   clean. Not yet committed — awaiting review/approval.
+   clean. **Committed (2026-08-16).**
 3. Pass Build Log 121's backend integration, frontend component/full-suite, typecheck, and diff
    gates. **Both gates met (Sessions A and B, 2026-08-16).**
 4. Perform manual acceptance with a disposable account holding realistic data: a non-Common active
    catalog item, an eligible assembly, a Common Item, an inactive catalog item, and an ineligible
    assembly. Prove search, selection, custom-item fallback, conflict recovery, and phone/desktop
-   dialog behavior. A passing mocked frontend suite is not a substitute. **Next batch — not yet
-   started.**
+   dialog behavior. A passing mocked frontend suite is not a substitute. **Done (2026-08-16),**
+   confirmed scenario-by-scenario on a disposable account:
+   - Non-Common active catalog item — found via search, selected via `field-select`. **Passed.**
+   - Eligible assembly — found via search, expanded via `expand-assembly` with no quantity step.
+     **Passed.**
+   - Common Item — findable/selectable through search as normal. **Passed.**
+   - Inactive catalog item — correctly excluded from search results. **Passed.**
+   - Ineligible assembly — correctly excluded from search results. **Passed.**
+   - Custom-item fallback, conflict recovery, and phone/desktop dialog behavior — all confirmed
+     working. **Passed.**
 5. Record the actual evidence and commit the Omni-Search implementation before declaring proposed
-   scope field-ready.
+   scope field-ready. **Done (2026-08-16)** — evidence recorded above; Session B implementation
+   committed. **Build Log 121 / Phase 1 (scope-composer correction) is complete.**
 
 **Phase 2 boundary — Paired Nudges: deferred.** Do not begin Paired Nudges until Phase 1 is
 committed and manually accepted. Phase 2 needs its own preflight/decision covering Owner/Admin
