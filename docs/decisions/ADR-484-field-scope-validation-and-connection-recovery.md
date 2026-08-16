@@ -21,7 +21,9 @@ against the following operational journeys before it is considered complete:
    restores it from the short Undo affordance. Expanded lines are not described as required or
    locked once in the Draft.
 5. **Decimal quantities:** the technician records decimal quantities such as 1.5 hours of labor or
-   0.5 gallons of material.
+   0.5 gallons of material. All Draft line types accept positive decimals at the domain/API layer;
+   unit conventions may guide presentation but cannot impose integer-only or unit-specific field
+   validation.
 6. **Connection interruption:** a failed add, edit, remove, or submit leaves authoritative server
    state unchanged; the UI makes the failure clear, preserves safely entered input where practical,
    and offers explicit retry/reconciliation without silently overwriting newer data.
@@ -53,4 +55,7 @@ price edit.
 - The focused composer UI-design/preflight must use these journeys as its acceptance scenarios.
 - The implementation/tests must preserve authoritative re-fetch and no-auto-retry behavior on
   conflict or failed network requests.
+- A composer opened on mobile must be validated with the virtual keyboard open in iOS Safari and
+  Android Chrome: the focused input, feedback, and submit control remain usable and unobscured.
+  The implementation mechanism is deliberately unconstrained.
 - Offline-first capability is deferred pending separate pilot evidence and design authorization.

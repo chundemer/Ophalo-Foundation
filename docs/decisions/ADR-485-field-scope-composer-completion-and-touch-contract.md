@@ -55,7 +55,15 @@ standard versioned server mutation; if the scope has changed, normal refresh/rec
 over restoring stale client state. The server, not the toast timer, authoritatively enforces the
 five-second expiry. It retains a separate removed-line snapshot sufficient to recreate the original
 line and provenance, because a removed Draft line is otherwise hard-deleted; restoring reinserts it
-at its original display order and advances the scope version.
+at its original display order and advances the scope version. Restore does not re-normalize other
+Draft-line display orders; reads use their existing deterministic `DisplayOrder`, then line-id tie
+break so Undo does not create unrelated edits.
+
+A Quick action's field-read eligibility is point-in-time only. If its resolved catalog-item or
+assembly target becomes unavailable before selection, the normal authoritative selection error and
+reconciliation path applies; the client presents a contextual office-updated/unavailable notice.
+No separate Quick-action-specific server error is introduced while field actions operate on the
+resolved target id.
 
 The composer is phone-first. Interactive controls provide a minimum 44 by 44 CSS-pixel touch
 target, visible focus indication, and accessible names. On opening a writable composer, focus moves

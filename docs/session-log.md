@@ -120,6 +120,15 @@ Owner/Admin-visible repair item but is omitted from the price-free field read. S
 add `ProposedScopeErrors.EmptySubmit` and reject server-side submission with zero lines. Existing
 field search and default-only atomic assembly expansion are reused unchanged.
 
+**Unified scope-composer operational clarifications: locked (2026-08-15).** Restore preserves its
+original `DisplayOrder` without re-normalizing other lines; read order remains deterministic by
+display order then line id. A Quick action invalidated after its field read reuses the authoritative
+catalog/assembly selection failure and reconciliation path, with a contextual client notice rather
+than a new Quick-action-specific error. Frontend acceptance must prove keyboard-open usability in
+iOS Safari and Android Chrome, without locking a specific viewport implementation. Every Draft line
+type accepts positive decimal quantities server-side; unit conventions guide presentation only.
+See [Build Log 119](build-log/119-unified-scope-composer-session-1-server-contract-preflight.md).
+
 **Unified scope-composer Session 2 — Quick scope action domain/persistence: complete
 (2026-08-15).** Persistence/domain-only, per build-log/119's Batch 2 scoping — no endpoints, API
 DTOs, or frontend changes; nothing is wired into `KeepServiceCollectionExtensions` yet, matching the

@@ -70,6 +70,40 @@ uses the field-access pattern: authenticate, account access, Price Book entitlem
 `RequestsOperate` plus `ScopeCapture`, then act. These rules are written in each API service; they
 are not inherited merely by citing an existing service.
 
+## Operational clarifications
+
+### Restore ordering
+
+Restore preserves the removed line's original `DisplayOrder`. It does not renumber the other Draft
+lines: an Undo operation must not create unrelated concurrent edits. Reads remain deterministically
+ordered by `DisplayOrder`, then `LineId`, so an unexpected duplicate display-order value is stable
+across clients without a restore-time re-normalization pass.
+
+### Quick action invalidation while the composer is open
+
+A field read is only a point-in-time eligibility view. A target can become unavailable before the
+technician taps it. The subsequent authoritative selection operation remains the decision point:
+the existing catalog-item-unavailable result or
+`ProposedScope.ExpandAssemblyNotOperationallyEligible` is returned, followed by normal
+reconciliation. The PWA maps those known results to a contextual notice that the office recently
+updated the item and it is no longer available. Do not introduce a separate
+`QuickActionIneligible` server error while field actions submit resolved catalog-item/assembly ids,
+not a Quick-action id.
+
+### Keyboard-safe composer behavior
+
+The frontend acceptance gate includes real keyboard-open verification in iOS Safari and Android
+Chrome. Search focus, edited line inputs, validation feedback, and the submit control must remain
+usable and unobscured. `100dvh`/flex layouts and the `visualViewport` API are permissible tools;
+the locked contract is the observable keyboard-safe behavior, not a required implementation
+mechanism.
+
+### Decimal quantities
+
+All Draft line types accept positive decimal quantities at the domain/API layer. Unit conventions
+may guide field labels and defaults but must not create integer-only or unit-specific submission
+validation that blocks a technician's fractional quantity.
+
 ## Session 2 implementation boundary
 
 Session 2 may add the removed-line snapshot table, Quick action entity/migration, domain services,
