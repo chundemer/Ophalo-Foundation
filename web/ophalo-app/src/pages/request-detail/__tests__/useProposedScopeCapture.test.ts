@@ -1,7 +1,7 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { renderHook, waitFor, act } from "@testing-library/react";
-import { useProposedScopeCapture } from "../useProposedScopeCapture";
-import { ApiError } from "../../../lib/apiClient";
+import { useProposedScopeCapture, PROPOSED_SCOPE_CONFLICT_NOTICE } from "../useProposedScopeCapture";
+import { api, ApiError } from "../../../lib/apiClient";
 import type { ProposedScopeDetailResult } from "../../../lib/apiClient";
 
 const mockGetCurrentProposedScopeForRequest = vi.fn();
@@ -161,5 +161,90 @@ describe("useProposedScopeCapture", () => {
     });
 
     expect(result.current.isModalOpen).toBe(false);
+  });
+
+  it("reconcileAfterConflict sets the shared notice and reloads the authoritative scope without retrying", async () => {
+    const scope = draftScope();
+    mockGetCurrentProposedScopeForRequest.mockResolvedValueOnce({ state: "Draft", scope });
+    const { result } = renderHook(() => useProposedScopeCapture("request-1"));
+    await waitFor(() => expect(result.current.state.status).toBe("draft"));
+
+    const refreshed = draftScope({ concurrencyVersion: "v2" });
+    mockGetProposedScope.mockResolvedValueOnce(refreshed);
+
+    await act(async () => {
+      await result.current.reconcileAfterConflict();
+    });
+
+    expect(mockGetProposedScope).toHaveBeenCalledTimes(1);
+    expect(mockGetProposedScope).toHaveBeenCalledWith("scope-1");
+    expect(result.current.conflictNotice).toBe(PROPOSED_SCOPE_CONFLICT_NOTICE);
+    expect(result.current.state).toEqual({ status: "draft", scope: refreshed });
+  });
+
+  it("clearConflictNotice clears a previously surfaced notice", async () => {
+    const scope = draftScope();
+    mockGetCurrentProposedScopeForRequest.mockResolvedValueOnce({ state: "Draft", scope });
+    const { result } = renderHook(() => useProposedScopeCapture("request-1"));
+    await waitFor(() => expect(result.current.state.status).toBe("draft"));
+
+    mockGetProposedScope.mockResolvedValueOnce(scope);
+    await act(async () => {
+      await result.current.reconcileAfterConflict("Custom notice");
+    });
+    expect(result.current.conflictNotice).toBe("Custom notice");
+
+    act(() => result.current.clearConflictNotice());
+    expect(result.current.conflictNotice).toBeNull();
+  });
+});
+
+describe("apiClient proposed-scope contract (Session 5A, build-log/120)", () => {
+  const originalFetch = globalThis.fetch;
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  it("getFieldQuickScopeActions returns a price-blind action shape", async () => {
+    const body = {
+      actions: [
+        {
+          id: "action-1",
+          order: 1,
+          catalogItemId: "item-1",
+          offeringAssemblyId: null,
+          targetDisplayName: "Filter",
+        },
+      ],
+    };
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => body });
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    const result = await api.getFieldQuickScopeActions();
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("/keep/pricebook/field/quick-scope-actions"),
+      expect.any(Object),
+    );
+    expect(Object.keys(result.actions[0]!).sort()).toEqual(
+      ["catalogItemId", "id", "offeringAssemblyId", "order", "targetDisplayName"].sort(),
+    );
+  });
+
+  it("restoreProposedScopeLine posts the version header to the versioned restore route", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ concurrencyVersion: "v3" }) });
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    const result = await api.restoreProposedScopeLine("scope-1", "line-1", "v2");
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("/keep/pricebook/proposed-scopes/scope-1/lines/line-1/restore"),
+      expect.objectContaining({
+        method: "POST",
+        headers: expect.objectContaining({ "X-Keep-ProposedScope-Version": "v2" }),
+      }),
+    );
+    expect(result).toEqual({ concurrencyVersion: "v3" });
   });
 });

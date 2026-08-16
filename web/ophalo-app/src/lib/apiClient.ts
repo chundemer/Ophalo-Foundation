@@ -198,6 +198,8 @@ import type {
   GetFieldOfferingAssembliesParams,
   UpdateProposedScopeLineBody,
   ProposedScopeTransitionResult,
+  QuickScopeActionFieldRowResponse,
+  QuickScopeActionFieldListResult,
 } from "./apiClient.types";
 
 export type {
@@ -305,6 +307,8 @@ export type {
   GetFieldOfferingAssembliesParams,
   UpdateProposedScopeLineBody,
   ProposedScopeTransitionResult,
+  QuickScopeActionFieldRowResponse,
+  QuickScopeActionFieldListResult,
 };
 
 export type { FollowUpResolutionOutcome, FollowUpCompletionReason } from "./apiClient.types";
@@ -789,6 +793,14 @@ export const api = {
     }),
   submitProposedScope: (proposedScopeId: string, version: string) =>
     apiFetch<ProposedScopeTransitionResult>(`/keep/pricebook/proposed-scopes/${proposedScopeId}/submit`, {
+      method: "POST",
+      headers: { "X-Keep-ProposedScope-Version": version },
+    }),
+  // Session 5A, build-log/120: unified composer client-contract wiring.
+  getFieldQuickScopeActions: () =>
+    apiFetch<QuickScopeActionFieldListResult>("/keep/pricebook/field/quick-scope-actions"),
+  restoreProposedScopeLine: (proposedScopeId: string, lineId: string, version: string) =>
+    apiFetch<ProposedScopeTransitionResult>(`/keep/pricebook/proposed-scopes/${proposedScopeId}/lines/${lineId}/restore`, {
       method: "POST",
       headers: { "X-Keep-ProposedScope-Version": version },
     }),

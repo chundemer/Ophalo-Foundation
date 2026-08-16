@@ -1002,3 +1002,17 @@ export interface UpdateProposedScopeLineBody {
 export interface ProposedScopeTransitionResult {
   concurrencyVersion: string;
 }
+
+// Session 5A, build-log/120: field-safe Quick scope action read — separate route/shape from the
+// Owner/Admin configuration response; never carries a price or eligibility/repair field.
+export interface QuickScopeActionFieldRowResponse {
+  id: string;
+  order: number;
+  catalogItemId: string | null;
+  offeringAssemblyId: string | null;
+  targetDisplayName: string;
+}
+
+export interface QuickScopeActionFieldListResult {
+  actions: QuickScopeActionFieldRowResponse[];
+}

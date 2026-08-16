@@ -15,9 +15,15 @@ export type ProposedScopeCaptureState =
   | { status: "draft"; scope: ProposedScopeDetailResult }
   | { status: "submitted"; scope: ProposedScopeDetailResult };
 
+// Session 5A, build-log/120: the one notice every composer mutation surfaces on a 409 or an
+// ambiguous (non-ApiError) failure — never retried automatically.
+export const PROPOSED_SCOPE_CONFLICT_NOTICE =
+  "This proposed scope changed elsewhere — refreshed with the latest scope. Try again.";
+
 export function useProposedScopeCapture(requestId: string) {
   const [state, setState] = useState<ProposedScopeCaptureState>({ status: "loading" });
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [conflictNotice, setConflictNotice] = useState<string | null>(null);
 
   const probe = useCallback(async () => {
     setState({ status: "loading" });
@@ -85,5 +91,28 @@ export function useProposedScopeCapture(requestId: string) {
 
   const closeModal = useCallback(() => setIsModalOpen(false), []);
 
-  return { state, isModalOpen, startCapture, startView, closeModal, refetchScope };
+  // Session 5A, build-log/120: the single reusable 409/ambiguous-failure path every composer
+  // mutation will call instead of duplicating notice-plus-refetch handling per surface. It only
+  // reloads the authoritative scope and surfaces one shared notice — it never retries the mutation.
+  const reconcileAfterConflict = useCallback(
+    async (message: string = PROPOSED_SCOPE_CONFLICT_NOTICE) => {
+      setConflictNotice(message);
+      await refetchScope();
+    },
+    [refetchScope],
+  );
+
+  const clearConflictNotice = useCallback(() => setConflictNotice(null), []);
+
+  return {
+    state,
+    isModalOpen,
+    startCapture,
+    startView,
+    closeModal,
+    refetchScope,
+    conflictNotice,
+    reconcileAfterConflict,
+    clearConflictNotice,
+  };
 }
