@@ -1,6 +1,6 @@
 import { forwardRef, useEffect, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { api, ApiError, type FieldCatalogItemResponse } from "../../lib/apiClient";
+import { api, ApiError, type FieldScopeSearchResultResponse } from "../../lib/apiClient";
 import { KeepButton } from "../../components/keep/KeepButton";
 
 const FOCUS_RING =
@@ -19,12 +19,16 @@ interface ComposerSearchAndAddProps {
   onConflict: () => void;
 }
 
-type Selection = { kind: "catalog"; item: FieldCatalogItemResponse } | { kind: "custom" };
+type Selection =
+  | { kind: "catalog"; item: FieldScopeSearchResultResponse }
+  | { kind: "custom" };
 
 /**
- * Session 5B, build-log/120: the single unified Name/SKU/Alias search input. Catalog results and
- * the explicit "Add as custom item" action render from the same entry surface — typing alone never
- * writes a line; a line is only written after an explicit pick and an explicit "Add to scope".
+ * Build Log 121, ADR-486: the single unified Name/SKU/Alias search input. Results render grouped
+ * as Matching assemblies, then Matching catalog items, then the always-last "Add as custom item"
+ * action — typing alone never writes a line. An assembly pick dispatches `expand-assembly`
+ * immediately; a catalog pick or custom item goes through the existing quantity/note confirmation
+ * and `field-select`.
  *
  * The forwarded ref targets the search input itself so the composer shell can hand it to
  * `KeepModal`'s `initialFocus` — the modal's default first-focusable pick would be the close
@@ -48,9 +52,13 @@ export const ComposerSearchAndAdd = forwardRef<HTMLInputElement, ComposerSearchA
     return () => clearTimeout(handle);
   }, [searchText]);
 
-  const { data: listPage, isLoading } = useQuery({
-    queryKey: ["fieldCatalogItems", "search", debouncedText],
-    queryFn: () => api.getFieldCatalogItems({ search: debouncedText, limit: 20 }),
+  const {
+    data: listPage,
+    isLoading,
+    isError,
+  } = useQuery({
+    queryKey: ["fieldScopeSearch", "search", debouncedText],
+    queryFn: () => api.getFieldScopeSearch({ search: debouncedText, limit: 20 }),
     enabled: selection === null && debouncedText.length > 0,
   });
 
@@ -109,8 +117,17 @@ export const ComposerSearchAndAdd = forwardRef<HTMLInputElement, ComposerSearchA
     },
   });
 
+  const expandMutation = useMutation({
+    mutationFn: (row: FieldScopeSearchResultResponse) =>
+      api.expandProposedScopeAssembly(proposedScopeId, { offeringAssemblyId: row.id, excludedOptionalItemIds: [] }, version),
+    onSuccess: () => {
+      resetAfterSuccess();
+      onCommitted();
+    },
+    onError: () => onConflict(),
+  });
+
   if (selection !== null) {
-    const unitLabel = selection.kind === "catalog" ? ` (${selection.item.unitOfMeasure})` : "";
     return (
       <div className="space-y-3">
         <button
@@ -150,7 +167,7 @@ export const ComposerSearchAndAdd = forwardRef<HTMLInputElement, ComposerSearchA
         )}
         <div>
           <label htmlFor="composer-add-quantity" className="block text-xs text-[var(--ophalo-muted)] mb-1">
-            Quantity{unitLabel}
+            Quantity
           </label>
           <input
             id="composer-add-quantity"
@@ -190,11 +207,14 @@ export const ComposerSearchAndAdd = forwardRef<HTMLInputElement, ComposerSearchA
   }
 
   const results = listPage?.items ?? [];
+  const assemblyResults = results.filter((row) => row.kind === "OfferingAssembly");
+  const catalogResults = results.filter((row) => row.kind === "CatalogItem");
+  const hasResults = assemblyResults.length > 0 || catalogResults.length > 0;
 
   return (
     <div className="space-y-2">
       <label htmlFor="composer-search-input" className="sr-only">
-        Search catalog items
+        Search catalog items and assemblies
       </label>
       <input
         ref={searchInputRef}
@@ -207,35 +227,76 @@ export const ComposerSearchAndAdd = forwardRef<HTMLInputElement, ComposerSearchA
         className={INPUT_CLS}
       />
       {debouncedText.length === 0 && (
-        <p className="text-sm text-[var(--ophalo-muted)]">Type to search catalog items.</p>
+        <p className="text-sm text-[var(--ophalo-muted)]">Type to search catalog items and assemblies.</p>
       )}
       {debouncedText.length > 0 && isLoading && <p className="text-sm text-[var(--ophalo-muted)]">Searching…</p>}
-      {debouncedText.length > 0 && (
-        <ul className="max-h-48 overflow-y-auto space-y-1">
-          {results.map((row) => (
-            <li key={row.item.id}>
+      {debouncedText.length > 0 && !isLoading && isError && (
+        <p role="alert" className="text-sm text-[var(--ophalo-danger)]">
+          Search failed. Try again.
+        </p>
+      )}
+      {debouncedText.length > 0 && !isLoading && !isError && (
+        <>
+          {!hasResults && <p className="text-sm text-[var(--ophalo-muted)]">No Price Book matches</p>}
+          <ul className="max-h-48 overflow-y-auto space-y-1">
+            {assemblyResults.length > 0 && (
+              <li className="rounded-lg border-l-4 border-[var(--keep-accent)] bg-[var(--ophalo-canvas)] px-3 py-2 text-xs font-bold uppercase tracking-wide text-[var(--ophalo-ink)]">
+                Matching assemblies
+              </li>
+            )}
+            {assemblyResults.map((row) => (
+              <li key={row.id}>
+                <button
+                  type="button"
+                  disabled={expandMutation.isPending}
+                  onClick={() => expandMutation.mutate(row)}
+                  className={`w-full text-left rounded-lg px-3 py-2 text-sm text-[var(--ophalo-ink)] hover:bg-[var(--ophalo-canvas)] disabled:opacity-50 ${FOCUS_RING}`}
+                >
+                  <span>{row.displayName}</span>
+                  <span className="ml-2 rounded bg-[var(--ophalo-canvas)] px-1.5 py-0.5 text-xs font-medium text-[var(--ophalo-muted)]">
+                    Assembly
+                  </span>
+                  {row.defaultItemCount !== null && (
+                    <span className="ml-2 text-xs text-[var(--ophalo-muted)]">Expands {row.defaultItemCount} items</span>
+                  )}
+                </button>
+              </li>
+            ))}
+            {catalogResults.length > 0 && (
+              <li className="mt-3 rounded-lg border-l-4 border-[var(--ophalo-border)] bg-[var(--ophalo-canvas)] px-3 py-2 text-xs font-bold uppercase tracking-wide text-[var(--ophalo-ink)]">
+                Matching catalog items
+              </li>
+            )}
+            {catalogResults.map((row) => (
+              <li key={row.id}>
+                <button
+                  type="button"
+                  onClick={() => setSelection({ kind: "catalog", item: row })}
+                  className={`w-full text-left rounded-lg px-3 py-2 text-sm text-[var(--ophalo-ink)] hover:bg-[var(--ophalo-canvas)] ${FOCUS_RING}`}
+                >
+                  <span>{row.displayName}</span>
+                  {row.catalogItemType && (
+                    <span className="ml-2 rounded bg-[var(--ophalo-canvas)] px-1.5 py-0.5 text-xs font-medium text-[var(--ophalo-muted)]">
+                      {row.catalogItemType}
+                    </span>
+                  )}
+                </button>
+              </li>
+            ))}
+            <li>
               <button
                 type="button"
-                onClick={() => setSelection({ kind: "catalog", item: row.item })}
-                className={`w-full text-left rounded-lg px-3 py-2 text-sm text-[var(--ophalo-ink)] hover:bg-[var(--ophalo-canvas)] ${FOCUS_RING}`}
+                onClick={() => {
+                  setCustomDescription(debouncedText);
+                  setSelection({ kind: "custom" });
+                }}
+                className={`w-full text-left rounded-lg px-3 py-2 text-sm font-medium text-[var(--keep-accent)] hover:bg-[var(--ophalo-canvas)] ${FOCUS_RING}`}
               >
-                {row.item.displayName}
+                Add “{debouncedText}” as custom item
               </button>
             </li>
-          ))}
-          <li>
-            <button
-              type="button"
-              onClick={() => {
-                setCustomDescription(debouncedText);
-                setSelection({ kind: "custom" });
-              }}
-              className={`w-full text-left rounded-lg px-3 py-2 text-sm font-medium text-[var(--keep-accent)] hover:bg-[var(--ophalo-canvas)] ${FOCUS_RING}`}
-            >
-              Add “{debouncedText}” as custom item
-            </button>
-          </li>
-        </ul>
+          </ul>
+        </>
       )}
     </div>
   );

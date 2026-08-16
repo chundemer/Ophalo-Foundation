@@ -200,6 +200,9 @@ import type {
   ProposedScopeTransitionResult,
   QuickScopeActionFieldRowResponse,
   QuickScopeActionFieldListResult,
+  FieldScopeSearchResultResponse,
+  FieldScopeSearchResult,
+  GetFieldScopeSearchParams,
 } from "./apiClient.types";
 
 export type {
@@ -309,6 +312,9 @@ export type {
   ProposedScopeTransitionResult,
   QuickScopeActionFieldRowResponse,
   QuickScopeActionFieldListResult,
+  FieldScopeSearchResultResponse,
+  FieldScopeSearchResult,
+  GetFieldScopeSearchParams,
 };
 
 export type { FollowUpResolutionOutcome, FollowUpCompletionReason } from "./apiClient.types";
@@ -765,6 +771,15 @@ export const api = {
     if (params.cursor) qs.set("cursor", params.cursor);
     const query = qs.toString();
     return apiFetch<FieldCatalogItemListResult>(`/keep/pricebook/field/catalog-items${query ? `?${query}` : ""}`);
+  },
+  // Build Log 121, ADR-486: polymorphic field-scope search — the composer's search surface.
+  getFieldScopeSearch: (params: GetFieldScopeSearchParams = {}) => {
+    const qs = new URLSearchParams();
+    if (params.search) qs.set("search", params.search);
+    if (params.limit) qs.set("limit", String(params.limit));
+    if (params.cursor) qs.set("cursor", params.cursor);
+    const query = qs.toString();
+    return apiFetch<FieldScopeSearchResult>(`/keep/pricebook/field/scope-search${query ? `?${query}` : ""}`);
   },
   getFieldCatalogCategories: () =>
     apiFetch<FieldCatalogCategoryListResult>("/keep/pricebook/field/catalog-categories"),

@@ -9,8 +9,9 @@ import {
   PROPOSED_SCOPE_RECONCILE_RELOAD_FAILURE_NOTICE,
 } from "../useProposedScopeCapture";
 
-const mockGetFieldCatalogItems = vi.fn();
+const mockGetFieldScopeSearch = vi.fn();
 const mockFieldSelectProposedScopeLine = vi.fn();
+const mockExpandProposedScopeAssembly = vi.fn();
 const mockGetFieldQuickScopeActions = vi.fn();
 const mockUpdateProposedScopeLine = vi.fn();
 const mockRemoveProposedScopeLine = vi.fn();
@@ -23,8 +24,9 @@ vi.mock("../../../lib/apiClient", async () => {
     ...actual,
     api: {
       ...actual.api,
-      getFieldCatalogItems: (...args: unknown[]) => mockGetFieldCatalogItems(...args),
+      getFieldScopeSearch: (...args: unknown[]) => mockGetFieldScopeSearch(...args),
       fieldSelectProposedScopeLine: (...args: unknown[]) => mockFieldSelectProposedScopeLine(...args),
+      expandProposedScopeAssembly: (...args: unknown[]) => mockExpandProposedScopeAssembly(...args),
       getFieldQuickScopeActions: (...args: unknown[]) => mockGetFieldQuickScopeActions(...args),
       updateProposedScopeLine: (...args: unknown[]) => mockUpdateProposedScopeLine(...args),
       removeProposedScopeLine: (...args: unknown[]) => mockRemoveProposedScopeLine(...args),
@@ -85,7 +87,7 @@ function renderComposer(overrides: Partial<React.ComponentProps<typeof ProposedS
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mockGetFieldCatalogItems.mockResolvedValue({ items: [], limit: 20, hasMore: false, nextCursor: null });
+  mockGetFieldScopeSearch.mockResolvedValue({ items: [], limit: 20, hasMore: false, nextCursor: null });
   mockGetFieldQuickScopeActions.mockResolvedValue({ actions: [] });
 });
 
@@ -104,17 +106,13 @@ describe("ProposedScopeComposer", () => {
   it("gives the unified search input an accessible name via a label, not placeholder text alone", async () => {
     renderComposer();
 
-    expect(await screen.findByRole("textbox", { name: "Search catalog items" })).toBeInTheDocument();
+    expect(await screen.findByRole("textbox", { name: "Search catalog items and assemblies" })).toBeInTheDocument();
   });
 
   it("renders a known catalog result and the explicit custom-add action from the same search", async () => {
-    mockGetFieldCatalogItems.mockResolvedValue({
+    mockGetFieldScopeSearch.mockResolvedValue({
       items: [
-        {
-          item: { id: "item-1", type: "Material", displayName: "Filter", externalKey: null, categoryId: null, unitOfMeasure: "each" },
-          matchRank: "DisplayName",
-          matchReason: null,
-        },
+        { kind: "CatalogItem", id: "item-1", displayName: "Filter", defaultItemCount: null, catalogItemType: null, externalKey: null },
       ],
       limit: 20,
       hasMore: false,
@@ -130,13 +128,9 @@ describe("ProposedScopeComposer", () => {
   });
 
   it("adds a known catalog item via field-select and reloads the authoritative scope", async () => {
-    mockGetFieldCatalogItems.mockResolvedValue({
+    mockGetFieldScopeSearch.mockResolvedValue({
       items: [
-        {
-          item: { id: "item-1", type: "Material", displayName: "Filter", externalKey: null, categoryId: null, unitOfMeasure: "each" },
-          matchRank: "DisplayName",
-          matchReason: null,
-        },
+        { kind: "CatalogItem", id: "item-1", displayName: "Filter", defaultItemCount: null, catalogItemType: null, externalKey: null },
       ],
       limit: 20,
       hasMore: false,
@@ -158,6 +152,102 @@ describe("ProposedScopeComposer", () => {
       ),
     );
     await waitFor(() => expect(onCommitted).toHaveBeenCalled());
+  });
+
+  it("groups matching assemblies before matching catalog items, badges each, and keeps custom item last", async () => {
+    mockGetFieldScopeSearch.mockResolvedValue({
+      items: [
+        { kind: "OfferingAssembly", id: "assembly-1", displayName: "Furnace Tune-Up", defaultItemCount: 4, catalogItemType: null, externalKey: null },
+        { kind: "CatalogItem", id: "item-1", displayName: "Furnace Inspection", defaultItemCount: null, catalogItemType: "Service", externalKey: null },
+      ],
+      limit: 20,
+      hasMore: false,
+      nextCursor: null,
+    });
+
+    const user = userEvent.setup();
+    renderComposer();
+    await user.type(screen.getByPlaceholderText("Search by name, SKU, or alias…"), "furn");
+
+    await screen.findByRole("button", { name: /Furnace Tune-Up/ });
+    const buttons = screen.getAllByRole("button").filter((b) => /Furnace|custom item/.test(b.textContent ?? ""));
+    expect(buttons.map((b) => b.textContent)).toEqual([
+      expect.stringContaining("Furnace Tune-Up"),
+      expect.stringContaining("Furnace Inspection"),
+      expect.stringContaining('Add “furn” as custom item'),
+    ]);
+    expect(screen.getByRole("button", { name: /Furnace Tune-Up/ })).toHaveTextContent("Assembly");
+    expect(screen.getByRole("button", { name: /Furnace Tune-Up/ })).toHaveTextContent("Expands 4 items");
+    expect(screen.getByRole("button", { name: /Furnace Inspection/ })).toHaveTextContent("Service");
+    expect(screen.getByText("Matching assemblies")).toBeInTheDocument();
+    expect(screen.getByText("Matching catalog items")).toBeInTheDocument();
+  });
+
+  it("omits a group heading when that group has no matches", async () => {
+    mockGetFieldScopeSearch.mockResolvedValue({
+      items: [
+        { kind: "CatalogItem", id: "item-1", displayName: "Furnace Inspection", defaultItemCount: null, catalogItemType: "Service", externalKey: null },
+      ],
+      limit: 20,
+      hasMore: false,
+      nextCursor: null,
+    });
+
+    const user = userEvent.setup();
+    renderComposer();
+    await user.type(screen.getByPlaceholderText("Search by name, SKU, or alias…"), "furn");
+
+    await screen.findByText("Matching catalog items");
+    expect(screen.queryByText("Matching assemblies")).not.toBeInTheDocument();
+  });
+
+  it("dispatches an assembly result through expand-assembly immediately, with no quantity step", async () => {
+    mockGetFieldScopeSearch.mockResolvedValue({
+      items: [
+        { kind: "OfferingAssembly", id: "assembly-1", displayName: "Furnace Tune-Up", defaultItemCount: 4, catalogItemType: null, externalKey: null },
+      ],
+      limit: 20,
+      hasMore: false,
+      nextCursor: null,
+    });
+    mockExpandProposedScopeAssembly.mockResolvedValueOnce({ lineIds: ["line-1", "line-2"], concurrencyVersion: "v2" });
+
+    const user = userEvent.setup();
+    const { onCommitted } = renderComposer();
+    await user.type(screen.getByPlaceholderText("Search by name, SKU, or alias…"), "furn");
+    await user.click(await screen.findByRole("button", { name: /Furnace Tune-Up/ }));
+
+    await waitFor(() =>
+      expect(mockExpandProposedScopeAssembly).toHaveBeenCalledWith(
+        "scope-1",
+        { offeringAssemblyId: "assembly-1", excludedOptionalItemIds: [] },
+        "v1",
+      ),
+    );
+    expect(mockFieldSelectProposedScopeLine).not.toHaveBeenCalled();
+    await waitFor(() => expect(onCommitted).toHaveBeenCalled());
+  });
+
+  it("shows an explicit no-match state only after a successful empty response", async () => {
+    mockGetFieldScopeSearch.mockResolvedValue({ items: [], limit: 20, hasMore: false, nextCursor: null });
+
+    const user = userEvent.setup();
+    renderComposer();
+    await user.type(screen.getByPlaceholderText("Search by name, SKU, or alias…"), "zzz");
+
+    expect(await screen.findByText("No Price Book matches")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: 'Add “zzz” as custom item' })).toBeInTheDocument();
+  });
+
+  it("shows a distinct error state when the search request fails, not an empty result", async () => {
+    mockGetFieldScopeSearch.mockRejectedValueOnce(new Error("network down"));
+
+    const user = userEvent.setup();
+    renderComposer();
+    await user.type(screen.getByPlaceholderText("Search by name, SKU, or alias…"), "furn");
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Search failed. Try again.");
+    expect(screen.queryByText("No Price Book matches")).not.toBeInTheDocument();
   });
 
   it("adds an explicit custom item and keeps the description visible and editable on a failed add", async () => {
@@ -208,13 +298,9 @@ describe("ProposedScopeComposer", () => {
     mockFieldSelectProposedScopeLine.mockRejectedValueOnce(
       new ApiError(404, "ProposedScope.LineCatalogItemNotFound", "not found"),
     );
-    mockGetFieldCatalogItems.mockResolvedValue({
+    mockGetFieldScopeSearch.mockResolvedValue({
       items: [
-        {
-          item: { id: "item-1", type: "Material", displayName: "Filter", externalKey: null, categoryId: null, unitOfMeasure: "each" },
-          matchRank: "DisplayName",
-          matchReason: null,
-        },
+        { kind: "CatalogItem", id: "item-1", displayName: "Filter", defaultItemCount: null, catalogItemType: null, externalKey: null },
       ],
       limit: 20,
       hasMore: false,
@@ -229,7 +315,7 @@ describe("ProposedScopeComposer", () => {
 
     const alert = await screen.findByRole("alert");
     expect(alert).toHaveTextContent("This item is no longer available.");
-    expect(screen.getByLabelText("Quantity (each)")).not.toHaveAttribute("aria-invalid");
+    expect(screen.getByLabelText("Quantity")).not.toHaveAttribute("aria-invalid");
   });
 
   it("clears the custom description, quantity, and note only after a successful custom add", async () => {

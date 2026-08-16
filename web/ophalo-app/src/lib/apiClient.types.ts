@@ -1016,3 +1016,28 @@ export interface QuickScopeActionFieldRowResponse {
 export interface QuickScopeActionFieldListResult {
   actions: QuickScopeActionFieldRowResponse[];
 }
+
+// Build Log 121, ADR-486: polymorphic field-scope search — one rank-ordered sequence of Active
+// catalog items and Active/operationally-eligible assemblies, replacing the Common-Item-only
+// composer search. Price-free; `kind` distinguishes an assembly row from a catalog-item row.
+export interface FieldScopeSearchResultResponse {
+  kind: "OfferingAssembly" | "CatalogItem";
+  id: string;
+  displayName: string;
+  defaultItemCount: number | null;
+  catalogItemType: string | null;
+  externalKey: string | null;
+}
+
+export interface FieldScopeSearchResult {
+  items: FieldScopeSearchResultResponse[];
+  limit: number;
+  hasMore: boolean;
+  nextCursor: string | null;
+}
+
+export interface GetFieldScopeSearchParams {
+  search?: string;
+  limit?: number;
+  cursor?: string;
+}

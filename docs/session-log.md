@@ -1,7 +1,8 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-08-16 (Build Log 121 Session A — backend polymorphic search — complete;
-Session B frontend wiring is the next batch; business acceptance remains paused pending both)
+**Last updated:** 2026-08-16 (Build Log 121 Sessions A and B — backend and frontend polymorphic
+search — both complete; manual acceptance with realistic disposable Price Book data is the next
+batch; business acceptance remains paused pending it)
 **Deployment posture:** Not pilot-ready.
 **Source of truth for acceptance criteria:** `docs/pilot-readiness-bug-tracker.md`.
 
@@ -106,14 +107,23 @@ technician toward an avoidable custom line. Complete the following in order:
    behind an ineligible-heavy raw window is never hidden on the first page (this composer's search
    box has no cursor-walk/Load-more UI, unlike the existing plain assembly list). 1496/1496 unit,
    14/14 architecture, 40/40 targeted integration tests passing; `git diff --check` clean.
-   **Session B (frontend wiring — `ComposerSearchAndAdd.tsx`/`apiClient.ts`) is the next batch,**
-   not yet started.
+   **Session B (frontend wiring) done (2026-08-16):** `apiClient.ts`/`apiClient.types.ts` gained
+   `getFieldScopeSearch`; `ComposerSearchAndAdd.tsx` now renders labeled **Matching assemblies** /
+   **Matching catalog items** groups (each heading shown only when that group has matches) ahead of
+   the always-last custom-item action, with a distinct accessible search-error state separate from
+   the successful-empty `No Price Book matches` state. An assembly pick dispatches
+   `expandProposedScopeAssembly` immediately (no quantity step); a catalog pick keeps the existing
+   quantity/note confirmation and `field-select` flow. `ProposedScopeComposer.test.tsx` updated/
+   extended for grouped rendering, group-heading presence, both selection paths, no-match, and
+   search-failure coverage. Frontend typecheck clean; full frontend suite 436/436; `git diff --check`
+   clean. Not yet committed — awaiting review/approval.
 3. Pass Build Log 121's backend integration, frontend component/full-suite, typecheck, and diff
-   gates. Backend gate met in Session A; frontend gate pending Session B.
+   gates. **Both gates met (Sessions A and B, 2026-08-16).**
 4. Perform manual acceptance with a disposable account holding realistic data: a non-Common active
    catalog item, an eligible assembly, a Common Item, an inactive catalog item, and an ineligible
    assembly. Prove search, selection, custom-item fallback, conflict recovery, and phone/desktop
-   dialog behavior. A passing mocked frontend suite is not a substitute.
+   dialog behavior. A passing mocked frontend suite is not a substitute. **Next batch — not yet
+   started.**
 5. Record the actual evidence and commit the Omni-Search implementation before declaring proposed
    scope field-ready.
 
