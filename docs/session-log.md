@@ -1,7 +1,7 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-08-16 (Paired Nudges Session 2 — Owner/Admin configuration API — complete
-and validated; next session is Paired Nudges Session 3, field nudge-read API)
+**Last updated:** 2026-08-16 (Paired Nudges Session 3 — field nudge-read API — complete
+and validated; next session is Paired Nudges Session 4, Owner/Admin settings UI)
 **Deployment posture:** Not pilot-ready.
 **Source of truth for acceptance criteria:** `docs/pilot-readiness-bug-tracker.md`.
 
@@ -171,12 +171,31 @@ whichever lookup ran first — a correction made during review. Two new error co
 were left untouched. 33/33 combined Nudge + Quick Scope Action integration tests passing; `git diff
 --check` clean. Committed (2026-08-16).
 
-**Next: Phase 2 — Paired Nudges Session 3: field nudge-read API.** Per
-[Build Log 123](build-log/123-paired-nudges-implementation-contract-preflight.md), add the
-scope-bound read `GET /keep/pricebook/proposed-scopes/{proposedScopeId}/nudge-suggestions`
-(`RequestsOperate` + `ScopeCapture`, not `PriceBookCatalogManage`) and integration tests covering
-eligibility filtering, Draft-line dedupe, and request visibility. Start a fresh session; run the
-mechanical file-level preflight first.
+**Phase 2 — Paired Nudges Session 3: field nudge-read API. Complete (2026-08-16).** Per
+[Build Log 123](build-log/123-paired-nudges-implementation-contract-preflight.md),
+`ScopeNudgeFieldReadApiService`/`FieldScopeNudgeEndpoints` add the scope-bound read `GET
+/keep/pricebook/proposed-scopes/{proposedScopeId}/nudge-suggestions`, gated by `RequestsOperate` +
+`ScopeCapture` (not `PriceBookCatalogManage`), a read-only gate 1 (Blocked-only denies), and the
+load-scope-then-verify-request-visibility ordering used by `ProposedScopeReadApiService`. New
+`IScopeNudgeRulePersistence.GetByTriggerAsync` (no prior trigger-lookup method existed) and new
+`ScopeNudgeTargetKind` enum for the price-free polymorphic suggestion row. Trigger-parameter shape
+validation (missing/duplicate/combined/malformed, all `ScopeNudgeRule.TriggerQueryParameterInvalid`
+→ 400) runs inside the service after every auth gate and the visibility check, not at the route
+layer — a review correction: the endpoint originally validated the raw query string before
+authentication, letting an unauthenticated/unauthorized caller learn about trigger-parameter shape.
+`ScopeNudgeFieldResult.Empty` (`RuleId: null`, empty suggestions) covers all three "empty result"
+cases from the brief: no rule configured, ineligible trigger, or no surviving suggestion. 11/11 new
+integration tests passing (happy-path ordering, ineligible-suggestion omission, Draft-line dedupe,
+ineligible-trigger/no-rule empty results, missing/combined/duplicate trigger-param 400s,
+operator-not-assigned 404 visibility, no-entitlement 403, offering-assembly target); 82/82 sibling
+Nudge/QuickScopeAction/ProposedScope regression and 14/14 architecture tests still passing; `git
+diff --check` clean. Committed (2026-08-16).
+
+**Next: Phase 2 — Paired Nudges Session 4: Owner/Admin settings UI.** Per
+[Build Log 123](build-log/123-paired-nudges-implementation-contract-preflight.md)'s bounded
+implementation sequence (step 4), add the Price Book rule-management screen using Session 2's
+Owner/Admin configuration API (`ScopeNudgeRuleConfigApiService`/`ScopeNudgeRuleEndpoints`). Start a
+fresh session; run the mechanical file-level preflight first.
 
 **Unified scope-composer redesign — approved implementation map (2026-08-15).** Work proceeds
 sequentially; it is not authority to reopen the broader Request Details, request-queue,
