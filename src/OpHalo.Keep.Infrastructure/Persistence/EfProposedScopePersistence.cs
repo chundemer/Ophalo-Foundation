@@ -9,6 +9,9 @@ namespace OpHalo.Keep.Infrastructure.Persistence;
 
 public sealed class EfProposedScopePersistence(OpHaloDbContext dbContext) : IProposedScopePersistence
 {
+    private const int ExpiredSnapshotCleanupBatchSize = 1_000;
+    private const int ExpiredSnapshotCleanupMaxBatches = 10;
+
     public Task<ProposedScope?> GetByIdAsync(Guid accountId, Guid proposedScopeId, CancellationToken ct) =>
         dbContext.Set<ProposedScope>()
             .Include(x => x.Lines)
@@ -113,6 +116,38 @@ public sealed class EfProposedScopePersistence(OpHaloDbContext dbContext) : IPro
         {
             return ProposedScopeCommitResult.ConcurrencyConflict;
         }
+    }
+
+    public async Task<RemovedLineSnapshotCleanupResult> DeleteExpiredRemovedLineSnapshotsAsync(
+        DateTime olderThanUtc, CancellationToken ct)
+    {
+        var totalDeleted = 0;
+        var batchCount = 0;
+
+        while (batchCount < ExpiredSnapshotCleanupMaxBatches)
+        {
+            // SKIP LOCKED makes concurrent API replicas cooperate rather than wait on the same
+            // expired rows. Each statement is its own short transaction, limiting lock duration.
+            var deletedThisBatch = await dbContext.Database.ExecuteSqlInterpolatedAsync($"""
+                DELETE FROM keep_pricebook_removed_scope_line_snapshots
+                WHERE id IN (
+                    SELECT id
+                    FROM keep_pricebook_removed_scope_line_snapshots
+                    WHERE removed_at_utc < {olderThanUtc}
+                    ORDER BY removed_at_utc, id
+                    FOR UPDATE SKIP LOCKED
+                    LIMIT {ExpiredSnapshotCleanupBatchSize}
+                )
+                """, ct);
+
+            batchCount++;
+            totalDeleted += deletedThisBatch;
+
+            if (deletedThisBatch < ExpiredSnapshotCleanupBatchSize)
+                break;
+        }
+
+        return new RemovedLineSnapshotCleanupResult(totalDeleted, batchCount);
     }
 
     private static bool IsUniqueConstraintViolation(DbUpdateException ex) =>

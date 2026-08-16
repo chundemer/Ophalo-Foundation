@@ -215,15 +215,54 @@ public sealed class RemovedProposedScopeLineSnapshotTests : IClassFixture<Postgr
         Assert.Equal(scopeId, reloaded.ProposedScopeId);
     }
 
+    [Fact]
+    public async Task DeleteExpiredRemovedLineSnapshotsAsync_deletes_only_rows_strictly_before_the_global_cutoff()
+    {
+        var catalogItemId = await SeedActiveCatalogItemAsync();
+        var (expiredScopeId, expiredLineId) = await SeedDraftScopeWithOneLineAsync(catalogItemId);
+        await using var seedCtx = CreateContext();
+        var secondRequestId = await SeedRequestAsync(seedCtx, AccountId, "+15555550101");
+        var (atCutoffScopeId, atCutoffLineId) = await SeedDraftScopeWithOneLineAsync(catalogItemId, secondRequestId);
+        var cutoff = Now.AddMinutes(-5);
+
+        await RemoveLineAtAsync(expiredScopeId, expiredLineId, cutoff.AddTicks(-1));
+        await RemoveLineAtAsync(atCutoffScopeId, atCutoffLineId, cutoff);
+
+        await using var cleanupCtx = CreateContext();
+        var result = await new EfProposedScopePersistence(cleanupCtx)
+            .DeleteExpiredRemovedLineSnapshotsAsync(cutoff, CancellationToken.None);
+
+        Assert.Equal(1, result.DeletedRowCount);
+        Assert.Equal(1, result.BatchCount);
+
+        await using var verifyCtx = CreateContext();
+        Assert.False(await verifyCtx.Set<RemovedProposedScopeLineSnapshot>()
+            .AnyAsync(x => x.ProposedScopeId == expiredScopeId && x.LineId == expiredLineId));
+        Assert.True(await verifyCtx.Set<RemovedProposedScopeLineSnapshot>()
+            .AnyAsync(x => x.ProposedScopeId == atCutoffScopeId && x.LineId == atCutoffLineId));
+    }
+
     // -------------------------------------------------------------------------
     // Helpers
     // -------------------------------------------------------------------------
 
-    private async Task<(Guid ScopeId, Guid LineId)> SeedDraftScopeWithOneLineAsync(Guid catalogItemId)
+    private async Task RemoveLineAtAsync(Guid scopeId, Guid lineId, DateTime removedAtUtc)
     {
         await using var ctx = CreateContext();
         var persistence = new EfProposedScopePersistence(ctx);
-        var scope = ProposedScope.Create(AccountId, RequestId, OwnerId).Value;
+        var scope = await persistence.GetByIdAsync(AccountId, scopeId, CancellationToken.None);
+        var removeResult = scope!.RemoveLine(lineId, removedAtUtc);
+        Assert.True(removeResult.IsSuccess);
+        Assert.Equal(ProposedScopeCommitResult.Committed, await persistence
+            .CommitWithRemovedLineSnapshotAsync(scope, removeResult.Value, CancellationToken.None));
+    }
+
+    private async Task<(Guid ScopeId, Guid LineId)> SeedDraftScopeWithOneLineAsync(
+        Guid catalogItemId, Guid? requestId = null)
+    {
+        await using var ctx = CreateContext();
+        var persistence = new EfProposedScopePersistence(ctx);
+        var scope = ProposedScope.Create(AccountId, requestId ?? RequestId, OwnerId).Value;
         var lineResult = scope.AddLine(
             ProposedScopeLineType.KnownCatalogItem, catalogItemId, null, 1m, false,
             null, null, null, 0, "Drain Pan", "each", null, null, OwnerId);
@@ -250,13 +289,14 @@ public sealed class RemovedProposedScopeLineSnapshotTests : IClassFixture<Postgr
         return catalogItemId;
     }
 
-    private static async Task<Guid> SeedRequestAsync(OpHaloDbContext ctx, Guid accountId)
+    private static async Task<Guid> SeedRequestAsync(
+        OpHaloDbContext ctx, Guid accountId, string phone = "+15555550100")
     {
-        var customer = KeepCustomer.Create(accountId, "Jane Customer", "+15555550100");
+        var customer = KeepCustomer.Create(accountId, "Jane Customer", phone);
         ctx.Set<KeepCustomer>().Add(customer);
 
         var request = KeepRequest.CreateByBusiness(
-            accountId, customer.Id, "Jane Customer", "+15555550100", null, "Leaky faucet",
+            accountId, customer.Id, "Jane Customer", phone, null, "Leaky faucet",
             $"R{Guid.NewGuid():N}"[..20], $"tok_{Guid.NewGuid():N}", Now, KeepRequestSource.Phone);
         ctx.Set<KeepRequest>().Add(request);
 

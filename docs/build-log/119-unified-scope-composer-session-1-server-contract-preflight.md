@@ -52,6 +52,15 @@ retention failures are discoverable. It is a separate maintenance slice and must
 the Undo-delete feature is treated as production-complete; it must not be placed on the field
 mutation hot path or used to determine whether a restore is expired.
 
+**Deferred operational hardening — cleanup freshness alert.** The pilot implementation writes a
+structured success/failure log for each run, but log absence is not a proactive guarantee that the
+cleanup service is still executing. When job-specific operational assurance is required, add a
+durable last-successful-run heartbeat (with last-failure details as appropriate), expose it through
+an internal health/monitoring surface, and alert when its age exceeds the agreed threshold (for
+example, two hours). A normal API process health check is insufficient: it proves the host is alive,
+not that this scheduled cleanup has completed successfully. This is deliberately deferred; do not
+add a job-run audit table or alerting infrastructure as part of the initial cleanup slice.
+
 ### 2. Empty scopes cannot submit
 
 `ProposedScope.Submit()` gains the domain invariant that `_lines.Count` must be greater than zero.

@@ -108,6 +108,7 @@ builder.Services.AddHealthChecks().AddCheck<DatabaseHealthCheck>("database");
 builder.Services.AddSingleton<IClock, OpHalo.Foundation.Infrastructure.Services.SystemClock>();
 
 builder.Services.AddKeepServices();
+builder.Services.AddHostedService<RemovedLineSnapshotCleanupService>();
 
 builder.Services.AddSingleton<IAccountAccessPolicy, AccountAccessPolicy>();
 builder.Services.AddSingleton<IUserAccessPolicy, UserAccessPolicy>();

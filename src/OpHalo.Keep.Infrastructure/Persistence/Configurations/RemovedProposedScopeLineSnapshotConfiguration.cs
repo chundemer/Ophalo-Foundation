@@ -65,6 +65,12 @@ internal sealed class RemovedProposedScopeLineSnapshotConfiguration : BaseEntity
         builder.Property(x => x.RemovedAtUtc)
             .IsRequired();
 
+        // Global maintenance cleanup seeks solely by expiry time. Keep this separate from the
+        // tenant/scope indexes used by request-path reads so that cleanup remains an indexed range
+        // delete as snapshot volume grows.
+        builder.HasIndex(x => x.RemovedAtUtc)
+            .HasDatabaseName("ix_keep_pricebook_removed_scope_line_snapshots_removed_at_utc");
+
         // The undo-delete key: at most one live snapshot per removed line. A restore hard-deletes
         // the consumed row in the same transaction, so a later delete of the same original line id
         // (after a restore) can insert a fresh row without violating this index.

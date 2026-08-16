@@ -1,9 +1,7 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-08-16 (Build Log 121 — polymorphic field-scope search — complete: Sessions A
-and B implemented and committed, manual acceptance passed on a disposable account. Phase 1 of the
-scope-composer completion sequence is done; Phase 2 Paired Nudges remains deferred pending a
-separate preflight)
+**Last updated:** 2026-08-16 (Undo snapshot-retention cleanup complete and validated; next session
+is Paired Nudges Session 1 domain/persistence/migration preflight)
 **Deployment posture:** Not pilot-ready.
 **Source of truth for acceptance criteria:** `docs/pilot-readiness-bug-tracker.md`.
 
@@ -138,11 +136,15 @@ completed in order:
    scope field-ready. **Done (2026-08-16)** — evidence recorded above; Session B implementation
    committed. **Build Log 121 / Phase 1 (scope-composer correction) is complete.**
 
-**Phase 2 boundary — Paired Nudges: deferred.** Do not begin Paired Nudges until Phase 1 is
-committed and manually accepted. Phase 2 needs its own preflight/decision covering Owner/Admin
-curation, post-confirmation trigger timing, one-to-three non-blocking suggestions, active-state
-validation, persistence, settings UI, and technician acceptance evidence. It must not be folded
-into Omni-Search.
+## Next approved sessions
+
+1. **Phase 2 — Paired Nudges Session 1: domain, persistence, and migration.**
+   [Build Log 122](build-log/122-paired-nudges-preflight.md) locks the product model, and
+   [Build Log 123](build-log/123-paired-nudges-implementation-contract-preflight.md) locks the
+   per-rule CRUD/configuration, field nudge-read, and five-session implementation contract. Run
+   only Session 1's mechanical file-level preflight before editing:
+   `ScopeNudgeRule`/`ScopeNudgeSuggestion`, validators/errors, persistence/configuration, migration,
+   and focused domain/persistence tests. No API or frontend work in that session.
 
 **Unified scope-composer redesign — approved implementation map (2026-08-15).** Work proceeds
 sequentially; it is not authority to reopen the broader Request Details, request-queue,
@@ -354,13 +356,19 @@ and a dedicated decision.
   the sole scope-entry surface. This records code completion only: the real-data field-discovery
   failure found immediately afterward blocks business acceptance pending ADR-486/Build Log 121.
 
-**Undo-delete snapshot retention: required maintenance follow-up (locked 2026-08-16).**
-`keep_pricebook_removed_scope_line_snapshots` is transient recovery state, not an audit table.
-Successful restore deletes its consumed row atomically; a scheduled, bounded cleanup must delete
-unrestored rows older than five minutes at least hourly, record deleted-row count/failure outcome,
-and remain outside the field-mutation hot path. The service-side five-second `RemovedAtUtc` check
-remains the sole expiration authority. This maintenance slice is required before Undo-delete is
-production-complete; full contract in [Build Log 119](build-log/119-unified-scope-composer-session-1-server-contract-preflight.md).
+**Undo-delete snapshot retention: complete (2026-08-16).**
+`keep_pricebook_removed_scope_line_snapshots` remains transient recovery state, not an audit table;
+the service-side five-second `RemovedAtUtc` restore gate remains its sole user-facing expiry
+authority, while storage cleanup retains rows for at least five minutes. `OpHalo.Api` now hosts the
+out-of-band `RemovedLineSnapshotCleanupService`: after a one-minute startup delay plus a stable
+0–30-second per-replica jitter, it runs hourly, creates a scoped persistence seam, and records
+structured cutoff, deleted-row count, batch count, duration, and failures. The global cleanup is
+an indexed (`RemovedAtUtc`) set-based delete, bounded to ten 1,000-row batches per run; PostgreSQL
+`FOR UPDATE SKIP LOCKED` makes concurrent API replicas cooperate safely. The migration is
+`20260816093000_RemovedProposedScopeLineSnapshotCleanupIndex`; focused real-PostgreSQL coverage
+proves strict-cutoff behavior (older rows delete; a row exactly at the cutoff remains). 7/7
+`RemovedProposedScopeLineSnapshotTests` pass. Full prior contract remains in
+[Build Log 119](build-log/119-unified-scope-composer-session-1-server-contract-preflight.md).
 
 **Session 2 progress:**
 

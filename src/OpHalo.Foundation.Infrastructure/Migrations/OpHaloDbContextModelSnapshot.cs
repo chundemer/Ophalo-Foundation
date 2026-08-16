@@ -3183,6 +3183,9 @@ namespace OpHalo.Foundation.Infrastructure.Migrations
                     b.HasIndex("AccountId", "ProposedScopeId")
                         .HasDatabaseName("ix_keep_pricebook_removed_scope_line_snapshots_account_id_prop");
 
+                    b.HasIndex("RemovedAtUtc")
+                        .HasDatabaseName("ix_keep_pricebook_removed_scope_line_snapshots_removed_at_utc");
+
                     b.HasIndex("ProposedScopeId", "LineId")
                         .IsUnique()
                         .HasDatabaseName("ux_keep_pricebook_removed_scope_line_snapshots_scope_line");

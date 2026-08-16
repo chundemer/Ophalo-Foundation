@@ -17,6 +17,9 @@ public enum ProposedScopeCommitResult
     DraftAlreadyOpenForRequest,
 }
 
+/// <summary>Outcome of one bounded, global cleanup pass for expired undo-delete snapshots.</summary>
+public readonly record struct RemovedLineSnapshotCleanupResult(int DeletedRowCount, int BatchCount);
+
 /// <summary>
 /// Persistence seam for <see cref="ProposedScope"/>. Every read is scoped by <c>accountId</c>
 /// directly in the query, never filtered after load, so a cross-account id can never resolve to
@@ -80,4 +83,12 @@ public interface IProposedScopePersistence
     /// </summary>
     Task<ProposedScopeCommitResult> CommitWithConsumedSnapshotDeleteAsync(
         ProposedScope scope, RemovedProposedScopeLineSnapshot snapshot, CancellationToken ct);
+
+    /// <summary>
+    /// Hard-deletes expired undo-delete snapshots across every account. This is an internal
+    /// maintenance operation, deliberately unscoped by account; each database batch is bounded so
+    /// a backlog cannot monopolize the database.
+    /// </summary>
+    Task<RemovedLineSnapshotCleanupResult> DeleteExpiredRemovedLineSnapshotsAsync(
+        DateTime olderThanUtc, CancellationToken ct);
 }
