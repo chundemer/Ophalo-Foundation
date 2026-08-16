@@ -1,9 +1,10 @@
 import { type ProposedScopeLineResponse } from "../../lib/apiClient";
 
 /**
- * Session 5B, build-log/120: read-only rendering of the authoritative Draft. Quick-action/assembly
- * source context, duplicate-row stacking, and edit/remove controls are 5C/5D scope — this only
- * proves the shell can display whatever lines the composer's mutations produce.
+ * Session 5B/5C, build-log/120: read-only rendering of the authoritative Draft. Repeated
+ * catalog-item/assembly selections and assembly-expanded default lines are always separate rows,
+ * keyed by line id — never merged or aggregated locally (locked shared implementation rule).
+ * Edit/remove controls remain 5D scope.
  */
 export function ComposerDraftList({ lines }: { lines: ProposedScopeLineResponse[] }) {
   if (lines.length === 0) {
@@ -16,8 +17,15 @@ export function ComposerDraftList({ lines }: { lines: ProposedScopeLineResponse[
         <li key={line.id} className="rounded-lg border border-[var(--ophalo-border)] px-3 py-2 text-sm text-[var(--ophalo-ink)]">
           <div className="flex items-center justify-between gap-2">
             <span className="min-w-0 truncate">{line.displayNameSnapshot}</span>
-            <span className="text-[var(--ophalo-muted)] shrink-0"> × {line.quantity}</span>
+            <span className="text-[var(--ophalo-muted)] shrink-0">
+              {" "}
+              × {line.quantity}
+              {line.unitOfMeasureSnapshot ? ` ${line.unitOfMeasureSnapshot}` : ""}
+            </span>
           </div>
+          {line.offeringAssemblyNameSnapshot && (
+            <p className="text-xs text-[var(--ophalo-muted)] truncate">From {line.offeringAssemblyNameSnapshot}</p>
+          )}
           {line.note && <p className="text-xs text-[var(--ophalo-muted)] truncate">{line.note}</p>}
         </li>
       ))}

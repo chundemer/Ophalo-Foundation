@@ -20,6 +20,12 @@ export type ProposedScopeCaptureState =
 export const PROPOSED_SCOPE_CONFLICT_NOTICE =
   "This proposed scope changed elsewhere — refreshed with the latest scope. Try again.";
 
+// Session 5C review fix, build-log/120: the reconciliation reload itself can fail (e.g. the
+// technician's connection drops between the conflict and the re-fetch). This is distinct from the
+// conflict notice above — it means the client does not yet know the authoritative scope state.
+export const PROPOSED_SCOPE_RECONCILE_RELOAD_FAILURE_NOTICE =
+  "Unable to refresh scope. Check your connection and try again.";
+
 export function useProposedScopeCapture(requestId: string) {
   const [state, setState] = useState<ProposedScopeCaptureState>({ status: "loading" });
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -91,15 +97,38 @@ export function useProposedScopeCapture(requestId: string) {
 
   const closeModal = useCallback(() => setIsModalOpen(false), []);
 
+  // Session 5C review fix: reconcileAfterConflict's own state is what the last reload attempt
+  // needs to retry with — kept separate from conflictNotice so a reload-failure notice can
+  // temporarily replace it without losing what the eventual successful reload should say.
+  const [pendingReconcileMessage, setPendingReconcileMessage] = useState<string | null>(null);
+
   // Session 5A, build-log/120: the single reusable 409/ambiguous-failure path every composer
   // mutation will call instead of duplicating notice-plus-refetch handling per surface. It only
   // reloads the authoritative scope and surfaces one shared notice — it never retries the mutation.
+  //
+  // Session 5C review fix: the authoritative reload itself can fail. The original mutation is
+  // still never retried, but a failed reload must not claim the scope was refreshed — it leaves
+  // the current (pre-conflict) scope state untouched, surfaces a distinct reload-failure notice,
+  // and remembers the intended notice so `retryReconciliation` can re-attempt the same reload.
   const reconcileAfterConflict = useCallback(
     async (message: string = PROPOSED_SCOPE_CONFLICT_NOTICE) => {
-      setConflictNotice(message);
-      await refetchScope();
+      try {
+        await refetchScope();
+        setConflictNotice(message);
+        setPendingReconcileMessage(null);
+      } catch {
+        setConflictNotice(PROPOSED_SCOPE_RECONCILE_RELOAD_FAILURE_NOTICE);
+        setPendingReconcileMessage(message);
+      }
     },
     [refetchScope],
+  );
+
+  // Session 5C review fix: explicit retry of a failed reconciliation reload, using the same
+  // authoritative read and the notice the failed attempt was trying to show.
+  const retryReconciliation = useCallback(
+    () => reconcileAfterConflict(pendingReconcileMessage ?? undefined),
+    [reconcileAfterConflict, pendingReconcileMessage],
   );
 
   const clearConflictNotice = useCallback(() => setConflictNotice(null), []);
@@ -113,6 +142,7 @@ export function useProposedScopeCapture(requestId: string) {
     refetchScope,
     conflictNotice,
     reconcileAfterConflict,
+    retryReconciliation,
     clearConflictNotice,
   };
 }

@@ -1,6 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { renderHook, waitFor, act } from "@testing-library/react";
-import { useProposedScopeCapture, PROPOSED_SCOPE_CONFLICT_NOTICE } from "../useProposedScopeCapture";
+import {
+  useProposedScopeCapture,
+  PROPOSED_SCOPE_CONFLICT_NOTICE,
+  PROPOSED_SCOPE_RECONCILE_RELOAD_FAILURE_NOTICE,
+} from "../useProposedScopeCapture";
 import { api, ApiError } from "../../../lib/apiClient";
 import type { ProposedScopeDetailResult } from "../../../lib/apiClient";
 
@@ -196,6 +200,46 @@ describe("useProposedScopeCapture", () => {
 
     act(() => result.current.clearConflictNotice());
     expect(result.current.conflictNotice).toBeNull();
+  });
+
+  it("reconcileAfterConflict shows a reload-failure notice and preserves scope state when the authoritative reload fails", async () => {
+    const scope = draftScope();
+    mockGetCurrentProposedScopeForRequest.mockResolvedValueOnce({ state: "Draft", scope });
+    const { result } = renderHook(() => useProposedScopeCapture("request-1"));
+    await waitFor(() => expect(result.current.state.status).toBe("draft"));
+
+    mockGetProposedScope.mockRejectedValueOnce(new Error("network down"));
+
+    await act(async () => {
+      await result.current.reconcileAfterConflict();
+    });
+
+    expect(result.current.conflictNotice).toBe(PROPOSED_SCOPE_RECONCILE_RELOAD_FAILURE_NOTICE);
+    expect(result.current.state).toEqual({ status: "draft", scope });
+  });
+
+  it("retryReconciliation re-attempts the same authoritative reload and, on success, surfaces the original notice", async () => {
+    const scope = draftScope();
+    mockGetCurrentProposedScopeForRequest.mockResolvedValueOnce({ state: "Draft", scope });
+    const { result } = renderHook(() => useProposedScopeCapture("request-1"));
+    await waitFor(() => expect(result.current.state.status).toBe("draft"));
+
+    mockGetProposedScope.mockRejectedValueOnce(new Error("network down"));
+    await act(async () => {
+      await result.current.reconcileAfterConflict("Custom notice");
+    });
+    expect(result.current.conflictNotice).toBe(PROPOSED_SCOPE_RECONCILE_RELOAD_FAILURE_NOTICE);
+    expect(result.current.state).toEqual({ status: "draft", scope });
+
+    const refreshed = draftScope({ concurrencyVersion: "v2" });
+    mockGetProposedScope.mockResolvedValueOnce(refreshed);
+    await act(async () => {
+      await result.current.retryReconciliation();
+    });
+
+    expect(mockGetProposedScope).toHaveBeenCalledTimes(2);
+    expect(result.current.conflictNotice).toBe("Custom notice");
+    expect(result.current.state).toEqual({ status: "draft", scope: refreshed });
   });
 });
 

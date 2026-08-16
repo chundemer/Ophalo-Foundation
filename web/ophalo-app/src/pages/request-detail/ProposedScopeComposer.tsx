@@ -3,7 +3,9 @@ import { X } from "lucide-react";
 import { KeepModal } from "../../components/keep/KeepModal";
 import { type ProposedScopeDetailResult } from "../../lib/apiClient";
 import { ComposerSearchAndAdd } from "./ComposerSearchAndAdd";
+import { ComposerQuickActions } from "./ComposerQuickActions";
 import { ComposerDraftList } from "./ComposerDraftList";
+import { PROPOSED_SCOPE_RECONCILE_RELOAD_FAILURE_NOTICE } from "./useProposedScopeCapture";
 
 const FOCUS_RING =
   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-offset-2";
@@ -13,15 +15,16 @@ interface ProposedScopeComposerProps {
   conflictNotice: string | null;
   onClose: () => void;
   onCommitted: () => void;
-  onConflict: () => void;
+  onConflict: (message?: string) => void;
   onDismissNotice: () => void;
+  onRetryReconciliation: () => void;
 }
 
 /**
- * Session 5B, build-log/120: the ADR-482/483 replacement surface — shell, unified search+add, and
- * live Draft. Built alongside `ProposedScopeCaptureModal`'s five-rung ladder, which stays fully
- * intact and unreachable from here until Session 5E's cutover and rung removal. The sticky footer
- * is a structural boundary only; `Submit scope to office` wiring is Session 5D.
+ * Session 5B/5C, build-log/120: the ADR-482/483 replacement surface — shell, Quick actions, unified
+ * search+add, and live Draft. Built alongside `ProposedScopeCaptureModal`'s five-rung ladder, which
+ * stays fully intact and unreachable from here until Session 5E's cutover and rung removal. The
+ * sticky footer is a structural boundary only; `Submit scope to office` wiring is Session 5D.
  *
  * Fixed `100dvh` full-screen presentation on phone; a constrained centered dialog from `md:` up,
  * per the locked shared implementation rules — the page behind never becomes the active scroller.
@@ -33,6 +36,7 @@ export function ProposedScopeComposer({
   onCommitted,
   onConflict,
   onDismissNotice,
+  onRetryReconciliation,
 }: ProposedScopeComposerProps) {
   const searchInputRef = useRef<HTMLInputElement>(null);
 
@@ -70,15 +74,33 @@ export function ProposedScopeComposer({
             className="flex items-start justify-between gap-2 rounded-lg border border-[var(--ophalo-border)] bg-[var(--ophalo-canvas)] px-3 py-2 text-sm text-[var(--ophalo-ink)]"
           >
             <span>{conflictNotice}</span>
-            <button
-              type="button"
-              onClick={onDismissNotice}
-              className={`text-xs font-medium text-[var(--keep-accent)] shrink-0 ${FOCUS_RING}`}
-            >
-              Dismiss
-            </button>
+            <div className="flex items-center gap-2 shrink-0">
+              {conflictNotice === PROPOSED_SCOPE_RECONCILE_RELOAD_FAILURE_NOTICE && (
+                <button
+                  type="button"
+                  onClick={onRetryReconciliation}
+                  className={`text-xs font-medium text-[var(--keep-accent)] ${FOCUS_RING}`}
+                >
+                  Retry
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={onDismissNotice}
+                className={`text-xs font-medium text-[var(--keep-accent)] ${FOCUS_RING}`}
+              >
+                Dismiss
+              </button>
+            </div>
           </div>
         )}
+
+        <ComposerQuickActions
+          proposedScopeId={scope.id}
+          version={scope.concurrencyVersion}
+          onCommitted={onCommitted}
+          onConflict={onConflict}
+        />
 
         <ComposerSearchAndAdd
           ref={searchInputRef}

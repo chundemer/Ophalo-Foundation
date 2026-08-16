@@ -37,6 +37,7 @@ export const ComposerSearchAndAdd = forwardRef<HTMLInputElement, ComposerSearchA
   const [searchText, setSearchText] = useState("");
   const [debouncedText, setDebouncedText] = useState("");
   const [selection, setSelection] = useState<Selection | null>(null);
+  const [customDescription, setCustomDescription] = useState("");
   const [quantity, setQuantity] = useState("1");
   const [note, setNote] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -59,6 +60,7 @@ export const ComposerSearchAndAdd = forwardRef<HTMLInputElement, ComposerSearchA
     setSelection(null);
     setSearchText("");
     setDebouncedText("");
+    setCustomDescription("");
     setQuantity("1");
     setNote("");
   }
@@ -74,7 +76,7 @@ export const ComposerSearchAndAdd = forwardRef<HTMLInputElement, ComposerSearchA
       }
       return api.fieldSelectProposedScopeLine(
         proposedScopeId,
-        { lineType: "OffCatalogItem", offCatalogDescription: debouncedText, quantity: Number(quantity), note: note.trim() || null },
+        { lineType: "OffCatalogItem", offCatalogDescription: customDescription, quantity: Number(quantity), note: note.trim() || null },
         version,
       );
     },
@@ -108,7 +110,6 @@ export const ComposerSearchAndAdd = forwardRef<HTMLInputElement, ComposerSearchA
   });
 
   if (selection !== null) {
-    const label = selection.kind === "catalog" ? selection.item.displayName : `“${debouncedText}” (custom item)`;
     const unitLabel = selection.kind === "catalog" ? ` (${selection.item.unitOfMeasure})` : "";
     return (
       <div className="space-y-3">
@@ -123,7 +124,30 @@ export const ComposerSearchAndAdd = forwardRef<HTMLInputElement, ComposerSearchA
         >
           ← Choose a different item
         </button>
-        <p className="text-sm font-medium text-[var(--ophalo-ink)]">{label}</p>
+        {selection.kind === "catalog" ? (
+          <p className="text-sm font-medium text-[var(--ophalo-ink)]">{selection.item.displayName}</p>
+        ) : (
+          <div>
+            <label htmlFor="composer-custom-description" className="block text-xs text-[var(--ophalo-muted)] mb-1">
+              Custom item description
+            </label>
+            <input
+              id="composer-custom-description"
+              type="text"
+              value={customDescription}
+              onChange={(e) => setCustomDescription(e.target.value)}
+              maxLength={DESCRIPTION_MAX_LENGTH}
+              aria-invalid={descriptionError ? true : undefined}
+              aria-describedby={descriptionError ? "composer-custom-description-error" : undefined}
+              className={INPUT_CLS}
+            />
+            {descriptionError && (
+              <p id="composer-custom-description-error" role="alert" className="text-sm text-[var(--ophalo-danger)] mt-1">
+                {descriptionError}
+              </p>
+            )}
+          </div>
+        )}
         <div>
           <label htmlFor="composer-add-quantity" className="block text-xs text-[var(--ophalo-muted)] mb-1">
             Quantity{unitLabel}
@@ -137,6 +161,14 @@ export const ComposerSearchAndAdd = forwardRef<HTMLInputElement, ComposerSearchA
             onChange={(e) => setQuantity(e.target.value)}
             className={INPUT_CLS}
           />
+          {/* `error` also covers non-quantity failures (item unavailable, generic mutation failure),
+              so it is announced via role="alert" rather than aria-invalid/aria-describedby on this
+              field — that pairing would incorrectly mark quantity itself as invalid in those cases. */}
+          {error && (
+            <p role="alert" className="text-sm text-[var(--ophalo-danger)] mt-1">
+              {error}
+            </p>
+          )}
         </div>
         <div>
           <label htmlFor="composer-add-note" className="block text-xs text-[var(--ophalo-muted)] mb-1">
@@ -144,8 +176,6 @@ export const ComposerSearchAndAdd = forwardRef<HTMLInputElement, ComposerSearchA
           </label>
           <input id="composer-add-note" type="text" value={note} onChange={(e) => setNote(e.target.value)} className={INPUT_CLS} />
         </div>
-        {descriptionError && <p className="text-sm text-[var(--ophalo-danger)]">{descriptionError}</p>}
-        {error && <p className="text-sm text-[var(--ophalo-danger)]">{error}</p>}
         <KeepButton
           type="button"
           variant="teal"
@@ -163,8 +193,12 @@ export const ComposerSearchAndAdd = forwardRef<HTMLInputElement, ComposerSearchA
 
   return (
     <div className="space-y-2">
+      <label htmlFor="composer-search-input" className="sr-only">
+        Search catalog items
+      </label>
       <input
         ref={searchInputRef}
+        id="composer-search-input"
         type="text"
         value={searchText}
         onChange={(e) => setSearchText(e.target.value)}
@@ -192,7 +226,10 @@ export const ComposerSearchAndAdd = forwardRef<HTMLInputElement, ComposerSearchA
           <li>
             <button
               type="button"
-              onClick={() => setSelection({ kind: "custom" })}
+              onClick={() => {
+                setCustomDescription(debouncedText);
+                setSelection({ kind: "custom" });
+              }}
               className={`w-full text-left rounded-lg px-3 py-2 text-sm font-medium text-[var(--keep-accent)] hover:bg-[var(--ophalo-canvas)] ${FOCUS_RING}`}
             >
               Add “{debouncedText}” as custom item
