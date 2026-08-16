@@ -171,6 +171,76 @@ public sealed class EfOfferingAssemblyPersistence(OpHaloDbContext dbContext) : I
             .ToList();
     }
 
+    // No-match sentinel for name rank — always beaten by a real 0/1/2 rank (mirrors
+    // EfCatalogReadPersistence's NameRank convention so the two streams merge on the same scale).
+    private const int NoMatch = int.MaxValue;
+
+    public async Task<IReadOnlyList<OfferingAssemblySearchRow>> SearchAsync(
+        Guid accountId,
+        string searchTerm,
+        OfferingAssemblySearchCursorPosition? cursor,
+        int fetchCount,
+        CancellationToken ct)
+    {
+        var nameTerm = searchTerm.Trim().ToLowerInvariant();
+
+        var ranked = dbContext.Set<OfferingAssembly>()
+            .AsNoTracking()
+            .Where(x => x.AccountId == accountId && x.ActiveState == CatalogActiveState.Active)
+            .Select(x => new
+            {
+                x.Id,
+                x.Name,
+                x.PrimaryCatalogItemId,
+                x.PriceTreatment,
+                x.ActiveState,
+                ItemCatalogItemIds = x.Items.Select(i => i.CatalogItemId).ToList(),
+                ItemCount = x.Items.Count,
+                Rank = x.Name.ToLower() == nameTerm ? 0
+                    : x.Name.ToLower().StartsWith(nameTerm) ? 1
+                    : x.Name.ToLower().Contains(nameTerm) ? 2
+                    : NoMatch,
+            })
+            .Where(x => x.Rank != NoMatch);
+
+        if (cursor is not null)
+        {
+            var cursorRank = (int)cursor.Rank;
+            var cursorName = cursor.Name;
+            var cursorId = cursor.LastId;
+            ranked = ranked.Where(x =>
+                x.Rank > cursorRank ||
+                (x.Rank == cursorRank && x.Name.CompareTo(cursorName) > 0) ||
+                (x.Rank == cursorRank && x.Name == cursorName && x.Id.CompareTo(cursorId) > 0));
+        }
+
+        var headers = await ranked
+            .OrderBy(x => x.Rank)
+            .ThenBy(x => x.Name)
+            .ThenBy(x => x.Id)
+            .Take(fetchCount)
+            .ToListAsync(ct);
+
+        if (headers.Count == 0)
+            return [];
+
+        // Same batched eligibility projection as ListAsync — never a per-row query.
+        var allCatalogItemIds = headers
+            .SelectMany(h => h.ItemCatalogItemIds.Append(h.PrimaryCatalogItemId))
+            .Distinct()
+            .ToList();
+        var lookup = await LoadCatalogItemLookupAsync(accountId, allCatalogItemIds, ct);
+
+        return headers
+            .Select(h => new OfferingAssemblySearchRow(
+                h.Id,
+                h.Name,
+                h.ItemCount,
+                (CatalogItemMatchRank)h.Rank,
+                ComputeEligibility(h.ActiveState, h.PriceTreatment, h.PrimaryCatalogItemId, h.ItemCatalogItemIds, lookup).IsEligible))
+            .ToList();
+    }
+
     public async Task<OfferingAssemblyDetail?> GetDetailAsync(Guid accountId, Guid offeringAssemblyId, CancellationToken ct)
     {
         var assembly = await dbContext.Set<OfferingAssembly>()

@@ -419,6 +419,10 @@ public class OfferingAssemblyLifecycleServiceTests
         public Task<OfferingAssemblyDetail?> GetDetailAsync(Guid accountId, Guid offeringAssemblyId, CancellationToken ct) =>
             throw new NotSupportedException("Not exercised by OfferingAssemblyLifecycleServiceTests.");
 
+        public Task<IReadOnlyList<OfferingAssemblySearchRow>> SearchAsync(
+            Guid accountId, string searchTerm, OfferingAssemblySearchCursorPosition? cursor, int fetchCount, CancellationToken ct) =>
+            throw new NotSupportedException("Not exercised by OfferingAssemblyLifecycleServiceTests.");
+
         public Task<OfferingAssemblyEligibility> GetEligibilityAsync(Guid accountId, Guid offeringAssemblyId, CancellationToken ct) =>
             throw new NotSupportedException("Not exercised by OfferingAssemblyLifecycleServiceTests.");
 

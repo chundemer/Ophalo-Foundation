@@ -35,6 +35,29 @@ public sealed record OfferingAssemblyListRow(
     Guid ConcurrencyVersion,
     bool IsOperationallyEligible);
 
+/// <summary>Last-row keyset position for the raw (pre-eligibility-filter) name-search stream
+/// (build-log/121). Callers position this against a returned row — never a row merely scanned and
+/// discarded — so a caller that over-fetches raw chunks to fill an eligibility-filtered page can
+/// resume without ever skipping a row further down the raw sequence (an unconsumed scanned row is
+/// simply re-scanned, not lost). Reuses <see cref="CatalogItemMatchRank"/> — same three-tier
+/// exact/prefix/substring scheme — so a catalog-item and assembly row can be merged into one
+/// globally rank-ordered sequence (ADR-486).</summary>
+public sealed record OfferingAssemblySearchCursorPosition(
+    CatalogItemMatchRank Rank,
+    string Name,
+    Guid LastId);
+
+/// <summary>One raw name-search match (build-log/121): <c>Active</c> only, ranked, with
+/// eligibility (ADR-479) already computed so the caller can filter without a second query.
+/// <c>ItemCount</c> is every item line (required and optional) — the count added when
+/// <c>expand-assembly</c> is called with no exclusions, i.e. the field default.</summary>
+public sealed record OfferingAssemblySearchRow(
+    Guid Id,
+    string Name,
+    int ItemCount,
+    CatalogItemMatchRank MatchRank,
+    bool IsOperationallyEligible);
+
 public sealed record OfferingAssemblyDetailItem(
     Guid Id,
     Guid CatalogItemId,
@@ -190,4 +213,18 @@ public interface IOfferingAssemblyPersistence
     /// </summary>
     Task<IReadOnlyList<OfferingAssemblyDependencyRow>> ListActiveAssembliesReferencingCatalogItemAsync(
         Guid accountId, Guid catalogItemId, CancellationToken ct);
+
+    /// <summary>
+    /// Polymorphic field-scope search's assembly stream (build-log/121, ADR-486): every
+    /// <c>Active</c> assembly matching <paramref name="searchTerm"/> by name, ranked exact/prefix/
+    /// substring, ordered (Rank, Name, Id). Returns up to <paramref name="fetchCount"/> raw rows —
+    /// operational eligibility is computed per row but never filtered here; the caller decides
+    /// whether/how far to keep scanning raw chunks to fill an eligibility-filtered page.
+    /// </summary>
+    Task<IReadOnlyList<OfferingAssemblySearchRow>> SearchAsync(
+        Guid accountId,
+        string searchTerm,
+        OfferingAssemblySearchCursorPosition? cursor,
+        int fetchCount,
+        CancellationToken ct);
 }

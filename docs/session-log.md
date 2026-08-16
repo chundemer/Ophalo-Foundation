@@ -1,8 +1,7 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-08-16 (ADR-486 polymorphic field-scope search locked; unified scope-composer
-Session 5E primary-action placement and ladder removal complete; snapshot-retention cleanup remains
-a required maintenance follow-up)
+**Last updated:** 2026-08-16 (Build Log 121 Session A — backend polymorphic search — complete;
+Session B frontend wiring is the next batch; business acceptance remains paused pending both)
 **Deployment posture:** Not pilot-ready.
 **Source of truth for acceptance criteria:** `docs/pilot-readiness-bug-tracker.md`.
 
@@ -45,7 +44,8 @@ promotion policy, snapshots, and submit/concurrency invariants remain unchanged.
 primary request-work action, not another right-panel Request Details card. Pause further work that
 extends or polishes the existing ladder; next work is a focused unified-composer preflight and
 replacement. Do **not** broaden that work into a general Request Details or request-queue redesign:
-those concerns are explicitly deferred until scope capture is complete and reviewed.
+those concerns are explicitly deferred until scope capture is complete and reviewed. ADR-486 later
+supersedes the Common-Item/Quick-action restriction on field discovery.
 
 **Scope-composer interaction contract: locked (2026-08-15).**
 [ADR-483](decisions/ADR-483-field-scope-composer-interaction-and-quick-actions.md) fixes the
@@ -54,7 +54,8 @@ office-curated Quick scope actions, and explicit custom-item creation are coequa
 paths; typing never itself creates a custom line. Assemblies are optional one-tap anchors that
 immediately expand to independently editable Draft lines, never auto-populated or opaque bundles.
 Quick actions are a small tenant-managed ordered set, not every active catalog item/assembly and
-not request-type/trade inference. Decimal/unit-safe quantity editing, immediate removal with
+not request-type/trade inference. ADR-486 retains them as accelerators but no longer permits them
+to be the only assembly-discovery route. Decimal/unit-safe quantity editing, immediate removal with
 recoverable Undo where feasible, and price blindness remain required. Next is a focused scope
 composer UI-design/preflight discussion; no implementation resumes until that design is locked.
 
@@ -88,6 +89,40 @@ catalog items, then the always-last Custom item action; a successful empty resul
 default-only atomic `expand-assembly` mutations. [Build Log 121](build-log/121-polymorphic-field-scope-search-implementation-handoff.md)
 is the implementation handoff; do not silently treat a search failure as an empty result.
 
+**Active completion sequence — Phase 1: scope-composer correction.** Session 5E's replacement is
+implemented but is **not business-accepted or pilot-ready**: live testing exposed that typing a
+known assembly or non-Common catalog item can produce a false zero-result state and steer a
+technician toward an avoidable custom line. Complete the following in order:
+
+1. Commit the bounded Session 5E implementation separately; it is a mechanical composer cutover,
+   not acceptance of the field workflow. **Done (2026-08-16).**
+2. Implement [Build Log 121](build-log/121-polymorphic-field-scope-search-implementation-handoff.md):
+   server-authoritative polymorphic search, grouped composer results, visible search-error state,
+   and existing selection mutations. **Session A (backend) done (2026-08-16):**
+   `GET /keep/pricebook/field/scope-search` merges catalog-item search (fully SQL-ranked) and
+   assembly name search (SQL-ranked, ADR-479 eligibility computed in memory) into one globally
+   rank-ordered, cursor-paginated sequence. The assembly side keeps pulling raw chunks — no
+   arbitrary scan cap — until the page fills or the raw stream is exhausted, so an eligible match
+   behind an ineligible-heavy raw window is never hidden on the first page (this composer's search
+   box has no cursor-walk/Load-more UI, unlike the existing plain assembly list). 1496/1496 unit,
+   14/14 architecture, 40/40 targeted integration tests passing; `git diff --check` clean.
+   **Session B (frontend wiring — `ComposerSearchAndAdd.tsx`/`apiClient.ts`) is the next batch,**
+   not yet started.
+3. Pass Build Log 121's backend integration, frontend component/full-suite, typecheck, and diff
+   gates. Backend gate met in Session A; frontend gate pending Session B.
+4. Perform manual acceptance with a disposable account holding realistic data: a non-Common active
+   catalog item, an eligible assembly, a Common Item, an inactive catalog item, and an ineligible
+   assembly. Prove search, selection, custom-item fallback, conflict recovery, and phone/desktop
+   dialog behavior. A passing mocked frontend suite is not a substitute.
+5. Record the actual evidence and commit the Omni-Search implementation before declaring proposed
+   scope field-ready.
+
+**Phase 2 boundary — Paired Nudges: deferred.** Do not begin Paired Nudges until Phase 1 is
+committed and manually accepted. Phase 2 needs its own preflight/decision covering Owner/Admin
+curation, post-confirmation trigger timing, one-to-three non-blocking suggestions, active-state
+validation, persistence, settings UI, and technician acceptance evidence. It must not be folded
+into Omni-Search.
+
 **Unified scope-composer redesign — approved implementation map (2026-08-15).** Work proceeds
 sequentially; it is not authority to reopen the broader Request Details, request-queue,
 classification/archetype, billing, or offline-first workstreams.
@@ -105,7 +140,7 @@ classification/archetype, billing, or offline-first workstreams.
 4. **Field mutation contract updates.** Server-reject empty submission; align deterministic field
    search with the unified composer; replace technician optional-item exclusion with default-only
    expansion; add versioned delete Undo/restore; prove snapshot/provenance, terminal-request, and
-   concurrency behavior.
+   concurrency behavior. The original Common-Item-only search assumption is superseded by ADR-486.
 5. **Unified composer frontend.** Replace the five-rung modal with a live Draft list, unified
    search/type input, explicit custom-item action, Quick scope actions, one-tap default assembly
    expansion, and sticky Draft/submit/read-only states. Do not delete ladder code until this
@@ -295,7 +330,8 @@ and a dedicated decision.
   in `web/`. 4 files modified, 7 deleted. Full frontend suite 431/431, focused request-detail/keep
   suite 152/152, `tsc --noEmit` and `git diff --check` clean. No backend/API contract changed, so no
   backend regression was required for this batch. Unified composer (`ProposedScopeComposer`) is now
-  the sole scope-entry surface, satisfying the Session 5 exit gate.
+  the sole scope-entry surface. This records code completion only: the real-data field-discovery
+  failure found immediately afterward blocks business acceptance pending ADR-486/Build Log 121.
 
 **Undo-delete snapshot retention: required maintenance follow-up (locked 2026-08-16).**
 `keep_pricebook_removed_scope_line_snapshots` is transient recovery state, not an audit table.

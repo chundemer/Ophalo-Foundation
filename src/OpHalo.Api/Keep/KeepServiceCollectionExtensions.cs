@@ -143,6 +143,11 @@ public static class KeepServiceCollectionExtensions
         // IOfferingAssemblyPersistence/IKeepRequestListCursorProtector (registered above).
         services.AddScoped<FieldOfferingAssemblyReadApiService>();
 
+        // Price Book, Quotes & Materials — polymorphic field-scope search (build-log/121, ADR-486).
+        // Reuses ICatalogReadPersistence/IOfferingAssemblyPersistence/IKeepRequestListCursorProtector
+        // (registered above).
+        services.AddScoped<FieldScopeSearchApiService>();
+
         // Price Book, Quotes & Materials — server-authoritative field-select (Session 3.4d). Reuses
         // EditProposedScopeService/ICatalogReadPersistence (registered above).
         services.AddScoped<FieldProposedScopeSelectionApiService>();

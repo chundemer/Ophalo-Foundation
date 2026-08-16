@@ -328,6 +328,7 @@ app.MapOfferingAssemblyEndpoints();
 app.MapProposedScopeEndpoints();
 app.MapFieldCatalogEndpoints();
 app.MapFieldOfferingAssemblyEndpoints();
+app.MapFieldScopeSearchEndpoints();
 app.MapQuickScopeActionEndpoints();
 app.MapFieldQuickScopeActionEndpoints();
 
