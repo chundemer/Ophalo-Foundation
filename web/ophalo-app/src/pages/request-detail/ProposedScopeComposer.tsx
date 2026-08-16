@@ -1,11 +1,15 @@
-import { useRef } from "react";
+import { useRef, useState } from "react";
+import { useMutation } from "@tanstack/react-query";
 import { X } from "lucide-react";
 import { KeepModal } from "../../components/keep/KeepModal";
-import { type ProposedScopeDetailResult } from "../../lib/apiClient";
+import { api, type ProposedScopeDetailResult } from "../../lib/apiClient";
 import { ComposerSearchAndAdd } from "./ComposerSearchAndAdd";
 import { ComposerQuickActions } from "./ComposerQuickActions";
 import { ComposerDraftList } from "./ComposerDraftList";
+import { ComposerUndoToast, type PendingUndo } from "./ComposerUndoToast";
 import { PROPOSED_SCOPE_RECONCILE_RELOAD_FAILURE_NOTICE } from "./useProposedScopeCapture";
+
+const SUBMITTED_OUTCOME_LABEL = "Submitted to office — awaiting review";
 
 const FOCUS_RING =
   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-offset-2";
@@ -21,10 +25,10 @@ interface ProposedScopeComposerProps {
 }
 
 /**
- * Session 5B/5C, build-log/120: the ADR-482/483 replacement surface — shell, Quick actions, unified
- * search+add, and live Draft. Built alongside `ProposedScopeCaptureModal`'s five-rung ladder, which
- * stays fully intact and unreachable from here until Session 5E's cutover and rung removal. The
- * sticky footer is a structural boundary only; `Submit scope to office` wiring is Session 5D.
+ * Session 5B/5C/5D, build-log/120: the ADR-482/483 replacement surface — shell, Quick actions,
+ * unified search+add, live Draft with edit/remove/Undo, and submit. Built alongside
+ * `ProposedScopeCaptureModal`'s five-rung ladder, which stays fully intact and unreachable from here
+ * until Session 5E's cutover and rung removal.
  *
  * Fixed `100dvh` full-screen presentation on phone; a constrained centered dialog from `md:` up,
  * per the locked shared implementation rules — the page behind never becomes the active scroller.
@@ -39,6 +43,28 @@ export function ProposedScopeComposer({
   onRetryReconciliation,
 }: ProposedScopeComposerProps) {
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const [pendingUndo, setPendingUndo] = useState<PendingUndo | null>(null);
+  const [submitted, setSubmitted] = useState(false);
+
+  function handleRemoved(removed: PendingUndo) {
+    setPendingUndo(removed);
+  }
+
+  function handleUndoSettled() {
+    setPendingUndo(null);
+    onCommitted();
+  }
+
+  const submitMutation = useMutation({
+    mutationFn: () => api.submitProposedScope(scope.id, scope.concurrencyVersion),
+    onSuccess: () => {
+      setSubmitted(true);
+      onCommitted();
+    },
+    onError: () => onConflict(),
+  });
+
+  const readOnly = submitted || scope.status !== "Draft";
 
   return (
     <KeepModal
@@ -95,34 +121,71 @@ export function ProposedScopeComposer({
           </div>
         )}
 
-        <ComposerQuickActions
-          proposedScopeId={scope.id}
-          version={scope.concurrencyVersion}
-          onCommitted={onCommitted}
-          onConflict={onConflict}
-        />
+        {!readOnly && (
+          <ComposerQuickActions
+            proposedScopeId={scope.id}
+            version={scope.concurrencyVersion}
+            onCommitted={onCommitted}
+            onConflict={onConflict}
+          />
+        )}
 
-        <ComposerSearchAndAdd
-          ref={searchInputRef}
-          proposedScopeId={scope.id}
-          version={scope.concurrencyVersion}
-          onCommitted={onCommitted}
-          onConflict={onConflict}
-        />
+        {!readOnly && (
+          <ComposerSearchAndAdd
+            ref={searchInputRef}
+            proposedScopeId={scope.id}
+            version={scope.concurrencyVersion}
+            onCommitted={onCommitted}
+            onConflict={onConflict}
+          />
+        )}
+
+        {pendingUndo && (
+          <ComposerUndoToast
+            proposedScopeId={scope.id}
+            pendingUndo={pendingUndo}
+            onRestored={handleUndoSettled}
+            onConflict={(message) => {
+              setPendingUndo(null);
+              onConflict(message);
+            }}
+            onExpire={() => setPendingUndo(null)}
+          />
+        )}
 
         <div className="border-t border-[var(--ophalo-border)] pt-3">
-          <ComposerDraftList lines={scope.lines} />
+          <ComposerDraftList
+            lines={scope.lines}
+            readOnly={readOnly}
+            proposedScopeId={scope.id}
+            version={scope.concurrencyVersion}
+            onCommitted={onCommitted}
+            onConflict={onConflict}
+            onRemoved={handleRemoved}
+          />
         </div>
       </div>
 
       <div className="px-4 py-3 border-t border-[var(--ophalo-border)] shrink-0">
-        <button
-          type="button"
-          disabled
-          className="w-full rounded-lg bg-[var(--keep-accent)] px-4 py-2.5 text-sm font-semibold text-white opacity-50"
-        >
-          Submit scope to office
-        </button>
+        {submitted ? (
+          <p role="status" aria-live="polite" className="text-center text-sm font-medium text-[var(--ophalo-ink)]">
+            {SUBMITTED_OUTCOME_LABEL}
+          </p>
+        ) : (
+          <>
+            <button
+              type="button"
+              disabled={scope.lines.length === 0 || submitMutation.isPending}
+              onClick={() => submitMutation.mutate()}
+              className={`w-full rounded-lg bg-[var(--keep-accent)] px-4 py-2.5 text-sm font-semibold text-white ${FOCUS_RING} disabled:opacity-50`}
+            >
+              Submit scope to office
+            </button>
+            {scope.lines.length === 0 && (
+              <p className="mt-1 text-center text-xs text-[var(--ophalo-muted)]">Add at least one item before submitting.</p>
+            )}
+          </>
+        )}
       </div>
     </KeepModal>
   );

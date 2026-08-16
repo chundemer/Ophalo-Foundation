@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, act } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ProposedScopeComposer } from "../ProposedScopeComposer";
@@ -12,6 +12,10 @@ import {
 const mockGetFieldCatalogItems = vi.fn();
 const mockFieldSelectProposedScopeLine = vi.fn();
 const mockGetFieldQuickScopeActions = vi.fn();
+const mockUpdateProposedScopeLine = vi.fn();
+const mockRemoveProposedScopeLine = vi.fn();
+const mockRestoreProposedScopeLine = vi.fn();
+const mockSubmitProposedScope = vi.fn();
 
 vi.mock("../../../lib/apiClient", async () => {
   const actual = await vi.importActual<typeof import("../../../lib/apiClient")>("../../../lib/apiClient");
@@ -22,9 +26,30 @@ vi.mock("../../../lib/apiClient", async () => {
       getFieldCatalogItems: (...args: unknown[]) => mockGetFieldCatalogItems(...args),
       fieldSelectProposedScopeLine: (...args: unknown[]) => mockFieldSelectProposedScopeLine(...args),
       getFieldQuickScopeActions: (...args: unknown[]) => mockGetFieldQuickScopeActions(...args),
+      updateProposedScopeLine: (...args: unknown[]) => mockUpdateProposedScopeLine(...args),
+      removeProposedScopeLine: (...args: unknown[]) => mockRemoveProposedScopeLine(...args),
+      restoreProposedScopeLine: (...args: unknown[]) => mockRestoreProposedScopeLine(...args),
+      submitProposedScope: (...args: unknown[]) => mockSubmitProposedScope(...args),
     },
   };
 });
+
+const associatedItemLine = {
+  id: "line-1",
+  lineType: "KnownCatalogItem",
+  catalogItemId: "item-1",
+  offeringAssemblyId: null,
+  quantity: 2,
+  isException: false,
+  offCatalogDescription: null,
+  offCatalogQuantity: null,
+  note: null,
+  displayOrder: 0,
+  displayNameSnapshot: "Filter",
+  unitOfMeasureSnapshot: "each",
+  offeringAssemblyNameSnapshot: null,
+  defaultQuantitySnapshot: null,
+};
 
 const scope: ProposedScopeDetailResult = {
   id: "scope-1",
@@ -231,33 +256,197 @@ describe("ProposedScopeComposer", () => {
     expect(screen.getByLabelText("Note")).toHaveValue("");
   });
 
-  it("renders the live Draft with existing lines and a disabled submit footer", () => {
-    renderComposer({
-      scope: {
-        ...scope,
-        lines: [
-          {
-            id: "line-1",
-            lineType: "KnownCatalogItem",
-            catalogItemId: "item-1",
-            offeringAssemblyId: null,
-            quantity: 2,
-            isException: false,
-            offCatalogDescription: null,
-            offCatalogQuantity: null,
-            note: null,
-            displayOrder: 0,
-            displayNameSnapshot: "Filter",
-            unitOfMeasureSnapshot: "each",
-            offeringAssemblyNameSnapshot: null,
-            defaultQuantitySnapshot: null,
-          },
-        ],
-      },
-    });
+  it("renders the live Draft with existing lines and an enabled submit footer", () => {
+    renderComposer({ scope: { ...scope, lines: [associatedItemLine] } });
 
     expect(screen.getByText("Filter")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Submit scope to office" })).not.toBeDisabled();
+  });
+
+  it("disables submit and explains why for an empty Draft", () => {
+    renderComposer();
+
     expect(screen.getByRole("button", { name: "Submit scope to office" })).toBeDisabled();
+    expect(screen.getByText("Add at least one item before submitting.")).toBeInTheDocument();
+  });
+
+  it("submits the scope and renders the locked submitted outcome on success", async () => {
+    mockSubmitProposedScope.mockResolvedValueOnce({ concurrencyVersion: "v2" });
+    const user = userEvent.setup();
+    const { onCommitted } = renderComposer({ scope: { ...scope, lines: [associatedItemLine] } });
+
+    await user.click(screen.getByRole("button", { name: "Submit scope to office" }));
+
+    expect(mockSubmitProposedScope).toHaveBeenCalledWith("scope-1", "v1");
+    expect(await screen.findByText("Submitted to office — awaiting review")).toBeInTheDocument();
+    expect(onCommitted).toHaveBeenCalled();
+    expect(screen.queryByRole("button", { name: "Submit scope to office" })).not.toBeInTheDocument();
+  });
+
+  it("edits a line's quantity, note, and exception flag through the server-authoritative PATCH", async () => {
+    mockUpdateProposedScopeLine.mockResolvedValueOnce({ concurrencyVersion: "v2" });
+    const user = userEvent.setup();
+    const { onCommitted } = renderComposer({
+      scope: { ...scope, lines: [{ ...associatedItemLine, lineType: "AssociatedItem" }] },
+    });
+
+    await user.click(screen.getByRole("button", { name: "Edit" }));
+    const quantityInput = screen.getByLabelText("Quantity (each)");
+    await user.clear(quantityInput);
+    await user.type(quantityInput, "5");
+    await user.type(screen.getByLabelText("Note"), "swap for spare");
+    await user.click(screen.getByRole("checkbox", { name: /exception/i }));
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() =>
+      expect(mockUpdateProposedScopeLine).toHaveBeenCalledWith(
+        "scope-1",
+        "line-1",
+        { quantity: 5, isException: true, note: "swap for spare", displayOrder: 0 },
+        "v1",
+      ),
+    );
+    await waitFor(() => expect(onCommitted).toHaveBeenCalled());
+  });
+
+  it("announces a generic edit failure without marking the quantity field invalid", async () => {
+    // A non-409 ApiError whose code isn't LineNotFound/LineQuantityMustBePositive falls through to
+    // the generic message while staying in the editor — distinct from the ambiguous-failure/409
+    // paths, which instead close the editor via onConflict.
+    mockUpdateProposedScopeLine.mockRejectedValueOnce(
+      new ApiError(400, "ProposedScope.LineDisplayOrderMustNotBeNegative", "unexpected"),
+    );
+    const user = userEvent.setup();
+    renderComposer({ scope: { ...scope, lines: [associatedItemLine] } });
+
+    await user.click(screen.getByRole("button", { name: "Edit" }));
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("Something went wrong. Try again.");
+    expect(screen.getByLabelText("Quantity (each)")).not.toHaveAttribute("aria-invalid");
+    expect(screen.getByLabelText("Quantity (each)")).not.toHaveAttribute("aria-describedby");
+  });
+
+  it("marks the quantity field invalid only for the positive-quantity validation error", async () => {
+    mockUpdateProposedScopeLine.mockRejectedValueOnce(
+      new ApiError(400, "ProposedScope.LineQuantityMustBePositive", "must be positive"),
+    );
+    const user = userEvent.setup();
+    renderComposer({ scope: { ...scope, lines: [associatedItemLine] } });
+
+    await user.click(screen.getByRole("button", { name: "Edit" }));
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("Quantity must be greater than zero.");
+    const quantityInput = screen.getByLabelText("Quantity (each)");
+    expect(quantityInput).toHaveAttribute("aria-invalid", "true");
+    expect(quantityInput).toHaveAttribute("aria-describedby", alert.id);
+  });
+
+  it("does not show the exception control for a non-AssociatedItem line", async () => {
+    const user = userEvent.setup();
+    renderComposer({ scope: { ...scope, lines: [associatedItemLine] } });
+
+    await user.click(screen.getByRole("button", { name: "Edit" }));
+    expect(screen.queryByRole("checkbox", { name: /exception/i })).not.toBeInTheDocument();
+  });
+
+  it("removes a line only after confirmed server success, then offers a five-second Undo", async () => {
+    mockRemoveProposedScopeLine.mockResolvedValueOnce({ concurrencyVersion: "v2" });
+    const user = userEvent.setup();
+    const { onCommitted } = renderComposer({ scope: { ...scope, lines: [associatedItemLine] } });
+
+    await user.click(screen.getByRole("button", { name: "Remove" }));
+
+    await waitFor(() => expect(mockRemoveProposedScopeLine).toHaveBeenCalledWith("scope-1", "line-1", "v1"));
+    await waitFor(() => expect(onCommitted).toHaveBeenCalled());
+    expect(await screen.findByRole("button", { name: "Undo" })).toBeInTheDocument();
+  });
+
+  it("restores using the version returned by the delete response, not the scope's pre-delete version", async () => {
+    // v1 is the composer's pre-delete `scope.concurrencyVersion`; the delete response returns v2 —
+    // Undo must restore against v2, proving it doesn't fall back to the stale pre-delete version.
+    mockRemoveProposedScopeLine.mockResolvedValueOnce({ concurrencyVersion: "v2" });
+    mockRestoreProposedScopeLine.mockResolvedValueOnce({ concurrencyVersion: "v3" });
+    const user = userEvent.setup();
+    const { onCommitted } = renderComposer({ scope: { ...scope, lines: [associatedItemLine] } });
+
+    await user.click(screen.getByRole("button", { name: "Remove" }));
+    await screen.findByRole("button", { name: "Undo" });
+    onCommitted.mockClear();
+    await user.click(screen.getByRole("button", { name: "Undo" }));
+
+    await waitFor(() =>
+      expect(mockRestoreProposedScopeLine).toHaveBeenCalledWith("scope-1", "line-1", "v2"),
+    );
+    expect(mockRestoreProposedScopeLine).not.toHaveBeenCalledWith("scope-1", "line-1", "v1");
+    await waitFor(() => expect(onCommitted).toHaveBeenCalled());
+    expect(screen.queryByRole("button", { name: "Undo" })).not.toBeInTheDocument();
+  });
+
+  it("dismisses the Undo toast and surfaces the shared notice when restore has expired", async () => {
+    mockRemoveProposedScopeLine.mockResolvedValueOnce({ concurrencyVersion: "v2" });
+    // ErrorHttpMapper maps ProposedScope.RestoreExpired to 422 (Unprocessable Entity), not 409 — the
+    // component routes by error code, not status, but the fixture must mirror the real API contract.
+    mockRestoreProposedScopeLine.mockRejectedValueOnce(
+      new ApiError(422, "ProposedScope.RestoreExpired", "expired"),
+    );
+    const user = userEvent.setup();
+    const { onConflict } = renderComposer({ scope: { ...scope, lines: [associatedItemLine] } });
+
+    await user.click(screen.getByRole("button", { name: "Remove" }));
+    await user.click(await screen.findByRole("button", { name: "Undo" }));
+
+    await waitFor(() =>
+      expect(onConflict).toHaveBeenCalledWith("This item can no longer be undone — refreshed with the latest scope."),
+    );
+    expect(screen.queryByRole("button", { name: "Undo" })).not.toBeInTheDocument();
+  });
+
+  it("dismisses the Undo toast and surfaces the same notice when the line was already restored", async () => {
+    // ErrorHttpMapper maps ProposedScope.RestoreLineAlreadyExists to 409 (Conflict) — a distinct real
+    // status from RestoreExpired's 422, but both are promised to show the same "can no longer be
+    // undone" message rather than the generic conflict notice.
+    mockRemoveProposedScopeLine.mockResolvedValueOnce({ concurrencyVersion: "v2" });
+    mockRestoreProposedScopeLine.mockRejectedValueOnce(
+      new ApiError(409, "ProposedScope.RestoreLineAlreadyExists", "already restored"),
+    );
+    const user = userEvent.setup();
+    const { onConflict } = renderComposer({ scope: { ...scope, lines: [associatedItemLine] } });
+
+    await user.click(screen.getByRole("button", { name: "Remove" }));
+    await user.click(await screen.findByRole("button", { name: "Undo" }));
+
+    await waitFor(() =>
+      expect(onConflict).toHaveBeenCalledWith("This item can no longer be undone — refreshed with the latest scope."),
+    );
+    expect(screen.queryByRole("button", { name: "Undo" })).not.toBeInTheDocument();
+  });
+
+  it("auto-dismisses the Undo toast after five seconds without issuing a restore request", async () => {
+    // shouldAdvanceTime keeps the fake clock ticking in step with real elapsed time, so userEvent's
+    // click and the mocked mutation's microtask resolution still work normally — only the final
+    // advanceTimersByTime call below needs to fast-forward instantly.
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      const user = userEvent.setup({ delay: null });
+      mockRemoveProposedScopeLine.mockResolvedValueOnce({ concurrencyVersion: "v2" });
+      renderComposer({ scope: { ...scope, lines: [associatedItemLine] } });
+
+      await user.click(screen.getByRole("button", { name: "Remove" }));
+      expect(await screen.findByRole("button", { name: "Undo" })).toBeInTheDocument();
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(5000);
+      });
+
+      expect(screen.queryByRole("button", { name: "Undo" })).not.toBeInTheDocument();
+      expect(mockRestoreProposedScopeLine).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("renders Quick actions above search and dispatches through field-select on tap", async () => {

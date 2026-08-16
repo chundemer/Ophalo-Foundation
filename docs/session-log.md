@@ -1,6 +1,6 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-08-16 (unified scope-composer Session 5B composer shell/search/custom-add
+**Last updated:** 2026-08-16 (unified scope-composer Session 5D line editing/delete-Undo/submit
 complete; snapshot-retention cleanup remains a required maintenance follow-up)
 **Deployment posture:** Not pilot-ready.
 **Source of truth for acceptance criteria:** `docs/pilot-readiness-bug-tracker.md`.
@@ -231,7 +231,7 @@ no new endpoint.
   (integration, including a real-PostgreSQL concurrent-restore race), 14/14 architecture tests,
   `git diff --check` clean.
 
-**Unified scope-composer Session 5 — frontend replacement: Slice 5A complete, 5B next
+**Unified scope-composer Session 5 — frontend replacement: Slices 5A–5D complete, 5E next
 (2026-08-16).** The approved, bounded 5A–5E coding order is in
 [Build Log 120](build-log/120-unified-scope-composer-session-5-frontend-coding-plan.md): client
 contract wiring; unified search/custom composer shell; Quick actions and live Draft; editing,
@@ -250,9 +250,33 @@ and a dedicated decision.
   prop. Full details in Build Log 120. 5 files (4 new, 1 modified), 15/15 focused tests
   (6 new + 6 ladder + 11 KeepModal, unchanged), `tsc --noEmit` and `git diff --check` clean. Manual
   phone/desktop keyboard check not yet performed.
-- **Next batch: Session 5C — Quick actions, assembly expansion, and visible Draft**, per Build
-  Log 120 (render field Quick actions and assembly expansion in the new composer; render the
-  authoritative Draft as stacked rows including duplicates; no client-side merge).
+- **Session 5C — Quick actions, assembly expansion, and visible Draft: complete (commit `d5b08ee`,
+  review fixes included).** Field Quick actions and default-only assembly expansion dispatch through
+  the existing field-select/expand-assembly mutations; the authoritative Draft renders as separate
+  stacked rows keyed by line id, never merged; target-unavailable responses (`ExpandAssemblyNotOperationallyEligible`,
+  `LineCatalogItemNotFound`) are checked ahead of generic 409 handling. Review fixes added a
+  distinct reload-failure/retry path (`reconcileAfterConflict`/`retryReconciliation`) so a failed
+  authoritative reload no longer claims success, plus accessible-label and field-associated
+  validation-error fixes. Full details in Build Log 120.
+- **Session 5D — Line editing, delete/Undo, submit, and recovery: complete (2026-08-16).** Inline
+  per-line edit (quantity, note, and the `isException` toggle gated to `AssociatedItem` lines only)
+  and Remove dispatch through the existing `PATCH`/`DELETE .../lines/{lineId}` endpoints; a new
+  five-second Undo toast restores using the version the delete response itself returned, not the
+  scope's pre-delete version (explicitly tested). The sticky `Submit scope to office` footer is wired
+  to the existing `submit` endpoint: disabled/explained for an empty Draft, replaced by the locked
+  `Submitted to office — awaiting review` outcome on success. No `RequestDetailContent` wiring yet
+  (still 5E scope). Review fix: the quantity input was marking itself invalid for every edit
+  failure, not just the positive-quantity error (the same issue already avoided in
+  `ComposerSearchAndAdd`) — fixed with a dedicated invalid flag; test fixtures corrected to the real
+  `RestoreExpired` (422) / `RestoreLineAlreadyExists` (409) status contract, with a fake-timer test
+  proving the Undo toast expires without issuing a restore call. 23/23 focused `ProposedScopeComposer`
+  tests, 162/162 across the full `request-detail`/`keep` focused suite, `tsc --noEmit` and
+  `git diff --check` clean. Manual iOS Safari/Android Chrome keyboard-open check still outstanding,
+  alongside 5B/5C's. Full details in Build Log 120.
+- **Next batch: Session 5E — Primary action placement, legacy removal, and release gate**, per Build
+  Log 120 (move Capture/Resume/View scope to the primary request-work location; remove the five-rung
+  ladder and its superseded tests only after replacement coverage is green; run complete frontend and
+  backend regressions).
 
 **Undo-delete snapshot retention: required maintenance follow-up (locked 2026-08-16).**
 `keep_pricebook_removed_scope_line_snapshots` is transient recovery state, not an audit table.

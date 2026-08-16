@@ -125,6 +125,17 @@ Implement:
 **Exit gate:** the ADR-484 assembly-plus-delta and clean-slate journeys pass at phone width; double
 selection visibly produces two rows; no client-side merge or inferred Quick actions exist.
 
+**Session 5C: complete (commit `d5b08ee`, review fixes included).** `ComposerQuickActions` renders
+the zero-to-six ordered field Quick actions and dispatches Common Items through field-select and
+assemblies through the default-only expand-assembly endpoint, with `ExpandAssemblyNotOperationallyEligible`
+and `LineCatalogItemNotFound` checked ahead of generic status handling so a real 409 isn't misrouted
+to the target-unavailable notice. `ComposerDraftList` renders the authoritative Draft as separate
+stacked rows keyed by line id — no client-side merge. `reconcileAfterConflict` distinguishes a failed
+authoritative reload from a successful one (`PROPOSED_SCOPE_RECONCILE_RELOAD_FAILURE_NOTICE`,
+`retryReconciliation`) instead of claiming success when the reload itself fails. Review fixes also
+added sr-only labeling for the unified search input and field-associated `aria-invalid`/`aria-describedby`
+validation errors. 8 files, 515 lines changed, full focused suite green.
+
 ### Session 5D — Line editing, delete/Undo, submit, and recovery
 
 **Goal:** finish the Draft workbench and its failure behavior.
@@ -143,6 +154,36 @@ Implement:
 
 **Exit gate:** ADR-484 direct-custom, removal/Undo, decimal-quantity, connection-interruption, and
 concurrent-change journeys pass. Verify keyboard-open behavior in iOS Safari and Android Chrome.
+
+**Session 5D: complete (2026-08-16).** `ComposerDraftList` gained inline per-line edit (quantity,
+note, and — only for an `AssociatedItem` line — the `isException` toggle, since
+`ProposedScope.LineIsExceptionOnlyForAssociatedItem` makes that field illegal on every other line
+type) and Remove, both dispatched through the existing `PATCH`/`DELETE .../lines/{lineId}` endpoints
+with the server as sole validation authority; edit/remove/Quick actions/search are hidden once the
+scope is read-only (submitted or non-Draft). A new `ComposerUndoToast` presents the five-second
+versioned Undo after a confirmed delete, restoring via the version the delete response itself
+returned — never the scope's pre-delete `concurrencyVersion` — since an intervening edit or Quick
+action could otherwise make Undo silently reuse a stale version; a dedicated test asserts the restore
+call uses the delete-response version, not the composer's pre-delete one. `RestoreExpired`/
+`RestoreLineAlreadyExists` map to a distinct "can no longer be undone" notice through the shared
+`onConflict` reconciliation path rather than a generic conflict message. The sticky
+`Submit scope to office` footer is wired to the existing `submit` endpoint: disabled with an inline
+explanation for an empty Draft, and replaced by the locked `Submitted to office — awaiting review`
+outcome text on success (ADR-485's exact field-outcome wording). No wiring into `RequestDetailContent`
+(still Session 5E scope). 4 files (1 new — `ComposerUndoToast.tsx`; 3 modified), 23/23 focused
+`ProposedScopeComposer` tests (14 new + 9 existing), 162/162 across the full `request-detail`/`keep`
+focused suite, `tsc --noEmit` and `git diff --check` clean. Manual iOS Safari/Android Chrome
+keyboard-open check not yet performed — carried forward as an outstanding manual-verification item
+alongside 5B/5C's.
+
+**Session 5D review fixes: complete (2026-08-16).** `ComposerDraftList`'s quantity input was marking
+itself `aria-invalid` for every edit failure, not just `LineQuantityMustBePositive` — the same issue
+already avoided in `ComposerSearchAndAdd`. Fixed with a dedicated `quantityInvalid` flag separate
+from the general error message, so generic failures still announce via `role="alert"` without
+mismarking the field. Test fixtures corrected to the real `ErrorHttpMapper` contract:
+`RestoreExpired` is 422, not 409; added the companion `RestoreLineAlreadyExists` (409) case proving
+both map to the same "can no longer be undone" notice. Added a `vi.useFakeTimers({ shouldAdvanceTime:
+true })` test proving the Undo toast disappears after five seconds with no restore call issued.
 
 ### Session 5E — Primary action placement, legacy removal, and release gate
 
