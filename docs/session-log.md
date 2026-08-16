@@ -1,7 +1,7 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-08-16 (Undo snapshot-retention cleanup complete and validated; next session
-is Paired Nudges Session 1 domain/persistence/migration preflight)
+**Last updated:** 2026-08-16 (Paired Nudges Session 1 — domain, persistence, and migration — complete
+and validated; next session is Paired Nudges Session 2, Owner/Admin configuration API)
 **Deployment posture:** Not pilot-ready.
 **Source of truth for acceptance criteria:** `docs/pilot-readiness-bug-tracker.md`.
 
@@ -138,13 +138,29 @@ completed in order:
 
 ## Next approved sessions
 
-1. **Phase 2 — Paired Nudges Session 1: domain, persistence, and migration.**
-   [Build Log 122](build-log/122-paired-nudges-preflight.md) locks the product model, and
-   [Build Log 123](build-log/123-paired-nudges-implementation-contract-preflight.md) locks the
-   per-rule CRUD/configuration, field nudge-read, and five-session implementation contract. Run
-   only Session 1's mechanical file-level preflight before editing:
-   `ScopeNudgeRule`/`ScopeNudgeSuggestion`, validators/errors, persistence/configuration, migration,
-   and focused domain/persistence tests. No API or frontend work in that session.
+**Phase 2 — Paired Nudges Session 1: domain, persistence, and migration. Complete (2026-08-16).**
+[Build Log 122](build-log/122-paired-nudges-preflight.md) locks the product model and
+[Build Log 123](build-log/123-paired-nudges-implementation-contract-preflight.md) locks the
+per-rule CRUD/configuration, field nudge-read, and five-session implementation contract.
+`ScopeNudgeRule`/`ScopeNudgeSuggestion` (per-rule CRUD, immutable trigger, validated 1–3 ordered
+suggestion set, per-trigger-type uniqueness — a deliberate contrast with `QuickScopeAction`'s
+whole-set replacement) plus `ScopeNudgeSuggestionSetValidator`, errors,
+`IScopeNudgeRulePersistence`/`EfScopeNudgeRulePersistence`, EF configurations, and migration
+`20260816221833_ScopeNudgeRule` are in. `ScopeNudgeSuggestion` carries its own `AccountId` so its FK
+to the parent rule is the composite `(AccountId, ScopeNudgeRuleId) -> (AccountId, Id)` with cascade
+delete, closing a tenant-isolation gap a `ScopeNudgeRuleId`-only FK would have left. 15/15 domain
+unit tests, 9/9 persistence integration tests, 14/14 architecture tests passing; `git diff --check`
+clean. One fix made during verification: the two trigger-uniqueness index names originally exceeded
+PostgreSQL's 63-char identifier limit and were silently truncated, so the duplicate-trigger
+exception match never fired — shortened to `ux_keep_scope_nudge_rules_trigger_catalog_item` /
+`ux_keep_scope_nudge_rules_trigger_offering_assembly` and reapplied. No API or frontend surface;
+domain/persistence-only per Session 1's scope. **Committed (2026-08-16).**
+
+**Next: Phase 2 — Paired Nudges Session 2: Owner/Admin configuration API.** Per
+[Build Log 123](build-log/123-paired-nudges-implementation-contract-preflight.md), add the per-rule
+CRUD service/endpoints (`GET`/`POST`/`PUT`/`DELETE /keep/pricebook/scope-nudge-rules`) and
+integration tests, consuming Session 1's `IScopeNudgeRulePersistence`. Start a fresh session; run
+the mechanical file-level preflight first.
 
 **Unified scope-composer redesign — approved implementation map (2026-08-15).** Work proceeds
 sequentially; it is not authority to reopen the broader Request Details, request-queue,
