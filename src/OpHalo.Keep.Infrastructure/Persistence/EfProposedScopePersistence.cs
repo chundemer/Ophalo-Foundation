@@ -91,6 +91,30 @@ public sealed class EfProposedScopePersistence(OpHaloDbContext dbContext) : IPro
         }
     }
 
+    public async Task<ProposedScopeCommitResult> CommitWithConsumedSnapshotDeleteAsync(
+        ProposedScope scope, RemovedProposedScopeLineSnapshot snapshot, CancellationToken ct)
+    {
+        dbContext.Set<RemovedProposedScopeLineSnapshot>().Remove(snapshot);
+
+        try
+        {
+            await dbContext.SaveChangesAsync(ct);
+            return ProposedScopeCommitResult.Committed;
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return ProposedScopeCommitResult.ConcurrencyConflict;
+        }
+        // Two writers who both loaded the scope (and its snapshot) before either committed can
+        // independently restore the same removed line, producing a primary-key collision on the
+        // restored ProposedScopeLine insert; treat it the same as the scope's own concurrency-token
+        // mismatch, matching CommitWithRemovedLineSnapshotAsync's same-line race handling.
+        catch (DbUpdateException ex) when (IsUniqueConstraintViolation(ex))
+        {
+            return ProposedScopeCommitResult.ConcurrencyConflict;
+        }
+    }
+
     private static bool IsUniqueConstraintViolation(DbUpdateException ex) =>
         ex.InnerException is PostgresException pgEx && pgEx.SqlState == PostgresErrorCodes.UniqueViolation;
 }

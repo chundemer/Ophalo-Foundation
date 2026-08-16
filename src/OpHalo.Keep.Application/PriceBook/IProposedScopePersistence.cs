@@ -68,4 +68,16 @@ public interface IProposedScopePersistence
     /// </summary>
     Task<ProposedScopeCommitResult> CommitWithRemovedLineSnapshotAsync(
         ProposedScope scope, RemovedProposedScopeLineSnapshot snapshot, CancellationToken ct);
+
+    /// <summary>
+    /// Undo-delete (Session 4b Slice 2, build-log/119 decision 1): saves a line-restore mutation to
+    /// a scope already loaded via <see cref="GetByIdAsync"/> (tracked) together with hard-deleting
+    /// the consumed <paramref name="snapshot"/> row, in one <c>SaveChangesAsync</c> — no explicit
+    /// transaction needed, both are tracked in the same <c>DbContext</c>. Same
+    /// <see cref="ProposedScopeCommitResult.ConcurrencyConflict"/> semantics as
+    /// <see cref="CommitWithRemovedLineSnapshotAsync"/>, covering both the scope's own concurrency
+    /// token and a same-line concurrent-restore race on the restored line's primary key.
+    /// </summary>
+    Task<ProposedScopeCommitResult> CommitWithConsumedSnapshotDeleteAsync(
+        ProposedScope scope, RemovedProposedScopeLineSnapshot snapshot, CancellationToken ct);
 }

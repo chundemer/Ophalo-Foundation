@@ -162,6 +162,13 @@ public static class ErrorHttpMapper
             // other current-content validation failures.
             var c when c == "ProposedScope.EmptySubmit" => (StatusCodes.Status422UnprocessableEntity, "Unprocessable entity.", null),
 
+            // Session 4b Slice 2: the five-second undo-delete window has closed (or the snapshot
+            // was already consumed/cleaned up) — same current-state-validation reasoning as
+            // EmptySubmit, not a version conflict. A second restore after a successful one is a
+            // real conflict on the now-live line, matching NotDraft/VersionMismatch's 409.
+            var c when c == "ProposedScope.RestoreExpired" => (StatusCodes.Status422UnprocessableEntity, "Unprocessable entity.", null),
+            var c when c == "ProposedScope.RestoreLineAlreadyExists" => (StatusCodes.Status409Conflict, "Conflict.", null),
+
             // --- ProposedScopeLine conflicts (Session 3.3b) — the Line segment breaks the generic
             // .NotFound suffix match below, same reason OfferingAssembly.ItemNotFound needed one.
             var c when c == "ProposedScope.LineNotFound" => (StatusCodes.Status404NotFound, "Resource not found.", null),

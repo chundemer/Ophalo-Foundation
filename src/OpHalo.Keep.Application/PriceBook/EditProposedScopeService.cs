@@ -55,6 +55,15 @@ public sealed record RemoveProposedScopeLineCommand(
     Guid CurrentAccountUserId,
     KeepRequestVisibilityScope Scope);
 
+/// <summary>Undo-delete (Session 4b Slice 2, build-log/119 decision 1).</summary>
+public sealed record RestoreLineCommand(
+    Guid AccountId,
+    Guid ProposedScopeId,
+    Guid LineId,
+    Guid ExpectedVersion,
+    Guid CurrentAccountUserId,
+    KeepRequestVisibilityScope Scope);
+
 /// <summary>Field-select command (Session 3.4d, build-log/118 decision 5): no
 /// <c>DisplayOrder</c> — <see cref="EditProposedScopeService.AppendFieldLineAsync"/> always computes
 /// it server-side from the loaded scope's current lines. Never <c>PrimaryOffering</c>/
@@ -161,6 +170,39 @@ public sealed class EditProposedScopeService(
             return Result<Guid>.Failure(removeResult.Error);
 
         var commitResult = await persistence.CommitWithRemovedLineSnapshotAsync(scope, removeResult.Value, ct);
+        return ToTransitionResult(commitResult, scope);
+    }
+
+    /// <summary>
+    /// Undo-delete (Session 4b Slice 2, build-log/119 decision 1). Checks the live scope for
+    /// <c>LineId</c> before looking up the snapshot: a line already present means a second restore
+    /// after a successful one (the first restore hard-deletes its snapshot), so it must fail as
+    /// <see cref="ProposedScopeErrors.RestoreLineAlreadyExists"/> without a snapshot lookup. If the
+    /// line is absent and no snapshot exists either (never removed, or already cleaned up), that is
+    /// the same observable outcome as an expired restore window —
+    /// <see cref="ProposedScopeErrors.RestoreExpired"/>, never a generic not-found.
+    /// </summary>
+    public async Task<Result<Guid>> RestoreLineAsync(RestoreLineCommand command, CancellationToken ct)
+    {
+        var loadResult = await LoadForEditAsync(
+            command.AccountId, command.ProposedScopeId, command.ExpectedVersion,
+            command.CurrentAccountUserId, command.Scope, ct);
+        if (loadResult.IsFailure)
+            return Result<Guid>.Failure(loadResult.Error);
+
+        var scope = loadResult.Value;
+        if (scope.Lines.Any(l => l.Id == command.LineId))
+            return Result<Guid>.Failure(ProposedScopeErrors.RestoreLineAlreadyExists);
+
+        var snapshot = await persistence.GetRemovedLineSnapshotAsync(command.AccountId, command.ProposedScopeId, command.LineId, ct);
+        if (snapshot is null)
+            return Result<Guid>.Failure(ProposedScopeErrors.RestoreExpired);
+
+        var restoreResult = scope.RestoreLine(snapshot, clock.UtcNow);
+        if (restoreResult.IsFailure)
+            return Result<Guid>.Failure(restoreResult.Error);
+
+        var commitResult = await persistence.CommitWithConsumedSnapshotDeleteAsync(scope, snapshot, ct);
         return ToTransitionResult(commitResult, scope);
     }
 

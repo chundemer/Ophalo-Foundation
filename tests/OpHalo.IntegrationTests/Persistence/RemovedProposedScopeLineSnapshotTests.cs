@@ -104,6 +104,78 @@ public sealed class RemovedProposedScopeLineSnapshotTests : IClassFixture<Postgr
     }
 
     [Fact]
+    public async Task CommitWithConsumedSnapshotDeleteAsync_restores_the_line_and_deletes_the_snapshot_atomically()
+    {
+        var catalogItemId = await SeedActiveCatalogItemAsync();
+        var (scopeId, lineId) = await SeedDraftScopeWithOneLineAsync(catalogItemId);
+
+        await using (var removeCtx = CreateContext())
+        {
+            var removePersistence = new EfProposedScopePersistence(removeCtx);
+            var scope = await removePersistence.GetByIdAsync(AccountId, scopeId, CancellationToken.None);
+            var removeResult = scope!.RemoveLine(lineId, Now);
+            await removePersistence.CommitWithRemovedLineSnapshotAsync(scope, removeResult.Value, CancellationToken.None);
+        }
+
+        await using var ctx = CreateContext();
+        var persistence = new EfProposedScopePersistence(ctx);
+        var reloadedScope = await persistence.GetByIdAsync(AccountId, scopeId, CancellationToken.None);
+        var snapshot = await persistence.GetRemovedLineSnapshotAsync(AccountId, scopeId, lineId, CancellationToken.None);
+        var restoreResult = reloadedScope!.RestoreLine(snapshot!, Now);
+        Assert.True(restoreResult.IsSuccess);
+
+        var commitResult = await persistence.CommitWithConsumedSnapshotDeleteAsync(reloadedScope, snapshot!, CancellationToken.None);
+
+        Assert.Equal(ProposedScopeCommitResult.Committed, commitResult);
+
+        await using var verifyCtx = CreateContext();
+        var reloaded = await verifyCtx.Set<ProposedScope>().Include(x => x.Lines).SingleAsync(x => x.Id == scopeId);
+        Assert.Contains(reloaded.Lines, l => l.Id == lineId);
+        Assert.False(await verifyCtx.Set<RemovedProposedScopeLineSnapshot>().AnyAsync(x => x.ProposedScopeId == scopeId && x.LineId == lineId));
+    }
+
+    [Fact]
+    public async Task CommitWithConsumedSnapshotDeleteAsync_when_two_writers_restore_the_same_line_the_second_loses()
+    {
+        var catalogItemId = await SeedActiveCatalogItemAsync();
+        var (scopeId, lineId) = await SeedDraftScopeWithOneLineAsync(catalogItemId);
+
+        await using (var removeCtx = CreateContext())
+        {
+            var removePersistence = new EfProposedScopePersistence(removeCtx);
+            var scope = await removePersistence.GetByIdAsync(AccountId, scopeId, CancellationToken.None);
+            var removeResult = scope!.RemoveLine(lineId, Now);
+            await removePersistence.CommitWithRemovedLineSnapshotAsync(scope, removeResult.Value, CancellationToken.None);
+        }
+
+        // Two independently loaded copies of the same post-removal state; the first writer wins.
+        await using var ctxA = CreateContext();
+        var persistenceA = new EfProposedScopePersistence(ctxA);
+        var loadedA = await persistenceA.GetByIdAsync(AccountId, scopeId, CancellationToken.None);
+        var snapshotA = await persistenceA.GetRemovedLineSnapshotAsync(AccountId, scopeId, lineId, CancellationToken.None);
+
+        await using var ctxB = CreateContext();
+        var persistenceB = new EfProposedScopePersistence(ctxB);
+        var loadedB = await persistenceB.GetByIdAsync(AccountId, scopeId, CancellationToken.None);
+        var snapshotB = await persistenceB.GetRemovedLineSnapshotAsync(AccountId, scopeId, lineId, CancellationToken.None);
+
+        var restoreA = loadedA!.RestoreLine(snapshotA!, Now);
+        Assert.True(restoreA.IsSuccess);
+        var commitA = await persistenceA.CommitWithConsumedSnapshotDeleteAsync(loadedA, snapshotA!, CancellationToken.None);
+        Assert.Equal(ProposedScopeCommitResult.Committed, commitA);
+
+        var restoreB = loadedB!.RestoreLine(snapshotB!, Now);
+        Assert.True(restoreB.IsSuccess);
+        var commitB = await persistenceB.CommitWithConsumedSnapshotDeleteAsync(loadedB, snapshotB!, CancellationToken.None);
+
+        Assert.Equal(ProposedScopeCommitResult.ConcurrencyConflict, commitB);
+
+        await using var verifyCtx = CreateContext();
+        var reloaded = await verifyCtx.Set<ProposedScope>().Include(x => x.Lines).SingleAsync(x => x.Id == scopeId);
+        Assert.Single(reloaded.Lines, l => l.Id == lineId);
+    }
+
+    [Fact]
     public async Task GetRemovedLineSnapshotAsync_for_a_wrong_account_id_returns_null()
     {
         var catalogItemId = await SeedActiveCatalogItemAsync();

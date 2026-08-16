@@ -129,6 +129,21 @@ public static class ProposedScopeEndpoints
             return result.IsSuccess ? Results.Ok(new ProposedScopeTransitionResponse(result.Value)) : ErrorHttpMapper.ToHttpResult(result.Error);
         }).RequireAuthorization();
 
+        app.MapPost("/keep/pricebook/proposed-scopes/{proposedScopeId:guid}/lines/{lineId:guid}/restore", async (
+            Guid proposedScopeId,
+            Guid lineId,
+            HttpRequest httpRequest,
+            ProposedScopeApiService service,
+            CancellationToken ct) =>
+        {
+            var versionResult = ProposedScopeVersionHeader.Parse(httpRequest.Headers);
+            if (!versionResult.IsSuccess)
+                return ErrorHttpMapper.ToHttpResult(versionResult.Error);
+
+            var result = await service.RestoreLineAsync(proposedScopeId, lineId, versionResult.Value, ct);
+            return result.IsSuccess ? Results.Ok(new ProposedScopeTransitionResponse(result.Value)) : ErrorHttpMapper.ToHttpResult(result.Error);
+        }).RequireAuthorization();
+
         app.MapPost("/keep/pricebook/proposed-scopes/{proposedScopeId:guid}/submit", async (
             Guid proposedScopeId,
             HttpRequest httpRequest,

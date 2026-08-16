@@ -563,6 +563,133 @@ public sealed class ProposedScopeApiTests : IClassFixture<KeepApiWebFactory>, IA
     }
 
     [Fact]
+    public async Task RestoreLine_WithinTheWindow_Returns200AndReinsertsTheLine()
+    {
+        var (accountId, ownerId, _) = await SeedAccountAsync("restore-line-ok");
+        await EnrollAsync(accountId, ownerId);
+        var cookie = await GetCookieAsync(ownerId, accountId);
+        var (scopeId, lineId, version) = await SeedDraftScopeWithLineAsync(accountId, ownerId);
+
+        var removeRequest = new HttpRequestMessage(HttpMethod.Delete, $"/keep/pricebook/proposed-scopes/{scopeId}/lines/{lineId}");
+        removeRequest.Headers.Add(ProposedScopeVersionHeader.HeaderName, version.ToString("D"));
+        var removeResponse = await AuthRequest(cookie).SendAsync(removeRequest);
+        Assert.Equal(HttpStatusCode.OK, removeResponse.StatusCode);
+        var removeBody = await removeResponse.Content.ReadFromJsonAsync<JsonElement>();
+        var versionAfterRemove = removeBody.GetProperty("concurrencyVersion").GetGuid();
+
+        var restoreRequest = new HttpRequestMessage(HttpMethod.Post, $"/keep/pricebook/proposed-scopes/{scopeId}/lines/{lineId}/restore");
+        restoreRequest.Headers.Add(ProposedScopeVersionHeader.HeaderName, versionAfterRemove.ToString("D"));
+        var restoreResponse = await AuthRequest(cookie).SendAsync(restoreRequest);
+
+        Assert.Equal(HttpStatusCode.OK, restoreResponse.StatusCode);
+
+        await using var scope = _factory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+        var reloaded = await db.Set<ProposedScope>().Include(x => x.Lines).SingleAsync(x => x.Id == scopeId);
+        Assert.Contains(reloaded.Lines, l => l.Id == lineId);
+        Assert.False(await db.Set<RemovedProposedScopeLineSnapshot>().AnyAsync(x => x.ProposedScopeId == scopeId && x.LineId == lineId));
+    }
+
+    [Fact]
+    public async Task RestoreLine_AfterTheWindowHasClosed_ReturnsRestoreExpired()
+    {
+        var (accountId, ownerId, _) = await SeedAccountAsync("restore-line-expired");
+        await EnrollAsync(accountId, ownerId);
+        var cookie = await GetCookieAsync(ownerId, accountId);
+        var (scopeId, lineId, version) = await SeedDraftScopeWithLineAsync(accountId, ownerId);
+
+        var removeRequest = new HttpRequestMessage(HttpMethod.Delete, $"/keep/pricebook/proposed-scopes/{scopeId}/lines/{lineId}");
+        removeRequest.Headers.Add(ProposedScopeVersionHeader.HeaderName, version.ToString("D"));
+        var removeResponse = await AuthRequest(cookie).SendAsync(removeRequest);
+        var removeBody = await removeResponse.Content.ReadFromJsonAsync<JsonElement>();
+        var versionAfterRemove = removeBody.GetProperty("concurrencyVersion").GetGuid();
+
+        await using (var scope = _factory.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+            await db.Set<RemovedProposedScopeLineSnapshot>()
+                .Where(x => x.ProposedScopeId == scopeId && x.LineId == lineId)
+                .ExecuteUpdateAsync(s => s.SetProperty(x => x.RemovedAtUtc, DateTime.UtcNow.AddSeconds(-10)));
+        }
+
+        var restoreRequest = new HttpRequestMessage(HttpMethod.Post, $"/keep/pricebook/proposed-scopes/{scopeId}/lines/{lineId}/restore");
+        restoreRequest.Headers.Add(ProposedScopeVersionHeader.HeaderName, versionAfterRemove.ToString("D"));
+        var restoreResponse = await AuthRequest(cookie).SendAsync(restoreRequest);
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, restoreResponse.StatusCode);
+        var body = await restoreResponse.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("ProposedScope.RestoreExpired", body.GetProperty("code").GetString());
+    }
+
+    [Fact]
+    public async Task RestoreLine_WithNoSnapshotAndNoLiveLine_ReturnsRestoreExpired()
+    {
+        var (accountId, ownerId, _) = await SeedAccountAsync("restore-line-no-snapshot");
+        await EnrollAsync(accountId, ownerId);
+        var cookie = await GetCookieAsync(ownerId, accountId);
+        var (scopeId, version) = await SeedDraftScopeAsync(accountId, ownerId);
+
+        var restoreRequest = new HttpRequestMessage(HttpMethod.Post, $"/keep/pricebook/proposed-scopes/{scopeId}/lines/{Guid.NewGuid()}/restore");
+        restoreRequest.Headers.Add(ProposedScopeVersionHeader.HeaderName, version.ToString("D"));
+        var restoreResponse = await AuthRequest(cookie).SendAsync(restoreRequest);
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, restoreResponse.StatusCode);
+        var body = await restoreResponse.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("ProposedScope.RestoreExpired", body.GetProperty("code").GetString());
+    }
+
+    [Fact]
+    public async Task RestoreLine_ASecondTimeAfterASuccessfulRestore_ReturnsRestoreLineAlreadyExists()
+    {
+        var (accountId, ownerId, _) = await SeedAccountAsync("restore-line-twice");
+        await EnrollAsync(accountId, ownerId);
+        var cookie = await GetCookieAsync(ownerId, accountId);
+        var (scopeId, lineId, version) = await SeedDraftScopeWithLineAsync(accountId, ownerId);
+
+        var removeRequest = new HttpRequestMessage(HttpMethod.Delete, $"/keep/pricebook/proposed-scopes/{scopeId}/lines/{lineId}");
+        removeRequest.Headers.Add(ProposedScopeVersionHeader.HeaderName, version.ToString("D"));
+        var removeResponse = await AuthRequest(cookie).SendAsync(removeRequest);
+        var removeBody = await removeResponse.Content.ReadFromJsonAsync<JsonElement>();
+        var versionAfterRemove = removeBody.GetProperty("concurrencyVersion").GetGuid();
+
+        var firstRestoreRequest = new HttpRequestMessage(HttpMethod.Post, $"/keep/pricebook/proposed-scopes/{scopeId}/lines/{lineId}/restore");
+        firstRestoreRequest.Headers.Add(ProposedScopeVersionHeader.HeaderName, versionAfterRemove.ToString("D"));
+        var firstRestoreResponse = await AuthRequest(cookie).SendAsync(firstRestoreRequest);
+        Assert.Equal(HttpStatusCode.OK, firstRestoreResponse.StatusCode);
+        var firstRestoreBody = await firstRestoreResponse.Content.ReadFromJsonAsync<JsonElement>();
+        var versionAfterRestore = firstRestoreBody.GetProperty("concurrencyVersion").GetGuid();
+
+        var secondRestoreRequest = new HttpRequestMessage(HttpMethod.Post, $"/keep/pricebook/proposed-scopes/{scopeId}/lines/{lineId}/restore");
+        secondRestoreRequest.Headers.Add(ProposedScopeVersionHeader.HeaderName, versionAfterRestore.ToString("D"));
+        var secondRestoreResponse = await AuthRequest(cookie).SendAsync(secondRestoreRequest);
+
+        Assert.Equal(HttpStatusCode.Conflict, secondRestoreResponse.StatusCode);
+        var body = await secondRestoreResponse.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("ProposedScope.RestoreLineAlreadyExists", body.GetProperty("code").GetString());
+    }
+
+    [Fact]
+    public async Task RestoreLine_WithAStaleVersion_Returns409()
+    {
+        var (accountId, ownerId, _) = await SeedAccountAsync("restore-line-stale");
+        await EnrollAsync(accountId, ownerId);
+        var cookie = await GetCookieAsync(ownerId, accountId);
+        var (scopeId, lineId, version) = await SeedDraftScopeWithLineAsync(accountId, ownerId);
+
+        var removeRequest = new HttpRequestMessage(HttpMethod.Delete, $"/keep/pricebook/proposed-scopes/{scopeId}/lines/{lineId}");
+        removeRequest.Headers.Add(ProposedScopeVersionHeader.HeaderName, version.ToString("D"));
+        await AuthRequest(cookie).SendAsync(removeRequest);
+
+        var restoreRequest = new HttpRequestMessage(HttpMethod.Post, $"/keep/pricebook/proposed-scopes/{scopeId}/lines/{lineId}/restore");
+        restoreRequest.Headers.Add(ProposedScopeVersionHeader.HeaderName, Guid.NewGuid().ToString("D"));
+        var restoreResponse = await AuthRequest(cookie).SendAsync(restoreRequest);
+
+        Assert.Equal(HttpStatusCode.Conflict, restoreResponse.StatusCode);
+        var body = await restoreResponse.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("ProposedScope.VersionMismatch", body.GetProperty("code").GetString());
+    }
+
+    [Fact]
     public async Task Submit_CorrectVersion_Returns200AndTransitionsStatus()
     {
         var (accountId, ownerId, _) = await SeedAccountAsync("submit-ok");

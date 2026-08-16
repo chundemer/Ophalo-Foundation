@@ -1,6 +1,7 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-08-16 (Undo-delete snapshot-retention operational requirement locked)
+**Last updated:** 2026-08-16 (unified scope-composer Session 4b Slice 2 restore endpoint complete;
+snapshot-retention cleanup remains a required maintenance follow-up)
 **Deployment posture:** Not pilot-ready.
 **Source of truth for acceptance criteria:** `docs/pilot-readiness-bug-tracker.md`.
 
@@ -207,18 +208,28 @@ no new endpoint.
   `ProposedScopeSubmissionTests`, 4/4 new `RemovedProposedScopeLineSnapshotTests`, 14/14
   architecture tests, `git diff --check` clean.
 
-**Unified scope-composer Session 4b Slice 2 — restore endpoint: next, not yet started.**
-- `EditProposedScopeService`: new `RestoreLineCommand`/`RestoreLineAsync` — loads via the existing
-  `LoadForEditAsync` preamble, calls `ProposedScope.RestoreLine`, then on success hard-deletes the
-  consumed snapshot row in the same transaction as the commit (no consumed-flag audit row) —
-  needs a new `IProposedScopePersistence` commit-with-consumed-snapshot-delete method, symmetric to
-  Slice 1's commit-with-snapshot-insert.
-- `ProposedScopeApiService`: `RestoreLineAsync`, same auth-gate composition as the other line
-  mutations (account access, Price Book entitlement, `RequestsOperate` + `ScopeCapture`, row
-  visibility).
-- `ProposedScopeEndpoints`: new `POST /keep/pricebook/proposed-scopes/{proposedScopeId}/lines/
-  {lineId}/restore`, same version-header contract as the existing line-mutation endpoints.
-- Estimated 3 production files, ~5 total with tests — comfortably under the batch-size gate.
+**Unified scope-composer Session 4b Slice 2 — restore endpoint: complete (2026-08-16).**
+- `EditProposedScopeService.RestoreLineAsync` loads via the existing `LoadForEditAsync` preamble;
+  if the live scope already contains `LineId` it fails `RestoreLineAlreadyExists` before any
+  snapshot lookup (the locked sequential double-restore behavior, since a successful restore
+  hard-deletes its snapshot); if no snapshot exists either, it fails the typed `RestoreExpired`
+  outcome rather than a generic not-found. `RestoreLineCommand` lives on this application contract,
+  not on `IProposedScopePersistence`.
+- `IProposedScopePersistence` gained only `CommitWithConsumedSnapshotDeleteAsync` (atomic commit +
+  consumed-snapshot hard-delete, symmetric to Slice 1's commit-with-snapshot-insert);
+  `EfProposedScopePersistence` translates both the scope's own EF concurrency exception and a
+  same-line concurrent-restore unique-key race into the normal `ConcurrencyConflict` outcome — no
+  500s.
+- `ProposedScopeApiService.RestoreLineAsync` reuses the same `AuthorizeAsync()` gate composition as
+  `RemoveLineAsync`. `ProposedScopeEndpoints` adds `POST /keep/pricebook/proposed-scopes/
+  {proposedScopeId}/lines/{lineId}/restore`, same version-header contract as the other line-mutation
+  endpoints.
+- `ErrorHttpMapper` maps `ProposedScope.RestoreExpired` to 422 and `ProposedScope.RestoreLineAlreadyExists`
+  to 409 (net-new mappings; neither existed before this slice).
+- 6 production files, 2 test files — within the batch-size gate. 41/41 `ProposedScopeTests`
+  (domain), 37/37 combined `ProposedScopeApiTests`/`RemovedProposedScopeLineSnapshotTests`
+  (integration, including a real-PostgreSQL concurrent-restore race), 14/14 architecture tests,
+  `git diff --check` clean.
 
 **Undo-delete snapshot retention: required maintenance follow-up (locked 2026-08-16).**
 `keep_pricebook_removed_scope_line_snapshots` is transient recovery state, not an audit table.

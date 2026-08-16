@@ -84,6 +84,18 @@ public sealed class ProposedScopeApiService(
             ct);
     }
 
+    public async Task<Result<Guid>> RestoreLineAsync(Guid proposedScopeId, Guid lineId, Guid expectedVersion, CancellationToken ct)
+    {
+        var gate = await AuthorizeAsync(ct);
+        if (gate.IsFailure)
+            return Result<Guid>.Failure(gate.Error);
+
+        return await editService.RestoreLineAsync(
+            new RestoreLineCommand(
+                currentUser.AccountId, proposedScopeId, lineId, expectedVersion, currentUser.UserId, gate.Value),
+            ct);
+    }
+
     public async Task<Result<Guid>> SubmitAsync(Guid proposedScopeId, Guid expectedVersion, CancellationToken ct)
     {
         var gate = await AuthorizeAsync(ct);
