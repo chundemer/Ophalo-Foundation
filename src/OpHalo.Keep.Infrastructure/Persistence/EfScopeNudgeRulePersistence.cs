@@ -23,6 +23,17 @@ public sealed class EfScopeNudgeRulePersistence(OpHaloDbContext dbContext) : ISc
             .OrderBy(x => x.CreatedAtUtc)
             .ToListAsync(ct);
 
+    public Task<ScopeNudgeRule?> GetByTriggerAsync(
+        Guid accountId, Guid? triggerCatalogItemId, Guid? triggerOfferingAssemblyId, CancellationToken ct) =>
+        dbContext.Set<ScopeNudgeRule>()
+            .Include(x => x.Suggestions)
+            .AsNoTracking()
+            .FirstOrDefaultAsync(
+                x => x.AccountId == accountId
+                    && x.TriggerCatalogItemId == triggerCatalogItemId
+                    && x.TriggerOfferingAssemblyId == triggerOfferingAssemblyId,
+                ct);
+
     public async Task<ScopeNudgeRuleCommitResult> CreateAsync(ScopeNudgeRule rule, CancellationToken ct)
     {
         dbContext.Set<ScopeNudgeRule>().Add(rule);

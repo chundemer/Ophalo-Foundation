@@ -172,6 +172,11 @@ public static class KeepServiceCollectionExtensions
         services.AddScoped<IScopeNudgeRulePersistence, EfScopeNudgeRulePersistence>();
         services.AddScoped<ScopeNudgeRuleConfigApiService>();
 
+        // Price Book, Quotes & Materials — Paired Nudges field nudge-read (Session 3,
+        // build-log/123). Reuses IProposedScopePersistence/IScopeNudgeRulePersistence/
+        // ICatalogReadPersistence/IOfferingAssemblyPersistence (all registered above).
+        services.AddScoped<ScopeNudgeFieldReadApiService>();
+
         return services;
     }
 }

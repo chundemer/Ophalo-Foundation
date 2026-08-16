@@ -333,6 +333,7 @@ app.MapFieldScopeSearchEndpoints();
 app.MapQuickScopeActionEndpoints();
 app.MapScopeNudgeRuleEndpoints();
 app.MapFieldQuickScopeActionEndpoints();
+app.MapFieldScopeNudgeEndpoints();
 
 app.MapAuthEndpoints();
 app.MapAccountEndpoints();

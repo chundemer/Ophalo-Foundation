@@ -39,6 +39,13 @@ public interface IScopeNudgeRulePersistence
     /// Empty for an account with no configuration — never null.</summary>
     Task<IReadOnlyList<ScopeNudgeRule>> ListForAccountAsync(Guid accountId, CancellationToken ct);
 
+    /// <summary>Loads the single rule (with suggestions attached, untracked) whose trigger matches
+    /// exactly one of <paramref name="triggerCatalogItemId"/> / <paramref name="triggerOfferingAssemblyId"/>,
+    /// or null if no rule is configured for that trigger. The field nudge-read path (build-log/123)
+    /// is the sole caller — callers must supply exactly one non-null id.</summary>
+    Task<ScopeNudgeRule?> GetByTriggerAsync(
+        Guid accountId, Guid? triggerCatalogItemId, Guid? triggerOfferingAssemblyId, CancellationToken ct);
+
     /// <summary>Inserts a newly created rule and its initial suggestion set.</summary>
     Task<ScopeNudgeRuleCommitResult> CreateAsync(ScopeNudgeRule rule, CancellationToken ct);
 

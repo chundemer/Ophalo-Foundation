@@ -49,6 +49,10 @@ public static class ErrorHttpMapper
             // Referenced catalog item/offering-assembly does not exist for the account — a missing
             // target, not malformed input, so 404 rather than the generic 400 default.
             "ScopeNudgeRule.TargetNotFound" => (StatusCodes.Status404NotFound, "Resource not found.", null),
+
+            // Malformed trigger query parameter shape (missing/duplicate/combined) on the field
+            // nudge-read endpoint — build-log/123.
+            "ScopeNudgeRule.TriggerQueryParameterInvalid" => (StatusCodes.Status400BadRequest, "Bad request.", null),
             "KeepPublicIntakeLink.ReplaceConfirmationInvalid" =>
                 (StatusCodes.Status400BadRequest, "Bad request.", null),
 

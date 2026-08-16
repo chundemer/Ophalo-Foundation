@@ -36,4 +36,7 @@ public static class ScopeNudgeRuleErrors
 
     public static readonly Error TargetNotFound =
         Error.Create("ScopeNudgeRule.TargetNotFound", "The selected catalog item or offering/assembly could not be found.");
+
+    public static readonly Error TriggerQueryParameterInvalid =
+        Error.Create("ScopeNudgeRule.TriggerQueryParameterInvalid", "Exactly one of triggerCatalogItemId or triggerOfferingAssemblyId is required.");
 }
