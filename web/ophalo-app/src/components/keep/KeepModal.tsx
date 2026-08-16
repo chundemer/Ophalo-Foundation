@@ -1,4 +1,4 @@
-import { useEffect, useRef, type MouseEvent, type ReactNode } from "react";
+import { useEffect, useRef, type MouseEvent, type ReactNode, type RefObject } from "react";
 
 const FOCUSABLE_SELECTOR =
   'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
@@ -21,6 +21,10 @@ interface KeepModalProps {
   backdropClosable?: boolean;
   label?: string;
   labelledBy?: string;
+  /** Session 5B, build-log/120: focus this element on mount instead of the first focusable
+   *  descendant (e.g. a leading close button) — for surfaces like the composer's unified search
+   *  input, where the default first-focusable pick would be the wrong control. */
+  initialFocus?: RefObject<HTMLElement | null>;
   /** Layout classes for the outer click-to-close container (e.g. flex centering). */
   overlayClassName?: string;
   panelClassName?: string;
@@ -40,6 +44,7 @@ export function KeepModal({
   backdropClosable = true,
   label,
   labelledBy,
+  initialFocus,
   overlayClassName = "",
   panelClassName = "",
   backdropClassName = "",
@@ -52,7 +57,7 @@ export function KeepModal({
     previousFocusRef.current = document.activeElement;
     const panel = panelRef.current;
     const focusable = panel ? getFocusable(panel) : [];
-    (focusable[0] ?? panel)?.focus();
+    (initialFocus?.current ?? focusable[0] ?? panel)?.focus();
 
     return () => {
       const prior = previousFocusRef.current;

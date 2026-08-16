@@ -89,6 +89,23 @@ the new composer must not include steps, `Not here`, categories, or off-catalog 
 **Exit gate:** a new empty Draft supports known-item search/add and explicit custom add; no
 price/cost/margin UI or payload is present; phone keyboard/opening behavior is manually checked.
 
+**Session 5B: complete (2026-08-16).** New `ProposedScopeComposer`/`ComposerSearchAndAdd`/
+`ComposerDraftList` alongside the untouched five-rung ladder — `ProposedScopeCaptureModal` and its
+rungs are not imported or modified, and no wiring was added to `RequestDetailContent`. One
+deterministic Name/SKU/Alias input renders catalog results and an explicit `Add "…" as custom item`
+action together; typing never writes a line; a known or custom pick goes through
+`fieldSelectProposedScopeLine` and clears only after confirmed success, preserving entered
+description/quantity/note on any failure or conflict. Phone gets a fixed `100dvh` full-screen
+presentation, desktop a constrained centered dialog, via `KeepModal`. `KeepModal` gained an optional
+`initialFocus` ref prop (backward-compatible; existing callers unaffected) so the unified input, not
+the close button, receives initial focus once the dialog is available. The sticky
+`Submit scope to office` footer is a disabled structural placeholder — wiring is Session 5D. No
+price/cost/margin UI or payload. 5 files changed (4 new, 1 modified — `KeepModal.tsx`); 6 new
+`ProposedScopeComposer` component tests plus the existing 6 ladder tests and 11 `KeepModal` tests
+all pass unchanged (15/15 focused run), `tsc --noEmit` and `git diff --check` clean. Manual phone/
+desktop keyboard-and-presentation check still outstanding — no live device/browser check performed
+this session.
+
 ### Session 5C — Quick actions, assembly expansion, and visible Draft
 
 **Goal:** complete the three coequal first-screen addition paths and make the current scope clear.

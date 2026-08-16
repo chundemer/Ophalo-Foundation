@@ -1,7 +1,7 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-08-16 (unified scope-composer Session 4b Slice 2 restore endpoint complete;
-snapshot-retention cleanup remains a required maintenance follow-up)
+**Last updated:** 2026-08-16 (unified scope-composer Session 5B composer shell/search/custom-add
+complete; snapshot-retention cleanup remains a required maintenance follow-up)
 **Deployment posture:** Not pilot-ready.
 **Source of truth for acceptance criteria:** `docs/pilot-readiness-bug-tracker.md`.
 
@@ -243,9 +243,16 @@ and a dedicated decision.
   methods for the field quick-scope-actions read and versioned restore, plus a reusable
   `reconcileAfterConflict` reload/notice path on `useProposedScopeCapture`. No rendering or ladder
   change. 4 files, 13/13 focused tests, `tsc --noEmit` and `git diff --check` clean.
-- **Next batch: Session 5B — unified composer shell, search, and explicit custom add**, per Build
-  Log 120 (new `ProposedScopeComposer` alongside the existing ladder; no price UI; ladder stays
-  reachable until replacement coverage is reviewed).
+- **Session 5B — unified composer shell, search, and explicit custom add: complete (2026-08-16).**
+  New `ProposedScopeComposer`/`ComposerSearchAndAdd`/`ComposerDraftList` alongside the untouched
+  five-rung ladder (no wiring into `RequestDetailContent`); one deterministic search surface for
+  catalog results and explicit custom-add; `KeepModal` gained a backward-compatible `initialFocus`
+  prop. Full details in Build Log 120. 5 files (4 new, 1 modified), 15/15 focused tests
+  (6 new + 6 ladder + 11 KeepModal, unchanged), `tsc --noEmit` and `git diff --check` clean. Manual
+  phone/desktop keyboard check not yet performed.
+- **Next batch: Session 5C — Quick actions, assembly expansion, and visible Draft**, per Build
+  Log 120 (render field Quick actions and assembly expansion in the new composer; render the
+  authoritative Draft as stacked rows including duplicates; no client-side merge).
 
 **Undo-delete snapshot retention: required maintenance follow-up (locked 2026-08-16).**
 `keep_pricebook_removed_scope_line_snapshots` is transient recovery state, not an audit table.
