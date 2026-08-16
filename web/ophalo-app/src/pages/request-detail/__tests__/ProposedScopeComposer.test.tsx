@@ -53,6 +53,18 @@ const associatedItemLine = {
   defaultQuantitySnapshot: null,
 };
 
+const customItemLine = {
+  ...associatedItemLine,
+  id: "line-custom",
+  lineType: "OffCatalogItem",
+  catalogItemId: null,
+  offCatalogDescription: "bolt 3/4\"",
+  offCatalogQuantity: 4,
+  quantity: 4,
+  displayNameSnapshot: "bolt 3/4\"",
+  unitOfMeasureSnapshot: null,
+};
+
 const scope: ProposedScopeDetailResult = {
   id: "scope-1",
   requestId: "request-1",
@@ -347,6 +359,12 @@ describe("ProposedScopeComposer", () => {
 
     expect(screen.getByText("Filter")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Submit scope to office" })).not.toBeDisabled();
+  });
+
+  it("identifies an off-catalog Draft line as a custom item", () => {
+    renderComposer({ scope: { ...scope, lines: [customItemLine] } });
+
+    expect(screen.getByText("Custom item")).toBeInTheDocument();
   });
 
   it("disables submit and explains why for an empty Draft", () => {

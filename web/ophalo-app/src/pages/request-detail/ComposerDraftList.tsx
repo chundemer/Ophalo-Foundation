@@ -179,6 +179,11 @@ function ComposerDraftLine({ line, readOnly, proposedScopeId, version, onCommitt
             × {line.quantity}
             {line.unitOfMeasureSnapshot ? ` ${line.unitOfMeasureSnapshot}` : ""}
           </span>
+          {line.lineType === "OffCatalogItem" && (
+            <span className="ml-2 inline-flex rounded bg-[var(--ophalo-canvas)] px-1.5 py-0.5 text-xs font-medium text-[var(--ophalo-muted)]">
+              Custom item
+            </span>
+          )}
           {line.isException && <span className="ml-1 text-xs text-[var(--ophalo-muted)]">(exception)</span>}
         </div>
         {!readOnly && (
