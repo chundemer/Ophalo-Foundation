@@ -1,7 +1,7 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-08-16 (Paired Nudges Session 3 — field nudge-read API — complete
-and validated; next session is Paired Nudges Session 4, Owner/Admin settings UI)
+**Last updated:** 2026-08-16 (Paired Nudges Session 4 — Owner/Admin settings UI — complete;
+next session is Paired Nudges Session 5, composer hook and chips)
 **Deployment posture:** Not pilot-ready.
 **Source of truth for acceptance criteria:** `docs/pilot-readiness-bug-tracker.md`.
 
@@ -191,11 +191,38 @@ operator-not-assigned 404 visibility, no-entitlement 403, offering-assembly targ
 Nudge/QuickScopeAction/ProposedScope regression and 14/14 architecture tests still passing; `git
 diff --check` clean. Committed (2026-08-16).
 
-**Next: Phase 2 — Paired Nudges Session 4: Owner/Admin settings UI.** Per
+**Paired Nudges Session 4 UI contract: locked (2026-08-16).**
+[Build Log 124](build-log/124-paired-nudges-session-4-ui-contract-preflight.md) fixes the
+rule-management screen ahead of implementation: a new Nudges tab in `PriceBook.tsx` (existing
+Owner/Admin role and entitlement gates), a list showing every rule including ineligible/repair-needed
+triggers and suggestions, a create modal (one trigger, 1–3 ordered suggestions), an edit modal scoped
+to suggestions only (trigger displayed, not editable), and a delete confirmation naming the trigger.
+No client-side eligibility, pricing, or uniqueness logic — Session 2's API responses and errors are
+authoritative.
+
+**Phase 2 — Paired Nudges Session 4: Owner/Admin settings UI. Complete (2026-08-16).** Per
 [Build Log 123](build-log/123-paired-nudges-implementation-contract-preflight.md)'s bounded
-implementation sequence (step 4), add the Price Book rule-management screen using Session 2's
-Owner/Admin configuration API (`ScopeNudgeRuleConfigApiService`/`ScopeNudgeRuleEndpoints`). Start a
-fresh session; run the mechanical file-level preflight first.
+implementation sequence (step 4) and [Build Log 124](build-log/124-paired-nudges-session-4-ui-contract-preflight.md)'s
+locked UI contract, added a Nudges tab to `PriceBook.tsx` (existing Owner/Admin role and entitlement
+gates) listing rules with ordered suggestions and ineligible/repair-needed indicators, plus a create/
+edit `ScopeNudgeRuleModal` (trigger locked in edit mode) and a delete confirmation naming the
+trigger. `AssemblyPicker` is a new browse-only, cursor-paginated selector: no admin-gated
+search-by-text endpoint exists for assemblies (`GET /keep/pricebook/offering-assemblies` supports
+only `status`/`cursor`), unlike the search-backed `CatalogItemPicker`. All uniqueness/eligibility/
+duplicate-trigger enforcement stays server-authoritative — the modal has no client-side `excludeIds`
+filtering and only surfaces the server's `DuplicateSuggestion`/`DuplicateTrigger`/`TargetNotFound`
+errors. `apiClient`/`apiClient.types` gained the four `ScopeNudgeRule*` methods and types; `App.tsx`
+extended pricebook tab routing to `nudges`. 443/443 frontend suite passing (6 new tests, including an
+assembly-trigger/assembly-suggestion path exercising the picker's pagination); typecheck and `git
+diff --check` clean. Committed (2026-08-16).
+
+**Next: Phase 2 — Paired Nudges Session 5: composer hook and chips.** Per
+[Build Log 123](build-log/123-paired-nudges-implementation-contract-preflight.md)'s bounded
+implementation sequence (step 5), add session-only retired-rule state, post-reload field nudge-reads
+(Session 3's `GET /keep/pricebook/proposed-scopes/{id}/nudge-suggestions`), price-blind accept/
+dismiss chips in the field scope composer, and the manual acceptance scenarios from
+[Build Log 122](build-log/122-paired-nudges-preflight.md). Start a fresh session; run the mechanical
+file-level preflight first.
 
 **Unified scope-composer redesign — approved implementation map (2026-08-15).** Work proceeds
 sequentially; it is not authority to reopen the broader Request Details, request-queue,
