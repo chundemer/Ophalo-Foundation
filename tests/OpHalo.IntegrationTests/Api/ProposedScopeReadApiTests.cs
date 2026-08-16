@@ -362,13 +362,19 @@ public sealed class ProposedScopeReadApiTests : IClassFixture<KeepApiWebFactory>
     /// <summary>Creates and immediately submits a scope (domain <c>Submit</c> only — this test
     /// doesn't need the atomic <c>KeepRequestWorkSignal</c> coordination the real submit endpoint
     /// provides) so distinct rows land at distinct <c>CreatedAtUtc</c> values for the
-    /// most-recent-only assertion.</summary>
+    /// most-recent-only assertion. Adds one line first — Session 4a's <c>EmptySubmit</c> domain
+    /// rule means <c>Submit</c> can no longer succeed on an empty scope.</summary>
     private async Task<(Guid ScopeId, Guid ConcurrencyVersion)> SeedSubmittedScopeAsync(
         Guid accountId, Guid requestId, Guid createdByUserId)
     {
+        var item = await SeedActiveCatalogItemAsync(accountId, createdByUserId, $"Test Item {Guid.NewGuid()}");
+
         var createResult = ProposedScope.Create(accountId, requestId, createdByUserId);
         Assert.True(createResult.IsSuccess);
         var scope = createResult.Value;
+        Assert.True(scope.AddLine(
+            ProposedScopeLineType.KnownCatalogItem, item.Id, null, 1m, false,
+            null, null, null, 0, item.DisplayName, "each", null, null, createdByUserId).IsSuccess);
         Assert.True(scope.Submit(DateTime.UtcNow).IsSuccess);
 
         await using var dbScope = _factory.CreateScope();

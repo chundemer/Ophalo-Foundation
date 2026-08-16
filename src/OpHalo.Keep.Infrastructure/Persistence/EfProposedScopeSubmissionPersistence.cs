@@ -21,7 +21,12 @@ public sealed class EfProposedScopeSubmissionPersistence(OpHaloDbContext dbConte
     {
         await using var tx = await dbContext.Database.BeginTransactionAsync(ct);
 
+        // Include(Lines) is required: ProposedScope.Submit's EmptySubmit rule (Session 4a) reads
+        // the in-memory _lines field, which a plain FirstOrDefaultAsync leaves empty regardless of
+        // what's actually persisted — without this, every submit would fail as EmptySubmit
+        // (Session 4b corrective fix).
         var scope = await dbContext.Set<ProposedScope>()
+            .Include(x => x.Lines)
             .FirstOrDefaultAsync(x => x.AccountId == accountId && x.Id == proposedScopeId, ct);
         if (scope is null)
             return new ProposedScopeSubmissionOutcome(ProposedScopeSubmissionResult.NotFound);

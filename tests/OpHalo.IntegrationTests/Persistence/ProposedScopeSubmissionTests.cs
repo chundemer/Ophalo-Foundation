@@ -132,21 +132,20 @@ public sealed class ProposedScopeSubmissionTests : IClassFixture<PostgresFixture
     [Fact]
     public async Task CommitAsync_with_a_stale_row_fails_with_ConcurrencyConflict()
     {
-        await using var ctx = CreateContext();
-        var persistence = new EfProposedScopePersistence(ctx);
-        var scope = ProposedScope.Create(AccountId, RequestId, OwnerId).Value;
-        await persistence.AddAsync(scope, CancellationToken.None);
+        var scopeId = await SeedDraftScopeWithLineAsync();
 
         // Two independently loaded copies of the same row; the first writer wins.
         await using var ctxA = CreateContext();
-        var loadedA = await new EfProposedScopePersistence(ctxA).GetByIdAsync(AccountId, scope.Id, CancellationToken.None);
+        var loadedA = await new EfProposedScopePersistence(ctxA).GetByIdAsync(AccountId, scopeId, CancellationToken.None);
         await using var ctxB = CreateContext();
-        var loadedB = await new EfProposedScopePersistence(ctxB).GetByIdAsync(AccountId, scope.Id, CancellationToken.None);
+        var loadedB = await new EfProposedScopePersistence(ctxB).GetByIdAsync(AccountId, scopeId, CancellationToken.None);
 
-        loadedA!.Submit(Now);
+        var submitA = loadedA!.Submit(Now);
+        Assert.True(submitA.IsSuccess);
         await new EfProposedScopePersistence(ctxA).CommitAsync(loadedA, CancellationToken.None);
 
-        loadedB!.Submit(Now);
+        var submitB = loadedB!.Submit(Now);
+        Assert.True(submitB.IsSuccess);
         var staleResult = await new EfProposedScopePersistence(ctxB).CommitAsync(loadedB, CancellationToken.None);
 
         Assert.Equal(ProposedScopeCommitResult.ConcurrencyConflict, staleResult);
@@ -159,7 +158,7 @@ public sealed class ProposedScopeSubmissionTests : IClassFixture<PostgresFixture
     [Fact]
     public async Task SubmitAsync_transitions_the_scope_and_raises_the_signal()
     {
-        var scopeId = await SeedDraftScopeAsync();
+        var scopeId = await SeedDraftScopeWithLineAsync();
 
         await using var ctx = CreateContext();
         var persistence = new EfProposedScopeSubmissionPersistence(ctx);
@@ -183,7 +182,7 @@ public sealed class ProposedScopeSubmissionTests : IClassFixture<PostgresFixture
     [Fact]
     public async Task SubmitAsync_when_the_signal_is_already_active_does_not_reset_RaisedAtUtc()
     {
-        var firstScopeId = await SeedDraftScopeAsync();
+        var firstScopeId = await SeedDraftScopeWithLineAsync();
         await using (var ctx = CreateContext())
         {
             var persistence = new EfProposedScopeSubmissionPersistence(ctx);
@@ -200,7 +199,7 @@ public sealed class ProposedScopeSubmissionTests : IClassFixture<PostgresFixture
             updatedAtAfterFirstSubmit = before.UpdatedAtUtc;
         }
 
-        var secondScopeId = await SeedDraftScopeAsync();
+        var secondScopeId = await SeedDraftScopeWithLineAsync();
         var later = Now.AddHours(2);
         await using (var ctx = CreateContext())
         {
@@ -225,7 +224,7 @@ public sealed class ProposedScopeSubmissionTests : IClassFixture<PostgresFixture
     [Fact]
     public async Task SubmitAsync_reopens_a_resolved_signal()
     {
-        var firstScopeId = await SeedDraftScopeAsync();
+        var firstScopeId = await SeedDraftScopeWithLineAsync();
         await using (var ctx = CreateContext())
         {
             var persistence = new EfProposedScopeSubmissionPersistence(ctx);
@@ -239,7 +238,7 @@ public sealed class ProposedScopeSubmissionTests : IClassFixture<PostgresFixture
                 $"UPDATE keep_request_work_signals SET resolved_at_utc = {Now} WHERE account_id = {AccountId}");
         }
 
-        var secondScopeId = await SeedDraftScopeAsync();
+        var secondScopeId = await SeedDraftScopeWithLineAsync();
         var reopenedAt = Now.AddDays(3);
         await using (var ctx = CreateContext())
         {
@@ -326,6 +325,23 @@ public sealed class ProposedScopeSubmissionTests : IClassFixture<PostgresFixture
     }
 
     [Fact]
+    public async Task SubmitAsync_for_a_zero_line_scope_returns_EmptySubmit_and_does_not_mutate_the_scope()
+    {
+        var scopeId = await SeedDraftScopeAsync();
+
+        await using var ctx = CreateContext();
+        var persistence = new EfProposedScopeSubmissionPersistence(ctx);
+        var outcome = await persistence.SubmitAsync(AccountId, scopeId, await GetVersionAsync(scopeId), Now, CancellationToken.None);
+
+        Assert.Equal(ProposedScopeSubmissionResult.EmptySubmit, outcome.Result);
+
+        await using var verifyCtx = CreateContext();
+        var scope = await verifyCtx.Set<ProposedScope>().SingleAsync(x => x.Id == scopeId);
+        Assert.Equal(ProposedScopeStatus.Draft, scope.Status);
+        Assert.Null(await GetSignalAsync(verifyCtx));
+    }
+
+    [Fact]
     public async Task SubmitAsync_observes_a_terminal_transition_that_commits_while_it_waits_for_the_row_lock()
     {
         // Proves the FOR UPDATE lock (not just an AsNoTracking read) is what makes the terminal
@@ -376,6 +392,22 @@ public sealed class ProposedScopeSubmissionTests : IClassFixture<PostgresFixture
         await using var ctx = CreateContext();
         var persistence = new EfProposedScopePersistence(ctx);
         var scope = ProposedScope.Create(AccountId, RequestId, OwnerId).Value;
+        await persistence.AddAsync(scope, CancellationToken.None);
+        return scope.Id;
+    }
+
+    /// <summary>Session 4a's <c>EmptySubmit</c> domain rule means a Draft scope with zero lines can
+    /// never reach <c>Committed</c>; every successful-submit proof needs at least one line.</summary>
+    private async Task<Guid> SeedDraftScopeWithLineAsync()
+    {
+        var catalogItemId = await SeedActiveCatalogItemAsync();
+
+        await using var ctx = CreateContext();
+        var persistence = new EfProposedScopePersistence(ctx);
+        var scope = ProposedScope.Create(AccountId, RequestId, OwnerId).Value;
+        scope.AddLine(
+            ProposedScopeLineType.KnownCatalogItem, catalogItemId, null, 1m, false,
+            null, null, null, 0, "Drain Pan", "each", null, null, OwnerId);
         await persistence.AddAsync(scope, CancellationToken.None);
         return scope.Id;
     }
