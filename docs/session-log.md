@@ -231,6 +231,22 @@ no new endpoint.
   (integration, including a real-PostgreSQL concurrent-restore race), 14/14 architecture tests,
   `git diff --check` clean.
 
+**Unified scope-composer Session 5 — frontend replacement: Slice 5A complete, 5B next
+(2026-08-16).** The approved, bounded 5A–5E coding order is in
+[Build Log 120](build-log/120-unified-scope-composer-session-5-frontend-coding-plan.md): client
+contract wiring; unified search/custom composer shell; Quick actions and live Draft; editing,
+Undo, submit, and recovery; then primary-action placement and ladder removal. This authorizes no
+inline request-list scope building and no native-mobile scope feature. The composer is the only
+field capture surface; a future list shortcut may only open that same composer after pilot evidence
+and a dedicated decision.
+- **Session 5A — client-contract wiring: complete (commit `f5bbcb3`).** Typed `apiClient`
+  methods for the field quick-scope-actions read and versioned restore, plus a reusable
+  `reconcileAfterConflict` reload/notice path on `useProposedScopeCapture`. No rendering or ladder
+  change. 4 files, 13/13 focused tests, `tsc --noEmit` and `git diff --check` clean.
+- **Next batch: Session 5B — unified composer shell, search, and explicit custom add**, per Build
+  Log 120 (new `ProposedScopeComposer` alongside the existing ladder; no price UI; ladder stays
+  reachable until replacement coverage is reviewed).
+
 **Undo-delete snapshot retention: required maintenance follow-up (locked 2026-08-16).**
 `keep_pricebook_removed_scope_line_snapshots` is transient recovery state, not an audit table.
 Successful restore deletes its consumed row atomically; a scheduled, bounded cleanup must delete

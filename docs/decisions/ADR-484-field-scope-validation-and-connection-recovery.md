@@ -42,6 +42,12 @@ The V1 recovery behavior is the existing server-authoritative model: a mutation 
 server success. Failures are visible and recoverable through explicit retry/reconciliation, not
 through a hidden client-side queue.
 
+For an explicit custom-item add, the composer retains the typed description, quantity, note, and
+inline validation state until the server confirms the add successfully. Selecting `Add "…" as
+custom item` is not permission to clear the input optimistically. Network failure, timeout,
+validation failure, or a concurrency conflict leaves the safely entered values available for an
+explicit retry; only a successful response clears the custom-item input for the next entry.
+
 ## Scope and terminology
 
 An assembly is an explicitly selected Quick scope action; its resulting Draft entries are

@@ -30,7 +30,10 @@ or edit any resulting Draft line under the normal line-type rules.
 
 Adding the same catalog item or the same assembly more than once creates distinct Draft lines; Keep
 does not silently merge quantities. Separate lines preserve their source, note, and physical-work
-context. Any later grouping is an office presentation concern, not a field-capture mutation.
+context. The live Draft renders those lines as visibly separate stacked rows, each with its own
+quantity, note, source context, and edit/remove affordances, so a technician can see that a
+repeated selection registered. Any later grouping is an office presentation concern, not a
+field-capture mutation.
 
 ### Submit and completion semantics
 
@@ -59,6 +62,11 @@ at its original display order and advances the scope version. Restore does not r
 Draft-line display orders; reads use their existing deterministic `DisplayOrder`, then line-id tie
 break so Undo does not create unrelated edits.
 
+The Undo request carries the version returned by the removal. If it receives a concurrency conflict,
+the client closes the toast, re-fetches the authoritative scope, and explains that the scope changed
+and the line could not be restored. It must not auto-retry. A version conflict is distinct from the
+server-declared five-second expiry, which receives separate "Undo period ended" feedback.
+
 A Quick action's field-read eligibility is point-in-time only. If its resolved catalog-item or
 assembly target becomes unavailable before selection, the normal authoritative selection error and
 reconciliation path applies; the client presents a contextual office-updated/unavailable notice.
@@ -70,6 +78,11 @@ target, visible focus indication, and accessible names. On opening a writable co
 to the unified search/type input after the dialog is available; the implementation must not obscure
 the active input or sticky submit area behind the mobile keyboard. The sticky submit footer remains
 available whenever submission is allowed and never hides line-edit controls or validation feedback.
+On phone-sized viewports, the open composer uses a fixed `100dvh` viewport container with a fixed
+header/footer and an internal `flex-1 overflow-y-auto` body for the add surface and live Draft.
+The page behind the composer must not become the active scrolling surface; this scroll isolation
+keeps the focused search input and sticky submit footer usable in iOS Safari and Android Chrome when
+the soft keyboard is present.
 
 ## Required implementation follow-up
 
@@ -78,4 +91,5 @@ available whenever submission is allowed and never hides line-edit controls or v
   composer to it; no static or client-only accelerator list is acceptable.
 - Replace the existing optional-item pre-expansion path and ladder UI/tests with this contract.
 - Validate all ADR-484 journeys plus duplicate selection, submit semantics, Undo conflict recovery,
-  keyboard behavior, and accessibility at phone viewport before declaring the redesign complete.
+  custom-input preservation on failed add, keyboard/scroll isolation behavior, and accessibility at
+  phone viewport before declaring the redesign complete.
