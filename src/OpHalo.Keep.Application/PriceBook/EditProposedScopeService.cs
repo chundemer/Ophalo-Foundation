@@ -3,6 +3,7 @@ using OpHalo.Keep.Application.Requests;
 using OpHalo.Keep.Core.Entities;
 using OpHalo.Keep.Core.Entities.Enums;
 using OpHalo.Keep.Core.Errors;
+using OpHalo.SharedKernel.Abstractions;
 using OpHalo.SharedKernel.Results;
 
 namespace OpHalo.Keep.Application.PriceBook;
@@ -103,7 +104,8 @@ public sealed record ExpandAssemblyResultValue(IReadOnlyList<Guid> LineIds, Guid
 public sealed class EditProposedScopeService(
     IProposedScopePersistence persistence,
     IKeepRequestDetailPersistence requestPersistence,
-    IOfferingAssemblyExpansionPersistence expansionPersistence)
+    IOfferingAssemblyExpansionPersistence expansionPersistence,
+    IClock clock)
 {
     public async Task<Result<AddProposedScopeLineResult>> AddLineAsync(AddProposedScopeLineCommand command, CancellationToken ct)
     {
@@ -154,11 +156,12 @@ public sealed class EditProposedScopeService(
             return Result<Guid>.Failure(loadResult.Error);
 
         var scope = loadResult.Value;
-        var removeResult = scope.RemoveLine(command.LineId);
+        var removeResult = scope.RemoveLine(command.LineId, clock.UtcNow);
         if (removeResult.IsFailure)
             return Result<Guid>.Failure(removeResult.Error);
 
-        return ToTransitionResult(await persistence.CommitAsync(scope, ct), scope);
+        var commitResult = await persistence.CommitWithRemovedLineSnapshotAsync(scope, removeResult.Value, ct);
+        return ToTransitionResult(commitResult, scope);
     }
 
     /// <summary>

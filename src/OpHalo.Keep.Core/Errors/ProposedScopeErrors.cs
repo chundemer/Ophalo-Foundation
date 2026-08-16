@@ -97,4 +97,16 @@ public static class ProposedScopeErrors
     /// optional associated item on this assembly — either unknown or a required item's id.</summary>
     public static readonly Error ExpandExclusionItemInvalid =
         Error.Create("ProposedScope.ExpandExclusionItemInvalid", "One or more excluded items are not optional items on this offering/assembly.");
+
+    /// <summary>Undo-delete (Session 4b, build-log/119 decision 1): the server-authoritative
+    /// five-second restore window (measured from the removed-line snapshot's
+    /// <c>RemovedAtUtc</c>) has elapsed.</summary>
+    public static readonly Error RestoreExpired =
+        Error.Create("ProposedScope.RestoreExpired", "This action can no longer be undone.");
+
+    /// <summary>Undo-delete (Session 4b, build-log/119 decision 1): the original line id is
+    /// already present on the scope — a second restore after a successful one is a real
+    /// conflict, never a silent no-op.</summary>
+    public static readonly Error RestoreLineAlreadyExists =
+        Error.Create("ProposedScope.RestoreLineAlreadyExists", "This line has already been restored.");
 }

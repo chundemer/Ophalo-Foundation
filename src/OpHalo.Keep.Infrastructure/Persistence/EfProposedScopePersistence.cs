@@ -60,6 +60,37 @@ public sealed class EfProposedScopePersistence(OpHaloDbContext dbContext) : IPro
         }
     }
 
+    public Task<RemovedProposedScopeLineSnapshot?> GetRemovedLineSnapshotAsync(
+        Guid accountId, Guid proposedScopeId, Guid lineId, CancellationToken ct) =>
+        dbContext.Set<RemovedProposedScopeLineSnapshot>()
+            .FirstOrDefaultAsync(
+                x => x.AccountId == accountId && x.ProposedScopeId == proposedScopeId && x.LineId == lineId, ct);
+
+    public async Task<ProposedScopeCommitResult> CommitWithRemovedLineSnapshotAsync(
+        ProposedScope scope, RemovedProposedScopeLineSnapshot snapshot, CancellationToken ct)
+    {
+        dbContext.Set<RemovedProposedScopeLineSnapshot>().Add(snapshot);
+
+        try
+        {
+            await dbContext.SaveChangesAsync(ct);
+            return ProposedScopeCommitResult.Committed;
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return ProposedScopeCommitResult.ConcurrencyConflict;
+        }
+        // Two writers who both loaded the scope before either committed can independently remove
+        // the same line, producing the same (ProposedScopeId, LineId) snapshot key; the resulting
+        // unique-index violation on the snapshot INSERT can reach Postgres before this batch's
+        // scope UPDATE predicate is even evaluated, so it must be treated the same as the scope's
+        // own concurrency-token mismatch — both mean someone else changed this scope first.
+        catch (DbUpdateException ex) when (IsUniqueConstraintViolation(ex))
+        {
+            return ProposedScopeCommitResult.ConcurrencyConflict;
+        }
+    }
+
     private static bool IsUniqueConstraintViolation(DbUpdateException ex) =>
         ex.InnerException is PostgresException pgEx && pgEx.SqlState == PostgresErrorCodes.UniqueViolation;
 }

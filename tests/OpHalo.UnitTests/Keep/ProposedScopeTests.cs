@@ -471,15 +471,22 @@ public class ProposedScopeTests
     // --- RemoveLine ---
 
     [Fact]
-    public void RemoveLine_while_Draft_removes_the_line()
+    public void RemoveLine_while_Draft_removes_the_line_and_returns_a_matching_snapshot()
     {
         var scope = New().Value;
         var line = AddKnownCatalogItemLine(scope).Value;
+        var now = DateTime.UtcNow;
 
-        var result = scope.RemoveLine(line.Id);
+        var result = scope.RemoveLine(line.Id, now);
 
         Assert.True(result.IsSuccess);
         Assert.Empty(scope.Lines);
+        var snapshot = result.Value;
+        Assert.Equal(line.Id, snapshot.LineId);
+        Assert.Equal(scope.Id, snapshot.ProposedScopeId);
+        Assert.Equal(line.DisplayNameSnapshot, snapshot.DisplayNameSnapshot);
+        Assert.Equal(line.DisplayOrder, snapshot.DisplayOrder);
+        Assert.Equal(now, snapshot.RemovedAtUtc);
     }
 
     [Fact]
@@ -487,7 +494,7 @@ public class ProposedScopeTests
     {
         var scope = New().Value;
 
-        var result = scope.RemoveLine(Guid.CreateVersion7());
+        var result = scope.RemoveLine(Guid.CreateVersion7(), DateTime.UtcNow);
 
         Assert.True(result.IsFailure);
         Assert.Equal(ProposedScopeErrors.LineNotFound, result.Error);
@@ -500,7 +507,72 @@ public class ProposedScopeTests
         var line = AddKnownCatalogItemLine(scope).Value;
         scope.Submit(DateTime.UtcNow);
 
-        var result = scope.RemoveLine(line.Id);
+        var result = scope.RemoveLine(line.Id, DateTime.UtcNow);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(ProposedScopeErrors.NotDraft, result.Error);
+    }
+
+    // --- RestoreLine ---
+
+    [Fact]
+    public void RestoreLine_within_the_five_second_window_reinserts_the_original_line()
+    {
+        var scope = New().Value;
+        var line = AddKnownCatalogItemLine(scope, displayOrder: 5).Value;
+        var removedAt = DateTime.UtcNow;
+        var snapshot = scope.RemoveLine(line.Id, removedAt).Value;
+
+        var result = scope.RestoreLine(snapshot, removedAt.AddSeconds(5));
+
+        Assert.True(result.IsSuccess);
+        var restored = Assert.Single(scope.Lines);
+        Assert.Equal(line.Id, restored.Id);
+        Assert.Equal(line.DisplayOrder, restored.DisplayOrder);
+        Assert.Equal(line.DisplayNameSnapshot, restored.DisplayNameSnapshot);
+    }
+
+    [Fact]
+    public void RestoreLine_after_the_five_second_window_fails_with_RestoreExpired()
+    {
+        var scope = New().Value;
+        var line = AddKnownCatalogItemLine(scope).Value;
+        var removedAt = DateTime.UtcNow;
+        var snapshot = scope.RemoveLine(line.Id, removedAt).Value;
+
+        var result = scope.RestoreLine(snapshot, removedAt.AddSeconds(5).AddTicks(1));
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(ProposedScopeErrors.RestoreExpired, result.Error);
+        Assert.Empty(scope.Lines);
+    }
+
+    [Fact]
+    public void RestoreLine_when_the_original_line_id_is_already_present_fails_with_RestoreLineAlreadyExists()
+    {
+        var scope = New().Value;
+        var line = AddKnownCatalogItemLine(scope).Value;
+        var removedAt = DateTime.UtcNow;
+        var snapshot = scope.RemoveLine(line.Id, removedAt).Value;
+        scope.RestoreLine(snapshot, removedAt);
+
+        var result = scope.RestoreLine(snapshot, removedAt);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(ProposedScopeErrors.RestoreLineAlreadyExists, result.Error);
+    }
+
+    [Fact]
+    public void RestoreLine_when_not_Draft_fails()
+    {
+        var scope = New().Value;
+        var line = AddKnownCatalogItemLine(scope, displayOrder: 0).Value;
+        AddOffCatalogLine(scope); // keeps the scope non-empty so Submit below can succeed.
+        var removedAt = DateTime.UtcNow;
+        var snapshot = scope.RemoveLine(line.Id, removedAt).Value;
+        scope.Submit(removedAt);
+
+        var result = scope.RestoreLine(snapshot, removedAt);
 
         Assert.True(result.IsFailure);
         Assert.Equal(ProposedScopeErrors.NotDraft, result.Error);

@@ -201,6 +201,35 @@ public sealed class ProposedScopeLine : BaseEntity
     }
 
     /// <summary>
+    /// Undo-delete (Session 4b, build-log/119 decision 1): recreates a line from its removed-line
+    /// snapshot, reusing the original <see cref="Id"/> and every captured field exactly —
+    /// including <see cref="DisplayOrder"/>, so the line reappears in its original position rather
+    /// than at the end. Internal — only <see cref="ProposedScope.RestoreLine"/> may call this,
+    /// after its own expiry/duplicate checks.
+    /// </summary>
+    internal static ProposedScopeLine Restore(RemovedProposedScopeLineSnapshot snapshot) =>
+        new()
+        {
+            Id = snapshot.LineId,
+            CreatedByUserId = snapshot.CreatedByUserId,
+            AccountId = snapshot.AccountId,
+            ProposedScopeId = snapshot.ProposedScopeId,
+            LineType = snapshot.LineType,
+            CatalogItemId = snapshot.CatalogItemId,
+            OfferingAssemblyId = snapshot.OfferingAssemblyId,
+            Quantity = snapshot.Quantity,
+            IsException = snapshot.IsException,
+            OffCatalogDescription = snapshot.OffCatalogDescription,
+            OffCatalogQuantity = snapshot.OffCatalogQuantity,
+            Note = snapshot.Note,
+            DisplayOrder = snapshot.DisplayOrder,
+            DisplayNameSnapshot = snapshot.DisplayNameSnapshot,
+            UnitOfMeasureSnapshot = snapshot.UnitOfMeasureSnapshot,
+            OfferingAssemblyNameSnapshot = snapshot.OfferingAssemblyNameSnapshot,
+            DefaultQuantitySnapshot = snapshot.DefaultQuantitySnapshot,
+        };
+
+    /// <summary>
     /// Updates only the fields a technician may adjust after selection: quantity, exception flag,
     /// note, and display order. <see cref="LineType"/>, the catalog/assembly references, and every
     /// snapshot field are fixed at creation (ADR-481) and have no update path. For an

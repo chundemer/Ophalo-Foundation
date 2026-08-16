@@ -49,4 +49,23 @@ public interface IProposedScopePersistence
     /// row changed since it was loaded.
     /// </summary>
     Task<ProposedScopeCommitResult> CommitAsync(ProposedScope scope, CancellationToken ct);
+
+    /// <summary>
+    /// Undo-delete (Session 4b, build-log/119 decision 1): the removed-line snapshot for a given
+    /// scope/line pair, or null if none exists (never removed, already restored, or already
+    /// cleaned up). Scoped by <c>accountId</c> directly in the query, same tenant-safety pattern as
+    /// every other read on this seam.
+    /// </summary>
+    Task<RemovedProposedScopeLineSnapshot?> GetRemovedLineSnapshotAsync(
+        Guid accountId, Guid proposedScopeId, Guid lineId, CancellationToken ct);
+
+    /// <summary>
+    /// Undo-delete (Session 4b, build-log/119 decision 1): saves a line-removal mutation to a
+    /// scope already loaded via <see cref="GetByIdAsync"/> (tracked) together with the newly
+    /// created removed-line snapshot, in one <c>SaveChangesAsync</c> — no explicit transaction
+    /// needed, both are tracked in the same <c>DbContext</c>. Same
+    /// <see cref="ProposedScopeCommitResult.ConcurrencyConflict"/> semantics as <see cref="CommitAsync"/>.
+    /// </summary>
+    Task<ProposedScopeCommitResult> CommitWithRemovedLineSnapshotAsync(
+        ProposedScope scope, RemovedProposedScopeLineSnapshot snapshot, CancellationToken ct);
 }

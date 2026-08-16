@@ -117,16 +117,48 @@ public sealed class ProposedScope : BaseEntity
         return Result.Success();
     }
 
-    public Result RemoveLine(Guid lineId)
+    /// <summary>
+    /// Removes a line and returns a full-field snapshot of it (Session 4b, build-log/119 decision
+    /// 1) so the caller can persist a short-lived undo-delete record in the same transaction — the
+    /// active row is hard-removed here, never soft-deleted.
+    /// </summary>
+    public Result<RemovedProposedScopeLineSnapshot> RemoveLine(Guid lineId, DateTime nowUtc)
+    {
+        if (Status != ProposedScopeStatus.Draft)
+            return Result<RemovedProposedScopeLineSnapshot>.Failure(ProposedScopeErrors.NotDraft);
+
+        var line = _lines.FirstOrDefault(l => l.Id == lineId);
+        if (line is null)
+            return Result<RemovedProposedScopeLineSnapshot>.Failure(ProposedScopeErrors.LineNotFound);
+
+        var snapshot = RemovedProposedScopeLineSnapshot.FromLine(line, nowUtc);
+        _lines.Remove(line);
+        ConcurrencyVersion = Guid.NewGuid();
+        return Result<RemovedProposedScopeLineSnapshot>.Success(snapshot);
+    }
+
+    /// <summary>
+    /// Undo-delete (Session 4b, build-log/119 decision 1): reinserts the line captured by
+    /// <paramref name="snapshot"/> at its original id and <c>DisplayOrder</c>. Accepted only when
+    /// <paramref name="nowUtc"/> is no more than five seconds after
+    /// <see cref="RemovedProposedScopeLineSnapshot.RemovedAtUtc"/> — the client-side toast timer is
+    /// presentation only and cannot extend this window. Fails if the original line id is already
+    /// present, so a second restore after a successful one is a real conflict, never a silent
+    /// no-op. The caller is responsible for hard-deleting the consumed snapshot row in the same
+    /// transaction as this mutation's commit.
+    /// </summary>
+    public Result RestoreLine(RemovedProposedScopeLineSnapshot snapshot, DateTime nowUtc)
     {
         if (Status != ProposedScopeStatus.Draft)
             return Result.Failure(ProposedScopeErrors.NotDraft);
 
-        var line = _lines.FirstOrDefault(l => l.Id == lineId);
-        if (line is null)
-            return Result.Failure(ProposedScopeErrors.LineNotFound);
+        if (nowUtc > snapshot.RemovedAtUtc.AddSeconds(5))
+            return Result.Failure(ProposedScopeErrors.RestoreExpired);
 
-        _lines.Remove(line);
+        if (_lines.Any(l => l.Id == snapshot.LineId))
+            return Result.Failure(ProposedScopeErrors.RestoreLineAlreadyExists);
+
+        _lines.Add(ProposedScopeLine.Restore(snapshot));
         ConcurrencyVersion = Guid.NewGuid();
         return Result.Success();
     }
