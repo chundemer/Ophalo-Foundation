@@ -30,4 +30,10 @@ public static class ScopeNudgeRuleErrors
 
     public static readonly Error DuplicateTrigger =
         Error.Create("ScopeNudgeRule.DuplicateTrigger", "An account may configure at most one rule per trigger catalog item or offering/assembly.");
+
+    public static readonly Error NotFound =
+        Error.Create("ScopeNudgeRule.NotFound", "Scope nudge rule not found.");
+
+    public static readonly Error TargetNotFound =
+        Error.Create("ScopeNudgeRule.TargetNotFound", "The selected catalog item or offering/assembly could not be found.");
 }

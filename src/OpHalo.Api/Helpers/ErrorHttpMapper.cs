@@ -45,6 +45,10 @@ public static class ErrorHttpMapper
             "KeepRequest.ServiceStateRequired"        => (StatusCodes.Status422UnprocessableEntity, "Unprocessable entity.", null),
             "KeepRequest.ServiceStateInvalid"         => (StatusCodes.Status422UnprocessableEntity, "Unprocessable entity.", null),
             "KeepPublicIntakeLink.NoActiveLink" => (StatusCodes.Status404NotFound, "Resource not found.", null),
+
+            // Referenced catalog item/offering-assembly does not exist for the account — a missing
+            // target, not malformed input, so 404 rather than the generic 400 default.
+            "ScopeNudgeRule.TargetNotFound" => (StatusCodes.Status404NotFound, "Resource not found.", null),
             "KeepPublicIntakeLink.ReplaceConfirmationInvalid" =>
                 (StatusCodes.Status400BadRequest, "Bad request.", null),
 
@@ -189,6 +193,8 @@ public static class ErrorHttpMapper
             // --- CatalogCategory concurrency/uniqueness conflicts (Session 2b.3) ---
             var c when c == "CatalogCategory.VersionMismatch"         => (StatusCodes.Status409Conflict, "Conflict.", null),
             var c when c == "CatalogCategory.NameAlreadyExists"       => (StatusCodes.Status409Conflict, "Conflict.", null),
+
+            var c when c == "ScopeNudgeRule.DuplicateTrigger" => (StatusCodes.Status409Conflict, "Conflict.", null),
 
             // --- Price book publish lock conflict (Session 2d.2, ADR-470) ---
             var c when c == "PriceBookVersion.PublishLockConflict" => (StatusCodes.Status409Conflict, "Conflict.", null),

@@ -165,6 +165,13 @@ public static class KeepServiceCollectionExtensions
         services.AddScoped<QuickScopeActionConfigApiService>();
         services.AddScoped<QuickScopeActionFieldReadApiService>();
 
+        // Price Book, Quotes & Materials — Paired Nudges Owner/Admin rule configuration (Session 2,
+        // build-log/123). IScopeNudgeRulePersistence was added in Session 1 with no consumer until
+        // this batch. Reuses ICatalogReadPersistence/IOfferingAssemblyPersistence (registered above)
+        // for existence checks and display/eligibility resolution.
+        services.AddScoped<IScopeNudgeRulePersistence, EfScopeNudgeRulePersistence>();
+        services.AddScoped<ScopeNudgeRuleConfigApiService>();
+
         return services;
     }
 }

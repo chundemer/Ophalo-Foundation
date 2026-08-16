@@ -331,6 +331,7 @@ app.MapFieldCatalogEndpoints();
 app.MapFieldOfferingAssemblyEndpoints();
 app.MapFieldScopeSearchEndpoints();
 app.MapQuickScopeActionEndpoints();
+app.MapScopeNudgeRuleEndpoints();
 app.MapFieldQuickScopeActionEndpoints();
 
 app.MapAuthEndpoints();
