@@ -1,7 +1,7 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-08-16 (Paired Nudges Session 1 — domain, persistence, and migration — complete
-and validated; next session is Paired Nudges Session 2, Owner/Admin configuration API)
+**Last updated:** 2026-08-16 (Paired Nudges Session 2 — Owner/Admin configuration API — complete
+and validated; next session is Paired Nudges Session 3, field nudge-read API)
 **Deployment posture:** Not pilot-ready.
 **Source of truth for acceptance criteria:** `docs/pilot-readiness-bug-tracker.md`.
 
@@ -156,11 +156,27 @@ exception match never fired — shortened to `ux_keep_scope_nudge_rules_trigger_
 `ux_keep_scope_nudge_rules_trigger_offering_assembly` and reapplied. No API or frontend surface;
 domain/persistence-only per Session 1's scope. **Committed (2026-08-16).**
 
-**Next: Phase 2 — Paired Nudges Session 2: Owner/Admin configuration API.** Per
-[Build Log 123](build-log/123-paired-nudges-implementation-contract-preflight.md), add the per-rule
-CRUD service/endpoints (`GET`/`POST`/`PUT`/`DELETE /keep/pricebook/scope-nudge-rules`) and
-integration tests, consuming Session 1's `IScopeNudgeRulePersistence`. Start a fresh session; run
-the mechanical file-level preflight first.
+**Phase 2 — Paired Nudges Session 2: Owner/Admin configuration API. Complete (2026-08-16).** Per
+[Build Log 123](build-log/123-paired-nudges-implementation-contract-preflight.md),
+`ScopeNudgeRuleConfigApiService`/`ScopeNudgeRuleEndpoints` add per-rule
+`GET`/`POST`/`PUT`/`DELETE /keep/pricebook/scope-nudge-rules`, gated by account access, Price Book
+entitlement, and `PriceBookCatalogManage` — same composition as
+`QuickScopeActionConfigApiService`. Write-time target checks are existence-only (an
+inactive/ineligible catalog item or assembly may be configured as a trigger or suggestion);
+aggregate-shape validation (`ScopeNudgeRule.Create`/`ReplaceSuggestions`) runs before any target
+lookup so a malformed dual-target request fails on the deterministic domain error rather than
+whichever lookup ran first — a correction made during review. Two new error codes
+(`ScopeNudgeRuleErrors.NotFound`, `TargetNotFound`) and two new `ErrorHttpMapper` entries
+(`TargetNotFound` → 404, `DuplicateTrigger` → 409) were added; the sibling `QuickScopeAction` codes
+were left untouched. 33/33 combined Nudge + Quick Scope Action integration tests passing; `git diff
+--check` clean. Committed (2026-08-16).
+
+**Next: Phase 2 — Paired Nudges Session 3: field nudge-read API.** Per
+[Build Log 123](build-log/123-paired-nudges-implementation-contract-preflight.md), add the
+scope-bound read `GET /keep/pricebook/proposed-scopes/{proposedScopeId}/nudge-suggestions`
+(`RequestsOperate` + `ScopeCapture`, not `PriceBookCatalogManage`) and integration tests covering
+eligibility filtering, Draft-line dedupe, and request visibility. Start a fresh session; run the
+mechanical file-level preflight first.
 
 **Unified scope-composer redesign — approved implementation map (2026-08-15).** Work proceeds
 sequentially; it is not authority to reopen the broader Request Details, request-queue,
