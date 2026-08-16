@@ -833,6 +833,43 @@ export interface GetOfferingAssembliesParams {
   limit?: number;
 }
 
+export interface ScopeNudgeSuggestionConfigRowResponse {
+  id: string;
+  order: number;
+  suggestedCatalogItemId: string | null;
+  suggestedOfferingAssemblyId: string | null;
+  targetDisplayName: string;
+  isEligible: boolean;
+}
+
+export interface ScopeNudgeRuleConfigRowResponse {
+  id: string;
+  triggerCatalogItemId: string | null;
+  triggerOfferingAssemblyId: string | null;
+  triggerDisplayName: string;
+  triggerIsEligible: boolean;
+  suggestions: ScopeNudgeSuggestionConfigRowResponse[];
+}
+
+export interface ScopeNudgeRuleConfigListResponse {
+  rules: ScopeNudgeRuleConfigRowResponse[];
+}
+
+export interface ScopeNudgeSuggestionBody {
+  catalogItemId?: string | null;
+  offeringAssemblyId?: string | null;
+}
+
+export interface CreateScopeNudgeRuleBody {
+  triggerCatalogItemId?: string | null;
+  triggerOfferingAssemblyId?: string | null;
+  suggestions: ScopeNudgeSuggestionBody[];
+}
+
+export interface UpdateScopeNudgeRuleBody {
+  suggestions: ScopeNudgeSuggestionBody[];
+}
+
 export type FollowUpResolutionOutcome = "complete" | "move" | "keep_active";
 export type FollowUpCompletionReason =
   | "customer_contacted"

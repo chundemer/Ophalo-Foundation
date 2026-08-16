@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronRight, Keyboard, Package, Plus, Search, Tag, X } from "lucide-react";
-import { api, ApiError, type AccountRole, type GetCatalogItemsParams } from "../lib/apiClient";
+import { api, ApiError, type AccountRole, type GetCatalogItemsParams, type ScopeNudgeRuleConfigRowResponse } from "../lib/apiClient";
 import { CatalogItemDrawer } from "../components/keep/CatalogItemDrawer";
 import { OfferingAssemblyDrawer } from "../components/keep/OfferingAssemblyDrawer";
 import { CategoryCombobox } from "../components/keep/CategoryCombobox";
 import { KeepModal } from "../components/keep/KeepModal";
+import { ScopeNudgeRuleModal } from "../components/keep/ScopeNudgeRuleModal";
 
 const SEARCH_DEBOUNCE_MS = 300;
 
@@ -40,8 +41,8 @@ interface PriceBookProps {
   onSelectAssembly: (offeringAssemblyId: string) => void;
   // App.tsx owns the URL (`#/pricebook` / `#/pricebook?tab=assemblies`) as the source of truth;
   // these are optional so existing callers/tests default to the Catalog Items tab uncontrolled.
-  activeTab?: "items" | "assemblies";
-  onTabChange?: (tab: "items" | "assemblies") => void;
+  activeTab?: "items" | "assemblies" | "nudges";
+  onTabChange?: (tab: "items" | "assemblies" | "nudges") => void;
 }
 
 const TYPE_LABELS: Record<string, string> = {
@@ -103,9 +104,9 @@ export function PriceBook({
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   // App.tsx's URL is the source of truth when it controls this (`activeTabProp`). This
   // uncontrolled fallback exists only for callers (tests, standalone usage) that don't pass it.
-  const [uncontrolledTab, setUncontrolledTab] = useState<"items" | "assemblies">("items");
+  const [uncontrolledTab, setUncontrolledTab] = useState<"items" | "assemblies" | "nudges">("items");
   const activeTab = activeTabProp ?? uncontrolledTab;
-  function selectTab(tab: "items" | "assemblies") {
+  function selectTab(tab: "items" | "assemblies" | "nudges") {
     if (onTabChange) onTabChange(tab);
     else setUncontrolledTab(tab);
   }
@@ -127,6 +128,33 @@ export function PriceBook({
     queryFn: () => api.getOfferingAssemblies({ status: assemblyStatusFilter, cursor: assemblyActiveCursor }),
     enabled: isOwnerOrAdmin && entitled && activeTab === "assemblies",
   });
+
+  const nudgeRulesQuery = useQuery({
+    queryKey: ["scopeNudgeRules"],
+    queryFn: () => api.getScopeNudgeRules(),
+    enabled: isOwnerOrAdmin && entitled && activeTab === "nudges",
+  });
+  const [nudgeRuleModal, setNudgeRuleModal] = useState<
+    { mode: "create" } | { mode: "edit"; rule: ScopeNudgeRuleConfigRowResponse } | null
+  >(null);
+  const [deleteNudgeRule, setDeleteNudgeRule] = useState<ScopeNudgeRuleConfigRowResponse | null>(null);
+  const [deleteNudgeRuleError, setDeleteNudgeRuleError] = useState<string | null>(null);
+  const [deleteNudgeRulePending, setDeleteNudgeRulePending] = useState(false);
+
+  async function confirmDeleteNudgeRule() {
+    if (!deleteNudgeRule) return;
+    setDeleteNudgeRulePending(true);
+    setDeleteNudgeRuleError(null);
+    try {
+      await api.deleteScopeNudgeRule(deleteNudgeRule.id);
+      await queryClient.invalidateQueries({ queryKey: ["scopeNudgeRules"] });
+      setDeleteNudgeRule(null);
+    } catch {
+      setDeleteNudgeRuleError("Something went wrong. Try again.");
+    } finally {
+      setDeleteNudgeRulePending(false);
+    }
+  }
 
   const handleAssemblyNextPage = () => {
     if (!assembliesQuery.data?.nextCursor) return;
@@ -411,6 +439,18 @@ export function PriceBook({
               Add assembly
             </button>
           )}
+          {activeTab === "nudges" && (
+            <button
+              type="button"
+              onClick={() => setNudgeRuleModal({ mode: "create" })}
+              className="sm:hidden inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium
+                bg-[var(--ophalo-navy)] text-white hover:opacity-90 transition-opacity
+                focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-offset-1"
+            >
+              <Plus className="h-4 w-4" />
+              Add nudge rule
+            </button>
+          )}
         </div>
       </div>
 
@@ -427,6 +467,7 @@ export function PriceBook({
             [
               { key: "items", label: "Catalog Items" },
               { key: "assemblies", label: "Offerings & Assemblies" },
+              { key: "nudges", label: "Nudges" },
             ] as const
           ).map((tab) => (
             <button
@@ -574,6 +615,21 @@ export function PriceBook({
           >
             <Plus className="h-4 w-4" />
             Add assembly
+          </button>
+        </div>
+      )}
+
+      {activeTab === "nudges" && (
+        <div className="mx-auto w-full max-w-[1440px] px-4 py-3 sm:px-6 flex flex-wrap items-center justify-end gap-3">
+          <button
+            type="button"
+            onClick={() => setNudgeRuleModal({ mode: "create" })}
+            className="hidden sm:inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium
+              bg-[var(--ophalo-navy)] text-white hover:opacity-90 transition-opacity
+              focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-offset-1"
+          >
+            <Plus className="h-4 w-4" />
+            Add nudge rule
           </button>
         </div>
       )}
@@ -955,6 +1011,112 @@ export function PriceBook({
         </div>
       )}
 
+      {activeTab === "nudges" && (
+        <div className="mx-auto flex-1 min-w-0 w-full max-w-[1440px] px-4 sm:px-6 pb-8">
+          {nudgeRulesQuery.isLoading && (
+            <div className="flex flex-1 items-center justify-center py-16">
+              <span className="text-[var(--ophalo-muted)] text-sm">Loading…</span>
+            </div>
+          )}
+
+          {nudgeRulesQuery.isError && (
+            <div className="flex flex-col items-center justify-center py-16 text-center">
+              <p className="text-[var(--ophalo-muted)] text-sm mb-3">Couldn't load nudge rules.</p>
+              <button
+                type="button"
+                onClick={() => void nudgeRulesQuery.refetch()}
+                className="text-sm font-medium text-[var(--keep-accent)] hover:underline"
+              >
+                Try again
+              </button>
+            </div>
+          )}
+
+          {!nudgeRulesQuery.isLoading && !nudgeRulesQuery.isError && (nudgeRulesQuery.data?.rules.length ?? 0) === 0 && (
+            <div className="flex flex-1 items-center justify-center py-16">
+              <div className="max-w-sm w-full rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-6 py-8 text-center shadow-sm">
+                <Package className="mx-auto mb-3 h-8 w-8 text-[var(--ophalo-muted)]" />
+                <h2 className="text-[var(--ophalo-ink)] text-base font-semibold mb-1">No nudge rules</h2>
+                <p className="text-[var(--ophalo-muted)] text-sm mb-4">
+                  Set up paired suggestions technicians see after adding a trigger item to a scope.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setNudgeRuleModal({ mode: "create" })}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium
+                    bg-[var(--ophalo-navy)] text-white hover:opacity-90 transition-opacity
+                    focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-offset-1"
+                >
+                  <Plus className="h-4 w-4" />
+                  Add your first nudge rule
+                </button>
+              </div>
+            </div>
+          )}
+
+          {!nudgeRulesQuery.isLoading && !nudgeRulesQuery.isError && (nudgeRulesQuery.data?.rules.length ?? 0) > 0 && (
+            <ul className="space-y-3">
+              {nudgeRulesQuery.data!.rules.map((rule) => (
+                <li
+                  key={rule.id}
+                  className="rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-4 py-3.5 shadow-sm"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[var(--ophalo-ink)] font-semibold">{rule.triggerDisplayName}</span>
+                        {!rule.triggerIsEligible && (
+                          <span className="rounded-full bg-[var(--ophalo-attention-bg)] px-2 py-0.5 text-xs font-medium text-[var(--ophalo-attention)]">
+                            Needs repair
+                          </span>
+                        )}
+                      </div>
+                      <ul className="mt-2 space-y-1 text-sm text-[var(--ophalo-muted)]">
+                        {rule.suggestions
+                          .slice()
+                          .sort((a, b) => a.order - b.order)
+                          .map((s) => (
+                            <li key={s.id} className="flex items-center gap-2">
+                              <span>{s.order + 1}.</span>
+                              <span>{s.targetDisplayName}</span>
+                              {!s.isEligible && (
+                                <span className="rounded-full bg-[var(--ophalo-attention-bg)] px-2 py-0.5 text-xs font-medium text-[var(--ophalo-attention)]">
+                                  Needs repair
+                                </span>
+                              )}
+                            </li>
+                          ))}
+                      </ul>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => setNudgeRuleModal({ mode: "edit", rule })}
+                        className="rounded-md px-2 py-1 text-sm font-medium text-[var(--keep-accent)] hover:bg-[var(--keep-accent-bg)]
+                          focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)]"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setDeleteNudgeRuleError(null);
+                          setDeleteNudgeRule(rule);
+                        }}
+                        className="rounded-md px-2 py-1 text-sm font-medium text-[var(--ophalo-danger)] hover:bg-[var(--ophalo-canvas)]
+                          focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)]"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+
       {shortcutsOpen && (
         <KeepModal
           onClose={() => setShortcutsOpen(false)}
@@ -1014,6 +1176,53 @@ export function PriceBook({
           onClose={() => setAssemblyDrawerOpen(false)}
           onCreated={() => void queryClient.invalidateQueries({ queryKey: ["offeringAssemblies"] })}
         />
+      )}
+
+      {nudgeRuleModal && (
+        <ScopeNudgeRuleModal
+          mode={nudgeRuleModal.mode}
+          existingRule={nudgeRuleModal.mode === "edit" ? nudgeRuleModal.rule : undefined}
+          onClose={() => setNudgeRuleModal(null)}
+          onSaved={() => void queryClient.invalidateQueries({ queryKey: ["scopeNudgeRules"] })}
+        />
+      )}
+
+      {deleteNudgeRule && (
+        <KeepModal
+          onClose={() => setDeleteNudgeRule(null)}
+          label="Delete nudge rule"
+          overlayClassName="flex items-center justify-center px-4"
+          backdropClassName="bg-black/30"
+          panelClassName="max-w-sm w-full rounded-xl bg-[var(--ophalo-card)] shadow-xl p-5 flex flex-col gap-4"
+        >
+          <h2 className="font-serif text-lg font-semibold text-[var(--ophalo-ink)]">Delete nudge rule</h2>
+          <p className="text-sm text-[var(--ophalo-ink)]">
+            Delete the nudge rule for <span className="font-semibold">{deleteNudgeRule.triggerDisplayName}</span>?
+            This can't be undone.
+          </p>
+          {deleteNudgeRuleError && (
+            <p className="text-sm text-[var(--ophalo-danger)]">{deleteNudgeRuleError}</p>
+          )}
+          <div className="flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => setDeleteNudgeRule(null)}
+              className="rounded-lg border border-[var(--ophalo-border)] px-3 py-1.5 text-sm font-medium text-[var(--ophalo-ink)] hover:bg-[var(--ophalo-canvas)]
+                focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-offset-1"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={() => void confirmDeleteNudgeRule()}
+              disabled={deleteNudgeRulePending}
+              className="rounded-lg bg-[var(--ophalo-danger)] px-3 py-1.5 text-sm font-medium text-white hover:opacity-90 disabled:opacity-60
+                focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-offset-1"
+            >
+              {deleteNudgeRulePending ? "Deleting…" : "Delete"}
+            </button>
+          </div>
+        </KeepModal>
       )}
     </div>
   );

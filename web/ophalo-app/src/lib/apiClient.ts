@@ -172,6 +172,7 @@ import type {
   AddOfferingAssemblyItemBody,
   OfferingAssemblyItemAddedResult,
   UpdateOfferingAssemblyItemBody,
+  OfferingAssemblyListRowResponse,
   OfferingAssemblyListResult,
   OfferingAssemblyDetailResult,
   GetOfferingAssembliesParams,
@@ -203,6 +204,10 @@ import type {
   FieldScopeSearchResultResponse,
   FieldScopeSearchResult,
   GetFieldScopeSearchParams,
+  ScopeNudgeRuleConfigListResponse,
+  ScopeNudgeRuleConfigRowResponse,
+  CreateScopeNudgeRuleBody,
+  UpdateScopeNudgeRuleBody,
 } from "./apiClient.types";
 
 export type {
@@ -284,6 +289,7 @@ export type {
   AddOfferingAssemblyItemBody,
   OfferingAssemblyItemAddedResult,
   UpdateOfferingAssemblyItemBody,
+  OfferingAssemblyListRowResponse,
   OfferingAssemblyListResult,
   OfferingAssemblyDetailResult,
   GetOfferingAssembliesParams,
@@ -315,6 +321,10 @@ export type {
   FieldScopeSearchResultResponse,
   FieldScopeSearchResult,
   GetFieldScopeSearchParams,
+  ScopeNudgeRuleConfigListResponse,
+  ScopeNudgeRuleConfigRowResponse,
+  CreateScopeNudgeRuleBody,
+  UpdateScopeNudgeRuleBody,
 };
 
 export type { FollowUpResolutionOutcome, FollowUpCompletionReason } from "./apiClient.types";
@@ -490,6 +500,20 @@ export const api = {
       `/keep/pricebook/offering-assemblies/${offeringAssemblyId}/items/${itemId}`,
       { method: "DELETE", headers: { "X-Keep-OfferingAssembly-Version": version } },
     ),
+  getScopeNudgeRules: () =>
+    apiFetch<ScopeNudgeRuleConfigListResponse>("/keep/pricebook/scope-nudge-rules"),
+  createScopeNudgeRule: (body: CreateScopeNudgeRuleBody) =>
+    apiFetch<ScopeNudgeRuleConfigRowResponse>("/keep/pricebook/scope-nudge-rules", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  updateScopeNudgeRule: (ruleId: string, body: UpdateScopeNudgeRuleBody) =>
+    apiFetch<ScopeNudgeRuleConfigRowResponse>(`/keep/pricebook/scope-nudge-rules/${ruleId}`, {
+      method: "PUT",
+      body: JSON.stringify(body),
+    }),
+  deleteScopeNudgeRule: (ruleId: string) =>
+    apiFetchVoid(`/keep/pricebook/scope-nudge-rules/${ruleId}`, { method: "DELETE" }),
   getRequestDetail: (requestId: string) =>
     apiFetch<KeepRequestDetailResult>(`/keep/requests/${requestId}`),
   getRelatedWork: (requestId: string) =>

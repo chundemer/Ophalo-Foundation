@@ -29,7 +29,7 @@ type AppRoute =
   | { page: "home" }
   | { page: "requests" }
   | { page: "settings"; section?: "public-profile" | "policy" | "team" }
-  | { page: "pricebook"; tab?: "items" | "assemblies" }
+  | { page: "pricebook"; tab?: "items" | "assemblies" | "nudges" }
   | { page: "pricebook-item"; catalogItemId: string; returnToAssembly?: string; returnToAssemblyReason?: "price" | "margin" }
   | { page: "pricebook-assembly"; offeringAssemblyId: string }
   | { page: "detail"; requestId: string; focusPanel?: string };
@@ -77,7 +77,10 @@ function getRouteFromLocation(): AppRoute {
   }
   if (hashPath === "#/pricebook") {
     const tab = new URLSearchParams(hashQuery ?? "").get("tab");
-    return { page: "pricebook", tab: tab === "assemblies" ? "assemblies" : "items" };
+    return {
+      page: "pricebook",
+      tab: tab === "assemblies" ? "assemblies" : tab === "nudges" ? "nudges" : "items",
+    };
   }
   return { page: "requests" };
 }
@@ -163,7 +166,12 @@ function AppShell() {
     if (newRoute.page === "detail") {
       history.pushState(null, "", `${base}#/request/${newRoute.requestId}`);
     } else if (newRoute.page === "pricebook") {
-      const suffix = newRoute.tab === "assemblies" ? "#/pricebook?tab=assemblies" : "#/pricebook";
+      const suffix =
+        newRoute.tab === "assemblies"
+          ? "#/pricebook?tab=assemblies"
+          : newRoute.tab === "nudges"
+            ? "#/pricebook?tab=nudges"
+            : "#/pricebook";
       history.pushState(null, "", `${base}${suffix}`);
     } else if (newRoute.page === "pricebook-item") {
       let suffix = `#/pricebook/${newRoute.catalogItemId}`;
