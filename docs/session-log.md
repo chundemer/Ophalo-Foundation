@@ -1,7 +1,7 @@
 # Session Log — OpHalo Foundation
 
 **Last updated:** 2026-08-16 (Paired Nudges Session 5 — composer hook and chips — complete;
-Paired Nudges implementation is done; manual field acceptance is the next step)
+manual field acceptance passed; Paired Nudges is field-ready)
 **Deployment posture:** Not pilot-ready.
 **Source of truth for acceptance criteria:** `docs/pilot-readiness-bug-tracker.md`.
 
@@ -244,9 +244,8 @@ regression test added. 64/64 focused composer/hook/quick-action tests passing (f
 typecheck and `git diff --check` clean. Committed (2026-08-16). This closes the bounded
 implementation sequence — Paired Nudges' automated coverage is done. Build Log 122's seven scenarios
 are mostly server-authoritative dedupe/eligibility behavior already proven by Session 3's backend
-integration tests; **manual field acceptance on a disposable account with a configured rule (chip
-surfacing, accept, dismiss, session-close reset) is still outstanding** and should happen before this
-feature is called pilot-ready.
+integration tests. Manual field acceptance on a disposable account with a configured rule (chip
+surfacing, accept, dismiss, session-close reset) **passed (2026-08-16)**. Paired Nudges is field-ready.
 
 **Unified scope-composer redesign — approved implementation map (2026-08-15).** Work proceeds
 sequentially; it is not authority to reopen the broader Request Details, request-queue,
