@@ -1,7 +1,7 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-08-16 (Paired Nudges Session 4 — Owner/Admin settings UI — complete;
-next session is Paired Nudges Session 5, composer hook and chips)
+**Last updated:** 2026-08-16 (Paired Nudges Session 5 — composer hook and chips — complete;
+Paired Nudges implementation is done; manual field acceptance is the next step)
 **Deployment posture:** Not pilot-ready.
 **Source of truth for acceptance criteria:** `docs/pilot-readiness-bug-tracker.md`.
 
@@ -216,13 +216,37 @@ extended pricebook tab routing to `nudges`. 443/443 frontend suite passing (6 ne
 assembly-trigger/assembly-suggestion path exercising the picker's pagination); typecheck and `git
 diff --check` clean. Committed (2026-08-16).
 
-**Next: Phase 2 — Paired Nudges Session 5: composer hook and chips.** Per
+**Paired Nudges Session 5 composer hook and chips contract: locked (2026-08-16).**
+[Build Log 125](build-log/125-paired-nudges-session-5-composer-hook-and-chips-contract-preflight.md)
+fixes the field wiring ahead of implementation: only a successful catalog-item add or assembly
+expansion (never custom adds, edits, removes, undo, or a plain reload) triggers a post-reload nudge
+read; a single chip panel between the add controls and the Draft list holds at most one rule's
+suggestions; a non-empty result always replaces whatever is showing, an empty result leaves it
+unchanged, and only an explicit accept or dismiss retires a rule for the open session (a replaced
+rule is not retired). Accept dispatches the existing field-select/expand-assembly mutation and
+retires the whole rule; dismiss is one action for the panel, no API write. `retiredRuleIds` and any
+visible panel clear on modal close, not hook unmount.
+
+**Phase 2 — Paired Nudges Session 5: composer hook and chips. Complete (2026-08-16).** Per
 [Build Log 123](build-log/123-paired-nudges-implementation-contract-preflight.md)'s bounded
-implementation sequence (step 5), add session-only retired-rule state, post-reload field nudge-reads
-(Session 3's `GET /keep/pricebook/proposed-scopes/{id}/nudge-suggestions`), price-blind accept/
-dismiss chips in the field scope composer, and the manual acceptance scenarios from
-[Build Log 122](build-log/122-paired-nudges-preflight.md). Start a fresh session; run the mechanical
-file-level preflight first.
+implementation sequence (step 5, the last) and [Build Log 125](build-log/125-paired-nudges-session-5-composer-hook-and-chips-contract-preflight.md)'s
+locked contract, wired `useProposedScopeCapture`, `ProposedScopeComposer`, `ComposerQuickActions`,
+and `ComposerSearchAndAdd` to Session 3's field nudge-read and added `ComposerNudgePanel`, the
+single price-blind chip panel between the add controls and the Draft list. `useProposedScopeCapture`
+gained session-scoped nudge state: a ref-based generation counter discards stale/late nudge-read
+responses so the newest successful trigger always wins, and `retiredRuleIds`/visible nudge state
+reset on `closeModal`, not hook unmount. Accept dispatches the existing field-select/expand-assembly
+mutation and only retires the rule after success; dismiss retires with no API write; a 409 clears the
+panel without retiring it. A review pass caught `ComposerNudgePanel` checking generic 409 status
+before the target-unavailable codes (`LineCatalogItemNotFound`/`ExpandAssemblyNotOperationallyEligible`,
+both themselves real 409s) — fixed to match `ComposerQuickActions`' existing ordering, with a
+regression test added. 64/64 focused composer/hook/quick-action tests passing (full suite 456/456);
+typecheck and `git diff --check` clean. Committed (2026-08-16). This closes the bounded
+implementation sequence — Paired Nudges' automated coverage is done. Build Log 122's seven scenarios
+are mostly server-authoritative dedupe/eligibility behavior already proven by Session 3's backend
+integration tests; **manual field acceptance on a disposable account with a configured rule (chip
+surfacing, accept, dismiss, session-close reset) is still outstanding** and should happen before this
+feature is called pilot-ready.
 
 **Unified scope-composer redesign — approved implementation map (2026-08-15).** Work proceeds
 sequentially; it is not authority to reopen the broader Request Details, request-queue,
