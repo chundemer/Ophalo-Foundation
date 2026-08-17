@@ -11,6 +11,7 @@ import type { ProposedScopeDetailResult } from "../../../lib/apiClient";
 const mockGetCurrentProposedScopeForRequest = vi.fn();
 const mockGetProposedScope = vi.fn();
 const mockCreateProposedScope = vi.fn();
+const mockGetScopeNudgeFieldSuggestions = vi.fn();
 
 vi.mock("../../../lib/apiClient", async () => {
   const actual = await vi.importActual<typeof import("../../../lib/apiClient")>("../../../lib/apiClient");
@@ -21,9 +22,29 @@ vi.mock("../../../lib/apiClient", async () => {
       getCurrentProposedScopeForRequest: (...args: unknown[]) => mockGetCurrentProposedScopeForRequest(...args),
       getProposedScope: (...args: unknown[]) => mockGetProposedScope(...args),
       createProposedScope: (...args: unknown[]) => mockCreateProposedScope(...args),
+      getScopeNudgeFieldSuggestions: (...args: unknown[]) => mockGetScopeNudgeFieldSuggestions(...args),
     },
   };
 });
+
+function emptyNudgeResult() {
+  return { ruleId: null, triggerCatalogItemId: null, triggerOfferingAssemblyId: null, suggestions: [] };
+}
+
+function nudgeResult(ruleId: string, displayName = "Drain pan") {
+  return {
+    ruleId,
+    triggerCatalogItemId: "item-1",
+    triggerOfferingAssemblyId: null,
+    suggestions: [{ id: "sugg-1", order: 0, catalogItemId: "item-9", offeringAssemblyId: null, displayName, targetKind: "CatalogItem" }],
+  };
+}
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((r) => (resolve = r));
+  return { promise, resolve };
+}
 
 function draftScope(overrides: Partial<ProposedScopeDetailResult> = {}): ProposedScopeDetailResult {
   return {
@@ -139,6 +160,190 @@ describe("useProposedScopeCapture", () => {
 
     expect(mockGetProposedScope).toHaveBeenCalledWith("scope-1");
     expect(result.current.state).toEqual({ status: "draft", scope: refreshed });
+  });
+
+  it("refetchScope without a trigger never requests a nudge read", async () => {
+    const scope = draftScope();
+    mockGetCurrentProposedScopeForRequest.mockResolvedValueOnce({ state: "Draft", scope });
+    const { result } = renderHook(() => useProposedScopeCapture("request-1"));
+    await waitFor(() => expect(result.current.state.status).toBe("draft"));
+    mockGetProposedScope.mockResolvedValueOnce(scope);
+
+    await act(async () => {
+      await result.current.refetchScope();
+    });
+
+    expect(mockGetScopeNudgeFieldSuggestions).not.toHaveBeenCalled();
+    expect(result.current.nudge).toBeNull();
+  });
+
+  it("a trigger-carrying refetchScope requests a nudge read after the reload and shows a non-empty result", async () => {
+    const scope = draftScope();
+    mockGetCurrentProposedScopeForRequest.mockResolvedValueOnce({ state: "Draft", scope });
+    const { result } = renderHook(() => useProposedScopeCapture("request-1"));
+    await waitFor(() => expect(result.current.state.status).toBe("draft"));
+    mockGetProposedScope.mockResolvedValueOnce(scope);
+    mockGetScopeNudgeFieldSuggestions.mockResolvedValueOnce(nudgeResult("rule-1"));
+
+    await act(async () => {
+      await result.current.refetchScope({ catalogItemId: "item-1" });
+    });
+
+    expect(mockGetScopeNudgeFieldSuggestions).toHaveBeenCalledWith("scope-1", { triggerCatalogItemId: "item-1" });
+    expect(result.current.nudge).toEqual({ ruleId: "rule-1", suggestions: nudgeResult("rule-1").suggestions });
+  });
+
+  it("an empty nudge-read result leaves an existing panel unchanged", async () => {
+    const scope = draftScope();
+    mockGetCurrentProposedScopeForRequest.mockResolvedValueOnce({ state: "Draft", scope });
+    const { result } = renderHook(() => useProposedScopeCapture("request-1"));
+    await waitFor(() => expect(result.current.state.status).toBe("draft"));
+
+    mockGetProposedScope.mockResolvedValueOnce(scope);
+    mockGetScopeNudgeFieldSuggestions.mockResolvedValueOnce(nudgeResult("rule-1"));
+    await act(async () => {
+      await result.current.refetchScope({ catalogItemId: "item-1" });
+    });
+    expect(result.current.nudge).not.toBeNull();
+
+    mockGetProposedScope.mockResolvedValueOnce(scope);
+    mockGetScopeNudgeFieldSuggestions.mockResolvedValueOnce(emptyNudgeResult());
+    await act(async () => {
+      await result.current.refetchScope({ catalogItemId: "item-2" });
+    });
+
+    expect(result.current.nudge).toEqual({ ruleId: "rule-1", suggestions: nudgeResult("rule-1").suggestions });
+  });
+
+  it("a nudge-read failure is silent and leaves an existing panel unchanged", async () => {
+    const scope = draftScope();
+    mockGetCurrentProposedScopeForRequest.mockResolvedValueOnce({ state: "Draft", scope });
+    const { result } = renderHook(() => useProposedScopeCapture("request-1"));
+    await waitFor(() => expect(result.current.state.status).toBe("draft"));
+
+    mockGetProposedScope.mockResolvedValueOnce(scope);
+    mockGetScopeNudgeFieldSuggestions.mockResolvedValueOnce(nudgeResult("rule-1"));
+    await act(async () => {
+      await result.current.refetchScope({ catalogItemId: "item-1" });
+    });
+    expect(result.current.nudge).not.toBeNull();
+
+    mockGetProposedScope.mockResolvedValueOnce(scope);
+    mockGetScopeNudgeFieldSuggestions.mockRejectedValueOnce(new Error("network down"));
+    await act(async () => {
+      await result.current.refetchScope({ catalogItemId: "item-2" });
+    });
+
+    expect(result.current.nudge).toEqual({ ruleId: "rule-1", suggestions: nudgeResult("rule-1").suggestions });
+  });
+
+  it("retireNudge excludes that rule from surfacing again even if its trigger returns a non-empty result", async () => {
+    const scope = draftScope();
+    mockGetCurrentProposedScopeForRequest.mockResolvedValueOnce({ state: "Draft", scope });
+    const { result } = renderHook(() => useProposedScopeCapture("request-1"));
+    await waitFor(() => expect(result.current.state.status).toBe("draft"));
+
+    act(() => result.current.retireNudge("rule-1"));
+
+    mockGetProposedScope.mockResolvedValueOnce(scope);
+    mockGetScopeNudgeFieldSuggestions.mockResolvedValueOnce(nudgeResult("rule-1"));
+    await act(async () => {
+      await result.current.refetchScope({ catalogItemId: "item-1" });
+    });
+
+    expect(result.current.nudge).toBeNull();
+  });
+
+  it("a later non-empty trigger result replaces the visible panel", async () => {
+    const scope = draftScope();
+    mockGetCurrentProposedScopeForRequest.mockResolvedValueOnce({ state: "Draft", scope });
+    const { result } = renderHook(() => useProposedScopeCapture("request-1"));
+    await waitFor(() => expect(result.current.state.status).toBe("draft"));
+
+    mockGetProposedScope.mockResolvedValueOnce(scope);
+    mockGetScopeNudgeFieldSuggestions.mockResolvedValueOnce(nudgeResult("rule-1", "First"));
+    await act(async () => {
+      await result.current.refetchScope({ catalogItemId: "item-1" });
+    });
+    expect(result.current.nudge?.ruleId).toBe("rule-1");
+
+    mockGetProposedScope.mockResolvedValueOnce(scope);
+    mockGetScopeNudgeFieldSuggestions.mockResolvedValueOnce(nudgeResult("rule-2", "Second"));
+    await act(async () => {
+      await result.current.refetchScope({ catalogItemId: "item-2" });
+    });
+
+    expect(result.current.nudge?.ruleId).toBe("rule-2");
+  });
+
+  it("a late response from an older trigger/read generation is discarded", async () => {
+    const scope = draftScope();
+    mockGetCurrentProposedScopeForRequest.mockResolvedValueOnce({ state: "Draft", scope });
+    const { result } = renderHook(() => useProposedScopeCapture("request-1"));
+    await waitFor(() => expect(result.current.state.status).toBe("draft"));
+
+    const firstReload = deferred<typeof scope>();
+    const secondReload = deferred<typeof scope>();
+    mockGetProposedScope.mockReturnValueOnce(firstReload.promise).mockReturnValueOnce(secondReload.promise);
+    // secondCall's reload (and therefore its nudge-read call) resolves first below, so its mocked
+    // response must be queued first — the mock queue follows call order, not trigger-issue order.
+    mockGetScopeNudgeFieldSuggestions.mockResolvedValueOnce(nudgeResult("rule-2", "Second"));
+    mockGetScopeNudgeFieldSuggestions.mockResolvedValueOnce(nudgeResult("rule-1", "First"));
+
+    let firstCall: Promise<void> | undefined;
+    let secondCall: Promise<void> | undefined;
+    act(() => {
+      firstCall = result.current.refetchScope({ catalogItemId: "item-1" });
+    });
+    act(() => {
+      secondCall = result.current.refetchScope({ catalogItemId: "item-2" });
+    });
+
+    await act(async () => {
+      secondReload.resolve(scope);
+      await secondCall;
+      firstReload.resolve(scope);
+      await firstCall;
+    });
+
+    expect(result.current.nudge?.ruleId).toBe("rule-2");
+  });
+
+  it("closeModal clears the visible panel and retirement, and discards a pending trigger read", async () => {
+    const scope = draftScope();
+    mockGetCurrentProposedScopeForRequest.mockResolvedValueOnce({ state: "Draft", scope });
+    const { result } = renderHook(() => useProposedScopeCapture("request-1"));
+    await waitFor(() => expect(result.current.state.status).toBe("draft"));
+
+    mockGetProposedScope.mockResolvedValueOnce(scope);
+    mockGetScopeNudgeFieldSuggestions.mockResolvedValueOnce(nudgeResult("rule-1"));
+    await act(async () => {
+      await result.current.refetchScope({ catalogItemId: "item-1" });
+    });
+    expect(result.current.nudge).not.toBeNull();
+    act(() => result.current.retireNudge("rule-1"));
+
+    act(() => result.current.closeModal());
+    expect(result.current.nudge).toBeNull();
+    expect(result.current.isModalOpen).toBe(false);
+
+    const pendingReload = deferred<typeof scope>();
+    mockGetProposedScope.mockReturnValueOnce(pendingReload.promise);
+    mockGetScopeNudgeFieldSuggestions.mockResolvedValueOnce(nudgeResult("rule-1"));
+    let call: Promise<void> | undefined;
+    act(() => {
+      call = result.current.refetchScope({ catalogItemId: "item-1" });
+    });
+    act(() => result.current.closeModal());
+
+    await act(async () => {
+      pendingReload.resolve(scope);
+      await call;
+    });
+
+    // rule-1 was retired before close; the same trigger firing again after close/reopen (a new
+    // session) is allowed to surface, but this response's generation was invalidated by closeModal.
+    expect(result.current.nudge).toBeNull();
   });
 
   it("startView opens the modal read-only for a submitted scope without creating anything", async () => {

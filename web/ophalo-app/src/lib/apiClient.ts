@@ -208,6 +208,8 @@ import type {
   ScopeNudgeRuleConfigRowResponse,
   CreateScopeNudgeRuleBody,
   UpdateScopeNudgeRuleBody,
+  ScopeNudgeFieldResultResponse,
+  ScopeNudgeSuggestionFieldRowResponse,
 } from "./apiClient.types";
 
 export type {
@@ -325,6 +327,8 @@ export type {
   ScopeNudgeRuleConfigRowResponse,
   CreateScopeNudgeRuleBody,
   UpdateScopeNudgeRuleBody,
+  ScopeNudgeFieldResultResponse,
+  ScopeNudgeSuggestionFieldRowResponse,
 };
 
 export type { FollowUpResolutionOutcome, FollowUpCompletionReason } from "./apiClient.types";
@@ -838,6 +842,18 @@ export const api = {
   // Session 5A, build-log/120: unified composer client-contract wiring.
   getFieldQuickScopeActions: () =>
     apiFetch<QuickScopeActionFieldListResult>("/keep/pricebook/field/quick-scope-actions"),
+  // Session 5, build-log/125: Paired Nudges field read for exactly one trigger.
+  getScopeNudgeFieldSuggestions: (
+    proposedScopeId: string,
+    trigger: { triggerCatalogItemId: string } | { triggerOfferingAssemblyId: string },
+  ) => {
+    const qs = new URLSearchParams();
+    if ("triggerCatalogItemId" in trigger) qs.set("triggerCatalogItemId", trigger.triggerCatalogItemId);
+    else qs.set("triggerOfferingAssemblyId", trigger.triggerOfferingAssemblyId);
+    return apiFetch<ScopeNudgeFieldResultResponse>(
+      `/keep/pricebook/proposed-scopes/${proposedScopeId}/nudge-suggestions?${qs.toString()}`,
+    );
+  },
   restoreProposedScopeLine: (proposedScopeId: string, lineId: string, version: string) =>
     apiFetch<ProposedScopeTransitionResult>(`/keep/pricebook/proposed-scopes/${proposedScopeId}/lines/${lineId}/restore`, {
       method: "POST",

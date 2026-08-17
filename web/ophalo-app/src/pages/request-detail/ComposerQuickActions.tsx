@@ -1,5 +1,6 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { api, ApiError, type QuickScopeActionFieldRowResponse } from "../../lib/apiClient";
+import type { ScopeNudgeTrigger } from "./useProposedScopeCapture";
 
 const FOCUS_RING =
   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-offset-1";
@@ -10,7 +11,7 @@ const QUICK_ACTION_UNAVAILABLE_NOTICE =
 interface ComposerQuickActionsProps {
   proposedScopeId: string;
   version: string;
-  onCommitted: () => void;
+  onCommitted: (trigger?: ScopeNudgeTrigger) => void;
   onConflict: (message?: string) => void;
 }
 
@@ -42,7 +43,12 @@ export function ComposerQuickActions({ proposedScopeId, version, onCommitted, on
         version,
       );
     },
-    onSuccess: () => onCommitted(),
+    onSuccess: (_data, action) =>
+      onCommitted(
+        action.catalogItemId !== null
+          ? { catalogItemId: action.catalogItemId }
+          : { offeringAssemblyId: action.offeringAssemblyId! },
+      ),
     onError: (err) => {
       // Session 5C review fix: the target-unavailable codes must be checked before generic status
       // handling — ExpandAssemblyNotOperationallyEligible is itself an actual 409, so a status-first

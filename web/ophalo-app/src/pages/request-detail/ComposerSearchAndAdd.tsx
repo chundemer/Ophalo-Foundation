@@ -2,6 +2,7 @@ import { forwardRef, useEffect, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { api, ApiError, type FieldScopeSearchResultResponse } from "../../lib/apiClient";
 import { KeepButton } from "../../components/keep/KeepButton";
+import type { ScopeNudgeTrigger } from "./useProposedScopeCapture";
 
 const FOCUS_RING =
   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-offset-1";
@@ -15,7 +16,7 @@ const DESCRIPTION_MAX_LENGTH = 200;
 interface ComposerSearchAndAddProps {
   proposedScopeId: string;
   version: string;
-  onCommitted: () => void;
+  onCommitted: (trigger?: ScopeNudgeTrigger) => void;
   onConflict: () => void;
 }
 
@@ -89,8 +90,10 @@ export const ComposerSearchAndAdd = forwardRef<HTMLInputElement, ComposerSearchA
       );
     },
     onSuccess: () => {
+      const trigger: ScopeNudgeTrigger | undefined =
+        selection?.kind === "catalog" ? { catalogItemId: selection.item.id } : undefined;
       resetAfterSuccess();
-      onCommitted();
+      onCommitted(trigger);
     },
     onError: (err) => {
       if (err instanceof ApiError && err.status === 409) {
@@ -120,9 +123,9 @@ export const ComposerSearchAndAdd = forwardRef<HTMLInputElement, ComposerSearchA
   const expandMutation = useMutation({
     mutationFn: (row: FieldScopeSearchResultResponse) =>
       api.expandProposedScopeAssembly(proposedScopeId, { offeringAssemblyId: row.id, excludedOptionalItemIds: [] }, version),
-    onSuccess: () => {
+    onSuccess: (_data, row) => {
       resetAfterSuccess();
-      onCommitted();
+      onCommitted({ offeringAssemblyId: row.id });
     },
     onError: () => onConflict(),
   });

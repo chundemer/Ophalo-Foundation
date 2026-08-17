@@ -7,6 +7,7 @@ import { ApiError, type ProposedScopeDetailResult } from "../../../lib/apiClient
 import {
   PROPOSED_SCOPE_CONFLICT_NOTICE,
   PROPOSED_SCOPE_RECONCILE_RELOAD_FAILURE_NOTICE,
+  type ProposedScopeNudgeState,
 } from "../useProposedScopeCapture";
 
 const mockGetFieldScopeSearch = vi.fn();
@@ -80,6 +81,9 @@ function renderComposer(overrides: Partial<React.ComponentProps<typeof ProposedS
   const onConflict = vi.fn();
   const onDismissNotice = vi.fn();
   const onRetryReconciliation = vi.fn();
+  const onAcceptNudge = vi.fn();
+  const onDismissNudge = vi.fn();
+  const onNudgeAcceptConflict = vi.fn();
   const utils = render(
     <QueryClientProvider client={queryClient}>
       <ProposedScopeComposer
@@ -90,11 +94,25 @@ function renderComposer(overrides: Partial<React.ComponentProps<typeof ProposedS
         onConflict={onConflict}
         onDismissNotice={onDismissNotice}
         onRetryReconciliation={onRetryReconciliation}
+        nudge={null}
+        onAcceptNudge={onAcceptNudge}
+        onDismissNudge={onDismissNudge}
+        onNudgeAcceptConflict={onNudgeAcceptConflict}
         {...overrides}
       />
     </QueryClientProvider>,
   );
-  return { ...utils, onClose, onCommitted, onConflict, onDismissNotice, onRetryReconciliation };
+  return {
+    ...utils,
+    onClose,
+    onCommitted,
+    onConflict,
+    onDismissNotice,
+    onRetryReconciliation,
+    onAcceptNudge,
+    onDismissNudge,
+    onNudgeAcceptConflict,
+  };
 }
 
 beforeEach(() => {
@@ -163,7 +181,7 @@ describe("ProposedScopeComposer", () => {
         "v1",
       ),
     );
-    await waitFor(() => expect(onCommitted).toHaveBeenCalled());
+    await waitFor(() => expect(onCommitted).toHaveBeenCalledWith({ catalogItemId: "item-1" }));
   });
 
   it("groups matching assemblies before matching catalog items, badges each, and keeps custom item last", async () => {
@@ -237,7 +255,7 @@ describe("ProposedScopeComposer", () => {
       ),
     );
     expect(mockFieldSelectProposedScopeLine).not.toHaveBeenCalled();
-    await waitFor(() => expect(onCommitted).toHaveBeenCalled());
+    await waitFor(() => expect(onCommitted).toHaveBeenCalledWith({ offeringAssemblyId: "assembly-1" }));
   });
 
   it("shows an explicit no-match state only after a successful empty response", async () => {
@@ -343,7 +361,7 @@ describe("ProposedScopeComposer", () => {
     await user.type(screen.getByLabelText("Note"), "from the truck");
     await user.click(screen.getByRole("button", { name: "Add to scope" }));
 
-    await waitFor(() => expect(onCommitted).toHaveBeenCalled());
+    await waitFor(() => expect(onCommitted).toHaveBeenCalledWith(undefined));
     await waitFor(() => expect(screen.getByPlaceholderText("Search by name, SKU, or alias…")).toHaveValue(""));
 
     // Reopen the custom-item entry to confirm quantity and note reverted to their defaults —
@@ -383,7 +401,7 @@ describe("ProposedScopeComposer", () => {
 
     expect(mockSubmitProposedScope).toHaveBeenCalledWith("scope-1", "v1");
     expect(await screen.findByText("Submitted to office — awaiting review")).toBeInTheDocument();
-    expect(onCommitted).toHaveBeenCalled();
+    expect(onCommitted).toHaveBeenCalledWith();
     expect(screen.queryByRole("button", { name: "Submit scope to office" })).not.toBeInTheDocument();
   });
 
@@ -410,7 +428,7 @@ describe("ProposedScopeComposer", () => {
         "v1",
       ),
     );
-    await waitFor(() => expect(onCommitted).toHaveBeenCalled());
+    await waitFor(() => expect(onCommitted).toHaveBeenCalledWith());
   });
 
   it("announces a generic edit failure without marking the quantity field invalid", async () => {
@@ -465,7 +483,7 @@ describe("ProposedScopeComposer", () => {
     await user.click(screen.getByRole("button", { name: "Remove" }));
 
     await waitFor(() => expect(mockRemoveProposedScopeLine).toHaveBeenCalledWith("scope-1", "line-1", "v1"));
-    await waitFor(() => expect(onCommitted).toHaveBeenCalled());
+    await waitFor(() => expect(onCommitted).toHaveBeenCalledWith());
     expect(await screen.findByRole("button", { name: "Undo" })).toBeInTheDocument();
   });
 
@@ -486,7 +504,7 @@ describe("ProposedScopeComposer", () => {
       expect(mockRestoreProposedScopeLine).toHaveBeenCalledWith("scope-1", "line-1", "v2"),
     );
     expect(mockRestoreProposedScopeLine).not.toHaveBeenCalledWith("scope-1", "line-1", "v1");
-    await waitFor(() => expect(onCommitted).toHaveBeenCalled());
+    await waitFor(() => expect(onCommitted).toHaveBeenCalledWith());
     expect(screen.queryByRole("button", { name: "Undo" })).not.toBeInTheDocument();
   });
 
@@ -570,7 +588,7 @@ describe("ProposedScopeComposer", () => {
         "v1",
       ),
     );
-    await waitFor(() => expect(onCommitted).toHaveBeenCalled());
+    await waitFor(() => expect(onCommitted).toHaveBeenCalledWith({ catalogItemId: "item-1" }));
   });
 
   it("shows a Retry control for the reload-failure notice and wires it to onRetryReconciliation", async () => {
@@ -585,5 +603,116 @@ describe("ProposedScopeComposer", () => {
     renderComposer({ conflictNotice: PROPOSED_SCOPE_CONFLICT_NOTICE });
 
     expect(screen.queryByRole("button", { name: "Retry" })).not.toBeInTheDocument();
+  });
+});
+
+const catalogNudge: ProposedScopeNudgeState = {
+  ruleId: "rule-1",
+  suggestions: [
+    { id: "sugg-1", order: 0, catalogItemId: "item-9", offeringAssemblyId: null, displayName: "Drain pan", targetKind: "CatalogItem" },
+  ],
+};
+
+const assemblyNudge: ProposedScopeNudgeState = {
+  ruleId: "rule-2",
+  suggestions: [
+    {
+      id: "sugg-2",
+      order: 0,
+      catalogItemId: null,
+      offeringAssemblyId: "assembly-9",
+      displayName: "Condensate kit",
+      targetKind: "OfferingAssembly",
+    },
+  ],
+};
+
+describe("ComposerNudgePanel wiring (build-log/125)", () => {
+  it("accepting a catalog suggestion dispatches field-select and retires the rule only after success", async () => {
+    mockFieldSelectProposedScopeLine.mockResolvedValueOnce({ lineId: "line-9", concurrencyVersion: "v2" });
+    const user = userEvent.setup();
+    const { onAcceptNudge } = renderComposer({ nudge: catalogNudge });
+
+    await user.click(screen.getByRole("button", { name: "Drain pan" }));
+
+    await waitFor(() =>
+      expect(mockFieldSelectProposedScopeLine).toHaveBeenCalledWith(
+        "scope-1",
+        { lineType: "KnownCatalogItem", catalogItemId: "item-9", quantity: 1 },
+        "v1",
+      ),
+    );
+    await waitFor(() => expect(onAcceptNudge).toHaveBeenCalledWith("rule-1"));
+  });
+
+  it("accepting an assembly suggestion dispatches expand-assembly and retires the rule", async () => {
+    mockExpandProposedScopeAssembly.mockResolvedValueOnce({ lineIds: ["line-9"], concurrencyVersion: "v2" });
+    const user = userEvent.setup();
+    const { onAcceptNudge } = renderComposer({ nudge: assemblyNudge });
+
+    await user.click(screen.getByRole("button", { name: "Condensate kit" }));
+
+    await waitFor(() =>
+      expect(mockExpandProposedScopeAssembly).toHaveBeenCalledWith(
+        "scope-1",
+        { offeringAssemblyId: "assembly-9", excludedOptionalItemIds: [] },
+        "v1",
+      ),
+    );
+    await waitFor(() => expect(onAcceptNudge).toHaveBeenCalledWith("rule-2"));
+  });
+
+  it("dismiss retires the panel with no API write", async () => {
+    const user = userEvent.setup();
+    const { onDismissNudge } = renderComposer({ nudge: catalogNudge });
+
+    await user.click(screen.getByRole("button", { name: "Dismiss" }));
+
+    expect(onDismissNudge).toHaveBeenCalledWith("rule-1");
+    expect(mockFieldSelectProposedScopeLine).not.toHaveBeenCalled();
+    expect(mockExpandProposedScopeAssembly).not.toHaveBeenCalled();
+  });
+
+  it("an ineligible-assembly 409 shows the unavailable notice and preserves the panel, not conflict reconciliation", async () => {
+    // ExpandAssemblyNotOperationallyEligible is itself a real 409 — the unavailable-code check must
+    // win over generic status handling, matching ComposerQuickActions' existing ordering.
+    mockExpandProposedScopeAssembly.mockRejectedValueOnce(
+      new ApiError(409, "ProposedScope.ExpandAssemblyNotOperationallyEligible", "no longer eligible"),
+    );
+    const user = userEvent.setup();
+    const { onAcceptNudge, onNudgeAcceptConflict } = renderComposer({ nudge: assemblyNudge });
+
+    await user.click(screen.getByRole("button", { name: "Condensate kit" }));
+
+    await waitFor(() =>
+      expect(screen.getByRole("alert")).toHaveTextContent("The office recently updated this item and it's no longer available."),
+    );
+    expect(onNudgeAcceptConflict).not.toHaveBeenCalled();
+    expect(onAcceptNudge).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "Condensate kit" })).toBeInTheDocument();
+  });
+
+  it("a 409 during accept follows reconciliation and does not retire the rule", async () => {
+    mockFieldSelectProposedScopeLine.mockRejectedValueOnce(new ApiError(409, "Conflict", "conflict"));
+    const user = userEvent.setup();
+    const { onAcceptNudge, onNudgeAcceptConflict } = renderComposer({ nudge: catalogNudge });
+
+    await user.click(screen.getByRole("button", { name: "Drain pan" }));
+
+    await waitFor(() => expect(onNudgeAcceptConflict).toHaveBeenCalledTimes(1));
+    expect(onAcceptNudge).not.toHaveBeenCalled();
+  });
+
+  it("a non-409 accept failure preserves the panel instead of retiring it", async () => {
+    mockFieldSelectProposedScopeLine.mockRejectedValueOnce(new Error("network down"));
+    const user = userEvent.setup();
+    const { onAcceptNudge, onNudgeAcceptConflict } = renderComposer({ nudge: catalogNudge });
+
+    await user.click(screen.getByRole("button", { name: "Drain pan" }));
+
+    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("Something went wrong. Try again."));
+    expect(onAcceptNudge).not.toHaveBeenCalled();
+    expect(onNudgeAcceptConflict).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "Drain pan" })).toBeInTheDocument();
   });
 });

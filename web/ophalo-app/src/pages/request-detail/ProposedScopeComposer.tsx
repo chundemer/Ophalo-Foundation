@@ -7,7 +7,12 @@ import { ComposerSearchAndAdd } from "./ComposerSearchAndAdd";
 import { ComposerQuickActions } from "./ComposerQuickActions";
 import { ComposerDraftList } from "./ComposerDraftList";
 import { ComposerUndoToast, type PendingUndo } from "./ComposerUndoToast";
-import { PROPOSED_SCOPE_RECONCILE_RELOAD_FAILURE_NOTICE } from "./useProposedScopeCapture";
+import { ComposerNudgePanel } from "./ComposerNudgePanel";
+import {
+  PROPOSED_SCOPE_RECONCILE_RELOAD_FAILURE_NOTICE,
+  type ProposedScopeNudgeState,
+  type ScopeNudgeTrigger,
+} from "./useProposedScopeCapture";
 
 const SUBMITTED_OUTCOME_LABEL = "Submitted to office — awaiting review";
 
@@ -18,10 +23,14 @@ interface ProposedScopeComposerProps {
   scope: ProposedScopeDetailResult;
   conflictNotice: string | null;
   onClose: () => void;
-  onCommitted: () => void;
+  onCommitted: (trigger?: ScopeNudgeTrigger) => void;
   onConflict: (message?: string) => void;
   onDismissNotice: () => void;
   onRetryReconciliation: () => void;
+  nudge: ProposedScopeNudgeState | null;
+  onAcceptNudge: (ruleId: string) => void;
+  onDismissNudge: (ruleId: string) => void;
+  onNudgeAcceptConflict: () => void;
 }
 
 /**
@@ -40,6 +49,10 @@ export function ProposedScopeComposer({
   onConflict,
   onDismissNotice,
   onRetryReconciliation,
+  nudge,
+  onAcceptNudge,
+  onDismissNudge,
+  onNudgeAcceptConflict,
 }: ProposedScopeComposerProps) {
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [pendingUndo, setPendingUndo] = useState<PendingUndo | null>(null);
@@ -136,6 +149,17 @@ export function ProposedScopeComposer({
             version={scope.concurrencyVersion}
             onCommitted={onCommitted}
             onConflict={onConflict}
+          />
+        )}
+
+        {!readOnly && nudge && (
+          <ComposerNudgePanel
+            proposedScopeId={scope.id}
+            version={scope.concurrencyVersion}
+            nudge={nudge}
+            onAccepted={() => onAcceptNudge(nudge.ruleId)}
+            onAcceptConflict={onNudgeAcceptConflict}
+            onDismiss={() => onDismissNudge(nudge.ruleId)}
           />
         )}
 

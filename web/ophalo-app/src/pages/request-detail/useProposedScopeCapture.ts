@@ -1,5 +1,15 @@
-import { useCallback, useEffect, useState } from "react";
-import { api, ApiError, type ProposedScopeDetailResult } from "../../lib/apiClient";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { api, ApiError, type ProposedScopeDetailResult, type ScopeNudgeSuggestionFieldRowResponse } from "../../lib/apiClient";
+
+// Session 5, build-log/125: the two commit shapes that are eligible to fire a nudge read — a
+// resolved catalog-item add or an assembly expansion. Off-catalog adds, edits, removes, Undo, and
+// submit use the plain no-trigger commit form and never carry one of these.
+export type ScopeNudgeTrigger = { catalogItemId: string } | { offeringAssemblyId: string };
+
+export interface ProposedScopeNudgeState {
+  ruleId: string;
+  suggestions: ScopeNudgeSuggestionFieldRowResponse[];
+}
 
 /**
  * Session 3.4f-1, build-log/118: hoisted at RequestDetailContent so the simultaneously-mounted
@@ -31,6 +41,14 @@ export function useProposedScopeCapture(requestId: string) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [conflictNotice, setConflictNotice] = useState<string | null>(null);
 
+  // Session 5, build-log/125: session-only nudge state — at most one visible suggestion set, and
+  // the rule IDs retired (accepted/dismissed) for the currently open composer session. Retirement
+  // and the read generation live in refs, not state, because they must reflect the latest value
+  // inside async continuations without waiting for a re-render.
+  const [nudge, setNudge] = useState<ProposedScopeNudgeState | null>(null);
+  const retiredRuleIdsRef = useRef<Set<string>>(new Set());
+  const nudgeGenerationRef = useRef(0);
+
   const probe = useCallback(async () => {
     setState({ status: "loading" });
     try {
@@ -58,11 +76,47 @@ export function useProposedScopeCapture(requestId: string) {
   // 3.4f-2 calls this after every field-select/expand-assembly commit (and on 409/timeout) to
   // replace local state with the authoritative snapshot — mutation responses carry only
   // {id, status, version}, never updated lines.
-  const refetchScope = useCallback(async () => {
-    if (state.status !== "draft" && state.status !== "submitted") return;
-    const scope = await api.getProposedScope(state.scope.id);
-    setState({ status: scope.status === "Draft" ? "draft" : "submitted", scope });
-  }, [state]);
+  //
+  // Session 5, build-log/125: an optional trigger marks this commit as nudge-eligible. The
+  // authoritative reload always runs first; only after it succeeds does a trigger-carrying call
+  // fire the nudge read. `nudgeGenerationRef` is bumped for every trigger-carrying call (and by
+  // `closeModal`) so a result can only update state when it is still the newest outstanding read —
+  // an older trigger's late response, or any response after close, is discarded.
+  const refetchScope = useCallback(
+    async (trigger?: ScopeNudgeTrigger) => {
+      if (state.status !== "draft" && state.status !== "submitted") return;
+      const myGeneration = trigger ? ++nudgeGenerationRef.current : nudgeGenerationRef.current;
+      const scope = await api.getProposedScope(state.scope.id);
+      setState({ status: scope.status === "Draft" ? "draft" : "submitted", scope });
+      if (!trigger) return;
+      try {
+        const result = await api.getScopeNudgeFieldSuggestions(
+          scope.id,
+          "catalogItemId" in trigger
+            ? { triggerCatalogItemId: trigger.catalogItemId }
+            : { triggerOfferingAssemblyId: trigger.offeringAssemblyId },
+        );
+        if (myGeneration !== nudgeGenerationRef.current) return;
+        if (result.ruleId && result.suggestions.length > 0 && !retiredRuleIdsRef.current.has(result.ruleId)) {
+          setNudge({ ruleId: result.ruleId, suggestions: result.suggestions });
+        }
+      } catch {
+        // Silent by design (build-log/125): a nudge-read failure never surfaces to the technician.
+      }
+    },
+    [state],
+  );
+
+  // Accept (after the field-select/expand-assembly mutation succeeds) and Dismiss both retire the
+  // rule for the rest of this open session and clear the visible panel. A 409 during accept clears
+  // the panel without retiring it — the Draft state it was computed against is stale, but the rule
+  // may legitimately fire again once the office/technician state settles.
+  const retireNudge = useCallback((ruleId: string) => {
+    retiredRuleIdsRef.current.add(ruleId);
+    setNudge(null);
+  }, []);
+
+  const clearNudge = useCallback(() => setNudge(null), []);
 
   const startCapture = useCallback(async () => {
     if (state.status === "draft") {
@@ -95,7 +149,16 @@ export function useProposedScopeCapture(requestId: string) {
     setIsModalOpen(true);
   }, [state]);
 
-  const closeModal = useCallback(() => setIsModalOpen(false), []);
+  // Session 5, build-log/125: closing the modal ends the nudge "session" — retirement and the
+  // visible panel are session-scoped, not hook-lifetime-scoped, and closeModal (not unmount) is the
+  // boundary. Bumping the generation here also discards any nudge-read still in flight so it cannot
+  // revive a panel after the composer reopens.
+  const closeModal = useCallback(() => {
+    nudgeGenerationRef.current++;
+    retiredRuleIdsRef.current = new Set();
+    setNudge(null);
+    setIsModalOpen(false);
+  }, []);
 
   // Session 5C review fix: reconcileAfterConflict's own state is what the last reload attempt
   // needs to retry with — kept separate from conflictNotice so a reload-failure notice can
@@ -144,5 +207,8 @@ export function useProposedScopeCapture(requestId: string) {
     reconcileAfterConflict,
     retryReconciliation,
     clearConflictNotice,
+    nudge,
+    retireNudge,
+    clearNudge,
   };
 }

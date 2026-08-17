@@ -59,10 +59,20 @@ export function RequestDetailContent(props: RequestDetailContentProps) {
           scope={proposedScopeCapture.state.scope}
           conflictNotice={proposedScopeCapture.conflictNotice}
           onClose={proposedScopeCapture.closeModal}
-          onCommitted={() => void proposedScopeCapture.refetchScope()}
+          onCommitted={(trigger) => void proposedScopeCapture.refetchScope(trigger)}
           onConflict={(message) => void proposedScopeCapture.reconcileAfterConflict(message)}
           onDismissNotice={proposedScopeCapture.clearConflictNotice}
           onRetryReconciliation={() => void proposedScopeCapture.retryReconciliation()}
+          nudge={proposedScopeCapture.nudge}
+          onAcceptNudge={(ruleId) => {
+            proposedScopeCapture.retireNudge(ruleId);
+            void proposedScopeCapture.refetchScope();
+          }}
+          onDismissNudge={(ruleId) => proposedScopeCapture.retireNudge(ruleId)}
+          onNudgeAcceptConflict={() => {
+            proposedScopeCapture.clearNudge();
+            void proposedScopeCapture.reconcileAfterConflict();
+          }}
         />
       )}
   </div>;

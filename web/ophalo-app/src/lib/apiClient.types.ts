@@ -1054,6 +1054,24 @@ export interface QuickScopeActionFieldListResult {
   actions: QuickScopeActionFieldRowResponse[];
 }
 
+// Session 5, build-log/125: field-safe Paired Nudges read for one trigger — price-free, mirrors
+// ScopeNudgeFieldResult/ScopeNudgeSuggestionFieldRow.
+export interface ScopeNudgeSuggestionFieldRowResponse {
+  id: string;
+  order: number;
+  catalogItemId: string | null;
+  offeringAssemblyId: string | null;
+  displayName: string;
+  targetKind: string;
+}
+
+export interface ScopeNudgeFieldResultResponse {
+  ruleId: string | null;
+  triggerCatalogItemId: string | null;
+  triggerOfferingAssemblyId: string | null;
+  suggestions: ScopeNudgeSuggestionFieldRowResponse[];
+}
+
 // Build Log 121, ADR-486: polymorphic field-scope search — one rank-ordered sequence of Active
 // catalog items and Active/operationally-eligible assemblies, replacing the Common-Item-only
 // composer search. Price-free; `kind` distinguishes an assembly row from a catalog-item row.
