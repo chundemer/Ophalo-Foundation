@@ -33,6 +33,88 @@ status read. The founder's live account is now enrolled for
 catalog/assembly data to that account: run full mutable acceptance locally against a disposable
 database, and use production only for entitlement, navigation, and real-business-data checks.
 
+**Commercial baseline, actual-work, and accounting-closeout direction: locked (2026-08-17); no
+implementation authorized.** [ADR-487](decisions/ADR-487-commercial-baselines-actual-work-and-accounting-closeout.md)
+and [Build Log 126](build-log/126-price-book-owner-quote-operations-discovery.md) close the
+identified contractor workflow gap without turning Keep into an ERP. Proposed scope remains the
+technician's price-blind recommendation; office-owned Commercial Documents support Estimate,
+Fixed-Price Quote, or T&M Authorization; Actual Work reuses the Unified Scope Composer but has
+separate records and may clone an approved commercial revision or begin directly for reactive
+work. Field staff record factual deltas and reasons only; Owner/Admin classifies their commercial
+effect, reviews Standard/Expected Direct Cost variance, and creates immutable accounting-export
+snapshots. A customer approval/delivery claim, true COGS, asset/property identity, accounting sync,
+invoicing, payments, inventory, and receipts remain out of scope pending separate decisions. The
+immediate next product preflight is Owner/Admin proposed-work review queue/workbench and history.
+Later Actual Work/closeout preflights must lock snapshot-based cloning across catalog deactivation,
+multi-visit versus mutable-draft lifecycle, hard-blocked unpriced direct-actual accounting export,
+and per-line field-recorder attribution before code begins.
+
+**Launch-minimum Residential / Commercial request work context: required before mixed-pilot
+go-live; preflight required before implementation.** [Build Log
+128](build-log/128-request-work-context-launch-minimum-preflight.md) records the narrow
+request-level `Residential`/`Commercial`/`Unclassified` qualification path. It is operational
+context—not account commercial standing, a permission, a quote requirement, or a separate B2B
+product. Staff-created requests select Residential or Commercial; public intake begins
+Unclassified; staff must classify before assigning an Operator as Responsible while still being able to
+acknowledge and communicate promptly. Commercial requests retain optional on-site contact name,
+phone, and PO/work-order reference; they do not introduce a property hierarchy or authorization
+engine. Complete this path before additional Price Book workbench features for the mixed
+residential/commercial pilot.
+
+**Authoritative mixed-contractor pilot delivery order: Build 104 amended (2026-08-18).**
+[Build Log 104 — Mixed Contractor Pilot Go-Live Roadmap](build-log/104-mixed-contractor-pilot-go-live-roadmap.md) is the single roadmap
+record: Work Context → Direct Actual Work → Proposed Work Review → Office Commercial Estimate →
+Owner/Admin closeout and the accounting CSV/reconciliation handoff → release evidence. Direct
+Actual Work and Proposed Work Review are twin launch priorities, but remain separate reviewable
+slices. Owner/Admin exports
+authoritative work data for manual QuickBooks entry, record the external invoice/reference, and
+reconcile the later outcome in Keep; `Paid in full` is an externally asserted reconciliation
+outcome, not Keep payment processing. Generic Price Book CSV import is deferred per DEF-087. The
+pilot launches queue-driven with no push requirement; do not claim APNs/FCM delivery until a later
+explicit decision promotes it.
+
+**Next-week controlled parallel field pilot: locked as the working delivery target (2026-08-19).**
+[Build Log 131](build-log/131-next-week-parallel-field-pilot-plan.md) narrows next week's release
+to Request Work Context, price-blind per-visit Direct Actual Work, the zero-line diagnostic/no-work
+safeguard, production error/usage insight, a feedback route, final cross-device UI-quality review,
+and a deployed rehearsal with an explicit parallel-run guide. The contractor's current
+paper/software process remains the billing, invoicing, and accounting authority. Proposed Work
+Review, commercial pricing, closeout, CSV export, and reconciliation are deferred from this
+narrow release—not cancelled from the Build 104 roadmap. At the end of the current week, adjust
+scope only against recorded implementation/release evidence, a retained operational fallback, and
+a clear acceptance gate; do not convert remaining work into an unsafe cutover.
+
+**Pilot communications and feedback: required for pilot activation (2026-08-19).** [Build Log
+104](build-log/104-mixed-contractor-pilot-go-live-roadmap.md) promotes authenticated Pilot Updates
+and Report Friction to a release requirement. Updates are audience-targeted only to Everyone,
+Owner/Admin, or Field Staff and classify New, Fixed, Known Issue, or Action Needed. Urgent issues
+escalate immediately to Owner/Admin; verified user-visible changes receive a daily update; the
+owner receives a weekly summary. No push requirement, email campaign, notification platform,
+delivery tracking, public status page, or generic CMS is introduced.
+
+**Direct Actual Work and accounting handoff: product preflight locked (2026-08-18).** [Build Log
+129](build-log/129-direct-actual-work-and-accounting-handoff-preflight.md) establishes the
+price-blind, per-visit Actual Work record, zero-line diagnostic/service visit safeguard,
+immutable multi-visit accounting-export snapshot, human-readable request-reference CSV keys, and
+external reconciliation boundary. It uses responsibility/ownership language only; Keep does not
+introduce separate task-routing state or represent itself as a task-routing application.
+
+**Office Commercial Estimate: product preflight locked (2026-08-18).** [Build Log
+130](build-log/130-office-commercial-estimate-preflight.md) establishes the required office-owned
+commercial bridge from reviewed Proposed Scope to a priced, immutable baseline for later Actual
+Work. Owner/Admin controls price, expected direct cost, margin, and discount; field users remain
+price-blind. Customer delivery/acceptance, signature, payment, invoice creation, and accounting
+sync remain outside the initial estimate slice.
+
+**Owner/Admin Proposed Work Review workbench: locked (2026-08-17); Step 1 preflight authorized.**
+[ADR-488](decisions/ADR-488-owner-admin-proposed-work-review-workbench.md) fixes the first
+implementation slice: an entitled Owner/Admin-only Proposed Work Review queue and read-only
+newest-first scope history; versioned `SubmittedToOffice` → `OfficeReviewed` **Mark reviewed** with
+reviewer/time/optional bounded internal note; aggregate signal resolution only after the last
+submitted scope; and terminal-request mutation block. Submitted field scope stays immutable;
+commercial editing, return/reject, technician notification, Actual Work, and customer acceptance
+remain out of this slice.
+
 **Scope-capture UX reset: locked (2026-08-14); pause the five-rung implementation.**
 [ADR-482](decisions/ADR-482-unified-technician-scope-composer.md) supersedes ADR-461's fixed
 Primary Offering → Common Items → Categories → Search → Off-Catalog escape ladder. Technician

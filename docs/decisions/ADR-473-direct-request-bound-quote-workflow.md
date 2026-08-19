@@ -3,6 +3,9 @@
 **Status:** Locked
 **Date:** 2026-08-02
 **Related:** ADR-458; ADR-461; ADR-465; ADR-467; ADR-468; ADR-472; build-log/107; build-log/108; DEF-088
+**Amended by:** ADR-487 — the office commercial record now supports Estimate, Fixed-Price Quote,
+and T&M Authorization. The request-bound, office-controlled, revisioned, price-authority, and
+no-customer-acceptance boundaries here remain in force.
 
 ## Decision
 
