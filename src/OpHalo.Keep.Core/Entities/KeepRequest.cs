@@ -120,6 +120,10 @@ public sealed class KeepRequest : BaseEntity
     // Customer-stated contact preference (S22p3). Default NoPreference.
     public ContactPreference ContactPreference { get; private set; } = ContactPreference.NoPreference;
 
+    // Residential/Commercial work context (Build Log 128). Default Unclassified — cannot be safely
+    // inferred from historical text; staff enforcement of a required value is a later slice.
+    public WorkContext WorkContext { get; private set; } = WorkContext.Unclassified;
+
     // --- Customer page viewed telemetry (ADR-341, P6c-2) ---
 
     public DateTime? CustomerPageLastViewedAtUtc { get; private set; }
@@ -1409,7 +1413,8 @@ public sealed class KeepRequest : BaseEntity
         string? serviceState = null,
         string? serviceZip = null,
         IntakeUrgency intakeUrgency = IntakeUrgency.Routine,
-        ContactPreference contactPreference = ContactPreference.NoPreference)
+        ContactPreference contactPreference = ContactPreference.NoPreference,
+        WorkContext workContext = WorkContext.Unclassified)
     {
         if (firstResponseTargetMinutes <= 0)
             throw new ArgumentException("First response target minutes must be positive.", nameof(firstResponseTargetMinutes));
@@ -1425,6 +1430,7 @@ public sealed class KeepRequest : BaseEntity
         request.ServiceZip = serviceZip?.Trim();
         request.IntakeUrgency = intakeUrgency;
         request.ContactPreference = contactPreference;
+        request.WorkContext = workContext;
 
         return request;
     }
@@ -1449,7 +1455,8 @@ public sealed class KeepRequest : BaseEntity
         string? serviceAddressLine2 = null,
         string? serviceCity = null,
         string? serviceState = null,
-        string? serviceZip = null)
+        string? serviceZip = null,
+        WorkContext workContext = WorkContext.Unclassified)
     {
         var request = CreateCore(accountId, customerId, customerName, customerPhone, customerEmail,
             description, referenceCode, pageToken, nowUtc, firstResponseTargetMinutes: 0,
@@ -1459,6 +1466,7 @@ public sealed class KeepRequest : BaseEntity
         request.ServiceCity         = serviceCity?.Trim();
         request.ServiceState        = serviceState?.Trim().ToUpperInvariant();
         request.ServiceZip          = serviceZip?.Trim();
+        request.WorkContext         = workContext;
         return request;
     }
 

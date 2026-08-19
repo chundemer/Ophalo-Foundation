@@ -84,6 +84,16 @@ narrow release—not cancelled from the Build 104 roadmap. At the end of the cur
 scope only against recorded implementation/release evidence, a retained operational fallback, and
 a clear acceptance gate; do not convert remaining work into an unsafe cutover.
 
+**Active next session — Request Work Context, Slice 1 complete (2026-08-19).**
+The product preflight is [Build Log 128](build-log/128-request-work-context-launch-minimum-preflight.md).
+Mechanical implementation preflight is complete. Slice 1 — durable `WorkContext`
+(`Residential`/`Commercial`/`Unclassified`) state on `KeepRequest`, EF configuration, migration, and
+backward-compatible factory wiring — is reviewed, approved, and complete. Slices 2–3 remain
+unapproved: staff enforcement, classification/correction, assignment gate, list projection/filter,
+and UI. Do **not** begin Direct Actual Work implementation until the full user-visible Work Context
+workflow (Slices 2–3) is reviewed and accepted. Build 129 is the following product preflight; it
+likewise requires its own mechanical implementation preflight before code.
+
 **Pilot communications and feedback: required for pilot activation (2026-08-19).** [Build Log
 104](build-log/104-mixed-contractor-pilot-go-live-roadmap.md) promotes authenticated Pilot Updates
 and Report Friction to a release requirement. Updates are audience-targeted only to Everyone,

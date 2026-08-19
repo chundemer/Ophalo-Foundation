@@ -39,6 +39,7 @@ public class KeepRequestTests
         Assert.Null(request.TerminatedAtUtc);
         Assert.Null(request.ExpiresAtUtc);
         Assert.Null(request.CurrentStatusText);
+        Assert.Equal(WorkContext.Unclassified, request.WorkContext);
     }
 
     [Fact]
@@ -53,6 +54,7 @@ public class KeepRequestTests
         Assert.Null(request.TerminatedAtUtc);
         Assert.Null(request.ExpiresAtUtc);
         Assert.Null(request.CurrentStatusText);
+        Assert.Equal(WorkContext.Unclassified, request.WorkContext);
     }
 
     [Fact]

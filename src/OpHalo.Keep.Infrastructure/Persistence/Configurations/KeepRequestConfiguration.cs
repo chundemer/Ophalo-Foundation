@@ -154,6 +154,13 @@ internal sealed class KeepRequestConfiguration : BaseEntityConfiguration<KeepReq
             .IsRequired()
             .HasDefaultValue(ContactPreference.NoPreference);
 
+        // Residential/Commercial work context (Build Log 128). Default Unclassified.
+        builder.Property(x => x.WorkContext)
+            .HasConversion<string>()
+            .HasMaxLength(50)
+            .IsRequired()
+            .HasDefaultValue(WorkContext.Unclassified);
+
         // Customer page viewed telemetry (ADR-341, P6c-2).
         builder.Property(x => x.CustomerPageLastViewedAtUtc);
 
