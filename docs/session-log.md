@@ -62,8 +62,9 @@ nudge read; the open Draft is now also visible read-only to Owner/Admin (not jus
 a new `IsRecorder` flag on the history read response. D adds
 `POST /keep/pricebook/actual-work/{actualWorkId}/transfer-recorder` — Owner/Admin-only,
 reason-required, recording an immutable `ActualWorkDraftRecorderTransfer` audit row atomically with
-the `RecorderAccountUserId` change. **GAP-055 remediation is complete; 5d-ii-d is unpaused** and is
-the next approved slice.
+the `RecorderAccountUserId` change. **GAP-055 remediation and 5d-ii-d are both complete** (commit
+`6543f81`); **slice 6 — Owner/Admin review mutation** is the next approved slice and needs its own
+mechanical preflight before implementation.
 
 Prior implementation rules, now superseded:
 
@@ -94,6 +95,7 @@ Prior implementation rules, now superseded:
 | 5d-ii-a2 — nudges EF persistence + migration | Complete | Build Log 129; commit `6984768` |
 | 5d-ii-b — nudges Owner/Admin config API | Complete | Build Log 129; commit `a1d6478` |
 | 5d-ii-c — nudges technician field-read API | Complete | Build Log 129; commit `b4cf5b0` |
+| 5d-ii-d — nudges frontend + assembly search grouping fix | Complete | Build Log 129; commit `6543f81` |
 
 5b shipped with both lifecycle corrections already fixed and regression-tested in the same commit:
 the submitted confirmation no longer unmounts on the post-submit history refresh, and a create-time
@@ -166,12 +168,16 @@ eligibility, deduplication, dismissal, explicit-add, and Draft-concurrency contr
       retained); account posture is Blocked-only. Add reuses
       `ActualWorkDraftApiService.AddLineAsync`; no new mutation handler. 4 production files, 1 new
       test file, 11/11 passing.
-   5. **5d-ii-d — frontend:** Unpaused — GAP-055's Draft-ownership remediation (Batches A–D) is
-      complete. Build Log 129, "5d-ii-d implementation preflight". 3 production files
-      (`apiClient.types.ts`, `apiClient.ts`,
+   5. **5d-ii-d — frontend:** Complete. Build Log 129, "5d-ii-d implementation preflight"; commit
+      `6543f81`. 3 production files (`apiClient.types.ts`, `apiClient.ts`,
       `ActualWorkComposer.tsx`), 1 test file; 0 new mutation families (reuses `addActualWorkLine`/
       `expandActualWorkAssembly`). Nudge state/fetch inline in `ActualWorkComposer.tsx`, mirroring
       `ComposerNudgePanel`'s UX only (session-only chips, client-side Dismiss), not its file split.
+      Same commit also fixed a pre-existing 5d-i-b usability gap found during manual verification:
+      `ActualWorkSearchAndAdd`'s search results listed assemblies after every catalog match in one
+      undifferentiated scroll box, making them practically undiscoverable; now mirrors Proposed
+      Scope's grouped "Matching assemblies" / "Matching catalog items" layout. 17/17 focused tests
+      passing.
 4. **6 — Owner/Admin review mutation:** mark reviewed with reviewer/time/optional internal note,
    then atomically resolve the Actual Work signal only when no submitted visit remains unreviewed.
 5. **7 — Owner/Admin financial read:** immutable snapshot totals, expected direct cost, margin,
