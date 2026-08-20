@@ -29,11 +29,29 @@ Those directions remain subject to their own ADR/build-log decisions.
 **Product boundary:** [ADR-487](decisions/ADR-487-commercial-baselines-actual-work-and-accounting-closeout.md)
 and [Build Log 129](build-log/129-direct-actual-work-and-accounting-handoff-preflight.md).
 
-Locked pilot rules:
+### Locked decision — Actual Work Draft ownership (2026-08-20)
 
-- The request's active Responsible user is the sole field recorder; Owner/Admin is price-blind
+**Pilot blocker:** [GAP-055 — Actual Work capture is incorrectly blocked by dispatch assignment](pilot-readiness-bug-tracker.md#gap-055--actual-work-capture-is-incorrectly-blocked-by-dispatch-assignment).
+
+The prior active-Responsible-only recorder rule is superseded. **First-recorder ownership is
+locked:** any active member with `RequestsOperate + ActualWorkCapture` may create the one open
+Draft; creation preserves immutable `CreatedByUserId` authorship and sets the exclusive current
+`RecorderAccountUserId`. Only the recorder may mutate, expand, read Draft-bound nudges, discard, or
+submit. An Owner/Admin may transfer an unsubmitted Draft through a reason-required immutable audit
+event; submitted visits stay immutable, silent takeover is prohibited, and Request assignment stays
+dispatch context.
+
+**Plan:** perform a mechanical ownership-remediation preflight for the explicit recorder field and
+transfer audit, then audit/replace every active-Responsible gate and affected UI copy in bounded
+migration, authorization/API, transfer, and frontend/test batches. [GAP-055](pilot-readiness-bug-tracker.md#gap-055--actual-work-capture-is-incorrectly-blocked-by-dispatch-assignment)
+is the authoritative acceptance and sequencing record. **5d-ii-d remains paused** until that
+correction is implemented; it must not absorb this cross-cutting work.
+
+Prior implementation rules, now superseded:
+
+- The request's active Responsible user was the sole field recorder; Owner/Admin was price-blind
   while using field capture.
-- One Draft per request; Drafts are editable/discardable only by the active Responsible user;
+- One Draft per request; Drafts were editable/discardable only by the active Responsible user;
   submitted visits are immutable.
 - Zero-line submission requires a non-blank completion note and one truthful outcome:
   `DiagnosticOnly`, `NoWorkAuthorized`, or `NoAccess`.
@@ -130,7 +148,11 @@ eligibility, deduplication, dismissal, explicit-add, and Draft-concurrency contr
       retained); account posture is Blocked-only. Add reuses
       `ActualWorkDraftApiService.AddLineAsync`; no new mutation handler. 4 production files, 1 new
       test file, 11/11 passing.
-   5. **5d-ii-d — frontend.** Fetch/render nudge suggestions in `ActualWorkComposer`, tap-to-add.
+   5. **5d-ii-d — frontend:** Paused by GAP-055's reopened Draft-ownership decision. Build Log 129,
+      "5d-ii-d implementation preflight". 3 production files (`apiClient.types.ts`, `apiClient.ts`,
+      `ActualWorkComposer.tsx`), 1 test file; 0 new mutation families (reuses `addActualWorkLine`/
+      `expandActualWorkAssembly`). Nudge state/fetch inline in `ActualWorkComposer.tsx`, mirroring
+      `ComposerNudgePanel`'s UX only (session-only chips, client-side Dismiss), not its file split.
 4. **6 — Owner/Admin review mutation:** mark reviewed with reviewer/time/optional internal note,
    then atomically resolve the Actual Work signal only when no submitted visit remains unreviewed.
 5. **7 — Owner/Admin financial read:** immutable snapshot totals, expected direct cost, margin,

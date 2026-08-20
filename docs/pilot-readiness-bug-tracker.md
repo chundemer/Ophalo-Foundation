@@ -1472,6 +1472,52 @@ client-only lifecycle state machine.
 
 ## P0/P1 Pilot Flow Bugs
 
+### GAP-055 — Actual Work capture is incorrectly blocked by dispatch assignment
+
+**Status:** Open — decision locked; remediation planned
+**Severity:** P0
+**Area:** Direct Actual Work field workflow, Draft authorization, and request participation
+**Source:** 2026-08-20 field-workflow review; see [the session-log decision record](session-log.md#locked-decision--actual-work-draft-ownership-2026-08-20).
+
+**Verified cause:** Current Actual Work capture treats the request's active `Responsible`
+participant as the sole eligible recorder. A technician who actually performs the work cannot start
+or record a Draft unless the office first changes assignment, even when that technician holds the
+normal `RequestsOperate` and `ActualWorkCapture` permissions. Dispatch assignment and factual
+field recording are different operational concerns; conflating them creates an avoidable
+office-call bottleneck and pressures technicians into delayed or incomplete capture.
+
+**Locked decision:** First-recorder ownership. Assignment remains dispatch context but is not
+authority to capture Actual Work. Any active member with `RequestsOperate + ActualWorkCapture` may
+create the one open Draft. Creation keeps immutable `CreatedByUserId` authorship and sets the
+exclusive, transferable `RecorderAccountUserId` owner. Only that recorder may mutate or submit the
+unsubmitted Draft. Owner/Admin may perform a reason-required, immutable-audited transfer; silent
+takeover and shared mutable Drafts are excluded. See ADR-487 and Build Log 129's “Draft recorder
+ownership correction.”
+
+**Required resolution / plan:**
+
+- Add `RecorderAccountUserId` and an immutable recorder-transfer audit record/event while retaining
+  immutable `CreatedByUserId` creation authorship.
+- Mechanically audit and replace the active-Responsible gate throughout Actual Work create, edit,
+  discard, submit, assembly expansion, nudge read, history/probe, endpoint behavior, and UI copy.
+- Preserve the one-open-Draft-per-request constraint and optimistic concurrency; do not turn a
+  Draft into a silently shared mutable record as an incidental fix.
+- Define the visibility and authorization behavior for the Draft owner, non-owner technicians,
+  Owner/Admin, submitted visits, and an audited transfer before any migration or code edit.
+- Re-preflight the resulting migration, API/UI, and regression-test batches. The pending
+  5d-ii-d nudge frontend slice is paused because it consumes the current Draft-ownership contract.
+
+**Acceptance criteria:**
+
+- A qualified technician who performed the work can start factual capture without an office
+  reassignment solely to satisfy a recorder gate.
+- Only the selected owner may mutate an open Draft, unless an explicit, authorized, auditable
+  transfer has occurred.
+- The system preserves a durable distinction among dispatch assignment, Draft ownership, and
+  immutable author/audit history.
+- Concurrent starts remain safe: exactly one Draft is created, and the losing caller receives a
+  recoverable outcome rather than creating competing field records.
+
 ### BUG-001 — Share-intent leaves stale detail version
 
 **Status:** Resolved in S15a

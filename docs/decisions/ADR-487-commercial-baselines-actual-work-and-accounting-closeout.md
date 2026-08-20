@@ -2,7 +2,7 @@
 
 **Status:** Locked  
 **Date:** 2026-08-17  
-**Amended:** 2026-08-19 — controlled parallel-pilot Actual Work foundation
+**Amended:** 2026-08-19 — controlled parallel-pilot Actual Work foundation; 2026-08-20 — first-recorder Draft ownership
 **Related:** ADR-453, ADR-456, ADR-463, ADR-465, ADR-473, ADR-475, ADR-478; Build Logs 116, 117, 126
 
 ## Decision
@@ -55,15 +55,20 @@ action**, not to a user's permanent role: an authorized Owner or Admin performin
 the same price-blind capture experience as an authorized Operator, while Owner/Admin financial
 review is the separate office action that follows field submission in the pilot.
 
-For the pilot, the request's active Responsible user is the sole field recorder and owns its one
-open Draft visit; that user may be an Owner, Admin, or Operator. The Responsible recorder may
-create, edit, or discard the Draft visit. Multi-technician work remains supported: the Responsible
-recorder records the one visit and is accountable for its job details; other technicians do not
-create parallel Actual Work drafts. Submitted visits are immutable. This pilot does not
-introduce cross-user draft takeover, a linked
-``correct prior visit`` workflow, or silent submitted-record editing. Those are viable future
-workflows, but each requires an explicit later product decision and cannot be inferred from the
-existence of an immutable visit record.
+For the pilot, dispatch assignment and Actual Work recording are separate concerns. Any active
+member with `RequestsOperate` and `ActualWorkCapture` may create the one open Draft visit for a
+request. Creation permanently records that user's `CreatedByUserId` authorship and sets an explicit
+`RecorderAccountUserId` as the Draft's current exclusive recorder. Only the recorder may edit,
+expand, receive Draft-bound nudges, discard, or submit that Draft. The database continues to enforce
+one open Draft per request, so a concurrent starter receives a recoverable existing-Draft outcome
+rather than creating a competing record.
+
+If the wrong technician starts a Draft or work changes hands, an Owner/Admin may transfer an
+**unsubmitted** Draft's recorder through an explicit `ActualWorkDraftRecorderTransferred` audit
+event containing the actor, prior recorder, new recorder, time, and reason. The transfer changes
+current operational ownership; it never rewrites immutable creation authorship. Silent takeover,
+shared mutable Draft editing, linked ``correct prior visit`` workflows, and submitted-record editing
+remain out of scope.
 
 Submission raises an additive Actual Work needs office review signal. Owner/Admin review the
 submitted factual visit through an actionable queue, see its Price Book-backed sales price,
@@ -138,6 +143,10 @@ The later Actual Work and closeout preflights must lock the following before cod
 pilot priority. Its implementation preflight must deliver a bounded end-to-end field-capture and
 office-history batch, not a persistence-only slice; Proposed Work Review and closeout remain
 separate deferred workflows for this release.
+
+**Amended 2026-08-20:** GAP-055 reopened and replaced the active-Responsible-only Draft recorder
+rule. First-recorder ownership is now the pilot decision; Build Log 129 owns the migration,
+authorization, transfer, UI-copy, and regression-test remediation plan.
 
 ## Non-goals
 

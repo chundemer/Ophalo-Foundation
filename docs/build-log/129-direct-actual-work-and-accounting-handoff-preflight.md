@@ -113,6 +113,36 @@ the Price Book. It must be an end-to-end vertical batch, not an isolated schema 
 - Marking a visit reviewed and resolving the aggregate Actual Work review signal run in one
   database transaction; a request remains queued while any submitted visit is unreviewed.
 
+### Draft recorder ownership correction — 2026-08-20
+
+**GAP-055 resolves this pilot-blocking workflow defect:** dispatch assignment (`Responsible`) is
+useful routing context but is not authority to record factual Actual Work. The prior requirement
+that a technician call the office for reassignment before recording work is superseded.
+
+Locked pilot policy:
+
+- Any active account member with the existing `RequestsOperate` and `ActualWorkCapture` permissions
+  may create the one open Actual Work Draft for a request; active-Responsible participation is not a
+  creation precondition.
+- Creation preserves immutable `CreatedByUserId` authorship and sets explicit
+  `RecorderAccountUserId` current ownership. The recorder alone may edit lines, expand assemblies,
+  read Draft-bound nudges, discard, or submit the unsubmitted Draft.
+- The existing one-open-Draft-per-request database constraint and the Draft concurrency token remain
+  mandatory. A concurrent starter must reconcile to the existing Draft rather than create a second
+  field record.
+- An Owner/Admin may transfer an **unsubmitted** Draft recorder only through an explicit,
+  reason-required, immutable `ActualWorkDraftRecorderTransferred` audit event containing actor,
+  prior recorder, new recorder, and time. It changes `RecorderAccountUserId`, never
+  `CreatedByUserId`. Silent takeover and a shared mutable Draft are not pilot behavior.
+- Submitted visits remain immutable. Request assignment continues to support dispatch and does not
+  change automatically when a technician starts or receives a Draft.
+
+This correction pauses 5d-ii-d. Before resuming it, perform a mechanical ownership-remediation
+preflight covering the domain/migration, all current active-Responsible authorization seams
+(create/edit/discard/submit/expand/nudge/history), transfer API/audit, field UI copy, and the
+concurrency/authorization regression matrix. Keep the work in bounded batches; do not fold this
+cross-cutting correction into the nudge frontend slice.
+
 ### Business-completeness correction — 2026-08-20
 
 The implemented 5b field composer permits catalog-item search and custom/off-catalog lines, but
@@ -269,6 +299,51 @@ Two decisions locked during preflight, since the mirror target's model didn't re
 PostgreSQL: happy path, ineligible suggestion omitted, catalog-item dedupe, assembly suggestion never
 suppressed, ineligible trigger, no rule configured, missing/combined trigger parameters, non-
 Responsible caller, submitted (non-Draft) visit, and missing entitlement.
+
+### 5d-ii-d implementation preflight — 2026-08-20
+
+Mechanical preflight only (5d-ii's locked split already fixed this batch's scope). Every named
+symbol confirmed present, no drift from the locked estimate:
+
+- `GET /keep/pricebook/actual-work/{actualWorkId}/nudge-suggestions`
+  (`ActualWorkNudgeFieldReadEndpoints`, 5d-ii-c) — query params
+  `triggerCatalogItemId`/`triggerOfferingAssemblyId`, response
+  `{ ruleId, triggerCatalogItemId, triggerOfferingAssemblyId, suggestions: [{ id, order,
+  catalogItemId, offeringAssemblyId, displayName }] }`. No `targetKind` field — unlike
+  `ScopeNudgeSuggestionFieldRowResponse`, this is not a literal type copy.
+- Commit points that must fire the trigger: `addMutation` (catalog line, existing) and
+  `expandAssemblyMutation` (assembly expand, 5d-i-b) inside `ActualWorkComposer.tsx`'s
+  `ActualWorkSearchAndAdd`. Off-catalog custom lines carry no `catalogItemId`/`offeringAssemblyId`
+  and cannot fire a trigger, matching the backend contract.
+- Accept dispatch targets: `api.addActualWorkLine` (catalog suggestion, quantity 1, no note) and
+  `api.expandActualWorkAssembly` (assembly suggestion, `includedOptionalItemIds: []` — ActualWork's
+  inclusion-list shape from 5d-i-a, not ProposedScope's `excludedOptionalItemIds`). Both already
+  exist in `apiClient.ts`; a 409 defers to the existing `onConflict()` reconciliation path already
+  wired for every other composer mutation.
+- `ComposerNudgePanel.tsx`/`useProposedScopeCapture.ts`'s nudge state (Session 5, build-log/125) is
+  the mirror target for UX (session-only "Often added together" chip panel, client-side Dismiss,
+  no persistence) but not a literal reuse target: ActualWork keeps its mutation logic inline in
+  `ActualWorkComposer.tsx` (established in 5b/5d-i-b) rather than ProposedScope's extracted
+  `ComposerSearchAndAdd.tsx`/`ComposerNudgePanel.tsx`/hook-owned-state split, so nudge state/fetch
+  belongs inline in `ActualWorkComposer.tsx`, not in `useActualWorkCapture.ts` (which only owns
+  probe/draft/modal state, no line mutations) or a new standalone panel file.
+- `ActualWorkComposer.tsx`'s own doc comment (line 48) currently reads "no assemblies, no nudges,
+  no Undo" — stale since 5d-i-b shipped assembly expansion; needs correcting in this batch too.
+
+**Exact file-level gate (0 new mutation families — reuses `addActualWorkLine`/
+`expandActualWorkAssembly` directly, no new handler):**
+
+1. `web/ophalo-app/src/lib/apiClient.types.ts` — add `ActualWorkNudgeSuggestionFieldRowResponse`,
+   `ActualWorkNudgeFieldResultResponse`.
+2. `web/ophalo-app/src/lib/apiClient.ts` — add `getActualWorkNudgeFieldSuggestions`.
+3. `web/ophalo-app/src/pages/request-detail/ActualWorkComposer.tsx` — nudge state/fetch/chip panel
+   inline in `ActualWorkSearchAndAdd`; correct the stale doc comment.
+4. `web/ophalo-app/src/pages/request-detail/__tests__/ActualWorkComposer.test.tsx` — fetch-after-
+   commit (both trigger kinds), render, tap-to-add success, dismiss, 409-reconcile cases.
+
+No unresolved decisions block implementation; the inline-vs-extracted-file choice above is a
+preflight finding, not an open product/architecture decision, since it follows the file's own
+established pattern. Awaiting Christian's go-ahead to implement.
 
 ### 5d-i-a implementation notes — 2026-08-20
 
