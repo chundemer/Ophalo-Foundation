@@ -32,6 +32,11 @@ internal sealed class ActualWorkConfiguration : BaseEntityConfiguration<ActualWo
 
         builder.Property(x => x.SubmittedAtUtc);
 
+        // Current recorder-ownership holder (GAP-055) — distinct from the immutable
+        // CreatedByUserId authorship column already mapped by BaseEntityConfiguration.
+        builder.Property(x => x.RecorderAccountUserId)
+            .IsRequired();
+
         // Application-managed opaque uuid token — same pattern as
         // ProposedScope.ConcurrencyVersion (ADR-330).
         builder.Property(x => x.ConcurrencyVersion)

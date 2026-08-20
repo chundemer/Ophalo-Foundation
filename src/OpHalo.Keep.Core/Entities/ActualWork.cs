@@ -14,8 +14,11 @@ namespace OpHalo.Keep.Core.Entities;
 /// Owner/Admin financial review (Batch 7) reads the immutable snapshots captured here.
 ///
 /// Mutable only while <see cref="Status"/> is <see cref="ActualWorkStatus.Draft"/>; the pilot locks
-/// one open Draft per request, owned by the request's active Responsible recorder (a database
-/// partial unique index, not enforced here). <see cref="Submit"/> is a pure status transition —
+/// one open Draft per request (a database partial unique index, not enforced here), owned by
+/// <see cref="RecorderAccountUserId"/> — first-recorder ownership (GAP-055, superseding the
+/// active-Responsible-only recorder rule): any qualified member may create it, and only its current
+/// recorder may mutate or submit it, unless an Owner/Admin performs an explicit, reason-required
+/// <see cref="TransferRecorder"/>. <see cref="Submit"/> is a pure status transition —
 /// raising/reopening the request's Actual Work review signal is a separate atomic persistence
 /// operation (Batch 4), never a side effect of this aggregate's own state change. A complex request
 /// may retain multiple immutable submitted visit records; a later visit is always a new
@@ -38,6 +41,12 @@ public sealed class ActualWork : BaseEntity
     public string? CompletionNote { get; private set; }
 
     public DateTime? SubmittedAtUtc { get; private set; }
+
+    /// <summary>Current recorder-ownership holder (GAP-055): distinct from the immutable
+    /// <see cref="Foundation.Core.Entities.Shared.BaseEntity.CreatedByUserId"/> authorship set at
+    /// <see cref="Create"/>. Set at creation to the creating caller and changed only by
+    /// <see cref="TransferRecorder"/>.</summary>
+    public Guid RecorderAccountUserId { get; private set; }
 
     /// <summary>
     /// Application-managed opaque concurrency token — same pattern as
@@ -70,8 +79,29 @@ public sealed class ActualWork : BaseEntity
             AccountId = accountId,
             RequestId = requestId,
             Status = ActualWorkStatus.Draft,
+            RecorderAccountUserId = createdByUserId,
             ConcurrencyVersion = Guid.NewGuid(),
         });
+    }
+
+    /// <summary>Owner/Admin-only, reason-required recorder-ownership transfer of an unsubmitted
+    /// Draft (GAP-055). Changes only <see cref="RecorderAccountUserId"/> — creation authorship
+    /// (<see cref="Foundation.Core.Entities.Shared.BaseEntity.CreatedByUserId"/>) never changes.
+    /// The caller's authorization (Owner/Admin) and the immutable
+    /// <c>ActualWorkDraftRecorderTransferred</c> audit event are the API/persistence layer's
+    /// responsibility (Batch D); this method only enforces the domain invariant that a submitted
+    /// visit can never be transferred.</summary>
+    public Result TransferRecorder(Guid newRecorderAccountUserId)
+    {
+        if (newRecorderAccountUserId == Guid.Empty)
+            throw new ArgumentException("NewRecorderAccountUserId must not be empty.", nameof(newRecorderAccountUserId));
+
+        if (Status != ActualWorkStatus.Draft)
+            return Result.Failure(ActualWorkErrors.NotDraft);
+
+        RecorderAccountUserId = newRecorderAccountUserId;
+        ConcurrencyVersion = Guid.NewGuid();
+        return Result.Success();
     }
 
     public Result<ActualWorkLine> AddLine(

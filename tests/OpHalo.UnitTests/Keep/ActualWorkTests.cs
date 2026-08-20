@@ -48,6 +48,7 @@ public class ActualWorkTests
         Assert.Equal(RequestId, work.RequestId);
         Assert.Equal(ActualWorkStatus.Draft, work.Status);
         Assert.Equal(Actor, work.CreatedByUserId);
+        Assert.Equal(Actor, work.RecorderAccountUserId);
         Assert.Null(work.SubmittedAtUtc);
         Assert.Null(work.Outcome);
         Assert.Null(work.CompletionNote);
@@ -362,5 +363,43 @@ public class ActualWorkTests
 
         Assert.True(result.IsFailure);
         Assert.Equal(ActualWorkErrors.InvalidOutcome, result.Error);
+    }
+
+    // --- TransferRecorder (GAP-055) ---
+
+    [Fact]
+    public void TransferRecorder_on_a_draft_changes_the_recorder_and_bumps_the_version()
+    {
+        var work = New().Value;
+        var newRecorder = Guid.CreateVersion7();
+        var versionBefore = work.ConcurrencyVersion;
+
+        var result = work.TransferRecorder(newRecorder);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(newRecorder, work.RecorderAccountUserId);
+        Assert.Equal(Actor, work.CreatedByUserId);
+        Assert.NotEqual(versionBefore, work.ConcurrencyVersion);
+    }
+
+    [Fact]
+    public void TransferRecorder_after_submit_fails()
+    {
+        var work = New().Value;
+        AddCatalogBackedLine(work);
+        work.Submit(DateTime.UtcNow, outcome: null, completionNote: null);
+
+        var result = work.TransferRecorder(Guid.CreateVersion7());
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(ActualWorkErrors.NotDraft, result.Error);
+    }
+
+    [Fact]
+    public void TransferRecorder_with_an_empty_guid_throws()
+    {
+        var work = New().Value;
+
+        Assert.Throws<ArgumentException>(() => work.TransferRecorder(Guid.Empty));
     }
 }
