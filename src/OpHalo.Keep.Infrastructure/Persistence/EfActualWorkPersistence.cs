@@ -57,6 +57,22 @@ public sealed class EfActualWorkPersistence(OpHaloDbContext dbContext) : IActual
         }
     }
 
+    public async Task<ActualWorkCommitResult> CommitAsync(
+        ActualWork actualWork, ActualWorkDraftRecorderTransfer transferEvent, CancellationToken ct)
+    {
+        dbContext.Set<ActualWorkDraftRecorderTransfer>().Add(transferEvent);
+
+        try
+        {
+            await dbContext.SaveChangesAsync(ct);
+            return ActualWorkCommitResult.Committed;
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return ActualWorkCommitResult.ConcurrencyConflict;
+        }
+    }
+
     public async Task<ActualWorkCommitResult> DiscardAsync(ActualWork actualWork, CancellationToken ct)
     {
         dbContext.Set<ActualWork>().Remove(actualWork);

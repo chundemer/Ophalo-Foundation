@@ -39,18 +39,24 @@ public sealed record ExpandActualWorkAssemblyApiCommand(
 public sealed record ExpandActualWorkAssemblyResult(
     IReadOnlyList<Guid> LineIds, IReadOnlyList<Guid> SkippedCatalogItemIds, Guid ActualWorkConcurrencyVersion);
 
+/// <summary>GAP-055: <see cref="Reason"/> is required, never inferred — an Owner/Admin transfer
+/// must always state why, for the immutable <c>ActualWorkDraftRecorderTransferred</c> audit
+/// record.</summary>
+public sealed record TransferActualWorkDraftRecorderApiCommand(Guid NewRecorderAccountUserId, string Reason);
+
 /// <summary>
-/// API-facing orchestration for Draft create/add-line/update-line/remove-line/discard (ADR-487,
-/// build-log/129, Batch 3) — the single three-gate owner for Actual Work draft mutations:
-/// <c>RequestsOperate</c> + Price Book entitlement (ADR-462) + <c>ActualWorkCapture</c>, gate
-/// composition mirroring <see cref="ProposedScopeApiService"/> exactly. First-recorder ownership
-/// (GAP-055, superseding the active-Responsible-only recorder rule): <see cref="CreateAsync"/> only
-/// requires the request to be visible under the caller's row-authorization scope, not active
-/// Responsible participation, and sets the caller as the Draft's <c>RecorderAccountUserId</c>. Every
-/// subsequent mutation instead checks that the caller is still that current recorder — a plain field
-/// comparison, not a Responsible-participation lookup. Submitted visits are immutable; every
-/// mutation here rejects a non-Draft visit via <see cref="ActualWorkErrors.NotDraft"/> from the
-/// domain aggregate itself.
+/// API-facing orchestration for Draft create/add-line/update-line/remove-line/discard/recorder-
+/// transfer (ADR-487, build-log/129, Batch 3; GAP-055 for transfer) — the single three-gate owner
+/// for Actual Work draft mutations: <c>RequestsOperate</c> + Price Book entitlement (ADR-462) +
+/// <c>ActualWorkCapture</c>, gate composition mirroring <see cref="ProposedScopeApiService"/>
+/// exactly. First-recorder ownership (GAP-055, superseding the active-Responsible-only recorder
+/// rule): <see cref="CreateAsync"/> only requires the request to be visible under the caller's
+/// row-authorization scope, not active Responsible participation, and sets the caller as the
+/// Draft's <c>RecorderAccountUserId</c>. Every subsequent mutation instead checks that the caller
+/// is still that current recorder — a plain field comparison, not a Responsible-participation
+/// lookup — except <see cref="TransferRecorderAsync"/>, which is Owner/Admin-only regardless of
+/// current recorder ownership. Submitted visits are immutable; every mutation here rejects a
+/// non-Draft visit via <see cref="ActualWorkErrors.NotDraft"/> from the domain aggregate itself.
 /// </summary>
 public sealed class ActualWorkDraftApiService(
     IActualWorkPersistence persistence,
@@ -78,7 +84,7 @@ public sealed class ActualWorkDraftApiService(
             return Result<ActualWork>.Failure(gate.Error);
 
         var request = await requestOperatePersistence.GetVisibleRequestForUpdateAsync(
-            requestId, currentUser.AccountId, currentUser.UserId, gate.Value, ct);
+            requestId, currentUser.AccountId, currentUser.UserId, gate.Value.Scope, ct);
         if (request is null)
             return Result<ActualWork>.Failure(KeepRequestErrors.NotFound);
 
@@ -302,6 +308,57 @@ public sealed class ActualWorkDraftApiService(
             currentUser.AccountId, actualWorkId, expectedVersion, outcome, completionNote, ct);
     }
 
+    /// <summary>
+    /// GAP-055: Owner/Admin-only, reason-required recorder-ownership transfer of an unsubmitted
+    /// Draft. Deliberately does not reuse <see cref="AuthorizeAndLoadDraftAsync"/> — that helper's
+    /// row-authorization check requires the caller to already be the current recorder, which is
+    /// exactly the constraint a transfer must bypass for the acting Owner/Admin. Instead this loads
+    /// the Draft directly after the three-gate auth plus an explicit Owner/Admin role check, then
+    /// delegates to the domain's <see cref="ActualWork.TransferRecorder"/> (Draft-only invariant)
+    /// and commits the visit's <c>RecorderAccountUserId</c> change atomically with the immutable
+    /// <see cref="ActualWorkDraftRecorderTransfer"/> audit record via
+    /// <see cref="IActualWorkPersistence"/>'s transfer-aware <c>CommitAsync</c> overload.
+    /// </summary>
+    public async Task<Result<Guid>> TransferRecorderAsync(
+        Guid actualWorkId, TransferActualWorkDraftRecorderApiCommand command, Guid expectedVersion, CancellationToken ct)
+    {
+        var gate = await AuthorizeAsync(ct);
+        if (gate.IsFailure)
+            return Result<Guid>.Failure(gate.Error);
+
+        if (gate.Value.Role is not (AccountUserRole.Owner or AccountUserRole.Admin))
+            return Result<Guid>.Failure(Forbidden);
+
+        if (command.NewRecorderAccountUserId == Guid.Empty)
+            return Result<Guid>.Failure(ActualWorkErrors.RecorderTransferTargetRequired);
+        if (string.IsNullOrWhiteSpace(command.Reason))
+            return Result<Guid>.Failure(ActualWorkErrors.RecorderTransferReasonRequired);
+
+        var actualWork = await persistence.GetByIdAsync(currentUser.AccountId, actualWorkId, ct);
+        if (actualWork is null)
+            return Result<Guid>.Failure(ActualWorkErrors.NotFound);
+
+        if (actualWork.ConcurrencyVersion != expectedVersion)
+            return Result<Guid>.Failure(ActualWorkErrors.VersionMismatch);
+
+        var priorRecorderAccountUserId = actualWork.RecorderAccountUserId;
+        var transferResult = actualWork.TransferRecorder(command.NewRecorderAccountUserId);
+        if (transferResult.IsFailure)
+            return Result<Guid>.Failure(transferResult.Error);
+
+        var transferEvent = ActualWorkDraftRecorderTransfer.Create(
+            currentUser.AccountId, actualWork.Id, currentUser.UserId, priorRecorderAccountUserId,
+            command.NewRecorderAccountUserId, command.Reason, clock.UtcNow);
+
+        var commitResult = await persistence.CommitAsync(actualWork, transferEvent, ct);
+        return commitResult switch
+        {
+            ActualWorkCommitResult.Committed => Result<Guid>.Success(actualWork.ConcurrencyVersion),
+            ActualWorkCommitResult.ConcurrencyConflict => Result<Guid>.Failure(ActualWorkErrors.VersionMismatch),
+            _ => throw new InvalidOperationException($"Unexpected commit result: {commitResult}"),
+        };
+    }
+
     private async Task<Result<Guid>> CommitAsync(ActualWork actualWork, CancellationToken ct)
     {
         var commitResult = await persistence.CommitAsync(actualWork, ct);
@@ -337,17 +394,22 @@ public sealed class ActualWorkDraftApiService(
         return Result<ActualWork>.Success(actualWork);
     }
 
+    /// <summary>Row-authorization scope (derived from role) plus the caller's <see cref="Role"/>
+    /// itself — Role is needed only by <see cref="TransferRecorderAsync"/>'s Owner/Admin-only gate;
+    /// every other caller uses <see cref="Scope"/> alone.</summary>
+    private sealed record ActualWorkAuthorization(KeepRequestVisibilityScope Scope, AccountUserRole Role);
+
     /// <summary>Returns the row-authorization scope (derived from role) on success, matching
     /// <see cref="ProposedScopeApiService.AuthorizeAsync"/> exactly except gate 3 checks
     /// <c>ActualWorkCapture</c> instead of <c>ScopeCapture</c>.</summary>
-    private async Task<Result<KeepRequestVisibilityScope>> AuthorizeAsync(CancellationToken ct)
+    private async Task<Result<ActualWorkAuthorization>> AuthorizeAsync(CancellationToken ct)
     {
         if (!currentUser.IsAuthenticated)
-            return Result<KeepRequestVisibilityScope>.Failure(Unauthorized);
+            return Result<ActualWorkAuthorization>.Failure(Unauthorized);
 
         var accountSnapshot = await snapshotPersistence.GetAccountAccessSnapshotAsync(currentUser.AccountId, ct);
         if (accountSnapshot is null)
-            return Result<KeepRequestVisibilityScope>.Failure(Forbidden);
+            return Result<ActualWorkAuthorization>.Failure(Forbidden);
 
         var accessContext = new AccountAccessContext(
             accountSnapshot.LifecycleState,
@@ -361,18 +423,18 @@ public sealed class ActualWorkDraftApiService(
 
         var decision = accountAccessPolicy.Evaluate(accessContext);
         if (decision.IsBlocked || decision.IsReadOnly)
-            return Result<KeepRequestVisibilityScope>.Failure(Forbidden);
+            return Result<ActualWorkAuthorization>.Failure(Forbidden);
 
         var featureContext = new AccountFeatureAccessContext(accountSnapshot.Plan);
         var enabled = await featureAccessResolver.IsEnabledAsync(
             currentUser.AccountId, featureContext, CapabilityPackageFeatureKeys.PriceBookQuotesMaterials, ct);
         if (!enabled)
-            return Result<KeepRequestVisibilityScope>.Failure(Forbidden);
+            return Result<ActualWorkAuthorization>.Failure(Forbidden);
 
         var roleSnapshot = await snapshotPersistence.GetAccountUserRoleSnapshotAsync(
             currentUser.AccountId, currentUser.UserId, ct);
         if (roleSnapshot is null)
-            return Result<KeepRequestVisibilityScope>.Failure(Forbidden);
+            return Result<ActualWorkAuthorization>.Failure(Forbidden);
 
         if (!userAccessPolicy.IsPermitted(
                 roleSnapshot.Role, roleSnapshot.MembershipStatus, accountSnapshot.Purpose,
@@ -381,13 +443,13 @@ public sealed class ActualWorkDraftApiService(
                 roleSnapshot.Role, roleSnapshot.MembershipStatus, accountSnapshot.Purpose,
                 PermissionKeys.Keep.ActualWorkCapture))
         {
-            return Result<KeepRequestVisibilityScope>.Failure(Forbidden);
+            return Result<ActualWorkAuthorization>.Failure(Forbidden);
         }
 
         var scope = roleSnapshot.Role is AccountUserRole.Owner or AccountUserRole.Admin
             ? KeepRequestVisibilityScope.AccountWide
             : KeepRequestVisibilityScope.MyWork;
 
-        return Result<KeepRequestVisibilityScope>.Success(scope);
+        return Result<ActualWorkAuthorization>.Success(new ActualWorkAuthorization(scope, roleSnapshot.Role));
     }
 }

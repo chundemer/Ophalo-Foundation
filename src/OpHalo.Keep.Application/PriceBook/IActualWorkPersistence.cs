@@ -52,6 +52,18 @@ public interface IActualWorkPersistence
     Task<ActualWorkCommitResult> CommitAsync(ActualWork actualWork, CancellationToken ct);
 
     /// <summary>
+    /// Saves a recorder-ownership transfer (GAP-055): the visit's <c>RecorderAccountUserId</c>
+    /// change and <paramref name="transferEvent"/>'s insert happen in the same
+    /// <c>SaveChangesAsync</c> call, so the mutation and its immutable audit record are always
+    /// atomic — never one without the other. <paramref name="actualWork"/> must already be loaded
+    /// via <see cref="GetByIdAsync"/> (tracked). Returns
+    /// <see cref="ActualWorkCommitResult.ConcurrencyConflict"/> instead of throwing when the row
+    /// changed since it was loaded.
+    /// </summary>
+    Task<ActualWorkCommitResult> CommitAsync(
+        ActualWork actualWork, ActualWorkDraftRecorderTransfer transferEvent, CancellationToken ct);
+
+    /// <summary>
     /// Deletes a Draft visit already loaded via <see cref="GetByIdAsync"/> (tracked), including its
     /// owned lines. Returns <see cref="ActualWorkCommitResult.ConcurrencyConflict"/> instead of
     /// throwing when the row changed since it was loaded. The caller is responsible for confirming

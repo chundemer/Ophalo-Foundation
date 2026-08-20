@@ -884,6 +884,25 @@ public static class KeepEndpoints
                 : ErrorHttpMapper.ToHttpResult(result.Error);
         }).RequireAuthorization();
 
+        // GAP-055 — Owner/Admin-only, reason-required Draft recorder-ownership transfer.
+        app.MapPost("/keep/pricebook/actual-work/{actualWorkId:guid}/transfer-recorder", async (
+            Guid actualWorkId,
+            ActualWorkTransferRecorderBody body,
+            HttpRequest httpRequest,
+            ActualWorkDraftApiService service,
+            CancellationToken ct) =>
+        {
+            var versionResult = ParseActualWorkVersion(httpRequest.Headers);
+            if (!versionResult.IsSuccess)
+                return ErrorHttpMapper.ToHttpResult(versionResult.Error);
+
+            var command = new TransferActualWorkDraftRecorderApiCommand(body.NewRecorderAccountUserId, body.Reason);
+            var result = await service.TransferRecorderAsync(actualWorkId, command, versionResult.Value, ct);
+            return result.IsSuccess
+                ? Results.Ok(new ActualWorkConcurrencyVersionResponse(result.Value))
+                : ErrorHttpMapper.ToHttpResult(result.Error);
+        }).RequireAuthorization();
+
         app.MapGet("/keep/pricebook/actual-work/request/{requestId:guid}/history", async (
             Guid requestId,
             ActualWorkHistoryReadApiService service,
@@ -1162,6 +1181,8 @@ file sealed record ActualWorkUpdateLineBody(decimal ActualQuantity, string? Note
 /// — no global string-enum JSON converter is configured), one of <c>DiagnosticOnly</c>,
 /// <c>NoWorkAuthorized</c>, <c>NoAccess</c> (case-insensitive).</summary>
 file sealed record ActualWorkSubmitBody(string? Outcome, string? CompletionNote);
+
+file sealed record ActualWorkTransferRecorderBody(Guid NewRecorderAccountUserId, string Reason);
 
 file sealed record ActualWorkLineAddedResponse(Guid LineId, Guid ActualWorkConcurrencyVersion);
 

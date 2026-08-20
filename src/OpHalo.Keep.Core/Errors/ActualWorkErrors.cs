@@ -86,4 +86,12 @@ public static class ActualWorkErrors
     /// associated item on the assembly (unknown id, or a required item's id).</summary>
     public static readonly Error ExpandInclusionItemInvalid =
         Error.Create("ActualWork.ExpandInclusionItemInvalid", "One or more selected optional items are not valid for this assembly.");
+
+    /// <summary>GAP-055: an Owner/Admin recorder transfer must always state why.</summary>
+    public static readonly Error RecorderTransferReasonRequired =
+        Error.Create("ActualWork.RecorderTransferReasonRequired", "A reason is required to transfer the recorder.");
+
+    /// <summary>GAP-055: the transfer target must be a specific account member, never an empty guid.</summary>
+    public static readonly Error RecorderTransferTargetRequired =
+        Error.Create("ActualWork.RecorderTransferTargetRequired", "A new recorder is required to transfer the recorder.");
 }
