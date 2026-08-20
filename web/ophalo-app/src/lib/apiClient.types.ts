@@ -953,6 +953,17 @@ export interface ExpandAssemblyResult {
   concurrencyVersion: string;
 }
 
+export interface ExpandActualWorkAssemblyBody {
+  offeringAssemblyId: string;
+  includedOptionalItemIds?: string[];
+}
+
+export interface ExpandActualWorkAssemblyResult {
+  lineIds: string[];
+  skippedCatalogItemIds: string[];
+  actualWorkConcurrencyVersion: string;
+}
+
 export interface FieldCatalogItemResponse {
   id: string;
   type: string;

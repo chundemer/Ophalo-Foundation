@@ -186,6 +186,8 @@ import type {
   ProposedScopeLineAddedResult,
   ExpandAssemblyBody,
   ExpandAssemblyResult,
+  ExpandActualWorkAssemblyBody,
+  ExpandActualWorkAssemblyResult,
   FieldCatalogItemResponse,
   FieldCatalogItemListRowResponse,
   FieldCatalogItemListResult,
@@ -316,6 +318,8 @@ export type {
   ProposedScopeLineAddedResult,
   ExpandAssemblyBody,
   ExpandAssemblyResult,
+  ExpandActualWorkAssemblyBody,
+  ExpandActualWorkAssemblyResult,
   FieldCatalogItemResponse,
   FieldCatalogItemListRowResponse,
   FieldCatalogItemListResult,
@@ -811,6 +815,12 @@ export const api = {
     apiFetch<ExpandAssemblyResult>(`/keep/pricebook/proposed-scopes/${proposedScopeId}/expand-assembly`, {
       method: "POST",
       headers: { "X-Keep-ProposedScope-Version": version },
+      body: JSON.stringify(body),
+    }),
+  expandActualWorkAssembly: (actualWorkId: string, body: ExpandActualWorkAssemblyBody, version: string) =>
+    apiFetch<ExpandActualWorkAssemblyResult>(`/keep/pricebook/actual-work/${actualWorkId}/expand-assembly`, {
+      method: "POST",
+      headers: { "X-Keep-ActualWork-Version": version },
       body: JSON.stringify(body),
     }),
   getFieldCatalogItems: (params: GetFieldCatalogItemsParams = {}) => {

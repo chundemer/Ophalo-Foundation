@@ -224,6 +224,8 @@ const ActualWorkSearchAndAdd = forwardRef<HTMLInputElement, ActualWorkSearchAndA
   });
 
   const catalogResults = (results?.items ?? []).filter((item) => item.kind === "CatalogItem");
+  const assemblyResults = (results?.items ?? []).filter((item) => item.kind === "OfferingAssembly");
+  const [expansionNotice, setExpansionNotice] = useState<string | null>(null);
 
   function resetAfterSuccess() {
     setError(null);
@@ -267,6 +269,27 @@ const ActualWorkSearchAndAdd = forwardRef<HTMLInputElement, ActualWorkSearchAndA
     },
   });
 
+  const expandAssemblyMutation = useMutation({
+    mutationFn: (assembly: FieldScopeSearchResultResponse) =>
+      api.expandActualWorkAssembly(actualWorkId, { offeringAssemblyId: assembly.id, includedOptionalItemIds: [] }, version),
+    onSuccess: async (result) => {
+      setExpansionNotice(
+        result.skippedCatalogItemIds.length === 0
+          ? `${result.lineIds.length} assembly item${result.lineIds.length === 1 ? "" : "s"} added.`
+          : `${result.lineIds.length} assembly item${result.lineIds.length === 1 ? "" : "s"} added; ${result.skippedCatalogItemIds.length} already on this visit.`,
+      );
+      setError(null);
+      await onCommitted();
+    },
+    onError: (err) => {
+      if (!(err instanceof ApiError) || err.status !== 400) {
+        onConflict();
+        return;
+      }
+      setError(err.message);
+    },
+  });
+
   const canAdd =
     selection !== null &&
     Number(quantity) > 0 &&
@@ -298,6 +321,18 @@ const ActualWorkSearchAndAdd = forwardRef<HTMLInputElement, ActualWorkSearchAndA
                     {item.displayName}
                   </button>
                 ))}
+              {!isLoading &&
+                assemblyResults.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    disabled={expandAssemblyMutation.isPending}
+                    onClick={() => expandAssemblyMutation.mutate(item)}
+                    className={`w-full text-left px-3 py-2 text-sm text-[var(--ophalo-ink)] hover:bg-[var(--ophalo-canvas)] ${FOCUS_RING} disabled:opacity-50`}
+                  >
+                    Add assembly: {item.displayName}
+                  </button>
+                ))}
               <button
                 type="button"
                 onClick={() => setSelection({ kind: "custom" })}
@@ -307,6 +342,8 @@ const ActualWorkSearchAndAdd = forwardRef<HTMLInputElement, ActualWorkSearchAndA
               </button>
             </div>
           )}
+          {expansionNotice && <p role="status" className="px-3 py-2 text-xs text-[var(--ophalo-muted)]">{expansionNotice}</p>}
+          {error && <p className="px-3 text-xs text-[var(--ophalo-danger,#c0392b)]">{error}</p>}
         </>
       ) : (
         <div className="rounded-lg border border-[var(--ophalo-border)] p-3 space-y-2">

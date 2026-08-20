@@ -12,6 +12,7 @@ const mockUpdateActualWorkLine = vi.fn();
 const mockRemoveActualWorkLine = vi.fn();
 const mockSubmitActualWork = vi.fn();
 const mockDiscardActualWork = vi.fn();
+const mockExpandActualWorkAssembly = vi.fn();
 
 vi.mock("../../../lib/apiClient", async () => {
   const actual = await vi.importActual<typeof import("../../../lib/apiClient")>("../../../lib/apiClient");
@@ -25,6 +26,7 @@ vi.mock("../../../lib/apiClient", async () => {
       removeActualWorkLine: (...args: unknown[]) => mockRemoveActualWorkLine(...args),
       submitActualWork: (...args: unknown[]) => mockSubmitActualWork(...args),
       discardActualWork: (...args: unknown[]) => mockDiscardActualWork(...args),
+      expandActualWorkAssembly: (...args: unknown[]) => mockExpandActualWorkAssembly(...args),
     },
   };
 });
@@ -150,6 +152,48 @@ describe("ActualWorkComposer", () => {
       ),
     );
     await waitFor(() => expect(onCommitted).toHaveBeenCalled());
+  });
+
+  it("expands an assembly with optional items defaulted out and reports skipped components", async () => {
+    const user = userEvent.setup();
+    mockGetFieldScopeSearch.mockResolvedValueOnce({
+      items: [{ kind: "OfferingAssembly", id: "assembly-1", displayName: "Furnace tune-up", defaultItemCount: 3, catalogItemType: null, externalKey: null }],
+      limit: 20,
+      hasMore: false,
+      nextCursor: null,
+    });
+    mockExpandActualWorkAssembly.mockResolvedValueOnce({
+      lineIds: ["line-2"], skippedCatalogItemIds: ["item-1"], actualWorkConcurrencyVersion: "v2",
+    });
+    const { onCommitted } = renderComposer();
+
+    await user.type(screen.getByPlaceholderText("Search by name or SKU..."), "furnace");
+    await user.click(await screen.findByRole("button", { name: "Add assembly: Furnace tune-up" }));
+
+    await waitFor(() =>
+      expect(mockExpandActualWorkAssembly).toHaveBeenCalledWith(
+        "draft-1", { offeringAssemblyId: "assembly-1", includedOptionalItemIds: [] }, "v1",
+      ),
+    );
+    await waitFor(() => expect(onCommitted).toHaveBeenCalled());
+    expect(screen.getByRole("status")).toHaveTextContent("1 assembly item added; 1 already on this visit.");
+  });
+
+  it("reconciles after a stale-version conflict while expanding an assembly", async () => {
+    const user = userEvent.setup();
+    mockGetFieldScopeSearch.mockResolvedValueOnce({
+      items: [{ kind: "OfferingAssembly", id: "assembly-1", displayName: "Furnace tune-up", defaultItemCount: 3, catalogItemType: null, externalKey: null }],
+      limit: 20,
+      hasMore: false,
+      nextCursor: null,
+    });
+    mockExpandActualWorkAssembly.mockRejectedValueOnce(new ApiError(409, "ActualWork.VersionMismatch", "conflict"));
+    const { onConflict } = renderComposer();
+
+    await user.type(screen.getByPlaceholderText("Search by name or SKU..."), "furnace");
+    await user.click(await screen.findByRole("button", { name: "Add assembly: Furnace tune-up" }));
+
+    await waitFor(() => expect(onConflict).toHaveBeenCalled());
   });
 
   it("edits an existing line's quantity and note", async () => {

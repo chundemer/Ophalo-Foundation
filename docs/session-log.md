@@ -93,10 +93,13 @@ eligibility, deduplication, dismissal, explicit-add, and Draft-concurrency contr
    and-report duplicate handling, inclusion-list optional-item contract, active-Responsible check
    moved inside the locked transaction (no pre-transaction tracked load). 7 production files, 8
    new/modified tests, 66/66 Actual Work integration tests passing.
-2. **5d-i-b — Actual Work assembly expansion, frontend:** next. Needs its own mechanical preflight
-   (confirm named symbols, exact file list) before implementation — includes the `FieldScopeSearch`
-   gate broadening locked in Build Log 129's 5d-i preflight (ADR-480 addendum).
-3. **5d-ii — Actual Work nudges:** follows 5d-i-b. Separate, Owner/Admin-configured Actual Work
+2. **5d-i-b — Actual Work assembly expansion, frontend:** Complete. `ActualWorkComposer` now
+   expands `OfferingAssembly` search results with optional items defaulted out, reports skipped
+   duplicate components, and reconciles a stale Draft token through the existing conflict path.
+   `FieldScopeSearch` now accepts `RequestsOperate` plus either capture permission. Build Log 129,
+   “5d-i-b implementation notes”; commit pending. 26 focused frontend tests, TypeScript check,
+   and 44 focused HTTP integration tests passing.
+3. **5d-ii — Actual Work nudges:** next. Separate, Owner/Admin-configured Actual Work
    rule set (same price-blind association shape as Proposed Scope's `ScopeNudgeRule`, not the same
    rows/table — factual-completion intent, not upsell), stateless eligibility filtering against the
    Draft, no persisted dismissal, explicit add via the ordinary single-line add path.

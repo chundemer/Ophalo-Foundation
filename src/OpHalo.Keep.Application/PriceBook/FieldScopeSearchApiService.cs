@@ -258,12 +258,17 @@ public sealed class FieldScopeSearchApiService(
         if (roleSnapshot is null)
             return Result.Failure(Forbidden);
 
+        var canCaptureScope = userAccessPolicy.IsPermitted(
+            roleSnapshot.Role, roleSnapshot.MembershipStatus, accountSnapshot.Purpose,
+            PermissionKeys.Keep.ScopeCapture);
+        var canCaptureActualWork = userAccessPolicy.IsPermitted(
+            roleSnapshot.Role, roleSnapshot.MembershipStatus, accountSnapshot.Purpose,
+            PermissionKeys.Keep.ActualWorkCapture);
+
         if (!userAccessPolicy.IsPermitted(
                 roleSnapshot.Role, roleSnapshot.MembershipStatus, accountSnapshot.Purpose,
                 PermissionKeys.Keep.RequestsOperate) ||
-            !userAccessPolicy.IsPermitted(
-                roleSnapshot.Role, roleSnapshot.MembershipStatus, accountSnapshot.Purpose,
-                PermissionKeys.Keep.ScopeCapture))
+            (!canCaptureScope && !canCaptureActualWork))
         {
             return Result.Failure(Forbidden);
         }

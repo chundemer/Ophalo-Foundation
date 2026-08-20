@@ -18,7 +18,7 @@ namespace OpHalo.IntegrationTests.Api;
 ///   GET /keep/pricebook/field/scope-search
 ///
 /// Covers the merged Active-catalog-item + Active/operationally-eligible-assembly result shape, the
-/// price-free wire contract, the RequestsOperate + ScopeCapture gate, and — the core correctness
+/// price-free wire contract, the RequestsOperate + (ScopeCapture or ActualWorkCapture) gate, and — the core correctness
 /// risk this endpoint exists to fix — that an eligible assembly is never lost behind an
 /// ineligible-heavy raw window, and that a cursor walk across a merged page never duplicates or
 /// skips a row in either stream.
@@ -110,6 +110,26 @@ public sealed class FieldScopeSearchApiTests : IClassFixture<KeepApiWebFactory>,
         Assert.Single(items);
         Assert.Equal(assemblyId, items[0].GetProperty("id").GetGuid());
         Assert.Equal("OfferingAssembly", items[0].GetProperty("kind").GetString());
+    }
+
+    [Fact]
+    public async Task Search_OperatorPermittedForActualWorkCapture_CanUseTheSharedFieldSearch()
+    {
+        // The current production role matrix grants the Operator both ScopeCapture and
+        // ActualWorkCapture. This proves the Actual Work caller's supported role path continues
+        // through this shared search surface; an ActualWorkCapture-only role does not yet exist
+        // to exercise as an HTTP principal.
+        var (accountId, ownerId, ownerCookie) = await SeedAccountAsync("actual-work-capture");
+        await EnrollAsync(accountId, ownerId);
+        var operatorId = await SeedOperatorAsync(accountId, "actual-work-capture");
+        var operatorCookie = await GetCookieAsync(operatorId, accountId);
+
+        var (itemId, _) = await CreateCatalogItemAsync(ownerCookie, "Actual Work Filter", "StandalonePrice", 10m, 20m, externalKey: null);
+
+        var response = await AuthRequest(operatorCookie).GetAsync("/keep/pricebook/field/scope-search?search=actual%20work");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Contains(body.GetProperty("items").EnumerateArray(), item => item.GetProperty("id").GetGuid() == itemId);
     }
 
     [Fact]

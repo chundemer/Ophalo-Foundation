@@ -193,10 +193,32 @@ recheck race proof, the one guarantee a full-stack HTTP test cannot express) plu
 skip-and-report, invalid-inclusion 400, stale-version 409, not-responsible 404, viewer-denied 403).
 66/66 Actual Work integration tests and 25/25 unit/architecture tests passing.
 
-**5d-i-b (frontend)** still needs its own mechanical preflight: exact file list for the composer/
-hook wiring plus the `FieldScopeSearchApiService` gate broadening (`RequestsOperate` and
-(`ScopeCapture` or `ActualWorkCapture`)) locked above — that gate change reopens ADR-480's exact
-composition and needs its own regression tests proving both callers.
+### 5d-i-b implementation notes — 2026-08-20
+
+Frontend assembly expansion is implemented. `ActualWorkComposer` now renders an explicit
+“Add assembly” affordance for an `OfferingAssembly` field-search result and calls the direct
+Actual Work expansion endpoint with an empty optional-inclusion list, preserving the locked
+optional-default-out behavior. Its result remains price-blind: the UI reports only generated-line
+and skipped-component counts, then awaits the normal Draft refresh before another mutation can
+use the refreshed concurrency version. A 409 follows the existing Actual Work reconcile path.
+
+The client uses separate `ExpandActualWorkAssemblyBody`/`ExpandActualWorkAssemblyResult` types,
+because the direct Actual Work response adds `skippedCatalogItemIds` and names its token
+`actualWorkConcurrencyVersion`; Proposed Scope's shape is not reusable without hiding that
+contract difference.
+
+`FieldScopeSearchApiService` now permits `RequestsOperate` plus either `ScopeCapture` or
+`ActualWorkCapture`, reopening ADR-480's exact composition as locked. The production role matrix
+currently grants both capture permissions together to every permitted role, so a literal
+ActualWorkCapture-only HTTP principal cannot be seeded without changing that unrelated matrix.
+The focused HTTP regression covers the supported Actual Work operator path and the existing
+ScopeCapture callers remain covered by the field-search suite.
+
+The preflight's eight-file estimate narrowed to six modified files after inspection: the existing
+Actual Work composer, not `useActualWorkCapture`, owns its line mutations and can await the same
+`onCommitted` Draft refresh directly; no hook or hook-test change is necessary. Tests: 26 focused
+frontend tests passing, TypeScript check passing, and 44 focused Field Scope Search/Actual Work
+HTTP integration tests passing. `git diff --check` clean.
 
 ### Pilot draft-concurrency decision
 
