@@ -221,6 +221,19 @@ duplicate-trigger uniqueness (both trigger types), the `ReplaceSuggestions`/`Sav
 cascade delete of suggestion rows, account-scoped listing, the composite-parent-FK cross-account
 rejection, and both database check constraints.
 
+### 5d-ii-b implementation notes — 2026-08-20
+
+Owner/Admin config API implemented and tested (5 production files, matching the locked estimate):
+`ActualWorkNudgeRuleConfigApiService` (List/Create/Update/Delete, mirroring
+`ScopeNudgeRuleConfigApiService`'s gate composition, existence-only write-time target checks, and
+per-rule CRUD shape exactly) and `ActualWorkNudgeRuleEndpoints` (thin route mapping under
+`/keep/pricebook/actual-work-nudge-rules`), plus DI registration
+(`IActualWorkNudgeRulePersistence` → `EfActualWorkNudgeRulePersistence`, first consumer) and two
+new explicit `ErrorHttpMapper` entries (`ActualWorkNudgeRule.TargetNotFound` → 404,
+`ActualWorkNudgeRule.DuplicateTrigger` → 409; `.NotFound` already covered by the generic suffix
+rule, remaining domain-shape errors fall through to the existing 400 default). 1 new test file
+(`ActualWorkNudgeRuleApiTests`, mirroring `ScopeNudgeRuleApiTests`), 17/17 passing.
+
 ### 5d-i-a implementation notes — 2026-08-20
 
 Backend expansion seam implemented and tested (7 production files, matching the locked estimate):
