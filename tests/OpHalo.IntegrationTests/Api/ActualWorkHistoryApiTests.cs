@@ -115,18 +115,24 @@ public sealed class ActualWorkHistoryApiTests : IClassFixture<KeepApiWebFactory>
     }
 
     [Fact]
-    public async Task GetHistory_ViewerWithoutActualWorkCapture_Returns403()
+    public async Task GetHistory_Viewer_ReturnsReadOnlyHistoryWithoutCaptureOrDraft()
     {
-        var (accountId, ownerId, ownerCookie) = await SeedAccountAsync("history-viewer-denied");
+        var (accountId, ownerId, ownerCookie) = await SeedAccountAsync("history-viewer-read-only");
         await EnrollAsync(accountId, ownerId);
         var requestId = await SeedRequestAsync(accountId);
         await SeedResponsibleAsync(requestId, accountId, ownerId);
-        var viewerId = await SeedViewerAsync(accountId, "history-viewer-denied");
+        await SeedSubmittedVisitAsync(accountId, requestId, ownerId);
+        await CreateDraftAsync(ownerCookie, requestId);
+        var viewerId = await SeedViewerAsync(accountId, "history-viewer-read-only");
         var viewerCookie = await GetCookieAsync(viewerId, accountId);
 
         var response = await AuthRequest(viewerCookie).GetAsync($"/keep/pricebook/actual-work/request/{requestId}/history");
 
-        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.False(body.GetProperty("canCaptureActualWork").GetBoolean());
+        Assert.Equal(JsonValueKind.Null, body.GetProperty("openDraft").ValueKind);
+        Assert.Equal(1, body.GetProperty("submittedVisits").GetArrayLength());
     }
 
     [Fact]

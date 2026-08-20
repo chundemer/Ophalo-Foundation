@@ -33,11 +33,11 @@ public sealed record ActualWorkSubmittedVisitEntry(
     DateTime? SubmittedAtUtc, IReadOnlyList<ActualWorkLineHistoryEntry> Lines);
 
 /// <summary><see cref="CanCaptureActualWork"/> disambiguates a null <see cref="OpenDraft"/>: it is
-/// true only when the caller is the request's active Responsible recorder (whether or not they
-/// have opened a Draft yet), false for any other visible caller (e.g. a watching Operator/Owner/
-/// Admin). The field capture UI must gate its "Record completed work" action on this, not on
-/// <c>OpenDraft is null</c> alone, or a non-Responsible watcher would see an action that fails
-/// 404/403 on create.</summary>
+/// true only when the caller is the request's active Responsible recorder and has both
+/// <c>RequestsOperate</c> and <c>ActualWorkCapture</c> (whether or not they have opened a Draft
+/// yet), false for any other visible caller (e.g. a Viewer or watching Operator/Owner/Admin). The
+/// field capture UI must gate its "Record completed work" action on this, not on <c>OpenDraft is
+/// null</c> alone, or a caller would see an action that fails 404/403 on create.</summary>
 public sealed record ActualWorkHistoryResult(
     bool CanCaptureActualWork, ActualWorkOpenDraftEntry? OpenDraft, IReadOnlyList<ActualWorkSubmittedVisitEntry> SubmittedVisits);
 
@@ -45,11 +45,11 @@ public sealed record ActualWorkHistoryResult(
 /// API-facing read orchestration for Actual Work visit history (Batch 5a, build-log/129):
 /// submitted visits are visible to any normally request-visible caller; the open Draft is visible
 /// only to the request's active-Responsible recorder (resume-after-reload — a bare create call
-/// cannot otherwise discover an already-open Draft). Gate 2 (Price Book entitlement) and gate 3
-/// (<c>RequestsOperate</c> AND <c>ActualWorkCapture</c>) mirror <see cref="ActualWorkDraftApiService"/>
-/// exactly; gate 1 is read-only (Blocked-only denies — <c>ReadOnly</c>, e.g. OffSeason, may still
-/// read), matching <see cref="ProposedScopeReadApiService"/>'s read policy rather than the mutation
-/// gate.
+/// cannot otherwise discover an already-open Draft). Gate 2 is the Price Book entitlement and
+/// gate 3 is <c>RequestsView</c>; capture permissions are separately required for the Draft
+/// affordance. Gate 1 is read-only (Blocked-only denies — <c>ReadOnly</c>, e.g. OffSeason, may
+/// still read), matching <see cref="ProposedScopeReadApiService"/>'s read policy rather than the
+/// mutation gate.
 /// </summary>
 public sealed class ActualWorkHistoryReadApiService(
     IActualWorkPersistence persistence,
@@ -75,14 +75,21 @@ public sealed class ActualWorkHistoryReadApiService(
             return Result<ActualWorkHistoryResult>.Failure(gate.Error);
 
         var request = await requestPersistence.GetRequestAsync(
-            requestId, currentUser.AccountId, currentUser.UserId, gate.Value, ct);
+            requestId, currentUser.AccountId, currentUser.UserId, gate.Value.Scope, ct);
         if (request is null)
             return Result<ActualWorkHistoryResult>.Failure(KeepRequestErrors.NotFound);
 
         ActualWorkOpenDraftEntry? openDraft = null;
         var isResponsible = await responsibleCheck.IsActiveResponsibleAsync(
-            requestId, currentUser.AccountId, currentUser.UserId, gate.Value, ct);
-        if (isResponsible)
+            requestId, currentUser.AccountId, currentUser.UserId, gate.Value.Scope, ct);
+        var canCaptureActualWork = isResponsible &&
+            userAccessPolicy.IsPermitted(
+                gate.Value.RoleSnapshot.Role, gate.Value.RoleSnapshot.MembershipStatus,
+                gate.Value.AccountPurpose, PermissionKeys.Keep.RequestsOperate) &&
+            userAccessPolicy.IsPermitted(
+                gate.Value.RoleSnapshot.Role, gate.Value.RoleSnapshot.MembershipStatus,
+                gate.Value.AccountPurpose, PermissionKeys.Keep.ActualWorkCapture);
+        if (canCaptureActualWork)
         {
             var draft = await persistence.GetOpenDraftForRequestAsync(currentUser.AccountId, requestId, ct);
             if (draft is not null)
@@ -92,7 +99,7 @@ public sealed class ActualWorkHistoryReadApiService(
         var submittedVisits = await persistence.GetSubmittedVisitsForRequestAsync(currentUser.AccountId, requestId, ct);
 
         return Result<ActualWorkHistoryResult>.Success(
-            new ActualWorkHistoryResult(isResponsible, openDraft, submittedVisits.Select(ToSubmittedVisitEntry).ToArray()));
+            new ActualWorkHistoryResult(canCaptureActualWork, openDraft, submittedVisits.Select(ToSubmittedVisitEntry).ToArray()));
     }
 
     private static ActualWorkOpenDraftEntry ToOpenDraftEntry(ActualWork visit) => new(
@@ -112,17 +119,16 @@ public sealed class ActualWorkHistoryReadApiService(
             .Select(l => new ActualWorkLineHistoryEntry(l.Id, l.DisplayNameSnapshot, l.UnitOfMeasureSnapshot, l.ActualQuantity, l.Note))
             .ToArray();
 
-    /// <summary>Returns the row-authorization scope (derived from role) on success. Gate 1 is
-    /// read-only — see class remarks — otherwise identical to
-    /// <see cref="ActualWorkDraftApiService"/>'s gate composition.</summary>
-    private async Task<Result<KeepRequestVisibilityScope>> AuthorizeAsync(CancellationToken ct)
+    /// <summary>Returns the request-visibility scope and resolved authorization facts on success.
+    /// Gate 1 is read-only — see class remarks.</summary>
+    private async Task<Result<ActualWorkHistoryAuthorization>> AuthorizeAsync(CancellationToken ct)
     {
         if (!currentUser.IsAuthenticated)
-            return Result<KeepRequestVisibilityScope>.Failure(Unauthorized);
+            return Result<ActualWorkHistoryAuthorization>.Failure(Unauthorized);
 
         var accountSnapshot = await snapshotPersistence.GetAccountAccessSnapshotAsync(currentUser.AccountId, ct);
         if (accountSnapshot is null)
-            return Result<KeepRequestVisibilityScope>.Failure(Forbidden);
+            return Result<ActualWorkHistoryAuthorization>.Failure(Forbidden);
 
         var accessContext = new AccountAccessContext(
             accountSnapshot.LifecycleState,
@@ -136,33 +142,45 @@ public sealed class ActualWorkHistoryReadApiService(
 
         var decision = accountAccessPolicy.Evaluate(accessContext);
         if (decision.IsBlocked)
-            return Result<KeepRequestVisibilityScope>.Failure(Forbidden);
+            return Result<ActualWorkHistoryAuthorization>.Failure(Forbidden);
 
         var featureContext = new AccountFeatureAccessContext(accountSnapshot.Plan);
         var enabled = await featureAccessResolver.IsEnabledAsync(
             currentUser.AccountId, featureContext, CapabilityPackageFeatureKeys.PriceBookQuotesMaterials, ct);
         if (!enabled)
-            return Result<KeepRequestVisibilityScope>.Failure(Forbidden);
+            return Result<ActualWorkHistoryAuthorization>.Failure(Forbidden);
 
         var roleSnapshot = await snapshotPersistence.GetAccountUserRoleSnapshotAsync(
             currentUser.AccountId, currentUser.UserId, ct);
         if (roleSnapshot is null)
-            return Result<KeepRequestVisibilityScope>.Failure(Forbidden);
+            return Result<ActualWorkHistoryAuthorization>.Failure(Forbidden);
 
         if (!userAccessPolicy.IsPermitted(
                 roleSnapshot.Role, roleSnapshot.MembershipStatus, accountSnapshot.Purpose,
-                PermissionKeys.Keep.RequestsOperate) ||
-            !userAccessPolicy.IsPermitted(
-                roleSnapshot.Role, roleSnapshot.MembershipStatus, accountSnapshot.Purpose,
-                PermissionKeys.Keep.ActualWorkCapture))
+                PermissionKeys.Keep.RequestsView))
+            return Result<ActualWorkHistoryAuthorization>.Failure(Forbidden);
+
+        KeepRequestVisibilityScope scope;
+        switch (roleSnapshot.Role)
         {
-            return Result<KeepRequestVisibilityScope>.Failure(Forbidden);
+            case AccountUserRole.Owner:
+            case AccountUserRole.Admin:
+            case AccountUserRole.Viewer:
+                scope = KeepRequestVisibilityScope.AccountWide;
+                break;
+            case AccountUserRole.Operator:
+                scope = KeepRequestVisibilityScope.MyWork;
+                break;
+            default:
+                return Result<ActualWorkHistoryAuthorization>.Failure(Forbidden);
         }
 
-        var scope = roleSnapshot.Role is AccountUserRole.Owner or AccountUserRole.Admin
-            ? KeepRequestVisibilityScope.AccountWide
-            : KeepRequestVisibilityScope.MyWork;
-
-        return Result<KeepRequestVisibilityScope>.Success(scope);
+        return Result<ActualWorkHistoryAuthorization>.Success(
+            new ActualWorkHistoryAuthorization(scope, roleSnapshot, accountSnapshot.Purpose));
     }
+
+    private sealed record ActualWorkHistoryAuthorization(
+        KeepRequestVisibilityScope Scope,
+        FoundationAccountUserRoleSnapshot RoleSnapshot,
+        AccountPurpose AccountPurpose);
 }
