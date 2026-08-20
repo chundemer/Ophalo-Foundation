@@ -1,7 +1,7 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-08-20 (Direct Actual Work — Batch 3 draft API/authorization implemented and
-reviewed; Batch 4 submission/review signal next)
+**Last updated:** 2026-08-20 (Direct Actual Work — Batch 4 submission/review signal implemented and
+reviewed; Batch 5 field capture UI next)
 **Deployment posture:** Not pilot-ready.
 **Source of truth for acceptance criteria:** `docs/pilot-readiness-bug-tracker.md`.
 
@@ -158,6 +158,33 @@ still produces a valid catalog-linked/unsnapshotted or catalog-linked/snapshotte
 per build-log/129's three-state design, since a technician may record work against an item since
 deactivated. 26/26 focused Actual Work integration tests and 14/14 architecture tests passing;
 `git diff --check` clean.
+
+**Batch 4 (submission and review signal) is implemented and reviewed (2026-08-20, commit
+`2e4e88c`).** `IActualWorkSubmissionPersistence`/`EfActualWorkSubmissionPersistence` own the atomic
+submit transaction — account-scoped `Include(Lines)` load, optimistic-concurrency check, a
+`SELECT ... FOR UPDATE` terminal-request lock, the pure `ActualWork.Submit` domain transition, and
+the ADR-463 `KeepRequestWorkSignal` raise/reopen upsert under the new
+`actual_work_needs_office_review` signal key (same `price_book_quotes_materials` module as
+`proposed_scope_needs_office_review`) — all inside one transaction, mirroring
+`IProposedScopeSubmissionPersistence` exactly. `SubmitActualWorkService` is a thin, account-scoped
+outcome-to-`Result` mapper with no row-authorization concern of its own.
+`ActualWorkDraftApiService.SubmitAsync` reuses the existing `AuthorizeAndLoadDraftAsync` helper for
+the three-gate auth stack plus the active-Responsible row-authorization check, then duplicates the
+zero-line/blank-note/null-outcome/undefined-outcome pre-check at the API boundary per build-log/129
+(fails fast with 400 before the atomic transaction opens; the persistence-layer domain call remains
+the authoritative, race-safe enforcement against a concurrent line add/remove). The
+`POST /keep/pricebook/actual-work/{id}/submit` route accepts `Outcome` as a `string?` parsed via
+`Enum.TryParse<ActualWorkOutcome>(ignoreCase: true)`, matching this codebase's existing string-enum
+wire convention (`ProposedScopeLineType`/`CatalogItemType`/`PriceTreatment`) rather than a raw
+numeric enum — no global JSON string-enum converter is configured. **7 production files (5 edited,
+2 new) plus 2 test files**, within gate. 45/45 focused Actual Work integration tests and 14/14
+architecture tests passing; `git diff --check` clean. **Review correction (non-blocking, noted for
+the next test-writing session):** the new persistence suite has 11 tests, not the originally
+reported 13, and proves successful zero-line submission only for the `DiagnosticOnly` outcome at
+the persistence layer — `NoWorkAuthorized`/`NoAccess` zero-line success is covered by domain tests
+plus one HTTP-level `NoAccess` test, not independently at the persistence layer. Batch 5 (field
+capture UI: Request Detail composer, client API/types, retry/error behavior, read-only submitted
+visit history) is next.
 
 **Pilot communications and feedback: required for pilot activation (2026-08-19).** [Build Log
 104](build-log/104-mixed-contractor-pilot-go-live-roadmap.md) promotes authenticated Pilot Updates
