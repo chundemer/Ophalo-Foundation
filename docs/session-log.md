@@ -44,8 +44,26 @@ dispatch context.
 **Plan:** perform a mechanical ownership-remediation preflight for the explicit recorder field and
 transfer audit, then audit/replace every active-Responsible gate and affected UI copy in bounded
 migration, authorization/API, transfer, and frontend/test batches. [GAP-055](pilot-readiness-bug-tracker.md#gap-055--actual-work-capture-is-incorrectly-blocked-by-dispatch-assignment)
-is the authoritative acceptance and sequencing record. **5d-ii-d remains paused** until that
-correction is implemented; it must not absorb this cross-cutting work.
+is the authoritative acceptance and sequencing record. **5d-ii-d was paused pending this
+correction; the correction is now complete (Batches A–D below) and 5d-ii-d is unpaused.**
+
+**GAP-055 remediation batches:**
+
+| Batch | Status | Durable record |
+|---|---|---|
+| A — domain + migration (`RecorderAccountUserId`, `TransferRecorder`) | Complete | commit `b3b3d41` |
+| B — Draft mutation/expand authorization swap | Complete | commit `d26b955` |
+| C — history/nudge read seams, `IActiveResponsibleCheck` removed | Complete | commit `72ce6a5` |
+| D — Owner/Admin transfer API + audit event | Complete | commit `c7ce822` |
+
+A/B/C replace every active-Responsible authorization check with a direct
+`RecorderAccountUserId` comparison across create, edit, discard, submit, assembly expansion, and
+nudge read; the open Draft is now also visible read-only to Owner/Admin (not just its recorder) via
+a new `IsRecorder` flag on the history read response. D adds
+`POST /keep/pricebook/actual-work/{actualWorkId}/transfer-recorder` — Owner/Admin-only,
+reason-required, recording an immutable `ActualWorkDraftRecorderTransfer` audit row atomically with
+the `RecorderAccountUserId` change. **GAP-055 remediation is complete; 5d-ii-d is unpaused** and is
+the next approved slice.
 
 Prior implementation rules, now superseded:
 
@@ -148,8 +166,9 @@ eligibility, deduplication, dismissal, explicit-add, and Draft-concurrency contr
       retained); account posture is Blocked-only. Add reuses
       `ActualWorkDraftApiService.AddLineAsync`; no new mutation handler. 4 production files, 1 new
       test file, 11/11 passing.
-   5. **5d-ii-d — frontend:** Paused by GAP-055's reopened Draft-ownership decision. Build Log 129,
-      "5d-ii-d implementation preflight". 3 production files (`apiClient.types.ts`, `apiClient.ts`,
+   5. **5d-ii-d — frontend:** Unpaused — GAP-055's Draft-ownership remediation (Batches A–D) is
+      complete. Build Log 129, "5d-ii-d implementation preflight". 3 production files
+      (`apiClient.types.ts`, `apiClient.ts`,
       `ActualWorkComposer.tsx`), 1 test file; 0 new mutation families (reuses `addActualWorkLine`/
       `expandActualWorkAssembly`). Nudge state/fetch inline in `ActualWorkComposer.tsx`, mirroring
       `ComposerNudgePanel`'s UX only (session-only chips, client-side Dismiss), not its file split.
