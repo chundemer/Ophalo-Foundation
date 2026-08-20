@@ -8,38 +8,55 @@ preflight and acceptance evidence
 ## Purpose and release posture
 
 The next-week release is a **controlled parallel field pilot**, not the full mixed-contractor
-cutover described in Build 104. Keep will capture factual field visits while the contractor's
-existing paper/software workflow remains the authority for estimates, invoices, payments, and
-accounting.
+cutover described in Build 104. For the named pilot technicians, Keep is the normal primary field
+record for supported jobs. The contractor's existing paper/software workflow remains the authority
+for estimates, invoices, payments, and accounting.
 
-This posture creates a safe way to test whether Keep improves the field record without risking the
-business's ability to bill. It does not lower the standards for authorization, tenant isolation,
-data integrity, error handling, or production verification.
+This posture removes routine technician dual entry while preserving billing continuity. It does not
+lower the standards for authorization, tenant isolation, data integrity, error handling, or
+production verification.
 
 ```text
-Technician completes visit
-        -> records factual Actual Work in Keep
-        -> continues normal ticket/billing process outside Keep
-Office compares the two records during the pilot
-        -> records gaps, friction, and reliability findings
+Pilot technician completes visit
+        -> records factual Actual Work in Keep (the normal field record)
+        -> Owner/Admin reviews work and financials in Keep
+        -> office creates billing in the existing system from the reviewed Keep record
+Keep unavailable
+        -> existing ticket is the explicit exception fallback
+        -> technician enters/retries Keep once connection is restored
 ```
 
-## Required next-week scope
+## Pilot operating model
 
-1. **Request Work Context.** Staff can classify a request as `Residential` or `Commercial` before
-   assigning field responsibility. Commercial context stays launch-minimum: on-site contact and
-   PO/work-order reference where needed. No property hierarchy or authorization engine.
+Start with one or two named technicians and supported service/repair work. Multi-technician work
+is allowed: the active Responsible user records the single Actual Work visit and remains
+accountable for job details; other technicians do not create parallel field records. Keep is not a
+routine second entry for field staff. The office continues its normal accounting/billing entry from
+the Owner/Admin-reviewed Keep record until the later CSV handoff is released.
 
-2. **Direct Actual Work MVP.** An authorized field user can start **Record completed work** from a
+## Completed foundation
+
+**Work Context storage foundation.** `KeepRequest` now durably stores
+`Unclassified`/`Residential`/`Commercial`; existing requests migrate truthfully to
+`Unclassified`, and both creation factories remain backward compatible. This is a safe data
+foundation only. It adds no pilot-visible selection, label, correction, list filter, assignment
+gate, commercial fields, or workflow behavior.
+
+## Required next-week scope, in delivery order
+
+1. **Direct Actual Work MVP.** An authorized field user can start **Record completed work** from a
    request and submit one price-blind, per-visit factual record. It supports catalog or explicit
    custom lines, actual quantities, a field note where needed, recorder identity, and visit
-   timestamp. Submitted visits are immutable history; office users can read them.
+   timestamp. Submission raises an Owner/Admin Actual Work Review queue item. The office review
+   shows the factual visit alongside its Price Book-backed sales price, Standard/Expected Direct
+   Cost, margin, totals, and any financially incomplete line; it records the office reviewer and
+   review time. Field capture remains price-blind.
 
-3. **Diagnostic/no-work safeguard.** A zero-line visit is allowed only with a required completion
+2. **Diagnostic/no-work safeguard.** A zero-line visit is allowed only with a required completion
    note and one truthful outcome: `DiagnosticOnly`, `NoWorkAuthorized`, or `NoAccess`. It must
    never silently represent a $0 billable job.
 
-4. **Production error and usage insight.** Complete the errors-only Sentry slice with release and
+3. **Production error and usage insight.** Complete the errors-only Sentry slice with release and
    correlation metadata, strict removal of PII/secrets/tokens, and founder alert routing. Retain
    the existing health/readiness and correlated server-log path. Add only privacy-safe pilot usage
    counters/events needed for daily operations: sign-in, request created, Actual Work draft
@@ -47,34 +64,46 @@ Office compares the two records during the pilot
    No session replay, tracing, user profiling, general product analytics platform, or customer
    content capture is authorized.
 
-5. **Feedback and operating loop.** Provide an authenticated Report Friction path, or an equally
+4. **Feedback and operating loop.** Provide an authenticated Report Friction path, or an equally
    visible in-app support route that records enough account/screen context for follow-up without
    capturing customer free text by default. Name an owner for daily review of error alerts,
    failed-submission counts, usage, and reported friction.
 
-6. **Final pilot UI-quality pass.** Review the real pilot paths on phone, tablet, and desktop:
+5. **Final pilot UI-quality pass.** Review the real pilot paths on phone, tablet, and desktop:
    sign-in, request discovery, field capture, diagnostic submission, office history, error/empty/
    loading states, and feedback. Resolve wireframe signals such as placeholder/developer copy,
    raw identifiers, dead controls, weak hierarchy, inconsistent visual tokens, inaccessible focus
    behavior, or insufficient touch targets. This is a targeted acceptance pass, not a general
    redesign.
 
-7. **Production rehearsal and parallel-run guide.** Rehearse the deployed end-to-end flow,
+6. **Production rehearsal and parallel-run guide.** Rehearse the deployed end-to-end flow,
    including a normal repair and a diagnostic-only visit. Verify error reporting/alert routing and
-   the feedback route. Give technicians a concise instruction to record the visit in Keep and to
-   continue the existing ticket/billing process. Name the support and escalation owner.
+   the feedback route. Give technicians a concise instruction that Keep is the primary field
+   record, with the existing ticket process used only when Keep is unavailable. Name the support
+   and escalation owner.
 
 ## Explicitly deferred from next week
 
 - Owner/Admin Proposed Work Review queue and **Mark reviewed** transition.
-- Commercial estimates, quotes, pricing, costs, margin, and customer approval flows.
+- Commercial estimates, customer quote/approval flows, and accounting closeout/reconciliation
+  decisions beyond the required Owner/Admin Actual Work financial review.
 - Owner/Admin Actual Work closeout, CSV export, invoice/reference capture, and reconciliation.
 - QuickBooks integration, invoicing, payments, tax, inventory, photos, routing, and offline
   mutation queues.
+- User-facing Work Context: staff selection/correction, request detail/list display or filter,
+  Responsible-assignment gate, and commercial on-site-contact/PO fields.
 
 Proposed Work is deferred only from this narrow field-capture release. It remains the next office
 workflow for recommendations that need a decision; it is not required for a technician to record
 a repair already completed.
+
+## Post-pilot expansion candidates
+
+Pilot evidence—not the existence of the storage field—determines whether Work Context grows.
+If residential/commercial distinctions prove useful, begin with a simple staff-visible label and
+authorized correction on request detail. Consider list filtering, commercial facts, or a
+Responsible-assignment gate only after the pilot establishes a concrete operational need. None is
+an implied Day-1 requirement.
 
 ## Evidence and adjustment checkpoint
 

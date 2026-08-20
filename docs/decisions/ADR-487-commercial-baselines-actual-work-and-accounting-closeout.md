@@ -2,6 +2,7 @@
 
 **Status:** Locked  
 **Date:** 2026-08-17  
+**Amended:** 2026-08-19 — controlled parallel-pilot Actual Work foundation
 **Related:** ADR-453, ADR-456, ADR-463, ADR-465, ADR-473, ADR-475, ADR-478; Build Logs 116, 117, 126
 
 ## Decision
@@ -45,6 +46,31 @@ totals. At review, Owner/Admin classifies the difference as an internal variance
 addition requiring appropriate revised/customer authorization, or work included under an existing
 time-and-materials authorization. Actual work must never silently revise a customer-facing
 commercial commitment.
+
+### Controlled parallel-pilot foundation
+
+For the controlled field pilot, the durable foundation is the distinct, request-bound Actual Work
+visit and its immutable submitted factual lines. Price blindness belongs to the **field-capture
+action**, not to a user's permanent role: an authorized Owner or Admin performing field work has
+the same price-blind capture experience as an authorized Operator, while Owner/Admin financial
+review is the separate office action that follows field submission in the pilot.
+
+For the pilot, the request's active Responsible user is the sole field recorder and owns its one
+open Draft visit; that user may be an Owner, Admin, or Operator. The Responsible recorder may
+create, edit, or discard the Draft visit. Multi-technician work remains supported: the Responsible
+recorder records the one visit and is accountable for its job details; other technicians do not
+create parallel Actual Work drafts. Submitted visits are immutable. This pilot does not
+introduce cross-user draft takeover, a linked
+``correct prior visit`` workflow, or silent submitted-record editing. Those are viable future
+workflows, but each requires an explicit later product decision and cannot be inferred from the
+existence of an immutable visit record.
+
+Submission raises an additive Actual Work needs office review signal. Owner/Admin review the
+submitted factual visit through an actionable queue, see its Price Book-backed sales price,
+Standard/Expected Direct Cost, margin, totals, and any incomplete financial data, then record an
+office review. Review is not customer approval, invoicing, export, payment, or reconciliation.
+The signal resolves only after all submitted visits on the request are reviewed. The later CSV
+handoff builds on this reviewed work; it does not require a new field-record model.
 
 ### Cost and closeout truthfulness
 
@@ -101,6 +127,11 @@ The later Actual Work and closeout preflights must lock the following before cod
 - The first implementation preflight remains Owner/Admin proposed-work review queue/workbench and
   retained scope history. It must not silently implement Actual Work or closeout while defining the
   review contract.
+
+**Amended 2026-08-19:** Build Log 131 now makes Direct Actual Work the active next-week parallel
+pilot priority. Its implementation preflight must deliver a bounded end-to-end field-capture and
+office-history batch, not a persistence-only slice; Proposed Work Review and closeout remain
+separate deferred workflows for this release.
 
 ## Non-goals
 

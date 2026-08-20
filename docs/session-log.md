@@ -49,17 +49,13 @@ Later Actual Work/closeout preflights must lock snapshot-based cloning across ca
 multi-visit versus mutable-draft lifecycle, hard-blocked unpriced direct-actual accounting export,
 and per-line field-recorder attribution before code begins.
 
-**Launch-minimum Residential / Commercial request work context: required before mixed-pilot
-go-live; preflight required before implementation.** [Build Log
-128](build-log/128-request-work-context-launch-minimum-preflight.md) records the narrow
-request-level `Residential`/`Commercial`/`Unclassified` qualification path. It is operational
-context—not account commercial standing, a permission, a quote requirement, or a separate B2B
-product. Staff-created requests select Residential or Commercial; public intake begins
-Unclassified; staff must classify before assigning an Operator as Responsible while still being able to
-acknowledge and communicate promptly. Commercial requests retain optional on-site contact name,
-phone, and PO/work-order reference; they do not introduce a property hierarchy or authorization
-engine. Complete this path before additional Price Book workbench features for the mixed
-residential/commercial pilot.
+**Work Context: storage foundation complete; user-facing workflow deferred from the controlled
+parallel field pilot (2026-08-19).** [Build Log 128](build-log/128-request-work-context-launch-minimum-preflight.md)
+now records prior discovery, not an active next-week requirement. Slice 1 safely persists
+`Residential`/`Commercial`/`Unclassified` and migrates existing data to `Unclassified`; it has no
+UI or behavior. The previously described staff selection/correction, list display/filter,
+Responsible-assignment gate, and commercial facts were not explicitly approved as Day-1 business
+needs, so are deferred for pilot evidence. Actual Work and operational insight take priority.
 
 **Authoritative mixed-contractor pilot delivery order: Build 104 amended (2026-08-18).**
 [Build Log 104 — Mixed Contractor Pilot Go-Live Roadmap](build-log/104-mixed-contractor-pilot-go-live-roadmap.md) is the single roadmap
@@ -75,24 +71,37 @@ explicit decision promotes it.
 
 **Next-week controlled parallel field pilot: locked as the working delivery target (2026-08-19).**
 [Build Log 131](build-log/131-next-week-parallel-field-pilot-plan.md) narrows next week's release
-to Request Work Context, price-blind per-visit Direct Actual Work, the zero-line diagnostic/no-work
-safeguard, production error/usage insight, a feedback route, final cross-device UI-quality review,
-and a deployed rehearsal with an explicit parallel-run guide. The contractor's current
+to price-blind per-visit Direct Actual Work, the zero-line diagnostic/no-work safeguard,
+production error/usage insight, a feedback route, final cross-device UI-quality review, and a
+deployed rehearsal with an explicit parallel-run guide. The contractor's current
 paper/software process remains the billing, invoicing, and accounting authority. Proposed Work
 Review, commercial pricing, closeout, CSV export, and reconciliation are deferred from this
 narrow release—not cancelled from the Build 104 roadmap. At the end of the current week, adjust
 scope only against recorded implementation/release evidence, a retained operational fallback, and
 a clear acceptance gate; do not convert remaining work into an unsafe cutover.
 
-**Active next session — Request Work Context, Slice 1 complete (2026-08-19).**
-The product preflight is [Build Log 128](build-log/128-request-work-context-launch-minimum-preflight.md).
-Mechanical implementation preflight is complete. Slice 1 — durable `WorkContext`
+**Work Context, Slice 1 complete (2026-08-19).** The product preflight is
+[Build Log 128](build-log/128-request-work-context-launch-minimum-preflight.md). Mechanical
+implementation preflight is complete. Slice 1 — durable `WorkContext`
 (`Residential`/`Commercial`/`Unclassified`) state on `KeepRequest`, EF configuration, migration, and
 backward-compatible factory wiring — is reviewed, approved, and complete. Slices 2–3 remain
-unapproved: staff enforcement, classification/correction, assignment gate, list projection/filter,
-and UI. Do **not** begin Direct Actual Work implementation until the full user-visible Work Context
-workflow (Slices 2–3) is reviewed and accepted. Build 129 is the following product preflight; it
-likewise requires its own mechanical implementation preflight before code.
+unapproved and are deferred from this pilot: staff selection/correction, assignment gate, list
+projection/filter, and commercial facts. Do **not** infer a future workflow from the storage field.
+
+**Active next session — Direct Actual Work mechanical implementation preflight (2026-08-19).**
+[Build Log 129](build-log/129-direct-actual-work-and-accounting-handoff-preflight.md) is the locked
+product boundary. The next session must turn it into one bounded, end-to-end implementation plan:
+field start/draft/submit, Owner/Admin Actual Work Review queue, Price Book-backed financial review,
+and office history; immutable visit/line storage, zero-line safeguards, authorization/visibility,
+concurrency, migration, API/UI seams, and acceptance tests. Its output must be a
+persona-complete vertical batch, not another isolated persistence-only slice. **Locked:** one open
+Draft visit per request, owned by its active Responsible user; multiple technicians do not create
+parallel drafts for this pilot. An Owner/Admin can be that Responsible recorder and uses the same
+price-blind capture action, then reviews price/cost/margin/totals through the separate office
+surface. Takeover/correction workflows, export, and reconciliation are later options; office
+financial review is required pilot scope. For one or two named pilot technicians, Keep is the
+normal primary field record; the existing ticket process is only the explicit connectivity/failure
+fallback while the office continues billing from reviewed Keep work until CSV handoff ships.
 
 **Pilot communications and feedback: required for pilot activation (2026-08-19).** [Build Log
 104](build-log/104-mixed-contractor-pilot-go-live-roadmap.md) promotes authenticated Pilot Updates

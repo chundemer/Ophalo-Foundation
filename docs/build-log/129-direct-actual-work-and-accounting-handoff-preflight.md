@@ -68,6 +68,47 @@ no-charge.
   collection activity.
 - Margin is an Owner/Admin closeout view, not an accounting-export column by default.
 
+## Controlled parallel-pilot implementation addendum — 2026-08-19
+
+The next-week release implements the complete technician-to-office loop: price-blind factual field
+capture, an Owner/Admin Actual Work Review queue, and Owner/Admin financial review sourced from
+the Price Book. It must be an end-to-end vertical batch, not an isolated schema foundation.
+
+### Locked pilot guardrails
+
+- The request's active **Responsible** user is the sole field recorder for the pilot. That user
+  may be an Owner, Admin, or Operator; an Owner/Admin assigned as Responsible uses the same
+  price-blind capture surface as an Operator, and role does not expose financial fields there.
+- There is one open Draft visit per request, owned by its Responsible recorder. The recorder may
+  create, edit, or discard it. Submitted visits and their factual lines are immutable.
+- Multi-technician work is supported without parallel drafts: the active Responsible user records
+  the single visit and remains accountable for its job details; other technicians do not create
+  their own Actual Work record for that request in this pilot.
+- No cross-user Draft **Take over** action, cross-user Draft edit, linked **Correct prior visit**
+  workflow, silent submitted-record edit, closeout, or export is in this pilot. These are
+  explicitly deferred product options, not missing implementation.
+- Submitting a visit raises an additive Actual Work needs office review signal. Owner/Admin sees
+  it in an Actual Work Review queue and can mark the submitted visit reviewed, recording reviewer,
+  time, and an optional internal note. The signal resolves only when no submitted visit on the
+  request remains unreviewed. Review is not an invoice, customer approval, export, or payment fact.
+- The field capture surface is Request Detail's **Record completed work** action. The Owner/Admin
+  review surface shows immutable visit history plus Price Book-backed sales price,
+  Standard/Expected Direct Cost, margin, totals, and clear incomplete-financial-data cues. No new
+  top-level navigation is added; the review queue is the office's actionable entry point.
+- Actual Work mutations follow the existing Price Book account entitlement plus request-operation
+  authority pattern. The mechanical preflight confirms the exact existing permission composition
+  at the endpoint/service seam; it does not create a new pilot-specific role or gate.
+
+### Pilot draft-concurrency decision
+
+The pilot locks **one open Draft visit per request**. If multiple technicians are present, the
+assigned Responsible user remains accountable for the job details and records the one field visit.
+The pilot does not introduce independent second-technician drafts, a shared draft, or takeover.
+
+All remaining items are mechanical-preflight choices constrained by this document and ADR-487:
+aggregate/table names, API/DTO shape, version header, persistence transaction, exact read
+visibility query, and focused authorization/concurrency/failure tests.
+
 ## Required mechanical-preflight decisions
 
 1. Exact Actual Work aggregate/table names, status transitions, concurrency contract, and whether

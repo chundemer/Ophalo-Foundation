@@ -1,7 +1,9 @@
 # Build Log 128 — Residential / Commercial Request Work Context: Launch-Minimum Preflight
 
-**Status:** Required before mixed residential/commercial pilot go-live — implementation not yet authorized  
+**Status:** Prior discovery/preflight — only persistence foundation implemented; user-facing scope
+deferred from the controlled parallel field pilot
 **Date:** 2026-08-18  
+**Amended:** 2026-08-19
 **Related:** Build Logs 101, 104, 126; ADR-487
 
 ## Purpose
@@ -11,7 +13,18 @@ first-class work context so staff can qualify, route, and later reconcile the wo
 business workflow from free text. This is a request fact, not an account commercial-state field, a
 permission, or a property-management product.
 
-## Launch-minimum decision
+## Controlled-pilot amendment
+
+The original launch-minimum workflow below was not explicitly approved as a Day-1 business need.
+For the next-week controlled parallel field pilot, only the safe storage foundation is retained:
+the `WorkContext` enum/property, `Unclassified` default, backward-compatible creation factories,
+and database migration. No user-facing control or behavior from the original scope is included.
+
+The field is not a commitment to a future dispatch rule. After pilot evidence, decide separately
+whether to add a staff-visible label/correction first, and whether any list filtering, commercial
+facts, or responsibility-assignment gate solves a demonstrated operational problem.
+
+## Original launch-minimum discovery
 
 Each request carries one of these values:
 

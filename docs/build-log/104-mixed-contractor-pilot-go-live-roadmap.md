@@ -52,6 +52,12 @@ platform.
 
 ## Authoritative mixed-contractor pilot roadmap — 2026-08-18
 
+**Controlled-pilot amendment (2026-08-19):** The must-ship sequence below remains the target for
+the later full mixed-contractor pilot. [Build Log 131](131-next-week-parallel-field-pilot-plan.md)
+supersedes it only for next week's limited parallel field pilot: Work Context has a storage
+foundation but its unapproved user-facing workflow is deferred; Direct Actual Work and production
+operational insight are the immediate priorities.
+
 This section supersedes earlier implied delivery ordering in this document. It is the single
 working path to pilot go-live; each numbered item still requires its own bounded mechanical
 preflight, implementation review, and acceptance evidence.
