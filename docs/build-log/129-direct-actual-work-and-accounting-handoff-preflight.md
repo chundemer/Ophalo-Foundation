@@ -234,6 +234,42 @@ new explicit `ErrorHttpMapper` entries (`ActualWorkNudgeRule.TargetNotFound` →
 rule, remaining domain-shape errors fall through to the existing 400 default). 1 new test file
 (`ActualWorkNudgeRuleApiTests`, mirroring `ScopeNudgeRuleApiTests`), 17/17 passing.
 
+### 5d-ii-c implementation notes — 2026-08-20
+
+Technician field-read API implemented and tested (4 production files, matching the locked estimate):
+`ActualWorkNudgeFieldReadApiService` (mirrors `ScopeNudgeFieldReadApiService`'s trigger-parse/
+rule-lookup/eligibility-filter shape) and `ActualWorkNudgeFieldReadEndpoints` (thin route mapping,
+`GET /keep/pricebook/actual-work/{actualWorkId}/nudge-suggestions`), plus route registration in
+`Program.cs` and DI registration in `KeepServiceCollectionExtensions.cs`. No new mutation handler —
+explicit add reuses `ActualWorkDraftApiService.AddLineAsync` directly (frontend wiring is 5d-ii-d).
+No new `ErrorHttpMapper` entries — `ActualWork.NotDraft` and the generic `.NotFound` suffix rule
+already cover every failure path.
+
+Two decisions locked during preflight, since the mirror target's model didn't resolve them cleanly:
+
+1. **Authorization mirrors `ActualWorkDraftApiService`, not ScopeNudge's row-visibility read.** The
+   gate composition and row authorization reuse `AuthorizeAndLoadDraftAsync`'s pattern exactly
+   (`RequestsOperate` + Price Book entitlement + `ActualWorkCapture`, then
+   `IActiveResponsibleCheck.IsActiveResponsibleAsync` against the Draft's `RequestId`) because an
+   Actual Work Draft is exclusive to its active Responsible participant, unlike a ProposedScope's
+   broader row-visibility read. A non-Responsible caller gets `KeepRequestErrors.NotFound`; a
+   non-Draft visit gets `ActualWorkErrors.NotDraft` — both indistinguishable from every other Draft
+   mutation's failure shape.
+2. **Dedupe suppresses only catalog-item suggestions already on the Draft.** `ActualWorkLine` retains
+   no `OfferingAssemblyId` (assembly provenance is discarded after expansion), so suggestion dedupe
+   matches only `SuggestedCatalogItemId` against the Draft's existing lines' `CatalogItemId`.
+   Assembly-targeted suggestions are never suppressed by this endpoint; partial/full prior expansion
+   is reported by the existing expand-assembly endpoint's skip-and-report result instead.
+3. **Account posture is Blocked-only**, matching `ScopeNudgeFieldReadApiService`'s read gate (not
+   `ActualWorkDraftApiService`'s mutation Blocked||ReadOnly posture) — price-blind, non-mutating
+   availability data; a read-only account may see suggestions even though the later add action stays
+   unavailable until the account leaves read-only.
+
+11 new HTTP integration tests (`ActualWorkNudgeFieldReadApiTests`), 11/11 passing against real
+PostgreSQL: happy path, ineligible suggestion omitted, catalog-item dedupe, assembly suggestion never
+suppressed, ineligible trigger, no rule configured, missing/combined trigger parameters, non-
+Responsible caller, submitted (non-Draft) visit, and missing entitlement.
+
 ### 5d-i-a implementation notes — 2026-08-20
 
 Backend expansion seam implemented and tested (7 production files, matching the locked estimate):

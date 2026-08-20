@@ -57,6 +57,7 @@ Locked pilot rules:
 | 5d-ii-a1 — nudges domain + persistence contract | Complete | Build Log 129; commit `aa76a9e` |
 | 5d-ii-a2 — nudges EF persistence + migration | Complete | Build Log 129; commit `6984768` |
 | 5d-ii-b — nudges Owner/Admin config API | Complete | Build Log 129; commit `a1d6478` |
+| 5d-ii-c — nudges technician field-read API | Complete | Build Log 129; commit `b4cf5b0` |
 
 5b shipped with both lifecycle corrections already fixed and regression-tested in the same commit:
 the submitted confirmation no longer unmounts on the post-submit history refresh, and a create-time
@@ -121,8 +122,14 @@ eligibility, deduplication, dismissal, explicit-add, and Draft-concurrency contr
       notes". Create/Update/Delete + list, mirroring `ScopeNudgeRuleConfigApiService`/
       `ScopeNudgeRuleEndpoints` exactly, gated `PriceBookCatalogManage`. 5 production files, 1 new
       test file, 17/17 passing.
-   4. **5d-ii-c — technician field-read API.** Add reuses `ActualWorkDraftApiService.AddLineAsync`;
-      no new mutation handler.
+   4. **5d-ii-c — technician field-read API:** Complete. Build Log 129, "5d-ii-c implementation
+      notes". `ActualWorkNudgeFieldReadApiService`, `ActualWorkNudgeFieldReadEndpoints`
+      (`GET /keep/pricebook/actual-work/{actualWorkId}/nudge-suggestions`). Authorization mirrors
+      `ActualWorkDraftApiService`'s active-Responsible gate (not ScopeNudge's row-visibility read);
+      dedupe suppresses only catalog-item suggestions already on the Draft (no assembly provenance
+      retained); account posture is Blocked-only. Add reuses
+      `ActualWorkDraftApiService.AddLineAsync`; no new mutation handler. 4 production files, 1 new
+      test file, 11/11 passing.
    5. **5d-ii-d — frontend.** Fetch/render nudge suggestions in `ActualWorkComposer`, tap-to-add.
 4. **6 — Owner/Admin review mutation:** mark reviewed with reviewer/time/optional internal note,
    then atomically resolve the Actual Work signal only when no submitted visit remains unreviewed.
