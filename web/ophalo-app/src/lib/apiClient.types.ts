@@ -1164,8 +1164,9 @@ export interface ActualWorkSubmittedVisitEntry {
 }
 
 /** `canCaptureActualWork` disambiguates a null `openDraft`: true only when the caller is the
- * request's active Responsible recorder (whether or not a Draft is open yet) — the capture UI
- * must gate on this, not on `openDraft === null` alone, or a non-Responsible watcher would see an
+ * request's active Responsible recorder AND holds `RequestsOperate` and `ActualWorkCapture`
+ * (whether or not a Draft is open yet) — the capture UI must gate on this, not on
+ * `openDraft === null` alone, or a caller without capture permission (e.g. a Viewer) would see an
  * action that fails on create. */
 export interface ActualWorkHistoryResult {
   canCaptureActualWork: boolean;

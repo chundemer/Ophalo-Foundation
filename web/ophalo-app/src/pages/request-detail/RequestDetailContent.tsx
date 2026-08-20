@@ -13,6 +13,8 @@ import { ProposedScopeCard } from "./ProposedScopeCard";
 import { ProposedScopeComposer } from "./ProposedScopeComposer";
 import { useActualWorkCapture } from "./useActualWorkCapture";
 import { ActualWorkCard } from "./ActualWorkCard";
+import { useActualWorkHistory } from "./useActualWorkHistory";
+import { ActualWorkHistoryCard } from "./ActualWorkHistoryCard";
 import { ActualWorkComposer } from "./ActualWorkComposer";
 
 interface RequestDetailContentProps extends RequestDetailLayoutProps {
@@ -36,6 +38,7 @@ export function RequestDetailContent(props: RequestDetailContentProps) {
   const layoutProps: RequestDetailLayoutProps = { requestId, detail, highlights, showProminentFeedbackCard, onDetailUpdated, onContactLaunched, onEditLocation, onRecordFollowUp, onCreateFollowUp, onReviewSuccess };
   const proposedScopeCapture = useProposedScopeCapture(requestId);
   const actualWorkCapture = useActualWorkCapture(requestId);
+  const actualWorkHistory = useActualWorkHistory(requestId);
   return <div className="flex flex-1 min-h-0 overflow-hidden md:grid md:[grid-template-columns:minmax(0,7fr)_minmax(320px,3fr)]">
     <div className="flex-1 md:flex-none overflow-y-auto px-4 md:px-6 py-5 space-y-4">
       <TodayPromiseBanner detail={detail} onRecordFollowUp={onRecordFollowUp} />
@@ -49,6 +52,7 @@ export function RequestDetailContent(props: RequestDetailContentProps) {
         state={actualWorkCapture.state}
         onStartCapture={() => void actualWorkCapture.startCapture()}
       />
+      <ActualWorkHistoryCard state={actualWorkHistory.state} onRetry={() => void actualWorkHistory.retry()} />
       <CustomerContactStrip requestId={requestId} phone={detail.customerPhone ?? null} email={detail.customerEmail ?? null} customerName={detail.customerName} pageToken={detail.pageToken ?? null} onContactLaunched={onContactLaunched} />
       <OriginalRequestCard detail={detail} />
       <RelatedWorkPanel requestId={requestId} onNavigate={props.onNavigate} />
@@ -92,7 +96,10 @@ export function RequestDetailContent(props: RequestDetailContentProps) {
         onConflict={(message) => void actualWorkCapture.reconcileAfterConflict(message)}
         onDismissNotice={actualWorkCapture.clearConflictNotice}
         onRetryReconciliation={() => void actualWorkCapture.retryReconciliation()}
-        onSubmitted={actualWorkCapture.markSubmitted}
+        onSubmitted={() => {
+          actualWorkCapture.markSubmitted();
+          void actualWorkHistory.retry();
+        }}
         onDiscarded={actualWorkCapture.onDraftDiscarded}
       />
     )}
