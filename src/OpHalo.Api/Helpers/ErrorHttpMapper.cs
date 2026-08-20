@@ -200,6 +200,11 @@ public static class ErrorHttpMapper
 
             var c when c == "ScopeNudgeRule.DuplicateTrigger" => (StatusCodes.Status409Conflict, "Conflict.", null),
 
+            // --- Direct Actual Work draft conflicts (ADR-487, build-log/129, Batch 3) ---
+            var c when c == "ActualWork.VersionMismatch"           => (StatusCodes.Status409Conflict, "Conflict.", null),
+            var c when c == "ActualWork.DraftAlreadyOpenForRequest" => (StatusCodes.Status409Conflict, "Conflict.", null),
+            var c when c == "ActualWork.NotDraft"                  => (StatusCodes.Status409Conflict, "Conflict.", null),
+
             // --- Price book publish lock conflict (Session 2d.2, ADR-470) ---
             var c when c == "PriceBookVersion.PublishLockConflict" => (StatusCodes.Status409Conflict, "Conflict.", null),
             var c when c == "PriceBookVersion.CatalogItemNotActive" => (StatusCodes.Status409Conflict, "Conflict.", null),

@@ -177,6 +177,15 @@ public static class KeepServiceCollectionExtensions
         // ICatalogReadPersistence/IOfferingAssemblyPersistence (all registered above).
         services.AddScoped<ScopeNudgeFieldReadApiService>();
 
+        // Direct Actual Work — draft create/edit/discard (ADR-487, build-log/129, Batch 3).
+        // IActualWorkPersistence was added in Batch 2 with no consumer until this batch. Reuses
+        // ICatalogReadPersistence (registered above) to resolve a field-selected catalog item's
+        // current Price Book snapshot; IActiveResponsibleCheck is the new reusable row-authorization
+        // primitive shared by every draft mutation.
+        services.AddScoped<IActualWorkPersistence, EfActualWorkPersistence>();
+        services.AddScoped<IActiveResponsibleCheck, ActiveResponsibleCheck>();
+        services.AddScoped<ActualWorkDraftApiService>();
+
         return services;
     }
 }

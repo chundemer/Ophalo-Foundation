@@ -176,6 +176,49 @@ public sealed class ActualWorkPersistenceTests : IClassFixture<PostgresFixture>,
     }
 
     // -------------------------------------------------------------------------
+    // DiscardAsync (Batch 3)
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public async Task DiscardAsync_deletes_the_visit_and_its_lines()
+    {
+        await using var ctx = CreateContext();
+        var persistence = new EfActualWorkPersistence(ctx);
+        var visit = ActualWork.Create(AccountId, RequestId, OwnerId).Value;
+        visit.AddLine(null, null, "Custom labor", null, 1m, null, null, null, null, OwnerId);
+        await persistence.AddAsync(visit, CancellationToken.None);
+
+        var discardResult = await persistence.DiscardAsync(visit, CancellationToken.None);
+
+        Assert.Equal(ActualWorkCommitResult.Committed, discardResult);
+
+        await using var verifyCtx = CreateContext();
+        Assert.Null(await verifyCtx.Set<ActualWork>().FirstOrDefaultAsync(x => x.Id == visit.Id));
+        Assert.Empty(await verifyCtx.Set<ActualWorkLine>().Where(x => x.ActualWorkId == visit.Id).ToListAsync());
+    }
+
+    [Fact]
+    public async Task DiscardAsync_on_a_stale_row_returns_ConcurrencyConflict()
+    {
+        await using var seedCtx = CreateContext();
+        var seedPersistence = new EfActualWorkPersistence(seedCtx);
+        var visit = ActualWork.Create(AccountId, RequestId, OwnerId).Value;
+        await seedPersistence.AddAsync(visit, CancellationToken.None);
+
+        await using var ctxA = CreateContext();
+        var loadedA = await new EfActualWorkPersistence(ctxA).GetByIdAsync(AccountId, visit.Id, CancellationToken.None);
+        await using var ctxB = CreateContext();
+        var loadedB = await new EfActualWorkPersistence(ctxB).GetByIdAsync(AccountId, visit.Id, CancellationToken.None);
+
+        loadedA!.AddLine(null, null, "Custom labor", null, 1m, null, null, null, null, OwnerId);
+        await new EfActualWorkPersistence(ctxA).CommitAsync(loadedA, CancellationToken.None);
+
+        var staleResult = await new EfActualWorkPersistence(ctxB).DiscardAsync(loadedB!, CancellationToken.None);
+
+        Assert.Equal(ActualWorkCommitResult.ConcurrencyConflict, staleResult);
+    }
+
+    // -------------------------------------------------------------------------
     // ck_keep_actual_work_lines_three_state_linkage — database check constraint
     // -------------------------------------------------------------------------
 

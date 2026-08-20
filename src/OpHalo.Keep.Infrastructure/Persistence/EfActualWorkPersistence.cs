@@ -49,6 +49,21 @@ public sealed class EfActualWorkPersistence(OpHaloDbContext dbContext) : IActual
         }
     }
 
+    public async Task<ActualWorkCommitResult> DiscardAsync(ActualWork actualWork, CancellationToken ct)
+    {
+        dbContext.Set<ActualWork>().Remove(actualWork);
+
+        try
+        {
+            await dbContext.SaveChangesAsync(ct);
+            return ActualWorkCommitResult.Committed;
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return ActualWorkCommitResult.ConcurrencyConflict;
+        }
+    }
+
     private static bool IsUniqueConstraintViolation(DbUpdateException ex) =>
         ex.InnerException is PostgresException pgEx && pgEx.SqlState == PostgresErrorCodes.UniqueViolation;
 }

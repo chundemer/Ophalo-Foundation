@@ -44,4 +44,13 @@ public interface IActualWorkPersistence
     /// changed since it was loaded.
     /// </summary>
     Task<ActualWorkCommitResult> CommitAsync(ActualWork actualWork, CancellationToken ct);
+
+    /// <summary>
+    /// Deletes a Draft visit already loaded via <see cref="GetByIdAsync"/> (tracked), including its
+    /// owned lines. Returns <see cref="ActualWorkCommitResult.ConcurrencyConflict"/> instead of
+    /// throwing when the row changed since it was loaded. The caller is responsible for confirming
+    /// <see cref="ActualWork.Status"/> is still <c>Draft</c> before calling this — a submitted visit
+    /// is immutable and never discarded.
+    /// </summary>
+    Task<ActualWorkCommitResult> DiscardAsync(ActualWork actualWork, CancellationToken ct);
 }

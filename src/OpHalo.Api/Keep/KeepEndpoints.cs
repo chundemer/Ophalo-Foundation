@@ -6,6 +6,7 @@ using Microsoft.Extensions.Options;
 using OpHalo.Api.Helpers;
 using OpHalo.Foundation.Application.Auth;
 using OpHalo.Keep.Application.IntakeSetup;
+using OpHalo.Keep.Application.PriceBook;
 using OpHalo.Keep.Application.PublicIntake;
 using OpHalo.Keep.Application.Requests;
 using OpHalo.Keep.Application.Setup;
@@ -13,6 +14,7 @@ using OpHalo.Keep.Core.Entities;
 using OpHalo.Keep.Core.Entities.Enums;
 using OpHalo.Keep.Core.Errors;
 using OpHalo.SharedKernel.Abstractions;
+using OpHalo.SharedKernel.Results;
 
 namespace OpHalo.Api.Keep;
 
@@ -771,6 +773,86 @@ public static class KeepEndpoints
             return result.IsSuccess ? Results.Ok(result.Value) : ErrorHttpMapper.ToHttpResult(result.Error);
         }).RequireAuthorization();
 
+        // Direct Actual Work — draft create/edit/discard (ADR-487, build-log/129, Batch 3).
+        // Auth-stack composition lives in ActualWorkDraftApiService; thin route mapping only.
+        app.MapPost("/keep/pricebook/actual-work/create", async (
+            ActualWorkCreateBody body,
+            ActualWorkDraftApiService service,
+            CancellationToken ct) =>
+        {
+            var result = await service.CreateAsync(body.RequestId, ct);
+            return result.IsSuccess ? Results.Ok(ToActualWorkResponse(result.Value)) : ErrorHttpMapper.ToHttpResult(result.Error);
+        }).RequireAuthorization();
+
+        app.MapPost("/keep/pricebook/actual-work/{actualWorkId:guid}/lines", async (
+            Guid actualWorkId,
+            ActualWorkAddLineBody body,
+            HttpRequest httpRequest,
+            ActualWorkDraftApiService service,
+            CancellationToken ct) =>
+        {
+            var versionResult = ParseActualWorkVersion(httpRequest.Headers);
+            if (!versionResult.IsSuccess)
+                return ErrorHttpMapper.ToHttpResult(versionResult.Error);
+
+            var command = new AddActualWorkLineApiCommand(
+                body.CatalogItemId, body.OffCatalogDescription, body.ActualQuantity, body.Note);
+            var result = await service.AddLineAsync(actualWorkId, command, versionResult.Value, ct);
+            return result.IsSuccess
+                ? Results.Ok(new ActualWorkLineAddedResponse(result.Value.LineId, result.Value.ActualWorkConcurrencyVersion))
+                : ErrorHttpMapper.ToHttpResult(result.Error);
+        }).RequireAuthorization();
+
+        app.MapPut("/keep/pricebook/actual-work/{actualWorkId:guid}/lines/{lineId:guid}", async (
+            Guid actualWorkId,
+            Guid lineId,
+            ActualWorkUpdateLineBody body,
+            HttpRequest httpRequest,
+            ActualWorkDraftApiService service,
+            CancellationToken ct) =>
+        {
+            var versionResult = ParseActualWorkVersion(httpRequest.Headers);
+            if (!versionResult.IsSuccess)
+                return ErrorHttpMapper.ToHttpResult(versionResult.Error);
+
+            var result = await service.UpdateLineAsync(
+                actualWorkId, lineId, body.ActualQuantity, body.Note, versionResult.Value, ct);
+            return result.IsSuccess
+                ? Results.Ok(new ActualWorkConcurrencyVersionResponse(result.Value))
+                : ErrorHttpMapper.ToHttpResult(result.Error);
+        }).RequireAuthorization();
+
+        app.MapDelete("/keep/pricebook/actual-work/{actualWorkId:guid}/lines/{lineId:guid}", async (
+            Guid actualWorkId,
+            Guid lineId,
+            HttpRequest httpRequest,
+            ActualWorkDraftApiService service,
+            CancellationToken ct) =>
+        {
+            var versionResult = ParseActualWorkVersion(httpRequest.Headers);
+            if (!versionResult.IsSuccess)
+                return ErrorHttpMapper.ToHttpResult(versionResult.Error);
+
+            var result = await service.RemoveLineAsync(actualWorkId, lineId, versionResult.Value, ct);
+            return result.IsSuccess
+                ? Results.Ok(new ActualWorkConcurrencyVersionResponse(result.Value))
+                : ErrorHttpMapper.ToHttpResult(result.Error);
+        }).RequireAuthorization();
+
+        app.MapDelete("/keep/pricebook/actual-work/{actualWorkId:guid}", async (
+            Guid actualWorkId,
+            HttpRequest httpRequest,
+            ActualWorkDraftApiService service,
+            CancellationToken ct) =>
+        {
+            var versionResult = ParseActualWorkVersion(httpRequest.Headers);
+            if (!versionResult.IsSuccess)
+                return ErrorHttpMapper.ToHttpResult(versionResult.Error);
+
+            var result = await service.DiscardAsync(actualWorkId, versionResult.Value, ct);
+            return result.IsSuccess ? Results.NoContent() : ErrorHttpMapper.ToHttpResult(result.Error);
+        }).RequireAuthorization();
+
         // Customer page — anonymous, resolved by page token (Phase 8-B1-β)
         // Returns 200 (active) or 410 (expired). Expired body: { businessName, referenceCode, isExpired, newRequestUrl }.
         app.MapGet("/keep/r/{pageToken}", async (
@@ -941,7 +1023,51 @@ public static class KeepEndpoints
         websiteUrl = info.WebsiteUrl,
         phone = info.Phone
     };
+
+    private static object ToActualWorkResponse(ActualWork actualWork) => new
+    {
+        id = actualWork.Id,
+        requestId = actualWork.RequestId,
+        status = actualWork.Status.ToString(),
+        concurrencyVersion = actualWork.ConcurrencyVersion
+    };
+
+    /// <summary>Strict parser for the <c>X-Keep-ActualWork-Version</c> optimistic-concurrency
+    /// header — same contract as <see cref="ProposedScopeVersionHeader"/> (ADR-330-335, DEF-074):
+    /// header must be present exactly once, canonical GUID "D" shape, Guid.Empty rejected. Inlined
+    /// here rather than a dedicated header-parser file to stay within Batch 3's file gate (create
+    /// carries no header, so this is used by every other draft mutation route).</summary>
+    private static Result<Guid> ParseActualWorkVersion(IHeaderDictionary headers)
+    {
+        const string headerName = "X-Keep-ActualWork-Version";
+
+        if (!headers.TryGetValue(headerName, out var values))
+            return Result<Guid>.Failure(ActualWorkErrors.ExpectedVersionRequired);
+
+        if (values.Count != 1)
+            return Result<Guid>.Failure(ActualWorkErrors.ExpectedVersionInvalid);
+
+        var trimmed = (values[0] ?? string.Empty).Trim();
+        if (!Guid.TryParseExact(trimmed, "D", out var version) || version == Guid.Empty)
+            return Result<Guid>.Failure(ActualWorkErrors.ExpectedVersionInvalid);
+
+        return Result<Guid>.Success(version);
+    }
 }
+
+file sealed record ActualWorkCreateBody(Guid RequestId);
+
+file sealed record ActualWorkAddLineBody(
+    Guid? CatalogItemId,
+    string? OffCatalogDescription,
+    decimal ActualQuantity,
+    string? Note);
+
+file sealed record ActualWorkUpdateLineBody(decimal ActualQuantity, string? Note);
+
+file sealed record ActualWorkLineAddedResponse(Guid LineId, Guid ActualWorkConcurrencyVersion);
+
+file sealed record ActualWorkConcurrencyVersionResponse(Guid ConcurrencyVersion);
 
 // Follow-up resolution request body (ADR-440, S83b).
 // NewDate / NewFollowUpReason are only used when Outcome == "move".

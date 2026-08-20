@@ -1,7 +1,7 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-08-19 (Direct Actual Work — Batch 1 domain model implemented and reviewed,
-Batch 2 persistence/migration next)
+**Last updated:** 2026-08-20 (Direct Actual Work — Batch 3 draft API/authorization implemented and
+reviewed; Batch 4 submission/review signal next)
 **Deployment posture:** Not pilot-ready.
 **Source of truth for acceptance criteria:** `docs/pilot-readiness-bug-tracker.md`.
 
@@ -88,10 +88,10 @@ backward-compatible factory wiring — is reviewed, approved, and complete. Slic
 unapproved and are deferred from this pilot: staff selection/correction, assignment gate, list
 projection/filter, and commercial facts. Do **not** infer a future workflow from the storage field.
 
-**Actual Work Batch 1 (domain model) complete; Batch 2 next (2026-08-19).**
-[Build Log 129](build-log/129-direct-actual-work-and-accounting-handoff-preflight.md) is the locked
-product boundary; mechanical preflight is complete. The approved 8-batch sequence is: domain →
-persistence/migration → draft API/authorization → submit/signal → field UI/history → Mark
+**Actual Work Batch 1 (domain model) and Batch 2 (persistence/migration) complete; Batch 3 next
+(2026-08-20).** [Build Log 129](build-log/129-direct-actual-work-and-accounting-handoff-preflight.md)
+is the locked product boundary; mechanical preflight is complete. The approved 8-batch sequence is:
+domain → persistence/migration → draft API/authorization → submit/signal → field UI/history → Mark
 reviewed → financial read → review queue UI. **Batch 1 is implemented and reviewed:**
 `ActualWork`/`ActualWorkLine` aggregate, Draft lifecycle, zero-line outcome/note invariant, and 25
 focused domain tests — no persistence, API, or UI yet. Review resolved two points, now locked for
@@ -100,11 +100,22 @@ Price Book snapshot (both `CatalogItemId`/`PriceBookVersionLineId` set), catalog
 snapshot (`CatalogItemId` only — the item currently carries no price-book entry), or custom
 (neither) — states two and three both render an incomplete-financial-data cue at Owner/Admin
 review; and `ActualWork.Submit` rejects an undefined `ActualWorkOutcome` value whenever one is
-supplied, not only on a zero-line submit. **Batch 2 (persistence/migration) is next, not yet
-implemented.** Every later batch must have its exact file list and count re-verified at its own
-approval, no bundled "migration unit" shorthand; known corrections already identified going in:
-Batch 2 counts migration+designer+model-snapshot as 3 separate files (7 total, still within gate);
-Batch 4 must also count the signal-key registry file; Batch 5 needs an explicit read API/service/
+supplied, not only on a zero-line submit. **Batch 2 is implemented and reviewed (commit
+`29dedf0`):** `ActualWorkConfiguration`/`ActualWorkLineConfiguration`, `IActualWorkPersistence`/
+`EfActualWorkPersistence`, the `AddActualWork` migration (partial unique open-Draft index, and a
+`ck_keep_actual_work_lines_three_state_linkage` database check constraint backstopping the three
+catalog-linkage states), and 10 persistence tests — 9 production files across two migrations, still
+within gate. Review resolved two further points, now locked: (1) the original per-column FKs to
+`CatalogItem`/`PriceBookVersionLine` only proved account ownership, not that the two ids agreed with
+each other, so `PriceBookVersionLine` gained a second alternate key `(AccountId, CatalogItemId, Id)`
+and `ActualWorkLine`'s FK now targets it as a 3-column composite
+(`AccountId, CatalogItemId, PriceBookVersionLineId`) — a second migration,
+`ActualWorkLinePriceBookVersionLineCompositeFk`, carries this; (2) `ActualWorkLine.Create` rejects
+an empty guid for `CatalogItemId`/`PriceBookVersionLineId` instead of silently normalizing it to
+null. **Batch 3 (draft API and authorization) is implemented and reviewed.** Every later batch
+must have its exact file list and count re-verified at its own approval, no bundled "migration unit"
+shorthand; known corrections already identified going in: Batch 4 must also count the signal-key
+registry file; Batch 5 needs an explicit read API/service/
 persistence path for visit history; Batch 7 needs its own persistence contract/EF implementation
 (or an explicitly extended existing one); Batch 8 must count the request-detail review-card mount
 plus frontend API types/client calls. **Locked:** one open Draft visit per request, owned by its
@@ -116,6 +127,37 @@ later live catalog join. Takeover/correction workflows, export, and reconciliati
 deferred. For one or two named pilot technicians, Keep is the normal primary field record; the
 existing ticket process is only the explicit connectivity/failure fallback while the office
 continues billing from reviewed Keep work until CSV handoff ships.
+
+**Batch 3 (draft API and authorization) is implemented and reviewed (2026-08-20).**
+`ActualWorkDraftApiService` (create/add-line/update-line/remove-line/discard) behind the same
+three-gate composition as `ProposedScopeApiService` (`RequestsOperate` + Price Book entitlement +
+new `ActualWorkCapture` permission, granted through `OperatorBase`), plus a fourth row-authorization
+gate: the new reusable `IActiveResponsibleCheck` primitive confirms the caller is the request's
+active Responsible participant, not merely a member with row visibility — invisible-request and
+visible-but-not-Responsible both collapse to the same indistinguishable 404 (ADR-319 discipline).
+Routes live in the existing `KeepEndpoints.cs` (no new endpoint-class/`Program.cs` file) under
+`/keep/pricebook/actual-work/...`, with the `X-Keep-ActualWork-Version` concurrency header parsed
+inline there rather than in a dedicated header-parser file. **Approved 9-production-file gate
+exception:** `ErrorHttpMapper.cs`'s three 409 mappings (`VersionMismatch`,
+`DraftAlreadyOpenForRequest`, `NotDraft`) were required for correct pilot conflict behavior and put
+the batch one file over the normal 8-production-file limit; no other file was safely removable
+without violating the locked API, authorization, persistence, or reuse requirements. **Review
+correction (release-blocking, fixed before commit):** the shared `AuthorizeAndLoadDraftAsync` load
+path did not check `Status == Draft`, so Discard could hard-delete a submitted (immutable) visit
+with a valid current token; it now returns `ActualWorkErrors.NotDraft` (409) for a non-Draft visit,
+covered by a regression test that submits a visit via the domain aggregate directly (no Submit API
+until Batch 4), attempts discard, and asserts the row survives. Also fixed: add-line now rejects a
+payload supplying both `CatalogItemId` and `OffCatalogDescription`
+(`LineOffCatalogDescriptionWithCatalogItem`) and rejects `CatalogItemId = Guid.Empty` via the
+existing empty-id error before lookup; `UpdateLineAsync`/`RemoveLineAsync` now thread the caller's
+`CancellationToken` into `CommitAsync` instead of discarding it. **Locked implementation
+decision:** a field-selected catalog item's Price Book snapshot resolves via the existing
+`ICatalogReadPersistence.GetItemDetailAsync`'s `CurrentPriceLine` (no new persistence method); unlike
+ProposedScope's field-select, `ActiveState` is intentionally not checked — an inactive catalog item
+still produces a valid catalog-linked/unsnapshotted or catalog-linked/snapshotted Actual Work line
+per build-log/129's three-state design, since a technician may record work against an item since
+deactivated. 26/26 focused Actual Work integration tests and 14/14 architecture tests passing;
+`git diff --check` clean.
 
 **Pilot communications and feedback: required for pilot activation (2026-08-19).** [Build Log
 104](build-log/104-mixed-contractor-pilot-go-live-roadmap.md) promotes authenticated Pilot Updates

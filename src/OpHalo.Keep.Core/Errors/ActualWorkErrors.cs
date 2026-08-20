@@ -41,6 +41,19 @@ public static class ActualWorkErrors
     public static readonly Error LinePriceBookVersionLineIdEmpty =
         Error.Create("ActualWork.LinePriceBookVersionLineIdEmpty", "Price book version line id must not be an empty guid.");
 
+    /// <summary>A field-supplied CatalogItemId that does not resolve to an account-owned catalog
+    /// item. Unlike ProposedScope's field-select, ActiveState is not checked here — an inactive item
+    /// is still a valid "catalog-backed without a snapshot" line (build-log/129's three-state
+    /// design), not a rejected reference.</summary>
+    public static readonly Error LineCatalogItemNotFound =
+        Error.Create("ActualWork.LineCatalogItemNotFound", "Catalog item not found.");
+
+    /// <summary>A line must be either catalog-backed (CatalogItemId) or custom
+    /// (OffCatalogDescription), never both — mirrors the "never trust a caller snapshot" discipline
+    /// of ProposedScope's field-select.</summary>
+    public static readonly Error LineOffCatalogDescriptionWithCatalogItem =
+        Error.Create("ActualWork.LineOffCatalogDescriptionWithCatalogItem", "A catalog-backed line must not also supply a custom description.");
+
     /// <summary>A Price Book version-line snapshot always resolves to a catalog item; a custom/
     /// off-catalog line cannot carry one.</summary>
     public static readonly Error LinePriceBookVersionLineRequiresCatalogItem =

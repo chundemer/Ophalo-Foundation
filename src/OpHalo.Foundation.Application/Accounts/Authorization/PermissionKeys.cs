@@ -51,6 +51,11 @@ public static class PermissionKeys
         /// one of three independent gates on every ProposedScope mutation, alongside
         /// RequestsOperate and the Price Book entitlement.</summary>
         public const string ScopeCapture = "keep.pricebook.scope.capture";
+
+        /// <summary>Direct Actual Work draft create/edit/discard (ADR-487, build-log/129, Batch 3) —
+        /// one of three independent gates on every Actual Work draft mutation, alongside
+        /// RequestsOperate, the Price Book entitlement, and the active-Responsible row check.</summary>
+        public const string ActualWorkCapture = "keep.pricebook.actualwork.capture";
     }
 
     // internal.* keys require AccountPurpose.Internal (see InternalPrefix). Broader
