@@ -13,6 +13,7 @@ const mockRemoveActualWorkLine = vi.fn();
 const mockSubmitActualWork = vi.fn();
 const mockDiscardActualWork = vi.fn();
 const mockExpandActualWorkAssembly = vi.fn();
+const mockGetActualWorkNudgeFieldSuggestions = vi.fn();
 
 vi.mock("../../../lib/apiClient", async () => {
   const actual = await vi.importActual<typeof import("../../../lib/apiClient")>("../../../lib/apiClient");
@@ -27,6 +28,7 @@ vi.mock("../../../lib/apiClient", async () => {
       submitActualWork: (...args: unknown[]) => mockSubmitActualWork(...args),
       discardActualWork: (...args: unknown[]) => mockDiscardActualWork(...args),
       expandActualWorkAssembly: (...args: unknown[]) => mockExpandActualWorkAssembly(...args),
+      getActualWorkNudgeFieldSuggestions: (...args: unknown[]) => mockGetActualWorkNudgeFieldSuggestions(...args),
     },
   };
 });
@@ -85,6 +87,12 @@ function renderComposer(overrides: Partial<React.ComponentProps<typeof ActualWor
 beforeEach(() => {
   vi.clearAllMocks();
   mockGetFieldScopeSearch.mockResolvedValue({ items: [], limit: 20, hasMore: false, nextCursor: null });
+  mockGetActualWorkNudgeFieldSuggestions.mockResolvedValue({
+    ruleId: null,
+    triggerCatalogItemId: null,
+    triggerOfferingAssemblyId: null,
+    suggestions: [],
+  });
 });
 
 describe("ActualWorkComposer", () => {
@@ -168,7 +176,7 @@ describe("ActualWorkComposer", () => {
     const { onCommitted } = renderComposer();
 
     await user.type(screen.getByPlaceholderText("Search by name or SKU..."), "furnace");
-    await user.click(await screen.findByRole("button", { name: "Add assembly: Furnace tune-up" }));
+    await user.click(await screen.findByRole("button", { name: /Furnace tune-up/ }));
 
     await waitFor(() =>
       expect(mockExpandActualWorkAssembly).toHaveBeenCalledWith(
@@ -191,9 +199,147 @@ describe("ActualWorkComposer", () => {
     const { onConflict } = renderComposer();
 
     await user.type(screen.getByPlaceholderText("Search by name or SKU..."), "furnace");
-    await user.click(await screen.findByRole("button", { name: "Add assembly: Furnace tune-up" }));
+    await user.click(await screen.findByRole("button", { name: /Furnace tune-up/ }));
 
     await waitFor(() => expect(onConflict).toHaveBeenCalled());
+  });
+
+  it("fetches and renders nudge suggestions after adding a catalog line", async () => {
+    const user = userEvent.setup();
+    mockGetFieldScopeSearch.mockResolvedValueOnce({
+      items: [{ kind: "CatalogItem", id: "item-1", displayName: "Filter", defaultItemCount: null, catalogItemType: "Part", externalKey: null }],
+      limit: 20,
+      hasMore: false,
+      nextCursor: null,
+    });
+    mockAddActualWorkLine.mockResolvedValueOnce({ lineId: "line-2", actualWorkConcurrencyVersion: "v1" });
+    mockGetActualWorkNudgeFieldSuggestions.mockResolvedValueOnce({
+      ruleId: "rule-1",
+      triggerCatalogItemId: "item-1",
+      triggerOfferingAssemblyId: null,
+      suggestions: [{ id: "sugg-1", order: 1, catalogItemId: "item-2", offeringAssemblyId: null, displayName: "Belt" }],
+    });
+    renderComposer();
+
+    await user.type(screen.getByPlaceholderText("Search by name or SKU..."), "filter");
+    await user.click(await screen.findByText("Filter"));
+    await user.click(screen.getByRole("button", { name: "Add item" }));
+
+    await waitFor(() =>
+      expect(mockGetActualWorkNudgeFieldSuggestions).toHaveBeenCalledWith("draft-1", { triggerCatalogItemId: "item-1" }),
+    );
+    expect(await screen.findByText("Often added together")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Belt" })).toBeInTheDocument();
+  });
+
+  it("fetches nudge suggestions after expanding an assembly", async () => {
+    const user = userEvent.setup();
+    mockGetFieldScopeSearch.mockResolvedValueOnce({
+      items: [{ kind: "OfferingAssembly", id: "assembly-1", displayName: "Furnace tune-up", defaultItemCount: 3, catalogItemType: null, externalKey: null }],
+      limit: 20,
+      hasMore: false,
+      nextCursor: null,
+    });
+    mockExpandActualWorkAssembly.mockResolvedValueOnce({
+      lineIds: ["line-2"], skippedCatalogItemIds: [], actualWorkConcurrencyVersion: "v2",
+    });
+    renderComposer();
+
+    await user.type(screen.getByPlaceholderText("Search by name or SKU..."), "furnace");
+    await user.click(await screen.findByRole("button", { name: /Furnace tune-up/ }));
+
+    await waitFor(() =>
+      expect(mockGetActualWorkNudgeFieldSuggestions).toHaveBeenCalledWith("draft-1", { triggerOfferingAssemblyId: "assembly-1" }),
+    );
+  });
+
+  it("tapping a nudge suggestion adds it via the existing add-line path and clears the panel", async () => {
+    const user = userEvent.setup();
+    mockGetFieldScopeSearch.mockResolvedValueOnce({
+      items: [{ kind: "CatalogItem", id: "item-1", displayName: "Filter", defaultItemCount: null, catalogItemType: "Part", externalKey: null }],
+      limit: 20,
+      hasMore: false,
+      nextCursor: null,
+    });
+    mockAddActualWorkLine.mockResolvedValueOnce({ lineId: "line-2", actualWorkConcurrencyVersion: "v1" });
+    mockGetActualWorkNudgeFieldSuggestions.mockResolvedValueOnce({
+      ruleId: "rule-1",
+      triggerCatalogItemId: "item-1",
+      triggerOfferingAssemblyId: null,
+      suggestions: [{ id: "sugg-1", order: 1, catalogItemId: "item-2", offeringAssemblyId: null, displayName: "Belt" }],
+    });
+    mockAddActualWorkLine.mockResolvedValueOnce({ lineId: "line-3", actualWorkConcurrencyVersion: "v1" });
+    const { onCommitted } = renderComposer();
+
+    await user.type(screen.getByPlaceholderText("Search by name or SKU..."), "filter");
+    await user.click(await screen.findByText("Filter"));
+    await user.click(screen.getByRole("button", { name: "Add item" }));
+    await screen.findByText("Often added together");
+
+    await user.click(screen.getByRole("button", { name: "Belt" }));
+
+    await waitFor(() =>
+      expect(mockAddActualWorkLine).toHaveBeenLastCalledWith("draft-1", { catalogItemId: "item-2", actualQuantity: 1, note: null }, "v1"),
+    );
+    await waitFor(() => expect(onCommitted).toHaveBeenCalledTimes(2));
+    expect(screen.queryByText("Often added together")).not.toBeInTheDocument();
+  });
+
+  it("dismissing a nudge panel clears it without adding anything", async () => {
+    const user = userEvent.setup();
+    mockGetFieldScopeSearch.mockResolvedValueOnce({
+      items: [{ kind: "CatalogItem", id: "item-1", displayName: "Filter", defaultItemCount: null, catalogItemType: "Part", externalKey: null }],
+      limit: 20,
+      hasMore: false,
+      nextCursor: null,
+    });
+    mockAddActualWorkLine.mockResolvedValueOnce({ lineId: "line-2", actualWorkConcurrencyVersion: "v1" });
+    mockGetActualWorkNudgeFieldSuggestions.mockResolvedValueOnce({
+      ruleId: "rule-1",
+      triggerCatalogItemId: "item-1",
+      triggerOfferingAssemblyId: null,
+      suggestions: [{ id: "sugg-1", order: 1, catalogItemId: "item-2", offeringAssemblyId: null, displayName: "Belt" }],
+    });
+    renderComposer();
+
+    await user.type(screen.getByPlaceholderText("Search by name or SKU..."), "filter");
+    await user.click(await screen.findByText("Filter"));
+    await user.click(screen.getByRole("button", { name: "Add item" }));
+    await screen.findByText("Often added together");
+
+    await user.click(screen.getByRole("button", { name: "Dismiss" }));
+
+    expect(screen.queryByText("Often added together")).not.toBeInTheDocument();
+    expect(mockAddActualWorkLine).toHaveBeenCalledTimes(1);
+  });
+
+  it("a 409 while accepting a nudge suggestion clears the panel and surfaces onConflict", async () => {
+    const user = userEvent.setup();
+    mockGetFieldScopeSearch.mockResolvedValueOnce({
+      items: [{ kind: "CatalogItem", id: "item-1", displayName: "Filter", defaultItemCount: null, catalogItemType: "Part", externalKey: null }],
+      limit: 20,
+      hasMore: false,
+      nextCursor: null,
+    });
+    mockAddActualWorkLine.mockResolvedValueOnce({ lineId: "line-2", actualWorkConcurrencyVersion: "v1" });
+    mockGetActualWorkNudgeFieldSuggestions.mockResolvedValueOnce({
+      ruleId: "rule-1",
+      triggerCatalogItemId: "item-1",
+      triggerOfferingAssemblyId: null,
+      suggestions: [{ id: "sugg-1", order: 1, catalogItemId: "item-2", offeringAssemblyId: null, displayName: "Belt" }],
+    });
+    mockAddActualWorkLine.mockRejectedValueOnce(new ApiError(409, "ActualWork.VersionMismatch", "conflict"));
+    const { onConflict } = renderComposer();
+
+    await user.type(screen.getByPlaceholderText("Search by name or SKU..."), "filter");
+    await user.click(await screen.findByText("Filter"));
+    await user.click(screen.getByRole("button", { name: "Add item" }));
+    await screen.findByText("Often added together");
+
+    await user.click(screen.getByRole("button", { name: "Belt" }));
+
+    await waitFor(() => expect(onConflict).toHaveBeenCalled());
+    expect(screen.queryByText("Often added together")).not.toBeInTheDocument();
   });
 
   it("edits an existing line's quantity and note", async () => {

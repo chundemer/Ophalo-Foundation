@@ -223,6 +223,8 @@ import type {
   ActualWorkOpenDraftEntry,
   ActualWorkSubmittedVisitEntry,
   ActualWorkHistoryResult,
+  ActualWorkNudgeSuggestionFieldRowResponse,
+  ActualWorkNudgeFieldResultResponse,
 } from "./apiClient.types";
 
 export type {
@@ -355,6 +357,8 @@ export type {
   ActualWorkOpenDraftEntry,
   ActualWorkSubmittedVisitEntry,
   ActualWorkHistoryResult,
+  ActualWorkNudgeSuggestionFieldRowResponse,
+  ActualWorkNudgeFieldResultResponse,
 };
 
 export type { FollowUpResolutionOutcome, FollowUpCompletionReason } from "./apiClient.types";
@@ -894,6 +898,18 @@ export const api = {
   // Direct Actual Work (ADR-487, build-log/129, Batch 5b) — price-blind field capture composer.
   getActualWorkHistoryForRequest: (requestId: string) =>
     apiFetch<ActualWorkHistoryResult>(`/keep/pricebook/actual-work/request/${requestId}/history`),
+  // Build Log 129, 5d-ii-d: Actual Work Paired Nudges field read for exactly one trigger.
+  getActualWorkNudgeFieldSuggestions: (
+    actualWorkId: string,
+    trigger: { triggerCatalogItemId: string } | { triggerOfferingAssemblyId: string },
+  ) => {
+    const qs = new URLSearchParams();
+    if ("triggerCatalogItemId" in trigger) qs.set("triggerCatalogItemId", trigger.triggerCatalogItemId);
+    else qs.set("triggerOfferingAssemblyId", trigger.triggerOfferingAssemblyId);
+    return apiFetch<ActualWorkNudgeFieldResultResponse>(
+      `/keep/pricebook/actual-work/${actualWorkId}/nudge-suggestions?${qs.toString()}`,
+    );
+  },
   createActualWork: (body: ActualWorkCreateBody) =>
     apiFetch<ActualWorkResult>("/keep/pricebook/actual-work/create", {
       method: "POST",

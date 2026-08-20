@@ -8,6 +8,7 @@ import {
   ApiError,
   type ActualWorkHistoryResult,
   type ActualWorkLineHistoryEntry,
+  type ActualWorkNudgeSuggestionFieldRowResponse,
   type FieldScopeSearchResultResponse,
 } from "../../lib/apiClient";
 import { ACTUAL_WORK_RECONCILE_RELOAD_FAILURE_NOTICE } from "./useActualWorkCapture";
@@ -46,12 +47,13 @@ interface ActualWorkComposerProps {
 
 /**
  * Batch 5b, build-log/129: the field capture composer for Direct Actual Work — mirrors
- * ProposedScopeComposer's shell/mount pattern, simplified to this feature's shape (no assemblies,
- * no nudges, no Undo — a submitted visit is immediately immutable, and the pilot has no
- * cross-user takeover to reconcile against). A catalog-backed or off-catalog line is added
- * directly against the open Draft; quantity/note are the only editable fields; the zero-line
- * submit path requires a truthful outcome and non-blank completion note (ActualWork.Submit,
- * build-log/129) — a submit with at least one line accepts both as optional.
+ * ProposedScopeComposer's shell/mount pattern, simplified to this feature's shape (no Undo — a
+ * submitted visit is immediately immutable, and the pilot has no cross-user takeover to reconcile
+ * against). A catalog-backed or off-catalog line is added directly against the open Draft;
+ * quantity/note are the only editable fields; the zero-line submit path requires a truthful
+ * outcome and non-blank completion note (ActualWork.Submit, build-log/129) — a submit with at
+ * least one line accepts both as optional. Assembly expansion (5d-i-b) and Paired Nudges
+ * (5d-ii-d) live inline in `ActualWorkSearchAndAdd` below.
  */
 export function ActualWorkComposer({
   draft,
@@ -227,6 +229,28 @@ const ActualWorkSearchAndAdd = forwardRef<HTMLInputElement, ActualWorkSearchAndA
   const assemblyResults = (results?.items ?? []).filter((item) => item.kind === "OfferingAssembly");
   const [expansionNotice, setExpansionNotice] = useState<string | null>(null);
 
+  // Build Log 129, 5d-ii-d: session-only Paired Nudges state, mirroring
+  // useProposedScopeCapture's nudge shape (build-log/125) but kept inline here since this
+  // composer's mutation logic already lives in this component rather than an extracted hook.
+  // Retirement and the read generation live in refs so they reflect the latest value inside async
+  // continuations without waiting for a re-render.
+  const [nudge, setNudge] = useState<{ ruleId: string; suggestions: ActualWorkNudgeSuggestionFieldRowResponse[] } | null>(null);
+  const retiredRuleIdsRef = useRef<Set<string>>(new Set());
+  const nudgeGenerationRef = useRef(0);
+
+  async function fetchNudge(trigger: { triggerCatalogItemId: string } | { triggerOfferingAssemblyId: string }) {
+    const myGeneration = ++nudgeGenerationRef.current;
+    try {
+      const result = await api.getActualWorkNudgeFieldSuggestions(actualWorkId, trigger);
+      if (myGeneration !== nudgeGenerationRef.current) return;
+      if (result.ruleId && result.suggestions.length > 0 && !retiredRuleIdsRef.current.has(result.ruleId)) {
+        setNudge({ ruleId: result.ruleId, suggestions: result.suggestions });
+      }
+    } catch {
+      // Silent by design (build-log/125 precedent): a nudge-read failure never surfaces to the technician.
+    }
+  }
+
   function resetAfterSuccess() {
     setError(null);
     setSelection(null);
@@ -253,8 +277,10 @@ const ActualWorkSearchAndAdd = forwardRef<HTMLInputElement, ActualWorkSearchAndA
       );
     },
     onSuccess: async () => {
+      const trigger = selection?.kind === "catalog" ? { triggerCatalogItemId: selection.item.id } : null;
       resetAfterSuccess();
       await onCommitted();
+      if (trigger) void fetchNudge(trigger);
     },
     onError: (err) => {
       if (err instanceof ApiError && err.status === 409) {
@@ -272,7 +298,7 @@ const ActualWorkSearchAndAdd = forwardRef<HTMLInputElement, ActualWorkSearchAndA
   const expandAssemblyMutation = useMutation({
     mutationFn: (assembly: FieldScopeSearchResultResponse) =>
       api.expandActualWorkAssembly(actualWorkId, { offeringAssemblyId: assembly.id, includedOptionalItemIds: [] }, version),
-    onSuccess: async (result) => {
+    onSuccess: async (result, assembly) => {
       setExpansionNotice(
         result.skippedCatalogItemIds.length === 0
           ? `${result.lineIds.length} assembly item${result.lineIds.length === 1 ? "" : "s"} added.`
@@ -280,6 +306,7 @@ const ActualWorkSearchAndAdd = forwardRef<HTMLInputElement, ActualWorkSearchAndA
       );
       setError(null);
       await onCommitted();
+      void fetchNudge({ triggerOfferingAssemblyId: assembly.id });
     },
     onError: (err) => {
       if (!(err instanceof ApiError) || err.status !== 400) {
@@ -308,42 +335,84 @@ const ActualWorkSearchAndAdd = forwardRef<HTMLInputElement, ActualWorkSearchAndA
             className={INPUT_CLS}
           />
           {debouncedText.length > 0 && (
-            <div className="rounded-lg border border-[var(--ophalo-border)] divide-y divide-[var(--ophalo-border)] max-h-48 overflow-y-auto">
+            <div className="rounded-lg border border-[var(--ophalo-border)] p-1">
               {isLoading && <p className="px-3 py-2 text-xs text-[var(--ophalo-muted)]">Searching...</p>}
-              {!isLoading &&
-                catalogResults.map((item) => (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={() => setSelection({ kind: "catalog", item })}
-                    className={`w-full text-left px-3 py-2 text-sm text-[var(--ophalo-ink)] hover:bg-[var(--ophalo-canvas)] ${FOCUS_RING}`}
-                  >
-                    {item.displayName}
-                  </button>
-                ))}
-              {!isLoading &&
-                assemblyResults.map((item) => (
-                  <button
-                    key={item.id}
-                    type="button"
-                    disabled={expandAssemblyMutation.isPending}
-                    onClick={() => expandAssemblyMutation.mutate(item)}
-                    className={`w-full text-left px-3 py-2 text-sm text-[var(--ophalo-ink)] hover:bg-[var(--ophalo-canvas)] ${FOCUS_RING} disabled:opacity-50`}
-                  >
-                    Add assembly: {item.displayName}
-                  </button>
-                ))}
-              <button
-                type="button"
-                onClick={() => setSelection({ kind: "custom" })}
-                className={`w-full text-left px-3 py-2 text-sm font-medium text-[var(--keep-accent)] hover:bg-[var(--ophalo-canvas)] ${FOCUS_RING}`}
-              >
-                Add as custom item
-              </button>
+              {!isLoading && (
+                <ul className="max-h-48 overflow-y-auto space-y-1">
+                  {assemblyResults.length > 0 && (
+                    <li className="rounded-lg border-l-4 border-[var(--keep-accent)] bg-[var(--ophalo-canvas)] px-3 py-2 text-xs font-bold uppercase tracking-wide text-[var(--ophalo-ink)]">
+                      Matching assemblies
+                    </li>
+                  )}
+                  {assemblyResults.map((item) => (
+                    <li key={item.id}>
+                      <button
+                        type="button"
+                        disabled={expandAssemblyMutation.isPending}
+                        onClick={() => expandAssemblyMutation.mutate(item)}
+                        className={`w-full text-left rounded-lg px-3 py-2 text-sm text-[var(--ophalo-ink)] hover:bg-[var(--ophalo-canvas)] ${FOCUS_RING} disabled:opacity-50`}
+                      >
+                        <span>{item.displayName}</span>
+                        <span className="ml-2 rounded bg-[var(--ophalo-canvas)] px-1.5 py-0.5 text-xs font-medium text-[var(--ophalo-muted)]">
+                          Assembly
+                        </span>
+                        {item.defaultItemCount !== null && (
+                          <span className="ml-2 text-xs text-[var(--ophalo-muted)]">Expands {item.defaultItemCount} items</span>
+                        )}
+                      </button>
+                    </li>
+                  ))}
+                  {catalogResults.length > 0 && (
+                    <li className="mt-3 rounded-lg border-l-4 border-[var(--ophalo-border)] bg-[var(--ophalo-canvas)] px-3 py-2 text-xs font-bold uppercase tracking-wide text-[var(--ophalo-ink)]">
+                      Matching catalog items
+                    </li>
+                  )}
+                  {catalogResults.map((item) => (
+                    <li key={item.id}>
+                      <button
+                        type="button"
+                        onClick={() => setSelection({ kind: "catalog", item })}
+                        className={`w-full text-left rounded-lg px-3 py-2 text-sm text-[var(--ophalo-ink)] hover:bg-[var(--ophalo-canvas)] ${FOCUS_RING}`}
+                      >
+                        {item.displayName}
+                      </button>
+                    </li>
+                  ))}
+                  <li>
+                    <button
+                      type="button"
+                      onClick={() => setSelection({ kind: "custom" })}
+                      className={`w-full text-left rounded-lg px-3 py-2 text-sm font-medium text-[var(--keep-accent)] hover:bg-[var(--ophalo-canvas)] ${FOCUS_RING}`}
+                    >
+                      Add as custom item
+                    </button>
+                  </li>
+                </ul>
+              )}
             </div>
           )}
           {expansionNotice && <p role="status" className="px-3 py-2 text-xs text-[var(--ophalo-muted)]">{expansionNotice}</p>}
           {error && <p className="px-3 text-xs text-[var(--ophalo-danger,#c0392b)]">{error}</p>}
+          {nudge && (
+            <ActualWorkNudgeChips
+              actualWorkId={actualWorkId}
+              version={version}
+              nudge={nudge}
+              onAccepted={async () => {
+                retiredRuleIdsRef.current.add(nudge.ruleId);
+                setNudge(null);
+                await onCommitted();
+              }}
+              onConflict={(message) => {
+                setNudge(null);
+                onConflict(message);
+              }}
+              onDismiss={() => {
+                retiredRuleIdsRef.current.add(nudge.ruleId);
+                setNudge(null);
+              }}
+            />
+          )}
         </>
       ) : (
         <div className="rounded-lg border border-[var(--ophalo-border)] p-3 space-y-2">
@@ -402,6 +471,89 @@ const ActualWorkSearchAndAdd = forwardRef<HTMLInputElement, ActualWorkSearchAndA
     </div>
   );
 });
+
+interface ActualWorkNudgeChipsProps {
+  actualWorkId: string;
+  version: string;
+  nudge: { ruleId: string; suggestions: ActualWorkNudgeSuggestionFieldRowResponse[] };
+  onAccepted: () => void;
+  onConflict: (message?: string) => void;
+  onDismiss: () => void;
+}
+
+/**
+ * Build Log 129, 5d-ii-d: the price-blind "Often added together" chip panel — mirrors
+ * ComposerNudgePanel's (build-log/125) UX exactly (session-only chips, client-side Dismiss,
+ * default quantity 1/no note/no optional-item inclusions on accept) but stays inline in this file
+ * rather than an extracted panel component, matching this composer's established shape. Accepting
+ * a chip dispatches the same add-line/expand-assembly mutations the rest of the composer uses;
+ * only success retires the panel. A 409 clears the panel without retiring the rule — the caller's
+ * `onConflict` handles reconciliation — and any other failure keeps the panel up so the technician
+ * can retry.
+ */
+function ActualWorkNudgeChips({ actualWorkId, version, nudge, onAccepted, onConflict, onDismiss }: ActualWorkNudgeChipsProps) {
+  const [error, setError] = useState<string | null>(null);
+
+  const acceptMutation = useMutation({
+    mutationFn: (suggestion: ActualWorkNudgeSuggestionFieldRowResponse): Promise<unknown> => {
+      if (suggestion.catalogItemId !== null) {
+        return api.addActualWorkLine(
+          actualWorkId,
+          { catalogItemId: suggestion.catalogItemId, actualQuantity: 1, note: null },
+          version,
+        );
+      }
+      return api.expandActualWorkAssembly(
+        actualWorkId,
+        { offeringAssemblyId: suggestion.offeringAssemblyId!, includedOptionalItemIds: [] },
+        version,
+      );
+    },
+    onSuccess: () => {
+      setError(null);
+      onAccepted();
+    },
+    onError: (err) => {
+      if (err instanceof ApiError && err.status === 409) {
+        onConflict();
+        return;
+      }
+      setError("Something went wrong. Try again.");
+    },
+  });
+
+  return (
+    <div className="rounded-lg border border-[var(--ophalo-border)] bg-[var(--ophalo-canvas)] p-3 space-y-2">
+      <p className="text-xs font-medium text-[var(--ophalo-muted)]">Often added together</p>
+      <div className="flex flex-wrap gap-2">
+        {nudge.suggestions.map((suggestion) => (
+          <button
+            key={suggestion.id}
+            type="button"
+            disabled={acceptMutation.isPending}
+            onClick={() => acceptMutation.mutate(suggestion)}
+            className={`min-h-[44px] rounded-lg border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-3 py-2 text-sm font-medium text-[var(--ophalo-ink)] hover:bg-[var(--ophalo-canvas)] disabled:opacity-50 ${FOCUS_RING}`}
+          >
+            {suggestion.displayName}
+          </button>
+        ))}
+        <button
+          type="button"
+          disabled={acceptMutation.isPending}
+          onClick={onDismiss}
+          className={`min-h-[44px] rounded-lg px-3 py-2 text-sm font-medium text-[var(--ophalo-muted)] hover:text-[var(--ophalo-ink)] disabled:opacity-50 ${FOCUS_RING}`}
+        >
+          Dismiss
+        </button>
+      </div>
+      {error && (
+        <p role="alert" className="text-sm text-[var(--ophalo-danger)]">
+          {error}
+        </p>
+      )}
+    </div>
+  );
+}
 
 interface ActualWorkDraftLineProps {
   line: ActualWorkLineHistoryEntry;

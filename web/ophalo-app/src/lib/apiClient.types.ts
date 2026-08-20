@@ -1184,3 +1184,20 @@ export interface ActualWorkHistoryResult {
   openDraft: ActualWorkOpenDraftEntry | null;
   submittedVisits: ActualWorkSubmittedVisitEntry[];
 }
+
+// Build Log 129, 5d-ii-c/d: Actual Work field-safe nudge read for one trigger — price-free, mirrors
+// ScopeNudgeFieldResultResponse/ScopeNudgeSuggestionFieldRowResponse, but no `targetKind` field.
+export interface ActualWorkNudgeSuggestionFieldRowResponse {
+  id: string;
+  order: number;
+  catalogItemId: string | null;
+  offeringAssemblyId: string | null;
+  displayName: string;
+}
+
+export interface ActualWorkNudgeFieldResultResponse {
+  ruleId: string | null;
+  triggerCatalogItemId: string | null;
+  triggerOfferingAssemblyId: string | null;
+  suggestions: ActualWorkNudgeSuggestionFieldRowResponse[];
+}
