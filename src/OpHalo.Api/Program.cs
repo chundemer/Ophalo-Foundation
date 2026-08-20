@@ -335,6 +335,7 @@ app.MapScopeNudgeRuleEndpoints();
 app.MapActualWorkNudgeRuleEndpoints();
 app.MapFieldQuickScopeActionEndpoints();
 app.MapFieldScopeNudgeEndpoints();
+app.MapActualWorkNudgeFieldReadEndpoints();
 
 app.MapAuthEndpoints();
 app.MapAccountEndpoints();

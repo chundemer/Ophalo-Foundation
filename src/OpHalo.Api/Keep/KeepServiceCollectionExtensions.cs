@@ -208,6 +208,12 @@ public static class KeepServiceCollectionExtensions
         // above); no new persistence registration needed.
         services.AddScoped<ActualWorkHistoryReadApiService>();
 
+        // Direct Actual Work — technician field-read nudge suggestions (5d-ii-c, build-log/129).
+        // Reuses IActualWorkPersistence/IActualWorkNudgeRulePersistence/IActiveResponsibleCheck/
+        // ICatalogReadPersistence/IOfferingAssemblyPersistence (all registered above); no new
+        // persistence registration needed.
+        services.AddScoped<ActualWorkNudgeFieldReadApiService>();
+
         return services;
     }
 }
