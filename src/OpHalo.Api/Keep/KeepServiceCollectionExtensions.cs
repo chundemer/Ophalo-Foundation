@@ -185,6 +185,11 @@ public static class KeepServiceCollectionExtensions
         services.AddScoped<IActualWorkPersistence, EfActualWorkPersistence>();
         services.AddScoped<IActiveResponsibleCheck, ActiveResponsibleCheck>();
 
+        // Direct Actual Work — atomic expand-assembly (build-log/129, 5d-i preflight lock). Reuses
+        // IOfferingAssemblyPersistence/ICatalogReadPersistence/IActiveResponsibleCheck (registered
+        // above/below).
+        services.AddScoped<IActualWorkAssemblyExpansionPersistence, EfActualWorkAssemblyExpansionPersistence>();
+
         // Direct Actual Work — submit/review-signal (Batch 4, build-log/129). Atomic seam separate
         // from IActualWorkPersistence, matching IProposedScopeSubmissionPersistence.
         services.AddScoped<IActualWorkSubmissionPersistence, EfActualWorkSubmissionPersistence>();

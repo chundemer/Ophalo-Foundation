@@ -34,6 +34,7 @@ namespace OpHalo.IntegrationTests.Api;
 public sealed class ActualWorkDraftApiTests : IClassFixture<KeepApiWebFactory>, IAsyncLifetime
 {
     private readonly KeepApiWebFactory _factory;
+    private int _versionNumberCounter;
 
     public ActualWorkDraftApiTests(KeepApiWebFactory factory) => _factory = factory;
 
@@ -516,6 +517,215 @@ public sealed class ActualWorkDraftApiTests : IClassFixture<KeepApiWebFactory>, 
         Assert.Equal(ActualWorkOutcome.NoWorkAuthorized, visit.Outcome);
     }
 
+    [Fact]
+    public async Task ExpandAssembly_CommitsRequiredItemsAndSkipsOptionalByDefault()
+    {
+        var (accountId, ownerId, ownerCookie) = await SeedAccountAsync("expand-happy-path");
+        await EnrollAsync(accountId, ownerId);
+        var requestId = await SeedRequestAsync(accountId);
+        await SeedResponsibleAsync(requestId, accountId, ownerId);
+        var (actualWorkId, version) = await CreateDraftAsync(ownerCookie, requestId);
+        var primary = await SeedPricedCatalogItemAsync(accountId, ownerId, "Condenser Unit");
+        var required = await SeedPricedCatalogItemAsync(accountId, ownerId, "Refrigerant Line Set");
+        var optional = await SeedPricedCatalogItemAsync(accountId, ownerId, "Optional Surge Protector");
+        var assemblyId = await SeedAssemblyAsync(
+            accountId, ownerId, primary.Id, (required.Id, IsOptional: false), (optional.Id, IsOptional: true));
+
+        var request = new HttpRequestMessage(HttpMethod.Post, $"/keep/pricebook/actual-work/{actualWorkId}/expand-assembly")
+        {
+            Content = JsonContent.Create(new { offeringAssemblyId = assemblyId, includedOptionalItemIds = Array.Empty<Guid>() })
+        };
+        request.Headers.Add("X-Keep-ActualWork-Version", version.ToString("D"));
+        var response = await AuthRequest(ownerCookie).SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(2, body.GetProperty("lineIds").GetArrayLength());
+        Assert.Empty(body.GetProperty("skippedCatalogItemIds").EnumerateArray());
+        Assert.False(body.TryGetProperty("sellPriceSnapshot", out _));
+
+        await using var scope = _factory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+        var lines = await db.Set<ActualWorkLine>().Where(x => x.ActualWorkId == actualWorkId).ToListAsync();
+        Assert.Equal(2, lines.Count);
+        Assert.Contains(lines, l => l.CatalogItemId == primary.Id);
+        Assert.Contains(lines, l => l.CatalogItemId == required.Id);
+        Assert.DoesNotContain(lines, l => l.CatalogItemId == optional.Id);
+        Assert.All(lines, l => Assert.Equal(100m, l.SellPriceSnapshot));
+    }
+
+    [Fact]
+    public async Task ExpandAssembly_IncludesExplicitlySelectedOptionalItem()
+    {
+        var (accountId, ownerId, ownerCookie) = await SeedAccountAsync("expand-optional-included");
+        await EnrollAsync(accountId, ownerId);
+        var requestId = await SeedRequestAsync(accountId);
+        await SeedResponsibleAsync(requestId, accountId, ownerId);
+        var (actualWorkId, version) = await CreateDraftAsync(ownerCookie, requestId);
+        var primary = await SeedPricedCatalogItemAsync(accountId, ownerId, "Condenser Unit");
+        var optional = await SeedPricedCatalogItemAsync(accountId, ownerId, "Optional Surge Protector");
+        var assemblyId = await SeedAssemblyAsync(accountId, ownerId, primary.Id, (optional.Id, IsOptional: true));
+
+        await using var seedScope = _factory.CreateScope();
+        var seedDb = seedScope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+        var optionalItemId = await seedDb.Set<OfferingAssemblyItem>()
+            .Where(i => i.OfferingAssemblyId == assemblyId && i.CatalogItemId == optional.Id)
+            .Select(i => i.Id)
+            .SingleAsync();
+
+        var request = new HttpRequestMessage(HttpMethod.Post, $"/keep/pricebook/actual-work/{actualWorkId}/expand-assembly")
+        {
+            Content = JsonContent.Create(new { offeringAssemblyId = assemblyId, includedOptionalItemIds = new[] { optionalItemId } })
+        };
+        request.Headers.Add("X-Keep-ActualWork-Version", version.ToString("D"));
+        var response = await AuthRequest(ownerCookie).SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        await using var scope = _factory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+        var lines = await db.Set<ActualWorkLine>().Where(x => x.ActualWorkId == actualWorkId).ToListAsync();
+        Assert.Equal(2, lines.Count);
+        Assert.Contains(lines, l => l.CatalogItemId == optional.Id);
+    }
+
+    [Fact]
+    public async Task ExpandAssembly_SkipsAndReportsAComponentAlreadyOnTheDraft()
+    {
+        var (accountId, ownerId, ownerCookie) = await SeedAccountAsync("expand-skip-report");
+        await EnrollAsync(accountId, ownerId);
+        var requestId = await SeedRequestAsync(accountId);
+        await SeedResponsibleAsync(requestId, accountId, ownerId);
+        var (actualWorkId, version) = await CreateDraftAsync(ownerCookie, requestId);
+        var primary = await SeedPricedCatalogItemAsync(accountId, ownerId, "Condenser Unit");
+        var required = await SeedPricedCatalogItemAsync(accountId, ownerId, "Refrigerant Line Set");
+        var assemblyId = await SeedAssemblyAsync(accountId, ownerId, primary.Id, (required.Id, IsOptional: false));
+
+        // Manually add the primary item first — the expansion must skip regenerating it.
+        var addLineRequest = new HttpRequestMessage(HttpMethod.Post, $"/keep/pricebook/actual-work/{actualWorkId}/lines")
+        {
+            Content = JsonContent.Create(new { catalogItemId = primary.Id, actualQuantity = 1m, note = (string?)null })
+        };
+        addLineRequest.Headers.Add("X-Keep-ActualWork-Version", version.ToString("D"));
+        var addLineResponse = await AuthRequest(ownerCookie).SendAsync(addLineRequest);
+        Assert.Equal(HttpStatusCode.OK, addLineResponse.StatusCode);
+        var addLineBody = await addLineResponse.Content.ReadFromJsonAsync<JsonElement>();
+        var versionAfterAddLine = addLineBody.GetProperty("actualWorkConcurrencyVersion").GetGuid();
+
+        var request = new HttpRequestMessage(HttpMethod.Post, $"/keep/pricebook/actual-work/{actualWorkId}/expand-assembly")
+        {
+            Content = JsonContent.Create(new { offeringAssemblyId = assemblyId, includedOptionalItemIds = Array.Empty<Guid>() })
+        };
+        request.Headers.Add("X-Keep-ActualWork-Version", versionAfterAddLine.ToString("D"));
+        var response = await AuthRequest(ownerCookie).SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Single(body.GetProperty("lineIds").EnumerateArray());
+        var skipped = body.GetProperty("skippedCatalogItemIds").EnumerateArray().Select(x => x.GetGuid()).ToList();
+        Assert.Single(skipped);
+        Assert.Equal(primary.Id, skipped[0]);
+
+        await using var scope = _factory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+        var lines = await db.Set<ActualWorkLine>().Where(x => x.ActualWorkId == actualWorkId).ToListAsync();
+        Assert.Equal(2, lines.Count);
+        Assert.Single(lines, l => l.CatalogItemId == primary.Id);
+        Assert.Single(lines, l => l.CatalogItemId == required.Id);
+    }
+
+    [Fact]
+    public async Task ExpandAssembly_UnknownInclusionId_Returns400AndWritesNoLines()
+    {
+        var (accountId, ownerId, ownerCookie) = await SeedAccountAsync("expand-invalid-inclusion");
+        await EnrollAsync(accountId, ownerId);
+        var requestId = await SeedRequestAsync(accountId);
+        await SeedResponsibleAsync(requestId, accountId, ownerId);
+        var (actualWorkId, version) = await CreateDraftAsync(ownerCookie, requestId);
+        var primary = await SeedPricedCatalogItemAsync(accountId, ownerId, "Condenser Unit");
+        var assemblyId = await SeedAssemblyAsync(accountId, ownerId, primary.Id);
+
+        var request = new HttpRequestMessage(HttpMethod.Post, $"/keep/pricebook/actual-work/{actualWorkId}/expand-assembly")
+        {
+            Content = JsonContent.Create(new { offeringAssemblyId = assemblyId, includedOptionalItemIds = new[] { Guid.NewGuid() } })
+        };
+        request.Headers.Add("X-Keep-ActualWork-Version", version.ToString("D"));
+        var response = await AuthRequest(ownerCookie).SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+
+        await using var scope = _factory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+        Assert.False(await db.Set<ActualWorkLine>().AnyAsync(x => x.ActualWorkId == actualWorkId));
+    }
+
+    [Fact]
+    public async Task ExpandAssembly_StaleVersion_Returns409()
+    {
+        var (accountId, ownerId, ownerCookie) = await SeedAccountAsync("expand-stale-version");
+        await EnrollAsync(accountId, ownerId);
+        var requestId = await SeedRequestAsync(accountId);
+        await SeedResponsibleAsync(requestId, accountId, ownerId);
+        var (actualWorkId, _) = await CreateDraftAsync(ownerCookie, requestId);
+        var primary = await SeedPricedCatalogItemAsync(accountId, ownerId, "Condenser Unit");
+        var assemblyId = await SeedAssemblyAsync(accountId, ownerId, primary.Id);
+
+        var request = new HttpRequestMessage(HttpMethod.Post, $"/keep/pricebook/actual-work/{actualWorkId}/expand-assembly")
+        {
+            Content = JsonContent.Create(new { offeringAssemblyId = assemblyId, includedOptionalItemIds = Array.Empty<Guid>() })
+        };
+        request.Headers.Add("X-Keep-ActualWork-Version", Guid.NewGuid().ToString("D"));
+        var response = await AuthRequest(ownerCookie).SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task ExpandAssembly_OwnerNotResponsible_Returns404()
+    {
+        var (accountId, ownerId, ownerCookie) = await SeedAccountAsync("expand-not-responsible");
+        await EnrollAsync(accountId, ownerId);
+        var operatorId = await SeedOperatorAsync(accountId, "expand-not-responsible");
+        var requestId = await SeedRequestAsync(accountId);
+        await SeedResponsibleAsync(requestId, accountId, operatorId);
+        var (actualWorkId, version) = await CreateDraftAsync(await GetCookieAsync(operatorId, accountId), requestId);
+        var primary = await SeedPricedCatalogItemAsync(accountId, ownerId, "Condenser Unit");
+        var assemblyId = await SeedAssemblyAsync(accountId, ownerId, primary.Id);
+
+        // Owner has AccountWide row visibility but is not this request's active Responsible
+        // recorder — same indistinguishable 404 as every other draft mutation gate.
+        var request = new HttpRequestMessage(HttpMethod.Post, $"/keep/pricebook/actual-work/{actualWorkId}/expand-assembly")
+        {
+            Content = JsonContent.Create(new { offeringAssemblyId = assemblyId, includedOptionalItemIds = Array.Empty<Guid>() })
+        };
+        request.Headers.Add("X-Keep-ActualWork-Version", version.ToString("D"));
+        var response = await AuthRequest(ownerCookie).SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task ExpandAssembly_ViewerWithoutActualWorkCapture_Returns403()
+    {
+        var (accountId, ownerId, ownerCookie) = await SeedAccountAsync("expand-viewer-denied");
+        await EnrollAsync(accountId, ownerId);
+        var viewerId = await SeedViewerAsync(accountId, "expand-viewer-denied");
+        var viewerCookie = await GetCookieAsync(viewerId, accountId);
+        var requestId = await SeedRequestAsync(accountId);
+        await SeedResponsibleAsync(requestId, accountId, ownerId);
+        var (actualWorkId, version) = await CreateDraftAsync(ownerCookie, requestId);
+        var primary = await SeedPricedCatalogItemAsync(accountId, ownerId, "Condenser Unit");
+        var assemblyId = await SeedAssemblyAsync(accountId, ownerId, primary.Id);
+
+        var request = new HttpRequestMessage(HttpMethod.Post, $"/keep/pricebook/actual-work/{actualWorkId}/expand-assembly")
+        {
+            Content = JsonContent.Create(new { offeringAssemblyId = assemblyId, includedOptionalItemIds = Array.Empty<Guid>() })
+        };
+        request.Headers.Add("X-Keep-ActualWork-Version", version.ToString("D"));
+        var response = await AuthRequest(viewerCookie).SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
     // -------------------------------------------------------------------------
     // Seeding helpers
     // -------------------------------------------------------------------------
@@ -604,6 +814,7 @@ public sealed class ActualWorkDraftApiTests : IClassFixture<KeepApiWebFactory>, 
         await db.SaveChangesAsync();
 
         var versionId = Guid.NewGuid();
+        var versionNumber = ++_versionNumberCounter;
         var nowUtc = DateTime.UtcNow;
         await db.Database.ExecuteSqlInterpolatedAsync($"""
             INSERT INTO keep_pricebook_versions (
@@ -611,7 +822,7 @@ public sealed class ActualWorkDraftApiTests : IClassFixture<KeepApiWebFactory>, 
                 published_at_utc, published_by_account_user_id, status,
                 created_at_utc, updated_at_utc)
             VALUES (
-                {versionId}, {accountId}, 1, NULL,
+                {versionId}, {accountId}, {versionNumber}, NULL,
                 {nowUtc}, {createdByUserId}, 'Published',
                 {nowUtc}, {nowUtc})
             """);
@@ -637,6 +848,28 @@ public sealed class ActualWorkDraftApiTests : IClassFixture<KeepApiWebFactory>, 
             """);
 
         return item;
+    }
+
+    private async Task<Guid> SeedAssemblyAsync(
+        Guid accountId, Guid createdByUserId, Guid primaryCatalogItemId, params (Guid CatalogItemId, bool IsOptional)[] items)
+    {
+        var createResult = OfferingAssembly.Create(
+            accountId, primaryCatalogItemId, $"Assembly {Guid.NewGuid():N}", PriceTreatment.Summed, createdByUserId);
+        Assert.True(createResult.IsSuccess);
+        var assembly = createResult.Value;
+
+        var displayOrder = 1;
+        foreach (var (catalogItemId, isOptional) in items)
+        {
+            var addResult = assembly.AddItem(catalogItemId, defaultQuantity: 1m, isOptional, displayOrder++, createdByUserId);
+            Assert.True(addResult.IsSuccess);
+        }
+
+        await using var scope = _factory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+        db.Set<OfferingAssembly>().Add(assembly);
+        await db.SaveChangesAsync();
+        return assembly.Id;
     }
 
     private async Task<(Guid AccountId, Guid OwnerAccountUserId, string OwnerCookie)> SeedAccountAsync(string slug)

@@ -73,13 +73,37 @@ Explicit empty state, outcome-code-to-label mapping, quiet 403 hide, compact ret
 failures; a successful submit now also refreshes this card via `actualWorkHistory.retry()`. 144/144
 request-detail frontend tests passing.
 
+**Business-completeness correction — field assist is required before pilot readiness.** 5b's
+composer supports individual catalog search and custom/off-catalog lines, but it omitted assembly
+expansion and contextual nudges. That is a product gap, not deferred UI polish: a technician needs
+support to find and record the complete factual work performed, rather than repeatedly searching
+for individual components or falling back to vague custom entries. **5d — Actual Work field
+assist: assembly expansion and nudges** is now required after 5c and before the office-review
+slices. It must remain price-blind and factual—no automatic additions, financial exposure, or
+Proposed Scope recommendation leakage—and needs its own exact file/test-count mechanical preflight
+before any code. That preflight must settle assembly snapshot/duplicate behavior and the nudge
+eligibility, deduplication, dismissal, explicit-add, and Draft-concurrency contracts.
+
 ### Next approved slices
 
-1. **6 — Owner/Admin review mutation:** mark reviewed with reviewer/time/optional internal note,
+1. **5d-i-a — Actual Work assembly expansion, backend:** Complete. Build Log 129, "5d-i-a
+   implementation notes"; commit pending review. Atomic `expand-assembly` transaction
+   (`IActualWorkAssemblyExpansionPersistence`/`EfActualWorkAssemblyExpansionPersistence`), skip-
+   and-report duplicate handling, inclusion-list optional-item contract, active-Responsible check
+   moved inside the locked transaction (no pre-transaction tracked load). 7 production files, 8
+   new/modified tests, 66/66 Actual Work integration tests passing.
+2. **5d-i-b — Actual Work assembly expansion, frontend:** next. Needs its own mechanical preflight
+   (confirm named symbols, exact file list) before implementation — includes the `FieldScopeSearch`
+   gate broadening locked in Build Log 129's 5d-i preflight (ADR-480 addendum).
+3. **5d-ii — Actual Work nudges:** follows 5d-i-b. Separate, Owner/Admin-configured Actual Work
+   rule set (same price-blind association shape as Proposed Scope's `ScopeNudgeRule`, not the same
+   rows/table — factual-completion intent, not upsell), stateless eligibility filtering against the
+   Draft, no persisted dismissal, explicit add via the ordinary single-line add path.
+4. **6 — Owner/Admin review mutation:** mark reviewed with reviewer/time/optional internal note,
    then atomically resolve the Actual Work signal only when no submitted visit remains unreviewed.
-2. **7 — Owner/Admin financial read:** immutable snapshot totals, expected direct cost, margin,
+5. **7 — Owner/Admin financial read:** immutable snapshot totals, expected direct cost, margin,
    and explicit incomplete-financial-data cues.
-3. **8 — Owner/Admin review UI:** existing Requests-workspace tab plus request-detail review card.
+6. **8 — Owner/Admin review UI:** existing Requests-workspace tab plus request-detail review card.
 
 Every slice needs its own exact file/test count and validated preflight. Do not bundle later
 financial/review work into field capture merely because files overlap.

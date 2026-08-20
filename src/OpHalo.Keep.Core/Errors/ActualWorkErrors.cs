@@ -76,4 +76,14 @@ public static class ActualWorkErrors
     /// or not the visit has lines — an undefined enum value is never persisted.</summary>
     public static readonly Error InvalidOutcome =
         Error.Create("ActualWork.InvalidOutcome", "The visit outcome is not a valid value.");
+
+    /// <summary>Build-log/129's 5d-i preflight lock: the ADR-479 operational-eligibility predicate,
+    /// recomputed from the row-locked assembly/catalog-item state at expand time, failed.</summary>
+    public static readonly Error ExpandAssemblyNotOperationallyEligible =
+        Error.Create("ActualWork.ExpandAssemblyNotOperationallyEligible", "This assembly is no longer eligible to expand.");
+
+    /// <summary>One or more submitted optional-item inclusion ids do not name a current optional
+    /// associated item on the assembly (unknown id, or a required item's id).</summary>
+    public static readonly Error ExpandInclusionItemInvalid =
+        Error.Create("ActualWork.ExpandInclusionItemInvalid", "One or more selected optional items are not valid for this assembly.");
 }

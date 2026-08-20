@@ -803,6 +803,26 @@ public static class KeepEndpoints
                 : ErrorHttpMapper.ToHttpResult(result.Error);
         }).RequireAuthorization();
 
+        app.MapPost("/keep/pricebook/actual-work/{actualWorkId:guid}/expand-assembly", async (
+            Guid actualWorkId,
+            ActualWorkExpandAssemblyBody body,
+            HttpRequest httpRequest,
+            ActualWorkDraftApiService service,
+            CancellationToken ct) =>
+        {
+            var versionResult = ParseActualWorkVersion(httpRequest.Headers);
+            if (!versionResult.IsSuccess)
+                return ErrorHttpMapper.ToHttpResult(versionResult.Error);
+
+            var command = new ExpandActualWorkAssemblyApiCommand(
+                body.OfferingAssemblyId, body.IncludedOptionalItemIds ?? []);
+            var result = await service.ExpandAssemblyAsync(actualWorkId, command, versionResult.Value, ct);
+            return result.IsSuccess
+                ? Results.Ok(new ActualWorkExpandAssemblyResponse(
+                    result.Value.LineIds, result.Value.SkippedCatalogItemIds, result.Value.ActualWorkConcurrencyVersion))
+                : ErrorHttpMapper.ToHttpResult(result.Error);
+        }).RequireAuthorization();
+
         app.MapPut("/keep/pricebook/actual-work/{actualWorkId:guid}/lines/{lineId:guid}", async (
             Guid actualWorkId,
             Guid lineId,
@@ -1145,6 +1165,13 @@ file sealed record ActualWorkSubmitBody(string? Outcome, string? CompletionNote)
 file sealed record ActualWorkLineAddedResponse(Guid LineId, Guid ActualWorkConcurrencyVersion);
 
 file sealed record ActualWorkConcurrencyVersionResponse(Guid ConcurrencyVersion);
+
+/// <summary>Build-log/129's 5d-i preflight lock: <see cref="IncludedOptionalItemIds"/> names the
+/// assembly's optional item ids to include; optional items default out (null/empty means none).</summary>
+file sealed record ActualWorkExpandAssemblyBody(Guid OfferingAssemblyId, IReadOnlyList<Guid>? IncludedOptionalItemIds);
+
+file sealed record ActualWorkExpandAssemblyResponse(
+    IReadOnlyList<Guid> LineIds, IReadOnlyList<Guid> SkippedCatalogItemIds, Guid ActualWorkConcurrencyVersion);
 
 // Follow-up resolution request body (ADR-440, S83b).
 // NewDate / NewFollowUpReason are only used when Outcome == "move".

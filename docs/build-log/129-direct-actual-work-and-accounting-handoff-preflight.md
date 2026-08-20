@@ -113,6 +113,91 @@ the Price Book. It must be an end-to-end vertical batch, not an isolated schema 
 - Marking a visit reviewed and resolving the aggregate Actual Work review signal run in one
   database transaction; a request remains queued while any submitted visit is unreviewed.
 
+### Business-completeness correction — 2026-08-20
+
+The implemented 5b field composer permits catalog-item search and custom/off-catalog lines, but
+does not offer assembly expansion or contextual nudges. That omission is not acceptable as the
+complete pilot field workflow: technicians need help finding the full set of parts and work that
+actually belongs in a factual Actual Work visit. Repeated individual searches or vague custom
+lines would make complete, trustworthy field recording unnecessarily difficult.
+
+Assembly expansion and field nudges are therefore required pilot field-assist capabilities, not
+optional polish. They remain price-blind and factual: neither may automatically add work, expose
+financial information, or convert Actual Work into a Proposed Scope recommendation flow. A new
+**5d — Actual Work field assist: assembly expansion and nudges** batch must follow 5c and receive
+its own mechanical preflight before implementation. That preflight must lock the expansion result
+and immutable-snapshot behavior, duplicate-component handling, nudge eligibility/deduplication and
+dismissal, explicit add/no-action behavior, Draft concurrency, and focused regression coverage.
+Do not reuse Proposed Scope behavior blindly merely because its interaction pattern is related.
+
+### 5d preflight — locked decisions — 2026-08-20
+
+Evaluated against Proposed Scope's existing assembly-expansion (`EditProposedScopeService
+.ExpandAssemblyAsync`) and nudge (`ScopeNudgeRule`/`ScopeNudgeSuggestion`,
+`ScopeNudgeFieldReadApiService`) prior art. Locked:
+
+- **Duplicate handling — skip and report.** Applies only to automated assembly-expansion and
+  nudge-add actions, not today's manual `AddLineAsync`, which keeps its existing no-guard
+  behavior. If the Draft already contains a line for a given catalog item, the generated line for
+  that component is skipped and the result reports which components were skipped so the UI can
+  tell the technician; the action still succeeds for the remaining components.
+- **Snapshot behavior — identical to a manual add.** Every generated catalog line resolves its
+  display name, sell price, and Standard/Expected Direct Cost snapshot exactly as a manually added
+  line does, inside the single atomic expansion transaction (one `ConcurrencyVersion` bump, not
+  one per line).
+- **Nudge source — separate Actual Work rule set, same technical shape.** Actual Work nudges reuse
+  the price-blind association mechanics (trigger → suggested targets, no stored price data) but do
+  not read Proposed Scope's `ScopeNudgeRule` rows. Proposed Scope nudges express commercial/upsell
+  intent; Actual Work nudges must express factual-completion pairing. A new, separately
+  Owner/Admin-configured rule set keeps that editorial ownership from blurring together later.
+- **Nudge eligibility/dismissal — stateless, matching Proposed Scope's pattern.** No persisted
+  dismiss state; the read service filters out any suggestion already on the current Draft or no
+  longer eligible, on every call.
+- **Explicit add — ordinary single-line add.** Tapping a nudge suggestion calls the same
+  `AddLineAsync` path as a manual add; there is no separate "suggested line" staging state.
+- **Draft concurrency — single token, no parallel path.** Expansion and nudge-add both go through
+  the Draft's one `ConcurrencyVersion`, the same optimistic-concurrency model as every other Draft
+  mutation.
+- **Batch split.** 5d splits into **5d-i — assembly expansion** (atomic expansion, per-item
+  snapshot resolution, skip-and-report result, concurrency/authorization tests) and **5d-ii —
+  Actual Work nudges** (separate configuration/read/add flow, stateless eligibility filtering, no
+  persisted dismissal), as two independently gated sessions rather than one batch, to stay inside
+  the hard batch-size gate.
+
+### 5d-i-a implementation notes — 2026-08-20
+
+Backend expansion seam implemented and tested (7 production files, matching the locked estimate):
+`IActualWorkAssemblyExpansionPersistence`/`EfActualWorkAssemblyExpansionPersistence` (new),
+`ActualWorkDraftApiService.ExpandAssemblyAsync`, `ActualWorkErrors` (two new codes), the
+`POST /keep/pricebook/actual-work/{actualWorkId}/expand-assembly` route in `KeepEndpoints.cs`, its
+DI registration in `KeepServiceCollectionExtensions.cs`, and two new `ErrorHttpMapper` lines.
+
+Two corrections made during the preflight review before implementation, both preserved here since
+they change the locked design:
+
+- **No pre-transaction tracked load.** `ActualWorkDraftApiService.ExpandAssemblyAsync` performs
+  only the account-level `AuthorizeAsync()` gate — no row read. The active-Responsible check moved
+  inside `EfActualWorkAssemblyExpansionPersistence.ExpandAsync`, run immediately after the
+  transaction's own `FOR UPDATE` lock on the Draft (the first tracked load of that aggregate
+  anywhere in the call path). This avoids handing an already-tracked `ActualWork` to the locked
+  seam, which would have let EF's identity map silently reuse the pre-lock entity instead of the
+  transaction's authoritative locked read. A `NotResponsible` outcome maps to the same
+  indistinguishable `KeepRequestErrors.NotFound` (404) `AuthorizeAndLoadDraftAsync` already used.
+- **Optional-item inclusion validated by `OfferingAssemblyItem.Id`**, not `CatalogItemId` — mirrors
+  `IOfferingAssemblyExpansionPersistence`'s `excludedOptionalItemIds` convention exactly (just
+  inverted to an inclusion list per the locked contract).
+
+Tests: `ActualWorkAssemblyExpansionPersistenceTests` (new, 1 test — the two-transaction eligibility-
+recheck race proof, the one guarantee a full-stack HTTP test cannot express) plus 7 new
+`ActualWorkDraftApiTests` HTTP tests (happy path, optional-default-out, explicit optional inclusion,
+skip-and-report, invalid-inclusion 400, stale-version 409, not-responsible 404, viewer-denied 403).
+66/66 Actual Work integration tests and 25/25 unit/architecture tests passing.
+
+**5d-i-b (frontend)** still needs its own mechanical preflight: exact file list for the composer/
+hook wiring plus the `FieldScopeSearchApiService` gate broadening (`RequestsOperate` and
+(`ScopeCapture` or `ActualWorkCapture`)) locked above — that gate change reopens ADR-480's exact
+composition and needs its own regression tests proving both callers.
+
 ### Pilot draft-concurrency decision
 
 The pilot locks **one open Draft visit per request**. If multiple technicians are present, the
@@ -138,6 +223,8 @@ foundation session is not feature completion; the next named session follows imm
    Actual Work review-signal raise/reopen behavior.
 5. **Field capture UI.** Request Detail composer, client API/types, retry/error behavior, and
    read-only submitted visit history.
+5d. **Actual Work field assist: assembly expansion and nudges.** Price-blind technician support
+   for finding and recording complete factual work; separate preflight required before code.
 6. **Owner/Admin review mutation.** Mark reviewed, reviewer/time/note, and atomic aggregate-signal
    resolution.
 7. **Owner/Admin financial read.** Immutable-snapshot totals, Standard/Expected Direct Cost,

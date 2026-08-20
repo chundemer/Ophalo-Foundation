@@ -205,6 +205,10 @@ public static class ErrorHttpMapper
             var c when c == "ActualWork.DraftAlreadyOpenForRequest" => (StatusCodes.Status409Conflict, "Conflict.", null),
             var c when c == "ActualWork.NotDraft"                  => (StatusCodes.Status409Conflict, "Conflict.", null),
 
+            // --- Direct Actual Work expand-assembly (build-log/129, 5d-i) ---
+            var c when c == "ActualWork.ExpandAssemblyNotOperationallyEligible" => (StatusCodes.Status409Conflict, "Conflict.", null),
+            var c when c == "ActualWork.ExpandInclusionItemInvalid" => (StatusCodes.Status400BadRequest, "Bad request.", null),
+
             // --- Price book publish lock conflict (Session 2d.2, ADR-470) ---
             var c when c == "PriceBookVersion.PublishLockConflict" => (StatusCodes.Status409Conflict, "Conflict.", null),
             var c when c == "PriceBookVersion.CatalogItemNotActive" => (StatusCodes.Status409Conflict, "Conflict.", null),

@@ -28,6 +28,17 @@ public sealed record AddActualWorkLineApiCommand(
 /// parent's token, so the caller needs the new value to chain the next sequential edit.</summary>
 public sealed record AddActualWorkLineResult(Guid LineId, Guid ActualWorkConcurrencyVersion);
 
+/// <summary>Build-log/129's 5d-i preflight lock: <see cref="IncludedOptionalItemIds"/> names the
+/// assembly's optional <c>OfferingAssemblyItem</c> ids to include — optional items default out, an
+/// empty list means none of them. Required items and the primary item are always included.</summary>
+public sealed record ExpandActualWorkAssemblyApiCommand(
+    Guid OfferingAssemblyId, IReadOnlyList<Guid> IncludedOptionalItemIds);
+
+/// <summary><see cref="SkippedCatalogItemIds"/> lists every candidate already present on the Draft
+/// (skip-and-report) — the expansion still succeeds for the remaining components.</summary>
+public sealed record ExpandActualWorkAssemblyResult(
+    IReadOnlyList<Guid> LineIds, IReadOnlyList<Guid> SkippedCatalogItemIds, Guid ActualWorkConcurrencyVersion);
+
 /// <summary>
 /// API-facing orchestration for Draft create/add-line/update-line/remove-line/discard (ADR-487,
 /// build-log/129, Batch 3) — the single three-gate owner for Actual Work draft mutations:
@@ -42,6 +53,7 @@ public sealed class ActualWorkDraftApiService(
     IActualWorkPersistence persistence,
     ICatalogReadPersistence catalogPersistence,
     IActiveResponsibleCheck responsibleCheck,
+    IActualWorkAssemblyExpansionPersistence assemblyExpansionPersistence,
     SubmitActualWorkService submitService,
     IAccountAccessSnapshotPersistence snapshotPersistence,
     ICurrentUser currentUser,
@@ -148,6 +160,48 @@ public sealed class ActualWorkDraftApiService(
             ActualWorkCommitResult.ConcurrencyConflict =>
                 Result<AddActualWorkLineResult>.Failure(ActualWorkErrors.VersionMismatch),
             _ => throw new InvalidOperationException($"Unexpected commit result: {commitResult}"),
+        };
+    }
+
+    /// <summary>
+    /// Build-log/129's 5d-i preflight lock: thin passthrough to
+    /// <see cref="IActualWorkAssemblyExpansionPersistence"/>, which owns the entire lock/recheck/
+    /// append transaction. Deliberately performs no row read of its own — the persistence seam's
+    /// locked load of the Draft must be the first tracked load of that aggregate anywhere in the
+    /// call path, so the active-Responsible/version/status checks all happen inside the transaction
+    /// against the just-locked row, not against a separately tracked pre-check load.
+    /// </summary>
+    public async Task<Result<ExpandActualWorkAssemblyResult>> ExpandAssemblyAsync(
+        Guid actualWorkId, ExpandActualWorkAssemblyApiCommand command, Guid expectedVersion, CancellationToken ct)
+    {
+        var gate = await AuthorizeAsync(ct);
+        if (gate.IsFailure)
+            return Result<ExpandActualWorkAssemblyResult>.Failure(gate.Error);
+
+        var outcome = await assemblyExpansionPersistence.ExpandAsync(
+            currentUser.AccountId, actualWorkId, expectedVersion, command.OfferingAssemblyId,
+            command.IncludedOptionalItemIds, currentUser.UserId, gate.Value, ct);
+
+        return outcome.Result switch
+        {
+            ActualWorkExpandAssemblyResult.Committed => Result<ExpandActualWorkAssemblyResult>.Success(
+                new ExpandActualWorkAssemblyResult(
+                    outcome.LineIds!, outcome.SkippedCatalogItemIds!, outcome.ConcurrencyVersion!.Value)),
+            ActualWorkExpandAssemblyResult.NotFound =>
+                Result<ExpandActualWorkAssemblyResult>.Failure(ActualWorkErrors.NotFound),
+            ActualWorkExpandAssemblyResult.NotResponsible =>
+                Result<ExpandActualWorkAssemblyResult>.Failure(KeepRequestErrors.NotFound),
+            ActualWorkExpandAssemblyResult.VersionMismatch =>
+                Result<ExpandActualWorkAssemblyResult>.Failure(ActualWorkErrors.VersionMismatch),
+            ActualWorkExpandAssemblyResult.NotDraft =>
+                Result<ExpandActualWorkAssemblyResult>.Failure(ActualWorkErrors.NotDraft),
+            ActualWorkExpandAssemblyResult.AssemblyNotFound =>
+                Result<ExpandActualWorkAssemblyResult>.Failure(OfferingAssemblyErrors.NotFound),
+            ActualWorkExpandAssemblyResult.AssemblyNotOperationallyEligible =>
+                Result<ExpandActualWorkAssemblyResult>.Failure(ActualWorkErrors.ExpandAssemblyNotOperationallyEligible),
+            ActualWorkExpandAssemblyResult.InvalidInclusion =>
+                Result<ExpandActualWorkAssemblyResult>.Failure(ActualWorkErrors.ExpandInclusionItemInvalid),
+            _ => throw new InvalidOperationException($"Unexpected expand result: {outcome.Result}"),
         };
     }
 
