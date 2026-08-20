@@ -332,6 +332,7 @@ app.MapFieldOfferingAssemblyEndpoints();
 app.MapFieldScopeSearchEndpoints();
 app.MapQuickScopeActionEndpoints();
 app.MapScopeNudgeRuleEndpoints();
+app.MapActualWorkNudgeRuleEndpoints();
 app.MapFieldQuickScopeActionEndpoints();
 app.MapFieldScopeNudgeEndpoints();
 

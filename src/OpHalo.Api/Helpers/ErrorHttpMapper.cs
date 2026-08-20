@@ -50,6 +50,10 @@ public static class ErrorHttpMapper
             // target, not malformed input, so 404 rather than the generic 400 default.
             "ScopeNudgeRule.TargetNotFound" => (StatusCodes.Status404NotFound, "Resource not found.", null),
 
+            // Same shape as ScopeNudgeRule.TargetNotFound (build-log/129, 5d-ii-b) — a missing
+            // configured target, not malformed input.
+            "ActualWorkNudgeRule.TargetNotFound" => (StatusCodes.Status404NotFound, "Resource not found.", null),
+
             // Malformed trigger query parameter shape (missing/duplicate/combined) on the field
             // nudge-read endpoint — build-log/123.
             "ScopeNudgeRule.TriggerQueryParameterInvalid" => (StatusCodes.Status400BadRequest, "Bad request.", null),
@@ -199,6 +203,8 @@ public static class ErrorHttpMapper
             var c when c == "CatalogCategory.NameAlreadyExists"       => (StatusCodes.Status409Conflict, "Conflict.", null),
 
             var c when c == "ScopeNudgeRule.DuplicateTrigger" => (StatusCodes.Status409Conflict, "Conflict.", null),
+
+            var c when c == "ActualWorkNudgeRule.DuplicateTrigger" => (StatusCodes.Status409Conflict, "Conflict.", null),
 
             // --- Direct Actual Work draft conflicts (ADR-487, build-log/129, Batch 3) ---
             var c when c == "ActualWork.VersionMismatch"           => (StatusCodes.Status409Conflict, "Conflict.", null),

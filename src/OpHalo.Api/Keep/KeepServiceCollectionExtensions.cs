@@ -177,6 +177,13 @@ public static class KeepServiceCollectionExtensions
         // ICatalogReadPersistence/IOfferingAssemblyPersistence (all registered above).
         services.AddScoped<ScopeNudgeFieldReadApiService>();
 
+        // Direct Actual Work — Owner/Admin nudge rule configuration (build-log/129, 5d-ii-b).
+        // IActualWorkNudgeRulePersistence was added in 5d-ii-a2 with no consumer until this batch.
+        // Reuses ICatalogReadPersistence/IOfferingAssemblyPersistence (registered above) for
+        // existence checks and display/eligibility resolution.
+        services.AddScoped<IActualWorkNudgeRulePersistence, EfActualWorkNudgeRulePersistence>();
+        services.AddScoped<ActualWorkNudgeRuleConfigApiService>();
+
         // Direct Actual Work — draft create/edit/discard (ADR-487, build-log/129, Batch 3).
         // IActualWorkPersistence was added in Batch 2 with no consumer until this batch. Reuses
         // ICatalogReadPersistence (registered above) to resolve a field-selected catalog item's
