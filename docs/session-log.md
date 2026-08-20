@@ -1,7 +1,7 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-08-20 (Direct Actual Work — Batch 4 submission/review signal implemented and
-reviewed; Batch 5 field capture UI next)
+**Last updated:** 2026-08-20 (Direct Actual Work — Batch 5a visit-history read path implemented and
+reviewed; Batch 5b capture composer next)
 **Deployment posture:** Not pilot-ready.
 **Source of truth for acceptance criteria:** `docs/pilot-readiness-bug-tracker.md`.
 
@@ -185,6 +185,46 @@ the persistence layer — `NoWorkAuthorized`/`NoAccess` zero-line success is cov
 plus one HTTP-level `NoAccess` test, not independently at the persistence layer. Batch 5 (field
 capture UI: Request Detail composer, client API/types, retry/error behavior, read-only submitted
 visit history) is next.
+
+**Batch 5 (field capture UI) split into 5a/5b/5c before implementation (2026-08-20).** Batch 5's
+own build-log/129 label ("field capture UI, client API/types, retry/error, read-only history") is
+not one implementable slice — a mechanical preflight found it needs a new backend read path first
+(no prior batch had a "list visits for a request" query), plus a frontend composer substantial
+enough that it must not be bundled with the read path or the history UI without separately
+inventorying file counts against the hard batch-size gate. Locked split:
+- **5a — backend read path only:** submitted-history query/service/endpoint/DI/tests, plus the
+  optional active-Responsible openDraft projection needed for resume-after-reload. **Complete
+  (commit `7c71086`).**
+- **5b — capture composer:** client API/types, the Request Detail mount (mirrors where
+  `ProposedScopeComposer` mounts below `DetailHero` in `web/ophalo-app`, both desktop and mobile
+  CSS-toggled layouts), and all draft mutation/submit handling (create/add-line/update-line/
+  remove-line/discard/submit). Next.
+- **5c — submitted-history UI:** deferred until 5b's own file-count inventory shows whether it
+  comfortably fits in 5b's gate or needs its own session. Do not bundle 5b and 5c before that
+  inventory.
+
+**Batch 5a (visit-history read path) is implemented and reviewed (2026-08-20, commit `7c71086`).**
+`IActualWorkPersistence.GetSubmittedVisitsForRequestAsync` (newest-first,
+`SubmittedAtUtc DESC, Id DESC`) plus the existing `GetOpenDraftForRequestAsync` back a new
+`ActualWorkHistoryReadApiService` behind `GET /keep/pricebook/actual-work/request/{requestId}/history`.
+Read policy mirrors `ProposedScopeReadApiService`, not the mutation gate: gate 1 denies only on
+`decision.IsBlocked`, so a `ReadOnly` (e.g. OffSeason) account can still view price-blind history.
+Submitted visits are gated by normal request visibility (`IKeepRequestDetailPersistence`,
+MyWork/AccountWide); the open Draft is included only when `IActiveResponsibleCheck` confirms the
+caller is the request's active Responsible recorder — this is what makes reload-after-crash/refresh
+recovery work, since a bare create call cannot otherwise discover an already-open Draft. Response
+DTOs are price-blind by construction: `ActualWorkOpenDraftEntry` carries `ConcurrencyVersion` (the
+composer needs it to keep editing), `ActualWorkSubmittedVisitEntry` does not (nothing here is ever
+mutated through this read); neither exposes catalog/price-book ids, price, cost, margin, or
+per-line recorder identity/time (not approved for this field-facing view — the pilot's
+one-Responsible-per-visit rule makes it unnecessary here; a later closeout/export preflight may
+still lock line-level attribution for accounting, separately). **Review correction (fixed before
+commit):** `Include(Lines)` does not guarantee collection order, so line mapping now explicitly
+orders `CreatedAtUtc ASC, Id ASC` rather than leaving response order to reload happenstance, with a
+regression test proving recorded order survives. 5 production files + 2 test files, within gate.
+57/57 focused Actual Work integration tests and 14/14 architecture tests passing; `git diff --check`
+clean. Batch 5b (capture composer) is next — start implementation preflight fresh, reading this
+entry plus build-log/129's field-capture-UI notes, not by rediscovering the split above.
 
 **Pilot communications and feedback: required for pilot activation (2026-08-19).** [Build Log
 104](build-log/104-mixed-contractor-pilot-go-live-roadmap.md) promotes authenticated Pilot Updates
