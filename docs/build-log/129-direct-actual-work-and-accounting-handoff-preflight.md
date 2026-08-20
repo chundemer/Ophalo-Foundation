@@ -164,6 +164,48 @@ Evaluated against Proposed Scope's existing assembly-expansion (`EditProposedSco
   persisted dismissal), as two independently gated sessions rather than one batch, to stay inside
   the hard batch-size gate.
 
+### 5d-ii preflight — locked decisions — 2026-08-20
+
+Mechanical preflight against the prior-art seam (`ScopeNudgeRule`/`ScopeNudgeSuggestion`,
+`IScopeNudgeRulePersistence`, `ScopeNudgeRuleConfigApiService`, `ScopeNudgeFieldReadApiService`,
+`ScopeNudgeRuleEndpoints`) confirmed every named symbol exists as described. A literal single-session
+5d-ii would require a new domain pair (`ActualWorkNudgeRule`/`ActualWorkNudgeSuggestion` +
+set validator + errors), a new persistence contract/EF implementation/two EF configurations/one
+migration, an Owner/Admin config API service (Create/Update/Delete — 3 mutation families alone),
+a technician field-read API service, endpoints, DI registration, `ErrorHttpMapper` additions, and
+frontend wiring — ~15 production files and 3+ mutation families, over the hard batch-size gate.
+Locked:
+
+- **Five-way split**, not the two-way 5d-i pattern, because 5d-ii-a alone (domain + persistence
+  contract + EF persistence + two EF configurations + migration artifacts) already exceeds the
+  eight-production-file gate as one batch:
+  1. **5d-ii-a1 — domain + application persistence contract.** `ActualWorkNudgeRule`,
+     `ActualWorkNudgeSuggestion`, `ActualWorkNudgeSuggestionSetValidator`,
+     `ActualWorkNudgeRuleErrors`, `IActualWorkNudgeRulePersistence`. No EF, no migration, no API.
+  2. **5d-ii-a2 — EF persistence, mappings, migration, persistence tests.**
+     `EfActualWorkNudgeRulePersistence`, `ActualWorkNudgeRuleConfiguration`,
+     `ActualWorkNudgeSuggestionConfiguration`, the migration (Christian runs `dotnet ef`), and
+     persistence tests.
+  3. **5d-ii-b — Owner/Admin config API.** Create/Update/Delete + list, mirroring
+     `ScopeNudgeRuleConfigApiService`/`ScopeNudgeRuleEndpoints` exactly.
+  4. **5d-ii-c — technician field-read API.** Mirrors `ScopeNudgeFieldReadApiService`; explicit add
+     reuses `ActualWorkDraftApiService.AddLineAsync`, no new mutation handler here.
+  5. **5d-ii-d — frontend.** Fetch nudges in `ActualWorkComposer`, render suggestion chips, tap-to-add
+     via the existing add-line path.
+- **Config CRUD gate — `PriceBookCatalogManage`.** Same permission as
+  `ScopeNudgeRuleConfigApiService`: this is catalog/editorial configuration, not technician capture.
+  No distinct permission key unless a future authority boundary requires one.
+
+### 5d-ii-a1 implementation notes — 2026-08-20
+
+Domain pair and application persistence contract implemented and tested (5 production files,
+matching the locked estimate): `ActualWorkNudgeRule`, `ActualWorkNudgeSuggestion`,
+`ActualWorkNudgeSuggestionSetValidator`, `ActualWorkNudgeRuleErrors` (all mirroring
+`ScopeNudgeRule`'s shape, distinct table/entities), `IActualWorkNudgeRulePersistence`
+(`ActualWorkNudgeRuleCommitResult` + per-rule CRUD contract). No EF, migration, or API surface in
+this batch. 2 new unit test files (`ActualWorkNudgeRuleTests`, `ActualWorkNudgeSuggestionSetValidatorTests`),
+15/15 passing.
+
 ### 5d-i-a implementation notes — 2026-08-20
 
 Backend expansion seam implemented and tested (7 production files, matching the locked estimate):

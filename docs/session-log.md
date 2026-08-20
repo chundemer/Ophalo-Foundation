@@ -54,6 +54,7 @@ Locked pilot rules:
 | 5b — capture composer | Complete | Build Log 129; commit `3f3dda8` |
 | 5c — submitted-history UI | Complete | Build Log 129; commit `3cd9ec5` (5a auth fix), `9bf6266` |
 | 5d-i-a — assembly expansion, backend | Complete | Build Log 129; commit `2a2d0de` |
+| 5d-ii-a1 — nudges domain + persistence contract | Complete | Build Log 129; commit pending |
 
 5b shipped with both lifecycle corrections already fixed and regression-tested in the same commit:
 the submitted confirmation no longer unmounts on the post-submit history refresh, and a create-time
@@ -99,10 +100,21 @@ eligibility, deduplication, dismissal, explicit-add, and Draft-concurrency contr
    `FieldScopeSearch` now accepts `RequestsOperate` plus either capture permission. Build Log 129,
    “5d-i-b implementation notes”; commit pending. 26 focused frontend tests, TypeScript check,
    and 44 focused HTTP integration tests passing.
-3. **5d-ii — Actual Work nudges:** next. Separate, Owner/Admin-configured Actual Work
-   rule set (same price-blind association shape as Proposed Scope's `ScopeNudgeRule`, not the same
-   rows/table — factual-completion intent, not upsell), stateless eligibility filtering against the
-   Draft, no persisted dismissal, explicit add via the ordinary single-line add path.
+3. **5d-ii — Actual Work nudges:** preflight complete, split five ways (Build Log 129, "5d-ii
+   preflight — locked decisions"). Separate, Owner/Admin-configured Actual Work rule set (same
+   price-blind association shape as Proposed Scope's `ScopeNudgeRule`, not the same rows/table —
+   factual-completion intent, not upsell), stateless eligibility filtering against the Draft, no
+   persisted dismissal, explicit add via the ordinary single-line add path. Config CRUD gate:
+   `PriceBookCatalogManage` (locked). Five independently gated sessions, in order:
+   1. **5d-ii-a1 — domain + application persistence contract:** Complete. Build Log 129, "5d-ii-a1
+      implementation notes". `ActualWorkNudgeRule`, `ActualWorkNudgeSuggestion`,
+      `ActualWorkNudgeSuggestionSetValidator`, `ActualWorkNudgeRuleErrors`,
+      `IActualWorkNudgeRulePersistence`. 5 production files, 2 new test files, 15/15 passing.
+   2. **5d-ii-a2 — EF persistence, mappings, migration, persistence tests:** next.
+   3. **5d-ii-b — Owner/Admin config API.** Create/Update/Delete + list.
+   4. **5d-ii-c — technician field-read API.** Add reuses `ActualWorkDraftApiService.AddLineAsync`;
+      no new mutation handler.
+   5. **5d-ii-d — frontend.** Fetch/render nudge suggestions in `ActualWorkComposer`, tap-to-add.
 4. **6 — Owner/Admin review mutation:** mark reviewed with reviewer/time/optional internal note,
    then atomically resolve the Actual Work signal only when no submitted visit remains unreviewed.
 5. **7 — Owner/Admin financial read:** immutable snapshot totals, expected direct cost, margin,
