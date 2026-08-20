@@ -1068,6 +1068,7 @@ public static class KeepEndpoints
 
     private static object ToActualWorkHistoryResponse(ActualWorkHistoryResult result) => new
     {
+        canCaptureActualWork = result.CanCaptureActualWork,
         openDraft = result.OpenDraft is null ? null : ToOpenDraftResponse(result.OpenDraft),
         submittedVisits = result.SubmittedVisits.Select(ToSubmittedVisitResponse),
     };

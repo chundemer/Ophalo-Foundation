@@ -11,6 +11,9 @@ import { RequestDetailActivity } from "./RequestDetailActivity";
 import { useProposedScopeCapture } from "./useProposedScopeCapture";
 import { ProposedScopeCard } from "./ProposedScopeCard";
 import { ProposedScopeComposer } from "./ProposedScopeComposer";
+import { useActualWorkCapture } from "./useActualWorkCapture";
+import { ActualWorkCard } from "./ActualWorkCard";
+import { ActualWorkComposer } from "./ActualWorkComposer";
 
 interface RequestDetailContentProps extends RequestDetailLayoutProps {
   detail: KeepRequestDetailResult;
@@ -32,6 +35,7 @@ export function RequestDetailContent(props: RequestDetailContentProps) {
   const { detail, requestId, highlights, showProminentFeedbackCard, onDetailUpdated, onContactLaunched, onEditLocation, onRecordFollowUp, onCreateFollowUp, onReviewSuccess } = props;
   const layoutProps: RequestDetailLayoutProps = { requestId, detail, highlights, showProminentFeedbackCard, onDetailUpdated, onContactLaunched, onEditLocation, onRecordFollowUp, onCreateFollowUp, onReviewSuccess };
   const proposedScopeCapture = useProposedScopeCapture(requestId);
+  const actualWorkCapture = useActualWorkCapture(requestId);
   return <div className="flex flex-1 min-h-0 overflow-hidden md:grid md:[grid-template-columns:minmax(0,7fr)_minmax(320px,3fr)]">
     <div className="flex-1 md:flex-none overflow-y-auto px-4 md:px-6 py-5 space-y-4">
       <TodayPromiseBanner detail={detail} onRecordFollowUp={onRecordFollowUp} />
@@ -40,6 +44,10 @@ export function RequestDetailContent(props: RequestDetailContentProps) {
         state={proposedScopeCapture.state}
         onStartCapture={() => void proposedScopeCapture.startCapture()}
         onStartView={proposedScopeCapture.startView}
+      />
+      <ActualWorkCard
+        state={actualWorkCapture.state}
+        onStartCapture={() => void actualWorkCapture.startCapture()}
       />
       <CustomerContactStrip requestId={requestId} phone={detail.customerPhone ?? null} email={detail.customerEmail ?? null} customerName={detail.customerName} pageToken={detail.pageToken ?? null} onContactLaunched={onContactLaunched} />
       <OriginalRequestCard detail={detail} />
@@ -75,5 +83,18 @@ export function RequestDetailContent(props: RequestDetailContentProps) {
           }}
         />
       )}
+    {actualWorkCapture.isModalOpen && actualWorkCapture.state.status === "draft" && (
+      <ActualWorkComposer
+        draft={actualWorkCapture.state.draft}
+        conflictNotice={actualWorkCapture.conflictNotice}
+        onClose={actualWorkCapture.closeModal}
+        onCommitted={() => actualWorkCapture.refetchDraft()}
+        onConflict={(message) => void actualWorkCapture.reconcileAfterConflict(message)}
+        onDismissNotice={actualWorkCapture.clearConflictNotice}
+        onRetryReconciliation={() => void actualWorkCapture.retryReconciliation()}
+        onSubmitted={actualWorkCapture.markSubmitted}
+        onDiscarded={actualWorkCapture.onDraftDiscarded}
+      />
+    )}
   </div>;
 }

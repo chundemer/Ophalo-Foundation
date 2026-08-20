@@ -51,9 +51,26 @@ public sealed class ActualWorkHistoryApiTests : IClassFixture<KeepApiWebFactory>
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.True(body.GetProperty("canCaptureActualWork").GetBoolean());
         Assert.True(body.TryGetProperty("openDraft", out var openDraft));
         Assert.Equal(draftVersion, openDraft.GetProperty("concurrencyVersion").GetGuid());
         Assert.Equal(1, body.GetProperty("submittedVisits").GetArrayLength());
+    }
+
+    [Fact]
+    public async Task GetHistory_ActiveResponsibleWithoutDraft_CanCaptureActualWorkIsTrue()
+    {
+        var (accountId, ownerId, ownerCookie) = await SeedAccountAsync("history-responsible-no-draft");
+        await EnrollAsync(accountId, ownerId);
+        var requestId = await SeedRequestAsync(accountId);
+        await SeedResponsibleAsync(requestId, accountId, ownerId);
+
+        var response = await AuthRequest(ownerCookie).GetAsync($"/keep/pricebook/actual-work/request/{requestId}/history");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.True(body.GetProperty("canCaptureActualWork").GetBoolean());
+        Assert.Equal(JsonValueKind.Null, body.GetProperty("openDraft").ValueKind);
     }
 
     [Fact]
@@ -76,6 +93,7 @@ public sealed class ActualWorkHistoryApiTests : IClassFixture<KeepApiWebFactory>
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.False(body.GetProperty("canCaptureActualWork").GetBoolean());
         Assert.Equal(JsonValueKind.Null, body.GetProperty("openDraft").ValueKind);
         Assert.Equal(1, body.GetProperty("submittedVisits").GetArrayLength());
     }

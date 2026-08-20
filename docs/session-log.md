@@ -1,7 +1,7 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-08-20 (Direct Actual Work — Batch 5a visit-history read path implemented and
-reviewed; Batch 5b capture composer next)
+**Last updated:** 2026-08-20 (Direct Actual Work — Batch 5b capture composer implemented and
+reviewed; Batch 5c submitted-history UI next)
 **Deployment posture:** Not pilot-ready.
 **Source of truth for acceptance criteria:** `docs/pilot-readiness-bug-tracker.md`.
 
@@ -198,10 +198,10 @@ inventorying file counts against the hard batch-size gate. Locked split:
 - **5b — capture composer:** client API/types, the Request Detail mount (mirrors where
   `ProposedScopeComposer` mounts below `DetailHero` in `web/ophalo-app`, both desktop and mobile
   CSS-toggled layouts), and all draft mutation/submit handling (create/add-line/update-line/
-  remove-line/discard/submit). Next.
-- **5c — submitted-history UI:** deferred until 5b's own file-count inventory shows whether it
-  comfortably fits in 5b's gate or needs its own session. Do not bundle 5b and 5c before that
-  inventory.
+  remove-line/discard/submit). **Complete.**
+- **5c — submitted-history UI:** 5b's file-count inventory (6 production + 2 test files, well
+  within gate) shows comfortable room — 5c may run standalone next session without needing its own
+  split. Next.
 
 **Batch 5a (visit-history read path) is implemented and reviewed (2026-08-20, commit `7c71086`).**
 `IActualWorkPersistence.GetSubmittedVisitsForRequestAsync` (newest-first,
@@ -223,8 +223,45 @@ commit):** `Include(Lines)` does not guarantee collection order, so line mapping
 orders `CreatedAtUtc ASC, Id ASC` rather than leaving response order to reload happenstance, with a
 regression test proving recorded order survives. 5 production files + 2 test files, within gate.
 57/57 focused Actual Work integration tests and 14/14 architecture tests passing; `git diff --check`
-clean. Batch 5b (capture composer) is next — start implementation preflight fresh, reading this
-entry plus build-log/129's field-capture-UI notes, not by rediscovering the split above.
+clean.
+
+**5a amended before 5b implementation (2026-08-20): `canCaptureActualWork` added to the history
+response.** A null `openDraft` was ambiguous — it could mean "active Responsible, no Draft open yet"
+(capture should show) or "visible watcher, not the Responsible recorder" (capture must not show),
+and both received the same 200 shape. `ActualWorkHistoryResult`/`ActualWorkHistoryReadApiService`
+now return `CanCaptureActualWork` (= the already-computed `isResponsible`), threaded into the HTTP
+response as `canCaptureActualWork`. `ActualWorkHistoryApiTests` extended: true for a Responsible with
+no Draft, false for a visible non-Responsible watcher. Same 3 files as 5a (`KeepEndpoints.cs`,
+`ActualWorkHistoryReadApiService.cs`, `ActualWorkHistoryApiTests.cs`); no file-count gate impact.
+9/9 focused tests passing.
+
+**Batch 5b (capture composer) is implemented and reviewed (2026-08-20).** `useActualWorkCapture`
+(mirrors `useProposedScopeCapture`'s probe/draft/modal state machine, gated on
+`canCaptureActualWork`), `ActualWorkCard` (entry point), and `ActualWorkComposer` (catalog/off-
+catalog line add, quantity/note edit, remove, discard, submit) are mounted below `DetailHero` in
+`RequestDetailContent.tsx` alongside Proposed Scope. No assemblies, nudges, or Undo — a submitted
+visit is immediately immutable and the pilot has no cross-user takeover to reconcile against. The
+zero-line submit path requires a truthful outcome and non-blank completion note client-side
+(`ActualWork.Submit`'s own rule remains the server-side authority); a submit with at least one line
+requires neither. 6 production files + 2 test files, within gate.
+
+**Review corrections (fixed before commit):** (1) the submit confirmation was unmounting itself —
+`onDraftSubmitted` reprobed history immediately on submit success, flipping hook state from `draft`
+to `no-draft` and dropping `RequestDetailContent`'s `state.status === "draft"` mount condition out
+from under the just-shown confirmation. Fixed by deferring the reprobe: `markSubmitted()` only sets
+a pending flag: the reprobe now runs from `closeModal()`, once the user dismisses the confirmation.
+(2) a create-time `ActualWork.DraftAlreadyOpenForRequest` (409) — another session/tab winning the
+one-Draft-per-request race between probe and create — was swallowed into a generic "Unable to start
+a visit" error. `startCapture()` now reconciles: refetches history, opens the modal on the now-
+authoritative Draft, and surfaces the shared conflict notice, falling back to the error state only if
+the reconciling refetch itself also fails. Also hardened: `onCommitted` is now awaitable and every
+line mutation's `onSuccess` awaits it before settling, so TanStack Query keeps the mutation (and its
+disabled controls) pending until the refreshed `concurrencyVersion` actually lands — closing a
+rapid-sequential-edit window that could otherwise fire against a stale version and draw an avoidable
+409. 133/133 focused `request-detail` tests and 481/481 full frontend suite passing; `tsc --noEmit`
+and `git diff --check` clean. Batch 5c (submitted-history UI) is next — start implementation
+preflight fresh, reading this entry plus build-log/129's field-capture-UI notes, not by rediscovering
+the split above.
 
 **Pilot communications and feedback: required for pilot activation (2026-08-19).** [Build Log
 104](build-log/104-mixed-contractor-pilot-go-live-roadmap.md) promotes authenticated Pilot Updates

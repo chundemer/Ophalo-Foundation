@@ -1096,3 +1096,79 @@ export interface GetFieldScopeSearchParams {
   limit?: number;
   cursor?: string;
 }
+
+// Direct Actual Work (ADR-487, build-log/129, Batch 5b) — price-blind field capture composer.
+export interface ActualWorkCreateBody {
+  requestId: string;
+}
+
+export interface ActualWorkResult {
+  id: string;
+  requestId: string;
+  status: string;
+  concurrencyVersion: string;
+}
+
+export interface ActualWorkAddLineBody {
+  catalogItemId?: string | null;
+  offCatalogDescription?: string | null;
+  actualQuantity: number;
+  note?: string | null;
+}
+
+export interface ActualWorkUpdateLineBody {
+  actualQuantity: number;
+  note?: string | null;
+}
+
+export interface ActualWorkLineAddedResult {
+  lineId: string;
+  actualWorkConcurrencyVersion: string;
+}
+
+export interface ActualWorkConcurrencyVersionResult {
+  concurrencyVersion: string;
+}
+
+/** One of "DiagnosticOnly" | "NoWorkAuthorized" | "NoAccess" — see `ActualWorkOutcome`. */
+export interface ActualWorkSubmitBody {
+  outcome?: string | null;
+  completionNote?: string | null;
+}
+
+export interface ActualWorkLineHistoryEntry {
+  id: string;
+  displayNameSnapshot: string;
+  unitOfMeasureSnapshot: string | null;
+  actualQuantity: number;
+  note: string | null;
+}
+
+export interface ActualWorkOpenDraftEntry {
+  id: string;
+  status: string;
+  outcome: string | null;
+  completionNote: string | null;
+  submittedAtUtc: string | null;
+  concurrencyVersion: string;
+  lines: ActualWorkLineHistoryEntry[];
+}
+
+export interface ActualWorkSubmittedVisitEntry {
+  id: string;
+  status: string;
+  outcome: string | null;
+  completionNote: string | null;
+  submittedAtUtc: string | null;
+  lines: ActualWorkLineHistoryEntry[];
+}
+
+/** `canCaptureActualWork` disambiguates a null `openDraft`: true only when the caller is the
+ * request's active Responsible recorder (whether or not a Draft is open yet) — the capture UI
+ * must gate on this, not on `openDraft === null` alone, or a non-Responsible watcher would see an
+ * action that fails on create. */
+export interface ActualWorkHistoryResult {
+  canCaptureActualWork: boolean;
+  openDraft: ActualWorkOpenDraftEntry | null;
+  submittedVisits: ActualWorkSubmittedVisitEntry[];
+}

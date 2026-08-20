@@ -32,8 +32,14 @@ public sealed record ActualWorkSubmittedVisitEntry(
     Guid Id, ActualWorkStatus Status, ActualWorkOutcome? Outcome, string? CompletionNote,
     DateTime? SubmittedAtUtc, IReadOnlyList<ActualWorkLineHistoryEntry> Lines);
 
+/// <summary><see cref="CanCaptureActualWork"/> disambiguates a null <see cref="OpenDraft"/>: it is
+/// true only when the caller is the request's active Responsible recorder (whether or not they
+/// have opened a Draft yet), false for any other visible caller (e.g. a watching Operator/Owner/
+/// Admin). The field capture UI must gate its "Record completed work" action on this, not on
+/// <c>OpenDraft is null</c> alone, or a non-Responsible watcher would see an action that fails
+/// 404/403 on create.</summary>
 public sealed record ActualWorkHistoryResult(
-    ActualWorkOpenDraftEntry? OpenDraft, IReadOnlyList<ActualWorkSubmittedVisitEntry> SubmittedVisits);
+    bool CanCaptureActualWork, ActualWorkOpenDraftEntry? OpenDraft, IReadOnlyList<ActualWorkSubmittedVisitEntry> SubmittedVisits);
 
 /// <summary>
 /// API-facing read orchestration for Actual Work visit history (Batch 5a, build-log/129):
@@ -86,7 +92,7 @@ public sealed class ActualWorkHistoryReadApiService(
         var submittedVisits = await persistence.GetSubmittedVisitsForRequestAsync(currentUser.AccountId, requestId, ct);
 
         return Result<ActualWorkHistoryResult>.Success(
-            new ActualWorkHistoryResult(openDraft, submittedVisits.Select(ToSubmittedVisitEntry).ToArray()));
+            new ActualWorkHistoryResult(isResponsible, openDraft, submittedVisits.Select(ToSubmittedVisitEntry).ToArray()));
     }
 
     private static ActualWorkOpenDraftEntry ToOpenDraftEntry(ActualWork visit) => new(

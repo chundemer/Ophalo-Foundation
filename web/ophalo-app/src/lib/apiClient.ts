@@ -210,6 +210,17 @@ import type {
   UpdateScopeNudgeRuleBody,
   ScopeNudgeFieldResultResponse,
   ScopeNudgeSuggestionFieldRowResponse,
+  ActualWorkCreateBody,
+  ActualWorkResult,
+  ActualWorkAddLineBody,
+  ActualWorkUpdateLineBody,
+  ActualWorkLineAddedResult,
+  ActualWorkConcurrencyVersionResult,
+  ActualWorkSubmitBody,
+  ActualWorkLineHistoryEntry,
+  ActualWorkOpenDraftEntry,
+  ActualWorkSubmittedVisitEntry,
+  ActualWorkHistoryResult,
 } from "./apiClient.types";
 
 export type {
@@ -329,6 +340,17 @@ export type {
   UpdateScopeNudgeRuleBody,
   ScopeNudgeFieldResultResponse,
   ScopeNudgeSuggestionFieldRowResponse,
+  ActualWorkCreateBody,
+  ActualWorkResult,
+  ActualWorkAddLineBody,
+  ActualWorkUpdateLineBody,
+  ActualWorkLineAddedResult,
+  ActualWorkConcurrencyVersionResult,
+  ActualWorkSubmitBody,
+  ActualWorkLineHistoryEntry,
+  ActualWorkOpenDraftEntry,
+  ActualWorkSubmittedVisitEntry,
+  ActualWorkHistoryResult,
 };
 
 export type { FollowUpResolutionOutcome, FollowUpCompletionReason } from "./apiClient.types";
@@ -858,5 +880,41 @@ export const api = {
     apiFetch<ProposedScopeTransitionResult>(`/keep/pricebook/proposed-scopes/${proposedScopeId}/lines/${lineId}/restore`, {
       method: "POST",
       headers: { "X-Keep-ProposedScope-Version": version },
+    }),
+  // Direct Actual Work (ADR-487, build-log/129, Batch 5b) — price-blind field capture composer.
+  getActualWorkHistoryForRequest: (requestId: string) =>
+    apiFetch<ActualWorkHistoryResult>(`/keep/pricebook/actual-work/request/${requestId}/history`),
+  createActualWork: (body: ActualWorkCreateBody) =>
+    apiFetch<ActualWorkResult>("/keep/pricebook/actual-work/create", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  addActualWorkLine: (actualWorkId: string, body: ActualWorkAddLineBody, version: string) =>
+    apiFetch<ActualWorkLineAddedResult>(`/keep/pricebook/actual-work/${actualWorkId}/lines`, {
+      method: "POST",
+      headers: { "X-Keep-ActualWork-Version": version },
+      body: JSON.stringify(body),
+    }),
+  updateActualWorkLine: (actualWorkId: string, lineId: string, body: ActualWorkUpdateLineBody, version: string) =>
+    apiFetch<ActualWorkConcurrencyVersionResult>(`/keep/pricebook/actual-work/${actualWorkId}/lines/${lineId}`, {
+      method: "PUT",
+      headers: { "X-Keep-ActualWork-Version": version },
+      body: JSON.stringify(body),
+    }),
+  removeActualWorkLine: (actualWorkId: string, lineId: string, version: string) =>
+    apiFetch<ActualWorkConcurrencyVersionResult>(`/keep/pricebook/actual-work/${actualWorkId}/lines/${lineId}`, {
+      method: "DELETE",
+      headers: { "X-Keep-ActualWork-Version": version },
+    }),
+  submitActualWork: (actualWorkId: string, body: ActualWorkSubmitBody, version: string) =>
+    apiFetch<ActualWorkConcurrencyVersionResult>(`/keep/pricebook/actual-work/${actualWorkId}/submit`, {
+      method: "POST",
+      headers: { "X-Keep-ActualWork-Version": version },
+      body: JSON.stringify(body),
+    }),
+  discardActualWork: (actualWorkId: string, version: string) =>
+    apiFetchVoid(`/keep/pricebook/actual-work/${actualWorkId}`, {
+      method: "DELETE",
+      headers: { "X-Keep-ActualWork-Version": version },
     }),
 };
