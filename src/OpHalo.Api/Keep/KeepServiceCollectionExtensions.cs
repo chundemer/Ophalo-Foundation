@@ -184,6 +184,11 @@ public static class KeepServiceCollectionExtensions
         // primitive shared by every draft mutation.
         services.AddScoped<IActualWorkPersistence, EfActualWorkPersistence>();
         services.AddScoped<IActiveResponsibleCheck, ActiveResponsibleCheck>();
+
+        // Direct Actual Work — submit/review-signal (Batch 4, build-log/129). Atomic seam separate
+        // from IActualWorkPersistence, matching IProposedScopeSubmissionPersistence.
+        services.AddScoped<IActualWorkSubmissionPersistence, EfActualWorkSubmissionPersistence>();
+        services.AddScoped<SubmitActualWorkService>();
         services.AddScoped<ActualWorkDraftApiService>();
 
         return services;

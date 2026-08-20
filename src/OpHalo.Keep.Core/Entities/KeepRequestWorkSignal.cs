@@ -17,6 +17,10 @@ public static class KeepRequestWorkSignalKeys
     public static class Signals
     {
         public const string ProposedScopeNeedsOfficeReview = "proposed_scope_needs_office_review";
+
+        /// <summary>Batch 4, build-log/129: raised when an Actual Work visit is submitted, resolved
+        /// only when no submitted visit on the request remains unreviewed.</summary>
+        public const string ActualWorkNeedsOfficeReview = "actual_work_needs_office_review";
     }
 }
 

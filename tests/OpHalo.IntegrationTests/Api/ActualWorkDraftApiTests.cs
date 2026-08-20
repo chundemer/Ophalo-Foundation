@@ -327,9 +327,219 @@ public sealed class ActualWorkDraftApiTests : IClassFixture<KeepApiWebFactory>, 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
+    [Fact]
+    public async Task Submit_ResponsibleOperatorWithLine_Returns200AndTransitionsToSubmitted()
+    {
+        var (accountId, ownerId, ownerCookie) = await SeedAccountAsync("submit-happy-path");
+        await EnrollAsync(accountId, ownerId);
+        var requestId = await SeedRequestAsync(accountId);
+        await SeedResponsibleAsync(requestId, accountId, ownerId);
+        var (actualWorkId, version) = await CreateDraftAsync(ownerCookie, requestId);
+        await AddOffCatalogLineAsync(ownerCookie, actualWorkId, version);
+
+        var request = new HttpRequestMessage(HttpMethod.Post, $"/keep/pricebook/actual-work/{actualWorkId}/submit")
+        {
+            Content = JsonContent.Create(new { outcome = (string?)null, completionNote = (string?)null })
+        };
+        request.Headers.Add("X-Keep-ActualWork-Version", (await GetVersionAsync(actualWorkId)).ToString("D"));
+        var response = await AuthRequest(ownerCookie).SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        await using var scope = _factory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+        var visit = await db.Set<ActualWork>().SingleAsync(x => x.Id == actualWorkId);
+        Assert.Equal(ActualWorkStatus.Submitted, visit.Status);
+
+        var signal = await db.Set<KeepRequestWorkSignal>().SingleOrDefaultAsync(x =>
+            x.AccountId == accountId && x.KeepRequestId == requestId &&
+            x.SignalKey == KeepRequestWorkSignalKeys.Signals.ActualWorkNeedsOfficeReview);
+        Assert.NotNull(signal);
+        Assert.Null(signal!.ResolvedAtUtc);
+    }
+
+    [Fact]
+    public async Task Submit_ZeroLinesWithNoNoteOrOutcome_Returns400()
+    {
+        var (accountId, ownerId, ownerCookie) = await SeedAccountAsync("submit-zero-line-invalid");
+        await EnrollAsync(accountId, ownerId);
+        var requestId = await SeedRequestAsync(accountId);
+        await SeedResponsibleAsync(requestId, accountId, ownerId);
+        var (actualWorkId, version) = await CreateDraftAsync(ownerCookie, requestId);
+
+        var request = new HttpRequestMessage(HttpMethod.Post, $"/keep/pricebook/actual-work/{actualWorkId}/submit")
+        {
+            Content = JsonContent.Create(new { outcome = (string?)null, completionNote = (string?)null })
+        };
+        request.Headers.Add("X-Keep-ActualWork-Version", version.ToString("D"));
+        var response = await AuthRequest(ownerCookie).SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+
+        await using var scope = _factory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+        var visit = await db.Set<ActualWork>().SingleAsync(x => x.Id == actualWorkId);
+        Assert.Equal(ActualWorkStatus.Draft, visit.Status);
+    }
+
+    [Fact]
+    public async Task Submit_ZeroLinesWithUndefinedOutcome_Returns400()
+    {
+        var (accountId, ownerId, ownerCookie) = await SeedAccountAsync("submit-invalid-outcome");
+        await EnrollAsync(accountId, ownerId);
+        var requestId = await SeedRequestAsync(accountId);
+        await SeedResponsibleAsync(requestId, accountId, ownerId);
+        var (actualWorkId, version) = await CreateDraftAsync(ownerCookie, requestId);
+
+        var request = new HttpRequestMessage(HttpMethod.Post, $"/keep/pricebook/actual-work/{actualWorkId}/submit")
+        {
+            Content = JsonContent.Create(new { outcome = "NotARealOutcome", completionNote = "Some note" })
+        };
+        request.Headers.Add("X-Keep-ActualWork-Version", version.ToString("D"));
+        var response = await AuthRequest(ownerCookie).SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Submit_ZeroLinesWithNoteAndOutcome_Returns200()
+    {
+        var (accountId, ownerId, ownerCookie) = await SeedAccountAsync("submit-zero-line-valid");
+        await EnrollAsync(accountId, ownerId);
+        var requestId = await SeedRequestAsync(accountId);
+        await SeedResponsibleAsync(requestId, accountId, ownerId);
+        var (actualWorkId, version) = await CreateDraftAsync(ownerCookie, requestId);
+
+        var request = new HttpRequestMessage(HttpMethod.Post, $"/keep/pricebook/actual-work/{actualWorkId}/submit")
+        {
+            Content = JsonContent.Create(new { outcome = "NoAccess", completionNote = "Gate was locked, no one home." })
+        };
+        request.Headers.Add("X-Keep-ActualWork-Version", version.ToString("D"));
+        var response = await AuthRequest(ownerCookie).SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        await using var scope = _factory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+        var visit = await db.Set<ActualWork>().SingleAsync(x => x.Id == actualWorkId);
+        Assert.Equal(ActualWorkStatus.Submitted, visit.Status);
+        Assert.Equal(ActualWorkOutcome.NoAccess, visit.Outcome);
+    }
+
+    [Fact]
+    public async Task Submit_StaleVersion_Returns409()
+    {
+        var (accountId, ownerId, ownerCookie) = await SeedAccountAsync("submit-stale-version");
+        await EnrollAsync(accountId, ownerId);
+        var requestId = await SeedRequestAsync(accountId);
+        await SeedResponsibleAsync(requestId, accountId, ownerId);
+        var (actualWorkId, version) = await CreateDraftAsync(ownerCookie, requestId);
+        await AddOffCatalogLineAsync(ownerCookie, actualWorkId, version);
+
+        var request = new HttpRequestMessage(HttpMethod.Post, $"/keep/pricebook/actual-work/{actualWorkId}/submit")
+        {
+            Content = JsonContent.Create(new { outcome = (string?)null, completionNote = (string?)null })
+        };
+        request.Headers.Add("X-Keep-ActualWork-Version", Guid.NewGuid().ToString("D"));
+        var response = await AuthRequest(ownerCookie).SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Submit_OperatorNotResponsible_Returns404()
+    {
+        var (accountId, ownerId, ownerCookie) = await SeedAccountAsync("submit-not-responsible");
+        await EnrollAsync(accountId, ownerId);
+        var operatorId = await SeedOperatorAsync(accountId, "submit-not-responsible");
+        var operatorCookie = await GetCookieAsync(operatorId, accountId);
+        var requestId = await SeedRequestAsync(accountId);
+        await SeedResponsibleAsync(requestId, accountId, ownerId);
+        var (actualWorkId, version) = await CreateDraftAsync(ownerCookie, requestId);
+
+        var request = new HttpRequestMessage(HttpMethod.Post, $"/keep/pricebook/actual-work/{actualWorkId}/submit")
+        {
+            Content = JsonContent.Create(new { outcome = "NoAccess", completionNote = "Gate was locked." })
+        };
+        request.Headers.Add("X-Keep-ActualWork-Version", version.ToString("D"));
+        var response = await AuthRequest(operatorCookie).SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Submit_ViewerWithoutActualWorkCapture_Returns403()
+    {
+        var (accountId, ownerId, ownerCookie) = await SeedAccountAsync("submit-viewer-denied");
+        await EnrollAsync(accountId, ownerId);
+        var viewerId = await SeedViewerAsync(accountId, "submit-viewer-denied");
+        var viewerCookie = await GetCookieAsync(viewerId, accountId);
+        var requestId = await SeedRequestAsync(accountId);
+        await SeedResponsibleAsync(requestId, accountId, ownerId);
+        var (actualWorkId, version) = await CreateDraftAsync(ownerCookie, requestId);
+
+        var request = new HttpRequestMessage(HttpMethod.Post, $"/keep/pricebook/actual-work/{actualWorkId}/submit")
+        {
+            Content = JsonContent.Create(new { outcome = "NoAccess", completionNote = "Gate was locked." })
+        };
+        request.Headers.Add("X-Keep-ActualWork-Version", version.ToString("D"));
+        var response = await AuthRequest(viewerCookie).SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Submit_SubmittedVisit_Returns409AndPreservesImmutableState()
+    {
+        var (accountId, ownerId, ownerCookie) = await SeedAccountAsync("submit-already-submitted");
+        await EnrollAsync(accountId, ownerId);
+        var requestId = await SeedRequestAsync(accountId);
+        await SeedResponsibleAsync(requestId, accountId, ownerId);
+        var (actualWorkId, _) = await CreateDraftAsync(ownerCookie, requestId);
+        var submittedVersion = await SubmitAsync(actualWorkId, accountId);
+
+        var request = new HttpRequestMessage(HttpMethod.Post, $"/keep/pricebook/actual-work/{actualWorkId}/submit")
+        {
+            Content = JsonContent.Create(new { outcome = "NoAccess", completionNote = "Should be rejected." })
+        };
+        request.Headers.Add("X-Keep-ActualWork-Version", submittedVersion.ToString("D"));
+        var response = await AuthRequest(ownerCookie).SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+
+        await using var scope = _factory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+        var visit = await db.Set<ActualWork>().SingleAsync(x => x.Id == actualWorkId);
+        Assert.Equal(ActualWorkStatus.Submitted, visit.Status);
+        // Original submission's outcome must survive untouched — proof the second submit attempt
+        // never reached the domain transition.
+        Assert.Equal(ActualWorkOutcome.NoWorkAuthorized, visit.Outcome);
+    }
+
     // -------------------------------------------------------------------------
     // Seeding helpers
     // -------------------------------------------------------------------------
+
+    private async Task AddOffCatalogLineAsync(string cookie, Guid actualWorkId, Guid version)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Post, $"/keep/pricebook/actual-work/{actualWorkId}/lines")
+        {
+            Content = JsonContent.Create(new
+            {
+                catalogItemId = (Guid?)null, offCatalogDescription = "Drain pan replacement", actualQuantity = 1m, note = (string?)null
+            })
+        };
+        request.Headers.Add("X-Keep-ActualWork-Version", version.ToString("D"));
+        var response = await AuthRequest(cookie).SendAsync(request);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    private async Task<Guid> GetVersionAsync(Guid actualWorkId)
+    {
+        await using var scope = _factory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+        return await db.Set<ActualWork>().Where(x => x.Id == actualWorkId).Select(x => x.ConcurrencyVersion).SingleAsync();
+    }
 
     private async Task<Guid> SubmitAsync(Guid actualWorkId, Guid accountId)
     {

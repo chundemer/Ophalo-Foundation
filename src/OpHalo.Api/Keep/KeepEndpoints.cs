@@ -839,6 +839,31 @@ public static class KeepEndpoints
                 : ErrorHttpMapper.ToHttpResult(result.Error);
         }).RequireAuthorization();
 
+        app.MapPost("/keep/pricebook/actual-work/{actualWorkId:guid}/submit", async (
+            Guid actualWorkId,
+            ActualWorkSubmitBody body,
+            HttpRequest httpRequest,
+            ActualWorkDraftApiService service,
+            CancellationToken ct) =>
+        {
+            var versionResult = ParseActualWorkVersion(httpRequest.Headers);
+            if (!versionResult.IsSuccess)
+                return ErrorHttpMapper.ToHttpResult(versionResult.Error);
+
+            ActualWorkOutcome? outcome = null;
+            if (body.Outcome is not null)
+            {
+                if (!Enum.TryParse<ActualWorkOutcome>(body.Outcome, ignoreCase: true, out var parsedOutcome))
+                    return ErrorHttpMapper.ToHttpResult(ActualWorkErrors.InvalidOutcome);
+                outcome = parsedOutcome;
+            }
+
+            var result = await service.SubmitAsync(actualWorkId, outcome, body.CompletionNote, versionResult.Value, ct);
+            return result.IsSuccess
+                ? Results.Ok(new ActualWorkConcurrencyVersionResponse(result.Value))
+                : ErrorHttpMapper.ToHttpResult(result.Error);
+        }).RequireAuthorization();
+
         app.MapDelete("/keep/pricebook/actual-work/{actualWorkId:guid}", async (
             Guid actualWorkId,
             HttpRequest httpRequest,
@@ -1064,6 +1089,12 @@ file sealed record ActualWorkAddLineBody(
     string? Note);
 
 file sealed record ActualWorkUpdateLineBody(decimal ActualQuantity, string? Note);
+
+/// <summary><see cref="Outcome"/> is a string parsed via <c>Enum.TryParse&lt;ActualWorkOutcome&gt;</c>
+/// (matches the <c>ProposedScopeLineType</c>/<c>CatalogItemType</c>/<c>PriceTreatment</c> convention
+/// — no global string-enum JSON converter is configured), one of <c>DiagnosticOnly</c>,
+/// <c>NoWorkAuthorized</c>, <c>NoAccess</c> (case-insensitive).</summary>
+file sealed record ActualWorkSubmitBody(string? Outcome, string? CompletionNote);
 
 file sealed record ActualWorkLineAddedResponse(Guid LineId, Guid ActualWorkConcurrencyVersion);
 

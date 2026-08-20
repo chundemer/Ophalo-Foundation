@@ -42,6 +42,7 @@ public sealed class ActualWorkDraftApiService(
     IActualWorkPersistence persistence,
     ICatalogReadPersistence catalogPersistence,
     IActiveResponsibleCheck responsibleCheck,
+    SubmitActualWorkService submitService,
     IAccountAccessSnapshotPersistence snapshotPersistence,
     ICurrentUser currentUser,
     IAccountAccessPolicy accountAccessPolicy,
@@ -203,6 +204,45 @@ public sealed class ActualWorkDraftApiService(
             ActualWorkCommitResult.ConcurrencyConflict => Result.Failure(ActualWorkErrors.VersionMismatch),
             _ => throw new InvalidOperationException($"Unexpected commit result: {commitResult}"),
         };
+    }
+
+    /// <summary>
+    /// Batch 4 (build-log/129). Reuses <see cref="AuthorizeAndLoadDraftAsync"/> for the three-gate
+    /// auth + active-Responsible row-authorization check + Draft-status check — that load also
+    /// supplies <c>RequestId</c> for the responsible check and <c>Lines</c> for the zero-line
+    /// pre-check below. Build Log 129 requires zero-line/outcome validation at both the domain and
+    /// API boundaries: <see cref="SubmitActualWorkService"/> delegates straight to the atomic
+    /// persistence seam, so this pre-check is duplicated here rather than solely relied upon inside
+    /// that transaction — it fails fast with a 400 before ever opening the atomic submit
+    /// transaction, while the persistence-layer domain call remains the authoritative, race-safe
+    /// enforcement (a concurrent line add/remove between this load and the atomic submit is only
+    /// caught there, via the same checks, returned as the matching
+    /// <see cref="ActualWorkSubmissionResult"/>).
+    /// </summary>
+    public async Task<Result<Guid>> SubmitAsync(
+        Guid actualWorkId, ActualWorkOutcome? outcome, string? completionNote, Guid expectedVersion, CancellationToken ct)
+    {
+        var loadResult = await AuthorizeAndLoadDraftAsync(actualWorkId, ct);
+        if (loadResult.IsFailure)
+            return Result<Guid>.Failure(loadResult.Error);
+        var actualWork = loadResult.Value;
+
+        if (actualWork.ConcurrencyVersion != expectedVersion)
+            return Result<Guid>.Failure(ActualWorkErrors.VersionMismatch);
+
+        if (outcome is not null && !Enum.IsDefined(outcome.Value))
+            return Result<Guid>.Failure(ActualWorkErrors.InvalidOutcome);
+
+        if (actualWork.Lines.Count == 0)
+        {
+            if (string.IsNullOrWhiteSpace(completionNote))
+                return Result<Guid>.Failure(ActualWorkErrors.ZeroLineCompletionNoteRequired);
+            if (outcome is null)
+                return Result<Guid>.Failure(ActualWorkErrors.ZeroLineOutcomeRequired);
+        }
+
+        return await submitService.SubmitAsync(
+            currentUser.AccountId, actualWorkId, expectedVersion, outcome, completionNote, ct);
     }
 
     private async Task<Result<Guid>> CommitAsync(ActualWork actualWork, CancellationToken ct)
