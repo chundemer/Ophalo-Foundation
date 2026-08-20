@@ -1,7 +1,7 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-08-19 (Direct Actual Work — mechanical preflight complete, 8-batch sequence
-approved, Batch 1 domain model approved to implement)
+**Last updated:** 2026-08-19 (Direct Actual Work — Batch 1 domain model implemented and reviewed,
+Batch 2 persistence/migration next)
 **Deployment posture:** Not pilot-ready.
 **Source of truth for acceptance criteria:** `docs/pilot-readiness-bug-tracker.md`.
 
@@ -88,14 +88,20 @@ backward-compatible factory wiring — is reviewed, approved, and complete. Slic
 unapproved and are deferred from this pilot: staff selection/correction, assignment gate, list
 projection/filter, and commercial facts. Do **not** infer a future workflow from the storage field.
 
-**Active next session — Actual Work Batch 1 approved (2026-08-19).**
+**Actual Work Batch 1 (domain model) complete; Batch 2 next (2026-08-19).**
 [Build Log 129](build-log/129-direct-actual-work-and-accounting-handoff-preflight.md) is the locked
 product boundary; mechanical preflight is complete. The approved 8-batch sequence is: domain →
 persistence/migration → draft API/authorization → submit/signal → field UI/history → Mark
-reviewed → financial read → review queue UI. **Batch 1 (domain model) is approved and ready to
-implement:** `ActualWork`/`ActualWorkLine` aggregate, immutable catalog price/cost snapshot
-fields, Draft lifecycle, zero-line outcome/note invariant, focused domain tests — no persistence,
-API, or UI yet. Every later batch must have its exact file list and count re-verified at its own
+reviewed → financial read → review queue UI. **Batch 1 is implemented and reviewed:**
+`ActualWork`/`ActualWorkLine` aggregate, Draft lifecycle, zero-line outcome/note invariant, and 25
+focused domain tests — no persistence, API, or UI yet. Review resolved two points, now locked for
+Batch 2: an `ActualWorkLine` has three catalog-linkage states, not two — catalog-backed with a
+Price Book snapshot (both `CatalogItemId`/`PriceBookVersionLineId` set), catalog-backed without a
+snapshot (`CatalogItemId` only — the item currently carries no price-book entry), or custom
+(neither) — states two and three both render an incomplete-financial-data cue at Owner/Admin
+review; and `ActualWork.Submit` rejects an undefined `ActualWorkOutcome` value whenever one is
+supplied, not only on a zero-line submit. **Batch 2 (persistence/migration) is next, not yet
+implemented.** Every later batch must have its exact file list and count re-verified at its own
 approval, no bundled "migration unit" shorthand; known corrections already identified going in:
 Batch 2 counts migration+designer+model-snapshot as 3 separate files (7 total, still within gate);
 Batch 4 must also count the signal-key registry file; Batch 5 needs an explicit read API/service/
