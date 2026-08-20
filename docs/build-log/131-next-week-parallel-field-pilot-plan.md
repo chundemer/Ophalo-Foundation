@@ -50,7 +50,9 @@ gate, commercial fields, or workflow behavior.
    timestamp. Submission raises an Owner/Admin Actual Work Review queue item. The office review
    shows the factual visit alongside its Price Book-backed sales price, Standard/Expected Direct
    Cost, margin, totals, and any financially incomplete line; it records the office reviewer and
-   review time. Field capture remains price-blind.
+   review time. Catalog-backed financial data is immutable at capture, never re-read from a later
+   catalog price. The queue is an Owner/Admin tab in the existing Requests workspace. Field capture
+   remains price-blind.
 
 2. **Diagnostic/no-work safeguard.** A zero-line visit is allowed only with a required completion
    note and one truthful outcome: `DiagnosticOnly`, `NoWorkAuthorized`, or `NoAccess`. It must

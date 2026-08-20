@@ -72,6 +72,12 @@ office review. Review is not customer approval, invoicing, export, payment, or r
 The signal resolves only after all submitted visits on the request are reviewed. The later CSV
 handoff builds on this reviewed work; it does not require a new field-record model.
 
+For a catalog-backed Actual Work line, the selected Price Book version-line identity, sell price,
+and Standard/Expected Direct Cost are immutable line snapshots captured with the field fact.
+Owner/Admin review never joins to a later live catalog price. Missing snapshot data is an explicit
+incomplete-financial-data state, never a fabricated total or margin. The review queue is an
+Owner/Admin-only tab within the existing Requests workspace, not new top-level navigation.
+
 ### Cost and closeout truthfulness
 
 Until Keep has receipts, purchasing, or inventory evidence, execution-cost reporting is labelled

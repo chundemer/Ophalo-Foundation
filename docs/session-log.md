@@ -1,7 +1,7 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-08-16 (Paired Nudges Session 5 — composer hook and chips — complete;
-manual field acceptance passed; Paired Nudges is field-ready)
+**Last updated:** 2026-08-19 (Direct Actual Work — mechanical preflight complete, 8-batch sequence
+approved, Batch 1 domain model approved to implement)
 **Deployment posture:** Not pilot-ready.
 **Source of truth for acceptance criteria:** `docs/pilot-readiness-bug-tracker.md`.
 
@@ -88,20 +88,28 @@ backward-compatible factory wiring — is reviewed, approved, and complete. Slic
 unapproved and are deferred from this pilot: staff selection/correction, assignment gate, list
 projection/filter, and commercial facts. Do **not** infer a future workflow from the storage field.
 
-**Active next session — Direct Actual Work mechanical implementation preflight (2026-08-19).**
+**Active next session — Actual Work Batch 1 approved (2026-08-19).**
 [Build Log 129](build-log/129-direct-actual-work-and-accounting-handoff-preflight.md) is the locked
-product boundary. The next session must turn it into one bounded, end-to-end implementation plan:
-field start/draft/submit, Owner/Admin Actual Work Review queue, Price Book-backed financial review,
-and office history; immutable visit/line storage, zero-line safeguards, authorization/visibility,
-concurrency, migration, API/UI seams, and acceptance tests. Its output must be a
-persona-complete vertical batch, not another isolated persistence-only slice. **Locked:** one open
-Draft visit per request, owned by its active Responsible user; multiple technicians do not create
-parallel drafts for this pilot. An Owner/Admin can be that Responsible recorder and uses the same
-price-blind capture action, then reviews price/cost/margin/totals through the separate office
-surface. Takeover/correction workflows, export, and reconciliation are later options; office
-financial review is required pilot scope. For one or two named pilot technicians, Keep is the
-normal primary field record; the existing ticket process is only the explicit connectivity/failure
-fallback while the office continues billing from reviewed Keep work until CSV handoff ships.
+product boundary; mechanical preflight is complete. The approved 8-batch sequence is: domain →
+persistence/migration → draft API/authorization → submit/signal → field UI/history → Mark
+reviewed → financial read → review queue UI. **Batch 1 (domain model) is approved and ready to
+implement:** `ActualWork`/`ActualWorkLine` aggregate, immutable catalog price/cost snapshot
+fields, Draft lifecycle, zero-line outcome/note invariant, focused domain tests — no persistence,
+API, or UI yet. Every later batch must have its exact file list and count re-verified at its own
+approval, no bundled "migration unit" shorthand; known corrections already identified going in:
+Batch 2 counts migration+designer+model-snapshot as 3 separate files (7 total, still within gate);
+Batch 4 must also count the signal-key registry file; Batch 5 needs an explicit read API/service/
+persistence path for visit history; Batch 7 needs its own persistence contract/EF implementation
+(or an explicitly extended existing one); Batch 8 must count the request-detail review-card mount
+plus frontend API types/client calls. **Locked:** one open Draft visit per request, owned by its
+active Responsible user; multiple technicians do not create parallel drafts for this pilot. An
+Owner/Admin can be that Responsible recorder and uses the same price-blind capture action, then
+reviews price/cost/margin/totals through the separate Owner/Admin review tab in the existing
+Requests workspace. Catalog-backed financial data is an immutable snapshot at capture, never a
+later live catalog join. Takeover/correction workflows, export, and reconciliation remain
+deferred. For one or two named pilot technicians, Keep is the normal primary field record; the
+existing ticket process is only the explicit connectivity/failure fallback while the office
+continues billing from reviewed Keep work until CSV handoff ships.
 
 **Pilot communications and feedback: required for pilot activation (2026-08-19).** [Build Log
 104](build-log/104-mixed-contractor-pilot-go-live-roadmap.md) promotes authenticated Pilot Updates

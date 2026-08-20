@@ -94,10 +94,24 @@ the Price Book. It must be an end-to-end vertical batch, not an isolated schema 
 - The field capture surface is Request Detail's **Record completed work** action. The Owner/Admin
   review surface shows immutable visit history plus Price Book-backed sales price,
   Standard/Expected Direct Cost, margin, totals, and clear incomplete-financial-data cues. No new
-  top-level navigation is added; the review queue is the office's actionable entry point.
-- Actual Work mutations follow the existing Price Book account entitlement plus request-operation
-  authority pattern. The mechanical preflight confirms the exact existing permission composition
-  at the endpoint/service seam; it does not create a new pilot-specific role or gate.
+  top-level navigation is added; the queue is an Owner/Admin-only **Actual Work Review** tab in the
+  existing Requests workspace and is the office's actionable entry point.
+- A catalog-backed Actual Work line snapshots its selected Price Book version-line identity,
+  sell price, and Standard/Expected Direct Cost when the field fact is recorded. Owner/Admin review
+  calculates from those immutable snapshots, never from the catalog's then-current price. A custom
+  or otherwise unsnapshotted line renders an explicit incomplete-financial-data cue; it never
+  produces invented totals or margin.
+- Actual Work mutations require the Price Book account entitlement, `RequestsOperate`, the distinct
+  `ActualWorkCapture` permission (`keep.pricebook.actualwork.capture`), and an active-Responsible
+  row-authorization check. The new permission is granted through `OperatorBase`; Owner/Admin
+  inherit it through role composition. The Responsible check is exposed as one reusable
+  participation read primitive, not duplicated by callers.
+- The domain and API boundary both reject a zero-line submit unless its completion note is
+  non-whitespace and its outcome is exactly `DiagnosticOnly`, `NoWorkAuthorized`, or `NoAccess`.
+- The database enforces one active Draft per request with a partial unique index whose predicate
+  matches the persisted lifecycle exactly. It must not invent a redundant `IsDiscarded` state.
+- Marking a visit reviewed and resolving the aggregate Actual Work review signal run in one
+  database transaction; a request remains queued while any submitted visit is unreviewed.
 
 ### Pilot draft-concurrency decision
 
@@ -109,20 +123,41 @@ All remaining items are mechanical-preflight choices constrained by this documen
 aggregate/table names, API/DTO shape, version header, persistence transaction, exact read
 visibility query, and focused authorization/concurrency/failure tests.
 
-## Required mechanical-preflight decisions
+### Approved implementation sequence
 
-1. Exact Actual Work aggregate/table names, status transitions, concurrency contract, and whether
-   one Draft visit is allowed per request or per responsible staff member.
-2. Required submission timestamp and the exact role/visibility rules for field users, Owner/Admin,
-   and authorized readers.
-3. Exact closeout eligibility and price/cost snapshot rules, including the hard block on direct
-   actual lines without valid customer price or Standard/Expected Direct Cost.
-4. Exact CSV schemas, export audit event, retry/idempotency behavior, and later-correction rule.
-5. `PermissionKeys.Keep.AccountingManage` is the accounting mutation/export seam and maps to
+Each session must publish its exact file/test count for the hard batch gate before edits. A
+foundation session is not feature completion; the next named session follows immediately.
+
+1. **Actual Work domain.** Visit/line aggregate, immutable financial snapshots, draft lifecycle,
+   zero-line outcome invariant, and domain tests.
+2. **Persistence and migration.** EF mappings, exact active-Draft index, persistence contract,
+   migration/designer/model-snapshot files counted individually, and persistence tests.
+3. **Draft API and authorization.** Create/edit/discard service and endpoints, `ActualWorkCapture`,
+   reusable active-Responsible check, and authorization/concurrency contracts.
+4. **Submission and review signal.** Atomic submit, zero-line boundary validation, and additive
+   Actual Work review-signal raise/reopen behavior.
+5. **Field capture UI.** Request Detail composer, client API/types, retry/error behavior, and
+   read-only submitted visit history.
+6. **Owner/Admin review mutation.** Mark reviewed, reviewer/time/note, and atomic aggregate-signal
+   resolution.
+7. **Owner/Admin financial read.** Immutable-snapshot totals, Standard/Expected Direct Cost,
+   margin, and incomplete-data projection/API.
+8. **Owner/Admin review UI.** Existing Requests-workspace Actual Work Review tab plus request-detail
+   review card; review action updates the queue and history.
+
+## Required later closeout/handoff decisions
+
+The pilot implementation sequence above resolves Actual Work aggregate, Draft, submission,
+review, snapshot, and visibility behavior. The later closeout/export preflight must still lock:
+
+1. Exact closeout eligibility over reviewed visits, including the hard block on a line lacking a
+   valid sales-price or Standard/Expected Direct Cost snapshot.
+2. Exact CSV schemas, export audit event, retry/idempotency behavior, and later-correction rule.
+3. `PermissionKeys.Keep.AccountingManage` is the accounting mutation/export seam and maps to
    Owner/Admin for the first pilot. No separate Accountant role or accounting-user UI is in the
    launch scope. A later role may receive this permission without changing accounting APIs, but
    role/membership and UI work remains a deliberate later slice.
-6. Exact invoice/reference and `Other`-note validation.
+4. Exact invoice/reference and `Other`-note validation.
 
 ## Non-goals
 
