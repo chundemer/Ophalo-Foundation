@@ -52,6 +52,7 @@ Locked pilot rules:
 | 4 — atomic submit/review signal | Complete | Build Log 129; commit `2e4e88c` |
 | 5a — price-blind history read | Complete | Build Log 129; commit `7c71086` |
 | 5b — capture composer | Complete | Build Log 129; commit `3f3dda8` |
+| 5c — submitted-history UI | Complete | Build Log 129; commit `3cd9ec5` (5a auth fix), `9bf6266` |
 
 5b shipped with both lifecycle corrections already fixed and regression-tested in the same commit:
 the submitted confirmation no longer unmounts on the post-submit history refresh, and a create-time
@@ -59,15 +60,26 @@ the submitted confirmation no longer unmounts on the post-submit history refresh
 notice. `useActualWorkCapture.test.ts`/`ActualWorkComposer.test.tsx` cover both cases (24/24
 passing, verified 2026-08-20).
 
+5c's preflight found 5a's read gate over-restrictive: it required `RequestsOperate` AND
+`ActualWorkCapture`, so a Viewer (`RequestsView` + account-wide visibility) got 403 instead of the
+locked "every request-visible reader" intent. Corrected in `3cd9ec5`: the read gate now requires
+only `RequestsView`, with `Owner`/`Admin`/`Viewer` → `AccountWide` and `Operator` → `MyWork`;
+`canCaptureActualWork` (and therefore `openDraft` visibility) is computed separately from
+`RequestsOperate` + `ActualWorkCapture` + active-Responsible. `ActualWorkHistoryApiTests` (9/9)
+covers the Viewer-200/read-only/no-Draft case. 5c itself (`9bf6266`) is a standalone,
+price-blind, read-only submitted-visit history card — its own probe (`useActualWorkHistory`), not
+a reuse of `useActualWorkCapture` (which discards `submittedVisits` for non-capturing callers).
+Explicit empty state, outcome-code-to-label mapping, quiet 403 hide, compact retry on other
+failures; a successful submit now also refreshes this card via `actualWorkHistory.retry()`. 144/144
+request-detail frontend tests passing.
+
 ### Next approved slices
 
-1. **5c — submitted-history UI:** standalone, price-blind submitted-visit history. Do not expose
-   financial/catalog identifiers or recorder/time attribution.
-2. **6 — Owner/Admin review mutation:** mark reviewed with reviewer/time/optional internal note,
+1. **6 — Owner/Admin review mutation:** mark reviewed with reviewer/time/optional internal note,
    then atomically resolve the Actual Work signal only when no submitted visit remains unreviewed.
-3. **7 — Owner/Admin financial read:** immutable snapshot totals, expected direct cost, margin,
+2. **7 — Owner/Admin financial read:** immutable snapshot totals, expected direct cost, margin,
    and explicit incomplete-financial-data cues.
-4. **8 — Owner/Admin review UI:** existing Requests-workspace tab plus request-detail review card.
+3. **8 — Owner/Admin review UI:** existing Requests-workspace tab plus request-detail review card.
 
 Every slice needs its own exact file/test count and validated preflight. Do not bundle later
 financial/review work into field capture merely because files overlap.
