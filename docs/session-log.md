@@ -55,6 +55,7 @@ Locked pilot rules:
 | 5c — submitted-history UI | Complete | Build Log 129; commit `3cd9ec5` (5a auth fix), `9bf6266` |
 | 5d-i-a — assembly expansion, backend | Complete | Build Log 129; commit `2a2d0de` |
 | 5d-ii-a1 — nudges domain + persistence contract | Complete | Build Log 129; commit `aa76a9e` |
+| 5d-ii-a2 — nudges EF persistence + migration | Complete | Build Log 129; commit pending |
 
 5b shipped with both lifecycle corrections already fixed and regression-tested in the same commit:
 the submitted confirmation no longer unmounts on the post-submit history refresh, and a create-time
@@ -110,8 +111,13 @@ eligibility, deduplication, dismissal, explicit-add, and Draft-concurrency contr
       implementation notes". `ActualWorkNudgeRule`, `ActualWorkNudgeSuggestion`,
       `ActualWorkNudgeSuggestionSetValidator`, `ActualWorkNudgeRuleErrors`,
       `IActualWorkNudgeRulePersistence`. 5 production files, 2 new test files, 15/15 passing.
-   2. **5d-ii-a2 — EF persistence, mappings, migration, persistence tests:** next.
-   3. **5d-ii-b — Owner/Admin config API.** Create/Update/Delete + list.
+   2. **5d-ii-a2 — EF persistence, mappings, migration, persistence tests:** Complete. Build Log
+      129, "5d-ii-a2 implementation notes". `ActualWorkNudgeRuleConfiguration`,
+      `ActualWorkNudgeSuggestionConfiguration`, `EfActualWorkNudgeRulePersistence`, migration
+      `20260820191413_ActualWorkNudgeRule`. 3 production files, 1 new test file, 9/9 persistence
+      tests passing against real PostgreSQL.
+   3. **5d-ii-b — Owner/Admin config API:** next. Create/Update/Delete + list, gate
+      `PriceBookCatalogManage` (locked).
    4. **5d-ii-c — technician field-read API.** Add reuses `ActualWorkDraftApiService.AddLineAsync`;
       no new mutation handler.
    5. **5d-ii-d — frontend.** Fetch/render nudge suggestions in `ActualWorkComposer`, tap-to-add.

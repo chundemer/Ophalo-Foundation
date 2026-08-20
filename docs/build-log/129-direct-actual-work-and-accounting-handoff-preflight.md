@@ -206,6 +206,21 @@ matching the locked estimate): `ActualWorkNudgeRule`, `ActualWorkNudgeSuggestion
 this batch. 2 new unit test files (`ActualWorkNudgeRuleTests`, `ActualWorkNudgeSuggestionSetValidatorTests`),
 15/15 passing.
 
+### 5d-ii-a2 implementation notes — 2026-08-20
+
+EF persistence, mappings, and migration implemented and tested (3 production files, matching the
+locked estimate): `ActualWorkNudgeRuleConfiguration`/`ActualWorkNudgeSuggestionConfiguration`
+(mirroring `ScopeNudgeRuleConfiguration`/`ScopeNudgeSuggestionConfiguration` exactly — same
+exclusive-trigger/exclusive-target check constraints, composite tenant-scoped FKs, database-level
+Cascade delete from suggestion to rule), `EfActualWorkNudgeRulePersistence`. Migration
+`20260820191413_ActualWorkNudgeRule` creates `keep_pricebook_actual_work_nudge_rules` and
+`keep_pricebook_actual_work_nudge_suggestions`; validated against the entity/configuration shape
+and confirmed both projects build clean with no pending-model-changes drift.
+`ActualWorkNudgeRulePersistenceTests` (1 new file, 9/9 passing against real PostgreSQL) covers
+duplicate-trigger uniqueness (both trigger types), the `ReplaceSuggestions`/`SaveAsync` round-trip,
+cascade delete of suggestion rows, account-scoped listing, the composite-parent-FK cross-account
+rejection, and both database check constraints.
+
 ### 5d-i-a implementation notes — 2026-08-20
 
 Backend expansion seam implemented and tested (7 production files, matching the locked estimate):
