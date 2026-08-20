@@ -1,5 +1,3 @@
-using OpHalo.Keep.Application.Requests;
-
 namespace OpHalo.Keep.Application.PriceBook;
 
 public enum ActualWorkExpandAssemblyResult
@@ -9,11 +7,11 @@ public enum ActualWorkExpandAssemblyResult
     VersionMismatch,
     NotDraft,
 
-    /// <summary>The caller is not the request's active Responsible recorder (build-log/129's sole
-    /// field-recorder rule), recomputed against the just-locked Draft's <c>RequestId</c>. Maps to
-    /// the same indistinguishable-not-found error as an unknown <c>actualWorkId</c>, never a
-    /// distinguishable 403.</summary>
-    NotResponsible,
+    /// <summary>The caller is not the Draft's current recorder (GAP-055, superseding the
+    /// active-Responsible-only recorder rule), checked directly against the just-locked Draft row's
+    /// <c>RecorderAccountUserId</c>. Maps to the same indistinguishable-not-found error as an
+    /// unknown <c>actualWorkId</c>, never a distinguishable 403.</summary>
+    NotRecorder,
 
     AssemblyNotFound,
 
@@ -43,12 +41,12 @@ public sealed record ActualWorkExpandAssemblyOutcome(
 /// preflight lock), mirroring <see cref="IOfferingAssemblyExpansionPersistence"/>'s "Assembly-
 /// expansion locking protocol": row-locks the <c>ActualWork</c> Draft (the first tracked load of
 /// that aggregate anywhere in the call path — <see cref="ActualWorkDraftApiService"/>'s gate reads
-/// no row), then the active-Responsible check, then the <c>OfferingAssembly</c> and every referenced
-/// <c>CatalogItem</c> (ascending id order), re-checks ADR-479 operational eligibility from those
-/// locked rows, then skip-and-reports any candidate already present on the Draft's just-locked
-/// <c>Lines</c> and appends the rest with the same per-item snapshot resolution a manual add uses —
-/// all inside one database transaction, committed or rolled back together. No caller ever sees a
-/// transaction object.
+/// no row), then the recorder-ownership check (GAP-055) against that just-locked row, then the
+/// <c>OfferingAssembly</c> and every referenced <c>CatalogItem</c> (ascending id order), re-checks
+/// ADR-479 operational eligibility from those locked rows, then skip-and-reports any candidate
+/// already present on the Draft's just-locked <c>Lines</c> and appends the rest with the same
+/// per-item snapshot resolution a manual add uses — all inside one database transaction, committed
+/// or rolled back together. No caller ever sees a transaction object.
 /// </summary>
 public interface IActualWorkAssemblyExpansionPersistence
 {
@@ -58,7 +56,6 @@ public interface IActualWorkAssemblyExpansionPersistence
         Guid expectedVersion,
         Guid offeringAssemblyId,
         IReadOnlyCollection<Guid> includedOptionalItemIds,
-        Guid createdByUserId,
-        KeepRequestVisibilityScope scope,
+        Guid callerAccountUserId,
         CancellationToken ct);
 }

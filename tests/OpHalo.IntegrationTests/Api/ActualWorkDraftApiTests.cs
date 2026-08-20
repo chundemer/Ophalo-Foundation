@@ -27,9 +27,9 @@ namespace OpHalo.IntegrationTests.Api;
 ///   DELETE /keep/pricebook/actual-work/{id}
 ///
 /// Covers the four-gate stack (account access, Price Book entitlement, RequestsOperate +
-/// ActualWorkCapture permissions, active-Responsible row authorization), the price-blind wire
-/// contract (a catalog-backed line's sell price/cost never appear in the response), and
-/// draft-already-open / version-mismatch conflicts.
+/// ActualWorkCapture permissions, first-recorder-ownership row authorization — GAP-055), the
+/// price-blind wire contract (a catalog-backed line's sell price/cost never appear in the
+/// response), and draft-already-open / version-mismatch conflicts.
 /// </summary>
 public sealed class ActualWorkDraftApiTests : IClassFixture<KeepApiWebFactory>, IAsyncLifetime
 {
@@ -65,14 +65,17 @@ public sealed class ActualWorkDraftApiTests : IClassFixture<KeepApiWebFactory>, 
     }
 
     [Fact]
-    public async Task Create_OperatorNotResponsible_Returns404()
+    public async Task Create_OperatorWithNoRequestParticipation_Returns404()
     {
-        var (accountId, ownerId, ownerCookie) = await SeedAccountAsync("create-not-responsible");
+        // GAP-055: creation no longer requires active-Responsible participation, but still
+        // requires the request to be visible under the caller's row-authorization scope. An
+        // Operator with no participation at all (not even Watching) is outside MyWork scope.
+        var (accountId, ownerId, ownerCookie) = await SeedAccountAsync("create-no-participation");
         await EnrollAsync(accountId, ownerId);
-        var operatorId = await SeedOperatorAsync(accountId, "create-not-responsible");
+        var operatorId = await SeedOperatorAsync(accountId, "create-no-participation");
         var operatorCookie = await GetCookieAsync(operatorId, accountId);
         var requestId = await SeedRequestAsync(accountId);
-        // No Responsible participation seeded for this Operator.
+        // No participation of any kind seeded for this Operator.
 
         var response = await AuthRequest(operatorCookie).PostAsJsonAsync(
             "/keep/pricebook/actual-work/create", new { requestId });
@@ -81,18 +84,49 @@ public sealed class ActualWorkDraftApiTests : IClassFixture<KeepApiWebFactory>, 
     }
 
     [Fact]
-    public async Task Create_OwnerNotResponsible_Returns404()
+    public async Task Create_OperatorWatchingButNotResponsible_Returns200AndOwnsTheDraft()
     {
-        // Owner has AccountWide row visibility but is not the request's active Responsible
-        // recorder — same indistinguishable 404 as an Operator outside MyWork scope.
-        var (accountId, ownerId, ownerCookie) = await SeedAccountAsync("create-owner-not-responsible");
+        // GAP-055's core fix: first-recorder ownership. A qualified Operator who is only Watching
+        // (visible under MyWork, but never the dispatch-assigned Responsible) can now start
+        // capture without an office reassignment, and becomes the Draft's recorder.
+        var (accountId, ownerId, ownerCookie) = await SeedAccountAsync("create-watching-not-responsible");
+        await EnrollAsync(accountId, ownerId);
+        var operatorId = await SeedOperatorAsync(accountId, "create-watching-not-responsible");
+        var operatorCookie = await GetCookieAsync(operatorId, accountId);
+        var requestId = await SeedRequestAsync(accountId);
+        await SeedResponsibleAsync(requestId, accountId, ownerId);
+        await SeedWatchingAsync(requestId, accountId, operatorId);
+
+        var response = await AuthRequest(operatorCookie).PostAsJsonAsync(
+            "/keep/pricebook/actual-work/create", new { requestId });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        await using var scope = _factory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+        var work = await db.Set<ActualWork>().SingleAsync(x => x.RequestId == requestId);
+        Assert.Equal(operatorId, work.RecorderAccountUserId);
+        Assert.Equal(operatorId, work.CreatedByUserId);
+    }
+
+    [Fact]
+    public async Task Create_OwnerWithAccountWideVisibilityAndNoParticipation_Returns200AndOwnsTheDraft()
+    {
+        // GAP-055: AccountWide scope (Owner/Admin) makes every account request visible regardless
+        // of participation, so Owner/Admin can also first-record without a prior assignment.
+        var (accountId, ownerId, ownerCookie) = await SeedAccountAsync("create-owner-no-participation");
         await EnrollAsync(accountId, ownerId);
         var requestId = await SeedRequestAsync(accountId);
 
         var response = await AuthRequest(ownerCookie).PostAsJsonAsync(
             "/keep/pricebook/actual-work/create", new { requestId });
 
-        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        await using var scope = _factory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+        var work = await db.Set<ActualWork>().SingleAsync(x => x.RequestId == requestId);
+        Assert.Equal(ownerId, work.RecorderAccountUserId);
     }
 
     [Fact]
@@ -237,6 +271,31 @@ public sealed class ActualWorkDraftApiTests : IClassFixture<KeepApiWebFactory>, 
         var response = await AuthRequest(ownerCookie).SendAsync(request);
 
         Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task AddLine_CallerNotTheRecorder_Returns404()
+    {
+        // GAP-055: AuthorizeAndLoadDraftAsync's recorder-ownership check is shared verbatim by
+        // AddLine/UpdateLine/RemoveLine/Discard — this proves the shared gate once, for all four.
+        var (accountId, ownerId, ownerCookie) = await SeedAccountAsync("addline-not-the-recorder");
+        await EnrollAsync(accountId, ownerId);
+        var operatorId = await SeedOperatorAsync(accountId, "addline-not-the-recorder");
+        var operatorCookie = await GetCookieAsync(operatorId, accountId);
+        var requestId = await SeedRequestAsync(accountId);
+        var (actualWorkId, version) = await CreateDraftAsync(ownerCookie, requestId);
+
+        var request = new HttpRequestMessage(HttpMethod.Post, $"/keep/pricebook/actual-work/{actualWorkId}/lines")
+        {
+            Content = JsonContent.Create(new
+            {
+                catalogItemId = (Guid?)null, offCatalogDescription = "Not my draft", actualQuantity = 1m, note = (string?)null
+            })
+        };
+        request.Headers.Add("X-Keep-ActualWork-Version", version.ToString("D"));
+        var response = await AuthRequest(operatorCookie).SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
     [Fact]
@@ -448,9 +507,12 @@ public sealed class ActualWorkDraftApiTests : IClassFixture<KeepApiWebFactory>, 
     }
 
     [Fact]
-    public async Task Submit_OperatorNotResponsible_Returns404()
+    public async Task Submit_OperatorNotTheRecorder_Returns404()
     {
-        var (accountId, ownerId, ownerCookie) = await SeedAccountAsync("submit-not-responsible");
+        // GAP-055: submit is gated on current recorder ownership, not active-Responsible
+        // participation — an Operator who never created/received this Draft still gets the same
+        // indistinguishable 404, even with full RequestsOperate + ActualWorkCapture permissions.
+        var (accountId, ownerId, ownerCookie) = await SeedAccountAsync("submit-not-the-recorder");
         await EnrollAsync(accountId, ownerId);
         var operatorId = await SeedOperatorAsync(accountId, "submit-not-responsible");
         var operatorCookie = await GetCookieAsync(operatorId, accountId);
@@ -680,19 +742,19 @@ public sealed class ActualWorkDraftApiTests : IClassFixture<KeepApiWebFactory>, 
     }
 
     [Fact]
-    public async Task ExpandAssembly_OwnerNotResponsible_Returns404()
+    public async Task ExpandAssembly_OwnerNotTheRecorder_Returns404()
     {
-        var (accountId, ownerId, ownerCookie) = await SeedAccountAsync("expand-not-responsible");
+        var (accountId, ownerId, ownerCookie) = await SeedAccountAsync("expand-not-the-recorder");
         await EnrollAsync(accountId, ownerId);
-        var operatorId = await SeedOperatorAsync(accountId, "expand-not-responsible");
+        var operatorId = await SeedOperatorAsync(accountId, "expand-not-the-recorder");
         var requestId = await SeedRequestAsync(accountId);
         await SeedResponsibleAsync(requestId, accountId, operatorId);
         var (actualWorkId, version) = await CreateDraftAsync(await GetCookieAsync(operatorId, accountId), requestId);
         var primary = await SeedPricedCatalogItemAsync(accountId, ownerId, "Condenser Unit");
         var assemblyId = await SeedAssemblyAsync(accountId, ownerId, primary.Id);
 
-        // Owner has AccountWide row visibility but is not this request's active Responsible
-        // recorder — same indistinguishable 404 as every other draft mutation gate.
+        // Owner has AccountWide row visibility but is not this Draft's current recorder (GAP-055)
+        // — same indistinguishable 404 as every other draft mutation gate.
         var request = new HttpRequestMessage(HttpMethod.Post, $"/keep/pricebook/actual-work/{actualWorkId}/expand-assembly")
         {
             Content = JsonContent.Create(new { offeringAssemblyId = assemblyId, includedOptionalItemIds = Array.Empty<Guid>() })
@@ -796,6 +858,17 @@ public sealed class ActualWorkDraftApiTests : IClassFixture<KeepApiWebFactory>, 
         db.Set<KeepRequestParticipant>().Add(
             KeepRequestParticipant.Create(
                 requestId, accountId, accountUserId, ParticipationType.Responsible, notificationsEnabled: true, now));
+        await db.SaveChangesAsync();
+    }
+
+    private async Task SeedWatchingAsync(Guid requestId, Guid accountId, Guid accountUserId)
+    {
+        var now = DateTime.UtcNow;
+        await using var scope = _factory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+        db.Set<KeepRequestParticipant>().Add(
+            KeepRequestParticipant.Create(
+                requestId, accountId, accountUserId, ParticipationType.Watching, notificationsEnabled: true, now));
         await db.SaveChangesAsync();
     }
 

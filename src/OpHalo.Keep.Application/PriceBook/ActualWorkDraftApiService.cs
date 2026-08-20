@@ -43,16 +43,19 @@ public sealed record ExpandActualWorkAssemblyResult(
 /// API-facing orchestration for Draft create/add-line/update-line/remove-line/discard (ADR-487,
 /// build-log/129, Batch 3) — the single three-gate owner for Actual Work draft mutations:
 /// <c>RequestsOperate</c> + Price Book entitlement (ADR-462) + <c>ActualWorkCapture</c>, gate
-/// composition mirroring <see cref="ProposedScopeApiService"/> exactly. A fourth row-authorization
-/// gate follows: <see cref="IActiveResponsibleCheck"/> confirms the caller is the request's active
-/// Responsible participant — the pilot's sole field recorder (build-log/129) — not merely a member
-/// with row visibility. Submitted visits are immutable; every mutation here rejects a non-Draft
-/// visit via <see cref="ActualWorkErrors.NotDraft"/> from the domain aggregate itself.
+/// composition mirroring <see cref="ProposedScopeApiService"/> exactly. First-recorder ownership
+/// (GAP-055, superseding the active-Responsible-only recorder rule): <see cref="CreateAsync"/> only
+/// requires the request to be visible under the caller's row-authorization scope, not active
+/// Responsible participation, and sets the caller as the Draft's <c>RecorderAccountUserId</c>. Every
+/// subsequent mutation instead checks that the caller is still that current recorder — a plain field
+/// comparison, not a Responsible-participation lookup. Submitted visits are immutable; every
+/// mutation here rejects a non-Draft visit via <see cref="ActualWorkErrors.NotDraft"/> from the
+/// domain aggregate itself.
 /// </summary>
 public sealed class ActualWorkDraftApiService(
     IActualWorkPersistence persistence,
     ICatalogReadPersistence catalogPersistence,
-    IActiveResponsibleCheck responsibleCheck,
+    IKeepRequestOperatePersistence requestOperatePersistence,
     IActualWorkAssemblyExpansionPersistence assemblyExpansionPersistence,
     SubmitActualWorkService submitService,
     IAccountAccessSnapshotPersistence snapshotPersistence,
@@ -74,9 +77,9 @@ public sealed class ActualWorkDraftApiService(
         if (gate.IsFailure)
             return Result<ActualWork>.Failure(gate.Error);
 
-        var isResponsible = await responsibleCheck.IsActiveResponsibleAsync(
+        var request = await requestOperatePersistence.GetVisibleRequestForUpdateAsync(
             requestId, currentUser.AccountId, currentUser.UserId, gate.Value, ct);
-        if (!isResponsible)
+        if (request is null)
             return Result<ActualWork>.Failure(KeepRequestErrors.NotFound);
 
         var createResult = ActualWork.Create(currentUser.AccountId, requestId, currentUser.UserId);
@@ -168,8 +171,8 @@ public sealed class ActualWorkDraftApiService(
     /// <see cref="IActualWorkAssemblyExpansionPersistence"/>, which owns the entire lock/recheck/
     /// append transaction. Deliberately performs no row read of its own — the persistence seam's
     /// locked load of the Draft must be the first tracked load of that aggregate anywhere in the
-    /// call path, so the active-Responsible/version/status checks all happen inside the transaction
-    /// against the just-locked row, not against a separately tracked pre-check load.
+    /// call path, so the recorder-ownership/version/status checks (GAP-055) all happen inside the
+    /// transaction against the just-locked row, not against a separately tracked pre-check load.
     /// </summary>
     public async Task<Result<ExpandActualWorkAssemblyResult>> ExpandAssemblyAsync(
         Guid actualWorkId, ExpandActualWorkAssemblyApiCommand command, Guid expectedVersion, CancellationToken ct)
@@ -180,7 +183,7 @@ public sealed class ActualWorkDraftApiService(
 
         var outcome = await assemblyExpansionPersistence.ExpandAsync(
             currentUser.AccountId, actualWorkId, expectedVersion, command.OfferingAssemblyId,
-            command.IncludedOptionalItemIds, currentUser.UserId, gate.Value, ct);
+            command.IncludedOptionalItemIds, currentUser.UserId, ct);
 
         return outcome.Result switch
         {
@@ -189,8 +192,8 @@ public sealed class ActualWorkDraftApiService(
                     outcome.LineIds!, outcome.SkippedCatalogItemIds!, outcome.ConcurrencyVersion!.Value)),
             ActualWorkExpandAssemblyResult.NotFound =>
                 Result<ExpandActualWorkAssemblyResult>.Failure(ActualWorkErrors.NotFound),
-            ActualWorkExpandAssemblyResult.NotResponsible =>
-                Result<ExpandActualWorkAssemblyResult>.Failure(KeepRequestErrors.NotFound),
+            ActualWorkExpandAssemblyResult.NotRecorder =>
+                Result<ExpandActualWorkAssemblyResult>.Failure(ActualWorkErrors.NotFound),
             ActualWorkExpandAssemblyResult.VersionMismatch =>
                 Result<ExpandActualWorkAssemblyResult>.Failure(ActualWorkErrors.VersionMismatch),
             ActualWorkExpandAssemblyResult.NotDraft =>
@@ -262,10 +265,10 @@ public sealed class ActualWorkDraftApiService(
 
     /// <summary>
     /// Batch 4 (build-log/129). Reuses <see cref="AuthorizeAndLoadDraftAsync"/> for the three-gate
-    /// auth + active-Responsible row-authorization check + Draft-status check — that load also
-    /// supplies <c>RequestId</c> for the responsible check and <c>Lines</c> for the zero-line
-    /// pre-check below. Build Log 129 requires zero-line/outcome validation at both the domain and
-    /// API boundaries: <see cref="SubmitActualWorkService"/> delegates straight to the atomic
+    /// auth + recorder-ownership row-authorization check (GAP-055) + Draft-status check — that load
+    /// also supplies <c>Lines</c> for the zero-line pre-check below. Build Log 129 requires
+    /// zero-line/outcome validation at both the domain and API boundaries:
+    /// <see cref="SubmitActualWorkService"/> delegates straight to the atomic
     /// persistence seam, so this pre-check is duplicated here rather than solely relied upon inside
     /// that transaction — it fails fast with a 400 before ever opening the atomic submit
     /// transaction, while the persistence-layer domain call remains the authoritative, race-safe
@@ -310,11 +313,11 @@ public sealed class ActualWorkDraftApiService(
         };
     }
 
-    /// <summary>Gate 1-3, then load the visit and confirm it is still a Draft owned (by request) by
-    /// the caller's active Responsible participation — the one row-authorization check every line
-    /// mutation and discard shares. A submitted visit is immutable: every caller here, including
-    /// Discard, relies on this returning <see cref="ActualWorkErrors.NotDraft"/> rather than
-    /// separately re-checking Status.</summary>
+    /// <summary>Gate 1-3, then load the visit and confirm it is still a Draft owned by the caller's
+    /// current recorder ownership (GAP-055) — the one row-authorization check every line mutation
+    /// and discard shares. A submitted visit is immutable: every caller here, including Discard,
+    /// relies on this returning <see cref="ActualWorkErrors.NotDraft"/> rather than separately
+    /// re-checking Status.</summary>
     private async Task<Result<ActualWork>> AuthorizeAndLoadDraftAsync(Guid actualWorkId, CancellationToken ct)
     {
         var gate = await AuthorizeAsync(ct);
@@ -325,10 +328,8 @@ public sealed class ActualWorkDraftApiService(
         if (actualWork is null)
             return Result<ActualWork>.Failure(ActualWorkErrors.NotFound);
 
-        var isResponsible = await responsibleCheck.IsActiveResponsibleAsync(
-            actualWork.RequestId, currentUser.AccountId, currentUser.UserId, gate.Value, ct);
-        if (!isResponsible)
-            return Result<ActualWork>.Failure(KeepRequestErrors.NotFound);
+        if (actualWork.RecorderAccountUserId != currentUser.UserId)
+            return Result<ActualWork>.Failure(ActualWorkErrors.NotFound);
 
         if (actualWork.Status != ActualWorkStatus.Draft)
             return Result<ActualWork>.Failure(ActualWorkErrors.NotDraft);

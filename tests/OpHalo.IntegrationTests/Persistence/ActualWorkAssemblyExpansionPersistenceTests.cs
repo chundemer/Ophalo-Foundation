@@ -52,7 +52,7 @@ public sealed class ActualWorkAssemblyExpansionPersistenceTests : IClassFixture<
     /// <summary>
     /// The two-transaction race proof: starts an expansion and pauses it — via
     /// <see cref="EfActualWorkAssemblyExpansionPersistence.PostDraftLockHook"/> — right after the
-    /// Draft's row lock is taken and active-Responsible/version/status-checked, immediately before
+    /// Draft's row lock is taken and recorder-ownership/version/status-checked, immediately before
     /// the OfferingAssembly/CatalogItem locks and the eligibility recheck run. While paused, a
     /// second connection deactivates the assembly's primary item and commits (nothing holds a lock
     /// on that row yet, so this write is free to proceed). Resuming the first transaction must
@@ -72,8 +72,7 @@ public sealed class ActualWorkAssemblyExpansionPersistenceTests : IClassFixture<
         var persistence = new EfActualWorkAssemblyExpansionPersistence(
             expandCtx,
             new EfOfferingAssemblyPersistence(expandCtx),
-            new EfCatalogReadPersistence(expandCtx),
-            new ActiveResponsibleCheck(new EfKeepRequestOperatePersistence(expandCtx)));
+            new EfCatalogReadPersistence(expandCtx));
         persistence.PostDraftLockHook = async _ =>
         {
             await using var raceCtx = CreateContext();
@@ -85,7 +84,7 @@ public sealed class ActualWorkAssemblyExpansionPersistenceTests : IClassFixture<
         };
 
         var outcome = await persistence.ExpandAsync(
-            AccountId, visitId, version, assemblyId, [], OwnerId, KeepRequestVisibilityScope.AccountWide, CancellationToken.None);
+            AccountId, visitId, version, assemblyId, [], OwnerId, CancellationToken.None);
 
         Assert.Equal(ActualWorkExpandAssemblyResult.AssemblyNotOperationallyEligible, outcome.Result);
 

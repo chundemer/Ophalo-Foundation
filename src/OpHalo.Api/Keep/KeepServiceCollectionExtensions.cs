@@ -193,8 +193,9 @@ public static class KeepServiceCollectionExtensions
         services.AddScoped<IActiveResponsibleCheck, ActiveResponsibleCheck>();
 
         // Direct Actual Work — atomic expand-assembly (build-log/129, 5d-i preflight lock). Reuses
-        // IOfferingAssemblyPersistence/ICatalogReadPersistence/IActiveResponsibleCheck (registered
-        // above/below).
+        // IOfferingAssemblyPersistence/ICatalogReadPersistence (registered above/below). GAP-055:
+        // recorder ownership is checked directly against the just-locked Draft row, no
+        // IActiveResponsibleCheck dependency here.
         services.AddScoped<IActualWorkAssemblyExpansionPersistence, EfActualWorkAssemblyExpansionPersistence>();
 
         // Direct Actual Work — submit/review-signal (Batch 4, build-log/129). Atomic seam separate

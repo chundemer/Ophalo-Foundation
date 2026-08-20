@@ -1,7 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using OpHalo.Foundation.Infrastructure.Persistence;
 using OpHalo.Keep.Application.PriceBook;
-using OpHalo.Keep.Application.Requests;
 using OpHalo.Keep.Core.Entities;
 using OpHalo.Keep.Core.Entities.Enums;
 
@@ -18,12 +17,11 @@ namespace OpHalo.Keep.Infrastructure.Persistence;
 public sealed class EfActualWorkAssemblyExpansionPersistence(
     OpHaloDbContext dbContext,
     IOfferingAssemblyPersistence assemblyPersistence,
-    ICatalogReadPersistence catalogPersistence,
-    IActiveResponsibleCheck responsibleCheck) : IActualWorkAssemblyExpansionPersistence
+    ICatalogReadPersistence catalogPersistence) : IActualWorkAssemblyExpansionPersistence
 {
     /// <summary>
     /// Test-only seam: invoked after the <c>ActualWork</c> Draft row lock is taken and
-    /// active-Responsible/version/status-checked, immediately before the <c>OfferingAssembly</c>/
+    /// recorder-ownership/version/status-checked, immediately before the <c>OfferingAssembly</c>/
     /// <c>CatalogItem</c> locks are acquired and eligibility is recomputed. No-op in production —
     /// never set by DI-resolved production code, only by a test holding a direct reference to this
     /// concrete type.
@@ -36,8 +34,7 @@ public sealed class EfActualWorkAssemblyExpansionPersistence(
         Guid expectedVersion,
         Guid offeringAssemblyId,
         IReadOnlyCollection<Guid> includedOptionalItemIds,
-        Guid createdByUserId,
-        KeepRequestVisibilityScope scope,
+        Guid callerAccountUserId,
         CancellationToken ct)
     {
         await using var tx = await dbContext.Database.BeginTransactionAsync(ct);
@@ -59,10 +56,8 @@ public sealed class EfActualWorkAssemblyExpansionPersistence(
         if (actualWork is null)
             return new ActualWorkExpandAssemblyOutcome(ActualWorkExpandAssemblyResult.NotFound);
 
-        var isResponsible = await responsibleCheck.IsActiveResponsibleAsync(
-            actualWork.RequestId, accountId, createdByUserId, scope, ct);
-        if (!isResponsible)
-            return new ActualWorkExpandAssemblyOutcome(ActualWorkExpandAssemblyResult.NotResponsible);
+        if (actualWork.RecorderAccountUserId != callerAccountUserId)
+            return new ActualWorkExpandAssemblyOutcome(ActualWorkExpandAssemblyResult.NotRecorder);
 
         if (actualWork.ConcurrencyVersion != expectedVersion)
             return new ActualWorkExpandAssemblyOutcome(ActualWorkExpandAssemblyResult.VersionMismatch);
@@ -175,7 +170,7 @@ public sealed class EfActualWorkAssemblyExpansionPersistence(
             var addResult = actualWork.AddLine(
                 detail.Item.Id, priceBookVersionLineId, displayNameSnapshot, unitOfMeasureSnapshot,
                 quantity, sellPriceSnapshot, standardExpectedDirectCostSnapshot,
-                note: null, commercialBaselineSourceLineId: null, createdByUserId);
+                note: null, commercialBaselineSourceLineId: null, callerAccountUserId);
             if (addResult.IsFailure)
                 return new ActualWorkExpandAssemblyOutcome(ActualWorkExpandAssemblyResult.NotDraft);
             lineIds.Add(addResult.Value.Id);
