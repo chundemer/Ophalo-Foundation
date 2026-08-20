@@ -53,6 +53,7 @@ Locked pilot rules:
 | 5a — price-blind history read | Complete | Build Log 129; commit `7c71086` |
 | 5b — capture composer | Complete | Build Log 129; commit `3f3dda8` |
 | 5c — submitted-history UI | Complete | Build Log 129; commit `3cd9ec5` (5a auth fix), `9bf6266` |
+| 5d-i-a — assembly expansion, backend | Complete | Build Log 129; commit `2a2d0de` |
 
 5b shipped with both lifecycle corrections already fixed and regression-tested in the same commit:
 the submitted confirmation no longer unmounts on the post-submit history refresh, and a create-time
