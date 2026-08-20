@@ -24,8 +24,8 @@ namespace OpHalo.IntegrationTests.Api;
 ///
 /// Covers the required trigger-parameter shape, read-time eligibility filtering of the trigger and
 /// each suggestion, catalog-item-only Draft-line dedupe (assembly suggestions are never suppressed —
-/// ActualWorkLine retains no assembly provenance), and the active-Responsible row-authorization gate
-/// shared with every other Actual Work Draft endpoint.
+/// ActualWorkLine retains no assembly provenance), and the recorder-ownership row-authorization gate
+/// (GAP-055) shared with every other Actual Work Draft endpoint.
 /// </summary>
 public sealed class ActualWorkNudgeFieldReadApiTests : IClassFixture<KeepApiWebFactory>, IAsyncLifetime
 {
@@ -201,15 +201,15 @@ public sealed class ActualWorkNudgeFieldReadApiTests : IClassFixture<KeepApiWebF
     }
 
     [Fact]
-    public async Task GetSuggestions_NonResponsibleCaller_Returns404()
+    public async Task GetSuggestions_CallerNotTheRecorder_Returns404()
     {
-        // A member without active-Responsible participation gets the same indistinguishable
-        // KeepRequest.NotFound as every other Actual Work Draft mutation (build-log/129 5d-ii-c
-        // lock) — never ScopeNudge's broader row-visibility read.
-        var (accountId, ownerId, ownerCookie) = await SeedAccountAsync("aw-nudge-non-responsible");
+        // GAP-055: a member who is not this Draft's current recorder gets the same
+        // indistinguishable ActualWork.NotFound as every other Actual Work Draft mutation
+        // (build-log/129 5d-ii-c lock) — never ScopeNudge's broader row-visibility read.
+        var (accountId, ownerId, ownerCookie) = await SeedAccountAsync("aw-nudge-not-the-recorder");
         await EnrollAsync(accountId, ownerId);
         var (actualWorkId, _) = await SeedDraftActualWorkAsync(accountId, ownerId, ownerCookie);
-        var operatorId = await SeedOperatorAsync(accountId, "aw-nudge-non-responsible");
+        var operatorId = await SeedOperatorAsync(accountId, "aw-nudge-not-the-recorder");
         var operatorCookie = await GetCookieAsync(operatorId, accountId);
 
         var response = await AuthRequest(operatorCookie).GetAsync(
@@ -217,7 +217,7 @@ public sealed class ActualWorkNudgeFieldReadApiTests : IClassFixture<KeepApiWebF
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
-        Assert.Equal("KeepRequest.NotFound", body.GetProperty("code").GetString());
+        Assert.Equal("ActualWork.NotFound", body.GetProperty("code").GetString());
     }
 
     [Fact]

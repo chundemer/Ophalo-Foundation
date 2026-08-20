@@ -1101,6 +1101,7 @@ public static class KeepEndpoints
         completionNote = draft.CompletionNote,
         submittedAtUtc = draft.SubmittedAtUtc,
         concurrencyVersion = draft.ConcurrencyVersion,
+        isRecorder = draft.IsRecorder,
         lines = draft.Lines.Select(ToLineHistoryResponse),
     };
 

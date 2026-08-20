@@ -19,12 +19,16 @@ namespace OpHalo.Keep.Application.PriceBook;
 public sealed record ActualWorkLineHistoryEntry(
     Guid Id, string DisplayNameSnapshot, string? UnitOfMeasureSnapshot, decimal ActualQuantity, string? Note);
 
-/// <summary>The caller's own open Draft, only returned when they are the request's active
-/// Responsible recorder (build-log/129). Carries <see cref="ConcurrencyVersion"/> because it is the
+/// <summary>The open Draft for this request, returned to its current recorder (GAP-055) for
+/// resume-after-reload editing, or to Owner/Admin read-only so they have grounds to decide on a
+/// recorder transfer even when they are not the recorder. <see cref="IsRecorder"/> disambiguates
+/// which case this is: false means the composer must render read-only, never offer the mutation
+/// actions a recorder gets. Carries <see cref="ConcurrencyVersion"/> because it is the
 /// resume-after-reload projection the capture composer edits against.</summary>
 public sealed record ActualWorkOpenDraftEntry(
     Guid Id, ActualWorkStatus Status, ActualWorkOutcome? Outcome, string? CompletionNote,
-    DateTime? SubmittedAtUtc, Guid ConcurrencyVersion, IReadOnlyList<ActualWorkLineHistoryEntry> Lines);
+    DateTime? SubmittedAtUtc, Guid ConcurrencyVersion, bool IsRecorder,
+    IReadOnlyList<ActualWorkLineHistoryEntry> Lines);
 
 /// <summary>A submitted, immutable visit — no <c>ConcurrencyVersion</c>, since nothing here is ever
 /// mutated through this read.</summary>
@@ -33,28 +37,30 @@ public sealed record ActualWorkSubmittedVisitEntry(
     DateTime? SubmittedAtUtc, IReadOnlyList<ActualWorkLineHistoryEntry> Lines);
 
 /// <summary><see cref="CanCaptureActualWork"/> disambiguates a null <see cref="OpenDraft"/>: it is
-/// true only when the caller is the request's active Responsible recorder and has both
-/// <c>RequestsOperate</c> and <c>ActualWorkCapture</c> (whether or not they have opened a Draft
-/// yet), false for any other visible caller (e.g. a Viewer or watching Operator/Owner/Admin). The
-/// field capture UI must gate its "Record completed work" action on this, not on <c>OpenDraft is
-/// null</c> alone, or a caller would see an action that fails 404/403 on create.</summary>
+/// true whenever the caller has both <c>RequestsOperate</c> and <c>ActualWorkCapture</c> (GAP-055 —
+/// no longer tied to active-Responsible participation; whether or not they have opened a Draft
+/// yet, and whether or not someone else already holds the open Draft), false for any other visible
+/// caller (e.g. a Viewer). The field capture UI must gate its "Record completed work" action on
+/// this, not on <c>OpenDraft is null</c> alone — a qualified caller who is not the current recorder
+/// still sees this as true, and a create call under those conditions returns the same opaque
+/// <c>DraftAlreadyOpenForRequest</c> conflict as any other caller (GAP-055's create-conflict stays
+/// opaque; no recorder identity is leaked there).</summary>
 public sealed record ActualWorkHistoryResult(
     bool CanCaptureActualWork, ActualWorkOpenDraftEntry? OpenDraft, IReadOnlyList<ActualWorkSubmittedVisitEntry> SubmittedVisits);
 
 /// <summary>
 /// API-facing read orchestration for Actual Work visit history (Batch 5a, build-log/129):
 /// submitted visits are visible to any normally request-visible caller; the open Draft is visible
-/// only to the request's active-Responsible recorder (resume-after-reload — a bare create call
-/// cannot otherwise discover an already-open Draft). Gate 2 is the Price Book entitlement and
-/// gate 3 is <c>RequestsView</c>; capture permissions are separately required for the Draft
-/// affordance. Gate 1 is read-only (Blocked-only denies — <c>ReadOnly</c>, e.g. OffSeason, may
-/// still read), matching <see cref="ProposedScopeReadApiService"/>'s read policy rather than the
-/// mutation gate.
+/// to its current recorder (resume-after-reload — a bare create call cannot otherwise discover an
+/// already-open Draft) and, read-only, to Owner/Admin (GAP-055 — grounds for a recorder-transfer
+/// decision without mutate rights). Gate 2 is the Price Book entitlement and gate 3 is
+/// <c>RequestsView</c>; capture permissions are separately required for the Draft affordance.
+/// Gate 1 is read-only (Blocked-only denies — <c>ReadOnly</c>, e.g. OffSeason, may still read),
+/// matching <see cref="ProposedScopeReadApiService"/>'s read policy rather than the mutation gate.
 /// </summary>
 public sealed class ActualWorkHistoryReadApiService(
     IActualWorkPersistence persistence,
     IKeepRequestDetailPersistence requestPersistence,
-    IActiveResponsibleCheck responsibleCheck,
     IAccountAccessSnapshotPersistence snapshotPersistence,
     ICurrentUser currentUser,
     IAccountAccessPolicy accountAccessPolicy,
@@ -79,21 +85,26 @@ public sealed class ActualWorkHistoryReadApiService(
         if (request is null)
             return Result<ActualWorkHistoryResult>.Failure(KeepRequestErrors.NotFound);
 
-        ActualWorkOpenDraftEntry? openDraft = null;
-        var isResponsible = await responsibleCheck.IsActiveResponsibleAsync(
-            requestId, currentUser.AccountId, currentUser.UserId, gate.Value.Scope, ct);
-        var canCaptureActualWork = isResponsible &&
+        var canCaptureActualWork =
             userAccessPolicy.IsPermitted(
                 gate.Value.RoleSnapshot.Role, gate.Value.RoleSnapshot.MembershipStatus,
                 gate.Value.AccountPurpose, PermissionKeys.Keep.RequestsOperate) &&
             userAccessPolicy.IsPermitted(
                 gate.Value.RoleSnapshot.Role, gate.Value.RoleSnapshot.MembershipStatus,
                 gate.Value.AccountPurpose, PermissionKeys.Keep.ActualWorkCapture);
-        if (canCaptureActualWork)
+
+        var isOwnerOrAdmin = gate.Value.RoleSnapshot.Role is AccountUserRole.Owner or AccountUserRole.Admin;
+
+        ActualWorkOpenDraftEntry? openDraft = null;
+        if (canCaptureActualWork || isOwnerOrAdmin)
         {
             var draft = await persistence.GetOpenDraftForRequestAsync(currentUser.AccountId, requestId, ct);
             if (draft is not null)
-                openDraft = ToOpenDraftEntry(draft);
+            {
+                var isRecorder = draft.RecorderAccountUserId == currentUser.UserId;
+                if (isRecorder || isOwnerOrAdmin)
+                    openDraft = ToOpenDraftEntry(draft, isRecorder);
+            }
         }
 
         var submittedVisits = await persistence.GetSubmittedVisitsForRequestAsync(currentUser.AccountId, requestId, ct);
@@ -102,9 +113,9 @@ public sealed class ActualWorkHistoryReadApiService(
             new ActualWorkHistoryResult(canCaptureActualWork, openDraft, submittedVisits.Select(ToSubmittedVisitEntry).ToArray()));
     }
 
-    private static ActualWorkOpenDraftEntry ToOpenDraftEntry(ActualWork visit) => new(
+    private static ActualWorkOpenDraftEntry ToOpenDraftEntry(ActualWork visit, bool isRecorder) => new(
         visit.Id, visit.Status, visit.Outcome, visit.CompletionNote, visit.SubmittedAtUtc,
-        visit.ConcurrencyVersion, ToLineEntries(visit));
+        visit.ConcurrencyVersion, isRecorder, ToLineEntries(visit));
 
     private static ActualWorkSubmittedVisitEntry ToSubmittedVisitEntry(ActualWork visit) => new(
         visit.Id, visit.Status, visit.Outcome, visit.CompletionNote, visit.SubmittedAtUtc, ToLineEntries(visit));

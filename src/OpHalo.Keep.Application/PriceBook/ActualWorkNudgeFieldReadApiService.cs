@@ -43,10 +43,10 @@ public sealed record ActualWorkNudgeFieldResult(
 ///
 /// Gate composition mirrors <see cref="ActualWorkDraftApiService"/>'s draft-mutation gates exactly
 /// (<c>RequestsOperate</c> + Price Book entitlement + <c>ActualWorkCapture</c>) plus row
-/// authorization via <see cref="IActiveResponsibleCheck"/> — a non-Responsible caller for the
-/// Draft's request gets the same indistinguishable <see cref="KeepRequestErrors.NotFound"/> as
-/// <see cref="ActualWorkDraftApiService.AuthorizeAndLoadDraftAsync"/> — because the Draft is
-/// exclusive to its active Responsible participant, unlike <c>ProposedScope</c>'s broader
+/// authorization against the Draft's current recorder ownership (GAP-055) — a caller who is not
+/// the Draft's <c>RecorderAccountUserId</c> gets the same indistinguishable
+/// <see cref="ActualWorkErrors.NotFound"/> as <see cref="ActualWorkDraftApiService.AuthorizeAndLoadDraftAsync"/>
+/// — because the Draft is exclusive to its current recorder, unlike <c>ProposedScope</c>'s broader
 /// row-visibility read. Account posture is Blocked-only (not Blocked||ReadOnly): this is
 /// price-blind, non-mutating availability data; a read-only account may still see suggestions even
 /// though the later add action is unavailable until the account leaves read-only.
@@ -54,7 +54,6 @@ public sealed record ActualWorkNudgeFieldResult(
 public sealed class ActualWorkNudgeFieldReadApiService(
     IActualWorkPersistence actualWorkPersistence,
     IActualWorkNudgeRulePersistence rulePersistence,
-    IActiveResponsibleCheck responsibleCheck,
     ICatalogReadPersistence catalogReadPersistence,
     IOfferingAssemblyPersistence offeringAssemblyPersistence,
     IAccountAccessSnapshotPersistence snapshotPersistence,
@@ -75,7 +74,7 @@ public sealed class ActualWorkNudgeFieldReadApiService(
     /// are the raw, unvalidated query-string values for each parameter name. Shape validation
     /// (missing/duplicate/combined/malformed all collapse to
     /// <see cref="ScopeNudgeRuleErrors.TriggerQueryParameterInvalid"/>) deliberately runs after every
-    /// auth gate and the Draft/active-Responsible load, matching
+    /// auth gate and the Draft/recorder-ownership load, matching
     /// <see cref="ScopeNudgeFieldReadApiService.GetSuggestionsAsync"/>'s gates -> load -> evaluate-
     /// trigger ordering.
     /// </summary>
@@ -189,8 +188,8 @@ public sealed class ActualWorkNudgeFieldReadApiService(
         return (offeringAssemblyDetail?.Name ?? "(deleted assembly)", assemblyIsEligible);
     }
 
-    /// <summary>Gate 1-3, then load the visit and confirm it is still a Draft owned (by request) by
-    /// the caller's active Responsible participation — the same row-authorization check
+    /// <summary>Gate 1-3, then load the visit and confirm it is still a Draft owned by the caller's
+    /// current recorder ownership (GAP-055) — the same row-authorization check
     /// <see cref="ActualWorkDraftApiService.AuthorizeAndLoadDraftAsync"/> shares across every line
     /// mutation, reused here for the read path instead of ScopeNudge's broader row-visibility
     /// gate.</summary>
@@ -204,10 +203,8 @@ public sealed class ActualWorkNudgeFieldReadApiService(
         if (actualWork is null)
             return Result<ActualWork>.Failure(ActualWorkErrors.NotFound);
 
-        var isResponsible = await responsibleCheck.IsActiveResponsibleAsync(
-            actualWork.RequestId, currentUser.AccountId, currentUser.UserId, gate.Value, ct);
-        if (!isResponsible)
-            return Result<ActualWork>.Failure(KeepRequestErrors.NotFound);
+        if (actualWork.RecorderAccountUserId != currentUser.UserId)
+            return Result<ActualWork>.Failure(ActualWorkErrors.NotFound);
 
         if (actualWork.Status != ActualWorkStatus.Draft)
             return Result<ActualWork>.Failure(ActualWorkErrors.NotDraft);

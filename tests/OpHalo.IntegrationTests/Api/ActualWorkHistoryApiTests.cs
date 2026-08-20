@@ -24,8 +24,8 @@ namespace OpHalo.IntegrationTests.Api;
 ///
 /// Covers the read-policy gate (Blocked-only denies, ReadOnly/OffSeason may still read — matching
 /// <c>ProposedScopeReadApiService</c>, not the mutation gate), normal request visibility gating
-/// submitted history, active-Responsible gating the optional openDraft, and the price-blind
-/// response shape.
+/// submitted history, GAP-055's recorder-ownership (plus Owner/Admin read-only) gating the optional
+/// openDraft, and the price-blind response shape.
 /// </summary>
 public sealed class ActualWorkHistoryApiTests : IClassFixture<KeepApiWebFactory>, IAsyncLifetime
 {
@@ -54,6 +54,7 @@ public sealed class ActualWorkHistoryApiTests : IClassFixture<KeepApiWebFactory>
         Assert.True(body.GetProperty("canCaptureActualWork").GetBoolean());
         Assert.True(body.TryGetProperty("openDraft", out var openDraft));
         Assert.Equal(draftVersion, openDraft.GetProperty("concurrencyVersion").GetGuid());
+        Assert.True(openDraft.GetProperty("isRecorder").GetBoolean());
         Assert.Equal(1, body.GetProperty("submittedVisits").GetArrayLength());
     }
 
@@ -74,18 +75,23 @@ public sealed class ActualWorkHistoryApiTests : IClassFixture<KeepApiWebFactory>
     }
 
     [Fact]
-    public async Task GetHistory_NotResponsible_OmitsOpenDraftButReturnsSubmittedVisits()
+    public async Task GetHistory_QualifiedOperatorNotTheRecorder_OmitsOpenDraftButCanCaptureIsTrue()
     {
-        var (accountId, ownerId, ownerCookie) = await SeedAccountAsync("history-not-responsible");
+        // GAP-055: canCaptureActualWork is now permission-only, decoupled from who currently holds
+        // the Draft — a qualified second Operator still sees canCaptureActualWork=true (they could
+        // start their own capture on a different request, or would hit the same opaque
+        // DraftAlreadyOpenForRequest conflict this request's create would return), but the other
+        // recorder's own open Draft stays invisible to them.
+        var (accountId, ownerId, ownerCookie) = await SeedAccountAsync("history-not-the-recorder");
         await EnrollAsync(accountId, ownerId);
         var requestId = await SeedRequestAsync(accountId);
         await SeedResponsibleAsync(requestId, accountId, ownerId);
         await SeedSubmittedVisitAsync(accountId, requestId, ownerId);
         await CreateDraftAsync(ownerCookie, requestId);
 
-        // A second Operator with MyWork visibility (watching the request) but not the Responsible
+        // A second Operator with MyWork visibility (watching the request) but not this Draft's
         // recorder — sees submitted history, never the other user's open Draft.
-        var operatorId = await SeedOperatorAsync(accountId, "history-not-responsible");
+        var operatorId = await SeedOperatorAsync(accountId, "history-not-the-recorder");
         await SeedWatcherAsync(requestId, accountId, operatorId);
         var operatorCookie = await GetCookieAsync(operatorId, accountId);
 
@@ -93,9 +99,31 @@ public sealed class ActualWorkHistoryApiTests : IClassFixture<KeepApiWebFactory>
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
-        Assert.False(body.GetProperty("canCaptureActualWork").GetBoolean());
+        Assert.True(body.GetProperty("canCaptureActualWork").GetBoolean());
         Assert.Equal(JsonValueKind.Null, body.GetProperty("openDraft").ValueKind);
         Assert.Equal(1, body.GetProperty("submittedVisits").GetArrayLength());
+    }
+
+    [Fact]
+    public async Task GetHistory_OwnerViewsAnotherRecordersOpenDraft_ReturnsReadOnly()
+    {
+        // GAP-055: Owner/Admin can see another recorder's open Draft read-only, giving them grounds
+        // to decide on a recorder transfer (Batch D) without needing mutate access themselves.
+        var (accountId, ownerId, ownerCookie) = await SeedAccountAsync("history-owner-views-other-recorder");
+        await EnrollAsync(accountId, ownerId);
+        var operatorId = await SeedOperatorAsync(accountId, "history-owner-views-other-recorder");
+        var operatorCookie = await GetCookieAsync(operatorId, accountId);
+        var requestId = await SeedRequestAsync(accountId);
+        await SeedWatcherAsync(requestId, accountId, operatorId);
+        var (_, draftVersion) = await CreateDraftAsync(operatorCookie, requestId);
+
+        var response = await AuthRequest(ownerCookie).GetAsync($"/keep/pricebook/actual-work/request/{requestId}/history");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.True(body.TryGetProperty("openDraft", out var openDraft));
+        Assert.Equal(draftVersion, openDraft.GetProperty("concurrencyVersion").GetGuid());
+        Assert.False(openDraft.GetProperty("isRecorder").GetBoolean());
     }
 
     [Fact]
@@ -292,9 +320,9 @@ public sealed class ActualWorkHistoryApiTests : IClassFixture<KeepApiWebFactory>
         await db.SaveChangesAsync();
     }
 
-    /// <summary>Gives an Operator MyWork row visibility on the request without making them the
-    /// Responsible recorder — proves openDraft stays hidden from a visible-but-not-Responsible
-    /// caller while submitted history is still returned.</summary>
+    /// <summary>Gives an Operator MyWork row visibility on the request without making them a Draft
+    /// recorder — used both to prove openDraft stays hidden from a non-recorder, non-Owner/Admin
+    /// caller, and (via <c>CreateDraftAsync</c>) to seed a Draft this Operator does own.</summary>
     private async Task SeedWatcherAsync(Guid requestId, Guid accountId, Guid accountUserId)
     {
         var now = DateTime.UtcNow;

@@ -184,13 +184,11 @@ public static class KeepServiceCollectionExtensions
         services.AddScoped<IActualWorkNudgeRulePersistence, EfActualWorkNudgeRulePersistence>();
         services.AddScoped<ActualWorkNudgeRuleConfigApiService>();
 
-        // Direct Actual Work — draft create/edit/discard (ADR-487, build-log/129, Batch 3).
-        // IActualWorkPersistence was added in Batch 2 with no consumer until this batch. Reuses
+        // Direct Actual Work — draft create/edit/discard (ADR-487, build-log/129, Batch 3). Reuses
         // ICatalogReadPersistence (registered above) to resolve a field-selected catalog item's
-        // current Price Book snapshot; IActiveResponsibleCheck is the new reusable row-authorization
-        // primitive shared by every draft mutation.
+        // current Price Book snapshot. GAP-055: every draft mutation authorizes against the Draft's
+        // own RecorderAccountUserId field, no separate row-authorization primitive needed.
         services.AddScoped<IActualWorkPersistence, EfActualWorkPersistence>();
-        services.AddScoped<IActiveResponsibleCheck, ActiveResponsibleCheck>();
 
         // Direct Actual Work — atomic expand-assembly (build-log/129, 5d-i preflight lock). Reuses
         // IOfferingAssemblyPersistence/ICatalogReadPersistence (registered above/below). GAP-055:
@@ -205,14 +203,14 @@ public static class KeepServiceCollectionExtensions
         services.AddScoped<ActualWorkDraftApiService>();
 
         // Direct Actual Work — read-only visit history (Batch 5a, build-log/129). Reuses
-        // IActualWorkPersistence/IKeepRequestDetailPersistence/IActiveResponsibleCheck (registered
-        // above); no new persistence registration needed.
+        // IActualWorkPersistence/IKeepRequestDetailPersistence (registered above); no new
+        // persistence registration needed.
         services.AddScoped<ActualWorkHistoryReadApiService>();
 
         // Direct Actual Work — technician field-read nudge suggestions (5d-ii-c, build-log/129).
-        // Reuses IActualWorkPersistence/IActualWorkNudgeRulePersistence/IActiveResponsibleCheck/
-        // ICatalogReadPersistence/IOfferingAssemblyPersistence (all registered above); no new
-        // persistence registration needed.
+        // Reuses IActualWorkPersistence/IActualWorkNudgeRulePersistence/ICatalogReadPersistence/
+        // IOfferingAssemblyPersistence (all registered above); no new persistence registration
+        // needed.
         services.AddScoped<ActualWorkNudgeFieldReadApiService>();
 
         return services;
