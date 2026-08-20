@@ -864,6 +864,15 @@ public static class KeepEndpoints
                 : ErrorHttpMapper.ToHttpResult(result.Error);
         }).RequireAuthorization();
 
+        app.MapGet("/keep/pricebook/actual-work/request/{requestId:guid}/history", async (
+            Guid requestId,
+            ActualWorkHistoryReadApiService service,
+            CancellationToken ct) =>
+        {
+            var result = await service.GetHistoryForRequestAsync(requestId, ct);
+            return result.IsSuccess ? Results.Ok(ToActualWorkHistoryResponse(result.Value)) : ErrorHttpMapper.ToHttpResult(result.Error);
+        }).RequireAuthorization();
+
         app.MapDelete("/keep/pricebook/actual-work/{actualWorkId:guid}", async (
             Guid actualWorkId,
             HttpRequest httpRequest,
@@ -1055,6 +1064,42 @@ public static class KeepEndpoints
         requestId = actualWork.RequestId,
         status = actualWork.Status.ToString(),
         concurrencyVersion = actualWork.ConcurrencyVersion
+    };
+
+    private static object ToActualWorkHistoryResponse(ActualWorkHistoryResult result) => new
+    {
+        openDraft = result.OpenDraft is null ? null : ToOpenDraftResponse(result.OpenDraft),
+        submittedVisits = result.SubmittedVisits.Select(ToSubmittedVisitResponse),
+    };
+
+    private static object ToOpenDraftResponse(ActualWorkOpenDraftEntry draft) => new
+    {
+        id = draft.Id,
+        status = draft.Status.ToString(),
+        outcome = draft.Outcome?.ToString(),
+        completionNote = draft.CompletionNote,
+        submittedAtUtc = draft.SubmittedAtUtc,
+        concurrencyVersion = draft.ConcurrencyVersion,
+        lines = draft.Lines.Select(ToLineHistoryResponse),
+    };
+
+    private static object ToSubmittedVisitResponse(ActualWorkSubmittedVisitEntry visit) => new
+    {
+        id = visit.Id,
+        status = visit.Status.ToString(),
+        outcome = visit.Outcome?.ToString(),
+        completionNote = visit.CompletionNote,
+        submittedAtUtc = visit.SubmittedAtUtc,
+        lines = visit.Lines.Select(ToLineHistoryResponse),
+    };
+
+    private static object ToLineHistoryResponse(ActualWorkLineHistoryEntry line) => new
+    {
+        id = line.Id,
+        displayNameSnapshot = line.DisplayNameSnapshot,
+        unitOfMeasureSnapshot = line.UnitOfMeasureSnapshot,
+        actualQuantity = line.ActualQuantity,
+        note = line.Note,
     };
 
     /// <summary>Strict parser for the <c>X-Keep-ActualWork-Version</c> optimistic-concurrency

@@ -314,8 +314,79 @@ public sealed class ActualWorkPersistenceTests : IClassFixture<PostgresFixture>,
     }
 
     // -------------------------------------------------------------------------
+    // GetSubmittedVisitsForRequestAsync — Batch 5a read-only history
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public async Task GetSubmittedVisitsForRequestAsync_returns_submitted_visits_newest_first()
+    {
+        var earlierId = await SeedSubmittedVisitAsync(Now);
+        var laterId = await SeedSubmittedVisitAsync(Now.AddHours(1));
+
+        await using var ctx = CreateContext();
+        var persistence = new EfActualWorkPersistence(ctx);
+        var visits = await persistence.GetSubmittedVisitsForRequestAsync(AccountId, RequestId, CancellationToken.None);
+
+        Assert.Equal([laterId, earlierId], visits.Select(x => x.Id));
+    }
+
+    [Fact]
+    public async Task GetSubmittedVisitsForRequestAsync_breaks_a_tied_SubmittedAtUtc_by_Id_descending()
+    {
+        var firstId = await SeedSubmittedVisitAsync(Now);
+        var secondId = await SeedSubmittedVisitAsync(Now);
+        var expectedOrder = new[] { firstId, secondId }.OrderByDescending(x => x).ToArray();
+
+        await using var ctx = CreateContext();
+        var persistence = new EfActualWorkPersistence(ctx);
+        var visits = await persistence.GetSubmittedVisitsForRequestAsync(AccountId, RequestId, CancellationToken.None);
+
+        Assert.Equal(expectedOrder, visits.Select(x => x.Id));
+    }
+
+    [Fact]
+    public async Task GetSubmittedVisitsForRequestAsync_excludes_the_open_draft()
+    {
+        await using var ctx = CreateContext();
+        await SeedDraftVisitAsync(ctx);
+        var persistence = new EfActualWorkPersistence(ctx);
+
+        var visits = await persistence.GetSubmittedVisitsForRequestAsync(AccountId, RequestId, CancellationToken.None);
+
+        Assert.Empty(visits);
+    }
+
+    [Fact]
+    public async Task GetSubmittedVisitsForRequestAsync_does_not_return_another_accounts_visits()
+    {
+        await SeedSubmittedVisitAsync(Now);
+
+        await using var ctx = CreateContext();
+        var persistence = new EfActualWorkPersistence(ctx);
+        var visits = await persistence.GetSubmittedVisitsForRequestAsync(OtherAccountId, RequestId, CancellationToken.None);
+
+        Assert.Empty(visits);
+    }
+
+    // -------------------------------------------------------------------------
     // Seeding helpers
     // -------------------------------------------------------------------------
+
+    private async Task<Guid> SeedSubmittedVisitAsync(DateTime submittedAtUtc)
+    {
+        await using var ctx = CreateContext();
+        var persistence = new EfActualWorkPersistence(ctx);
+        var visit = ActualWork.Create(AccountId, RequestId, OwnerId).Value;
+        visit.AddLine(null, null, "Drain pan replacement", "each", 1m, null, null, null, null, OwnerId);
+        await persistence.AddAsync(visit, CancellationToken.None);
+
+        var submitResult = visit.Submit(submittedAtUtc, null, null);
+        Assert.True(submitResult.IsSuccess);
+        var commitResult = await persistence.CommitAsync(visit, CancellationToken.None);
+        Assert.Equal(ActualWorkCommitResult.Committed, commitResult);
+
+        return visit.Id;
+    }
 
     private async Task<Guid> SeedDraftVisitAsync(OpHaloDbContext ctx)
     {

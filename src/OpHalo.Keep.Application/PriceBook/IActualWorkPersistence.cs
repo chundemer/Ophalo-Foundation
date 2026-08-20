@@ -30,6 +30,12 @@ public interface IActualWorkPersistence
     /// one open Draft per request, build-log/129).</summary>
     Task<ActualWork?> GetOpenDraftForRequestAsync(Guid accountId, Guid requestId, CancellationToken ct);
 
+    /// <summary>All <c>Submitted</c> visits for the request (Batch 5a's read-only history), newest
+    /// first by <c>SubmittedAtUtc DESC, Id DESC</c>. Never includes the open <c>Draft</c> — that
+    /// stays a separate, active-Responsible-gated read via <see cref="GetOpenDraftForRequestAsync"/>
+    /// (build-log/129's field-recorder boundary).</summary>
+    Task<IReadOnlyList<ActualWork>> GetSubmittedVisitsForRequestAsync(Guid accountId, Guid requestId, CancellationToken ct);
+
     /// <summary>
     /// Persists a newly created visit. Returns
     /// <see cref="ActualWorkCommitResult.DraftAlreadyOpenForRequest"/> instead of throwing when a

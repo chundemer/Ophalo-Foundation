@@ -191,6 +191,11 @@ public static class KeepServiceCollectionExtensions
         services.AddScoped<SubmitActualWorkService>();
         services.AddScoped<ActualWorkDraftApiService>();
 
+        // Direct Actual Work — read-only visit history (Batch 5a, build-log/129). Reuses
+        // IActualWorkPersistence/IKeepRequestDetailPersistence/IActiveResponsibleCheck (registered
+        // above); no new persistence registration needed.
+        services.AddScoped<ActualWorkHistoryReadApiService>();
+
         return services;
     }
 }

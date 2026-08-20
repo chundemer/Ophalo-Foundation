@@ -21,6 +21,14 @@ public sealed class EfActualWorkPersistence(OpHaloDbContext dbContext) : IActual
                 x => x.AccountId == accountId && x.RequestId == requestId && x.Status == ActualWorkStatus.Draft,
                 ct);
 
+    public async Task<IReadOnlyList<ActualWork>> GetSubmittedVisitsForRequestAsync(Guid accountId, Guid requestId, CancellationToken ct) =>
+        await dbContext.Set<ActualWork>()
+            .Include(x => x.Lines)
+            .Where(x => x.AccountId == accountId && x.RequestId == requestId && x.Status == ActualWorkStatus.Submitted)
+            .OrderByDescending(x => x.SubmittedAtUtc)
+            .ThenByDescending(x => x.Id)
+            .ToListAsync(ct);
+
     public async Task<ActualWorkCommitResult> AddAsync(ActualWork actualWork, CancellationToken ct)
     {
         dbContext.Set<ActualWork>().Add(actualWork);
