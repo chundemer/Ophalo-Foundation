@@ -63,6 +63,13 @@ internal sealed class PriceBookVersionLineConfiguration : BaseEntityConfiguratio
         builder.HasAlternateKey(x => new { x.AccountId, x.Id })
             .HasName("ak_keep_pricebook_version_lines_account_id");
 
+        // Second alternate key including CatalogItemId — supports ActualWorkLine's composite FK
+        // tying (AccountId, CatalogItemId, PriceBookVersionLineId) to this row, so the database
+        // rejects a snapshot line whose CatalogItemId does not match the catalog item this
+        // version-line actually prices (build-log/129 Batch 2 review).
+        builder.HasAlternateKey(x => new { x.AccountId, x.CatalogItemId, x.Id })
+            .HasName("ak_keep_pricebook_version_lines_account_id_catalog_item_id");
+
         builder.HasOne<Account>()
             .WithMany()
             .HasForeignKey(x => x.AccountId)

@@ -31,6 +31,16 @@ public static class ActualWorkErrors
     public static readonly Error LineDisplayNameSnapshotRequired =
         Error.Create("ActualWork.LineDisplayNameSnapshotRequired", "A description is required.");
 
+    /// <summary>An empty guid is never a valid optional id — a caller must pass null instead of
+    /// <see cref="Guid.Empty"/> to mean "no catalog item"; silently normalizing it could turn
+    /// malformed input into an unintended custom line.</summary>
+    public static readonly Error LineCatalogItemIdEmpty =
+        Error.Create("ActualWork.LineCatalogItemIdEmpty", "Catalog item id must not be an empty guid.");
+
+    /// <summary>Same rule as <see cref="LineCatalogItemIdEmpty"/> for the price book version-line id.</summary>
+    public static readonly Error LinePriceBookVersionLineIdEmpty =
+        Error.Create("ActualWork.LinePriceBookVersionLineIdEmpty", "Price book version line id must not be an empty guid.");
+
     /// <summary>A Price Book version-line snapshot always resolves to a catalog item; a custom/
     /// off-catalog line cannot carry one.</summary>
     public static readonly Error LinePriceBookVersionLineRequiresCatalogItem =

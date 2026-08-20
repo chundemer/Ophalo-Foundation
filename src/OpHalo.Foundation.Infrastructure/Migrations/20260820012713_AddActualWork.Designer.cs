@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using OpHalo.Foundation.Infrastructure.Persistence;
@@ -11,9 +12,11 @@ using OpHalo.Foundation.Infrastructure.Persistence;
 namespace OpHalo.Foundation.Infrastructure.Migrations
 {
     [DbContext(typeof(OpHaloDbContext))]
-    partial class OpHaloDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260820012713_AddActualWork")]
+    partial class AddActualWork
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -888,8 +891,11 @@ namespace OpHalo.Foundation.Infrastructure.Migrations
                     b.HasIndex("AccountId", "ActualWorkId")
                         .HasDatabaseName("ix_keep_actual_work_lines_account_id_actual_work_id");
 
-                    b.HasIndex("AccountId", "CatalogItemId", "PriceBookVersionLineId")
-                        .HasDatabaseName("ix_keep_actual_work_lines_account_id_catalog_item_id_price_boo");
+                    b.HasIndex("AccountId", "CatalogItemId")
+                        .HasDatabaseName("ix_keep_actual_work_lines_account_id_catalog_item_id");
+
+                    b.HasIndex("AccountId", "PriceBookVersionLineId")
+                        .HasDatabaseName("ix_keep_actual_work_lines_account_id_price_book_version_line_id");
 
                     b.ToTable("keep_actual_work_lines", null, t =>
                         {
@@ -2973,9 +2979,6 @@ namespace OpHalo.Foundation.Infrastructure.Migrations
                     b.HasAlternateKey("AccountId", "Id")
                         .HasName("ak_keep_pricebook_version_lines_account_id");
 
-                    b.HasAlternateKey("AccountId", "CatalogItemId", "Id")
-                        .HasName("ak_keep_pricebook_version_lines_account_id_catalog_item_id");
-
                     b.HasIndex("AccountId", "CatalogItemId")
                         .HasDatabaseName("ix_keep_pricebook_version_lines_account_id_catalog_item_id");
 
@@ -3656,10 +3659,10 @@ namespace OpHalo.Foundation.Infrastructure.Migrations
 
                     b.HasOne("OpHalo.Keep.Core.Entities.PriceBookVersionLine", null)
                         .WithMany()
-                        .HasForeignKey("AccountId", "CatalogItemId", "PriceBookVersionLineId")
-                        .HasPrincipalKey("AccountId", "CatalogItemId", "Id")
+                        .HasForeignKey("AccountId", "PriceBookVersionLineId")
+                        .HasPrincipalKey("AccountId", "Id")
                         .OnDelete(DeleteBehavior.Restrict)
-                        .HasConstraintName("fk_keep_actual_work_lines_price_book_version_line_account_id_c");
+                        .HasConstraintName("fk_keep_actual_work_lines_price_book_version_line_account_id_p");
                 });
 
             modelBuilder.Entity("OpHalo.Keep.Core.Entities.CatalogCategory", b =>

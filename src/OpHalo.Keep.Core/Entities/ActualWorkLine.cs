@@ -83,12 +83,13 @@ public sealed class ActualWorkLine : BaseEntity
         if (actualQuantity <= 0)
             return Result<ActualWorkLine>.Failure(ActualWorkErrors.LineQuantityMustBePositive);
 
-        // Normalize Guid.Empty to null up front so neither id can be stored as an empty guid in
-        // any of the three states below.
+        // An empty guid is never a valid optional id — reject it explicitly rather than
+        // normalizing it to null, which could silently turn malformed catalog input into an
+        // unintended custom line.
         if (catalogItemId == Guid.Empty)
-            catalogItemId = null;
+            return Result<ActualWorkLine>.Failure(ActualWorkErrors.LineCatalogItemIdEmpty);
         if (priceBookVersionLineId == Guid.Empty)
-            priceBookVersionLineId = null;
+            return Result<ActualWorkLine>.Failure(ActualWorkErrors.LinePriceBookVersionLineIdEmpty);
 
         // Three states (build-log/129): (1) catalog-backed with a price-book snapshot — both ids
         // set; (2) catalog-backed without a snapshot — CatalogItemId only, e.g. the item currently

@@ -131,7 +131,7 @@ public class ActualWorkTests
     }
 
     [Fact]
-    public void AddLine_normalizes_an_empty_guid_catalog_item_id_to_null()
+    public void AddLine_rejects_an_empty_guid_catalog_item_id()
     {
         var work = New().Value;
 
@@ -139,12 +139,12 @@ public class ActualWorkTests
             catalogItemId: Guid.Empty, priceBookVersionLineId: null, "3/4 inch copper elbow", null, 1m,
             null, null, null, null, Actor);
 
-        Assert.True(result.IsSuccess);
-        Assert.Null(result.Value.CatalogItemId);
+        Assert.True(result.IsFailure);
+        Assert.Equal(ActualWorkErrors.LineCatalogItemIdEmpty, result.Error);
     }
 
     [Fact]
-    public void AddLine_normalizes_an_empty_guid_price_book_version_line_id_to_null()
+    public void AddLine_rejects_an_empty_guid_price_book_version_line_id()
     {
         var work = New().Value;
 
@@ -152,8 +152,8 @@ public class ActualWorkTests
             CatalogItemId, priceBookVersionLineId: Guid.Empty, "Drain Pan", "each", 1m,
             null, null, null, null, Actor);
 
-        Assert.True(result.IsSuccess);
-        Assert.Null(result.Value.PriceBookVersionLineId);
+        Assert.True(result.IsFailure);
+        Assert.Equal(ActualWorkErrors.LinePriceBookVersionLineIdEmpty, result.Error);
     }
 
     // --- AddLine: custom/off-catalog ---
