@@ -1,14 +1,16 @@
 # Keep Product Positioning
 
-**Status:** Current product compass — updated 2026-07-28
+**Status:** Current product compass — reviewed 2026-08-21
 **Purpose:** Guide product decisions, implementation scope, packaging, and future marketing language.
+**Release posture:** The controlled parallel field pilot is the active target; Keep is not yet
+pilot-ready. “Available” below means implemented product capability, not a claim of general release.
 **Related direction:** Build 101 (contractor asset/workflow discovery), Build 102 (large-account
 Request List discussion), and Build 103 (modular capability packages).
 
 ## Core Promise
 
 Keep helps service contractors make sure every service need is known, owned, followed through, and
-closed with confidence—connected to the customer, property, and equipment involved.
+closed with confidence—connected to the customer and service context involved.
 
 The short version:
 
@@ -30,24 +32,23 @@ Keep does not manage every part of the work. Keep maintains the trusted record a
 Before the job, during the wait, after the service, and even after the close, the question is:
 
 ```text
-Do we know the asset, the work, and the promise well enough to act with confidence?
+Do we know the service context, the work, and the promise well enough to act with confidence?
 ```
 
 ## What Keep Is
 
-Keep is an asset-aware continuity and work-record platform for service contractors. It connects a
-service need to the people, property, equipment, work history, materials, and communication needed
-to resolve it responsibly.
+Keep is a continuity and work-record platform for service contractors. It connects a service need
+to the people, service location, work record, and communication needed to resolve it responsibly.
 
-The core customer promise remains essential. The product direction now recognizes that a contractor
-cannot reliably keep that promise when the team cannot identify the exact equipment, understand the
-prior work, or retain what was done at the site.
+The core customer promise remains essential. The future asset direction recognizes that a
+contractor cannot reliably keep that promise when the team cannot identify exact equipment,
+understand prior work, or retain what was done at the site.
 
 It helps the business answer:
 
 - Did a customer ask for help?
-- Which property, unit/location, and equipment asset is involved?
-- What work, diagnosis, materials, and warranty context already exist?
+- What service location and request context are involved?
+- What work, diagnosis, and material context has been retained?
 - Did we acknowledge them quickly?
 - Does someone own the follow-up?
 - Is the customer waiting on us?
@@ -60,13 +61,15 @@ It helps the business answer:
 Keep turns scattered work and communication into a visible, retained loop:
 
 ```text
-service need -> known property/asset -> ownership -> diagnosis/work -> updates or approval
--> completion -> retained history -> feedback/closeout
+service need -> known context -> ownership -> updates/contact -> completion/work record
+-> retained history -> feedback/closeout
 ```
 
-Not every account needs every stage on day one. Keep Core already owns the request/continuity loop.
-Asset identity, QR labels, price-book materials, B2B property authorization, and accounting exchange
-are staged first-party capability packages, not claims that every current account already has them.
+Not every account needs every stage on day one. Keep Core owns the request/continuity loop. The
+enabled Price Book capability now supports controlled catalog/assembly data and a price-blind
+Actual Work record for the controlled field-pilot workflow. Asset identity, QR labels, B2B property
+authorization, customer-facing quotes, and accounting exchange remain staged directions, not
+current-product claims.
 
 For pilot, the request must be capturable by the business first. If a customer calls, texts, emails,
 leaves a voicemail, walks in, or comes through a referral, Keep should let the business create the
@@ -77,11 +80,12 @@ That distinction protects the core promise: Keep cannot become a secondary inbox
 customers willing to fill out a form. The business hears about the need first; Keep captures it
 first; the customer page helps enrich, update, and close the loop afterward.
 
-## Current Direction and Capability Packages
+## Current Product and Capability Direction
 
-Keep remains one product, deployed and operated by OpHalo. It will grow through first-party,
+Keep remains one product, deployed and operated by OpHalo. It grows through first-party,
 server-enforced capability packages rather than customer-specific forks or a third-party runtime
-plugin marketplace.
+plugin marketplace. Packages below are deliberately marked as available or directional so product
+and marketing copy do not confuse a designed capability with a released one.
 
 ```text
 Keep Core → Asset Operations → Price Book & Materials → B2B Property Workflow
@@ -90,93 +94,64 @@ Keep Core → Asset Operations → Price Book & Materials → B2B Property Workf
 
 The packages represent complete customer outcomes, not isolated buttons:
 
-- **Keep Core:** a service need is captured, owned, communicated, followed up, and closed.
-- **Asset Operations:** a technician identifies the exact equipment, including via an assigned opaque
-  QR label, and sees permitted service history and warranty context.
-- **Price Book & Materials:** authorized staff maintain a controlled catalog and retain the exact
-  material/labor lines and price snapshot used on a work record. Reusable scope recipes grow from
-  real, approved work rather than requiring an abstract bundle library at onboarding.
-- **B2B Property Workflow:** contractor/property-manager work retains property, unit, authorization,
-  completion, and billing-handoff context.
-- **Accounting Exchange:** approved work crosses a reviewed, explicit boundary to accounting; it is
-  not a claim that Keep replaces QuickBooks.
+- **Keep Core — available:** a service need is captured, owned, communicated, followed up, and
+  closed. It includes business-created and public-intake requests, service-location context,
+  customer request pages, external-contact logging, attention/follow-up handling, and feedback
+  review.
+- **Price Book & Actual Work — enabled-pilot capability:** authorized staff maintain a controlled
+  catalog, categories, and offering assemblies. A field user can record factual work/materials on
+  a request without seeing prices; submitted visits retain immutable snapshots and enter an
+  Owner/Admin review queue. It is not quoting, invoicing, inventory, or accounting export.
+- **Asset Operations — directional:** exact equipment identity, opaque QR labels, permitted service
+  history, and warranty context require a separate asset-identity and authorization model.
+- **B2B Property Workflow — directional:** property/unit, authorization, completion, and billing
+  handoff context are not yet a released property-manager workflow.
+- **Accounting Exchange — directional:** a reviewed, explicit accounting boundary is planned; Keep
+  does not currently replace QuickBooks or create an accounting handoff.
 
 Account entitlement, user permission, and record/state policy remain distinct server-side gates for
 every package. A customer cannot access a capability merely because its UI is visible.
 
-### Scope Recipe Direction
+### Commercial-Scope Direction
 
-For Price Book & Materials, Keep is deliberately avoiding traditional package sprawl. A business
-first scopes a real request with recognizable catalog/labor lines; an Owner/Admin can then save a
-useful selection as a reusable scope recipe. Reusing that recipe expands it into ordinary,
-editable lines and preserves immutable source/grouping snapshots on the submitted scope or quote.
+Keep is deliberately avoiding traditional package sprawl. The current capability has controlled
+catalog items and office-managed offering assemblies for factual field capture. Reusable scope
+recipes, formal commercial documents, and customer-facing quotes are later work, not current pilot
+behavior.
 
-This makes catalog search the reliable early and uncommon-work fallback, while repeated work becomes
-progressively faster: catalog search and primary offerings → common items/basic assemblies →
-reusable recipes → evidence-backed anchors, modifiers, and guided condition checks. It does not
-require a contractor to configure every job permutation before the first quote, and it does not
-change V1's office-controlled, internal-only quote boundary. A customer-facing quote is a planned
-next-stage capability that will use the same stored grouping to present a concise scope summary;
-delivery, customer decision/approval, PDF, signature, and multi-option proposal workflows remain
-separately sequenced until the internal quote foundation is proven.
+Catalog search, primary offerings/assemblies, and explicit factual-completion nudges make repeated
+field recording faster without requiring a contractor to configure every job permutation. Field
+capture stays price-blind. Customer-facing delivery, acceptance/approval, PDFs, signatures,
+multi-option proposals, invoices, and payments remain separately sequenced capabilities.
 
 ## Product Surfaces and Intended Users
 
-Keep has two authenticated work surfaces with deliberately different jobs. They use the same API,
-account model, request state, and server-authoritative authorization rules; the client surface never
+Keep currently has one authenticated, responsive PWA. It uses the same API, account model, request
+state, and server-authoritative authorization rules at desktop and phone sizes; the client never
 decides what a user may see or do.
 
-### PWA — Owner/Admin command center
+### PWA — staff workbench
 
-The PWA is primarily for Owners and Admins managing the business-wide customer promise. It provides:
+The PWA provides the account-wide command-center views for Owners/Admins and the permitted work
+views/actions for Operators. It provides:
 
 - all-account work, attention, Available/unassigned, closeout, feedback, and history visibility;
 - dispatch, assignment, routing, and workload oversight;
 - manual/business request creation;
 - fast business-first capture from calls, voicemails, texts, emails, walk-ins, and referrals;
 - intake-link, member, account, and operational settings;
-- account-wide totals, response posture, and trustworthy operational review.
+- account-wide totals, response posture, and trustworthy operational review;
+- enabled-pilot Actual Work capture, retained submitted-visit history, and an Owner/Admin review
+  queue; field capture is price-blind while financial review is a distinct office action.
 
 Viewer is a trusted account-wide read-only role on this surface. Viewer supports partners, managers,
 consultants, auditors, or others who need oversight without operational or administrative writes.
 The product must clearly disclose the breadth of Viewer access when the role is granted.
 
-### Native mobile — Operator field workspace
-
-The native mobile app is primarily for Operators working on the road. It should stay narrow, fast,
-and interruption-tolerant. It provides:
-
-- My Work for requests where the Operator is Responsible or Watching;
-- a prominent privacy-limited Available surface for discovering and explicitly claiming/watching
-  eligible unassigned work;
-- customer contact actions, updates, internal notes, status changes, attention handling, and
-  participation controls allowed for that Operator;
-- quick capture for customer needs received in the field, with optional customer-link sharing after
-  the request exists;
-- native phone, email, and Messages launchers plus explicit contact logging;
-- resume synchronization, badges, push, and deep links for urgent actionable work.
-
-The Available queue should optimize for a quick operational choice, not prolonged browsing. Its
-API defaults to 20 privacy-limited rows and permits at most 50 through cursor pagination. A client
-may request fewer rows for a compact mobile screen or more for a wider Operator workspace; the
-backend does not infer authorization or page size from device type. The route performs a narrow
-`limit + 1` keyset query, does not compute an exact total, and should be refreshed deliberately
-rather than aggressively polled. The broader authenticated request-list contract keeps its separate
-50-default/100-maximum behavior.
-
-Launching an external phone or messaging app records local intent, not a completed communication.
-When the Operator returns, Keep should request confirmation without blocking unrelated work or
-writing a false server-side audit event.
-
-The surface split is:
-
-```text
-PWA    -> manage the whole business and close the loop
-Mobile -> handle the work in front of the Operator
-```
-
-This is a product and UX boundary, not a security shortcut. Owners/Admins and Operators remain
-subject to the same server-side account, row-visibility, and action policies regardless of client.
+The responsive PWA adapts contact handoffs and layout to the device: it can hand a desktop user
+off to their phone for calling/texting and can launch the permitted external actions on a phone.
+Those launches record intent only; contact logging remains an explicit confirmation. A native
+mobile app is a separate future track, not a current Keep surface or public promise.
 
 Public intake and customer request pages remain separate anonymous customer surfaces. They are not
 PWA or Operator-mobile workspaces and expose only their intentionally limited public contracts.
@@ -202,10 +177,11 @@ Features should be questioned when they drift into:
 - technician productivity management;
 - broad CRM/marketing automation.
 
-Bounded capability is allowed where it completes the contractor's record: price-book items and
-material snapshots, asset-linked quote/approval context where validated, and reviewed accounting
-exchange. Keep does not become the source of truth for stock, payment collection, accounting ledgers,
-fleet GPS, routing, or a property manager's portfolio system.
+Bounded capability is allowed where it completes the contractor's record: controlled catalog data,
+price-blind Actual Work capture, immutable material/work snapshots, and Owner/Admin review. Future
+asset-linked context, customer quotes, and accounting exchange need their own approved workflows.
+Keep does not become the source of truth for stock, payment collection, accounting ledgers, fleet
+GPS, routing, or a property manager's portfolio system.
 
 ## Why Businesses Need It
 
@@ -232,10 +208,11 @@ Keep is valuable when the business already has tools, but still lacks one truste
 - external contact logging;
 - responsibility and routing;
 - unresolved feedback;
-- closeout and history.
-- equipment/service history and warranty context;
-- what material or labor was used on the work; and
-- a controlled handoff to the accounting or property-management system that remains authoritative.
+- closeout and history; and
+- in enabled pilot accounts, what material or labor was actually recorded on a visit.
+
+Equipment/service history, warranty context, property-manager authorization, and accounting handoff
+are future extensions; they should not be used to describe the current pilot as though they exist.
 
 ## Differentiation
 
@@ -244,23 +221,22 @@ Keep's wedge is not "manage every part of a service business."
 Keep's wedge is:
 
 ```text
-Every service need becomes a known, owned record—connected to the asset and followed through until
-the promise is closed.
+Every service need becomes a known, owned record—followed through until the promise is closed.
 ```
 
 Different from full field-service platforms:
 
 - lighter onboarding;
 - works beside existing tools;
-- customer/property-manager communication stays connected to the actual work;
-- the technician can identify the exact asset and its permitted history instead of starting from
-  memory, a text thread, or an incomplete work order;
-- price/material context can be retained without turning Keep into inventory or accounting software;
+- customer communication stays connected to the request and retained work record;
+- price-blind factual work/material capture can retain what happened without turning Keep into
+  inventory or accounting software;
 - customer gets a personal request page where the B2C workflow calls for it;
 - external calls/texts/emails can be logged without forcing all communication into one channel;
-- attention, feedback, and stale work are surfaced as operational promises, not just records.
-- V1 should feel fresh through refetch-after-write, focus/resume sync, pull-to-refresh, active
-  polling, server-derived badges/counts, and native push/deep links, not through SSE/WebSockets.
+- attention, feedback, and stale work are surfaced as operational promises, not just records;
+- the responsive PWA is deliberately refreshed through refetch-after-write, focus/resume sync,
+  pull-to-refresh, active polling, and server-derived badges/counts. Native push/deep links are
+  future-native-app work, not a current claim.
 
 ## Economic Wedge
 
@@ -317,13 +293,13 @@ slip away after they contact you.
 ```
 
 ```text
-Keep gives your team a trusted record of the equipment, work, and customer promise that otherwise
-gets split across texts, memory, paper, and disconnected tools.
+Keep gives your team a trusted record of the work and customer promise that otherwise gets split
+across texts, memory, paper, and disconnected tools.
 ```
 
 ```text
 Keep does not ask you to replace every system. It gives your team the continuity layer around the
-equipment and work those systems do not keep connected.
+work those systems do not keep connected.
 ```
 
 ## Proving Impact
@@ -354,6 +330,7 @@ Early impact measurement should focus on behavior and customer-confidence signal
 - external contacts logged;
 - unresolved feedback caught and reviewed;
 - completed requests waiting for Owner/Admin closeout;
+- submitted Actual Work visits and Owner/Admin review of them, where the capability is enabled;
 - repeat customers seen again through Keep when identity matching is reliable enough.
 
 Later business-impact measurement may add optional fields such as:
@@ -383,9 +360,9 @@ Strong fit:
 
 - service contractors with inbound requests and slow or multi-step resolution;
 - teams where office/admin staff and field operators share responsibility;
-- HVAC and other equipment/service businesses that need asset-specific service history;
-- contractors serving property managers that need property/unit/authorization context without
-  replacing the property manager's formal system;
+- HVAC and other service businesses where retained request/work context matters;
+- contractors serving property managers who need a continuity layer without replacing the property
+  manager's formal system;
 - businesses where missed follow-up can lose the customer quickly;
 - businesses not ready to migrate every workflow to a full field-service platform;
 - businesses using several tools but lacking one trustworthy continuity and work record.
@@ -428,9 +405,9 @@ visibility, notification routing, or self-assign rules.
 Before adding a feature, ask:
 
 ```text
-Does this help the team identify the right service context, retain what happened, and prevent a
-customer or property partner from being forgotten, waiting too long, losing trust, or leaving
-without the business knowing?
+Does this help the team retain the right service context and what happened, and prevent a customer
+or property partner from being forgotten, waiting too long, losing trust, or leaving without the
+business knowing?
 ```
 
 If yes, it may belong in Keep.
@@ -481,8 +458,8 @@ by default:
 Default posture from here:
 
 ```text
-stabilize and prove Core → validate a bounded contractor workflow → productize reusable capability
-packages with evidence.
+stabilize and prove Core → validate the bounded Direct Actual Work pilot workflow → productize
+reusable capability packages with evidence.
 ```
 
 ## Messaging Drafts
@@ -490,9 +467,9 @@ packages with evidence.
 Possible plain-language positioning:
 
 - "Know the work. Keep the promise."
-- "Keep gives contractors a trusted record of the equipment, work, and customer promise."
+- "Keep gives contractors a trusted record of the work and customer promise."
 - "Every service need is known, owned, and followed through."
-- "Scan the equipment, know the history, and keep the work moving."
+- "Know what happened on the visit, and keep the work moving."
 - "Keep the office, technician, customer, and property partner aligned around the same work."
 - "Keep makes sure every customer request is seen, owned, and followed up."
 - "Protect the leads you already paid to earn."
@@ -513,16 +490,13 @@ For early pilots, learn:
 - Does external-contact logging reduce duplicate work and missed follow-up?
 - Does feedback review catch unresolved issues that would otherwise disappear?
 - Does the product feel lighter than a field-service platform?
-- Can a technician identify the right equipment and permitted service history faster than the current
-  text/paper/disconnected-tool workflow?
-- Does the price-book/material workflow reduce re-entry while preserving a trustworthy historical
+- Does price-blind Actual Work capture reduce re-entry while preserving a trustworthy historical
   record?
-- Does the B2B property workflow make contractor/property-manager coordination clearer without
-  requiring either party to abandon its existing system of record?
+- Do catalog search, assemblies, and factual-completion nudges help technicians record complete
+  work without exposing prices?
 - Where does assignment help, and where does it feel too heavy?
-- Which V1 notification types are urgent enough for native push?
-- Do refetch-after-write, focus/resume sync, pull-to-refresh, active polling, badges, and push make
-  the UI feel fresh enough without SSE/WebSockets?
+- Do refetch-after-write, focus/resume sync, pull-to-refresh, active polling, and badges make the
+  responsive PWA feel fresh enough without SSE/WebSockets?
 - Do pilot users actually use Report Friction when something hurts, and does Pilot Updates reduce
   repeated "is this known?" questions?
 - Which impact metrics make owners feel the subscription is protecting revenue, reputation, or

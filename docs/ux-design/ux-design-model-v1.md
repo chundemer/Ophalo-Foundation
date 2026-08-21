@@ -344,6 +344,20 @@ The retired teal candidate `#159DB8` must not be used for Keep.
 - Do not make the whole UI one hue family.
 - Do not let cream or off-white become visually sleepy. Pair it with strong ink, navy, and clear borders.
 
+### Contrast And Field-Use Hardening
+
+Keep is used in bright offices, truck cabs, and job sites. A pale semantic wash is a surface, not a
+text-color decision.
+
+- Text placed on `--keep-accent-bg`, `--ophalo-attention-bg`, or `--keep-info-bg` uses
+  `--ophalo-ink` or another explicitly audited high-contrast foreground. Do not rely on the related
+  teal, amber, or blue token for ordinary body text on its own pale background.
+- Every badge combination, text-on-fill combination, and disabled control must be checked against
+  WCAG 2.1 AA before release. Passing a desktop screenshot review alone is insufficient.
+- Attention amber is an operational alert, not decoration. Keep it distinguishable from both Keep
+  teal and the OpHalo terracotta accent in low-light and high-glare conditions.
+- Icons, labels, and copy must communicate state even when color is unavailable or washed out.
+
 ---
 
 ## Component Contract
@@ -528,6 +542,16 @@ Mobile should prioritize:
 3. Filters/search only as needed.
 4. First request card quickly.
 
+#### Desktop Request Queue + Workbench — Pending UI-001
+
+The active UI-production decision register proposes a desktop master-detail workbench: a focused
+Request Queue beside a selected request workbench. This does not replace the current Request List
+surface contract until UI-001 is explicitly locked and the existing PWA-layout decisions are
+reconciled.
+
+When locked, the queue remains an operational request queue—not an inbox or global navigation—and
+the selected request retains its durable route and server-authoritative detail contract.
+
 ### Request Detail
 
 Request detail should support focused follow-through, not become a management dashboard.
@@ -562,3 +586,8 @@ Release checks must verify:
 - text does not clip in cards, filters, buttons, or badges
 - mobile controls do not push the first useful request content too far down the page
 - public forms remain readable without layout shift
+- ordinary interactive targets are at least 44 by 44 CSS pixels where practical; persistent
+  job-site action bars and primary field actions are at least 48 by 48 CSS pixels
+- the Production Richness Floor adapts to one-column phones: one type anchor and one elevated,
+  filled surface remain visible without pushing the current primary touch action below the first
+  useful viewport

@@ -136,7 +136,7 @@ Cards are border-first, not shadow-first (per visual doctrine: minimal shadow).
 | Card internal padding | `px-5 py-5 sm:px-6` |
 | In-card stack gap | `space-y-3` |
 | Max content width | `max-w-2xl` |
-| Tap target min height | `min-h-[42px]` (≥44px preferred) |
+| Tap target min height | `min-h-[44px]`; persistent job-site action bars and primary field actions use ≥48px |
 
 ## Color
 
@@ -242,7 +242,7 @@ One transition contract. Motion is for state feedback, never decoration.
 | Icon-only controls | Forbidden on mobile without an accessible label |
 | Hidden labels | Use `sr-only` for `<dt>`/visual-only labels |
 | Contrast | Body/meta verified against canvas and card; disabled states still legible |
-| Target size | `min-h-[42px]` per WCAG 2.2 target size |
+| Target size | `min-h-[44px]` for ordinary controls; persistent job-site action bars and primary field actions use ≥48px |
 | Keyboard | All controls reachable in logical order; no focus traps |
 
 ---
