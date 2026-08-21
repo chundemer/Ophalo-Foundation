@@ -354,8 +354,7 @@ for the new compact current-page slice and for the later Queue-pane variant.
 ### Current stop point
 
 Step 4 is complete and verified (typecheck, full frontend suite, CSS token check, visual
-verification). Awaiting commit of the V2/session-log documentation (this update) separately from
-the frontend implementation commit.
+verification). Step 3 (below) is also complete and verified, not yet committed.
 
 Step 5 (UI-001's bounded Queue + Workbench shell) is its own migration slice, sequenced and
 preflighted separately — see `docs/build-log/132-ui-001-queue-workbench-shell-preflight.md` for the
@@ -368,8 +367,22 @@ locked architecture (retained-route shell, reused focused fallback) and 6-step b
   `docs/ux-design/v2/keep-ui-design-model-v2.md` §13.
 - Step 2 (lock retained-route shell approach) — already resolved as part of the build-log 132
   preflight (§3.1/§6); no separate implementation action needed.
-- **Step 3 (first functional wide shell: Queue pane + UI-003-compliant Priority Preview) — next.**
-  Needs its own exact preflight before implementation; not started.
+- **Step 3 (first functional wide shell: Queue pane + UI-003-compliant Priority Preview) —
+  complete, not yet committed (2026-08-21).** Preflighted (`docs/build-log/132`, ranking/attention
+  field confirmation) and reviewed twice before landing: `RequestWorkbenchShell.tsx` (new,
+  `ResizeObserver`-gated at the locked 1001 CSS-px protected minimum) and `PriorityPreview.tsx`
+  (new, all four UI-003 branches) added; `App.tsx`'s `#/requests` render gate now mounts the
+  shell; `Requests.tsx` reports a settled `AppliedQueueSnapshot` (never `draftQ`) via
+  `onAppliedSnapshotChange` without duplicating its fetch. `RequestQueueNavigation` is reused
+  unchanged (no pane-mode prop — deferred to Step 4). One-pane fallback applies regardless of
+  width whenever the applied view has no ranked `KeepRequestSummary` shape or context Priority
+  Preview can honestly branch on: Available, Actual Work Review, and History (closed/cancelled
+  result set, outside UI-003's active-queue branches) — gated by `isRankedView` in
+  `AppliedQueueSnapshot`. Two review rounds corrected: (1) the attention predicate to the locked
+  `attention.attentionLevel !== "none"` (not `attentionReason` presence); (2) Open request now
+  passes `{ requestIds }` navigation context so Request Detail keeps Prev/Next; (3) History
+  excluded from `isRankedView`. `#/request/{id}` is unaffected by this step — still renders via
+  the existing focused `RequestDetail` fallback regardless of width (Step 5).
 - Steps 4–6 (Queue-pane layout variant, embedded Workbench, one-pane fallback verification) —
   not started.
 
@@ -378,9 +391,11 @@ locked architecture (retained-route shell, reused focused fallback) and 6-step b
 `dotnet build` on `OpHalo.Api`/`OpHalo.IntegrationTests` clean; 18/18 focused
 `ActualWorkFinancialReadApiTests` passing (13 pre-existing + 5 new), committed at `1e35335`.
 
-Frontend (uncommitted, this session): `tsc --noEmit` clean; `vitest run` full suite 515/515
-passing (49 files); CSS token check clean. 6 production files, 6 test files (5 modified + 1 new
-`requestsWorkspace.test.ts`) changed, 12 total.
+Frontend (uncommitted, this session): `tsc --noEmit` clean; `vitest run` full suite 525/525
+passing (51 files); CSS token check clean; `git diff --check` clean. Step 3 adds 2 new production
+files (`PriorityPreview.tsx`, `RequestWorkbenchShell.tsx`), modifies `App.tsx`/`Requests.tsx`, adds
+a global `ResizeObserver` test stub (`test/setup.ts`), and adds 2 new test files
+(`PriorityPreview.test.tsx`, `RequestWorkbenchShell.test.tsx`, 8 + 4 tests).
 
 ## Pilot-wide operational constraints
 

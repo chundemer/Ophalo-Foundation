@@ -4,7 +4,7 @@ import { AuthGuard } from "./components/AuthGuard";
 import { QuickCapture } from "./components/QuickCapture";
 import { KeepButton } from "./components/keep/KeepButton";
 import { Home } from "./pages/Home";
-import { Requests } from "./pages/Requests";
+import { RequestWorkbenchShell } from "./components/requests/RequestWorkbenchShell";
 import { RequestDetail } from "./pages/RequestDetail";
 import { AccessLimited } from "./pages/AccessLimited";
 import { Settings } from "./pages/Settings";
@@ -444,7 +444,7 @@ function AppShell() {
         )}
         {route.page === "requests" && role === "viewer" && <AccessLimited />}
         {route.page === "requests" && role !== "unknown" && role !== "viewer" && (
-          <Requests
+          <RequestWorkbenchShell
             role={role}
             viewCounts={viewCounts}
             onViewCountsUpdate={handleViewCountsUpdate}

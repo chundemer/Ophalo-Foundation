@@ -61,6 +61,19 @@ function historyHeadingSuffix(q: string, scopeLabel: string, dateLabel: string):
   return ` ${parts.join(" · ")}`;
 }
 
+// UI-001 Step 3: the settled applied-queue state a sibling Priority Preview consumes — never a
+// second fetch, never the transient search draft.
+export interface AppliedQueueSnapshot {
+  requests: KeepRequestSummary[];
+  isLoading: boolean;
+  isError: boolean;
+  isForbidden: boolean;
+  isFiltered: boolean;
+  isRankedView: boolean;
+  onResetFilters: () => void;
+  onRetry: () => void;
+}
+
 interface RequestsProps {
   role: AccountRole;
   viewCounts: KeepRequestViewCounts | null;
@@ -68,6 +81,7 @@ interface RequestsProps {
   onSelectRequest: (requestId: string, navContext?: { requestIds: string[] }, focus?: string) => void;
   onNavigateSettings: (section?: "public-profile" | "policy" | "team") => void;
   onStartCapture: () => void;
+  onAppliedSnapshotChange?: (snapshot: AppliedQueueSnapshot) => void;
 }
 
 export function Requests({
@@ -77,6 +91,7 @@ export function Requests({
   onSelectRequest,
   onNavigateSettings,
   onStartCapture,
+  onAppliedSnapshotChange,
 }: RequestsProps) {
   const tabs = getTabsForRole(role);
   const [activeTab, setActiveTab] = useState<TabDef>(tabs[0]);
@@ -350,6 +365,29 @@ export function Requests({
   const isError = isAvailableTab ? availableQuery.isError : listQuery.isError;
   const error = isAvailableTab ? availableQuery.error : listQuery.error;
   const isForbidden = isError && error instanceof ApiError && error.status === 403;
+
+  // UI-001 Step 3: reports the settled applied-queue state (never draftQ) so a sibling Priority
+  // Preview can stay truthful to the same view/filter/search context without a second fetch.
+  // Available and Actual Work Review are their own item shapes (KeepRequestAvailableItem / review
+  // entries), not ranked KeepRequestSummary rows — Priority Preview cannot honestly branch on
+  // them, so isRankedView tells the shell to keep the one-pane fallback for those tabs. History
+  // is a closed/cancelled result set, not the active queue UI-003's branches describe (its
+  // empty state is "no matching history", never "no active requests" + New Request) — also
+  // excluded.
+  const isRankedView = !isAvailableTab && !isReviewTab && !presentAsHistory;
+  useEffect(() => {
+    onAppliedSnapshotChange?.({
+      requests: isRankedView ? listQuery.data?.requests ?? [] : [],
+      isLoading,
+      isError,
+      isForbidden,
+      isFiltered: criteriaActive,
+      isRankedView,
+      onResetFilters: clearFilters,
+      onRetry: () => void (isAvailableTab ? availableQuery.refetch() : listQuery.refetch()),
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isRankedView, presentAsHistory, listQuery.data, isLoading, isError, isForbidden, criteriaActive, onAppliedSnapshotChange]);
 
   // GAP-043: a truthful numbered range, never "of N" — this cursor model has no server total.
   // Valid under the existing fixed-limit, short-final-page contract: only the last page can be
