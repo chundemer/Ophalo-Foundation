@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { PriorityPreview } from "../PriorityPreview";
 import { mockRequestSummaries } from "../../../mocks/fixtures";
+import { statusLabel } from "../../../lib/requestStatus";
 import type { AppliedQueueSnapshot } from "../../../pages/Requests";
 
 function snapshot(overrides: Partial<AppliedQueueSnapshot> = {}): AppliedQueueSnapshot {
@@ -40,6 +41,44 @@ describe("PriorityPreview", () => {
     expect(screen.getByText(attentionRow!.customerName)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /open request/i }));
     expect(onOpenRequest).toHaveBeenCalledWith(attentionRow!.id);
+  });
+
+  it("richness: shows the status badge, original need, and service location when available", () => {
+    const row = mockRequestSummaries.find(
+      (r) => r.attention.attentionLevel !== "none" && r.serviceCity && r.serviceState,
+    );
+    expect(row).toBeDefined();
+    render(
+      <PriorityPreview
+        snapshot={snapshot({ requests: [row!] })}
+        onOpenRequest={vi.fn()}
+        onStartCapture={vi.fn()}
+      />,
+    );
+    expect(screen.getByText(statusLabel(row!.status))).toBeInTheDocument();
+    expect(screen.getByText(row!.originalSummary.fullText)).toBeInTheDocument();
+    expect(
+      screen.getByText(`${row!.serviceCity}, ${row!.serviceState} ${row!.serviceZip ?? ""}`.trim()),
+    ).toBeInTheDocument();
+    const openButton = screen.getByRole("button", { name: /open request/i });
+    expect(openButton.className).toContain("keep-accent");
+  });
+
+  it("richness: omits service location when not available on the row", () => {
+    const row = {
+      ...mockRequestSummaries[0],
+      serviceCity: null,
+      serviceState: null,
+      serviceZip: null,
+    };
+    render(
+      <PriorityPreview
+        snapshot={snapshot({ requests: [row] })}
+        onOpenRequest={vi.fn()}
+        onStartCapture={vi.fn()}
+      />,
+    );
+    expect(screen.queryByText(/,\s*[A-Z]{2}\s*\d{5}/)).not.toBeInTheDocument();
   });
 
   it("branch: no-attention — states the provable fact and previews the next active request", () => {

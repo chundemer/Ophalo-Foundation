@@ -1,4 +1,7 @@
-import { AlertTriangle, Clock } from "lucide-react";
+import { AlertTriangle, Clock, MapPin } from "lucide-react";
+import { KeepBadge } from "../keep/KeepBadge";
+import { KeepButton } from "../keep/KeepButton";
+import { statusLabel, statusBadgeVariant } from "../../lib/requestStatus";
 import type { KeepRequestSummary } from "../../lib/apiClient";
 import type { AppliedQueueSnapshot } from "../../pages/Requests";
 
@@ -21,6 +24,17 @@ const ATTENTION_LABELS: Record<string, string> = {
 
 function attentionLabel(reason: string | null): string {
   return (reason && ATTENTION_LABELS[reason]) ?? "Needs attention";
+}
+
+// Small, self-contained duplicate of RequestRow.tsx's buildCollapsedSummary (ADR-450): same
+// whitespace normalization and 240-char word-boundary cap with ellipsis, minus the show-more
+// toggle this compact preview doesn't need — the remaining visual clipping is CSS line-clamp-2.
+function normalizeSummary(fullText: string): string {
+  const normalized = fullText.replace(/\s+/g, " ").trim();
+  if (normalized.length <= 240) return normalized;
+  const slice = normalized.slice(0, 239);
+  const lastSpace = slice.lastIndexOf(" ");
+  return (lastSpace > 0 ? slice.slice(0, lastSpace) : slice).trimEnd() + "…";
 }
 
 interface PriorityPreviewProps {
@@ -108,6 +122,10 @@ export function PriorityPreview({ snapshot, onOpenRequest, onStartCapture }: Pri
 
   const topAttention = requests.find(hasAttention);
   const previewRow = topAttention ?? requests[0];
+  const originalNeed = previewRow.originalSummary.fullText.trim()
+    ? normalizeSummary(previewRow.originalSummary.fullText)
+    : null;
+  const hasServiceLocation = Boolean(previewRow.serviceCity && previewRow.serviceState);
 
   return (
     <div className="flex h-full flex-col gap-4 p-6">
@@ -131,14 +149,27 @@ export function PriorityPreview({ snapshot, onOpenRequest, onStartCapture }: Pri
           </span>
           <span className="keep-row-title truncate">{previewRow.customerName}</span>
         </div>
+        <div className="flex flex-wrap items-center gap-1.5">
+          <KeepBadge variant={statusBadgeVariant(previewRow.status)}>
+            {statusLabel(previewRow.status)}
+          </KeepBadge>
+        </div>
+        {originalNeed && (
+          <p className="keep-row-meta line-clamp-2">{originalNeed}</p>
+        )}
+        {hasServiceLocation && (
+          <div className="flex items-center gap-1 text-[var(--ophalo-muted)] text-xs">
+            <MapPin className="h-3 w-3 shrink-0" />
+            <span className="truncate">
+              {previewRow.serviceCity}, {previewRow.serviceState}
+              {previewRow.serviceZip ? ` ${previewRow.serviceZip}` : ""}
+            </span>
+          </div>
+        )}
       </div>
-      <button
-        type="button"
-        onClick={() => onOpenRequest(previewRow.id)}
-        className={`self-start rounded-lg bg-[var(--ophalo-navy)] px-3 py-1.5 text-sm text-white hover:opacity-90 ${FOCUS_RING}`}
-      >
+      <KeepButton variant="teal" onClick={() => onOpenRequest(previewRow.id)} className="self-start">
         Open request
-      </button>
+      </KeepButton>
     </div>
   );
 }
