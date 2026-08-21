@@ -27,8 +27,21 @@ Every V2 surface must be reviewed with realistic populated data for:
   switches cleanly to focused drill-down; it never becomes a cramped pseudo-desktop.
 - `#/requests` is a side-effect-free Priority Preview when unselected; explicit selection alone changes
   the durable request route.
-- Queue tab labels, role defaults, More Views, active-session restoration, filtered-empty recovery, and
+- Queue tab labels, role defaults, Views, active-session restoration, filtered-empty recovery, and
   non-disruptive refresh behavior conform to UI-004.
+- On the current full-width `#/requests` page, Owner/Admin can see a compact, intrinsic-width Office
+  Review control directly below primary tabs when review work exists. It must not stretch across the
+  workspace or look like an empty input. Views/History stay visually associated with navigation and
+  do not become disconnected filler. In UI-001's future bounded Queue pane, review the pane-width
+  strip, dedicated Views/History row, and two-row 320–360px primary grid at their actual width.
+- For Owner/Admin, the Office Review strip's aggregate and its Ready to Close / Feedback Review /
+  Actual Work Review counts come from authoritative server counts only — never a guessed zero and never
+  the full review-queue list's `.length`. The strip is navy/neutral, never amber, hidden below a
+  zero aggregate, and holds a structured loading placeholder (not a blank bar) while inputs resolve so
+  the Queue does not shift. Collapsed is the default scan state, reading "Office Review · N pending";
+  once a member is active the strip names it, matching how Views names Watching. Opened, actionable
+  (non-zero) members lead; zero-count members collapse into one quiet line. Watching is verified
+  separately as a quiet Views utility, not part of Office Review.
 - The selected request’s phone, service location, responsible owner, identity, status/attention reason,
   and authorized current action are reachable without scrolling past the original customer description.
 - Work Canvas preserves original customer wording, omits empty work-context placeholders, and discloses

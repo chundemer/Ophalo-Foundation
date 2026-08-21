@@ -23,7 +23,8 @@ customer-surface recipes. Do not duplicate a recipe merely to change class names
 
 | Recipe | Governing rule | Required behavior |
 |---|---|---|
-| Request Queue | UI-001, UI-004 | 320–360 CSS-pixel bounded wide pane; three primary tabs by role; More Views; selected row; filtered-empty and quiet refresh treatment |
+| Request Queue | UI-001, UI-004 | Future 320–360 CSS-pixel bounded wide pane: three primary tabs by role, two-row grid at the bounded width; Views (Watching only) + History in their own utility row below Office Review; selected row; filtered-empty and quiet refresh treatment. The current full-width page uses the same role/view behavior but normal horizontal tabs and its compact Office Review variant. |
+| Office Review control | UI-004 amendment | Owner/Admin-only; conditional on authoritative aggregate > 0; navy/neutral, never amber; structured loading placeholder (not a blank bar); collapsed reads "Office Review · N pending", names the active member once one is open; opens to actionable (non-zero) members first with zero-count members collapsed into one quiet line; plain disclosure/group, not an ARIA menu. Current full-width variant is intrinsic/content width directly below primary tabs; future Queue-pane variant is pane width. |
 | Priority Preview | UI-003 | read-only, non-mutating, applied-context summary with explicit Open request or recovery action |
 | Request Anchor | UI-005 | compact sticky identity/status/action/context strip; phone, service location, owner accessible without scroll |
 | Work Canvas | UI-005 | attention guidance, original customer need, conditional actionable work context, composition, then history |

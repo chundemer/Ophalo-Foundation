@@ -126,16 +126,18 @@ auto-selection, or hidden route mutation.
 
 ### UI-004 — Queue views, defaults, and selection continuity
 
-**Status:** Locked — 2026-08-21  
+**Status:** Locked — 2026-08-21; **amended 2026-08-21** (Owner/Admin Office Review).
 **Decision:** The visible primary queue tabs are intentionally constrained to three.
 
-| User context | Primary tabs | Secondary views in **More Views** |
+| User context | Primary tabs | Secondary views in **Views** |
 |---|---|---|
-| Owner/Admin | Needs Attention, All Work, My Work | Watching, Ready to Close, Feedback Review, Actual Work Review |
+| Owner/Admin | Needs Attention, All Work, My Work | Watching |
 | Operator | My Work, Needs Attention, Available | Watching |
 
 **My Work** is the standard visible label; do not use longer alternatives such as “Assigned to Me” or
-“My Promises” in the primary tab bar. When a secondary view is active, **More Views** visibly names it.
+“My Promises” in the primary tab bar. The secondary-views control is labeled **Views**, not "More
+Views" — it holds only Watching for either role, and "More" overstates a single-item control. When a
+secondary view is active, **Views** visibly names it (e.g. the control reads "Watching").
 History remains a quiet footer/non-peer entry using existing dates, not a new “Completed Today” queue.
 
 On a new browser session, Owner/Admin starts in Needs Attention and Operator starts in My Work. During
@@ -146,6 +148,74 @@ contract; a particular browser-storage mechanism is not mandated here.
 Server ranking and paging remain authoritative. Incoming changes must not silently reorder a list under
 an actively scanning user; show a quiet refresh/update-available affordance instead. A filtered-empty
 view is always distinct from a truly empty queue and provides a clear Reset filters recovery.
+
+#### UI-004 amendment — Owner/Admin Office Review strip (2026-08-21)
+
+**Supersedes** the original UI-004 table's placement of Ready to Close, Feedback Review, and Actual
+Work Review inside Owner/Admin's generic **More Views**. Those three are Owner/Admin office
+obligations, not quiet secondary views, and must not be hidden behind an un-badged overflow menu.
+
+**Presentation variants (2026-08-21):** the role, count, disclosure, and action rules below apply
+to both Requests presentations. Today's full-width `#/requests` page uses a normal horizontal
+three-tab row and a compact, intrinsic-width Office Review control directly below it; it must not
+stretch Office Review across the workspace or imitate a full-width input. Views and History remain
+a compact, visually associated utility group on the tab row where space permits, or wrap together
+before search/filter when space does not. UI-001's future 320–360 CSS-px Queue pane reuses the same
+component as a pane-width strip, places Views/History in their own utility row, and uses the
+two-row primary grid. The Queue-pane target composition:
+
+```
+Needs Attention 13
+All Work 16 | My Work 4
+Office Review · 1 pending ▾
+Views ▾                                      History
+Search / filter
+```
+
+- Owner/Admin retains exactly three primary queue controls: Needs Attention, All Work, My Work.
+  Unchanged from the base decision above.
+- A conditional **Office Review** control renders directly below the primary controls and above
+  search/filter for Owner/Admin only. It is distinct from customer-promise risk (Needs Attention)
+  and uses navy/neutral treatment, never amber by default. Collapsed is the default scan state, not
+  the expanded list. It is compact and content-width on the current full-width page; it is full width
+  within the future bounded Queue pane.
+  - Its aggregate count is Ready to Close count + Feedback Review count + Actual Work Review count.
+    Ready to Close and Feedback Review use their existing server view counts; Actual Work Review uses
+    the authoritative `GET /keep/pricebook/actual-work/review-queue/count` endpoint (`{ count: int }`,
+    Slice A-1, commit `1e35335`). The aggregate must never be a guessed zero and must never be derived
+    from the full review-queue list's `.length`.
+  - The strip is shown only when the authoritative aggregate is greater than zero. While the
+    authoritative inputs are loading, the Queue reserves a compact loading placeholder in the strip's
+    position, shaped like the eventual strip rather than a blank bar, so the Queue does not shift when
+    the result resolves; an incomplete aggregate is never displayed as final.
+  - Collapsed, the strip reads "Office Review · {aggregate} pending" — not a leading digit juxtaposed
+    with the label. Once a member view (Ready to Close/Feedback Review/Actual Work Review) is active,
+    it instead names that destination — "Office Review: Feedback Review" — the same active-naming
+    pattern **Views** uses for Watching, so the Owner never loses scan context after selecting one.
+  - Opening Office Review reveals Ready to Close, Feedback Review, and Actual Work Review, each with
+    its own authoritative count, prioritizing actionable (non-zero) members as normal rows; members
+    with nothing to review collapse into one quiet line (e.g. "No Ready to Close") rather than
+    standing as equal-weight zero-badge rows — a single real item must not be buried among two empty
+    ones.
+- **Watching** is not office-review work. For Owner/Admin it is a quiet **Views** utility, kept
+  separate from Office Review. Operator is unchanged: Watching remains its only secondary view behind
+  **Views**, and Operator has no Office Review strip.
+- **Views** and the demoted **History** entry point form a compact, visually associated utility
+  group. On the current full-width page they may share the tab row; if they wrap, they wrap together
+  before search/filter. In the future bounded Queue pane they live in their own row below Office
+  Review, with Views left and History right. The Views/Office Review disclosures are a plain
+  disclosure/group (not an ARIA `menu`/`menuitem`, since neither implements full menu keyboard
+  traversal): Escape and an outside pointerdown both dismiss and return focus to the trigger;
+  selecting a view does the same after navigating.
+- Owner/Admin's default-session view remains Needs Attention, and Needs Attention remains the amber
+  customer-promise-risk surface. Office Review work must never be merged into Needs Attention or imply
+  that every review item is urgent.
+- At the UI-001 320–360 CSS-px Queue-pane width, Owner/Admin's three primary controls use a two-row
+  grid rather than a horizontal tab row: Row 1 is Needs Attention with its authoritative count, full
+  width; Row 2 is All Work with its count and My Work with its count, side by side. Operator's
+  narrow-pane grid is unaffected by this amendment: Row 1 is My Work full-width; Row 2 is Needs
+  Attention and Available. Neither role's narrow-pane grid may scroll horizontally, clip, abbreviate a
+  locked label, or squeeze a control below its usable target size.
 
 ### UI-005 — Request information hierarchy
 

@@ -259,28 +259,32 @@ financial/review work into field capture merely because files overlap.
 locked), design model, component spec, review rubric. Separate track from Direct Actual Work above.
 
 Full-codebase implementation preflight is complete (architecture map, decision-to-code mapping for
-UI-001–UI-013, migration sequence). Slice A (Queue tab regrouping, UI-004) was implemented and
-corrected twice on review, but its frontend diff was superseded by the amendment below before
-landing and was discarded — do not resurrect it as a starting point for Slice A-2.
+UI-001–UI-013, migration sequence). The implementation sequence below deliberately separates the
+small, current-page Office Review control from the later UI-001 Queue + Workbench shell. They share
+one role and data contract, but they are not the same layout task.
 
 ### Locked decision — Owner/Admin Office Review amendment (2026-08-21)
 
 Supersedes plain More-Views grouping for Owner/Admin's Ready to Close / Feedback Review / Actual
-Work Review. Approved amendment, **not yet written into `docs/ux-design/v2/`** — that write-up is
-the next step:
+Work Review. The amendment is recorded in the current V2 documentation changes and must be committed
+separately from later frontend work:
 
 - Owner/Admin primary tabs stay exactly Needs Attention, All Work, My Work — unchanged.
-- Add a conditional, persistent **Office Review** strip below the primary tabs, above search/filter:
-  aggregates Ready to Close + Feedback Review + Actual Work Review counts, navy/neutral treatment
-  (never amber — reserved for customer-promise risk), opens an accessible chooser naming each queue
-  and its count. Hidden until the aggregate is authoritatively known (no guessed zero); reserve a
-  compact loading placeholder so it doesn't shift the Queue after initial render.
+- Add a conditional, persistent **Office Review** control below the primary tabs, above
+  search/filter. It aggregates Ready to Close + Feedback Review + Actual Work Review counts,
+  uses navy/neutral treatment (never amber — reserved for customer-promise risk), and opens an
+  accessible chooser naming each queue and its count. It is hidden only after the aggregate is
+  authoritatively known to be zero; while loading, reserve a compact placeholder rather than
+  guessing zero.
 - Watching becomes a separate quiet Views/utility control for Owner/Admin (not part of Office
   Review). Operator is unchanged: primary My Work/Needs Attention/Available, Watching stays behind
-  its existing More Views.
-- At the V2 Queue pane's locked 320–360 CSS-px width: Owner/Admin primary tabs use a two-row grid
-  (Row 1: Needs Attention full-width; Row 2: All Work | My Work). Operator: Row 1: My Work
-  full-width; Row 2: Needs Attention | Available. No horizontal scrolling, no clipped labels.
+  its quiet Views control.
+- The behavior and data contract applies to both presentations. On today's full-width
+  `#/requests` page, Office Review is a compact, content-width control — never a stretched,
+  full-page faux input. In UI-001's future 320–360 CSS-px Queue pane, the same component becomes
+  pane-width and primary tabs use a two-row grid: Owner/Admin row 1 Needs Attention; row 2 All Work
+  | My Work. Operator row 1 My Work; row 2 Needs Attention | Available. No horizontal scrolling or
+  clipped labels.
 
 **Why:** no authoritative server count existed for Actual Work Review (only a full-row-list
 endpoint) — the prior client badge already leaned on that list's `.length`, which the Office Review
@@ -288,7 +292,7 @@ aggregate must not repeat.
 
 ### Delivered slices
 
-1. **Slice A-1 — Actual Work Review authoritative count (backend):** Complete, commit pending.
+1. **Slice A-1 — Actual Work Review authoritative count (backend):** Complete, commit `1e35335`.
    `IActualWorkFinancialReviewPersistence.CountUnreviewedAsync`,
    `EfActualWorkFinancialReviewPersistence` (COUNT query, no row projection),
    `ActualWorkFinancialReadApiService.GetReviewQueueCountAsync` (same Owner/Admin gate as the
@@ -296,26 +300,72 @@ aggregate must not repeat.
    `{ count: int }`. 4 production files, 1 test file (5 new HTTP integration tests: account-scoped
    count, zero case, Operator 403, missing-entitlement 403, unauthenticated 401). 18/18
    `ActualWorkFinancialReadApiTests` passing. No migration, no mutation handler.
+2. **Earlier documentation amendment:** Uncommitted and superseded in part. The four V2 documents
+   contain the Office Review, Views, and narrow Queue-pane rules, but their old containment wording
+   incorrectly prohibited the current full-width implementation. Step 1 below corrects that wording
+   before frontend work resumes.
 
-### Next approved slice
+### Rejected attempt — Slice A-2 full-width frontend (2026-08-21)
 
-**Step 2 (next session):** amend `docs/ux-design/v2/keep-ui-production-decision-register.md` (and
-design model / component spec as needed) with the Office Review + narrow-grid rules above as newly
-locked UI-004 sub-decisions. Then **re-preflight Slice A-2** (Office Review strip, narrow-pane
-compact tab grid, Watching split, duplicate Ready-to-Close header-pill removal) against the amended
-docs before implementing. Consume Slice A-1's new count endpoint — do not derive the aggregate from
-the full review-queue list's `.length`.
+A-2 was implemented and reviewed twice (Office Review, Views/History split, a two-row grid via a
+real CSS container query, accessible disclosure semantics). The failure was structural, not a
+product-rule failure: it applied the Queue-pane layout unchanged to a 1,100px+ full-width page. That
+made Office Review a stretched faux input and left Views/History disconnected from the controls.
 
-### Blockers
+**Disposition:** not committed. Preserved as `stash@{0}` on `main`, labeled
+`slice-a2-full-width-superseded-frontend` — do not discard or apply wholesale. Its label wording,
+active-context naming, accessible disclosure pattern, and loading-state work are reference material
+for the new compact current-page slice and for the later Queue-pane variant.
 
-None for the docs amendment or the A-2 re-preflight. A-2 *implementation* is blocked on that
-re-preflight being presented and approved first.
+### Sequenced delivery plan
+
+1. **Correct the V2 presentation contract — complete (2026-08-21).** The decision register, design
+   model, component spec, and review rubric now distinguish the current compact full-width
+   Requests-page variant from the later bounded Queue-pane variant while preserving one shared
+   role/count/action contract.
+2. **Preflight the current-page Office Review slice — complete (2026-08-21).** Preflight was
+   reviewed and corrected twice (locked primary-tab order/labels, Row 1/Row 2 layout and
+   unclipped-popover containment, disclosure mutual exclusion, error-vs-loading Office Review
+   state) before implementation began.
+3. **Review the preflight before code — complete (2026-08-21).** Accepted after corrections; the
+   accepted preflight produced a compact Office Review control directly below the primary tabs,
+   keeps Views/History purposeful, and does not use a full-width Queue-pane treatment.
+4. **Implement and verify the current-page slice — complete (2026-08-21).** Delivered: locked
+   Owner/Admin primary-tab order (Needs Attention, All Work, My Work) and the single "My Work"
+   label on both roles; Watching moved to a **Views** disclosure; Ready to Close/Feedback
+   Review/Actual Work Review moved to an Owner/Admin-only **Office Review** disclosure sourced
+   from authoritative counts only (Actual Work Review via the Slice A-1 count endpoint, never
+   review-queue `.length`); Row 1 (primary tabs + Views/History sharing space, wrapping together
+   when space doesn't permit) and Row 2 (Office Review, its own row) with `overflow-x-auto`
+   scoped to the tablist only so neither popover clips; mutual-exclusion disclosure state with
+   correct focus-return semantics; `aria-controls`-based disclosure relationship (not
+   `aria-haspopup`, which implies a menu); an explicit `loading` / `error+retry` / `ready`
+   Office Review state (error is distinct from loading, never a guessed zero); removed the
+   duplicate "Ready to close" header pill now superseded by Office Review. Fixed one latent
+   pre-existing bug found along the way: the new-session landing tab now actually lands on
+   Needs Attention (the already-locked decision), which the old tab ordering never satisfied.
+   Visual verification at narrow current-page widths and 100/125/150% zoom completed by
+   Christian. Not committed yet — code and documentation are queued as separate commits.
+5. **Build UI-001 later as its own migration slice — next.** Reuse the Office Review component
+   with its Queue-pane presentation (pane-width strip, dedicated Views/History row, and
+   320–360px two-row primary tab grid). Do not let that future shell block the current
+   operational fix, which is already delivered.
+
+### Current stop point
+
+Step 4 is complete and verified (typecheck, full frontend suite, CSS token check, visual
+verification). Step 5 (UI-001's bounded Queue pane) is the next separate migration slice — not
+started, and not implied by anything in this track. Awaiting commit of the V2/session-log
+documentation (this update) separately from the frontend implementation commit.
 
 ### Verified baseline
 
 `dotnet build` on `OpHalo.Api`/`OpHalo.IntegrationTests` clean; 18/18 focused
-`ActualWorkFinancialReadApiTests` passing (13 pre-existing + 5 new). No frontend changes in this
-track are currently in the tree.
+`ActualWorkFinancialReadApiTests` passing (13 pre-existing + 5 new), committed at `1e35335`.
+
+Frontend (uncommitted, this session): `tsc --noEmit` clean; `vitest run` full suite 515/515
+passing (49 files); CSS token check clean. 6 production files, 6 test files (5 modified + 1 new
+`requestsWorkspace.test.ts`) changed, 12 total.
 
 ## Pilot-wide operational constraints
 

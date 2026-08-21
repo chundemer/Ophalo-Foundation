@@ -56,10 +56,30 @@ opening a request. It follows the applied queue context and gives a factual, ser
 where one exists. Selecting a row or **Open request** alone changes the route to `#/request/{id}`.
 
 Primary queues are deliberately limited to three: Owner/Admin sees Needs Attention, All Work, My Work;
-Operator sees My Work, Needs Attention, Available. Secondary review queues belong in a visibly labelled
-**More Views** control. New sessions begin at Needs Attention for Owner/Admin and My Work for Operators;
-active-session returns preserve the applied queue context and scroll position. Background data does not
-silently reorder an actively scanned list.
+Operator sees My Work, Needs Attention, Available. Watching is a quiet secondary view in a visibly
+labelled **Views** control for both roles (not "More Views" — it only ever holds Watching). New
+sessions begin at Needs Attention for Owner/Admin and My Work for Operators; active-session returns
+preserve the applied queue context and scroll position. Background data does not silently reorder an
+actively scanned list.
+
+Owner/Admin additionally carries a conditional **Office Review** control below the primary tabs,
+above search/filter: it aggregates Ready to Close, Feedback Review, and Actual Work Review under an
+authoritative count, using navy/neutral treatment (never amber — amber
+stays reserved for Needs Attention's customer-promise risk). Collapsed — reading "Office Review · N
+pending" — is the default scan state; opening it prioritizes actionable (non-zero) members and
+collapses empty ones into one quiet line. It renders only once its aggregate is authoritatively known,
+never as a guessed zero, with a structured loading placeholder (shaped like the eventual strip, not a
+blank bar) so the Queue does not shift under an actively scanning user. Office Review is Owner/Admin
+office obligations, not a quiet view, and is distinct from Watching. Operator has no Office Review
+strip.
+
+**Presentation:** the current full-width `#/requests` page uses a normal horizontal primary-tab row
+and an intrinsic-width Office Review control directly beneath it. It must feel like a compact
+operational control, never a workspace-wide faux input. Views and History remain a compact,
+associated utility group on that tab row where space permits, or wrap together before search/filter.
+The future UI-001 bounded 320–360 CSS-px Queue pane reuses the same behavior with a pane-width Office
+Review strip, a dedicated Views/History utility row, and the two-row primary grid defined in section
+13. Presentation changes density and containment only; it does not create different queue rules.
 
 A selected request uses a compact sticky Request Anchor over a scrollable Work Canvas. The anchor keeps
 the customer, request/status/attention identity, current authorized action, and phone/location/owner
@@ -157,6 +177,12 @@ queue is bounded to 320–360 CSS pixels; the layout appears only when the avail
 workspace protects a usable selected-workbench minimum. This is not a fixed device/viewport breakpoint.
 When space is insufficient, Keep uses the focused one-pane Queue → request drill-down presentation.
 There is no manual collapsible queue in the first redesign release.
+
+At this 320–360 CSS-px width, primary tabs use a two-row grid rather than a horizontal strip, per the
+UI-004 amendment: Owner/Admin Row 1 is Needs Attention full-width, Row 2 is All Work | My Work;
+Operator Row 1 is My Work full-width, Row 2 is Needs Attention | Available. Neither role's grid may
+scroll horizontally, clip, abbreviate a locked label, or squeeze a control below its usable target
+size.
 
 UI-002 through UI-005 lock the durable selected route, non-mutating Priority Preview, role queue
 defaults, refresh posture, and first-viewport detail hierarchy. The exact protected workbench minimum
