@@ -22,27 +22,56 @@ export interface TabDef {
   roles: AccountRole[];
 }
 
+// UI-004 (locked, amended 2026-08-21): "My Work" is the single primary-tab label for
+// assigned_to_me on both roles — do not use "Assigned to Me" or "My Promises" here.
 const ALL_TABS: TabDef[] = [
-  { id: "default",        label: "All work",         view: "default",          roles: ["owner", "admin"] },
-  { id: "assigned_to_me", label: "Assigned to Me",   view: "assigned_to_me",   roles: ["owner", "admin"] },
-  { id: "assigned_to_me", label: "My Promises",      view: "assigned_to_me",   roles: ["operator"] },
   { id: "needs_attention",label: "Needs Attention",  view: "needs_attention",  roles: ["owner", "admin", "operator"] },
+  { id: "default",        label: "All Work",         view: "default",          roles: ["owner", "admin"] },
+  { id: "assigned_to_me", label: "My Work",          view: "assigned_to_me",   roles: ["owner", "admin", "operator"] },
+  { id: "available_work", label: "Available Work",   view: "available",        roles: ["operator"] },
   { id: "watching",       label: "Watching",         view: "watching",         roles: ["owner", "admin", "operator"] },
   { id: "ready_to_close", label: "Ready to Close",   view: "ready_to_close",   roles: ["owner", "admin"] },
   { id: "feedback_review",label: "Feedback Review",  view: "feedback_review",  roles: ["owner", "admin"] },
-  { id: "available_work", label: "Available Work",   view: "available",        roles: ["operator"] },
   { id: "actual_work_review", label: "Actual Work Review", view: "actual_work_review", roles: ["owner", "admin"] },
 ];
 
+// UI-004 amendment (2026-08-21): primary tabs are exactly 3, in this order.
+// Owner/Admin: Needs Attention, All Work, My Work. Operator: My Work, Needs Attention, Available.
+const PRIMARY_TAB_IDS: Partial<Record<AccountRole, TabId[]>> = {
+  owner: ["needs_attention", "default", "assigned_to_me"],
+  admin: ["needs_attention", "default", "assigned_to_me"],
+  operator: ["assigned_to_me", "needs_attention", "available_work"],
+};
+
+// UI-004 amendment: Watching is the only Views member, for both roles.
+const SECONDARY_VIEW_IDS: Partial<Record<AccountRole, TabId[]>> = {
+  owner: ["watching"],
+  admin: ["watching"],
+  operator: ["watching"],
+};
+
+// UI-004 amendment: Office Review members — Owner/Admin only.
+const OFFICE_REVIEW_MEMBER_IDS: Partial<Record<AccountRole, TabId[]>> = {
+  owner: ["ready_to_close", "feedback_review", "actual_work_review"],
+  admin: ["ready_to_close", "feedback_review", "actual_work_review"],
+};
+
+function tabsById(ids: TabId[] | undefined, role: AccountRole): TabDef[] {
+  return (ids ?? [])
+    .map((id) => ALL_TABS.find((t) => t.id === id && t.roles.includes(role)))
+    .filter((t): t is TabDef => t !== undefined);
+}
+
 export function getTabsForRole(role: AccountRole): TabDef[] {
-  const seen = new Set<string>();
-  return ALL_TABS.filter((t) => {
-    if (!t.roles.includes(role)) return false;
-    const key = t.view;
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
+  return tabsById(PRIMARY_TAB_IDS[role], role);
+}
+
+export function getSecondaryViewsForRole(role: AccountRole): TabDef[] {
+  return tabsById(SECONDARY_VIEW_IDS[role], role);
+}
+
+export function getOfficeReviewMembersForRole(role: AccountRole): TabDef[] {
+  return tabsById(OFFICE_REVIEW_MEMBER_IDS[role], role);
 }
 
 // Session 3.5: a quiet, truthful description for each operational queue so its purpose is
@@ -179,15 +208,15 @@ export function resolveHistoryDateParams(
 
 // --- Sidebar count helper ---
 
-// reviewQueueCount is the client-side length of the already-loaded Actual Work review queue
-// (Slice 8A) — there is no server view-count for it, and it must never show a guessed count
-// before that queue has loaded (null, not 0, until then).
+// actualWorkReviewCount is the authoritative server COUNT (Slice A-1, GET
+// /keep/pricebook/actual-work/review-queue/count) — never the loaded review queue's
+// `.length`, and never a guessed 0 before the count query has resolved (null until then).
 export function countForTab(
   tab: TabDef,
   counts: KeepRequestViewCounts | null,
-  reviewQueueCount?: number | null,
+  actualWorkReviewCount?: number | null,
 ): number | null {
-  if (tab.id === "actual_work_review") return reviewQueueCount ?? null;
+  if (tab.id === "actual_work_review") return actualWorkReviewCount ?? null;
   if (!counts) return null;
   switch (tab.id) {
     case "default":         return counts.default;

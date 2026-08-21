@@ -1,4 +1,4 @@
-import { AlertTriangle, CheckCircle2 } from "lucide-react";
+import { AlertTriangle } from "lucide-react";
 import type { KeepBusinessSetupResult, KeepRequestViewCounts } from "../../lib/apiClient";
 import { RequestsOnboardingBanner } from "../RequestsOnboardingBanner";
 import type { TabDef, TabId } from "../../pages/requestsWorkspace";
@@ -11,6 +11,9 @@ interface SummaryPill {
   variant: "attention" | "success";
 }
 
+// UI-004 amendment (2026-08-21): Ready to Close no longer has its own header pill — Office
+// Review is now the single Owner/Admin entry point for that queue, so a duplicate count
+// display here would diverge from Office Review's own authoritative row.
 function buildSummaryPills(
   viewCounts: KeepRequestViewCounts | null,
   tabs: TabDef[],
@@ -25,15 +28,6 @@ function buildSummaryPills(
       tabId: "needs_attention",
       icon: <AlertTriangle className="h-3 w-3" />,
       variant: "attention",
-    });
-  }
-  if (viewCounts.readyToClose > 0 && tabs.some((t) => t.id === "ready_to_close")) {
-    pills.push({
-      label: "Ready to close",
-      count: viewCounts.readyToClose,
-      tabId: "ready_to_close",
-      icon: <CheckCircle2 className="h-3 w-3" />,
-      variant: "success",
     });
   }
   return pills;

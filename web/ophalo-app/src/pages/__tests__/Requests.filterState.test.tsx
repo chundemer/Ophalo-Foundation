@@ -59,6 +59,8 @@ const mockBusinessSetup: KeepSetupResult = {
   },
 };
 
+const HISTORY_VIEWS = new Set(["closed_history", "cancelled_history", "all_history"]);
+
 function listResult(
   requests: KeepRequestListResult["requests"],
   isHistory = false,
@@ -97,8 +99,10 @@ beforeEach(() => {
   mockGetAvailableRequests.mockResolvedValue({ requests: [], pageInfo: { limit: 50, hasMore: false, nextCursor: null } });
   mockGetGuidedSetup.mockResolvedValue(completeGuidedSetup);
   mockGetSetup.mockResolvedValue(mockBusinessSetup);
+  // UI-004 amendment: the landing view is Needs Attention, not "default" — history is
+  // determined by the actual history views, not by "any non-default view".
   mockGetRequests.mockImplementation((query: GetRequestsParams) =>
-    Promise.resolve(listResult(query.q || query.status ? [] : [sampleRow], query.view !== "default")),
+    Promise.resolve(listResult(query.q || query.status ? [] : [sampleRow], HISTORY_VIEWS.has(query.view ?? ""))),
   );
 });
 

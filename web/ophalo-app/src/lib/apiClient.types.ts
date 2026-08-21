@@ -1217,6 +1217,12 @@ export interface ActualWorkReviewQueueEntry {
   totalMargin: number | null;
 }
 
+// Slice A-1, build-log/1e35335: authoritative COUNT for the Office Review aggregate — never
+// derive this from ActualWorkReviewQueueEntry[].length.
+export interface ActualWorkReviewQueueCountResult {
+  count: number;
+}
+
 export interface ActualWorkFinancialLineEntry {
   id: string;
   displayNameSnapshot: string;

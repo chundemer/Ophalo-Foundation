@@ -226,6 +226,7 @@ import type {
   ActualWorkNudgeSuggestionFieldRowResponse,
   ActualWorkNudgeFieldResultResponse,
   ActualWorkReviewQueueEntry,
+  ActualWorkReviewQueueCountResult,
   ActualWorkFinancialDetailResult,
   ActualWorkReviewBody,
 } from "./apiClient.types";
@@ -363,6 +364,7 @@ export type {
   ActualWorkNudgeSuggestionFieldRowResponse,
   ActualWorkNudgeFieldResultResponse,
   ActualWorkReviewQueueEntry,
+  ActualWorkReviewQueueCountResult,
   ActualWorkFinancialDetailResult,
   ActualWorkReviewBody,
 };
@@ -952,6 +954,9 @@ export const api = {
   // Slice 8A, build-log/129: Owner/Admin unreviewed-review queue and per-visit financial detail.
   getActualWorkReviewQueue: () =>
     apiFetch<ActualWorkReviewQueueEntry[]>("/keep/pricebook/actual-work/review-queue"),
+  // Slice A-1, build-log/1e35335: authoritative count for the Office Review aggregate.
+  getActualWorkReviewQueueCount: () =>
+    apiFetch<ActualWorkReviewQueueCountResult>("/keep/pricebook/actual-work/review-queue/count"),
   getActualWorkFinancialDetail: (actualWorkId: string) =>
     apiFetch<ActualWorkFinancialDetailResult>(`/keep/pricebook/actual-work/${actualWorkId}/financial-detail`),
   reviewActualWork: (actualWorkId: string, body: ActualWorkReviewBody, version: string) =>

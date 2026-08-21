@@ -14,6 +14,7 @@ const mockGetAvailableRequests = vi.fn();
 const mockGetGuidedSetup = vi.fn();
 const mockGetSetup = vi.fn();
 const mockGetMe = vi.fn();
+const mockGetActualWorkReviewQueueCount = vi.fn();
 
 vi.mock("../../lib/apiClient", async () => {
   const actual = await vi.importActual<typeof import("../../lib/apiClient")>(
@@ -28,6 +29,7 @@ vi.mock("../../lib/apiClient", async () => {
       getGuidedSetup: (...args: unknown[]) => mockGetGuidedSetup(...args),
       getSetup: (...args: unknown[]) => mockGetSetup(...args),
       getMe: (...args: unknown[]) => mockGetMe(...args),
+      getActualWorkReviewQueueCount: (...args: unknown[]) => mockGetActualWorkReviewQueueCount(...args),
     },
   };
 });
@@ -90,9 +92,11 @@ beforeEach(() => {
   mockGetGuidedSetup.mockReset();
   mockGetSetup.mockReset();
   mockGetMe.mockReset();
+  mockGetActualWorkReviewQueueCount.mockReset();
   mockGetAvailableRequests.mockResolvedValue({ requests: [], pageInfo: { limit: 50, hasMore: false, nextCursor: null } });
   mockGetGuidedSetup.mockResolvedValue(completeGuidedSetup);
   mockGetSetup.mockResolvedValue(mockBusinessSetup);
+  mockGetActualWorkReviewQueueCount.mockResolvedValue({ count: 0 });
   mockGetMe.mockResolvedValue({
     accountUserId: "mock-user-1",
     accountId: "mock-account-1",
@@ -109,8 +113,10 @@ describe("Requests — ADR-449 Owner/Admin work-queue hierarchy", () => {
     renderRequests("owner");
 
     expect(await screen.findByRole("heading", { name: "Requests for Acme Plumbing" })).toBeInTheDocument();
+    // UI-004 amendment: new-session landing tab is Needs Attention — select All Work explicitly.
+    fireEvent.click(await screen.findByRole("tab", { name: /All Work/ }));
     expect(
-      screen.getByText(
+      await screen.findByText(
         "Open requests and feedback requiring review, ranked with customer promises needing attention first.",
       ),
     ).toBeInTheDocument();
@@ -123,8 +129,10 @@ describe("Requests — ADR-449 Owner/Admin work-queue hierarchy", () => {
     mockGetRequests.mockResolvedValue(listResult([needsAttentionRow, openWorkRow]));
     renderRequests("owner");
 
+    // UI-004 amendment: new-session landing tab is Needs Attention — select All Work explicitly.
+    fireEvent.click(await screen.findByRole("tab", { name: /All Work/ }));
     await screen.findByText(needsAttentionRow.customerName);
-    const region = screen.getByRole("region", { name: "All work requests" });
+    const region = screen.getByRole("region", { name: "All Work requests" });
     // First h2 in the region is GAP-043's stable page-range heading ("Showing 1–2"), not a section label.
     const headings = within(region).getAllByRole("heading", { level: 2 }).slice(1);
     expect(headings.map((h) => h.textContent)).toEqual(["Needs attention", "Open work"]);
@@ -140,6 +148,8 @@ describe("Requests — ADR-449 Owner/Admin work-queue hierarchy", () => {
     mockGetRequests.mockResolvedValue(listResult([openWorkRow]));
     renderRequests("owner");
 
+    // UI-004 amendment: new-session landing tab is Needs Attention — select All Work explicitly.
+    fireEvent.click(await screen.findByRole("tab", { name: /All Work/ }));
     await screen.findByText("Open work");
     expect(screen.queryByText("Needs attention")).not.toBeInTheDocument();
   });

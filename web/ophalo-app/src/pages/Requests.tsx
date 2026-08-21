@@ -10,8 +10,11 @@ import { RequestListToolbar } from "../components/requests/RequestListToolbar";
 import { RequestListContent } from "../components/requests/RequestListContent";
 import { ActualWorkReviewQueueList } from "../components/requests/ActualWorkReviewQueueList";
 import { ApiError } from "../lib/apiClient";
+import type { OfficeReviewState } from "../components/requests/RequestQueueNavigation";
 import {
   getTabsForRole,
+  getSecondaryViewsForRole,
+  getOfficeReviewMembersForRole,
   getQueueSubtitle,
   EMPTY_STATE,
   resolveHistoryDateParams,
@@ -197,6 +200,14 @@ export function Requests({
   });
 
   const isOwnerOrAdmin = role === "owner" || role === "admin";
+
+  // UI-004 amendment: the authoritative Actual Work Review count for the Office Review
+  // aggregate (Slice A-1) — never the full review-queue list's `.length`.
+  const reviewQueueCountQuery = useQuery({
+    queryKey: ["actual-work-review-queue-count"],
+    queryFn: api.getActualWorkReviewQueueCount,
+    enabled: isOwnerOrAdmin,
+  });
   const guidedSetupQuery = useQuery({
     queryKey: ["guided-setup"],
     queryFn: api.getGuidedSetup,
@@ -280,8 +291,35 @@ export function Requests({
     }
   }, [latestCounts, onViewCountsUpdate]);
 
-  // Slice 8A: badge count is the loaded queue's own length, never a guess before it loads.
-  const reviewQueueCount = reviewQueueQuery.data ? reviewQueueQuery.data.length : null;
+  const secondaryViews = getSecondaryViewsForRole(role);
+  const officeReviewMembers = getOfficeReviewMembersForRole(role);
+
+  // UI-004 amendment: Office Review is withheld until both authoritative inputs (viewCounts,
+  // the Actual Work Review count) are known. A failed input is an "error" state, not a
+  // perpetual "loading" one — it never falls back to a guessed zero or partial aggregate.
+  // Operator never renders Office Review (RequestQueueNavigation gates the whole row on
+  // isOwnerOrAdmin) — "loading" here is inert, not a real state.
+  const officeReview: OfficeReviewState = !isOwnerOrAdmin
+    ? { status: "loading" }
+    : listQuery.isError || reviewQueueCountQuery.isError
+      ? {
+          status: "error",
+          retry: () => {
+            if (listQuery.isError) void listQuery.refetch();
+            if (reviewQueueCountQuery.isError) void reviewQueueCountQuery.refetch();
+          },
+        }
+      : viewCounts === null || reviewQueueCountQuery.data === undefined
+        ? { status: "loading" }
+        : {
+            status: "ready",
+            aggregate: viewCounts.readyToClose + viewCounts.feedbackReview + reviewQueueCountQuery.data.count,
+            members: {
+              readyToClose: viewCounts.readyToClose,
+              feedbackReview: viewCounts.feedbackReview,
+              actualWorkReview: reviewQueueCountQuery.data.count,
+            },
+          };
 
   const requests = isAvailableTab
     ? availableQuery.data?.requests ?? []
@@ -434,7 +472,9 @@ export function Requests({
           tabs={tabs}
           activeTab={activeTab}
           viewCounts={viewCounts}
-          reviewQueueCount={reviewQueueCount}
+          secondaryViews={secondaryViews}
+          officeReviewMembers={officeReviewMembers}
+          officeReview={officeReview}
           onSelectTab={selectTab}
           historyMode={historyMode}
           historyScope={historyScope}

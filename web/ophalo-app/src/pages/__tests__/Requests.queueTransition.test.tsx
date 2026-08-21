@@ -1,10 +1,34 @@
+import { useState } from "react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor, fireEvent, within } from "@testing-library/react";
+import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Requests } from "../Requests";
 import { mockRequestSummaries, mockViewCounts } from "../../mocks/fixtures";
-import type { KeepRequestListResult, KeepSetupResult } from "../../lib/apiClient";
+import type { KeepRequestListResult, KeepSetupResult, KeepRequestViewCounts } from "../../lib/apiClient";
+
+// App.tsx owns viewCounts as external state and feeds it back via onViewCountsUpdate (Session
+// 3.5 first-visit count continuity) — Office Review's readyToClose/feedbackReview inputs read
+// this same prop, so tests exercising it need the same round trip, not a static null/no-op.
+function RequestsHarness({
+  role,
+  onSelectRequest = () => {},
+}: {
+  role: "owner" | "admin" | "operator";
+  onSelectRequest?: (requestId: string) => void;
+}) {
+  const [viewCounts, setViewCounts] = useState<KeepRequestViewCounts | null>(null);
+  return (
+    <Requests
+      role={role}
+      viewCounts={viewCounts}
+      onViewCountsUpdate={setViewCounts}
+      onSelectRequest={onSelectRequest}
+      onNavigateSettings={() => {}}
+      onStartCapture={() => {}}
+    />
+  );
+}
 
 // GAP-041: a first-time queue selection must keep the header/tab bar/search row stable
 // and show a fixed queue-agnostic skeleton, never blank the whole region or reuse the
@@ -18,6 +42,7 @@ const mockGetGuidedSetup = vi.fn();
 const mockGetSetup = vi.fn();
 const mockGetMe = vi.fn();
 const mockGetActualWorkReviewQueue = vi.fn();
+const mockGetActualWorkReviewQueueCount = vi.fn();
 
 vi.mock("../../lib/apiClient", async () => {
   const actual = await vi.importActual<typeof import("../../lib/apiClient")>(
@@ -33,6 +58,7 @@ vi.mock("../../lib/apiClient", async () => {
       getSetup: (...args: unknown[]) => mockGetSetup(...args),
       getMe: (...args: unknown[]) => mockGetMe(...args),
       getActualWorkReviewQueue: (...args: unknown[]) => mockGetActualWorkReviewQueue(...args),
+      getActualWorkReviewQueueCount: (...args: unknown[]) => mockGetActualWorkReviewQueueCount(...args),
     },
   };
 });
@@ -80,14 +106,7 @@ function renderRequests(
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(
     <QueryClientProvider client={queryClient}>
-      <Requests
-        role={role}
-        viewCounts={null}
-        onViewCountsUpdate={() => {}}
-        onSelectRequest={onSelectRequest}
-        onNavigateSettings={() => {}}
-        onStartCapture={() => {}}
-      />
+      <RequestsHarness role={role} onSelectRequest={onSelectRequest} />
     </QueryClientProvider>,
   );
 }
@@ -105,8 +124,10 @@ beforeEach(() => {
   mockGetSetup.mockReset();
   mockGetMe.mockReset();
   mockGetActualWorkReviewQueue.mockReset();
+  mockGetActualWorkReviewQueueCount.mockReset();
   mockGetAvailableRequests.mockResolvedValue({ requests: [], pageInfo: { limit: 50, hasMore: false, nextCursor: null } });
   mockGetActualWorkReviewQueue.mockResolvedValue([]);
+  mockGetActualWorkReviewQueueCount.mockResolvedValue({ count: 0 });
   mockGetGuidedSetup.mockResolvedValue(completeGuidedSetup);
   mockGetSetup.mockResolvedValue(mockBusinessSetup);
   // GAP-042: ["me"] resolves independently of the list response — this is what proves the
@@ -128,9 +149,10 @@ describe("Requests — GAP-041 queue-transition stability", () => {
     renderRequests();
 
     expect(await screen.findByRole("heading", { name: "Requests for Acme Plumbing" })).toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: /All work/ })).toBeInTheDocument();
+    // UI-004 amendment: Owner/Admin's new-session landing tab is Needs Attention.
+    expect(screen.getByRole("tab", { name: /Needs Attention/ })).toBeInTheDocument();
     expect(screen.getByLabelText("Search requests")).toBeInTheDocument();
-    const region = screen.getByRole("region", { name: "All work requests" });
+    const region = screen.getByRole("region", { name: "Needs Attention requests" });
     expect(region).toHaveAttribute("aria-busy", "true");
     // Five fixed skeleton placeholders, not the "Loading…" blob.
     expect(region.querySelectorAll('[aria-hidden="true"] > div').length).toBe(5);
@@ -149,15 +171,16 @@ describe("Requests — GAP-041 queue-transition stability", () => {
           : listResult([mockRequestSummaries[0]]),
       ),
     );
+    // UI-004 amendment: new-session landing tab is Needs Attention.
     renderRequests();
+    await screen.findByText(mockRequestSummaries[1].customerName);
+
+    fireEvent.click(screen.getByRole("tab", { name: /All Work/ }));
     await screen.findByText(mockRequestSummaries[0].customerName);
 
     fireEvent.click(screen.getByRole("tab", { name: /Needs Attention/ }));
-    await screen.findByText(mockRequestSummaries[1].customerName);
-
-    fireEvent.click(screen.getByRole("tab", { name: /All work/ }));
     // Cached — must be present synchronously, no skeleton frame in between.
-    expect(screen.getByText(mockRequestSummaries[0].customerName)).toBeInTheDocument();
+    expect(screen.getByText(mockRequestSummaries[1].customerName)).toBeInTheDocument();
   });
 
   it("moves focus and selection with ArrowRight/ArrowLeft/Home/End without navigation", async () => {
@@ -206,32 +229,44 @@ describe("Requests — GAP-041 queue-transition stability", () => {
   });
 });
 
-describe("Requests — Slice 8A Actual Work review queue tab", () => {
-  it("shows the tab for Owner/Admin", async () => {
+// UI-004 amendment: Actual Work Review is an Office Review member, not a primary tab — it's
+// reachable by opening the Office Review disclosure, and its count comes from the
+// authoritative GET .../review-queue/count endpoint, never the review queue list's `.length`.
+describe("Requests — Slice 8A / UI-004 amendment Actual Work Review (Office Review member)", () => {
+  it("shows Office Review with Actual Work Review as a member for Owner/Admin", async () => {
+    mockGetActualWorkReviewQueueCount.mockResolvedValue({ count: 1 });
     mockGetRequests.mockResolvedValue(listResult([]));
     renderRequests("owner");
-    expect(await screen.findByRole("tab", { name: /Actual Work Review/ })).toBeInTheDocument();
+
+    const officeReviewTrigger = await screen.findByRole("button", { name: /Office Review/ });
+    fireEvent.click(officeReviewTrigger);
+    expect(await screen.findByRole("button", { name: /Actual Work Review/ })).toBeInTheDocument();
   });
 
-  it("hides the tab for Operator", async () => {
+  it("never renders Office Review for Operator, regardless of counts", async () => {
+    mockGetActualWorkReviewQueueCount.mockResolvedValue({ count: 1 });
     mockGetRequests.mockResolvedValue(listResult([]));
     renderRequests("operator");
     await screen.findByRole("heading", { name: "Requests for Acme Plumbing" });
-    expect(screen.queryByRole("tab", { name: /Actual Work Review/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Office Review/ })).not.toBeInTheDocument();
+    expect(screen.queryByText(/Actual Work Review/)).not.toBeInTheDocument();
   });
 
-  it("renders queue rows and navigates to the request on selection, and shows the badge only once the queue has loaded", async () => {
+  it("selecting Actual Work Review from Office Review renders queue rows and navigates on selection", async () => {
+    mockGetActualWorkReviewQueueCount.mockResolvedValue({ count: 1 });
     mockGetRequests.mockResolvedValue(listResult([]));
     const gate = deferred<unknown[]>();
     mockGetActualWorkReviewQueue.mockReturnValue(gate.promise);
     const onSelectRequest = vi.fn();
     renderRequests("owner", onSelectRequest);
 
-    const reviewTab = await screen.findByRole("tab", { name: /Actual Work Review/ });
-    // Not yet visited/loaded — no guessed badge count.
-    expect(within(reviewTab).queryByText(/^\d+$/)).not.toBeInTheDocument();
+    const officeReviewTrigger = await screen.findByRole("button", { name: /Office Review/ });
+    fireEvent.click(officeReviewTrigger);
+    const memberButton = await screen.findByRole("button", { name: /Actual Work Review/ });
+    fireEvent.click(memberButton);
+    // Selecting closes the disclosure and returns focus to its own trigger.
+    await waitFor(() => expect(document.activeElement).toBe(officeReviewTrigger));
 
-    fireEvent.click(reviewTab);
     await screen.findByText("Loading review queue…");
 
     gate.resolve([
@@ -252,8 +287,20 @@ describe("Requests — Slice 8A Actual Work review queue tab", () => {
     const row = await screen.findByText("Marcus Reyes");
     fireEvent.click(row);
     expect(onSelectRequest).toHaveBeenCalledWith("req-1");
+  });
 
-    await waitFor(() => expect(within(reviewTab).getByText("1")).toBeInTheDocument());
+  it("Office Review shows a Retry affordance (not a perpetual loading placeholder) when the count query fails", async () => {
+    mockGetActualWorkReviewQueueCount.mockRejectedValue(new Error("network error"));
+    mockGetRequests.mockResolvedValue(listResult([]));
+    renderRequests("owner");
+
+    const retryButton = await screen.findByRole("button", { name: /couldn.t load counts/i });
+    expect(retryButton).toBeInTheDocument();
+
+    mockGetActualWorkReviewQueueCount.mockResolvedValue({ count: 2 });
+    fireEvent.click(retryButton);
+
+    await waitFor(() => expect(screen.getByRole("button", { name: /Office Review/ })).toBeInTheDocument());
   });
 });
 

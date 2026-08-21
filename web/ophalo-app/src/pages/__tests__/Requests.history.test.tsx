@@ -59,6 +59,8 @@ const mockBusinessSetup: KeepSetupResult = {
   },
 };
 
+const HISTORY_VIEWS = new Set(["closed_history", "cancelled_history", "all_history"]);
+
 function listResult(requests: KeepRequestListResult["requests"], isHistory: boolean): KeepRequestListResult {
   return {
     requests,
@@ -92,8 +94,10 @@ beforeEach(() => {
   mockGetAvailableRequests.mockResolvedValue({ requests: [], pageInfo: { limit: 50, hasMore: false, nextCursor: null } });
   mockGetGuidedSetup.mockResolvedValue(completeGuidedSetup);
   mockGetSetup.mockResolvedValue(mockBusinessSetup);
+  // UI-004 amendment: the landing view is Needs Attention, not "default" — history is
+  // determined by the actual history views, not by "any non-default view".
   mockGetRequests.mockImplementation((query: GetRequestsParams) =>
-    Promise.resolve(listResult([], query.view !== "default")),
+    Promise.resolve(listResult([], HISTORY_VIEWS.has(query.view ?? ""))),
   );
 });
 
@@ -222,6 +226,7 @@ describe("Requests — GAP-044 history entry point", () => {
 
     expect(await screen.findByRole("tablist")).toBeInTheDocument();
     expect(screen.queryByText("Closed and cancelled work — not part of your active queues.")).not.toBeInTheDocument();
-    await waitFor(() => expect(mockGetRequests).toHaveBeenCalledWith(expect.objectContaining({ view: "default" })));
+    // UI-004 amendment: tabs[0] is now Needs Attention (the locked Owner/Admin landing tab).
+    await waitFor(() => expect(mockGetRequests).toHaveBeenCalledWith(expect.objectContaining({ view: "needs_attention" })));
   });
 });
