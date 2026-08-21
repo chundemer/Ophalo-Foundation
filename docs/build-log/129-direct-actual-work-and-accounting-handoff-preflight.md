@@ -464,7 +464,20 @@ domain + persistence layer only, no mutation handler exposed yet):
 6A totals: 6 production files, 2 test files, 8 total files, zero mutation handler families
 (persistence/domain only). Under the hard gate.
 
-**6B file/test-count gate** (3 production files):
+### 6B preflight — mechanical drift found — 2026-08-20
+
+Mechanical preflight against the merged 6A persistence contract and `ErrorHttpMapper.cs`'s
+existing Actual Work entries confirmed every symbol named in the original 6B gate still exists,
+with one gap: `ErrorHttpMapper.cs` was not in the original file count. `ActualWork.NotFound` is
+already covered by the generic `.NotFound` suffix fallback (404), but `ActualWork.NotSubmitted`
+and `ActualWork.AlreadyReviewed` need explicit 409 entries — matching the existing
+`ActualWork.NotDraft`/`VersionMismatch`/`DraftAlreadyOpenForRequest` state-conflict precedent,
+not the default 400 fallback — and `ActualWork.ReviewNoteTooLong` needs an explicit 400 entry for
+consistency with the file's existing pattern (`ExpandInclusionItemInvalid` gets one despite 400
+already being the default). Corrected gate below: 4 production files, still under the eight-file
+hard gate.
+
+**6B file/test-count gate** (4 production files):
 1. `Application/PriceBook/ActualWorkReviewApiService.cs` — new service owning the Owner/Admin auth
    stack (RequestsOperate + Price Book entitlement + Owner/Admin role check, no `ActualWorkCapture`)
    and mapping the persistence outcome to a `Result`.
@@ -473,10 +486,29 @@ domain + persistence layer only, no mutation handler exposed yet):
 3. `Api/Keep/KeepServiceCollectionExtensions.cs` — DI registration for
    `IActualWorkReviewPersistence`/`EfActualWorkReviewPersistence` and
    `ActualWorkReviewApiService`.
+4. `ErrorHttpMapper.cs` — explicit `ActualWork.NotSubmitted`/`AlreadyReviewed` (409) and
+   `ReviewNoteTooLong` (400) entries.
 
 6B test files (1, new):
 1. `tests/OpHalo.IntegrationTests/Api/ActualWorkReviewApiTests.cs` — new, endpoint-level
    200/403 (non-Owner/Admin, missing entitlement)/404/409 cases.
+
+### 6B implementation notes — 2026-08-20
+
+Implemented as gated (4 production files, 1 test file). `ActualWorkReviewApiService` composes its
+own auth stack rather than reusing `ActualWorkDraftApiService.AuthorizeAsync` — that helper's gate
+3 requires `ActualWorkCapture`, which office review deliberately does not check. Endpoint follows
+the existing `POST .../actual-work/{id}/...` + `X-Keep-ActualWork-Version` header convention
+exactly. `ErrorHttpMapper.cs` gained explicit `ActualWork.NotSubmitted`/`AlreadyReviewed` (409) and
+`ReviewNoteTooLong` (400) entries; `ActualWork.NotFound` needed no entry (generic `.NotFound`
+suffix fallback already covers it).
+
+8/8 new `ActualWorkReviewApiTests` passing (Owner 200 + review fields set, Admin 200, Operator 403,
+missing-entitlement 403, unknown-visit 404, stale-version 409, Draft-visit 409/`NotSubmitted`,
+reviewed-twice 409/`AlreadyReviewed` with no field overwrite). Full regression: 130/130 Actual Work
+integration tests, 49/49 Actual Work unit tests, no regressions. `git diff --check` clean.
+
+Slice 6 (6A + 6B) is complete.
 
 6B totals: 3 production files, 1 test file, 4 total files, one mutation handler family (mark
 reviewed). Under the hard gate.

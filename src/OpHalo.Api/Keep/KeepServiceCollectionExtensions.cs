@@ -213,6 +213,12 @@ public static class KeepServiceCollectionExtensions
         // needed.
         services.AddScoped<ActualWorkNudgeFieldReadApiService>();
 
+        // Direct Actual Work — Owner/Admin review mark-reviewed/signal-resolve (Batch 6,
+        // build-log/129). Atomic seam separate from IActualWorkPersistence, matching
+        // IActualWorkSubmissionPersistence.
+        services.AddScoped<IActualWorkReviewPersistence, EfActualWorkReviewPersistence>();
+        services.AddScoped<ActualWorkReviewApiService>();
+
         return services;
     }
 }

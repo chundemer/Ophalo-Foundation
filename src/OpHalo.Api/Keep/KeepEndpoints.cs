@@ -903,6 +903,24 @@ public static class KeepEndpoints
                 : ErrorHttpMapper.ToHttpResult(result.Error);
         }).RequireAuthorization();
 
+        // Batch 6 — Owner/Admin-only office acknowledgement of a submitted visit.
+        app.MapPost("/keep/pricebook/actual-work/{actualWorkId:guid}/review", async (
+            Guid actualWorkId,
+            ActualWorkReviewBody body,
+            HttpRequest httpRequest,
+            ActualWorkReviewApiService service,
+            CancellationToken ct) =>
+        {
+            var versionResult = ParseActualWorkVersion(httpRequest.Headers);
+            if (!versionResult.IsSuccess)
+                return ErrorHttpMapper.ToHttpResult(versionResult.Error);
+
+            var result = await service.MarkReviewedAsync(actualWorkId, body.ReviewNote, versionResult.Value, ct);
+            return result.IsSuccess
+                ? Results.Ok(new ActualWorkConcurrencyVersionResponse(result.Value))
+                : ErrorHttpMapper.ToHttpResult(result.Error);
+        }).RequireAuthorization();
+
         app.MapGet("/keep/pricebook/actual-work/request/{requestId:guid}/history", async (
             Guid requestId,
             ActualWorkHistoryReadApiService service,
@@ -1183,6 +1201,8 @@ file sealed record ActualWorkUpdateLineBody(decimal ActualQuantity, string? Note
 file sealed record ActualWorkSubmitBody(string? Outcome, string? CompletionNote);
 
 file sealed record ActualWorkTransferRecorderBody(Guid NewRecorderAccountUserId, string Reason);
+
+file sealed record ActualWorkReviewBody(string? ReviewNote);
 
 file sealed record ActualWorkLineAddedResponse(Guid LineId, Guid ActualWorkConcurrencyVersion);
 
