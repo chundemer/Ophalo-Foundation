@@ -361,9 +361,12 @@ pass. See
 [Build Log 134](build-log/134-ui-001-post-step-4-queue-and-preview-refinement-backlog.md) for the
 refinement decisions and measured evidence.
 
-**Next session:** Step 5 (embedding the real Request Detail Workbench). Priority-Preview richness
-(Build Log 134 §3) is delivered (`e935b8c`) and real-device zoom acceptance is complete — no
-remaining blockers ahead of Step 5.
+**Step 5 (embedding the real Request Detail Workbench) is complete, committed `6d85b2f`
+(2026-08-21).** Real-browser 100/125/150% zoom acceptance passed. See the UI-001 migration
+progress entry below for scope.
+
+**Next session:** Step 6 (one-pane fallback and final route verification) — the last item in the
+locked Build Log 132 §5 migration sequence.
 
 **UI-001 migration progress:**
 - Step 1 (measurement/sizing spike) — **complete, 2026-08-21**
@@ -420,7 +423,23 @@ remaining blockers ahead of Step 5.
   convention as `RequestRow.tsx`. Open request action switched from a hand-rolled navy button to
   the shared `KeepButton` `teal` variant. 8/8 focused `PriorityPreview.test.tsx` tests passing (2
   new); `tsc --noEmit` and `git diff --check` clean.
-- Steps 5–6 (embedded Workbench, one-pane fallback verification) — not started.
+- **Step 5 (embed/adapt the real Request Detail Workbench) — complete, committed `6d85b2f`
+  (2026-08-21).** `RequestWorkbenchShell` now owns both `#/requests` and `#/request/{id}` for
+  eligible roles: the Queue pane (`Requests`) occupies the same JSX position for both routes, so
+  navigating between them at wide widths is a prop update, not a remount — filters/scroll/live
+  `AppliedQueueSnapshot` persist, verified by a no-additional-fetch assertion. Pane 2 renders
+  `RequestDetail` (`paneMode`) for the detail route; pane-mode Prev/Next is computed from the live
+  snapshot's applied order (`snapshot.requests`), not the frozen `navContext` — if the open
+  request scrolls out of the applied snapshot both ids come back `undefined` and
+  `RequestDetailHeader` hides Prev/Next via its existing null-both behavior. `RequestDetail`/
+  `RequestDetailHeader` gained `paneMode`/`showBack` (default `true`) to suppress only the Back
+  control in the embedded pane; identity, Prev/Next, and all modal behavior (share/follow-up/
+  service-location/contact) are unchanged. Viewer/unknown roles keep the pre-Step-5 standalone
+  `RequestDetail` render byte-for-byte (GAP-042 direct-link access), unaffected by the
+  role-gated shell. Narrow-detail fallback for eligible roles is unchanged in behavior (full-page
+  `RequestDetail`, no Queue mounted). Real-browser 100/125/150% zoom acceptance passed
+  (2026-08-21).
+- Step 6 (one-pane fallback and final route verification) — not started; next session.
 
 ### Verified baseline
 
@@ -441,6 +460,12 @@ refinement modifies `RequestRow.tsx`, `RequestListToolbar.tsx`, `RequestQueueNav
 Priority Preview richness batch (committed `e935b8c`): `tsc --noEmit` clean; `git diff --check`
 clean; focused `PriorityPreview.test.tsx` 8/8 passing. 2 files changed
 (`PriorityPreview.tsx`, `PriorityPreview.test.tsx`).
+
+Step 5 (committed `6d85b2f`): `tsc --noEmit` clean; `git diff --check` clean; full frontend
+`vitest run` 551/551 passing (55 files, run for regression at this gap-completion point per
+Verification rules). 6 files changed: `App.tsx`, `RequestWorkbenchShell.tsx`, `RequestDetail.tsx`,
+`RequestDetailHeader.tsx`, `RequestWorkbenchShell.test.tsx` (5 new cases), and a new
+`RequestDetailHeader.showBack.test.tsx` (2 cases).
 
 ## Pilot-wide operational constraints
 
