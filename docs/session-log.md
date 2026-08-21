@@ -63,8 +63,8 @@ a new `IsRecorder` flag on the history read response. D adds
 `POST /keep/pricebook/actual-work/{actualWorkId}/transfer-recorder` — Owner/Admin-only,
 reason-required, recording an immutable `ActualWorkDraftRecorderTransfer` audit row atomically with
 the `RecorderAccountUserId` change. **GAP-055 remediation and 5d-ii-d are both complete** (commit
-`6543f81`); **slice 6 — Owner/Admin review mutation** is the next approved slice and needs its own
-mechanical preflight before implementation.
+`6543f81`); **slice 6 — Owner/Admin review mutation** is split into 6A (domain/persistence/
+migration, complete, commit `5a24e43`) and 6B (review API/endpoints/DI, next approved slice).
 
 Prior implementation rules, now superseded:
 
