@@ -26,4 +26,13 @@ public sealed class EfActualWorkFinancialReviewPersistence(OpHaloDbContext dbCon
             .Select(r => new ActualWorkReviewQueueSourceRow(r.visit, r.ReferenceCode, r.CustomerName))
             .ToArray();
     }
+
+    public Task<int> CountUnreviewedAsync(Guid accountId, CancellationToken ct)
+    {
+        return dbContext.Set<ActualWork>().CountAsync(
+            visit => visit.AccountId == accountId
+                     && visit.Status == ActualWorkStatus.Submitted
+                     && visit.ReviewedAtUtc == null,
+            ct);
+    }
 }

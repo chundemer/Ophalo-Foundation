@@ -143,6 +143,77 @@ public sealed class ActualWorkFinancialReadApiTests : IClassFixture<KeepApiWebFa
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
+    // --- Review queue count (Slice A-1) ---
+
+    [Fact]
+    public async Task ReviewQueueCount_MatchesSubmittedUnreviewedVisits_ForTheCallingAccount()
+    {
+        var (accountId, ownerId, ownerCookie) = await SeedAccountAsync("queue-count-membership");
+        await EnrollAsync(accountId, ownerId);
+        var requestId = await SeedRequestAsync(accountId, "Jane Customer");
+
+        await CreateVisitAsync(accountId, requestId, ownerId, submit: false, review: false);
+        await CreateVisitAsync(accountId, requestId, ownerId, submit: true, review: false);
+        await CreateVisitAsync(accountId, requestId, ownerId, submit: true, review: false);
+        await CreateVisitAsync(accountId, requestId, ownerId, submit: true, review: true);
+
+        var (otherAccountId, otherOwnerId, _) = await SeedAccountAsync("queue-count-other-account");
+        var otherRequestId = await SeedRequestAsync(otherAccountId, "Other Customer");
+        await CreateVisitAsync(otherAccountId, otherRequestId, otherOwnerId, submit: true, review: false);
+
+        var response = await GetQueueCountAsync(ownerCookie);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(2, body.GetProperty("count").GetInt32());
+    }
+
+    [Fact]
+    public async Task ReviewQueueCount_NoUnreviewedVisits_ReturnsZero()
+    {
+        var (accountId, ownerId, ownerCookie) = await SeedAccountAsync("queue-count-zero");
+        await EnrollAsync(accountId, ownerId);
+
+        var response = await GetQueueCountAsync(ownerCookie);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(0, body.GetProperty("count").GetInt32());
+    }
+
+    [Fact]
+    public async Task ReviewQueueCount_Operator_Returns403()
+    {
+        var (accountId, ownerId, _) = await SeedAccountAsync("queue-count-operator-forbidden");
+        await EnrollAsync(accountId, ownerId);
+        var operatorId = await SeedOperatorAsync(accountId, "queue-count-operator-forbidden");
+        var operatorCookie = await GetCookieAsync(operatorId, accountId);
+
+        var response = await GetQueueCountAsync(operatorCookie);
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task ReviewQueueCount_WithoutPriceBookEntitlement_Returns403()
+    {
+        var (_, _, ownerCookie) = await SeedAccountAsync("queue-count-no-entitlement");
+        // Deliberately no EnrollAsync — the account lacks the Price Book entitlement.
+
+        var response = await GetQueueCountAsync(ownerCookie);
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task ReviewQueueCount_Unauthenticated_Returns401()
+    {
+        var response = await _factory.CreateClient()
+            .GetAsync("/keep/pricebook/actual-work/review-queue/count");
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
     // --- Financial detail ---
 
     [Fact]
@@ -282,6 +353,9 @@ public sealed class ActualWorkFinancialReadApiTests : IClassFixture<KeepApiWebFa
 
     private async Task<HttpResponseMessage> GetQueueAsync(string cookie) =>
         await AuthRequest(cookie).GetAsync("/keep/pricebook/actual-work/review-queue");
+
+    private async Task<HttpResponseMessage> GetQueueCountAsync(string cookie) =>
+        await AuthRequest(cookie).GetAsync("/keep/pricebook/actual-work/review-queue/count");
 
     private async Task<HttpResponseMessage> GetDetailAsync(string cookie, Guid actualWorkId) =>
         await AuthRequest(cookie).GetAsync($"/keep/pricebook/actual-work/{actualWorkId}/financial-detail");

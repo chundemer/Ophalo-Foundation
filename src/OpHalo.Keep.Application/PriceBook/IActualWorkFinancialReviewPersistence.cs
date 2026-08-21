@@ -20,4 +20,9 @@ public interface IActualWorkFinancialReviewPersistence
     /// oldest-first (<c>SubmittedAtUtc ASC, Id ASC</c>) — a FIFO review backlog, not a recent-
     /// activity feed. Unbounded: pilot volume does not warrant pagination.</summary>
     Task<IReadOnlyList<ActualWorkReviewQueueSourceRow>> GetUnreviewedQueueAsync(Guid accountId, CancellationToken ct);
+
+    /// <summary>Authoritative count of the same backlog <see cref="GetUnreviewedQueueAsync"/> returns —
+    /// a <c>COUNT(*)</c>, not a client-side <c>.Length</c> of the full row set — for badge/aggregate
+    /// display that must not force a full queue load.</summary>
+    Task<int> CountUnreviewedAsync(Guid accountId, CancellationToken ct);
 }

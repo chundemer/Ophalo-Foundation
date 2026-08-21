@@ -941,6 +941,18 @@ public static class KeepEndpoints
                 : ErrorHttpMapper.ToHttpResult(result.Error);
         }).RequireAuthorization();
 
+        // Slice A-1 — authoritative count for the same queue, for badge/aggregate display that
+        // must not force a full queue load just to get a number.
+        app.MapGet("/keep/pricebook/actual-work/review-queue/count", async (
+            ActualWorkFinancialReadApiService service,
+            CancellationToken ct) =>
+        {
+            var result = await service.GetReviewQueueCountAsync(ct);
+            return result.IsSuccess
+                ? Results.Ok(new { count = result.Value })
+                : ErrorHttpMapper.ToHttpResult(result.Error);
+        }).RequireAuthorization();
+
         // Batch 7 — Owner/Admin-only single-visit financial detail (unreviewed or reviewed).
         app.MapGet("/keep/pricebook/actual-work/{actualWorkId:guid}/financial-detail", async (
             Guid actualWorkId,

@@ -112,6 +112,18 @@ public sealed class ActualWorkFinancialReadApiService(
             rows.Select(ToQueueEntry).ToArray());
     }
 
+    /// <summary>Authoritative count for the same queue <see cref="GetReviewQueueAsync"/> returns, for
+    /// badge/aggregate display that must not force a full queue load to get a number.</summary>
+    public async Task<Result<int>> GetReviewQueueCountAsync(CancellationToken ct)
+    {
+        var gate = await AuthorizeAsync(ct);
+        if (gate.IsFailure)
+            return Result<int>.Failure(gate.Error);
+
+        var count = await financialReviewPersistence.CountUnreviewedAsync(currentUser.AccountId, ct);
+        return Result<int>.Success(count);
+    }
+
     public async Task<Result<ActualWorkFinancialDetailResult>> GetFinancialDetailAsync(
         Guid actualWorkId, CancellationToken ct)
     {

@@ -253,6 +253,70 @@ eligibility, deduplication, dismissal, explicit-add, and Draft-concurrency contr
 Every slice needs its own exact file/test count and validated preflight. Do not bundle later
 financial/review work into field capture merely because files overlap.
 
+## Active work — Keep UI V2 Production Upgrade
+
+**Product boundary:** [docs/ux-design/v2/](ux-design/v2/) — README, decision register (UI-001–UI-013
+locked), design model, component spec, review rubric. Separate track from Direct Actual Work above.
+
+Full-codebase implementation preflight is complete (architecture map, decision-to-code mapping for
+UI-001–UI-013, migration sequence). Slice A (Queue tab regrouping, UI-004) was implemented and
+corrected twice on review, but its frontend diff was superseded by the amendment below before
+landing and was discarded — do not resurrect it as a starting point for Slice A-2.
+
+### Locked decision — Owner/Admin Office Review amendment (2026-08-21)
+
+Supersedes plain More-Views grouping for Owner/Admin's Ready to Close / Feedback Review / Actual
+Work Review. Approved amendment, **not yet written into `docs/ux-design/v2/`** — that write-up is
+the next step:
+
+- Owner/Admin primary tabs stay exactly Needs Attention, All Work, My Work — unchanged.
+- Add a conditional, persistent **Office Review** strip below the primary tabs, above search/filter:
+  aggregates Ready to Close + Feedback Review + Actual Work Review counts, navy/neutral treatment
+  (never amber — reserved for customer-promise risk), opens an accessible chooser naming each queue
+  and its count. Hidden until the aggregate is authoritatively known (no guessed zero); reserve a
+  compact loading placeholder so it doesn't shift the Queue after initial render.
+- Watching becomes a separate quiet Views/utility control for Owner/Admin (not part of Office
+  Review). Operator is unchanged: primary My Work/Needs Attention/Available, Watching stays behind
+  its existing More Views.
+- At the V2 Queue pane's locked 320–360 CSS-px width: Owner/Admin primary tabs use a two-row grid
+  (Row 1: Needs Attention full-width; Row 2: All Work | My Work). Operator: Row 1: My Work
+  full-width; Row 2: Needs Attention | Available. No horizontal scrolling, no clipped labels.
+
+**Why:** no authoritative server count existed for Actual Work Review (only a full-row-list
+endpoint) — the prior client badge already leaned on that list's `.length`, which the Office Review
+aggregate must not repeat.
+
+### Delivered slices
+
+1. **Slice A-1 — Actual Work Review authoritative count (backend):** Complete, commit pending.
+   `IActualWorkFinancialReviewPersistence.CountUnreviewedAsync`,
+   `EfActualWorkFinancialReviewPersistence` (COUNT query, no row projection),
+   `ActualWorkFinancialReadApiService.GetReviewQueueCountAsync` (same Owner/Admin gate as the
+   existing queue read), new `GET /keep/pricebook/actual-work/review-queue/count` →
+   `{ count: int }`. 4 production files, 1 test file (5 new HTTP integration tests: account-scoped
+   count, zero case, Operator 403, missing-entitlement 403, unauthenticated 401). 18/18
+   `ActualWorkFinancialReadApiTests` passing. No migration, no mutation handler.
+
+### Next approved slice
+
+**Step 2 (next session):** amend `docs/ux-design/v2/keep-ui-production-decision-register.md` (and
+design model / component spec as needed) with the Office Review + narrow-grid rules above as newly
+locked UI-004 sub-decisions. Then **re-preflight Slice A-2** (Office Review strip, narrow-pane
+compact tab grid, Watching split, duplicate Ready-to-Close header-pill removal) against the amended
+docs before implementing. Consume Slice A-1's new count endpoint — do not derive the aggregate from
+the full review-queue list's `.length`.
+
+### Blockers
+
+None for the docs amendment or the A-2 re-preflight. A-2 *implementation* is blocked on that
+re-preflight being presented and approved first.
+
+### Verified baseline
+
+`dotnet build` on `OpHalo.Api`/`OpHalo.IntegrationTests` clean; 18/18 focused
+`ActualWorkFinancialReadApiTests` passing (13 pre-existing + 5 new). No frontend changes in this
+track are currently in the tree.
+
 ## Pilot-wide operational constraints
 
 - The authenticated staff PWA is the active field surface. The Expo/native track is separate and
