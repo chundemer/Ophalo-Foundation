@@ -353,17 +353,17 @@ for the new compact current-page slice and for the later Queue-pane variant.
 
 ### Current stop point
 
-Steps 3 and 4, plus the Build Log 134 §1–§4 Queue-density refinement, are implemented and verified
-by automated checks, not yet committed. Real-browser 100/125/150% zoom acceptance for both roles
-remains outstanding — the fixed-360px measurements taken this session (mock-workbench harness,
-worst-case 2-digit counts) are zoom-invariant for wrap/clip but do not substitute for Christian's
-manual zoom pass. See
+Steps 3 (`f51d66d`) and 4 plus the Build Log 134 §1–§4 Queue-density refinement (`f629c60`) are
+committed. Real-browser 100/125/150% zoom acceptance for both roles is **complete and passed
+(2026-08-21)**, confirmed by Christian on real devices — the fixed-360px measurements taken during
+implementation (mock-workbench harness, worst-case 2-digit counts) are superseded by this manual
+pass. See
 [Build Log 134](build-log/134-ui-001-post-step-4-queue-and-preview-refinement-backlog.md) for the
 refinement decisions and measured evidence.
 
-**Next session:** carry forward the outstanding real-device zoom acceptance. Priority-Preview
-richness (Build Log 134 §3) is now delivered (`e935b8c`) — see the UI-001 migration progress entry
-below. Step 5 (embedding the real Request Detail Workbench) remains later, after zoom acceptance.
+**Next session:** Step 5 (embedding the real Request Detail Workbench). Priority-Preview richness
+(Build Log 134 §3) is delivered (`e935b8c`) and real-device zoom acceptance is complete — no
+remaining blockers ahead of Step 5.
 
 **UI-001 migration progress:**
 - Step 1 (measurement/sizing spike) — **complete, 2026-08-21**
@@ -388,13 +388,13 @@ below. Step 5 (embedding the real Request Detail Workbench) remains later, after
   passes `{ requestIds }` navigation context so Request Detail keeps Prev/Next; (3) History
   excluded from `isRankedView`. `#/request/{id}` is unaffected by this step — still renders via
   the existing focused `RequestDetail` fallback regardless of width (Step 5).
-- **Step 4 (Queue-pane layout variant) — implemented, not yet committed (2026-08-21).** Pane mode
-  adds the two-row primary-tab grid and a Row 2 grouping secondary navigation/utilities together
-  (Office Review left, Views/History right); it reuses the existing count and disclosure contract
-  unchanged. Automated checks are clean; real-browser zoom/role acceptance remains outstanding as
-  described above.
+- **Step 4 (Queue-pane layout variant) — complete, committed `f629c60`.** Pane mode adds the
+  two-row primary-tab grid and a Row 2 grouping secondary navigation/utilities together (Office
+  Review left, Views/History right); it reuses the existing count and disclosure contract
+  unchanged. Automated checks clean; real-browser 100/125/150% zoom/role acceptance passed for
+  both roles (2026-08-21, see Current stop point above).
 - **Post-Step-4 Queue-density refinement (Build Log 134 §1 Queue-pane density, §2 scan-only rows)
-  — implemented, not yet committed (2026-08-21).** Details:
+  — complete, committed `f629c60`.** Details:
   - Compact header: `RequestsWorkspaceHeader.tsx` renders a compact "Request Queue" label in pane
     mode instead of the business H1/subtitle; full-page/narrow unchanged.
   - Primary tabs: measured, not assumed. Stood up the existing mock-workbench harness
@@ -427,7 +427,8 @@ below. Step 5 (embedding the real Request Detail Workbench) remains later, after
 `dotnet build` on `OpHalo.Api`/`OpHalo.IntegrationTests` clean; 18/18 focused
 `ActualWorkFinancialReadApiTests` passing (13 pre-existing + 5 new), committed at `1e35335`.
 
-Frontend (uncommitted): `tsc --noEmit` clean; `vitest run` full suite 542/542 passing (54 files);
+Frontend (Steps 3/4 + density refinement, committed `f51d66d`/`f629c60`): `tsc --noEmit` clean;
+`vitest run` full suite 542/542 passing (54 files);
 CSS token check clean; `git diff --check` clean. Step 3 adds 2 new production files
 (`PriorityPreview.tsx`, `RequestWorkbenchShell.tsx`), modifies `App.tsx`/`Requests.tsx`, adds a
 global `ResizeObserver` test stub (`test/setup.ts`), and adds 2 new test files
