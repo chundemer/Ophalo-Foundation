@@ -51,6 +51,7 @@ export function RequestListToolbar({
             <div className="relative flex-1">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[var(--ophalo-muted)] pointer-events-none" />
               <input
+                id="request-search"
                 ref={searchInputRef}
                 type="text"
                 value={draftQ}
@@ -79,6 +80,7 @@ export function RequestListToolbar({
             paneMode ? (
               <div className="relative shrink-0">
                 <select
+                  id="request-status-filter"
                   value={statusFilter}
                   onChange={(e) => onStatusFilterChange(e.target.value)}
                   aria-label="Filter by status"
@@ -107,6 +109,7 @@ export function RequestListToolbar({
               </div>
             ) : (
               <select
+                id="request-status-filter"
                 value={statusFilter}
                 onChange={(e) => onStatusFilterChange(e.target.value)}
                 aria-label="Filter by status"
