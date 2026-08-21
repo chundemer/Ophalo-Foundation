@@ -455,6 +455,38 @@ describe("RequestRow — Build 087 / GAP-027 locked row contract", () => {
     expect(screen.getByRole("button", { name: "Read full request" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Show less" })).not.toBeInTheDocument();
   });
+
+  it("build-log 134 §4: paneMode hides the quick-action footer but keeps the row selectable with its status/exception metadata", () => {
+    const row = buildRow({
+      status: "received",
+      ranking: { rankingGroup: "overdue_business_waiting", rankingOrder: 1, rankingReason: "overdue_business_waiting", severity: "danger", isOverdue: true, elapsedSinceUtc: null, dueAtUtc: "2026-07-13T12:00:00Z", isPostClose: false },
+      attention: { attentionLevel: "none", waitingDirection: "none", attentionReason: null, priorityBand: "standard", attentionSinceUtc: null, nextAttentionAtUtc: null, firstResponseDueAtUtc: "2026-07-13T12:00:00Z", firstRespondedAtUtc: null, firstResponsePending: false, firstResponseOverdue: true },
+      actions: { quickActions: [quickAction("open_detail", "detail"), quickAction("post_customer_update"), quickAction("contact_customer")] },
+    });
+    const onSelect = vi.fn();
+
+    render(<RequestRow row={row} onSelect={onSelect} paneMode />);
+
+    expect(screen.queryByRole("button", { name: "Update customer" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Log contact" })).not.toBeInTheDocument();
+    expect(screen.getByText(/Response overdue · Jul 13/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /Jane Smith/ }));
+    expect(onSelect).toHaveBeenCalledWith("req-1");
+  });
+
+  it("preserves the quick-action footer in the one-pane fallback when paneMode is false/omitted", () => {
+    const row = buildRow({
+      status: "received",
+      ranking: { rankingGroup: "overdue_business_waiting", rankingOrder: 1, rankingReason: "overdue_business_waiting", severity: "danger", isOverdue: true, elapsedSinceUtc: null, dueAtUtc: "2026-07-13T12:00:00Z", isPostClose: false },
+      attention: { attentionLevel: "none", waitingDirection: "none", attentionReason: null, priorityBand: "standard", attentionSinceUtc: null, nextAttentionAtUtc: null, firstResponseDueAtUtc: "2026-07-13T12:00:00Z", firstRespondedAtUtc: null, firstResponsePending: false, firstResponseOverdue: true },
+      actions: { quickActions: [quickAction("open_detail", "detail"), quickAction("post_customer_update"), quickAction("contact_customer")] },
+    });
+
+    render(<RequestRow row={row} onSelect={noop} />);
+
+    expect(screen.getByRole("button", { name: "Update customer" })).toBeInTheDocument();
+  });
 });
 
 describe("buildCollapsedSummary — ADR-450 word-boundary/whitespace collapse", () => {

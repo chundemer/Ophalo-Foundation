@@ -353,12 +353,17 @@ for the new compact current-page slice and for the later Queue-pane variant.
 
 ### Current stop point
 
-Step 4 is complete and verified (typecheck, full frontend suite, CSS token check, visual
-verification). Step 3 (below) is also complete and verified, not yet committed.
+Steps 3 and 4, plus the Build Log 134 §1–§4 Queue-density refinement, are implemented and verified
+by automated checks, not yet committed. Real-browser 100/125/150% zoom acceptance for both roles
+remains outstanding — the fixed-360px measurements taken this session (mock-workbench harness,
+worst-case 2-digit counts) are zoom-invariant for wrap/clip but do not substitute for Christian's
+manual zoom pass. See
+[Build Log 134](build-log/134-ui-001-post-step-4-queue-and-preview-refinement-backlog.md) for the
+refinement decisions and measured evidence.
 
-Step 5 (UI-001's bounded Queue + Workbench shell) is its own migration slice, sequenced and
-preflighted separately — see `docs/build-log/132-ui-001-queue-workbench-shell-preflight.md` for the
-locked architecture (retained-route shell, reused focused fallback) and 6-step build order.
+**Next session:** carry forward the outstanding real-device zoom acceptance, then preflight
+Priority-Preview richness (Build Log 134 §3, deferred out of this batch). Step 5 (embedding the
+real Request Detail Workbench) remains later, after that review.
 
 **UI-001 migration progress:**
 - Step 1 (measurement/sizing spike) — **complete, 2026-08-21**
@@ -383,19 +388,45 @@ locked architecture (retained-route shell, reused focused fallback) and 6-step b
   passes `{ requestIds }` navigation context so Request Detail keeps Prev/Next; (3) History
   excluded from `isRankedView`. `#/request/{id}` is unaffected by this step — still renders via
   the existing focused `RequestDetail` fallback regardless of width (Step 5).
-- Steps 4–6 (Queue-pane layout variant, embedded Workbench, one-pane fallback verification) —
-  not started.
+- **Step 4 (Queue-pane layout variant) — implemented, not yet committed (2026-08-21).** Pane mode
+  adds the two-row primary-tab grid and a Row 2 grouping secondary navigation/utilities together
+  (Office Review left, Views/History right); it reuses the existing count and disclosure contract
+  unchanged. Automated checks are clean; real-browser zoom/role acceptance remains outstanding as
+  described above.
+- **Post-Step-4 Queue-density refinement (Build Log 134 §1 Queue-pane density, §2 scan-only rows)
+  — implemented, not yet committed (2026-08-21).** Details:
+  - Compact header: `RequestsWorkspaceHeader.tsx` renders a compact "Request Queue" label in pane
+    mode instead of the business H1/subtitle; full-page/narrow unchanged.
+  - Primary tabs: measured, not assumed. Stood up the existing mock-workbench harness
+    (`VITE_OPHALO_MOCK_WORKBENCH=true`) headlessly at the true 360px pane width with worst-case
+    2-digit counts. A single 3-way tab row with full labels + badge-pill counts wrapped "Needs
+    Attention" to two lines for both roles, so the two-row primary-tab grid (locked
+    keep-ui-design-model-v2.md §13) was retained rather than forced into one row; badge-pill
+    counts kept (no inline dot notation, no literal amber/slate — semantic tokens only).
+  - Search + status filter: `RequestListToolbar.tsx` gains a pane-mode branch — same `<select>`
+    element/contract, `appearance-none` + custom chevron for compact styling only, collapsed
+    label reads "Filter", truncates long values, accent border when active, one-tap clear.
+    Full-page/narrow toolbar renders unchanged.
+  - Scan-only rows (§2): `RequestRow.tsx` takes a `paneMode` prop hiding the quick-action footer
+    (Update customer/Log contact); row stays fully selectable with status/exception/context
+    metadata intact. One-pane fallback unchanged (footer buttons still render).
+  - Priority Preview richness (Build Log 134 §3) stays deferred — not part of this batch.
+- Steps 5–6 (embedded Workbench, one-pane fallback verification) — not started.
 
 ### Verified baseline
 
 `dotnet build` on `OpHalo.Api`/`OpHalo.IntegrationTests` clean; 18/18 focused
 `ActualWorkFinancialReadApiTests` passing (13 pre-existing + 5 new), committed at `1e35335`.
 
-Frontend (uncommitted, this session): `tsc --noEmit` clean; `vitest run` full suite 525/525
-passing (51 files); CSS token check clean; `git diff --check` clean. Step 3 adds 2 new production
-files (`PriorityPreview.tsx`, `RequestWorkbenchShell.tsx`), modifies `App.tsx`/`Requests.tsx`, adds
-a global `ResizeObserver` test stub (`test/setup.ts`), and adds 2 new test files
-(`PriorityPreview.test.tsx`, `RequestWorkbenchShell.test.tsx`, 8 + 4 tests).
+Frontend (uncommitted): `tsc --noEmit` clean; `vitest run` full suite 542/542 passing (54 files);
+CSS token check clean; `git diff --check` clean. Step 3 adds 2 new production files
+(`PriorityPreview.tsx`, `RequestWorkbenchShell.tsx`), modifies `App.tsx`/`Requests.tsx`, adds a
+global `ResizeObserver` test stub (`test/setup.ts`), and adds 2 new test files
+(`PriorityPreview.test.tsx`, `RequestWorkbenchShell.test.tsx`, 8 + 4 tests). The Queue-density
+refinement modifies `RequestRow.tsx`, `RequestListToolbar.tsx`, `RequestQueueNavigation.tsx`,
+`RequestsWorkspaceHeader.tsx`, `Requests.tsx`, and adds 3 new test files
+(`RequestListToolbar.test.tsx`, `RequestsWorkspaceHeader.test.tsx`, plus pane-mode cases added to
+`RequestQueueNavigation.test.tsx` and `RequestRow.test.tsx`).
 
 ## Pilot-wide operational constraints
 

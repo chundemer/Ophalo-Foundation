@@ -82,6 +82,9 @@ interface RequestsProps {
   onNavigateSettings: (section?: "public-profile" | "policy" | "team") => void;
   onStartCapture: () => void;
   onAppliedSnapshotChange?: (snapshot: AppliedQueueSnapshot) => void;
+  // UI-001 Step 4: true when rendered inside the bounded Queue pane — see
+  // RequestQueueNavigation's paneMode doc. Undefined/false keeps today's full-width layout.
+  paneMode?: boolean;
 }
 
 export function Requests({
@@ -92,6 +95,7 @@ export function Requests({
   onNavigateSettings,
   onStartCapture,
   onAppliedSnapshotChange,
+  paneMode,
 }: RequestsProps) {
   const tabs = getTabsForRole(role);
   const [activeTab, setActiveTab] = useState<TabDef>(tabs[0]);
@@ -500,6 +504,7 @@ export function Requests({
         onActionClick={handleActionClick}
         onShareClick={setShareModalTarget}
         showCloseoutCue={!presentAsHistory && activeTab.id === "ready_to_close"}
+        paneMode={paneMode}
       />
     );
   }
@@ -518,9 +523,7 @@ export function Requests({
           onStartCapture={onStartCapture}
           pageTitle={pageTitle}
           pageSubtitle={pageSubtitle}
-          viewCounts={viewCounts}
-          tabs={tabs}
-          onSelectTab={selectTab}
+          paneMode={paneMode}
         />
 
         <RequestQueueNavigation
@@ -539,6 +542,7 @@ export function Requests({
           onExitHistory={exitHistory}
           onUpdateHistoryScope={updateHistoryScope}
           onUpdateHistoryDateScope={updateHistoryDateScope}
+          paneMode={paneMode}
         />
 
         <RequestListToolbar
@@ -555,6 +559,7 @@ export function Requests({
           showStalenessNotice={showStalenessNotice}
           onManualRefresh={manualRefresh}
           appliedLineText={appliedLineText}
+          paneMode={paneMode}
         />
 
         </div>{/* /max-w-6xl */}

@@ -343,9 +343,15 @@ interface RequestRowProps {
   onActionClick?: (row: KeepRequestSummary, action: KeepQuickAction) => void;
   onShareClick?: (row: KeepRequestSummary) => void;
   showCloseoutCue?: boolean;
+  // UI-001 post-Step-4 density refinement (build-log 134 §2, locked 2026-08-21): the Queue pane
+  // is a scan-and-select surface — the quick-action footer (Update customer/Log contact/etc.) is
+  // hidden so more rows fit; the row stays fully selectable and keeps its server-authorized
+  // status/exception/context metadata. Action-taking moves to the request work area. Undefined/
+  // false preserves today's one-pane fallback row treatment unchanged.
+  paneMode?: boolean;
 }
 
-export function RequestRow({ row, onSelect, onSelectFocused, onActionClick, onShareClick, showCloseoutCue }: RequestRowProps) {
+export function RequestRow({ row, onSelect, onSelectFocused, onActionClick, onShareClick, showCloseoutCue, paneMode = false }: RequestRowProps) {
   const [expanded, setExpanded] = useState(false);
   const { collapsed: collapsedSummary, showToggle: summaryTruncated } = buildCollapsedSummary(row.originalSummary.fullText);
   const lastTouch = relativeTime(row.lastBusinessActivityAtUtc ?? row.updatedAtUtc);
@@ -462,7 +468,7 @@ export function RequestRow({ row, onSelect, onSelectFocused, onActionClick, onSh
       )}
 
       {/* Context metadata — quiet, unbordered; no competing alert badges */}
-      <div className={`keep-row-meta flex flex-wrap items-center gap-x-3 gap-y-1 px-4 pt-1 ${quickActionButtons.length > 0 ? "pb-2" : "pb-3"}`}>
+      <div className={`keep-row-meta flex flex-wrap items-center gap-x-3 gap-y-1 px-4 pt-1 ${!paneMode && quickActionButtons.length > 0 ? "pb-2" : "pb-3"}`}>
         {row.participation.responsibleDisplayName && (
           <span className="flex items-center gap-1">
             <UserRound className="h-3 w-3" />
@@ -519,8 +525,9 @@ export function RequestRow({ row, onSelect, onSelectFocused, onActionClick, onSh
         )}
       </div>
 
-      {/* Quick action bar — at most one promoted action and one relevant secondary (Build 087 §5) */}
-      {quickActionButtons.length > 0 && (
+      {/* Quick action bar — at most one promoted action and one relevant secondary (Build 087
+          §5). Hidden in pane mode (build-log 134 §2): the pane is scan-and-select only. */}
+      {!paneMode && quickActionButtons.length > 0 && (
         <div className="border-t border-[var(--ophalo-border)] px-4 py-2 flex items-center gap-2 flex-wrap">
           {quickActionButtons.map((action) => (
             <button

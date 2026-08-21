@@ -40,6 +40,12 @@ interface RequestQueueNavigationProps {
   onExitHistory: () => void;
   onUpdateHistoryScope: (scope: HistoryScope) => void;
   onUpdateHistoryDateScope: (scope: HistoryDateScope) => void;
+  // UI-001 post-Step-4 density refinement (build-log 134 §1, locked 2026-08-21): the 320-360
+  // CSS-px bounded Queue pane compresses to two rows — Row 1 is the three primary tabs sharing
+  // one row (full labels, inline "· N" counts, role-agnostic); Row 2 groups Office Review
+  // (left) with Views/History (right) as secondary navigation/utilities. Undefined/false keeps
+  // today's full-width layout.
+  paneMode?: boolean;
 }
 
 // UI-004 amendment: a plain disclosure/group — not an ARIA menu, since it doesn't implement
@@ -55,6 +61,7 @@ function DisclosureButton({
   ariaLabel,
   children,
   align = "left",
+  fullWidth = false,
 }: {
   id: DisclosureId;
   isOpen: boolean;
@@ -67,6 +74,10 @@ function DisclosureButton({
   // from whatever the user just clicked.
   children: (dismiss: () => void) => React.ReactNode;
   align?: "left" | "right";
+  // Stretches the trigger to fill its container instead of staying content-width, per the
+  // UI-004 amendment's presentation-variant rule. Unused by the current pane-mode layout
+  // (build-log 134 §1), kept for callers that still want a full-width strip.
+  fullWidth?: boolean;
 }) {
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -106,10 +117,12 @@ function DisclosureButton({
         aria-expanded={isOpen}
         aria-controls={isOpen ? popoverId : undefined}
         onClick={() => onOpenChange(isOpen ? null : id)}
-        className="flex cursor-pointer items-center gap-1 text-xs font-medium text-[var(--ophalo-muted)] hover:text-[var(--ophalo-ink)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] rounded px-1 py-1"
+        className={`flex cursor-pointer items-center gap-1 text-xs font-medium text-[var(--ophalo-muted)] hover:text-[var(--ophalo-ink)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] rounded px-1 py-1 ${
+          fullWidth ? "w-full justify-between" : ""
+        }`}
       >
         {label}
-        <ChevronDown className="h-3 w-3" />
+        <ChevronDown className="h-3 w-3 shrink-0" />
       </button>
       {isOpen && (
         <div
@@ -191,6 +204,7 @@ function OfficeReviewControl({
   onSelectTab,
   isOpen,
   onOpenChange,
+  fullWidth = false,
 }: {
   officeReviewMembers: TabDef[];
   activeTab: TabDef;
@@ -198,6 +212,8 @@ function OfficeReviewControl({
   onSelectTab: (tab: TabDef) => void;
   isOpen: boolean;
   onOpenChange: (id: DisclosureId | null) => void;
+  // UI-001 Step 4: pane-width variant — see DisclosureButton's fullWidth doc.
+  fullWidth?: boolean;
 }) {
   if (officeReviewMembers.length === 0) return null;
 
@@ -215,7 +231,9 @@ function OfficeReviewControl({
     return (
       <div
         aria-hidden="true"
-        className="inline-flex h-7 w-44 animate-pulse motion-reduce:animate-none items-center rounded-full bg-[var(--ophalo-canvas)]"
+        className={`h-7 animate-pulse motion-reduce:animate-none items-center rounded-full bg-[var(--ophalo-canvas)] ${
+          fullWidth ? "flex w-full" : "inline-flex w-44"
+        }`}
       />
     );
   }
@@ -225,7 +243,9 @@ function OfficeReviewControl({
       <button
         type="button"
         onClick={officeReview.retry}
-        className="inline-flex items-center gap-1.5 rounded-full border border-[var(--ophalo-border)] px-3 py-1 text-xs font-medium text-[var(--ophalo-muted)] hover:text-[var(--ophalo-ink)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)]"
+        className={`items-center gap-1.5 rounded-full border border-[var(--ophalo-border)] px-3 py-1 text-xs font-medium text-[var(--ophalo-muted)] hover:text-[var(--ophalo-ink)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] ${
+          fullWidth ? "flex w-full justify-center" : "inline-flex"
+        }`}
       >
         Office Review — couldn’t load counts · Retry
       </button>
@@ -249,8 +269,13 @@ function OfficeReviewControl({
       isOpen={isOpen}
       onOpenChange={onOpenChange}
       ariaLabel="Office Review"
+      fullWidth={fullWidth}
       label={
-        <span className="inline-flex items-center gap-1.5 rounded-full bg-[var(--ophalo-navy)]/10 px-2.5 py-1 text-[var(--ophalo-navy)]">
+        <span
+          className={`items-center gap-1.5 rounded-full bg-[var(--ophalo-navy)]/10 px-2.5 py-1 text-[var(--ophalo-navy)] ${
+            fullWidth ? "flex flex-1 min-w-0" : "inline-flex"
+          }`}
+        >
           {activeMember ? `Office Review: ${activeMember.label}` : `Office Review · ${officeReview.aggregate} pending`}
         </span>
       }
@@ -304,6 +329,7 @@ export function RequestQueueNavigation({
   onExitHistory,
   onUpdateHistoryScope,
   onUpdateHistoryDateScope,
+  paneMode = false,
 }: RequestQueueNavigationProps) {
   const tabRefs = useRef<(HTMLButtonElement | null)[]>([]);
   // UI-004 amendment: only one of Office Review / Views may be open at a time.
@@ -334,84 +360,153 @@ export function RequestQueueNavigation({
     tabRefs.current[nextIndex]?.focus();
   }
 
+  // Shared tab-button rendering for the full-width horizontal strip, the pane-mode single-row
+  // grid, and the one-pane fallback. `fill` stretches each button to share its row evenly (pane
+  // mode); the full-width strip keeps its intrinsic, whitespace-nowrap sizing instead.
+  // `denseCount` swaps the badge-pill count for an inline "· N" (pane mode only, build-log 134
+  // §1) — full labels are never abbreviated, only the count treatment shrinks to fit three tabs
+  // on one row at the 320-360 CSS-px pane width.
+  function renderTabButton(tab: TabDef, i: number, fill: boolean, denseCount = false) {
+    const count = countForTab(tab, viewCounts);
+    const isActive = tab.view === activeTab.view;
+    return (
+      <button
+        key={`${tab.id}-${tab.label}`}
+        ref={(el) => { tabRefs.current[i] = el; }}
+        role="tab"
+        aria-selected={isActive}
+        tabIndex={isActive ? 0 : -1}
+        type="button"
+        onClick={() => onSelectTab(tab)}
+        onKeyDown={(e) => handleTabKeyDown(e, i)}
+        className={`flex items-center justify-center gap-1 border-b-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-inset ${
+          fill ? `flex-1 min-w-0 min-h-11 py-2.5 ${denseCount ? "px-1 text-xs" : "px-2 text-sm"}` : "px-3 py-4 text-sm whitespace-nowrap"
+        } ${
+          isActive
+            ? "font-semibold border-[var(--ophalo-navy)] text-[var(--ophalo-navy)]"
+            : "font-medium border-transparent text-[var(--ophalo-muted)] hover:text-[var(--ophalo-ink)] hover:border-[var(--ophalo-border)]"
+        }`}
+      >
+        {tab.label}
+        {count != null && count > 0 && (
+          denseCount ? (
+            <span className="text-[11px] font-semibold">· {count}</span>
+          ) : (
+            <span className={`rounded-full px-1.5 py-0.5 text-xs font-semibold ${
+              isActive
+                ? "bg-[var(--ophalo-navy)] text-white"
+                : "bg-[var(--keep-accent-bg)] text-[var(--keep-accent)]"
+            }`}>
+              {count}
+            </span>
+          )
+        )}
+      </button>
+    );
+  }
+
   return (
     <div className="border-t border-[var(--ophalo-border)]">
       {!historyMode ? (
-        <>
-          {/* Row 1: primary tabs (own scroll region) + Views/History, sharing the row when
-              space permits and wrapping together onto their own line when it doesn't. */}
-          <div className="flex items-center justify-between gap-2 flex-wrap px-4 sm:px-6">
-            <div role="tablist" aria-label="Request queues" className="flex gap-0 overflow-x-auto shrink min-w-0">
-              {tabs.map((tab, i) => {
-                const count = countForTab(tab, viewCounts);
-                const isActive = tab.view === activeTab.view;
-                return (
-                  <button
-                    key={`${tab.id}-${tab.label}`}
-                    ref={(el) => { tabRefs.current[i] = el; }}
-                    role="tab"
-                    aria-selected={isActive}
-                    tabIndex={isActive ? 0 : -1}
-                    type="button"
-                    onClick={() => onSelectTab(tab)}
-                    onKeyDown={(e) => handleTabKeyDown(e, i)}
-                    className={`flex items-center gap-1.5 px-3 py-4 text-sm border-b-2 whitespace-nowrap transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-inset ${
-                      isActive
-                        ? "font-semibold border-[var(--ophalo-navy)] text-[var(--ophalo-navy)]"
-                        : "font-medium border-transparent text-[var(--ophalo-muted)] hover:text-[var(--ophalo-ink)] hover:border-[var(--ophalo-border)]"
-                    }`}
-                  >
-                    {tab.label}
-                    {count != null && count > 0 && (
-                      <span className={`rounded-full px-1.5 py-0.5 text-xs font-semibold ${
-                        isActive
-                          ? "bg-[var(--ophalo-navy)] text-white"
-                          : "bg-[var(--keep-accent-bg)] text-[var(--keep-accent)]"
-                      }`}>
-                        {count}
-                      </span>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-            <div className="flex items-center gap-3 shrink-0">
-              <ViewsControl
-                secondaryViews={secondaryViews}
-                activeTab={activeTab}
-                viewCounts={viewCounts}
-                onSelectTab={onSelectTab}
-                isOpen={openDisclosure === "views"}
-                onOpenChange={setOpenDisclosure}
-              />
-              {/* GAP-044: demoted, non-competing entry point — not styled as a peer tab. */}
-              {isOwnerOrAdmin && (
-                <button
-                  type="button"
-                  onClick={onEnterHistory}
-                  className="shrink-0 text-xs font-medium text-[var(--ophalo-muted)] hover:text-[var(--ophalo-ink)] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] rounded"
-                >
-                  History
-                </button>
+        paneMode ? (
+          <>
+            {/* Row 1: two-row primary tab grid, locked keep-ui-design-model-v2.md §13 — tabs[0]
+                gets its own full-width row, tabs[1]/tabs[2] share the second row. Role ordering
+                already places each role's primary tab first, so this split is role-agnostic.
+                Measured evidence (build-log 134 §2, 2026-08-21): at the true 360px pane width, a
+                single 3-way row with full labels + badge-pill counts wraps "Needs Attention" to
+                two lines (real-browser measurement via mock harness), so the single-row layout
+                was rejected in favor of retaining this two-row grid. */}
+            <div role="tablist" aria-label="Request queues" className="flex flex-col gap-1 px-3 pt-2 sm:px-4">
+              <div className="flex">{renderTabButton(tabs[0], 0, true)}</div>
+              {tabs.length > 1 && (
+                <div className="flex gap-1">
+                  {tabs.slice(1).map((tab, i) => renderTabButton(tab, i + 1, true))}
+                </div>
               )}
             </div>
-          </div>
 
-          {/* Row 2: Office Review — directly below the primary tabs, above search/filter.
-              Owner/Admin only; contributes no row when there's nothing to review. */}
-          {isOwnerOrAdmin && (
-            <div className="px-4 pb-2 sm:px-6">
-              <OfficeReviewControl
-                officeReviewMembers={officeReviewMembers}
-                activeTab={activeTab}
-                officeReview={officeReview}
-                onSelectTab={onSelectTab}
-                isOpen={openDisclosure === "office_review"}
-                onOpenChange={setOpenDisclosure}
-              />
+            {/* Row 2: secondary navigation/utilities, grouped together beneath the primary
+                queues — Office Review (Owner/Admin only) on the left, Views/History on the
+                right, per build-log 134 §1. */}
+            <div className="flex items-center gap-2 px-3 pt-2 pb-2 sm:px-4">
+              {isOwnerOrAdmin && (
+                <OfficeReviewControl
+                  officeReviewMembers={officeReviewMembers}
+                  activeTab={activeTab}
+                  officeReview={officeReview}
+                  onSelectTab={onSelectTab}
+                  isOpen={openDisclosure === "office_review"}
+                  onOpenChange={setOpenDisclosure}
+                />
+              )}
+              <div className="flex items-center gap-3 shrink-0 ml-auto">
+                <ViewsControl
+                  secondaryViews={secondaryViews}
+                  activeTab={activeTab}
+                  viewCounts={viewCounts}
+                  onSelectTab={onSelectTab}
+                  isOpen={openDisclosure === "views"}
+                  onOpenChange={setOpenDisclosure}
+                />
+                {isOwnerOrAdmin && (
+                  <button
+                    type="button"
+                    onClick={onEnterHistory}
+                    className="shrink-0 text-xs font-medium text-[var(--ophalo-muted)] hover:text-[var(--ophalo-ink)] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] rounded"
+                  >
+                    History
+                  </button>
+                )}
+              </div>
             </div>
-          )}
-        </>
+          </>
+        ) : (
+          <>
+            {/* Row 1: primary tabs (own scroll region) + Views/History, sharing the row when
+                space permits and wrapping together onto their own line when it doesn't. */}
+            <div className="flex items-center justify-between gap-2 flex-wrap px-4 sm:px-6">
+              <div role="tablist" aria-label="Request queues" className="flex gap-0 overflow-x-auto shrink min-w-0">
+                {tabs.map((tab, i) => renderTabButton(tab, i, false))}
+              </div>
+              <div className="flex items-center gap-3 shrink-0">
+                <ViewsControl
+                  secondaryViews={secondaryViews}
+                  activeTab={activeTab}
+                  viewCounts={viewCounts}
+                  onSelectTab={onSelectTab}
+                  isOpen={openDisclosure === "views"}
+                  onOpenChange={setOpenDisclosure}
+                />
+                {/* GAP-044: demoted, non-competing entry point — not styled as a peer tab. */}
+                {isOwnerOrAdmin && (
+                  <button
+                    type="button"
+                    onClick={onEnterHistory}
+                    className="shrink-0 text-xs font-medium text-[var(--ophalo-muted)] hover:text-[var(--ophalo-ink)] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] rounded"
+                  >
+                    History
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Row 2: Office Review — directly below the primary tabs, above search/filter.
+                Owner/Admin only; contributes no row when there's nothing to review. */}
+            {isOwnerOrAdmin && (
+              <div className="px-4 pb-2 sm:px-6">
+                <OfficeReviewControl
+                  officeReviewMembers={officeReviewMembers}
+                  activeTab={activeTab}
+                  officeReview={officeReview}
+                  onSelectTab={onSelectTab}
+                  isOpen={openDisclosure === "office_review"}
+                  onOpenChange={setOpenDisclosure}
+                />
+              </div>
+            )}
+          </>
+        )
       ) : (
         <div className="flex flex-wrap items-center gap-3 px-4 py-3 sm:px-6">
           <button

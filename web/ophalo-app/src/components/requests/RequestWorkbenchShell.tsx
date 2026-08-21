@@ -56,6 +56,7 @@ export function RequestWorkbenchShell(props: RequestWorkbenchShellProps) {
           onNavigateSettings={onNavigateSettings}
           onStartCapture={onStartCapture}
           onAppliedSnapshotChange={handleAppliedSnapshotChange}
+          paneMode={showTwoPane}
         />
       </div>
       {showTwoPane && (
