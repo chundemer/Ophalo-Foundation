@@ -27,6 +27,11 @@ import {
   type HistoryDateScope,
 } from "./requestsWorkspace";
 
+// Search remains server-backed, but applies after a brief pause so the visible result set keeps
+// pace with what an owner types without issuing a request for every keystroke. Enter/Search still
+// applies immediately via submitSearch.
+const SEARCH_DEBOUNCE_MS = 350;
+
 // GAP-046: submitted-criteria wording shared by the applied-criteria line, the filtered-empty
 // detail, and the live-region heading/range suffix — reports only submitted values, never draftQ.
 function operationalAppliedText(q: string, statusFilter: string): string {
@@ -163,6 +168,18 @@ export function Requests({
     setCursor(null);
     cursorStack.current = [];
   }
+
+  useEffect(() => {
+    if (draftQ === q) return;
+
+    const timer = window.setTimeout(() => {
+      setQ(draftQ);
+      setCursor(null);
+      cursorStack.current = [];
+    }, SEARCH_DEBOUNCE_MS);
+
+    return () => window.clearTimeout(timer);
+  }, [draftQ, q]);
 
   // GAP-044: history mode substitutes its own view/date scope for the operational tab's view
   // and status filter; search and pagination stay wired the same way in both modes so neither

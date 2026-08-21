@@ -137,7 +137,7 @@ describe("Requests — GAP-046 filter-state visibility and recovery", () => {
     );
   });
 
-  it("does not let a changed-but-unsubmitted draft replace the submitted criteria in the line or live heading", async () => {
+  it("applies a changed search draft after the debounce interval", async () => {
     const user = userEvent.setup();
     renderRequests();
 
@@ -152,8 +152,10 @@ describe("Requests — GAP-046 filter-state visibility and recovery", () => {
     fireEvent.change(searchInput, { target: { value: "smithers" } });
 
     expect(screen.getByText("Applied: Search “smith” · Status: All active statuses")).toBeInTheDocument();
-    expect(screen.queryByText(/smithers/)).not.toBeInTheDocument();
-    expect(mockGetRequests).not.toHaveBeenCalled();
+    await waitFor(() =>
+      expect(mockGetRequests).toHaveBeenCalledWith(expect.objectContaining({ q: "smithers" })),
+    );
+    expect(screen.getByText("Applied: Search “smithers” · Status: All active statuses")).toBeInTheDocument();
   });
 
   it("renders filtered-empty copy distinct from the true-empty copy, and Clear filters recovers", async () => {
