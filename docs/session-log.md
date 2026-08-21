@@ -361,9 +361,9 @@ manual zoom pass. See
 [Build Log 134](build-log/134-ui-001-post-step-4-queue-and-preview-refinement-backlog.md) for the
 refinement decisions and measured evidence.
 
-**Next session:** carry forward the outstanding real-device zoom acceptance, then preflight
-Priority-Preview richness (Build Log 134 §3, deferred out of this batch). Step 5 (embedding the
-real Request Detail Workbench) remains later, after that review.
+**Next session:** carry forward the outstanding real-device zoom acceptance. Priority-Preview
+richness (Build Log 134 §3) is now delivered (`e935b8c`) — see the UI-001 migration progress entry
+below. Step 5 (embedding the real Request Detail Workbench) remains later, after zoom acceptance.
 
 **UI-001 migration progress:**
 - Step 1 (measurement/sizing spike) — **complete, 2026-08-21**
@@ -410,7 +410,16 @@ real Request Detail Workbench) remains later, after that review.
   - Scan-only rows (§2): `RequestRow.tsx` takes a `paneMode` prop hiding the quick-action footer
     (Update customer/Log contact); row stays fully selectable with status/exception/context
     metadata intact. One-pane fallback unchanged (footer buttons still render).
-  - Priority Preview richness (Build Log 134 §3) stays deferred — not part of this batch.
+- **Priority Preview richness (Build Log 134 §3) — complete, committed `e935b8c`
+  (2026-08-21).** Added to `PriorityPreview.tsx` using only already-authoritative list-summary
+  data (no new fetch): status badge (`statusLabel`/`statusBadgeVariant` imported from
+  `lib/requestStatus.ts`); original customer need (`originalSummary.fullText`, locally duplicated
+  240-char word-boundary truncation with ellipsis matching `RequestRow.tsx`'s
+  `buildCollapsedSummary`/ADR-450, minus its show-more toggle — visual clipping is CSS
+  `line-clamp-2`); service location gated on `serviceCity && serviceState`, same `MapPin`
+  convention as `RequestRow.tsx`. Open request action switched from a hand-rolled navy button to
+  the shared `KeepButton` `teal` variant. 8/8 focused `PriorityPreview.test.tsx` tests passing (2
+  new); `tsc --noEmit` and `git diff --check` clean.
 - Steps 5–6 (embedded Workbench, one-pane fallback verification) — not started.
 
 ### Verified baseline
@@ -427,6 +436,10 @@ refinement modifies `RequestRow.tsx`, `RequestListToolbar.tsx`, `RequestQueueNav
 `RequestsWorkspaceHeader.tsx`, `Requests.tsx`, and adds 3 new test files
 (`RequestListToolbar.test.tsx`, `RequestsWorkspaceHeader.test.tsx`, plus pane-mode cases added to
 `RequestQueueNavigation.test.tsx` and `RequestRow.test.tsx`).
+
+Priority Preview richness batch (committed `e935b8c`): `tsc --noEmit` clean; `git diff --check`
+clean; focused `PriorityPreview.test.tsx` 8/8 passing. 2 files changed
+(`PriorityPreview.tsx`, `PriorityPreview.test.tsx`).
 
 ## Pilot-wide operational constraints
 
