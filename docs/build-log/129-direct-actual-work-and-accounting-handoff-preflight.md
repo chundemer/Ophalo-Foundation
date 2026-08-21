@@ -401,6 +401,105 @@ Actual Work composer, not `useActualWorkCapture`, owns its line mutations and ca
 frontend tests passing, TypeScript check passing, and 44 focused Field Scope Search/Actual Work
 HTTP integration tests passing. `git diff --check` clean.
 
+### 6 preflight — locked decisions — 2026-08-20
+
+Mechanical preflight against the submit/signal seam (`IActualWorkSubmissionPersistence`/
+`EfActualWorkSubmissionPersistence`, `ActualWork.Submit`, `KeepRequestWorkSignalKeys.Signals
+.ActualWorkNeedsOfficeReview`) and the cross-module Owner/Admin mutation analog
+(`MarkFeedbackReviewedService`) confirmed every named symbol exists as described. Locked:
+
+- **Authorization.** Owner/Admin role check, `RequestsOperate` permission, and the existing Price
+  Book entitlement (`CapabilityPackageFeatureKeys.PriceBookQuotesMaterials`). No new
+  `ActualWorkReview` permission key — this is an office-only role capability, not a separately
+  delegable technician capability, unlike `ActualWorkCapture`.
+- **New `ActualWork` fields.** Nullable `ReviewedAtUtc`, `ReviewedByAccountUserId`, `ReviewNote`
+  (optional, trimmed to null, max 2,000 chars — matches the feedback-review note convention).
+  `ActualWorkStatus` does not gain a value; `Status` stays `Submitted` per its existing doc comment.
+- **Single-shot.** Only a `Submitted`, not-yet-reviewed visit (`ReviewedAtUtc IS NULL`) can be
+  marked reviewed. A repeat review is a conflict error; it never overwrites reviewer, timestamp, or
+  note — mirrors ADR-275's feedback-review precedent.
+- **Signal resolution.** Per-request aggregate across all `ActualWork` rows, atomic with the
+  triggering review: resolve `ActualWorkNeedsOfficeReview` only when no `Submitted` visit remains
+  with `ReviewedAtUtc IS NULL` for that request. Mirrors `EfActualWorkSubmissionPersistence`'s raise/
+  reopen upsert, inverted to a conditional resolve, in the same transaction as the review write.
+- **Terminal-request posture — confirmed 2026-08-20.** Not blocked. A submitted visit must remain
+  reviewable so its aggregate review signal cannot be stranded after the request closes; unlike
+  ADR-488's ProposedScope review, no terminal-request lock applies here. No `SELECT ... FOR UPDATE`
+  terminal check in the review transaction.
+- **Two-way split — corrected 2026-08-20.** The original single-session estimate undercounted
+  `KeepEndpoints.cs` and `KeepServiceCollectionExtensions.cs` as one file pair; they are two
+  separate production files, putting a single session at 9 production files, over the eight-file
+  hard gate. Split by layer, matching the 5d-i two-way precedent:
+  1. **6A — domain, persistence, migration.** `ActualWork.cs`, `ActualWorkErrors.cs`,
+     `ActualWorkConfiguration.cs`, migration, `IActualWorkReviewPersistence.cs`,
+     `EfActualWorkReviewPersistence.cs`. No API, no DI registration.
+  2. **6B — review API service, endpoints, DI.** `ActualWorkReviewApiService.cs`,
+     `KeepEndpoints.cs`, `KeepServiceCollectionExtensions.cs`, API tests. Depends on 6A's merged
+     persistence contract.
+
+**6A file/test-count gate** (6 production files, within the eight-file/one-mutation-family gate;
+domain + persistence layer only, no mutation handler exposed yet):
+1. `Core/Entities/ActualWork.cs` — `ReviewedAtUtc`/`ReviewedByAccountUserId`/`ReviewNote` fields,
+   `MarkReviewed` domain method.
+2. `Core/Errors/ActualWorkErrors.cs` — `NotSubmitted` (Draft, not yet submitted),
+   `AlreadyReviewed` (conflict), `ReviewNoteTooLong`.
+3. `Infrastructure/Persistence/Configurations/ActualWorkConfiguration.cs` — map the three new
+   columns.
+4. Migration (Christian runs `dotnet ef`, `--startup-project src/OpHalo.Keep.Infrastructure`) +
+   Designer + model-snapshot update.
+5. `Application/PriceBook/IActualWorkReviewPersistence.cs` — new interface, result enum, outcome
+   record, mirroring `IActualWorkSubmissionPersistence`'s shape.
+6. `Infrastructure/Persistence/EfActualWorkReviewPersistence.cs` — atomic transaction: tracked load
+   + version check + `MarkReviewed` domain transition + conditional signal resolve (no terminal
+   check), one commit.
+
+6A test files (2, new/modified):
+1. `tests/OpHalo.UnitTests/Keep/ActualWorkTests.cs` — `MarkReviewed` domain cases: success, not-
+   submitted, already-reviewed, note trimming/length.
+2. `tests/OpHalo.IntegrationTests/Persistence/ActualWorkReviewPersistenceTests.cs` — new, mirrors
+   `ActualWorkSubmissionTests.cs`: commit + signal resolves (last unreviewed visit), commit + signal
+   stays active (another unreviewed submitted visit remains on the request), not found, version
+   mismatch, not-submitted, already-reviewed conflict.
+
+6A totals: 6 production files, 2 test files, 8 total files, zero mutation handler families
+(persistence/domain only). Under the hard gate.
+
+**6B file/test-count gate** (3 production files):
+1. `Application/PriceBook/ActualWorkReviewApiService.cs` — new service owning the Owner/Admin auth
+   stack (RequestsOperate + Price Book entitlement + Owner/Admin role check, no `ActualWorkCapture`)
+   and mapping the persistence outcome to a `Result`.
+2. `Api/Keep/KeepEndpoints.cs` — new `POST /keep/pricebook/actual-work/{actualWorkId}/review` route
+   (reuses the existing `X-Keep-ActualWork-Version` header).
+3. `Api/Keep/KeepServiceCollectionExtensions.cs` — DI registration for
+   `IActualWorkReviewPersistence`/`EfActualWorkReviewPersistence` and
+   `ActualWorkReviewApiService`.
+
+6B test files (1, new):
+1. `tests/OpHalo.IntegrationTests/Api/ActualWorkReviewApiTests.cs` — new, endpoint-level
+   200/403 (non-Owner/Admin, missing entitlement)/404/409 cases.
+
+6B totals: 3 production files, 1 test file, 4 total files, one mutation handler family (mark
+reviewed). Under the hard gate.
+
+### 6A implementation notes — 2026-08-20
+
+Domain/persistence/migration layer is implemented as gated. `ActualWork.MarkReviewed` adds the
+three nullable fields and the single-shot domain transition (no `Status` change, per
+`ActualWorkStatus`'s existing doc comment). `IActualWorkReviewPersistence`/
+`EfActualWorkReviewPersistence` own the atomic transaction: tracked load, version check, domain
+transition, `SaveChangesAsync`, then a conditional `UPDATE ... WHERE resolved_at_utc IS NULL AND
+NOT EXISTS (...)` resolve of `ActualWorkNeedsOfficeReview` scoped to the request — no terminal
+check, confirming the locked "not blocked" decision above. Migration `AddActualWorkReview`
+(`20260820235826`) adds `review_note`/`reviewed_at_utc`/`reviewed_by_account_user_id` to
+`keep_actual_works`; verified against the entity/EF configuration and the model snapshot diff
+before tests were written — no drift, no unrelated snapshot changes.
+
+6 production files as gated, 2 test files as gated. 34/34 `ActualWorkTests` unit tests passing
+(6 new `MarkReviewed` cases), 8/8 new `ActualWorkReviewPersistenceTests` integration tests passing
+against real PostgreSQL (commit-resolves, commit-leaves-active-with-another-unreviewed-visit,
+last-unreviewed-then-resolves, not-found, wrong-account, version-mismatch, not-submitted,
+already-reviewed-no-overwrite). `git diff --check` clean.
+
 ### Pilot draft-concurrency decision
 
 The pilot locks **one open Draft visit per request**. If multiple technicians are present, the

@@ -94,4 +94,17 @@ public static class ActualWorkErrors
     /// <summary>GAP-055: the transfer target must be a specific account member, never an empty guid.</summary>
     public static readonly Error RecorderTransferTargetRequired =
         Error.Create("ActualWork.RecorderTransferTargetRequired", "A new recorder is required to transfer the recorder.");
+
+    /// <summary>Batch 6: only a Submitted visit may be marked reviewed — it is still Draft.</summary>
+    public static readonly Error NotSubmitted =
+        Error.Create("ActualWork.NotSubmitted", "This actual work visit has not been submitted yet.");
+
+    /// <summary>Batch 6: single-shot review — a visit that already has a reviewer/timestamp cannot
+    /// be reviewed again.</summary>
+    public static readonly Error AlreadyReviewed =
+        Error.Create("ActualWork.AlreadyReviewed", "This actual work visit was already reviewed.");
+
+    /// <summary>Batch 6: matches the feedback-review note convention (max 2,000 characters).</summary>
+    public static readonly Error ReviewNoteTooLong =
+        Error.Create("ActualWork.ReviewNoteTooLong", "The review note must be 2,000 characters or fewer.");
 }

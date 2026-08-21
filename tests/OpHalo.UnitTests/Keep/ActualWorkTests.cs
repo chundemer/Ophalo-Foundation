@@ -402,4 +402,96 @@ public class ActualWorkTests
 
         Assert.Throws<ArgumentException>(() => work.TransferRecorder(Guid.Empty));
     }
+
+    // --- MarkReviewed (Batch 6) ---
+
+    [Fact]
+    public void MarkReviewed_on_a_submitted_visit_succeeds()
+    {
+        var work = New().Value;
+        AddCatalogBackedLine(work);
+        work.Submit(DateTime.UtcNow, outcome: null, completionNote: null);
+        var reviewer = Guid.CreateVersion7();
+        var reviewedAt = DateTime.UtcNow;
+        var versionBefore = work.ConcurrencyVersion;
+
+        var result = work.MarkReviewed(reviewer, "Looks good.", reviewedAt);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(reviewedAt, work.ReviewedAtUtc);
+        Assert.Equal(reviewer, work.ReviewedByAccountUserId);
+        Assert.Equal("Looks good.", work.ReviewNote);
+        Assert.Equal(ActualWorkStatus.Submitted, work.Status);
+        Assert.NotEqual(versionBefore, work.ConcurrencyVersion);
+    }
+
+    [Fact]
+    public void MarkReviewed_trims_whitespace_only_note_to_null()
+    {
+        var work = New().Value;
+        AddCatalogBackedLine(work);
+        work.Submit(DateTime.UtcNow, outcome: null, completionNote: null);
+
+        var result = work.MarkReviewed(Guid.CreateVersion7(), "   ", DateTime.UtcNow);
+
+        Assert.True(result.IsSuccess);
+        Assert.Null(work.ReviewNote);
+    }
+
+    [Fact]
+    public void MarkReviewed_trims_surrounding_whitespace_from_a_note()
+    {
+        var work = New().Value;
+        AddCatalogBackedLine(work);
+        work.Submit(DateTime.UtcNow, outcome: null, completionNote: null);
+
+        var result = work.MarkReviewed(Guid.CreateVersion7(), "  Looks good.  ", DateTime.UtcNow);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal("Looks good.", work.ReviewNote);
+    }
+
+    [Fact]
+    public void MarkReviewed_with_a_note_over_2000_characters_fails()
+    {
+        var work = New().Value;
+        AddCatalogBackedLine(work);
+        work.Submit(DateTime.UtcNow, outcome: null, completionNote: null);
+
+        var result = work.MarkReviewed(Guid.CreateVersion7(), new string('x', 2001), DateTime.UtcNow);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(ActualWorkErrors.ReviewNoteTooLong, result.Error);
+        Assert.Null(work.ReviewedAtUtc);
+    }
+
+    [Fact]
+    public void MarkReviewed_on_a_draft_fails()
+    {
+        var work = New().Value;
+
+        var result = work.MarkReviewed(Guid.CreateVersion7(), null, DateTime.UtcNow);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(ActualWorkErrors.NotSubmitted, result.Error);
+    }
+
+    [Fact]
+    public void MarkReviewed_twice_fails_and_does_not_overwrite_the_first_review()
+    {
+        var work = New().Value;
+        AddCatalogBackedLine(work);
+        work.Submit(DateTime.UtcNow, outcome: null, completionNote: null);
+        var firstReviewer = Guid.CreateVersion7();
+        var firstReviewedAt = DateTime.UtcNow;
+        work.MarkReviewed(firstReviewer, "First review.", firstReviewedAt);
+
+        var result = work.MarkReviewed(Guid.CreateVersion7(), "Second review.", DateTime.UtcNow);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(ActualWorkErrors.AlreadyReviewed, result.Error);
+        Assert.Equal(firstReviewer, work.ReviewedByAccountUserId);
+        Assert.Equal(firstReviewedAt, work.ReviewedAtUtc);
+        Assert.Equal("First review.", work.ReviewNote);
+    }
 }

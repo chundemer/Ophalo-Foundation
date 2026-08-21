@@ -42,6 +42,21 @@ public sealed class ActualWork : BaseEntity
 
     public DateTime? SubmittedAtUtc { get; private set; }
 
+    /// <summary>Set only by <see cref="MarkReviewed"/> (Batch 6) — office acknowledgement of a
+    /// submitted visit. Never overwritten; a repeat <see cref="MarkReviewed"/> call is rejected
+    /// rather than replacing this timestamp.</summary>
+    public DateTime? ReviewedAtUtc { get; private set; }
+
+    /// <summary>The Owner/Admin who reviewed this visit. Distinct from
+    /// <see cref="RecorderAccountUserId"/> — review is an office role capability, never the field
+    /// recorder's own action.</summary>
+    public Guid? ReviewedByAccountUserId { get; private set; }
+
+    /// <summary>Optional, trimmed-to-null, max 2,000 characters (Batch 6) — matches the feedback-
+    /// review note convention. Distinct from <see cref="CompletionNote"/>, which is the
+    /// technician's own field note.</summary>
+    public string? ReviewNote { get; private set; }
+
     /// <summary>Current recorder-ownership holder (GAP-055): distinct from the immutable
     /// <see cref="Foundation.Core.Entities.Shared.BaseEntity.CreatedByUserId"/> authorship set at
     /// <see cref="Create"/>. Set at creation to the creating caller and changed only by
@@ -195,6 +210,35 @@ public sealed class ActualWork : BaseEntity
         Outcome = outcome;
         CompletionNote = completionNote;
         SubmittedAtUtc = submittedAtUtc;
+        ConcurrencyVersion = Guid.NewGuid();
+        return Result.Success();
+    }
+
+    /// <summary>
+    /// Office acknowledgement of a submitted visit (Batch 6). Single-shot: only a
+    /// <see cref="ActualWorkStatus.Submitted"/> visit with a null <see cref="ReviewedAtUtc"/> may be
+    /// reviewed; a repeat call is rejected and never overwrites the existing reviewer, timestamp, or
+    /// note. Does not change <see cref="Status"/> — reviewed visits remain <c>Submitted</c> per
+    /// <see cref="ActualWorkStatus"/>'s doc comment. <paramref name="reviewNote"/> is trimmed to null
+    /// and capped at 2,000 characters, matching the feedback-review note convention. Raising/
+    /// resolving the request's Actual Work review signal is a separate atomic persistence operation
+    /// (Batch 6), never a side effect of this aggregate's own state change, mirroring <see cref="Submit"/>.
+    /// </summary>
+    public Result MarkReviewed(Guid reviewedByAccountUserId, string? reviewNote, DateTime reviewedAtUtc)
+    {
+        if (Status != ActualWorkStatus.Submitted)
+            return Result.Failure(ActualWorkErrors.NotSubmitted);
+
+        if (ReviewedAtUtc is not null)
+            return Result.Failure(ActualWorkErrors.AlreadyReviewed);
+
+        var trimmedNote = string.IsNullOrWhiteSpace(reviewNote) ? null : reviewNote.Trim();
+        if (trimmedNote is not null && trimmedNote.Length > 2000)
+            return Result.Failure(ActualWorkErrors.ReviewNoteTooLong);
+
+        ReviewedAtUtc = reviewedAtUtc;
+        ReviewedByAccountUserId = reviewedByAccountUserId;
+        ReviewNote = trimmedNote;
         ConcurrencyVersion = Guid.NewGuid();
         return Result.Success();
     }

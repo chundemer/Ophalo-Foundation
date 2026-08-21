@@ -178,8 +178,15 @@ eligibility, deduplication, dismissal, explicit-add, and Draft-concurrency contr
       undifferentiated scroll box, making them practically undiscoverable; now mirrors Proposed
       Scope's grouped "Matching assemblies" / "Matching catalog items" layout. 17/17 focused tests
       passing.
-4. **6 — Owner/Admin review mutation:** mark reviewed with reviewer/time/optional internal note,
-   then atomically resolve the Actual Work signal only when no submitted visit remains unreviewed.
+4. **6 — Owner/Admin review mutation:** preflight complete, split two ways (Build Log 129, "6
+   preflight — locked decisions"). Owner/Admin + `RequestsOperate` + Price Book entitlement, no new
+   permission key; nullable `ReviewedAtUtc`/`ReviewedByAccountUserId`/`ReviewNote` on `ActualWork`;
+   single-shot; per-request signal resolve atomic with the review; not blocked on terminal
+   requests.
+   1. **6A — domain, persistence, migration:** Complete. Build Log 129, "6A implementation notes".
+      6 production files, 2 test files. 34/34 unit + 8/8 persistence integration tests passing.
+   2. **6B — review API service, endpoints, DI:** 3 production files, 1 test file. Next approved
+      slice; depends on 6A's merged persistence contract.
 5. **7 — Owner/Admin financial read:** immutable snapshot totals, expected direct cost, margin,
    and explicit incomplete-financial-data cues.
 6. **8 — Owner/Admin review UI:** existing Requests-workspace tab plus request-detail review card.

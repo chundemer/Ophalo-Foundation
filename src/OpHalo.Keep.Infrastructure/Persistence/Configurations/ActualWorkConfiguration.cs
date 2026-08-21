@@ -32,6 +32,13 @@ internal sealed class ActualWorkConfiguration : BaseEntityConfiguration<ActualWo
 
         builder.Property(x => x.SubmittedAtUtc);
 
+        builder.Property(x => x.ReviewedAtUtc);
+
+        builder.Property(x => x.ReviewedByAccountUserId);
+
+        builder.Property(x => x.ReviewNote)
+            .HasMaxLength(2000);
+
         // Current recorder-ownership holder (GAP-055) — distinct from the immutable
         // CreatedByUserId authorship column already mapped by BaseEntityConfiguration.
         builder.Property(x => x.RecorderAccountUserId)
