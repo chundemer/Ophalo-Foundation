@@ -510,7 +510,7 @@ integration tests, 49/49 Actual Work unit tests, no regressions. `git diff --che
 
 Slice 6 (6A + 6B) is complete.
 
-6B totals: 3 production files, 1 test file, 4 total files, one mutation handler family (mark
+6B totals: 4 production files, 1 test file, 5 total files, one mutation handler family (mark
 reviewed). Under the hard gate.
 
 ### 6A implementation notes — 2026-08-20
@@ -531,6 +531,148 @@ before tests were written — no drift, no unrelated snapshot changes.
 against real PostgreSQL (commit-resolves, commit-leaves-active-with-another-unreviewed-visit,
 last-unreviewed-then-resolves, not-found, wrong-account, version-mismatch, not-submitted,
 already-reviewed-no-overwrite). `git diff --check` clean.
+
+### 7 preflight — locked decisions — 2026-08-21
+
+Owner/Admin financial read (ADR-487, "Field fact, office commercial decision" and "Cost and
+closeout truthfulness"). No sibling read API exists in this module to mirror — the shape below is
+new design, not mechanical confirmation. Locked:
+
+- **Two reads, not one.**
+  1. **Review queue** — one row per submitted, not-yet-reviewed visit (`Status = Submitted AND
+     ReviewedAtUtc IS NULL`), account-wide. Lightweight: request context plus visit-level totals
+     and completeness, no line detail.
+  2. **Financial detail** — single visit by id, supports both unreviewed and reviewed submitted
+     visits (`Status = Submitted`, `ReviewedAtUtc` either null or set). A `Draft` visit returns
+     `ActualWork.NotSubmitted` (reused, no new error) — this is an office read of a submitted fact,
+     never a Draft.
+- **Per-visit aggregation only.** No per-request rollup in this slice; a request may carry multiple
+  submitted visits, each reviewed/read independently, matching 6's per-visit `MarkReviewed`. Queue
+  rows carry `RequestId`/`ReferenceCode`/`CustomerName` for office navigation context only — never a
+  summed total across a request's visits.
+- **Incomplete-data rule — corrected 2026-08-21.** A line is incomplete when either required
+  snapshot is null: `SellPriceSnapshot is null || StandardExpectedDirectCostSnapshot is null`. This
+  is the sole completeness test — not `PriceBookVersionLineId is null`. `PriceBookVersionLineId`
+  remains a useful explanatory field on the line (distinguishes "no price-book link at all" from "a
+  linked catalog item currently carrying no price-book entry," `ActualWorkLine`'s states 2/3), but
+  the domain does not guarantee the two snapshot fields are non-null whenever
+  `PriceBookVersionLineId` is set — testing the snapshots directly is correct regardless of that
+  invariant holding. Visit-level `HasIncompleteFinancialData` is true whenever any line is
+  incomplete. When true, `TotalSalesPrice`, `TotalStandardExpectedDirectCost`, and `TotalMargin` are
+  all null — never a partial sum or a fabricated $0, matching ADR-487's "explicit
+  incomplete-financial-data state, never a fabricated total or margin." A zero-line submitted visit
+  (valid per `Submit`'s zero-line path) has `HasIncompleteFinancialData = false` and all three
+  totals `0.00m` — there are no lines to be incomplete, so this is a true, complete zero, not a
+  missing-data state. Line-level `LineSalesTotal`/`LineStandardExpectedDirectCostTotal`/`LineMargin`
+  are computed server-side from the immutable snapshots (`SellPriceSnapshot * ActualQuantity`,
+  `StandardExpectedDirectCostSnapshot * ActualQuantity`, and their difference) whenever that line is
+  complete, and null when incomplete — never deferred to Slice 8 client-side calculation.
+- **Authorization.** Identical gate to 6B's `ActualWorkReviewApiService.AuthorizeAsync`: Owner/Admin
+  role, `RequestsOperate`, `PriceBookQuotesMaterials` entitlement, non-blocked/non-read-only account
+  access. No `ActualWorkCapture`, no new permission key. Both new services duplicate this private
+  method rather than share it — matches the existing pattern (`ActualWorkReviewApiService` and
+  `ActualWorkHistoryReadApiService` each already own their own copy with small policy differences);
+  introducing a shared helper is out of scope for this slice.
+- **Queue ordering.** `SubmittedAtUtc ASC, Id ASC` — oldest-unreviewed-first FIFO, consistent with an
+  actionable backlog rather than a most-recent-first activity feed. No pagination — mirrors
+  `ActualWorkHistoryReadApiService`'s unbounded `SubmittedVisits` list; pilot volume does not
+  warrant it.
+
+**Endpoints** (new `GET`s under the existing `/keep/pricebook/actual-work` route group in
+`KeepEndpoints.cs`):
+1. `GET /keep/pricebook/actual-work/review-queue` — account-wide, no route parameter.
+2. `GET /keep/pricebook/actual-work/{actualWorkId:guid}/financial-detail`.
+
+**New DTOs** (`ActualWorkFinancialReadApiService.cs`, mirroring `ActualWorkHistoryReadApiService.cs`'s
+in-file record convention):
+- `ActualWorkReviewQueueEntry(Guid ActualWorkId, Guid RequestId, string ReferenceCode, string
+  CustomerName, DateTime SubmittedAtUtc, bool HasIncompleteFinancialData, int IncompleteLineCount,
+  decimal? TotalSalesPrice, decimal? TotalStandardExpectedDirectCost, decimal? TotalMargin)`
+- `ActualWorkFinancialLineEntry(Guid Id, string DisplayNameSnapshot, string? UnitOfMeasureSnapshot,
+  decimal ActualQuantity, string? Note, bool IsFinancialDataComplete, decimal? SellPriceSnapshot,
+  decimal? StandardExpectedDirectCostSnapshot, decimal? LineSalesTotal, decimal?
+  LineStandardExpectedDirectCostTotal, decimal? LineMargin)`
+- `ActualWorkFinancialDetailResult(Guid Id, Guid RequestId, ActualWorkStatus Status, ActualWorkOutcome?
+  Outcome, string? CompletionNote, Guid RecorderAccountUserId, DateTime SubmittedAtUtc, DateTime?
+  ReviewedAtUtc, Guid? ReviewedByAccountUserId, string? ReviewNote, bool HasIncompleteFinancialData,
+  decimal? TotalSalesPrice, decimal? TotalStandardExpectedDirectCost, decimal? TotalMargin,
+  IReadOnlyList<ActualWorkFinancialLineEntry> Lines)`
+
+Per-line total/margin is computed even though ADR-487 only names visit-level totals explicitly —
+matches "line totals, and margin" from Christian's Decision 3 above and gives the review-card UI
+(Slice 8) a per-line breakdown, not just a visit sum.
+
+**Application/persistence seam:**
+- `IActualWorkFinancialReviewPersistence` (new interface, read-only, no transaction): `Task<
+  IReadOnlyList<ActualWorkReviewQueueRow>> GetUnreviewedQueueAsync(Guid accountId, CancellationToken
+  ct)` — projects `keep_actual_works` joined to `keep_requests` (`ReferenceCode`, `CustomerName`) for
+  `Status = Submitted AND ReviewedAtUtc IS NULL`, ordered as locked above. Detail read reuses the
+  existing `IActualWorkPersistence.GetByIdAsync` (already account-scoped, already loads `Lines`) — no
+  new single-visit persistence method needed.
+- `EfActualWorkFinancialReviewPersistence` — one query, no transaction, no domain mutation.
+- Totals/completeness computed in the application-layer service (pure projection over already-loaded
+  `ActualWork`/`ActualWorkLine` fields), not in SQL — mirrors `ActualWorkHistoryReadApiService.ToLineEntries`'s
+  in-service projection style rather than pushing arithmetic into the EF query.
+
+**File/test-count gate** (5 production files, within the eight-file/one-mutation-family gate; zero
+mutation handler families — both reads):
+1. `Application/PriceBook/IActualWorkFinancialReviewPersistence.cs` — new interface + queue-row
+   record.
+2. `Infrastructure/Persistence/EfActualWorkFinancialReviewPersistence.cs` — new, one join query.
+3. `Application/PriceBook/ActualWorkFinancialReadApiService.cs` — new: both `GetReviewQueueAsync`
+   and `GetFinancialDetailAsync`, shared private `AuthorizeAsync` (own copy, per the decision above),
+   shared private totals/completeness projection helper.
+4. `Api/Keep/KeepEndpoints.cs` — two new `MapGet`s + two new response-shaping helpers.
+5. `Api/Keep/KeepServiceCollectionExtensions.cs` — register
+   `IActualWorkFinancialReviewPersistence`/`EfActualWorkFinancialReviewPersistence` and
+   `ActualWorkFinancialReadApiService`.
+
+No `ErrorHttpMapper.cs` change: `auth.unauthorized`/`auth.forbidden` and `ActualWork.NotSubmitted`/
+`ActualWork.NotFound` (via the generic `.NotFound` suffix) already map correctly.
+
+**Test files (2, new):**
+1. `tests/OpHalo.UnitTests/Keep/ActualWorkFinancialProjectionTests.cs` — pure totals/completeness
+   projection cases: all-complete lines (line totals/margin computed correctly from snapshot ×
+   quantity), one incomplete line by null `SellPriceSnapshot` (line totals null, visit totals null,
+   count correct), one incomplete line by null `StandardExpectedDirectCostSnapshot` (same), zero-line
+   submitted visit (totals `0.00m`, not incomplete), custom/off-catalog line (null
+   `PriceBookVersionLineId` and both snapshots null — incomplete), catalog-item-without-snapshot line
+   (`PriceBookVersionLineId` null, `CatalogItemId` set, both snapshots null — incomplete), and a line
+   with `PriceBookVersionLineId` set but a snapshot null anyway — confirms completeness is decided by
+   the snapshot fields, not `PriceBookVersionLineId`.
+2. `tests/OpHalo.IntegrationTests/Api/ActualWorkFinancialReadApiTests.cs` — HTTP-level: queue returns
+   only `Submitted`+unreviewed rows (excludes Draft, excludes already-reviewed), queue excludes other
+   accounts, queue ordering, detail on unreviewed submitted visit, detail on already-reviewed
+   submitted visit (includes reviewer/note), detail on Draft visit returns `NotSubmitted` (409),
+   detail not-found/cross-account, authorization: non-Owner/Admin forbidden, missing
+   `RequestsOperate` forbidden, missing Price Book entitlement forbidden, unauthenticated 401.
+
+Totals: 5 production files, 2 test files, 7 total files, zero mutation handler families. Well under
+the hard gate — room remains if the queue's request-context join needs an extra small helper file
+during implementation.
+
+**Approved for implementation — 2026-08-21.**
+
+### 7 implementation notes — 2026-08-21
+
+Implemented exactly as gated. `IActualWorkFinancialReviewPersistence`/
+`EfActualWorkFinancialReviewPersistence` project the unreviewed queue (visit + `Lines` joined to
+`KeepRequest` for `ReferenceCode`/`CustomerName`), account-scoped, `Submitted`+`ReviewedAtUtc IS
+NULL`, ordered `SubmittedAtUtc ASC, Id ASC`. `ActualWorkFinancialReadApiService` composes its own
+Owner/Admin authorization copy (identical to 6B's) and calls the internal
+`ActualWorkFinancialProjection` static class for both reads — pure, dependency-free, and exposed to
+`OpHalo.UnitTests` via the Application project's existing `InternalsVisibleTo`. Detail reuses
+`IActualWorkPersistence.GetByIdAsync` (no new persistence method). Two `GET`s added to
+`KeepEndpoints.cs`; DI registered in `KeepServiceCollectionExtensions.cs`. No `ErrorHttpMapper.cs`
+change needed — confirmed during preflight.
+
+5 production files, 2 test files as gated. 6/6 new `ActualWorkFinancialProjectionTests` unit tests
+passing (all-complete totals/margin, null-sell-price incomplete, null-cost incomplete, zero-line
+complete-zero, custom/off-catalog incomplete, catalog-without-snapshot incomplete). 12/12 new
+`ActualWorkFinancialReadApiTests` HTTP integration tests passing (queue membership/ordering/
+incomplete-totals, Operator/no-entitlement/unauthenticated forbidden, detail on unreviewed/reviewed/
+Draft/unknown/cross-account visits, Operator forbidden). 142/142 Actual Work integration + 55/55
+Actual Work unit tests passing, no regressions. `git diff --check` clean.
 
 ### Pilot draft-concurrency decision
 

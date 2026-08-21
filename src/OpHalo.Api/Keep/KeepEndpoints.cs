@@ -930,6 +930,29 @@ public static class KeepEndpoints
             return result.IsSuccess ? Results.Ok(ToActualWorkHistoryResponse(result.Value)) : ErrorHttpMapper.ToHttpResult(result.Error);
         }).RequireAuthorization();
 
+        // Batch 7 — Owner/Admin-only account-wide unreviewed-review queue.
+        app.MapGet("/keep/pricebook/actual-work/review-queue", async (
+            ActualWorkFinancialReadApiService service,
+            CancellationToken ct) =>
+        {
+            var result = await service.GetReviewQueueAsync(ct);
+            return result.IsSuccess
+                ? Results.Ok(result.Value.Select(ToActualWorkReviewQueueEntryResponse).ToArray())
+                : ErrorHttpMapper.ToHttpResult(result.Error);
+        }).RequireAuthorization();
+
+        // Batch 7 — Owner/Admin-only single-visit financial detail (unreviewed or reviewed).
+        app.MapGet("/keep/pricebook/actual-work/{actualWorkId:guid}/financial-detail", async (
+            Guid actualWorkId,
+            ActualWorkFinancialReadApiService service,
+            CancellationToken ct) =>
+        {
+            var result = await service.GetFinancialDetailAsync(actualWorkId, ct);
+            return result.IsSuccess
+                ? Results.Ok(ToActualWorkFinancialDetailResponse(result.Value))
+                : ErrorHttpMapper.ToHttpResult(result.Error);
+        }).RequireAuthorization();
+
         app.MapDelete("/keep/pricebook/actual-work/{actualWorkId:guid}", async (
             Guid actualWorkId,
             HttpRequest httpRequest,
@@ -1150,6 +1173,54 @@ public static class KeepEndpoints
         completionNote = visit.CompletionNote,
         submittedAtUtc = visit.SubmittedAtUtc,
         lines = visit.Lines.Select(ToLineHistoryResponse),
+    };
+
+    private static object ToActualWorkReviewQueueEntryResponse(ActualWorkReviewQueueEntry entry) => new
+    {
+        actualWorkId = entry.ActualWorkId,
+        requestId = entry.RequestId,
+        referenceCode = entry.ReferenceCode,
+        customerName = entry.CustomerName,
+        submittedAtUtc = entry.SubmittedAtUtc,
+        hasIncompleteFinancialData = entry.HasIncompleteFinancialData,
+        incompleteLineCount = entry.IncompleteLineCount,
+        totalSalesPrice = entry.TotalSalesPrice,
+        totalStandardExpectedDirectCost = entry.TotalStandardExpectedDirectCost,
+        totalMargin = entry.TotalMargin,
+    };
+
+    private static object ToActualWorkFinancialDetailResponse(ActualWorkFinancialDetailResult result) => new
+    {
+        id = result.Id,
+        requestId = result.RequestId,
+        status = result.Status.ToString(),
+        outcome = result.Outcome?.ToString(),
+        completionNote = result.CompletionNote,
+        recorderAccountUserId = result.RecorderAccountUserId,
+        submittedAtUtc = result.SubmittedAtUtc,
+        reviewedAtUtc = result.ReviewedAtUtc,
+        reviewedByAccountUserId = result.ReviewedByAccountUserId,
+        reviewNote = result.ReviewNote,
+        hasIncompleteFinancialData = result.HasIncompleteFinancialData,
+        totalSalesPrice = result.TotalSalesPrice,
+        totalStandardExpectedDirectCost = result.TotalStandardExpectedDirectCost,
+        totalMargin = result.TotalMargin,
+        lines = result.Lines.Select(ToFinancialLineResponse),
+    };
+
+    private static object ToFinancialLineResponse(ActualWorkFinancialLineEntry line) => new
+    {
+        id = line.Id,
+        displayNameSnapshot = line.DisplayNameSnapshot,
+        unitOfMeasureSnapshot = line.UnitOfMeasureSnapshot,
+        actualQuantity = line.ActualQuantity,
+        note = line.Note,
+        isFinancialDataComplete = line.IsFinancialDataComplete,
+        sellPriceSnapshot = line.SellPriceSnapshot,
+        standardExpectedDirectCostSnapshot = line.StandardExpectedDirectCostSnapshot,
+        lineSalesTotal = line.LineSalesTotal,
+        lineStandardExpectedDirectCostTotal = line.LineStandardExpectedDirectCostTotal,
+        lineMargin = line.LineMargin,
     };
 
     private static object ToLineHistoryResponse(ActualWorkLineHistoryEntry line) => new

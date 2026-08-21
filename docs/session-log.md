@@ -189,8 +189,18 @@ eligibility, deduplication, dismissal, explicit-add, and Draft-concurrency contr
       notes". 4 production files (added `ErrorHttpMapper.cs` beyond the original 3-file estimate),
       1 test file. 8/8 new API tests; 130/130 Actual Work integration + 49/49 unit tests passing,
       no regressions.
-5. **7 — Owner/Admin financial read:** immutable snapshot totals, expected direct cost, margin,
-   and explicit incomplete-financial-data cues.
+5. **7 — Owner/Admin financial read:** Complete. Build Log 129, "7 implementation notes". Two
+   read-only GETs: `GET /keep/pricebook/actual-work/review-queue` (account-wide unreviewed-review
+   queue, per-visit rows, request context only) and
+   `GET /keep/pricebook/actual-work/{id}/financial-detail` (factual record plus immutable snapshot
+   totals, Standard/Expected Direct Cost, margin). Per-visit aggregation only, no per-request
+   rollup. A line is incomplete when either `SellPriceSnapshot` or
+   `StandardExpectedDirectCostSnapshot` is null (not `PriceBookVersionLineId` alone); incomplete
+   data forces all-null visit totals, never a partial sum or fabricated $0. Same authorization gate
+   as 6B (Owner/Admin + `RequestsOperate` + Price Book entitlement, no new permission). 5 production
+   files, 1 new interface + 1 new EF class + 1 new API service + 2 endpoint-layer edits, 2 test
+   files; 6/6 unit + 12/12 API integration tests passing, 142/142 Actual Work integration + 55/55
+   Actual Work unit tests passing overall, no regressions.
 6. **8 — Owner/Admin review UI:** existing Requests-workspace tab plus request-detail review card.
 
 Every slice needs its own exact file/test count and validated preflight. Do not bundle later

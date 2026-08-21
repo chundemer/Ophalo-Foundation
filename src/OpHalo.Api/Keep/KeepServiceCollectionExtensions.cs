@@ -219,6 +219,12 @@ public static class KeepServiceCollectionExtensions
         services.AddScoped<IActualWorkReviewPersistence, EfActualWorkReviewPersistence>();
         services.AddScoped<ActualWorkReviewApiService>();
 
+        // Direct Actual Work — Owner/Admin financial read: review queue and single-visit financial
+        // detail (Batch 7, build-log/129). Detail reuses IActualWorkPersistence (registered above);
+        // the queue's request-context join is a new read-only seam.
+        services.AddScoped<IActualWorkFinancialReviewPersistence, EfActualWorkFinancialReviewPersistence>();
+        services.AddScoped<ActualWorkFinancialReadApiService>();
+
         return services;
     }
 }
