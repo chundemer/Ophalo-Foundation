@@ -379,9 +379,13 @@ interface RequestDetailProps {
   prevId?: string;
   nextId?: string;
   onNavigate?: (id: string) => void;
+  // Step 5: set only by RequestWorkbenchShell's wide two-pane render. The Queue pane already
+  // supplies navigation context in that layout, so the header's Back control is redundant/
+  // ambiguous there — identity and Prev/Next stay, modal behavior is untouched.
+  paneMode?: boolean;
 }
 
-export function RequestDetail({ requestId, focusPanel, onBack, prevId, nextId, onNavigate }: RequestDetailProps) {
+export function RequestDetail({ requestId, focusPanel, onBack, prevId, nextId, onNavigate, paneMode }: RequestDetailProps) {
   const [shareCleared, setShareCleared] = useState(false);
   const [shareModalOpen, setShareModalOpen] = useState(false);
   const [followUpPanelOpen, setFollowUpPanelOpen] = useState(false);
@@ -554,7 +558,7 @@ export function RequestDetail({ requestId, focusPanel, onBack, prevId, nextId, o
         <NeedsShareBanner onOpenShareDrawer={() => setShareModalOpen(true)} />
       )}
 
-      <RequestDetailHeader onBack={onBack} referenceCode={detail?.referenceCode} businessName={meQuery.data?.businessName} prevId={prevId} nextId={nextId} onNavigate={onNavigate} />
+      <RequestDetailHeader onBack={onBack} showBack={!paneMode} referenceCode={detail?.referenceCode} businessName={meQuery.data?.businessName} prevId={prevId} nextId={nextId} onNavigate={onNavigate} />
       <RequestDetailStates isLoading={isLoading} isError={isError} error={error} isFetching={isFetching} onRetry={() => void refetch()} />
       {detail && <RequestDetailContent
         requestId={requestId}

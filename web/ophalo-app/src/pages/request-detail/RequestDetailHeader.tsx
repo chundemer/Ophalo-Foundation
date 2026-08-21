@@ -3,6 +3,7 @@ import { FOCUS_RING } from "./helpers";
 
 interface RequestDetailHeaderProps {
   onBack: () => void;
+  showBack?: boolean;
   referenceCode?: string;
   businessName?: string | null;
   prevId?: string;
@@ -10,13 +11,15 @@ interface RequestDetailHeaderProps {
   onNavigate?: (id: string) => void;
 }
 
-export function RequestDetailHeader({ onBack, referenceCode, businessName, prevId, nextId, onNavigate }: RequestDetailHeaderProps) {
+export function RequestDetailHeader({ onBack, showBack = true, referenceCode, businessName, prevId, nextId, onNavigate }: RequestDetailHeaderProps) {
   return (
     <div className="flex items-center gap-2 px-4 py-3 bg-[var(--ophalo-card)] border-b border-[var(--ophalo-border)] shrink-0 min-w-0">
-      <button type="button" onClick={onBack} className={`flex items-center gap-1 text-sm text-[var(--ophalo-muted)] hover:text-[var(--ophalo-ink)] -ml-1 transition-colors shrink-0 ${FOCUS_RING}`}>
-        <ChevronLeft className="h-4 w-4" />
-        Requests
-      </button>
+      {showBack && (
+        <button type="button" onClick={onBack} className={`flex items-center gap-1 text-sm text-[var(--ophalo-muted)] hover:text-[var(--ophalo-ink)] -ml-1 transition-colors shrink-0 ${FOCUS_RING}`}>
+          <ChevronLeft className="h-4 w-4" />
+          Requests
+        </button>
+      )}
       {businessName && (
         <span className="text-sm text-[var(--ophalo-muted)] truncate min-w-0" title={businessName}>
           · {businessName}

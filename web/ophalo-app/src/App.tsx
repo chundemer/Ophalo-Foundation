@@ -443,14 +443,32 @@ function AppShell() {
           </div>
         )}
         {route.page === "requests" && role === "viewer" && <AccessLimited />}
-        {route.page === "requests" && role !== "unknown" && role !== "viewer" && (
+        {/* Viewer/unknown keep the pre-Step-5 standalone detail render, unaffected by the Queue
+            pane (which is gated to eligible roles below) — GAP-042: Viewer can reach Detail via a
+            direct link even though it can't reach the Requests list. */}
+        {route.page === "detail" && (role === "unknown" || role === "viewer") && (
+          <RequestDetail
+            requestId={route.requestId}
+            focusPanel={route.focusPanel}
+            onBack={backToRequests}
+            prevId={prevRequestId}
+            nextId={nextRequestId}
+            onNavigate={(id) => selectRequest(id, navContext ?? undefined)}
+          />
+        )}
+        {(route.page === "requests" || route.page === "detail") && role !== "unknown" && role !== "viewer" && (
           <RequestWorkbenchShell
             role={role}
+            route={route.page === "detail" ? { page: "detail", requestId: route.requestId, focusPanel: route.focusPanel } : { page: "requests" }}
             viewCounts={viewCounts}
             onViewCountsUpdate={handleViewCountsUpdate}
             onSelectRequest={selectRequest}
             onNavigateSettings={navigateToSettings}
             onStartCapture={openCapture}
+            onBack={backToRequests}
+            narrowPrevId={prevRequestId}
+            narrowNextId={nextRequestId}
+            onNarrowNavigate={(id) => selectRequest(id, navContext ?? undefined)}
           />
         )}
         {route.page === "home" && (
@@ -509,16 +527,6 @@ function AppShell() {
                 returnToAssemblyReason: reasonKind,
               })
             }
-          />
-        )}
-        {route.page === "detail" && (
-          <RequestDetail
-            requestId={route.requestId}
-            focusPanel={route.focusPanel}
-            onBack={backToRequests}
-            prevId={prevRequestId}
-            nextId={nextRequestId}
-            onNavigate={(id) => selectRequest(id, navContext ?? undefined)}
           />
         )}
       </main>
