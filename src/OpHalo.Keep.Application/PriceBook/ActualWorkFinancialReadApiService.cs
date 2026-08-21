@@ -51,7 +51,10 @@ public sealed record ActualWorkFinancialLineEntry(
 /// <summary>The full factual and financial record of one submitted visit, for the Owner/Admin
 /// request-detail review card (Batch 7, build-log/129). Supports both an unreviewed and an already-
 /// reviewed submitted visit — never a <c>Draft</c>. Visit-level totals are null whenever any line is
-/// incomplete, matching <see cref="ActualWorkReviewQueueEntry"/>'s rule.</summary>
+/// incomplete, matching <see cref="ActualWorkReviewQueueEntry"/>'s rule. <see
+/// cref="ConcurrencyVersion"/> (Slice 8A contract patch) is the expected-version the review card
+/// must echo back on <c>POST .../review</c> — this read is the only place the review card can
+/// obtain it, since it never opens the underlying <c>ActualWork</c> as a Draft.</summary>
 public sealed record ActualWorkFinancialDetailResult(
     Guid Id,
     Guid RequestId,
@@ -67,12 +70,15 @@ public sealed record ActualWorkFinancialDetailResult(
     decimal? TotalSalesPrice,
     decimal? TotalStandardExpectedDirectCost,
     decimal? TotalMargin,
-    IReadOnlyList<ActualWorkFinancialLineEntry> Lines);
+    IReadOnlyList<ActualWorkFinancialLineEntry> Lines,
+    Guid ConcurrencyVersion);
 
 /// <summary>
 /// API-facing read orchestration for Owner/Admin Actual Work financial review (Batch 7,
 /// build-log/129): a lightweight account-wide unreviewed-review queue and a single-visit financial
-/// detail read. Both are read-only — no mutation, no <c>ConcurrencyVersion</c> exposed. Gate is
+/// detail read. Both are read-only — no mutation. The financial-detail read exposes
+/// <c>ConcurrencyVersion</c> (Slice 8A contract patch) so the review card has an expected version to
+/// send to <c>POST .../review</c>; the review-queue list does not. Gate is
 /// identical to <see cref="ActualWorkReviewApiService.AuthorizeAsync"/>: Owner/Admin role,
 /// <c>RequestsOperate</c>, the Price Book entitlement, non-blocked/non-read-only account access — no
 /// <c>ActualWorkCapture</c>, no new permission key. Duplicated here rather than shared, matching the
@@ -142,7 +148,7 @@ public sealed class ActualWorkFinancialReadApiService(
             visit.RecorderAccountUserId, visit.SubmittedAtUtc!.Value, visit.ReviewedAtUtc,
             visit.ReviewedByAccountUserId, visit.ReviewNote, totals.HasIncompleteFinancialData,
             totals.TotalSalesPrice, totals.TotalStandardExpectedDirectCost, totals.TotalMargin,
-            lines.Select(ActualWorkFinancialProjection.ToLineEntry).ToArray());
+            lines.Select(ActualWorkFinancialProjection.ToLineEntry).ToArray(), visit.ConcurrencyVersion);
     }
 
     /// <summary>Owner/Admin office-review gate: authenticated, non-blocked/read-only account access,

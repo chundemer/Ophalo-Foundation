@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor, fireEvent } from "@testing-library/react";
+import { render, screen, waitFor, fireEvent, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Requests } from "../Requests";
@@ -17,6 +17,7 @@ const mockGetAvailableRequests = vi.fn();
 const mockGetGuidedSetup = vi.fn();
 const mockGetSetup = vi.fn();
 const mockGetMe = vi.fn();
+const mockGetActualWorkReviewQueue = vi.fn();
 
 vi.mock("../../lib/apiClient", async () => {
   const actual = await vi.importActual<typeof import("../../lib/apiClient")>(
@@ -31,6 +32,7 @@ vi.mock("../../lib/apiClient", async () => {
       getGuidedSetup: (...args: unknown[]) => mockGetGuidedSetup(...args),
       getSetup: (...args: unknown[]) => mockGetSetup(...args),
       getMe: (...args: unknown[]) => mockGetMe(...args),
+      getActualWorkReviewQueue: (...args: unknown[]) => mockGetActualWorkReviewQueue(...args),
     },
   };
 });
@@ -71,15 +73,18 @@ function listResult(requests: KeepRequestListResult["requests"]): KeepRequestLis
   };
 }
 
-function renderRequests() {
+function renderRequests(
+  role: "owner" | "admin" | "operator" = "owner",
+  onSelectRequest: (requestId: string) => void = () => {},
+) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(
     <QueryClientProvider client={queryClient}>
       <Requests
-        role="owner"
+        role={role}
         viewCounts={null}
         onViewCountsUpdate={() => {}}
-        onSelectRequest={() => {}}
+        onSelectRequest={onSelectRequest}
         onNavigateSettings={() => {}}
         onStartCapture={() => {}}
       />
@@ -99,7 +104,9 @@ beforeEach(() => {
   mockGetGuidedSetup.mockReset();
   mockGetSetup.mockReset();
   mockGetMe.mockReset();
+  mockGetActualWorkReviewQueue.mockReset();
   mockGetAvailableRequests.mockResolvedValue({ requests: [], pageInfo: { limit: 50, hasMore: false, nextCursor: null } });
+  mockGetActualWorkReviewQueue.mockResolvedValue([]);
   mockGetGuidedSetup.mockResolvedValue(completeGuidedSetup);
   mockGetSetup.mockResolvedValue(mockBusinessSetup);
   // GAP-042: ["me"] resolves independently of the list response — this is what proves the
@@ -196,6 +203,57 @@ describe("Requests — GAP-041 queue-transition stability", () => {
     tabs[2].focus();
     await user.keyboard(" ");
     await waitFor(() => expect(tabs[2]).toHaveAttribute("aria-selected", "true"));
+  });
+});
+
+describe("Requests — Slice 8A Actual Work review queue tab", () => {
+  it("shows the tab for Owner/Admin", async () => {
+    mockGetRequests.mockResolvedValue(listResult([]));
+    renderRequests("owner");
+    expect(await screen.findByRole("tab", { name: /Actual Work Review/ })).toBeInTheDocument();
+  });
+
+  it("hides the tab for Operator", async () => {
+    mockGetRequests.mockResolvedValue(listResult([]));
+    renderRequests("operator");
+    await screen.findByRole("heading", { name: "Requests for Acme Plumbing" });
+    expect(screen.queryByRole("tab", { name: /Actual Work Review/ })).not.toBeInTheDocument();
+  });
+
+  it("renders queue rows and navigates to the request on selection, and shows the badge only once the queue has loaded", async () => {
+    mockGetRequests.mockResolvedValue(listResult([]));
+    const gate = deferred<unknown[]>();
+    mockGetActualWorkReviewQueue.mockReturnValue(gate.promise);
+    const onSelectRequest = vi.fn();
+    renderRequests("owner", onSelectRequest);
+
+    const reviewTab = await screen.findByRole("tab", { name: /Actual Work Review/ });
+    // Not yet visited/loaded — no guessed badge count.
+    expect(within(reviewTab).queryByText(/^\d+$/)).not.toBeInTheDocument();
+
+    fireEvent.click(reviewTab);
+    await screen.findByText("Loading review queue…");
+
+    gate.resolve([
+      {
+        actualWorkId: "aw-1",
+        requestId: "req-1",
+        referenceCode: "REQ-001",
+        customerName: "Marcus Reyes",
+        submittedAtUtc: "2026-08-20T12:00:00Z",
+        hasIncompleteFinancialData: false,
+        incompleteLineCount: 0,
+        totalSalesPrice: 100,
+        totalStandardExpectedDirectCost: 40,
+        totalMargin: 60,
+      },
+    ]);
+
+    const row = await screen.findByText("Marcus Reyes");
+    fireEvent.click(row);
+    expect(onSelectRequest).toHaveBeenCalledWith("req-1");
+
+    await waitFor(() => expect(within(reviewTab).getByText("1")).toBeInTheDocument());
   });
 });
 

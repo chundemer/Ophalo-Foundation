@@ -1,6 +1,6 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-08-20
+**Last updated:** 2026-08-21
 **Deployment posture:** Not pilot-ready.
 **Purpose:** current operational handoff only — not an implementation archive.
 
@@ -201,7 +201,54 @@ eligibility, deduplication, dismissal, explicit-add, and Draft-concurrency contr
    files, 1 new interface + 1 new EF class + 1 new API service + 2 endpoint-layer edits, 2 test
    files; 6/6 unit + 12/12 API integration tests passing, 142/142 Actual Work integration + 55/55
    Actual Work unit tests passing overall, no regressions.
-6. **8 — Owner/Admin review UI:** existing Requests-workspace tab plus request-detail review card.
+6. **8 — Owner/Admin review UI:** split into 8A (Requests-workspace review-queue tab, read-only)
+   and 8B (request-detail financial review card + review mutation).
+   1. **8A — Requests-workspace review-queue tab:** Complete. `apiClient.types.ts`/`apiClient.ts`
+      wiring for all three financial-read/review endpoints (previously unused by the frontend);
+      new client-only `actual_work_review` tab (not a `RequestView` — backed directly by
+      `GET .../review-queue`, distinct row shape from `RequestListContent`); new
+      `ActualWorkReviewQueueList` component; `RequestQueueNavigation` threads a client-side
+      queue-length badge (no count endpoint). 6 production files, 1 extended test file
+      (`Requests.queueTransition.test.tsx`, +2 tests). TypeScript clean, `git diff --check`
+      clean, extended file 8/8 passing, full focused `Requests.*` suite 45/45 passing.
+   2. **Contract patch (Slice 7/8A correction):** Complete. `ActualWorkFinancialDetailResult` had
+      no `ConcurrencyVersion`, so 8B's review card would have had no valid expected version to
+      send to `POST .../review`. Added `ConcurrencyVersion` to the record, serialized it from the
+      `financial-detail` endpoint, added it to the frontend type. 3 production files
+      (`ActualWorkFinancialReadApiService.cs`, `KeepEndpoints.cs`, `apiClient.types.ts`), 1 test
+      file extended (`ActualWorkFinancialReadApiTests.cs`: existing detail test now asserts the
+      returned version matches the DB row; new `FinancialDetail_ConcurrencyVersion_CanBeUsedToReview`
+      proves the real round trip — fetch financial-detail, POST that version to `/review`, 200).
+      13/13 passing in that class, `ActualWorkReviewApiTests` 8/8 unaffected. No standalone
+      frontend apiClient contract test added — the backend round trip proves the wire contract;
+      8B's review-card test is where a client-side assertion has a real consumer (financial-detail
+      supplies `concurrencyVersion`, the review mutation must send that exact value).
+   3. **8B — request-detail financial review card + review mutation:** Preflight complete, **build
+      paused** — Christian is starting a UI/UX redesign and does not want 8B built ahead of it only
+      to be rebuilt after. Resume 8B from this preflight once the redesign lands; re-validate
+      against the redesigned request-detail layout before implementing, don't implement from this
+      preflight unchanged if the layout has moved.
+      - No "financial detail for a request" endpoint exists — only per-`actualWorkId`. Plan was to
+        reuse `useActualWorkHistory`'s already-fetched `submittedVisits[].id` (== `actualWorkId`)
+        rather than add a new request-scoped read, then fetch financial-detail per visit for
+        Owner/Admin — one card, one row per visit, mirroring `ActualWorkHistoryCard`'s existing
+        multi-visit shape.
+      - `role`/`isOwnerOrAdmin` is not threaded into `request-detail/*` anywhere today — no
+        Owner/Admin-gated card exists there yet. Plan was a single `isOwnerOrAdmin: boolean` prop
+        from `RequestDetail.tsx`'s existing `meQuery.data?.accountRole` into `RequestDetailContent`
+        only (not the shared `RequestDetailLayoutProps` — mobile/desktop layout components don't
+        need it).
+      - Quiet-hide on 403 for Owner/Admin too (entitlement/blocked-account gate can still fail) —
+        mirrors `useActualWorkHistory`'s convention; skip the fetch outright for non-Owner/Admin.
+      - `ActualWork.AlreadyReviewed` (409, distinguishable via `ApiError.code`) is expected/routine
+        on a shared review queue, not exceptional — plan was to re-fetch that visit's detail and
+        show the real reviewer/note rather than a generic conflict error.
+      - Planned file list (re-verify against the redesign before implementing): new
+        `useActualWorkFinancialReview.ts` hook, new `ActualWorkFinancialReviewCard.tsx`, edits to
+        `RequestDetailContent.tsx` and `RequestDetail.tsx`. 1 mutation family, 4 production files.
+        Test file: add `ActualWorkFinancialReviewCard.test.tsx` (new file warranted here, unlike
+        8A) proving financial-detail supplies `concurrencyVersion` and the review call sends that
+        exact value.
 
 Every slice needs its own exact file/test count and validated preflight. Do not bundle later
 financial/review work into field capture merely because files overlap.

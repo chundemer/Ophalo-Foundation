@@ -1206,6 +1206,7 @@ public static class KeepEndpoints
         totalStandardExpectedDirectCost = result.TotalStandardExpectedDirectCost,
         totalMargin = result.TotalMargin,
         lines = result.Lines.Select(ToFinancialLineResponse),
+        concurrencyVersion = result.ConcurrencyVersion,
     };
 
     private static object ToFinancialLineResponse(ActualWorkFinancialLineEntry line) => new

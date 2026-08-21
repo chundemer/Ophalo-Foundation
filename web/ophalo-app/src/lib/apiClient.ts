@@ -225,6 +225,9 @@ import type {
   ActualWorkHistoryResult,
   ActualWorkNudgeSuggestionFieldRowResponse,
   ActualWorkNudgeFieldResultResponse,
+  ActualWorkReviewQueueEntry,
+  ActualWorkFinancialDetailResult,
+  ActualWorkReviewBody,
 } from "./apiClient.types";
 
 export type {
@@ -359,6 +362,9 @@ export type {
   ActualWorkHistoryResult,
   ActualWorkNudgeSuggestionFieldRowResponse,
   ActualWorkNudgeFieldResultResponse,
+  ActualWorkReviewQueueEntry,
+  ActualWorkFinancialDetailResult,
+  ActualWorkReviewBody,
 };
 
 export type { FollowUpResolutionOutcome, FollowUpCompletionReason } from "./apiClient.types";
@@ -942,5 +948,16 @@ export const api = {
     apiFetchVoid(`/keep/pricebook/actual-work/${actualWorkId}`, {
       method: "DELETE",
       headers: { "X-Keep-ActualWork-Version": version },
+    }),
+  // Slice 8A, build-log/129: Owner/Admin unreviewed-review queue and per-visit financial detail.
+  getActualWorkReviewQueue: () =>
+    apiFetch<ActualWorkReviewQueueEntry[]>("/keep/pricebook/actual-work/review-queue"),
+  getActualWorkFinancialDetail: (actualWorkId: string) =>
+    apiFetch<ActualWorkFinancialDetailResult>(`/keep/pricebook/actual-work/${actualWorkId}/financial-detail`),
+  reviewActualWork: (actualWorkId: string, body: ActualWorkReviewBody, version: string) =>
+    apiFetch<ActualWorkConcurrencyVersionResult>(`/keep/pricebook/actual-work/${actualWorkId}/review`, {
+      method: "POST",
+      headers: { "X-Keep-ActualWork-Version": version },
+      body: JSON.stringify(body),
     }),
 };

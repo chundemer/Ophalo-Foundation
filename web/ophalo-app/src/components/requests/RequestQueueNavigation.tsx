@@ -14,6 +14,7 @@ interface RequestQueueNavigationProps {
   tabs: TabDef[];
   activeTab: TabDef;
   viewCounts: KeepRequestViewCounts | null;
+  reviewQueueCount?: number | null;
   onSelectTab: (tab: TabDef) => void;
   historyMode: boolean;
   historyScope: HistoryScope;
@@ -29,6 +30,7 @@ export function RequestQueueNavigation({
   tabs,
   activeTab,
   viewCounts,
+  reviewQueueCount,
   onSelectTab,
   historyMode,
   historyScope,
@@ -72,7 +74,7 @@ export function RequestQueueNavigation({
         <div className="flex items-center justify-between gap-2 px-4 sm:px-6 min-w-max">
           <div role="tablist" aria-label="Request queues" className="flex gap-0">
             {tabs.map((tab, i) => {
-              const count = countForTab(tab, viewCounts);
+              const count = countForTab(tab, viewCounts, reviewQueueCount);
               const isActive = tab.view === activeTab.view;
               return (
                 <button

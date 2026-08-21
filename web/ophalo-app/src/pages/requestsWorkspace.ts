@@ -9,12 +9,16 @@ export type TabId =
   | "watching"
   | "ready_to_close"
   | "feedback_review"
-  | "available_work";
+  | "available_work"
+  | "actual_work_review";
 
 export interface TabDef {
   id: TabId;
   label: string;
-  view: RequestView | "available";
+  // Slice 8A, build-log/129: "actual_work_review" is a client-only tab, not a server RequestView —
+  // it's backed by the standalone GET /keep/pricebook/actual-work/review-queue endpoint, which
+  // returns ActualWorkReviewQueueEntry rows (not full request-list rows).
+  view: RequestView | "available" | "actual_work_review";
   roles: AccountRole[];
 }
 
@@ -27,6 +31,7 @@ const ALL_TABS: TabDef[] = [
   { id: "ready_to_close", label: "Ready to Close",   view: "ready_to_close",   roles: ["owner", "admin"] },
   { id: "feedback_review",label: "Feedback Review",  view: "feedback_review",  roles: ["owner", "admin"] },
   { id: "available_work", label: "Available Work",   view: "available",        roles: ["operator"] },
+  { id: "actual_work_review", label: "Actual Work Review", view: "actual_work_review", roles: ["owner", "admin"] },
 ];
 
 export function getTabsForRole(role: AccountRole): TabDef[] {
@@ -91,6 +96,10 @@ export const EMPTY_STATE: Record<TabId, { heading: string; detail: string }> = {
   available_work: {
     heading: "No available work",
     detail: "Unassigned requests that are open to claim will appear here.",
+  },
+  actual_work_review: {
+    heading: "Nothing to review",
+    detail: "Submitted visits awaiting review will appear here.",
   },
 };
 
@@ -170,7 +179,15 @@ export function resolveHistoryDateParams(
 
 // --- Sidebar count helper ---
 
-export function countForTab(tab: TabDef, counts: KeepRequestViewCounts | null): number | null {
+// reviewQueueCount is the client-side length of the already-loaded Actual Work review queue
+// (Slice 8A) — there is no server view-count for it, and it must never show a guessed count
+// before that queue has loaded (null, not 0, until then).
+export function countForTab(
+  tab: TabDef,
+  counts: KeepRequestViewCounts | null,
+  reviewQueueCount?: number | null,
+): number | null {
+  if (tab.id === "actual_work_review") return reviewQueueCount ?? null;
   if (!counts) return null;
   switch (tab.id) {
     case "default":         return counts.default;

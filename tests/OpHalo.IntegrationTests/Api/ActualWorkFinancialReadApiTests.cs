@@ -173,6 +173,32 @@ public sealed class ActualWorkFinancialReadApiTests : IClassFixture<KeepApiWebFa
         Assert.Equal(85.00m, line.GetProperty("lineSalesTotal").GetDecimal());
         Assert.Equal(36.00m, line.GetProperty("lineStandardExpectedDirectCostTotal").GetDecimal());
         Assert.Equal(49.00m, line.GetProperty("lineMargin").GetDecimal());
+
+        await using var scope = _factory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+        var visit = await db.Set<ActualWork>().SingleAsync(x => x.Id == visitId);
+        Assert.Equal(visit.ConcurrencyVersion, body.GetProperty("concurrencyVersion").GetGuid());
+    }
+
+    [Fact]
+    public async Task FinancialDetail_ConcurrencyVersion_CanBeUsedToReview()
+    {
+        // Slice 8A contract patch: the review card's only source for the review mutation's
+        // expected version is this read (it never opens the visit as a Draft) — proves the
+        // round trip actually works, not just that some GUID is present.
+        var (accountId, ownerId, ownerCookie) = await SeedAccountAsync("detail-version-roundtrip");
+        await EnrollAsync(accountId, ownerId);
+        var requestId = await SeedRequestAsync(accountId, "Jane Customer");
+        var visitId = await CreateVisitAsync(accountId, requestId, ownerId, submit: true, review: false);
+
+        var detailResponse = await GetDetailAsync(ownerCookie, visitId);
+        Assert.Equal(HttpStatusCode.OK, detailResponse.StatusCode);
+        var detailBody = await detailResponse.Content.ReadFromJsonAsync<JsonElement>();
+        var concurrencyVersion = detailBody.GetProperty("concurrencyVersion").GetGuid();
+
+        var reviewResponse = await PostReviewAsync(ownerCookie, visitId, concurrencyVersion, "Confirmed via detail read.");
+
+        Assert.Equal(HttpStatusCode.OK, reviewResponse.StatusCode);
     }
 
     [Fact]
@@ -259,6 +285,17 @@ public sealed class ActualWorkFinancialReadApiTests : IClassFixture<KeepApiWebFa
 
     private async Task<HttpResponseMessage> GetDetailAsync(string cookie, Guid actualWorkId) =>
         await AuthRequest(cookie).GetAsync($"/keep/pricebook/actual-work/{actualWorkId}/financial-detail");
+
+    private async Task<HttpResponseMessage> PostReviewAsync(
+        string cookie, Guid actualWorkId, Guid expectedVersion, string? reviewNote)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Post, $"/keep/pricebook/actual-work/{actualWorkId}/review")
+        {
+            Content = JsonContent.Create(new { reviewNote })
+        };
+        request.Headers.Add("X-Keep-ActualWork-Version", expectedVersion.ToString("D"));
+        return await AuthRequest(cookie).SendAsync(request);
+    }
 
     private async Task<Guid> CreateVisitAsync(
         Guid accountId, Guid requestId, Guid recorderAccountUserId, bool submit, bool review,

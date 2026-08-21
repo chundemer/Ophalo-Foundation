@@ -8,6 +8,7 @@ import { RequestsWorkspaceHeader } from "../components/requests/RequestsWorkspac
 import { RequestQueueNavigation } from "../components/requests/RequestQueueNavigation";
 import { RequestListToolbar } from "../components/requests/RequestListToolbar";
 import { RequestListContent } from "../components/requests/RequestListContent";
+import { ActualWorkReviewQueueList } from "../components/requests/ActualWorkReviewQueueList";
 import { ApiError } from "../lib/apiClient";
 import {
   getTabsForRole,
@@ -90,6 +91,9 @@ export function Requests({
   const [historyDateScope, setHistoryDateScope] = useState<HistoryDateScope>("all_time");
 
   const isAvailableTab = !historyMode && activeTab.view === "available";
+  // Slice 8A, build-log/129: "actual_work_review" is a client-only tab, not a RequestView —
+  // it bypasses listQuery/availableQuery entirely and sources its own endpoint.
+  const isReviewTab = !historyMode && activeTab.view === "actual_work_review";
   const isOnFirstPage = cursor === null;
 
   function selectTab(tab: TabDef) {
@@ -173,9 +177,15 @@ export function Requests({
         cursor: cursor ?? undefined,
         ...historyDateParams,
       }),
-    enabled: !isAvailableTab,
+    enabled: !isAvailableTab && !isReviewTab,
     refetchInterval: isOnFirstPage ? 30_000 : false,
     refetchOnWindowFocus: isOnFirstPage,
+  });
+
+  const reviewQueueQuery = useQuery({
+    queryKey: ["actual-work-review-queue"],
+    queryFn: api.getActualWorkReviewQueue,
+    enabled: isReviewTab,
   });
 
   const availableQuery = useQuery({
@@ -269,6 +279,9 @@ export function Requests({
       onViewCountsUpdate(latestCounts);
     }
   }, [latestCounts, onViewCountsUpdate]);
+
+  // Slice 8A: badge count is the loaded queue's own length, never a guess before it loads.
+  const reviewQueueCount = reviewQueueQuery.data ? reviewQueueQuery.data.length : null;
 
   const requests = isAvailableTab
     ? availableQuery.data?.requests ?? []
@@ -421,6 +434,7 @@ export function Requests({
           tabs={tabs}
           activeTab={activeTab}
           viewCounts={viewCounts}
+          reviewQueueCount={reviewQueueCount}
           onSelectTab={selectTab}
           historyMode={historyMode}
           historyScope={historyScope}
@@ -433,7 +447,7 @@ export function Requests({
         />
 
         <RequestListToolbar
-          isAvailableTab={isAvailableTab}
+          isAvailableTab={isAvailableTab || isReviewTab}
           historyMode={historyMode}
           presentAsHistory={presentAsHistory}
           searchInputRef={searchInputRef}
@@ -451,36 +465,46 @@ export function Requests({
         </div>{/* /max-w-6xl */}
       </div>
 
-      <RequestListContent
-        listRegionRef={listRegionRef}
-        pageHeadingRef={pageHeadingRef}
-        contextLabel={contextLabel}
-        heading={{
-          headingText: pageHeadingText,
-          isLoading,
-          isError,
-          isForbidden,
-          emptyState,
-          onClearFilters: clearFilters,
-        }}
-        rows={{
-          itemCount: requests.length,
-          isAvailableTab,
-          availableRequests: availableQuery.data?.requests ?? [],
-          onAvailableSelect: handleRowSelect,
-          requests: listQuery.data?.requests ?? [],
-          isDefaultTab,
-          needsAttentionRows,
-          openWorkRows,
-          renderRow: renderRequestRow,
-        }}
-        pager={{
-          hasMore: pageInfo?.hasMore ?? false,
-          isOnFirstPage,
-          onPrevPage: goPrevPage,
-          onNextPage: goNextPage,
-        }}
-      />
+      {isReviewTab ? (
+        <ActualWorkReviewQueueList
+          entries={reviewQueueQuery.data ?? []}
+          isLoading={reviewQueueQuery.isLoading}
+          isError={reviewQueueQuery.isError}
+          onRetry={() => void reviewQueueQuery.refetch()}
+          onSelectRequest={(requestId) => onSelectRequest(requestId)}
+        />
+      ) : (
+        <RequestListContent
+          listRegionRef={listRegionRef}
+          pageHeadingRef={pageHeadingRef}
+          contextLabel={contextLabel}
+          heading={{
+            headingText: pageHeadingText,
+            isLoading,
+            isError,
+            isForbidden,
+            emptyState,
+            onClearFilters: clearFilters,
+          }}
+          rows={{
+            itemCount: requests.length,
+            isAvailableTab,
+            availableRequests: availableQuery.data?.requests ?? [],
+            onAvailableSelect: handleRowSelect,
+            requests: listQuery.data?.requests ?? [],
+            isDefaultTab,
+            needsAttentionRows,
+            openWorkRows,
+            renderRow: renderRequestRow,
+          }}
+          pager={{
+            hasMore: pageInfo?.hasMore ?? false,
+            isOnFirstPage,
+            onPrevPage: goPrevPage,
+            onNextPage: goNextPage,
+          }}
+        />
+      )}
 
       {/* Row action modal */}
       {activeModalAction && (

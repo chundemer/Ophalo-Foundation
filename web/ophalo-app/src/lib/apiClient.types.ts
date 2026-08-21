@@ -1201,3 +1201,57 @@ export interface ActualWorkNudgeFieldResultResponse {
   triggerOfferingAssemblyId: string | null;
   suggestions: ActualWorkNudgeSuggestionFieldRowResponse[];
 }
+
+// Slice 8A, build-log/129: Owner/Admin account-wide unreviewed-review queue and per-visit
+// financial detail (mirrors ActualWorkFinancialReadApiService's response shapes exactly).
+export interface ActualWorkReviewQueueEntry {
+  actualWorkId: string;
+  requestId: string;
+  referenceCode: string;
+  customerName: string;
+  submittedAtUtc: string;
+  hasIncompleteFinancialData: boolean;
+  incompleteLineCount: number;
+  totalSalesPrice: number | null;
+  totalStandardExpectedDirectCost: number | null;
+  totalMargin: number | null;
+}
+
+export interface ActualWorkFinancialLineEntry {
+  id: string;
+  displayNameSnapshot: string;
+  unitOfMeasureSnapshot: string | null;
+  actualQuantity: number;
+  note: string | null;
+  isFinancialDataComplete: boolean;
+  sellPriceSnapshot: number | null;
+  standardExpectedDirectCostSnapshot: number | null;
+  lineSalesTotal: number | null;
+  lineStandardExpectedDirectCostTotal: number | null;
+  lineMargin: number | null;
+}
+
+export interface ActualWorkFinancialDetailResult {
+  id: string;
+  requestId: string;
+  status: string;
+  outcome: string | null;
+  completionNote: string | null;
+  recorderAccountUserId: string;
+  submittedAtUtc: string;
+  reviewedAtUtc: string | null;
+  reviewedByAccountUserId: string | null;
+  reviewNote: string | null;
+  hasIncompleteFinancialData: boolean;
+  totalSalesPrice: number | null;
+  totalStandardExpectedDirectCost: number | null;
+  totalMargin: number | null;
+  lines: ActualWorkFinancialLineEntry[];
+  // Slice 8A contract patch: the review card's only source for the review mutation's expected
+  // X-Keep-ActualWork-Version — the review-queue list does not carry it.
+  concurrencyVersion: string;
+}
+
+export interface ActualWorkReviewBody {
+  reviewNote: string | null;
+}
