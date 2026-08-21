@@ -354,9 +354,24 @@ for the new compact current-page slice and for the later Queue-pane variant.
 ### Current stop point
 
 Step 4 is complete and verified (typecheck, full frontend suite, CSS token check, visual
-verification). Step 5 (UI-001's bounded Queue pane) is the next separate migration slice — not
-started, and not implied by anything in this track. Awaiting commit of the V2/session-log
-documentation (this update) separately from the frontend implementation commit.
+verification). Awaiting commit of the V2/session-log documentation (this update) separately from
+the frontend implementation commit.
+
+Step 5 (UI-001's bounded Queue + Workbench shell) is its own migration slice, sequenced and
+preflighted separately — see `docs/build-log/132-ui-001-queue-workbench-shell-preflight.md` for the
+locked architecture (retained-route shell, reused focused fallback) and 6-step build order.
+
+**UI-001 migration progress:**
+- Step 1 (measurement/sizing spike) — **complete, 2026-08-21**
+  (`docs/build-log/133-ui-001-step1-measurement-spike-preflight.md`). Protected Workbench minimum
+  locked at 640 CSS-px; protected application-workspace minimum locked at 1001 CSS-px, recorded in
+  `docs/ux-design/v2/keep-ui-design-model-v2.md` §13.
+- Step 2 (lock retained-route shell approach) — already resolved as part of the build-log 132
+  preflight (§3.1/§6); no separate implementation action needed.
+- **Step 3 (first functional wide shell: Queue pane + UI-003-compliant Priority Preview) — next.**
+  Needs its own exact preflight before implementation; not started.
+- Steps 4–6 (Queue-pane layout variant, embedded Workbench, one-pane fallback verification) —
+  not started.
 
 ### Verified baseline
 

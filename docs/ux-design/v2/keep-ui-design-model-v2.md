@@ -185,8 +185,17 @@ scroll horizontally, clip, abbreviate a locked label, or squeeze a control below
 size.
 
 UI-002 through UI-005 lock the durable selected route, non-mutating Priority Preview, role queue
-defaults, refresh posture, and first-viewport detail hierarchy. The exact protected workbench minimum
-remains an implementation measurement validated at 100%, 125%, and 150% zoom with populated data.
+defaults, refresh posture, and first-viewport detail hierarchy.
+
+**Protected workbench minimum — locked 2026-08-21 (Step 1 measurement spike,
+`docs/build-log/133-ui-001-step1-measurement-spike-preflight.md`):** 640 CSS-px, confirmed against
+the spike's populated-data fixture at 100%, 125%, and 150% browser zoom with no clipped/truncated
+label, no card-level horizontal scroll, no touch target below 44px (general) / 48px (persistent
+field), and the Request Anchor's phone/service-location/owner reachable without scrolling past the
+original customer description. The protected application-workspace minimum used by the two-pane vs.
+one-pane fallback decision is Queue width (use the 360 CSS-px upper bound for this check, so the
+fallback never triggers while the Workbench pane is actually protected at less than its confirmed
+minimum) + 640 + the existing 1px inter-pane border = **1001 CSS-px**.
 
 ## 14. Non-goals
 
