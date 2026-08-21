@@ -365,8 +365,9 @@ refinement decisions and measured evidence.
 (2026-08-21).** Real-browser 100/125/150% zoom acceptance passed. See the UI-001 migration
 progress entry below for scope.
 
-**Next session:** Step 6 (one-pane fallback and final route verification) — the last item in the
-locked Build Log 132 §5 migration sequence.
+**Step 6 (one-pane fallback and final route verification) is complete (2026-08-21), closing out the
+locked Build Log 132 §5 migration sequence.** No production code changed — verification only. See
+UI-001 migration progress below.
 
 **UI-001 migration progress:**
 - Step 1 (measurement/sizing spike) — **complete, 2026-08-21**
@@ -439,7 +440,13 @@ locked Build Log 132 §5 migration sequence.
   role-gated shell. Narrow-detail fallback for eligible roles is unchanged in behavior (full-page
   `RequestDetail`, no Queue mounted). Real-browser 100/125/150% zoom acceptance passed
   (2026-08-21).
-- Step 6 (one-pane fallback and final route verification) — not started; next session.
+- **Step 6 (one-pane fallback and final route verification) — complete, 2026-08-21.** No code
+  changes required: `RequestWorkbenchShell.tsx`/`App.tsx` already implemented the locked §6 fallback
+  identity and route/render coupling as of Step 5. Focused automated verification: 10 test files,
+  64/64 passing (`RequestWorkbenchShell.test.tsx` + adjacent `Requests.*`/`RequestDetailHeader.*`
+  suites); `git diff --check` clean. Manual verification by Christian: direct-route load, refresh,
+  Back/Forward for `#/request/{id}`, and resize across the 1001px boundary mid-session for both
+  routes — confirmed. **This completes the locked Build Log 132 §5 migration sequence (Steps 1–6).**
 
 ### Verified baseline
 
