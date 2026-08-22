@@ -26,9 +26,12 @@ Those directions remain subject to their own ADR/build-log decisions.
 
 ## Active priority — Request Detail / Workbench redesign
 
-**Status:** Layout-shell batch complete and committed (`24220d7`, 2026-08-22). The compact Anchor +
-single-Work-Canvas Workbench is live in `web/ophalo-app`, reusing the existing Actual Work
-capture/history module. UI interaction model remains locked per the signoff spec below.
+**Status:** Layout-shell batch complete and committed (`24220d7`, 2026-08-22), establishing the
+structural baseline — compact Anchor + single Work Canvas and no Proposed Scope. Workbench visual
+slice A (three-row Anchor + Canvas max-width frame) is now also complete and committed (`fbcba40`,
+2026-08-22) — see slice A in "Next approved sequence" below for detail. Slices B and C (Communication
+& Planning consolidation, contextual module density) remain outstanding; do not mistake either
+committed batch for full visual-production acceptance.
 
 **Locked UI source:**
 [Request Detail / Workbench production interaction specification](ux-design/v2/request-detail-workbench-signoff-spec.md).
@@ -74,17 +77,64 @@ explicitly deferred from this go-live surface.
 **Known follow-up cleanup (not yet done):** delete the now-unused `CustomerPanel` and
 `LogContactCard` from `DetailPanels.tsx` rather than leaving them as dead exports.
 
-**Next steps:**
-1. The Owner/Admin financial review card (8B, see Direct Actual Work section below) stays deferred
-   until Christian explicitly decides it belongs in a future UI batch.
-2. The remaining API preflight gaps (self-assign/clear-responsible/watcher-management flags, edit
-   service location, set internal priority, follow-up-resolution flag, server-authored
-   `PrimaryAction`/attention-guidance metadata) are real but not a blanket blocker — resolve each
-   incrementally when its specific Workbench action is built, not as a bundled up-front batch.
-3. Batch-size note: this redesign ran across three correction rounds and landed at 13 production +
-   2 test files in one commit — over the repo's normal 8-file/12-total batch gate, accepted as a
-   single exception by Christian given the iterative, cohesive nature of the visual corrections.
-   Start a fresh session for the next batch rather than continuing to extend this one.
+### Visual-production target — locked direction for the next focused slices
+
+The Workbench must read as one dense, calm operating surface—not a long stack of independently
+bordered cards. The approved visual reference is a **composition target**, not a new product
+contract: preserve the signoff spec's authorization, attention, customer-continuity, and
+price-blind Direct Actual Work boundaries.
+
+1. **Request Anchor:** one compact outer card/grid, approximately two to three rows at ordinary
+   desktop density. Row one contains reference, status, active attention when present, customer
+   identity, and the one permitted primary action. Row two contains factual contact, service
+   location, owner, the one explicit Log contact entry point, and quiet page/share utilities. Its
+   child pieces render as inline context—not as separate cards—and it must not leave a large blank
+   header region. Active attention retains precedence: completion is not a filled normal primary
+   while attention is active unless the server explicitly authorizes that result.
+2. **Customer Need:** one compact, readable module showing the original request verbatim. Short
+   requests must not consume dashboard-card height.
+3. **Work Execution:** Direct Actual Work only, shown only for real authorized capture/draft/history
+   state. It is a single compact contextual module; its CTA is prominent inside the module but does
+   not compete with the Anchor's current-work primary. **Do not add Proposed Scope** or any pricing,
+   quote, cost, or financial information.
+4. **Communication & Planning:** one enclosing module. The update/internal-note composer appears
+   first with its persistent customer-visible/internal disclosure. Follow Up On, Planned For, and
+   authorized internal priority then appear as a compact, aligned planning row—not as a sequence of
+   unrelated full-width cards. A disabled Send update remains visibly disabled; valid customer
+   composition earns the teal submit emphasis.
+5. **Activity & record context:** one chronological activity/history module. Related work, watcher/
+   mute participation, feedback summary, source metadata, and other low-frequency facts stay behind
+   a quiet Record details disclosure unless an authorized action needs immediate visibility.
+
+At normal desktop width, constrain the readable Canvas content with deliberate gutters/max width;
+do not allow a form to become an edge-to-edge, over-wide field. Mobile retains the same data/action
+truth but uses the focused single-column behavior in the signoff spec.
+
+### Next approved sequence
+
+1. **Workbench visual slice A — compact Anchor and Canvas frame:** Complete, commit `fbcba40`.
+   Anchor is a three-row hierarchy inside one rounded/bordered card — row 1 (reference/status/
+   attention left, Log contact + one authorized primary action right), row 2 (full-width customer
+   identity), a divider, row 3 (three chrome-free context columns: customer contact, service
+   location, owner/share). Work Canvas gained a `max-w-6xl mx-auto` content wrapper (reusing the
+   Queue-pane content-width convention) inside its existing sole-scroll region. Verified with
+   focused tests (`RequestDetailAnchor.test.tsx`, `RequestDetailContent.canvasFrame.test.tsx`) and
+   desktop screenshots at ~1018px Canvas width for received/no-attention, active-attention, and
+   resolved/can-close. **Read-only/unauthorized was not screenshotted** (no local Viewer-role
+   account exists yet) — behavior is covered by an automated test only; visual confirmation is
+   deferred, not blocking.
+2. **Workbench visual slice B — Communication & Planning consolidation:** preflight and implement
+   the one-module composer/planning surface and compact planning row without changing existing
+   mutation, validation, or follow-up-resolution behavior.
+3. **Workbench visual slice C — contextual module density:** preflight the Actual Work presentation,
+   activity/history, and Record details disclosure; remove remaining card explosion and duplication
+   only where the existing authorization/data-flow contract is preserved.
+4. The Owner/Admin financial review card (8B, see Direct Actual Work section below) stays deferred
+   until Christian explicitly decides it belongs in a future UI batch. Remaining API-preflight gaps
+   are incremental action-specific work, not a reason to invent client-side primary-action logic.
+
+Each visual slice needs desktop evidence at 100%, 125%, and 150% zoom plus focused regression
+coverage. Do not bundle the three slices or restart another broad Request Detail rewrite.
 
 **Detailed evidence:**
 [Request Detail / Workbench API preflight](ux-design/v2/request-detail-workbench-api-preflight.md)
