@@ -24,11 +24,14 @@ Do not infer implementation authority for equipment assets, QR tagging, customer
 invoicing, payments, QuickBooks sync, inventory, fleet replacement, or native-mobile work.
 Those directions remain subject to their own ADR/build-log decisions.
 
-## Active priority — Request Detail / Workbench contract slice
+## Active priority — Request Detail / Workbench redesign
 
-**Status:** UI interaction model locked; Request Detail frontend implementation paused pending the
-bounded backend contract slice below. This is not a new discovery track and must not reopen the
-approved Workbench model.
+**Status:** UI interaction model locked. Correction (2026-08-22): an earlier version of this section
+and the linked preflight wrongly assumed no authenticated Request Detail frontend existed. It does —
+`web/ophalo-app` already has a working Request Detail page and a complete Actual Work integration
+(`ActualWorkCard.tsx`, `ActualWorkComposer.tsx`, `ActualWorkHistoryCard.tsx`,
+`useActualWorkCapture.ts`, `useActualWorkHistory.ts`, passing tests). That is not a new prerequisite
+to build — it is an existing module to reuse.
 
 **Locked UI source:**
 [Request Detail / Workbench production interaction specification](ux-design/v2/request-detail-workbench-signoff-spec.md).
@@ -36,24 +39,25 @@ Desktop remains Queue + one Workbench, with a compact sticky Request Anchor and 
 scroll surface. The controlled-pilot Workbench includes **Direct Actual Work only**; Proposed Scope
 is explicitly deferred from this go-live surface.
 
-**Required backend slice before Request Detail frontend work:**
+**Confirmed sequencing (2026-08-22):**
 
-1. Expose the missing server-authorized availability flags for self-assign/clear responsible/manage
-   watchers, edit service location, set internal priority, and follow-up resolution.
-2. Return nullable, structured server-authored `AvailableActions.PrimaryAction` and bounded
-   attention-guidance metadata. The client may not choose a recommended attention-resolution action.
-3. Return a lightweight authorized, non-financial Actual Work summary on request detail: existence,
-   resumable-draft state, capture/view availability, and relevant count/state. Full Actual Work
-   data remains module-owned and loads only when its focused workspace opens.
-4. Add contract tests for the new fields across the approved lifecycle and role matrix.
+1. Build the redesigned two-pane Workbench (sticky Anchor, single Work Canvas, contact/
+   communication/timing/history layout) against the 17/24 actions the API preflight's contract
+   matrix already marks "Ready for frontend as-is."
+2. Reuse the existing Actual Work capture/history components as one conditional Work Canvas module —
+   not a separate backend phase or a new prerequisite.
+3. The Owner/Admin financial review card (8B, see Direct Actual Work section below) stays deferred
+   until the redesigned Workbench is in place, unless a later session explicitly decides it belongs
+   in the same UI batch.
+4. The remaining API preflight gaps (self-assign/clear-responsible/watcher-management flags, edit
+   service location, set internal priority, follow-up-resolution flag, server-authored
+   `PrimaryAction`/attention-guidance metadata) are real but not Actual Work work and not a blanket
+   blocker — resolve each one incrementally when its specific Workbench action is built, not as a
+   bundled up-front backend batch.
 
-**Sequencing:** complete the backend slice → rerun the API preflight against the real payload →
-write the frontend build guide → implement the approved Workbench. Do not begin piecemeal Request
-Detail frontend production work against client-inferred permissions, recommendations, or Actual Work
-context.
-
-**Detailed evidence and acceptance:**
-[Request Detail / Workbench API preflight](ux-design/v2/request-detail-workbench-api-preflight.md).
+**Detailed evidence:**
+[Request Detail / Workbench API preflight](ux-design/v2/request-detail-workbench-api-preflight.md)
+(contract matrix and gap list still valid; frontend-existence framing corrected above).
 
 ## Active work — Direct Actual Work
 

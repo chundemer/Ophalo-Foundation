@@ -53,11 +53,19 @@ ADR-436, ADR-439, ADR-440, ADR-441, ADR-487; targeted sections of
   `src/OpHalo.Api/Keep/KeepRequestVersionHeader.cs` — `KeepRequest.RequestChanged` /
   `X-Keep-Request-Version` header contract.
 
-**Frontend code:** `web/ophalo-web/src/app/keep/` and `src/components/keep/` contain only public
-surfaces today — intake, customer tracker (`r/[pageToken]`), SMS/call handoff resolution pages,
-and shared `KeepBadge`/`KeepButton`/`KeepPublicShell`. **No authenticated request-detail
-workbench frontend code, types, hooks, or mocks exist yet.** This preflight is genuinely
-pre-implementation; there is nothing to audit for drift on the frontend side.
+**Frontend code — correction (2026-08-22):** an earlier version of this section checked only
+`web/ophalo-web` (public surfaces — intake, customer tracker, SMS/call handoff, shared
+`KeepBadge`/`KeepButton`/`KeepPublicShell`) and concluded no authenticated request-detail frontend
+existed. That was wrong: the authenticated app is `web/ophalo-app`, which already contains a working
+Request Detail page and Actual Work integration — `ActualWorkCard.tsx`, `ActualWorkComposer.tsx`,
+`ActualWorkHistoryCard.tsx`, `useActualWorkCapture.ts`, `useActualWorkHistory.ts`, and passing tests
+under `web/ophalo-app/src/pages/request-detail/__tests__/`. This preflight's contract-matrix and
+gap analysis (server-side flags, `PrimaryAction`, attention-guidance metadata) still stands, but the
+"nothing to audit for drift on the frontend side" framing does not: Actual Work capture/history is a
+reusable existing module, not new frontend work. See `docs/session-log.md` "Active priority" for the
+corrected sequencing — Request Detail UI redesign first, reusing existing Actual Work components as
+one conditional module; 8B (Owner/Admin financial review card) stays deferred per its own preflight
+in `docs/session-log.md`'s Direct Actual Work section.
 
 **Tests:** `tests/OpHalo.IntegrationTests/Api/KeepRequestDetailTests.cs`,
 `KeepRequestDetailB4Tests.cs`, `KeepRequestDetailB5Tests.cs`, `KeepRequestDetailRowAuthApiTests.cs`;
