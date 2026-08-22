@@ -405,11 +405,24 @@ separate and must not displace these selected shell corrections.
    2 test files (`RequestWorkbenchShell.test.tsx` +2 cases, `App.test.tsx` +1 case for the brand-nav
    entry-intent path). 36/36 (`App.test.tsx` + `RequestWorkbenchShell.test.tsx`) + 59/59 `Requests.*`
    passing, `tsc --noEmit` and `git diff --check` clean.
-4. **Queue navigation hierarchy and active-context clarity.** Preflight a compact, fixed Queue
-   header that unmistakably identifies the active primary queue and applied result set, while
-   separating primary queues (Needs Attention, All Work, My Work) from Office Review, Views, and
-   History utilities. Validate at the locked 360px pane width before changing the existing measured
-   two-row tab contract.
+4. **Queue navigation hierarchy and active-context clarity — implemented, real-browser acceptance
+   pending.** Pane-mode header now reads `Request Queue · <active queue> · <count>` (e.g. "Request
+   Queue · Needs Attention · 13"), reusing `Requests.tsx`'s existing `contextLabel` and the
+   already-exported `countForTab` helper — no new/derived count, count omitted where none applies
+   (History). The existing `appliedLineText` line stays in place in the same fixed header block.
+   Root-caused and fixed the pane's scroll ownership bug: the 360px Queue-pane wrapper
+   (`RequestWorkbenchShell.tsx`) had `overflow-y-auto` on itself instead of `min-h-0`, so nested
+   flex children's default `min-height:auto` let content grow past the available height and that
+   wrapper — not `RequestListContent`'s own scroll region — ended up scrolling the whole pane,
+   header included. Fixed by making the pane wrapper `min-h-0` (no self-scroll) and adding
+   `min-h-0` to `RequestListContent.tsx`'s and `ActualWorkReviewQueueList.tsx`'s row regions (same
+   bug, same fix, since Actual Work Review is a sibling queue reached via Office Review). 6
+   production/test files (`RequestsWorkspaceHeader.tsx`, `Requests.tsx`, `RequestWorkbenchShell.tsx`,
+   `RequestListContent.tsx`, `ActualWorkReviewQueueList.tsx`, `RequestsWorkspaceHeader.test.tsx` +2
+   cases). 63/63 relevant frontend tests passing, `tsc --noEmit` and `git diff --check` clean.
+   **Still required before this item is complete:** Christian's real-browser acceptance at the
+   locked 360px pane width — fixed header, row-only scrolling, no clipped controls, no
+   nested/double scrollbar.
 5. **Queue scan-density follow-through.** Keep only the Queue header fixed and the rows scrollable;
    tune row metadata hierarchy only after selection and queue identity are clear. Pane quick-action
    footers are already removed and must stay out of this batch. Presentation-layer automatic

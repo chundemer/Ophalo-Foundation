@@ -25,7 +25,7 @@ export function ActualWorkReviewQueueList({
 }: ActualWorkReviewQueueListProps) {
   if (isLoading) {
     return (
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 min-h-0 overflow-y-auto">
         <p className="px-4 sm:px-6 py-6 text-sm text-[var(--ophalo-muted)]">Loading review queue…</p>
       </div>
     );
@@ -33,7 +33,7 @@ export function ActualWorkReviewQueueList({
 
   if (isError) {
     return (
-      <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-6">
+      <div className="flex-1 min-h-0 overflow-y-auto px-4 sm:px-6 py-6">
         <p className="text-sm text-[var(--ophalo-muted)] mb-3">Unable to load the review queue.</p>
         <button
           type="button"
@@ -48,7 +48,7 @@ export function ActualWorkReviewQueueList({
 
   if (entries.length === 0) {
     return (
-      <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-6">
+      <div className="flex-1 min-h-0 overflow-y-auto px-4 sm:px-6 py-6">
         <p className="text-sm font-semibold text-[var(--ophalo-ink)]">Nothing to review</p>
         <p className="text-sm text-[var(--ophalo-muted)] mt-1">
           Submitted visits awaiting review will appear here.
@@ -58,7 +58,7 @@ export function ActualWorkReviewQueueList({
   }
 
   return (
-    <div className="flex-1 overflow-y-auto">
+    <div className="flex-1 min-h-0 overflow-y-auto">
       <div className="max-w-6xl mx-auto w-full divide-y divide-[var(--ophalo-border)]">
         {entries.map((entry) => (
           <button

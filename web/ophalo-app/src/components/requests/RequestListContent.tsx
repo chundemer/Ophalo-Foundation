@@ -56,7 +56,7 @@ export function RequestListContent({
       {/* Content — scrollable, canvas background shows between cards */}
       <div
         ref={listRegionRef}
-        className="flex-1 overflow-y-auto"
+        className="flex-1 min-h-0 overflow-y-auto"
         role="region"
         aria-label={`${contextLabel} requests`}
         aria-live="polite"

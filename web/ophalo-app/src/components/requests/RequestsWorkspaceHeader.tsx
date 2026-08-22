@@ -12,6 +12,13 @@ interface RequestsWorkspaceHeaderProps {
   // replaces the full-page H1/subtitle with a compact label to reclaim vertical space for the
   // request list. The one-pane fallback keeps the full H1/subtitle regardless of width.
   paneMode?: boolean;
+  // Backlog item 4 (2026-08-21): pane-mode active-queue identity — the active primary/secondary
+  // tab's own label (mirrors Requests.tsx's `contextLabel`, already the source of truth for
+  // RequestListContent's live-region heading) and its authoritative count (RequestListToolbar's
+  // `countForTab`, same number RequestQueueNavigation's tab row renders — never re-derived).
+  // Undefined/unused outside paneMode.
+  queueIdentityLabel?: string;
+  queueIdentityCount?: number | null;
 }
 
 export function RequestsWorkspaceHeader({
@@ -22,6 +29,8 @@ export function RequestsWorkspaceHeader({
   pageTitle,
   pageSubtitle,
   paneMode = false,
+  queueIdentityLabel,
+  queueIdentityCount,
 }: RequestsWorkspaceHeaderProps) {
   if (paneMode) {
     return (
@@ -37,6 +46,8 @@ export function RequestsWorkspaceHeader({
         )}
         <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ophalo-muted)]">
           Request Queue
+          {queueIdentityLabel && <> · {queueIdentityLabel}</>}
+          {queueIdentityCount != null && <> · {queueIdentityCount}</>}
         </p>
       </div>
     );

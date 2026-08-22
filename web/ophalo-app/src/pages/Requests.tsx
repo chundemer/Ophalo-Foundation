@@ -22,6 +22,7 @@ import {
   HISTORY_DATE_SCOPES,
   HISTORY_EMPTY_STATE,
   getStatusLabel,
+  countForTab,
   type TabDef,
   type HistoryScope,
   type HistoryDateScope,
@@ -275,6 +276,12 @@ export function Requests({
   const serverListContext = isAvailableTab ? undefined : listQuery.data?.listContext;
   const presentAsHistory = serverListContext ? serverListContext.isHistory : historyMode;
   const contextLabel = presentAsHistory ? HISTORY_SCOPE_LABELS[historyScope] : activeTab.label;
+  // Backlog item 4 (2026-08-21): pane-mode fixed identity line — reuses the same authoritative
+  // counts RequestQueueNavigation's tab row already renders (never a derived/guessed number).
+  // History is its own result-set concept, not a stable queue count, so it stays null there.
+  const identityCount = presentAsHistory
+    ? null
+    : countForTab(activeTab, viewCounts, reviewQueueCountQuery.data?.count ?? null);
 
   // GAP-046: submitted criteria only (never draftQ) — the single source of truth for the
   // applied-criteria line, the filtered-empty state, and the live-region heading/range suffix.
@@ -529,6 +536,8 @@ export function Requests({
           pageTitle={pageTitle}
           pageSubtitle={pageSubtitle}
           paneMode={paneMode}
+          queueIdentityLabel={contextLabel}
+          queueIdentityCount={identityCount}
         />
 
         <RequestQueueNavigation

@@ -126,8 +126,14 @@ export function RequestWorkbenchShell(props: RequestWorkbenchShellProps) {
 
   return (
     <div ref={containerRef} className="flex h-full min-h-0 flex-1">
+      {/* Backlog item 4 (2026-08-21): the pane no longer owns vertical scroll itself — with
+          overflow-y-auto here, nested flex children default to min-height:auto and grow past
+          the available height, so this wrapper (not RequestListContent's own scroll region)
+          ended up scrolling the whole pane, header included. min-h-0 lets it clip to the
+          stretched height from the row-flex parent instead; RequestListContent.tsx's own
+          flex-1 + min-h-0 + overflow-y-auto region is the sole scroll owner in pane mode. */}
       {showQueue && (
-        <div className={paneMode ? "w-[360px] shrink-0 overflow-y-auto border-r border-[var(--ophalo-border)]" : "flex-1 min-w-0"}>
+        <div className={paneMode ? "w-[360px] shrink-0 min-h-0 border-r border-[var(--ophalo-border)]" : "flex-1 min-w-0"}>
           <Requests
             role={role}
             viewCounts={viewCounts}

@@ -27,6 +27,32 @@ describe("RequestsWorkspaceHeader pane mode (UI-001 post-Step-4 density refineme
     expect(screen.queryByText("Requests for Apex Home Services")).not.toBeInTheDocument();
   });
 
+  it("Backlog item 4: pane mode appends the active queue's label and authoritative count", () => {
+    render(
+      <RequestsWorkspaceHeader
+        {...baseProps()}
+        paneMode
+        queueIdentityLabel="Needs Attention"
+        queueIdentityCount={13}
+      />,
+    );
+
+    expect(screen.getByText("Request Queue · Needs Attention · 13")).toBeInTheDocument();
+  });
+
+  it("Backlog item 4: omits the count segment when no authoritative count applies (e.g. History)", () => {
+    render(
+      <RequestsWorkspaceHeader
+        {...baseProps()}
+        paneMode
+        queueIdentityLabel="This week"
+        queueIdentityCount={null}
+      />,
+    );
+
+    expect(screen.getByText("Request Queue · This week")).toBeInTheDocument();
+  });
+
   it("full-page/narrow mode: keeps the H1 and subtitle unchanged when paneMode is false/omitted", () => {
     render(<RequestsWorkspaceHeader {...baseProps()} />);
 
