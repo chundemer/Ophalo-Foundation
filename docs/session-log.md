@@ -33,8 +33,8 @@ slice A (three-row Anchor + Canvas max-width frame) is now also complete and com
 2026-08-22), and slice C (contextual module density) is committed (`d255cc8`, 2026-08-22) — see
 "Next approved sequence" below for detail on all three. The pre-existing document-scroll P0
 discovered during Slice C review is now resolved (see below). Slice C's 100%/125%/150% desktop
-zoom evidence is still outstanding (not yet captured); do not mistake any committed batch for full
-visual-production acceptance until each slice's evidence is captured.
+zoom evidence is captured and confirmed (2026-08-22). All three slices (A, B, C) are now visually
+signed off.
 
 **Locked UI source:**
 [Request Detail / Workbench production interaction specification](ux-design/v2/request-detail-workbench-signoff-spec.md).
@@ -161,10 +161,8 @@ truth but uses the focused single-column behavior in the signoff spec.
    (one `ActualWorkHistoryCard` test updated for the removed filler-subsection behavior). Files:
    `ActualWorkCard.tsx`, `ActualWorkHistoryCard.tsx`, `DetailPanels.tsx`,
    `RequestDetailContent.tsx`, `TeamSection.tsx`, plus the one test file above.
-   **Visual evidence outstanding:** the required 100%/125%/150% desktop zoom screenshots were not
-   captured — screenshot review instead surfaced an unrelated, pre-existing P0 shell bug (see
-   below) that made the live page unusable for verification. Capture evidence once that bug is
-   resolved; do not treat Slice C as visually signed off until then.
+   **Visual evidence:** captured at 100%/125%/150% desktop zoom (2026-08-22), confirmed by
+   Christian after the document-scroll P0 below was resolved. Slice C is visually signed off.
 
 ### Resolved P0 — Workbench document scrolled on window resize (not caused by Slice B/C)
 
