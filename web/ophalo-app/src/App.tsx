@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useLayoutEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { AuthGuard } from "./components/AuthGuard";
 import { QuickCapture } from "./components/QuickCapture";
@@ -168,6 +168,22 @@ function AppShell() {
   // real h-dvh/overflow-hidden ancestor for RequestWorkbenchShell's internal per-pane scroll
   // regions, which otherwise have no bounded-height parent to resolve against.
   const [workbenchWideActive, setWorkbenchWideActive] = useState(false);
+
+  // The app root bounds the Workbench panes, but the browser still owns html/body document
+  // scrolling unless it is explicitly locked. During a desktop resize, native scroll clamping
+  // could otherwise retain a document scroll position and carry the shell/Anchor away. Pane mode
+  // has exactly two scroll owners (Queue and Work Canvas), so enter it at document top and prevent
+  // html/body from becoming a third one. Layout effect avoids a visible one-frame jump.
+  useLayoutEffect(() => {
+    if (!workbenchWideActive) return;
+
+    document.documentElement.classList.add("workbench-scroll-lock");
+    window.scrollTo(0, 0);
+
+    return () => {
+      document.documentElement.classList.remove("workbench-scroll-lock");
+    };
+  }, [workbenchWideActive]);
 
   function navigate(newRoute: AppRoute) {
     const base = window.location.pathname + window.location.search;

@@ -48,6 +48,15 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Wide Request Workbench owns scrolling through its Queue and Work Canvas. Keep html/body from
+   becoming a third scroll owner during viewport resize; App.tsx applies this only in wide pane
+   mode and removes it again for narrow/detail and every other route. */
+html.workbench-scroll-lock,
+html.workbench-scroll-lock body {
+  height: 100%;
+  overflow: hidden;
+}
+
 /* Keep workbench type roles
    Semantic classes for consistent operational typography — use these instead of
    one-off inline size/weight combinations throughout the workbench UI. */

@@ -29,11 +29,12 @@ Those directions remain subject to their own ADR/build-log decisions.
 **Status:** Layout-shell batch complete and committed (`24220d7`, 2026-08-22), establishing the
 structural baseline — compact Anchor + single Work Canvas and no Proposed Scope. Workbench visual
 slice A (three-row Anchor + Canvas max-width frame) is now also complete and committed (`fbcba40`,
-2026-08-22), and slice B (Communication & Planning consolidation) is committed (`49440c8`,
-2026-08-22) — see "Next approved sequence" below for detail on both. Slice C (contextual module
-density) is implemented but its visual-zoom evidence is outstanding, blocked on the pre-existing
-P0 shell-scroll bug below; do not mistake any committed batch for full visual-production
-acceptance until each slice's evidence is captured.
+2026-08-22), slice B (Communication & Planning consolidation) is committed (`49440c8`,
+2026-08-22), and slice C (contextual module density) is committed (`d255cc8`, 2026-08-22) — see
+"Next approved sequence" below for detail on all three. The pre-existing document-scroll P0
+discovered during Slice C review is now resolved (see below). Slice C's 100%/125%/150% desktop
+zoom evidence is still outstanding (not yet captured); do not mistake any committed batch for full
+visual-production acceptance until each slice's evidence is captured.
 
 **Locked UI source:**
 [Request Detail / Workbench production interaction specification](ux-design/v2/request-detail-workbench-signoff-spec.md).
@@ -165,48 +166,33 @@ truth but uses the focused single-column behavior in the signoff spec.
    below) that made the live page unusable for verification. Capture evidence once that bug is
    resolved; do not treat Slice C as visually signed off until then.
 
-### Pre-existing P0 — Workbench document scrolls on window resize (not caused by Slice B/C)
+### Resolved P0 — Workbench document scrolled on window resize (not caused by Slice B/C)
 
-**Status:** Confirmed pre-existing by Christian (reproduces on the Slice B commit, `49440c8`,
-before any Slice C changes). Discovered during Slice C screenshot review; blocks visual sign-off
-for both slices but is out of scope for either slice's own batch — needs its own preflight/session.
+**Status:** Resolved and committed (2026-08-22). Was confirmed pre-existing by Christian
+(reproduced on the Slice B commit, `49440c8`, before any Slice C changes). Discovered during
+Slice C screenshot review; no longer blocks visual sign-off for either slice.
 
-**Symptom:** after an OS-level window resize while the Workbench is in wide pane-split mode
-(`workbenchWideActive`/`isWide`), the whole document becomes scrolled — the top nav, the sticky
-Request Anchor, and the Queue pane's own header/filters scroll off-screen together, which defeats
-the Workbench contract (only the Queue and Work Canvas should scroll independently; the app shell
-and Anchor must stay fixed). `App.tsx`'s intended guard (`workbenchWideActive` drives `h-dvh
-overflow-hidden` on the app root and `min-h-0 overflow-hidden` on `main`, per commit `c550d53`,
-which fixed this same bug class once before) is present and applying correctly in the DOM, but the
-document remains genuinely scrollable afterward.
+**Root cause and fix (Christian):** a scroll-ownership gap — the wide Workbench correctly bounded
+its own React app container (`h-dvh overflow-hidden` on the app root, `min-h-0 overflow-hidden` on
+`main`), but `html`/`body` remained eligible browser-document scroll owners the whole time. After
+a resize, the browser could retain/re-clamp a document-level scroll position, carrying the top
+nav, Queue header, and Request Anchor off-screen even though every element inside the app root
+measured correctly contained. Fix: a `workbench-scroll-lock` class is added to `<html>` (via a
+`useLayoutEffect` keyed off `workbenchWideActive`, avoiding a visible one-frame jump) whenever wide
+pane-split mode activates; the class sets `height: 100%; overflow: hidden` on both `html` and
+`body` (`app.css`), and `window.scrollTo(0, 0)` runs on entry so an already-retained document
+position can't leave the view displaced. The class is removed on cleanup, preserving normal
+document scrolling for mobile, settings, and every other non-workbench route. Verified: `tsc
+--noEmit` clean, full suite passing. Files: `App.tsx`, `styles/app.css`.
 
-**Narrowed via live console diagnostics (not yet root-caused):**
-- `document.documentElement.scrollHeight` exceeds `window.innerHeight` by a small, resize-
-  dependent amount (observed 37px, 417px, 82px across different sessions) after a resize.
-- No element is responsible: a DOM sweep for elements extending past the viewport with no
-  clipping ancestor (`overflow-y: auto/scroll/hidden` on any ancestor up to `<body>`) returns
-  empty. No `position: fixed`/`absolute` element extends past the viewport either.
-- Not a horizontal-scrollbar-induced reflow: `scrollWidth === clientWidth === innerWidth`.
-- Not a stale one-frame layout cache: the discrepancy survives two `requestAnimationFrame` passes
-  plus a forced synchronous reflow (`document.body.offsetHeight` read).
-- Not a frozen inline JS-set height: swept `html, body, #root, #root *` for any element near the
-  stale `scrollHeight` value or carrying an inline `style.height` — none found.
-- A manual `window.scrollTo(0, 0)` run from devtools *after* the resize gesture has fully settled
-  reliably fixes the visible symptom. Resetting scroll on every `resize` event (rather than
-  debounced to the trailing edge) does not stick — consistent with the browser's own native
-  scroll re-clamping firing mid-drag and winning the race against an immediate reset.
-
-**Attempted fixes, all reverted (did not resolve it or the session moved on to isolate root cause
-first):** reset scroll on `workbenchWideActive` transition only; reset on every `resize` event;
-debounce the reset to 150ms after the last `resize` event; swap `h-dvh` → `h-screen` on the app
-root. `App.tsx` is back to its pre-investigation state (no diff).
-
-**Next session:** needs live browser devtools access (Elements/Layout panels, not just console
-snippets relayed through chat) to find what's actually contributing the residual scrollable
-overflow, since it isn't any element the console sweeps could name. Candidates not yet checked:
-CSS `contain`/`content-visibility` on any ancestor, `scrollbar-gutter`, and whether the
-`ResizeObserver` in `RequestWorkbenchShell.tsx` is itself reporting a size that doesn't match the
-DOM at time of measurement during a live resize (vs. only after it settles).
+**Diagnostic trail (superseded by the fix above, kept for context):** live console diagnostics
+during investigation ruled out a specific unclipped/oversized element, a `position: fixed`/
+`absolute` element extending past the viewport, a horizontal-scrollbar-induced reflow, a stale
+one-frame layout cache, and a frozen inline JS-set height — because none of those were ever the
+actual problem; the gap was `html`/`body` never having been locked as a scroll owner at all.
+Several earlier reset-on-resize attempts (immediate, debounced, `h-dvh`→`h-screen`) were tried and
+reverted before the actual fix, for the same reason: they fought symptom-level scroll position
+without closing off `html`/`body` as an eligible scroll owner.
 4. The Owner/Admin financial review card (8B, see Direct Actual Work section below) stays deferred
    until Christian explicitly decides it belongs in a future UI batch. Remaining API-preflight gaps
    are incremental action-specific work, not a reason to invent client-side primary-action logic.
