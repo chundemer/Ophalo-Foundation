@@ -400,8 +400,8 @@ export function ProminentFeedbackCard({ requestId, detail, onDetailUpdated, onRe
 export function OriginalRequestCard({ detail }: { detail: KeepRequestDetailResult }) {
   if (!detail.description) return null;
   return (
-    <div className="rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-5 py-4">
-      <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ophalo-muted)] mb-1">
+    <div className="rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-4 py-2.5">
+      <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ophalo-muted)] mb-0.5">
         Customer description
       </p>
       <p className="text-sm leading-6 text-[var(--ophalo-ink)] whitespace-pre-wrap">
@@ -599,56 +599,37 @@ interface ServiceLocationPanelProps {
 export function ServiceLocationPanel({ detail, onEditLocation }: ServiceLocationPanelProps) {
   const canEdit = detail.availableActions.canAddInternalNote;
   const hasAddress = !!(detail.serviceAddressLine1 || detail.serviceCity);
+  const addressLine = [
+    detail.serviceAddressLine1,
+    detail.serviceAddressLine2,
+    detail.serviceCity && detail.serviceState
+      ? `${detail.serviceCity}, ${detail.serviceState}${detail.serviceZip ? ` ${detail.serviceZip}` : ""}`
+      : null,
+  ].filter(Boolean).join(", ");
 
+  // Inline Anchor context item (locked correction, 2026-08-22) — no independent card
+  // border/padding/background; the Anchor owns the one boundary for the whole strip.
   return (
-    <div>
-      <div className="flex items-center justify-between px-1 mb-2">
-        <p className="text-xs font-semibold uppercase tracking-widest text-[var(--ophalo-muted)]">Service Location</p>
-        {canEdit && hasAddress && (
-          <button
-            type="button"
-            onClick={onEditLocation}
-            className={`text-xs text-[var(--keep-accent)] hover:underline ${FOCUS_RING} rounded`}
-          >
-            Edit
-          </button>
-        )}
-      </div>
+    <div className="flex items-center gap-2">
+      <span className="text-xs font-semibold uppercase tracking-widest text-[var(--ophalo-muted)] shrink-0">
+        Location
+      </span>
       {hasAddress ? (
-        <div className="rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-4 py-3">
-          {detail.serviceAddressLine1 && (
-            <p className="text-sm font-semibold text-[var(--ophalo-ink)]">{detail.serviceAddressLine1}</p>
-          )}
-          {detail.serviceAddressLine2 && (
-            <p className="text-sm text-[var(--ophalo-ink)]">{detail.serviceAddressLine2}</p>
-          )}
-          {detail.serviceCity && detail.serviceState && (
-            <p className="text-sm text-[var(--ophalo-ink)]">
-              {detail.serviceCity}, {detail.serviceState}{detail.serviceZip ? ` ${detail.serviceZip}` : ""}
-            </p>
-          )}
-        </div>
+        <span className="text-sm text-[var(--ophalo-ink)]">{addressLine}</span>
       ) : (
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[var(--ophalo-attention)] bg-[var(--ophalo-attention-bg)] px-4 py-3">
-          <div className="flex min-w-0 items-start gap-2">
-            <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--ophalo-attention)]" />
-            <div>
-              <p className="text-xs font-semibold text-[var(--ophalo-ink)]">No service location on file</p>
-              <p className="text-xs leading-5 text-[var(--ophalo-muted)]">
-                Add the service address if work will be performed on-site.
-              </p>
-            </div>
-          </div>
-          {canEdit && (
-            <button
-              type="button"
-              onClick={onEditLocation}
-              className={`inline-flex min-h-[32px] shrink-0 items-center rounded-lg border border-[var(--ophalo-attention)] bg-[var(--ophalo-card)] px-3 text-xs font-semibold text-[var(--ophalo-ink)] hover:bg-white transition-colors ${FOCUS_RING}`}
-            >
-              Add location
-            </button>
-          )}
-        </div>
+        <span className="inline-flex items-center gap-1 text-sm font-medium text-[var(--ophalo-attention)]">
+          <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+          Not on file
+        </span>
+      )}
+      {canEdit && (
+        <button
+          type="button"
+          onClick={onEditLocation}
+          className={`text-xs font-semibold text-[var(--keep-accent)] hover:underline ${FOCUS_RING} rounded`}
+        >
+          {hasAddress ? "Edit" : "Add"}
+        </button>
       )}
     </div>
   );

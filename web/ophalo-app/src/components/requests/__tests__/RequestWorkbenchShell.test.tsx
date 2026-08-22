@@ -313,6 +313,19 @@ describe("RequestWorkbenchShell", () => {
       expect(mockGetRequests.mock.calls.length).toBe(callsBeforeNavigate);
     });
 
+    it("does not scroll the Workbench pane wrapper — RequestDetail's own Work Canvas is the sole scroll owner", async () => {
+      renderShell(() => {}, { page: "detail", requestId: mockRequestSummaries[0].id });
+      fireWidth(1001);
+      await waitFor(() =>
+        expect(screen.getAllByText(mockRequestSummaries[0].customerName).length).toBeGreaterThan(0),
+      );
+
+      const stub = screen.getByTestId("request-detail-stub");
+      const paneWrapper = stub.parentElement;
+      expect(paneWrapper).toHaveClass("overflow-hidden");
+      expect(paneWrapper).not.toHaveClass("overflow-y-auto");
+    });
+
     it("computes pane-mode Prev/Next from the live applied snapshot, not frozen navContext", async () => {
       mockGetRequests.mockResolvedValue(listResultMulti());
       renderShell(() => {}, { page: "detail", requestId: mockRequestSummaries[1].id });

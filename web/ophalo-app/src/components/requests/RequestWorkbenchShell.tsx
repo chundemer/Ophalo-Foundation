@@ -170,7 +170,10 @@ export function RequestWorkbenchShell(props: RequestWorkbenchShellProps) {
         </div>
       )}
       {showPaneDetail && detailRoute && (
-        <div className="flex-1 min-w-0 min-h-0 overflow-y-auto">
+        // RequestDetail's Work Canvas is the sole Work Canvas scroll surface (locked Workbench
+        // spec §1.2/§7.1) — this wrapper must not scroll, or the Anchor loses its sticky/non-
+        // scrolling guarantee and two nested overflow-y-auto ancestors fight over scroll.
+        <div className="flex-1 min-w-0 min-h-0 overflow-hidden">
           <RequestDetail
             requestId={detailRoute.requestId}
             focusPanel={detailRoute.focusPanel}

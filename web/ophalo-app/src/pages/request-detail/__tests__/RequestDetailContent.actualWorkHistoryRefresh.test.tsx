@@ -21,25 +21,21 @@ vi.mock("../DetailPanels", () => ({
   AttentionGuidanceCard: () => null,
   OriginalRequestCard: () => null,
   RelatedWorkPanel: () => null,
+  MarkHandledCard: () => null,
+  LogContactCard: () => null,
+  CustomerPanel: () => null,
+  TriagePanel: () => null,
+  FeedbackSummaryCard: () => null,
+  SourceMetaPanel: () => null,
+  WorkControlsGroup: () => null,
 }));
 vi.mock("../CustomerContactStrip", () => ({ CustomerContactStrip: () => null }));
-vi.mock("../RequestDetailMobileLayout", () => ({
-  RequestDetailMobileActions: () => null,
-  RequestDetailMobileContext: () => null,
-}));
+vi.mock("../RequestDetailAnchor", () => ({ RequestDetailAnchor: () => null }));
+vi.mock("../TimingPanel", () => ({ TimingPanel: () => null }));
+vi.mock("../BusinessSection", () => ({ CloseRequestCard: () => null, WorkDoneCard: () => null }));
+vi.mock("../TeamSection", () => ({ TeamSection: () => null }));
 vi.mock("../UnifiedComposer", () => ({ UnifiedComposer: () => null }));
-vi.mock("../RequestDetailDesktopLayout", () => ({ RequestDetailDesktopLayout: () => null }));
 vi.mock("../RequestDetailActivity", () => ({ RequestDetailActivity: () => null }));
-vi.mock("../ProposedScopeCard", () => ({ ProposedScopeCard: () => null }));
-vi.mock("../ProposedScopeComposer", () => ({ ProposedScopeComposer: () => null }));
-vi.mock("../useProposedScopeCapture", () => ({
-  useProposedScopeCapture: () => ({
-    state: { status: "hidden" },
-    isModalOpen: false,
-    startCapture: vi.fn(),
-    startView: vi.fn(),
-  }),
-}));
 vi.mock("../ActualWorkCard", () => ({ ActualWorkCard: () => null }));
 vi.mock("../ActualWorkHistoryCard", () => ({ ActualWorkHistoryCard: () => null }));
 vi.mock("../useActualWorkHistory", () => ({
@@ -107,5 +103,42 @@ describe("RequestDetailContent — Actual Work submit refreshes history (Batch 5
 
     expect(mockMarkSubmitted).toHaveBeenCalledTimes(1);
     expect(mockHistoryRetry).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("RequestDetailContent — Proposed Scope removal (locked Workbench spec)", () => {
+  it("never renders Proposed Scope capture/view in the Request Detail render path", () => {
+    render(
+      <RequestDetailContent
+        detail={baseDetail()}
+        requestId="req-1"
+        highlights={{}}
+        showProminentFeedbackCard={false}
+        onDetailUpdated={vi.fn()}
+        onContactLaunched={vi.fn()}
+        onEditLocation={vi.fn()}
+        onRecordFollowUp={vi.fn()}
+        onCreateFollowUp={vi.fn()}
+        onReviewSuccess={vi.fn()}
+        canRecordShareIntent={false}
+        needsShare={false}
+        onOpenShareDrawer={vi.fn()}
+        customerUpdateDraft=""
+        onCustomerUpdateDraftChange={vi.fn()}
+        customerUpdateDraftStatus="idle"
+        onCustomerUpdateDraftStatusChange={vi.fn()}
+        reviewSuccessMsg={null}
+        timelineFilter="all"
+        onTimelineFilterChange={vi.fn()}
+        displayedEvents={[]}
+      />,
+    );
+
+    // Proposed Scope is explicitly deferred from this pilot Workbench surface (locked spec,
+    // 2026-08-22). None of this test file's mocks stub out a Proposed Scope module, so if it
+    // were ever re-wired into RequestDetailContent, its real "Capture proposed scope" entry
+    // point (or the draft/submitted states' own headings) would render here unmocked.
+    expect(screen.queryByText(/proposed scope/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /proposed scope/i })).not.toBeInTheDocument();
   });
 });

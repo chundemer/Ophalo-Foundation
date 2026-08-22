@@ -8,9 +8,13 @@ interface TeamSectionProps {
   requestId: string;
   detail: KeepRequestDetailResult;
   onDetailUpdated: (updated: KeepRequestDetailResult) => void;
+  // compact: render only the assigned-owner line (Anchor's "owner context") — no card chrome,
+  // no watcher list, no watch/mute controls. Those stay in the full card, used in canvas record
+  // context. Assign/clear behavior is unchanged.
+  compact?: boolean;
 }
 
-export function TeamSection({ requestId, detail, onDetailUpdated }: TeamSectionProps) {
+export function TeamSection({ requestId, detail, onDetailUpdated, compact = false }: TeamSectionProps) {
   const { canWatch, canUnwatch, canMute, canUnmute, canAssignResponsible } =
     detail.availableActions;
 
@@ -43,9 +47,12 @@ export function TeamSection({ requestId, detail, onDetailUpdated }: TeamSectionP
   );
   const addableWatchers = activeMembers.filter((m) => !watcherIds.has(m.accountUserId));
 
-  const hasTeamContent =
-    canWatch || canUnwatch || canMute || canUnmute || canAssignResponsible ||
-    responsible || watchers.length > 0;
+  // compact (Anchor owner context): show if there's an owner to display or a way to assign one.
+  // full (record-details disclosure): the assigned-owner row is omitted (Anchor already shows
+  // it), so this mode is only worth rendering for watcher/mute content.
+  const hasTeamContent = compact
+    ? !!responsible || canAssignResponsible
+    : canWatch || canUnwatch || canMute || canUnmute || watchers.length > 0;
 
   if (!hasTeamContent) return null;
 
@@ -69,20 +76,21 @@ export function TeamSection({ requestId, detail, onDetailUpdated }: TeamSectionP
 
   const inlineBtnCls = `rounded-md px-2.5 py-1.5 text-xs font-semibold bg-[var(--ophalo-navy)] text-white hover:opacity-90 disabled:opacity-50 transition-colors ${FOCUS_RING}`;
 
-  return (
-    <div className="rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-4 py-4 space-y-4">
-      <p className="text-sm font-semibold text-[var(--ophalo-muted)]">Team &amp; context</p>
+  const errorBlock = error && (
+    <p className="rounded-lg p-2 text-xs bg-[var(--ophalo-danger-bg)] text-[var(--ophalo-danger)]">
+      {error}
+    </p>
+  );
 
-      {error && (
-        <p className="rounded-lg p-2 text-xs bg-[var(--ophalo-danger-bg)] text-[var(--ophalo-danger)]">
-          {error}
-        </p>
+  const assignedBlock = (
+    <div>
+      {!compact && <p className="text-xs text-[var(--ophalo-muted)] mb-1">Assigned</p>}
+      {compact && (
+        <span className="text-xs font-semibold uppercase tracking-widest text-[var(--ophalo-muted)] mr-2">
+          Owner
+        </span>
       )}
-
-      {/* Assigned */}
-      <div>
-        <p className="text-xs text-[var(--ophalo-muted)] mb-1">Assigned</p>
-        {responsible ? (
+      {responsible ? (
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-1.5 text-sm text-[var(--ophalo-ink)]">
               <User className="h-3.5 w-3.5 text-[var(--ophalo-muted)] shrink-0" />
@@ -135,7 +143,27 @@ export function TeamSection({ requestId, detail, onDetailUpdated }: TeamSectionP
         ) : (
           <p className="text-sm text-[var(--ophalo-attention)] font-medium">Unassigned</p>
         )}
+    </div>
+  );
+
+  if (compact) {
+    // Inline Anchor context item (locked correction, 2026-08-22) — no independent card
+    // border/padding/background; the Anchor owns the one boundary for the whole strip.
+    return (
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+        {errorBlock}
+        {assignedBlock}
       </div>
+    );
+  }
+
+  return (
+    <div className="rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-4 py-4 space-y-4">
+      <p className="text-sm font-semibold text-[var(--ophalo-muted)]">Team &amp; context</p>
+
+      {errorBlock}
+
+      {/* Assigned owner is already shown in the Anchor's compact owner context — not repeated here. */}
 
       {/* Watching */}
       {(watchers.length > 0 || canAssignResponsible) && (

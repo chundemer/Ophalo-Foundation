@@ -20,6 +20,10 @@ interface UnifiedComposerProps {
   customerUpdateDraftStatus: string;
   onCustomerUpdateDraftStatusChange: (v: string) => void;
   highlight?: HighlightLevel;
+  // bare: no outer card chrome (border/bg/highlight) — used when a parent wraps this together
+  // with TimingPanel in one shared Communication & Planning surface (locked correction,
+  // 2026-08-22). Padding is preserved either way.
+  bare?: boolean;
 }
 
 type ActiveTab = "customerUpdate" | "internalNote";
@@ -36,6 +40,7 @@ export function UnifiedComposer({
   customerUpdateDraftStatus,
   onCustomerUpdateDraftStatusChange,
   highlight,
+  bare = false,
 }: UnifiedComposerProps) {
   const { canSendBusinessUpdate, canAddInternalNote } = detail.availableActions;
   const defaultTab: ActiveTab = canSendBusinessUpdate ? "customerUpdate" : "internalNote";
@@ -81,8 +86,12 @@ export function UnifiedComposer({
 
   return (
     <div
-      className={`rounded-xl border px-5 py-5 scroll-mt-4 transition-[border-color,background-color,box-shadow] ${highlightBorderCls(highlight)} ${highlightBgCls()}`}
-      style={{ boxShadow: highlightBoxShadow(highlight) }}
+      className={
+        bare
+          ? "px-5 py-5"
+          : `rounded-xl border px-5 py-5 scroll-mt-4 transition-[border-color,background-color,box-shadow] ${highlightBorderCls(highlight)} ${highlightBgCls()}`
+      }
+      style={bare ? undefined : { boxShadow: highlightBoxShadow(highlight) }}
     >
       {/* Tab bar */}
       <div className="mb-4 flex items-center justify-between gap-2">

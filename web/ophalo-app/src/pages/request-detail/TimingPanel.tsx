@@ -15,9 +15,13 @@ interface TimingPanelProps {
   detail: KeepRequestDetailResult;
   onDetailUpdated: (updated: KeepRequestDetailResult) => void;
   onRecordFollowUp?: () => void;
+  // bare: no outer card chrome (border/rounding/bg) or standalone label — used when a parent
+  // wraps this together with UnifiedComposer in one shared Communication & Planning surface
+  // (locked correction, 2026-08-22). The active-timing accent border is preserved either way.
+  bare?: boolean;
 }
 
-export function TimingPanel({ requestId, detail, onDetailUpdated, onRecordFollowUp }: TimingPanelProps) {
+export function TimingPanel({ requestId, detail, onDetailUpdated, onRecordFollowUp, bare = false }: TimingPanelProps) {
   const { canSetFollowUpOn, canSetPlannedFor } = detail.availableActions;
   const { followUpNoteMaxLength, allowedFollowUpReasons } = detail.validation;
 
@@ -151,14 +155,21 @@ export function TimingPanel({ requestId, detail, onDetailUpdated, onRecordFollow
 
   return (
     <div>
-      <p className="px-1 text-xs font-semibold uppercase tracking-widest text-[var(--ophalo-muted)] mb-2">
-        Follow-up &amp; planned timing
-      </p>
+      {!bare && (
+        <p className="px-1 text-xs font-semibold uppercase tracking-widest text-[var(--ophalo-muted)] mb-2">
+          Follow-up &amp; planned timing
+        </p>
+      )}
       <div
-        className={`rounded-xl border bg-[var(--ophalo-card)] divide-y divide-[var(--ophalo-border)] ${
-          hasActiveTiming ? "border-[var(--keep-accent)] border-l-4" : "border-[var(--ophalo-border)]"
+        className={`divide-y divide-[var(--ophalo-border)] ${bare ? "" : "rounded-xl border bg-[var(--ophalo-card)]"} ${
+          hasActiveTiming ? "border-[var(--keep-accent)] border-l-4" : bare ? "" : "border-[var(--ophalo-border)]"
         }`}
       >
+        {bare && (
+          <div className="px-4 py-2 text-xs font-semibold uppercase tracking-widest text-[var(--ophalo-muted)]">
+            Follow-up &amp; planned timing
+          </div>
+        )}
         {/* Info row */}
         <div className="flex items-center gap-2 px-4 py-2.5">
           <Clock

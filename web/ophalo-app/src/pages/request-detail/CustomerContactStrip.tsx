@@ -41,7 +41,9 @@ export function CustomerContactStrip({
 
   return (
     <>
-      <div className="rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-4 py-3 flex flex-wrap items-center gap-x-4 gap-y-2">
+      {/* Inline Anchor context item (locked correction, 2026-08-22) — no independent card
+          border/padding/background; the Anchor owns the one boundary for the whole strip. */}
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
         <span className="text-xs font-semibold uppercase tracking-widest text-[var(--ophalo-muted)] shrink-0">
           Contact
         </span>

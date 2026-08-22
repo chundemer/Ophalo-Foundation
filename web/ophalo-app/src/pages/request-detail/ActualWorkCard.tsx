@@ -26,7 +26,9 @@ export function ActualWorkCard({ state, onStartCapture }: ActualWorkCardProps) {
             ? "Record the work completed on this visit."
             : `${state.submittedCount} prior visit${state.submittedCount === 1 ? "" : "s"} recorded.`}
         </p>
-        <KeepButton variant="teal" onClick={onStartCapture} className="w-full">
+        {/* secondary, not teal — the Anchor owns the one primary-weight action (locked spec);
+            this module's CTA must not visually compete with it or the composer's Send update. */}
+        <KeepButton variant="secondary" onClick={onStartCapture} className="w-full">
           Record completed work
         </KeepButton>
       </div>
@@ -41,7 +43,7 @@ export function ActualWorkCard({ state, onStartCapture }: ActualWorkCardProps) {
           ? "Draft visit started — no items added yet."
           : `Draft visit in progress — ${state.draft.lines.length} item${state.draft.lines.length === 1 ? "" : "s"} added.`}
       </p>
-      <KeepButton variant="teal" onClick={onStartCapture} className="w-full">
+      <KeepButton variant="secondary" onClick={onStartCapture} className="w-full">
         Resume completed work
       </KeepButton>
     </div>

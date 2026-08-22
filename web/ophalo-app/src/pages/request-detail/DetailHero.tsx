@@ -137,17 +137,12 @@ export function TodayPromiseBanner({ detail, onRecordFollowUp }: TodayPromiseBan
 
 interface DetailHeroProps {
   detail: KeepRequestDetailResult;
-  canRecordShareIntent: boolean;
-  needsShare: boolean;
-  onOpenShareDrawer: () => void;
 }
 
-export function DetailHero({
-  detail,
-  canRecordShareIntent,
-  needsShare,
-  onOpenShareDrawer,
-}: DetailHeroProps) {
+// Anchor row 1, left side (locked correction, 2026-08-22): reference/status/attention/name
+// compressed onto one line — no own card chrome, no second stacked row. Share affordances moved
+// to CustomerPageHeroActions, rendered separately by the Anchor as a row-2 inline context item.
+export function DetailHero({ detail }: DetailHeroProps) {
   const hasAttention = detail.attentionLevel !== "none";
 
   // ADR-150: customer page viewed info shown in header badges
@@ -165,45 +160,32 @@ export function DetailHero({
   }, [detail.customerPageLastViewedAtUtc, detail.customerPageViewedAfterLatestUpdate, detail.needsShare]);
 
   return (
-    <div className="rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-5 py-5 shadow-sm">
-      {/* Badge row */}
-      <div className="flex flex-wrap items-center gap-2 mb-3">
-        <span className="font-mono text-xs text-[var(--ophalo-muted)]">{detail.referenceCode}</span>
-        <KeepBadge variant={statusBadgeVariant(detail.status)}>{statusLabel(detail.status)}</KeepBadge>
-        {hasAttention && detail.attentionReason && (
-          <KeepBadge variant="attention">
-            {detail.attentionLevel === "overdue" ? (
-              <AlertTriangle className="h-3 w-3 mr-1 shrink-0" />
-            ) : (
-              <Clock className="h-3 w-3 mr-1 shrink-0" />
-            )}
-            {reasonLabel(detail.attentionReason)}
-          </KeepBadge>
-        )}
-        {pageViewedInfo && (
-          <span
-            className={`inline-flex items-center gap-1 text-xs ${
-              pageViewedInfo.isAmber ? "text-[var(--ophalo-attention)]" : "text-[var(--ophalo-muted)]"
-            }`}
-          >
-            <Eye className="h-3 w-3 shrink-0" />
-            {pageViewedInfo.text}
-          </span>
-        )}
-      </div>
-
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        {/* Customer name — page type anchor */}
-        <h1 className="font-serif text-[26px] font-semibold leading-tight text-[var(--ophalo-ink)]">
-          {detail.customerName}
-        </h1>
-        <CustomerPageHeroActions
-          pageToken={detail.pageToken}
-          canRecordShareIntent={canRecordShareIntent}
-          needsShare={needsShare}
-          onOpenShareDrawer={onOpenShareDrawer}
-        />
-      </div>
+    <div className="flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1">
+      <span className="font-mono text-xs text-[var(--ophalo-muted)] shrink-0">{detail.referenceCode}</span>
+      <KeepBadge variant={statusBadgeVariant(detail.status)}>{statusLabel(detail.status)}</KeepBadge>
+      {hasAttention && detail.attentionReason && (
+        <KeepBadge variant="attention">
+          {detail.attentionLevel === "overdue" ? (
+            <AlertTriangle className="h-3 w-3 mr-1 shrink-0" />
+          ) : (
+            <Clock className="h-3 w-3 mr-1 shrink-0" />
+          )}
+          {reasonLabel(detail.attentionReason)}
+        </KeepBadge>
+      )}
+      <h1 className="font-serif text-lg font-semibold leading-tight text-[var(--ophalo-ink)] truncate">
+        {detail.customerName}
+      </h1>
+      {pageViewedInfo && (
+        <span
+          className={`inline-flex items-center gap-1 text-xs shrink-0 ${
+            pageViewedInfo.isAmber ? "text-[var(--ophalo-attention)]" : "text-[var(--ophalo-muted)]"
+          }`}
+        >
+          <Eye className="h-3 w-3 shrink-0" />
+          {pageViewedInfo.text}
+        </span>
+      )}
     </div>
   );
 }
