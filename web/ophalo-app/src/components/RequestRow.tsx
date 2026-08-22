@@ -1,4 +1,4 @@
-import { useState, type ComponentType } from "react";
+import { useState, type ComponentType, type KeyboardEvent } from "react";
 import { AlertTriangle, Clock, MessageSquare, ChevronRight, UserRound, CheckCircle2, Share2, Phone, StickyNote, MapPin } from "lucide-react";
 import { KeepBadge, type KeepBadgeVariant } from "./keep/KeepBadge";
 import type { KeepRequestSummary, KeepRequestAvailableItem, KeepQuickAction } from "../lib/apiClient";
@@ -349,9 +349,12 @@ interface RequestRowProps {
   // status/exception/context metadata. Action-taking moves to the request work area. Undefined/
   // false preserves today's one-pane fallback row treatment unchanged.
   paneMode?: boolean;
+  // Backlog item 2 (2026-08-21): marks the row currently open in Pane 2. Distinct from the
+  // exception rail (borderAccent) — layered alongside it, never replacing it.
+  selected?: boolean;
 }
 
-export function RequestRow({ row, onSelect, onSelectFocused, onActionClick, onShareClick, showCloseoutCue, paneMode = false }: RequestRowProps) {
+export function RequestRow({ row, onSelect, onSelectFocused, onActionClick, onShareClick, showCloseoutCue, paneMode = false, selected = false }: RequestRowProps) {
   const [expanded, setExpanded] = useState(false);
   const { collapsed: collapsedSummary, showToggle: summaryTruncated } = buildCollapsedSummary(row.originalSummary.fullText);
   const lastTouch = relativeTime(row.lastBusinessActivityAtUtc ?? row.updatedAtUtc);
@@ -404,15 +407,27 @@ export function RequestRow({ row, onSelect, onSelectFocused, onActionClick, onSh
     ? [promoted, secondary].filter((a): a is PromotedAction => a !== null)
     : fallbackRoutineActions;
 
+  function handleRowKeyDown(e: KeyboardEvent<HTMLDivElement>) {
+    // Only the row itself (not a nested interactive descendant, which handles its own keys and
+    // whose keydown bubbles here) treats Enter/Space as activation.
+    if (e.target !== e.currentTarget) return;
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      onSelect(row.id);
+    }
+  }
+
   return (
-    <div className={`rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] hover:shadow-sm transition-shadow ${borderAccent}`}>
-      {/* Row-navigation target — identity/status/exception only, no nested interactive content */}
-      <button
-        type="button"
-        onClick={() => onSelect(row.id)}
-        className={`w-full text-left flex flex-col gap-2 px-4 pt-3 pb-2 ${FOCUS_RING} rounded-t-xl`}
-      >
-        {/* Identity: reference + customer name */}
+    <div
+      role="button"
+      tabIndex={0}
+      aria-selected={selected}
+      onClick={() => onSelect(row.id)}
+      onKeyDown={handleRowKeyDown}
+      className={`rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] hover:shadow-sm transition-shadow cursor-pointer ${borderAccent} ${selected ? "ring-2 ring-inset ring-[var(--keep-accent)]" : ""} ${FOCUS_RING}`}
+    >
+      {/* Identity/status/exception — activates the whole row via the container above */}
+      <div className="flex flex-col gap-2 px-4 pt-3 pb-2">
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 min-w-0">
             <span className="font-mono text-[11px] text-[var(--ophalo-muted)] shrink-0">{row.referenceCode}</span>
@@ -434,10 +449,10 @@ export function RequestRow({ row, onSelect, onSelectFocused, onActionClick, onSh
             <span className="text-sm text-[var(--ophalo-muted)]">Next: {promoted.label}</span>
           )}
         </div>
-      </button>
+      </div>
 
-      {/* Original request context (ADR-450) — non-interactive region, sibling of the nav button.
-          Owns its own expansion control; clicking here does not navigate. */}
+      {/* Original request context (ADR-450) — non-interactive region except its own expansion
+          control, which stops propagation so it never also activates the row. */}
       <div className="px-4">
         <p className={`keep-row-meta text-left ${expanded ? "whitespace-pre-wrap break-words" : "line-clamp-2"}`}>
           {expanded ? row.originalSummary.fullText : collapsedSummary}
@@ -446,7 +461,10 @@ export function RequestRow({ row, onSelect, onSelectFocused, onActionClick, onSh
           <button
             type="button"
             aria-expanded={expanded}
-            onClick={() => setExpanded((v) => !v)}
+            onClick={(e) => {
+              e.stopPropagation();
+              setExpanded((v) => !v);
+            }}
             className={`text-xs font-medium text-[var(--keep-accent)] hover:underline ${FOCUS_RING} rounded`}
           >
             {expanded ? "Show less" : "Read full request"}

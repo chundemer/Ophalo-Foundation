@@ -376,11 +376,21 @@ separate and must not displace these selected shell corrections.
    FeedbackReview_ListView_IncludesAgingMetadata` updated to assert the list returns exactly the
    unreviewed-negative rows and excludes already-reviewed/positive/no-feedback rows. 13/13 +
    52/52 (`KeepRequestListQueryApiTests`) + 180/180 (`KeepRequestListServiceTests`) passing.
-2. **Queue-row activation and selected-request state.** Make the entire scan-only Queue row a
-   keyboard-accessible activation target, then visibly mark the request currently shown in Pane 2.
-   Preserve the existing red attention/overdue rail as an urgency signal; selection needs a
-   distinct teal inset ring/tint or equivalent, not a competing left rail. Cover the durable route,
-   pointer, and keyboard paths.
+2. **Queue-row activation and selected-request state — complete.** `RequestRow.tsx`'s outer
+   container is now the single activation target (`role="button" tabIndex={0}`, Enter/Space
+   handled, click-to-select), replacing the prior partial `<button>` limited to the
+   identity/status block. Nested controls ("Read full request" toggle, quick-action footer)
+   `stopPropagation` so they stay independently operable without also activating the row. New
+   `selected` prop renders `ring-2 ring-inset ring-[var(--keep-accent)]`, layered alongside the
+   existing `borderAccent` exception rail (danger/attention), never replacing it. `Requests.tsx`
+   gained `selectedRequestId?`, threaded to each row as `selected={row.id === selectedRequestId}`;
+   `RequestWorkbenchShell.tsx` passes `selectedRequestId={detailRoute?.requestId}` — the request
+   open in Pane 2 — into the paned `<Requests>` instance. Covers durable route, pointer, and
+   keyboard paths. 3 production files, 1 test file (2 new `RequestRow.test.tsx` cases: keyboard
+   activation, nested-control independence, selected-state rendering; 1 pre-existing test's loose
+   accessible-name regex fixed to an exact match, since the whole row's accessible name now
+   includes quick-action label text). 35/35 `RequestRow.test.tsx` + 58/58 `Requests.*`/
+   `RequestWorkbenchShell.test.tsx` passing. `tsc --noEmit` and `git diff --check` clean.
 3. **Intentional wide-shell initial selection.** On a wide initial `#/requests` entry, make the
    default workbench content deliberate rather than a sparse Priority Preview. Preflight the
    one-time selection contract: select the first eligible row from the active applied queue, retain

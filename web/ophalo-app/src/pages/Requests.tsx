@@ -85,6 +85,9 @@ interface RequestsProps {
   // UI-001 Step 4: true when rendered inside the bounded Queue pane — see
   // RequestQueueNavigation's paneMode doc. Undefined/false keeps today's full-width layout.
   paneMode?: boolean;
+  // Backlog item 2 (2026-08-21): the request currently open in Pane 2, so its Queue row can
+  // carry a distinct selected treatment. Undefined outside paned two-pane rendering.
+  selectedRequestId?: string;
 }
 
 export function Requests({
@@ -96,6 +99,7 @@ export function Requests({
   onStartCapture,
   onAppliedSnapshotChange,
   paneMode,
+  selectedRequestId,
 }: RequestsProps) {
   const tabs = getTabsForRole(role);
   const [activeTab, setActiveTab] = useState<TabDef>(tabs[0]);
@@ -505,6 +509,7 @@ export function Requests({
         onShareClick={setShareModalTarget}
         showCloseoutCue={!presentAsHistory && activeTab.id === "ready_to_close"}
         paneMode={paneMode}
+        selected={row.id === selectedRequestId}
       />
     );
   }

@@ -97,6 +97,7 @@ export function RequestWorkbenchShell(props: RequestWorkbenchShellProps) {
             onNavigateSettings={onNavigateSettings}
             onStartCapture={onStartCapture}
             onAppliedSnapshotChange={handleAppliedSnapshotChange}
+            selectedRequestId={detailRoute?.requestId}
             paneMode={paneMode}
           />
         </div>

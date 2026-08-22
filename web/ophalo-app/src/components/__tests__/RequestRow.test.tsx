@@ -157,8 +157,8 @@ describe("RequestRow — Build 087 / GAP-027 locked row contract", () => {
     render(<RequestRow row={row} onSelect={noop} />);
 
     expect(screen.queryByText(/^Next:/)).not.toBeInTheDocument();
-    const buttons = screen.getAllByRole("button", { name: /Update customer|Log contact/ });
-    expect(buttons.map((b) => b.textContent)).toEqual(["Update customer", "Log contact"]);
+    expect(screen.getByRole("button", { name: "Update customer" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Log contact" })).toBeInTheDocument();
   });
 
   it("GAP-007: routine row exposes only the single server-eligible action it has, without inventing the other", () => {
@@ -486,6 +486,55 @@ describe("RequestRow — Build 087 / GAP-027 locked row contract", () => {
     render(<RequestRow row={row} onSelect={noop} />);
 
     expect(screen.getByRole("button", { name: "Update customer" })).toBeInTheDocument();
+  });
+
+  it("backlog item 2: the entire row is a single keyboard-accessible activation target", async () => {
+    const user = userEvent.setup();
+    const row = buildRow();
+    const onSelect = vi.fn();
+
+    render(<RequestRow row={row} onSelect={onSelect} />);
+
+    const rowEl = screen.getByRole("button", { name: /Jane Smith/ });
+    expect(rowEl).toHaveAttribute("tabIndex", "0");
+
+    rowEl.focus();
+    await user.keyboard("{Enter}");
+    expect(onSelect).toHaveBeenCalledWith("req-1");
+
+    onSelect.mockClear();
+    await user.keyboard(" ");
+    expect(onSelect).toHaveBeenCalledWith("req-1");
+  });
+
+  it("backlog item 2: nested interactive controls stay independently operable and never also activate the row", () => {
+    const longText = "D".repeat(300);
+    const row = buildRow({ originalSummary: { fullText: longText } });
+    const onSelect = vi.fn();
+
+    render(<RequestRow row={row} onSelect={onSelect} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Read full request" }));
+    expect(onSelect).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "Show less" })).toBeInTheDocument();
+  });
+
+  it("backlog item 2: selected prop marks the row aria-selected without disturbing the exception rail", () => {
+    const row = buildRow({
+      ranking: { rankingGroup: "overdue_business_waiting", rankingOrder: 1, rankingReason: "overdue_business_waiting", severity: "danger", isOverdue: true, elapsedSinceUtc: null, dueAtUtc: "2026-07-13T12:00:00Z", isPostClose: false },
+      attention: { attentionLevel: "none", waitingDirection: "none", attentionReason: null, priorityBand: "standard", attentionSinceUtc: null, nextAttentionAtUtc: null, firstResponseDueAtUtc: "2026-07-13T12:00:00Z", firstRespondedAtUtc: null, firstResponsePending: false, firstResponseOverdue: true },
+    });
+
+    const { rerender } = render(<RequestRow row={row} onSelect={noop} />);
+    const rowEl = screen.getByRole("button", { name: /Jane Smith/ });
+    expect(rowEl).toHaveAttribute("aria-selected", "false");
+    expect(rowEl.className).toContain("border-l-[var(--ophalo-danger)]");
+    expect(rowEl.className).not.toContain("ring-inset");
+
+    rerender(<RequestRow row={row} onSelect={noop} selected />);
+    expect(rowEl).toHaveAttribute("aria-selected", "true");
+    expect(rowEl.className).toContain("border-l-[var(--ophalo-danger)]");
+    expect(rowEl.className).toContain("ring-inset");
   });
 });
 
