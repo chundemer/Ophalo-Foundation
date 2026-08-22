@@ -475,6 +475,44 @@ describe("RequestRow — Build 087 / GAP-027 locked row contract", () => {
     expect(onSelect).toHaveBeenCalledWith("req-1");
   });
 
+  it("backlog item 5: paneMode renders a compact scan-and-select row — identity, status/exception, Next: cue, and city/state only", () => {
+    const row = buildRow({
+      status: "received",
+      originalSummary: { fullText: "Fix leak" },
+      latestActivity: { previewText: "Called customer back", previewAtUtc: "2026-08-20T12:00:00Z", previewSource: "note", previewTruncated: false },
+      hasInternalNote: true,
+      businessPriority: "urgent",
+      serviceCity: "Brighton",
+      serviceState: "TN",
+      serviceZip: "38011",
+      participation: {
+        responsibleCount: 1,
+        watchingCount: 0,
+        hasResponsible: true,
+        isUnassigned: false,
+        currentUserParticipationType: "responsible",
+        responsibleDisplayName: "Alex Rivera",
+      },
+      actions: { quickActions: [quickAction("open_detail", "detail"), quickAction("post_customer_update")] },
+    });
+
+    render(<RequestRow row={row} onSelect={noop} paneMode />);
+
+    // Kept: identity, status/exception (Response overdue text also carries the Next: cue path
+    // tested above), and a bare city/state chip with no zip.
+    expect(screen.getByText("Brighton, TN")).toBeInTheDocument();
+    expect(screen.queryByText(/38011/)).not.toBeInTheDocument();
+
+    // Trimmed for the compact pane row.
+    expect(screen.queryByText("Fix leak")).not.toBeInTheDocument();
+    expect(screen.queryByText("Called customer back")).not.toBeInTheDocument();
+    expect(screen.queryByText("Alex Rivera")).not.toBeInTheDocument();
+    expect(screen.queryByText("Internal note")).not.toBeInTheDocument();
+    expect(screen.queryByText("Internal priority: Urgent")).not.toBeInTheDocument();
+    expect(screen.queryByText("Created by business")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Read full request" })).not.toBeInTheDocument();
+  });
+
   it("preserves the quick-action footer in the one-pane fallback when paneMode is false/omitted", () => {
     const row = buildRow({
       status: "received",

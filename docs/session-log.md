@@ -423,10 +423,21 @@ separate and must not displace these selected shell corrections.
    **Still required before this item is complete:** Christian's real-browser acceptance at the
    locked 360px pane width — fixed header, row-only scrolling, no clipped controls, no
    nested/double scrollbar.
-5. **Queue scan-density follow-through.** Keep only the Queue header fixed and the rows scrollable;
-   tune row metadata hierarchy only after selection and queue identity are clear. Pane quick-action
-   footers are already removed and must stay out of this batch. Presentation-layer automatic
-   title-casing remains rejected because it can corrupt valid customer and business names.
+5. **Queue scan-density follow-through — complete.** Preflight confirmed the header/row scroll
+   split item 4 already delivered the flex-height chain (pane wrapper `min-h-0`, `Requests.tsx`
+   root `flex flex-col h-full`, `RequestListContent.tsx`/`ActualWorkReviewQueueList.tsx` row
+   regions `flex-1 min-h-0 overflow-y-auto`) — no hardcoded `100vh` calc anywhere, no code change
+   needed for that half. `RequestRow.tsx` pane mode now renders a compact scan-and-select row:
+   identity, status/exception badges, the `Next:` cue (operationally distinct from status —
+   locked by Christian over the minimal-set proposal), and a bare city/state chip (no zip).
+   Trimmed from pane mode: original-summary text and its expand toggle, latest-activity preview,
+   responsible/unassigned/last-touch/source-intake chips, follow-up/planned timing, feedback-
+   resolved, internal-priority, and internal-note chips. Exception rail (`borderAccent`) and
+   selected-row ring are untouched (they render on the outer container, outside the trimmed
+   region). Full-page/narrow row rendering is unaffected. 1 production file (`RequestRow.tsx`), 1
+   test file (`RequestRow.test.tsx`, 1 new pane-mode compact-row case). 36/36 `RequestRow.test.tsx`
+   + 86/86 adjacent `Requests.*`/`requests/__tests__` suites passing, `tsc --noEmit` and
+   `git diff --check` clean.
 
 **UI-001 migration progress:**
 - Step 1 (measurement/sizing spike) — **complete, 2026-08-21**

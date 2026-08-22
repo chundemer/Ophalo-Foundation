@@ -452,28 +452,32 @@ export function RequestRow({ row, onSelect, onSelectFocused, onActionClick, onSh
       </div>
 
       {/* Original request context (ADR-450) — non-interactive region except its own expansion
-          control, which stops propagation so it never also activates the row. */}
-      <div className="px-4">
-        <p className={`keep-row-meta text-left ${expanded ? "whitespace-pre-wrap break-words" : "line-clamp-2"}`}>
-          {expanded ? row.originalSummary.fullText : collapsedSummary}
-        </p>
-        {summaryTruncated && (
-          <button
-            type="button"
-            aria-expanded={expanded}
-            onClick={(e) => {
-              e.stopPropagation();
-              setExpanded((v) => !v);
-            }}
-            className={`text-xs font-medium text-[var(--keep-accent)] hover:underline ${FOCUS_RING} rounded`}
-          >
-            {expanded ? "Show less" : "Read full request"}
-          </button>
-        )}
-      </div>
+          control, which stops propagation so it never also activates the row. Hidden in pane
+          mode (backlog item 5): the pane is a compact scan-and-select surface only. */}
+      {!paneMode && (
+        <div className="px-4">
+          <p className={`keep-row-meta text-left ${expanded ? "whitespace-pre-wrap break-words" : "line-clamp-2"}`}>
+            {expanded ? row.originalSummary.fullText : collapsedSummary}
+          </p>
+          {summaryTruncated && (
+            <button
+              type="button"
+              aria-expanded={expanded}
+              onClick={(e) => {
+                e.stopPropagation();
+                setExpanded((v) => !v);
+              }}
+              className={`text-xs font-medium text-[var(--keep-accent)] hover:underline ${FOCUS_RING} rounded`}
+            >
+              {expanded ? "Show less" : "Read full request"}
+            </button>
+          )}
+        </div>
+      )}
 
-      {/* Latest activity (ADR-450) — visually secondary, never replaces original context */}
-      {row.latestActivity?.previewText && (
+      {/* Latest activity (ADR-450) — visually secondary, never replaces original context.
+          Hidden in pane mode (backlog item 5). */}
+      {!paneMode && row.latestActivity?.previewText && (
         <div className="px-4 pt-1">
           <p className="keep-row-meta line-clamp-1 text-left">
             <span className="text-[var(--ophalo-muted)]">
@@ -485,63 +489,74 @@ export function RequestRow({ row, onSelect, onSelectFocused, onActionClick, onSh
         </div>
       )}
 
-      {/* Context metadata — quiet, unbordered; no competing alert badges */}
-      <div className={`keep-row-meta flex flex-wrap items-center gap-x-3 gap-y-1 px-4 pt-1 ${!paneMode && quickActionButtons.length > 0 ? "pb-2" : "pb-3"}`}>
-        {row.participation.responsibleDisplayName && (
-          <span className="flex items-center gap-1">
-            <UserRound className="h-3 w-3" />
-            {row.participation.responsibleDisplayName}
-          </span>
-        )}
-        {row.participation.isUnassigned && (
-          <span className="inline-flex items-center gap-1 rounded-md bg-[var(--ophalo-canvas)] px-1.5 py-0.5 text-[var(--ophalo-muted)]">
-            <UserRound className="h-3 w-3" />
-            Unassigned
-          </span>
-        )}
-        {lastTouch && (
-          <span className="inline-flex items-center gap-1">
-            <Clock className="h-3 w-3" />
-            Last touch {lastTouch}
-          </span>
-        )}
-        {row.source === "public_intake" ? (
-          <span className="inline-flex items-center gap-1">
-            Customer intake
-            {row.contactPreference === "text_message" && " · Prefers text"}
-            {row.contactPreference === "phone_call" && " · Prefers call"}
-            {row.contactPreference === "email" && " · Prefers email"}
-          </span>
-        ) : (
-          <span>Created by business</span>
-        )}
-        {row.serviceCity && row.serviceState && (
-          <span className="inline-flex items-center gap-1">
+      {/* Context metadata — quiet, unbordered; no competing alert badges. Pane mode (backlog
+          item 5) keeps only service city/state: identity, status/exception, and the Next: cue
+          above already carry the scan signal a compact row needs. */}
+      {paneMode ? (
+        row.serviceCity && row.serviceState && (
+          <div className="keep-row-meta flex items-center gap-1 px-4 pt-1 pb-3">
             <MapPin className="h-3 w-3" />
-            {row.serviceCity}, {row.serviceState}{row.serviceZip ? ` ${row.serviceZip}` : ""}
-          </span>
-        )}
-        {followUpMeta && <span>{followUpMeta}</span>}
-        {plannedMeta && <span>{plannedMeta}</span>}
-        {row.feedbackWasResolved === true && !row.isPostCloseFollowUp && (
-          <span className="flex items-center gap-1">
-            <CheckCircle2 className="h-3 w-3" />
-            Customer confirmed resolved
-          </span>
-        )}
-        {row.businessPriority === "urgent" && (
-          <span>Internal priority: Urgent</span>
-        )}
-        {row.businessPriority === "soon" && (
-          <span>Internal priority: Soon</span>
-        )}
-        {row.hasInternalNote && (
-          <span className="flex items-center gap-1 text-[var(--ophalo-muted)]">
-            <StickyNote className="h-3 w-3" />
-            Internal note
-          </span>
-        )}
-      </div>
+            {row.serviceCity}, {row.serviceState}
+          </div>
+        )
+      ) : (
+        <div className={`keep-row-meta flex flex-wrap items-center gap-x-3 gap-y-1 px-4 pt-1 ${quickActionButtons.length > 0 ? "pb-2" : "pb-3"}`}>
+          {row.participation.responsibleDisplayName && (
+            <span className="flex items-center gap-1">
+              <UserRound className="h-3 w-3" />
+              {row.participation.responsibleDisplayName}
+            </span>
+          )}
+          {row.participation.isUnassigned && (
+            <span className="inline-flex items-center gap-1 rounded-md bg-[var(--ophalo-canvas)] px-1.5 py-0.5 text-[var(--ophalo-muted)]">
+              <UserRound className="h-3 w-3" />
+              Unassigned
+            </span>
+          )}
+          {lastTouch && (
+            <span className="inline-flex items-center gap-1">
+              <Clock className="h-3 w-3" />
+              Last touch {lastTouch}
+            </span>
+          )}
+          {row.source === "public_intake" ? (
+            <span className="inline-flex items-center gap-1">
+              Customer intake
+              {row.contactPreference === "text_message" && " · Prefers text"}
+              {row.contactPreference === "phone_call" && " · Prefers call"}
+              {row.contactPreference === "email" && " · Prefers email"}
+            </span>
+          ) : (
+            <span>Created by business</span>
+          )}
+          {row.serviceCity && row.serviceState && (
+            <span className="inline-flex items-center gap-1">
+              <MapPin className="h-3 w-3" />
+              {row.serviceCity}, {row.serviceState}{row.serviceZip ? ` ${row.serviceZip}` : ""}
+            </span>
+          )}
+          {followUpMeta && <span>{followUpMeta}</span>}
+          {plannedMeta && <span>{plannedMeta}</span>}
+          {row.feedbackWasResolved === true && !row.isPostCloseFollowUp && (
+            <span className="flex items-center gap-1">
+              <CheckCircle2 className="h-3 w-3" />
+              Customer confirmed resolved
+            </span>
+          )}
+          {row.businessPriority === "urgent" && (
+            <span>Internal priority: Urgent</span>
+          )}
+          {row.businessPriority === "soon" && (
+            <span>Internal priority: Soon</span>
+          )}
+          {row.hasInternalNote && (
+            <span className="flex items-center gap-1 text-[var(--ophalo-muted)]">
+              <StickyNote className="h-3 w-3" />
+              Internal note
+            </span>
+          )}
+        </div>
+      )}
 
       {/* Quick action bar — at most one promoted action and one relevant secondary (Build 087
           §5). Hidden in pane mode (build-log 134 §2): the pane is scan-and-select only. */}
