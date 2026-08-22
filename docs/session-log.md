@@ -420,14 +420,22 @@ separate and must not displace these selected shell corrections.
    production/test files (`RequestsWorkspaceHeader.tsx`, `Requests.tsx`, `RequestWorkbenchShell.tsx`,
    `RequestListContent.tsx`, `ActualWorkReviewQueueList.tsx`, `RequestsWorkspaceHeader.test.tsx` +2
    cases). 63/63 relevant frontend tests passing, `tsc --noEmit` and `git diff --check` clean.
-   **Still required before this item is complete:** Christian's real-browser acceptance at the
-   locked 360px pane width — fixed header, row-only scrolling, no clipped controls, no
-   nested/double scrollbar.
-5. **Queue scan-density follow-through — complete.** Preflight confirmed the header/row scroll
-   split item 4 already delivered the flex-height chain (pane wrapper `min-h-0`, `Requests.tsx`
-   root `flex flex-col h-full`, `RequestListContent.tsx`/`ActualWorkReviewQueueList.tsx` row
-   regions `flex-1 min-h-0 overflow-y-auto`) — no hardcoded `100vh` calc anywhere, no code change
-   needed for that half. `RequestRow.tsx` pane mode now renders a compact scan-and-select row:
+   **Real-browser acceptance found a deeper bug (2026-08-22):** at the wide (≥1001px) workbench
+   width, scrolling the Queue pane scrolled the *entire page* — Pane 2 (Detail) and Pane 3 (Team &
+   context) content scrolled away with it, leaving blank space, while Pane 1 kept revealing more
+   rows. Root cause: `html`/`body`/`#root` and the App shell root (`min-h-screen`, not `h-screen`)
+   and `<main>` (`flex-1 min-w-0 flex flex-col`, no height cap) never established a real bounded
+   height anywhere above `RequestWorkbenchShell`. Its `h-full`/`flex-1`/`min-h-0`/`overflow-y-auto`
+   chain (this item's fix, and item 5's) had no defined-height ancestor to resolve against, so it
+   was inert — the browser fell back to plain document scroll, which happened to look like
+   row-only scrolling in jsdom-based tests (no real layout) but was never true pane-scoped
+   scrolling. Fixed in item 6 below.
+5. **Queue scan-density follow-through — complete.** Preflight read item 4's flex-height chain
+   (pane wrapper `min-h-0`, `Requests.tsx` root `flex flex-col h-full`,
+   `RequestListContent.tsx`/`ActualWorkReviewQueueList.tsx` row regions `flex-1 min-h-0
+   overflow-y-auto`) as already correct from source alone, without validating against a real
+   layout — wrong: see item 4's real-browser finding and item 6's fix; the chain had no bounded
+   ancestor and was inert. `RequestRow.tsx` pane mode now renders a compact scan-and-select row:
    identity, status/exception badges, the `Next:` cue (operationally distinct from status —
    locked by Christian over the minimal-set proposal), and a bare city/state chip (no zip).
    Trimmed from pane mode: original-summary text and its expand toggle, latest-activity preview,
@@ -438,6 +446,29 @@ separate and must not displace these selected shell corrections.
    test file (`RequestRow.test.tsx`, 1 new pane-mode compact-row case). 36/36 `RequestRow.test.tsx`
    + 86/86 adjacent `Requests.*`/`requests/__tests__` suites passing, `tsc --noEmit` and
    `git diff --check` clean.
+6. **Wide-workbench height-boundary fix — complete, pending Christian's real-browser
+   acceptance.** Fixes the item 4 finding above: nothing between `#root` and
+   `RequestWorkbenchShell` established a real bounded height, so its internal
+   `min-h-0`/`overflow-y-auto` pane-scroll chain was inert and the whole document scrolled
+   instead. Scoped narrowly (Christian's locked design) so only the wide Queue+Detail workbench
+   gets a fixed-viewport ancestor — narrow fallback, Price Book, Settings, and Home keep normal
+   document scroll unchanged: `RequestWorkbenchShell.tsx` reports its measured wide-pane state
+   upward via a new `onWideModeChange` callback (mirrors its existing `isWide` ResizeObserver
+   state, reset on unmount/width drop below the locked 1001px minimum); `App.tsx` holds that as
+   `workbenchWideActive` and applies `h-dvh overflow-hidden` to the shell root and `min-h-0
+   overflow-hidden` to `<main>` only while it's true (`min-h-screen` and no cap otherwise, byte-
+   for-byte unchanged for every other route). No hardcoded `100vh - headerHeight` calculation —
+   `h-dvh` is viewport-relative on its own; the flex-col chain (root → shrink-0 headers → `<main>`
+   flex-1 → `RequestWorkbenchShell`'s existing `flex h-full min-h-0 flex-1`) does the rest.
+   `RequestWorkbenchShell.tsx`'s Pane 1 (Queue) wrapper gained `min-h-0 overflow-hidden` in both
+   the split and full-width-within-workbench branches; Pane 2 (Detail) and the Priority Preview
+   wrapper gained `min-h-0` alongside their existing `overflow-y-auto`. 3 production files
+   (`App.tsx`, `RequestWorkbenchShell.tsx` — prop/wiring only, no test-file changes needed since
+   jsdom doesn't lay out real heights and can't exercise this). 110/110 relevant frontend tests
+   (`App.test.tsx`, `RequestWorkbenchShell.test.tsx`, `Requests.*`, `requests/__tests__`) passing,
+   `tsc --noEmit` and `git diff --check` clean. **Still required:** Christian's real-browser
+   acceptance — wide (≥1001px) Pane 1/Pane 2 scroll independently with no whole-page scroll, and
+   narrow width / Price Book / Settings / Home still scroll normally.
 
 **UI-001 migration progress:**
 - Step 1 (measurement/sizing spike) — **complete, 2026-08-21**

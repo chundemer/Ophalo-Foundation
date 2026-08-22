@@ -163,6 +163,11 @@ function AppShell() {
   // Incremented only by an explicit Requests navigation. The wide workbench consumes this as a
   // fresh-entry intent without remounting its Queue pane (so filters and scroll still persist).
   const [requestEntryIntent, setRequestEntryIntent] = useState(0);
+  // True only while RequestWorkbenchShell measures itself at the wide pane-split width — the
+  // narrow fallback, Price Book, and every other route keep normal document scroll. Drives a
+  // real h-dvh/overflow-hidden ancestor for RequestWorkbenchShell's internal per-pane scroll
+  // regions, which otherwise have no bounded-height parent to resolve against.
+  const [workbenchWideActive, setWorkbenchWideActive] = useState(false);
 
   function navigate(newRoute: AppRoute) {
     const base = window.location.pathname + window.location.search;
@@ -244,7 +249,11 @@ function AppShell() {
   // Mobile is always column (top bar above content); desktop non-workbench switches to a row
   // (sidebar beside content) — workbench stays column at every size (header above main).
   return (
-    <div className={`flex flex-col min-h-screen bg-[var(--ophalo-canvas)] ${isWorkbench ? "" : "md:flex-row"}`}>
+    <div
+      className={`flex flex-col bg-[var(--ophalo-canvas)] ${
+        workbenchWideActive ? "h-dvh overflow-hidden" : "min-h-screen"
+      } ${isWorkbench ? "" : "md:flex-row"}`}
+    >
       {/* Top bar — mobile only, all routes: logo + hamburger trigger for MobileNavMenu. */}
       {role !== "unknown" && (
         <header className="md:hidden flex items-center justify-between px-4 h-14 shrink-0 bg-[var(--ophalo-card)] border-b border-[var(--ophalo-border)]">
@@ -445,7 +454,7 @@ function AppShell() {
       )}
 
       {/* Main content */}
-      <main className="flex-1 min-w-0 flex flex-col">
+      <main className={`flex-1 min-w-0 flex flex-col ${workbenchWideActive ? "min-h-0 overflow-hidden" : ""}`}>
         {route.page === "requests" && role === "unknown" && (
           <div className="flex flex-1 items-center justify-center">
             <span className="text-[var(--ophalo-muted)] text-sm">Loading…</span>
@@ -479,6 +488,7 @@ function AppShell() {
             narrowPrevId={prevRequestId}
             narrowNextId={nextRequestId}
             onNarrowNavigate={(id) => selectRequest(id, navContext ?? undefined)}
+            onWideModeChange={setWorkbenchWideActive}
           />
         )}
         {route.page === "home" && (

@@ -35,6 +35,11 @@ interface RequestWorkbenchShellProps {
   narrowPrevId?: string;
   narrowNextId?: string;
   onNarrowNavigate?: (requestId: string) => void;
+  // Reports the measured wide-pane state upward so App.tsx can bound its own height chain (a
+  // real h-dvh/overflow-hidden ancestor) only while this shell actually needs internal
+  // per-pane scrolling. Narrow fallback and every non-workbench route keep normal document
+  // scroll untouched.
+  onWideModeChange?: (active: boolean) => void;
 }
 
 export function RequestWorkbenchShell(props: RequestWorkbenchShellProps) {
@@ -51,6 +56,7 @@ export function RequestWorkbenchShell(props: RequestWorkbenchShellProps) {
     narrowPrevId,
     narrowNextId,
     onNarrowNavigate,
+    onWideModeChange,
   } = props;
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [isWide, setIsWide] = useState(false);
@@ -67,6 +73,11 @@ export function RequestWorkbenchShell(props: RequestWorkbenchShellProps) {
     observer.observe(el);
     return () => observer.disconnect();
   }, []);
+
+  useEffect(() => {
+    onWideModeChange?.(isWide);
+    return () => onWideModeChange?.(false);
+  }, [isWide, onWideModeChange]);
 
   const handleAppliedSnapshotChange = useCallback((next: AppliedQueueSnapshot) => {
     setSnapshot(next);
@@ -133,7 +144,7 @@ export function RequestWorkbenchShell(props: RequestWorkbenchShellProps) {
           stretched height from the row-flex parent instead; RequestListContent.tsx's own
           flex-1 + min-h-0 + overflow-y-auto region is the sole scroll owner in pane mode. */}
       {showQueue && (
-        <div className={paneMode ? "w-[360px] shrink-0 min-h-0 border-r border-[var(--ophalo-border)]" : "flex-1 min-w-0"}>
+        <div className={paneMode ? "w-[360px] shrink-0 min-h-0 overflow-hidden border-r border-[var(--ophalo-border)]" : "flex-1 min-w-0 min-h-0 overflow-hidden"}>
           <Requests
             role={role}
             viewCounts={viewCounts}
@@ -148,7 +159,7 @@ export function RequestWorkbenchShell(props: RequestWorkbenchShellProps) {
         </div>
       )}
       {showTwoPaneRequests && (
-        <div className="flex-1 min-w-0 overflow-y-auto">
+        <div className="flex-1 min-w-0 min-h-0 overflow-y-auto">
           <PriorityPreview
             snapshot={snapshot}
             onOpenRequest={(requestId) =>
@@ -159,7 +170,7 @@ export function RequestWorkbenchShell(props: RequestWorkbenchShellProps) {
         </div>
       )}
       {showPaneDetail && detailRoute && (
-        <div className="flex-1 min-w-0 overflow-y-auto">
+        <div className="flex-1 min-w-0 min-h-0 overflow-y-auto">
           <RequestDetail
             requestId={detailRoute.requestId}
             focusPanel={detailRoute.focusPanel}
