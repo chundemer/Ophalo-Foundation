@@ -60,7 +60,8 @@ export function RequestDetailContent(props: RequestDetailContentProps) {
         needsShare={props.needsShare}
         onOpenShareDrawer={props.onOpenShareDrawer}
       />
-      <div className="flex-1 min-h-0 overflow-y-auto px-4 md:px-6 py-5 space-y-6">
+      <div className="flex-1 min-h-0 overflow-y-auto px-4 md:px-6 py-5">
+      <div className="max-w-6xl mx-auto w-full space-y-6">
         {/* 1. Active attention guidance */}
         <div id="focus-panel-attention" className="space-y-3">
           <AttentionGuidanceCard detail={detail} highlights={highlights} />
@@ -148,6 +149,7 @@ export function RequestDetailContent(props: RequestDetailContentProps) {
             <SourceMetaPanel detail={detail} />
           </div>
         </details>
+      </div>
       </div>
       {actualWorkCapture.isModalOpen && actualWorkCapture.state.status === "draft" && (
         <ActualWorkComposer

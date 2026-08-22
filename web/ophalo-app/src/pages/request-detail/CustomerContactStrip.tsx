@@ -41,12 +41,15 @@ export function CustomerContactStrip({
 
   return (
     <>
-      {/* Inline Anchor context item (locked correction, 2026-08-22) — no independent card
+      {/* Inline Anchor context item (three-row correction, 2026-08-22) — no independent card
           border/padding/background; the Anchor owns the one boundary for the whole strip. */}
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+      <div className="flex flex-col gap-1">
         <span className="text-xs font-semibold uppercase tracking-widest text-[var(--ophalo-muted)] shrink-0">
-          Contact
+          Customer contact
         </span>
+        {phone && <p className="text-sm text-[var(--ophalo-ink)]">{formatNaPhone(phone)}</p>}
+        {email && <p className="text-sm text-[var(--ophalo-ink)] truncate">{email}</p>}
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
         {phone && (
           <>
             {/* Desktop: QR handoff — no direct tel: on desktop (ADR-443) */}
@@ -97,6 +100,7 @@ export function CustomerContactStrip({
             Email
           </a>
         )}
+      </div>
       </div>
       {callQrOpen && phone && (
         <CallQrModal

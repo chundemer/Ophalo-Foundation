@@ -1,17 +1,19 @@
 import { type RequestDetailLayoutProps } from "./DetailPanels";
-import { DetailHero, CustomerPageHeroActions } from "./DetailHero";
+import { DetailHeroBadges, DetailHeroName, CustomerPageHeroActions } from "./DetailHero";
 import { CustomerContactStrip } from "./CustomerContactStrip";
 import { ServiceLocationPanel } from "./DetailPanels";
 import { TeamSection } from "./TeamSection";
 import { WorkDoneCard, CloseRequestCard } from "./BusinessSection";
-import { FOCUS_RING } from "./helpers";
+import { KeepButton } from "../../components/keep/KeepButton";
 
-// Sticky Request Anchor (locked correction, 2026-08-22): one outer card with a real two-row
-// grid, not a stack of card-shaped children.
-//   Row 1: reference/status/attention/name (left, DetailHero) | one compact primary action (right).
-//   Row 2: contact, service location, owner, Log contact, and share — all inline context items
-//          with no independent border/padding/background of their own.
-// Target footprint: a compact ~160px header, not a tall mostly-empty one.
+// Sticky Request Anchor (three-row correction, 2026-08-22): one outer bordered/rounded card with
+// a deliberate three-row desktop hierarchy — not a single flattened horizontal strip and not a
+// stack of independently card-shaped children.
+//   Row 1: reference/status/attention (left, DetailHeroBadges) | Log contact + the one compact
+//          primary action (right).
+//   Row 2: customer identity, full width (DetailHeroName).
+//   Divider, then Row 3: three stable context columns — customer contact, service location, and
+//          owner/share utilities — each chrome-free inline content inside the one outer card.
 //
 // Primary-action slot: only two already-authorized, mutually-exclusive-by-status derivations are
 // shown here — ADR-434 "Mark work done" (WorkDoneCard) and the locked spec's own Close-request-
@@ -38,51 +40,62 @@ export function RequestDetailAnchor({
   onOpenShareDrawer,
 }: RequestDetailAnchorProps) {
   return (
-    <div className="shrink-0 border-b border-[var(--ophalo-border)] bg-[var(--ophalo-canvas)] px-4 md:px-6 py-2.5">
-      {/* Row 1 */}
-      <div className="flex items-center justify-between gap-3">
-        <div className="min-w-0 flex-1">
-          <DetailHero detail={detail} />
+    <div className="shrink-0 bg-[var(--ophalo-canvas)] px-4 md:px-6 py-3">
+      <div className="rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] shadow-sm px-4 py-3 md:px-5 md:py-4">
+        {/* Row 1: reference/status/attention (left) | Log contact + primary action (right) */}
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <DetailHeroBadges detail={detail} />
+          <div className="flex shrink-0 items-center gap-2">
+            {detail.availableActions.canLogExternalContact && (
+              <KeepButton
+                type="button"
+                variant="secondary"
+                onClick={() =>
+                  onContactLaunched(
+                    "outbound",
+                    detail.customerPhone ? "phone" : detail.customerEmail ? "email" : "other",
+                  )
+                }
+              >
+                Log contact
+              </KeepButton>
+            )}
+            <WorkDoneCard requestId={requestId} detail={detail} onDetailUpdated={onDetailUpdated} compact />
+            <CloseRequestCard requestId={requestId} detail={detail} onDetailUpdated={onDetailUpdated} compact />
+          </div>
         </div>
-        <div className="shrink-0">
-          <WorkDoneCard requestId={requestId} detail={detail} onDetailUpdated={onDetailUpdated} compact />
-          <CloseRequestCard requestId={requestId} detail={detail} onDetailUpdated={onDetailUpdated} compact />
+
+        {/* Row 2: customer identity, full width */}
+        <div className="mt-2">
+          <DetailHeroName detail={detail} />
         </div>
-      </div>
-      {/* Row 2 — inline context items, no independent card chrome */}
-      <div className="mt-1.5 flex flex-wrap items-center gap-x-5 gap-y-1.5">
-        <CustomerContactStrip
-          requestId={requestId}
-          phone={detail.customerPhone ?? null}
-          email={detail.customerEmail ?? null}
-          customerName={detail.customerName}
-          pageToken={detail.pageToken ?? null}
-          onContactLaunched={onContactLaunched}
-        />
-        <ServiceLocationPanel detail={detail} onEditLocation={onEditLocation} />
-        <TeamSection requestId={requestId} detail={detail} onDetailUpdated={onDetailUpdated} compact />
-        {detail.availableActions.canLogExternalContact && (
-          <button
-            type="button"
-            onClick={() =>
-              onContactLaunched(
-                "outbound",
-                detail.customerPhone ? "phone" : detail.customerEmail ? "email" : "other",
-              )
-            }
-            className={`text-xs font-semibold text-[var(--ophalo-muted)] hover:text-[var(--ophalo-ink)] transition-colors ${FOCUS_RING} rounded`}
-          >
-            Log contact
-          </button>
-        )}
-        {detail.pageToken && (
-          <CustomerPageHeroActions
-            pageToken={detail.pageToken}
-            canRecordShareIntent={canRecordShareIntent}
-            needsShare={needsShare}
-            onOpenShareDrawer={onOpenShareDrawer}
-          />
-        )}
+
+        {/* Divider, then Row 3: three stable context columns — chrome-free inline content inside
+            the one outer Anchor card. */}
+        <div className="mt-3 border-t border-[var(--ophalo-border)] pt-3">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <CustomerContactStrip
+              requestId={requestId}
+              phone={detail.customerPhone ?? null}
+              email={detail.customerEmail ?? null}
+              customerName={detail.customerName}
+              pageToken={detail.pageToken ?? null}
+              onContactLaunched={onContactLaunched}
+            />
+            <ServiceLocationPanel detail={detail} onEditLocation={onEditLocation} />
+            <div className="flex flex-col gap-1.5">
+              <TeamSection requestId={requestId} detail={detail} onDetailUpdated={onDetailUpdated} compact />
+              {detail.pageToken && (
+                <CustomerPageHeroActions
+                  pageToken={detail.pageToken}
+                  canRecordShareIntent={canRecordShareIntent}
+                  needsShare={needsShare}
+                  onOpenShareDrawer={onOpenShareDrawer}
+                />
+              )}
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );

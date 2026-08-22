@@ -607,30 +607,32 @@ export function ServiceLocationPanel({ detail, onEditLocation }: ServiceLocation
       : null,
   ].filter(Boolean).join(", ");
 
-  // Inline Anchor context item (locked correction, 2026-08-22) — no independent card
+  // Inline Anchor context item (three-row correction, 2026-08-22) — no independent card
   // border/padding/background; the Anchor owns the one boundary for the whole strip.
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex flex-col gap-1">
       <span className="text-xs font-semibold uppercase tracking-widest text-[var(--ophalo-muted)] shrink-0">
-        Location
+        Service location
       </span>
-      {hasAddress ? (
-        <span className="text-sm text-[var(--ophalo-ink)]">{addressLine}</span>
-      ) : (
-        <span className="inline-flex items-center gap-1 text-sm font-medium text-[var(--ophalo-attention)]">
-          <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
-          Not on file
-        </span>
-      )}
-      {canEdit && (
-        <button
-          type="button"
-          onClick={onEditLocation}
-          className={`text-xs font-semibold text-[var(--keep-accent)] hover:underline ${FOCUS_RING} rounded`}
-        >
-          {hasAddress ? "Edit" : "Add"}
-        </button>
-      )}
+      <div className="flex items-center gap-2">
+        {hasAddress ? (
+          <span className="text-sm text-[var(--ophalo-ink)]">{addressLine}</span>
+        ) : (
+          <span className="inline-flex items-center gap-1 text-sm font-medium text-[var(--ophalo-attention)]">
+            <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+            Not on file
+          </span>
+        )}
+        {canEdit && (
+          <button
+            type="button"
+            onClick={onEditLocation}
+            className={`text-xs font-semibold text-[var(--keep-accent)] hover:underline ${FOCUS_RING} rounded`}
+          >
+            {hasAddress ? "Edit" : "Add"}
+          </button>
+        )}
+      </div>
     </div>
   );
 }

@@ -139,25 +139,10 @@ interface DetailHeroProps {
   detail: KeepRequestDetailResult;
 }
 
-// Anchor row 1, left side (locked correction, 2026-08-22): reference/status/attention/name
-// compressed onto one line — no own card chrome, no second stacked row. Share affordances moved
-// to CustomerPageHeroActions, rendered separately by the Anchor as a row-2 inline context item.
-export function DetailHero({ detail }: DetailHeroProps) {
+// Anchor row 1, left side (three-row correction, 2026-08-22): reference/status/attention only —
+// customer identity is its own full-width row 2 (DetailHeroName), not compressed onto this line.
+export function DetailHeroBadges({ detail }: DetailHeroProps) {
   const hasAttention = detail.attentionLevel !== "none";
-
-  // ADR-150: customer page viewed info shown in header badges
-  const pageViewedInfo = useMemo(() => {
-    if (detail.customerPageLastViewedAtUtc) {
-      return {
-        text: `Viewed ${formatEventTime(detail.customerPageLastViewedAtUtc)}`,
-        isAmber: detail.customerPageViewedAfterLatestUpdate === false,
-      };
-    }
-    if (!detail.needsShare) {
-      return { text: "Not yet viewed", isAmber: true };
-    }
-    return null;
-  }, [detail.customerPageLastViewedAtUtc, detail.customerPageViewedAfterLatestUpdate, detail.needsShare]);
 
   return (
     <div className="flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1">
@@ -173,6 +158,29 @@ export function DetailHero({ detail }: DetailHeroProps) {
           {reasonLabel(detail.attentionReason)}
         </KeepBadge>
       )}
+    </div>
+  );
+}
+
+// Anchor row 2 (three-row correction, 2026-08-22): customer identity as its own full-width row,
+// beneath the reference/status/attention row and above the contact/location/owner row.
+export function DetailHeroName({ detail }: DetailHeroProps) {
+  // ADR-150: customer page viewed info shown alongside identity
+  const pageViewedInfo = useMemo(() => {
+    if (detail.customerPageLastViewedAtUtc) {
+      return {
+        text: `Viewed ${formatEventTime(detail.customerPageLastViewedAtUtc)}`,
+        isAmber: detail.customerPageViewedAfterLatestUpdate === false,
+      };
+    }
+    if (!detail.needsShare) {
+      return { text: "Not yet viewed", isAmber: true };
+    }
+    return null;
+  }, [detail.customerPageLastViewedAtUtc, detail.customerPageViewedAfterLatestUpdate, detail.needsShare]);
+
+  return (
+    <div className="flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1">
       <h1 className="font-serif text-lg font-semibold leading-tight text-[var(--ophalo-ink)] truncate">
         {detail.customerName}
       </h1>
