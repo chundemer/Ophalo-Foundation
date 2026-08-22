@@ -29,9 +29,11 @@ Those directions remain subject to their own ADR/build-log decisions.
 **Status:** Layout-shell batch complete and committed (`24220d7`, 2026-08-22), establishing the
 structural baseline — compact Anchor + single Work Canvas and no Proposed Scope. Workbench visual
 slice A (three-row Anchor + Canvas max-width frame) is now also complete and committed (`fbcba40`,
-2026-08-22) — see slice A in "Next approved sequence" below for detail. Slices B and C (Communication
-& Planning consolidation, contextual module density) remain outstanding; do not mistake either
-committed batch for full visual-production acceptance.
+2026-08-22), and slice B (Communication & Planning consolidation) is committed (`49440c8`,
+2026-08-22) — see "Next approved sequence" below for detail on both. Slice C (contextual module
+density) is implemented but its visual-zoom evidence is outstanding, blocked on the pre-existing
+P0 shell-scroll bug below; do not mistake any committed batch for full visual-production
+acceptance until each slice's evidence is captured.
 
 **Locked UI source:**
 [Request Detail / Workbench production interaction specification](ux-design/v2/request-detail-workbench-signoff-spec.md).
@@ -123,8 +125,8 @@ truth but uses the focused single-column behavior in the signoff spec.
    resolved/can-close. **Read-only/unauthorized was not screenshotted** (no local Viewer-role
    account exists yet) — behavior is covered by an automated test only; visual confirmation is
    deferred, not blocking.
-2. **Workbench visual slice B — Communication & Planning consolidation:** Implemented, not yet
-   committed (2026-08-22). Preflight surfaced a real contradiction between this section's own
+2. **Workbench visual slice B — Communication & Planning consolidation:** Complete, commit
+   `49440c8` (2026-08-22). Preflight surfaced a real contradiction between this section's own
    "planning row" wording (Follow Up On + Planned For + internal priority together) and the
    locked signoff spec, which had placed internal priority under Record details. Christian
    resolved it explicitly: internal priority moves into the planning row (locked exception now
@@ -144,15 +146,107 @@ truth but uses the focused single-column behavior in the signoff spec.
    full-width buttons, which made the three columns look unevenly spaced. Fixed by making the
    select `w-full` with matching padding/font-size (`DetailPanels.tsx`). Re-verified: `tsc
    --noEmit` clean, all 163 `request-detail` tests pass. Committed.
-3. **Workbench visual slice C — contextual module density:** preflight the Actual Work presentation,
-   activity/history, and Record details disclosure; remove remaining card explosion and duplication
-   only where the existing authorization/data-flow contract is preserved.
+3. **Workbench visual slice C — contextual module density:** Implemented (2026-08-22). Christian's
+   decisions: (1) Work Execution merges `ActualWorkCard` + `ActualWorkHistoryCard` into one
+   enclosing card following the Slice B pattern, but Visit History's divider/subsection renders
+   only when a submitted visit actually exists or on a real load error — the old "No visits
+   submitted yet." filler subsection is removed entirely, and the whole module self-hides when
+   neither has content. (2) Record details shares one enclosing card across its five panels
+   (`CustomerSignalPanel`, `RelatedWorkPanel`, `TeamSection`, `FeedbackSummaryCard`,
+   `SourceMetaPanel`, each gained a `bare` prop); render only the panels that apply, with dividers
+   appearing only between panels that actually render (relies on Tailwind's `divide-y` sibling
+   selector — a hidden panel returns `null`, so it emits no DOM node and no empty-gap divider).
+   No authorization/data-flow changes. Verified: `tsc --noEmit` clean; full suite 572/572 passing
+   (one `ActualWorkHistoryCard` test updated for the removed filler-subsection behavior). Files:
+   `ActualWorkCard.tsx`, `ActualWorkHistoryCard.tsx`, `DetailPanels.tsx`,
+   `RequestDetailContent.tsx`, `TeamSection.tsx`, plus the one test file above.
+   **Visual evidence outstanding:** the required 100%/125%/150% desktop zoom screenshots were not
+   captured — screenshot review instead surfaced an unrelated, pre-existing P0 shell bug (see
+   below) that made the live page unusable for verification. Capture evidence once that bug is
+   resolved; do not treat Slice C as visually signed off until then.
+
+### Pre-existing P0 — Workbench document scrolls on window resize (not caused by Slice B/C)
+
+**Status:** Confirmed pre-existing by Christian (reproduces on the Slice B commit, `49440c8`,
+before any Slice C changes). Discovered during Slice C screenshot review; blocks visual sign-off
+for both slices but is out of scope for either slice's own batch — needs its own preflight/session.
+
+**Symptom:** after an OS-level window resize while the Workbench is in wide pane-split mode
+(`workbenchWideActive`/`isWide`), the whole document becomes scrolled — the top nav, the sticky
+Request Anchor, and the Queue pane's own header/filters scroll off-screen together, which defeats
+the Workbench contract (only the Queue and Work Canvas should scroll independently; the app shell
+and Anchor must stay fixed). `App.tsx`'s intended guard (`workbenchWideActive` drives `h-dvh
+overflow-hidden` on the app root and `min-h-0 overflow-hidden` on `main`, per commit `c550d53`,
+which fixed this same bug class once before) is present and applying correctly in the DOM, but the
+document remains genuinely scrollable afterward.
+
+**Narrowed via live console diagnostics (not yet root-caused):**
+- `document.documentElement.scrollHeight` exceeds `window.innerHeight` by a small, resize-
+  dependent amount (observed 37px, 417px, 82px across different sessions) after a resize.
+- No element is responsible: a DOM sweep for elements extending past the viewport with no
+  clipping ancestor (`overflow-y: auto/scroll/hidden` on any ancestor up to `<body>`) returns
+  empty. No `position: fixed`/`absolute` element extends past the viewport either.
+- Not a horizontal-scrollbar-induced reflow: `scrollWidth === clientWidth === innerWidth`.
+- Not a stale one-frame layout cache: the discrepancy survives two `requestAnimationFrame` passes
+  plus a forced synchronous reflow (`document.body.offsetHeight` read).
+- Not a frozen inline JS-set height: swept `html, body, #root, #root *` for any element near the
+  stale `scrollHeight` value or carrying an inline `style.height` — none found.
+- A manual `window.scrollTo(0, 0)` run from devtools *after* the resize gesture has fully settled
+  reliably fixes the visible symptom. Resetting scroll on every `resize` event (rather than
+  debounced to the trailing edge) does not stick — consistent with the browser's own native
+  scroll re-clamping firing mid-drag and winning the race against an immediate reset.
+
+**Attempted fixes, all reverted (did not resolve it or the session moved on to isolate root cause
+first):** reset scroll on `workbenchWideActive` transition only; reset on every `resize` event;
+debounce the reset to 150ms after the last `resize` event; swap `h-dvh` → `h-screen` on the app
+root. `App.tsx` is back to its pre-investigation state (no diff).
+
+**Next session:** needs live browser devtools access (Elements/Layout panels, not just console
+snippets relayed through chat) to find what's actually contributing the residual scrollable
+overflow, since it isn't any element the console sweeps could name. Candidates not yet checked:
+CSS `contain`/`content-visibility` on any ancestor, `scrollbar-gutter`, and whether the
+`ResizeObserver` in `RequestWorkbenchShell.tsx` is itself reporting a size that doesn't match the
+DOM at time of measurement during a live resize (vs. only after it settles).
 4. The Owner/Admin financial review card (8B, see Direct Actual Work section below) stays deferred
    until Christian explicitly decides it belongs in a future UI batch. Remaining API-preflight gaps
    are incremental action-specific work, not a reason to invent client-side primary-action logic.
 
 Each visual slice needs desktop evidence at 100%, 125%, and 150% zoom plus focused regression
 coverage. Do not bundle the three slices or restart another broad Request Detail rewrite.
+
+### Blocking attention-contract gap — queue membership must explain itself on Request Detail
+
+**Status:** Discovered during Workbench visual verification; resolve before declaring the redesigned
+Request Detail production-ready. This is a product/API contract gap, not a CSS or client-side
+presentation issue.
+
+The server's **Needs Attention** queue/count correctly includes three different operational
+conditions:
+
+1. persisted active attention (`AttentionLevel != None`);
+2. a due/overdue `FollowUpOn` promise; and
+3. an overdue first business response (the Request-row **Response overdue** badge).
+
+Today, `AttentionGuidanceCard` in Request Detail renders only when the detail payload has both a
+non-`none` `attentionLevel` and an `attentionReason`. The latter two queue-membership conditions
+can therefore appear in Needs Attention without a Request Detail **Why / Resolve by** explanation.
+This produces a false operational distinction: a user opens a row labelled Needs Attention yet sees
+no corresponding guidance panel. The timing-change example has persisted attention metadata and
+does render the panel; most Response-overdue rows do not.
+
+**Locked correction:** every request admitted to **Needs Attention** must receive an equivalent,
+server-authored Request Detail attention explanation and safe resolution guidance. The client must
+not derive the reason, recommend an action, or decide what clears the state from dates/statuses.
+The detail contract needs to expose the authoritative effective attention reason/level and bounded
+guidance for read-time first-response-overdue and due/overdue Follow Up On cases, alongside the
+existing persisted-attention path. Keep lifecycle/attention effects truthful: recording work does
+not clear attention; only the server-authorized resolution does.
+
+**Required next session (separate from visual Slice B):** preflight the list-membership predicate,
+detail mapper/DTO, authorization/effective-action contract, and the exact resolution behavior for
+each of the three cases. Add an end-to-end matrix proving that every Needs Attention row has its
+matching Request Detail guidance—or is not admitted to that queue. Do not paper over this with a
+frontend fallback card.
 
 **Detailed evidence:**
 [Request Detail / Workbench API preflight](ux-design/v2/request-detail-workbench-api-preflight.md)

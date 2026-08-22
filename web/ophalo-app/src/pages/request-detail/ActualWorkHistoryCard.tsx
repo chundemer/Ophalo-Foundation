@@ -6,6 +6,9 @@ import { formatDate } from "./helpers";
 interface ActualWorkHistoryCardProps {
   state: ActualWorkHistoryState;
   onRetry: () => void;
+  // bare: no outer card chrome — used when a parent shares one enclosing Work Execution module
+  // with ActualWorkCard (locked exception, 2026-08-22).
+  bare?: boolean;
 }
 
 const OUTCOME_LABELS: Record<string, string> = {
@@ -56,14 +59,16 @@ function VisitEntry({ visit }: { visit: ActualWorkSubmittedVisitEntry }) {
  * (no visibility) never blocks the rest of request-detail; a transport/other failure renders a
  * compact retry affordance instead of a generic error card.
  */
-export function ActualWorkHistoryCard({ state, onRetry }: ActualWorkHistoryCardProps) {
+export function ActualWorkHistoryCard({ state, onRetry, bare = false }: ActualWorkHistoryCardProps) {
   if (state.status === "loading" || state.status === "hidden") {
     return null;
   }
 
+  const wrapperCls = bare ? "px-5 py-4" : "rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-5 py-4";
+
   if (state.status === "error") {
     return (
-      <div className="rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-5 py-4">
+      <div className={wrapperCls}>
         <p className="text-sm font-semibold text-[var(--ophalo-ink)] mb-1">Visit history</p>
         <p className="text-xs text-[var(--ophalo-muted)] mb-3">Unable to load visit history.</p>
         <KeepButton variant="secondary" onClick={onRetry} className="w-full">
@@ -73,18 +78,20 @@ export function ActualWorkHistoryCard({ state, onRetry }: ActualWorkHistoryCardP
     );
   }
 
+  // No filler for the empty case — an authorized recorder with no submitted visits yet has
+  // nothing to disclose here; ActualWorkCard already covers that state.
+  if (state.submittedVisits.length === 0) {
+    return null;
+  }
+
   return (
-    <div className="rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-5 py-4">
+    <div className={wrapperCls}>
       <p className="text-sm font-semibold text-[var(--ophalo-ink)] mb-3">Visit history</p>
-      {state.submittedVisits.length === 0 ? (
-        <p className="text-xs text-[var(--ophalo-muted)]">No visits submitted yet.</p>
-      ) : (
-        <div className="space-y-3">
-          {state.submittedVisits.map((visit) => (
-            <VisitEntry key={visit.id} visit={visit} />
-          ))}
-        </div>
-      )}
+      <div className="space-y-3">
+        {state.submittedVisits.map((visit) => (
+          <VisitEntry key={visit.id} visit={visit} />
+        ))}
+      </div>
     </div>
   );
 }

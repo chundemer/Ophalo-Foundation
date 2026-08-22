@@ -12,9 +12,12 @@ interface TeamSectionProps {
   // no watcher list, no watch/mute controls. Those stay in the full card, used in canvas record
   // context. Assign/clear behavior is unchanged.
   compact?: boolean;
+  // bare: full mode without its own card chrome — used when a parent shares one enclosing
+  // Record details module with other panels (locked exception, 2026-08-22).
+  bare?: boolean;
 }
 
-export function TeamSection({ requestId, detail, onDetailUpdated, compact = false }: TeamSectionProps) {
+export function TeamSection({ requestId, detail, onDetailUpdated, compact = false, bare = false }: TeamSectionProps) {
   const { canWatch, canUnwatch, canMute, canUnmute, canAssignResponsible } =
     detail.availableActions;
 
@@ -158,7 +161,7 @@ export function TeamSection({ requestId, detail, onDetailUpdated, compact = fals
   }
 
   return (
-    <div className="rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-4 py-4 space-y-4">
+    <div className={bare ? "px-4 py-3 space-y-4" : "rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-4 py-4 space-y-4"}>
       <p className="text-sm font-semibold text-[var(--ophalo-muted)]">Team &amp; context</p>
 
       {errorBlock}

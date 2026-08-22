@@ -17,11 +17,10 @@ describe("ActualWorkHistoryCard", () => {
     expect(container).toBeEmptyDOMElement();
   });
 
-  it("renders the card with an explicit empty-state message when there are no submitted visits", () => {
+  it("renders nothing when loaded with no submitted visits (no empty-state filler)", () => {
     const state: ActualWorkHistoryState = { status: "loaded", submittedVisits: [] };
-    render(<ActualWorkHistoryCard state={state} onRetry={vi.fn()} />);
-    expect(screen.getByText("Visit history")).toBeInTheDocument();
-    expect(screen.getByText("No visits submitted yet.")).toBeInTheDocument();
+    const { container } = render(<ActualWorkHistoryCard state={state} onRetry={vi.fn()} />);
+    expect(container).toBeEmptyDOMElement();
   });
 
   it("renders a compact retry state on error and calls onRetry", async () => {

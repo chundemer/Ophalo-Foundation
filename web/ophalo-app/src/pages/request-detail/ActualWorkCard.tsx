@@ -4,6 +4,9 @@ import { type ActualWorkCaptureState } from "./useActualWorkCapture";
 interface ActualWorkCardProps {
   state: ActualWorkCaptureState;
   onStartCapture: () => void;
+  // bare: no outer card chrome — used when a parent shares one enclosing Work Execution module
+  // with ActualWorkHistoryCard (locked exception, 2026-08-22).
+  bare?: boolean;
 }
 
 /**
@@ -12,14 +15,16 @@ interface ActualWorkCardProps {
  * render nothing, same as ProposedScopeCard, so a transient probe failure never blocks the rest
  * of the request-detail cards and a non-Responsible watcher never sees an action that would fail.
  */
-export function ActualWorkCard({ state, onStartCapture }: ActualWorkCardProps) {
+export function ActualWorkCard({ state, onStartCapture, bare = false }: ActualWorkCardProps) {
   if (state.status === "loading" || state.status === "hidden" || state.status === "error") {
     return null;
   }
 
+  const wrapperCls = bare ? "px-5 py-4" : "rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-5 py-4";
+
   if (state.status === "no-draft") {
     return (
-      <div className="rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-5 py-4">
+      <div className={wrapperCls}>
         <p className="text-sm font-semibold text-[var(--ophalo-ink)] mb-1">Actual work</p>
         <p className="text-xs text-[var(--ophalo-muted)] mb-3">
           {state.submittedCount === 0
@@ -36,7 +41,7 @@ export function ActualWorkCard({ state, onStartCapture }: ActualWorkCardProps) {
   }
 
   return (
-    <div className="rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-5 py-4">
+    <div className={wrapperCls}>
       <p className="text-sm font-semibold text-[var(--ophalo-ink)] mb-1">Actual work</p>
       <p className="text-xs text-[var(--ophalo-muted)] mb-3">
         {state.draft.lines.length === 0

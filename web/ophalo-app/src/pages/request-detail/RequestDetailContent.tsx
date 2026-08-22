@@ -53,6 +53,10 @@ export function RequestDetailContent(props: RequestDetailContentProps) {
   const layoutProps: RequestDetailLayoutProps = { requestId, detail, highlights, showProminentFeedbackCard, onDetailUpdated, onContactLaunched, onEditLocation, onRecordFollowUp, onCreateFollowUp, onReviewSuccess };
   const actualWorkCapture = useActualWorkCapture(requestId);
   const actualWorkHistory = useActualWorkHistory(requestId);
+  const actualWorkCardVisible = actualWorkCapture.state.status === "no-draft" || actualWorkCapture.state.status === "draft";
+  const actualWorkHistoryVisible =
+    actualWorkHistory.state.status === "error" ||
+    (actualWorkHistory.state.status === "loaded" && actualWorkHistory.state.submittedVisits.length > 0);
   return (
     <div className="flex flex-1 min-h-0 flex-col">
       <RequestDetailAnchor
@@ -78,14 +82,20 @@ export function RequestDetailContent(props: RequestDetailContentProps) {
         {/* 2. Customer need — the original request only */}
         <OriginalRequestCard detail={detail} />
 
-        {/* 3. Work execution — Actual Work, conditional (self-hides when not entitled/present) */}
-        <div className="space-y-3">
-          <ActualWorkCard
-            state={actualWorkCapture.state}
-            onStartCapture={() => void actualWorkCapture.startCapture()}
-          />
-          <ActualWorkHistoryCard state={actualWorkHistory.state} onRetry={() => void actualWorkHistory.retry()} />
-        </div>
+        {/* 3. Work execution — Actual Work, one compact module (locked exception, 2026-08-22:
+            capture and visit history share one enclosing card; visit history renders only when
+            visits actually exist, no "no visits submitted" filler). Whole module self-hides when
+            neither has content. */}
+        {(actualWorkCardVisible || actualWorkHistoryVisible) && (
+          <div className="rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] divide-y divide-[var(--ophalo-border)]">
+            <ActualWorkCard
+              state={actualWorkCapture.state}
+              onStartCapture={() => void actualWorkCapture.startCapture()}
+              bare
+            />
+            <ActualWorkHistoryCard state={actualWorkHistory.state} onRetry={() => void actualWorkHistory.retry()} bare />
+          </div>
+        )}
 
         {/* 4. Communication & planning — one cohesive surface: composer and Follow-Up/Planned-For
             share one enclosing card (locked correction, 2026-08-22), not two disconnected ones.
@@ -150,12 +160,15 @@ export function RequestDetailContent(props: RequestDetailContentProps) {
             Record details
             <span className="text-[var(--ophalo-muted)] transition-transform group-open:rotate-180">⌄</span>
           </summary>
-          <div className="mt-3 space-y-3">
-            <CustomerSignalPanel detail={detail} />
-            <RelatedWorkPanel requestId={requestId} onNavigate={props.onNavigate} />
-            <TeamSection requestId={requestId} detail={detail} onDetailUpdated={onDetailUpdated} />
-            {!showProminentFeedbackCard && <FeedbackSummaryCard detail={detail} />}
-            <SourceMetaPanel detail={detail} />
+          {/* Each panel self-hides (returns null) when it has nothing meaningful to show;
+              divide-y only borders elements with an actual preceding DOM sibling, so a hidden
+              panel never leaves a divider/empty gap. */}
+          <div className="mt-3 rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] divide-y divide-[var(--ophalo-border)]">
+            <CustomerSignalPanel detail={detail} bare />
+            <RelatedWorkPanel requestId={requestId} onNavigate={props.onNavigate} bare />
+            <TeamSection requestId={requestId} detail={detail} onDetailUpdated={onDetailUpdated} bare />
+            {!showProminentFeedbackCard && <FeedbackSummaryCard detail={detail} bare />}
+            <SourceMetaPanel detail={detail} bare />
           </div>
         </details>
       </div>

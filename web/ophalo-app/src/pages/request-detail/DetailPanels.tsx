@@ -295,11 +295,11 @@ function FeedbackReviewSection({
 // Feedback summary card — quiet completed state for positive feedback
 // ---------------------------------------------------------------------------
 
-export function FeedbackSummaryCard({ detail }: { detail: KeepRequestDetailResult }) {
+export function FeedbackSummaryCard({ detail, bare = false }: { detail: KeepRequestDetailResult; bare?: boolean }) {
   if (detail.feedbackWasResolved !== true || !detail.feedbackSubmittedAtUtc) return null;
 
   return (
-    <div className="rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-5 py-4">
+    <div className={bare ? "px-4 py-3" : "rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-5 py-4"}>
       <p className="text-sm font-semibold text-[var(--ophalo-ink)]">Customer feedback</p>
       <p className="mt-1 text-xs text-[var(--ophalo-muted)]">
         Customer confirmed their request was resolved
@@ -418,9 +418,10 @@ export function OriginalRequestCard({ detail }: { detail: KeepRequestDetailResul
 interface RelatedWorkPanelProps {
   requestId: string;
   onNavigate?: (id: string) => void;
+  bare?: boolean;
 }
 
-export function RelatedWorkPanel({ requestId, onNavigate }: RelatedWorkPanelProps) {
+export function RelatedWorkPanel({ requestId, onNavigate, bare = false }: RelatedWorkPanelProps) {
   const { data } = useQuery({
     queryKey: ["request-related-work", requestId],
     queryFn: () => api.getRelatedWork(requestId),
@@ -430,7 +431,7 @@ export function RelatedWorkPanel({ requestId, onNavigate }: RelatedWorkPanelProp
   if (!onNavigate || !data || data.totalCount === 0) return null;
 
   return (
-    <div className="rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-5 py-4">
+    <div className={bare ? "px-4 py-3" : "rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-5 py-4"}>
       <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ophalo-muted)] mb-2">
         Related work for this customer ({data.totalCount})
       </p>
@@ -643,15 +644,16 @@ export function ServiceLocationPanel({ detail, onEditLocation }: ServiceLocation
 
 interface CustomerSignalPanelProps {
   detail: KeepRequestDetailResult;
+  bare?: boolean;
 }
 
-export function CustomerSignalPanel({ detail }: CustomerSignalPanelProps) {
+export function CustomerSignalPanel({ detail, bare = false }: CustomerSignalPanelProps) {
   const hasCustomerSignal = detail.source === "public_intake" &&
     !!(detail.intakeUrgency || detail.contactPreference);
   if (!hasCustomerSignal) return null;
 
   return (
-    <div className="rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-4 py-3">
+    <div className={bare ? "px-4 py-3" : "rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-4 py-3"}>
       <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ophalo-muted)] mb-1">Customer signal</p>
       <div className="flex flex-wrap gap-1.5 mb-1.5">
         {detail.intakeUrgency === "urgent" && <KeepBadge variant="attention">Customer marked urgent</KeepBadge>}
@@ -772,9 +774,9 @@ export function TriagePanel({ detail, onDetailUpdated, bare = false }: TriagePan
 // Source metadata panel
 // ---------------------------------------------------------------------------
 
-export function SourceMetaPanel({ detail }: { detail: KeepRequestDetailResult }) {
+export function SourceMetaPanel({ detail, bare = false }: { detail: KeepRequestDetailResult; bare?: boolean }) {
   return (
-    <div className="px-1 space-y-0.5">
+    <div className={bare ? "px-4 py-3 space-y-0.5" : "px-1 space-y-0.5"}>
       <p className="text-xs text-[var(--ophalo-muted)]">
         Source: {detail.source === "public_intake" ? "Customer intake form" : "Team added"}
       </p>
