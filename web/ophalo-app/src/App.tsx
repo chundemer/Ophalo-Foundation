@@ -160,6 +160,9 @@ function AppShell() {
 
   const navItems = getNavItems(role, priceBookEntitled);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  // Incremented only by an explicit Requests navigation. The wide workbench consumes this as a
+  // fresh-entry intent without remounting its Queue pane (so filters and scroll still persist).
+  const [requestEntryIntent, setRequestEntryIntent] = useState(0);
 
   function navigate(newRoute: AppRoute) {
     const base = window.location.pathname + window.location.search;
@@ -196,6 +199,12 @@ function AppShell() {
 
   function navigateToSettings(section?: "public-profile" | "policy" | "team") {
     navigate({ page: "settings", section });
+  }
+
+  function navigateToRequests() {
+    setRequestEntryIntent((current) => current + 1);
+    navigate({ page: "requests" });
+    setNavContext(null);
   }
 
   function selectRequest(requestId: string, context?: RequestNavContext, focus?: string) {
@@ -241,7 +250,7 @@ function AppShell() {
         <header className="md:hidden flex items-center justify-between px-4 h-14 shrink-0 bg-[var(--ophalo-card)] border-b border-[var(--ophalo-border)]">
           <button
             type="button"
-            onClick={() => navigate({ page: "requests" })}
+            onClick={navigateToRequests}
             aria-label="Go to requests"
             className="flex items-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-offset-2 rounded"
           >
@@ -270,7 +279,7 @@ function AppShell() {
           <div className="px-4 py-4 border-b border-[var(--ophalo-border)]">
             <button
               type="button"
-              onClick={() => navigate({ page: "requests" })}
+              onClick={navigateToRequests}
               aria-label="Go to requests"
               className="block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-offset-2 rounded"
             >
@@ -287,7 +296,7 @@ function AppShell() {
               <button
                 key={item.id}
                 type="button"
-                onClick={() => navigate({ page: item.id })}
+                onClick={() => item.id === "requests" ? navigateToRequests() : navigate({ page: item.id })}
                 className={`w-full flex items-center gap-2.5 rounded-md px-3 py-2.5 text-sm text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-offset-2 ${
                   activeNavId === item.id
                     ? "font-semibold bg-[var(--keep-accent-bg)] text-[var(--ophalo-navy)]"
@@ -341,7 +350,7 @@ function AppShell() {
         <header className="hidden md:flex items-center gap-3 px-4 h-14 shrink-0 bg-[var(--ophalo-card)] border-b border-[var(--ophalo-border)]">
           <button
             type="button"
-            onClick={() => navigate({ page: "requests" })}
+            onClick={navigateToRequests}
             aria-label="Go to requests"
             className="flex items-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-offset-2 rounded shrink-0"
           >
@@ -356,7 +365,7 @@ function AppShell() {
           <nav className="flex items-center gap-1 ml-2">
             <button
               type="button"
-              onClick={() => navigate({ page: "requests" })}
+              onClick={navigateToRequests}
               className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-offset-2 ${
                 activeNavId === "requests"
                   ? "bg-[var(--keep-accent-bg)] text-[var(--ophalo-navy)] font-semibold"
@@ -465,6 +474,7 @@ function AppShell() {
             onSelectRequest={selectRequest}
             onNavigateSettings={navigateToSettings}
             onStartCapture={openCapture}
+            requestEntryIntent={requestEntryIntent}
             onBack={backToRequests}
             narrowPrevId={prevRequestId}
             narrowNextId={nextRequestId}
@@ -476,7 +486,7 @@ function AppShell() {
             onStartCapture={openCapture}
             role={role}
             onNavigateSettings={navigateToSettings}
-            onNavigateRequests={() => navigate({ page: "requests" })}
+            onNavigateRequests={navigateToRequests}
           />
         )}
         {route.page === "settings" && <Settings callerRole={role} scrollToSection={route.section} />}
@@ -565,7 +575,7 @@ function AppShell() {
           items={navItems}
           activeId={activeNavId}
           roleLabel={roleLabel(role)}
-          onNavigate={(id) => navigate({ page: id })}
+          onNavigate={(id) => id === "requests" ? navigateToRequests() : navigate({ page: id })}
           onClose={() => setMobileMenuOpen(false)}
         />
       )}

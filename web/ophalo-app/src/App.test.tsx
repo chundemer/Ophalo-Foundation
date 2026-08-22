@@ -118,6 +118,32 @@ describe("App — desktop New Request CTA on Price Book routes", () => {
   });
 });
 
+describe("App — brand navigation", () => {
+  beforeEach(() => {
+    window.location.hash = "";
+    mockGetMe.mockReset().mockResolvedValue({
+      accountUserId: "u1",
+      accountId: "a1",
+      isAuthenticated: true,
+      isVerified: true,
+      accountRole: "owner",
+      businessName: "Acme HVAC",
+    });
+    mockGetCapabilityPackages.mockReset().mockResolvedValue([]);
+  });
+
+  it("sends the desktop brand lockup to an explicit Requests entry", async () => {
+    const user = userEvent.setup();
+    const { container } = renderApp();
+    await waitFor(() => expect(screen.getByRole("button", { name: "Requests" })).toBeInTheDocument());
+
+    await user.click(within(getDesktopHeader(container)).getByRole("button", { name: "Go to requests" }));
+
+    expect(window.location.hash).toBe("");
+    expect(screen.queryByRole("heading", { name: "Getting started" })).not.toBeInTheDocument();
+  });
+});
+
 // URL-addressable Price Book tabs (2026-08-12): the hash query string is the source of truth for
 // which tab renders, not in-memory component state — direct load, refresh, and back/forward must
 // all resolve the same way tab selection does.

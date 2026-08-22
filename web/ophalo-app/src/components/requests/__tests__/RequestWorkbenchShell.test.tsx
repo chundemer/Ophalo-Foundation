@@ -179,6 +179,64 @@ describe("RequestWorkbenchShell", () => {
     });
   });
 
+  it("Backlog item 3: auto-selects the first eligible request once, on initial wide entry with a settled ranked queue", async () => {
+    mockGetRequests.mockResolvedValue(listResultMulti());
+    const onSelectRequest = vi.fn();
+    renderShell(onSelectRequest);
+    await waitFor(() => expect(mockGetRequests).toHaveBeenCalled());
+    fireWidth(1001);
+
+    await waitFor(() =>
+      expect(onSelectRequest).toHaveBeenCalledWith(mockRequestSummaries[0].id, {
+        requestIds: mockRequestSummaries.slice(0, 3).map((r) => r.id),
+      }),
+    );
+    expect(onSelectRequest).toHaveBeenCalledTimes(1);
+  });
+
+  it("Backlog item 3: does not auto-select again once a detail route has already been entered", async () => {
+    const onSelectRequest = vi.fn();
+    renderShell(onSelectRequest, { page: "detail", requestId: mockRequestSummaries[0].id });
+    fireWidth(1001);
+    await waitFor(() => expect(mockGetRequests).toHaveBeenCalled());
+    await waitFor(() => expect(screen.getByTestId("request-detail-stub")).toBeInTheDocument());
+
+    expect(onSelectRequest).not.toHaveBeenCalled();
+  });
+
+  it("Backlog item 3: an explicit Requests entry selects again without remounting the Queue", async () => {
+    mockGetRequests.mockResolvedValue(listResultMulti());
+    const onSelectRequest = vi.fn();
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const props = {
+      role: "owner" as const,
+      route: { page: "requests" as const },
+      viewCounts: null,
+      onViewCountsUpdate: () => {},
+      onSelectRequest,
+      onNavigateSettings: () => {},
+      onStartCapture: () => {},
+      onBack: () => {},
+    };
+    const { rerender } = render(
+      <QueryClientProvider client={queryClient}>
+        <RequestWorkbenchShell {...props} requestEntryIntent={0} />
+      </QueryClientProvider>,
+    );
+    await waitFor(() => expect(mockGetRequests).toHaveBeenCalled());
+    fireWidth(1001);
+    await waitFor(() => expect(onSelectRequest).toHaveBeenCalledTimes(1));
+
+    rerender(
+      <QueryClientProvider client={queryClient}>
+        <RequestWorkbenchShell {...props} requestEntryIntent={1} />
+      </QueryClientProvider>,
+    );
+
+    await waitFor(() => expect(onSelectRequest).toHaveBeenCalledTimes(2));
+    expect(mockGetRequests).toHaveBeenCalledTimes(1);
+  });
+
   it("falls back to the one-pane presentation in History mode, even when wide", async () => {
     mockGetRequests.mockImplementation((args: { view: string }) =>
       Promise.resolve(

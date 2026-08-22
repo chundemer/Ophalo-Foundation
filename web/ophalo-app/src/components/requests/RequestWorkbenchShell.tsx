@@ -1,8 +1,16 @@
 import { useEffect, useRef, useState, useCallback } from "react";
-import type { AccountRole, KeepRequestViewCounts } from "../../lib/apiClient";
+import type { AccountRole, KeepRequestSummary, KeepRequestViewCounts } from "../../lib/apiClient";
 import { Requests, type AppliedQueueSnapshot } from "../../pages/Requests";
 import { RequestDetail } from "../../pages/RequestDetail";
 import { PriorityPreview } from "./PriorityPreview";
+
+// Backlog item 3 (2026-08-21): duplicated rather than imported — PriorityPreview.tsx keeps this
+// predicate internal. Same locked rule as PriorityPreview's own `hasAttention`: the
+// `attentionLevel !== "none"` check used throughout the codebase (RequestRow.tsx, DetailHero.tsx,
+// BusinessSection.tsx).
+function hasAttention(row: KeepRequestSummary): boolean {
+  return row.attention.attentionLevel !== "none";
+}
 
 // Locked in keep-ui-design-model-v2.md §13 (build-log 133): 360px Queue pane + 640px protected
 // Workbench minimum + 1px border. Below this, no pane split can honor either minimum.
@@ -18,6 +26,9 @@ interface RequestWorkbenchShellProps {
   onSelectRequest: (requestId: string, navContext?: { requestIds: string[] }, focus?: string) => void;
   onNavigateSettings: (section?: "public-profile" | "policy" | "team") => void;
   onStartCapture: () => void;
+  // Bumped only for an explicit Requests navigation. It restarts initial selection without
+  // remounting Requests, preserving the Queue pane's filters and scroll position.
+  requestEntryIntent?: number;
   // Narrow-detail fallback only (structurally unchanged from the pre-Step-5 standalone route) —
   // the frozen navigation context set at selection time, not the Queue pane's live snapshot.
   onBack?: () => void;
@@ -35,6 +46,7 @@ export function RequestWorkbenchShell(props: RequestWorkbenchShellProps) {
     onSelectRequest,
     onNavigateSettings,
     onStartCapture,
+    requestEntryIntent = 0,
     onBack,
     narrowPrevId,
     narrowNextId,
@@ -69,6 +81,33 @@ export function RequestWorkbenchShell(props: RequestWorkbenchShellProps) {
   // wide treatment.
   const showTwoPaneRequests = isWide && route.page === "requests" && !!snapshot?.isRankedView;
   const showPaneDetail = isWide && !!detailRoute;
+
+  // Backlog item 3 (2026-08-21): one-time initial selection, latched for the life of this mount.
+  // Any detail route — auto-selected or user-chosen — latches the ref so a browser Back/Forward
+  // return to bare #/requests stays on the aggregate Priority Preview instead of re-selecting.
+  // Only App's explicit Requests-navigation intent resets it; filters/tabs/live snapshot updates
+  // never select a replacement customer.
+  const hasAutoSelectedRef = useRef(false);
+  const priorRequestEntryIntentRef = useRef(requestEntryIntent);
+  useEffect(() => {
+    if (priorRequestEntryIntentRef.current === requestEntryIntent) return;
+    priorRequestEntryIntentRef.current = requestEntryIntent;
+    hasAutoSelectedRef.current = false;
+  }, [requestEntryIntent]);
+  useEffect(() => {
+    if (detailRoute) {
+      hasAutoSelectedRef.current = true;
+      return;
+    }
+    if (hasAutoSelectedRef.current) return;
+    if (!showTwoPaneRequests) return;
+    if (!snapshot || snapshot.isLoading || snapshot.isError || snapshot.isForbidden) return;
+    if (snapshot.requests.length === 0) return;
+
+    hasAutoSelectedRef.current = true;
+    const firstEligible = snapshot.requests.find(hasAttention) ?? snapshot.requests[0];
+    onSelectRequest(firstEligible.id, { requestIds: snapshot.requests.map((r) => r.id) });
+  }, [detailRoute, showTwoPaneRequests, snapshot, onSelectRequest, requestEntryIntent]);
   const paneMode = showTwoPaneRequests || showPaneDetail;
   // The Queue pane persists mounted across #/requests <-> #/request/{id} at wide widths (Step 5
   // requirement 1) so its filters/scroll/live snapshot survive; below the protected minimum with

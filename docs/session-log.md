@@ -391,11 +391,20 @@ separate and must not displace these selected shell corrections.
    accessible-name regex fixed to an exact match, since the whole row's accessible name now
    includes quick-action label text). 35/35 `RequestRow.test.tsx` + 58/58 `Requests.*`/
    `RequestWorkbenchShell.test.tsx` passing. `tsc --noEmit` and `git diff --check` clean.
-3. **Intentional wide-shell initial selection.** On a wide initial `#/requests` entry, make the
-   default workbench content deliberate rather than a sparse Priority Preview. Preflight the
-   one-time selection contract: select the first eligible row from the active applied queue, retain
-   an explicit selection while it remains in view, and never silently switch customers when a live
-   filter removes it. Keep narrow one-pane behavior unchanged.
+3. **Intentional wide-shell initial selection — complete.** `RequestWorkbenchShell.tsx` auto-selects
+   the first eligible row (same attention-first predicate as `PriorityPreview`'s `hasAttention`,
+   `attentionLevel !== "none"`, falling back to queue order) once per mount, latched by a
+   `hasAutoSelectedRef` that locks as soon as any detail route — auto or user-chosen — is entered.
+   A deliberate return to bare `#/requests` (browser back/forward, filters, tabs, live snapshot
+   updates) never re-selects a replacement customer while that latch holds. A new `requestEntryIntent`
+   counter (`App.tsx`) is bumped only by explicit Requests-navigation affordances (brand lockup,
+   primary nav item, mobile menu) and resets the latch without remounting the Queue pane, so
+   filters/scroll survive; `navigateToRequests()` centralizes this. Narrow one-pane behavior
+   unchanged. 3 production files (`RequestWorkbenchShell.tsx`, `App.tsx`, plus the reused
+   `PriorityPreview` predicate duplicated locally per the locked preflight decision — not exported),
+   2 test files (`RequestWorkbenchShell.test.tsx` +2 cases, `App.test.tsx` +1 case for the brand-nav
+   entry-intent path). 36/36 (`App.test.tsx` + `RequestWorkbenchShell.test.tsx`) + 59/59 `Requests.*`
+   passing, `tsc --noEmit` and `git diff --check` clean.
 4. **Queue navigation hierarchy and active-context clarity.** Preflight a compact, fixed Queue
    header that unmistakably identifies the active primary queue and applied result set, while
    separating primary queues (Needs Attention, All Work, My Work) from Office Review, Views, and
