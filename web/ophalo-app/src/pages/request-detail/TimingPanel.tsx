@@ -15,9 +15,9 @@ interface TimingPanelProps {
   detail: KeepRequestDetailResult;
   onDetailUpdated: (updated: KeepRequestDetailResult) => void;
   onRecordFollowUp?: () => void;
-  // bare: no outer card chrome (border/rounding/bg) or standalone label — used when a parent
-  // wraps this together with UnifiedComposer in one shared Communication & Planning surface
-  // (locked correction, 2026-08-22). The active-timing accent border is preserved either way.
+  // bare: renders as two compact grid-item tiles (no outer card chrome, shared label, or info
+  // row) so a parent can align them with TriagePanel's priority tile in one shared
+  // Communication & Planning planning row (locked exception, 2026-08-22).
   bare?: boolean;
 }
 
@@ -153,37 +153,8 @@ export function TimingPanel({ requestId, detail, onDetailUpdated, onRecordFollow
     }
   }
 
-  return (
-    <div>
-      {!bare && (
-        <p className="px-1 text-xs font-semibold uppercase tracking-widest text-[var(--ophalo-muted)] mb-2">
-          Follow-up &amp; planned timing
-        </p>
-      )}
-      <div
-        className={`divide-y divide-[var(--ophalo-border)] ${bare ? "" : "rounded-xl border bg-[var(--ophalo-card)]"} ${
-          hasActiveTiming ? "border-[var(--keep-accent)] border-l-4" : bare ? "" : "border-[var(--ophalo-border)]"
-        }`}
-      >
-        {bare && (
-          <div className="px-4 py-2 text-xs font-semibold uppercase tracking-widest text-[var(--ophalo-muted)]">
-            Follow-up &amp; planned timing
-          </div>
-        )}
-        {/* Info row */}
-        <div className="flex items-center gap-2 px-4 py-2.5">
-          <Clock
-            className={`h-3.5 w-3.5 shrink-0 ${hasActiveTiming ? "text-[var(--keep-accent)]" : "text-[var(--ophalo-muted)]"}`}
-            aria-hidden="true"
-          />
-          <p className="text-xs leading-5 text-[var(--ophalo-muted)]">
-            Internal — does not notify the customer.
-          </p>
-        </div>
-
-        {/* Follow-up section */}
-        {canSetFollowUpOn && (
-          <div className="px-4 py-3 space-y-2">
+  const followUpTile = canSetFollowUpOn && (
+          <div className={bare ? "space-y-2" : "px-4 py-3 space-y-2"}>
             <p className="text-xs text-[var(--ophalo-muted)]">Your internal reminder to check back on this request.</p>
             <button
               type="button"
@@ -315,11 +286,10 @@ export function TimingPanel({ requestId, detail, onDetailUpdated, onRecordFollow
               </div>
             )}
           </div>
-        )}
+  );
 
-        {/* Planned-for section */}
-        {canSetPlannedFor && (
-          <div className="px-4 py-3 space-y-2">
+  const plannedTile = canSetPlannedFor && (
+          <div className={bare ? "space-y-2" : "px-4 py-3 space-y-2"}>
             <p className="text-xs text-[var(--ophalo-muted)]">When work is scheduled to be performed.</p>
             <button
               type="button"
@@ -403,7 +373,39 @@ export function TimingPanel({ requestId, detail, onDetailUpdated, onRecordFollow
               </div>
             )}
           </div>
-        )}
+  );
+
+  if (bare) {
+    return (
+      <>
+        {followUpTile}
+        {plannedTile}
+      </>
+    );
+  }
+
+  return (
+    <div>
+      <p className="px-1 text-xs font-semibold uppercase tracking-widest text-[var(--ophalo-muted)] mb-2">
+        Follow-up &amp; planned timing
+      </p>
+      <div
+        className={`divide-y divide-[var(--ophalo-border)] rounded-xl border bg-[var(--ophalo-card)] ${
+          hasActiveTiming ? "border-[var(--keep-accent)] border-l-4" : "border-[var(--ophalo-border)]"
+        }`}
+      >
+        {/* Info row */}
+        <div className="flex items-center gap-2 px-4 py-2.5">
+          <Clock
+            className={`h-3.5 w-3.5 shrink-0 ${hasActiveTiming ? "text-[var(--keep-accent)]" : "text-[var(--ophalo-muted)]"}`}
+            aria-hidden="true"
+          />
+          <p className="text-xs leading-5 text-[var(--ophalo-muted)]">
+            Internal — does not notify the customer.
+          </p>
+        </div>
+        {followUpTile}
+        {plannedTile}
       </div>
     </div>
   );

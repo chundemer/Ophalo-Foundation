@@ -8,6 +8,7 @@ import {
   OriginalRequestCard,
   RelatedWorkPanel,
   TriagePanel,
+  CustomerSignalPanel,
   FeedbackSummaryCard,
   SourceMetaPanel,
   WorkControlsGroup,
@@ -96,15 +97,22 @@ export function RequestDetailContent(props: RequestDetailContentProps) {
             <div id="focus-panel-update">
               <UnifiedComposer requestId={requestId} detail={detail} onDetailUpdated={onDetailUpdated} customerUpdateDraft={props.customerUpdateDraft} onCustomerUpdateDraftChange={props.onCustomerUpdateDraftChange} customerUpdateDraftStatus={props.customerUpdateDraftStatus} onCustomerUpdateDraftStatusChange={props.onCustomerUpdateDraftStatusChange} highlight={highlights.sendUpdate} bare />
             </div>
-            <TimingPanel
-              requestId={requestId}
-              detail={detail}
-              onDetailUpdated={onDetailUpdated}
-              onRecordFollowUp={onRecordFollowUp}
-              bare
-            />
+            <div className="px-4 py-3">
+              <p className="text-xs leading-5 text-[var(--ophalo-muted)] mb-2">
+                Internal — none of this notifies the customer.
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <TimingPanel
+                  requestId={requestId}
+                  detail={detail}
+                  onDetailUpdated={onDetailUpdated}
+                  onRecordFollowUp={onRecordFollowUp}
+                  bare
+                />
+                <TriagePanel detail={detail} onDetailUpdated={onDetailUpdated} bare />
+              </div>
+            </div>
           </div>
-          <TriagePanel detail={detail} onDetailUpdated={onDetailUpdated} />
         </div>
 
         {/* 5. Activity — one chronological timeline */}
@@ -143,6 +151,7 @@ export function RequestDetailContent(props: RequestDetailContentProps) {
             <span className="text-[var(--ophalo-muted)] transition-transform group-open:rotate-180">⌄</span>
           </summary>
           <div className="mt-3 space-y-3">
+            <CustomerSignalPanel detail={detail} />
             <RelatedWorkPanel requestId={requestId} onNavigate={props.onNavigate} />
             <TeamSection requestId={requestId} detail={detail} onDetailUpdated={onDetailUpdated} />
             {!showProminentFeedbackCard && <FeedbackSummaryCard detail={detail} />}

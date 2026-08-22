@@ -123,9 +123,27 @@ truth but uses the focused single-column behavior in the signoff spec.
    resolved/can-close. **Read-only/unauthorized was not screenshotted** (no local Viewer-role
    account exists yet) — behavior is covered by an automated test only; visual confirmation is
    deferred, not blocking.
-2. **Workbench visual slice B — Communication & Planning consolidation:** preflight and implement
-   the one-module composer/planning surface and compact planning row without changing existing
-   mutation, validation, or follow-up-resolution behavior.
+2. **Workbench visual slice B — Communication & Planning consolidation:** Implemented, not yet
+   committed (2026-08-22). Preflight surfaced a real contradiction between this section's own
+   "planning row" wording (Follow Up On + Planned For + internal priority together) and the
+   locked signoff spec, which had placed internal priority under Record details. Christian
+   resolved it explicitly: internal priority moves into the planning row (locked exception now
+   recorded in the spec, `request-detail-workbench-signoff-spec.md`); customer-signal badges
+   (intake urgency/contact preference) split out of the old `TriagePanel` into a new
+   `CustomerSignalPanel` and stay under Record details. `TriagePanel` is now priority-only and
+   gained a `bare` prop; `TimingPanel` restructured its bare mode into two grid-item tiles (no
+   more nested divide-y/label/info-row) so Follow Up On, Planned For, and Internal Priority render
+   as three aligned columns in one row beneath the composer, inside the shared Communication &
+   Planning card. No mutation/validation/API changes. Verified: `tsc --noEmit` clean; all 163
+   `request-detail` tests pass (2 existing test files needed a `CustomerSignalPanel: () => null`
+   mock added alongside their existing `TriagePanel`/`TimingPanel` mocks); desktop screenshots at
+   100%, 125%, and 150% zoom confirm the row holds up with no overlap/wrap. Files: `DetailPanels.tsx`,
+   `TimingPanel.tsx`, `RequestDetailContent.tsx`, plus the two test files above.
+   **Follow-up fix (2026-08-22):** Christian's screenshot review caught the Internal Priority
+   `<select>` sizing to its content instead of matching the Follow Up/Planned For tiles'
+   full-width buttons, which made the three columns look unevenly spaced. Fixed by making the
+   select `w-full` with matching padding/font-size (`DetailPanels.tsx`). Re-verified: `tsc
+   --noEmit` clean, all 163 `request-detail` tests pass. Committed.
 3. **Workbench visual slice C — contextual module density:** preflight the Actual Work presentation,
    activity/history, and Record details disclosure; remove remaining card explosion and duplication
    only where the existing authorization/data-flow contract is preserved.

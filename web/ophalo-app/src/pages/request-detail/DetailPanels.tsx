@@ -638,50 +638,63 @@ export function ServiceLocationPanel({ detail, onEditLocation }: ServiceLocation
 }
 
 // ---------------------------------------------------------------------------
-// Triage panel — customer signal and internal priority
+// Customer signal panel — record-details-only surface for intake urgency/contact preference
+// ---------------------------------------------------------------------------
+
+interface CustomerSignalPanelProps {
+  detail: KeepRequestDetailResult;
+}
+
+export function CustomerSignalPanel({ detail }: CustomerSignalPanelProps) {
+  const hasCustomerSignal = detail.source === "public_intake" &&
+    !!(detail.intakeUrgency || detail.contactPreference);
+  if (!hasCustomerSignal) return null;
+
+  return (
+    <div className="rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-4 py-3">
+      <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ophalo-muted)] mb-1">Customer signal</p>
+      <div className="flex flex-wrap gap-1.5 mb-1.5">
+        {detail.intakeUrgency === "urgent" && <KeepBadge variant="attention">Customer marked urgent</KeepBadge>}
+        {detail.intakeUrgency === "soon" && <KeepBadge variant="default">Customer asked for soon follow-up</KeepBadge>}
+        {detail.contactPreference === "phone_call" && <KeepBadge variant="default">Prefers call</KeepBadge>}
+        {detail.contactPreference === "text_message" && <KeepBadge variant="default">Prefers text</KeepBadge>}
+        {detail.contactPreference === "email" && <KeepBadge variant="default">Prefers email</KeepBadge>}
+        {detail.contactPreference === "no_preference" && <KeepBadge variant="default">No preference</KeepBadge>}
+      </div>
+      <p className="text-xs text-[var(--ophalo-muted)]">
+        Review the request, then update the customer or log contact if needed.
+      </p>
+    </div>
+  );
+}
+
+// Triage panel — internal priority only (customer signal moved to CustomerSignalPanel,
+// Record details; locked exception 2026-08-22 moved this into the Communication & Planning
+// planning row, alongside Follow Up On / Planned For)
 // ---------------------------------------------------------------------------
 
 interface TriagePanelProps {
   detail: KeepRequestDetailResult;
   onDetailUpdated: (updated: KeepRequestDetailResult) => void;
+  // bare: no outer card chrome/label — used when a parent renders this as one tile of the
+  // shared Communication & Planning planning row (locked exception, 2026-08-22).
+  bare?: boolean;
 }
 
 const PRIORITY_CONFLICT_MESSAGE =
   "This request was updated by another team member. Refresh to see the latest priority.";
 
-export function TriagePanel({ detail, onDetailUpdated }: TriagePanelProps) {
+export function TriagePanel({ detail, onDetailUpdated, bare = false }: TriagePanelProps) {
   const [pendingPriority, setPendingPriority] = useState<string | null | undefined>(undefined);
   const [prioritySubmitting, setPrioritySubmitting] = useState(false);
   const [priorityConflictDisabled, setPriorityConflictDisabled] = useState(false);
   const [priorityError, setPriorityError] = useState<string | null>(null);
   const canEdit = detail.availableActions.canAddInternalNote;
   const displayPriority = pendingPriority !== undefined ? pendingPriority : detail.businessPriority;
-  const hasCustomerSignal = detail.source === "public_intake" &&
-    !!(detail.intakeUrgency || detail.contactPreference);
 
-  return (
-    <div>
-      <p className="px-1 text-xs font-semibold uppercase tracking-widest text-[var(--ophalo-muted)] mb-2">Triage</p>
-      <div className="rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-4 py-3 space-y-3">
-        {hasCustomerSignal && (
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ophalo-muted)] mb-1">Customer signal</p>
-            <div className="flex flex-wrap gap-1.5 mb-1.5">
-              {detail.intakeUrgency === "urgent" && <KeepBadge variant="attention">Customer marked urgent</KeepBadge>}
-              {detail.intakeUrgency === "soon" && <KeepBadge variant="default">Customer asked for soon follow-up</KeepBadge>}
-              {detail.contactPreference === "phone_call" && <KeepBadge variant="default">Prefers call</KeepBadge>}
-              {detail.contactPreference === "text_message" && <KeepBadge variant="default">Prefers text</KeepBadge>}
-              {detail.contactPreference === "email" && <KeepBadge variant="default">Prefers email</KeepBadge>}
-              {detail.contactPreference === "no_preference" && <KeepBadge variant="default">No preference</KeepBadge>}
-            </div>
-            <p className="text-xs text-[var(--ophalo-muted)]">
-              Review the request, then update the customer or log contact if needed.
-            </p>
-          </div>
-        )}
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ophalo-muted)] mb-1">Internal priority</p>
-          {canEdit ? (
+  const content = (
+    <>
+      {canEdit ? (
             <>
               <select
                 value={displayPriority ?? ""}
@@ -707,7 +720,7 @@ export function TriagePanel({ detail, onDetailUpdated }: TriagePanelProps) {
                     setPrioritySubmitting(false);
                   }
                 }}
-                className="text-xs text-[var(--ophalo-ink)] bg-transparent border border-[var(--ophalo-border)] rounded px-2 py-0.5 focus:outline-none focus:ring-1 focus:ring-[var(--keep-accent)] disabled:opacity-60 disabled:cursor-not-allowed"
+                className="w-full text-sm text-[var(--ophalo-ink)] bg-transparent border border-[var(--ophalo-border)] rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-[var(--keep-accent)] disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 <option value="">Not set</option>
                 <option value="routine">Routine</option>
@@ -722,17 +735,34 @@ export function TriagePanel({ detail, onDetailUpdated }: TriagePanelProps) {
                 <p className="text-xs text-[var(--ophalo-muted)] mt-1">
                   Set priority to handle this ahead of routine work.
                 </p>
-              ) : null}
-            </>
-          ) : (
-            <span className="text-sm font-semibold text-[var(--ophalo-ink)]">
-              {detail.businessPriority === "urgent" && "Team marked urgent"}
-              {detail.businessPriority === "soon" && "Team marked soon"}
-              {detail.businessPriority === "routine" && "Routine"}
-              {!detail.businessPriority && <span className="text-[var(--ophalo-muted)]">Not set</span>}
-            </span>
-          )}
-        </div>
+      ) : null}
+        </>
+      ) : (
+        <span className="text-sm font-semibold text-[var(--ophalo-ink)]">
+          {detail.businessPriority === "urgent" && "Team marked urgent"}
+          {detail.businessPriority === "soon" && "Team marked soon"}
+          {detail.businessPriority === "routine" && "Routine"}
+          {!detail.businessPriority && <span className="text-[var(--ophalo-muted)]">Not set</span>}
+        </span>
+      )}
+    </>
+  );
+
+  if (bare) {
+    return (
+      <div className="space-y-2">
+        <p className="text-xs text-[var(--ophalo-muted)]">Internal priority</p>
+        {content}
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <p className="px-1 text-xs font-semibold uppercase tracking-widest text-[var(--ophalo-muted)] mb-2">Triage</p>
+      <div className="rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-4 py-3 space-y-1">
+        <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ophalo-muted)]">Internal priority</p>
+        {content}
       </div>
     </div>
   );

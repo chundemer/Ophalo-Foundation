@@ -74,7 +74,7 @@ The product owner approved the following reconciled interaction model on 2026-08
 | Mark work done | Anchor primary when server authorizes completion and no active attention | If completion is authorized during attention, it may appear only as an explicit demoted warning action: **Mark work done, attention remains**. |
 | Close request | Relevant closeout module / Anchor primary only when server authorizes `canClose` | Owner/Admin only; red filled action plus confirmation. Never a routine “More” action. |
 | Edit service location | Relevant contextual record-details module | Inline edit. Detail-owned; no generic Queue mutation. |
-| Set internal priority | Relevant contextual record-details module | Inline edit. Must remain visually and semantically distinct from customer urgency. |
+| Set internal priority | First-canvas timing/planning context, aligned with Follow Up On and Planned For (locked exception, 2026-08-22 — see note below) | Inline edit. Must remain visually and semantically distinct from customer urgency. |
 | Share customer-page link | Low-frequency utility in Anchor | Use server-authorized share intent/page token. Never show raw token; sharing does not prove customer receipt or clear attention unless confirmed by the server’s separate flow. |
 | Generic status change | Relevant contextual lifecycle module only when server exposes it | Detail-owned; do not turn status into a default action menu. |
 
@@ -89,6 +89,8 @@ The product owner approved the following reconciled interaction model on 2026-08
 | Closed | Read-only completed record; show unresolved feedback review only where authorized | No lifecycle primary. Owner/Admin may see authorized feedback-review action. | Terminal transition clears normal active attention. Closed unresolved feedback is a distinct Owner/Admin review state, not reopened work. | Closed does not mean the customer received a particular update, and feedback review does not reopen it. |
 
 **Attention precedence:** An active attention reason always precedes ordinary completion in visual hierarchy. Server-authored guidance controls the reason and resolution effects. Stronger attention may supersede due/overdue Follow Up. Customer-reported urgency and internal priority are signals, not attention by themselves. Amber communicates risk; it is never a filled action.
+
+**Locked exception (2026-08-22):** Internal priority moves from the Record-details module into the Communication & Planning surface, forming a compact, aligned three-item planning row with Follow Up On and Planned For (density/operational-usability decision, not a semantic change). Internal priority remains distinct from customer-reported urgency and is still not attention by itself.
 
 ## 5. Desktop Workbench wireframe
 
@@ -106,9 +108,9 @@ The product owner approved the following reconciled interaction model on 2026-08
 │                                                                      │     (omit when absent; capture opens focused workspace)              │
 │                                                                      │  4. Communicate: [Customer update] [Internal note]                  │
 │                                                                      │     explicit customer-visible/internal disclosure                    │
-│                                                                      │  5. Timing: Follow Up On / Planned For (when permitted)              │
+│                                                                      │  5. Timing/planning: Follow Up On / Planned For / Internal priority  │
 │                                                                      │  6. Activity and history                                              │
-│                                                                      │  7. Record details: location, internal priority, watch/mute, share  │
+│                                                                      │  7. Record details: location, watch/mute, share                     │
 └────────────────────────────────────────────────────────────────────┴───────────────────────────────────────────────────────────────────┘
 ```
 

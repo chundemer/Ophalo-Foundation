@@ -17,6 +17,7 @@ vi.mock("../DetailPanels", () => ({
   RelatedWorkPanel: () => null,
   MarkHandledCard: () => null,
   TriagePanel: () => null,
+  CustomerSignalPanel: () => null,
   FeedbackSummaryCard: () => null,
   SourceMetaPanel: () => null,
   WorkControlsGroup: () => null,
