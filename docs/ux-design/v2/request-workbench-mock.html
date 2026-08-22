@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>OpHalo — Request Workbench mock</title>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: { ink: '#172033', canvas: '#f5f7fa', line: '#dbe2ea', navy: '#243b5a', keep: '#087e8b', amber: '#9a5b00' },
+            fontFamily: { serif: ['Georgia', 'serif'], sans: ['Inter', 'ui-sans-serif', 'system-ui'] },
+          },
+        },
+      };
+    </script>
+    <script src="https://cdn.tailwindcss.com"></script>
+  </head>
+  <body class="bg-slate-200 font-sans text-ink antialiased">
+    <!-- Concept mock only: no application behavior, API calls, or action permissions. -->
+    <main class="mx-auto h-screen max-w-[1600px] overflow-hidden bg-canvas shadow-2xl">
+      <div class="flex h-full min-w-[1000px]">
+        <!-- Pane 1: Queue owns its own scroll. -->
+        <aside class="flex w-[360px] shrink-0 flex-col border-r border-line bg-white">
+          <header class="border-b border-line px-5 pb-4 pt-5">
+            <div class="flex items-center justify-between">
+              <div>
+                <p class="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Keep</p>
+                <h1 class="mt-1 font-serif text-2xl font-semibold">Requests</h1>
+              </div>
+              <button class="rounded-lg bg-navy px-3 py-2 text-sm font-semibold text-white">New request</button>
+            </div>
+            <div class="mt-4 flex rounded-lg bg-slate-100 p-1 text-sm font-medium text-slate-600">
+              <button class="flex-1 rounded-md bg-white px-2 py-1.5 text-ink shadow-sm">Needs attention</button>
+              <button class="flex-1 px-2 py-1.5">My work</button>
+            </div>
+            <label class="mt-4 block">
+              <span class="sr-only">Search requests</span>
+              <input class="w-full rounded-lg border border-line bg-white px-3 py-2 text-sm outline-none ring-keep focus:ring-2" placeholder="Search requests" />
+            </label>
+          </header>
+          <div class="flex-1 overflow-y-auto p-3">
+            <p class="px-2 pb-2 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">7 need attention</p>
+            <button class="mb-2 w-full rounded-xl border border-keep bg-teal-50 px-3 py-3 text-left shadow-sm ring-1 ring-keep/20">
+              <div class="flex items-start justify-between gap-2"><span class="font-mono text-xs text-slate-500">MGN2U88P</span><span class="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber">Follow-up overdue</span></div>
+              <p class="mt-1 font-serif text-lg font-semibold">Charles C. Hundemer</p>
+              <p class="mt-1 truncate text-sm text-slate-600">Water heater is not producing hot water</p>
+              <p class="mt-2 text-xs font-medium text-slate-500">Brighton, TN · Received today</p>
+            </button>
+            <button class="mb-2 w-full rounded-xl border border-transparent px-3 py-3 text-left hover:border-line hover:bg-slate-50"><div class="flex justify-between"><span class="font-mono text-xs text-slate-500">RKP3D119</span><span class="text-xs font-medium text-amber">Needs update</span></div><p class="mt-1 font-serif text-lg font-semibold">Marta Sanchez</p><p class="mt-1 truncate text-sm text-slate-600">Kitchen faucet leak</p><p class="mt-2 text-xs text-slate-500">Memphis, TN · Yesterday</p></button>
+            <button class="mb-2 w-full rounded-xl border border-transparent px-3 py-3 text-left hover:border-line hover:bg-slate-50"><span class="font-mono text-xs text-slate-500">HDT5Q210</span><p class="mt-1 font-serif text-lg font-semibold">J. R. Wilson</p><p class="mt-1 truncate text-sm text-slate-600">Annual HVAC maintenance</p><p class="mt-2 text-xs text-slate-500">Atoka, TN · Scheduled Friday</p></button>
+            <button class="mb-2 w-full rounded-xl border border-transparent px-3 py-3 text-left hover:border-line hover:bg-slate-50"><span class="font-mono text-xs text-slate-500">VCS7M847</span><p class="mt-1 font-serif text-lg font-semibold">Avery Brooks</p><p class="mt-1 truncate text-sm text-slate-600">Garage outlet stopped working</p><p class="mt-2 text-xs text-slate-500">Covington, TN · Monday</p></button>
+          </div>
+        </aside>
+
+        <!-- Pane 2: one workbench scroll owner. -->
+        <section class="min-w-0 flex-1 overflow-y-auto bg-canvas">
+          <div class="mx-auto max-w-6xl p-5 lg:p-7">
+            <!-- Sticky Request Anchor: fixed inside the workbench, not the whole viewport. -->
+            <header class="sticky top-0 z-10 -mt-5 border-b border-line bg-canvas/95 py-5 backdrop-blur lg:-mt-7 lg:py-7">
+              <div class="rounded-2xl border border-line bg-white px-5 py-4 shadow-sm">
+                <div class="flex flex-wrap items-start justify-between gap-4">
+                  <div class="min-w-0">
+                    <div class="flex flex-wrap items-center gap-2 text-xs">
+                      <span class="font-mono text-slate-500">MGN2U88P</span>
+                      <span class="rounded-full bg-slate-100 px-2.5 py-1 font-semibold text-slate-700">Received</span>
+                      <span class="rounded-full bg-amber-100 px-2.5 py-1 font-semibold text-amber">Follow-up overdue</span>
+                    </div>
+                    <h2 class="mt-2 break-words font-serif text-[28px] font-semibold leading-tight">Charles C. Hundemer</h2>
+                  </div>
+                  <div class="flex flex-wrap items-center gap-2">
+                    <button class="rounded-lg border border-navy px-3.5 py-2 text-sm font-semibold text-navy">Log contact</button>
+                    <button class="rounded-lg bg-keep px-3.5 py-2 text-sm font-semibold text-white shadow-sm">Send customer update</button>
+                    <details class="relative">
+                      <summary class="cursor-pointer list-none rounded-lg border border-line px-3 py-2 text-sm font-semibold text-navy">More actions <span aria-hidden="true">⌄</span></summary>
+                      <div class="absolute right-0 top-11 z-20 w-52 rounded-xl border border-line bg-white p-2 shadow-lg">
+                        <button class="block w-full rounded-lg px-3 py-2 text-left text-sm hover:bg-slate-50">Assign or reassign</button>
+                        <button class="block w-full rounded-lg px-3 py-2 text-left text-sm hover:bg-slate-50">Set follow-up or plan date</button>
+                        <button class="block w-full rounded-lg px-3 py-2 text-left text-sm hover:bg-slate-50">Set internal priority</button>
+                        <button class="block w-full rounded-lg px-3 py-2 text-left text-sm hover:bg-slate-50">Share customer-page link</button>
+                        <button class="block w-full rounded-lg px-3 py-2 text-left text-sm hover:bg-slate-50">Watch / mute notifications</button>
+                        <button class="block w-full rounded-lg px-3 py-2 text-left text-sm hover:bg-slate-50">Edit service location</button>
+                      </div>
+                    </details>
+                  </div>
+                </div>
+                <div class="mt-4 grid gap-x-6 gap-y-2 border-t border-line pt-3 text-sm md:grid-cols-2 xl:grid-cols-4">
+                  <p class="min-w-0"><span class="mr-1.5 text-slate-400">☎</span><a class="font-medium text-keep underline decoration-keep/30 underline-offset-2" href="#">(190) 121-6715</a> <button class="ml-1 text-xs font-semibold text-navy underline">Scan to call</button> <button class="ml-1 text-xs font-semibold text-navy underline">Scan to text</button></p>
+                  <p class="min-w-0 truncate"><span class="mr-1.5 text-slate-400">✉</span><a class="font-medium text-keep underline decoration-keep/30 underline-offset-2" href="#">charles@example.com</a></p>
+                  <p class="min-w-0 md:col-span-2 xl:col-span-1"><span class="mr-1.5 text-slate-400">⌖</span>2198 Melrose Rd, Brighton, TN</p>
+                  <p><span class="mr-1.5 text-slate-400">◉</span>Responsible: Christian</p>
+                </div>
+              </div>
+            </header>
+
+            <div class="space-y-4 pb-12">
+              <section class="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4">
+                <div class="flex flex-wrap items-center justify-between gap-3"><div><p class="text-sm font-semibold text-amber">Follow-up overdue</p><p class="mt-1 text-sm leading-6 text-slate-700">Customer asked for a call back today. Review the request, then send an update or log the completed contact.</p></div><div class="flex shrink-0 gap-2"><button class="rounded-lg border border-amber-700 bg-white px-3 py-2 text-sm font-semibold text-amber">Record follow-up</button><button class="rounded-lg px-3 py-2 text-sm font-semibold text-navy underline">Clear attention…</button></div></div>
+              </section>
+              <section class="rounded-2xl border border-line bg-white px-5 py-5 shadow-sm">
+                <p class="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Customer’s request</p>
+                <p class="mt-3 max-w-4xl text-[15px] leading-7 text-slate-700">“Our water heater stopped producing hot water this morning. There is a small amount of water near the unit. We are home after 3pm and prefer a phone call.”</p>
+              </section>
+              <section class="rounded-2xl border border-line bg-white px-5 py-5 shadow-sm">
+                <div class="flex flex-wrap items-center justify-between gap-3"><div><p class="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Work</p><h3 class="mt-1 text-lg font-semibold">Actual work draft is open</h3></div><button class="rounded-lg bg-navy px-3.5 py-2 text-sm font-semibold text-white">Open actual work</button></div>
+                <p class="mt-2 text-sm leading-6 text-slate-600">Record only factual work performed on this visit. Pricing is not shown on this field surface.</p><div class="mt-3"><button class="text-sm font-semibold text-navy underline underline-offset-2">Mark work done</button><span class="ml-2 text-xs text-slate-500">Available, but not recommended while this request is still received.</span></div><div class="mt-4 border-t border-line pt-4"><p class="text-sm font-semibold">Proposed scope <span class="ml-2 font-normal text-slate-500">No scope shared</span></p><button class="mt-1 text-sm font-semibold text-navy underline underline-offset-2">Review proposed scope</button></div>
+              </section>
+              <section class="rounded-2xl border border-line bg-white px-5 py-5 shadow-sm">
+                <div class="flex gap-5 border-b border-line"><button class="border-b-2 border-keep pb-3 text-sm font-semibold text-keep">Customer update</button><button class="pb-3 text-sm font-semibold text-slate-500">Internal note</button></div>
+                <p class="mt-4 text-sm font-medium text-keep">Visible to customer</p><textarea class="mt-2 h-28 w-full resize-y rounded-xl border border-line p-3 text-sm outline-none focus:ring-2 focus:ring-keep" placeholder="Write an update for Charles…"></textarea><div class="mt-3 flex items-center justify-between gap-3"><p class="text-xs text-slate-500">Cmd/Ctrl + Enter to send</p><button class="rounded-lg bg-keep px-4 py-2 text-sm font-semibold text-white">Send update</button></div>
+              </section>
+              <section class="rounded-2xl border border-line bg-white px-5 py-5 shadow-sm"><div class="flex items-center justify-between"><div><p class="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Activity</p><h3 class="mt-1 text-lg font-semibold">Request history</h3></div><button class="text-sm font-semibold text-navy">All activity ▾</button></div><ol class="mt-5 space-y-5 border-l border-line pl-5 text-sm"><li><p class="font-medium">Follow-up became overdue</p><p class="mt-1 text-slate-500">Today at 8:00 AM · System</p></li><li><p class="font-medium">Customer request received</p><p class="mt-1 text-slate-500">Yesterday at 4:22 PM · Public intake</p></li><li><p class="font-medium">Request assigned to Christian</p><p class="mt-1 text-slate-500">Yesterday at 4:25 PM · Office</p></li></ol></section>
+              <section class="rounded-2xl border border-line bg-white px-5 py-5 shadow-sm"><p class="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Record context</p><div class="mt-3 grid gap-3 text-sm text-slate-600 md:grid-cols-3"><p><span class="block text-xs font-semibold text-slate-500">Customer preference</span>Phone call</p><p><span class="block text-xs font-semibold text-slate-500">Internal priority</span>Not set</p><p><span class="block text-xs font-semibold text-slate-500">Source</span>Public intake</p></div></section>
+            </div>
+          </div>
+        </section>
+      </div>
+    </main>
+  </body>
+</html>

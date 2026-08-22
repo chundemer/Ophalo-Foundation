@@ -1,6 +1,6 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-08-21
+**Last updated:** 2026-08-22
 **Deployment posture:** Not pilot-ready.
 **Purpose:** current operational handoff only — not an implementation archive.
 
@@ -23,6 +23,37 @@ See [Build Log 131](build-log/131-next-week-parallel-field-pilot-plan.md) and
 Do not infer implementation authority for equipment assets, QR tagging, customer quotes,
 invoicing, payments, QuickBooks sync, inventory, fleet replacement, or native-mobile work.
 Those directions remain subject to their own ADR/build-log decisions.
+
+## Active priority — Request Detail / Workbench contract slice
+
+**Status:** UI interaction model locked; Request Detail frontend implementation paused pending the
+bounded backend contract slice below. This is not a new discovery track and must not reopen the
+approved Workbench model.
+
+**Locked UI source:**
+[Request Detail / Workbench production interaction specification](ux-design/v2/request-detail-workbench-signoff-spec.md).
+Desktop remains Queue + one Workbench, with a compact sticky Request Anchor and one Work Canvas
+scroll surface. The controlled-pilot Workbench includes **Direct Actual Work only**; Proposed Scope
+is explicitly deferred from this go-live surface.
+
+**Required backend slice before Request Detail frontend work:**
+
+1. Expose the missing server-authorized availability flags for self-assign/clear responsible/manage
+   watchers, edit service location, set internal priority, and follow-up resolution.
+2. Return nullable, structured server-authored `AvailableActions.PrimaryAction` and bounded
+   attention-guidance metadata. The client may not choose a recommended attention-resolution action.
+3. Return a lightweight authorized, non-financial Actual Work summary on request detail: existence,
+   resumable-draft state, capture/view availability, and relevant count/state. Full Actual Work
+   data remains module-owned and loads only when its focused workspace opens.
+4. Add contract tests for the new fields across the approved lifecycle and role matrix.
+
+**Sequencing:** complete the backend slice → rerun the API preflight against the real payload →
+write the frontend build guide → implement the approved Workbench. Do not begin piecemeal Request
+Detail frontend production work against client-inferred permissions, recommendations, or Actual Work
+context.
+
+**Detailed evidence and acceptance:**
+[Request Detail / Workbench API preflight](ux-design/v2/request-detail-workbench-api-preflight.md).
 
 ## Active work — Direct Actual Work
 
