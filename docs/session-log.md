@@ -360,7 +360,10 @@ The UI-001 migration is complete: Steps 3–4/density refinement are committed
 (`6d85b2f`). Real-browser 100/125/150% zoom acceptance passed for both roles, and Step 6 route /
 one-pane verification passed. The following are newly observed shell refinements, deliberately
 ordered as separate bounded batches. They require a mechanical preflight and approval before code;
-they are not authorized by the completed migration.
+they are not authorized by the completed migration. **Items 1–6 below are all complete for now**
+(item 6's real-browser acceptance is deferred to the next Request Detail pane upgrade's review
+pass, not waived). **Next scheduled work is the Request Detail pane upgrade** — needs its own
+preflight before code; not yet scoped in this log.
 
 **Global next-work selection:** start with the ordered UI shell backlog below. Direct Actual Work
 Slice 6B is historical/completed, not a scheduled next task; its later deferred UI work remains
@@ -446,8 +449,9 @@ separate and must not displace these selected shell corrections.
    test file (`RequestRow.test.tsx`, 1 new pane-mode compact-row case). 36/36 `RequestRow.test.tsx`
    + 86/86 adjacent `Requests.*`/`requests/__tests__` suites passing, `tsc --noEmit` and
    `git diff --check` clean.
-6. **Wide-workbench height-boundary fix — complete, pending Christian's real-browser
-   acceptance.** Fixes the item 4 finding above: nothing between `#root` and
+6. **Wide-workbench height-boundary fix — complete for now.** Christian is deferring full
+   real-browser acceptance until the next Request Detail pane upgrade/review pass rather than
+   signing off separately now; revisit acceptance then. Fixes the item 4 finding above: nothing between `#root` and
    `RequestWorkbenchShell` established a real bounded height, so its internal
    `min-h-0`/`overflow-y-auto` pane-scroll chain was inert and the whole document scrolled
    instead. Scoped narrowly (Christian's locked design) so only the wide Queue+Detail workbench
@@ -466,9 +470,10 @@ separate and must not displace these selected shell corrections.
    (`App.tsx`, `RequestWorkbenchShell.tsx` — prop/wiring only, no test-file changes needed since
    jsdom doesn't lay out real heights and can't exercise this). 110/110 relevant frontend tests
    (`App.test.tsx`, `RequestWorkbenchShell.test.tsx`, `Requests.*`, `requests/__tests__`) passing,
-   `tsc --noEmit` and `git diff --check` clean. **Still required:** Christian's real-browser
+   `tsc --noEmit` and `git diff --check` clean. **Deferred, not waived:** Christian's real-browser
    acceptance — wide (≥1001px) Pane 1/Pane 2 scroll independently with no whole-page scroll, and
-   narrow width / Price Book / Settings / Home still scroll normally.
+   narrow width / Price Book / Settings / Home still scroll normally — is folded into the next
+   Request Detail pane upgrade's review pass rather than signed off standalone.
 
 **UI-001 migration progress:**
 - Step 1 (measurement/sizing spike) — **complete, 2026-08-21**
