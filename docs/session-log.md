@@ -26,38 +26,69 @@ Those directions remain subject to their own ADR/build-log decisions.
 
 ## Active priority — Request Detail / Workbench redesign
 
-**Status:** UI interaction model locked. Correction (2026-08-22): an earlier version of this section
-and the linked preflight wrongly assumed no authenticated Request Detail frontend existed. It does —
-`web/ophalo-app` already has a working Request Detail page and a complete Actual Work integration
-(`ActualWorkCard.tsx`, `ActualWorkComposer.tsx`, `ActualWorkHistoryCard.tsx`,
-`useActualWorkCapture.ts`, `useActualWorkHistory.ts`, passing tests). That is not a new prerequisite
-to build — it is an existing module to reuse.
+**Status:** Layout-shell batch complete and committed (`24220d7`, 2026-08-22). The compact Anchor +
+single-Work-Canvas Workbench is live in `web/ophalo-app`, reusing the existing Actual Work
+capture/history module. UI interaction model remains locked per the signoff spec below.
 
 **Locked UI source:**
 [Request Detail / Workbench production interaction specification](ux-design/v2/request-detail-workbench-signoff-spec.md).
-Desktop remains Queue + one Workbench, with a compact sticky Request Anchor and one Work Canvas
-scroll surface. The controlled-pilot Workbench includes **Direct Actual Work only**; Proposed Scope
-is explicitly deferred from this go-live surface.
+Desktop is Queue + one Workbench, with a compact sticky Request Anchor and one Work Canvas scroll
+surface. The controlled-pilot Workbench includes **Direct Actual Work only**; Proposed Scope is
+explicitly deferred from this go-live surface.
 
-**Confirmed sequencing (2026-08-22):**
+**What shipped (commit `24220d7`):**
+- `RequestDetailAnchor.tsx` (new): a compact 2-row grid card — row 1 is
+  reference/status/attention/name (`DetailHero`, compressed to one line) with the one authorized
+  primary action (ADR-434 Mark-work-done, or Close when `canClose`) on the right; row 2 is
+  contact/service-location/owner/Log-contact/share as inline context items, no independent card
+  chrome per item.
+- `RequestWorkbenchShell.tsx`: the Workbench pane wrapper is now `overflow-hidden` —
+  `RequestDetail`'s own Work Canvas is the sole scroll owner (matches the Queue pane's existing
+  sole-scroll pattern).
+- `RequestDetailContent.tsx`: single-scroll Work Canvas in the locked fixed order (attention →
+  customer need → Actual Work → Communication & Planning → activity → record-details disclosure).
+  Communication & Planning (composer + Follow-Up/Planned-For) now shares one enclosing card
+  (`UnifiedComposer`/`TimingPanel` both gained a `bare` prop for this).
+- `RequestDetailDesktopLayout.tsx` / `RequestDetailMobileLayout.tsx`: deleted; both pane-specific
+  layouts collapsed into the one fixed-order canvas.
 
-1. Build the redesigned two-pane Workbench (sticky Anchor, single Work Canvas, contact/
-   communication/timing/history layout) against the 17/24 actions the API preflight's contract
-   matrix already marks "Ready for frontend as-is."
-2. Reuse the existing Actual Work capture/history components as one conditional Work Canvas module —
-   not a separate backend phase or a new prerequisite.
-3. The Owner/Admin financial review card (8B, see Direct Actual Work section below) stays deferred
-   until the redesigned Workbench is in place, unless a later session explicitly decides it belongs
-   in the same UI batch.
-4. The remaining API preflight gaps (self-assign/clear-responsible/watcher-management flags, edit
+**Omitted / removed from the Request Detail render path in this redesign:**
+- **Proposed Scope** (`ProposedScopeCard`, `ProposedScopeComposer`, `useProposedScopeCapture`) —
+  explicitly deferred from this pilot Workbench per the locked spec; not wired anywhere in the new
+  layout. Components remain in the codebase, just unreachable from Request Detail.
+- **`CustomerPanel`** (duplicate phone/email card) — removed; contact now lives only in the Anchor.
+  Still defined in `DetailPanels.tsx` but unused — flagged for a follow-up deletion pass.
+- **`LogContactCard`** (standalone "Log external contact" card) — removed as a canvas card;
+  replaced by one "Log contact" entry point in the Anchor. Still defined in `DetailPanels.tsx` but
+  unused — flagged for a follow-up deletion pass.
+- **Full-card `CloseRequestCard` / `WorkDoneCard` treatment** — both now render only via their new
+  `compact` prop as the Anchor's single primary-action button; the old full-width bordered-card
+  rendering in the canvas is gone (components kept, just always used compact from Request Detail).
+- **`TeamSection`'s "Assigned" row in the canvas** — removed from the canvas (full) render mode;
+  owner is shown only in the Anchor's compact strip now. The canvas's full `TeamSection` renders
+  only Watching/mute content, and only when such content exists.
+- Individually-carded **Contact / Service Location / Owner** — no longer their own bordered cards
+  anywhere on the page; `CustomerContactStrip`, `ServiceLocationPanel`, and `TeamSection` (compact)
+  all lost their independent border/padding/background and render as plain inline Anchor items.
+
+**Known follow-up cleanup (not yet done):** delete the now-unused `CustomerPanel` and
+`LogContactCard` from `DetailPanels.tsx` rather than leaving them as dead exports.
+
+**Next steps:**
+1. The Owner/Admin financial review card (8B, see Direct Actual Work section below) stays deferred
+   until Christian explicitly decides it belongs in a future UI batch.
+2. The remaining API preflight gaps (self-assign/clear-responsible/watcher-management flags, edit
    service location, set internal priority, follow-up-resolution flag, server-authored
-   `PrimaryAction`/attention-guidance metadata) are real but not Actual Work work and not a blanket
-   blocker — resolve each one incrementally when its specific Workbench action is built, not as a
-   bundled up-front backend batch.
+   `PrimaryAction`/attention-guidance metadata) are real but not a blanket blocker — resolve each
+   incrementally when its specific Workbench action is built, not as a bundled up-front batch.
+3. Batch-size note: this redesign ran across three correction rounds and landed at 13 production +
+   2 test files in one commit — over the repo's normal 8-file/12-total batch gate, accepted as a
+   single exception by Christian given the iterative, cohesive nature of the visual corrections.
+   Start a fresh session for the next batch rather than continuing to extend this one.
 
 **Detailed evidence:**
 [Request Detail / Workbench API preflight](ux-design/v2/request-detail-workbench-api-preflight.md)
-(contract matrix and gap list still valid; frontend-existence framing corrected above).
+(contract matrix and gap list still valid; frontend-existence framing corrected 2026-08-22).
 
 ## Active work — Direct Actual Work
 
