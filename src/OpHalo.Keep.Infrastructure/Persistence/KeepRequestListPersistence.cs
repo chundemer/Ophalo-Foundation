@@ -135,11 +135,13 @@ public sealed class KeepRequestListPersistence(OpHaloDbContext dbContext, IClock
                         && r.FirstResponseDueAtUtc.HasValue
                         && r.FirstResponseDueAtUtc.Value <= nowUtc))),
 
-            // All closed requests with any submitted feedback: pending-review (unresolved) rows
-            // surface with active attention signals; positive (resolved) rows appear quietly.
+            // Closed requests with unresolved feedback only (ADR-242). Must mirror
+            // GetViewCountsAsync's feedbackReviewCount predicate exactly — the chooser badge,
+            // count, and this row list are one authoritative membership rule.
             ActiveViewKind.FeedbackReview => scopedBase.Where(r =>
                 r.Status == KeepRequestStatus.Closed
-                && r.FeedbackSubmittedAtUtc.HasValue),
+                && r.AttentionReason == AttentionReason.UnresolvedFeedback
+                && r.AttentionLevel != AttentionLevel.None),
 
             // NeedsStatusCheck: candidate rows with no active attention and an active status.
             // The 5-day due check and FollowUpOn/PlannedFor suppression are applied in-memory

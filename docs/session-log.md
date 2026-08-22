@@ -64,7 +64,8 @@ a new `IsRecorder` flag on the history read response. D adds
 reason-required, recording an immutable `ActualWorkDraftRecorderTransfer` audit row atomically with
 the `RecorderAccountUserId` change. **GAP-055 remediation and 5d-ii-d are both complete** (commit
 `6543f81`); **slice 6 — Owner/Admin review mutation** is split into 6A (domain/persistence/
-migration, complete, commit `5a24e43`) and 6B (review API/endpoints/DI, next approved slice).
+migration, complete, commit `5a24e43`) and 6B (review API/endpoints/DI, complete; see the
+implementation record below).
 
 Prior implementation rules, now superseded:
 
@@ -345,29 +346,55 @@ for the new compact current-page slice and for the later Queue-pane variant.
    pre-existing bug found along the way: the new-session landing tab now actually lands on
    Needs Attention (the already-locked decision), which the old tab ordering never satisfied.
    Visual verification at narrow current-page widths and 100/125/150% zoom completed by
-   Christian. Not committed yet — code and documentation are queued as separate commits.
-5. **Build UI-001 later as its own migration slice — next.** Reuse the Office Review component
-   with its Queue-pane presentation (pane-width strip, dedicated Views/History row, and
-   320–360px two-row primary tab grid). Do not let that future shell block the current
-   operational fix, which is already delivered.
+   Christian. This current-page variant and its Queue-pane reuse are part of the completed UI-001
+   migration recorded below.
+5. **Build UI-001 migration — complete.** The Office Review component is reused in its Queue-pane
+   presentation (pane-width strip, dedicated Views/History row, and 320–360px two-row primary
+   tab grid). The locked Build Log 132 Steps 1–6 migration sequence is complete; subsequent work
+   is the ordered shell-refinement backlog below, not an extension of that migration.
 
-### Current stop point
+### Current stop point and ordered UI shell backlog
 
-Steps 3 (`f51d66d`) and 4 plus the Build Log 134 §1–§4 Queue-density refinement (`f629c60`) are
-committed. Real-browser 100/125/150% zoom acceptance for both roles is **complete and passed
-(2026-08-21)**, confirmed by Christian on real devices — the fixed-360px measurements taken during
-implementation (mock-workbench harness, worst-case 2-digit counts) are superseded by this manual
-pass. See
-[Build Log 134](build-log/134-ui-001-post-step-4-queue-and-preview-refinement-backlog.md) for the
-refinement decisions and measured evidence.
+The UI-001 migration is complete: Steps 3–4/density refinement are committed
+(`f51d66d`/`f629c60`), Priority Preview richness is committed (`e935b8c`), and Step 5 is committed
+(`6d85b2f`). Real-browser 100/125/150% zoom acceptance passed for both roles, and Step 6 route /
+one-pane verification passed. The following are newly observed shell refinements, deliberately
+ordered as separate bounded batches. They require a mechanical preflight and approval before code;
+they are not authorized by the completed migration.
 
-**Step 5 (embedding the real Request Detail Workbench) is complete, committed `6d85b2f`
-(2026-08-21).** Real-browser 100/125/150% zoom acceptance passed. See the UI-001 migration
-progress entry below for scope.
+**Global next-work selection:** start with the ordered UI shell backlog below. Direct Actual Work
+Slice 6B is historical/completed, not a scheduled next task; its later deferred UI work remains
+separate and must not displace these selected shell corrections.
 
-**Step 6 (one-pane fallback and final route verification) is complete (2026-08-21), closing out the
-locked Build Log 132 §5 migration sequence.** No production code changed — verification only. See
-UI-001 migration progress below.
+1. **Feedback Review membership/count reconciliation — complete.** Fixed in
+   `KeepRequestListPersistence.cs`: the `ActiveViewKind.FeedbackReview` row query previously
+   matched any closed request with `FeedbackSubmittedAtUtc.HasValue`, including already-reviewed
+   and positive-feedback rows, while `GetViewCountsAsync`'s `feedbackReviewCount` counted only
+   `Closed && AttentionReason == UnresolvedFeedback && AttentionLevel != None`. The row predicate
+   now matches the count predicate exactly (also matching the domain's own
+   `KeepRequest.HasActiveUnresolvedFeedbackReview`, ADR-242). `KeepFeedbackReviewApiTests.
+   FeedbackReview_ListView_IncludesAgingMetadata` updated to assert the list returns exactly the
+   unreviewed-negative rows and excludes already-reviewed/positive/no-feedback rows. 13/13 +
+   52/52 (`KeepRequestListQueryApiTests`) + 180/180 (`KeepRequestListServiceTests`) passing.
+2. **Queue-row activation and selected-request state.** Make the entire scan-only Queue row a
+   keyboard-accessible activation target, then visibly mark the request currently shown in Pane 2.
+   Preserve the existing red attention/overdue rail as an urgency signal; selection needs a
+   distinct teal inset ring/tint or equivalent, not a competing left rail. Cover the durable route,
+   pointer, and keyboard paths.
+3. **Intentional wide-shell initial selection.** On a wide initial `#/requests` entry, make the
+   default workbench content deliberate rather than a sparse Priority Preview. Preflight the
+   one-time selection contract: select the first eligible row from the active applied queue, retain
+   an explicit selection while it remains in view, and never silently switch customers when a live
+   filter removes it. Keep narrow one-pane behavior unchanged.
+4. **Queue navigation hierarchy and active-context clarity.** Preflight a compact, fixed Queue
+   header that unmistakably identifies the active primary queue and applied result set, while
+   separating primary queues (Needs Attention, All Work, My Work) from Office Review, Views, and
+   History utilities. Validate at the locked 360px pane width before changing the existing measured
+   two-row tab contract.
+5. **Queue scan-density follow-through.** Keep only the Queue header fixed and the rows scrollable;
+   tune row metadata hierarchy only after selection and queue identity are clear. Pane quick-action
+   footers are already removed and must stay out of this batch. Presentation-layer automatic
+   title-casing remains rejected because it can corrupt valid customer and business names.
 
 **UI-001 migration progress:**
 - Step 1 (measurement/sizing spike) — **complete, 2026-08-21**
@@ -377,7 +404,7 @@ UI-001 migration progress below.
 - Step 2 (lock retained-route shell approach) — already resolved as part of the build-log 132
   preflight (§3.1/§6); no separate implementation action needed.
 - **Step 3 (first functional wide shell: Queue pane + UI-003-compliant Priority Preview) —
-  complete, not yet committed (2026-08-21).** Preflighted (`docs/build-log/132`, ranking/attention
+  complete, committed `f51d66d` (2026-08-21).** Preflighted (`docs/build-log/132`, ranking/attention
   field confirmation) and reviewed twice before landing: `RequestWorkbenchShell.tsx` (new,
   `ResizeObserver`-gated at the locked 1001 CSS-px protected minimum) and `PriorityPreview.tsx`
   (new, all four UI-003 branches) added; `App.tsx`'s `#/requests` render gate now mounts the

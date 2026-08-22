@@ -401,8 +401,9 @@ public sealed class KeepFeedbackReviewApiTests : IClassFixture<KeepApiWebFactory
     [Fact]
     public async Task FeedbackReview_ListView_IncludesAgingMetadata()
     {
-        // feedback_review view returns unreviewed negative-feedback rows with server-computed
-        // age bucket and due timestamp on each summary row.
+        // feedback_review view returns only closed, unreviewed-negative-feedback rows (ADR-242) —
+        // one authoritative membership predicate shared with the chooser badge/count. Positive and
+        // already-reviewed feedback must not appear merely because the request is closed.
         var response = await AuthRequest(_ownerCookie).GetAsync("/keep/requests?view=feedback_review");
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
@@ -410,35 +411,25 @@ public sealed class KeepFeedbackReviewApiTests : IClassFixture<KeepApiWebFactory
         var requests = body.GetProperty("requests").EnumerateArray().ToList();
         Assert.NotEmpty(requests);
 
-        // The view now includes all closed rows with any feedback (positive + reviewed appear
-        // quietly alongside unreviewed negative). Only unreviewed negative rows carry aging metadata.
         Assert.All(requests, row =>
         {
-            var wasResolved = row.GetProperty("feedbackWasResolved");
-            var rowCtx = row.GetProperty("rowContext").GetString();
+            Assert.False(row.GetProperty("feedbackWasResolved").GetBoolean());
+            Assert.Equal("feedback_review", row.GetProperty("rowContext").GetString());
+
             var bucketProp = row.GetProperty("feedbackReviewAgeBucket");
             var dueProp = row.GetProperty("feedbackReviewDueAtUtc");
-
-            // Active unreviewed-negative: rowContext == "feedback_review" and wasResolved == false.
-            if (wasResolved.ValueKind == JsonValueKind.False && rowCtx == "feedback_review")
-            {
-                Assert.Equal(JsonValueKind.String, bucketProp.ValueKind);
-                Assert.Contains(bucketProp.GetString(), new[] { "new", "aging", "overdue" });
-                Assert.Equal(JsonValueKind.String, dueProp.ValueKind);
-            }
-            else
-            {
-                // Positive or already-reviewed rows must not carry aging metadata.
-                Assert.Equal(JsonValueKind.Null, bucketProp.ValueKind);
-                Assert.Equal(JsonValueKind.Null, dueProp.ValueKind);
-            }
+            Assert.Equal(JsonValueKind.String, bucketProp.ValueKind);
+            Assert.Contains(bucketProp.GetString(), new[] { "new", "aging", "overdue" });
+            Assert.Equal(JsonValueKind.String, dueProp.ValueKind);
         });
 
-        // At least the 4 seeded unreviewed-negative rows must appear with aging metadata.
-        var activeCount = requests.Count(row =>
-            row.GetProperty("feedbackWasResolved").ValueKind == JsonValueKind.False
-            && row.GetProperty("rowContext").GetString() == "feedback_review");
-        Assert.True(activeCount >= 4, $"Expected ≥4 active unreviewed-negative rows, got {activeCount}.");
+        // Exactly the 4 seeded unreviewed-negative rows must appear; the already-reviewed and
+        // positive-feedback rows must be excluded.
+        Assert.Equal(4, requests.Count);
+        var requestIds = requests.Select(row => row.GetProperty("id").GetGuid()).ToList();
+        Assert.DoesNotContain(_alreadyReviewedRequestId, requestIds);
+        Assert.DoesNotContain(_positiveFeedbackRequestId, requestIds);
+        Assert.DoesNotContain(_noFeedbackRequestId, requestIds);
     }
 
     // =========================================================================
