@@ -226,15 +226,22 @@ guidance for read-time first-response-overdue and due/overdue Follow Up On cases
 existing persisted-attention path. Keep lifecycle/attention effects truthful: recording work does
 not clear attention; only the server-authorized resolution does.
 
-**Required next session (separate from visual Slice B):** preflight the list-membership predicate,
-detail mapper/DTO, authorization/effective-action contract, and the exact resolution behavior for
-each of the three cases. Add an end-to-end matrix proving that every Needs Attention row has its
-matching Request Detail guidance—or is not admitted to that queue. Do not paper over this with a
-frontend fallback card.
+**Preflight complete, decisions locked (2026-08-22):** ADR-489 locks the full effective attention
+order — persisted attention > due/overdue Follow Up On > first-response overdue (a due Follow Up On
+is a deliberate customer promise and outranks the generic first-response SLA fallback). ADR-490
+locks the `EffectiveAttention` (`level`/`reason`/`dueAt`/`guidance`) DTO shape, reuse of the dormant
+`AttentionReason.FirstResponseDue` plus a new `AttentionReason.FollowUpDue` member, and
+`CanSetFollowUpOn` as the ratified shared gate for setting and resolving Follow Up On. Full analysis
+and precedence matrix: [Request Detail / Workbench API preflight](ux-design/v2/request-detail-workbench-api-preflight.md).
 
-**Detailed evidence:**
-[Request Detail / Workbench API preflight](ux-design/v2/request-detail-workbench-api-preflight.md)
-(contract matrix and gap list still valid; frontend-existence framing corrected 2026-08-22).
+**Approved next batch — Slice A (backend contract), start now:** `AttentionReason.cs`,
+`KeepRequestDetailResult.cs`, `KeepRequestDetailMapper.cs` (derive `EffectiveAttention` with the
+locked 3-way precedence), `GetKeepRequestListService.cs` (new enum arm), plus backend tests covering
+every pairwise and the triple-overlap precedence combination. Additive DTO field; ships and compiles
+independently of the frontend. **Slice B (frontend consumption)** — `apiClient.types.ts`,
+`helpers.ts`, `DetailPanels.tsx`, mocks, plus the end-to-end Needs-Attention-row-matches-detail-
+guidance matrix test — follows once Slice A ships. Do not paper over the gap with a frontend
+fallback card in the interim.
 
 ## Active work — Direct Actual Work
 

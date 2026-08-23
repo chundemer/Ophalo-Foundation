@@ -188,6 +188,114 @@ duplicated per surface), and when any other combination is ambiguous or metadata
 neutral review context — never invent a lifecycle or attention primary that the derivation cannot
 support.
 
+## Needs Attention queue-membership vs. detail-guidance gap (added 2026-08-22)
+
+**Discovered during Workbench visual verification, not during original preflight authoring.**
+ADR-426/build-log-075 already locked the general principle that detail attention guidance must be
+server-authored, but its scope and the DTO it audited only cover the persisted-attention path. This
+section extends that same principle to the two queue-membership predicates it did not examine.
+
+**List membership** (`KeepRequestListPersistence.cs:127-136`) admits a row to Needs Attention on any
+of three OR'd conditions:
+
+1. `AttentionLevel != None` (persisted attention);
+2. `FollowUpOnDate.HasValue && FollowUpOnDate <= today` (ADR-439: due/overdue Follow Up On becomes
+   active operational attention unless a stronger reason already owns the request);
+3. `FirstRespondedAtUtc == null && FirstResponseDueAtUtc <= now` (first business response overdue —
+   the Request-row **Response overdue** badge, ADR-192/ADR-178).
+
+**Detail contract today** (`KeepRequestDetailResult.cs`, `KeepRequestDetailMapper.cs`) returns the
+raw dates for all three conditions but derives an effective attention verdict for none but the
+first. `AttentionGuidanceCard` (`DetailPanels.tsx:799` → `helpers.ts:179`) renders only when
+`attentionLevel !== "none" && attentionReason`, so conditions 2 and 3 admit a row to Needs Attention
+with no corresponding Request Detail **Why / Resolve by** explanation — violating the ADR-436
+requirement that staff-facing attention signals answer why the signal is shown and what to do next,
+and the signoff spec's §4 lifecycle/attention matrix, which already states due/overdue Follow Up is
+active attention.
+
+The derivation exists once today, list-side only, in `GetKeepRequestListService.cs:676-699`
+(`firstResponseOverdue`, `isDueOrOverdueFollowUpOn`/`isFollowUpOverdue`, per ADR-439). Detail has no
+equivalent — the fix is porting this derivation into the detail mapper as an authoritative field,
+not inventing new logic, and not leaving the client to re-derive it (locked: client must not derive
+the reason).
+
+**Resolution paths already exist for all three cases — this is a read-contract gap only, no new
+mutation endpoint is required:**
+
+| Case | Queue-admission source | Existing resolution mechanism | Authorization gate |
+|---|---|---|---|
+| 1. Persisted attention | `AttentionLevel != None` | `AcknowledgeAttention` (ADR-112) | `AvailableActions.CanAcknowledgeAttention` (`hasAttention`) |
+| 2. Follow-Up due/overdue | `FollowUpOnDate <= today` (ADR-439) | `ManageRequestTimingService.ResolveFollowUpAsync` — `complete`/`move`/`keep_active` (ADR-440) | Inferable from `CanSetFollowUpOn` only; **not an explicit contract guarantee** — already flagged as gap item 3 above (§8 requires per-action availability metadata) |
+| 3. First-response overdue | `FirstRespondedAtUtc == null && FirstResponseDueAtUtc <= now` | Any customer-facing response: `ChangeStatus` with message (`KeepRequest.cs:205`), `LogOutboundExternalContact` (`:713`), `ConfirmUpdateNotification` (`:857`) — all set `FirstRespondedAtUtc` | Each already independently authorized (`CanChangeStatus`, `CanLogExternalContact`, update-notification flow) |
+
+**Cross-checked against every doc that defines a piece of this matrix, to avoid contradicting a
+locked line while closing this gap:**
+
+- Signoff spec §4 **Attention precedence** (line 91): "Stronger attention may supersede due/overdue
+  Follow Up" — matches `GetKeepRequestListService.cs:695` (`isDueOrOverdueFollowUpOn` is gated on
+  `AttentionLevel == None`). Case 1 already outranks case 2 in the verified code; any
+  `EffectiveAttention` derivation must preserve this, not re-derive it differently.
+- **Locked decision (2026-08-22, ADR-489):** the full effective attention order is (1) persisted
+  attention, then (2) due/overdue Follow Up On, then (3) first-response overdue. A due Follow Up On
+  is a specific, deliberate customer promise and outranks the generic first-response SLA fallback,
+  so case 2 also outranks case 3 — not only case 1's absence. Each lower-ranked condition remains a
+  queue-membership condition on its own — it still admits the row to Needs Attention independently —
+  but must not replace or compete with a higher-ranked reason in the detail card. If a higher-ranked
+  condition later resolves and a lower-ranked one still applies, `EffectiveAttention` recomputes and
+  surfaces the next-ranked reason then (e.g. persisted attention clears with no first response yet →
+  surfaces `FirstResponseDue`). This mirrors and extends the case 1/case 2 precedence pattern already
+  verified above and keeps the derivation entirely server-side — no client-side ranking. All pairwise
+  and the triple-overlap combination require explicit backend test coverage in Slice A.
+- `AttentionReason.FirstResponseDue` (`AttentionReason.cs:9`, value `6`) **already exists in the
+  enum and is already mapped to `"first_response_due"` in both mappers**, but is never assigned
+  anywhere in `KeepRequest.cs` — confirmed by searching every `AttentionReason =` assignment in
+  Core. It is a dormant slot, not a proposal: reusing it for case 3 needs no enum change and no new
+  client switch arm, only wiring the read-time derivation to populate it in the detail response.
+- No equivalent dormant value exists for case 2 (Follow Up due/overdue) — the enum has no
+  `FollowUpDue`/similar member. Extending the enum here is a real, first-time addition and must be
+  reviewed as one (owned-enum switches are exhaustive/fail-explicit per project rules — every mapper
+  switch and every client switch on `AttentionReason` needs a new arm).
+
+**All four decisions locked (2026-08-22, ADR-489 + ADR-490):**
+
+1. **Locked (ADR-490):** one server-computed `EffectiveAttention` block —
+   `{ level, reason, dueAt, guidance }` — on `KeepRequestDetailResult`. The client consumes it; it
+   does not combine raw conditions.
+2. **Locked (ADR-489):** effective attention order is case 1 (persisted attention) > case 2
+   (Follow Up due/overdue) > case 3 (first-response overdue) — case 2 outranks case 3, not only
+   case 1's absence, since a due Follow Up On is a deliberate customer promise.
+3. **Locked (ADR-490):** case 3 reuses the dormant `AttentionReason.FirstResponseDue` (no enum
+   change). Case 2 gets a new `AttentionReason.FollowUpDue` member — exhaustive-switch updates
+   accepted in every mapper switch and every client switch on `AttentionReason`.
+4. **Locked (ADR-490):** `CanSetFollowUpOn` is the ratified shared gate for both setting and
+   resolving Follow Up On. `follow-up-resolution` endpoint authorization must enforce this same
+   policy explicitly — not inherit it from a client-only assumption.
+
+Proceeding to implementation preflight below.
+
+**Approved split (2026-08-22):** implementation proceeds as two independently compiling vertical
+slices per the batch-size gate.
+
+- **Slice A (backend contract, approved to start):** `AttentionReason.cs` (add `FollowUpDue`),
+  `KeepRequestDetailResult.cs` (add `EffectiveAttention`), `KeepRequestDetailMapper.cs` (derive
+  `EffectiveAttention` with the full case 1 > case 2 > case 3 order locked in ADR-489),
+  `GetKeepRequestListService.cs` (add the new enum arm to its existing switch), plus backend unit/
+  contract tests covering every pairwise and the triple-overlap precedence combination explicitly.
+  Additive DTO field — ships and compiles independently of the frontend.
+- **Slice B (frontend consumption, follows after Slice A ships):** `apiClient.types.ts`,
+  `helpers.ts`, `DetailPanels.tsx`, `mocks/fixtures.ts`/`mockApiClient.ts`, plus frontend tests and
+  the end-to-end matrix proving every Needs Attention row has matching Request Detail guidance or is
+  not admitted to that queue.
+
+This is list-membership-predicate-driven detail-contract work; it does not touch Visual Slice B/C,
+Actual Work, or Primary Action sequencing beyond the cross-reference in gap item 5.
+
+**Sources checked for contradiction:** `request-detail-workbench-signoff-spec.md` §4 (lifecycle and
+attention matrix, precedence line); ADR-436 (staff operational signal clarity); ADR-439 (Follow Up
+On promise-protection semantics); ADR-426 / build-log-075 (detail attention guidance metadata);
+ADR-178/ADR-182/ADR-192 (list-side reason/next-action copy and Response overdue badge — list-only,
+not detail, and not contradicted by anything proposed here).
+
 ## State/role coverage
 
 | State/role dimension | Verified backend behavior | Evidence |
@@ -235,7 +343,9 @@ Ordered by what blocks frontend coding soonest:
    attention guidance, and indirectly every surface that must show "one enabled local-task primary
    at rest" (UI-006). The narrow ADR-434 "Mark work done" eligibility check may still be written as
    one shared, tested client derivation in the interim, but it must not be extended to choose among
-   other attention-remediation actions.
+   other attention-remediation actions. **This item's scope now extends to the two queue-membership
+   attention sources (due/overdue Follow Up On, first-response overdue) documented in "Needs
+   Attention queue-membership vs. detail-guidance gap" below — not persisted attention alone.**
 6. **Add contract tests proving items 1–5 across the approved lifecycle/role matrix** before the
    frontend build guide is written.
 
