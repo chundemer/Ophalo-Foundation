@@ -35,7 +35,13 @@ workbench, not a workflow or API-contract redesign.
    `resolveNextStep`). `RequestDetailContent.tsx` wired to the merged component;
    `NextStepCard.test.tsx` renamed/adapted to `HeroAttentionBanner.test.tsx`. 193/193 request-detail
    tests pass, `pnpm typecheck` clean, visual check passed.
-3. Actual Work compact strip — not started.
+3. Actual Work compact strip — done. `ActualWorkCard.tsx` collapsed the stacked label/description/
+   full-width-button layout into a horizontal strip (label+summary left, compact `ClipboardList`-
+   icon Record/Resume trigger right); quiet-degradation (loading/hidden/error → null) and secondary-
+   not-teal button convention preserved. `ActualWorkHistoryCard.tsx` header padding tightened
+   (`py-4` → `py-3.5`) to register as the same strip module; visit-entry list and price-blind/empty-
+   state behavior unchanged. 193/193 request-detail tests pass, `pnpm typecheck` clean,
+   `pnpm check:tokens` clean, visual check passed.
 4. Owner "Change" quiet trigger + canvas width narrowing — not started.
 5. Activity collapse + reorder below Record details — not started.
 
