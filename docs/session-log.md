@@ -18,35 +18,32 @@ The visual workbench refinement is verified in the current worktree and remains 
 neutral borders, consolidated attention, compact Actual Work, teal inline triggers, and quiet
 history disclosures. Do not combine its final review/commit with the next Actual Work decision.
 
-### Next batch — Actual Work record correction and state clarity
+### Next batch — Actual Work draft/submitted CTA clarity (implementation-ready, 2026-08-23)
 
-**Status:** pre-work required; no implementation is authorized yet.
+**Status:** implementation-ready. Discovery confirmed ADR-487 already locks the boundary; no new
+product decision was needed.
 
 Observed UX contradiction: an active blank Actual Work draft appears beside a submitted visit
 history. The action label **Resume** opens the blank draft, while the visible submitted items are
 intentionally immutable. This is technically correct but misleading.
 
-**Working decision proposal — requires product confirmation before implementation:**
+**Discovery findings:** `ActualWorkStatus` (`src/OpHalo.Keep.Core/Entities/Enums/ActualWorkStatus.cs`)
+persists only `Draft`/`Submitted`; `Submit()` freezes status permanently with no reopen path. No
+Correction/Reconciliation/Reversal/Adjustment concept exists anywhere in the codebase. ADR-487
+already locks this: "Submitted visits are immutable... Cross-user draft takeover and linked
+correction workflow are deferred." A correction/adjustment/reconciliation authority-and-audit model
+therefore remains separate, deferred domain/workflow work — not something this batch opens.
+
+**Approved presentation-only scope:**
 
 ```text
-Draft       → editable; use “Continue draft” / “Add actual work,” never “Resume” for an empty draft
-Submitted   → locked immutable record; show visible “Submitted · locked” text plus a lock icon
-Correction  → explicit correction-request flow with a required reason; original remains unchanged
-Reconciled  → permanently locked; any later change is an adjustment/reversal record, never in-place edit
+Empty draft (no draft, or a draft with zero lines) → "Add actual work"
+Draft with saved lines                             → "Continue draft"
+Submitted visit                                     → visible lock icon + "Submitted · locked"
 ```
 
-The first UI-only correction may rename the draft CTA by factual state and add explicit submitted
-lock status. Do not imply that a historical submitted visit is editable or will populate a new
-draft. A correction-request, adjustment, reconciliation, authority, and audit model is a separate
-workflow/domain decision — not a presentation-only extension.
-
-**Required pre-work before approval:** identify the current persisted Actual Work statuses and
-transitions; submitted/reconciliation authority and endpoints; whether correction/reversal concepts
-already exist; immutable/audit constraints; authorized actors; and the smallest safe API/UI/test
-surface. Record the resulting product decision in the decision index/ADR as appropriate. Per
-`CLAUDE.md`, this is targeted discovery because the decision is unresolved; after confirmation, the
-implementation preflight must only confirm named symbols, caller fan-out, exact file count, and
-tests before edits.
+No Correction/Reconciled states, reconciliation language, correction actions, or implied undo path.
+Do not imply a historical submitted visit is editable or will populate a new draft.
 
 ### Non-negotiable product rules
 

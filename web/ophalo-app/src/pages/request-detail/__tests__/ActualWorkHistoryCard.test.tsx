@@ -77,6 +77,17 @@ describe("ActualWorkHistoryCard", () => {
     expect(screen.getByText("Oldest visit note")).toBeInTheDocument();
   });
 
+  it("shows the submitted-locked indicator on every visit entry", () => {
+    const state: ActualWorkHistoryState = {
+      status: "loaded",
+      submittedVisits: [
+        { id: "v1", status: "SubmittedToOffice", outcome: null, completionNote: null, submittedAtUtc: "2026-01-01T12:00:00Z", lines: [] },
+      ],
+    };
+    render(<ActualWorkHistoryCard state={state} onRetry={vi.fn()} />);
+    expect(screen.getByText("Submitted · locked")).toBeInTheDocument();
+  });
+
   it("null-guards a missing submittedAtUtc", () => {
     const state: ActualWorkHistoryState = {
       status: "loaded",

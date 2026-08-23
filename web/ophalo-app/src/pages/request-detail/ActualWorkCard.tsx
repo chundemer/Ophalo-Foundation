@@ -24,6 +24,7 @@ export function ActualWorkCard({ state, onStartCapture, bare = false }: ActualWo
   const wrapperCls = bare ? "px-5 py-3.5" : "rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-5 py-3.5";
 
   const isNoDraft = state.status === "no-draft";
+  const hasSavedLines = state.status === "draft" && state.draft.lines.length > 0;
   const summary = isNoDraft
     ? state.submittedCount === 0
       ? "Record the work completed on this visit."
@@ -47,7 +48,7 @@ export function ActualWorkCard({ state, onStartCapture, bare = false }: ActualWo
           className="shrink-0 inline-flex items-center gap-1.5"
         >
           <ClipboardList className="h-3.5 w-3.5 shrink-0" />
-          {isNoDraft ? "Record" : "Resume"}
+          {hasSavedLines ? "Continue draft" : "Add actual work"}
         </KeepButton>
       </div>
     </div>

@@ -1,4 +1,4 @@
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, Lock } from "lucide-react";
 import { KeepButton } from "../../components/keep/KeepButton";
 import { type ActualWorkSubmittedVisitEntry } from "../../lib/apiClient";
 import { type ActualWorkHistoryState } from "./useActualWorkHistory";
@@ -33,6 +33,10 @@ function VisitEntry({ visit }: { visit: ActualWorkSubmittedVisitEntry }) {
         </p>
         {outcome && <p className="text-xs text-[var(--ophalo-muted)]">{outcome}</p>}
       </div>
+      <p className="flex items-center gap-1 text-xs text-[var(--ophalo-muted)] mt-0.5">
+        <Lock className="h-3 w-3 shrink-0" />
+        Submitted · locked
+      </p>
       {visit.completionNote && (
         <p className="text-xs text-[var(--ophalo-muted)] mt-1">{visit.completionNote}</p>
       )}
