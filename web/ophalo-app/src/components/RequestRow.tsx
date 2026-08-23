@@ -434,7 +434,7 @@ export function RequestRow({ row, onSelect, onSelectFocused, onActionClick, onSh
       aria-selected={selected}
       onClick={() => onSelect(row.id)}
       onKeyDown={handleRowKeyDown}
-      className={`rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] hover:shadow-sm transition-shadow cursor-pointer ${borderAccent} ${selected ? "ring-2 ring-inset ring-[var(--keep-accent)]" : ""} ${FOCUS_RING}`}
+      className={`rounded-xl border border-[var(--ophalo-border)] hover:shadow-sm transition-shadow cursor-pointer ${borderAccent} ${selected ? "bg-[var(--keep-accent-bg)] ring-1 ring-inset ring-[var(--keep-accent)]/40" : "bg-[var(--ophalo-card)]"} ${FOCUS_RING}`}
     >
       {/* Identity/status/exception — activates the whole row via the container above */}
       <div className="flex flex-col gap-2 px-4 pt-3 pb-2">
