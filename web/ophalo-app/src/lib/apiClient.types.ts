@@ -234,6 +234,14 @@ export interface KeepRequestNavigation {
   total: number;
 }
 
+export interface EffectiveAttentionInfo {
+  level: string;
+  reason: string | null;
+  dueAtUtc: string | null;
+  dueOnDate: string | null;
+  guidanceKey: string | null;
+}
+
 export interface KeepRequestDetailResult {
   requestId: string;
   referenceCode: string;
@@ -261,6 +269,7 @@ export interface KeepRequestDetailResult {
   attentionLevel: string;
   waitingDirection: string;
   attentionReason: string | null;
+  effectiveAttention: EffectiveAttentionInfo;
   priorityBand: string;
   attentionSinceUtc: string | null;
   nextAttentionAtUtc: string | null;

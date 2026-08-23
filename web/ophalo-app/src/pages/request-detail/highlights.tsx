@@ -12,11 +12,12 @@ export interface AttentionHighlights {
 }
 
 export function getAttentionResolutionHighlights(detail: KeepRequestDetailResult): AttentionHighlights {
-  if (detail.attentionLevel === "none" || !detail.attentionReason) return {};
+  const attention = detail.effectiveAttention;
+  if (attention.level === "none" || !attention.reason) return {};
   const canSendUpdate = detail.availableActions.canSendBusinessUpdate;
   const canLogContact = detail.availableActions.canLogExternalContact;
   const canMarkHandled = detail.availableActions.canAcknowledgeAttention;
-  switch (detail.attentionReason) {
+  switch (attention.reason) {
     case "customer_message":
     case "update_request":
     case "first_response_due":

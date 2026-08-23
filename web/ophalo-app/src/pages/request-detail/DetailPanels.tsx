@@ -98,7 +98,7 @@ interface MarkHandledCardProps {
 
 export function MarkHandledCard({ requestId, detail, onDetailUpdated, highlight }: MarkHandledCardProps) {
   const { canAcknowledgeAttention } = detail.availableActions;
-  const hasAttention = detail.attentionLevel !== "none" && !!detail.attentionReason;
+  const hasAttention = detail.effectiveAttention.level !== "none" && !!detail.effectiveAttention.reason;
   const { acknowledgeReasonMaxLength } = detail.validation;
 
   const [reason, setReason] = useState("");
@@ -800,7 +800,7 @@ export function AttentionGuidanceCard({ detail, highlights }: AttentionGuidanceC
   const guidance = buildAttentionGuidance(detail);
   if (!guidance) return null;
 
-  const isOverdue = detail.attentionLevel === "overdue";
+  const isOverdue = detail.effectiveAttention.level === "overdue";
 
   const primaryPanelLabel: string | null = (() => {
     if (highlights.sendUpdate === "primary") return "Send customer update";
@@ -864,10 +864,10 @@ export function AttentionGuidanceCard({ detail, highlights }: AttentionGuidanceC
             </p>
             <p className="mt-1 text-sm text-[var(--ophalo-ink)]">
               {highlights.sendUpdate === "primary"
-                ? "Recommended: Send customer update using the highlighted panel on the right."
+                ? "Recommended: Send customer update using the highlighted action."
                 : highlights.logContact === "primary"
-                  ? "Recommended: Log external contact using the highlighted panel on the right."
-                  : "Use the highlighted panel on the right."}
+                  ? "Recommended: Log external contact using the highlighted action."
+                  : "Use the highlighted action."}
             </p>
           </div>
         )}

@@ -142,20 +142,21 @@ interface DetailHeroProps {
 // Anchor row 1, left side (three-row correction, 2026-08-22): reference/status/attention only —
 // customer identity is its own full-width row 2 (DetailHeroName), not compressed onto this line.
 export function DetailHeroBadges({ detail }: DetailHeroProps) {
-  const hasAttention = detail.attentionLevel !== "none";
+  const attention = detail.effectiveAttention;
+  const hasAttention = attention.level !== "none";
 
   return (
     <div className="flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1">
       <span className="font-mono text-xs text-[var(--ophalo-muted)] shrink-0">{detail.referenceCode}</span>
       <KeepBadge variant={statusBadgeVariant(detail.status)}>{statusLabel(detail.status)}</KeepBadge>
-      {hasAttention && detail.attentionReason && (
+      {hasAttention && attention.reason && (
         <KeepBadge variant="attention">
-          {detail.attentionLevel === "overdue" ? (
+          {attention.level === "overdue" ? (
             <AlertTriangle className="h-3 w-3 mr-1 shrink-0" />
           ) : (
             <Clock className="h-3 w-3 mr-1 shrink-0" />
           )}
-          {reasonLabel(detail.attentionReason)}
+          {reasonLabel(attention.reason)}
         </KeepBadge>
       )}
     </div>

@@ -32,7 +32,7 @@ export function WorkDoneCard({ requestId, detail, onDetailUpdated, compact = fal
     detail.availableActions.canChangeStatus &&
     detail.availableActions.allowedStatuses.includes("resolved") &&
     detail.status !== "resolved";
-  const hasAttention = detail.attentionLevel !== "none";
+  const hasAttention = detail.effectiveAttention.level !== "none";
   const isReceived = detail.status === "received";
 
   // Three visual branches:
@@ -307,7 +307,7 @@ export function CloseRequestCard({ requestId, detail, onDetailUpdated, compact =
     detail.availableActions.canClose &&
     detail.availableActions.allowedStatuses.includes("closed") &&
     detail.status === "resolved" &&
-    detail.attentionLevel === "none";
+    detail.effectiveAttention.level === "none";
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [conflictDisabled, setConflictDisabled] = useState(false);
   const [error, setError] = useState<string | null>(null);

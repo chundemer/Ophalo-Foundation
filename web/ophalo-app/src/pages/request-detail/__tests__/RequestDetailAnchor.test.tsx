@@ -14,7 +14,10 @@ beforeEach(() => {
 // full-width customer identity (row 2), a divider, then three stable context columns (row 3).
 
 function baseDetail(): KeepRequestDetailResult {
-  return mockRequestDetails["mock-req-001"];
+  return {
+    ...mockRequestDetails["mock-req-001"],
+    effectiveAttention: { ...mockRequestDetails["mock-req-001"].effectiveAttention },
+  };
 }
 
 function renderAnchor(detail: KeepRequestDetailResult) {

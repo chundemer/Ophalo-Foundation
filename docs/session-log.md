@@ -1,870 +1,211 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-08-22
+**Last updated:** 2026-08-23
 **Deployment posture:** Not pilot-ready.
-**Purpose:** current operational handoff only — not an implementation archive.
+**Purpose:** active handoff only. Completed implementation narratives belong in Git history and the relevant build log, not here.
 
 ## Authoritative sources
 
-- Acceptance status and prioritization: [pilot-readiness-bug-tracker.md](pilot-readiness-bug-tracker.md)
-- Product decisions: [decision index](decisions/README.md) and the individual ADRs
-- Implementation contracts and durable evidence: [build logs](build-log/)
-- Historical session narratives removed from this working index: Git history before this
-  consolidation. Do not restore them here; link the relevant ADR/build log instead.
+- Acceptance status and release priority: [pilot-readiness-bug-tracker.md](pilot-readiness-bug-tracker.md)
+- Product decisions: [decision index](decisions/README.md) and individual ADRs
+- Durable implementation evidence: [build logs](build-log/)
+- Request Detail interaction contract: [Workbench signoff specification](ux-design/v2/request-detail-workbench-signoff-spec.md)
+- Effective-attention contract and precedence: [Request Detail API preflight](ux-design/v2/request-detail-workbench-api-preflight.md)
 
-## Current delivery target
+## Current production focus — Request Detail action clarity
 
-The controlled parallel field pilot is the active target. It is a price-blind, per-visit Direct
-Actual Work loop with a retained paper/software fallback for connectivity failure; the contractor's
-current billing/accounting process remains authoritative until a later, separately approved handoff.
-See [Build Log 131](build-log/131-next-week-parallel-field-pilot-plan.md) and
-[Build Log 129](build-log/129-direct-actual-work-and-accounting-handoff-preflight.md).
+The Workbench shell and three visual slices are complete. The remaining issue is action discovery:
+an operator must scan multiple regions to identify and reach the correct next action. The next
+change must make one server-authorized resolution route obvious while preserving the difference
+between communication, externally handled contact, and formal attestation.
 
-Do not infer implementation authority for equipment assets, QR tagging, customer quotes,
-invoicing, payments, QuickBooks sync, inventory, fleet replacement, or native-mobile work.
-Those directions remain subject to their own ADR/build-log decisions.
+### Non-negotiable product rules
 
-## Active priority — Request Detail / Workbench redesign
+- `EffectiveAttention` is authoritative for Request Detail attention presentation and gating. Do
+  not derive an active attention result from legacy `attentionLevel`, `attentionReason`, dates, or status.
+- `guidanceKey` selects the resolution route. It is not prose and must not be replaced by a client-side guess:
 
-**Status:** Layout-shell batch complete and committed (`24220d7`, 2026-08-22), establishing the
-structural baseline — compact Anchor + single Work Canvas and no Proposed Scope. Workbench visual
-slice A (three-row Anchor + Canvas max-width frame) is now also complete and committed (`fbcba40`,
-2026-08-22), slice B (Communication & Planning consolidation) is committed (`49440c8`,
-2026-08-22), and slice C (contextual module density) is committed (`d255cc8`, 2026-08-22) — see
-"Next approved sequence" below for detail on all three. The pre-existing document-scroll P0
-discovered during Slice C review is now resolved (see below). Slice C's 100%/125%/150% desktop
-zoom evidence is captured and confirmed (2026-08-22). All three slices (A, B, C) are now visually
-signed off.
+  | `guidanceKey` | Meaning | Resolution route |
+  |---|---|---|
+  | `acknowledge_attention` | Persisted attention has been handled through the appropriate real-world action. | Explicit **Clear attention** attestation, with a required reason. |
+  | `resolve_follow_up` | A customer Follow Up On promise is due or overdue. | Complete, move, or retain the follow-up through the dedicated resolution flow. |
+  | `respond_to_customer` | The first response is overdue. | Send a customer update or log an actual external contact, as currently authorized. |
 
-**Locked UI source:**
-[Request Detail / Workbench production interaction specification](ux-design/v2/request-detail-workbench-signoff-spec.md).
-Desktop is Queue + one Workbench, with a compact sticky Request Anchor and one Work Canvas scroll
-surface. The controlled-pilot Workbench includes **Direct Actual Work only**; Proposed Scope is
-explicitly deferred from this go-live surface.
+- A customer update does not automatically clear attention or prove delivery, receipt, or resolution.
+  Clear attention is not a substitute for doing the customer work.
+- Marking work done must continue to state that attention remains when it does. It may be visually
+  compact, but the consequence cannot be hidden.
+- Follow Up On is date-only. Render `effectiveAttention.dueOnDate` with `formatDateOnly`; never
+  synthesize UTC midnight or apply a timezone conversion.
+- Render only mutations returned as available by the current server detail. Returned authoritative
+  detail replaces local state after every mutation.
 
-**What shipped (commit `24220d7`):**
-- `RequestDetailAnchor.tsx` (new): a compact 2-row grid card — row 1 is
-  reference/status/attention/name (`DetailHero`, compressed to one line) with the one authorized
-  primary action (ADR-434 Mark-work-done, or Close when `canClose`) on the right; row 2 is
-  contact/service-location/owner/Log-contact/share as inline context items, no independent card
-  chrome per item.
-- `RequestWorkbenchShell.tsx`: the Workbench pane wrapper is now `overflow-hidden` —
-  `RequestDetail`'s own Work Canvas is the sole scroll owner (matches the Queue pane's existing
-  sole-scroll pattern).
-- `RequestDetailContent.tsx`: single-scroll Work Canvas in the locked fixed order (attention →
-  customer need → Actual Work → Communication & Planning → activity → record-details disclosure).
-  Communication & Planning (composer + Follow-Up/Planned-For) now shares one enclosing card
-  (`UnifiedComposer`/`TimingPanel` both gained a `bare` prop for this).
-- `RequestDetailDesktopLayout.tsx` / `RequestDetailMobileLayout.tsx`: deleted; both pane-specific
-  layouts collapsed into the one fixed-order canvas.
+### EffectiveAttention migration — complete (2026-08-23)
 
-**Omitted / removed from the Request Detail render path in this redesign:**
-- **Proposed Scope** (`ProposedScopeCard`, `ProposedScopeComposer`, `useProposedScopeCapture`) —
-  explicitly deferred from this pilot Workbench per the locked spec; not wired anywhere in the new
-  layout. Components remain in the codebase, just unreachable from Request Detail.
-- **`CustomerPanel`** (duplicate phone/email card) — removed; contact now lives only in the Anchor.
-  Still defined in `DetailPanels.tsx` but unused — flagged for a follow-up deletion pass.
-- **`LogContactCard`** (standalone "Log external contact" card) — removed as a canvas card;
-  replaced by one "Log contact" entry point in the Anchor. Still defined in `DetailPanels.tsx` but
-  unused — flagged for a follow-up deletion pass.
-- **Full-card `CloseRequestCard` / `WorkDoneCard` treatment** — both now render only via their new
-  `compact` prop as the Anchor's single primary-action button; the old full-width bordered-card
-  rendering in the canvas is gone (components kept, just always used compact from Request Detail).
-- **`TeamSection`'s "Assigned" row in the canvas** — removed from the canvas (full) render mode;
-  owner is shown only in the Anchor's compact strip now. The canvas's full `TeamSection` renders
-  only Watching/mute content, and only when such content exists.
-- Individually-carded **Contact / Service Location / Owner** — no longer their own bordered cards
-  anywhere on the page; `CustomerContactStrip`, `ServiceLocationPanel`, and `TeamSection` (compact)
-  all lost their independent border/padding/background and render as plain inline Anchor items.
+`BusinessSection.tsx` (`WorkDoneCard` line 35, `CloseRequestCard` line 310) now gates on
+`detail.effectiveAttention.level` instead of legacy `detail.attentionLevel`. No remaining
+non-test Request Detail consumer reads `attentionLevel`/`attentionReason`.
 
-**Known follow-up cleanup (not yet done):** delete the now-unused `CustomerPanel` and
-`LogContactCard` from `DetailPanels.tsx` rather than leaving them as dead exports.
+Verified: `pnpm typecheck` clean; `BusinessSection.compactPrimary`, `RequestDetailAnchor`, and
+`NeedsAttentionDetailGuidance.matrix` (11/11) pass, including the required regression case —
+`mock-req-001` with legacy `attentionLevel: "normal"`/`attentionReason: null` while
+`effectiveAttention` is overridden active for each `guidanceKey`. `git diff --check` clean.
 
-### Visual-production target — locked direction for the next focused slices
+**Next batch:** step 2 of the approved implementation sequence below — the server-routed Next
+step module.
 
-The Workbench must read as one dense, calm operating surface—not a long stack of independently
-bordered cards. The approved visual reference is a **composition target**, not a new product
-contract: preserve the signoff spec's authorization, attention, customer-continuity, and
-price-blind Direct Actual Work boundaries.
+## Locked Request Detail action-surface contract (2026-08-23)
 
-1. **Request Anchor:** one compact outer card/grid, approximately two to three rows at ordinary
-   desktop density. Row one contains reference, status, active attention when present, customer
-   identity, and the one permitted primary action. Row two contains factual contact, service
-   location, owner, the one explicit Log contact entry point, and quiet page/share utilities. Its
-   child pieces render as inline context—not as separate cards—and it must not leave a large blank
-   header region. Active attention retains precedence: completion is not a filled normal primary
-   while attention is active unless the server explicitly authorizes that result.
-2. **Customer Need:** one compact, readable module showing the original request verbatim. Short
-   requests must not consume dashboard-card height.
-3. **Work Execution:** Direct Actual Work only, shown only for real authorized capture/draft/history
-   state. It is a single compact contextual module; its CTA is prominent inside the module but does
-   not compete with the Anchor's current-work primary. **Do not add Proposed Scope** or any pricing,
-   quote, cost, or financial information.
-4. **Communication & Planning:** one enclosing module. The update/internal-note composer appears
-   first with its persistent customer-visible/internal disclosure. Follow Up On, Planned For, and
-   authorized internal priority then appear as a compact, aligned planning row—not as a sequence of
-   unrelated full-width cards. A disabled Send update remains visibly disabled; valid customer
-   composition earns the teal submit emphasis.
-5. **Activity & record context:** one chronological activity/history module. Related work, watcher/
-   mute participation, feedback summary, source metadata, and other low-frequency facts stay behind
-   a quiet Record details disclosure unless an authorized action needs immediate visibility.
+**Status:** approved for implementation after the required mechanical preflight. This is the
+interaction allocation for the Request Workbench; it supersedes no domain ADR. Reconcile the
+implementation with the signoff specification and current server authorization during preflight.
 
-At normal desktop width, constrain the readable Canvas content with deliberate gutters/max width;
-do not allow a form to become an edge-to-edge, over-wide field. Mobile retains the same data/action
-truth but uses the focused single-column behavior in the signoff spec.
+### Surface and routing matrix
 
-### Next approved sequence
-
-1. **Workbench visual slice A — compact Anchor and Canvas frame:** Complete, commit `fbcba40`.
-   Anchor is a three-row hierarchy inside one rounded/bordered card — row 1 (reference/status/
-   attention left, Log contact + one authorized primary action right), row 2 (full-width customer
-   identity), a divider, row 3 (three chrome-free context columns: customer contact, service
-   location, owner/share). Work Canvas gained a `max-w-6xl mx-auto` content wrapper (reusing the
-   Queue-pane content-width convention) inside its existing sole-scroll region. Verified with
-   focused tests (`RequestDetailAnchor.test.tsx`, `RequestDetailContent.canvasFrame.test.tsx`) and
-   desktop screenshots at ~1018px Canvas width for received/no-attention, active-attention, and
-   resolved/can-close. **Read-only/unauthorized was not screenshotted** (no local Viewer-role
-   account exists yet) — behavior is covered by an automated test only; visual confirmation is
-   deferred, not blocking.
-2. **Workbench visual slice B — Communication & Planning consolidation:** Complete, commit
-   `49440c8` (2026-08-22). Preflight surfaced a real contradiction between this section's own
-   "planning row" wording (Follow Up On + Planned For + internal priority together) and the
-   locked signoff spec, which had placed internal priority under Record details. Christian
-   resolved it explicitly: internal priority moves into the planning row (locked exception now
-   recorded in the spec, `request-detail-workbench-signoff-spec.md`); customer-signal badges
-   (intake urgency/contact preference) split out of the old `TriagePanel` into a new
-   `CustomerSignalPanel` and stay under Record details. `TriagePanel` is now priority-only and
-   gained a `bare` prop; `TimingPanel` restructured its bare mode into two grid-item tiles (no
-   more nested divide-y/label/info-row) so Follow Up On, Planned For, and Internal Priority render
-   as three aligned columns in one row beneath the composer, inside the shared Communication &
-   Planning card. No mutation/validation/API changes. Verified: `tsc --noEmit` clean; all 163
-   `request-detail` tests pass (2 existing test files needed a `CustomerSignalPanel: () => null`
-   mock added alongside their existing `TriagePanel`/`TimingPanel` mocks); desktop screenshots at
-   100%, 125%, and 150% zoom confirm the row holds up with no overlap/wrap. Files: `DetailPanels.tsx`,
-   `TimingPanel.tsx`, `RequestDetailContent.tsx`, plus the two test files above.
-   **Follow-up fix (2026-08-22):** Christian's screenshot review caught the Internal Priority
-   `<select>` sizing to its content instead of matching the Follow Up/Planned For tiles'
-   full-width buttons, which made the three columns look unevenly spaced. Fixed by making the
-   select `w-full` with matching padding/font-size (`DetailPanels.tsx`). Re-verified: `tsc
-   --noEmit` clean, all 163 `request-detail` tests pass. Committed.
-3. **Workbench visual slice C — contextual module density:** Implemented (2026-08-22). Christian's
-   decisions: (1) Work Execution merges `ActualWorkCard` + `ActualWorkHistoryCard` into one
-   enclosing card following the Slice B pattern, but Visit History's divider/subsection renders
-   only when a submitted visit actually exists or on a real load error — the old "No visits
-   submitted yet." filler subsection is removed entirely, and the whole module self-hides when
-   neither has content. (2) Record details shares one enclosing card across its five panels
-   (`CustomerSignalPanel`, `RelatedWorkPanel`, `TeamSection`, `FeedbackSummaryCard`,
-   `SourceMetaPanel`, each gained a `bare` prop); render only the panels that apply, with dividers
-   appearing only between panels that actually render (relies on Tailwind's `divide-y` sibling
-   selector — a hidden panel returns `null`, so it emits no DOM node and no empty-gap divider).
-   No authorization/data-flow changes. Verified: `tsc --noEmit` clean; full suite 572/572 passing
-   (one `ActualWorkHistoryCard` test updated for the removed filler-subsection behavior). Files:
-   `ActualWorkCard.tsx`, `ActualWorkHistoryCard.tsx`, `DetailPanels.tsx`,
-   `RequestDetailContent.tsx`, `TeamSection.tsx`, plus the one test file above.
-   **Visual evidence:** captured at 100%/125%/150% desktop zoom (2026-08-22), confirmed by
-   Christian after the document-scroll P0 below was resolved. Slice C is visually signed off.
-
-### Resolved P0 — Workbench document scrolled on window resize (not caused by Slice B/C)
-
-**Status:** Resolved and committed (2026-08-22). Was confirmed pre-existing by Christian
-(reproduced on the Slice B commit, `49440c8`, before any Slice C changes). Discovered during
-Slice C screenshot review; no longer blocks visual sign-off for either slice.
-
-**Root cause and fix (Christian):** a scroll-ownership gap — the wide Workbench correctly bounded
-its own React app container (`h-dvh overflow-hidden` on the app root, `min-h-0 overflow-hidden` on
-`main`), but `html`/`body` remained eligible browser-document scroll owners the whole time. After
-a resize, the browser could retain/re-clamp a document-level scroll position, carrying the top
-nav, Queue header, and Request Anchor off-screen even though every element inside the app root
-measured correctly contained. Fix: a `workbench-scroll-lock` class is added to `<html>` (via a
-`useLayoutEffect` keyed off `workbenchWideActive`, avoiding a visible one-frame jump) whenever wide
-pane-split mode activates; the class sets `height: 100%; overflow: hidden` on both `html` and
-`body` (`app.css`), and `window.scrollTo(0, 0)` runs on entry so an already-retained document
-position can't leave the view displaced. The class is removed on cleanup, preserving normal
-document scrolling for mobile, settings, and every other non-workbench route. Verified: `tsc
---noEmit` clean, full suite passing. Files: `App.tsx`, `styles/app.css`.
-
-**Diagnostic trail (superseded by the fix above, kept for context):** live console diagnostics
-during investigation ruled out a specific unclipped/oversized element, a `position: fixed`/
-`absolute` element extending past the viewport, a horizontal-scrollbar-induced reflow, a stale
-one-frame layout cache, and a frozen inline JS-set height — because none of those were ever the
-actual problem; the gap was `html`/`body` never having been locked as a scroll owner at all.
-Several earlier reset-on-resize attempts (immediate, debounced, `h-dvh`→`h-screen`) were tried and
-reverted before the actual fix, for the same reason: they fought symptom-level scroll position
-without closing off `html`/`body` as an eligible scroll owner.
-4. The Owner/Admin financial review card (8B, see Direct Actual Work section below) stays deferred
-   until Christian explicitly decides it belongs in a future UI batch. Remaining API-preflight gaps
-   are incremental action-specific work, not a reason to invent client-side primary-action logic.
-
-Each visual slice needs desktop evidence at 100%, 125%, and 150% zoom plus focused regression
-coverage. Do not bundle the three slices or restart another broad Request Detail rewrite.
-
-### Blocking attention-contract gap — queue membership must explain itself on Request Detail
-
-**Status:** Discovered during Workbench visual verification; resolve before declaring the redesigned
-Request Detail production-ready. This is a product/API contract gap, not a CSS or client-side
-presentation issue.
-
-The server's **Needs Attention** queue/count correctly includes three different operational
-conditions:
-
-1. persisted active attention (`AttentionLevel != None`);
-2. a due/overdue `FollowUpOn` promise; and
-3. an overdue first business response (the Request-row **Response overdue** badge).
-
-Today, `AttentionGuidanceCard` in Request Detail renders only when the detail payload has both a
-non-`none` `attentionLevel` and an `attentionReason`. The latter two queue-membership conditions
-can therefore appear in Needs Attention without a Request Detail **Why / Resolve by** explanation.
-This produces a false operational distinction: a user opens a row labelled Needs Attention yet sees
-no corresponding guidance panel. The timing-change example has persisted attention metadata and
-does render the panel; most Response-overdue rows do not.
-
-**Locked correction:** every request admitted to **Needs Attention** must receive an equivalent,
-server-authored Request Detail attention explanation and safe resolution guidance. The client must
-not derive the reason, recommend an action, or decide what clears the state from dates/statuses.
-The detail contract needs to expose the authoritative effective attention reason/level and bounded
-guidance for read-time first-response-overdue and due/overdue Follow Up On cases, alongside the
-existing persisted-attention path. Keep lifecycle/attention effects truthful: recording work does
-not clear attention; only the server-authorized resolution does.
-
-**Preflight complete, decisions locked (2026-08-22):** ADR-489 locks the full effective attention
-order — persisted attention > due/overdue Follow Up On > first-response overdue (a due Follow Up On
-is a deliberate customer promise and outranks the generic first-response SLA fallback). ADR-490
-locks the `EffectiveAttention` (`level`/`reason`/`dueAt`/`guidance`) DTO shape, reuse of the dormant
-`AttentionReason.FirstResponseDue` plus a new `AttentionReason.FollowUpDue` member, and
-`CanSetFollowUpOn` as the ratified shared gate for setting and resolving Follow Up On. Full analysis
-and precedence matrix: [Request Detail / Workbench API preflight](ux-design/v2/request-detail-workbench-api-preflight.md).
-
-**Slice A (backend contract) — complete, approved (2026-08-22):** `AttentionReason.cs`
-(`FollowUpDue` member), `KeepRequestDetailResult.cs`, `KeepRequestDetailMapper.cs`
-(`ComputeEffectiveAttention`), `GetKeepRequestListService.cs` (shared enum arm), plus
-`KeepRequestEffectiveAttentionTests.cs` (15 tests: 4 isolated cases, pairwise/triple overlap,
-fall-through-on-resolve, the Closed-unresolved-feedback exclusion, and 3 JSON serialization
-contract tests). 1301/1301 Keep unit tests and architecture tests green.
-
-`EffectiveAttentionResult` shape shipped (all four locked decisions plus the review corrections):
-
-```
-EffectiveAttentionResult(
-    string Level,       // "none" | "waiting" | "needs_attention" | "overdue"
-    string? Reason,      // bounded AttentionReason slug, e.g. "follow_up_due", "first_response_due"
-    DateTime? DueAtUtc,  // real UTC instant — case 1 (NextAttentionAtUtc) and case 3 only
-    DateOnly? DueOnDate, // date-only promise — case 2 (Follow Up On) only, never a synthesized instant
-    string? GuidanceKey) // acknowledge_attention | resolve_follow_up | respond_to_customer | null
-```
-
-`DueAtUtc`/`DueOnDate` are mutually exclusive by design — Follow Up On has no time-of-day in the
-domain, so it must never be collapsed into a fabricated UTC-midnight `DateTime` (a review correction
-against the first draft, which did exactly that and would have let a client time zone shift the
-apparent promised date). `GuidanceKey` is a bounded routing key, not prose — Why/Resolve-by copy
-stays a client-side mapping per the ADR-426 interim rule until backend guidance text ships.
-
-Two real gaps the implementation surfaced and fixed, not just coded around: (1) an initial
-`UnresolvedFeedback → "review_feedback"` branch was dead code — that reason is only ever set on a
-Closed request (ADR-138 exception), which the terminal guard correctly excludes from Needs
-Attention entirely (it belongs to the separate FeedbackReview queue) — removed, and pinned down by
-`Closed_unresolved_feedback_attention_does_not_leak_into_effective_attention`; (2) two test setups
-silently failed `SetFollowUpOn` by calling it after `ChangeStatus(Resolved)` (Follow Up On is
-active-request-only per the signoff spec) — caught by asserting `IsSuccess` on every domain call.
-
-**Slice B (frontend consumption), start next:** `apiClient.types.ts`, `helpers.ts`,
-`DetailPanels.tsx`, `mocks/fixtures.ts`/`mockApiClient.ts`, plus the end-to-end
-Needs-Attention-row-matches-detail-guidance matrix test. Consume `effectiveAttention` (not raw
-`attentionLevel`/`attentionReason`) in `AttentionGuidanceCard`; render `dueOnDate` as a bare date
-(no time-zone conversion) and `dueAtUtc` as an instant, matching the backend split above.
-
-## Active work — Direct Actual Work
-
-**Product boundary:** [ADR-487](decisions/ADR-487-commercial-baselines-actual-work-and-accounting-closeout.md)
-and [Build Log 129](build-log/129-direct-actual-work-and-accounting-handoff-preflight.md).
-
-### Locked decision — Actual Work Draft ownership (2026-08-20)
-
-**Pilot blocker:** [GAP-055 — Actual Work capture is incorrectly blocked by dispatch assignment](pilot-readiness-bug-tracker.md#gap-055--actual-work-capture-is-incorrectly-blocked-by-dispatch-assignment).
-
-The prior active-Responsible-only recorder rule is superseded. **First-recorder ownership is
-locked:** any active member with `RequestsOperate + ActualWorkCapture` may create the one open
-Draft; creation preserves immutable `CreatedByUserId` authorship and sets the exclusive current
-`RecorderAccountUserId`. Only the recorder may mutate, expand, read Draft-bound nudges, discard, or
-submit. An Owner/Admin may transfer an unsubmitted Draft through a reason-required immutable audit
-event; submitted visits stay immutable, silent takeover is prohibited, and Request assignment stays
-dispatch context.
-
-**Plan:** perform a mechanical ownership-remediation preflight for the explicit recorder field and
-transfer audit, then audit/replace every active-Responsible gate and affected UI copy in bounded
-migration, authorization/API, transfer, and frontend/test batches. [GAP-055](pilot-readiness-bug-tracker.md#gap-055--actual-work-capture-is-incorrectly-blocked-by-dispatch-assignment)
-is the authoritative acceptance and sequencing record. **5d-ii-d was paused pending this
-correction; the correction is now complete (Batches A–D below) and 5d-ii-d is unpaused.**
-
-**GAP-055 remediation batches:**
-
-| Batch | Status | Durable record |
+| Server route / workflow | Surface | Trigger and constraint |
 |---|---|---|
-| A — domain + migration (`RecorderAccountUserId`, `TransferRecorder`) | Complete | commit `b3b3d41` |
-| B — Draft mutation/expand authorization swap | Complete | commit `d26b955` |
-| C — history/nudge read seams, `IActiveResponsibleCheck` removed | Complete | commit `72ce6a5` |
-| D — Owner/Admin transfer API + audit event | Complete | commit `c7ce822` |
+| `respond_to_customer` | Inline Customer Update composer | The Next step CTA expands it when `canSendBusinessUpdate` is true. If that action is unavailable but contact logging is authorized, route to the Log Contact sheet instead; never expand a disabled composer as the resolution target. |
+| `acknowledge_attention` | Right slide-over / mobile bottom sheet | Opened by Next step or an explicit link. Requires the existing formal attestation reason. |
+| `resolve_follow_up` | Right slide-over / mobile bottom sheet | Opened when the customer Follow Up On promise is due or overdue. It offers Complete, Reschedule, or Keep active; it is not acknowledgement or generic messaging. |
+| Log contact | Right slide-over / mobile bottom sheet | Opened from the Anchor or Next step when it is the authorized contact resolution route. |
+| Mark work done | Persistent Anchor macro action | Retains an explicit “attention remains” consequence whenever effective attention is active. |
+| Destructive action, dirty-draft discard, 409 recovery | Centered modal | Blocking/binary interruption only. |
 
-A/B/C replace every active-Responsible authorization check with a direct
-`RecorderAccountUserId` comparison across create, edit, discard, submit, assembly expansion, and
-nudge read; the open Draft is now also visible read-only to Owner/Admin (not just its recorder) via
-a new `IsRecorder` flag on the history read response. D adds
-`POST /keep/pricebook/actual-work/{actualWorkId}/transfer-recorder` — Owner/Admin-only,
-reason-required, recording an immutable `ActualWorkDraftRecorderTransfer` audit row atomically with
-the `RecorderAccountUserId` change. **GAP-055 remediation and 5d-ii-d are both complete** (commit
-`6543f81`); **slice 6 — Owner/Admin review mutation** is split into 6A (domain/persistence/
-migration, complete, commit `5a24e43`) and 6B (review API/endpoints/DI, complete; see the
-implementation record below).
+### Interaction model
 
-Prior implementation rules, now superseded:
+1. Add a compact **Next step** module directly below Attention Guidance. It names the exact action
+   selected by the server and presents one explicit destination button. Do not say “use the
+   highlighted action” or rely on a visual highlight elsewhere on the page.
+2. Keep the customer’s original request immediately after this module, so an operator can read the
+   problem before acting.
+3. Keep the customer-update composer inline and collapsed by default. `respond_to_customer`
+   auto-expands it only when a customer update is currently authorized. This retains a comfortable
+   writing surface and visible request context for routine work.
+4. Use a responsive **drawer / sheet** for structured, deliberate side workflows:
 
-- The request's active Responsible user was the sole field recorder; Owner/Admin was price-blind
-  while using field capture.
-- One Draft per request; Drafts were editable/discardable only by the active Responsible user;
-  submitted visits are immutable.
-- Zero-line submission requires a non-blank completion note and one truthful outcome:
-  `DiagnosticOnly`, `NoWorkAuthorized`, or `NoAccess`.
-- Field surfaces are price-blind. Sales price, expected direct cost, totals, and margin belong only
-  to the later Owner/Admin financial-review work.
-- Submission raises/reopens the additive Actual Work office-review signal. Signal resolution waits
-  for the later review mutation and must remain aggregate-state-driven.
+   - Clear attention
+   - Log external contact
+   - Resolve Follow Up On
+   - Edit service location
 
-### Delivered slices
+   On wide screens, it is a right-side slide-over that preserves line-of-sight to the request and
+   history. On narrow screens, it becomes a bottom sheet. Do not introduce a centered modal for
+   these workflows.
+5. Reserve centered modals for blocking or binary decisions: destructive confirmation,
+   dirty-draft discard, and version-conflict recovery.
 
-| Slice | Status | Durable record |
-|---|---|---|
-| 1 — domain | Complete | Build Log 129; commit `fb9e6a1` |
-| 2 — persistence/migration | Complete | Build Log 129; commit `29dedf0` |
-| 3 — draft API/authorization | Complete | Build Log 129; commit `068f9aa` |
-| 4 — atomic submit/review signal | Complete | Build Log 129; commit `2e4e88c` |
-| 5a — price-blind history read | Complete | Build Log 129; commit `7c71086` |
-| 5b — capture composer | Complete | Build Log 129; commit `3f3dda8` |
-| 5c — submitted-history UI | Complete | Build Log 129; commit `3cd9ec5` (5a auth fix), `9bf6266` |
-| 5d-i-a — assembly expansion, backend | Complete | Build Log 129; commit `2a2d0de` |
-| 5d-ii-a1 — nudges domain + persistence contract | Complete | Build Log 129; commit `aa76a9e` |
-| 5d-ii-a2 — nudges EF persistence + migration | Complete | Build Log 129; commit `6984768` |
-| 5d-ii-b — nudges Owner/Admin config API | Complete | Build Log 129; commit `a1d6478` |
-| 5d-ii-c — nudges technician field-read API | Complete | Build Log 129; commit `b4cf5b0` |
-| 5d-ii-d — nudges frontend + assembly search grouping fix | Complete | Build Log 129; commit `6543f81` |
+### Why this is the recommended split
 
-5b shipped with both lifecycle corrections already fixed and regression-tested in the same commit:
-the submitted confirmation no longer unmounts on the post-submit history refresh, and a create-time
-`409 DraftAlreadyOpenForRequest` reconciles to the authoritative Draft with the shared conflict
-notice. `useActualWorkCapture.test.ts`/`ActualWorkComposer.test.tsx` cover both cases (24/24
-passing, verified 2026-08-20).
+- Clear-attention attestation, contact log, and follow-up resolution often require reference to the
+  original request, contact information, and prior activity while writing. A drawer/sheet preserves context.
+- These flows need room for server disclosures, required reason text, contact method/outcome
+  controls, and normal vertical scrolling. A fixed centered modal is a poor fit and creates nested scroll risk.
+- Customer updates are daily core work. Hiding their writing surface in a drawer by default adds
+  friction without improving truthfulness.
 
-5c's preflight found 5a's read gate over-restrictive: it required `RequestsOperate` AND
-`ActualWorkCapture`, so a Viewer (`RequestsView` + account-wide visibility) got 403 instead of the
-locked "every request-visible reader" intent. Corrected in `3cd9ec5`: the read gate now requires
-only `RequestsView`, with `Owner`/`Admin`/`Viewer` → `AccountWide` and `Operator` → `MyWork`;
-`canCaptureActualWork` (and therefore `openDraft` visibility) is computed separately from
-`RequestsOperate` + `ActualWorkCapture` + active-Responsible. `ActualWorkHistoryApiTests` (9/9)
-covers the Viewer-200/read-only/no-Draft case. 5c itself (`9bf6266`) is a standalone,
-price-blind, read-only submitted-visit history card — its own probe (`useActualWorkHistory`), not
-a reuse of `useActualWorkCapture` (which discards `submittedVisits` for non-capturing callers).
-Explicit empty state, outcome-code-to-label mapping, quiet 403 hide, compact retry on other
-failures; a successful submit now also refreshes this card via `actualWorkHistory.retry()`. 144/144
-request-detail frontend tests passing.
+### Explicit non-recommendations
 
-**Business-completeness correction — field assist is required before pilot readiness.** 5b's
-composer supports individual catalog search and custom/off-catalog lines, but it omitted assembly
-expansion and contextual nudges. That is a product gap, not deferred UI polish: a technician needs
-support to find and record the complete factual work performed, rather than repeatedly searching
-for individual components or falling back to vague custom entries. **5d — Actual Work field
-assist: assembly expansion and nudges** is now required after 5c and before the office-review
-slices. It must remain price-blind and factual—no automatic additions, financial exposure, or
-Proposed Scope recommendation leakage—and needs its own exact file/test-count mechanical preflight
-before any code. That preflight must settle assembly snapshot/duplicate behavior and the nudge
-eligibility, deduplication, dismissal, explicit-add, and Draft-concurrency contracts.
+- Do not make every action a drawer or introduce a permanent floating bottom command dock in the
+  first release. It adds a competing visual zone, can obstruct mobile content, and is unnecessary
+  once Next step provides a single destination.
+- Do not put Clear attention in customer-update or internal-note tabs. It is a different,
+  server-authorized attestation with a different audit meaning.
+- Do not make a due Follow Up route to Clear attention or Send customer update by default. Its
+  `resolve_follow_up` flow is distinct.
+- Do not split the timeline into permanent Transcript/Audit tabs before pilot evidence shows current
+  filters are inadequate. A customer-facing filter is the lower-risk first move.
 
-### Next approved slices
+## Approved implementation sequence
 
-1. **5d-i-a — Actual Work assembly expansion, backend:** Complete. Build Log 129, "5d-i-a
-   implementation notes"; commit pending review. Atomic `expand-assembly` transaction
-   (`IActualWorkAssemblyExpansionPersistence`/`EfActualWorkAssemblyExpansionPersistence`), skip-
-   and-report duplicate handling, inclusion-list optional-item contract, active-Responsible check
-   moved inside the locked transaction (no pre-transaction tracked load). 7 production files, 8
-   new/modified tests, 66/66 Actual Work integration tests passing.
-2. **5d-i-b — Actual Work assembly expansion, frontend:** Complete. `ActualWorkComposer` now
-   expands `OfferingAssembly` search results with optional items defaulted out, reports skipped
-   duplicate components, and reconciles a stale Draft token through the existing conflict path.
-   `FieldScopeSearch` now accepts `RequestsOperate` plus either capture permission. Build Log 129,
-   “5d-i-b implementation notes”; commit pending. 26 focused frontend tests, TypeScript check,
-   and 44 focused HTTP integration tests passing.
-3. **5d-ii — Actual Work nudges:** preflight complete, split five ways (Build Log 129, "5d-ii
-   preflight — locked decisions"). Separate, Owner/Admin-configured Actual Work rule set (same
-   price-blind association shape as Proposed Scope's `ScopeNudgeRule`, not the same rows/table —
-   factual-completion intent, not upsell), stateless eligibility filtering against the Draft, no
-   persisted dismissal, explicit add via the ordinary single-line add path. Config CRUD gate:
-   `PriceBookCatalogManage` (locked). Five independently gated sessions, in order:
-   1. **5d-ii-a1 — domain + application persistence contract:** Complete. Build Log 129, "5d-ii-a1
-      implementation notes". `ActualWorkNudgeRule`, `ActualWorkNudgeSuggestion`,
-      `ActualWorkNudgeSuggestionSetValidator`, `ActualWorkNudgeRuleErrors`,
-      `IActualWorkNudgeRulePersistence`. 5 production files, 2 new test files, 15/15 passing.
-   2. **5d-ii-a2 — EF persistence, mappings, migration, persistence tests:** Complete. Build Log
-      129, "5d-ii-a2 implementation notes". `ActualWorkNudgeRuleConfiguration`,
-      `ActualWorkNudgeSuggestionConfiguration`, `EfActualWorkNudgeRulePersistence`, migration
-      `20260820191413_ActualWorkNudgeRule`. 3 production files, 1 new test file, 9/9 persistence
-      tests passing against real PostgreSQL.
-   3. **5d-ii-b — Owner/Admin config API:** Complete. Build Log 129, "5d-ii-b implementation
-      notes". Create/Update/Delete + list, mirroring `ScopeNudgeRuleConfigApiService`/
-      `ScopeNudgeRuleEndpoints` exactly, gated `PriceBookCatalogManage`. 5 production files, 1 new
-      test file, 17/17 passing.
-   4. **5d-ii-c — technician field-read API:** Complete. Build Log 129, "5d-ii-c implementation
-      notes". `ActualWorkNudgeFieldReadApiService`, `ActualWorkNudgeFieldReadEndpoints`
-      (`GET /keep/pricebook/actual-work/{actualWorkId}/nudge-suggestions`). Authorization mirrors
-      `ActualWorkDraftApiService`'s active-Responsible gate (not ScopeNudge's row-visibility read);
-      dedupe suppresses only catalog-item suggestions already on the Draft (no assembly provenance
-      retained); account posture is Blocked-only. Add reuses
-      `ActualWorkDraftApiService.AddLineAsync`; no new mutation handler. 4 production files, 1 new
-      test file, 11/11 passing.
-   5. **5d-ii-d — frontend:** Complete. Build Log 129, "5d-ii-d implementation preflight"; commit
-      `6543f81`. 3 production files (`apiClient.types.ts`, `apiClient.ts`,
-      `ActualWorkComposer.tsx`), 1 test file; 0 new mutation families (reuses `addActualWorkLine`/
-      `expandActualWorkAssembly`). Nudge state/fetch inline in `ActualWorkComposer.tsx`, mirroring
-      `ComposerNudgePanel`'s UX only (session-only chips, client-side Dismiss), not its file split.
-      Same commit also fixed a pre-existing 5d-i-b usability gap found during manual verification:
-      `ActualWorkSearchAndAdd`'s search results listed assemblies after every catalog match in one
-      undifferentiated scroll box, making them practically undiscoverable; now mirrors Proposed
-      Scope's grouped "Matching assemblies" / "Matching catalog items" layout. 17/17 focused tests
-      passing.
-4. **6 — Owner/Admin review mutation:** Complete, split two ways (Build Log 129, "6 preflight —
-   locked decisions"). Owner/Admin + `RequestsOperate` + Price Book entitlement, no new permission
-   key; nullable `ReviewedAtUtc`/`ReviewedByAccountUserId`/`ReviewNote` on `ActualWork`;
-   single-shot; per-request signal resolve atomic with the review; not blocked on terminal
-   requests.
-   1. **6A — domain, persistence, migration:** Complete. Build Log 129, "6A implementation notes".
-      6 production files, 2 test files. 34/34 unit + 8/8 persistence integration tests passing.
-   2. **6B — review API service, endpoints, DI:** Complete. Build Log 129, "6B implementation
-      notes". 4 production files (added `ErrorHttpMapper.cs` beyond the original 3-file estimate),
-      1 test file. 8/8 new API tests; 130/130 Actual Work integration + 49/49 unit tests passing,
-      no regressions.
-5. **7 — Owner/Admin financial read:** Complete. Build Log 129, "7 implementation notes". Two
-   read-only GETs: `GET /keep/pricebook/actual-work/review-queue` (account-wide unreviewed-review
-   queue, per-visit rows, request context only) and
-   `GET /keep/pricebook/actual-work/{id}/financial-detail` (factual record plus immutable snapshot
-   totals, Standard/Expected Direct Cost, margin). Per-visit aggregation only, no per-request
-   rollup. A line is incomplete when either `SellPriceSnapshot` or
-   `StandardExpectedDirectCostSnapshot` is null (not `PriceBookVersionLineId` alone); incomplete
-   data forces all-null visit totals, never a partial sum or fabricated $0. Same authorization gate
-   as 6B (Owner/Admin + `RequestsOperate` + Price Book entitlement, no new permission). 5 production
-   files, 1 new interface + 1 new EF class + 1 new API service + 2 endpoint-layer edits, 2 test
-   files; 6/6 unit + 12/12 API integration tests passing, 142/142 Actual Work integration + 55/55
-   Actual Work unit tests passing overall, no regressions.
-6. **8 — Owner/Admin review UI:** split into 8A (Requests-workspace review-queue tab, read-only)
-   and 8B (request-detail financial review card + review mutation).
-   1. **8A — Requests-workspace review-queue tab:** Complete. `apiClient.types.ts`/`apiClient.ts`
-      wiring for all three financial-read/review endpoints (previously unused by the frontend);
-      new client-only `actual_work_review` tab (not a `RequestView` — backed directly by
-      `GET .../review-queue`, distinct row shape from `RequestListContent`); new
-      `ActualWorkReviewQueueList` component; `RequestQueueNavigation` threads a client-side
-      queue-length badge (no count endpoint). 6 production files, 1 extended test file
-      (`Requests.queueTransition.test.tsx`, +2 tests). TypeScript clean, `git diff --check`
-      clean, extended file 8/8 passing, full focused `Requests.*` suite 45/45 passing.
-   2. **Contract patch (Slice 7/8A correction):** Complete. `ActualWorkFinancialDetailResult` had
-      no `ConcurrencyVersion`, so 8B's review card would have had no valid expected version to
-      send to `POST .../review`. Added `ConcurrencyVersion` to the record, serialized it from the
-      `financial-detail` endpoint, added it to the frontend type. 3 production files
-      (`ActualWorkFinancialReadApiService.cs`, `KeepEndpoints.cs`, `apiClient.types.ts`), 1 test
-      file extended (`ActualWorkFinancialReadApiTests.cs`: existing detail test now asserts the
-      returned version matches the DB row; new `FinancialDetail_ConcurrencyVersion_CanBeUsedToReview`
-      proves the real round trip — fetch financial-detail, POST that version to `/review`, 200).
-      13/13 passing in that class, `ActualWorkReviewApiTests` 8/8 unaffected. No standalone
-      frontend apiClient contract test added — the backend round trip proves the wire contract;
-      8B's review-card test is where a client-side assertion has a real consumer (financial-detail
-      supplies `concurrencyVersion`, the review mutation must send that exact value).
-   3. **8B — request-detail financial review card + review mutation:** Preflight complete, **build
-      paused** — Christian is starting a UI/UX redesign and does not want 8B built ahead of it only
-      to be rebuilt after. Resume 8B from this preflight once the redesign lands; re-validate
-      against the redesigned request-detail layout before implementing, don't implement from this
-      preflight unchanged if the layout has moved.
-      - No "financial detail for a request" endpoint exists — only per-`actualWorkId`. Plan was to
-        reuse `useActualWorkHistory`'s already-fetched `submittedVisits[].id` (== `actualWorkId`)
-        rather than add a new request-scoped read, then fetch financial-detail per visit for
-        Owner/Admin — one card, one row per visit, mirroring `ActualWorkHistoryCard`'s existing
-        multi-visit shape.
-      - `role`/`isOwnerOrAdmin` is not threaded into `request-detail/*` anywhere today — no
-        Owner/Admin-gated card exists there yet. Plan was a single `isOwnerOrAdmin: boolean` prop
-        from `RequestDetail.tsx`'s existing `meQuery.data?.accountRole` into `RequestDetailContent`
-        only (not the shared `RequestDetailLayoutProps` — mobile/desktop layout components don't
-        need it).
-      - Quiet-hide on 403 for Owner/Admin too (entitlement/blocked-account gate can still fail) —
-        mirrors `useActualWorkHistory`'s convention; skip the fetch outright for non-Owner/Admin.
-      - `ActualWork.AlreadyReviewed` (409, distinguishable via `ApiError.code`) is expected/routine
-        on a shared review queue, not exceptional — plan was to re-fetch that visit's detail and
-        show the real reviewer/note rather than a generic conflict error.
-      - Planned file list (re-verify against the redesign before implementing): new
-        `useActualWorkFinancialReview.ts` hook, new `ActualWorkFinancialReviewCard.tsx`, edits to
-        `RequestDetailContent.tsx` and `RequestDetail.tsx`. 1 mutation family, 4 production files.
-        Test file: add `ActualWorkFinancialReviewCard.test.tsx` (new file warranted here, unlike
-        8A) proving financial-detail supplies `concurrencyVersion` and the review call sends that
-        exact value.
+### 0. Mechanical preflight — no code
 
-Every slice needs its own exact file/test count and validated preflight. Do not bundle later
-financial/review work into field capture merely because files overlap.
+Read the current Request Detail composition, mutation controllers, drawer/modal primitives,
+responsive behavior, and dirty-draft handling. Produce exact files, ownership, accessibility
+behavior, and a test plan. Confirm that a sheet preserves request context without becoming a third
+permanent pane.
 
-## Active work — Keep UI V2 Production Upgrade
+### 1. Finish EffectiveAttention correctness — complete
 
-**Product boundary:** [docs/ux-design/v2/](ux-design/v2/) — README, decision register (UI-001–UI-013
-locked), design model, component spec, review rubric. Separate track from Direct Actual Work above.
+### 2. Introduce a server-routed Next step module (next batch)
 
-Full-codebase implementation preflight is complete (architecture map, decision-to-code mapping for
-UI-001–UI-013, migration sequence). The implementation sequence below deliberately separates the
-small, current-page Office Review control from the later UI-001 Queue + Workbench shell. They share
-one role and data contract, but they are not the same layout task.
+- Add one small Request Detail component immediately after Attention Guidance.
+- Map `guidanceKey` to the locked matrix above. `respond_to_customer` expands the inline Customer
+  Update composer only when it is authorized; otherwise it routes to an authorized Log Contact sheet.
+- If a server-selected route is unavailable, show factual guidance without inventing a fallback
+  mutation; record this as a contract discrepancy for review.
+- Remove “highlighted panel/action” recommendation copy.
 
-### Locked decision — Owner/Admin Office Review amendment (2026-08-21)
+### 3. Establish the responsive sheet primitive and draft rules
 
-Supersedes plain More-Views grouping for Owner/Admin's Ready to Close / Feedback Review / Actual
-Work Review. The amendment is recorded in the current V2 documentation changes and must be committed
-separately from later frontend work:
+- Desktop: right slide-over, full viewport height, one normal scroll owner, focus trapped while
+  open, Escape and close supported, and focus returned to the trigger.
+- Mobile/tablet: bottom-sheet presentation with keyboard-safe sizing and an accessible close control.
+- Preserve an in-memory draft for a sheet closed during the same request session. Explicit **Discard**
+  clears it. Do not persist customer-sensitive drafts to local storage by default.
+- Warn before closing only when a dirty draft would be lost; do not turn routine close/reopen into a confirmation loop.
 
-- Owner/Admin primary tabs stay exactly Needs Attention, All Work, My Work — unchanged.
-- Add a conditional, persistent **Office Review** control below the primary tabs, above
-  search/filter. It aggregates Ready to Close + Feedback Review + Actual Work Review counts,
-  uses navy/neutral treatment (never amber — reserved for customer-promise risk), and opens an
-  accessible chooser naming each queue and its count. It is hidden only after the aggregate is
-  authoritatively known to be zero; while loading, reserve a compact placeholder rather than
-  guessing zero.
-- Watching becomes a separate quiet Views/utility control for Owner/Admin (not part of Office
-  Review). Operator is unchanged: primary My Work/Needs Attention/Available, Watching stays behind
-  its quiet Views control.
-- The behavior and data contract applies to both presentations. On today's full-width
-  `#/requests` page, Office Review is a compact, content-width control — never a stretched,
-  full-page faux input. In UI-001's future 320–360 CSS-px Queue pane, the same component becomes
-  pane-width and primary tabs use a two-row grid: Owner/Admin row 1 Needs Attention; row 2 All Work
-  | My Work. Operator row 1 My Work; row 2 Needs Attention | Available. No horizontal scrolling or
-  clipped labels.
+### 4. Move structured actions into sheets without changing domain meaning
 
-**Why:** no authoritative server count existed for Actual Work Review (only a full-row-list
-endpoint) — the prior client badge already leaned on that list's `.length`, which the Office Review
-aggregate must not repeat.
+- Clear attention: move the existing required-reason form into the sheet; submit only through the
+  acknowledgement endpoint and replace detail with its response.
+- Log contact: move the existing workflow into the sheet; preserve outcome and attention-effect disclosures.
+- Resolve Follow Up On: use its dedicated resolution path. Preserve date-only display; never model
+  it as generic acknowledgement.
+- Edit service location: move only if its current form and authorization make the sheet appropriate;
+  do not bundle unrelated location changes into the attention slice.
 
-### Delivered slices
+### 5. Simplify the canvas and protect truthful completion behavior
 
-1. **Slice A-1 — Actual Work Review authoritative count (backend):** Complete, commit `1e35335`.
-   `IActualWorkFinancialReviewPersistence.CountUnreviewedAsync`,
-   `EfActualWorkFinancialReviewPersistence` (COUNT query, no row projection),
-   `ActualWorkFinancialReadApiService.GetReviewQueueCountAsync` (same Owner/Admin gate as the
-   existing queue read), new `GET /keep/pricebook/actual-work/review-queue/count` →
-   `{ count: int }`. 4 production files, 1 test file (5 new HTTP integration tests: account-scoped
-   count, zero case, Operator 403, missing-entitlement 403, unauthenticated 401). 18/18
-   `ActualWorkFinancialReadApiTests` passing. No migration, no mutation handler.
-2. **Earlier documentation amendment:** Uncommitted and superseded in part. The four V2 documents
-   contain the Office Review, Views, and narrow Queue-pane rules, but their old containment wording
-   incorrectly prohibited the current full-width implementation. Step 1 below corrects that wording
-   before frontend work resumes.
+- Remove standalone structured-action form cards only after their sheet destination is live and keyboard-accessible.
+- Keep Customer Update inline but collapsed by default and expanded from its explicit destination.
+  Preserve customer-visible disclosure, status behavior, validation, and draft/error recovery.
+- Keep Log contact reachable from the Anchor as a compact trigger, but route it to the sheet.
+- Render **Mark work done** as demoted when effective attention remains, with clear nearby consequence text.
 
-### Rejected attempt — Slice A-2 full-width frontend (2026-08-21)
+### 6. Verify the full resolution matrix
 
-A-2 was implemented and reviewed twice (Office Review, Views/History split, a two-row grid via a
-real CSS container query, accessible disclosure semantics). The failure was structural, not a
-product-rule failure: it applied the Queue-pane layout unchanged to a 1,100px+ full-width page. That
-made Office Review a stretched faux input and left Views/History disconnected from the controls.
+For persisted attention, due/overdue Follow Up On, and overdue first response, verify:
 
-**Disposition:** not committed. Preserved as `stash@{0}` on `main`, labeled
-`slice-a2-full-width-superseded-frontend` — do not discard or apply wholesale. Its label wording,
-active-context naming, accessible disclosure pattern, and loading-state work are reference material
-for the new compact current-page slice and for the later Queue-pane variant.
+- Needs Attention row admission matches visible detail guidance.
+- Next step label matches `guidanceKey`.
+- The named target opens and has matching available-action authorization.
+- Update, contact logging, follow-up resolution, and acknowledgement retain distinct server-owned effects.
+- Desktop 100%/125%/150% zoom, keyboard-only operation, narrow-screen sheet behavior, focus return,
+  dirty-draft close/reopen, 409 recovery, and unavailable/403 states work.
 
-### Sequenced delivery plan
+Run focused Vitest coverage, `pnpm typecheck`, `pnpm check:tokens`, and the relevant full frontend
+suite before visual sign-off.
 
-1. **Correct the V2 presentation contract — complete (2026-08-21).** The decision register, design
-   model, component spec, and review rubric now distinguish the current compact full-width
-   Requests-page variant from the later bounded Queue-pane variant while preserving one shared
-   role/count/action contract.
-2. **Preflight the current-page Office Review slice — complete (2026-08-21).** Preflight was
-   reviewed and corrected twice (locked primary-tab order/labels, Row 1/Row 2 layout and
-   unclipped-popover containment, disclosure mutual exclusion, error-vs-loading Office Review
-   state) before implementation began.
-3. **Review the preflight before code — complete (2026-08-21).** Accepted after corrections; the
-   accepted preflight produced a compact Office Review control directly below the primary tabs,
-   keeps Views/History purposeful, and does not use a full-width Queue-pane treatment.
-4. **Implement and verify the current-page slice — complete (2026-08-21).** Delivered: locked
-   Owner/Admin primary-tab order (Needs Attention, All Work, My Work) and the single "My Work"
-   label on both roles; Watching moved to a **Views** disclosure; Ready to Close/Feedback
-   Review/Actual Work Review moved to an Owner/Admin-only **Office Review** disclosure sourced
-   from authoritative counts only (Actual Work Review via the Slice A-1 count endpoint, never
-   review-queue `.length`); Row 1 (primary tabs + Views/History sharing space, wrapping together
-   when space doesn't permit) and Row 2 (Office Review, its own row) with `overflow-x-auto`
-   scoped to the tablist only so neither popover clips; mutual-exclusion disclosure state with
-   correct focus-return semantics; `aria-controls`-based disclosure relationship (not
-   `aria-haspopup`, which implies a menu); an explicit `loading` / `error+retry` / `ready`
-   Office Review state (error is distinct from loading, never a guessed zero); removed the
-   duplicate "Ready to close" header pill now superseded by Office Review. Fixed one latent
-   pre-existing bug found along the way: the new-session landing tab now actually lands on
-   Needs Attention (the already-locked decision), which the old tab ordering never satisfied.
-   Visual verification at narrow current-page widths and 100/125/150% zoom completed by
-   Christian. This current-page variant and its Queue-pane reuse are part of the completed UI-001
-   migration recorded below.
-5. **Build UI-001 migration — complete.** The Office Review component is reused in its Queue-pane
-   presentation (pane-width strip, dedicated Views/History row, and 320–360px two-row primary
-   tab grid). The locked Build Log 132 Steps 1–6 migration sequence is complete; subsequent work
-   is the ordered shell-refinement backlog below, not an extension of that migration.
+## Other active work
 
-### Current stop point and ordered UI shell backlog
+### Owner/Admin Actual Work financial review UI (8B)
 
-The UI-001 migration is complete: Steps 3–4/density refinement are committed
-(`f51d66d`/`f629c60`), Priority Preview richness is committed (`e935b8c`), and Step 5 is committed
-(`6d85b2f`). Real-browser 100/125/150% zoom acceptance passed for both roles, and Step 6 route /
-one-pane verification passed. The following are newly observed shell refinements, deliberately
-ordered as separate bounded batches. They require a mechanical preflight and approval before code;
-they are not authorized by the completed migration. **Items 1–6 below are all complete for now**
-(item 6's real-browser acceptance is deferred to the next Request Detail pane upgrade's review
-pass, not waived). **Next scheduled work is the Request Detail pane upgrade** — needs its own
-preflight before code; not yet scoped in this log.
+**Status:** preflight complete; implementation paused pending the Request Detail action-surface
+redesign. Revalidate before code; do not revive the old layout plan unchanged.
 
-**Global next-work selection:** start with the ordered UI shell backlog below. Direct Actual Work
-Slice 6B is historical/completed, not a scheduled next task; its later deferred UI work remains
-separate and must not displace these selected shell corrections.
+- Backend financial-detail and review endpoints exist; financial detail includes the concurrency version.
+- The future Request Detail card must be Owner/Admin-only, quiet-hide 403/entitlement-denied states,
+  fetch per submitted visit, submit the exact returned concurrency version, and recover
+  `ActualWork.AlreadyReviewed` by refreshing to show the real reviewer/note.
+- The card stays separate from price-blind operator/field workflows.
 
-1. **Feedback Review membership/count reconciliation — complete.** Fixed in
-   `KeepRequestListPersistence.cs`: the `ActiveViewKind.FeedbackReview` row query previously
-   matched any closed request with `FeedbackSubmittedAtUtc.HasValue`, including already-reviewed
-   and positive-feedback rows, while `GetViewCountsAsync`'s `feedbackReviewCount` counted only
-   `Closed && AttentionReason == UnresolvedFeedback && AttentionLevel != None`. The row predicate
-   now matches the count predicate exactly (also matching the domain's own
-   `KeepRequest.HasActiveUnresolvedFeedbackReview`, ADR-242). `KeepFeedbackReviewApiTests.
-   FeedbackReview_ListView_IncludesAgingMetadata` updated to assert the list returns exactly the
-   unreviewed-negative rows and excludes already-reviewed/positive/no-feedback rows. 13/13 +
-   52/52 (`KeepRequestListQueryApiTests`) + 180/180 (`KeepRequestListServiceTests`) passing.
-2. **Queue-row activation and selected-request state — complete.** `RequestRow.tsx`'s outer
-   container is now the single activation target (`role="button" tabIndex={0}`, Enter/Space
-   handled, click-to-select), replacing the prior partial `<button>` limited to the
-   identity/status block. Nested controls ("Read full request" toggle, quick-action footer)
-   `stopPropagation` so they stay independently operable without also activating the row. New
-   `selected` prop renders `ring-2 ring-inset ring-[var(--keep-accent)]`, layered alongside the
-   existing `borderAccent` exception rail (danger/attention), never replacing it. `Requests.tsx`
-   gained `selectedRequestId?`, threaded to each row as `selected={row.id === selectedRequestId}`;
-   `RequestWorkbenchShell.tsx` passes `selectedRequestId={detailRoute?.requestId}` — the request
-   open in Pane 2 — into the paned `<Requests>` instance. Covers durable route, pointer, and
-   keyboard paths. 3 production files, 1 test file (2 new `RequestRow.test.tsx` cases: keyboard
-   activation, nested-control independence, selected-state rendering; 1 pre-existing test's loose
-   accessible-name regex fixed to an exact match, since the whole row's accessible name now
-   includes quick-action label text). 35/35 `RequestRow.test.tsx` + 58/58 `Requests.*`/
-   `RequestWorkbenchShell.test.tsx` passing. `tsc --noEmit` and `git diff --check` clean.
-3. **Intentional wide-shell initial selection — complete.** `RequestWorkbenchShell.tsx` auto-selects
-   the first eligible row (same attention-first predicate as `PriorityPreview`'s `hasAttention`,
-   `attentionLevel !== "none"`, falling back to queue order) once per mount, latched by a
-   `hasAutoSelectedRef` that locks as soon as any detail route — auto or user-chosen — is entered.
-   A deliberate return to bare `#/requests` (browser back/forward, filters, tabs, live snapshot
-   updates) never re-selects a replacement customer while that latch holds. A new `requestEntryIntent`
-   counter (`App.tsx`) is bumped only by explicit Requests-navigation affordances (brand lockup,
-   primary nav item, mobile menu) and resets the latch without remounting the Queue pane, so
-   filters/scroll survive; `navigateToRequests()` centralizes this. Narrow one-pane behavior
-   unchanged. 3 production files (`RequestWorkbenchShell.tsx`, `App.tsx`, plus the reused
-   `PriorityPreview` predicate duplicated locally per the locked preflight decision — not exported),
-   2 test files (`RequestWorkbenchShell.test.tsx` +2 cases, `App.test.tsx` +1 case for the brand-nav
-   entry-intent path). 36/36 (`App.test.tsx` + `RequestWorkbenchShell.test.tsx`) + 59/59 `Requests.*`
-   passing, `tsc --noEmit` and `git diff --check` clean.
-4. **Queue navigation hierarchy and active-context clarity — implemented, real-browser acceptance
-   pending.** Pane-mode header now reads `Request Queue · <active queue> · <count>` (e.g. "Request
-   Queue · Needs Attention · 13"), reusing `Requests.tsx`'s existing `contextLabel` and the
-   already-exported `countForTab` helper — no new/derived count, count omitted where none applies
-   (History). The existing `appliedLineText` line stays in place in the same fixed header block.
-   Root-caused and fixed the pane's scroll ownership bug: the 360px Queue-pane wrapper
-   (`RequestWorkbenchShell.tsx`) had `overflow-y-auto` on itself instead of `min-h-0`, so nested
-   flex children's default `min-height:auto` let content grow past the available height and that
-   wrapper — not `RequestListContent`'s own scroll region — ended up scrolling the whole pane,
-   header included. Fixed by making the pane wrapper `min-h-0` (no self-scroll) and adding
-   `min-h-0` to `RequestListContent.tsx`'s and `ActualWorkReviewQueueList.tsx`'s row regions (same
-   bug, same fix, since Actual Work Review is a sibling queue reached via Office Review). 6
-   production/test files (`RequestsWorkspaceHeader.tsx`, `Requests.tsx`, `RequestWorkbenchShell.tsx`,
-   `RequestListContent.tsx`, `ActualWorkReviewQueueList.tsx`, `RequestsWorkspaceHeader.test.tsx` +2
-   cases). 63/63 relevant frontend tests passing, `tsc --noEmit` and `git diff --check` clean.
-   **Real-browser acceptance found a deeper bug (2026-08-22):** at the wide (≥1001px) workbench
-   width, scrolling the Queue pane scrolled the *entire page* — Pane 2 (Detail) and Pane 3 (Team &
-   context) content scrolled away with it, leaving blank space, while Pane 1 kept revealing more
-   rows. Root cause: `html`/`body`/`#root` and the App shell root (`min-h-screen`, not `h-screen`)
-   and `<main>` (`flex-1 min-w-0 flex flex-col`, no height cap) never established a real bounded
-   height anywhere above `RequestWorkbenchShell`. Its `h-full`/`flex-1`/`min-h-0`/`overflow-y-auto`
-   chain (this item's fix, and item 5's) had no defined-height ancestor to resolve against, so it
-   was inert — the browser fell back to plain document scroll, which happened to look like
-   row-only scrolling in jsdom-based tests (no real layout) but was never true pane-scoped
-   scrolling. Fixed in item 6 below.
-5. **Queue scan-density follow-through — complete.** Preflight read item 4's flex-height chain
-   (pane wrapper `min-h-0`, `Requests.tsx` root `flex flex-col h-full`,
-   `RequestListContent.tsx`/`ActualWorkReviewQueueList.tsx` row regions `flex-1 min-h-0
-   overflow-y-auto`) as already correct from source alone, without validating against a real
-   layout — wrong: see item 4's real-browser finding and item 6's fix; the chain had no bounded
-   ancestor and was inert. `RequestRow.tsx` pane mode now renders a compact scan-and-select row:
-   identity, status/exception badges, the `Next:` cue (operationally distinct from status —
-   locked by Christian over the minimal-set proposal), and a bare city/state chip (no zip).
-   Trimmed from pane mode: original-summary text and its expand toggle, latest-activity preview,
-   responsible/unassigned/last-touch/source-intake chips, follow-up/planned timing, feedback-
-   resolved, internal-priority, and internal-note chips. Exception rail (`borderAccent`) and
-   selected-row ring are untouched (they render on the outer container, outside the trimmed
-   region). Full-page/narrow row rendering is unaffected. 1 production file (`RequestRow.tsx`), 1
-   test file (`RequestRow.test.tsx`, 1 new pane-mode compact-row case). 36/36 `RequestRow.test.tsx`
-   + 86/86 adjacent `Requests.*`/`requests/__tests__` suites passing, `tsc --noEmit` and
-   `git diff --check` clean.
-6. **Wide-workbench height-boundary fix — complete for now.** Christian is deferring full
-   real-browser acceptance until the next Request Detail pane upgrade/review pass rather than
-   signing off separately now; revisit acceptance then. Fixes the item 4 finding above: nothing between `#root` and
-   `RequestWorkbenchShell` established a real bounded height, so its internal
-   `min-h-0`/`overflow-y-auto` pane-scroll chain was inert and the whole document scrolled
-   instead. Scoped narrowly (Christian's locked design) so only the wide Queue+Detail workbench
-   gets a fixed-viewport ancestor — narrow fallback, Price Book, Settings, and Home keep normal
-   document scroll unchanged: `RequestWorkbenchShell.tsx` reports its measured wide-pane state
-   upward via a new `onWideModeChange` callback (mirrors its existing `isWide` ResizeObserver
-   state, reset on unmount/width drop below the locked 1001px minimum); `App.tsx` holds that as
-   `workbenchWideActive` and applies `h-dvh overflow-hidden` to the shell root and `min-h-0
-   overflow-hidden` to `<main>` only while it's true (`min-h-screen` and no cap otherwise, byte-
-   for-byte unchanged for every other route). No hardcoded `100vh - headerHeight` calculation —
-   `h-dvh` is viewport-relative on its own; the flex-col chain (root → shrink-0 headers → `<main>`
-   flex-1 → `RequestWorkbenchShell`'s existing `flex h-full min-h-0 flex-1`) does the rest.
-   `RequestWorkbenchShell.tsx`'s Pane 1 (Queue) wrapper gained `min-h-0 overflow-hidden` in both
-   the split and full-width-within-workbench branches; Pane 2 (Detail) and the Priority Preview
-   wrapper gained `min-h-0` alongside their existing `overflow-y-auto`. 3 production files
-   (`App.tsx`, `RequestWorkbenchShell.tsx` — prop/wiring only, no test-file changes needed since
-   jsdom doesn't lay out real heights and can't exercise this). 110/110 relevant frontend tests
-   (`App.test.tsx`, `RequestWorkbenchShell.test.tsx`, `Requests.*`, `requests/__tests__`) passing,
-   `tsc --noEmit` and `git diff --check` clean. **Deferred, not waived:** Christian's real-browser
-   acceptance — wide (≥1001px) Pane 1/Pane 2 scroll independently with no whole-page scroll, and
-   narrow width / Price Book / Settings / Home still scroll normally — is folded into the next
-   Request Detail pane upgrade's review pass rather than signed off standalone.
+## Pilot and release constraints
 
-**UI-001 migration progress:**
-- Step 1 (measurement/sizing spike) — **complete, 2026-08-21**
-  (`docs/build-log/133-ui-001-step1-measurement-spike-preflight.md`). Protected Workbench minimum
-  locked at 640 CSS-px; protected application-workspace minimum locked at 1001 CSS-px, recorded in
-  `docs/ux-design/v2/keep-ui-design-model-v2.md` §13.
-- Step 2 (lock retained-route shell approach) — already resolved as part of the build-log 132
-  preflight (§3.1/§6); no separate implementation action needed.
-- **Step 3 (first functional wide shell: Queue pane + UI-003-compliant Priority Preview) —
-  complete, committed `f51d66d` (2026-08-21).** Preflighted (`docs/build-log/132`, ranking/attention
-  field confirmation) and reviewed twice before landing: `RequestWorkbenchShell.tsx` (new,
-  `ResizeObserver`-gated at the locked 1001 CSS-px protected minimum) and `PriorityPreview.tsx`
-  (new, all four UI-003 branches) added; `App.tsx`'s `#/requests` render gate now mounts the
-  shell; `Requests.tsx` reports a settled `AppliedQueueSnapshot` (never `draftQ`) via
-  `onAppliedSnapshotChange` without duplicating its fetch. `RequestQueueNavigation` is reused
-  unchanged (no pane-mode prop — deferred to Step 4). One-pane fallback applies regardless of
-  width whenever the applied view has no ranked `KeepRequestSummary` shape or context Priority
-  Preview can honestly branch on: Available, Actual Work Review, and History (closed/cancelled
-  result set, outside UI-003's active-queue branches) — gated by `isRankedView` in
-  `AppliedQueueSnapshot`. Two review rounds corrected: (1) the attention predicate to the locked
-  `attention.attentionLevel !== "none"` (not `attentionReason` presence); (2) Open request now
-  passes `{ requestIds }` navigation context so Request Detail keeps Prev/Next; (3) History
-  excluded from `isRankedView`. `#/request/{id}` is unaffected by this step — still renders via
-  the existing focused `RequestDetail` fallback regardless of width (Step 5).
-- **Step 4 (Queue-pane layout variant) — complete, committed `f629c60`.** Pane mode adds the
-  two-row primary-tab grid and a Row 2 grouping secondary navigation/utilities together (Office
-  Review left, Views/History right); it reuses the existing count and disclosure contract
-  unchanged. Automated checks clean; real-browser 100/125/150% zoom/role acceptance passed for
-  both roles (2026-08-21, see Current stop point above).
-- **Post-Step-4 Queue-density refinement (Build Log 134 §1 Queue-pane density, §2 scan-only rows)
-  — complete, committed `f629c60`.** Details:
-  - Compact header: `RequestsWorkspaceHeader.tsx` renders a compact "Request Queue" label in pane
-    mode instead of the business H1/subtitle; full-page/narrow unchanged.
-  - Primary tabs: measured, not assumed. Stood up the existing mock-workbench harness
-    (`VITE_OPHALO_MOCK_WORKBENCH=true`) headlessly at the true 360px pane width with worst-case
-    2-digit counts. A single 3-way tab row with full labels + badge-pill counts wrapped "Needs
-    Attention" to two lines for both roles, so the two-row primary-tab grid (locked
-    keep-ui-design-model-v2.md §13) was retained rather than forced into one row; badge-pill
-    counts kept (no inline dot notation, no literal amber/slate — semantic tokens only).
-  - Search + status filter: `RequestListToolbar.tsx` gains a pane-mode branch — same `<select>`
-    element/contract, `appearance-none` + custom chevron for compact styling only, collapsed
-    label reads "Filter", truncates long values, accent border when active, one-tap clear.
-    Full-page/narrow toolbar renders unchanged.
-  - Scan-only rows (§2): `RequestRow.tsx` takes a `paneMode` prop hiding the quick-action footer
-    (Update customer/Log contact); row stays fully selectable with status/exception/context
-    metadata intact. One-pane fallback unchanged (footer buttons still render).
-- **Priority Preview richness (Build Log 134 §3) — complete, committed `e935b8c`
-  (2026-08-21).** Added to `PriorityPreview.tsx` using only already-authoritative list-summary
-  data (no new fetch): status badge (`statusLabel`/`statusBadgeVariant` imported from
-  `lib/requestStatus.ts`); original customer need (`originalSummary.fullText`, locally duplicated
-  240-char word-boundary truncation with ellipsis matching `RequestRow.tsx`'s
-  `buildCollapsedSummary`/ADR-450, minus its show-more toggle — visual clipping is CSS
-  `line-clamp-2`); service location gated on `serviceCity && serviceState`, same `MapPin`
-  convention as `RequestRow.tsx`. Open request action switched from a hand-rolled navy button to
-  the shared `KeepButton` `teal` variant. 8/8 focused `PriorityPreview.test.tsx` tests passing (2
-  new); `tsc --noEmit` and `git diff --check` clean.
-- **Step 5 (embed/adapt the real Request Detail Workbench) — complete, committed `6d85b2f`
-  (2026-08-21).** `RequestWorkbenchShell` now owns both `#/requests` and `#/request/{id}` for
-  eligible roles: the Queue pane (`Requests`) occupies the same JSX position for both routes, so
-  navigating between them at wide widths is a prop update, not a remount — filters/scroll/live
-  `AppliedQueueSnapshot` persist, verified by a no-additional-fetch assertion. Pane 2 renders
-  `RequestDetail` (`paneMode`) for the detail route; pane-mode Prev/Next is computed from the live
-  snapshot's applied order (`snapshot.requests`), not the frozen `navContext` — if the open
-  request scrolls out of the applied snapshot both ids come back `undefined` and
-  `RequestDetailHeader` hides Prev/Next via its existing null-both behavior. `RequestDetail`/
-  `RequestDetailHeader` gained `paneMode`/`showBack` (default `true`) to suppress only the Back
-  control in the embedded pane; identity, Prev/Next, and all modal behavior (share/follow-up/
-  service-location/contact) are unchanged. Viewer/unknown roles keep the pre-Step-5 standalone
-  `RequestDetail` render byte-for-byte (GAP-042 direct-link access), unaffected by the
-  role-gated shell. Narrow-detail fallback for eligible roles is unchanged in behavior (full-page
-  `RequestDetail`, no Queue mounted). Real-browser 100/125/150% zoom acceptance passed
-  (2026-08-21).
-- **Step 6 (one-pane fallback and final route verification) — complete, 2026-08-21.** No code
-  changes required: `RequestWorkbenchShell.tsx`/`App.tsx` already implemented the locked §6 fallback
-  identity and route/render coupling as of Step 5. Focused automated verification: 10 test files,
-  64/64 passing (`RequestWorkbenchShell.test.tsx` + adjacent `Requests.*`/`RequestDetailHeader.*`
-  suites); `git diff --check` clean. Manual verification by Christian: direct-route load, refresh,
-  Back/Forward for `#/request/{id}`, and resize across the 1001px boundary mid-session for both
-  routes — confirmed. **This completes the locked Build Log 132 §5 migration sequence (Steps 1–6).**
-
-### Verified baseline
-
-`dotnet build` on `OpHalo.Api`/`OpHalo.IntegrationTests` clean; 18/18 focused
-`ActualWorkFinancialReadApiTests` passing (13 pre-existing + 5 new), committed at `1e35335`.
-
-Frontend (Steps 3/4 + density refinement, committed `f51d66d`/`f629c60`): `tsc --noEmit` clean;
-`vitest run` full suite 542/542 passing (54 files);
-CSS token check clean; `git diff --check` clean. Step 3 adds 2 new production files
-(`PriorityPreview.tsx`, `RequestWorkbenchShell.tsx`), modifies `App.tsx`/`Requests.tsx`, adds a
-global `ResizeObserver` test stub (`test/setup.ts`), and adds 2 new test files
-(`PriorityPreview.test.tsx`, `RequestWorkbenchShell.test.tsx`, 8 + 4 tests). The Queue-density
-refinement modifies `RequestRow.tsx`, `RequestListToolbar.tsx`, `RequestQueueNavigation.tsx`,
-`RequestsWorkspaceHeader.tsx`, `Requests.tsx`, and adds 3 new test files
-(`RequestListToolbar.test.tsx`, `RequestsWorkspaceHeader.test.tsx`, plus pane-mode cases added to
-`RequestQueueNavigation.test.tsx` and `RequestRow.test.tsx`).
-
-Priority Preview richness batch (committed `e935b8c`): `tsc --noEmit` clean; `git diff --check`
-clean; focused `PriorityPreview.test.tsx` 8/8 passing. 2 files changed
-(`PriorityPreview.tsx`, `PriorityPreview.test.tsx`).
-
-Step 5 (committed `6d85b2f`): `tsc --noEmit` clean; `git diff --check` clean; full frontend
-`vitest run` 551/551 passing (55 files, run for regression at this gap-completion point per
-Verification rules). 6 files changed: `App.tsx`, `RequestWorkbenchShell.tsx`, `RequestDetail.tsx`,
-`RequestDetailHeader.tsx`, `RequestWorkbenchShell.test.tsx` (5 new cases), and a new
-`RequestDetailHeader.showBack.test.tsx` (2 cases).
-
-## Pilot-wide operational constraints
-
-- The authenticated staff PWA is the active field surface. The Expo/native track is separate and
-  not implied by PWA work.
+- The staff PWA is the active field surface; native/mobile work is not implied.
+- Do not infer authority for quotes, prices, invoicing, payments, QuickBooks, inventory, fleet, or
+  Proposed Scope from Request Detail work.
 - Price Book access requires the account capability package. Use disposable local data for mutable
-  acceptance; do not seed dummy catalog data into the founder's production account.
-- Public routing is: `app.ophalo.com` for authenticated staff, `www.ophalo.com` for public tracker
-  and QR resolver pages, and `api.ophalo.com` for the API.
-- Sentry's free errors-only offering is the selected crash diagnostic path. Do not build a generic
-  application exception table or introduce paid observability/replay/tracing before revenue.
-
-## Remaining pilot/release work
-
-The tracker is the single status source for all GAP items. Current categories include:
-
-- deployed public-intake/tracker and phone-input/device evidence;
-- production routing, cookies, DNS, environment, health, release identity, alerting, and telemetry
-  redaction verification;
-- Pilot Feedback/Help & Updates, founder value reporting, and public marketing/support accuracy;
-- intentionally deferred Request Detail modal dirty-close/extraction work and native parity.
-
-Read the selected tracker item and its controlling ADR/build log before proposing code. Completed
-tracker rows and prior queue sequencing are historical evidence, not active work orders.
+  acceptance; never seed test catalog data into the founder’s production account.
+- Before a production candidate, run repository checks and the controlled production smoke test;
+  verify health/readiness, release identity, error capture, alert routing, and telemetry redaction.
+- Do not invite a pilot customer until selected P0/P1 tracker items and the end-to-end pilot checklist
+  are complete or explicitly deferred.
 
 ## Working-session rules
 
-1. Preflight: inspect the controlling tracker/ADR/build log and current code; provide exact files,
-   data flow, open decisions, tests, and verification commands. Do not implement in this step.
-2. Validation: independently verify the preflight. The only outcomes are approved, correct and
-   resubmit, or a framed product decision.
-3. Implementation: make one reviewable change set, add focused regression coverage, and run
-   proportionate checks. Stop for a decision when new production scope appears.
-
-## Release rules
-
-- Finish or explicitly defer every selected P0/P1 tracker item before inviting a pilot customer.
-- Before a production candidate, run repository checks and the controlled smoke test
-  (`scripts/production-smoke-test.mjs`; see [the runbook](runbook/production-smoke-test.md)).
-- Verify health/readiness, release identity, error capture, alert routing, and telemetry redaction.
-- Do not onboard until production sign-in and the required end-to-end pilot checklist are verified.
+1. Preflight before implementation: inspect the controlling ADR/build log/tracker and current code;
+   report exact files, data flow, open decisions, tests, and verification commands.
+2. Implement one reviewable change set at a time. Do not combine EffectiveAttention completion,
+   action-surface redesign, and financial-review UI merely because they touch Request Detail.
+3. Stop for an explicit product decision if current server data/action metadata cannot truthfully
+   support the proposed UI.

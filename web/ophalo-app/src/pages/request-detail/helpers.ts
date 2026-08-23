@@ -143,6 +143,7 @@ export const ATTENTION_LABELS: Record<string, string> = {
   change_or_cancel_request: "Change or cancel request",
   complaint: "Complaint",
   first_response_due: "First response due",
+  follow_up_due: "Follow up due",
   unresolved_feedback: "Feedback needs review",
   call_requested: "Call requested",
   timing_change_requested: "Timing change requested",
@@ -176,7 +177,8 @@ export interface AttentionGuidance {
 }
 
 export function buildAttentionGuidance(detail: KeepRequestDetailResult): AttentionGuidance | null {
-  if (detail.attentionLevel === "none" || !detail.attentionReason) return null;
+  const attention = detail.effectiveAttention;
+  if (attention.level === "none" || !attention.reason) return null;
 
   const canSendUpdate = detail.availableActions.canSendBusinessUpdate;
   const canLogContact = detail.availableActions.canLogExternalContact;
@@ -208,10 +210,10 @@ export function buildAttentionGuidance(detail: KeepRequestDetailResult): Attenti
         ? "Mark feedback reviewed when Owner/Admin handling is complete."
         : null;
 
-  switch (detail.attentionReason) {
+  switch (attention.reason) {
     case "customer_message":
       return {
-        label: reasonLabel(detail.attentionReason),
+        label: reasonLabel(attention.reason),
         why: "The customer sent a message and the request is waiting on the business.",
         resolveBy: contactOrUpdate,
         sourceLabel,
@@ -220,7 +222,7 @@ export function buildAttentionGuidance(detail: KeepRequestDetailResult): Attenti
       };
     case "update_request":
       return {
-        label: reasonLabel(detail.attentionReason),
+        label: reasonLabel(attention.reason),
         why: "The customer is asking for an update, so the next visible business touch matters.",
         resolveBy: contactOrUpdate,
         sourceLabel,
@@ -229,7 +231,7 @@ export function buildAttentionGuidance(detail: KeepRequestDetailResult): Attenti
       };
     case "first_response_due":
       return {
-        label: reasonLabel(detail.attentionReason),
+        label: reasonLabel(attention.reason),
         why: "This request has not received its first business response inside the response window.",
         resolveBy: canSendUpdate
           ? "Send the first customer-page update, or log a real external contact if you respond outside Keep."
@@ -238,9 +240,20 @@ export function buildAttentionGuidance(detail: KeepRequestDetailResult): Attenti
         sourceText,
         afterHandled,
       };
+    case "follow_up_due":
+      return {
+        label: reasonLabel(attention.reason),
+        why: "The customer follow-up promise is due and needs a deliberate resolution.",
+        resolveBy: attention.dueOnDate
+          ? `Resolve by ${formatDateOnly(attention.dueOnDate)}.`
+          : "Complete, move, or keep the customer follow-up promise.",
+        sourceLabel,
+        sourceText,
+        afterHandled,
+      };
     case "call_requested":
       return {
-        label: reasonLabel(detail.attentionReason),
+        label: reasonLabel(attention.reason),
         why: "The customer asked for a call, so Keep needs a durable record that the contact was handled.",
         resolveBy: canLogContact
           ? "Call using your normal phone workflow, then save an external contact log."
@@ -252,7 +265,7 @@ export function buildAttentionGuidance(detail: KeepRequestDetailResult): Attenti
     case "schedule_change_request":
     case "timing_change_requested":
       return {
-        label: reasonLabel(detail.attentionReason),
+        label: reasonLabel(attention.reason),
         why: "The customer is asking about timing. Keep should protect the promise without becoming a schedule board.",
         resolveBy: canSendUpdate
           ? "Confirm the timing on the customer page, or log contact if you handle the timing outside Keep."
@@ -263,7 +276,7 @@ export function buildAttentionGuidance(detail: KeepRequestDetailResult): Attenti
       };
     case "change_or_cancel_request":
       return {
-        label: reasonLabel(detail.attentionReason),
+        label: reasonLabel(attention.reason),
         why: "The customer is asking to change or cancel the request, and the business needs to decide the next promise.",
         resolveBy: "Review the request, then update the customer, log contact, or use the status selector when the business decision is clear.",
         sourceLabel,
@@ -272,7 +285,7 @@ export function buildAttentionGuidance(detail: KeepRequestDetailResult): Attenti
       };
     case "cancellation_requested":
       return {
-        label: reasonLabel(detail.attentionReason),
+        label: reasonLabel(attention.reason),
         why: "The customer appears to be asking to cancel.",
         resolveBy: "Confirm the cancellation intent, then update the customer or change status to Cancelled if appropriate.",
         sourceLabel,
@@ -281,7 +294,7 @@ export function buildAttentionGuidance(detail: KeepRequestDetailResult): Attenti
       };
     case "complaint":
       return {
-        label: reasonLabel(detail.attentionReason),
+        label: reasonLabel(attention.reason),
         why: "The customer raised an issue that needs a deliberate business response.",
         resolveBy: contactOrUpdate,
         sourceLabel,
@@ -290,7 +303,7 @@ export function buildAttentionGuidance(detail: KeepRequestDetailResult): Attenti
       };
     case "unresolved_feedback":
       return {
-        label: reasonLabel(detail.attentionReason),
+        label: reasonLabel(attention.reason),
         why: "The customer left unresolved feedback after closeout. This is Owner/Admin review work, not a normal acknowledgement.",
         resolveBy: "Review the feedback and customer context. Mark feedback reviewed when the follow-up decision is complete.",
         sourceLabel,
@@ -299,7 +312,7 @@ export function buildAttentionGuidance(detail: KeepRequestDetailResult): Attenti
       };
     default:
       return {
-        label: reasonLabel(detail.attentionReason),
+        label: reasonLabel(attention.reason),
         why: "This request is waiting on business attention.",
         resolveBy: contactOrUpdate,
         sourceLabel,

@@ -20,7 +20,11 @@ vi.mock("../../../lib/apiClient", async () => {
 });
 
 function baseDetail(overrides: Partial<KeepRequestDetailResult> = {}): KeepRequestDetailResult {
-  return { ...mockRequestDetails["mock-req-001"], ...overrides };
+  return {
+    ...mockRequestDetails["mock-req-001"],
+    effectiveAttention: { ...mockRequestDetails["mock-req-001"].effectiveAttention },
+    ...overrides,
+  };
 }
 
 beforeEach(() => {

@@ -268,6 +268,13 @@ export function installMockApi(): void {
       attentionLevel: "normal",
       waitingDirection: "business",
       attentionReason: null,
+      effectiveAttention: {
+        level: "none",
+        reason: null,
+        dueAtUtc: null,
+        dueOnDate: null,
+        guidanceKey: null,
+      },
       priorityBand: "normal",
       attentionSinceUtc: null,
       nextAttentionAtUtc: null,
@@ -532,6 +539,13 @@ export function installMockApi(): void {
       {
         ...d,
         attentionLevel: "normal",
+        effectiveAttention: {
+          level: "none",
+          reason: null,
+          dueAtUtc: null,
+          dueOnDate: null,
+          guidanceKey: null,
+        },
         attentionClearedAtUtc: now,
         attentionClearedByAccountUserId: MOCK_USER_ID,
         attentionClearReason: reason,
