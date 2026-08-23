@@ -49,8 +49,8 @@ interface RequestDetailContentProps extends RequestDetailLayoutProps {
 // Scope is explicitly deferred from this pilot Workbench (locked spec §1.7/§3) and is not wired
 // here.
 export function RequestDetailContent(props: RequestDetailContentProps) {
-  const { detail, requestId, highlights, showProminentFeedbackCard, onDetailUpdated, onContactLaunched, onEditLocation, onRecordFollowUp, onCreateFollowUp, onReviewSuccess, onOpenClearAttention } = props;
-  const layoutProps: RequestDetailLayoutProps = { requestId, detail, highlights, showProminentFeedbackCard, onDetailUpdated, onContactLaunched, onEditLocation, onRecordFollowUp, onCreateFollowUp, onReviewSuccess };
+  const { detail, requestId, highlights, showProminentFeedbackCard, onDetailUpdated, onContactLaunched, onEditLocation, onOpenReassignOwner, onRecordFollowUp, onCreateFollowUp, onReviewSuccess, onOpenClearAttention } = props;
+  const layoutProps: RequestDetailLayoutProps = { requestId, detail, highlights, showProminentFeedbackCard, onDetailUpdated, onContactLaunched, onEditLocation, onOpenReassignOwner, onRecordFollowUp, onCreateFollowUp, onReviewSuccess };
   const actualWorkCapture = useActualWorkCapture(requestId);
   const actualWorkHistory = useActualWorkHistory(requestId);
   const actualWorkCardVisible = actualWorkCapture.state.status === "no-draft" || actualWorkCapture.state.status === "draft";
@@ -66,7 +66,7 @@ export function RequestDetailContent(props: RequestDetailContentProps) {
         onOpenShareDrawer={props.onOpenShareDrawer}
       />
       <div data-request-detail-work-canvas className="flex-1 min-h-0 overflow-y-auto px-4 md:px-6 py-5">
-      <div className="max-w-6xl mx-auto w-full space-y-6">
+      <div className="max-w-4xl mx-auto w-full space-y-6">
         {/* 1. Active attention guidance */}
         <div id="focus-panel-attention" className="space-y-3">
           <HeroAttentionBanner

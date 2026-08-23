@@ -42,6 +42,7 @@ export interface RequestDetailLayoutProps {
   onDetailUpdated: (updated: KeepRequestDetailResult) => void;
   onContactLaunched: (direction: string, channel: string) => void;
   onEditLocation: () => void;
+  onOpenReassignOwner: () => void;
   onRecordFollowUp: () => void;
   onCreateFollowUp: () => void;
   onReviewSuccess: () => void;

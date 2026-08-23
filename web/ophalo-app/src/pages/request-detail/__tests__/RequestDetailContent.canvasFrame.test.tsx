@@ -4,10 +4,10 @@ import { RequestDetailContent } from "../RequestDetailContent";
 import { mockRequestDetails } from "../../../mocks/fixtures";
 import type { KeepRequestDetailResult } from "../../../lib/apiClient";
 
-// Canvas max-width frame (three-row correction, 2026-08-22): the Work Canvas scroll region must
-// constrain its readable content with a centered max-width wrapper, reusing the app's existing
-// Queue-pane content-width convention (max-w-6xl mx-auto w-full), rather than rendering edge to
-// edge at wide desktop widths.
+// Canvas max-width frame (three-row correction, 2026-08-22; narrowed to the mockup's reading
+// measure in slice 4, 2026-08-23): the Work Canvas scroll region must constrain its readable
+// content with a centered max-width wrapper (max-w-4xl mx-auto w-full), rather than rendering
+// edge to edge at wide desktop widths.
 
 vi.mock("../DetailHero", () => ({ TodayPromiseBanner: () => null }));
 vi.mock("../DetailPanels", () => ({
@@ -64,6 +64,7 @@ describe("RequestDetailContent — Canvas max-width frame", () => {
         onDetailUpdated={vi.fn()}
         onContactLaunched={vi.fn()}
         onEditLocation={vi.fn()}
+        onOpenReassignOwner={vi.fn()}
         onOpenClearAttention={vi.fn()}
         onRecordFollowUp={vi.fn()}
         onCreateFollowUp={vi.fn()}
@@ -84,7 +85,7 @@ describe("RequestDetailContent — Canvas max-width frame", () => {
 
     const scrollRegion = container.querySelector(".overflow-y-auto");
     expect(scrollRegion).not.toBeNull();
-    const maxWidthWrapper = scrollRegion?.querySelector(".max-w-6xl.mx-auto");
+    const maxWidthWrapper = scrollRegion?.querySelector(".max-w-4xl.mx-auto");
     expect(maxWidthWrapper).not.toBeNull();
   });
 });

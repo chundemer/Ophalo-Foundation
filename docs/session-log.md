@@ -42,7 +42,17 @@ workbench, not a workflow or API-contract redesign.
    (`py-4` → `py-3.5`) to register as the same strip module; visit-entry list and price-blind/empty-
    state behavior unchanged. 193/193 request-detail tests pass, `pnpm typecheck` clean,
    `pnpm check:tokens` clean, visual check passed.
-4. Owner "Change" quiet trigger + canvas width narrowing — not started.
+4. Owner "Change" quiet trigger + canvas width narrowing — done. `TeamSection.tsx` compact mode
+   now shows a static owner display plus a quiet Change/Assign trigger (`onOpenReassign`); the
+   inline assign select and Clear control moved into a new `OwnerReassignmentSheet` (same file),
+   opened via `ResponsiveSheet` outside the metadata ledger. Reuses the existing authorized
+   `setResponsible`/`clearResponsible` calls unchanged — no new mutation, only relocated UI.
+   `onOpenReassignOwner` threaded through `RequestDetailLayoutProps` → `RequestDetailAnchor` →
+   `RequestDetail.tsx` (new `reassignOwnerOpen` state, mirrors the `clearAttentionOpen` pattern).
+   Work Canvas width narrowed `max-w-6xl` → `max-w-4xl` in `RequestDetailContent.tsx` toward the
+   mockup's reading measure; `RequestDetailContent.canvasFrame.test.tsx` updated to match. 193/193
+   request-detail tests pass, `pnpm typecheck` clean, `pnpm check:tokens` clean, visual check
+   passed.
 5. Activity collapse + reorder below Record details — not started.
 
 **Target:** the supplied Request Detail mockup is the visual reference. Move away from a wireframe

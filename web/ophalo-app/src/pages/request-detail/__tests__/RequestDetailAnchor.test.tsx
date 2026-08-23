@@ -32,6 +32,7 @@ function renderAnchor(detail: KeepRequestDetailResult) {
         onDetailUpdated={vi.fn()}
         onContactLaunched={vi.fn()}
         onEditLocation={vi.fn()}
+        onOpenReassignOwner={vi.fn()}
         onRecordFollowUp={vi.fn()}
         onCreateFollowUp={vi.fn()}
         onReviewSuccess={vi.fn()}

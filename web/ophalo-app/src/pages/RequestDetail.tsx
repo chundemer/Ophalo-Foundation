@@ -28,6 +28,7 @@ import {
 import { type TimelineFilter, isCommunicationEvent } from "./request-detail/TimelineEvent";
 import { FollowUpResolutionPanel } from "./request-detail/FollowUpResolutionPanel";
 import { ClearAttentionSheet } from "./request-detail/DetailPanels";
+import { OwnerReassignmentSheet } from "./request-detail/TeamSection";
 import { ResponsiveSheet } from "../components/keep/ResponsiveSheet";
 import { CallHandoffQr } from "./request-detail/CallHandoffQr";
 import { useHandoffMint } from "./request-detail/useHandoffMint";
@@ -598,6 +599,7 @@ export function RequestDetail({ requestId, focusPanel, onBack, prevId, nextId, o
   const [serviceLocationModalOpen, setServiceLocationModalOpen] = useState(false);
   const [contactModal, setContactModal] = useState<{ direction: string; channel: string } | null>(null);
   const [clearAttentionOpen, setClearAttentionOpen] = useState(false);
+  const [reassignOwnerOpen, setReassignOwnerOpen] = useState(false);
   const [businessUpdateDraft, setBusinessUpdateDraft] = useState("");
   const [businessUpdateDraftStatus, setBusinessUpdateDraftStatus] = useState("");
   const [timelineFilter, setTimelineFilter] = useState<TimelineFilter>("communication");
@@ -736,6 +738,14 @@ export function RequestDetail({ requestId, focusPanel, onBack, prevId, nextId, o
           onClose={() => setClearAttentionOpen(false)}
         />
       )}
+      {reassignOwnerOpen && detail && (
+        <OwnerReassignmentSheet
+          requestId={requestId}
+          detail={detail}
+          onDetailUpdated={handleDetailUpdated}
+          onClose={() => setReassignOwnerOpen(false)}
+        />
+      )}
       {shareModalOpen && (
         <ShareLinkModal
           requestId={requestId}
@@ -781,6 +791,7 @@ export function RequestDetail({ requestId, focusPanel, onBack, prevId, nextId, o
         onDetailUpdated={handleDetailUpdated}
         onContactLaunched={handleContactLaunched}
         onEditLocation={handleOpenServiceLocation}
+        onOpenReassignOwner={() => setReassignOwnerOpen(true)}
         onOpenClearAttention={() => setClearAttentionOpen(true)}
         onRecordFollowUp={() => setFollowUpPanelOpen(true)}
         onCreateFollowUp={() => setFollowUpCaptureOpen(true)}
