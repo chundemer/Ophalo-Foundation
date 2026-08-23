@@ -74,6 +74,11 @@ interface TodayPromiseBannerProps {
 }
 
 export function TodayPromiseBanner({ detail, onRecordFollowUp }: TodayPromiseBannerProps) {
+  // `follow_up_due` already owns the attention guidance and its Resolve follow-up CTA. Rendering
+  // this legacy timing banner as well repeats the same alarm and presents two routes to the same
+  // resolution sheet.
+  if (detail.effectiveAttention.reason === "follow_up_due") return null;
+
   const followUpToday = isDateOnlyToday(detail.followUpOnDate);
   const followUpOverdue = isDateOnlyPast(detail.followUpOnDate);
   const plannedToday = isDateOnlyToday(detail.plannedForDate);

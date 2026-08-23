@@ -93,7 +93,7 @@ function buildRow(overrides: Partial<KeepRequestSummary> = {}): KeepRequestSumma
 const noop = () => {};
 
 describe("RequestRow — Build 087 / GAP-027 locked row contract", () => {
-  it("received row with overdue first response shows a merged Response overdue exception and promotes Update customer", () => {
+  it("received row with overdue first response shows a merged Response overdue exception and promotes direct customer contact", () => {
     const row = buildRow({
       status: "received",
       ranking: { rankingGroup: "overdue_business_waiting", rankingOrder: 1, rankingReason: "overdue_business_waiting", severity: "danger", isOverdue: true, elapsedSinceUtc: null, dueAtUtc: "2026-07-13T12:00:00Z", isPostClose: false },
@@ -104,11 +104,11 @@ describe("RequestRow — Build 087 / GAP-027 locked row contract", () => {
     render(<RequestRow row={row} onSelect={noop} />);
 
     expect(screen.getByText(/Response overdue · Jul 13/)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Update customer" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Log contact" })).toBeInTheDocument();
     expect(screen.queryByText("Open detail")).not.toBeInTheDocument();
   });
 
-  it("promotes Log contact instead of Update customer when the customer prefers a phone call", () => {
+  it("promotes Log contact for an overdue first response regardless of the saved preference", () => {
     const row = buildRow({
       status: "received",
       contactPreference: "phone_call",
@@ -119,7 +119,6 @@ describe("RequestRow — Build 087 / GAP-027 locked row contract", () => {
 
     render(<RequestRow row={row} onSelect={noop} />);
 
-    // Build 087 §4 step 6: a phone-call preference promotes Log contact ahead of Update customer.
     expect(screen.getByText("Next: Log contact")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Log contact" })).toBeInTheDocument();
   });
@@ -145,10 +144,10 @@ describe("RequestRow — Build 087 / GAP-027 locked row contract", () => {
 
     expect(screen.getByText("Pending Customer")).toBeInTheDocument();
     expect(screen.queryByText(/^Next:/)).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /Update customer|Log contact|Review request/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Update customer page|Log contact|Review request/ })).not.toBeInTheDocument();
   });
 
-  it("GAP-007: routine row with no promoted Next: cue still shows its server-eligible actions, Update customer then Log contact", () => {
+  it("GAP-007: routine row with no promoted Next: cue still shows direct customer contact before the customer-page update", () => {
     const row = buildRow({
       status: "in_progress",
       actions: { quickActions: [quickAction("open_detail", "detail"), quickAction("post_customer_update"), quickAction("contact_customer")] },
@@ -157,8 +156,8 @@ describe("RequestRow — Build 087 / GAP-027 locked row contract", () => {
     render(<RequestRow row={row} onSelect={noop} />);
 
     expect(screen.queryByText(/^Next:/)).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Update customer" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Log contact" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Update customer page" })).toBeInTheDocument();
   });
 
   it("GAP-007: routine row exposes only the single server-eligible action it has, without inventing the other", () => {
@@ -170,7 +169,7 @@ describe("RequestRow — Build 087 / GAP-027 locked row contract", () => {
     render(<RequestRow row={row} onSelect={noop} />);
 
     expect(screen.getByRole("button", { name: "Log contact" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Update customer" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Update customer page" })).not.toBeInTheDocument();
   });
 
   it("work-completed (Resolved) row still shows an overdue follow-up alarm — Resolved is not terminal", () => {
@@ -242,7 +241,7 @@ describe("RequestRow — Build 087 / GAP-027 locked row contract", () => {
     expect(actionBar?.querySelectorAll("button").length).toBe(2);
   });
 
-  it("colors action buttons by brand role, not amber — Update customer teal, Log contact navy-outline", () => {
+  it("colors action buttons by brand role, not amber — Log contact teal, customer-page update navy-outline", () => {
     // Button Hierarchy Is Locked (ux-design-decisions.md): amber is a status color, never a
     // button treatment; communication actions are Keep teal, secondary operator actions are
     // navy outline.
@@ -254,13 +253,13 @@ describe("RequestRow — Build 087 / GAP-027 locked row contract", () => {
 
     render(<RequestRow row={row} onSelect={noop} />);
 
-    const updateButton = screen.getByRole("button", { name: "Update customer" });
-    expect(updateButton.className).toContain("bg-[var(--keep-accent)]");
-    expect(updateButton.className).not.toMatch(/attention/);
-
     const contactButton = screen.getByRole("button", { name: "Log contact" });
-    expect(contactButton.className).toContain("border-[var(--ophalo-navy)]");
+    expect(contactButton.className).toContain("bg-[var(--keep-accent)]");
     expect(contactButton.className).not.toMatch(/attention/);
+
+    const updateButton = screen.getByRole("button", { name: "Update customer page" });
+    expect(updateButton.className).toContain("border-[var(--ophalo-navy)]");
+    expect(updateButton.className).not.toMatch(/attention/);
   });
 
   it("promotes Share Link when the customer page is unshared and no higher-priority state exists", () => {
@@ -467,7 +466,7 @@ describe("RequestRow — Build 087 / GAP-027 locked row contract", () => {
 
     render(<RequestRow row={row} onSelect={onSelect} paneMode />);
 
-    expect(screen.queryByRole("button", { name: "Update customer" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Update customer page" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Log contact" })).not.toBeInTheDocument();
     expect(screen.getByText(/Response overdue · Jul 13/)).toBeInTheDocument();
 
@@ -523,7 +522,7 @@ describe("RequestRow — Build 087 / GAP-027 locked row contract", () => {
 
     render(<RequestRow row={row} onSelect={noop} />);
 
-    expect(screen.getByRole("button", { name: "Update customer" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Log contact" })).toBeInTheDocument();
   });
 
   it("backlog item 2: the entire row is a single keyboard-accessible activation target", async () => {

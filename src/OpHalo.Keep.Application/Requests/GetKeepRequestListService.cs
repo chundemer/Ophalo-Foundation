@@ -942,7 +942,7 @@ public sealed class GetKeepRequestListService(
         if (actionDecision.CanSendBusinessUpdate)
         {
             actions.Add(new KeepQuickAction(
-                "post_customer_update", "Update customer", "customer_visible",
+                "post_customer_update", "Update customer page", "customer_visible",
                 RequiresVersion: true,
                 ExecutionMode: "modal",
                 ClearsAttention: r.WaitingDirection == WaitingDirection.Business && r.AttentionLevel != AttentionLevel.None,
@@ -1280,7 +1280,7 @@ public sealed class GetKeepRequestListService(
             false, false, false, "opens_detail");
 
         public static readonly KeepQuickAction ContactCustomer = new(
-            "contact_customer", "Contact customer", "external_affordance",
+            "contact_customer", "Log contact", "external_affordance",
             RequiresVersion: true, ExecutionMode: "modal",
             false, false, false, "external_contact_only");
 

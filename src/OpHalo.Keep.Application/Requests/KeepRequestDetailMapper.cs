@@ -444,7 +444,7 @@ internal static class KeepRequestDetailMapper
                 Reason: MapAttentionReason(AttentionReason.FirstResponseDue),
                 DueAtUtc: request.FirstResponseDueAtUtc,
                 DueOnDate: null,
-                GuidanceKey: "respond_to_customer");
+                GuidanceKey: "log_external_contact");
         }
 
         return none;
@@ -464,7 +464,7 @@ internal static class KeepRequestDetailMapper
         AttentionReason.ScheduleChangeRequest => "log_external_contact",
         AttentionReason.ChangeOrCancelRequest => "respond_to_customer",
         AttentionReason.Complaint             => "respond_to_customer",
-        AttentionReason.FirstResponseDue      => "respond_to_customer",
+        AttentionReason.FirstResponseDue      => "log_external_contact",
         AttentionReason.CallRequested         => "log_external_contact",
         AttentionReason.TimingChangeRequested => "log_external_contact",
         AttentionReason.CancellationRequested => "respond_to_customer",

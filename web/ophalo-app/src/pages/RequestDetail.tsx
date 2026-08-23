@@ -489,6 +489,10 @@ export function RequestDetail({ requestId, focusPanel, onBack, prevId, nextId, o
 
   function handleDetailUpdated(updated: KeepRequestDetailResult) {
     queryClient.setQueryData(["request-detail", requestId], updated);
+    // Detail mutations can clear an attention condition, which changes membership in the
+    // request queues. Invalidate every cached queue so a visible Needs Attention list removes
+    // the request immediately, without requiring a manual browser refresh.
+    void queryClient.invalidateQueries({ queryKey: ["requests"] });
     setShareCleared(false);
   }
 

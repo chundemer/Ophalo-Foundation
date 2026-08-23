@@ -152,7 +152,7 @@ public class KeepRequestEffectiveAttentionTests
         Assert.Equal("first_response_due", detail.EffectiveAttention.Reason);
         Assert.Equal(T0.AddMinutes(60), detail.EffectiveAttention.DueAtUtc);
         Assert.Null(detail.EffectiveAttention.DueOnDate);
-        Assert.Equal("respond_to_customer", detail.EffectiveAttention.GuidanceKey);
+        Assert.Equal("log_external_contact", detail.EffectiveAttention.GuidanceKey);
     }
 
     // -----------------------------------------------------------------------
@@ -377,7 +377,7 @@ public class EffectiveAttentionSerializationContractTests
             Reason: "first_response_due",
             DueAtUtc: new DateTime(2026, 8, 22, 14, 30, 0, DateTimeKind.Utc),
             DueOnDate: null,
-            GuidanceKey: "respond_to_customer");
+            GuidanceKey: "log_external_contact");
 
         var json = System.Text.Json.JsonSerializer.Serialize(effectiveAttention, Options);
 

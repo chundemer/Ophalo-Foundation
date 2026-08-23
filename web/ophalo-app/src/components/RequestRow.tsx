@@ -22,7 +22,7 @@ const MODAL_ACTION_CODES = new Set([
 
 const ACTION_LABELS: Record<string, string> = {
   contact_customer: "Log contact",
-  post_customer_update: "Update customer",
+  post_customer_update: "Update customer page",
   acknowledge_attention: "Review request",
   review_feedback: "Review feedback",
   close_request: "Close request",
@@ -45,8 +45,8 @@ const ATTENTION_LABELS: Record<string, string> = {
 type ActionRole = "teal" | "navy-outline" | "neutral" | "danger";
 
 const ACTION_ROLES: Record<string, ActionRole> = {
-  post_customer_update: "teal",       // Keep communication primary — customer-visible update.
-  contact_customer: "navy-outline",   // Secondary operator action.
+  contact_customer: "teal",           // Logging actual customer contact is the primary response action.
+  post_customer_update: "navy-outline", // Customer-page update is a distinct, secondary action.
   share_link: "navy-outline",         // Customer-page secondary action.
   review_feedback: "navy-outline",    // Secondary operator action.
   acknowledge_attention: "neutral",   // Quiet bookkeeping ("Mark handled").
@@ -205,6 +205,16 @@ function selectPromotedAction(row: KeepRequestSummary, isCalmCloseout: boolean):
   if (reason === "call_requested") {
     return hasAction(row, "contact_customer") ? { code: "contact_customer", label: ACTION_LABELS.contact_customer } : null;
   }
+  // A first response must mean actual outreach, not merely an update on the customer page.
+  // `no_first_response` is retained for older list payloads; newer payloads use
+  // `first_response_due`.
+  if (reason === "first_response_due" || reason === "no_first_response" || row.attention.firstResponseOverdue) {
+    return hasAction(row, "contact_customer")
+      ? { code: "contact_customer", label: ACTION_LABELS.contact_customer }
+      : hasAction(row, "post_customer_update")
+        ? { code: "post_customer_update", label: ACTION_LABELS.post_customer_update }
+        : null;
+  }
   const followUpDate = row.timing?.followUpOnDate ?? null;
   const followUpNotFuture = !!(followUpDate && !row.timing?.hasFutureFollowUpOn);
   if (followUpNotFuture) {
@@ -236,7 +246,7 @@ function routineActions(row: KeepRequestSummary): PromotedAction[] {
   if (row.isTerminal || row.isPostCloseFollowUp) return [];
   const isClosedOrCancelled = row.status === "closed" || row.status === "cancelled";
   if (isClosedOrCancelled) return [];
-  return (["post_customer_update", "contact_customer"] as const)
+  return (["contact_customer", "post_customer_update"] as const)
     .filter((code) => hasAction(row, code))
     .slice(0, 2)
     .map((code) => ({ code, label: ACTION_LABELS[code] }));
@@ -344,7 +354,7 @@ interface RequestRowProps {
   onShareClick?: (row: KeepRequestSummary) => void;
   showCloseoutCue?: boolean;
   // UI-001 post-Step-4 density refinement (build-log 134 §2, locked 2026-08-21): the Queue pane
-  // is a scan-and-select surface — the quick-action footer (Update customer/Log contact/etc.) is
+  // is a scan-and-select surface — the quick-action footer (Update customer page/Contact customer/etc.) is
   // hidden so more rows fit; the row stays fully selectable and keeps its server-authorized
   // status/exception/context metadata. Action-taking moves to the request work area. Undefined/
   // false preserves today's one-pane fallback row treatment unchanged.

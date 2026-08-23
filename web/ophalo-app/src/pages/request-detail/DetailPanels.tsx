@@ -921,7 +921,7 @@ export function NextStepCard({ detail, onRecordFollowUp, onContactLaunched }: Ne
       break;
     case "log_external_contact":
       if (!canLogExternalContact) return null;
-      buttonLabel = "Contact customer";
+      buttonLabel = "Log contact";
       {
         const contactChannel = detail.customerPhone ? "phone" : detail.customerEmail ? "email" : "other";
         onActivate = () => onContactLaunched("outbound", contactChannel);

@@ -233,8 +233,8 @@ export function buildAttentionGuidance(detail: KeepRequestDetailResult): Attenti
       return {
         label: reasonLabel(attention.reason),
         why: "This request has not received its first business response inside the response window.",
-        resolveBy: canSendUpdate
-          ? "Send the first customer-page update, or log a real external contact if you respond outside Keep."
+        resolveBy: canLogContact
+          ? "Contact the customer directly, then log the real external contact in Keep. You can also add a customer-page update afterward."
           : "Log the real first contact once you respond outside Keep.",
         sourceLabel,
         sourceText,

@@ -18,9 +18,13 @@ export function getAttentionResolutionHighlights(detail: KeepRequestDetailResult
   const canLogContact = detail.availableActions.canLogExternalContact;
   const canMarkHandled = detail.availableActions.canAcknowledgeAttention;
   switch (attention.reason) {
+    case "first_response_due":
+      return {
+        logContact: canLogContact ? "primary" : undefined,
+        sendUpdate: canSendUpdate ? (canLogContact ? "secondary" : "primary") : undefined,
+      };
     case "customer_message":
     case "update_request":
-    case "first_response_due":
     case "complaint":
       return {
         sendUpdate: canSendUpdate ? "primary" : undefined,

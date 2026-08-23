@@ -124,7 +124,7 @@ describe("NextStepCard", () => {
     expect(onContactLaunched).toHaveBeenCalledWith("outbound", expect.any(String));
   });
 
-  it("routes log_external_contact directly to the Contact customer workflow", () => {
+  it("routes log_external_contact directly to the Log contact workflow", () => {
     const onContactLaunched = vi.fn();
     render(
       <NextStepCard
@@ -134,7 +134,7 @@ describe("NextStepCard", () => {
       />,
     );
 
-    screen.getByRole("button", { name: "Contact customer" }).click();
+    screen.getByRole("button", { name: "Log contact" }).click();
 
     expect(onContactLaunched).toHaveBeenCalledWith("outbound", expect.any(String));
   });
