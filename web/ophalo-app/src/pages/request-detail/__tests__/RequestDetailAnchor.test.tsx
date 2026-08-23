@@ -109,7 +109,7 @@ describe("RequestDetailAnchor — three-row desktop hierarchy", () => {
     };
     renderAnchor(detail);
 
-    expect(screen.queryByRole("button", { name: "Log contact" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Contact customer" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /mark work done/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Close request" })).not.toBeInTheDocument();
     // Factual context remains visible even when no mutation is authorized

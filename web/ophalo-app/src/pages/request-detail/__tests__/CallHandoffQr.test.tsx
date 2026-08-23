@@ -2,7 +2,6 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { CallHandoffQr } from "../CallHandoffQr";
-import { CustomerContactStrip } from "../CustomerContactStrip";
 import { LogContactModal } from "../../RequestDetail";
 import { mockRequestDetails } from "../../../mocks/fixtures";
 
@@ -95,32 +94,7 @@ describe("CallHandoffQr (shared component/hook)", () => {
   });
 });
 
-describe("Wiring — both desktop call-QR entry points use CallHandoffQr", () => {
-  it("CustomerContactStrip's desktop 'Scan to call' trigger renders the shared component", async () => {
-    const user = userEvent.setup();
-    mockCreateCallHandoff.mockResolvedValue({
-      handoffUrl: "https://app.ophalo.com/keep/share-call/strip-token",
-      expiresAtUtc: "2026-07-19T23:00:00Z",
-    });
-
-    render(
-      <CustomerContactStrip
-        requestId="req-strip"
-        phone="5555550101"
-        email={null}
-        customerName="Marcus Webb"
-        pageToken="page-token"
-        onContactLaunched={() => {}}
-      />
-    );
-
-    await user.click(screen.getByRole("button", { name: /Scan to call/i }));
-
-    await waitFor(() => expect(mockCreateCallHandoff).toHaveBeenCalledWith("req-strip"));
-    const qr = await screen.findByTestId("qr");
-    expect(qr.getAttribute("data-value")).toBe("https://app.ophalo.com/keep/share-call/strip-token");
-  });
-
+describe("Wiring — Contact customer drawer uses CallHandoffQr", () => {
   it("RequestDetail's Log external contact modal renders the shared component for its desktop QR", async () => {
     mockCreateCallHandoff.mockResolvedValue({
       handoffUrl: "https://app.ophalo.com/keep/share-call/log-contact-token",

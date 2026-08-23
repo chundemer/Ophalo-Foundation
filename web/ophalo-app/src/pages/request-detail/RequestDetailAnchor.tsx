@@ -57,7 +57,7 @@ export function RequestDetailAnchor({
                   )
                 }
               >
-                Log contact
+                Contact customer
               </KeepButton>
             )}
             <WorkDoneCard requestId={requestId} detail={detail} onDetailUpdated={onDetailUpdated} compact />
@@ -75,11 +75,8 @@ export function RequestDetailAnchor({
         <div className="mt-3 border-t border-[var(--ophalo-border)] pt-3">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <CustomerContactStrip
-              requestId={requestId}
               phone={detail.customerPhone ?? null}
               email={detail.customerEmail ?? null}
-              customerName={detail.customerName}
-              pageToken={detail.pageToken ?? null}
               onContactLaunched={onContactLaunched}
             />
             <ServiceLocationPanel detail={detail} onEditLocation={onEditLocation} />

@@ -96,7 +96,7 @@ describe("BusinessUpdateSection — notify-step wiring (GAP-052b)", () => {
       />
     );
 
-    await user.click(screen.getByRole("button", { name: "Send update" }));
+    await user.click(screen.getByRole("button", { name: "Post customer-page update" }));
 
     await waitFor(() => expect(screen.getByTestId("notify-panel")).toBeInTheDocument());
     expect(notifyPanelSpy).toHaveBeenCalledWith("new-event-99");

@@ -456,10 +456,10 @@ export function BusinessUpdateSection({
     (!statusRequiresMessage || hasMessage);
   const submitLabel =
     hasMessage && hasStatus
-      ? "Send update & change status"
+      ? "Post update & change status"
       : hasStatus
         ? "Update status"
-        : "Send update";
+        : "Post customer-page update";
 
   async function doSubmit() {
     if (!canSubmit) return;
@@ -587,7 +587,9 @@ export function BusinessUpdateSection({
         </div>
       )}
       <p className="text-xs text-[var(--ophalo-muted)]">
-        {hasMessage ? "Visible on the customer page." : "No customer message will be sent."}
+        {hasMessage
+          ? "Visible on the customer page. The customer will not be notified unless you send a text or email."
+          : "No customer-page update will be posted."}
         {selectedStatus && ` Status will change to ${statusLabel(selectedStatus)}.`}
         {statusRequiresMessage && !hasMessage && " Add a message for this status."}
       </p>

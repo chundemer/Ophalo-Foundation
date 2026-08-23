@@ -113,8 +113,11 @@ export function RequestDetailContent(props: RequestDetailContentProps) {
               <UnifiedComposer requestId={requestId} detail={detail} onDetailUpdated={onDetailUpdated} customerUpdateDraft={props.customerUpdateDraft} onCustomerUpdateDraftChange={props.onCustomerUpdateDraftChange} customerUpdateDraftStatus={props.customerUpdateDraftStatus} onCustomerUpdateDraftStatusChange={props.onCustomerUpdateDraftStatusChange} highlight={highlights.sendUpdate} bare />
             </div>
             <div className="px-4 py-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ophalo-muted)] mb-1">
+                Internal planning
+              </p>
               <p className="text-xs leading-5 text-[var(--ophalo-muted)] mb-2">
-                Internal — none of this notifies the customer.
+                None of this notifies the customer.
               </p>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <TimingPanel

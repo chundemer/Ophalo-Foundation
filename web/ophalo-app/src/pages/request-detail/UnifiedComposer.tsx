@@ -113,7 +113,7 @@ export function UnifiedComposer({
                   : "bg-[var(--ophalo-card)] text-[var(--ophalo-muted)] hover:text-[var(--ophalo-ink)]"
               }`}
             >
-              Customer update
+              Customer-page update
             </button>
           )}
           {canAddInternalNote && (

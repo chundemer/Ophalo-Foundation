@@ -1,6 +1,7 @@
 import { useState, useMemo, useRef, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Phone, X } from "lucide-react";
+import QRCode from "react-qr-code";
 import {
   api,
   ApiError,
@@ -102,6 +103,13 @@ export function LogContactModal({
   }, [showDiscardConfirm]);
 
   const showPhone = channel === "phone" && !!detail.customerPhone;
+  const showSms = channel === "sms" && !!detail.customerPhone;
+  const showEmail = channel === "email" && !!detail.customerEmail;
+  const publicBaseUrl = ((import.meta.env.VITE_PUBLIC_BASE_URL as string | undefined) ?? "").replace(/\/$/, "");
+  const customerPageUrl = detail.pageToken ? `${publicBaseUrl}/keep/r/${detail.pageToken}` : null;
+  const directMessage = customerPageUrl
+    ? `${detail.businessName}: Regarding your request, please see ${customerPageUrl}`
+    : `${detail.businessName}: Regarding your request.`;
 
   async function handleSubmit(body: Parameters<typeof api.logExternalContact>[1]) {
     if (isSubmitting || conflictDisabled) return;
@@ -130,7 +138,7 @@ export function LogContactModal({
       contentInert={showDiscardConfirm}
       header={
         <div className="flex items-center justify-between">
-          <h2 id="log-contact-dialog-heading" className="text-base font-semibold text-[var(--ophalo-ink)]">Log external contact</h2>
+          <h2 id="log-contact-dialog-heading" className="text-base font-semibold text-[var(--ophalo-ink)]">Contact customer</h2>
           <button
             type="button"
             onClick={attemptClose}
@@ -175,7 +183,8 @@ export function LogContactModal({
       }
     >
       <p className="text-xs text-[var(--ophalo-muted)] mb-4">
-        Save a Keep record of this contact. Opening the phone app is a separate step.
+        Use your phone to call or text, then record what actually happened. Opening a call,
+        text, or email draft does not update Keep.
       </p>
 
       {showPhone && (
@@ -210,6 +219,36 @@ export function LogContactModal({
         </div>
       )}
 
+      {showSms && detail.customerPhone && (
+        <div className="flex flex-col gap-2 mb-4 rounded-lg border border-[var(--ophalo-border)] bg-[var(--ophalo-canvas)] px-3 py-2.5">
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="flex items-center gap-1.5 text-sm font-semibold text-[var(--ophalo-ink)]">
+              {formatNaPhone(detail.customerPhone)}
+            </span>
+            <span className="ml-auto text-xs text-[var(--ophalo-muted)]">Text includes the request-page link</span>
+          </div>
+          <div className="hidden md:flex flex-col items-center gap-1.5 pt-2 border-t border-[var(--ophalo-border)]">
+            <SmsHandoffQr requestId={requestId} message={directMessage} />
+            <p className="text-xs text-[var(--ophalo-muted)] text-center">Scan to open the text draft on your phone.</p>
+          </div>
+          <a
+            href={`sms:${detail.customerPhone}?&body=${encodeURIComponent(directMessage)}`}
+            className={`md:hidden inline-flex items-center justify-center rounded-lg border-2 border-[var(--ophalo-navy)] px-4 py-2 text-sm font-semibold text-[var(--ophalo-navy)] ${FOCUS_RING}`}
+          >
+            Open text draft
+          </a>
+        </div>
+      )}
+
+      {showEmail && detail.customerEmail && (
+        <a
+          href={`mailto:${detail.customerEmail}?subject=${encodeURIComponent("Regarding your request")}&body=${encodeURIComponent(directMessage)}`}
+          className={`mb-4 inline-flex w-full items-center justify-center rounded-lg border-2 border-[var(--ophalo-navy)] px-4 py-2 text-sm font-semibold text-[var(--ophalo-navy)] ${FOCUS_RING}`}
+        >
+          Open email draft with request link
+        </a>
+      )}
+
       <ExternalContactForm
         initialDirection={initialDirection as "outbound" | "inbound"}
         initialChannel={initialChannel}
@@ -224,6 +263,25 @@ export function LogContactModal({
       />
     </ResponsiveSheet>
   );
+}
+
+function SmsHandoffQr({ requestId, message }: { requestId: string; message: string }) {
+  const [handoffUrl, setHandoffUrl] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setHandoffUrl(null);
+    setError(null);
+    api.createSmsHandoff(requestId, message)
+      .then((result) => { if (!cancelled) setHandoffUrl(result.handoffUrl); })
+      .catch(() => { if (!cancelled) setError("Could not create text link. Try again."); });
+    return () => { cancelled = true; };
+  }, [requestId, message]);
+
+  if (error) return <p className="text-xs text-[var(--ophalo-danger)]">{error}</p>;
+  if (!handoffUrl) return <p className="text-xs text-[var(--ophalo-muted)]">Preparing text link…</p>;
+  return <div className="bg-white p-2 rounded-lg"><QRCode value={handoffUrl} size={108} /></div>;
 }
 
 // ---------------------------------------------------------------------------

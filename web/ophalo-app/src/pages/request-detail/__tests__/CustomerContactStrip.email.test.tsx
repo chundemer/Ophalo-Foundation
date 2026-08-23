@@ -1,36 +1,14 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { CustomerContactStrip } from "../CustomerContactStrip";
 
-// GAP-048: the Email quick action is a plain contact shortcut — it must never embed the
-// private customer-page URL. Sharing the tracker link happens only through ShareLinkModal's
-// explicit prepare/confirm ceremony.
-
-vi.mock("../../../lib/apiClient", () => ({
-  api: {
-    createSmsHandoff: vi.fn(),
-    createCallHandoff: vi.fn(),
-  },
-}));
-
-describe("CustomerContactStrip — Email quick action (GAP-048)", () => {
-  beforeEach(() => {
-    vi.stubEnv("VITE_PUBLIC_BASE_URL", "http://localhost:3000");
-  });
-
-  it("renders a bare mailto: with no prefilled subject or body, even with a pageToken present", () => {
-    render(
-      <CustomerContactStrip
-        requestId="req-1"
-        phone={null}
-        email="customer@example.com"
-        customerName="Jamie Rivera"
-        pageToken="tok_abc123"
-        onContactLaunched={vi.fn()}
-      />
-    );
-
-    const emailLink = screen.getByRole("link", { name: /email/i });
-    expect(emailLink).toHaveAttribute("href", "mailto:customer@example.com");
+describe("CustomerContactStrip — email shortcut", () => {
+  it("opens the shared contact workflow instead of bypassing its audit record", async () => {
+    const user = userEvent.setup();
+    const onContactLaunched = vi.fn();
+    render(<CustomerContactStrip phone={null} email="customer@example.com" onContactLaunched={onContactLaunched} />);
+    await user.click(screen.getByRole("button", { name: "Email" }));
+    expect(onContactLaunched).toHaveBeenCalledWith("outbound", "email");
   });
 });

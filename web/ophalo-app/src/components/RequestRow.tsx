@@ -21,8 +21,8 @@ const MODAL_ACTION_CODES = new Set([
 ]);
 
 const ACTION_LABELS: Record<string, string> = {
-  contact_customer: "Log contact",
-  post_customer_update: "Update customer page",
+  contact_customer: "Contact customer",
+  post_customer_update: "Post customer-page update",
   acknowledge_attention: "Review request",
   review_feedback: "Review feedback",
   close_request: "Close request",
