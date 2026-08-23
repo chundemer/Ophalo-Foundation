@@ -5,7 +5,10 @@
   --ophalo-ink: #172033;
   --ophalo-canvas: #f8f6f1;
   --ophalo-card: #ffffff;
-  --ophalo-border: #ddd6c8;
+  --ophalo-border: #e2e8f0;
+  --ophalo-border-subtle: #edf1f5;
+  --ophalo-surface-muted: #f6f7f9;
+  --ophalo-shadow-card: 0 1px 2px rgba(16, 36, 62, 0.06);
   --ophalo-muted: #5d6878;
 
   /* OpHalo shared semantic tokens */
