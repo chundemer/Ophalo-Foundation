@@ -131,9 +131,6 @@ export function RequestDetailContent(props: RequestDetailContentProps) {
           </div>
         </div>
 
-        {/* 5. Activity — one chronological timeline */}
-        <RequestDetailActivity timelineFilter={props.timelineFilter} onTimelineFilterChange={props.onTimelineFilterChange} displayedEvents={props.displayedEvents} />
-
         {/* Actionable, stays visible (not lower-frequency record context) */}
         {!showProminentFeedbackCard && (
           <WorkControlsGroup
@@ -156,7 +153,7 @@ export function RequestDetailContent(props: RequestDetailContentProps) {
           </div>
         )}
 
-        {/* 6. Lower-frequency record context — concise disclosure, not a stack of full-width
+        {/* 5. Lower-frequency record context — concise disclosure, not a stack of full-width
             cards (locked correction, 2026-08-22). Owner/contact are already in the Anchor, so
             they are not repeated here; TeamSection's assigned-owner row is omitted in this mode. */}
         <details className="group rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-4 py-3">
@@ -177,6 +174,10 @@ export function RequestDetailContent(props: RequestDetailContentProps) {
             <SourceMetaPanel detail={detail} bare />
           </div>
         </details>
+
+        {/* 6. Activity — one chronological timeline, collapsed at rest, moved below Record
+            details (slice 5, 2026-08-23). Still the canvas's sole timeline render. */}
+        <RequestDetailActivity timelineFilter={props.timelineFilter} onTimelineFilterChange={props.onTimelineFilterChange} displayedEvents={props.displayedEvents} />
       </div>
       </div>
       {actualWorkCapture.isModalOpen && actualWorkCapture.state.status === "draft" && (

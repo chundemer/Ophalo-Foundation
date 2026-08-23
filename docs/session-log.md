@@ -21,9 +21,8 @@ between communication, externally handled contact, and formal attestation.
 
 ### Next presentation pass — Request Detail workbench refinement (2026-08-23)
 
-**Status:** approved visual direction; implementation in progress as independently compiling
-vertical slices (batch-size gate). This is a presentation/layout pass over the existing authorized
-workbench, not a workflow or API-contract redesign.
+**Status:** complete — all 5 slices implemented and visually checked. This was a presentation/layout
+pass over the existing authorized workbench, not a workflow or API-contract redesign.
 
 **Slice progress:**
 1. Global border-temperature tokens — done, committed `4c05cdc`. `--ophalo-border` neutralized to
@@ -53,7 +52,14 @@ workbench, not a workflow or API-contract redesign.
    mockup's reading measure; `RequestDetailContent.canvasFrame.test.tsx` updated to match. 193/193
    request-detail tests pass, `pnpm typecheck` clean, `pnpm check:tokens` clean, visual check
    passed.
-5. Activity collapse + reorder below Record details — not started.
+5. Activity collapse + reorder below Record details — done. `RequestDetailActivity.tsx` wrapped in
+   native `<details>`/`<summary>`, collapsed at rest, with an entry count (`N entries`) and the same
+   chevron/`group-open` affordance as Record details; filter controls and timeline only render
+   expanded, still the canvas's sole timeline render. `RequestDetailContent.tsx` reordered so the
+   Record details disclosure precedes Activity. 193/193 request-detail tests pass, `pnpm typecheck`
+   clean, `pnpm check:tokens` clean, visual check passed.
+
+**All 5 slices complete.** The Request Detail workbench refinement pass is done.
 
 **Target:** the supplied Request Detail mockup is the visual reference. Move away from a wireframe
 of stacked/nested boxes toward a calm, single-plane operational workbench: consistent Inter-based
