@@ -143,14 +143,19 @@ permanent pane.
 - Remove “highlighted panel/action” recommendation copy.
 - Timing and schedule-change reasons route to **Contact customer**, not a passive page update.
 
-### 3. Establish the responsive sheet primitive and draft rules
+### 3. Establish the responsive sheet primitive and draft rules — complete (2026-08-23)
 
 - Desktop: right slide-over, full viewport height, one normal scroll owner, focus trapped while
   open, Escape and close supported, and focus returned to the trigger.
 - Mobile/tablet: bottom-sheet presentation with keyboard-safe sizing and an accessible close control.
+- `ResponsiveSheet` (`web/ophalo-app/src/components/keep/ResponsiveSheet.tsx`) is presentation-only:
+  layout, focus, and Escape/backdrop close plumbing, built on `KeepModal`. `label`/`labelledBy` is a
+  mandatory, TypeScript-enforced accessible name.
 - Preserve an in-memory draft for a sheet closed during the same request session. Explicit **Discard**
   clears it. Do not persist customer-sensitive drafts to local storage by default.
 - Warn before closing only when a dirty draft would be lost; do not turn routine close/reopen into a confirmation loop.
+- Draft state and dirty-close confirmation are owned by each step-4 workflow, not the primitive —
+  discard rules and draft shape differ materially across contact, follow-up, attention, and location.
 
 ### 4. Move structured actions into sheets without changing domain meaning
 
