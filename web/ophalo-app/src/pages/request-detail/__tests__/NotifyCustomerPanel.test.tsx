@@ -179,6 +179,35 @@ describe("NotifyCustomerPanel — prepared phase (mine)", () => {
     expect(qr.getAttribute("data-value")).not.toContain(detail.customerPhone);
   });
 
+  it("desktop SMS: shows retry on mint failure, and retry re-mints successfully", async () => {
+    const user = userEvent.setup();
+    mockCreateSmsHandoff
+      .mockRejectedValueOnce(new Error("network down"))
+      .mockResolvedValueOnce({
+        handoffUrl: "https://app.ophalo.com/keep/share-sms/retried-token",
+        expiresAtUtc: "2026-07-26T23:00:00Z",
+      });
+    const detail = preparedDetail("sms");
+
+    render(
+      <NotifyCustomerPanel
+        requestId="req-77"
+        detail={detail}
+        relatedUpdateEventId="event-1"
+        onDetailUpdated={() => {}}
+        onDone={() => {}}
+      />
+    );
+
+    expect(await screen.findByText("Could not create text link. Try again.")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Try again" }));
+
+    const qr = await screen.findByTestId("qr");
+    expect(qr.getAttribute("data-value")).toBe("https://app.ophalo.com/keep/share-sms/retried-token");
+    expect(mockCreateSmsHandoff).toHaveBeenCalledTimes(2);
+  });
+
   it("formats the phone number in the desktop SMS QR caption (GAP-051 close-out)", async () => {
     const detail = preparedDetail("sms");
 

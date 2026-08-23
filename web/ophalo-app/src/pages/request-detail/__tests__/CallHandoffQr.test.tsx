@@ -10,10 +10,12 @@ import { mockRequestDetails } from "../../../mocks/fixtures";
 // component/hook directly, plus a wiring assertion per desktop entry point.
 
 const mockCreateCallHandoff = vi.fn();
+const mockCreateSmsHandoff = vi.fn();
 
 vi.mock("../../../lib/apiClient", () => ({
   api: {
     createCallHandoff: (...args: unknown[]) => mockCreateCallHandoff(...args),
+    createSmsHandoff: (...args: unknown[]) => mockCreateSmsHandoff(...args),
     logExternalContact: vi.fn(),
   },
   ApiError: class ApiError extends Error {
@@ -115,5 +117,34 @@ describe("Wiring — Contact customer drawer uses CallHandoffQr", () => {
     await waitFor(() => expect(mockCreateCallHandoff).toHaveBeenCalledWith("req-log"));
     const qr = await screen.findByTestId("qr");
     expect(qr.getAttribute("data-value")).toBe("https://app.ophalo.com/keep/share-call/log-contact-token");
+  });
+
+  it("RequestDetail's Log external contact modal SMS QR shows retry on mint failure and re-mints", async () => {
+    const user = userEvent.setup();
+    mockCreateSmsHandoff
+      .mockRejectedValueOnce(new Error("network down"))
+      .mockResolvedValueOnce({
+        handoffUrl: "https://app.ophalo.com/keep/share-sms/log-contact-retried",
+        expiresAtUtc: "2026-07-19T23:00:00Z",
+      });
+
+    render(
+      <LogContactModal
+        requestId="req-log"
+        detail={mockRequestDetails["mock-req-001"]}
+        initialDirection="outbound"
+        initialChannel="sms"
+        onDetailUpdated={() => {}}
+        onClose={() => {}}
+      />
+    );
+
+    expect(await screen.findByText("Could not create text link. Try again.")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Try again" }));
+
+    const qr = await screen.findByTestId("qr");
+    expect(qr.getAttribute("data-value")).toBe("https://app.ophalo.com/keep/share-sms/log-contact-retried");
+    expect(mockCreateSmsHandoff).toHaveBeenCalledTimes(2);
   });
 });

@@ -239,6 +239,24 @@ suite before visual sign-off.
 
 ## Other active work
 
+### Two-domain customer communication (ADR-491) — complete (2026-08-23)
+
+Locked scope from `ADR-491`: Post customer-page update vs. Contact customer / Log direct contact
+are distinct communication domains; call/text QR handoffs are utilities within Contact customer,
+never standalone workflows or evidence of contact.
+
+Implemented (`ef0bc96`): consolidated Request Detail customer contact/handoff into the unified
+Contact customer drawer; added an SMS handoff QR alongside the existing call handoff; removed dead
+props on `CustomerContactStrip` and fixed a vacuous test assertion surfaced in review.
+
+Follow-up dedup (post-commit, same day): extracted a shared `useHandoffMint` hook (mint/loading/
+error/retry state machine) used by `useCallHandoff`, `RequestDetail.tsx`'s SMS handoff QR, and
+`NotifyCustomerPanel`'s SMS handoff QR — same state machine, presentation stays per-caller. Added a
+request-generation guard so a stale/overlapping mint or a post-unmount resolution can never write
+state (regression risk identified in review). New tests: `useHandoffMint.test.ts` (stale-overlap,
+post-unmount) plus retry-regression coverage for both SMS sites. Verified: `tsc --noEmit` clean,
+`git diff --check` clean, 193/193 `src/pages/request-detail` tests pass.
+
 ### Owner/Admin Actual Work financial review UI (8B)
 
 **Status:** preflight complete; implementation paused pending the Request Detail action-surface

@@ -1,10 +1,12 @@
-import { useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import QRCode from "react-qr-code";
+import { RefreshCw } from "lucide-react";
 import { api, ApiError, type KeepRequestDetailResult } from "../../lib/apiClient";
 import { KeepButton } from "../../components/keep/KeepButton";
 import { KeepBadge } from "../../components/keep/KeepBadge";
 import { formatEventTime } from "./helpers";
 import { formatNaPhone } from "../../components/quick-capture/utils";
+import { useHandoffMint } from "./useHandoffMint";
 
 type Channel = "sms" | "email";
 
@@ -42,8 +44,6 @@ export function NotifyCustomerPanel({
   const [isConfirming, setIsConfirming] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [conflictDisabled, setConflictDisabled] = useState(false);
-  const [smsHandoffUrl, setSmsHandoffUrl] = useState<string | null>(null);
-  const [smsHandoffError, setSmsHandoffError] = useState<string | null>(null);
 
   const publicBaseUrl = (import.meta.env.VITE_PUBLIC_BASE_URL as string).replace(/\/$/, "");
   const customerPageUrl = `${publicBaseUrl}/keep/r/${detail.pageToken}`;
@@ -55,19 +55,20 @@ export function NotifyCustomerPanel({
 
   // Mint a fresh desktop SMS QR handoff whenever the prepared phase is entered for the sms
   // channel — Keep stores no draft text, only the pending pointer, so this regenerates each time.
-  useEffect(() => {
-    if (!pending || pending.channel !== "sms") {
-      setSmsHandoffUrl(null);
-      return;
-    }
-    let cancelled = false;
-    setSmsHandoffError(null);
-    api.createSmsHandoff(requestId, messageBody)
-      .then((result) => { if (!cancelled) setSmsHandoffUrl(result.handoffUrl); })
-      .catch(() => { if (!cancelled) setSmsHandoffError("Could not create text link. Try again."); });
-    return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pending?.relatedUpdateEventId, pending?.channel, requestId]);
+  const mintSmsHandoff = useCallback(
+    () => api.createSmsHandoff(requestId, messageBody),
+    [requestId, messageBody, pending?.relatedUpdateEventId],
+  );
+  const {
+    handoffUrl: smsHandoffUrl,
+    isLoading: isSmsHandoffLoading,
+    error: smsHandoffError,
+    retry: retrySmsHandoff,
+  } = useHandoffMint(
+    pending?.channel === "sms",
+    mintSmsHandoff,
+    "Could not create text link. Try again.",
+  );
 
   async function handlePrepare() {
     setIsPreparing(true);
@@ -166,15 +167,31 @@ export function NotifyCustomerPanel({
               <div className="mb-4">
                 {/* Desktop: opaque QR handoff — never encodes raw phone/message text (ADR-448 pattern) */}
                 <div className="hidden md:flex flex-col items-center gap-2">
-                  {smsHandoffUrl ? (
+                  {isSmsHandoffLoading ? (
+                    <div
+                      className="flex items-center justify-center"
+                      style={{ height: 160, width: 160 }}
+                      role="status"
+                      aria-label="Preparing text link"
+                    >
+                      <RefreshCw className="h-5 w-5 animate-spin text-[var(--ophalo-muted)]" />
+                    </div>
+                  ) : smsHandoffUrl ? (
                     <div className="bg-white p-2 rounded-lg">
                       <QRCode value={smsHandoffUrl} size={160} />
                     </div>
                   ) : smsHandoffError ? (
-                    <p className="text-xs text-[var(--ophalo-danger)]">{smsHandoffError}</p>
-                  ) : (
-                    <p className="text-xs text-[var(--ophalo-muted)]">Preparing text link…</p>
-                  )}
+                    <div className="flex flex-col items-center gap-2 text-center">
+                      <p className="text-xs text-[var(--ophalo-danger)]">{smsHandoffError}</p>
+                      <button
+                        type="button"
+                        onClick={() => void retrySmsHandoff()}
+                        className="text-xs font-medium text-[var(--keep-accent)] hover:underline"
+                      >
+                        Try again
+                      </button>
+                    </div>
+                  ) : null}
                   <p className="text-xs text-[var(--ophalo-muted)] text-center">
                     Scan with your phone to open the text draft to {formatNaPhone(detail.customerPhone)}.
                   </p>

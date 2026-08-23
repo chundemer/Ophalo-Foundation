@@ -1,6 +1,6 @@
-import { useState, useMemo, useRef, useEffect } from "react";
+import { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Phone, X } from "lucide-react";
+import { Phone, X, RefreshCw } from "lucide-react";
 import QRCode from "react-qr-code";
 import {
   api,
@@ -30,6 +30,7 @@ import { FollowUpResolutionPanel } from "./request-detail/FollowUpResolutionPane
 import { ClearAttentionSheet } from "./request-detail/DetailPanels";
 import { ResponsiveSheet } from "../components/keep/ResponsiveSheet";
 import { CallHandoffQr } from "./request-detail/CallHandoffQr";
+import { useHandoffMint } from "./request-detail/useHandoffMint";
 import { RequestDetailHeader } from "./request-detail/RequestDetailHeader";
 import { RequestDetailStates } from "./request-detail/RequestDetailStates";
 import { RequestDetailContent } from "./request-detail/RequestDetailContent";
@@ -266,21 +267,42 @@ export function LogContactModal({
 }
 
 function SmsHandoffQr({ requestId, message }: { requestId: string; message: string }) {
-  const [handoffUrl, setHandoffUrl] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const mint = useCallback(() => api.createSmsHandoff(requestId, message), [requestId, message]);
+  const { handoffUrl, isLoading, error, retry } = useHandoffMint(
+    true,
+    mint,
+    "Could not create text link. Try again.",
+  );
 
-  useEffect(() => {
-    let cancelled = false;
-    setHandoffUrl(null);
-    setError(null);
-    api.createSmsHandoff(requestId, message)
-      .then((result) => { if (!cancelled) setHandoffUrl(result.handoffUrl); })
-      .catch(() => { if (!cancelled) setError("Could not create text link. Try again."); });
-    return () => { cancelled = true; };
-  }, [requestId, message]);
+  if (isLoading) {
+    return (
+      <div
+        className="flex items-center justify-center"
+        style={{ height: 108, width: 108 }}
+        role="status"
+        aria-label="Preparing text link"
+      >
+        <RefreshCw className="h-5 w-5 animate-spin text-[var(--ophalo-muted)]" />
+      </div>
+    );
+  }
 
-  if (error) return <p className="text-xs text-[var(--ophalo-danger)]">{error}</p>;
-  if (!handoffUrl) return <p className="text-xs text-[var(--ophalo-muted)]">Preparing text link…</p>;
+  if (error) {
+    return (
+      <div className="flex flex-col items-center gap-2 text-center" style={{ width: 108 }}>
+        <p className="text-xs text-[var(--ophalo-danger)]">{error}</p>
+        <button
+          type="button"
+          onClick={() => void retry()}
+          className="text-xs font-medium text-[var(--keep-accent)] hover:underline"
+        >
+          Try again
+        </button>
+      </div>
+    );
+  }
+
+  if (!handoffUrl) return null;
   return <div className="bg-white p-2 rounded-lg"><QRCode value={handoffUrl} size={108} /></div>;
 }
 
