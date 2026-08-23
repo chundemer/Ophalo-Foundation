@@ -57,6 +57,26 @@ describe("ActualWorkHistoryCard", () => {
     expect(screen.queryByText("NoWorkAuthorized")).not.toBeInTheDocument();
   });
 
+  it("shows only the most recent visit open, collapsing older visits behind a disclosure", () => {
+    const state: ActualWorkHistoryState = {
+      status: "loaded",
+      submittedVisits: [
+        { id: "v3", status: "SubmittedToOffice", outcome: null, completionNote: "Most recent visit note", submittedAtUtc: "2026-03-01T12:00:00Z", lines: [] },
+        { id: "v2", status: "SubmittedToOffice", outcome: null, completionNote: "Middle visit note", submittedAtUtc: "2026-02-01T12:00:00Z", lines: [] },
+        { id: "v1", status: "SubmittedToOffice", outcome: null, completionNote: "Oldest visit note", submittedAtUtc: "2026-01-01T12:00:00Z", lines: [] },
+      ],
+    };
+    render(<ActualWorkHistoryCard state={state} onRetry={vi.fn()} />);
+
+    expect(screen.getByText("Most recent visit note")).toBeInTheDocument();
+    expect(screen.getByText("2 earlier visits")).toBeInTheDocument();
+    // Collapsed <details> content is present in the DOM but not open by default.
+    const details = screen.getByText("2 earlier visits").closest("details");
+    expect(details).not.toHaveAttribute("open");
+    expect(screen.getByText("Middle visit note")).toBeInTheDocument();
+    expect(screen.getByText("Oldest visit note")).toBeInTheDocument();
+  });
+
   it("null-guards a missing submittedAtUtc", () => {
     const state: ActualWorkHistoryState = {
       status: "loaded",

@@ -110,7 +110,7 @@ export function TeamSection({ requestId, detail, onDetailUpdated, compact = fals
           <button
             type="button"
             onClick={onOpenReassign}
-            className={`text-xs text-[var(--ophalo-muted)] underline hover:text-[var(--ophalo-ink)] transition-colors ${FOCUS_RING}`}
+            className={`text-xs font-semibold text-[var(--keep-accent)] hover:underline transition-colors ${FOCUS_RING}`}
           >
             {responsible ? "Change" : "Assign"}
           </button>

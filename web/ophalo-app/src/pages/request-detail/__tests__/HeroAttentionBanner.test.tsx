@@ -170,6 +170,67 @@ describe("HeroAttentionBanner", () => {
     expect(screen.queryByRole("button")).toBeNull();
   });
 
+  it("folds the customer's original description in as verbatim context when no timeline quote exists", () => {
+    const detail = { ...detailWith("respond_to_customer", { canSendBusinessUpdate: true }), events: [] };
+    render(
+      <HeroAttentionBanner
+        detail={detail}
+        onRecordFollowUp={vi.fn()}
+        onContactLaunched={vi.fn()}
+        onOpenClearAttention={vi.fn()}
+      />,
+    );
+    expect(screen.getByText("Customer's original request")).toBeInTheDocument();
+    expect(screen.getByText(`"${detail.description}"`)).toBeInTheDocument();
+  });
+
+  it("shows the distinct timeline-sourced quote, not the original description, when one exists", () => {
+    const detail = {
+      ...detailWith("respond_to_customer", { canSendBusinessUpdate: true }),
+      events: [
+        {
+          id: "e1",
+          eventType: "message_added",
+          content: "Can someone come out tomorrow instead?",
+          visibility: "customer",
+          occurredAtUtc: "2026-07-05T12:00:00Z",
+          actorType: "customer",
+          actorAccountUserId: null,
+          actorDisplayName: "Jane Customer",
+          statusAfter: null,
+          messageIntent: null,
+          communicationChannel: null,
+          externalContactDirection: null,
+          externalContactChannel: null,
+          externalContactOutcome: null,
+          externalContactRequiresFollowUp: false,
+          externalContactSetFirstResponse: null,
+          externalContactClearedAttention: null,
+          participationAction: null,
+          participationTargetAccountUserId: null,
+          participationTargetDisplayName: null,
+          participationPreviousResponsibleAccountUserId: null,
+          participationInternalNote: null,
+          plannedForDate: null,
+          followUpOnDate: null,
+          followUpOnReason: null,
+          feedbackWasResolved: null,
+          relatedEventId: null,
+        },
+      ],
+    };
+    render(
+      <HeroAttentionBanner
+        detail={detail}
+        onRecordFollowUp={vi.fn()}
+        onContactLaunched={vi.fn()}
+        onOpenClearAttention={vi.fn()}
+      />,
+    );
+    expect(screen.getByText('"Can someone come out tomorrow instead?"')).toBeInTheDocument();
+    expect(screen.queryByText(`"${detail.description}"`)).not.toBeInTheDocument();
+  });
+
   it("renders nothing when the routed action is not server-authorized", () => {
     render(
       <HeroAttentionBanner

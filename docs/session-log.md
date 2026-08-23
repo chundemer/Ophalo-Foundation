@@ -14,124 +14,39 @@
 
 ## Current production focus — Request Detail action clarity
 
-The Workbench shell and three visual slices are complete. The remaining issue is action discovery:
-an operator must scan multiple regions to identify and reach the correct next action. The next
-change must make one server-authorized resolution route obvious while preserving the difference
-between communication, externally handled contact, and formal attestation.
+The visual workbench refinement is verified in the current worktree and remains presentation-only:
+neutral borders, consolidated attention, compact Actual Work, teal inline triggers, and quiet
+history disclosures. Do not combine its final review/commit with the next Actual Work decision.
 
-### Next presentation pass — Request Detail workbench refinement (2026-08-23)
+### Next batch — Actual Work record correction and state clarity
 
-**Status:** complete — all 5 slices implemented and visually checked. This was a presentation/layout
-pass over the existing authorized workbench, not a workflow or API-contract redesign.
+**Status:** pre-work required; no implementation is authorized yet.
 
-**Slice progress:**
-1. Global border-temperature tokens — done, committed `4c05cdc`. `--ophalo-border` neutralized to
-   `#e2e8f0`; added `--ophalo-border-subtle`, `--ophalo-surface-muted`, `--ophalo-shadow-card` to
-   `app.css` and `ophalo-tokens.css`. `ophalo-web/src/app/globals.css` deliberately left out of
-   scope (separate public frontend; token decision deferred). Cross-route visual check passed.
-2. Hero attention banner consolidation — done. `AttentionGuidanceCard` + `NextStepCard` merged into
-   one `HeroAttentionBanner` in `DetailPanels.tsx`; routing logic unchanged (extracted to
-   `resolveNextStep`). `RequestDetailContent.tsx` wired to the merged component;
-   `NextStepCard.test.tsx` renamed/adapted to `HeroAttentionBanner.test.tsx`. 193/193 request-detail
-   tests pass, `pnpm typecheck` clean, visual check passed.
-3. Actual Work compact strip — done. `ActualWorkCard.tsx` collapsed the stacked label/description/
-   full-width-button layout into a horizontal strip (label+summary left, compact `ClipboardList`-
-   icon Record/Resume trigger right); quiet-degradation (loading/hidden/error → null) and secondary-
-   not-teal button convention preserved. `ActualWorkHistoryCard.tsx` header padding tightened
-   (`py-4` → `py-3.5`) to register as the same strip module; visit-entry list and price-blind/empty-
-   state behavior unchanged. 193/193 request-detail tests pass, `pnpm typecheck` clean,
-   `pnpm check:tokens` clean, visual check passed.
-4. Owner "Change" quiet trigger + canvas width narrowing — done. `TeamSection.tsx` compact mode
-   now shows a static owner display plus a quiet Change/Assign trigger (`onOpenReassign`); the
-   inline assign select and Clear control moved into a new `OwnerReassignmentSheet` (same file),
-   opened via `ResponsiveSheet` outside the metadata ledger. Reuses the existing authorized
-   `setResponsible`/`clearResponsible` calls unchanged — no new mutation, only relocated UI.
-   `onOpenReassignOwner` threaded through `RequestDetailLayoutProps` → `RequestDetailAnchor` →
-   `RequestDetail.tsx` (new `reassignOwnerOpen` state, mirrors the `clearAttentionOpen` pattern).
-   Work Canvas width narrowed `max-w-6xl` → `max-w-4xl` in `RequestDetailContent.tsx` toward the
-   mockup's reading measure; `RequestDetailContent.canvasFrame.test.tsx` updated to match. 193/193
-   request-detail tests pass, `pnpm typecheck` clean, `pnpm check:tokens` clean, visual check
-   passed.
-5. Activity collapse + reorder below Record details — done. `RequestDetailActivity.tsx` wrapped in
-   native `<details>`/`<summary>`, collapsed at rest, with an entry count (`N entries`) and the same
-   chevron/`group-open` affordance as Record details; filter controls and timeline only render
-   expanded, still the canvas's sole timeline render. `RequestDetailContent.tsx` reordered so the
-   Record details disclosure precedes Activity. 193/193 request-detail tests pass, `pnpm typecheck`
-   clean, `pnpm check:tokens` clean, visual check passed.
+Observed UX contradiction: an active blank Actual Work draft appears beside a submitted visit
+history. The action label **Resume** opens the blank draft, while the visible submitted items are
+intentionally immutable. This is technically correct but misleading.
 
-**All 5 slices complete.** The Request Detail workbench refinement pass is done.
+**Working decision proposal — requires product confirmation before implementation:**
 
-**Target:** the supplied Request Detail mockup is the visual reference. Move away from a wireframe
-of stacked/nested boxes toward a calm, single-plane operational workbench: consistent Inter-based
-operational typography, restrained borders, whitespace/alignment-led grouping, sentence-case
-labels, and bold reserved for scanning anchors, important values, and permitted primary actions.
-A controlled serif face may remain only for the request title and a verbatim customer quotation.
+```text
+Draft       → editable; use “Continue draft” / “Add actual work,” never “Resume” for an empty draft
+Submitted   → locked immutable record; show visible “Submitted · locked” text plus a lock icon
+Correction  → explicit correction-request flow with a required reason; original remains unchanged
+Reconciled  → permanently locked; any later change is an adjustment/reversal record, never in-place edit
+```
 
-**Approved visual changes**
+The first UI-only correction may rename the draft CTA by factual state and add explicit submitted
+lock status. Do not imply that a historical submitted visit is editable or will populate a new
+draft. A correction-request, adjustment, reconciliation, authority, and audit model is a separate
+workflow/domain decision — not a presentation-only extension.
 
-1. Use the existing Lucide icon set consistently for interactive controls, status/risk cues, mode
-   tabs, section anchors, and disclosure affordances. Icons stay small outline glyphs aligned to
-   text; do not paste one-off inline SVG path sets. Do not add decorative icons to static metadata
-   labels (Customer contact, Service location, Assigned owner, etc.).
-2. Narrow and center the desktop Work Canvas toward the mockup's reading measure (evaluate
-   `max-w-4xl` versus the current `max-w-6xl`), retaining the protected two-pane desktop shell and
-   its one canvas scroll owner.
-3. Retain the compact three-row Request Anchor and its data/action wiring. Refine it visually;
-   owner assignment may become a quiet **Change** trigger that opens the existing authorized
-   reassignment workflow outside the metadata ledger. Do not alter authorization or mutation flow.
-4. When active attention exists, compose its current guidance, verbatim customer context, and
-   server-routed next action into one quiet amber `HeroAttentionBanner`. It must preserve the
-   server-authored Why/Resolve-by explanation when meaningful and may only offer Clear attention
-   when `canAcknowledgeAttention` authorizes it. Never infer a clearance route.
-5. Turn Actual Work into a compact factual execution strip with its existing authorized
-   Record/Resume action. Do **not** introduce Proposed Scope, pricing, or an **Edit Scope** action:
-   Proposed Scope remains outside the controlled-pilot Workbench.
-6. Keep the customer-update/internal-note composer as the substantive writing surface; flatten
-   routine enclosing chrome rather than adding cards within cards. Preserve its visibility
-   disclosures, drafts, error recovery, and server-authorized status behavior.
-7. Collapse **Activity History & Communication Log** at rest and move that disclosure **below
-   Record details**. The collapsed summary must retain an entry count and keyboard-accessible
-   disclosure semantics. Record details therefore precedes Activity in the visual/canvas order;
-   do not create another scroll owner or duplicate timeline data.
-
-**Guardrails / validation before implementation**
-
-- `RequestDetailContent.tsx` currently renders `AttentionGuidanceCard`, `NextStepCard`, and
-  `OriginalRequestCard` independently; consolidate presentation conditionally without assuming
-  that attention guidance or `detail.description` exists.
-- `NextStepCard` already safely routes by `guidanceKey`; retain its server availability checks and
-  target behavior (composer focus, Contact customer sheet, Follow Up resolution, or Clear
-  attention sheet). A teal visual CTA must not become a client-authored workflow decision.
-- Existing `ActualWorkCard` / `ActualWorkHistoryCard` intentionally hide absent data and protect
-  price-blind Actual Work. Preserve both properties in the strip/disclosure treatment.
-- Use existing CSS tokens in `src/styles/app.css`, `KeepButton`, and Lucide imports. Any global
-  token adjustment needs a cross-app visual check; prefer request-detail-local composition first.
-- Update the relevant Request Detail rendering/accessibility tests for the reordered collapsed
-  Activity disclosure, then run focused Vitest, `pnpm typecheck`, `pnpm check:tokens`, and visual
-  checks at desktop 100%/125%/150% plus narrow layout before sign-off.
-
-**Global styling-token guidance — approved, but deliberately narrow**
-
-- The existing global foundation is aligned with the mockup and should remain: canvas
-  `#f8f6f1`, white surfaces, navy, Keep teal, Inter for operational UI, and Source Serif only for
-  display roles/customer quotations.
-- The worthwhile global refinement is border temperature: evaluate changing
-  `--ophalo-border` from warm `#ddd6c8` to a neutral/slate value around `#e2e8f0` (or a slightly
-  softer `#e7edf3`). This should reduce the application's wireframe/outlined-card feeling without
-  changing information hierarchy. Perform a cross-route visual review before accepting it.
-- Add semantic tokens rather than scattering new literal colors: `--ophalo-border-subtle` for
-  internal dividers, `--ophalo-surface-muted` for quiet grouped controls, and
-  `--ophalo-shadow-card` for the restrained surface elevation used by the upgraded workbench.
-  Use the standard border for interactive boundaries/meaningful surfaces, and the subtle border
-  for internal division.
-- Keep `KeepButton`'s existing semantic variants, 42px minimum height, and focus behavior intact.
-  Any visually tighter desktop controls belong in a Request-Detail-scoped compact treatment; do
-  not globally reduce touch targets as part of this presentation pass.
-- Preserve Source Serif for page titles and verbatim customer quotes only. Migrate operational row
-  titles/metadata to the existing Inter/sans role where the current shared type utility uses serif.
-- `src/styles/app.css` explicitly mirrors `web/shared/styles/ophalo-tokens.css`; any accepted
-  global token adjustment must update both sources. Validate Requests, Price Book, Settings, and
-  Request Detail after the token change, then run `pnpm check:tokens`.
+**Required pre-work before approval:** identify the current persisted Actual Work statuses and
+transitions; submitted/reconciliation authority and endpoints; whether correction/reversal concepts
+already exist; immutable/audit constraints; authorized actors; and the smallest safe API/UI/test
+surface. Record the resulting product decision in the decision index/ADR as appropriate. Per
+`CLAUDE.md`, this is targeted discovery because the decision is unresolved; after confirmation, the
+implementation preflight must only confirm named symbols, caller fan-out, exact file count, and
+tests before edits.
 
 ### Non-negotiable product rules
 

@@ -1,7 +1,8 @@
+import { ChevronRight } from "lucide-react";
 import { KeepButton } from "../../components/keep/KeepButton";
 import { type ActualWorkSubmittedVisitEntry } from "../../lib/apiClient";
 import { type ActualWorkHistoryState } from "./useActualWorkHistory";
-import { formatDate } from "./helpers";
+import { formatDate, FOCUS_RING } from "./helpers";
 
 interface ActualWorkHistoryCardProps {
   state: ActualWorkHistoryState;
@@ -84,13 +85,28 @@ export function ActualWorkHistoryCard({ state, onRetry, bare = false }: ActualWo
     return null;
   }
 
+  const [mostRecent, ...older] = state.submittedVisits;
+
   return (
     <div className={wrapperCls}>
       <p className="text-sm font-semibold text-[var(--ophalo-ink)] mb-3">Visit history</p>
       <div className="space-y-3">
-        {state.submittedVisits.map((visit) => (
-          <VisitEntry key={visit.id} visit={visit} />
-        ))}
+        <VisitEntry visit={mostRecent} />
+        {older.length > 0 && (
+          <details className="group">
+            <summary
+              className={`list-none flex cursor-pointer items-center gap-1 text-xs font-medium text-[var(--ophalo-muted)] hover:text-[var(--ophalo-ink)] transition-colors ${FOCUS_RING} rounded`}
+            >
+              <ChevronRight className="h-3.5 w-3.5 shrink-0 transition-transform group-open:rotate-90" />
+              {older.length} earlier {older.length === 1 ? "visit" : "visits"}
+            </summary>
+            <div className="mt-3 space-y-3">
+              {older.map((visit) => (
+                <VisitEntry key={visit.id} visit={visit} />
+              ))}
+            </div>
+          </details>
+        )}
       </div>
     </div>
   );

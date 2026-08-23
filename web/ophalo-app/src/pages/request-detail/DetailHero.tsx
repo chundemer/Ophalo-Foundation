@@ -41,7 +41,7 @@ export function CustomerPageHeroActions({
         href={customerPageUrl}
         target="_blank"
         rel="noreferrer"
-        className={`inline-flex items-center gap-1 font-semibold text-[var(--ophalo-muted)] hover:text-[var(--ophalo-ink)] transition-colors ${FOCUS_RING}`}
+        className={`inline-flex items-center gap-1 font-semibold text-[var(--keep-accent)] hover:underline transition-colors ${FOCUS_RING}`}
       >
         <ExternalLink className="h-3.5 w-3.5 shrink-0" />
         View customer page
@@ -50,11 +50,7 @@ export function CustomerPageHeroActions({
         <button
           type="button"
           onClick={onOpenShareDrawer}
-          className={`inline-flex items-center gap-1 font-semibold transition-colors ${FOCUS_RING} ${
-            needsShare
-              ? "text-[var(--ophalo-attention)] hover:text-[var(--ophalo-ink)]"
-              : "text-[var(--ophalo-muted)] hover:text-[var(--ophalo-ink)]"
-          }`}
+          className={`inline-flex items-center gap-1 font-semibold text-[var(--keep-accent)] hover:underline transition-colors ${FOCUS_RING}`}
         >
           <Share2 className="h-3.5 w-3.5 shrink-0" />
           Share Link

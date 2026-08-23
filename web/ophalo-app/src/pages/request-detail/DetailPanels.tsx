@@ -488,8 +488,27 @@ export function ProminentFeedbackCard({ requestId, detail, onDetailUpdated, onRe
 // Original request card — customer description
 // ---------------------------------------------------------------------------
 
-export function OriginalRequestCard({ detail }: { detail: KeepRequestDetailResult }) {
+interface OriginalRequestCardProps {
+  detail: KeepRequestDetailResult;
+  // quiet: the Hero Attention Banner is already showing a distinct timeline-sourced quote, so
+  // this renders as unboxed supporting content rather than a second equal-weight card.
+  quiet?: boolean;
+}
+
+export function OriginalRequestCard({ detail, quiet = false }: OriginalRequestCardProps) {
   if (!detail.description) return null;
+  if (quiet) {
+    return (
+      <div className="px-1">
+        <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ophalo-muted)] mb-0.5">
+          Customer description
+        </p>
+        <p className="text-sm leading-6 text-[var(--ophalo-ink)] whitespace-pre-wrap">
+          {detail.description}
+        </p>
+      </div>
+    );
+  }
   return (
     <div className="rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-4 py-2.5">
       <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ophalo-muted)] mb-0.5">
@@ -960,6 +979,12 @@ export function HeroAttentionBanner({ detail, onRecordFollowUp, onContactLaunche
   const isOverdue = detail.effectiveAttention.level === "overdue";
   const nextStep = resolveNextStep(detail, { onRecordFollowUp, onContactLaunched, onOpenClearAttention });
 
+  // No distinct timeline-sourced quote exists for this attention — fold the customer's original
+  // description in as the verbatim context instead of a second standalone card (RequestDetailContent
+  // suppresses OriginalRequestCard in this case; see its `quiet`-vs-hidden selection).
+  const sourceText = guidance.sourceText ?? detail.description ?? null;
+  const sourceLabel = guidance.sourceText ? guidance.sourceLabel : detail.description ? "Customer's original request" : null;
+
   return (
     <section className="rounded-xl border border-[var(--ophalo-border)] border-l-4 border-l-[var(--ophalo-attention)] bg-[var(--ophalo-attention-bg)] px-5 py-4">
       <div className="flex flex-wrap items-center gap-2 mb-3">
@@ -982,15 +1007,15 @@ export function HeroAttentionBanner({ detail, onRecordFollowUp, onContactLaunche
           <p className="mt-1 text-sm leading-6 text-[var(--ophalo-ink)]">{guidance.why}</p>
         </div>
 
-        {guidance.sourceText && (
+        {sourceText && (
           <div className="rounded-lg border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-3 py-2.5">
-            {guidance.sourceLabel && (
+            {sourceLabel && (
               <p className="text-xs font-semibold text-[var(--ophalo-muted)] mb-1">
-                {guidance.sourceLabel}
+                {sourceLabel}
               </p>
             )}
             <p className="text-sm leading-6 text-[var(--ophalo-ink)] italic">
-              "{guidance.sourceText}"
+              "{sourceText}"
             </p>
           </div>
         )}
