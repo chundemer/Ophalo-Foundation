@@ -878,18 +878,86 @@ export function SourceMetaPanel({ detail, bare = false }: { detail: KeepRequestD
 }
 
 // ---------------------------------------------------------------------------
-// Needs attention guidance card
+// Hero attention banner — one quiet amber surface composing the active
+// guidance (why / verbatim source / resolve-by) with the single server-routed
+// next-step destination. Replaces the former AttentionGuidanceCard +
+// NextStepCard pair (locked spec, presentation pass item 4); routing logic is
+// unchanged. acknowledge_attention and log_external_contact/resolve_follow_up
+// route to the locked ResponsiveSheet workflows (step 4); respond_to_customer
+// still scrolls to the always-open composer within the Work Canvas pending
+// the collapsed-composer migration.
 // ---------------------------------------------------------------------------
 
-interface AttentionGuidanceCardProps {
+interface HeroAttentionBannerProps {
   detail: KeepRequestDetailResult;
+  onRecordFollowUp: () => void;
+  onContactLaunched: (direction: string, channel: string) => void;
+  onOpenClearAttention: () => void;
 }
 
-export function AttentionGuidanceCard({ detail }: AttentionGuidanceCardProps) {
+function scrollAndFocusWithinWorkCanvas(id: string) {
+  const target = document.getElementById(id);
+  if (!target) return;
+
+  const canvas = target.closest<HTMLElement>("[data-request-detail-work-canvas]");
+  if (canvas) {
+    const canvasRect = canvas.getBoundingClientRect();
+    const targetRect = target.getBoundingClientRect();
+    canvas.scrollTo({
+      top: Math.max(0, canvas.scrollTop + targetRect.top - canvasRect.top - 24),
+      behavior: "smooth",
+    });
+  }
+
+  target.focus({ preventScroll: true });
+}
+
+function resolveNextStep(
+  detail: KeepRequestDetailResult,
+  callbacks: Pick<HeroAttentionBannerProps, "onRecordFollowUp" | "onContactLaunched" | "onOpenClearAttention">,
+): { buttonLabel: string; onActivate: () => void } | null {
+  const { guidanceKey } = detail.effectiveAttention;
+  const { canAcknowledgeAttention, canSetFollowUpOn, canSendBusinessUpdate, canLogExternalContact } =
+    detail.availableActions;
+  const { onRecordFollowUp, onContactLaunched, onOpenClearAttention } = callbacks;
+
+  switch (guidanceKey) {
+    case "acknowledge_attention":
+      if (!canAcknowledgeAttention) return null;
+      return { buttonLabel: "Go to Clear attention", onActivate: onOpenClearAttention };
+    case "resolve_follow_up":
+      if (!canSetFollowUpOn) return null;
+      return { buttonLabel: "Resolve follow-up", onActivate: onRecordFollowUp };
+    case "respond_to_customer":
+      // Two authorized resolution routes exist for this key — a customer update and an
+      // external contact log. Only render no CTA when neither is authorized.
+      if (canSendBusinessUpdate) {
+        return {
+          buttonLabel: "Respond to customer",
+          onActivate: () => scrollAndFocusWithinWorkCanvas("focus-panel-update"),
+        };
+      }
+      if (canLogExternalContact) {
+        const contactChannel = detail.customerPhone ? "phone" : detail.customerEmail ? "email" : "other";
+        return { buttonLabel: "Log contact", onActivate: () => onContactLaunched("outbound", contactChannel) };
+      }
+      return null;
+    case "log_external_contact": {
+      if (!canLogExternalContact) return null;
+      const contactChannel = detail.customerPhone ? "phone" : detail.customerEmail ? "email" : "other";
+      return { buttonLabel: "Log contact", onActivate: () => onContactLaunched("outbound", contactChannel) };
+    }
+    default:
+      return null;
+  }
+}
+
+export function HeroAttentionBanner({ detail, onRecordFollowUp, onContactLaunched, onOpenClearAttention }: HeroAttentionBannerProps) {
   const guidance = buildAttentionGuidance(detail);
   if (!guidance) return null;
 
   const isOverdue = detail.effectiveAttention.level === "overdue";
+  const nextStep = resolveNextStep(detail, { onRecordFollowUp, onContactLaunched, onOpenClearAttention });
 
   return (
     <section className="rounded-xl border border-[var(--ophalo-border)] border-l-4 border-l-[var(--ophalo-attention)] bg-[var(--ophalo-attention-bg)] px-5 py-4">
@@ -938,96 +1006,18 @@ export function AttentionGuidanceCard({ detail }: AttentionGuidanceCardProps) {
           )}
         </div>
       </div>
+
+      {nextStep && (
+        <div className="mt-4 pt-3 border-t border-[var(--ophalo-attention)]/25 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ophalo-muted)]">
+              Next step
+            </p>
+            <p className="mt-1 text-sm text-[var(--ophalo-ink)]">{nextStep.buttonLabel}</p>
+          </div>
+          <KeepButton onClick={nextStep.onActivate}>{nextStep.buttonLabel}</KeepButton>
+        </div>
+      )}
     </section>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Next step — the one server-routed destination for the active guidanceKey.
-// acknowledge_attention and log_external_contact/resolve_follow_up route to the
-// locked ResponsiveSheet workflows (step 4); respond_to_customer still scrolls to
-// the always-open composer within the Work Canvas pending the collapsed-composer
-// migration.
-// ---------------------------------------------------------------------------
-
-interface NextStepCardProps {
-  detail: KeepRequestDetailResult;
-  onRecordFollowUp: () => void;
-  onContactLaunched: (direction: string, channel: string) => void;
-  onOpenClearAttention: () => void;
-}
-
-function scrollAndFocusWithinWorkCanvas(id: string) {
-  const target = document.getElementById(id);
-  if (!target) return;
-
-  const canvas = target.closest<HTMLElement>("[data-request-detail-work-canvas]");
-  if (canvas) {
-    const canvasRect = canvas.getBoundingClientRect();
-    const targetRect = target.getBoundingClientRect();
-    canvas.scrollTo({
-      top: Math.max(0, canvas.scrollTop + targetRect.top - canvasRect.top - 24),
-      behavior: "smooth",
-    });
-  }
-
-  target.focus({ preventScroll: true });
-}
-
-export function NextStepCard({ detail, onRecordFollowUp, onContactLaunched, onOpenClearAttention }: NextStepCardProps) {
-  const { guidanceKey } = detail.effectiveAttention;
-  const { canAcknowledgeAttention, canSetFollowUpOn, canSendBusinessUpdate, canLogExternalContact } =
-    detail.availableActions;
-
-  let buttonLabel: string;
-  let onActivate: () => void;
-
-  switch (guidanceKey) {
-    case "acknowledge_attention":
-      if (!canAcknowledgeAttention) return null;
-      buttonLabel = "Go to Clear attention";
-      onActivate = onOpenClearAttention;
-      break;
-    case "resolve_follow_up":
-      if (!canSetFollowUpOn) return null;
-      buttonLabel = "Resolve follow-up";
-      onActivate = onRecordFollowUp;
-      break;
-    case "respond_to_customer":
-      // Two authorized resolution routes exist for this key — a customer update and an
-      // external contact log. Only render no CTA when neither is authorized.
-      if (canSendBusinessUpdate) {
-        buttonLabel = "Respond to customer";
-        onActivate = () => scrollAndFocusWithinWorkCanvas("focus-panel-update");
-      } else if (canLogExternalContact) {
-        buttonLabel = "Log contact";
-        const contactChannel = detail.customerPhone ? "phone" : detail.customerEmail ? "email" : "other";
-        onActivate = () => onContactLaunched("outbound", contactChannel);
-      } else {
-        return null;
-      }
-      break;
-    case "log_external_contact":
-      if (!canLogExternalContact) return null;
-      buttonLabel = "Log contact";
-      {
-        const contactChannel = detail.customerPhone ? "phone" : detail.customerEmail ? "email" : "other";
-        onActivate = () => onContactLaunched("outbound", contactChannel);
-      }
-      break;
-    default:
-      return null;
-  }
-
-  return (
-    <div className="rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-5 py-4 flex flex-wrap items-center justify-between gap-3">
-      <div>
-        <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ophalo-muted)]">
-          Next step
-        </p>
-        <p className="mt-1 text-sm text-[var(--ophalo-ink)]">{buttonLabel}</p>
-      </div>
-      <KeepButton onClick={onActivate}>{buttonLabel}</KeepButton>
-    </div>
   );
 }

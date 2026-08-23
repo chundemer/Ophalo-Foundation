@@ -3,8 +3,7 @@ import { type TimelineFilter } from "./TimelineEvent";
 import {
   type RequestDetailLayoutProps,
   ProminentFeedbackCard,
-  AttentionGuidanceCard,
-  NextStepCard,
+  HeroAttentionBanner,
   OriginalRequestCard,
   RelatedWorkPanel,
   TriagePanel,
@@ -70,8 +69,7 @@ export function RequestDetailContent(props: RequestDetailContentProps) {
       <div className="max-w-6xl mx-auto w-full space-y-6">
         {/* 1. Active attention guidance */}
         <div id="focus-panel-attention" className="space-y-3">
-          <AttentionGuidanceCard detail={detail} />
-          <NextStepCard
+          <HeroAttentionBanner
             detail={detail}
             onRecordFollowUp={onRecordFollowUp}
             onContactLaunched={onContactLaunched}

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
-import { NextStepCard } from "../DetailPanels";
+import { HeroAttentionBanner } from "../DetailPanels";
 import { mockRequestDetails, OWNER_ACTIONS } from "../../../mocks/fixtures";
 import type { KeepRequestDetailResult } from "../../../lib/apiClient";
 
@@ -41,19 +41,22 @@ function detailWith(
   };
 }
 
-describe("NextStepCard", () => {
+describe("HeroAttentionBanner", () => {
   it("routes acknowledge_attention to the Clear attention sheet", () => {
     const onRecordFollowUp = vi.fn();
     const onContactLaunched = vi.fn();
     const onOpenClearAttention = vi.fn();
     render(
-      <NextStepCard
+      <HeroAttentionBanner
         detail={detailWith("acknowledge_attention", { canAcknowledgeAttention: true })}
         onRecordFollowUp={onRecordFollowUp}
         onContactLaunched={onContactLaunched}
         onOpenClearAttention={onOpenClearAttention}
       />,
     );
+
+    expect(screen.getByText("Why")).toBeInTheDocument();
+    expect(screen.getByText("Resolve by")).toBeInTheDocument();
 
     screen.getByRole("button", { name: "Go to Clear attention" }).click();
 
@@ -65,7 +68,7 @@ describe("NextStepCard", () => {
   it("routes resolve_follow_up (due Follow Up On) to the controller callback", () => {
     const onRecordFollowUp = vi.fn();
     render(
-      <NextStepCard
+      <HeroAttentionBanner
         detail={detailWith("resolve_follow_up", { canSetFollowUpOn: true })}
         onRecordFollowUp={onRecordFollowUp}
         onContactLaunched={vi.fn()}
@@ -84,7 +87,7 @@ describe("NextStepCard", () => {
     const onContactLaunched = vi.fn();
 
     render(
-      <NextStepCard
+      <HeroAttentionBanner
         detail={detailWith("respond_to_customer", {
           canSendBusinessUpdate: true,
           canLogExternalContact: true,
@@ -107,7 +110,7 @@ describe("NextStepCard", () => {
   it("routes respond_to_customer to Log contact when a customer update is unavailable but contact logging is authorized", () => {
     const onContactLaunched = vi.fn();
     render(
-      <NextStepCard
+      <HeroAttentionBanner
         detail={detailWith("respond_to_customer", {
           canSendBusinessUpdate: false,
           canLogExternalContact: true,
@@ -127,7 +130,7 @@ describe("NextStepCard", () => {
   it("routes log_external_contact directly to the Log contact workflow", () => {
     const onContactLaunched = vi.fn();
     render(
-      <NextStepCard
+      <HeroAttentionBanner
         detail={detailWith("log_external_contact", { canLogExternalContact: true })}
         onRecordFollowUp={vi.fn()}
         onContactLaunched={onContactLaunched}
@@ -142,7 +145,7 @@ describe("NextStepCard", () => {
 
   it("renders nothing for respond_to_customer when neither a customer update nor contact logging is authorized", () => {
     render(
-      <NextStepCard
+      <HeroAttentionBanner
         detail={detailWith("respond_to_customer", {
           canSendBusinessUpdate: false,
           canLogExternalContact: false,
@@ -157,7 +160,7 @@ describe("NextStepCard", () => {
 
   it("renders nothing when there is no guidanceKey", () => {
     render(
-      <NextStepCard
+      <HeroAttentionBanner
         detail={detailWith(null, {})}
         onRecordFollowUp={vi.fn()}
         onContactLaunched={vi.fn()}
@@ -169,7 +172,7 @@ describe("NextStepCard", () => {
 
   it("renders nothing when the routed action is not server-authorized", () => {
     render(
-      <NextStepCard
+      <HeroAttentionBanner
         detail={detailWith("acknowledge_attention", { canAcknowledgeAttention: false })}
         onRecordFollowUp={vi.fn()}
         onContactLaunched={vi.fn()}

@@ -19,6 +19,98 @@ an operator must scan multiple regions to identify and reach the correct next ac
 change must make one server-authorized resolution route obvious while preserving the difference
 between communication, externally handled contact, and formal attestation.
 
+### Next presentation pass — Request Detail workbench refinement (2026-08-23)
+
+**Status:** approved visual direction; implementation in progress as independently compiling
+vertical slices (batch-size gate). This is a presentation/layout pass over the existing authorized
+workbench, not a workflow or API-contract redesign.
+
+**Slice progress:**
+1. Global border-temperature tokens — done, committed `4c05cdc`. `--ophalo-border` neutralized to
+   `#e2e8f0`; added `--ophalo-border-subtle`, `--ophalo-surface-muted`, `--ophalo-shadow-card` to
+   `app.css` and `ophalo-tokens.css`. `ophalo-web/src/app/globals.css` deliberately left out of
+   scope (separate public frontend; token decision deferred). Cross-route visual check passed.
+2. Hero attention banner consolidation — done. `AttentionGuidanceCard` + `NextStepCard` merged into
+   one `HeroAttentionBanner` in `DetailPanels.tsx`; routing logic unchanged (extracted to
+   `resolveNextStep`). `RequestDetailContent.tsx` wired to the merged component;
+   `NextStepCard.test.tsx` renamed/adapted to `HeroAttentionBanner.test.tsx`. 193/193 request-detail
+   tests pass, `pnpm typecheck` clean, visual check passed.
+3. Actual Work compact strip — not started.
+4. Owner "Change" quiet trigger + canvas width narrowing — not started.
+5. Activity collapse + reorder below Record details — not started.
+
+**Target:** the supplied Request Detail mockup is the visual reference. Move away from a wireframe
+of stacked/nested boxes toward a calm, single-plane operational workbench: consistent Inter-based
+operational typography, restrained borders, whitespace/alignment-led grouping, sentence-case
+labels, and bold reserved for scanning anchors, important values, and permitted primary actions.
+A controlled serif face may remain only for the request title and a verbatim customer quotation.
+
+**Approved visual changes**
+
+1. Use the existing Lucide icon set consistently for interactive controls, status/risk cues, mode
+   tabs, section anchors, and disclosure affordances. Icons stay small outline glyphs aligned to
+   text; do not paste one-off inline SVG path sets. Do not add decorative icons to static metadata
+   labels (Customer contact, Service location, Assigned owner, etc.).
+2. Narrow and center the desktop Work Canvas toward the mockup's reading measure (evaluate
+   `max-w-4xl` versus the current `max-w-6xl`), retaining the protected two-pane desktop shell and
+   its one canvas scroll owner.
+3. Retain the compact three-row Request Anchor and its data/action wiring. Refine it visually;
+   owner assignment may become a quiet **Change** trigger that opens the existing authorized
+   reassignment workflow outside the metadata ledger. Do not alter authorization or mutation flow.
+4. When active attention exists, compose its current guidance, verbatim customer context, and
+   server-routed next action into one quiet amber `HeroAttentionBanner`. It must preserve the
+   server-authored Why/Resolve-by explanation when meaningful and may only offer Clear attention
+   when `canAcknowledgeAttention` authorizes it. Never infer a clearance route.
+5. Turn Actual Work into a compact factual execution strip with its existing authorized
+   Record/Resume action. Do **not** introduce Proposed Scope, pricing, or an **Edit Scope** action:
+   Proposed Scope remains outside the controlled-pilot Workbench.
+6. Keep the customer-update/internal-note composer as the substantive writing surface; flatten
+   routine enclosing chrome rather than adding cards within cards. Preserve its visibility
+   disclosures, drafts, error recovery, and server-authorized status behavior.
+7. Collapse **Activity History & Communication Log** at rest and move that disclosure **below
+   Record details**. The collapsed summary must retain an entry count and keyboard-accessible
+   disclosure semantics. Record details therefore precedes Activity in the visual/canvas order;
+   do not create another scroll owner or duplicate timeline data.
+
+**Guardrails / validation before implementation**
+
+- `RequestDetailContent.tsx` currently renders `AttentionGuidanceCard`, `NextStepCard`, and
+  `OriginalRequestCard` independently; consolidate presentation conditionally without assuming
+  that attention guidance or `detail.description` exists.
+- `NextStepCard` already safely routes by `guidanceKey`; retain its server availability checks and
+  target behavior (composer focus, Contact customer sheet, Follow Up resolution, or Clear
+  attention sheet). A teal visual CTA must not become a client-authored workflow decision.
+- Existing `ActualWorkCard` / `ActualWorkHistoryCard` intentionally hide absent data and protect
+  price-blind Actual Work. Preserve both properties in the strip/disclosure treatment.
+- Use existing CSS tokens in `src/styles/app.css`, `KeepButton`, and Lucide imports. Any global
+  token adjustment needs a cross-app visual check; prefer request-detail-local composition first.
+- Update the relevant Request Detail rendering/accessibility tests for the reordered collapsed
+  Activity disclosure, then run focused Vitest, `pnpm typecheck`, `pnpm check:tokens`, and visual
+  checks at desktop 100%/125%/150% plus narrow layout before sign-off.
+
+**Global styling-token guidance — approved, but deliberately narrow**
+
+- The existing global foundation is aligned with the mockup and should remain: canvas
+  `#f8f6f1`, white surfaces, navy, Keep teal, Inter for operational UI, and Source Serif only for
+  display roles/customer quotations.
+- The worthwhile global refinement is border temperature: evaluate changing
+  `--ophalo-border` from warm `#ddd6c8` to a neutral/slate value around `#e2e8f0` (or a slightly
+  softer `#e7edf3`). This should reduce the application's wireframe/outlined-card feeling without
+  changing information hierarchy. Perform a cross-route visual review before accepting it.
+- Add semantic tokens rather than scattering new literal colors: `--ophalo-border-subtle` for
+  internal dividers, `--ophalo-surface-muted` for quiet grouped controls, and
+  `--ophalo-shadow-card` for the restrained surface elevation used by the upgraded workbench.
+  Use the standard border for interactive boundaries/meaningful surfaces, and the subtle border
+  for internal division.
+- Keep `KeepButton`'s existing semantic variants, 42px minimum height, and focus behavior intact.
+  Any visually tighter desktop controls belong in a Request-Detail-scoped compact treatment; do
+  not globally reduce touch targets as part of this presentation pass.
+- Preserve Source Serif for page titles and verbatim customer quotes only. Migrate operational row
+  titles/metadata to the existing Inter/sans role where the current shared type utility uses serif.
+- `src/styles/app.css` explicitly mirrors `web/shared/styles/ophalo-tokens.css`; any accepted
+  global token adjustment must update both sources. Validate Requests, Price Book, Settings, and
+  Request Detail after the token change, then run `pnpm check:tokens`.
+
 ### Non-negotiable product rules
 
 - `EffectiveAttention` is authoritative for Request Detail attention presentation and gating. Do

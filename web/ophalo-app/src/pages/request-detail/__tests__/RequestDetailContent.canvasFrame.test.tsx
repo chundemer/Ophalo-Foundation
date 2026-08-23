@@ -12,8 +12,7 @@ import type { KeepRequestDetailResult } from "../../../lib/apiClient";
 vi.mock("../DetailHero", () => ({ TodayPromiseBanner: () => null }));
 vi.mock("../DetailPanels", () => ({
   ProminentFeedbackCard: () => null,
-  AttentionGuidanceCard: () => null,
-  NextStepCard: () => null,
+  HeroAttentionBanner: () => null,
   OriginalRequestCard: () => null,
   RelatedWorkPanel: () => null,
   TriagePanel: () => null,
