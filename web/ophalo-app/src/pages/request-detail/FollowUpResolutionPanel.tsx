@@ -1,8 +1,9 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { X } from "lucide-react";
 import { api, ApiError, type KeepRequestDetailResult } from "../../lib/apiClient";
 import type { FollowUpResolutionOutcome, FollowUpCompletionReason } from "../../lib/apiClient";
 import { KeepButton } from "../../components/keep/KeepButton";
+import { ResponsiveSheet } from "../../components/keep/ResponsiveSheet";
 import {
   COMPLETION_REASON_LABELS,
   FOLLOW_UP_REASON_LABELS,
@@ -53,6 +54,10 @@ export function FollowUpResolutionPanel({
   const [submitting, setSubmitting] = useState(false);
   const [conflict, setConflict] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
+  const keepEditingRef = useRef<HTMLButtonElement>(null);
+  const discardRef = useRef<HTMLButtonElement>(null);
+  const previousFocusRef = useRef<Element | null>(null);
 
   const today = todayIso();
   const tomorrow = addDays(today, 1);
@@ -62,6 +67,44 @@ export function FollowUpResolutionPanel({
   const currentReason = detail.followUpOnReason
     ? (FOLLOW_UP_REASON_LABELS[detail.followUpOnReason] ?? detail.followUpOnReason)
     : null;
+
+  const dirty = outcome !== null || note.trim().length > 0;
+
+  function attemptClose() {
+    if (dirty) {
+      setShowDiscardConfirm(true);
+      return;
+    }
+    onClose();
+  }
+
+  useEffect(() => {
+    if (!showDiscardConfirm) return;
+    previousFocusRef.current = document.activeElement;
+    keepEditingRef.current?.focus();
+
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        e.stopPropagation();
+        setShowDiscardConfirm(false);
+        return;
+      }
+      if (e.key !== "Tab") return;
+      e.preventDefault();
+      e.stopPropagation();
+      const first = keepEditingRef.current;
+      const last = discardRef.current;
+      if (!first || !last) return;
+      (document.activeElement === first ? last : first).focus();
+    }
+    document.addEventListener("keydown", onKeyDown, true);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown, true);
+      const prior = previousFocusRef.current;
+      if (prior instanceof HTMLElement) prior.focus();
+    };
+  }, [showDiscardConfirm]);
 
   async function handleSubmit() {
     if (!outcome || submitting || conflict) return;
@@ -102,51 +145,77 @@ export function FollowUpResolutionPanel({
     outcome !== null &&
     ((outcome === "complete" || outcome === "keep_active") ? !!completionReason : !!newDate);
 
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") { e.preventDefault(); onClose(); }
-    };
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [onClose]);
-
   return (
-    <div className="fixed inset-0 z-50" role="dialog" aria-modal="true" aria-label="Record follow-up outcome">
-      {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
-
-      {/* Sheet bottom on mobile / centered modal on desktop */}
-      <div className="absolute inset-x-0 bottom-0 sm:inset-0 sm:flex sm:items-center sm:justify-center sm:p-4">
-        <div className="relative bg-[var(--ophalo-card)] rounded-t-2xl sm:rounded-2xl shadow-xl w-full sm:max-w-md max-h-[90vh] overflow-y-auto">
-
-          {/* Drag handle — mobile only */}
-          <div className="sm:hidden flex justify-center pt-3 pb-1">
-            <div className="h-1 w-10 rounded-full bg-[var(--ophalo-border)]" />
+    <ResponsiveSheet
+      onClose={attemptClose}
+      labelledBy="follow-up-resolution-heading"
+      contentInert={showDiscardConfirm}
+      header={
+        <div className="flex items-start justify-between">
+          <div>
+            <p id="follow-up-resolution-heading" className="text-base font-semibold text-[var(--ophalo-ink)]">Record follow-up</p>
+            {currentFollowUpDate && (
+              <p className="text-xs text-[var(--ophalo-muted)] mt-0.5">
+                {formatDateOnly(currentFollowUpDate)}
+                {currentReason ? ` · ${currentReason}` : ""}
+              </p>
+            )}
           </div>
-
-          {/* Header */}
-          <div className="flex items-start justify-between px-5 pt-4 pb-3 border-b border-[var(--ophalo-border)]">
-            <div>
-              <p className="text-base font-semibold text-[var(--ophalo-ink)]">Record follow-up</p>
-              {currentFollowUpDate && (
-                <p className="text-xs text-[var(--ophalo-muted)] mt-0.5">
-                  {formatDateOnly(currentFollowUpDate)}
-                  {currentReason ? ` · ${currentReason}` : ""}
-                </p>
-              )}
+          <button
+            type="button"
+            onClick={attemptClose}
+            className={`text-[var(--ophalo-muted)] hover:text-[var(--ophalo-ink)] transition-colors rounded-lg p-1 ${FOCUS_RING}`}
+            aria-label="Close"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+      }
+      footer={
+        <KeepButton
+          type="button"
+          variant="primary"
+          disabled={!canSubmit}
+          onClick={() => void handleSubmit()}
+          className="w-full"
+        >
+          {submitting ? "Saving…" : "Save"}
+        </KeepButton>
+      }
+      overlay={
+        showDiscardConfirm && (
+          <div
+            role="alertdialog"
+            aria-modal="true"
+            aria-label="Discard changes"
+            className="absolute inset-0 z-10 flex items-center justify-center bg-black/30 px-6"
+          >
+            <div className="max-w-xs w-full rounded-lg bg-[var(--ophalo-card)] shadow-xl p-4 flex flex-col gap-3">
+              <p className="text-sm text-[var(--ophalo-ink)]">Discard this follow-up outcome?</p>
+              <div className="flex items-center justify-end gap-3">
+                <button
+                  ref={keepEditingRef}
+                  type="button"
+                  onClick={() => setShowDiscardConfirm(false)}
+                  className={`text-sm text-[var(--ophalo-muted)] hover:text-[var(--ophalo-ink)] rounded ${FOCUS_RING}`}
+                >
+                  Keep editing
+                </button>
+                <button
+                  ref={discardRef}
+                  type="button"
+                  onClick={onClose}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-medium bg-[var(--ophalo-danger)] text-white hover:opacity-90 ${FOCUS_RING}`}
+                >
+                  Discard
+                </button>
+              </div>
             </div>
-            <button
-              type="button"
-              onClick={onClose}
-              className={`text-[var(--ophalo-muted)] hover:text-[var(--ophalo-ink)] transition-colors rounded-lg p-1 ${FOCUS_RING}`}
-              aria-label="Close"
-            >
-              <X className="h-5 w-5" />
-            </button>
           </div>
-
-          {/* Body */}
-          <div className="px-5 py-4 space-y-4">
+        )
+      }
+    >
+      <div className="space-y-4">
             {conflict && error && (
               <div className="rounded-lg border border-[var(--ophalo-danger)] bg-[var(--ophalo-danger-bg)] px-3 py-2.5 text-xs text-[var(--ophalo-danger)]">
                 {error}
@@ -297,23 +366,8 @@ export function FollowUpResolutionPanel({
             {!conflict && error && (
               <p className="text-xs text-[var(--ophalo-danger)]">{error}</p>
             )}
-          </div>
-
-          {/* Footer */}
-          <div className="px-5 pb-5 pt-1">
-            <KeepButton
-              type="button"
-              variant="primary"
-              disabled={!canSubmit}
-              onClick={() => void handleSubmit()}
-              className="w-full"
-            >
-              {submitting ? "Saving…" : "Save"}
-            </KeepButton>
-          </div>
-        </div>
       </div>
-    </div>
+    </ResponsiveSheet>
   );
 }
 

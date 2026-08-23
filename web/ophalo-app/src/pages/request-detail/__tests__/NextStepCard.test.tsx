@@ -42,27 +42,24 @@ function detailWith(
 }
 
 describe("NextStepCard", () => {
-  it("routes acknowledge_attention to the Clear attention card", () => {
+  it("routes acknowledge_attention to the Clear attention sheet", () => {
     const onRecordFollowUp = vi.fn();
     const onContactLaunched = vi.fn();
+    const onOpenClearAttention = vi.fn();
     render(
       <NextStepCard
         detail={detailWith("acknowledge_attention", { canAcknowledgeAttention: true })}
         onRecordFollowUp={onRecordFollowUp}
         onContactLaunched={onContactLaunched}
+        onOpenClearAttention={onOpenClearAttention}
       />,
     );
-    const { canvas, target } = appendWorkCanvasTarget("clear-attention-card");
-    const focusSpy = vi.spyOn(target, "focus");
 
     screen.getByRole("button", { name: "Go to Clear attention" }).click();
 
-    expect(canvas.scrollTo).toHaveBeenCalled();
-    expect(target.scrollIntoView).not.toHaveBeenCalled();
-    expect(focusSpy).toHaveBeenCalled();
+    expect(onOpenClearAttention).toHaveBeenCalledTimes(1);
     expect(onRecordFollowUp).not.toHaveBeenCalled();
     expect(onContactLaunched).not.toHaveBeenCalled();
-    document.body.removeChild(canvas);
   });
 
   it("routes resolve_follow_up (due Follow Up On) to the controller callback", () => {
@@ -72,6 +69,7 @@ describe("NextStepCard", () => {
         detail={detailWith("resolve_follow_up", { canSetFollowUpOn: true })}
         onRecordFollowUp={onRecordFollowUp}
         onContactLaunched={vi.fn()}
+        onOpenClearAttention={vi.fn()}
       />,
     );
 
@@ -93,6 +91,7 @@ describe("NextStepCard", () => {
         })}
         onRecordFollowUp={vi.fn()}
         onContactLaunched={onContactLaunched}
+        onOpenClearAttention={vi.fn()}
       />,
     );
 
@@ -115,6 +114,7 @@ describe("NextStepCard", () => {
         })}
         onRecordFollowUp={vi.fn()}
         onContactLaunched={onContactLaunched}
+        onOpenClearAttention={vi.fn()}
       />,
     );
 
@@ -131,6 +131,7 @@ describe("NextStepCard", () => {
         detail={detailWith("log_external_contact", { canLogExternalContact: true })}
         onRecordFollowUp={vi.fn()}
         onContactLaunched={onContactLaunched}
+        onOpenClearAttention={vi.fn()}
       />,
     );
 
@@ -148,6 +149,7 @@ describe("NextStepCard", () => {
         })}
         onRecordFollowUp={vi.fn()}
         onContactLaunched={vi.fn()}
+        onOpenClearAttention={vi.fn()}
       />,
     );
     expect(screen.queryByRole("button")).toBeNull();
@@ -155,7 +157,12 @@ describe("NextStepCard", () => {
 
   it("renders nothing when there is no guidanceKey", () => {
     render(
-      <NextStepCard detail={detailWith(null, {})} onRecordFollowUp={vi.fn()} onContactLaunched={vi.fn()} />,
+      <NextStepCard
+        detail={detailWith(null, {})}
+        onRecordFollowUp={vi.fn()}
+        onContactLaunched={vi.fn()}
+        onOpenClearAttention={vi.fn()}
+      />,
     );
     expect(screen.queryByRole("button")).toBeNull();
   });
@@ -166,6 +173,7 @@ describe("NextStepCard", () => {
         detail={detailWith("acknowledge_attention", { canAcknowledgeAttention: false })}
         onRecordFollowUp={vi.fn()}
         onContactLaunched={vi.fn()}
+        onOpenClearAttention={vi.fn()}
       />,
     );
     expect(screen.queryByRole("button")).toBeNull();

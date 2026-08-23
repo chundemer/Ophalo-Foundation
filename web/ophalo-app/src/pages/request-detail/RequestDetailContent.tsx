@@ -5,7 +5,6 @@ import {
   ProminentFeedbackCard,
   AttentionGuidanceCard,
   NextStepCard,
-  MarkHandledCard,
   OriginalRequestCard,
   RelatedWorkPanel,
   TriagePanel,
@@ -42,6 +41,7 @@ interface RequestDetailContentProps extends RequestDetailLayoutProps {
   onTimelineFilterChange: (filter: TimelineFilter) => void;
   displayedEvents: KeepRequestDetailResult["events"];
   onNavigate?: (id: string) => void;
+  onOpenClearAttention: () => void;
 }
 
 // Work Canvas — the Workbench's sole vertical scroll surface (locked spec §1.2, §1.5, §5, §7.1).
@@ -50,7 +50,7 @@ interface RequestDetailContentProps extends RequestDetailLayoutProps {
 // Scope is explicitly deferred from this pilot Workbench (locked spec §1.7/§3) and is not wired
 // here.
 export function RequestDetailContent(props: RequestDetailContentProps) {
-  const { detail, requestId, highlights, showProminentFeedbackCard, onDetailUpdated, onContactLaunched, onEditLocation, onRecordFollowUp, onCreateFollowUp, onReviewSuccess } = props;
+  const { detail, requestId, highlights, showProminentFeedbackCard, onDetailUpdated, onContactLaunched, onEditLocation, onRecordFollowUp, onCreateFollowUp, onReviewSuccess, onOpenClearAttention } = props;
   const layoutProps: RequestDetailLayoutProps = { requestId, detail, highlights, showProminentFeedbackCard, onDetailUpdated, onContactLaunched, onEditLocation, onRecordFollowUp, onCreateFollowUp, onReviewSuccess };
   const actualWorkCapture = useActualWorkCapture(requestId);
   const actualWorkHistory = useActualWorkHistory(requestId);
@@ -71,12 +71,11 @@ export function RequestDetailContent(props: RequestDetailContentProps) {
         {/* 1. Active attention guidance */}
         <div id="focus-panel-attention" className="space-y-3">
           <AttentionGuidanceCard detail={detail} />
-          <NextStepCard detail={detail} onRecordFollowUp={onRecordFollowUp} onContactLaunched={onContactLaunched} />
-          <MarkHandledCard
-            requestId={requestId}
+          <NextStepCard
             detail={detail}
-            onDetailUpdated={onDetailUpdated}
-            highlight={highlights.markHandled}
+            onRecordFollowUp={onRecordFollowUp}
+            onContactLaunched={onContactLaunched}
+            onOpenClearAttention={onOpenClearAttention}
           />
           <TodayPromiseBanner detail={detail} onRecordFollowUp={onRecordFollowUp} />
         </div>

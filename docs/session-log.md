@@ -55,6 +55,54 @@ Verified: `pnpm typecheck` clean; `BusinessSection.compactPrimary`, `RequestDeta
 **Next batch:** the drawer/sheet primitive and structured-action migration; the server-routed Next
 step module now uses reason-specific effective-attention guidance and canvas-owned scrolling.
 
+### Step 4 — structured-action migration to `ResponsiveSheet` (locked 2026-08-23)
+
+**Status:** implementation-ready after mechanical preflight. `ResponsiveSheet` (step 3, `c5d59b6`)
+already requires an accessible name at the type level (`label`/`labelledBy` union) and has test
+coverage for both — no outstanding accessibility gap to close before adding consumers.
+
+Preflight found four current surfaces, none using `KeepModal` or `ResponsiveSheet`:
+
+| Workflow | Current implementation | File |
+|---|---|---|
+| Log external contact | `LogContactModal` — hand-rolled centered dialog | `RequestDetail.tsx` |
+| Resolve Follow Up On | `FollowUpResolutionPanel` — hand-rolled `fixed inset-0` dialog | `request-detail/FollowUpResolutionPanel.tsx` |
+| Edit service location | `ServiceLocationModal` — hand-rolled centered dialog, manual Escape listener | `RequestDetail.tsx` |
+| Clear attention | `MarkHandledCard` — not a dialog; always-mounted inline card reached via `scrollAndFocusWithinWorkCanvas("clear-attention-card")` | `request-detail/DetailPanels.tsx` |
+
+Rules for this batch:
+
+1. Real replacement, not a chrome swap: all four converge on `ResponsiveSheet`. Keep existing
+   mutation handlers/API calls (`api.acknowledgeAttention`, `api.updateServiceLocation`, the
+   follow-up resolution call, the contact-log call) unchanged.
+2. Do not extract `LogContactModal` or `ServiceLocationModal` out of `RequestDetail.tsx` in this
+   step. Replace their dialog chrome in place — `RequestDetail.tsx` already owns their open state,
+   returned-detail cache updates, and focus restoration. Extraction is a separate structural
+   refactor and is out of scope here.
+3. Clear attention's primary trigger becomes the Next Step CTA (`respond_to_customer` /
+   `acknowledge_attention` routing already resolves to it) — consistent with the other three
+   workflows and avoiding a second duplicate-action surface. Remove the always-visible inline
+   `MarkHandledCard` entirely; its form becomes sheet content opened via `onOpenClearAttention`.
+   A separate non-primary access point, if ever needed, is a later decision — not part of this
+   migration.
+4. Clear-attention sheet open state lives in `RequestDetail.tsx` alongside the contact/location/
+   follow-up sheet state. Thread `onOpenClearAttention` through `RequestDetailContent` →
+   `NextStepCard` as a callback; `NextStepCard` must not manipulate sheet state or DOM anchors
+   itself. This removes the `scrollAndFocusWithinWorkCanvas("clear-attention-card")` path.
+
+**Correction (2026-08-23):** the first implementation pass wired routing but missed the ResponsiveSheet
+doc comment's own requirement — deferred to step 4, not optional — that each consumer own dirty-close
+confirmation so Escape/backdrop/Close/Cancel cannot silently destroy an in-progress form. Fixed by
+following the codebase's existing convention (`CatalogItemDrawer.tsx`, `OfferingAssemblyDrawer.tsx`):
+a local `isDirty`/`attemptClose`/`showDiscardConfirm` triple per consumer (duplicated, not shared —
+matches the existing precedent and "differ materially in discard rules and draft shape"), gating
+`ResponsiveSheet`'s `onClose` and every in-panel Close/Cancel button, with a nested `alertdialog`
+overlay (Keep editing / Discard) that traps focus and marks the background `inert`. `ResponsiveSheet`
+gained two additive presentation-only props to support this — `overlay?: ReactNode` (rendered last,
+absolute over the full panel) and `contentInert?: boolean` (marks header/body/footer inert while the
+overlay is shown) — no draft/dirty logic added to the primitive itself. `ExternalContactForm` gained
+an optional `onDirtyChange` callback since its field state isn't otherwise visible to `LogContactModal`.
+
 ## Locked Request Detail action-surface contract (2026-08-23)
 
 **Status:** approved for implementation after the required mechanical preflight. This is the

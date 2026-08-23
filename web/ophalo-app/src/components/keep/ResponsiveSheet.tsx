@@ -18,15 +18,23 @@ type ResponsiveSheetProps = ResponsiveSheetNaming & {
   footer?: ReactNode;
   /** The single scrollable region between header and footer. */
   children: ReactNode;
+  /** Renders last, absolutely positioned over the full panel — for a nested confirmation
+   *  sub-dialog (e.g. discard-changes). The caller owns its own focus trap/Escape handling;
+   *  this is purely a positioning slot. */
+  overlay?: ReactNode;
+  /** Marks the header/body/footer content `inert` (out of tab order and hit-testing) while
+   *  `overlay` is shown, so background controls aren't reachable behind it. */
+  contentInert?: boolean;
 };
 
 /**
  * Presentation-only responsive sheet: desktop right slide-over, mobile/tablet bottom sheet.
  * Wraps KeepModal for dialog semantics (focus trap, Escape, backdrop, focus restoration) and adds
- * only layout — positioning, sizing, and the header/body/footer scroll structure. Draft state and
- * dirty-close confirmation belong to each workflow that uses this, not to the primitive: those
- * rules differ materially across contact, follow-up, attention, and location (docs/session-log.md
- * step 3).
+ * only layout — positioning, sizing, the header/body/footer scroll structure, and an optional
+ * full-panel overlay slot for a nested confirmation sub-dialog. Draft state and dirty-close
+ * confirmation logic belong to each workflow that uses this, not to the primitive: those rules
+ * differ materially across contact, follow-up, attention, and location (docs/session-log.md
+ * step 4).
  *
  * `label` or `labelledBy` is required — an unnamed dialog is not acceptable; prefer `labelledBy`
  * pointing at the heading rendered in `header`.
@@ -40,6 +48,8 @@ export function ResponsiveSheet({
   header,
   footer,
   children,
+  overlay,
+  contentInert = false,
 }: ResponsiveSheetProps) {
   return (
     <KeepModal
@@ -55,17 +65,20 @@ export function ResponsiveSheet({
         "bg-[var(--ophalo-card)] shadow-xl flex flex-col"
       }
     >
-      {header && (
-        <div className="shrink-0 px-4 md:px-6 py-4 border-b border-[var(--ophalo-border)]">
-          {header}
-        </div>
-      )}
-      <div className="flex-1 min-h-0 overflow-y-auto px-4 md:px-6 py-4">{children}</div>
-      {footer && (
-        <div className="shrink-0 px-4 md:px-6 py-4 border-t border-[var(--ophalo-border)]">
-          {footer}
-        </div>
-      )}
+      <div className="contents" {...(contentInert ? { inert: true } : {})}>
+        {header && (
+          <div className="shrink-0 px-4 md:px-6 py-4 border-b border-[var(--ophalo-border)]">
+            {header}
+          </div>
+        )}
+        <div className="flex-1 min-h-0 overflow-y-auto px-4 md:px-6 py-4">{children}</div>
+        {footer && (
+          <div className="shrink-0 px-4 md:px-6 py-4 border-t border-[var(--ophalo-border)]">
+            {footer}
+          </div>
+        )}
+      </div>
+      {overlay}
     </KeepModal>
   );
 }

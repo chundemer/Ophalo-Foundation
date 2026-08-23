@@ -22,7 +22,6 @@ vi.mock("../DetailPanels", () => ({
   NextStepCard: () => null,
   OriginalRequestCard: () => null,
   RelatedWorkPanel: () => null,
-  MarkHandledCard: () => null,
   LogContactCard: () => null,
   CustomerPanel: () => null,
   TriagePanel: () => null,
@@ -84,6 +83,7 @@ describe("RequestDetailContent — Actual Work submit refreshes history (Batch 5
         onDetailUpdated={vi.fn()}
         onContactLaunched={vi.fn()}
         onEditLocation={vi.fn()}
+        onOpenClearAttention={vi.fn()}
         onRecordFollowUp={vi.fn()}
         onCreateFollowUp={vi.fn()}
         onReviewSuccess={vi.fn()}
@@ -119,6 +119,7 @@ describe("RequestDetailContent — Proposed Scope removal (locked Workbench spec
         onDetailUpdated={vi.fn()}
         onContactLaunched={vi.fn()}
         onEditLocation={vi.fn()}
+        onOpenClearAttention={vi.fn()}
         onRecordFollowUp={vi.fn()}
         onCreateFollowUp={vi.fn()}
         onReviewSuccess={vi.fn()}

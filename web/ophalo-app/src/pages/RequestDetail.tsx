@@ -26,6 +26,8 @@ import {
 } from "./request-detail/highlights";
 import { type TimelineFilter, isCommunicationEvent } from "./request-detail/TimelineEvent";
 import { FollowUpResolutionPanel } from "./request-detail/FollowUpResolutionPanel";
+import { ClearAttentionSheet } from "./request-detail/DetailPanels";
+import { ResponsiveSheet } from "../components/keep/ResponsiveSheet";
 import { CallHandoffQr } from "./request-detail/CallHandoffQr";
 import { RequestDetailHeader } from "./request-detail/RequestDetailHeader";
 import { RequestDetailStates } from "./request-detail/RequestDetailStates";
@@ -56,17 +58,48 @@ export function LogContactModal({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [conflictDisabled, setConflictDisabled] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [dirty, setDirty] = useState(false);
+  const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
+  const keepEditingRef = useRef<HTMLButtonElement>(null);
+  const discardRef = useRef<HTMLButtonElement>(null);
+  const previousFocusRef = useRef<Element | null>(null);
   const { copiedId: phoneCopyState, failedId: phoneCopyFailed, copy: copyPhone } = useCopyFeedback();
-  const dialogRef = useRef<HTMLDivElement>(null);
+
+  function attemptClose() {
+    if (dirty) {
+      setShowDiscardConfirm(true);
+      return;
+    }
+    onClose();
+  }
 
   useEffect(() => {
-    dialogRef.current?.focus();
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") { e.preventDefault(); onClose(); }
+    if (!showDiscardConfirm) return;
+    previousFocusRef.current = document.activeElement;
+    keepEditingRef.current?.focus();
+
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        e.stopPropagation();
+        setShowDiscardConfirm(false);
+        return;
+      }
+      if (e.key !== "Tab") return;
+      e.preventDefault();
+      e.stopPropagation();
+      const first = keepEditingRef.current;
+      const last = discardRef.current;
+      if (!first || !last) return;
+      (document.activeElement === first ? last : first).focus();
+    }
+    document.addEventListener("keydown", onKeyDown, true);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown, true);
+      const prior = previousFocusRef.current;
+      if (prior instanceof HTMLElement) prior.focus();
     };
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [onClose]);
+  }, [showDiscardConfirm]);
 
   const showPhone = channel === "phone" && !!detail.customerPhone;
 
@@ -91,79 +124,105 @@ export function LogContactModal({
   }
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
-      onClick={onClose}
-    >
-      <div
-        ref={dialogRef}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="log-contact-dialog-heading"
-        tabIndex={-1}
-        className="bg-[var(--ophalo-card)] rounded-xl shadow-xl w-full max-w-md p-5 focus:outline-none"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between mb-1">
+    <ResponsiveSheet
+      onClose={attemptClose}
+      labelledBy="log-contact-dialog-heading"
+      contentInert={showDiscardConfirm}
+      header={
+        <div className="flex items-center justify-between">
           <h2 id="log-contact-dialog-heading" className="text-base font-semibold text-[var(--ophalo-ink)]">Log external contact</h2>
           <button
             type="button"
-            onClick={onClose}
+            onClick={attemptClose}
             className={`text-[var(--ophalo-muted)] hover:text-[var(--ophalo-ink)] p-1 rounded-md transition-colors ${FOCUS_RING}`}
           >
             <X className="h-4 w-4" />
             <span className="sr-only">Close</span>
           </button>
         </div>
-        <p className="text-xs text-[var(--ophalo-muted)] mb-4">
-          Save a Keep record of this contact. Opening the phone app is a separate step.
-        </p>
-
-        {showPhone && (
-          <div className="flex flex-col gap-2 mb-4 rounded-lg border border-[var(--ophalo-border)] bg-[var(--ophalo-canvas)] px-3 py-2.5">
-            <div className="flex flex-wrap items-center gap-3">
-              <span className="flex items-center gap-1.5 text-sm font-semibold text-[var(--ophalo-ink)]">
-                <Phone className="h-3.5 w-3.5 text-[var(--keep-accent)] shrink-0" />
-                {formatNaPhone(detail.customerPhone)}
-              </span>
-              <div className="flex items-center gap-2 ml-auto">
+      }
+      overlay={
+        showDiscardConfirm && (
+          <div
+            role="alertdialog"
+            aria-modal="true"
+            aria-label="Discard changes"
+            className="absolute inset-0 z-10 flex items-center justify-center bg-black/30 px-6"
+          >
+            <div className="max-w-xs w-full rounded-lg bg-[var(--ophalo-card)] shadow-xl p-4 flex flex-col gap-3">
+              <p className="text-sm text-[var(--ophalo-ink)]">Discard this contact log?</p>
+              <div className="flex items-center justify-end gap-3">
                 <button
+                  ref={keepEditingRef}
                   type="button"
-                  onClick={() => void copyPhone(detail.customerPhone!, "phone")}
-                  className={`text-xs text-[var(--ophalo-muted)] hover:text-[var(--ophalo-ink)] transition-colors ${FOCUS_RING}`}
+                  onClick={() => setShowDiscardConfirm(false)}
+                  className={`text-sm text-[var(--ophalo-muted)] hover:text-[var(--ophalo-ink)] rounded ${FOCUS_RING}`}
                 >
-                  {phoneCopyState === "phone" ? "Copied!" : phoneCopyFailed === "phone" ? "Couldn't copy" : "Copy"}
+                  Keep editing
                 </button>
-                {/* Mobile: direct tel: link (ADR-443) */}
-                <span className="md:hidden text-[var(--ophalo-border)]">·</span>
-                <a
-                  href={`tel:${detail.customerPhone}`}
-                  className={`md:hidden text-xs text-[var(--ophalo-muted)] hover:text-[var(--ophalo-ink)] transition-colors ${FOCUS_RING}`}
+                <button
+                  ref={discardRef}
+                  type="button"
+                  onClick={onClose}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-medium bg-[var(--ophalo-danger)] text-white hover:opacity-90 ${FOCUS_RING}`}
                 >
-                  Call with phone app
-                </a>
+                  Discard
+                </button>
               </div>
             </div>
-            {/* Desktop: QR handoff instead of direct tel: (ADR-443, GAP-020) */}
-            <div className="hidden md:flex flex-col items-center gap-1.5 pt-2 border-t border-[var(--ophalo-border)]">
-              <CallHandoffQr requestId={requestId} size={108} caption="Scan to call with your phone" />
+          </div>
+        )
+      }
+    >
+      <p className="text-xs text-[var(--ophalo-muted)] mb-4">
+        Save a Keep record of this contact. Opening the phone app is a separate step.
+      </p>
+
+      {showPhone && (
+        <div className="flex flex-col gap-2 mb-4 rounded-lg border border-[var(--ophalo-border)] bg-[var(--ophalo-canvas)] px-3 py-2.5">
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="flex items-center gap-1.5 text-sm font-semibold text-[var(--ophalo-ink)]">
+              <Phone className="h-3.5 w-3.5 text-[var(--keep-accent)] shrink-0" />
+              {formatNaPhone(detail.customerPhone)}
+            </span>
+            <div className="flex items-center gap-2 ml-auto">
+              <button
+                type="button"
+                onClick={() => void copyPhone(detail.customerPhone!, "phone")}
+                className={`text-xs text-[var(--ophalo-muted)] hover:text-[var(--ophalo-ink)] transition-colors ${FOCUS_RING}`}
+              >
+                {phoneCopyState === "phone" ? "Copied!" : phoneCopyFailed === "phone" ? "Couldn't copy" : "Copy"}
+              </button>
+              {/* Mobile: direct tel: link (ADR-443) */}
+              <span className="md:hidden text-[var(--ophalo-border)]">·</span>
+              <a
+                href={`tel:${detail.customerPhone}`}
+                className={`md:hidden text-xs text-[var(--ophalo-muted)] hover:text-[var(--ophalo-ink)] transition-colors ${FOCUS_RING}`}
+              >
+                Call with phone app
+              </a>
             </div>
           </div>
-        )}
+          {/* Desktop: QR handoff instead of direct tel: (ADR-443, GAP-020) */}
+          <div className="hidden md:flex flex-col items-center gap-1.5 pt-2 border-t border-[var(--ophalo-border)]">
+            <CallHandoffQr requestId={requestId} size={108} caption="Scan to call with your phone" />
+          </div>
+        </div>
+      )}
 
-        <ExternalContactForm
-          initialDirection={initialDirection as "outbound" | "inbound"}
-          initialChannel={initialChannel}
-          maxSummaryLength={detail.validation.externalContactSummaryMaxLength}
-          loading={isSubmitting}
-          disabled={conflictDisabled}
-          error={error}
-          onSubmit={(body) => void handleSubmit(body)}
-          onCancel={onClose}
-          onChannelChange={setChannel}
-        />
-      </div>
-    </div>
+      <ExternalContactForm
+        initialDirection={initialDirection as "outbound" | "inbound"}
+        initialChannel={initialChannel}
+        maxSummaryLength={detail.validation.externalContactSummaryMaxLength}
+        loading={isSubmitting}
+        disabled={conflictDisabled}
+        error={error}
+        onSubmit={(body) => void handleSubmit(body)}
+        onCancel={attemptClose}
+        onChannelChange={setChannel}
+        onDirtyChange={setDirty}
+      />
+    </ResponsiveSheet>
   );
 }
 
@@ -192,7 +251,7 @@ interface ServiceLocationModalProps {
   onClose: () => void;
 }
 
-function ServiceLocationModal({ requestId, detail, onDetailUpdated, onClose }: ServiceLocationModalProps) {
+export function ServiceLocationModal({ requestId, detail, onDetailUpdated, onClose }: ServiceLocationModalProps) {
   const [addressLine1, setAddressLine1] = useState(detail.serviceAddressLine1 ?? "");
   const [addressLine2, setAddressLine2] = useState(detail.serviceAddressLine2 ?? "");
   const [city, setCity] = useState(detail.serviceCity ?? "");
@@ -201,16 +260,55 @@ function ServiceLocationModal({ requestId, detail, onDetailUpdated, onClose }: S
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [conflictDisabled, setConflictDisabled] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") { e.preventDefault(); onClose(); }
-    };
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [onClose]);
+  const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
+  const keepEditingRef = useRef<HTMLButtonElement>(null);
+  const discardRef = useRef<HTMLButtonElement>(null);
+  const previousFocusRef = useRef<Element | null>(null);
 
   const isEditing = !!(detail.serviceAddressLine1 || detail.serviceCity);
+
+  const dirty =
+    addressLine1 !== (detail.serviceAddressLine1 ?? "") ||
+    addressLine2 !== (detail.serviceAddressLine2 ?? "") ||
+    city !== (detail.serviceCity ?? "") ||
+    state !== (detail.serviceState ?? "") ||
+    zip !== (detail.serviceZip ?? "");
+
+  function attemptClose() {
+    if (dirty) {
+      setShowDiscardConfirm(true);
+      return;
+    }
+    onClose();
+  }
+
+  useEffect(() => {
+    if (!showDiscardConfirm) return;
+    previousFocusRef.current = document.activeElement;
+    keepEditingRef.current?.focus();
+
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        e.stopPropagation();
+        setShowDiscardConfirm(false);
+        return;
+      }
+      if (e.key !== "Tab") return;
+      e.preventDefault();
+      e.stopPropagation();
+      const first = keepEditingRef.current;
+      const last = discardRef.current;
+      if (!first || !last) return;
+      (document.activeElement === first ? last : first).focus();
+    }
+    document.addEventListener("keydown", onKeyDown, true);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown, true);
+      const prior = previousFocusRef.current;
+      if (prior instanceof HTMLElement) prior.focus();
+    };
+  }, [showDiscardConfirm]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -244,32 +342,78 @@ function ServiceLocationModal({ requestId, detail, onDetailUpdated, onClose }: S
   const labelCls = "block text-xs font-medium text-[var(--ophalo-muted)] mb-1";
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
-      onClick={onClose}
-    >
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="service-location-dialog-heading"
-        className="bg-[var(--ophalo-card)] rounded-xl shadow-xl w-full max-w-md p-5"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between mb-4">
+    <ResponsiveSheet
+      onClose={attemptClose}
+      labelledBy="service-location-dialog-heading"
+      contentInert={showDiscardConfirm}
+      header={
+        <div className="flex items-center justify-between">
           <h2 id="service-location-dialog-heading" className="text-base font-semibold text-[var(--ophalo-ink)]">
             {isEditing ? "Edit service location" : "Add service location"}
           </h2>
           <button
             type="button"
-            onClick={onClose}
+            onClick={attemptClose}
             className={`text-[var(--ophalo-muted)] hover:text-[var(--ophalo-ink)] p-1 rounded-md transition-colors ${FOCUS_RING}`}
           >
             <X className="h-4 w-4" />
             <span className="sr-only">Close</span>
           </button>
         </div>
-
-        <form onSubmit={handleSubmit} className="space-y-3">
+      }
+      footer={
+        <div className="flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={attemptClose}
+            className={`px-3 py-1.5 text-sm text-[var(--ophalo-muted)] hover:text-[var(--ophalo-ink)] transition-colors rounded-md ${FOCUS_RING}`}
+          >
+            Cancel
+          </button>
+          <KeepButton
+            type="submit"
+            form="service-location-form"
+            disabled={isSubmitting || conflictDisabled}
+            className="min-h-[34px] px-4 py-1.5 text-sm"
+          >
+            {isSubmitting ? "Saving…" : "Save location"}
+          </KeepButton>
+        </div>
+      }
+      overlay={
+        showDiscardConfirm && (
+          <div
+            role="alertdialog"
+            aria-modal="true"
+            aria-label="Discard changes"
+            className="absolute inset-0 z-10 flex items-center justify-center bg-black/30 px-6"
+          >
+            <div className="max-w-xs w-full rounded-lg bg-[var(--ophalo-card)] shadow-xl p-4 flex flex-col gap-3">
+              <p className="text-sm text-[var(--ophalo-ink)]">Discard your changes to this location?</p>
+              <div className="flex items-center justify-end gap-3">
+                <button
+                  ref={keepEditingRef}
+                  type="button"
+                  onClick={() => setShowDiscardConfirm(false)}
+                  className={`text-sm text-[var(--ophalo-muted)] hover:text-[var(--ophalo-ink)] rounded ${FOCUS_RING}`}
+                >
+                  Keep editing
+                </button>
+                <button
+                  ref={discardRef}
+                  type="button"
+                  onClick={onClose}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-medium bg-[var(--ophalo-danger)] text-white hover:opacity-90 ${FOCUS_RING}`}
+                >
+                  Discard
+                </button>
+              </div>
+            </div>
+          </div>
+        )
+      }
+    >
+        <form id="service-location-form" onSubmit={handleSubmit} className="space-y-3">
           <div>
             <label htmlFor="sl-line1" className={labelCls}>
               Address line 1 <span className="text-[var(--ophalo-attention)]">*</span>
@@ -282,7 +426,6 @@ function ServiceLocationModal({ requestId, detail, onDetailUpdated, onClose }: S
               onChange={(e) => setAddressLine1(e.target.value)}
               placeholder="123 Main St"
               required
-              autoFocus
             />
           </div>
           <div>
@@ -345,26 +488,8 @@ function ServiceLocationModal({ requestId, detail, onDetailUpdated, onClose }: S
           {error && (
             <p className="text-xs text-[var(--ophalo-danger)]">{error}</p>
           )}
-
-          <div className="flex justify-end gap-2 pt-1">
-            <button
-              type="button"
-              onClick={onClose}
-              className={`px-3 py-1.5 text-sm text-[var(--ophalo-muted)] hover:text-[var(--ophalo-ink)] transition-colors rounded-md ${FOCUS_RING}`}
-            >
-              Cancel
-            </button>
-            <KeepButton
-              type="submit"
-              disabled={isSubmitting || conflictDisabled}
-              className="min-h-[34px] px-4 py-1.5 text-sm"
-            >
-              {isSubmitting ? "Saving…" : "Save location"}
-            </KeepButton>
-          </div>
         </form>
-      </div>
-    </div>
+    </ResponsiveSheet>
   );
 }
 
@@ -392,6 +517,7 @@ export function RequestDetail({ requestId, focusPanel, onBack, prevId, nextId, o
   const [followUpCaptureOpen, setFollowUpCaptureOpen] = useState(false);
   const [serviceLocationModalOpen, setServiceLocationModalOpen] = useState(false);
   const [contactModal, setContactModal] = useState<{ direction: string; channel: string } | null>(null);
+  const [clearAttentionOpen, setClearAttentionOpen] = useState(false);
   const [businessUpdateDraft, setBusinessUpdateDraft] = useState("");
   const [businessUpdateDraftStatus, setBusinessUpdateDraftStatus] = useState("");
   const [timelineFilter, setTimelineFilter] = useState<TimelineFilter>("communication");
@@ -404,9 +530,6 @@ export function RequestDetail({ requestId, focusPanel, onBack, prevId, nextId, o
       if (reviewSuccessTimerRef.current) clearTimeout(reviewSuccessTimerRef.current);
     };
   }, []);
-
-  const lastFocusRef = useRef<HTMLElement | null>(null);
-  const serviceLocationFocusRef = useRef<HTMLElement | null>(null);
 
   const { data: detail, isLoading, isError, isFetching, error, refetch } = useQuery({
     queryKey: ["request-detail", requestId],
@@ -497,12 +620,10 @@ export function RequestDetail({ requestId, focusPanel, onBack, prevId, nextId, o
   }
 
   function handleContactLaunched(direction: string, channel: string) {
-    lastFocusRef.current = document.activeElement as HTMLElement;
     setContactModal({ direction, channel });
   }
 
   function handleOpenServiceLocation() {
-    serviceLocationFocusRef.current = document.activeElement as HTMLElement;
     setServiceLocationModalOpen(true);
   }
 
@@ -516,7 +637,7 @@ export function RequestDetail({ requestId, focusPanel, onBack, prevId, nextId, o
           initialDirection={contactModal.direction}
           initialChannel={contactModal.channel}
           onDetailUpdated={handleDetailUpdated}
-          onClose={() => { setContactModal(null); lastFocusRef.current?.focus(); }}
+          onClose={() => setContactModal(null)}
         />
       )}
       {serviceLocationModalOpen && detail && (
@@ -524,7 +645,15 @@ export function RequestDetail({ requestId, focusPanel, onBack, prevId, nextId, o
           requestId={requestId}
           detail={detail}
           onDetailUpdated={handleDetailUpdated}
-          onClose={() => { setServiceLocationModalOpen(false); serviceLocationFocusRef.current?.focus(); }}
+          onClose={() => setServiceLocationModalOpen(false)}
+        />
+      )}
+      {clearAttentionOpen && detail && (
+        <ClearAttentionSheet
+          requestId={requestId}
+          detail={detail}
+          onDetailUpdated={handleDetailUpdated}
+          onClose={() => setClearAttentionOpen(false)}
         />
       )}
       {shareModalOpen && (
@@ -572,6 +701,7 @@ export function RequestDetail({ requestId, focusPanel, onBack, prevId, nextId, o
         onDetailUpdated={handleDetailUpdated}
         onContactLaunched={handleContactLaunched}
         onEditLocation={handleOpenServiceLocation}
+        onOpenClearAttention={() => setClearAttentionOpen(true)}
         onRecordFollowUp={() => setFollowUpPanelOpen(true)}
         onCreateFollowUp={() => setFollowUpCaptureOpen(true)}
         onReviewSuccess={handleReviewSuccess}

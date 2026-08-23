@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import type { LogExternalContactBody } from "../lib/apiClient";
 
 // ---------------------------------------------------------------------------
@@ -40,6 +40,9 @@ export interface ExternalContactFormProps {
   onSubmit: (body: LogExternalContactBody) => void;
   onCancel: () => void;
   onChannelChange?: (channel: string) => void;
+  /** Reports whether the form currently differs from its initial state, so a sheet-owned
+   *  dirty-close confirmation can gate Escape/backdrop/Close/Cancel. */
+  onDirtyChange?: (dirty: boolean) => void;
 }
 
 const FOCUS_RING =
@@ -63,6 +66,7 @@ export function ExternalContactForm({
   onSubmit,
   onCancel,
   onChannelChange,
+  onDirtyChange,
 }: ExternalContactFormProps) {
   const [direction, setDirection] = useState<"outbound" | "inbound">(initialDirection);
   const [channel, setChannel] = useState(initialChannel);
@@ -71,6 +75,16 @@ export function ExternalContactForm({
   const [summary, setSummary] = useState("");
 
   const channels = direction === "outbound" ? OUTBOUND_CHANNELS : INBOUND_CHANNELS;
+  const dirty =
+    summary.trim() !== "" ||
+    requiresFollowUp ||
+    direction !== initialDirection ||
+    channel !== initialChannel ||
+    outcome !== PHONE_OUTCOMES[0].value;
+
+  useEffect(() => {
+    onDirtyChange?.(dirty);
+  }, [dirty, onDirtyChange]);
   const showOutcome = direction === "outbound" && channel === "phone";
   const followUpFromOutcome = showOutcome && FOLLOW_UP_OUTCOMES.has(outcome);
   const showFollowUp =

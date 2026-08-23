@@ -1,12 +1,13 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Copy, Check, AlertTriangle, Clock, Phone, Mail } from "lucide-react";
+import { Copy, Check, AlertTriangle, Clock, Phone, Mail, X } from "lucide-react";
 import {
   api,
   ApiError,
   type KeepRequestDetailResult,
 } from "../../lib/apiClient";
 import { KeepButton } from "../../components/keep/KeepButton";
+import { ResponsiveSheet } from "../../components/keep/ResponsiveSheet";
 import { formatNaPhone } from "../../components/quick-capture/utils";
 import { KeepBadge, type KeepBadgeVariant } from "../../components/keep/KeepBadge";
 import { useCopyFeedback } from "../../hooks/useCopyFeedback";
@@ -89,26 +90,66 @@ export function LogContactCard({ detail, onContactLaunched, highlight }: LogCont
 // Clear attention
 // ---------------------------------------------------------------------------
 
-interface MarkHandledCardProps {
+interface ClearAttentionSheetProps {
   requestId: string;
   detail: KeepRequestDetailResult;
   onDetailUpdated: (updated: KeepRequestDetailResult) => void;
-  highlight?: HighlightLevel;
+  onClose: () => void;
 }
 
-export function MarkHandledCard({ requestId, detail, onDetailUpdated, highlight }: MarkHandledCardProps) {
-  const { canAcknowledgeAttention } = detail.availableActions;
-  const hasAttention = detail.effectiveAttention.level !== "none" && !!detail.effectiveAttention.reason;
+export function ClearAttentionSheet({ requestId, detail, onDetailUpdated, onClose }: ClearAttentionSheetProps) {
   const { acknowledgeReasonMaxLength } = detail.validation;
 
   const [reason, setReason] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [conflictDisabled, setConflictDisabled] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
+  const keepEditingRef = useRef<HTMLButtonElement>(null);
+  const discardRef = useRef<HTMLButtonElement>(null);
+  const previousFocusRef = useRef<Element | null>(null);
 
-  if (!canAcknowledgeAttention || !hasAttention) return null;
+  const dirty = reason.trim().length > 0;
+  const canSubmit = dirty && !isSubmitting && !conflictDisabled;
 
-  const canSubmit = reason.trim().length > 0 && !isSubmitting && !conflictDisabled;
+  function attemptClose() {
+    if (dirty) {
+      setShowDiscardConfirm(true);
+      return;
+    }
+    onClose();
+  }
+
+  // Nested alertdialog inside ResponsiveSheet's own dialog (matches CatalogItemDrawer's P2 fix):
+  // captures Escape/Tab before ResponsiveSheet's own listener and traps focus between the two
+  // confirm buttons while contentInert removes the background form from tab order/hit-testing.
+  useEffect(() => {
+    if (!showDiscardConfirm) return;
+    previousFocusRef.current = document.activeElement;
+    keepEditingRef.current?.focus();
+
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        e.stopPropagation();
+        setShowDiscardConfirm(false);
+        return;
+      }
+      if (e.key !== "Tab") return;
+      e.preventDefault();
+      e.stopPropagation();
+      const first = keepEditingRef.current;
+      const last = discardRef.current;
+      if (!first || !last) return;
+      (document.activeElement === first ? last : first).focus();
+    }
+    document.addEventListener("keydown", onKeyDown, true);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown, true);
+      const prior = previousFocusRef.current;
+      if (prior instanceof HTMLElement) prior.focus();
+    };
+  }, [showDiscardConfirm]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -118,6 +159,7 @@ export function MarkHandledCard({ requestId, detail, onDetailUpdated, highlight 
     try {
       const updated = await api.acknowledgeAttention(requestId, reason.trim(), detail.version);
       onDetailUpdated(updated);
+      onClose();
     } catch (e) {
       if (e instanceof ApiError && e.status === 409) {
         setConflictDisabled(true);
@@ -130,19 +172,70 @@ export function MarkHandledCard({ requestId, detail, onDetailUpdated, highlight 
     }
   }
 
-  const shadow = highlightBoxShadow(highlight);
-
   return (
-    <div
-      id="clear-attention-card"
-      tabIndex={-1}
-      className={`rounded-xl border px-5 py-4 transition-[border-color,background-color,box-shadow] ${highlightBorderCls(highlight)} ${highlightBgCls()} focus:outline-none focus:ring-2 focus:ring-[var(--keep-accent)]`}
-      style={shadow ? { boxShadow: shadow } : undefined}
+    <ResponsiveSheet
+      onClose={attemptClose}
+      labelledBy="clear-attention-sheet-heading"
+      contentInert={showDiscardConfirm}
+      header={
+        <div className="flex items-center justify-between">
+          <h2 id="clear-attention-sheet-heading" className="text-base font-semibold text-[var(--ophalo-ink)]">
+            Clear attention
+          </h2>
+          <button
+            type="button"
+            onClick={attemptClose}
+            className={`text-[var(--ophalo-muted)] hover:text-[var(--ophalo-ink)] p-1 rounded-md transition-colors ${FOCUS_RING}`}
+          >
+            <X className="h-4 w-4" />
+            <span className="sr-only">Close</span>
+          </button>
+        </div>
+      }
+      footer={
+        <KeepButton
+          type="submit"
+          form="clear-attention-form"
+          variant="secondary"
+          disabled={!canSubmit}
+          className="w-full"
+        >
+          {isSubmitting ? "Clearing…" : "Clear attention"}
+        </KeepButton>
+      }
+      overlay={
+        showDiscardConfirm && (
+          <div
+            role="alertdialog"
+            aria-modal="true"
+            aria-label="Discard changes"
+            className="absolute inset-0 z-10 flex items-center justify-center bg-black/30 px-6"
+          >
+            <div className="max-w-xs w-full rounded-lg bg-[var(--ophalo-card)] shadow-xl p-4 flex flex-col gap-3">
+              <p className="text-sm text-[var(--ophalo-ink)]">Discard your note and keep this attention active?</p>
+              <div className="flex items-center justify-end gap-3">
+                <button
+                  ref={keepEditingRef}
+                  type="button"
+                  onClick={() => setShowDiscardConfirm(false)}
+                  className={`text-sm text-[var(--ophalo-muted)] hover:text-[var(--ophalo-ink)] rounded ${FOCUS_RING}`}
+                >
+                  Keep editing
+                </button>
+                <button
+                  ref={discardRef}
+                  type="button"
+                  onClick={onClose}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-medium bg-[var(--ophalo-danger)] text-white hover:opacity-90 ${FOCUS_RING}`}
+                >
+                  Discard
+                </button>
+              </div>
+            </div>
+          </div>
+        )
+      }
     >
-      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-        <p className="text-sm font-semibold text-[var(--ophalo-ink)]">Clear attention</p>
-        <RecommendedActionBadge level={highlight} />
-      </div>
       <p className="text-xs text-[var(--ophalo-muted)] mb-3">
         Use only when no customer update or contact log is needed.
       </p>
@@ -157,27 +250,22 @@ export function MarkHandledCard({ requestId, detail, onDetailUpdated, highlight 
           {error}
         </div>
       )}
-      <form onSubmit={(e) => void handleSubmit(e)} className="space-y-2.5">
-        <div>
-          <label htmlFor="ack-reason" className="block text-xs font-semibold text-[var(--ophalo-muted)] mb-1">
-            Brief note before clearing
-          </label>
-          <textarea
-            id="ack-reason"
-            value={reason}
-            onChange={(e) => setReason(e.target.value)}
-            maxLength={acknowledgeReasonMaxLength}
-            disabled={conflictDisabled}
-            placeholder="Example: Reviewed — no follow-up needed."
-            rows={2}
-            className={`${INPUT_CLS} resize-none`}
-          />
-        </div>
-        <KeepButton type="submit" variant="secondary" disabled={!canSubmit} className="w-full">
-          {isSubmitting ? "Clearing…" : "Clear attention"}
-        </KeepButton>
+      <form id="clear-attention-form" onSubmit={(e) => void handleSubmit(e)}>
+        <label htmlFor="ack-reason" className="block text-xs font-semibold text-[var(--ophalo-muted)] mb-1">
+          Brief note before clearing
+        </label>
+        <textarea
+          id="ack-reason"
+          value={reason}
+          onChange={(e) => setReason(e.target.value)}
+          maxLength={acknowledgeReasonMaxLength}
+          disabled={conflictDisabled}
+          placeholder="Example: Reviewed — no follow-up needed."
+          rows={3}
+          className={`${INPUT_CLS} resize-none`}
+        />
       </form>
-    </div>
+    </ResponsiveSheet>
   );
 }
 
@@ -856,17 +944,17 @@ export function AttentionGuidanceCard({ detail }: AttentionGuidanceCardProps) {
 
 // ---------------------------------------------------------------------------
 // Next step — the one server-routed destination for the active guidanceKey.
-// Interim routing only (locked sequence step 2): points at the current inline
-// Clear-attention card and the existing follow-up controller callback, and
-// scrolls within the Work Canvas to the always-open composer. A requested call
-// routes directly to external-contact logging. Steps 3-5 replace these interim
-// destinations with the locked sheet/collapsed-composer surfaces.
+// acknowledge_attention and log_external_contact/resolve_follow_up route to the
+// locked ResponsiveSheet workflows (step 4); respond_to_customer still scrolls to
+// the always-open composer within the Work Canvas pending the collapsed-composer
+// migration.
 // ---------------------------------------------------------------------------
 
 interface NextStepCardProps {
   detail: KeepRequestDetailResult;
   onRecordFollowUp: () => void;
   onContactLaunched: (direction: string, channel: string) => void;
+  onOpenClearAttention: () => void;
 }
 
 function scrollAndFocusWithinWorkCanvas(id: string) {
@@ -886,7 +974,7 @@ function scrollAndFocusWithinWorkCanvas(id: string) {
   target.focus({ preventScroll: true });
 }
 
-export function NextStepCard({ detail, onRecordFollowUp, onContactLaunched }: NextStepCardProps) {
+export function NextStepCard({ detail, onRecordFollowUp, onContactLaunched, onOpenClearAttention }: NextStepCardProps) {
   const { guidanceKey } = detail.effectiveAttention;
   const { canAcknowledgeAttention, canSetFollowUpOn, canSendBusinessUpdate, canLogExternalContact } =
     detail.availableActions;
@@ -898,7 +986,7 @@ export function NextStepCard({ detail, onRecordFollowUp, onContactLaunched }: Ne
     case "acknowledge_attention":
       if (!canAcknowledgeAttention) return null;
       buttonLabel = "Go to Clear attention";
-      onActivate = () => scrollAndFocusWithinWorkCanvas("clear-attention-card");
+      onActivate = onOpenClearAttention;
       break;
     case "resolve_follow_up":
       if (!canSetFollowUpOn) return null;
