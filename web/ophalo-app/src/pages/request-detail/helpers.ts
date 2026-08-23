@@ -267,9 +267,7 @@ export function buildAttentionGuidance(detail: KeepRequestDetailResult): Attenti
       return {
         label: reasonLabel(attention.reason),
         why: "The customer is asking about timing. Keep should protect the promise without becoming a schedule board.",
-        resolveBy: canSendUpdate
-          ? "Confirm the timing on the customer page, or log contact if you handle the timing outside Keep."
-          : "Confirm timing through your normal channel, then log the contact.",
+        resolveBy: "Contact the customer by phone, text, or email, then save what happened in Keep. A customer-page update alone does not notify them.",
         sourceLabel,
         sourceText,
         afterHandled,

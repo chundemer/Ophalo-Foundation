@@ -27,9 +27,10 @@ between communication, externally handled contact, and formal attestation.
 
   | `guidanceKey` | Meaning | Resolution route |
   |---|---|---|
-  | `acknowledge_attention` | Persisted attention has been handled through the appropriate real-world action. | Explicit **Clear attention** attestation, with a required reason. |
+  | `acknowledge_attention` | A future server-authored acknowledgement-only condition. | Explicit **Clear attention** attestation, with a required reason. It is not the recommended route for current customer-originated attention reasons. |
   | `resolve_follow_up` | A customer Follow Up On promise is due or overdue. | Complete, move, or retain the follow-up through the dedicated resolution flow. |
   | `respond_to_customer` | The first response is overdue. | Send a customer update or log an actual external contact, as currently authorized. |
+  | `log_external_contact` | A customer explicitly requested a call, or asked to coordinate timing. | Open **Contact customer** and log the completed external contact. Timing coordination must not rely on a passive customer-page update; a requested call still requires live phone contact. |
 
 - A customer update does not automatically clear attention or prove delivery, receipt, or resolution.
   Clear attention is not a substitute for doing the customer work.
@@ -51,8 +52,8 @@ Verified: `pnpm typecheck` clean; `BusinessSection.compactPrimary`, `RequestDeta
 `mock-req-001` with legacy `attentionLevel: "normal"`/`attentionReason: null` while
 `effectiveAttention` is overridden active for each `guidanceKey`. `git diff --check` clean.
 
-**Next batch:** step 2 of the approved implementation sequence below — the server-routed Next
-step module.
+**Next batch:** the drawer/sheet primitive and structured-action migration; the server-routed Next
+step module now uses reason-specific effective-attention guidance and canvas-owned scrolling.
 
 ## Locked Request Detail action-surface contract (2026-08-23)
 
@@ -65,9 +66,9 @@ implementation with the signoff specification and current server authorization d
 | Server route / workflow | Surface | Trigger and constraint |
 |---|---|---|
 | `respond_to_customer` | Inline Customer Update composer | The Next step CTA expands it when `canSendBusinessUpdate` is true. If that action is unavailable but contact logging is authorized, route to the Log Contact sheet instead; never expand a disabled composer as the resolution target. |
-| `acknowledge_attention` | Right slide-over / mobile bottom sheet | Opened by Next step or an explicit link. Requires the existing formal attestation reason. |
+| `acknowledge_attention` | Right slide-over / mobile bottom sheet | Explicit secondary route for a server-authored acknowledgement-only condition. Requires the existing formal attestation reason. |
 | `resolve_follow_up` | Right slide-over / mobile bottom sheet | Opened when the customer Follow Up On promise is due or overdue. It offers Complete, Reschedule, or Keep active; it is not acknowledgement or generic messaging. |
-| Log contact | Right slide-over / mobile bottom sheet | Opened from the Anchor or Next step when it is the authorized contact resolution route. |
+| `log_external_contact` / Log contact | Right slide-over / mobile bottom sheet | Opened from the Anchor or Next step when it is the authorized contact resolution route. |
 | Mark work done | Persistent Anchor macro action | Retains an explicit “attention remains” consequence whenever effective attention is active. |
 | Destructive action, dirty-draft discard, 409 recovery | Centered modal | Blocking/binary interruption only. |
 
@@ -93,6 +94,12 @@ implementation with the signoff specification and current server authorization d
    these workflows.
 5. Reserve centered modals for blocking or binary decisions: destructive confirmation,
    dirty-draft discard, and version-conflict recovery.
+
+**Locked time-sensitive communication rule:** `ScheduleChangeRequest` and
+`TimingChangeRequested` return `log_external_contact`. Their Next step CTA is **Contact customer**;
+it opens the durable contact workflow, where call/text/email launch utilities support the contact
+but do not themselves resolve attention. A customer-page update remains an available secondary
+action and must disclose that it does not notify the customer.
 
 ### Why this is the recommended split
 
@@ -126,7 +133,7 @@ permanent pane.
 
 ### 1. Finish EffectiveAttention correctness — complete
 
-### 2. Introduce a server-routed Next step module (next batch)
+### 2. Introduce a server-routed Next step module — complete (2026-08-23)
 
 - Add one small Request Detail component immediately after Attention Guidance.
 - Map `guidanceKey` to the locked matrix above. `respond_to_customer` expands the inline Customer
@@ -134,6 +141,7 @@ permanent pane.
 - If a server-selected route is unavailable, show factual guidance without inventing a fallback
   mutation; record this as a contract discrepancy for review.
 - Remove “highlighted panel/action” recommendation copy.
+- Timing and schedule-change reasons route to **Contact customer**, not a passive page update.
 
 ### 3. Establish the responsive sheet primitive and draft rules
 

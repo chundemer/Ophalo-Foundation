@@ -134,7 +134,9 @@ export function MarkHandledCard({ requestId, detail, onDetailUpdated, highlight 
 
   return (
     <div
-      className={`rounded-xl border px-5 py-4 transition-[border-color,background-color,box-shadow] ${highlightBorderCls(highlight)} ${highlightBgCls()}`}
+      id="clear-attention-card"
+      tabIndex={-1}
+      className={`rounded-xl border px-5 py-4 transition-[border-color,background-color,box-shadow] ${highlightBorderCls(highlight)} ${highlightBgCls()} focus:outline-none focus:ring-2 focus:ring-[var(--keep-accent)]`}
       style={shadow ? { boxShadow: shadow } : undefined}
     >
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
@@ -793,22 +795,13 @@ export function SourceMetaPanel({ detail, bare = false }: { detail: KeepRequestD
 
 interface AttentionGuidanceCardProps {
   detail: KeepRequestDetailResult;
-  highlights: AttentionHighlights;
 }
 
-export function AttentionGuidanceCard({ detail, highlights }: AttentionGuidanceCardProps) {
+export function AttentionGuidanceCard({ detail }: AttentionGuidanceCardProps) {
   const guidance = buildAttentionGuidance(detail);
   if (!guidance) return null;
 
   const isOverdue = detail.effectiveAttention.level === "overdue";
-
-  const primaryPanelLabel: string | null = (() => {
-    if (highlights.sendUpdate === "primary") return "Send customer update";
-    if (highlights.logContact === "primary") return "Log external contact";
-    if (highlights.feedbackReview === "primary") return "Review feedback";
-    if (highlights.markHandled === "primary") return "Clear attention";
-    return null;
-  })();
 
   return (
     <section className="rounded-xl border border-[var(--ophalo-border)] border-l-4 border-l-[var(--ophalo-attention)] bg-[var(--ophalo-attention-bg)] px-5 py-4">
@@ -856,22 +849,97 @@ export function AttentionGuidanceCard({ detail, highlights }: AttentionGuidanceC
             </p>
           )}
         </div>
-
-        {primaryPanelLabel && (
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ophalo-attention)]">
-              Recommended next step
-            </p>
-            <p className="mt-1 text-sm text-[var(--ophalo-ink)]">
-              {highlights.sendUpdate === "primary"
-                ? "Recommended: Send customer update using the highlighted action."
-                : highlights.logContact === "primary"
-                  ? "Recommended: Log external contact using the highlighted action."
-                  : "Use the highlighted action."}
-            </p>
-          </div>
-        )}
       </div>
     </section>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Next step — the one server-routed destination for the active guidanceKey.
+// Interim routing only (locked sequence step 2): points at the current inline
+// Clear-attention card and the existing follow-up controller callback, and
+// scrolls within the Work Canvas to the always-open composer. A requested call
+// routes directly to external-contact logging. Steps 3-5 replace these interim
+// destinations with the locked sheet/collapsed-composer surfaces.
+// ---------------------------------------------------------------------------
+
+interface NextStepCardProps {
+  detail: KeepRequestDetailResult;
+  onRecordFollowUp: () => void;
+  onContactLaunched: (direction: string, channel: string) => void;
+}
+
+function scrollAndFocusWithinWorkCanvas(id: string) {
+  const target = document.getElementById(id);
+  if (!target) return;
+
+  const canvas = target.closest<HTMLElement>("[data-request-detail-work-canvas]");
+  if (canvas) {
+    const canvasRect = canvas.getBoundingClientRect();
+    const targetRect = target.getBoundingClientRect();
+    canvas.scrollTo({
+      top: Math.max(0, canvas.scrollTop + targetRect.top - canvasRect.top - 24),
+      behavior: "smooth",
+    });
+  }
+
+  target.focus({ preventScroll: true });
+}
+
+export function NextStepCard({ detail, onRecordFollowUp, onContactLaunched }: NextStepCardProps) {
+  const { guidanceKey } = detail.effectiveAttention;
+  const { canAcknowledgeAttention, canSetFollowUpOn, canSendBusinessUpdate, canLogExternalContact } =
+    detail.availableActions;
+
+  let buttonLabel: string;
+  let onActivate: () => void;
+
+  switch (guidanceKey) {
+    case "acknowledge_attention":
+      if (!canAcknowledgeAttention) return null;
+      buttonLabel = "Go to Clear attention";
+      onActivate = () => scrollAndFocusWithinWorkCanvas("clear-attention-card");
+      break;
+    case "resolve_follow_up":
+      if (!canSetFollowUpOn) return null;
+      buttonLabel = "Resolve follow-up";
+      onActivate = onRecordFollowUp;
+      break;
+    case "respond_to_customer":
+      // Two authorized resolution routes exist for this key — a customer update and an
+      // external contact log. Only render no CTA when neither is authorized.
+      if (canSendBusinessUpdate) {
+        buttonLabel = "Respond to customer";
+        onActivate = () => scrollAndFocusWithinWorkCanvas("focus-panel-update");
+      } else if (canLogExternalContact) {
+        buttonLabel = "Log contact";
+        const contactChannel = detail.customerPhone ? "phone" : detail.customerEmail ? "email" : "other";
+        onActivate = () => onContactLaunched("outbound", contactChannel);
+      } else {
+        return null;
+      }
+      break;
+    case "log_external_contact":
+      if (!canLogExternalContact) return null;
+      buttonLabel = "Contact customer";
+      {
+        const contactChannel = detail.customerPhone ? "phone" : detail.customerEmail ? "email" : "other";
+        onActivate = () => onContactLaunched("outbound", contactChannel);
+      }
+      break;
+    default:
+      return null;
+  }
+
+  return (
+    <div className="rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-5 py-4 flex flex-wrap items-center justify-between gap-3">
+      <div>
+        <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ophalo-muted)]">
+          Next step
+        </p>
+        <p className="mt-1 text-sm text-[var(--ophalo-ink)]">{buttonLabel}</p>
+      </div>
+      <KeepButton onClick={onActivate}>{buttonLabel}</KeepButton>
+    </div>
   );
 }

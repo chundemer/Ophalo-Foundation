@@ -403,9 +403,10 @@ internal static class KeepRequestDetailMapper
             Level: "none", Reason: null, DueAtUtc: null, DueOnDate: null, GuidanceKey: null);
         if (request.IsTerminal) return none;
 
-        // Case 1: persisted attention always wins when active. UnresolvedFeedback is unreachable
-        // here — see terminal-guard note above — so every reason that does reach this branch
-        // resolves the same way: acknowledge attention.
+        // Case 1: persisted attention always wins when active. Its resolution remains reason
+        // specific: a customer request must lead to customer response/contact, not an implicit
+        // instruction to clear attention. UnresolvedFeedback is unreachable here — see the
+        // terminal-guard note above.
         if (request.AttentionLevel != AttentionLevel.None && request.AttentionReason.HasValue)
         {
             return new EffectiveAttentionResult(
@@ -413,7 +414,7 @@ internal static class KeepRequestDetailMapper
                 Reason: MapAttentionReason(request.AttentionReason.Value),
                 DueAtUtc: request.NextAttentionAtUtc,
                 DueOnDate: null,
-                GuidanceKey: "acknowledge_attention");
+                GuidanceKey: MapPersistedAttentionGuidanceKey(request.AttentionReason.Value));
         }
 
         // Case 2: due/overdue Follow Up On — a deliberate customer promise, so it outranks case 3
@@ -448,6 +449,30 @@ internal static class KeepRequestDetailMapper
 
         return none;
     }
+
+    /// <summary>
+    /// ADR-490 amendment (2026-08-23): persisted attention is not automatically an
+    /// acknowledgement task. Customer-originated requests route to a response; a requested call
+    /// routes to durable external-contact logging because text/email cannot satisfy that promise.
+    /// The acknowledgement endpoint remains an explicit, server-authorized secondary attestation,
+    /// not the default guidance for these customer-request reasons.
+    /// </summary>
+    private static string MapPersistedAttentionGuidanceKey(AttentionReason reason) => reason switch
+    {
+        AttentionReason.CustomerMessage       => "respond_to_customer",
+        AttentionReason.UpdateRequest         => "respond_to_customer",
+        AttentionReason.ScheduleChangeRequest => "log_external_contact",
+        AttentionReason.ChangeOrCancelRequest => "respond_to_customer",
+        AttentionReason.Complaint             => "respond_to_customer",
+        AttentionReason.FirstResponseDue      => "respond_to_customer",
+        AttentionReason.CallRequested         => "log_external_contact",
+        AttentionReason.TimingChangeRequested => "log_external_contact",
+        AttentionReason.CancellationRequested => "respond_to_customer",
+        AttentionReason.FollowUpDue           => "resolve_follow_up",
+        AttentionReason.UnresolvedFeedback => throw new InvalidOperationException(
+            "Unresolved feedback is terminal-only and cannot produce effective attention guidance."),
+        _ => throw new InvalidOperationException($"Unknown AttentionReason: {reason}")
+    };
 
     private static string MapPriorityBand(PriorityBand band) => band switch
     {

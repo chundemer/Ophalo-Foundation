@@ -4,6 +4,7 @@ import {
   type RequestDetailLayoutProps,
   ProminentFeedbackCard,
   AttentionGuidanceCard,
+  NextStepCard,
   MarkHandledCard,
   OriginalRequestCard,
   RelatedWorkPanel,
@@ -65,11 +66,12 @@ export function RequestDetailContent(props: RequestDetailContentProps) {
         needsShare={props.needsShare}
         onOpenShareDrawer={props.onOpenShareDrawer}
       />
-      <div className="flex-1 min-h-0 overflow-y-auto px-4 md:px-6 py-5">
+      <div data-request-detail-work-canvas className="flex-1 min-h-0 overflow-y-auto px-4 md:px-6 py-5">
       <div className="max-w-6xl mx-auto w-full space-y-6">
         {/* 1. Active attention guidance */}
         <div id="focus-panel-attention" className="space-y-3">
-          <AttentionGuidanceCard detail={detail} highlights={highlights} />
+          <AttentionGuidanceCard detail={detail} />
+          <NextStepCard detail={detail} onRecordFollowUp={onRecordFollowUp} onContactLaunched={onContactLaunched} />
           <MarkHandledCard
             requestId={requestId}
             detail={detail}
@@ -104,7 +106,11 @@ export function RequestDetailContent(props: RequestDetailContentProps) {
           {showProminentFeedbackCard && <ProminentFeedbackCard requestId={requestId} detail={detail} onDetailUpdated={onDetailUpdated} onReviewSuccess={onReviewSuccess} />}
           {props.reviewSuccessMsg && <div role="status" aria-live="polite" className="rounded-xl border border-[var(--ophalo-success)] bg-[var(--ophalo-success-bg)] px-4 py-3 text-sm text-[var(--ophalo-success)] font-medium">{props.reviewSuccessMsg}</div>}
           <div className="rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] divide-y divide-[var(--ophalo-border)]">
-            <div id="focus-panel-update">
+            <div
+              id="focus-panel-update"
+              tabIndex={-1}
+              className="rounded-t-xl focus:outline-none focus:ring-2 focus:ring-[var(--keep-accent)]"
+            >
               <UnifiedComposer requestId={requestId} detail={detail} onDetailUpdated={onDetailUpdated} customerUpdateDraft={props.customerUpdateDraft} onCustomerUpdateDraftChange={props.onCustomerUpdateDraftChange} customerUpdateDraftStatus={props.customerUpdateDraftStatus} onCustomerUpdateDraftStatusChange={props.onCustomerUpdateDraftStatusChange} highlight={highlights.sendUpdate} bare />
             </div>
             <div className="px-4 py-3">

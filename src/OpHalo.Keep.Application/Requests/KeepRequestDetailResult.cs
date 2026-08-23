@@ -88,10 +88,10 @@ public sealed record KeepRequestDetailResult(
 /// in a non-UTC client time zone can shift the apparent calendar date the business promised.
 ///
 /// GuidanceKey names which existing resolution mechanism applies (acknowledge_attention |
-/// resolve_follow_up | respond_to_customer | null) so the client can route to the right action
-/// without guessing; it is a bounded key, not prose guidance or an executable resolution — full
-/// Why/Resolve-by copy stays a bounded client-side mapping per the ADR-426 interim rule until
-/// backend guidance text ships.
+/// resolve_follow_up | respond_to_customer | log_external_contact | null) so the client can route
+/// to the right action without guessing. It is a bounded key, not prose guidance or an executable
+/// resolution — full Why/Resolve-by copy stays a bounded client-side mapping per the ADR-426
+/// interim rule until backend guidance text ships.
 /// </summary>
 public sealed record EffectiveAttentionResult(
     string Level,

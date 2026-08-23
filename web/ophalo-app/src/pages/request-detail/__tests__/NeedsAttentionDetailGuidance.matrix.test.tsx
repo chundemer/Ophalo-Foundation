@@ -15,7 +15,7 @@ describe("Needs Attention row matches detail guidance", () => {
           reason: "customer_message",
           dueAtUtc: "2026-07-01T15:00:00Z",
           dueOnDate: null,
-          guidanceKey: "acknowledge_attention",
+          guidanceKey: "respond_to_customer",
         },
       },
       expectedLabel: "Customer message",
@@ -50,6 +50,21 @@ describe("Needs Attention row matches detail guidance", () => {
       },
       expectedLabel: "First response due",
       expectedResolveBy: "Send the first customer-page update, or log a real external contact if you respond outside Keep.",
+    },
+    {
+      name: "time-sensitive timing request",
+      detail: {
+        ...mockRequestDetails["mock-req-001"],
+        effectiveAttention: {
+          level: "needs_attention",
+          reason: "timing_change_requested",
+          dueAtUtc: "2026-07-01T15:00:00Z",
+          dueOnDate: null,
+          guidanceKey: "log_external_contact",
+        },
+      },
+      expectedLabel: "Timing change requested",
+      expectedResolveBy: "Contact the customer by phone, text, or email, then save what happened in Keep. A customer-page update alone does not notify them.",
     },
   ];
 

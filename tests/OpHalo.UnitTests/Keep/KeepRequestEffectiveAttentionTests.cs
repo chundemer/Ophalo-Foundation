@@ -83,7 +83,28 @@ public class KeepRequestEffectiveAttentionTests
 
         Assert.Equal("waiting", detail.EffectiveAttention.Level);
         Assert.Equal("customer_message", detail.EffectiveAttention.Reason);
-        Assert.Equal("acknowledge_attention", detail.EffectiveAttention.GuidanceKey);
+        Assert.Equal("respond_to_customer", detail.EffectiveAttention.GuidanceKey);
+    }
+
+    [Theory]
+    [InlineData(MessageIntent.GeneralMessage, "respond_to_customer")]
+    [InlineData(MessageIntent.UpdateRequest, "respond_to_customer")]
+    [InlineData(MessageIntent.ScheduleChangeRequest, "log_external_contact")]
+    [InlineData(MessageIntent.ChangeOrCancelRequest, "respond_to_customer")]
+    [InlineData(MessageIntent.Complaint, "respond_to_customer")]
+    [InlineData(MessageIntent.CallRequested, "log_external_contact")]
+    [InlineData(MessageIntent.TimingChangeRequested, "log_external_contact")]
+    [InlineData(MessageIntent.CancellationRequested, "respond_to_customer")]
+    public async Task Case1_persisted_customer_attention_routes_to_the_reason_specific_guidance_key(
+        MessageIntent intent,
+        string expectedGuidanceKey)
+    {
+        var request = MakeRequest();
+        request.AddCustomerMessage(intent, "Customer request", 60, 240, 60, T0.AddMinutes(5));
+
+        var detail = await ExecuteAsync(request, T0.AddMinutes(10));
+
+        Assert.Equal(expectedGuidanceKey, detail.EffectiveAttention.GuidanceKey);
     }
 
     [Fact]
@@ -148,7 +169,7 @@ public class KeepRequestEffectiveAttentionTests
         var detail = await ExecuteAsync(request, T0.AddDays(3)); // follow-up now well overdue too
 
         Assert.Equal("customer_message", detail.EffectiveAttention.Reason);
-        Assert.Equal("acknowledge_attention", detail.EffectiveAttention.GuidanceKey);
+        Assert.Equal("respond_to_customer", detail.EffectiveAttention.GuidanceKey);
     }
 
     [Fact]
@@ -161,7 +182,7 @@ public class KeepRequestEffectiveAttentionTests
         var detail = await ExecuteAsync(request, T0.AddMinutes(90)); // also past first-response target
 
         Assert.Equal("customer_message", detail.EffectiveAttention.Reason);
-        Assert.Equal("acknowledge_attention", detail.EffectiveAttention.GuidanceKey);
+        Assert.Equal("respond_to_customer", detail.EffectiveAttention.GuidanceKey);
     }
 
     [Fact]

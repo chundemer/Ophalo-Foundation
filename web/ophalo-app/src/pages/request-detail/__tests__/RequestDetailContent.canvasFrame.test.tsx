@@ -13,6 +13,7 @@ vi.mock("../DetailHero", () => ({ TodayPromiseBanner: () => null }));
 vi.mock("../DetailPanels", () => ({
   ProminentFeedbackCard: () => null,
   AttentionGuidanceCard: () => null,
+  NextStepCard: () => null,
   OriginalRequestCard: () => null,
   RelatedWorkPanel: () => null,
   MarkHandledCard: () => null,
