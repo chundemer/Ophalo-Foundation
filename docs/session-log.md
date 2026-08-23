@@ -234,14 +234,43 @@ locks the `EffectiveAttention` (`level`/`reason`/`dueAt`/`guidance`) DTO shape, 
 `CanSetFollowUpOn` as the ratified shared gate for setting and resolving Follow Up On. Full analysis
 and precedence matrix: [Request Detail / Workbench API preflight](ux-design/v2/request-detail-workbench-api-preflight.md).
 
-**Approved next batch — Slice A (backend contract), start now:** `AttentionReason.cs`,
-`KeepRequestDetailResult.cs`, `KeepRequestDetailMapper.cs` (derive `EffectiveAttention` with the
-locked 3-way precedence), `GetKeepRequestListService.cs` (new enum arm), plus backend tests covering
-every pairwise and the triple-overlap precedence combination. Additive DTO field; ships and compiles
-independently of the frontend. **Slice B (frontend consumption)** — `apiClient.types.ts`,
-`helpers.ts`, `DetailPanels.tsx`, mocks, plus the end-to-end Needs-Attention-row-matches-detail-
-guidance matrix test — follows once Slice A ships. Do not paper over the gap with a frontend
-fallback card in the interim.
+**Slice A (backend contract) — complete, approved (2026-08-22):** `AttentionReason.cs`
+(`FollowUpDue` member), `KeepRequestDetailResult.cs`, `KeepRequestDetailMapper.cs`
+(`ComputeEffectiveAttention`), `GetKeepRequestListService.cs` (shared enum arm), plus
+`KeepRequestEffectiveAttentionTests.cs` (15 tests: 4 isolated cases, pairwise/triple overlap,
+fall-through-on-resolve, the Closed-unresolved-feedback exclusion, and 3 JSON serialization
+contract tests). 1301/1301 Keep unit tests and architecture tests green.
+
+`EffectiveAttentionResult` shape shipped (all four locked decisions plus the review corrections):
+
+```
+EffectiveAttentionResult(
+    string Level,       // "none" | "waiting" | "needs_attention" | "overdue"
+    string? Reason,      // bounded AttentionReason slug, e.g. "follow_up_due", "first_response_due"
+    DateTime? DueAtUtc,  // real UTC instant — case 1 (NextAttentionAtUtc) and case 3 only
+    DateOnly? DueOnDate, // date-only promise — case 2 (Follow Up On) only, never a synthesized instant
+    string? GuidanceKey) // acknowledge_attention | resolve_follow_up | respond_to_customer | null
+```
+
+`DueAtUtc`/`DueOnDate` are mutually exclusive by design — Follow Up On has no time-of-day in the
+domain, so it must never be collapsed into a fabricated UTC-midnight `DateTime` (a review correction
+against the first draft, which did exactly that and would have let a client time zone shift the
+apparent promised date). `GuidanceKey` is a bounded routing key, not prose — Why/Resolve-by copy
+stays a client-side mapping per the ADR-426 interim rule until backend guidance text ships.
+
+Two real gaps the implementation surfaced and fixed, not just coded around: (1) an initial
+`UnresolvedFeedback → "review_feedback"` branch was dead code — that reason is only ever set on a
+Closed request (ADR-138 exception), which the terminal guard correctly excludes from Needs
+Attention entirely (it belongs to the separate FeedbackReview queue) — removed, and pinned down by
+`Closed_unresolved_feedback_attention_does_not_leak_into_effective_attention`; (2) two test setups
+silently failed `SetFollowUpOn` by calling it after `ChangeStatus(Resolved)` (Follow Up On is
+active-request-only per the signoff spec) — caught by asserting `IsSuccess` on every domain call.
+
+**Slice B (frontend consumption), start next:** `apiClient.types.ts`, `helpers.ts`,
+`DetailPanels.tsx`, `mocks/fixtures.ts`/`mockApiClient.ts`, plus the end-to-end
+Needs-Attention-row-matches-detail-guidance matrix test. Consume `effectiveAttention` (not raw
+`attentionLevel`/`attentionReason`) in `AttentionGuidanceCard`; render `dueOnDate` as a bare date
+(no time-zone conversion) and `dueAtUtc` as an instant, matching the backend split above.
 
 ## Active work — Direct Actual Work
 

@@ -83,6 +83,7 @@ internal static class KeepRequestDetailMapper
         WaitingDirection: MapWaitingDirection(request.WaitingDirection),
         AttentionReason: request.AttentionReason.HasValue
             ? MapAttentionReason(request.AttentionReason.Value) : null,
+        EffectiveAttention: ComputeEffectiveAttention(request, nowUtc),
         PriorityBand: MapPriorityBand(request.PriorityBand),
         AttentionSinceUtc: request.AttentionSinceUtc,
         NextAttentionAtUtc: request.NextAttentionAtUtc,
@@ -376,8 +377,77 @@ internal static class KeepRequestDetailMapper
         AttentionReason.CallRequested         => "call_requested",
         AttentionReason.TimingChangeRequested => "timing_change_requested",
         AttentionReason.CancellationRequested => "cancellation_requested",
+        // Never persisted (never assigned on KeepRequest) — reachable only via ComputeEffectiveAttention's
+        // case 2 (due/overdue Follow Up On). Kept in this exhaustive switch because the enum is shared.
+        AttentionReason.FollowUpDue           => "follow_up_due",
         _ => throw new InvalidOperationException($"Unknown AttentionReason: {reason}")
     };
+
+    /// <summary>
+    /// ADR-489/ADR-490: folds the three Needs Attention queue-membership conditions into one
+    /// server-ranked verdict. Precedence: persisted attention (case 1) &gt; due/overdue Follow Up On
+    /// (case 2) &gt; first-response overdue (case 3). Mirrors the terminal-status guard and the
+    /// case-2/case-3 predicates already verified in GetKeepRequestListService (NeedsAttention view
+    /// and firstResponseOverdue/isDueOrOverdueFollowUpOn) — do not diverge from that logic here.
+    ///
+    /// Terminal statuses (Closed/Cancelled/Spam/Test) always yield "none" here, matching the
+    /// NeedsAttention list predicate excluding them outright. This intentionally excludes the
+    /// Closed-with-unresolved-feedback case: SubmitFeedback sets persisted attention on a Closed
+    /// request as an explicit exception to the terminal-no-attention posture (ADR-138), but that
+    /// row belongs to the separate FeedbackReview queue/module, never to Needs Attention — so
+    /// AttentionReason.UnresolvedFeedback can never reach case 1 below.
+    /// </summary>
+    private static EffectiveAttentionResult ComputeEffectiveAttention(KeepRequest request, DateTime nowUtc)
+    {
+        var none = new EffectiveAttentionResult(
+            Level: "none", Reason: null, DueAtUtc: null, DueOnDate: null, GuidanceKey: null);
+        if (request.IsTerminal) return none;
+
+        // Case 1: persisted attention always wins when active. UnresolvedFeedback is unreachable
+        // here — see terminal-guard note above — so every reason that does reach this branch
+        // resolves the same way: acknowledge attention.
+        if (request.AttentionLevel != AttentionLevel.None && request.AttentionReason.HasValue)
+        {
+            return new EffectiveAttentionResult(
+                Level: MapAttentionLevel(request.AttentionLevel),
+                Reason: MapAttentionReason(request.AttentionReason.Value),
+                DueAtUtc: request.NextAttentionAtUtc,
+                DueOnDate: null,
+                GuidanceKey: "acknowledge_attention");
+        }
+
+        // Case 2: due/overdue Follow Up On — a deliberate customer promise, so it outranks case 3
+        // (ADR-489). Matches GetKeepRequestListService's isDueOrOverdueFollowUpOn/isFollowUpOverdue.
+        // Follow Up On is date-only in the domain (no time-of-day exists) — surface it as DueOnDate,
+        // never synthesize a UTC instant from it (see EffectiveAttentionResult doc comment).
+        var today = DateOnly.FromDateTime(nowUtc);
+        if (request.FollowUpOnDate.HasValue && request.FollowUpOnDate.Value <= today)
+        {
+            var isOverdue = request.FollowUpOnDate.Value < today;
+            return new EffectiveAttentionResult(
+                Level: isOverdue ? "overdue" : "needs_attention",
+                Reason: MapAttentionReason(AttentionReason.FollowUpDue),
+                DueAtUtc: null,
+                DueOnDate: request.FollowUpOnDate.Value,
+                GuidanceKey: "resolve_follow_up");
+        }
+
+        // Case 3: overdue first business response. Matches GetKeepRequestListService's
+        // firstResponseOverdue — !IsTerminal is already guaranteed by the guard above.
+        if (request.FirstRespondedAtUtc is null
+            && request.FirstResponseDueAtUtc.HasValue
+            && request.FirstResponseDueAtUtc.Value <= nowUtc)
+        {
+            return new EffectiveAttentionResult(
+                Level: "overdue",
+                Reason: MapAttentionReason(AttentionReason.FirstResponseDue),
+                DueAtUtc: request.FirstResponseDueAtUtc,
+                DueOnDate: null,
+                GuidanceKey: "respond_to_customer");
+        }
+
+        return none;
+    }
 
     private static string MapPriorityBand(PriorityBand band) => band switch
     {

@@ -11,5 +11,6 @@ public enum AttentionReason
     UnresolvedFeedback = 7,
     CallRequested = 8,
     TimingChangeRequested = 9,
-    CancellationRequested = 10
+    CancellationRequested = 10,
+    FollowUpDue = 11
 }

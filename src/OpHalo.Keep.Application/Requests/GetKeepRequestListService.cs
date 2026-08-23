@@ -1258,6 +1258,9 @@ public sealed class GetKeepRequestListService(
         AttentionReason.CallRequested         => "call_requested",
         AttentionReason.TimingChangeRequested => "timing_change_requested",
         AttentionReason.CancellationRequested => "cancellation_requested",
+        // Never persisted on KeepRequest — only reachable via KeepRequestDetailMapper's detail-only
+        // EffectiveAttention derivation (ADR-489/ADR-490). Kept here because the enum is shared.
+        AttentionReason.FollowUpDue           => "follow_up_due",
         _ => throw new InvalidOperationException($"Unknown AttentionReason: {reason}")
     };
 

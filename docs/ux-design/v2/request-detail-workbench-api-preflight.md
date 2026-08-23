@@ -258,9 +258,14 @@ locked line while closing this gap:**
 
 **All four decisions locked (2026-08-22, ADR-489 + ADR-490):**
 
-1. **Locked (ADR-490):** one server-computed `EffectiveAttention` block —
-   `{ level, reason, dueAt, guidance }` — on `KeepRequestDetailResult`. The client consumes it; it
-   does not combine raw conditions.
+1. **Locked (ADR-490):** one server-computed `EffectiveAttention` block on `KeepRequestDetailResult`.
+   The client consumes it; it does not combine raw conditions. **Shipped shape (Slice A,
+   2026-08-22) refines the original sketch:** `dueAt` split into `dueAtUtc` (real UTC instant — case
+   1/case 3 only) and `dueOnDate` (date-only — case 2/Follow Up On only, never a synthesized
+   instant, so a client time zone can't shift the promised calendar date); `guidance` renamed
+   `guidanceKey` — a bounded routing key (`acknowledge_attention` | `resolve_follow_up` |
+   `respond_to_customer` | null), not prose, since full Why/Resolve-by copy stays client-owned per
+   the ADR-426 interim rule.
 2. **Locked (ADR-489):** effective attention order is case 1 (persisted attention) > case 2
    (Follow Up due/overdue) > case 3 (first-response overdue) — case 2 outranks case 3, not only
    case 1's absence, since a due Follow Up On is a deliberate customer promise.
