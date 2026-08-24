@@ -21,17 +21,22 @@ export function ActualWorkCard({ state, onStartCapture, bare = false }: ActualWo
     return null;
   }
 
-  const wrapperCls = bare ? "px-5 py-3.5" : "rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-5 py-3.5";
+  // This is deliberately a one-line execution strip.  Line items live in the drawer so
+  // opening a request never turns its canvas into a long visit-history document.
+  const wrapperCls = bare ? "px-5 py-3" : "rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-5 py-3";
 
   const isNoDraft = state.status === "no-draft";
   const hasSavedLines = state.status === "draft" && state.draft.lines.length > 0;
+  const priorVisits = state.submittedCount === 0
+    ? null
+    : `${state.submittedCount} prior visit${state.submittedCount === 1 ? "" : "s"} locked.`;
   const summary = isNoDraft
     ? state.submittedCount === 0
       ? "Record the work completed on this visit."
-      : `${state.submittedCount} prior visit${state.submittedCount === 1 ? "" : "s"} recorded.`
+      : `${state.submittedCount} prior visit${state.submittedCount === 1 ? "" : "s"} recorded · locked.`
     : state.draft.lines.length === 0
-      ? "Draft visit started — no items added yet."
-      : `Draft visit in progress — ${state.draft.lines.length} item${state.draft.lines.length === 1 ? "" : "s"} added.`;
+      ? `Draft visit started — no items added yet.${priorVisits ? ` ${priorVisits}` : ""}`
+      : `Draft visit in progress — ${state.draft.lines.length} item${state.draft.lines.length === 1 ? "" : "s"} added.${priorVisits ? ` ${priorVisits}` : ""}`;
 
   return (
     <div className={wrapperCls}>

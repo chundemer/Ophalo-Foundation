@@ -1,6 +1,6 @@
 import { forwardRef, useEffect, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { X } from "lucide-react";
+import { Check, ChevronRight, Lock, X } from "lucide-react";
 import { KeepModal } from "../../components/keep/KeepModal";
 import { KeepButton } from "../../components/keep/KeepButton";
 import {
@@ -9,6 +9,7 @@ import {
   type ActualWorkHistoryResult,
   type ActualWorkLineHistoryEntry,
   type ActualWorkNudgeSuggestionFieldRowResponse,
+  type ActualWorkSubmittedVisitEntry,
   type FieldScopeSearchResultResponse,
 } from "../../lib/apiClient";
 import { ACTUAL_WORK_RECONCILE_RELOAD_FAILURE_NOTICE } from "./useActualWorkCapture";
@@ -43,6 +44,7 @@ interface ActualWorkComposerProps {
   onRetryReconciliation: () => void;
   onSubmitted: () => void;
   onDiscarded: () => void;
+  submittedVisits?: ActualWorkSubmittedVisitEntry[];
 }
 
 /**
@@ -65,6 +67,7 @@ export function ActualWorkComposer({
   onRetryReconciliation,
   onSubmitted,
   onDiscarded,
+  submittedVisits = [],
 }: ActualWorkComposerProps) {
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [submitted, setSubmitted] = useState(false);
@@ -81,25 +84,34 @@ export function ActualWorkComposer({
       onClose={onClose}
       labelledBy="actual-work-composer-heading"
       initialFocus={searchInputRef}
-      overlayClassName="md:flex md:items-center md:justify-center md:px-4"
-      backdropClassName="bg-black/40"
+      overlayClassName="flex justify-end"
+      backdropClassName="bg-slate-950/35 backdrop-blur-[1px]"
       panelClassName={
-        "fixed inset-0 h-[100dvh] w-full flex flex-col bg-[var(--ophalo-card)] " +
-        "md:relative md:h-auto md:max-h-[85vh] md:w-full md:max-w-lg md:rounded-xl md:shadow-xl"
+        "fixed inset-y-0 right-0 h-[100dvh] w-full max-w-[420px] flex flex-col bg-[var(--ophalo-card)] " +
+        "border-l border-[var(--ophalo-border)] shadow-2xl"
       }
     >
-      <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--ophalo-border)] shrink-0">
-        <h2 id="actual-work-composer-heading" className="text-base font-semibold text-[var(--ophalo-ink)]">
+      <div className="px-4 py-4 border-b border-[var(--ophalo-border)] shrink-0">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--ophalo-muted)]">Work execution manager</p>
+            <h2 id="actual-work-composer-heading" className="mt-1 font-serif text-xl font-semibold text-[var(--ophalo-ink)]">
           Record completed work
-        </h2>
-        <button
+            </h2>
+          </div>
+          <button
           type="button"
           onClick={onClose}
           className={`text-[var(--ophalo-muted)] hover:text-[var(--ophalo-ink)] p-1 rounded-md transition-colors ${FOCUS_RING}`}
-        >
-          <X className="h-4 w-4" />
-          <span className="sr-only">Close</span>
-        </button>
+          >
+            <X className="h-4 w-4" />
+            <span className="sr-only">Close</span>
+          </button>
+        </div>
+        <div className="mt-2 flex items-center justify-between gap-2">
+          <p className="text-xs text-[var(--ophalo-muted)]">Changes are saved automatically.</p>
+          <span className="inline-flex items-center gap-1 rounded-full border border-[var(--ophalo-success)] bg-[var(--ophalo-success-bg)] px-2 py-0.5 text-[11px] font-semibold text-[var(--ophalo-success)]"><Check className="h-3 w-3" /> Auto-saved</span>
+        </div>
       </div>
 
       <div className="flex-1 min-h-0 overflow-y-auto px-4 py-3 space-y-4">
@@ -131,17 +143,13 @@ export function ActualWorkComposer({
           </div>
         )}
 
-        {!readOnly && (
-          <ActualWorkSearchAndAdd
-            ref={searchInputRef}
-            actualWorkId={draft.id}
-            version={draft.concurrencyVersion}
-            onCommitted={onCommitted}
-            onConflict={onConflict}
-          />
-        )}
-
-        <div className="border-t border-[var(--ophalo-border)] pt-3 space-y-2">
+        <section className="rounded-xl border border-sky-200 bg-sky-50/55 p-3 space-y-3">
+          <div className="flex items-center justify-between gap-2">
+            <div><h3 className="text-xs font-bold uppercase tracking-wide text-[var(--ophalo-ink)]">Active visit draft</h3><p className="mt-0.5 text-xs text-[var(--ophalo-muted)]">Editable work for this visit</p></div>
+            <span className="rounded border border-sky-300 bg-white px-2 py-0.5 text-xs font-semibold text-sky-800">Editable</span>
+          </div>
+          {!readOnly && <ActualWorkSearchAndAdd ref={searchInputRef} actualWorkId={draft.id} version={draft.concurrencyVersion} onCommitted={onCommitted} onConflict={onConflict} />}
+        <div className="space-y-2">
           {draft.lines.length === 0 && (
             <p className="text-xs text-[var(--ophalo-muted)]">No items added yet.</p>
           )}
@@ -175,14 +183,16 @@ export function ActualWorkComposer({
             onClick={() => discardMutation.mutate()}
             className={`text-xs font-medium text-[var(--ophalo-muted)] hover:text-[var(--ophalo-ink)] ${FOCUS_RING} disabled:opacity-50`}
           >
-            Discard draft
+            Discard this visit
           </button>
-        )}
+        )}</section>
+        <SubmittedVisits visits={submittedVisits} />
       </div>
 
       <ActualWorkSubmitFooter
         draft={draft}
         submitted={submitted}
+        onSaveDraft={onClose}
         onConflict={onConflict}
         onSubmitted={() => {
           setSubmitted(true);
@@ -191,6 +201,11 @@ export function ActualWorkComposer({
       />
     </KeepModal>
   );
+}
+
+function SubmittedVisits({ visits }: { visits: ActualWorkSubmittedVisitEntry[] }) {
+  if (visits.length === 0) return null;
+  return <section className="border-t border-[var(--ophalo-border)] pt-4"><div className="mb-2 flex items-center justify-between"><h3 className="text-xs font-bold uppercase tracking-wide text-[var(--ophalo-muted)]">Submitted visits (locked)</h3><span className="text-[11px] text-[var(--ophalo-muted)]">Read-only audit record</span></div><div className="space-y-2">{visits.map((visit, index) => <details key={visit.id} className="group rounded-lg border border-[var(--ophalo-border)] bg-[var(--ophalo-canvas)]"><summary className={`flex cursor-pointer list-none items-center justify-between gap-2 px-3 py-2 text-xs font-medium text-[var(--ophalo-ink)] ${FOCUS_RING}`}><span className="flex items-center gap-2"><Lock className="h-3.5 w-3.5 text-[var(--ophalo-muted)]" />Visit #{visits.length - index} · {visit.submittedAtUtc ? new Date(visit.submittedAtUtc).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : "Submitted"}<span className="rounded bg-slate-200 px-1.5 py-0.5 text-[10px]">{visit.lines.length} item{visit.lines.length === 1 ? "" : "s"}</span></span><ChevronRight className="h-3.5 w-3.5 transition-transform group-open:rotate-90" /></summary><div className="border-t border-[var(--ophalo-border)] px-3 py-2 space-y-1">{visit.lines.map((line) => <p key={line.id} className="text-xs text-[var(--ophalo-muted)]">{line.displayNameSnapshot} — {line.actualQuantity} {line.unitOfMeasureSnapshot ?? ""}</p>)}</div></details>)}</div></section>;
 }
 
 interface ActualWorkSearchAndAddProps {
@@ -698,13 +713,14 @@ function ActualWorkDraftLine({ line, readOnly, actualWorkId, version, onCommitte
 interface ActualWorkSubmitFooterProps {
   draft: ActualWorkDraft;
   submitted: boolean;
+  onSaveDraft: () => void;
   onConflict: (message?: string) => void;
   onSubmitted: () => void;
 }
 
 /** Zero-line submit requires a truthful outcome + non-whitespace completion note
  * (ActualWork.Submit, build-log/129); a submit with at least one line accepts both as optional. */
-function ActualWorkSubmitFooter({ draft, submitted, onConflict, onSubmitted }: ActualWorkSubmitFooterProps) {
+function ActualWorkSubmitFooter({ draft, submitted, onSaveDraft, onConflict, onSubmitted }: ActualWorkSubmitFooterProps) {
   const [outcome, setOutcome] = useState("");
   const [completionNote, setCompletionNote] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -767,14 +783,19 @@ function ActualWorkSubmitFooter({ draft, submitted, onConflict, onSubmitted }: A
         </>
       )}
       {error && <p className="text-xs text-[var(--ophalo-danger,#c0392b)]">{error}</p>}
-      <button
-        type="button"
-        disabled={!canSubmit || submitMutation.isPending}
-        onClick={() => submitMutation.mutate()}
-        className={`w-full rounded-lg bg-[var(--keep-accent)] px-4 py-2.5 text-sm font-semibold text-white ${FOCUS_RING} disabled:opacity-50`}
-      >
-        Submit visit to office
-      </button>
+      <div className="grid grid-cols-2 gap-3">
+        <KeepButton variant="secondary" onClick={onSaveDraft} disabled={submitMutation.isPending}>
+          Save draft &amp; exit
+        </KeepButton>
+        <button
+          type="button"
+          disabled={!canSubmit || submitMutation.isPending}
+          onClick={() => submitMutation.mutate()}
+          className={`rounded-lg bg-[var(--keep-accent)] px-3 py-2.5 text-sm font-semibold text-white ${FOCUS_RING} disabled:opacity-50`}
+        >
+          Submit visit to office
+        </button>
+      </div>
       {zeroLine && !canSubmit && (
         <p className="text-center text-xs text-[var(--ophalo-muted)]">
           Select an outcome and add a completion note, or add at least one item, before submitting.

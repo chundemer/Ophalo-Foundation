@@ -12,20 +12,81 @@
 - Request Detail interaction contract: [Workbench signoff specification](ux-design/v2/request-detail-workbench-signoff-spec.md)
 - Effective-attention contract and precedence: [Request Detail API preflight](ux-design/v2/request-detail-workbench-api-preflight.md)
 
-## Current production focus — Request Detail action clarity
+## Current production focus — Request Detail desktop final pass
 
-The visual workbench refinement is committed (`99cba09`): neutral borders, consolidated attention,
-compact Actual Work with collapsed visit history, teal inline triggers, and quiet history
-disclosures. Actual Work draft/submitted CTA clarity is also committed (`985eba5`): "Add actual
-work" / "Continue draft" by factual draft state, and a lock icon + "Submitted · locked" on every
-submitted visit row — presentation-only, per ADR-487 (correction/reversal/reconciliation remains
-deferred domain work, not opened by this change).
+The Request Detail desktop workbench is in its final presentation pass. The prior action-surface,
+queue-header, planning-strip, and permanent Customer Need / compact attention-rail slices are
+complete. The remaining desktop work is a bounded polish handoff, not a redesign and not new
+domain/API work. Finish it, verify it visually, then move to the mobile/PWA version of this page.
 
-Implementation sequence steps 1-6 (below) are now complete — the Request Detail action-surface
-redesign is done. The action-first planning and queue-signals slice (below) is also complete. The
-queue-header consolidation batch (below) is also complete and committed. The Customer Need /
-attention-rail decoupling batch (below) is also complete and committed.
-**Next batch: resume 8B (Owner/Admin Actual Work financial review UI).**
+### Claude handoff — complete the desktop page
+
+**Scope boundary:** preserve all existing server-owned attention routing, permissions, mutations,
+audit semantics, query contracts, and price-blind Actual Work boundary. Do not add a new workflow,
+new API, "Edit Scope" action, status transition, or financial field. This is desktop-only layout,
+copy, and hierarchy polish. Mobile/PWA is the next separate phase after desktop signoff.
+
+**Desktop geometry is locked:** the approved final reference deliberately preserves the current
+desktop pane proportions and working widths: the request queue remains approximately 360px; the
+detail workspace begins at the same boundary; the main detail content stays a centered,
+constrained desktop column; and the Anchor, attention rail, Customer Need, Actual Work, and
+communication workspace retain their established working width. This is not an application
+re-layout. Make the final refinements inside that proven geometry; do not widen/narrow panes or
+turn the desktop canvas into a full-bleed layout. Mobile is a later, separate responsive design
+task and must not disturb this desktop baseline.
+
+**Already implemented locally, pending normal review/commit:** Actual Work has been changed from a
+centered modal and expanded canvas history into a right-side 420px execution drawer. The canvas
+shows one compact Actual Work strip; the drawer has an editable tinted Active visit draft section,
+an Auto-saved indicator, explicit **Save draft & exit** and **Submit visit to office** actions,
+and a separate read-only locked submitted-visit accordion. Files: `ActualWorkCard.tsx`,
+`ActualWorkComposer.tsx`, `ActualWorkHistoryCard.tsx`, and `RequestDetailContent.tsx`. Focused
+Actual Work tests passed (19/19) and `pnpm typecheck` passed before handoff. Do not revert this
+back to a centered modal or re-expand historical line items into the desktop canvas.
+
+**Locked desktop decisions:**
+
+1. **Queue header:** use exactly two compact control rows above the queue content. Row 1 is the
+   existing three primary scopes; Row 2 is Search plus Views. Do not restore a separate stacked
+   "Needs Attention" row or native status filter. Compact visual labels may be Attention / All /
+   Mine only if accessible names retain Needs Attention / All Work / My Work. Preserve current
+   role-aware tab definitions, counts, keyboard behavior, and Views-popover semantics.
+2. **Queue cards:** protect long request/customer titles with `min-w-0` + truncation so title text
+   never collides with the chevron. Keep the current concise operational signals and Next action;
+   do not turn rows into badge-heavy metadata cards. Counts and status badges are subordinate to
+   the item identity and next action.
+3. **Header ledger:** retain the current clear three-column Customer contact / Service location /
+   Owner ledger and its visible, labeled three-control Internal Planning row. The full controls are
+   intentional desktop affordances; do not replace them with compact metadata pills. Standardize
+   chevron inset/spacing and preserve visible labels and existing accessible names.
+4. **Action hierarchy:** **Contact customer** is a utility/outline action. The effective-attention
+   rail owns the contextual primary action. For a `respond_to_customer` first-response obligation,
+   its label should be **Send first response**, not the ambiguous "Respond to customer." For other
+   server guidance keys, retain server-routed factual labels/destinations; do not hard-code a
+   generic response action. **Mark work complete** must be visually demoted whenever attention
+   remains, with nearby truthful consequence copy. It must not visually outrank the active amber
+   rail just because it is a terminal work-state action.
+5. **Customer Need:** keep the permanent quiet module directly below the conditional attention
+   rail. It is original customer context, never an attention artifact or timeline substitute.
+6. **Actual Work strip copy must be mutually exclusive:**
+   - no draft: `No draft in progress · N submitted visits locked` + **Add actual work**;
+   - active draft: `Draft visit in progress · N items` (+ locked-history count when relevant) +
+     **Resume draft** / **Continue draft**;
+   - submitted-only: `N submitted visits locked` + **Add actual work**.
+   Never show both "No draft active" and "Draft visit started." Submitted records are immutable;
+   the drawer must state that clearly rather than implying office approval or editable status.
+
+**Desktop visual acceptance pass:** test at 100%, 125%, and 150% zoom and at the actual queue-pane
+width. There must be no clipped title/chevron, floating select chevron, accidental horizontal
+scroll, ambiguous competing primary CTA, inaccessible tab/popover/drawer control, or expanded
+Actual Work history bloat on the canvas. Verify keyboard focus, Escape/outside close and focus
+return for the Actual Work drawer. Run focused tests plus `pnpm typecheck`, `pnpm check:tokens`,
+and `git diff --check` for any desktop presentation change.
+
+**Next after desktop signoff:** mobile/PWA Request Detail. Treat it as a responsive interaction
+design pass, not a shrink-to-fit desktop conversion: the queue, ledger, attention rail, planning
+controls, inline communication workspace, and Actual Work drawer need deliberate small-screen
+prioritization and sheet behavior.
 
 ### Request Detail — permanent Customer Need + compact attention rail — complete (2026-08-24)
 

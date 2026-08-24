@@ -91,7 +91,7 @@ export function RequestDetailContent(props: RequestDetailContentProps) {
               onStartCapture={() => void actualWorkCapture.startCapture()}
               bare
             />
-            <ActualWorkHistoryCard state={actualWorkHistory.state} onRetry={() => void actualWorkHistory.retry()} bare />
+            {!actualWorkCardVisible && <ActualWorkHistoryCard state={actualWorkHistory.state} onRetry={() => void actualWorkHistory.retry()} bare />}
           </div>
         )}
 
@@ -173,6 +173,7 @@ export function RequestDetailContent(props: RequestDetailContentProps) {
             void actualWorkHistory.retry();
           }}
           onDiscarded={actualWorkCapture.onDraftDiscarded}
+          submittedVisits={actualWorkHistory.state.status === "loaded" ? actualWorkHistory.state.submittedVisits : []}
         />
       )}
     </div>

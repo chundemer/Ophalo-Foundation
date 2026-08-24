@@ -33,7 +33,7 @@ describe("ActualWorkHistoryCard", () => {
     expect(onRetry).toHaveBeenCalledTimes(1);
   });
 
-  it("renders submitted visits with a human-readable outcome label and formatted date", () => {
+  it("renders a compact locked-count summary for a single submitted visit", () => {
     const state: ActualWorkHistoryState = {
       status: "loaded",
       submittedVisits: [
@@ -51,13 +51,14 @@ describe("ActualWorkHistoryCard", () => {
     };
     render(<ActualWorkHistoryCard state={state} onRetry={vi.fn()} />);
 
-    expect(screen.getByText("No work authorized")).toBeInTheDocument();
-    expect(screen.getByText("Customer declined repair.")).toBeInTheDocument();
-    expect(screen.getByText(/Filter/)).toBeInTheDocument();
-    expect(screen.queryByText("NoWorkAuthorized")).not.toBeInTheDocument();
+    expect(screen.getByText("Visit history")).toBeInTheDocument();
+    expect(screen.getByText("1 submitted visit · locked record")).toBeInTheDocument();
+    // Per-visit outcome/note/line detail moved to the Actual Work drawer's SubmittedVisits accordion.
+    expect(screen.queryByText("No work authorized")).not.toBeInTheDocument();
+    expect(screen.queryByText("Customer declined repair.")).not.toBeInTheDocument();
   });
 
-  it("shows only the most recent visit open, collapsing older visits behind a disclosure", () => {
+  it("pluralizes the locked-count summary for multiple submitted visits", () => {
     const state: ActualWorkHistoryState = {
       status: "loaded",
       submittedVisits: [
@@ -68,27 +69,21 @@ describe("ActualWorkHistoryCard", () => {
     };
     render(<ActualWorkHistoryCard state={state} onRetry={vi.fn()} />);
 
-    expect(screen.getByText("Most recent visit note")).toBeInTheDocument();
-    expect(screen.getByText("2 earlier visits")).toBeInTheDocument();
-    // Collapsed <details> content is present in the DOM but not open by default.
-    const details = screen.getByText("2 earlier visits").closest("details");
-    expect(details).not.toHaveAttribute("open");
-    expect(screen.getByText("Middle visit note")).toBeInTheDocument();
-    expect(screen.getByText("Oldest visit note")).toBeInTheDocument();
+    expect(screen.getByText("3 submitted visits · locked record")).toBeInTheDocument();
   });
 
-  it("shows the submitted-locked indicator on every visit entry", () => {
+  it("shows a lock affordance icon alongside the summary", () => {
     const state: ActualWorkHistoryState = {
       status: "loaded",
       submittedVisits: [
         { id: "v1", status: "SubmittedToOffice", outcome: null, completionNote: null, submittedAtUtc: "2026-01-01T12:00:00Z", lines: [] },
       ],
     };
-    render(<ActualWorkHistoryCard state={state} onRetry={vi.fn()} />);
-    expect(screen.getByText("Submitted · locked")).toBeInTheDocument();
+    const { container } = render(<ActualWorkHistoryCard state={state} onRetry={vi.fn()} />);
+    expect(container.querySelector("svg")).toBeInTheDocument();
   });
 
-  it("null-guards a missing submittedAtUtc", () => {
+  it("null-guards a missing submittedAtUtc without affecting the summary count", () => {
     const state: ActualWorkHistoryState = {
       status: "loaded",
       submittedVisits: [
@@ -97,6 +92,6 @@ describe("ActualWorkHistoryCard", () => {
     };
     render(<ActualWorkHistoryCard state={state} onRetry={vi.fn()} />);
 
-    expect(screen.getByText("Submitted")).toBeInTheDocument();
+    expect(screen.getByText("1 submitted visit · locked record")).toBeInTheDocument();
   });
 });
