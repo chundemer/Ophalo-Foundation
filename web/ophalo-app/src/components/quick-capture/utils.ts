@@ -17,7 +17,7 @@ export type Stage =
   | { kind: "handoff" }
   | { kind: "lookup" }
   | { kind: "result"; lookup: PhoneLookupResult; lockedPhone: string }
-  | { kind: "capture"; prefill: { name?: string; email?: string; description?: string; wasTruncated?: boolean } | null; lockedPhone: string }
+  | { kind: "capture"; prefill: { name?: string; email?: string; description?: string; wasTruncated?: boolean } | null; lockedPhone: string; existingCustomerId?: string }
   | { kind: "success"; requestId: string; referenceCode: string; pageToken: string; customerPhone: string; customerEmail: string | null; customerName: string };
 
 export const SOURCE_OPTIONS = [

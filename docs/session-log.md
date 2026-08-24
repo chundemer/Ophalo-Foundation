@@ -12,40 +12,30 @@
 - Request Detail interaction contract: [Workbench signoff specification](ux-design/v2/request-detail-workbench-signoff-spec.md)
 - Effective-attention contract and precedence: [Request Detail API preflight](ux-design/v2/request-detail-workbench-api-preflight.md)
 
-## Current work — New Request possible-existing-customer lookup
+## Current work
 
-**Decision:** [ADR-492](decisions/ADR-492-new-request-possible-existing-customer-lookup.md)
-(including its 2026-08-24 amendment on candidate identity/reuse) supersedes GAP-025's silent
-request-phone prefill. This is a focused repair of the existing desktop New Request / Quick
-Capture workflow before mobile work begins. Do not redesign the request workbench, begin
-mobile/PWA layout work, backfill customers, or add a customer-history workspace.
+None queued. Next batch to be defined by Christian.
 
-Backend contract is implemented and locked (see build log below). Remaining scope is frontend only.
+### Frontend — possible-existing-customer lookup + reuse contract — complete (2026-08-24)
 
-**Next batch — frontend:**
+Implemented per [ADR-492](decisions/ADR-492-new-request-possible-existing-customer-lookup.md)
+(including its 2026-08-24 amendment). `QuickCapture`/`LookupResultView` now render a distinct
+**Possible existing customer** decision screen — mutually exclusive with the exact-match Customer
+Found screen — showing `possibleCustomer.activeRequests` cards when present or a concise
+prior-request cue when empty. Two explicit staff actions: **Use existing customer details** (sends
+`candidateCustomerId` as `existingCustomerId` on create) and **Create as new customer** (omits it,
+proceeds with entered phone only); neither fires from a bare lookup. `apiClient.types.ts` /
+`mockApiClient.ts` updated to the backend shape (`PhoneLookupResult.possibleCustomer`,
+`CreateRequestBody.existingCustomerId`); removed the old `Prefill`-shaped typing.
 
-1. Change `QuickCapture` / `LookupResultView` so a `PossibleCustomer` lookup result renders an
-   explicit decision screen: label it **Possible existing customer**; show its `ActiveRequests`
-   cards (already scoped/sorted server-side) when present; show a concise prior-request cue when
-   `ActiveRequests` is empty. Keep it short — no full history browser. Never render this alongside
-   or in place of the exact-match `Customer` screen — the two are mutually exclusive per result.
-2. Add two explicit staff actions: **Use existing customer details** sends
-   `PossibleCustomer.CandidateCustomerId` as `ExistingCustomerId` on the create call; **Create as
-   new customer** omits it and proceeds with the entered phone only. Neither path may fire from a
-   bare phone lookup — only from the explicit button.
-3. Preserve entered phone and existing draft/back behavior; accessible modal focus/Escape behavior
-   matches the existing Customer Found screen.
-4. Update `apiClient.ts` / `mockApiClient.ts` typed lookup and create contracts to match the
-   backend shape (`PhoneLookupResult.PossibleCustomer`, `CreateBusinessRequestBody.ExistingCustomerId`) —
-   remove any lingering `Prefill`-shaped typing.
+Files: `QuickCapture.tsx`, `quick-capture/LookupResultView.tsx`, `quick-capture/CaptureForm.tsx`,
+`quick-capture/utils.ts`, `lib/apiClient.ts`, `lib/apiClient.types.ts`, `mocks/mockApiClient.ts`,
+`quick-capture/__tests__/LookupGate.test.tsx`,
+`quick-capture/__tests__/PossibleExistingCustomer.test.tsx` (new).
 
-**Tests required:** frontend coverage proving labels, card navigation, explicit reuse/new paths,
-draft preservation, and accessible modal focus behavior. Run focused frontend suite, `pnpm
-typecheck`, `pnpm check:tokens`, and `git diff --check`.
-
-**Done when:** a desktop browser pass shows all three lookup outcomes (exact customer, possible
-customer with active work, possible customer with history only) without a duplicate/implicit-link
-path. Report the API contract and screenshot evidence for review before mobile UI begins.
+Verified: `pnpm typecheck` clean, `pnpm check:tokens` passed, `git diff --check` clean, focused
+`quick-capture` + `lib` suite 56/56 passing (4 new). Confirmed working by Christian against the
+real backend, including all three lookup outcomes in the browser.
 
 ### Backend — possible-existing-customer lookup + reuse contract — complete (2026-08-24)
 

@@ -7,6 +7,7 @@ import { SOURCE_OPTIONS, formatNaPhone, DESCRIPTION_MAX_LENGTH, type CaptureForm
 interface CaptureFormProps {
   lockedPhone: string;
   prefill: { name?: string; email?: string; description?: string; wasTruncated?: boolean } | null;
+  existingCustomerId?: string;
   initialDraft?: CaptureFormDraft;
   isPastDue: boolean;
   isReadOnly: boolean;
@@ -18,6 +19,7 @@ interface CaptureFormProps {
 export function CaptureForm({
   lockedPhone,
   prefill,
+  existingCustomerId,
   initialDraft,
   isPastDue,
   isReadOnly,
@@ -57,6 +59,7 @@ export function CaptureForm({
         customerEmail: email.trim() || undefined,
         description: description.trim(),
         source,
+        ...(existingCustomerId ? { existingCustomerId } : {}),
         ...(showAddress ? {
           serviceAddressLine1: addrLine1.trim(),
           serviceAddressLine2: addrLine2.trim() || undefined,

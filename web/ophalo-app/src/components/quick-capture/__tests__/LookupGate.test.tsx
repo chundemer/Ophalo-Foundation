@@ -25,7 +25,7 @@ vi.mock("../../../lib/apiClient", async () => {
 
 const emptyResult: PhoneLookupResult = {
   customer: null,
-  prefill: null,
+  possibleCustomer: null,
   activeRequests: [],
   hasMoreActiveRequests: false,
 };

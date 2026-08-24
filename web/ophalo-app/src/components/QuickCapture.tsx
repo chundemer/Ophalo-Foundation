@@ -35,18 +35,11 @@ export function QuickCapture({ onClose, onSelectRequest, isPastDue = false, isRe
   const [captureFormDraft, setCaptureFormDraft] = useState<CaptureFormDraft | null>(null);
 
   function handleLookupSuccess(result: PhoneLookupResult, phone: string) {
-    if (result.customer) {
-      // Always show the result view when a customer is found — whether they have active requests
-      // or not. "Customer match, no active requests → show customer name + Create New Request."
+    if (result.customer || result.possibleCustomer) {
+      // Exact match and possible-existing-customer (ADR-492) are mutually exclusive results,
+      // but both route through the same decision screen — always show it before capture, whether
+      // active requests exist or not.
       setStage({ kind: "result", lookup: result, lockedPhone: phone });
-    } else if (result.prefill) {
-      // GAP-025: no KeepCustomer row, but a legacy request carries this phone — prefill identity
-      // fields directly rather than fabricating a customer-found result view.
-      setStage({
-        kind: "capture",
-        lockedPhone: phone,
-        prefill: { name: result.prefill.name, email: result.prefill.email ?? undefined },
-      });
     } else {
       // No match — advance directly to capture with locked phone, no prefill.
       setStage({ kind: "capture", lockedPhone: phone, prefill: null });
@@ -91,7 +84,9 @@ export function QuickCapture({ onClose, onSelectRequest, isPastDue = false, isRe
       : stage.kind === "lookup"
         ? "Look Up Customer"
         : stage.kind === "result"
-          ? "Customer Found"
+          ? stage.lookup.customer
+            ? "Customer Found"
+            : "Possible Existing Customer"
           : stage.kind === "capture"
             ? followUpPrefill ? "Create Follow-up Request" : "New Request"
             : "Request Captured";
@@ -132,6 +127,21 @@ export function QuickCapture({ onClose, onSelectRequest, isPastDue = false, isRe
                 : null,
             })
           }
+          onUseExistingCustomer={(candidateCustomerId) =>
+            setStage({
+              kind: "capture",
+              lockedPhone,
+              prefill: lookup.possibleCustomer
+                ? { name: lookup.possibleCustomer.name, email: lookup.possibleCustomer.email ?? undefined }
+                : null,
+              existingCustomerId: candidateCustomerId,
+            })
+          }
+          onCreateAsNew={() =>
+            // No candidate id and no prefill — a bare phone lookup must never silently reuse
+            // possible-existing-customer identity (ADR-492).
+            setStage({ kind: "capture", lockedPhone, prefill: null })
+          }
           onNavigateToRequest={handleNavigateToExisting}
           onBack={() => setStage({ kind: "lookup" })}
         />
@@ -143,6 +153,7 @@ export function QuickCapture({ onClose, onSelectRequest, isPastDue = false, isRe
         <CaptureForm
           lockedPhone={stage.lockedPhone}
           prefill={stage.prefill}
+          existingCustomerId={stage.existingCustomerId}
           initialDraft={captureFormDraft ?? undefined}
           isPastDue={isPastDue}
           isReadOnly={isReadOnly}

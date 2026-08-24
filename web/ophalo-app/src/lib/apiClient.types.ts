@@ -117,16 +117,22 @@ export interface PhoneLookupActiveRequest {
   lastActivityAtUtc: string | null;
 }
 
-export interface PhoneLookupPrefill {
+// ADR-492: a request-phone-only match is continuity evidence, not confirmed identity — the
+// candidate's id is real but its current phone may no longer match what was entered.
+export interface PhoneLookupPossibleCustomer {
+  candidateCustomerId: string;
   name: string;
+  phone: string;
   email: string | null;
+  activeRequests: PhoneLookupActiveRequest[];
+  hasMoreActiveRequests: boolean;
 }
 
 export interface PhoneLookupResult {
   customer: PhoneLookupCustomer | null;
-  prefill: PhoneLookupPrefill | null;
   activeRequests: PhoneLookupActiveRequest[];
   hasMoreActiveRequests: boolean;
+  possibleCustomer: PhoneLookupPossibleCustomer | null;
 }
 
 export interface CreateRequestBody {
@@ -140,6 +146,7 @@ export interface CreateRequestBody {
   serviceCity?: string;
   serviceState?: string;
   serviceZip?: string;
+  existingCustomerId?: string;
 }
 
 export interface AvailableActionsMetadata {
