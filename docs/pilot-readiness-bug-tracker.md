@@ -1363,27 +1363,24 @@ removed or disabled.
 
 ### GAP-025 — Quick Capture does not recognize a customer found by request-list phone search
 
-**Status:** Complete (Session 2.3). `LookupKeepRequestByPhoneService` falls back to
-`IKeepBusinessRequestPersistence.FindMostRecentRequestByCustomerPhoneAsync` (account-scoped) when
-the canonical customer lookup misses, and returns a distinct `PhoneLookupResult.Prefill` (name/
-email) without creating or linking a `KeepCustomer` row — a locked decision (read-only prefill
-only, no backfill). Since `PhoneNormalizer` isn't SQL-translatable, the raw `CustomerPhone` is
-normalized in a raw-SQL `regexp_replace(customer_phone, '[^0-9]', '', 'g')` predicate (via
-`FromSqlInterpolated`, composed with `OrderByDescending`/`AsNoTracking`) so the SQL-side strip is
-digit-for-digit equivalent to `PhoneNormalizer` — matching every account-scoped row exactly, in the
-database, with no candidate cap. Two earlier drafts were caught in review and replaced before this
-was marked complete: a `Contains(last4-digits)` + `Take(50)` prefilter that could silently exclude a
-valid match behind 50+ newer same-account rows sharing those trailing digits, and a chained
-`string.Replace` punctuation strip that only removed the specific characters
-`KeepRequestInputValidator` allows on write and would miss a legacy value using an unanticipated
-separator (e.g. `555/123/4999`). Quick Capture (`QuickCapture.tsx`) carries the prefill straight
-into `CaptureForm` while keeping `customer: null`. 4 new focused service-level tests
-(`LookupKeepRequestByPhoneServiceTests.cs`) cover the legacy-match fallback, no-match case,
-customer-match short-circuit, and account isolation; 4 new persistence-level tests against real
-PostgreSQL (`KeepPersistenceProofTests.cs`) prove the fix directly, including the 60-decoy
-candidate-cap regression and the unanticipated-separator regression. Full backend Keep unit suite
-960/960, Keep persistence proof suite 34/34, frontend suite 144/144 passing, `tsc --noEmit` and
-`git diff --check` clean.
+**Status:** Reopened (2026-08-24). The Session 2.3 fallback correctly recognizes an exact
+account-scoped request-phone match, but deliberately carries it straight into capture as a silent
+name/email prefill while keeping `customer: null` and returning no active-request context. That
+behavior hides continuity information and makes it too easy to duplicate active work.
+
+**Locked resolution:** ADR-492 supersedes the silent-prefill behavior. Preserve the exact
+canonical-customer lookup and its existing Customer Found view. A request-phone-only fallback must
+instead return an explicitly labelled **possible existing customer** result, with up to three linked
+active request cards when present and a concise historical cue otherwise. Staff may open an active
+request, explicitly reuse the candidate's details, or create as a new customer; no match may
+auto-select, navigate, silently link, or backfill a customer. The explicit reuse choice requires a
+server-authorized create contract. Preserve tenant isolation, the exact normalized SQL lookup, and
+the no-candidate-cap protections from the prior resolution.
+
+**Prior implementation evidence:** `FindMostRecentRequestByCustomerPhoneAsync` uses an
+account-scoped raw-SQL `regexp_replace(customer_phone, '[^0-9]', '', 'g')` predicate because
+`PhoneNormalizer` is not SQL-translatable. The exact database matching and its regression coverage
+remain required; only the result semantics are superseded.
 **Severity:** P1
 **Area:** `ophalo-app` Quick Capture lookup; Keep customer/request identity data
 
