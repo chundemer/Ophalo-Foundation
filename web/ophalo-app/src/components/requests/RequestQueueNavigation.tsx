@@ -1,5 +1,5 @@
-import { useEffect, useId, useRef, useState } from "react";
-import { ChevronLeft, ChevronDown } from "lucide-react";
+import { useRef } from "react";
+import { ChevronLeft } from "lucide-react";
 import type { KeepRequestViewCounts } from "../../lib/apiClient";
 import {
   countForTab,
@@ -10,330 +10,37 @@ import {
   type HistoryDateScope,
 } from "../../pages/requestsWorkspace";
 
-// UI-004 amendment (2026-08-21): the aggregate/loading/error contract for the Office Review
-// strip. "error" is distinct from "loading" — a failed count query must never sit behind a
-// perpetual placeholder, and must never fall back to a guessed zero.
-export type OfficeReviewState =
-  | { status: "loading" }
-  | { status: "error"; retry: () => void }
-  | {
-      status: "ready";
-      aggregate: number;
-      members: { readyToClose: number; feedbackReview: number; actualWorkReview: number };
-    };
-
-type DisclosureId = "office_review" | "views";
-
 interface RequestQueueNavigationProps {
   tabs: TabDef[];
   activeTab: TabDef;
   viewCounts: KeepRequestViewCounts | null;
-  secondaryViews: TabDef[];
-  officeReviewMembers: TabDef[];
-  officeReview: OfficeReviewState;
   onSelectTab: (tab: TabDef) => void;
   historyMode: boolean;
   historyScope: HistoryScope;
   historyDateScope: HistoryDateScope;
-  isOwnerOrAdmin: boolean;
-  onEnterHistory: () => void;
   onExitHistory: () => void;
   onUpdateHistoryScope: (scope: HistoryScope) => void;
   onUpdateHistoryDateScope: (scope: HistoryDateScope) => void;
   // UI-001 post-Step-4 density refinement (build-log 134 §1, locked 2026-08-21): the 320-360
-  // CSS-px bounded Queue pane compresses to two rows — Row 1 is the three primary tabs sharing
-  // one row (full labels, inline "· N" counts, role-agnostic); Row 2 groups Office Review
-  // (left) with Views/History (right) as secondary navigation/utilities. Undefined/false keeps
-  // today's full-width layout.
+  // CSS-px bounded Queue pane compresses the primary tabs to a two-row grid. Undefined/false
+  // keeps today's full-width single-row layout.
   paneMode?: boolean;
-}
-
-// UI-004 amendment: a plain disclosure/group — not an ARIA menu, since it doesn't implement
-// full menu keyboard traversal (arrow keys, typeahead). Escape and an outside pointerdown both
-// dismiss and return focus to the trigger; selecting an item does the same after navigating.
-// Only one of Office Review / Views may be open at a time — callers pass shared open/onOpen
-// state so opening one closes the other.
-function DisclosureButton({
-  id,
-  isOpen,
-  onOpenChange,
-  label,
-  ariaLabel,
-  children,
-  align = "left",
-  fullWidth = false,
-}: {
-  id: DisclosureId;
-  isOpen: boolean;
-  onOpenChange: (id: DisclosureId | null) => void;
-  label: React.ReactNode;
-  ariaLabel: string;
-  // Render prop: `dismiss` closes this disclosure AND returns focus to its own trigger — use
-  // it for Escape, outside-pointerdown, and item selection. A close caused by the *other*
-  // disclosure opening (mutual exclusion) does NOT call dismiss and must NOT steal focus back
-  // from whatever the user just clicked.
-  children: (dismiss: () => void) => React.ReactNode;
-  align?: "left" | "right";
-  // Stretches the trigger to fill its container instead of staying content-width, per the
-  // UI-004 amendment's presentation-variant rule. Unused by the current pane-mode layout
-  // (build-log 134 §1), kept for callers that still want a full-width strip.
-  fullWidth?: boolean;
-}) {
-  const triggerRef = useRef<HTMLButtonElement | null>(null);
-  const containerRef = useRef<HTMLDivElement | null>(null);
-  const popoverId = useId();
-
-  function dismiss() {
-    onOpenChange(null);
-    triggerRef.current?.focus();
-  }
-
-  useEffect(() => {
-    if (!isOpen) return;
-    function handlePointerDown(e: PointerEvent) {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        dismiss();
-      }
-    }
-    function handleKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") {
-        dismiss();
-      }
-    }
-    document.addEventListener("pointerdown", handlePointerDown);
-    document.addEventListener("keydown", handleKeyDown);
-    return () => {
-      document.removeEventListener("pointerdown", handlePointerDown);
-      document.removeEventListener("keydown", handleKeyDown);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen]);
-
-  return (
-    <div ref={containerRef} className="relative">
-      <button
-        ref={triggerRef}
-        type="button"
-        aria-expanded={isOpen}
-        aria-controls={isOpen ? popoverId : undefined}
-        onClick={() => onOpenChange(isOpen ? null : id)}
-        className={`flex cursor-pointer items-center gap-1 text-xs font-medium text-[var(--ophalo-muted)] hover:text-[var(--ophalo-ink)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] rounded px-1 py-1 ${
-          fullWidth ? "w-full justify-between" : ""
-        }`}
-      >
-        {label}
-        <ChevronDown className="h-3 w-3 shrink-0" />
-      </button>
-      {isOpen && (
-        <div
-          id={popoverId}
-          role="group"
-          aria-label={ariaLabel}
-          className={`absolute ${align === "right" ? "right-0" : "left-0"} z-20 mt-1 min-w-[12rem] rounded-md border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] py-1 shadow-lg`}
-        >
-          {children(dismiss)}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function ViewsControl({
-  secondaryViews,
-  activeTab,
-  viewCounts,
-  onSelectTab,
-  isOpen,
-  onOpenChange,
-}: {
-  secondaryViews: TabDef[];
-  activeTab: TabDef;
-  viewCounts: KeepRequestViewCounts | null;
-  onSelectTab: (tab: TabDef) => void;
-  isOpen: boolean;
-  onOpenChange: (id: DisclosureId | null) => void;
-}) {
-  if (secondaryViews.length === 0) return null;
-  const activeSecondaryTab = secondaryViews.find((t) => t.id === activeTab.id) ?? null;
-
-  return (
-    <DisclosureButton
-      id="views"
-      isOpen={isOpen}
-      onOpenChange={onOpenChange}
-      ariaLabel="Views"
-      label={activeSecondaryTab ? `Views: ${activeSecondaryTab.label}` : "Views"}
-    >
-      {(dismiss) =>
-        secondaryViews.map((tab) => {
-          const count = countForTab(tab, viewCounts);
-          const isActive = tab.view === activeTab.view;
-          return (
-            <button
-              key={tab.id}
-              type="button"
-              aria-current={isActive}
-              onClick={() => { onSelectTab(tab); dismiss(); }}
-              className={`flex w-full items-center justify-between gap-2 px-3 py-1.5 text-sm hover:bg-[var(--ophalo-canvas)] ${
-                isActive ? "font-semibold text-[var(--ophalo-navy)]" : "text-[var(--ophalo-ink)]"
-              }`}
-            >
-              <span>{tab.label}</span>
-              {count != null && count > 0 && (
-                <span className="rounded-full bg-[var(--keep-accent-bg)] px-1.5 py-0.5 text-xs font-semibold text-[var(--keep-accent)]">
-                  {count}
-                </span>
-              )}
-            </button>
-          );
-        })
-      }
-    </DisclosureButton>
-  );
-}
-
-// UI-004 amendment: navy/neutral, never amber — Needs Attention keeps sole ownership of the
-// customer-promise-risk color. Collapsed default reads "Office Review · N pending"; once a
-// member is the active tab it names that destination instead, the same convention Views uses
-// for Watching. Opened, actionable (non-zero) members lead; zero-count members collapse into
-// one quiet line rather than standing as equal-weight zero-badge rows.
-function OfficeReviewControl({
-  officeReviewMembers,
-  activeTab,
-  officeReview,
-  onSelectTab,
-  isOpen,
-  onOpenChange,
-  fullWidth = false,
-}: {
-  officeReviewMembers: TabDef[];
-  activeTab: TabDef;
-  officeReview: OfficeReviewState;
-  onSelectTab: (tab: TabDef) => void;
-  isOpen: boolean;
-  onOpenChange: (id: DisclosureId | null) => void;
-  // UI-001 Step 4: pane-width variant — see DisclosureButton's fullWidth doc.
-  fullWidth?: boolean;
-}) {
-  if (officeReviewMembers.length === 0) return null;
-
-  const memberCount = (tab: TabDef): number => {
-    if (officeReview.status !== "ready") return 0;
-    switch (tab.id) {
-      case "ready_to_close": return officeReview.members.readyToClose;
-      case "feedback_review": return officeReview.members.feedbackReview;
-      case "actual_work_review": return officeReview.members.actualWorkReview;
-      default: return 0;
-    }
-  };
-
-  if (officeReview.status === "loading") {
-    return (
-      <div
-        aria-hidden="true"
-        className={`h-7 animate-pulse motion-reduce:animate-none items-center rounded-full bg-[var(--ophalo-canvas)] ${
-          fullWidth ? "flex w-full" : "inline-flex w-44"
-        }`}
-      />
-    );
-  }
-
-  if (officeReview.status === "error") {
-    return (
-      <button
-        type="button"
-        onClick={officeReview.retry}
-        className={`items-center gap-1.5 rounded-full border border-[var(--ophalo-border)] px-3 py-1 text-xs font-medium text-[var(--ophalo-muted)] hover:text-[var(--ophalo-ink)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] ${
-          fullWidth ? "flex w-full justify-center" : "inline-flex"
-        }`}
-      >
-        Office Review — couldn’t load counts · Retry
-      </button>
-    );
-  }
-
-  if (officeReview.aggregate <= 0) return null;
-
-  const activeMember = officeReviewMembers.find((t) => t.id === activeTab.id) ?? null;
-  const [actionable, empty] = officeReviewMembers.reduce<[TabDef[], TabDef[]]>(
-    (acc, tab) => {
-      acc[memberCount(tab) > 0 ? 0 : 1].push(tab);
-      return acc;
-    },
-    [[], []],
-  );
-
-  return (
-    <DisclosureButton
-      id="office_review"
-      isOpen={isOpen}
-      onOpenChange={onOpenChange}
-      ariaLabel="Office Review"
-      fullWidth={fullWidth}
-      label={
-        <span
-          className={`items-center gap-1.5 rounded-full bg-[var(--ophalo-navy)]/10 px-2.5 py-1 text-[var(--ophalo-navy)] ${
-            fullWidth ? "flex flex-1 min-w-0" : "inline-flex"
-          }`}
-        >
-          {activeMember ? `Office Review: ${activeMember.label}` : `Office Review · ${officeReview.aggregate} pending`}
-        </span>
-      }
-    >
-      {(dismiss) => (
-        <>
-          {actionable.map((tab) => {
-            const count = memberCount(tab);
-            const isActive = tab.view === activeTab.view;
-            return (
-              <button
-                key={tab.id}
-                type="button"
-                aria-current={isActive}
-                onClick={() => { onSelectTab(tab); dismiss(); }}
-                className={`flex w-full items-center justify-between gap-2 px-3 py-1.5 text-sm hover:bg-[var(--ophalo-canvas)] ${
-                  isActive ? "font-semibold text-[var(--ophalo-navy)]" : "text-[var(--ophalo-ink)]"
-                }`}
-              >
-                <span>{tab.label}</span>
-                <span className="rounded-full bg-[var(--keep-accent-bg)] px-1.5 py-0.5 text-xs font-semibold text-[var(--keep-accent)]">
-                  {count}
-                </span>
-              </button>
-            );
-          })}
-          {empty.length > 0 && (
-            <div className="px-3 py-1.5 text-xs text-[var(--ophalo-muted)]">
-              No {empty.map((t) => t.label).join(", ")}
-            </div>
-          )}
-        </>
-      )}
-    </DisclosureButton>
-  );
 }
 
 export function RequestQueueNavigation({
   tabs,
   activeTab,
   viewCounts,
-  secondaryViews,
-  officeReviewMembers,
-  officeReview,
   onSelectTab,
   historyMode,
   historyScope,
   historyDateScope,
-  isOwnerOrAdmin,
-  onEnterHistory,
   onExitHistory,
   onUpdateHistoryScope,
   onUpdateHistoryDateScope,
   paneMode = false,
 }: RequestQueueNavigationProps) {
   const tabRefs = useRef<(HTMLButtonElement | null)[]>([]);
-  // UI-004 amendment: only one of Office Review / Views may be open at a time.
-  const [openDisclosure, setOpenDisclosure] = useState<DisclosureId | null>(null);
 
   // GAP-041: roving-tabindex keyboard pattern — Left/Right/Home/End move focus and
   // selection together; Enter/Space activation is native <button> behavior, unchanged.
@@ -360,12 +67,11 @@ export function RequestQueueNavigation({
     tabRefs.current[nextIndex]?.focus();
   }
 
-  // Shared tab-button rendering for the full-width horizontal strip, the pane-mode single-row
-  // grid, and the one-pane fallback. `fill` stretches each button to share its row evenly (pane
-  // mode); the full-width strip keeps its intrinsic, whitespace-nowrap sizing instead.
-  // `denseCount` swaps the badge-pill count for an inline "· N" (pane mode only, build-log 134
-  // §1) — full labels are never abbreviated, only the count treatment shrinks to fit three tabs
-  // on one row at the 320-360 CSS-px pane width.
+  // Shared tab-button rendering for the full-width horizontal strip and the pane-mode grid.
+  // `fill` stretches each button to share its row evenly (pane mode); the full-width strip keeps
+  // its intrinsic, whitespace-nowrap sizing instead. `denseCount` swaps the badge-pill count for
+  // an inline "· N" (pane mode only, build-log 134 §1) — full labels are never abbreviated, only
+  // the count treatment shrinks to fit three tabs on one row at the 320-360 CSS-px pane width.
   function renderTabButton(tab: TabDef, i: number, fill: boolean, denseCount = false) {
     const count = countForTab(tab, viewCounts);
     const isActive = tab.view === activeTab.view;
@@ -409,103 +115,28 @@ export function RequestQueueNavigation({
     <div className="border-t border-[var(--ophalo-border)]">
       {!historyMode ? (
         paneMode ? (
-          <>
-            {/* Row 1: two-row primary tab grid, locked keep-ui-design-model-v2.md §13 — tabs[0]
-                gets its own full-width row, tabs[1]/tabs[2] share the second row. Role ordering
-                already places each role's primary tab first, so this split is role-agnostic.
-                Measured evidence (build-log 134 §2, 2026-08-21): at the true 360px pane width, a
-                single 3-way row with full labels + badge-pill counts wraps "Needs Attention" to
-                two lines (real-browser measurement via mock harness), so the single-row layout
-                was rejected in favor of retaining this two-row grid. */}
-            <div role="tablist" aria-label="Request queues" className="flex flex-col gap-1 px-3 pt-2 sm:px-4">
-              <div className="flex">{renderTabButton(tabs[0], 0, true)}</div>
-              {tabs.length > 1 && (
-                <div className="flex gap-1">
-                  {tabs.slice(1).map((tab, i) => renderTabButton(tab, i + 1, true))}
-                </div>
-              )}
-            </div>
-
-            {/* Row 2: secondary navigation/utilities, grouped together beneath the primary
-                queues — Office Review (Owner/Admin only) on the left, Views/History on the
-                right, per build-log 134 §1. */}
-            <div className="flex items-center gap-2 px-3 pt-2 pb-2 sm:px-4">
-              {isOwnerOrAdmin && (
-                <OfficeReviewControl
-                  officeReviewMembers={officeReviewMembers}
-                  activeTab={activeTab}
-                  officeReview={officeReview}
-                  onSelectTab={onSelectTab}
-                  isOpen={openDisclosure === "office_review"}
-                  onOpenChange={setOpenDisclosure}
-                />
-              )}
-              <div className="flex items-center gap-3 shrink-0 ml-auto">
-                <ViewsControl
-                  secondaryViews={secondaryViews}
-                  activeTab={activeTab}
-                  viewCounts={viewCounts}
-                  onSelectTab={onSelectTab}
-                  isOpen={openDisclosure === "views"}
-                  onOpenChange={setOpenDisclosure}
-                />
-                {isOwnerOrAdmin && (
-                  <button
-                    type="button"
-                    onClick={onEnterHistory}
-                    className="shrink-0 text-xs font-medium text-[var(--ophalo-muted)] hover:text-[var(--ophalo-ink)] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] rounded"
-                  >
-                    History
-                  </button>
-                )}
-              </div>
-            </div>
-          </>
-        ) : (
-          <>
-            {/* Row 1: primary tabs (own scroll region) + Views/History, sharing the row when
-                space permits and wrapping together onto their own line when it doesn't. */}
-            <div className="flex items-center justify-between gap-2 flex-wrap px-4 sm:px-6">
-              <div role="tablist" aria-label="Request queues" className="flex gap-0 overflow-x-auto shrink min-w-0">
-                {tabs.map((tab, i) => renderTabButton(tab, i, false))}
-              </div>
-              <div className="flex items-center gap-3 shrink-0">
-                <ViewsControl
-                  secondaryViews={secondaryViews}
-                  activeTab={activeTab}
-                  viewCounts={viewCounts}
-                  onSelectTab={onSelectTab}
-                  isOpen={openDisclosure === "views"}
-                  onOpenChange={setOpenDisclosure}
-                />
-                {/* GAP-044: demoted, non-competing entry point — not styled as a peer tab. */}
-                {isOwnerOrAdmin && (
-                  <button
-                    type="button"
-                    onClick={onEnterHistory}
-                    className="shrink-0 text-xs font-medium text-[var(--ophalo-muted)] hover:text-[var(--ophalo-ink)] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] rounded"
-                  >
-                    History
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {/* Row 2: Office Review — directly below the primary tabs, above search/filter.
-                Owner/Admin only; contributes no row when there's nothing to review. */}
-            {isOwnerOrAdmin && (
-              <div className="px-4 pb-2 sm:px-6">
-                <OfficeReviewControl
-                  officeReviewMembers={officeReviewMembers}
-                  activeTab={activeTab}
-                  officeReview={officeReview}
-                  onSelectTab={onSelectTab}
-                  isOpen={openDisclosure === "office_review"}
-                  onOpenChange={setOpenDisclosure}
-                />
+          // Row 1: two-row primary tab grid, locked keep-ui-design-model-v2.md §13 — tabs[0]
+          // gets its own full-width row, tabs[1]/tabs[2] share the second row. Role ordering
+          // already places each role's primary tab first, so this split is role-agnostic.
+          // Measured evidence (build-log 134 §2, 2026-08-21): at the true 360px pane width, a
+          // single 3-way row with full labels + badge-pill counts wraps "Needs Attention" to
+          // two lines (real-browser measurement via mock harness), so the single-row layout
+          // was rejected in favor of retaining this two-row grid.
+          <div role="tablist" aria-label="Request queues" className="flex flex-col gap-1 px-3 pt-2 pb-2 sm:px-4">
+            <div className="flex">{renderTabButton(tabs[0], 0, true)}</div>
+            {tabs.length > 1 && (
+              <div className="flex gap-1">
+                {tabs.slice(1).map((tab, i) => renderTabButton(tab, i + 1, true))}
               </div>
             )}
-          </>
+          </div>
+        ) : (
+          // Row 1: primary tabs, own scroll region.
+          <div className="flex items-center px-4 sm:px-6">
+            <div role="tablist" aria-label="Request queues" className="flex gap-0 overflow-x-auto shrink min-w-0">
+              {tabs.map((tab, i) => renderTabButton(tab, i, false))}
+            </div>
+          </div>
         )
       ) : (
         <div className="flex flex-wrap items-center gap-3 px-4 py-3 sm:px-6">

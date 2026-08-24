@@ -127,7 +127,9 @@ describe("Requests — GAP-046 filter-state visibility and recovery", () => {
     renderRequests();
 
     await screen.findByText("Showing 1–1");
-    await user.selectOptions(screen.getByLabelText("Filter by status"), "in_progress");
+    await user.click(screen.getByRole("button", { name: "Views" }));
+    await user.click(screen.getByRole("radio", { name: "Active" }));
+    await user.click(screen.getByRole("button", { name: "Apply" }));
 
     await waitFor(() =>
       expect(screen.getByText("Applied: Status: Active")).toBeInTheDocument(),
@@ -186,8 +188,9 @@ describe("Requests — GAP-046 filter-state visibility and recovery", () => {
     const user = userEvent.setup();
     renderRequests();
 
-    await user.click(await screen.findByRole("button", { name: "History" }));
-    expect(screen.queryByLabelText("Filter by status")).not.toBeInTheDocument();
+    await user.click(await screen.findByRole("button", { name: "Views" }));
+    await user.click(screen.getByRole("button", { name: "History Log" }));
+    expect(screen.queryByRole("button", { name: /^Views/ })).not.toBeInTheDocument();
 
     const scopeGroup = screen.getByRole("group", { name: "History scope" });
     await user.click(within(scopeGroup).getByRole("button", { name: "Closed" }));
@@ -249,7 +252,9 @@ describe("Requests — GAP-046 filter-state visibility and recovery", () => {
     renderRequests();
 
     await screen.findByText("Showing 1–1");
-    await user.selectOptions(screen.getByLabelText("Filter by status"), "in_progress");
+    await user.click(screen.getByRole("button", { name: "Views" }));
+    await user.click(screen.getByRole("radio", { name: "Active" }));
+    await user.click(screen.getByRole("button", { name: "Apply" }));
     await screen.findByText("No matching requests");
     mockGetRequests.mockClear();
 
@@ -260,14 +265,15 @@ describe("Requests — GAP-046 filter-state visibility and recovery", () => {
         expect.objectContaining({ q: undefined, status: undefined, cursor: undefined }),
       ),
     );
-    expect(screen.getByLabelText("Filter by status")).toHaveValue("");
+    expect(screen.queryByRole("button", { name: "Views · 1" })).not.toBeInTheDocument();
   });
 
   it("history Clear filters preserves a non-default date scope, not just history scope", async () => {
     const user = userEvent.setup();
     renderRequests();
 
-    await user.click(await screen.findByRole("button", { name: "History" }));
+    await user.click(await screen.findByRole("button", { name: "Views" }));
+    await user.click(screen.getByRole("button", { name: "History Log" }));
     const scopeGroup = screen.getByRole("group", { name: "History scope" });
     await user.click(within(scopeGroup).getByRole("button", { name: "Closed" }));
     const dateGroup = screen.getByRole("group", { name: "Date range" });

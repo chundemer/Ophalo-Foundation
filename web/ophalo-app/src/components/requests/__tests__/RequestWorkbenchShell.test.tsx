@@ -256,7 +256,10 @@ describe("RequestWorkbenchShell", () => {
     await waitFor(() => expect(screen.getByRole("button", { name: /open request/i })).toBeInTheDocument());
 
     act(() => {
-      screen.getByRole("button", { name: "History" }).click();
+      screen.getByRole("button", { name: "Views" }).click();
+    });
+    act(() => {
+      screen.getByRole("button", { name: "History Log" }).click();
     });
 
     // History is a closed/cancelled result set, not an active queue UI-003's branches describe —

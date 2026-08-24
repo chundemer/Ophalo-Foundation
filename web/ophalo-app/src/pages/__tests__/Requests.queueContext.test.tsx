@@ -144,12 +144,11 @@ beforeEach(() => {
   mockGetRequests.mockImplementation((query: { view: string }) => Promise.resolve(listResult(query.view)));
 });
 
+// Request Queue header consolidation (locked 2026-08-24): Watching and the Owner/Admin Office
+// Review destinations both live in the single Views popover now — there is no separate Office
+// Review disclosure to open.
 async function openViews() {
   fireEvent.click(await screen.findByRole("button", { name: /^Views/ }));
-}
-
-async function openOfficeReview() {
-  fireEvent.click(await screen.findByRole("button", { name: /^Office Review/ }));
 }
 
 describe("Requests — GAP-027-adjacent queue subtitles (session 3.5)", () => {
@@ -167,11 +166,11 @@ describe("Requests — GAP-027-adjacent queue subtitles (session 3.5)", () => {
     fireEvent.click(await screen.findByRole("button", { name: /Watching/ }));
     await waitFor(() => expect(screen.getByText("Requests you're watching.")).toBeInTheDocument());
 
-    await openOfficeReview();
+    await openViews();
     fireEvent.click(await screen.findByRole("button", { name: /Ready to Close/ }));
     await waitFor(() => expect(screen.getByText("Resolved work ready for owner/admin closeout.")).toBeInTheDocument());
 
-    await openOfficeReview();
+    await openViews();
     fireEvent.click(await screen.findByRole("button", { name: /Feedback Review/ }));
     await waitFor(() => expect(screen.getByText("Closed requests with customer feedback awaiting review.")).toBeInTheDocument());
 
@@ -199,11 +198,11 @@ describe("Requests — GAP-027-adjacent queue subtitles (session 3.5)", () => {
     fireEvent.click(await screen.findByRole("button", { name: /Watching/ }));
     await waitFor(() => expect(screen.queryByText(ALL_WORK_SUBTITLE)).not.toBeInTheDocument());
 
-    await openOfficeReview();
+    await openViews();
     fireEvent.click(await screen.findByRole("button", { name: /Ready to Close/ }));
     await waitFor(() => expect(screen.queryByText(ALL_WORK_SUBTITLE)).not.toBeInTheDocument());
 
-    await openOfficeReview();
+    await openViews();
     fireEvent.click(await screen.findByRole("button", { name: /Feedback Review/ }));
     await waitFor(() => expect(screen.queryByText(ALL_WORK_SUBTITLE)).not.toBeInTheDocument());
   });
@@ -222,7 +221,11 @@ describe("Requests — GAP-027-adjacent queue subtitles (session 3.5)", () => {
 
     expect(screen.queryByRole("tab", { name: /Ready to Close/ })).not.toBeInTheDocument();
     expect(screen.queryByRole("tab", { name: /Feedback Review/ })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /^Office Review/ })).not.toBeInTheDocument();
+
+    await openViews();
+    expect(screen.queryByRole("button", { name: /Ready to Close/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Feedback Review/ })).not.toBeInTheDocument();
+    expect(screen.queryByText("History Log")).not.toBeInTheDocument();
   });
 });
 
@@ -250,7 +253,7 @@ describe("Requests — no duplicate empty-state heading (session 3.5 follow-up)"
     renderRequests("owner");
     await screen.findByRole("tab", { name: /Needs Attention/ });
 
-    await openOfficeReview();
+    await openViews();
     fireEvent.click(await screen.findByRole("button", { name: /Feedback Review/ }));
     await waitFor(() =>
       expect(screen.getByText("Closed requests with customer feedback awaiting review.")).toBeInTheDocument(),
@@ -297,19 +300,15 @@ describe("Requests — first-visit count continuity (session 3.5)", () => {
   });
 });
 
-describe("Requests — UI-004 amendment Office Review disclosure exclusivity and a11y", () => {
-  it("opening Views closes Office Review, and vice versa; each returns focus to its own trigger on close", async () => {
+describe("Requests — Views popover a11y (Request Queue header consolidation, locked 2026-08-24)", () => {
+  it("shows Watching and Office Review destinations together in one popover, and Escape returns focus to the trigger", async () => {
     renderRequests("owner");
     await screen.findByRole("tab", { name: /Needs Attention/ });
-
-    const officeReviewTrigger = await screen.findByRole("button", { name: /^Office Review/ });
-    fireEvent.click(officeReviewTrigger);
-    expect(await screen.findByRole("button", { name: /Ready to Close/ })).toBeInTheDocument();
 
     const viewsTrigger = await screen.findByRole("button", { name: /^Views/ });
     fireEvent.click(viewsTrigger);
     expect(await screen.findByRole("button", { name: /Watching/ })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /Ready to Close/ })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Ready to Close/ })).toBeInTheDocument();
 
     fireEvent.keyDown(document, { key: "Escape" });
     await waitFor(() => expect(screen.queryByRole("button", { name: /Watching/ })).not.toBeInTheDocument());
@@ -323,7 +322,7 @@ describe("Requests — UI-004 amendment Office Review disclosure exclusivity and
     renderRequests("owner");
     await screen.findByRole("tab", { name: /Needs Attention/ });
 
-    await openOfficeReview();
+    await openViews();
     expect(await screen.findByRole("button", { name: /Feedback Review/ })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Ready to Close/ })).not.toBeInTheDocument();
     expect(screen.getByText("No Ready to Close")).toBeInTheDocument();
@@ -332,12 +331,13 @@ describe("Requests — UI-004 amendment Office Review disclosure exclusivity and
   it("shows a Retry affordance (not a perpetual loading placeholder) when the Actual Work Review count fails, and recovers on retry", async () => {
     mockGetActualWorkReviewQueueCount.mockRejectedValue(new Error("network error"));
     renderRequests("owner");
+    await openViews();
 
     const retryButton = await screen.findByRole("button", { name: /couldn.t load counts/i });
 
     mockGetActualWorkReviewQueueCount.mockResolvedValue({ count: 1 });
     fireEvent.click(retryButton);
 
-    await waitFor(() => expect(screen.getByRole("button", { name: /^Office Review/ })).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole("button", { name: /Ready to Close/ })).toBeInTheDocument());
   });
 });

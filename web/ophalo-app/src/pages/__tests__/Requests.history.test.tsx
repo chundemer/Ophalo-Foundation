@@ -70,6 +70,13 @@ function listResult(requests: KeepRequestListResult["requests"], isHistory: bool
   };
 }
 
+// Request Queue header consolidation (locked 2026-08-24): History moved from a standalone
+// header button into Views as "History Log".
+async function enterHistory(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(await screen.findByRole("button", { name: "Views" }));
+  await user.click(screen.getByRole("button", { name: "History Log" }));
+}
+
 function renderRequests(role: "owner" | "admin" | "operator" = "owner") {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(
@@ -106,7 +113,8 @@ describe("Requests — GAP-044 history entry point", () => {
     renderRequests("operator");
 
     await screen.findByRole("heading", { name: "Requests" });
-    expect(screen.queryByRole("button", { name: "History" })).not.toBeInTheDocument();
+    await userEvent.setup().click(screen.getByRole("button", { name: "Views" }));
+    expect(screen.queryByRole("button", { name: "History Log" })).not.toBeInTheDocument();
     expect(mockGetRequests.mock.calls.every(([q]) => q.view !== "closed_history"
       && q.view !== "cancelled_history" && q.view !== "all_history")).toBe(true);
   });
@@ -115,8 +123,7 @@ describe("Requests — GAP-044 history entry point", () => {
     const user = userEvent.setup();
     renderRequests("owner");
 
-    const historyButton = await screen.findByRole("button", { name: "History" });
-    await user.click(historyButton);
+    await enterHistory(user);
 
     await waitFor(() => expect(mockGetRequests).toHaveBeenCalledWith(
       expect.objectContaining({ view: "all_history" }),
@@ -128,14 +135,14 @@ describe("Requests — GAP-044 history entry point", () => {
     expect(screen.getByText("Closed and cancelled work — not part of your active queues.")).toBeInTheDocument();
     expect(screen.getByLabelText("Search requests")).toHaveAttribute("placeholder", "Search closed & cancelled history…");
     expect(screen.queryByRole("tablist")).not.toBeInTheDocument();
-    expect(screen.queryByLabelText("Filter by status")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^Views/ })).not.toBeInTheDocument();
   });
 
   it("switches Closed/Cancelled scope, retaining history mode", async () => {
     const user = userEvent.setup();
     renderRequests("owner");
 
-    await user.click(await screen.findByRole("button", { name: "History" }));
+    await enterHistory(user);
     await waitFor(() => expect(mockGetRequests).toHaveBeenCalledWith(expect.objectContaining({ view: "all_history" })));
 
     await user.click(screen.getByRole("button", { name: "Closed" }));
@@ -149,7 +156,7 @@ describe("Requests — GAP-044 history entry point", () => {
   it("maps Yesterday/This week to closedShortcut and Today to explicit UTC closedFrom/closedTo, never both", async () => {
     const user = userEvent.setup();
     renderRequests("owner");
-    await user.click(await screen.findByRole("button", { name: "History" }));
+    await enterHistory(user);
 
     await user.click(screen.getByRole("button", { name: "Yesterday" }));
     await waitFor(() => expect(mockGetRequests).toHaveBeenCalledWith(
@@ -180,7 +187,7 @@ describe("Requests — GAP-044 history entry point", () => {
   it("retains history view and date scope when searching or paginating — never returns to active queues", async () => {
     const user = userEvent.setup();
     renderRequests("owner");
-    await user.click(await screen.findByRole("button", { name: "History" }));
+    await enterHistory(user);
     await user.click(screen.getByRole("button", { name: "Yesterday" }));
     await waitFor(() => expect(mockGetRequests).toHaveBeenCalledWith(
       expect.objectContaining({ view: "all_history", closedShortcut: "yesterday" }),
@@ -202,7 +209,7 @@ describe("Requests — GAP-044 history entry point", () => {
     mockGetRequests.mockImplementation(() => Promise.resolve(listResult([], false)));
     renderRequests("owner");
 
-    await user.click(await screen.findByRole("button", { name: "History" }));
+    await enterHistory(user);
     await waitFor(() => expect(mockGetRequests).toHaveBeenCalledWith(
       expect.objectContaining({ view: "all_history" }),
     ));
@@ -219,7 +226,7 @@ describe("Requests — GAP-044 history entry point", () => {
   it("returns to the default queue tab bar on Back to queues", async () => {
     const user = userEvent.setup();
     renderRequests("owner");
-    await user.click(await screen.findByRole("button", { name: "History" }));
+    await enterHistory(user);
     await screen.findByText("Closed and cancelled work — not part of your active queues.");
 
     await user.click(screen.getByRole("button", { name: /Back to queues/ }));

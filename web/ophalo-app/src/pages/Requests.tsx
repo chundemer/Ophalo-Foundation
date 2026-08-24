@@ -10,7 +10,7 @@ import { RequestListToolbar } from "../components/requests/RequestListToolbar";
 import { RequestListContent } from "../components/requests/RequestListContent";
 import { ActualWorkReviewQueueList } from "../components/requests/ActualWorkReviewQueueList";
 import { ApiError } from "../lib/apiClient";
-import type { OfficeReviewState } from "../components/requests/RequestQueueNavigation";
+import type { OfficeReviewState } from "../components/requests/RequestListToolbar";
 import {
   getTabsForRole,
   getSecondaryViewsForRole,
@@ -544,15 +544,10 @@ export function Requests({
           tabs={tabs}
           activeTab={activeTab}
           viewCounts={viewCounts}
-          secondaryViews={secondaryViews}
-          officeReviewMembers={officeReviewMembers}
-          officeReview={officeReview}
           onSelectTab={selectTab}
           historyMode={historyMode}
           historyScope={historyScope}
           historyDateScope={historyDateScope}
-          isOwnerOrAdmin={isOwnerOrAdmin}
-          onEnterHistory={enterHistory}
           onExitHistory={exitHistory}
           onUpdateHistoryScope={updateHistoryScope}
           onUpdateHistoryDateScope={updateHistoryDateScope}
@@ -574,6 +569,14 @@ export function Requests({
           onManualRefresh={manualRefresh}
           appliedLineText={appliedLineText}
           paneMode={paneMode}
+          activeTab={activeTab}
+          viewCounts={viewCounts}
+          onSelectTab={selectTab}
+          secondaryViews={secondaryViews}
+          officeReviewMembers={officeReviewMembers}
+          officeReview={officeReview}
+          isOwnerOrAdmin={isOwnerOrAdmin}
+          onEnterHistory={enterHistory}
         />
 
         </div>{/* /max-w-6xl */}

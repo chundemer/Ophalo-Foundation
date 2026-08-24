@@ -229,8 +229,9 @@ describe("Requests — GAP-041 queue-transition stability", () => {
   });
 });
 
-// UI-004 amendment: Actual Work Review is an Office Review member, not a primary tab — it's
-// reachable by opening the Office Review disclosure, and its count comes from the
+// UI-004 amendment: Actual Work Review is an Office Review member, not a primary tab. Request
+// Queue header consolidation (locked 2026-08-24) moved Office Review destinations into the
+// single Views popover — it's reachable by opening Views, and its count still comes from the
 // authoritative GET .../review-queue/count endpoint, never the review queue list's `.length`.
 describe("Requests — Slice 8A / UI-004 amendment Actual Work Review (Office Review member)", () => {
   it("shows Office Review with Actual Work Review as a member for Owner/Admin", async () => {
@@ -238,21 +239,21 @@ describe("Requests — Slice 8A / UI-004 amendment Actual Work Review (Office Re
     mockGetRequests.mockResolvedValue(listResult([]));
     renderRequests("owner");
 
-    const officeReviewTrigger = await screen.findByRole("button", { name: /Office Review/ });
-    fireEvent.click(officeReviewTrigger);
+    const viewsTrigger = await screen.findByRole("button", { name: /^Views/ });
+    fireEvent.click(viewsTrigger);
     expect(await screen.findByRole("button", { name: /Actual Work Review/ })).toBeInTheDocument();
   });
 
-  it("never renders Office Review for Operator, regardless of counts", async () => {
+  it("never renders Office Review destinations for Operator, regardless of counts", async () => {
     mockGetActualWorkReviewQueueCount.mockResolvedValue({ count: 1 });
     mockGetRequests.mockResolvedValue(listResult([]));
     renderRequests("operator");
     await screen.findByRole("heading", { name: "Requests for Acme Plumbing" });
-    expect(screen.queryByRole("button", { name: /Office Review/ })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /^Views/ }));
     expect(screen.queryByText(/Actual Work Review/)).not.toBeInTheDocument();
   });
 
-  it("selecting Actual Work Review from Office Review renders queue rows and navigates on selection", async () => {
+  it("selecting Actual Work Review from Views renders queue rows and navigates on selection", async () => {
     mockGetActualWorkReviewQueueCount.mockResolvedValue({ count: 1 });
     mockGetRequests.mockResolvedValue(listResult([]));
     const gate = deferred<unknown[]>();
@@ -260,12 +261,12 @@ describe("Requests — Slice 8A / UI-004 amendment Actual Work Review (Office Re
     const onSelectRequest = vi.fn();
     renderRequests("owner", onSelectRequest);
 
-    const officeReviewTrigger = await screen.findByRole("button", { name: /Office Review/ });
-    fireEvent.click(officeReviewTrigger);
+    const viewsTrigger = await screen.findByRole("button", { name: /^Views/ });
+    fireEvent.click(viewsTrigger);
     const memberButton = await screen.findByRole("button", { name: /Actual Work Review/ });
     fireEvent.click(memberButton);
-    // Selecting closes the disclosure and returns focus to its own trigger.
-    await waitFor(() => expect(document.activeElement).toBe(officeReviewTrigger));
+    // Selecting closes the popover and returns focus to its own trigger.
+    await waitFor(() => expect(document.activeElement).toBe(viewsTrigger));
 
     await screen.findByText("Loading review queue…");
 
@@ -293,6 +294,7 @@ describe("Requests — Slice 8A / UI-004 amendment Actual Work Review (Office Re
     mockGetActualWorkReviewQueueCount.mockRejectedValue(new Error("network error"));
     mockGetRequests.mockResolvedValue(listResult([]));
     renderRequests("owner");
+    fireEvent.click(await screen.findByRole("button", { name: /^Views/ }));
 
     const retryButton = await screen.findByRole("button", { name: /couldn.t load counts/i });
     expect(retryButton).toBeInTheDocument();
@@ -300,7 +302,7 @@ describe("Requests — Slice 8A / UI-004 amendment Actual Work Review (Office Re
     mockGetActualWorkReviewQueueCount.mockResolvedValue({ count: 2 });
     fireEvent.click(retryButton);
 
-    await waitFor(() => expect(screen.getByRole("button", { name: /Office Review/ })).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole("button", { name: /Actual Work Review/ })).toBeInTheDocument());
   });
 });
 

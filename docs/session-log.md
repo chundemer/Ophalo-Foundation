@@ -22,8 +22,84 @@ submitted visit row — presentation-only, per ADR-487 (correction/reversal/reco
 deferred domain work, not opened by this change).
 
 Implementation sequence steps 1-6 (below) are now complete — the Request Detail action-surface
-redesign is done. The action-first planning and queue-signals slice (below) is also complete.
+redesign is done. The action-first planning and queue-signals slice (below) is also complete. The
+queue-header consolidation batch (below) is also complete and committed.
 **Next batch: resume 8B (Owner/Admin Actual Work financial review UI).**
+
+### Request Queue header consolidation — complete (2026-08-24)
+
+**Implemented as specified below.** `RequestQueueNavigation.tsx` now owns only the primary-tabs row
+(Row 1) and the history sub-header. `RequestListToolbar.tsx` owns Row 2: search plus one **Views**
+popover bundling Saved views (Watching, then Owner/Admin Office Review destinations), **History
+Log**, and single-select status filtering (radio semantics, draft-copies-applied on open, Apply
+commits once and returns focus to Views, Escape/outside-click discards unapplied changes, **Reset
+filters** commits an immediate clear and updates the `Views · N` badge — locked in review; the
+first pass left Reset as draft-only, corrected before commit). `Requests.tsx` rewired accordingly;
+no query/API/domain changes. Verified: typecheck clean, full suite 628/628 passing (plus the
+Reset-filters regression test rewritten for the corrected behavior), `pnpm check:tokens` passed,
+`git diff --check` clean.
+
+**Problem to resolve:** the current queue header has five competing vertical control layers before
+the first request row. It mixes a native browser `<select>` status filter with custom React
+disclosures, and exposes the same scope through primary tabs, secondary links/disclosures, and the
+status filter. This is control overload, not a new data/domain requirement.
+
+**Locked interaction model:** make the normal operational queue header two compact rows, following
+the approved reference:
+
+```text
+[ Attention · N ] [ All · N ] [ Mine · N ]
+[ Search queue…                              ] [ Views v ]
+                                             └ Saved views + Filter by status
+```
+
+- Row 1 is the sole primary scope chooser. Use the existing role-aware primary tab definitions and
+  their server-authoritative counts: Owner/Admin remains **Needs Attention, All Work, My Work**;
+  Operator remains **My Work, Needs Attention, Available Work**. Compact display labels may be
+  **Attention / All / Mine** only where their accessible names retain the full labels. The selected
+  tab must have a clear selected container/state; counts are subordinate badges, never separately
+  clickable controls. Keep the existing roving-tab keyboard behavior and authoritative
+  `onSelectTab` semantics.
+- Row 2 contains search and one custom **Views** button. It replaces the native status `<select>`
+  entirely. Do not retain a visible `Filter` control or any native OS option menu.
+- The Views popover is a normal accessible disclosure/group (not an ARIA menu unless full menu
+  keyboard semantics are implemented). It contains, in order: a **Saved views** section (Watching;
+  then Owner/Admin Office Review destinations when applicable), a separator, then **Filter by
+  status** controls using the existing `STATUS_OPTIONS`, followed by **Reset filters** and
+  **Apply**. The current API/query contract carries one status value, so these are a custom
+  single-select control (radio semantics/checkmark treatment), not a multi-status checkbox filter.
+  Do not fabricate multi-select query behavior. The UI may use the agreed icon set for saved-view
+  rows; icons are decorative and the text label remains the accessible name.
+- `Office Review` is no longer a peer header link/control. Its existing aggregate/count/error
+  contract stays intact, but its members move into the Saved views portion of Views for Owner/Admin
+  only. Preserve the rule that counts are server-authoritative; no guessed zero or client-derived
+  membership. Watching remains a saved view, not a fourth primary tab.
+- `History` moves into Views as **History Log**. Entering/exiting history and the history
+  scope/date controls retain their existing behavior; do not merge history into a status filter or
+  invent history counts. It is a result-set mode, not an operational queue scope.
+- Status filtering remains operational-only; it must not be shown or applied in history mode.
+  Preserve submitted-search semantics, clear-search behavior, applied-criteria/status messaging,
+  first-load stability (GAP-041), authorization, query keys, and server ownership of membership,
+  ranking, and counts. The Views trigger should visibly indicate active non-default status filters
+  (for example `Views · 2` or a count badge) and provide a one-action reset.
+- Do not change request-row content, API contracts, tab IDs/views, query behavior, or the
+  customer-facing product domain. This is an interaction/layout consolidation only.
+
+**Current implementation map:** `Requests.tsx` owns selected tab, search, status filter, history
+mode, queries, and mutation/reset semantics. `RequestQueueNavigation.tsx` owns primary tabs plus
+the current Office Review/Views disclosures. `RequestListToolbar.tsx` owns search and the native
+status `<select>` that must be removed/replaced. `RequestsWorkspaceHeader.tsx` owns the compact
+pane queue identity. `requestsWorkspace.ts` owns tab definitions, status options, counts, and
+history helpers. Update focused coverage in `components/requests/__tests__/RequestQueueNavigation.test.tsx`
+and the Requests/workspace tests; add coverage for no native `combobox`, popover open/close and
+focus return/Escape, saved-view navigation, filter Apply/Reset, active-filter indication, history
+entry, role gating, and primary-tab keyboard navigation.
+
+**Visual intent:** two rows, one component vocabulary, shallow white/light canvas popover,
+existing navy/teal/accent tokens, and the previously agreed icons. No five-row stack, raw text-link
+navigation, dark OS-native picker, or color-only state. Validate at the real narrow queue-pane
+width as well as full-width/narrow-page layouts; preserve 44px minimum interactive targets where
+the existing layout supports them.
 
 ### Action-first planning and queue signals — complete (2026-08-24)
 

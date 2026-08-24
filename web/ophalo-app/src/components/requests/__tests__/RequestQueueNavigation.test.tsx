@@ -1,30 +1,25 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { RequestQueueNavigation } from "../RequestQueueNavigation";
-import { getTabsForRole, getSecondaryViewsForRole, getOfficeReviewMembersForRole } from "../../../pages/requestsWorkspace";
+import { getTabsForRole } from "../../../pages/requestsWorkspace";
 
 // UI-001 post-Step-4 density refinement (build-log 134 §1/§2, locked 2026-08-21): Row 1 keeps
 // the two-row primary tab grid (tabs[0] full width, tabs[1]/tabs[2] share row 2) — a single
 // 3-way row with full labels + badge-pill counts was measured (real-browser mock harness) to
-// wrap "Needs Attention" at the true 360px pane width, so it was rejected. Row 2 groups Office
-// Review (left) with Views/History (right). Automated coverage here is structural/contract only;
-// the actual "no clip / no horizontal scroll" render at 360px and 100/125/150% zoom still needs
-// manual browser verification.
+// wrap "Needs Attention" at the true 360px pane width, so it was rejected. Request Queue header
+// consolidation (locked 2026-08-24) moved Office Review/Views/History out of this component into
+// RequestListToolbar's Views popover — this file now covers the primary-tabs row and the
+// history sub-header only.
 
 function baseProps(role: "owner" | "operator") {
   return {
     tabs: getTabsForRole(role),
     activeTab: getTabsForRole(role)[0],
     viewCounts: null,
-    secondaryViews: getSecondaryViewsForRole(role),
-    officeReviewMembers: getOfficeReviewMembersForRole(role),
-    officeReview: { status: "ready" as const, aggregate: 1, members: { readyToClose: 1, feedbackReview: 0, actualWorkReview: 0 } },
     onSelectTab: vi.fn(),
     historyMode: false,
     historyScope: "all_history" as const,
     historyDateScope: "all_time" as const,
-    isOwnerOrAdmin: role === "owner",
-    onEnterHistory: vi.fn(),
     onExitHistory: vi.fn(),
     onUpdateHistoryScope: vi.fn(),
     onUpdateHistoryDateScope: vi.fn(),
@@ -87,28 +82,22 @@ describe("RequestQueueNavigation pane mode (UI-001 post-Step-4 density refinemen
     expect(screen.queryByText(/^· /)).not.toBeInTheDocument();
   });
 
-  it("Owner/Admin: Office Review and Views/History share row 2, Office Review on the left", () => {
-    render(<RequestQueueNavigation {...baseProps("owner")} paneMode />);
-
-    const officeReview = screen.getByRole("button", { name: /Office Review/ });
-    const views = screen.getByRole("button", { name: "Views" });
-    const history = screen.getByRole("button", { name: "History" });
-
-    // Office Review precedes Views/History in document order (left-to-right).
-    expect(officeReview.compareDocumentPosition(views) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(officeReview.compareDocumentPosition(history) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-  });
-
-  it("Operator pane mode: no Office Review (not an office-review role)", () => {
-    render(<RequestQueueNavigation {...baseProps("operator")} paneMode />);
-    expect(screen.queryByRole("button", { name: /Office Review/ })).not.toBeInTheDocument();
-  });
-
   it("keeps the current full-width layout unchanged when paneMode is omitted", () => {
     render(<RequestQueueNavigation {...baseProps("owner")} />);
 
     const tablist = screen.getByRole("tablist", { name: "Request queues" });
     expect(tablist.className).toMatch(/overflow-x-auto/);
     expect(tablist.children).toHaveLength(3);
+  });
+});
+
+describe("RequestQueueNavigation history mode", () => {
+  it("renders the history sub-header with Back to queues, scope, and date-range controls", () => {
+    render(<RequestQueueNavigation {...baseProps("owner")} historyMode />);
+
+    expect(screen.getByRole("button", { name: /Back to queues/ })).toBeInTheDocument();
+    expect(screen.getByRole("group", { name: "History scope" })).toBeInTheDocument();
+    expect(screen.getByRole("group", { name: "Date range" })).toBeInTheDocument();
+    expect(screen.queryByRole("tablist")).not.toBeInTheDocument();
   });
 });
