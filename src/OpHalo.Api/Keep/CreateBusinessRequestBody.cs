@@ -10,4 +10,5 @@ public sealed record CreateBusinessRequestBody(
     string? ServiceAddressLine2 = null,
     string? ServiceCity = null,
     string? ServiceState = null,
-    string? ServiceZip = null);
+    string? ServiceZip = null,
+    Guid? ExistingCustomerId = null);

@@ -12,6 +12,14 @@ public interface IKeepBusinessRequestPersistence
         Guid accountId, string canonicalPhone, CancellationToken ct);
 
     /// <summary>
+    /// Returns the tracked customer for (accountId, customerId), or null if none exists (e.g. a
+    /// stale/tampered candidate ID). Tracked so a subsequent UpdateContactInfo call is persisted
+    /// by CommitBusinessRequestAsync when reusing a possible-match candidate at create time.
+    /// </summary>
+    Task<KeepCustomer?> FindCustomerByIdAsync(
+        Guid accountId, Guid customerId, CancellationToken ct);
+
+    /// <summary>
     /// Returns up to <paramref name="take"/> non-terminal requests for the given customer,
     /// ordered by max(LastBusinessActivityAt, LastCustomerActivityAt) DESC, CreatedAtUtc DESC.
     /// AsNoTracking — read-only projection for the phone lookup gate.

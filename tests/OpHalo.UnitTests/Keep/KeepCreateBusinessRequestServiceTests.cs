@@ -295,6 +295,57 @@ public class KeepCreateBusinessRequestServiceTests
     }
 
     // ---------------------------------------------------------------------------
+    // ADR-492 — explicit possible-match reuse
+    // ---------------------------------------------------------------------------
+
+    [Fact]
+    public async Task Execute_attaches_to_explicit_existing_customer_id_and_skips_canonical_phone_lookup()
+    {
+        var candidate = KeepCustomer.Create(AccountId, "Old Name", "0499888777", "old@example.com");
+        var business = HappyBusinessPersistence();
+        business.CustomerById = candidate;
+
+        var sut = BuildSut(business: business);
+        var command = ValidCommand() with { ExistingCustomerId = candidate.Id };
+        var result = await sut.ExecuteAsync(command);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(candidate.Id, business.CommittedCustomer!.Id);
+        Assert.Equal("Jane Doe", business.CommittedCustomer.Name);
+        Assert.Equal(0, business.FindByCanonicalPhoneCalls);
+    }
+
+    [Fact]
+    public async Task Execute_does_not_overwrite_candidate_canonical_phone_on_reuse()
+    {
+        var candidate = KeepCustomer.Create(AccountId, "Old Name", "0499888777", null);
+        var originalCanonicalPhone = candidate.CanonicalPhone;
+        var business = HappyBusinessPersistence();
+        business.CustomerById = candidate;
+
+        var sut = BuildSut(business: business);
+        var command = ValidCommand() with { ExistingCustomerId = candidate.Id, CustomerPhone = "0400111222" };
+        var result = await sut.ExecuteAsync(command);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(originalCanonicalPhone, business.CommittedCustomer!.CanonicalPhone);
+    }
+
+    [Fact]
+    public async Task Execute_returns_invalid_existing_customer_when_id_is_not_tenant_scoped()
+    {
+        var business = HappyBusinessPersistence();
+        business.CustomerById = null; // simulates a stale/cross-tenant candidate ID
+
+        var sut = BuildSut(business: business);
+        var command = ValidCommand() with { ExistingCustomerId = Guid.NewGuid() };
+        var result = await sut.ExecuteAsync(command);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal("KeepRequest.InvalidExistingCustomer", result.Error.Code);
+    }
+
+    // ---------------------------------------------------------------------------
     // Retry — token collision
     // ---------------------------------------------------------------------------
 
@@ -563,18 +614,24 @@ public class KeepCreateBusinessRequestServiceTests
         public KeepCustomer? ExistingCustomer    { get; set; }
         public KeepCustomer? CustomerAfterCollision { get; set; }
         public KeepCustomer? CommittedCustomer   { get; private set; }
+        public KeepCustomer? CustomerById        { get; set; }
         public int CommitAttempts                { get; private set; }
+        public int FindByCanonicalPhoneCalls     { get; private set; }
         public Queue<BusinessRequestCommitResult> CommitResults { get; } = new();
 
         private bool _collisionHappened;
 
         public Task<KeepCustomer?> FindCustomerByCanonicalPhoneAsync(Guid a, string p, CancellationToken ct)
         {
+            FindByCanonicalPhoneCalls++;
             // After a phone collision the service re-reads — return the winning customer.
             if (_collisionHappened && CustomerAfterCollision is not null)
                 return Task.FromResult<KeepCustomer?>(CustomerAfterCollision);
             return Task.FromResult(ExistingCustomer);
         }
+
+        public Task<KeepCustomer?> FindCustomerByIdAsync(Guid a, Guid customerId, CancellationToken ct) =>
+            Task.FromResult(CustomerById is not null && CustomerById.AccountId == a ? CustomerById : null);
 
         public Task<bool> PageTokenExistsAsync(string t, CancellationToken ct) =>
             Task.FromResult(false);

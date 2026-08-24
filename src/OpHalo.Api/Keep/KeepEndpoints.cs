@@ -190,7 +190,7 @@ public static class KeepEndpoints
             var command = new CreateBusinessRequestCommand(
                 body.CustomerName, body.CustomerPhone, body.CustomerEmail, body.Description, body.Source,
                 body.ServiceAddressLine1, body.ServiceAddressLine2, body.ServiceCity,
-                body.ServiceState, body.ServiceZip);
+                body.ServiceState, body.ServiceZip, body.ExistingCustomerId);
             var result = await service.ExecuteAsync(command, ct);
             return result.IsSuccess
                 ? Results.Created($"/keep/requests/{result.Value.RequestId}", result.Value)

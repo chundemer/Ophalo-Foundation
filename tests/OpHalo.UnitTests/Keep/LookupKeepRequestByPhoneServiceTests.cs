@@ -29,10 +29,10 @@ public class LookupKeepRequestByPhoneServiceTests
             new FakeFeatureAccessPolicy(),
             new FakeClock(Now));
 
-    private static KeepRequest LegacyRequest(Guid accountId, string customerPhone, string name, string? email) =>
+    private static KeepRequest LegacyRequest(Guid accountId, Guid customerId, string customerPhone, string name, string? email) =>
         KeepRequest.CreateByBusiness(
             accountId,
-            Guid.NewGuid(),
+            customerId,
             name,
             customerPhone,
             email,
@@ -43,11 +43,14 @@ public class LookupKeepRequestByPhoneServiceTests
             KeepRequestSource.Phone);
 
     [Fact]
-    public async Task Falls_back_to_legacy_request_phone_match_when_no_customer_row()
+    public async Task Falls_back_to_possible_match_when_no_customer_row_matches_canonical_phone()
     {
+        var candidateId = Guid.NewGuid();
+        var candidate = KeepCustomer.Create(AccountId, "Legacy Larry", "555-555-0199", "larry@example.com");
         var business = new FakeBusinessPersistence
         {
-            LegacyMatch = LegacyRequest(AccountId, "(555) 555-0100", "Legacy Larry", "larry@example.com"),
+            LegacyMatch = LegacyRequest(AccountId, candidateId, "(555) 555-0100", "Legacy Larry", "larry@example.com"),
+            CandidateCustomer = candidate,
         };
         var sut = BuildSut(business);
 
@@ -55,14 +58,15 @@ public class LookupKeepRequestByPhoneServiceTests
 
         Assert.True(result.IsSuccess);
         Assert.Null(result.Value.Customer);
-        Assert.NotNull(result.Value.Prefill);
-        Assert.Equal("Legacy Larry", result.Value.Prefill!.Name);
-        Assert.Equal("larry@example.com", result.Value.Prefill.Email);
         Assert.Empty(result.Value.ActiveRequests);
+        Assert.NotNull(result.Value.PossibleCustomer);
+        Assert.Equal(candidate.Id, result.Value.PossibleCustomer!.CandidateCustomerId);
+        Assert.Equal("Legacy Larry", result.Value.PossibleCustomer.Name);
+        Assert.Equal("larry@example.com", result.Value.PossibleCustomer.Email);
     }
 
     [Fact]
-    public async Task Returns_no_prefill_when_neither_customer_nor_legacy_request_match()
+    public async Task Returns_no_possible_customer_when_neither_customer_nor_legacy_request_match()
     {
         var business = new FakeBusinessPersistence { LegacyMatch = null };
         var sut = BuildSut(business);
@@ -71,7 +75,7 @@ public class LookupKeepRequestByPhoneServiceTests
 
         Assert.True(result.IsSuccess);
         Assert.Null(result.Value.Customer);
-        Assert.Null(result.Value.Prefill);
+        Assert.Null(result.Value.PossibleCustomer);
     }
 
     [Fact]
@@ -82,8 +86,8 @@ public class LookupKeepRequestByPhoneServiceTests
         {
             ExistingCustomer = customer,
             // If the service queried the fallback despite a customer match, this would surface as
-            // a prefill on the result and fail the assertion below.
-            LegacyMatch = LegacyRequest(AccountId, "5555550100", "Should Not Appear", null),
+            // a possible-customer result and fail the assertion below.
+            LegacyMatch = LegacyRequest(AccountId, Guid.NewGuid(), "5555550100", "Should Not Appear", null),
         };
         var sut = BuildSut(business);
 
@@ -91,7 +95,7 @@ public class LookupKeepRequestByPhoneServiceTests
 
         Assert.True(result.IsSuccess);
         Assert.NotNull(result.Value.Customer);
-        Assert.Null(result.Value.Prefill);
+        Assert.Null(result.Value.PossibleCustomer);
         Assert.Equal(0, business.LegacyLookupCalls);
     }
 
@@ -100,14 +104,51 @@ public class LookupKeepRequestByPhoneServiceTests
     {
         var business = new FakeBusinessPersistence
         {
-            LegacyMatch = LegacyRequest(OtherAccountId, "5555550100", "Cross Account Cathy", null),
+            LegacyMatch = LegacyRequest(OtherAccountId, Guid.NewGuid(), "5555550100", "Cross Account Cathy", null),
         };
         var sut = BuildSut(business);
 
         var result = await sut.ExecuteAsync("5555550100");
 
         Assert.True(result.IsSuccess);
-        Assert.Null(result.Value.Prefill);
+        Assert.Null(result.Value.PossibleCustomer);
+    }
+
+    [Fact]
+    public async Task Possible_customer_active_requests_are_scoped_to_the_candidate_customer_id_not_raw_phone()
+    {
+        var candidate = KeepCustomer.Create(AccountId, "Legacy Larry", "555-555-0199", null);
+        var activeRequest = LegacyRequest(AccountId, candidate.Id, "555-555-0199", "Legacy Larry", null);
+        var business = new FakeBusinessPersistence
+        {
+            LegacyMatch = LegacyRequest(AccountId, candidate.Id, "(555) 555-0100", "Legacy Larry", null),
+            CandidateCustomer = candidate,
+            ActiveRequestsByCandidateId = new List<KeepRequest> { activeRequest },
+        };
+        var sut = BuildSut(business);
+
+        var result = await sut.ExecuteAsync("5555550100");
+
+        Assert.True(result.IsSuccess);
+        Assert.NotNull(result.Value.PossibleCustomer);
+        Assert.Single(result.Value.PossibleCustomer!.ActiveRequests);
+        Assert.Equal(candidate.Id, business.LastActiveRequestsCustomerId);
+    }
+
+    [Fact]
+    public async Task Returns_no_possible_customer_when_candidate_customer_row_is_missing()
+    {
+        var business = new FakeBusinessPersistence
+        {
+            LegacyMatch = LegacyRequest(AccountId, Guid.NewGuid(), "5555550100", "Legacy Larry", null),
+            CandidateCustomer = null,
+        };
+        var sut = BuildSut(business);
+
+        var result = await sut.ExecuteAsync("5555550100");
+
+        Assert.True(result.IsSuccess);
+        Assert.Null(result.Value.PossibleCustomer);
     }
 
     // ---------------------------------------------------------------------------
@@ -116,16 +157,25 @@ public class LookupKeepRequestByPhoneServiceTests
 
     private sealed class FakeBusinessPersistence : IKeepBusinessRequestPersistence
     {
-        public KeepCustomer? ExistingCustomer { get; set; }
-        public KeepRequest? LegacyMatch       { get; set; }
-        public int LegacyLookupCalls          { get; private set; }
+        public KeepCustomer? ExistingCustomer   { get; set; }
+        public KeepRequest? LegacyMatch         { get; set; }
+        public KeepCustomer? CandidateCustomer  { get; set; }
+        public List<KeepRequest> ActiveRequestsByCandidateId { get; set; } = new();
+        public Guid? LastActiveRequestsCustomerId { get; private set; }
+        public int LegacyLookupCalls            { get; private set; }
 
         public Task<KeepCustomer?> FindCustomerByCanonicalPhoneAsync(Guid accountId, string canonicalPhone, CancellationToken ct) =>
             Task.FromResult(ExistingCustomer);
 
+        public Task<KeepCustomer?> FindCustomerByIdAsync(Guid accountId, Guid customerId, CancellationToken ct) =>
+            Task.FromResult(CandidateCustomer is not null && CandidateCustomer.AccountId == accountId ? CandidateCustomer : null);
+
         public Task<IReadOnlyList<KeepRequest>> FindActiveRequestsByCustomerIdAsync(
-            Guid accountId, Guid customerId, int take, CancellationToken ct) =>
-            Task.FromResult<IReadOnlyList<KeepRequest>>(Array.Empty<KeepRequest>());
+            Guid accountId, Guid customerId, int take, CancellationToken ct)
+        {
+            LastActiveRequestsCustomerId = customerId;
+            return Task.FromResult<IReadOnlyList<KeepRequest>>(ActiveRequestsByCandidateId);
+        }
 
         public Task<KeepRequest?> FindMostRecentRequestByCustomerPhoneAsync(
             Guid accountId, string canonicalPhone, CancellationToken ct)

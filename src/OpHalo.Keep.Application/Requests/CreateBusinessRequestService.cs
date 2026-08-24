@@ -48,6 +48,9 @@ public sealed class CreateBusinessRequestService(
     private static readonly Error ServiceStateInvalid =
         Error.Create("KeepRequest.ServiceStateInvalid", "State must be a valid two-letter US state code.");
 
+    private static readonly Error InvalidExistingCustomer =
+        Error.Create("KeepRequest.InvalidExistingCustomer", "The selected customer is no longer available.");
+
     private static readonly HashSet<string> ValidUsStateCodes = new(StringComparer.OrdinalIgnoreCase)
     {
         "AL","AK","AZ","AR","CA","CO","CT","DE","FL","GA",
@@ -140,12 +143,31 @@ public sealed class CreateBusinessRequestService(
 
         // --- Customer find or create ---
         var accountId = currentUser.AccountId;
-        var customer = await businessRequestPersistence.FindCustomerByCanonicalPhoneAsync(
-            accountId, v.CanonicalPhone, ct);
-        if (customer is null)
-            customer = KeepCustomer.Create(accountId, v.TrimmedName, v.TrimmedPhone, v.TrimmedEmail);
+        KeepCustomer customer;
+
+        if (command.ExistingCustomerId is { } existingCustomerId)
+        {
+            // ADR-492: explicit reuse of a possible-match candidate. Verify it is tenant-scoped
+            // before attaching — never trust a client-sent ID cross-account. Contact info may be
+            // refreshed but CanonicalPhone is never overwritten by the entered draft phone.
+            var existing = await businessRequestPersistence.FindCustomerByIdAsync(
+                accountId, existingCustomerId, ct);
+            if (existing is null)
+                return Result<KeepRequestDetailResult>.Failure(InvalidExistingCustomer);
+
+            existing.UpdateContactInfo(v.TrimmedName, v.TrimmedEmail);
+            customer = existing;
+        }
         else
-            customer.UpdateContactInfo(v.TrimmedName, v.TrimmedEmail);
+        {
+            var matched = await businessRequestPersistence.FindCustomerByCanonicalPhoneAsync(
+                accountId, v.CanonicalPhone, ct);
+            if (matched is null)
+                matched = KeepCustomer.Create(accountId, v.TrimmedName, v.TrimmedPhone, v.TrimmedEmail);
+            else
+                matched.UpdateContactInfo(v.TrimmedName, v.TrimmedEmail);
+            customer = matched;
+        }
 
         // --- Retry loop: customer-identity and token collisions share the five-attempt ceiling ---
         for (var attempt = 0; attempt < MaxAttempts; attempt++)

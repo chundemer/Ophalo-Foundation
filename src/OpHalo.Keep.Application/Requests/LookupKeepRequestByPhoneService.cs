@@ -14,8 +14,6 @@ namespace OpHalo.Keep.Application.Requests;
 
 public sealed record PhoneLookupCustomer(string Name, string Phone, string? Email);
 
-public sealed record PhoneLookupPrefill(string Name, string? Email);
-
 public sealed record PhoneLookupActiveRequest(
     Guid RequestId,
     string ReferenceCode,
@@ -23,11 +21,22 @@ public sealed record PhoneLookupActiveRequest(
     string Description,
     DateTime? LastActivityAtUtc);
 
-public sealed record PhoneLookupResult(
-    PhoneLookupCustomer? Customer,
-    PhoneLookupPrefill? Prefill,
+// ADR-492: a request-phone-only match is continuity evidence, not confirmed identity. The
+// candidate's KeepCustomerId is real (KeepRequest.KeepCustomerId is non-nullable) but its current
+// CanonicalPhone may no longer match the entered number — number could be stale/shared/recycled.
+public sealed record PhoneLookupPossibleCustomer(
+    Guid CandidateCustomerId,
+    string Name,
+    string Phone,
+    string? Email,
     IReadOnlyList<PhoneLookupActiveRequest> ActiveRequests,
     bool HasMoreActiveRequests);
+
+public sealed record PhoneLookupResult(
+    PhoneLookupCustomer? Customer,
+    IReadOnlyList<PhoneLookupActiveRequest> ActiveRequests,
+    bool HasMoreActiveRequests,
+    PhoneLookupPossibleCustomer? PossibleCustomer);
 
 public sealed class LookupKeepRequestByPhoneService(
     IKeepRequestOperatePersistence operatePersistence,
@@ -98,24 +107,44 @@ public sealed class LookupKeepRequestByPhoneService(
         var customer = await businessRequestPersistence.FindCustomerByCanonicalPhoneAsync(
             currentUser.AccountId, canonical, ct);
 
+        const int PageSize = 3;
+
         if (customer is null)
         {
-            // GAP-025: no KeepCustomer row yet, but legacy/unbackfilled requests may still carry
-            // this phone. Fall back to a read-only prefill so Quick Capture doesn't open blank —
-            // never creates or links a KeepCustomer here.
+            // ADR-492: no exact canonical-phone match, but a legacy/unbackfilled request may still
+            // carry this phone. That request's KeepCustomerId is a real, tenant-scoped customer —
+            // a candidate, not confirmed identity, since its current phone no longer matches.
             var legacyMatch = await businessRequestPersistence.FindMostRecentRequestByCustomerPhoneAsync(
                 currentUser.AccountId, canonical, ct);
+            if (legacyMatch is null)
+                return Result<PhoneLookupResult>.Success(
+                    new PhoneLookupResult(null, Array.Empty<PhoneLookupActiveRequest>(), false, null));
 
-            var prefill = legacyMatch is null
-                ? null
-                : new PhoneLookupPrefill(legacyMatch.CustomerName, legacyMatch.CustomerEmail);
+            var candidate = await businessRequestPersistence.FindCustomerByIdAsync(
+                currentUser.AccountId, legacyMatch.KeepCustomerId, ct);
+            if (candidate is null)
+                return Result<PhoneLookupResult>.Success(
+                    new PhoneLookupResult(null, Array.Empty<PhoneLookupActiveRequest>(), false, null));
+
+            var candidateRows = await businessRequestPersistence.FindActiveRequestsByCustomerIdAsync(
+                currentUser.AccountId, candidate.Id, take: PageSize + 1, ct);
+
+            var candidateHasMore = candidateRows.Count > PageSize;
+            var candidatePage = candidateHasMore ? candidateRows.Take(PageSize).ToList() : candidateRows;
+
+            var possibleCustomer = new PhoneLookupPossibleCustomer(
+                candidate.Id,
+                candidate.Name,
+                candidate.PrimaryPhone,
+                candidate.Email,
+                candidatePage.Select(MapActiveRequest).ToList(),
+                candidateHasMore);
 
             return Result<PhoneLookupResult>.Success(
-                new PhoneLookupResult(null, prefill, Array.Empty<PhoneLookupActiveRequest>(), false));
+                new PhoneLookupResult(null, Array.Empty<PhoneLookupActiveRequest>(), false, possibleCustomer));
         }
 
         // Fetch one extra to detect hasMoreActiveRequests without a separate count query.
-        const int PageSize = 3;
         var rows = await businessRequestPersistence.FindActiveRequestsByCustomerIdAsync(
             currentUser.AccountId, customer.Id, take: PageSize + 1, ct);
 
@@ -126,7 +155,7 @@ public sealed class LookupKeepRequestByPhoneService(
         var activeRequests = page.Select(MapActiveRequest).ToList();
 
         return Result<PhoneLookupResult>.Success(
-            new PhoneLookupResult(lookupCustomer, null, activeRequests, hasMore));
+            new PhoneLookupResult(lookupCustomer, activeRequests, hasMore, null));
     }
 
     private static PhoneLookupActiveRequest MapActiveRequest(KeepRequest r) =>

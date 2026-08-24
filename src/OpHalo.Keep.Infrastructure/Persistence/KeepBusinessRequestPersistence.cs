@@ -13,6 +13,11 @@ public sealed class KeepBusinessRequestPersistence(OpHaloDbContext dbContext) : 
         dbContext.Set<KeepCustomer>()
             .FirstOrDefaultAsync(c => c.AccountId == accountId && c.CanonicalPhone == canonicalPhone, ct);
 
+    public Task<KeepCustomer?> FindCustomerByIdAsync(
+        Guid accountId, Guid customerId, CancellationToken ct) =>
+        dbContext.Set<KeepCustomer>()
+            .FirstOrDefaultAsync(c => c.AccountId == accountId && c.Id == customerId, ct);
+
     public async Task<IReadOnlyList<KeepRequest>> FindActiveRequestsByCustomerIdAsync(
         Guid accountId, Guid customerId, int take, CancellationToken ct)
     {

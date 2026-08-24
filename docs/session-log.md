@@ -15,43 +15,55 @@
 ## Current work — New Request possible-existing-customer lookup
 
 **Decision:** [ADR-492](decisions/ADR-492-new-request-possible-existing-customer-lookup.md)
-supersedes GAP-025's silent request-phone prefill. This is a focused repair of the existing desktop
-New Request / Quick Capture workflow before mobile work begins. Do not redesign the request
-workbench, begin mobile/PWA layout work, backfill customers, or add a customer-history workspace.
+(including its 2026-08-24 amendment on candidate identity/reuse) supersedes GAP-025's silent
+request-phone prefill. This is a focused repair of the existing desktop New Request / Quick
+Capture workflow before mobile work begins. Do not redesign the request workbench, begin
+mobile/PWA layout work, backfill customers, or add a customer-history workspace.
 
-**Baseline:** `LookupKeepRequestByPhoneService` first matches
-`KeepCustomer.CanonicalPhone`, then falls back to its account-scoped, SQL-normalized
-`KeepRequest.CustomerPhone` lookup. `QuickCapture` sends the exact customer match to
-`LookupResultView`, but sends a fallback match directly to `CaptureForm` as `prefill`. The fallback
-currently returns no active-request context.
+Backend contract is implemented and locked (see build log below). Remaining scope is frontend only.
 
-**Implement:**
+**Next batch — frontend:**
 
-1. Preserve the exact canonical-phone **Customer Found** branch exactly: customer identity, up to
-   three active request cards sorted by current activity, and explicit **Create New Request for
-   [Name]**. No auto-selection or navigation.
-2. Add a distinct, typed API result for a request-phone-only **possible existing customer** match.
-   It must carry only account-scoped candidate identity/context and up to three linked active
-   requests; it must not masquerade as an exact canonical-phone customer match.
-3. Change `QuickCapture` / `LookupResultView` so this result is an explicit decision screen:
-   label it **Possible existing customer**; show open-request cards when present; show a concise
-   prior-request cue when it has only history. Keep it short—no full history browser.
-4. Add two explicit paths: **Use existing customer details** and **Create as new customer**. The
-   first must use an explicit server-authorized reuse choice in creation; neither path may happen
-   implicitly from a phone lookup. Preserve the entered phone and existing draft/back behavior.
-5. Preserve account isolation, ten-digit normalization (ADR-444), exact raw-phone SQL
-   normalization, active-card cap/sort, permissions, read-only/past-due behavior, focus/Escape
-   behavior, and no `KeepCustomer` backfill.
+1. Change `QuickCapture` / `LookupResultView` so a `PossibleCustomer` lookup result renders an
+   explicit decision screen: label it **Possible existing customer**; show its `ActiveRequests`
+   cards (already scoped/sorted server-side) when present; show a concise prior-request cue when
+   `ActiveRequests` is empty. Keep it short — no full history browser. Never render this alongside
+   or in place of the exact-match `Customer` screen — the two are mutually exclusive per result.
+2. Add two explicit staff actions: **Use existing customer details** sends
+   `PossibleCustomer.CandidateCustomerId` as `ExistingCustomerId` on the create call; **Create as
+   new customer** omits it and proceeds with the entered phone only. Neither path may fire from a
+   bare phone lookup — only from the explicit button.
+3. Preserve entered phone and existing draft/back behavior; accessible modal focus/Escape behavior
+   matches the existing Customer Found screen.
+4. Update `apiClient.ts` / `mockApiClient.ts` typed lookup and create contracts to match the
+   backend shape (`PhoneLookupResult.PossibleCustomer`, `CreateBusinessRequestBody.ExistingCustomerId`) —
+   remove any lingering `Prefill`-shaped typing.
 
-**Tests required:** service/API coverage for exact match, possible match with active work, possible
-match with historical-only work, no match, account isolation, and stale/shared/recycled-phone
-non-auto-link behavior. Frontend coverage must prove labels, card navigation, explicit reuse/new
-paths, draft preservation, and accessible modal focus behavior. Run focused backend/frontend suites,
-`pnpm typecheck`, `pnpm check:tokens`, and `git diff --check`.
+**Tests required:** frontend coverage proving labels, card navigation, explicit reuse/new paths,
+draft preservation, and accessible modal focus behavior. Run focused frontend suite, `pnpm
+typecheck`, `pnpm check:tokens`, and `git diff --check`.
 
 **Done when:** a desktop browser pass shows all three lookup outcomes (exact customer, possible
 customer with active work, possible customer with history only) without a duplicate/implicit-link
 path. Report the API contract and screenshot evidence for review before mobile UI begins.
+
+### Backend — possible-existing-customer lookup + reuse contract — complete (2026-08-24)
+
+Implemented per the ADR-492 amendment. `LookupKeepRequestByPhoneService` now returns a distinct
+`PhoneLookupPossibleCustomer` (replacing the old `Prefill`) carrying the matched historical
+request's real, tenant-scoped `KeepCustomerId` as `CandidateCustomerId`, plus up to three active
+requests queried by that candidate ID (not raw-phone regexp) with the same cap/sort as the
+exact-match path. `CreateBusinessRequestCommand`/`CreateBusinessRequestBody` gained
+`ExistingCustomerId`; `CreateBusinessRequestService` verifies it is tenant-scoped
+(`InvalidExistingCustomer` error otherwise) and attaches without overwriting `CanonicalPhone`.
+Added `IKeepBusinessRequestPersistence.FindCustomerByIdAsync`.
+
+Files: `IKeepBusinessRequestPersistence.cs`, `KeepBusinessRequestPersistence.cs`,
+`LookupKeepRequestByPhoneService.cs`, `CreateBusinessRequestCommand.cs`,
+`CreateBusinessRequestService.cs`, `CreateBusinessRequestBody.cs`, `KeepEndpoints.cs`,
+`LookupKeepRequestByPhoneServiceTests.cs`, `KeepCreateBusinessRequestServiceTests.cs`.
+
+Verified: build clean, `git diff --check` clean, focused tests 45/45, full unit suite 1594/1594.
 
 ### Request Detail — desktop polish pass — complete (2026-08-24)
 
