@@ -1,6 +1,6 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useId } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Copy, Check, AlertTriangle, Clock, Phone, Mail, X, ChevronDown } from "lucide-react";
+import { Copy, Check, AlertTriangle, Clock, Info, Phone, Mail, X, ChevronDown } from "lucide-react";
 import {
   api,
   ApiError,
@@ -17,6 +17,7 @@ import {
   STATUS_CONFLICT_MESSAGE,
   formatDate,
   buildAttentionGuidance,
+  type AttentionGuidance,
   statusLabel,
   statusBadgeVariant,
 } from "./helpers";
@@ -490,29 +491,16 @@ export function ProminentFeedbackCard({ requestId, detail, onDetailUpdated, onRe
 
 interface OriginalRequestCardProps {
   detail: KeepRequestDetailResult;
-  // quiet: the Hero Attention Banner is already showing a distinct timeline-sourced quote, so
-  // this renders as unboxed supporting content rather than a second equal-weight card.
-  quiet?: boolean;
 }
 
-export function OriginalRequestCard({ detail, quiet = false }: OriginalRequestCardProps) {
+// Permanent Customer Need module (locked spec, 2026-08-24): always mounted regardless of
+// attention state, distinct from the conditional attention rail's on-demand evidence.
+export function OriginalRequestCard({ detail }: OriginalRequestCardProps) {
   if (!detail.description) return null;
-  if (quiet) {
-    return (
-      <div className="px-1">
-        <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ophalo-muted)] mb-0.5">
-          Customer description
-        </p>
-        <p className="text-sm leading-6 text-[var(--ophalo-ink)] whitespace-pre-wrap">
-          {detail.description}
-        </p>
-      </div>
-    );
-  }
   return (
     <div className="rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-4 py-2.5">
       <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ophalo-muted)] mb-0.5">
-        Customer description
+        Customer need
       </p>
       <p className="text-sm leading-6 text-[var(--ophalo-ink)] whitespace-pre-wrap">
         {detail.description}
@@ -942,14 +930,16 @@ export function SourceMetaPanel({ detail, bare = false }: { detail: KeepRequestD
 }
 
 // ---------------------------------------------------------------------------
-// Hero attention banner — one quiet amber surface composing the active
-// guidance (why / verbatim source / resolve-by) with the single server-routed
-// next-step destination. Replaces the former AttentionGuidanceCard +
-// NextStepCard pair (locked spec, presentation pass item 4); routing logic is
-// unchanged. acknowledge_attention and log_external_contact/resolve_follow_up
-// route to the locked ResponsiveSheet workflows (step 4); respond_to_customer
-// still scrolls to the always-open composer within the Work Canvas pending
-// the collapsed-composer migration.
+// Attention rail — one compact amber row (locked spec, 2026-08-24) carrying the
+// badge/label, an on-demand disclosure for why/resolve-by/evidence, the single
+// server-routed next-step CTA, and a secondary Clear attention entry when
+// acknowledgement is separately authorized. Conditional: absent entirely when
+// there is no active guidance. Customer Need (OriginalRequestCard) is now a
+// permanent, separate module — no longer coupled to this rail.
+// acknowledge_attention and log_external_contact/resolve_follow_up route to the
+// locked ResponsiveSheet workflows (step 4); respond_to_customer still scrolls
+// to the always-open composer within the Work Canvas pending the
+// collapsed-composer migration.
 // ---------------------------------------------------------------------------
 
 interface HeroAttentionBannerProps {
@@ -1016,78 +1006,133 @@ function resolveNextStep(
   }
 }
 
+function AttentionGuidanceDisclosure({ guidance }: { guidance: AttentionGuidance }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const popoverId = useId();
+
+  function dismiss() {
+    setIsOpen(false);
+    triggerRef.current?.focus();
+  }
+
+  useEffect(() => {
+    if (!isOpen) return;
+    function handlePointerDown(e: PointerEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        dismiss();
+      }
+    }
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") dismiss();
+    }
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen]);
+
+  return (
+    <div ref={containerRef} className="relative shrink-0">
+      <button
+        ref={triggerRef}
+        type="button"
+        aria-expanded={isOpen}
+        aria-controls={isOpen ? popoverId : undefined}
+        aria-label="Why this needs attention"
+        onClick={() => (isOpen ? dismiss() : setIsOpen(true))}
+        className="flex items-center justify-center rounded p-0.5 text-[var(--ophalo-attention)] hover:text-[var(--ophalo-ink)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ophalo-attention)]"
+      >
+        <Info className="h-4 w-4" />
+      </button>
+      {isOpen && (
+        <div
+          id={popoverId}
+          role="group"
+          aria-label="Attention guidance"
+          className="absolute left-0 z-20 mt-1 w-72 rounded-md border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] p-3 space-y-3 shadow-lg"
+        >
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ophalo-attention)]">
+              Why
+            </p>
+            <p className="mt-1 text-sm leading-6 text-[var(--ophalo-ink)]">{guidance.why}</p>
+          </div>
+
+          {guidance.sourceText && (
+            <div className="rounded-lg border border-[var(--ophalo-border)] bg-[var(--ophalo-canvas)] px-3 py-2.5">
+              {guidance.sourceLabel && (
+                <p className="text-xs font-semibold text-[var(--ophalo-muted)] mb-1">
+                  {guidance.sourceLabel}
+                </p>
+              )}
+              <p className="text-sm leading-6 text-[var(--ophalo-ink)] italic">
+                "{guidance.sourceText}"
+              </p>
+            </div>
+          )}
+
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ophalo-attention)]">
+              Resolve by
+            </p>
+            <p className="mt-1 text-sm leading-6 text-[var(--ophalo-ink)]">{guidance.resolveBy}</p>
+            {guidance.afterHandled && (
+              <p className="mt-1 text-xs leading-5 text-[var(--ophalo-muted)]">
+                {guidance.afterHandled}
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function HeroAttentionBanner({ detail, onRecordFollowUp, onContactLaunched, onOpenClearAttention }: HeroAttentionBannerProps) {
   const guidance = buildAttentionGuidance(detail);
   if (!guidance) return null;
 
   const isOverdue = detail.effectiveAttention.level === "overdue";
   const nextStep = resolveNextStep(detail, { onRecordFollowUp, onContactLaunched, onOpenClearAttention });
-
-  // No distinct timeline-sourced quote exists for this attention — fold the customer's original
-  // description in as the verbatim context instead of a second standalone card (RequestDetailContent
-  // suppresses OriginalRequestCard in this case; see its `quiet`-vs-hidden selection).
-  const sourceText = guidance.sourceText ?? detail.description ?? null;
-  const sourceLabel = guidance.sourceText ? guidance.sourceLabel : detail.description ? "Customer's original request" : null;
+  // Secondary Clear attention entry point: only when acknowledgement is separately authorized
+  // and isn't already the routed primary CTA (acknowledge_attention already routes there).
+  const showSecondaryClear =
+    detail.availableActions.canAcknowledgeAttention && detail.effectiveAttention.guidanceKey !== "acknowledge_attention";
 
   return (
-    <section className="rounded-xl border border-[var(--ophalo-border)] border-l-4 border-l-[var(--ophalo-attention)] bg-[var(--ophalo-attention-bg)] px-5 py-4">
-      <div className="flex flex-wrap items-center gap-2 mb-3">
-        <KeepBadge variant={isOverdue ? "danger" : "attention"}>
-          {isOverdue ? (
-            <AlertTriangle className="h-3 w-3 mr-1 shrink-0" />
-          ) : (
-            <Clock className="h-3 w-3 mr-1 shrink-0" />
-          )}
-          Needs attention
-        </KeepBadge>
-        <span className="text-sm font-semibold text-[var(--ophalo-ink)]">{guidance.label}</span>
-      </div>
-
-      <div className="space-y-3">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ophalo-attention)]">
-            Why
-          </p>
-          <p className="mt-1 text-sm leading-6 text-[var(--ophalo-ink)]">{guidance.why}</p>
-        </div>
-
-        {sourceText && (
-          <div className="rounded-lg border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-3 py-2.5">
-            {sourceLabel && (
-              <p className="text-xs font-semibold text-[var(--ophalo-muted)] mb-1">
-                {sourceLabel}
-              </p>
+    <section className="rounded-xl border border-[var(--ophalo-border)] border-l-4 border-l-[var(--ophalo-attention)] bg-[var(--ophalo-attention-bg)] px-4 py-2.5">
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="flex items-center gap-2 min-w-0">
+          <KeepBadge variant={isOverdue ? "danger" : "attention"}>
+            {isOverdue ? (
+              <AlertTriangle className="h-3 w-3 mr-1 shrink-0" />
+            ) : (
+              <Clock className="h-3 w-3 mr-1 shrink-0" />
             )}
-            <p className="text-sm leading-6 text-[var(--ophalo-ink)] italic">
-              "{sourceText}"
-            </p>
-          </div>
-        )}
+            Needs attention
+          </KeepBadge>
+          <span className="text-sm font-semibold text-[var(--ophalo-ink)] truncate">{guidance.label}</span>
+          <AttentionGuidanceDisclosure guidance={guidance} />
+        </div>
 
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ophalo-attention)]">
-            Resolve by
-          </p>
-          <p className="mt-1 text-sm leading-6 text-[var(--ophalo-ink)]">{guidance.resolveBy}</p>
-          {guidance.afterHandled && (
-            <p className="mt-1 text-xs leading-5 text-[var(--ophalo-muted)]">
-              {guidance.afterHandled}
-            </p>
+        <div className="flex items-center gap-3 ml-auto">
+          {showSecondaryClear && (
+            <button
+              type="button"
+              onClick={onOpenClearAttention}
+              className="text-sm font-medium text-[var(--ophalo-attention)] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ophalo-attention)] rounded"
+            >
+              Clear attention
+            </button>
           )}
+          {nextStep && <KeepButton onClick={nextStep.onActivate}>{nextStep.buttonLabel}</KeepButton>}
         </div>
       </div>
-
-      {nextStep && (
-        <div className="mt-4 pt-3 border-t border-[var(--ophalo-attention)]/25 flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ophalo-muted)]">
-              Next step
-            </p>
-            <p className="mt-1 text-sm text-[var(--ophalo-ink)]">{nextStep.buttonLabel}</p>
-          </div>
-          <KeepButton onClick={nextStep.onActivate}>{nextStep.buttonLabel}</KeepButton>
-        </div>
-      )}
     </section>
   );
 }

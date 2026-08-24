@@ -22,7 +22,7 @@ import { useActualWorkHistory } from "./useActualWorkHistory";
 import { ActualWorkHistoryCard } from "./ActualWorkHistoryCard";
 import { ActualWorkComposer } from "./ActualWorkComposer";
 import { TeamSection } from "./TeamSection";
-import { FOCUS_RING, buildAttentionGuidance } from "./helpers";
+import { FOCUS_RING } from "./helpers";
 
 interface RequestDetailContentProps extends RequestDetailLayoutProps {
   detail: KeepRequestDetailResult;
@@ -55,11 +55,6 @@ export function RequestDetailContent(props: RequestDetailContentProps) {
   const actualWorkHistoryVisible =
     actualWorkHistory.state.status === "error" ||
     (actualWorkHistory.state.status === "loaded" && actualWorkHistory.state.submittedVisits.length > 0);
-  // Attention/description consolidation: when the banner already shows a distinct timeline-sourced
-  // quote, the original description is retained but unboxed beneath it; when there's no such quote,
-  // the description is folded into the banner itself (see HeroAttentionBanner) and suppressed here.
-  const attentionGuidance = buildAttentionGuidance(detail);
-  const hasTimelineQuote = !!attentionGuidance?.sourceText;
   return (
     <div className="flex flex-1 min-h-0 flex-col">
       <RequestDetailAnchor
@@ -81,14 +76,9 @@ export function RequestDetailContent(props: RequestDetailContentProps) {
           <TodayPromiseBanner detail={detail} onRecordFollowUp={onRecordFollowUp} />
         </div>
 
-        {/* 2. Customer need — the original request only. Hidden when the Hero Attention Banner
-            has already folded it in as the verbatim context (no distinct timeline quote); shown
-            unboxed when the banner instead shows a distinct timeline-sourced quote. */}
-        {attentionGuidance ? (
-          hasTimelineQuote && <OriginalRequestCard detail={detail} quiet />
-        ) : (
-          <OriginalRequestCard detail={detail} />
-        )}
+        {/* 2. Customer need — permanent, always mounted regardless of attention state
+            (locked spec, 2026-08-24: decoupled from the conditional attention rail). */}
+        <OriginalRequestCard detail={detail} />
 
         {/* 3. Work execution — Actual Work, one compact module (locked exception, 2026-08-22:
             capture and visit history share one enclosing card; visit history renders only when

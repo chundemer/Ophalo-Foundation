@@ -23,8 +23,110 @@ deferred domain work, not opened by this change).
 
 Implementation sequence steps 1-6 (below) are now complete — the Request Detail action-surface
 redesign is done. The action-first planning and queue-signals slice (below) is also complete. The
-queue-header consolidation batch (below) is also complete and committed.
+queue-header consolidation batch (below) is also complete and committed. The Customer Need /
+attention-rail decoupling batch (below) is also complete and committed.
 **Next batch: resume 8B (Owner/Admin Actual Work financial review UI).**
+
+### Request Detail — permanent Customer Need + compact attention rail — complete (2026-08-24)
+
+**Implemented as specified below.** `HeroAttentionBanner` (`DetailPanels.tsx`) is now a single
+compact amber rail — badge, label, an on-demand accessible disclosure (`AttentionGuidanceDisclosure`,
+same outside-click/Escape/focus-return pattern as `RequestListToolbar`'s `ViewsPopover`) holding
+Why/Resolve by/after-handled/timeline-evidence, the server-routed primary Next step CTA, and a
+secondary **Clear attention** entry point shown whenever acknowledgement is separately authorized
+(suppressed only when the primary CTA already routes there, i.e. `guidanceKey ===
+"acknowledge_attention"`). `OriginalRequestCard` is now a single always-mounted **Customer need**
+module (`RequestDetailContent.tsx` renders it unconditionally; `hasTimelineQuote` suppression
+removed) — no longer coupled to attention state. Presentation-only; no API/query/domain changes.
+Verified: typecheck clean, `pnpm check:tokens` passed, `git diff --check` clean, full
+`src/pages/request-detail` suite 206/206 passing. Zoom/narrow-viewport visual pass (acceptance
+check 6) not run in this session — flag if a dedicated visual QA pass is still wanted before this
+ships to pilot.
+
+**Original spec (as implemented):**
+
+**Problem:** the current `HeroAttentionBanner` is a tall amber card that combines three different
+things: temporary operational guidance (**Why**, **Resolve by**, and Next step), the customer's
+durable original request, and the next action. This hides the core customer context when attention
+clears, makes routine work visually heavy, and forces experienced operators to scan SOP prose on
+every flagged request.
+
+**Locked product decision:** Customer Need is durable request context; Needs Attention is a
+conditional operational state. They must not be coupled in the DOM or layout.
+
+**Target canvas order:** directly below the existing Zone A Request Detail Anchor / Internal
+Planning row, render (1) the conditional Attention rail, (2) the always-mounted Customer Need
+module, (3) Actual Work, then (4) the existing communication workspace. When there is no active
+effective-attention guidance, do not render any attention surface: no amber background, warning
+icon, rail border, placeholder, or residual vertical gap. Customer Need then sits immediately
+under the Anchor.
+
+**Attention rail (active guidance only):** replace the current multi-section hero card with a
+single compact amber rail. It contains the warning icon/badge, the server-authored attention
+label (for example, **First response due**), an accessible on-demand information trigger, the
+single server-routed primary Next step CTA, and a secondary **Clear attention** entry point only
+when acknowledgement is an authorized, applicable action. On ordinary desktop widths it should be
+one shallow horizontal row; it may wrap into a usable compact multi-row layout at narrow widths.
+Do not force a brittle literal 48px height at the expense of target size, readable labels, zoom, or
+mobile layout.
+
+**On-demand guidance:** move the existing `guidance.why`, `guidance.resolveBy`, and optional
+`guidance.afterHandled` content out of the rail into a click/tap accessible popover or disclosure
+anchored to the information trigger. It must be keyboard reachable, expose an accessible name and
+expanded state, close with Escape/outside interaction as appropriate, and remain usable without
+hover. This is presentation relocation only: retain the exact server-owned guidance copy and do
+not invent client-side SLA rules.
+
+**Permanent Customer Need:** always render one quiet, compact module showing the request's
+original description, labeled **Customer need**. It is not amber and has no alert styling. It must
+remain visible both while attention is active and after it is cleared. Do not replace it with a
+timeline-sourced quote: attention evidence may be surfaced in the on-demand guidance, but the
+permanent module is specifically the original request description. Apply the established empty
+content behavior if the API has no description; do not render a fake customer quote.
+
+**Preserve domain/workflow truth:** CTA selection remains entirely server-driven through
+`effectiveAttention.guidanceKey` and existing available-action authorization. Do not hard-code
+“Respond to customer” into the rail: valid routes include Respond to customer, Log contact,
+Resolve follow-up, and Go to Clear attention. Keep the existing resolution destinations and
+effects intact. In particular, Clear attention must continue to open the required-reason sheet;
+it must never silently clear the flag. A customer-page update and a logged direct contact remain
+distinct domains and must retain their existing disclosures/audit semantics.
+
+**Implementation map:**
+
+- `web/ophalo-app/src/pages/request-detail/RequestDetailContent.tsx` owns canvas ordering and
+  must render `OriginalRequestCard` unconditionally as the permanent Customer Need module.
+  Remove the current `hasTimelineQuote` conditional/suppression behavior.
+- `web/ophalo-app/src/pages/request-detail/DetailPanels.tsx` owns `HeroAttentionBanner` and
+  `OriginalRequestCard`. Refactor the former into the conditional compact rail; preserve
+  `resolveNextStep`, `scrollAndFocusWithinWorkCanvas`, authorization checks, and sheet callbacks.
+  Adapt the latter to the quiet permanent Customer Need presentation.
+- `web/ophalo-app/src/pages/request-detail/helpers.ts` remains the authoritative UI mapping for
+  `buildAttentionGuidance`; do not alter effective-attention precedence or API contracts for this
+  presentation slice.
+- Update/add focused tests under
+  `web/ophalo-app/src/pages/request-detail/__tests__/`, especially
+  `HeroAttentionBanner.test.tsx` and RequestDetailContent coverage.
+
+**Acceptance checks:**
+
+1. With each active `guidanceKey`, the rail renders, its label and server-routed CTA are correct,
+   and the CTA retains its current destination behavior/authorization fallback.
+2. With no active guidance, the rail is absent and Customer Need remains directly below the
+   Anchor; no alert visual residue is rendered.
+3. With active guidance, Customer Need still renders exactly once and displays the original
+   description rather than a timeline quote.
+4. Why / Resolve by / after-handled guidance is available on demand and works with keyboard and
+   touch; it is not permanently consuming canvas height.
+5. Clear attention opens its existing sheet and preserves required-attestation behavior.
+6. Verify desktop at 100%/125%/150% zoom and a narrow/mobile viewport: no clipping, overlap,
+   inaccessible action, or unintended horizontal scroll.
+7. Run the focused Request Detail tests, `pnpm typecheck`, `pnpm check:tokens`, and the relevant
+   frontend suite before handoff. Keep this as one presentation-only reviewable change set; do not
+   combine it with 8B financial-review work.
+
+**Deferred next:** resume 8B (Owner/Admin Actual Work financial review UI) after this slice is
+implemented and verified.
 
 ### Request Queue header consolidation — complete (2026-08-24)
 

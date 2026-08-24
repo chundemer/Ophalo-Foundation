@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { HeroAttentionBanner } from "../DetailPanels";
 import { mockRequestDetails, OWNER_ACTIONS } from "../../../mocks/fixtures";
 import type { KeepRequestDetailResult } from "../../../lib/apiClient";
@@ -42,7 +43,8 @@ function detailWith(
 }
 
 describe("HeroAttentionBanner", () => {
-  it("routes acknowledge_attention to the Clear attention sheet", () => {
+  it("routes acknowledge_attention to the Clear attention sheet", async () => {
+    const user = userEvent.setup();
     const onRecordFollowUp = vi.fn();
     const onContactLaunched = vi.fn();
     const onOpenClearAttention = vi.fn();
@@ -55,14 +57,34 @@ describe("HeroAttentionBanner", () => {
       />,
     );
 
+    await user.click(screen.getByRole("button", { name: "Why this needs attention" }));
     expect(screen.getByText("Why")).toBeInTheDocument();
     expect(screen.getByText("Resolve by")).toBeInTheDocument();
 
+    // acknowledge_attention already routes the primary CTA to Clear attention, so no
+    // redundant secondary entry point renders alongside it.
+    expect(screen.getAllByRole("button", { name: "Go to Clear attention" })).toHaveLength(1);
     screen.getByRole("button", { name: "Go to Clear attention" }).click();
 
     expect(onOpenClearAttention).toHaveBeenCalledTimes(1);
     expect(onRecordFollowUp).not.toHaveBeenCalled();
     expect(onContactLaunched).not.toHaveBeenCalled();
+  });
+
+  it("shows a secondary Clear attention entry point alongside a different primary CTA when acknowledgement is separately authorized", () => {
+    const onOpenClearAttention = vi.fn();
+    render(
+      <HeroAttentionBanner
+        detail={detailWith("resolve_follow_up", { canSetFollowUpOn: true, canAcknowledgeAttention: true })}
+        onRecordFollowUp={vi.fn()}
+        onContactLaunched={vi.fn()}
+        onOpenClearAttention={onOpenClearAttention}
+      />,
+    );
+
+    screen.getByRole("button", { name: "Resolve follow-up" });
+    screen.getByRole("button", { name: "Clear attention" }).click();
+    expect(onOpenClearAttention).toHaveBeenCalledTimes(1);
   });
 
   it("routes resolve_follow_up (due Follow Up On) to the controller callback", () => {
@@ -143,19 +165,25 @@ describe("HeroAttentionBanner", () => {
     expect(onContactLaunched).toHaveBeenCalledWith("outbound", expect.any(String));
   });
 
-  it("renders nothing for respond_to_customer when neither a customer update nor contact logging is authorized", () => {
+  it("renders no CTA for respond_to_customer when neither a customer update nor contact logging is authorized", () => {
     render(
       <HeroAttentionBanner
         detail={detailWith("respond_to_customer", {
           canSendBusinessUpdate: false,
           canLogExternalContact: false,
+          canAcknowledgeAttention: false,
         })}
         onRecordFollowUp={vi.fn()}
         onContactLaunched={vi.fn()}
         onOpenClearAttention={vi.fn()}
       />,
     );
-    expect(screen.queryByRole("button")).toBeNull();
+    // The info disclosure trigger still renders (why/resolve-by guidance is independent of
+    // CTA authorization); no primary or secondary action button does.
+    expect(screen.queryByRole("button", { name: "Respond to customer" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Log contact" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Clear attention" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Why this needs attention" })).toBeInTheDocument();
   });
 
   it("renders nothing when there is no guidanceKey", () => {
@@ -170,7 +198,8 @@ describe("HeroAttentionBanner", () => {
     expect(screen.queryByRole("button")).toBeNull();
   });
 
-  it("folds the customer's original description in as verbatim context when no timeline quote exists", () => {
+  it("shows no timeline-sourced evidence in the guidance disclosure when no distinct quote exists", async () => {
+    const user = userEvent.setup();
     const detail = { ...detailWith("respond_to_customer", { canSendBusinessUpdate: true }), events: [] };
     render(
       <HeroAttentionBanner
@@ -180,11 +209,12 @@ describe("HeroAttentionBanner", () => {
         onOpenClearAttention={vi.fn()}
       />,
     );
-    expect(screen.getByText("Customer's original request")).toBeInTheDocument();
-    expect(screen.getByText(`"${detail.description}"`)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Why this needs attention" }));
+    expect(screen.queryByText(`"${detail.description}"`)).not.toBeInTheDocument();
   });
 
-  it("shows the distinct timeline-sourced quote, not the original description, when one exists", () => {
+  it("shows the distinct timeline-sourced quote in the guidance disclosure when one exists", async () => {
+    const user = userEvent.setup();
     const detail = {
       ...detailWith("respond_to_customer", { canSendBusinessUpdate: true }),
       events: [
@@ -227,11 +257,12 @@ describe("HeroAttentionBanner", () => {
         onOpenClearAttention={vi.fn()}
       />,
     );
+    await user.click(screen.getByRole("button", { name: "Why this needs attention" }));
     expect(screen.getByText('"Can someone come out tomorrow instead?"')).toBeInTheDocument();
     expect(screen.queryByText(`"${detail.description}"`)).not.toBeInTheDocument();
   });
 
-  it("renders nothing when the routed action is not server-authorized", () => {
+  it("renders no CTA when the routed action is not server-authorized", () => {
     render(
       <HeroAttentionBanner
         detail={detailWith("acknowledge_attention", { canAcknowledgeAttention: false })}
@@ -240,6 +271,7 @@ describe("HeroAttentionBanner", () => {
         onOpenClearAttention={vi.fn()}
       />,
     );
-    expect(screen.queryByRole("button")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Go to Clear attention" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Clear attention" })).toBeNull();
   });
 });
