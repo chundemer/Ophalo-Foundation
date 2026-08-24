@@ -95,6 +95,101 @@ describe("RequestDetailAnchor — three-row desktop hierarchy", () => {
     expect(screen.queryByRole("button", { name: /mark work done/i })).not.toBeInTheDocument();
   });
 
+  it("Row 4 (locked correction, 2026-08-24): renders three persistently labeled controls in locked order — Internal priority, Planned work date, Set internal follow-up", () => {
+    const detail: KeepRequestDetailResult = {
+      ...baseDetail(),
+      businessPriority: null,
+      plannedForDate: null,
+      followUpOnDate: null,
+    };
+    const { container } = renderAnchor(detail);
+
+    const grid = container.querySelector(".mt-3.grid")!;
+    expect(grid).not.toBeNull();
+    // Only the three top-level field labels — not the nested date-editor popover's own labels.
+    const labels = Array.from(grid.querySelectorAll(":scope > div > label")).map((el) => el.textContent);
+    expect(labels).toEqual(["Internal priority", "Planned work date", "Set internal follow-up"]);
+
+    // Not a passive metadata strip — no card chrome, one compact three-column row on desktop.
+    expect(grid.className).toContain("sm:grid-cols-3");
+  });
+
+  it("Row 4: exact empty-state control copy — never 'Not planned' or 'No follow-up'", () => {
+    const detail: KeepRequestDetailResult = {
+      ...baseDetail(),
+      businessPriority: null,
+      plannedForDate: null,
+      followUpOnDate: null,
+    };
+    renderAnchor(detail);
+
+    expect(screen.getByRole("combobox", { name: "Internal priority" })).toBeInTheDocument();
+    expect((screen.getByRole("combobox", { name: "Internal priority" }) as HTMLSelectElement).value).toBe("");
+    expect(screen.getByText("Set planned work date…")).toBeInTheDocument();
+    expect(screen.getByText("Set internal follow-up…")).toBeInTheDocument();
+    expect(screen.queryByText("Not planned")).not.toBeInTheDocument();
+    expect(screen.queryByText("No follow-up")).not.toBeInTheDocument();
+  });
+
+  it("Row 4: renders the formatted date when planned/follow-up are set (authorized interaction path)", () => {
+    const detail: KeepRequestDetailResult = {
+      ...baseDetail(),
+      businessPriority: "urgent",
+      plannedForDate: "2026-08-29",
+      followUpOnDate: "2026-08-26",
+      followUpOnReason: "reminder",
+    };
+    const { container } = renderAnchor(detail);
+
+    const prioritySelect = screen.getByRole("combobox", { name: "Internal priority" });
+    expect((prioritySelect as HTMLSelectElement).value).toBe("urgent");
+    expect(prioritySelect.className).toContain("text-[var(--ophalo-danger)]");
+
+    expect(screen.getByRole("button", { name: "Planned work date: Aug 29, 2026" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Set internal follow-up: Aug 26, 2026" })).toBeInTheDocument();
+    expect(screen.queryByText("Set planned work date…")).not.toBeInTheDocument();
+    expect(screen.queryByText("Set internal follow-up…")).not.toBeInTheDocument();
+
+    // Still a single outer Anchor card — Row 4 adds a top separator, not a nested bordered box.
+    expect(container.querySelectorAll(".rounded-xl.border").length).toBe(1);
+  });
+
+  it("Row 4 correction (locked 2026-08-24): a set planned/follow-up date stays visible as a read-only labeled value even when the viewer lacks the edit permission — never hidden", () => {
+    const detail: KeepRequestDetailResult = {
+      ...baseDetail(),
+      plannedForDate: "2026-08-29",
+      followUpOnDate: "2026-08-26",
+      followUpOnReason: "reminder",
+      availableActions: { ...baseDetail().availableActions, canSetPlannedFor: false, canSetFollowUpOn: false },
+    };
+    renderAnchor(detail);
+
+    expect(screen.getByText("Planned work date")).toBeInTheDocument();
+    expect(screen.getByText("Set internal follow-up")).toBeInTheDocument();
+    expect(screen.getByText("Aug 29, 2026")).toBeInTheDocument();
+    expect(screen.getByText("Aug 26, 2026")).toBeInTheDocument();
+    // Read-only: not an interactive trigger.
+    expect(screen.queryByRole("button", { name: /Aug 29, 2026/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Aug 26, 2026/ })).not.toBeInTheDocument();
+  });
+
+  it("Row 4: omits an unauthorized, unset planned/follow-up field rather than rendering a dead control", () => {
+    const detail: KeepRequestDetailResult = {
+      ...baseDetail(),
+      plannedForDate: null,
+      followUpOnDate: null,
+      availableActions: { ...baseDetail().availableActions, canSetPlannedFor: false, canSetFollowUpOn: false },
+    };
+    const { container } = renderAnchor(detail);
+
+    expect(screen.queryByText("Planned work date")).not.toBeInTheDocument();
+    expect(screen.queryByText("Set internal follow-up")).not.toBeInTheDocument();
+    // Priority always renders (Routine is a real value, not an unset state).
+    expect(screen.getByText("Internal priority")).toBeInTheDocument();
+    const grid = container.querySelector(".mt-3.grid")!;
+    expect(grid.children.length).toBe(1);
+  });
+
   it("renders no primary/Log-contact controls for a read-only/unauthorized viewer", () => {
     const detail: KeepRequestDetailResult = {
       ...baseDetail(),

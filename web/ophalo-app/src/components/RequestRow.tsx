@@ -1,5 +1,5 @@
 import { useState, type ComponentType, type KeyboardEvent } from "react";
-import { AlertTriangle, Clock, MessageSquare, ChevronRight, UserRound, CheckCircle2, Share2, Phone, StickyNote, MapPin } from "lucide-react";
+import { AlertTriangle, Clock, MessageSquare, ChevronRight, UserRound, CheckCircle2, Share2, Phone, StickyNote } from "lucide-react";
 import { KeepBadge, type KeepBadgeVariant } from "./keep/KeepBadge";
 import type { KeepRequestSummary, KeepRequestAvailableItem, KeepQuickAction } from "../lib/apiClient";
 import { statusLabel, statusBadgeVariant } from "../lib/requestStatus";
@@ -381,7 +381,21 @@ export function RequestRow({ row, onSelect, onSelectFocused, onActionClick, onSh
   // always render here when present.
   const showFollowUpMeta = !isClosedOrCancelled && exception?.key !== "due_follow_up_on";
   const followUpMeta = showFollowUpMeta ? timingChipText("Follow-up", row.timing?.followUpOnLabel, row.timing?.followUpOnDate) : null;
-  const plannedMeta = !isClosedOrCancelled ? timingChipText("Planned", row.timing?.plannedForLabel, row.timing?.plannedForDate) : null;
+
+  // Conditional combined action-signal line (locked 2026-08-24, queue redesign): at most one
+  // compact line, capped at three signals, never a second cluster of status badges. Priority
+  // shows only above Routine; planned date only when set; contact preference only when explicit
+  // (never "No preference").
+  const prioritySignal = row.businessPriority === "urgent" ? "Urgent" : row.businessPriority === "soon" ? "Soon" : null;
+  const plannedDateLabel = !isClosedOrCancelled ? shortDate(row.timing?.plannedForDate ?? null) : null;
+  const contactSignal =
+    row.contactPreference === "text_message" ? "Prefers text" :
+    row.contactPreference === "phone_call" ? "Prefers call" :
+    row.contactPreference === "email" ? "Prefers email" : null;
+  const actionSignalLine = [prioritySignal, plannedDateLabel && `Planned ${plannedDateLabel}`, contactSignal]
+    .filter((s): s is string => !!s)
+    .slice(0, 3)
+    .join(" · ") || null;
 
   const borderAccent = exception
     ? exception.tone === "danger"
@@ -500,13 +514,14 @@ export function RequestRow({ row, onSelect, onSelectFocused, onActionClick, onSh
       )}
 
       {/* Context metadata — quiet, unbordered; no competing alert badges. Pane mode (backlog
-          item 5) keeps only service city/state: identity, status/exception, and the Next: cue
-          above already carry the scan signal a compact row needs. */}
+          item 5) is the actual queue surface in day-to-day use, so it gets the same
+          action-first signal line as the default row (locked 2026-08-24), not a separate
+          city/state-only treatment: identity, status/exception, and the Next: cue above already
+          carry the scan signal a compact row needs. */}
       {paneMode ? (
-        row.serviceCity && row.serviceState && (
+        actionSignalLine && (
           <div className="keep-row-meta flex items-center gap-1 px-4 pt-1 pb-3">
-            <MapPin className="h-3 w-3" />
-            {row.serviceCity}, {row.serviceState}
+            {actionSignalLine}
           </div>
         )
       ) : (
@@ -530,34 +545,17 @@ export function RequestRow({ row, onSelect, onSelectFocused, onActionClick, onSh
             </span>
           )}
           {row.source === "public_intake" ? (
-            <span className="inline-flex items-center gap-1">
-              Customer intake
-              {row.contactPreference === "text_message" && " · Prefers text"}
-              {row.contactPreference === "phone_call" && " · Prefers call"}
-              {row.contactPreference === "email" && " · Prefers email"}
-            </span>
+            <span>Customer intake</span>
           ) : (
             <span>Created by business</span>
           )}
-          {row.serviceCity && row.serviceState && (
-            <span className="inline-flex items-center gap-1">
-              <MapPin className="h-3 w-3" />
-              {row.serviceCity}, {row.serviceState}{row.serviceZip ? ` ${row.serviceZip}` : ""}
-            </span>
-          )}
           {followUpMeta && <span>{followUpMeta}</span>}
-          {plannedMeta && <span>{plannedMeta}</span>}
+          {actionSignalLine && <span>{actionSignalLine}</span>}
           {row.feedbackWasResolved === true && !row.isPostCloseFollowUp && (
             <span className="flex items-center gap-1">
               <CheckCircle2 className="h-3 w-3" />
               Customer confirmed resolved
             </span>
-          )}
-          {row.businessPriority === "urgent" && (
-            <span>Internal priority: Urgent</span>
-          )}
-          {row.businessPriority === "soon" && (
-            <span>Internal priority: Soon</span>
           )}
           {row.hasInternalNote && (
             <span className="flex items-center gap-1 text-[var(--ophalo-muted)]">

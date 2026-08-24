@@ -6,7 +6,6 @@ import {
   HeroAttentionBanner,
   OriginalRequestCard,
   RelatedWorkPanel,
-  TriagePanel,
   CustomerSignalPanel,
   FeedbackSummaryCard,
   SourceMetaPanel,
@@ -15,7 +14,6 @@ import {
 import { TodayPromiseBanner } from "./DetailHero";
 import { RequestDetailAnchor } from "./RequestDetailAnchor";
 import { UnifiedComposer } from "./UnifiedComposer";
-import { TimingPanel } from "./TimingPanel";
 import { KeepButton } from "../../components/keep/KeepButton";
 import { RequestDetailActivity } from "./RequestDetailActivity";
 import { useActualWorkCapture } from "./useActualWorkCapture";
@@ -107,38 +105,18 @@ export function RequestDetailContent(props: RequestDetailContentProps) {
           </div>
         )}
 
-        {/* 4. Communication & planning — one cohesive surface: composer and Follow-Up/Planned-For
-            share one enclosing card (locked correction, 2026-08-22), not two disconnected ones.
-            Log Contact's one entry point lives in the Anchor now, not duplicated here. */}
+        {/* 4. Communication — composer only; Follow-Up/Planned-For and priority moved to the
+            Anchor's compact Internal Planning strip (locked 2026-08-24). Log Contact's one entry
+            point lives in the Anchor too, not duplicated here. */}
         <div className="space-y-3">
           {showProminentFeedbackCard && <ProminentFeedbackCard requestId={requestId} detail={detail} onDetailUpdated={onDetailUpdated} onReviewSuccess={onReviewSuccess} />}
           {props.reviewSuccessMsg && <div role="status" aria-live="polite" className="rounded-xl border border-[var(--ophalo-success)] bg-[var(--ophalo-success-bg)] px-4 py-3 text-sm text-[var(--ophalo-success)] font-medium">{props.reviewSuccessMsg}</div>}
-          <div className="rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] divide-y divide-[var(--ophalo-border)]">
-            <div
-              id="focus-panel-update"
-              tabIndex={-1}
-              className="rounded-t-xl focus:outline-none focus:ring-2 focus:ring-[var(--keep-accent)]"
-            >
-              <UnifiedComposer requestId={requestId} detail={detail} onDetailUpdated={onDetailUpdated} customerUpdateDraft={props.customerUpdateDraft} onCustomerUpdateDraftChange={props.onCustomerUpdateDraftChange} customerUpdateDraftStatus={props.customerUpdateDraftStatus} onCustomerUpdateDraftStatusChange={props.onCustomerUpdateDraftStatusChange} highlight={highlights.sendUpdate} bare />
-            </div>
-            <div className="px-4 py-3">
-              <p className="text-xs font-semibold uppercase tracking-wide text-[var(--ophalo-muted)] mb-1">
-                Internal planning
-              </p>
-              <p className="text-xs leading-5 text-[var(--ophalo-muted)] mb-2">
-                None of this notifies the customer.
-              </p>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <TimingPanel
-                  requestId={requestId}
-                  detail={detail}
-                  onDetailUpdated={onDetailUpdated}
-                  onRecordFollowUp={onRecordFollowUp}
-                  bare
-                />
-                <TriagePanel detail={detail} onDetailUpdated={onDetailUpdated} bare />
-              </div>
-            </div>
+          <div
+            id="focus-panel-update"
+            tabIndex={-1}
+            className="rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] focus:outline-none focus:ring-2 focus:ring-[var(--keep-accent)]"
+          >
+            <UnifiedComposer requestId={requestId} detail={detail} onDetailUpdated={onDetailUpdated} customerUpdateDraft={props.customerUpdateDraft} onCustomerUpdateDraftChange={props.onCustomerUpdateDraftChange} customerUpdateDraftStatus={props.customerUpdateDraftStatus} onCustomerUpdateDraftStatusChange={props.onCustomerUpdateDraftStatusChange} highlight={highlights.sendUpdate} bare />
           </div>
         </div>
 

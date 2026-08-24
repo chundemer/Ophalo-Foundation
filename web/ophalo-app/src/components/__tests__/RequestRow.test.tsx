@@ -474,16 +474,18 @@ describe("RequestRow — Build 087 / GAP-027 locked row contract", () => {
     expect(onSelect).toHaveBeenCalledWith("req-1");
   });
 
-  it("backlog item 5: paneMode renders a compact scan-and-select row — identity, status/exception, Next: cue, and city/state only", () => {
+  it("action-first queue redesign (locked 2026-08-24): paneMode renders a compact scan-and-select row — identity, status/exception, Next: cue, and the same conditional action-signal line as the default row, never city/state", () => {
     const row = buildRow({
       status: "received",
       originalSummary: { fullText: "Fix leak" },
       latestActivity: { previewText: "Called customer back", previewAtUtc: "2026-08-20T12:00:00Z", previewSource: "note", previewTruncated: false },
       hasInternalNote: true,
       businessPriority: "urgent",
+      contactPreference: "text_message",
       serviceCity: "Brighton",
       serviceState: "TN",
       serviceZip: "38011",
+      timing: { followUpOnDate: null, followUpOnReason: null, followUpOnNote: null, followUpOnLabel: null, hasFutureFollowUpOn: false, plannedForDate: "2026-08-29T12:00:00Z", plannedForLabel: null, hasFuturePlannedFor: true },
       participation: {
         responsibleCount: 1,
         watchingCount: 0,
@@ -498,8 +500,9 @@ describe("RequestRow — Build 087 / GAP-027 locked row contract", () => {
     render(<RequestRow row={row} onSelect={noop} paneMode />);
 
     // Kept: identity, status/exception (Response overdue text also carries the Next: cue path
-    // tested above), and a bare city/state chip with no zip.
-    expect(screen.getByText("Brighton, TN")).toBeInTheDocument();
+    // tested above), and the same capped action-signal line as the default row — never city/state.
+    expect(screen.getByText("Urgent · Planned Aug 29 · Prefers text")).toBeInTheDocument();
+    expect(screen.queryByText(/Brighton/)).not.toBeInTheDocument();
     expect(screen.queryByText(/38011/)).not.toBeInTheDocument();
 
     // Trimmed for the compact pane row.
@@ -510,6 +513,47 @@ describe("RequestRow — Build 087 / GAP-027 locked row contract", () => {
     expect(screen.queryByText("Internal priority: Urgent")).not.toBeInTheDocument();
     expect(screen.queryByText("Created by business")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Read full request" })).not.toBeInTheDocument();
+  });
+
+  it("action-first queue redesign: paneMode omits the action-signal line entirely when no eligible signal exists", () => {
+    const row = buildRow({
+      status: "received",
+      businessPriority: "routine",
+      contactPreference: "no_preference",
+    });
+
+    const { container } = render(<RequestRow row={row} onSelect={noop} paneMode />);
+
+    expect(container.querySelector(".keep-row-meta")).toBeNull();
+  });
+
+  it("action-first queue redesign (locked 2026-08-24): default row combines priority, planned date, and contact preference into one capped signal line, never city/state", () => {
+    const row = buildRow({
+      businessPriority: "urgent",
+      contactPreference: "text_message",
+      serviceCity: "Brighton",
+      serviceState: "TN",
+      timing: { followUpOnDate: null, followUpOnReason: null, followUpOnNote: null, followUpOnLabel: null, hasFutureFollowUpOn: false, plannedForDate: "2026-08-29T12:00:00Z", plannedForLabel: null, hasFuturePlannedFor: true },
+    });
+
+    render(<RequestRow row={row} onSelect={noop} />);
+
+    expect(screen.getByText("Urgent · Planned Aug 29 · Prefers text")).toBeInTheDocument();
+    expect(screen.queryByText(/Brighton/)).not.toBeInTheDocument();
+    expect(screen.queryByText("Internal priority: Urgent")).not.toBeInTheDocument();
+  });
+
+  it("action-first queue redesign: the signal line is unmounted (not a field showing defaults) when no eligible signal exists", () => {
+    const row = buildRow({
+      businessPriority: "routine",
+      contactPreference: "no_preference",
+    });
+
+    render(<RequestRow row={row} onSelect={noop} />);
+
+    expect(screen.queryByText(/No preference/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Routine/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Planned/)).not.toBeInTheDocument();
   });
 
   it("preserves the quick-action footer in the one-pane fallback when paneMode is false/omitted", () => {

@@ -19,9 +19,13 @@ interface TimingPanelProps {
   // row) so a parent can align them with TriagePanel's priority tile in one shared
   // Communication & Planning planning row (locked exception, 2026-08-22).
   bare?: boolean;
+  // strip: each tile is one labeled, bordered select-style control (persistent label above,
+  // no helper copy) with the editor form in a dropdown popover, for the Anchor's compact
+  // Internal Planning row (locked correction, 2026-08-24).
+  strip?: boolean;
 }
 
-export function TimingPanel({ requestId, detail, onDetailUpdated, onRecordFollowUp, bare = false }: TimingPanelProps) {
+export function TimingPanel({ requestId, detail, onDetailUpdated, onRecordFollowUp, bare = false, strip = false }: TimingPanelProps) {
   const { canSetFollowUpOn, canSetPlannedFor } = detail.availableActions;
   const { followUpNoteMaxLength, allowedFollowUpReasons } = detail.validation;
 
@@ -39,11 +43,18 @@ export function TimingPanel({ requestId, detail, onDetailUpdated, onRecordFollow
   const [plannedConflict, setPlannedConflict] = useState(false);
   const [plannedError, setPlannedError] = useState<string | null>(null);
 
-  if (!canSetFollowUpOn && !canSetPlannedFor) return null;
-
   const hasFollowUp = !!detail.followUpOnDate;
   const hasPlanned = !!detail.plannedForDate;
   const hasActiveTiming = hasFollowUp || hasPlanned;
+
+  // strip: an existing planned/follow-up value is operational planning data, not an editing
+  // affordance — it must stay visible as a read-only label even when the viewer lacks the
+  // mutation permission (locked correction, 2026-08-24). The card variant is unaffected: it only
+  // ever shows an editable tile when the viewer is authorized to edit it.
+  const showFollowUp = canSetFollowUpOn || (strip && hasFollowUp);
+  const showPlanned = canSetPlannedFor || (strip && hasPlanned);
+
+  if (!showFollowUp && !showPlanned) return null;
 
   function openEditor(which: "followUp" | "planned") {
     if (which === "followUp") {
@@ -153,7 +164,124 @@ export function TimingPanel({ requestId, detail, onDetailUpdated, onRecordFollow
     }
   }
 
-  const followUpTile = canSetFollowUpOn && (
+  const followUpForm = (
+    <form onSubmit={(e) => void handleSetFollowUp(e)} className="space-y-2">
+      <div>
+        <label htmlFor="follow-up-date" className="text-xs text-[var(--ophalo-muted)] block mb-0.5">Date</label>
+        <input
+          id="follow-up-date"
+          type="date"
+          value={editorFollowUpDate}
+          onChange={(e) => setEditorFollowUpDate(e.target.value)}
+          disabled={followUpConflict}
+          className={INPUT_CLS}
+        />
+      </div>
+      <div>
+        <label htmlFor="follow-up-reason" className="text-xs text-[var(--ophalo-muted)] block mb-0.5">Reason</label>
+        <select
+          id="follow-up-reason"
+          value={editorFollowUpReason}
+          onChange={(e) => setEditorFollowUpReason(e.target.value)}
+          disabled={followUpConflict}
+          className={INPUT_CLS}
+        >
+          <option value="">Select reason…</option>
+          {allowedFollowUpReasons.map((r) => (
+            <option key={r} value={r}>{FOLLOW_UP_REASON_LABELS[r] ?? r}</option>
+          ))}
+        </select>
+      </div>
+      <div>
+        <label htmlFor="follow-up-note" className="text-xs text-[var(--ophalo-muted)] block mb-0.5">
+          {editorFollowUpReason === "other" ? "Note (required)" : "Note (optional)"}
+        </label>
+        <input
+          id="follow-up-note"
+          type="text"
+          value={editorFollowUpNote}
+          onChange={(e) => setEditorFollowUpNote(e.target.value)}
+          maxLength={followUpNoteMaxLength}
+          disabled={followUpConflict}
+          placeholder={editorFollowUpReason === "other" ? "Describe the follow-up reason…" : "Optional note…"}
+          className={INPUT_CLS}
+        />
+      </div>
+      <div className="flex gap-2">
+        <KeepButton
+          type="submit"
+          variant="secondary"
+          disabled={!editorFollowUpDate || !editorFollowUpReason || (editorFollowUpReason === "other" && editorFollowUpNote.trim().length === 0) || followUpSubmitting || followUpConflict}
+          className="flex-1"
+        >
+          {followUpSubmitting ? "Saving…" : hasFollowUp ? "Save follow-up" : "Set follow-up"}
+        </KeepButton>
+        <KeepButton type="button" variant="secondary" onClick={closeEditor}>
+          Cancel
+        </KeepButton>
+      </div>
+    </form>
+  );
+
+  const followUpClearAction = hasFollowUp && (
+    <button
+      type="button"
+      onClick={() => void handleClearFollowUp()}
+      disabled={followUpSubmitting || followUpConflict}
+      className={`text-xs text-[var(--ophalo-muted)] hover:text-[var(--ophalo-danger)] disabled:opacity-50 transition-colors ${FOCUS_RING} rounded`}
+    >
+      {followUpSubmitting ? "Clearing…" : "Clear follow-up"}
+    </button>
+  );
+
+  const followUpTile = showFollowUp && (
+    strip ? (
+      <div className="flex flex-col gap-1 min-w-0">
+        {/* No htmlFor/id association to the trigger button: a <label for> on a button replaces
+            its accessible name entirely, which would hide the current value from screen
+            readers. The label stays a persistent visual heading; the button carries its own
+            aria-label with the value. */}
+        <label className="text-xs font-semibold uppercase tracking-widest text-[var(--ophalo-muted)]">
+          Set internal follow-up
+        </label>
+        {canSetFollowUpOn ? (
+          <div className="relative">
+            <button
+              type="button"
+              aria-expanded={expandedEditor === "followUp"}
+              aria-controls="timing-followup-editor"
+              aria-label={`Set internal follow-up: ${hasFollowUp ? formatDateOnly(detail.followUpOnDate!) : "not set"}`}
+              onClick={() => expandedEditor === "followUp" ? closeEditor() : openEditor("followUp")}
+              className={`w-full flex items-center justify-between gap-2 rounded-lg border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-3 py-2 text-left text-sm transition-colors hover:border-[var(--keep-accent)] ${FOCUS_RING} ${
+                hasFollowUp ? "text-[var(--ophalo-ink)]" : "text-[var(--ophalo-muted)]"
+              }`}
+            >
+              <span className="truncate" aria-hidden="true">{hasFollowUp ? formatDateOnly(detail.followUpOnDate!) : "Set internal follow-up…"}</span>
+              {expandedEditor === "followUp" ? <ChevronUp className="h-3.5 w-3.5 shrink-0 text-[var(--ophalo-muted)]" /> : <ChevronDown className="h-3.5 w-3.5 shrink-0 text-[var(--ophalo-muted)]" />}
+            </button>
+            <div
+              id="timing-followup-editor"
+              hidden={expandedEditor !== "followUp"}
+              className="absolute z-20 mt-1 w-72 space-y-2 rounded-lg border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] p-3 shadow-lg"
+            >
+              {followUpError && expandedEditor === "followUp" && (
+                <p className={`text-xs ${followUpConflict ? "text-[var(--ophalo-attention)]" : "text-[var(--ophalo-danger)]"}`}>
+                  {followUpError}
+                </p>
+              )}
+              {followUpForm}
+              {followUpClearAction && <div className="pt-1">{followUpClearAction}</div>}
+            </div>
+          </div>
+        ) : (
+          // Read-only: unauthorized to edit, but an existing value is operational planning data
+          // and must stay visible, not be hidden because it can't be mutated here.
+          <div className="rounded-lg border border-[var(--ophalo-border)] px-3 py-2 text-sm text-[var(--ophalo-ink)]">
+            {formatDateOnly(detail.followUpOnDate!)}
+          </div>
+        )}
+      </div>
+    ) : (
           <div className={bare ? "space-y-2" : "px-4 py-3 space-y-2"}>
             <p className="text-xs text-[var(--ophalo-muted)]">Your internal reminder to check back on this request.</p>
             <button
@@ -199,62 +327,7 @@ export function TimingPanel({ requestId, detail, onDetailUpdated, onRecordFollow
                   {followUpError}
                 </p>
               )}
-              <form onSubmit={(e) => void handleSetFollowUp(e)} className="space-y-2">
-                <div>
-                  <label htmlFor="follow-up-date" className="text-xs text-[var(--ophalo-muted)] block mb-0.5">Date</label>
-                  <input
-                    id="follow-up-date"
-                    type="date"
-                    value={editorFollowUpDate}
-                    onChange={(e) => setEditorFollowUpDate(e.target.value)}
-                    disabled={followUpConflict}
-                    className={INPUT_CLS}
-                  />
-                </div>
-                <div>
-                  <label htmlFor="follow-up-reason" className="text-xs text-[var(--ophalo-muted)] block mb-0.5">Reason</label>
-                  <select
-                    id="follow-up-reason"
-                    value={editorFollowUpReason}
-                    onChange={(e) => setEditorFollowUpReason(e.target.value)}
-                    disabled={followUpConflict}
-                    className={INPUT_CLS}
-                  >
-                    <option value="">Select reason…</option>
-                    {allowedFollowUpReasons.map((r) => (
-                      <option key={r} value={r}>{FOLLOW_UP_REASON_LABELS[r] ?? r}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label htmlFor="follow-up-note" className="text-xs text-[var(--ophalo-muted)] block mb-0.5">
-                    {editorFollowUpReason === "other" ? "Note (required)" : "Note (optional)"}
-                  </label>
-                  <input
-                    id="follow-up-note"
-                    type="text"
-                    value={editorFollowUpNote}
-                    onChange={(e) => setEditorFollowUpNote(e.target.value)}
-                    maxLength={followUpNoteMaxLength}
-                    disabled={followUpConflict}
-                    placeholder={editorFollowUpReason === "other" ? "Describe the follow-up reason…" : "Optional note…"}
-                    className={INPUT_CLS}
-                  />
-                </div>
-                <div className="flex gap-2">
-                  <KeepButton
-                    type="submit"
-                    variant="secondary"
-                    disabled={!editorFollowUpDate || !editorFollowUpReason || (editorFollowUpReason === "other" && editorFollowUpNote.trim().length === 0) || followUpSubmitting || followUpConflict}
-                    className="flex-1"
-                  >
-                    {followUpSubmitting ? "Saving…" : hasFollowUp ? "Save follow-up" : "Set follow-up"}
-                  </KeepButton>
-                  <KeepButton type="button" variant="secondary" onClick={closeEditor}>
-                    Cancel
-                  </KeepButton>
-                </div>
-              </form>
+              {followUpForm}
             </div>
 
             {/* Secondary actions — shown when set and editor is closed */}
@@ -270,14 +343,7 @@ export function TimingPanel({ requestId, detail, onDetailUpdated, onRecordFollow
                     Record follow-up
                   </button>
                 )}
-                <button
-                  type="button"
-                  onClick={() => void handleClearFollowUp()}
-                  disabled={followUpSubmitting || followUpConflict}
-                  className={`text-xs text-[var(--ophalo-muted)] hover:text-[var(--ophalo-danger)] disabled:opacity-50 transition-colors ${FOCUS_RING} rounded`}
-                >
-                  {followUpSubmitting ? "Clearing…" : "Clear follow-up"}
-                </button>
+                {followUpClearAction}
                 {followUpError && (
                   <p className={`text-xs w-full ${followUpConflict ? "text-[var(--ophalo-attention)]" : "text-[var(--ophalo-danger)]"}`}>
                     {followUpError}
@@ -286,9 +352,97 @@ export function TimingPanel({ requestId, detail, onDetailUpdated, onRecordFollow
               </div>
             )}
           </div>
+    )
   );
 
-  const plannedTile = canSetPlannedFor && (
+  const plannedForm = (
+    <form onSubmit={(e) => void handleSetPlanned(e)} className="space-y-2">
+      <div>
+        <label htmlFor="planned-date" className="text-xs text-[var(--ophalo-muted)] block mb-0.5">
+          {hasPlanned ? "Change date" : "Date"}
+        </label>
+        <input
+          id="planned-date"
+          type="date"
+          value={editorPlannedDate}
+          onChange={(e) => setEditorPlannedDate(e.target.value)}
+          disabled={plannedConflict}
+          className={INPUT_CLS}
+        />
+      </div>
+      <div className="flex gap-2">
+        <KeepButton
+          type="submit"
+          variant="secondary"
+          disabled={!editorPlannedDate || plannedSubmitting || plannedConflict}
+          className="flex-1"
+        >
+          {plannedSubmitting ? "Saving…" : hasPlanned ? "Save date" : "Set date"}
+        </KeepButton>
+        <KeepButton type="button" variant="secondary" onClick={closeEditor}>
+          Cancel
+        </KeepButton>
+      </div>
+    </form>
+  );
+
+  const plannedClearAction = hasPlanned && (
+    <button
+      type="button"
+      onClick={() => void handleClearPlanned()}
+      disabled={plannedSubmitting || plannedConflict}
+      className={`text-xs text-[var(--ophalo-muted)] hover:text-[var(--ophalo-danger)] disabled:opacity-50 transition-colors ${FOCUS_RING} rounded`}
+    >
+      {plannedSubmitting ? "Removing…" : "Remove planned date"}
+    </button>
+  );
+
+  const plannedTile = showPlanned && (
+    strip ? (
+      <div className="flex flex-col gap-1 min-w-0">
+        {/* No htmlFor/id association to the trigger button: a <label for> on a button replaces
+            its accessible name entirely, which would hide the current value from screen
+            readers. The label stays a persistent visual heading; the button carries its own
+            aria-label with the value. */}
+        <label className="text-xs font-semibold uppercase tracking-widest text-[var(--ophalo-muted)]">
+          Planned work date
+        </label>
+        {canSetPlannedFor ? (
+          <div className="relative">
+            <button
+              type="button"
+              aria-expanded={expandedEditor === "planned"}
+              aria-controls="timing-planned-editor"
+              aria-label={`Planned work date: ${hasPlanned ? formatDateOnly(detail.plannedForDate!) : "not set"}`}
+              onClick={() => expandedEditor === "planned" ? closeEditor() : openEditor("planned")}
+              className={`w-full flex items-center justify-between gap-2 rounded-lg border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-3 py-2 text-left text-sm transition-colors hover:border-[var(--keep-accent)] ${FOCUS_RING} ${
+                hasPlanned ? "text-[var(--ophalo-ink)]" : "text-[var(--ophalo-muted)]"
+              }`}
+            >
+              <span className="truncate" aria-hidden="true">{hasPlanned ? formatDateOnly(detail.plannedForDate!) : "Set planned work date…"}</span>
+              {expandedEditor === "planned" ? <ChevronUp className="h-3.5 w-3.5 shrink-0 text-[var(--ophalo-muted)]" /> : <ChevronDown className="h-3.5 w-3.5 shrink-0 text-[var(--ophalo-muted)]" />}
+            </button>
+            <div
+              id="timing-planned-editor"
+              hidden={expandedEditor !== "planned"}
+              className="absolute z-20 mt-1 w-64 space-y-2 rounded-lg border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] p-3 shadow-lg"
+            >
+              {plannedError && expandedEditor === "planned" && (
+                <p className={`text-xs ${plannedConflict ? "text-[var(--ophalo-attention)]" : "text-[var(--ophalo-danger)]"}`}>
+                  {plannedError}
+                </p>
+              )}
+              {plannedForm}
+              {plannedClearAction && <div className="pt-1">{plannedClearAction}</div>}
+            </div>
+          </div>
+        ) : (
+          <div className="rounded-lg border border-[var(--ophalo-border)] px-3 py-2 text-sm text-[var(--ophalo-ink)]">
+            {formatDateOnly(detail.plannedForDate!)}
+          </div>
+        )}
+      </div>
+    ) : (
           <div className={bare ? "space-y-2" : "px-4 py-3 space-y-2"}>
             <p className="text-xs text-[var(--ophalo-muted)]">When work is scheduled to be performed.</p>
             <button
@@ -324,47 +478,13 @@ export function TimingPanel({ requestId, detail, onDetailUpdated, onRecordFollow
                   {plannedError}
                 </p>
               )}
-              <form onSubmit={(e) => void handleSetPlanned(e)} className="space-y-2">
-                <div>
-                  <label htmlFor="planned-date" className="text-xs text-[var(--ophalo-muted)] block mb-0.5">
-                    {hasPlanned ? "Change date" : "Date"}
-                  </label>
-                  <input
-                    id="planned-date"
-                    type="date"
-                    value={editorPlannedDate}
-                    onChange={(e) => setEditorPlannedDate(e.target.value)}
-                    disabled={plannedConflict}
-                    className={INPUT_CLS}
-                  />
-                </div>
-                <div className="flex gap-2">
-                  <KeepButton
-                    type="submit"
-                    variant="secondary"
-                    disabled={!editorPlannedDate || plannedSubmitting || plannedConflict}
-                    className="flex-1"
-                  >
-                    {plannedSubmitting ? "Saving…" : hasPlanned ? "Save date" : "Set date"}
-                  </KeepButton>
-                  <KeepButton type="button" variant="secondary" onClick={closeEditor}>
-                    Cancel
-                  </KeepButton>
-                </div>
-              </form>
+              {plannedForm}
             </div>
 
             {/* Remove action — shown when set and editor is closed */}
             {hasPlanned && expandedEditor !== "planned" && (
               <div className="flex flex-wrap items-center gap-3">
-                <button
-                  type="button"
-                  onClick={() => void handleClearPlanned()}
-                  disabled={plannedSubmitting || plannedConflict}
-                  className={`text-xs text-[var(--ophalo-muted)] hover:text-[var(--ophalo-danger)] disabled:opacity-50 transition-colors ${FOCUS_RING} rounded`}
-                >
-                  {plannedSubmitting ? "Removing…" : "Remove planned date"}
-                </button>
+                {plannedClearAction}
                 {plannedError && (
                   <p className={`text-xs w-full ${plannedConflict ? "text-[var(--ophalo-attention)]" : "text-[var(--ophalo-danger)]"}`}>
                     {plannedError}
@@ -373,13 +493,14 @@ export function TimingPanel({ requestId, detail, onDetailUpdated, onRecordFollow
               </div>
             )}
           </div>
+    )
   );
 
-  if (bare) {
+  if (strip || bare) {
     return (
       <>
-        {followUpTile}
         {plannedTile}
+        {followUpTile}
       </>
     );
   }

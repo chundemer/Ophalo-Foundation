@@ -1,6 +1,6 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-08-23
+**Last updated:** 2026-08-24
 **Deployment posture:** Not pilot-ready.
 **Purpose:** active handoff only. Completed implementation narratives belong in Git history and the relevant build log, not here.
 
@@ -14,36 +14,82 @@
 
 ## Current production focus — Request Detail action clarity
 
-The visual workbench refinement is verified in the current worktree and remains presentation-only:
-neutral borders, consolidated attention, compact Actual Work, teal inline triggers, and quiet
-history disclosures. Do not combine its final review/commit with the next Actual Work decision.
+The visual workbench refinement is committed (`99cba09`): neutral borders, consolidated attention,
+compact Actual Work with collapsed visit history, teal inline triggers, and quiet history
+disclosures. Actual Work draft/submitted CTA clarity is also committed (`985eba5`): "Add actual
+work" / "Continue draft" by factual draft state, and a lock icon + "Submitted · locked" on every
+submitted visit row — presentation-only, per ADR-487 (correction/reversal/reconciliation remains
+deferred domain work, not opened by this change).
 
-### Next batch — Actual Work draft/submitted CTA clarity (implementation-ready, 2026-08-23)
+Implementation sequence steps 1-6 (below) are now complete — the Request Detail action-surface
+redesign is done. The action-first planning and queue-signals slice (below) is also complete.
+**Next batch: resume 8B (Owner/Admin Actual Work financial review UI).**
 
-**Status:** implementation-ready. Discovery confirmed ADR-487 already locks the boundary; no new
-product decision was needed.
+### Action-first planning and queue signals — complete (2026-08-24)
 
-Observed UX contradiction: an active blank Actual Work draft appears beside a submitted visit
-history. The action label **Resume** opens the blank draft, while the visible submitted items are
-intentionally immutable. This is technically correct but misleading.
+Presentation-only, existing request/detail contracts supplied all data; no new API/domain work.
 
-**Discovery findings:** `ActualWorkStatus` (`src/OpHalo.Keep.Core/Entities/Enums/ActualWorkStatus.cs`)
-persists only `Draft`/`Submitted`; `Submit()` freezes status permanently with no reopen path. No
-Correction/Reconciliation/Reversal/Adjustment concept exists anywhere in the codebase. ADR-487
-already locks this: "Submitted visits are immutable... Cross-user draft takeover and linked
-correction workflow are deferred." A correction/adjustment/reconciliation authority-and-audit model
-therefore remains separate, deferred domain/workflow work — not something this batch opens.
+#### Detail header: Internal Planning row
 
-**Approved presentation-only scope:**
+Built as a locked correction to the original one-line-strip brief: the terse pill format
+(`Priority: Routine · Not planned · No follow-up`) read as passive metadata, not an actionable
+control, and was rejected in review. Final design is a labeled, bordered select-style control row
+at the bottom of the Request Detail Anchor (Zone A), below customer/contact/location/owner facts,
+one subtle top separator above it:
 
 ```text
-Empty draft (no draft, or a draft with zero lines) → "Add actual work"
-Draft with saved lines                             → "Continue draft"
-Submitted visit                                     → visible lock icon + "Submitted · locked"
+Internal priority        Planned work date          Set internal follow-up
+[ Routine          v ]   [ Set planned work date… ]  [ Set internal follow-up… ]
 ```
 
-No Correction/Reconciled states, reconciliation language, correction actions, or implied undo path.
-Do not imply a historical submitted visit is editable or will populate a new draft.
+- Locked order: **Internal priority -> Planned work date -> Set internal follow-up**. Desktop:
+  one three-column grid row (`RequestDetailAnchor.tsx` Row 4). Narrow: the same labeled controls
+  stack (`grid-cols-1` -> `sm:grid-cols-3`).
+- Each field has a persistent visible label, a bordered select-like control, and a
+  dropdown/chevron affordance; reuses `TriagePanel`/`TimingPanel`'s existing mutation handlers,
+  date-only formatting, and conflict/error behavior via a new `strip` prop on both — no invented
+  state or endpoints.
+- Exact empty-state copy: Priority `Routine`, Planned `Set planned work date…`, Follow-up
+  `Set internal follow-up…`. Never `Not planned` / `No follow-up`.
+- Authorization: if the viewer can edit a field, it renders as an active control; if not but a
+  value exists, it renders read-only (labeled, bordered, no chevron) — existing planning data is
+  never hidden because editing is unavailable; if unauthorized and unset, the field is omitted
+  entirely rather than rendering a dead control. Priority always renders (`Routine` is a real
+  value, not an absence).
+- Accessibility correction found in testing: `<label for>` pointing at a trigger button replaces
+  its accessible name entirely, which would hide the date value from screen readers. Fixed by
+  keeping the label purely visual and giving each trigger an explicit `aria-label` that includes
+  the field name and current value (e.g. `"Planned work date: Aug 29, 2026"`).
+- Old duplicated Timing/Triage card removed from `RequestDetailContent.tsx` now that the Anchor
+  row carries full parity.
+
+Owners: `RequestDetailAnchor.tsx` (Row 4 composition), `DetailPanels.tsx` (`TriagePanel` `strip`),
+`TimingPanel.tsx` (`strip`), `RequestDetailContent.tsx` (old card removed).
+
+#### Request queue: conditional combined action-signal line
+
+Removed service **city/state** from both the default `RequestRow` card and the `paneMode` (actual
+day-to-day queue surface) row; service location stays in detail/filters. Both now render one
+conditional, capped, compact signal line in place of it:
+
+```text
+Urgent · Planned Aug 29 · Prefers text
+```
+
+- Shows internal priority only above Routine (`urgent`/`soon`); planned date only when set;
+  contact preference only when explicitly `phone_call`/`text_message`/`email` — never
+  `No preference`. Capped at three signals, unmounted entirely when no eligible signal exists.
+- Deliberately excludes follow-up: a due/overdue follow-up is already carried by the existing
+  attention/status cue, so it is not duplicated into the signal line.
+- Existing attention ranking, badges, promoted row action, and `Next:` action semantics are
+  unchanged.
+
+Owner: `web/ophalo-app/src/components/RequestRow.tsx`.
+
+Verified: 623/623 frontend tests pass (`pnpm test`), `pnpm typecheck` clean, `pnpm check:tokens`
+passed. Focused coverage added for locked label order, exact empty-state copy, set-value
+rendering, authorized interaction, read-only existing-value, omitted-when-unauthorized-and-unset,
+and the queue signal line (default row, pane row, and unmount-when-empty).
 
 ### Non-negotiable product rules
 
@@ -231,7 +277,7 @@ permanent pane.
 - Draft state and dirty-close confirmation are owned by each step-4 workflow, not the primitive —
   discard rules and draft shape differ materially across contact, follow-up, attention, and location.
 
-### 4. Move structured actions into sheets without changing domain meaning
+### 4. Move structured actions into sheets without changing domain meaning — complete (`2f67476`, `f293a06`)
 
 - Clear attention: move the existing required-reason form into the sheet; submit only through the
   acknowledgement endpoint and replace detail with its response.
@@ -241,7 +287,7 @@ permanent pane.
 - Edit service location: move only if its current form and authorization make the sheet appropriate;
   do not bundle unrelated location changes into the attention slice.
 
-### 5. Simplify the canvas and protect truthful completion behavior
+### 5. Simplify the canvas and protect truthful completion behavior — complete (2026-08-23)
 
 - Remove standalone structured-action form cards only after their sheet destination is live and keyboard-accessible.
 - Keep Customer Update inline but collapsed by default and expanded from its explicit destination.
@@ -249,19 +295,24 @@ permanent pane.
 - Keep Log contact reachable from the Anchor as a compact trigger, but route it to the sheet.
 - Render **Mark work done** as demoted when effective attention remains, with clear nearby consequence text.
 
-### 6. Verify the full resolution matrix
+Delivered across `ad49157`, `3da292a`, `4ef0352`, `04dbf9b`, `99cba09`: HeroAttentionBanner
+consolidation, Actual Work compact strip with collapsed visit history, quiet owner-reassignment
+trigger, and Activity collapsed below Record details.
 
-For persisted attention, due/overdue Follow Up On, and overdue first response, verify:
+### 6. Verify the full resolution matrix — complete (2026-08-24)
+
+For persisted attention, due/overdue Follow Up On, and overdue first response, verified:
 
 - Needs Attention row admission matches visible detail guidance.
 - Next step label matches `guidanceKey`.
 - The named target opens and has matching available-action authorization.
 - Update, contact logging, follow-up resolution, and acknowledgement retain distinct server-owned effects.
 - Desktop 100%/125%/150% zoom, keyboard-only operation, narrow-screen sheet behavior, focus return,
-  dirty-draft close/reopen, 409 recovery, and unavailable/403 states work.
+  dirty-draft close/reopen, 409 recovery, and unavailable/403 states — confirmed by Christian.
 
-Run focused Vitest coverage, `pnpm typecheck`, `pnpm check:tokens`, and the relevant full frontend
-suite before visual sign-off.
+Automated verification: full frontend suite 615/615 tests passed (68 files, including all
+`src/pages/request-detail` coverage), `pnpm typecheck` clean, `pnpm check:tokens` passed. This
+closes the approved Request Detail action-surface implementation sequence (steps 0-6).
 
 ## Other active work
 

@@ -1,9 +1,10 @@
 import { type RequestDetailLayoutProps } from "./DetailPanels";
 import { DetailHeroBadges, DetailHeroName, CustomerPageHeroActions } from "./DetailHero";
 import { CustomerContactStrip } from "./CustomerContactStrip";
-import { ServiceLocationPanel } from "./DetailPanels";
+import { ServiceLocationPanel, TriagePanel } from "./DetailPanels";
 import { TeamSection } from "./TeamSection";
 import { WorkDoneCard, CloseRequestCard } from "./BusinessSection";
+import { TimingPanel } from "./TimingPanel";
 import { KeepButton } from "../../components/keep/KeepButton";
 
 // Sticky Request Anchor (three-row correction, 2026-08-22): one outer bordered/rounded card with
@@ -93,6 +94,16 @@ export function RequestDetailAnchor({
               )}
             </div>
           </div>
+        </div>
+
+        {/* Row 4: compact Internal Planning row (locked correction, 2026-08-24) — locked order
+            Internal priority -> Planned work date -> Set internal follow-up, each a persistently
+            labeled, bordered select-style control (one compact row desktop, stacked narrow).
+            Reuses TriagePanel/TimingPanel's `strip` mode: same mutation authority, date-only
+            formatting, and conflict/error behavior as the full-card variants. */}
+        <div className="mt-3 grid grid-cols-1 gap-4 border-t border-[var(--ophalo-border)] pt-3 sm:grid-cols-3">
+          <TriagePanel detail={detail} onDetailUpdated={onDetailUpdated} strip />
+          <TimingPanel requestId={requestId} detail={detail} onDetailUpdated={onDetailUpdated} strip />
         </div>
       </div>
     </div>

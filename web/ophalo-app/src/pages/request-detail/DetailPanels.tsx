@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Copy, Check, AlertTriangle, Clock, Phone, Mail, X } from "lucide-react";
+import { Copy, Check, AlertTriangle, Clock, Phone, Mail, X, ChevronDown } from "lucide-react";
 import {
   api,
   ApiError,
@@ -791,18 +791,82 @@ interface TriagePanelProps {
   // bare: no outer card chrome/label — used when a parent renders this as one tile of the
   // shared Communication & Planning planning row (locked exception, 2026-08-22).
   bare?: boolean;
+  // strip: one labeled, bordered select-style control (persistent label above, no helper copy,
+  // no card chrome) for the Anchor's compact Internal Planning row (locked correction, 2026-08-24).
+  strip?: boolean;
 }
 
 const PRIORITY_CONFLICT_MESSAGE =
   "This request was updated by another team member. Refresh to see the latest priority.";
 
-export function TriagePanel({ detail, onDetailUpdated, bare = false }: TriagePanelProps) {
+export function TriagePanel({ detail, onDetailUpdated, bare = false, strip = false }: TriagePanelProps) {
   const [pendingPriority, setPendingPriority] = useState<string | null | undefined>(undefined);
   const [prioritySubmitting, setPrioritySubmitting] = useState(false);
   const [priorityConflictDisabled, setPriorityConflictDisabled] = useState(false);
   const [priorityError, setPriorityError] = useState<string | null>(null);
   const canEdit = detail.availableActions.canAddInternalNote;
   const displayPriority = pendingPriority !== undefined ? pendingPriority : detail.businessPriority;
+
+  async function handlePriorityChange(val: string | null) {
+    if (prioritySubmitting || priorityConflictDisabled) return;
+    setPendingPriority(val);
+    setPrioritySubmitting(true);
+    setPriorityError(null);
+    try {
+      const updated = await api.setBusinessPriority(detail.requestId, val, detail.version);
+      onDetailUpdated(updated);
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 409) {
+        setPriorityConflictDisabled(true);
+        setPriorityError(PRIORITY_CONFLICT_MESSAGE);
+      } else {
+        setPriorityError("Could not save priority. Try again.");
+      }
+    } finally {
+      setPendingPriority(undefined);
+      setPrioritySubmitting(false);
+    }
+  }
+
+  if (strip) {
+    const priorityLabel = displayPriority === "urgent" ? "Urgent" : displayPriority === "soon" ? "Soon" : "Routine";
+    const emphasize = displayPriority === "urgent";
+    return (
+      <div className="flex flex-col gap-1 min-w-0">
+        <label htmlFor={canEdit ? "internal-priority-strip-select" : undefined} className="text-xs font-semibold uppercase tracking-widest text-[var(--ophalo-muted)]">
+          Internal priority
+        </label>
+        {canEdit ? (
+          <div className="relative">
+            <select
+              id="internal-priority-strip-select"
+              value={displayPriority ?? ""}
+              disabled={prioritySubmitting || priorityConflictDisabled}
+              onChange={(e) => void handlePriorityChange(e.target.value || null)}
+              className={`w-full appearance-none rounded-lg border bg-[var(--ophalo-card)] pl-3 pr-7 py-2 text-sm disabled:opacity-60 disabled:cursor-not-allowed transition-colors focus:outline-none focus:ring-2 focus:ring-[var(--keep-accent)] focus:border-[var(--keep-accent)] ${
+                emphasize ? "border-[var(--ophalo-danger)] text-[var(--ophalo-danger)] font-semibold" : "border-[var(--ophalo-border)] text-[var(--ophalo-ink)]"
+              }`}
+            >
+              <option value="">Routine</option>
+              <option value="routine">Routine</option>
+              <option value="soon">Soon</option>
+              <option value="urgent">Urgent</option>
+            </select>
+            <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[var(--ophalo-muted)]" aria-hidden="true" />
+          </div>
+        ) : (
+          <div className={`rounded-lg border px-3 py-2 text-sm ${emphasize ? "border-[var(--ophalo-danger)] text-[var(--ophalo-danger)] font-semibold" : "border-[var(--ophalo-border)] text-[var(--ophalo-ink)]"}`}>
+            {priorityLabel}
+          </div>
+        )}
+        {priorityError && (
+          <p className={`text-xs ${priorityConflictDisabled ? "text-[var(--ophalo-attention)]" : "text-[var(--ophalo-danger)]"}`} role="alert">
+            {priorityError}
+          </p>
+        )}
+      </div>
+    );
+  }
 
   const content = (
     <>
@@ -811,27 +875,7 @@ export function TriagePanel({ detail, onDetailUpdated, bare = false }: TriagePan
               <select
                 value={displayPriority ?? ""}
                 disabled={prioritySubmitting || priorityConflictDisabled}
-                onChange={async (e) => {
-                  if (prioritySubmitting || priorityConflictDisabled) return;
-                  const val = e.target.value || null;
-                  setPendingPriority(val);
-                  setPrioritySubmitting(true);
-                  setPriorityError(null);
-                  try {
-                    const updated = await api.setBusinessPriority(detail.requestId, val, detail.version);
-                    onDetailUpdated(updated);
-                  } catch (err) {
-                    if (err instanceof ApiError && err.status === 409) {
-                      setPriorityConflictDisabled(true);
-                      setPriorityError(PRIORITY_CONFLICT_MESSAGE);
-                    } else {
-                      setPriorityError("Could not save priority. Try again.");
-                    }
-                  } finally {
-                    setPendingPriority(undefined);
-                    setPrioritySubmitting(false);
-                  }
-                }}
+                onChange={(e) => void handlePriorityChange(e.target.value || null)}
                 className="w-full text-sm text-[var(--ophalo-ink)] bg-transparent border border-[var(--ophalo-border)] rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-[var(--keep-accent)] disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 <option value="">Not set</option>
