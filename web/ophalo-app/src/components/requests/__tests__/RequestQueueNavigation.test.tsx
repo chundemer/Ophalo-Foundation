@@ -3,13 +3,12 @@ import { render, screen } from "@testing-library/react";
 import { RequestQueueNavigation } from "../RequestQueueNavigation";
 import { getTabsForRole } from "../../../pages/requestsWorkspace";
 
-// UI-001 post-Step-4 density refinement (build-log 134 §1/§2, locked 2026-08-21): Row 1 keeps
-// the two-row primary tab grid (tabs[0] full width, tabs[1]/tabs[2] share row 2) — a single
-// 3-way row with full labels + badge-pill counts was measured (real-browser mock harness) to
-// wrap "Needs Attention" at the true 360px pane width, so it was rejected. Request Queue header
-// consolidation (locked 2026-08-24) moved Office Review/Views/History out of this component into
-// RequestListToolbar's Views popover — this file now covers the primary-tabs row and the
-// history sub-header only.
+// Locked decision (2026-08-24): pane mode renders one equal three-tab row using compact visual
+// labels (Attention/All/Mine/Available) plus dense inline counts, so all three tabs fit on one
+// row at the ~360px pane width. Accessible names stay the full TabDef.label via aria-label.
+// Request Queue header consolidation (locked 2026-08-24) moved Office Review/Views/History out of
+// this component into RequestListToolbar's Views popover — this file now covers the primary-tabs
+// row and the history sub-header only.
 
 function baseProps(role: "owner" | "operator") {
   return {
@@ -26,36 +25,33 @@ function baseProps(role: "owner" | "operator") {
   };
 }
 
-describe("RequestQueueNavigation pane mode (UI-001 post-Step-4 density refinement)", () => {
-  it("Owner/Admin: tabs[0] (Needs Attention) renders alone in row 1, All Work/My Work share row 2", () => {
+describe("RequestQueueNavigation pane mode (single-row compact tabs, locked 2026-08-24)", () => {
+  it("Owner/Admin: renders exactly one row with all three tabs, accessible names intact", () => {
     render(<RequestQueueNavigation {...baseProps("owner")} paneMode />);
 
     const tablist = screen.getByRole("tablist", { name: "Request queues" });
     const tabs = screen.getAllByRole("tab");
-    expect(tabs.map((t) => t.textContent)).toEqual([
-      expect.stringContaining("Needs Attention"),
-      expect.stringContaining("All Work"),
-      expect.stringContaining("My Work"),
+    expect(tabs).toHaveLength(3);
+    expect(tablist.children).toHaveLength(3);
+    expect(tabs.map((t) => t.getAttribute("aria-label"))).toEqual([
+      "Needs Attention",
+      "All Work",
+      "My Work",
     ]);
-
-    const rows = tablist.children;
-    expect(rows).toHaveLength(2);
-    expect(rows[0].children).toHaveLength(1);
-    expect(rows[1].children).toHaveLength(2);
   });
 
-  it("Operator: tabs[0] (My Work) renders alone in row 1, Needs Attention/Available share row 2", () => {
+  it("Operator: renders one row with role-ordered accessible names intact", () => {
     render(<RequestQueueNavigation {...baseProps("operator")} paneMode />);
 
     const tabs = screen.getAllByRole("tab");
-    expect(tabs.map((t) => t.textContent)).toEqual([
-      expect.stringContaining("My Work"),
-      expect.stringContaining("Needs Attention"),
-      expect.stringContaining("Available Work"),
+    expect(tabs.map((t) => t.getAttribute("aria-label"))).toEqual([
+      "My Work",
+      "Needs Attention",
+      "Available Work",
     ]);
   });
 
-  it("pane mode grid does not use horizontal-scroll/clip classes and meets the 44px touch-target minimum", () => {
+  it("pane mode row does not use horizontal-scroll/clip classes and meets the 44px touch-target minimum", () => {
     render(<RequestQueueNavigation {...baseProps("owner")} paneMode />);
 
     const tablist = screen.getByRole("tablist", { name: "Request queues" });
@@ -67,11 +63,15 @@ describe("RequestQueueNavigation pane mode (UI-001 post-Step-4 density refinemen
     }
   });
 
-  it("does not abbreviate primary tab labels in pane mode", () => {
+  it("uses compact visual labels in pane mode while accessible names stay full", () => {
     render(<RequestQueueNavigation {...baseProps("owner")} paneMode />);
-    expect(screen.getByText("Needs Attention")).toBeInTheDocument();
-    expect(screen.getByText("All Work")).toBeInTheDocument();
-    expect(screen.getByText("My Work")).toBeInTheDocument();
+    expect(screen.getByText("Attention")).toBeInTheDocument();
+    expect(screen.getByText("All")).toBeInTheDocument();
+    expect(screen.getByText("Mine")).toBeInTheDocument();
+    expect(screen.queryByText("Needs Attention")).not.toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Needs Attention" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "All Work" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "My Work" })).toBeInTheDocument();
   });
 
   it("renders counts as a badge pill, not inline dot-notation, in pane mode", () => {

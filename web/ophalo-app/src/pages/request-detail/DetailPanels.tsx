@@ -987,7 +987,7 @@ function resolveNextStep(
       // external contact log. Only render no CTA when neither is authorized.
       if (canSendBusinessUpdate) {
         return {
-          buttonLabel: "Respond to customer",
+          buttonLabel: "Send first response",
           onActivate: () => scrollAndFocusWithinWorkCanvas("focus-panel-update"),
         };
       }

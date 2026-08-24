@@ -14,10 +14,12 @@
 
 ## Current production focus — Request Detail desktop final pass
 
-The Request Detail desktop workbench is in its final presentation pass. The prior action-surface,
-queue-header, planning-strip, and permanent Customer Need / compact attention-rail slices are
-complete. The remaining desktop work is a bounded polish handoff, not a redesign and not new
-domain/API work. Finish it, verify it visually, then move to the mobile/PWA version of this page.
+The Request Detail desktop workbench is in its final implementation-and-presentation pass. The
+prior action-surface, planning-strip, and permanent Customer Need / compact attention-rail slices
+are complete. The remaining desktop work is a bounded set of **required UI implementation
+changes**, followed by visual acceptance — not a verification-only session, not a redesign, and
+not new domain/API work. Implement the locked refinements below, verify them, then move to the
+mobile/PWA version of this page.
 
 ### Claude handoff — complete the desktop page
 
@@ -35,14 +37,38 @@ re-layout. Make the final refinements inside that proven geometry; do not widen/
 turn the desktop canvas into a full-bleed layout. Mobile is a later, separate responsive design
 task and must not disturb this desktop baseline.
 
-**Already implemented locally, pending normal review/commit:** Actual Work has been changed from a
-centered modal and expanded canvas history into a right-side 420px execution drawer. The canvas
-shows one compact Actual Work strip; the drawer has an editable tinted Active visit draft section,
-an Auto-saved indicator, explicit **Save draft & exit** and **Submit visit to office** actions,
-and a separate read-only locked submitted-visit accordion. Files: `ActualWorkCard.tsx`,
-`ActualWorkComposer.tsx`, `ActualWorkHistoryCard.tsx`, and `RequestDetailContent.tsx`. Focused
-Actual Work tests passed (19/19) and `pnpm typecheck` passed before handoff. Do not revert this
-back to a centered modal or re-expand historical line items into the desktop canvas.
+**Committed (3613a50):** Actual Work has been changed from a centered modal and expanded canvas
+history into a right-side 420px execution drawer. The canvas shows one compact Actual Work strip;
+the drawer has an editable tinted Active visit draft section, an Auto-saved indicator, explicit
+**Save draft & exit** and **Submit visit to office** actions, and a separate read-only locked
+submitted-visit accordion. Files: `ActualWorkCard.tsx`, `ActualWorkComposer.tsx`,
+`ActualWorkHistoryCard.tsx`, and `RequestDetailContent.tsx`. `ActualWorkHistoryCard.test.tsx` was
+updated to match the simplified compact locked-count strip (4 stale tests referenced the old
+expanded per-visit rendering that moved into the drawer's accordion). Focused
+`src/pages/request-detail` suite 206/206, `pnpm typecheck`, and `pnpm check:tokens` all pass. Do
+not revert this back to a centered modal or re-expand historical line items into the desktop
+canvas.
+
+**Current implementation status — this overrides older "complete" narratives below:**
+
+- **Done locally, awaiting commit:**
+  1. The `respond_to_customer` customer-update CTA now reads **Send first response** in
+     `DetailPanels.tsx`; its two focused accessible-name assertions are updated in
+     `HeroAttentionBanner.test.tsx`. The Log contact fallback and no-CTA route are unchanged.
+  2. `RequestQueueNavigation.tsx` pane mode now renders one equal three-tab primary-scope row
+     (was a two-row grid) using compact visual labels (Attention/All/Mine/Available) with
+     `aria-label` preserving the full accessible names (Needs Attention/All Work/My Work/Available
+     Work); counts stay badge-pill, not dense dot-notation. `RequestQueueNavigation.test.tsx`
+     rewritten for the single-row layout.
+  3. `ActualWorkCard.tsx` now chooses its CTA from Draft existence (`status === "draft"`), not
+     line count: an active zero-line Draft now shows **Resume draft** (was incorrectly
+     **Add actual work**); a Draft with saved lines still shows **Continue draft**; no-draft still
+     shows **Add actual work**. `ActualWorkCard.test.tsx` updated to assert **Resume draft**.
+  Focused `src/pages/request-detail` + `src/components/requests` suite 249/249, `pnpm typecheck`,
+  `pnpm check:tokens`, and `git diff --check` all pass.
+- **Remaining before signoff:** the desktop visual acceptance pass (step 2 below) — no further
+  implementation is believed outstanding, but must be demonstrated in the browser rather than
+  inferred from a source preflight.
 
 **Locked desktop decisions:**
 
@@ -76,12 +102,18 @@ back to a centered modal or re-expand historical line items into the desktop can
    Never show both "No draft active" and "Draft visit started." Submitted records are immutable;
    the drawer must state that clearly rather than implying office approval or editable status.
 
-**Desktop visual acceptance pass:** test at 100%, 125%, and 150% zoom and at the actual queue-pane
-width. There must be no clipped title/chevron, floating select chevron, accidental horizontal
-scroll, ambiguous competing primary CTA, inaccessible tab/popover/drawer control, or expanded
-Actual Work history bloat on the canvas. Verify keyboard focus, Escape/outside close and focus
-return for the Actual Work drawer. Run focused tests plus `pnpm typecheck`, `pnpm check:tokens`,
-and `git diff --check` for any desktop presentation change.
+**Required next-session execution order:**
+
+1. ~~Implement the outstanding desktop UI changes~~ — complete, see Current implementation status
+   above.
+2. **Perform the desktop visual acceptance pass** at 100%, 125%, and 150% zoom and at the actual
+   queue-pane width. Check for clipped title/chevron, floating select chevron, accidental
+   horizontal scroll, ambiguous competing primary CTAs, inaccessible tab/popover/drawer controls,
+   and expanded Actual Work history bloat on the canvas. Verify keyboard focus, Escape/outside
+   close, and focus return for the Actual Work drawer. This still needs to be run in a real
+   browser; source-level preflight is not a substitute.
+3. **Then finalize:** confirm no regressions from the visual pass, then this desktop final pass is
+   ready for signoff.
 
 **Next after desktop signoff:** mobile/PWA Request Detail. Treat it as a responsive interaction
 design pass, not a shrink-to-fit desktop conversion: the queue, ledger, attention rail, planning

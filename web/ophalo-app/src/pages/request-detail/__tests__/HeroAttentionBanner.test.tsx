@@ -120,7 +120,7 @@ describe("HeroAttentionBanner", () => {
       />,
     );
 
-    screen.getByRole("button", { name: "Respond to customer" }).click();
+    screen.getByRole("button", { name: "Send first response" }).click();
 
     expect(canvas.scrollTo).toHaveBeenCalled();
     expect(target.scrollIntoView).not.toHaveBeenCalled();
@@ -180,7 +180,7 @@ describe("HeroAttentionBanner", () => {
     );
     // The info disclosure trigger still renders (why/resolve-by guidance is independent of
     // CTA authorization); no primary or secondary action button does.
-    expect(screen.queryByRole("button", { name: "Respond to customer" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Send first response" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Log contact" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Clear attention" })).toBeNull();
     expect(screen.getByRole("button", { name: "Why this needs attention" })).toBeInTheDocument();

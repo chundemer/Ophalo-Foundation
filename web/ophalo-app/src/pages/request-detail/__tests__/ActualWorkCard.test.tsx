@@ -11,7 +11,7 @@ describe("ActualWorkCard", () => {
     expect(screen.queryByRole("button", { name: /Resume/ })).not.toBeInTheDocument();
   });
 
-  it("labels an open draft with zero lines as 'Add actual work'", () => {
+  it("labels an open draft with zero lines as 'Resume draft', never 'Add actual work'", () => {
     const state: ActualWorkCaptureState = {
       status: "draft",
       draft: {
@@ -26,7 +26,8 @@ describe("ActualWorkCard", () => {
       submittedCount: 0,
     };
     render(<ActualWorkCard state={state} onStartCapture={vi.fn()} />);
-    expect(screen.getByRole("button", { name: /Add actual work/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Resume draft/ })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Add actual work/ })).not.toBeInTheDocument();
   });
 
   it("labels an open draft with saved lines as 'Continue draft'", () => {

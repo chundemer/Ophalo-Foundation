@@ -27,6 +27,16 @@ interface RequestQueueNavigationProps {
   paneMode?: boolean;
 }
 
+// Compact visual labels for the pane-mode single-row primary tabs (locked decision: queue-header
+// consolidation, 2026-08-24). Accessible names stay the full TabDef.label via aria-label — these
+// are visual-only abbreviations.
+const COMPACT_TAB_LABELS: Partial<Record<string, string>> = {
+  needs_attention: "Attention",
+  default: "All",
+  assigned_to_me: "Mine",
+  available_work: "Available",
+};
+
 export function RequestQueueNavigation({
   tabs,
   activeTab,
@@ -72,7 +82,7 @@ export function RequestQueueNavigation({
   // its intrinsic, whitespace-nowrap sizing instead. `denseCount` swaps the badge-pill count for
   // an inline "· N" (pane mode only, build-log 134 §1) — full labels are never abbreviated, only
   // the count treatment shrinks to fit three tabs on one row at the 320-360 CSS-px pane width.
-  function renderTabButton(tab: TabDef, i: number, fill: boolean, denseCount = false) {
+  function renderTabButton(tab: TabDef, i: number, fill: boolean, denseCount = false, compactLabel = false) {
     const count = countForTab(tab, viewCounts);
     const isActive = tab.view === activeTab.view;
     return (
@@ -81,6 +91,7 @@ export function RequestQueueNavigation({
         ref={(el) => { tabRefs.current[i] = el; }}
         role="tab"
         aria-selected={isActive}
+        aria-label={compactLabel ? tab.label : undefined}
         tabIndex={isActive ? 0 : -1}
         type="button"
         onClick={() => onSelectTab(tab)}
@@ -93,7 +104,7 @@ export function RequestQueueNavigation({
             : "font-medium border-transparent text-[var(--ophalo-muted)] hover:text-[var(--ophalo-ink)] hover:border-[var(--ophalo-border)]"
         }`}
       >
-        {tab.label}
+        {compactLabel ? (COMPACT_TAB_LABELS[tab.id] ?? tab.label) : tab.label}
         {count != null && count > 0 && (
           denseCount ? (
             <span className="text-[11px] font-semibold">· {count}</span>
@@ -115,20 +126,11 @@ export function RequestQueueNavigation({
     <div className="border-t border-[var(--ophalo-border)]">
       {!historyMode ? (
         paneMode ? (
-          // Row 1: two-row primary tab grid, locked keep-ui-design-model-v2.md §13 — tabs[0]
-          // gets its own full-width row, tabs[1]/tabs[2] share the second row. Role ordering
-          // already places each role's primary tab first, so this split is role-agnostic.
-          // Measured evidence (build-log 134 §2, 2026-08-21): at the true 360px pane width, a
-          // single 3-way row with full labels + badge-pill counts wraps "Needs Attention" to
-          // two lines (real-browser measurement via mock harness), so the single-row layout
-          // was rejected in favor of retaining this two-row grid.
-          <div role="tablist" aria-label="Request queues" className="flex flex-col gap-1 px-3 pt-2 pb-2 sm:px-4">
-            <div className="flex">{renderTabButton(tabs[0], 0, true)}</div>
-            {tabs.length > 1 && (
-              <div className="flex gap-1">
-                {tabs.slice(1).map((tab, i) => renderTabButton(tab, i + 1, true))}
-              </div>
-            )}
+          // Row 1: single equal three-tab row at the ~360px pane width (locked decision,
+          // 2026-08-24). Compact visual labels (Attention/All/Mine/Available) plus dense inline
+          // counts fit all three tabs on one row; accessible names stay the full TabDef.label.
+          <div role="tablist" aria-label="Request queues" className="flex gap-1 px-3 pt-2 pb-2 sm:px-4">
+            {tabs.map((tab, i) => renderTabButton(tab, i, true, false, true))}
           </div>
         ) : (
           // Row 1: primary tabs, own scroll region.
