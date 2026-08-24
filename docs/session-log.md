@@ -12,113 +12,75 @@
 - Request Detail interaction contract: [Workbench signoff specification](ux-design/v2/request-detail-workbench-signoff-spec.md)
 - Effective-attention contract and precedence: [Request Detail API preflight](ux-design/v2/request-detail-workbench-api-preflight.md)
 
-## Current production focus — Request Detail desktop final pass
+## Current work — New Request possible-existing-customer lookup
 
-The Request Detail desktop workbench is in its final implementation-and-presentation pass. The
-prior action-surface, planning-strip, and permanent Customer Need / compact attention-rail slices
-are complete. The remaining desktop work is a bounded set of **required UI implementation
-changes**, followed by visual acceptance — not a verification-only session, not a redesign, and
-not new domain/API work. Implement the locked refinements below, verify them, then move to the
-mobile/PWA version of this page.
+**Decision:** [ADR-492](decisions/ADR-492-new-request-possible-existing-customer-lookup.md)
+supersedes GAP-025's silent request-phone prefill. This is a focused repair of the existing desktop
+New Request / Quick Capture workflow before mobile work begins. Do not redesign the request
+workbench, begin mobile/PWA layout work, backfill customers, or add a customer-history workspace.
 
-### Claude handoff — complete the desktop page
+**Baseline:** `LookupKeepRequestByPhoneService` first matches
+`KeepCustomer.CanonicalPhone`, then falls back to its account-scoped, SQL-normalized
+`KeepRequest.CustomerPhone` lookup. `QuickCapture` sends the exact customer match to
+`LookupResultView`, but sends a fallback match directly to `CaptureForm` as `prefill`. The fallback
+currently returns no active-request context.
 
-**Scope boundary:** preserve all existing server-owned attention routing, permissions, mutations,
-audit semantics, query contracts, and price-blind Actual Work boundary. Do not add a new workflow,
-new API, "Edit Scope" action, status transition, or financial field. This is desktop-only layout,
-copy, and hierarchy polish. Mobile/PWA is the next separate phase after desktop signoff.
+**Implement:**
 
-**Desktop geometry is locked:** the approved final reference deliberately preserves the current
-desktop pane proportions and working widths: the request queue remains approximately 360px; the
-detail workspace begins at the same boundary; the main detail content stays a centered,
-constrained desktop column; and the Anchor, attention rail, Customer Need, Actual Work, and
-communication workspace retain their established working width. This is not an application
-re-layout. Make the final refinements inside that proven geometry; do not widen/narrow panes or
-turn the desktop canvas into a full-bleed layout. Mobile is a later, separate responsive design
-task and must not disturb this desktop baseline.
+1. Preserve the exact canonical-phone **Customer Found** branch exactly: customer identity, up to
+   three active request cards sorted by current activity, and explicit **Create New Request for
+   [Name]**. No auto-selection or navigation.
+2. Add a distinct, typed API result for a request-phone-only **possible existing customer** match.
+   It must carry only account-scoped candidate identity/context and up to three linked active
+   requests; it must not masquerade as an exact canonical-phone customer match.
+3. Change `QuickCapture` / `LookupResultView` so this result is an explicit decision screen:
+   label it **Possible existing customer**; show open-request cards when present; show a concise
+   prior-request cue when it has only history. Keep it short—no full history browser.
+4. Add two explicit paths: **Use existing customer details** and **Create as new customer**. The
+   first must use an explicit server-authorized reuse choice in creation; neither path may happen
+   implicitly from a phone lookup. Preserve the entered phone and existing draft/back behavior.
+5. Preserve account isolation, ten-digit normalization (ADR-444), exact raw-phone SQL
+   normalization, active-card cap/sort, permissions, read-only/past-due behavior, focus/Escape
+   behavior, and no `KeepCustomer` backfill.
 
-**Committed (3613a50):** Actual Work has been changed from a centered modal and expanded canvas
-history into a right-side 420px execution drawer. The canvas shows one compact Actual Work strip;
-the drawer has an editable tinted Active visit draft section, an Auto-saved indicator, explicit
-**Save draft & exit** and **Submit visit to office** actions, and a separate read-only locked
-submitted-visit accordion. Files: `ActualWorkCard.tsx`, `ActualWorkComposer.tsx`,
-`ActualWorkHistoryCard.tsx`, and `RequestDetailContent.tsx`. `ActualWorkHistoryCard.test.tsx` was
-updated to match the simplified compact locked-count strip (4 stale tests referenced the old
-expanded per-visit rendering that moved into the drawer's accordion). Focused
-`src/pages/request-detail` suite 206/206, `pnpm typecheck`, and `pnpm check:tokens` all pass. Do
-not revert this back to a centered modal or re-expand historical line items into the desktop
-canvas.
+**Tests required:** service/API coverage for exact match, possible match with active work, possible
+match with historical-only work, no match, account isolation, and stale/shared/recycled-phone
+non-auto-link behavior. Frontend coverage must prove labels, card navigation, explicit reuse/new
+paths, draft preservation, and accessible modal focus behavior. Run focused backend/frontend suites,
+`pnpm typecheck`, `pnpm check:tokens`, and `git diff --check`.
 
-**Current implementation status — this overrides older "complete" narratives below:**
+**Done when:** a desktop browser pass shows all three lookup outcomes (exact customer, possible
+customer with active work, possible customer with history only) without a duplicate/implicit-link
+path. Report the API contract and screenshot evidence for review before mobile UI begins.
 
-- **Done locally, awaiting commit:**
-  1. The `respond_to_customer` customer-update CTA now reads **Send first response** in
-     `DetailPanels.tsx`; its two focused accessible-name assertions are updated in
-     `HeroAttentionBanner.test.tsx`. The Log contact fallback and no-CTA route are unchanged.
-  2. `RequestQueueNavigation.tsx` pane mode now renders one equal three-tab primary-scope row
-     (was a two-row grid) using compact visual labels (Attention/All/Mine/Available) with
-     `aria-label` preserving the full accessible names (Needs Attention/All Work/My Work/Available
-     Work); counts stay badge-pill, not dense dot-notation. `RequestQueueNavigation.test.tsx`
-     rewritten for the single-row layout.
-  3. `ActualWorkCard.tsx` now chooses its CTA from Draft existence (`status === "draft"`), not
-     line count: an active zero-line Draft now shows **Resume draft** (was incorrectly
-     **Add actual work**); a Draft with saved lines still shows **Continue draft**; no-draft still
-     shows **Add actual work**. `ActualWorkCard.test.tsx` updated to assert **Resume draft**.
-  Focused `src/pages/request-detail` + `src/components/requests` suite 249/249, `pnpm typecheck`,
-  `pnpm check:tokens`, and `git diff --check` all pass.
-- **Remaining before signoff:** the desktop visual acceptance pass (step 2 below) — no further
-  implementation is believed outstanding, but must be demonstrated in the browser rather than
-  inferred from a source preflight.
+### Request Detail — desktop polish pass — complete (2026-08-24)
 
-**Locked desktop decisions:**
+**Implemented within the existing locked layout** (queue ~360px, panel widths unchanged, no
+Edit Scope, no drawer architecture change). Six files touched, presentation-only:
 
-1. **Queue header:** use exactly two compact control rows above the queue content. Row 1 is the
-   existing three primary scopes; Row 2 is Search plus Views. Do not restore a separate stacked
-   "Needs Attention" row or native status filter. Compact visual labels may be Attention / All /
-   Mine only if accessible names retain Needs Attention / All Work / My Work. Preserve current
-   role-aware tab definitions, counts, keyboard behavior, and Views-popover semantics.
-2. **Queue cards:** protect long request/customer titles with `min-w-0` + truncation so title text
-   never collides with the chevron. Keep the current concise operational signals and Next action;
-   do not turn rows into badge-heavy metadata cards. Counts and status badges are subordinate to
-   the item identity and next action.
-3. **Header ledger:** retain the current clear three-column Customer contact / Service location /
-   Owner ledger and its visible, labeled three-control Internal Planning row. The full controls are
-   intentional desktop affordances; do not replace them with compact metadata pills. Standardize
-   chevron inset/spacing and preserve visible labels and existing accessible names.
-4. **Action hierarchy:** **Contact customer** is a utility/outline action. The effective-attention
-   rail owns the contextual primary action. For a `respond_to_customer` first-response obligation,
-   its label should be **Send first response**, not the ambiguous "Respond to customer." For other
-   server guidance keys, retain server-routed factual labels/destinations; do not hard-code a
-   generic response action. **Mark work complete** must be visually demoted whenever attention
-   remains, with nearby truthful consequence copy. It must not visually outrank the active amber
-   rail just because it is a terminal work-state action.
-5. **Customer Need:** keep the permanent quiet module directly below the conditional attention
-   rail. It is original customer context, never an attention artifact or timeline substitute.
-6. **Actual Work strip copy must be mutually exclusive:**
-   - no draft: `No draft in progress · N submitted visits locked` + **Add actual work**;
-   - active draft: `Draft visit in progress · N items` (+ locked-history count when relevant) +
-     **Resume draft** / **Continue draft**;
-   - submitted-only: `N submitted visits locked` + **Add actual work**.
-   Never show both "No draft active" and "Draft visit started." Submitted records are immutable;
-   the drawer must state that clearly rather than implying office approval or editable status.
+- `RequestQueueNavigation.tsx` — replaced the underlined-link tab treatment with a quiet filled
+  pill for the selected scope; tab counts are now plain muted text instead of colored badges.
+- `TeamSection.tsx` — the Anchor's compact Owner column now uses the same label-then-value
+  `flex flex-col gap-1` structure as `CustomerContactStrip`/`ServiceLocationPanel`, so all three
+  Row 3 columns share the same label-to-value rhythm.
+- `BusinessSection.tsx` — "Mark work done, attention remains" renders as a quiet text-style
+  trigger (not an equal-weight outline button) when attention is active, so it reads as
+  subordinate to "Contact customer" and the amber rail's own actions.
+- `ActualWorkCard.tsx`, `ActualWorkHistoryCard.tsx`, `UnifiedComposer.tsx` — normalized
+  horizontal padding to `px-4` (was `px-5`) to match the attention rail and Customer Need card,
+  so the attention rail → Customer Need → Actual Work → communication composer sequence reads
+  as one consistent column instead of staggered insets.
 
-**Required next-session execution order:**
+Verified: typecheck clean, `pnpm check:tokens` passed, `git diff --check` clean, full
+`src/pages/request-detail` suite 206/206 passing, `RequestQueueNavigation`/`RequestRow` suites
+passing. Zoom (100/125/150%) and narrow queue-pane-width checks confirmed working by Christian
+against the real backend.
 
-1. ~~Implement the outstanding desktop UI changes~~ — complete, see Current implementation status
-   above.
-2. **Perform the desktop visual acceptance pass** at 100%, 125%, and 150% zoom and at the actual
-   queue-pane width. Check for clipped title/chevron, floating select chevron, accidental
-   horizontal scroll, ambiguous competing primary CTAs, inaccessible tab/popover/drawer controls,
-   and expanded Actual Work history bloat on the canvas. Verify keyboard focus, Escape/outside
-   close, and focus return for the Actual Work drawer. This still needs to be run in a real
-   browser; source-level preflight is not a substitute.
-3. **Then finalize:** confirm no regressions from the visual pass, then this desktop final pass is
-   ready for signoff.
-
-**Next after desktop signoff:** mobile/PWA Request Detail. Treat it as a responsive interaction
-design pass, not a shrink-to-fit desktop conversion: the queue, ledger, attention rail, planning
-controls, inline communication workspace, and Actual Work drawer need deliberate small-screen
-prioritization and sheet behavior.
+**Not changed (checked, no concrete gap found without inventing one):** `RequestRow.tsx` and
+`PriorityPreview.tsx` row-scanning density — already compact (reference + title + one
+status/exception badge + one Next-action line); select-chevron inset on Internal
+Priority/Planned/Follow-up controls — already adequately padded; Log Contact fallback —
+untouched, confirmed still intact.
 
 ### Request Detail — permanent Customer Need + compact attention rail — complete (2026-08-24)
 

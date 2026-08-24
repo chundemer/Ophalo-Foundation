@@ -88,8 +88,8 @@ export function UnifiedComposer({
     <div
       className={
         bare
-          ? "px-5 py-5"
-          : `rounded-xl border px-5 py-5 scroll-mt-4 transition-[border-color,background-color,box-shadow] ${highlightBorderCls(highlight)} ${highlightBgCls()}`
+          ? "px-4 py-4"
+          : `rounded-xl border px-4 py-4 scroll-mt-4 transition-[border-color,background-color,box-shadow] ${highlightBorderCls(highlight)} ${highlightBgCls()}`
       }
       style={bare ? undefined : { boxShadow: highlightBoxShadow(highlight) }}
     >

@@ -182,6 +182,19 @@ export function WorkDoneCard({ requestId, detail, onDetailUpdated, compact = fal
         )}
         {confirming ? (
           renderConfirmation()
+        ) : isDemotedPath ? (
+          // Subordinate to the amber attention rail's own actions (locked desktop-polish
+          // decision, 2026-08-24): a quiet text-style trigger, not an equal-weight outline
+          // button competing with Contact customer.
+          <button
+            ref={triggerBtnRef}
+            type="button"
+            disabled={isSubmitting || conflictDisabled}
+            onClick={enterConfirming}
+            className="px-2 text-sm font-medium text-[var(--ophalo-muted)] hover:text-[var(--ophalo-ink)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-offset-2 rounded"
+          >
+            {label}
+          </button>
         ) : (
           <KeepButton
             ref={triggerBtnRef}

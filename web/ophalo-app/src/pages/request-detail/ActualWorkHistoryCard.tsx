@@ -22,7 +22,7 @@ export function ActualWorkHistoryCard({ state, onRetry, bare = false }: ActualWo
     return null;
   }
 
-  const wrapperCls = bare ? "px-5 py-3.5" : "rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-5 py-3.5";
+  const wrapperCls = bare ? "px-4 py-3.5" : "rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-4 py-3.5";
 
   if (state.status === "error") {
     return (

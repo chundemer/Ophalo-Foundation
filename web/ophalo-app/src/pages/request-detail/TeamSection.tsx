@@ -89,14 +89,37 @@ export function TeamSection({ requestId, detail, onDetailUpdated, compact = fals
   // compact: static owner display plus a quiet Change/Assign trigger that opens
   // OwnerReassignmentSheet — the actual assign/clear controls live there now, outside the
   // metadata ledger (slice 4, 2026-08-23). No inline select/mutation here.
-  const assignedBlock = (
+  const assignedBlock = compact ? (
+    // Same flex-col label-then-value structure as the Anchor's other two context columns
+    // (CustomerContactStrip, ServiceLocationPanel) — consistent label-to-value rhythm across
+    // the three-column row (desktop-polish, 2026-08-24).
+    <div className="flex flex-col gap-1">
+      <span className="text-xs font-semibold uppercase tracking-widest text-[var(--ophalo-muted)] shrink-0">
+        Owner
+      </span>
+      <div className="flex items-center gap-2">
+        {responsible ? (
+          <span className="inline-flex items-center gap-1.5 text-sm text-[var(--ophalo-ink)]">
+            <User className="h-3.5 w-3.5 text-[var(--ophalo-muted)] shrink-0" />
+            {responsible.displayName}
+          </span>
+        ) : (
+          <span className="text-sm font-medium text-[var(--ophalo-attention)]">Unassigned</span>
+        )}
+        {canAssignResponsible && (
+          <button
+            type="button"
+            onClick={onOpenReassign}
+            className={`text-xs font-semibold text-[var(--keep-accent)] hover:underline transition-colors ${FOCUS_RING} rounded`}
+          >
+            {responsible ? "Change" : "Assign"}
+          </button>
+        )}
+      </div>
+    </div>
+  ) : (
     <div>
-      {!compact && <p className="text-xs text-[var(--ophalo-muted)] mb-1">Assigned</p>}
-      {compact && (
-        <span className="text-xs font-semibold uppercase tracking-widest text-[var(--ophalo-muted)] mr-2">
-          Owner
-        </span>
-      )}
+      <p className="text-xs text-[var(--ophalo-muted)] mb-1">Assigned</p>
       <div className="flex items-center justify-between gap-2">
         {responsible ? (
           <div className="flex items-center gap-1.5 text-sm text-[var(--ophalo-ink)]">
@@ -106,15 +129,6 @@ export function TeamSection({ requestId, detail, onDetailUpdated, compact = fals
         ) : (
           <p className="text-sm text-[var(--ophalo-attention)] font-medium">Unassigned</p>
         )}
-        {compact && canAssignResponsible && (
-          <button
-            type="button"
-            onClick={onOpenReassign}
-            className={`text-xs font-semibold text-[var(--keep-accent)] hover:underline transition-colors ${FOCUS_RING}`}
-          >
-            {responsible ? "Change" : "Assign"}
-          </button>
-        )}
       </div>
     </div>
   );
@@ -123,7 +137,7 @@ export function TeamSection({ requestId, detail, onDetailUpdated, compact = fals
     // Inline Anchor context item (locked correction, 2026-08-22) — no independent card
     // border/padding/background; the Anchor owns the one boundary for the whole strip.
     return (
-      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+      <div className="flex flex-col gap-1">
         {errorBlock}
         {assignedBlock}
       </div>

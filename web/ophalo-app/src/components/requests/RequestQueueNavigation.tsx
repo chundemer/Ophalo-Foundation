@@ -96,24 +96,22 @@ export function RequestQueueNavigation({
         type="button"
         onClick={() => onSelectTab(tab)}
         onKeyDown={(e) => handleTabKeyDown(e, i)}
-        className={`flex items-center justify-center gap-1 border-b-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-inset ${
-          fill ? `flex-1 min-w-0 min-h-11 py-2.5 ${denseCount ? "px-1 text-xs" : "px-2 text-sm"}` : "px-3 py-4 text-sm whitespace-nowrap"
+        className={`flex items-center justify-center gap-1 rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-inset ${
+          fill ? `flex-1 min-w-0 min-h-11 py-2 ${denseCount ? "px-1 text-xs" : "px-2 text-sm"}` : "px-3 py-1.5 text-sm whitespace-nowrap"
         } ${
           isActive
-            ? "font-semibold border-[var(--ophalo-navy)] text-[var(--ophalo-navy)]"
-            : "font-medium border-transparent text-[var(--ophalo-muted)] hover:text-[var(--ophalo-ink)] hover:border-[var(--ophalo-border)]"
+            ? "font-semibold bg-[var(--ophalo-canvas)] text-[var(--ophalo-navy)]"
+            : "font-medium text-[var(--ophalo-muted)] hover:text-[var(--ophalo-ink)] hover:bg-[var(--ophalo-canvas)]/60"
         }`}
       >
         {compactLabel ? (COMPACT_TAB_LABELS[tab.id] ?? tab.label) : tab.label}
         {count != null && count > 0 && (
           denseCount ? (
-            <span className="text-[11px] font-semibold">· {count}</span>
+            <span className={`text-[11px] ${isActive ? "font-medium text-[var(--ophalo-muted)]" : "font-normal text-[var(--ophalo-muted)]"}`}>
+              · {count}
+            </span>
           ) : (
-            <span className={`rounded-full px-1.5 py-0.5 text-xs font-semibold ${
-              isActive
-                ? "bg-[var(--ophalo-navy)] text-white"
-                : "bg-[var(--keep-accent-bg)] text-[var(--keep-accent)]"
-            }`}>
+            <span className="text-xs font-medium text-[var(--ophalo-muted)]">
               {count}
             </span>
           )
@@ -134,8 +132,8 @@ export function RequestQueueNavigation({
           </div>
         ) : (
           // Row 1: primary tabs, own scroll region.
-          <div className="flex items-center px-4 sm:px-6">
-            <div role="tablist" aria-label="Request queues" className="flex gap-0 overflow-x-auto shrink min-w-0">
+          <div className="flex items-center px-4 py-2 sm:px-6">
+            <div role="tablist" aria-label="Request queues" className="flex gap-1 overflow-x-auto shrink min-w-0">
               {tabs.map((tab, i) => renderTabButton(tab, i, false))}
             </div>
           </div>

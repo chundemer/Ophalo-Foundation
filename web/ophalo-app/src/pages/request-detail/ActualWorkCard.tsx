@@ -23,7 +23,7 @@ export function ActualWorkCard({ state, onStartCapture, bare = false }: ActualWo
 
   // This is deliberately a one-line execution strip.  Line items live in the drawer so
   // opening a request never turns its canvas into a long visit-history document.
-  const wrapperCls = bare ? "px-5 py-3" : "rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-5 py-3";
+  const wrapperCls = bare ? "px-4 py-2" : "rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-4 py-2";
 
   const isNoDraft = state.status === "no-draft";
   const isDraft = state.status === "draft";
