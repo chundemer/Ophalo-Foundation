@@ -14,6 +14,38 @@
 
 ## Current work
 
+### Frontend — request-card "Next:" action truncation — complete (2026-08-25)
+
+**Goal:** prevent overflow/wrap of the `Next: {promoted.label}` cue in the operator queue row
+(`ophalo-app`'s `RequestRow.tsx`). Confirmed via preflight: the span at
+`components/RequestRow.tsx:473` has no `truncate` class, so a long promoted-action label (e.g. a
+long next-step string) will wrap or overflow the card instead of clipping.
+
+**Scope decision (2026-08-25):** raised alongside three other visual-bug observations from a UI
+screenshot review; only this one survived preflight as a real, unscoped gap. The other three were
+evaluated and dropped from this batch:
+- Tab active-state pill ("Attention" looking like an isolated badge) — not a bug: pane-mode tabs
+  already render equal-width (`flex-1`), and the filled-pill active state is the deliberate output
+  of the 2026-08-24 desktop-polish-pass decision (see that entry below), not a regression. Left
+  alone; would need a separate decision to change intentionally.
+- Dropdown-arrow padding on Internal Priority/Planned/Follow-up selects — the same 2026-08-24 batch
+  already checked this exact control and recorded "already adequately padded, no gap found." New
+  screenshot claim contradicts that finding; not re-opened without a fresh, closer measurement.
+- Red text on "Customer replied" exception badges — not a hardcoded color bug. Traced through
+  `RequestRow.tsx`'s `resolveException()`: the icon is already differentiated (`MessageSquare`, not
+  `AlertTriangle`) for that reason, and the color comes from `severityToTone(row.ranking.severity)`,
+  a backend-computed field — likely reflects a genuinely overdue response despite the customer
+  reply, not a copy/paste error. Left alone; would need backend ranking context to revisit.
+
+Files: `components/RequestRow.tsx` — `Next:` span (line 473) gets `truncate max-w-full` plus a
+`title` tooltip carrying the full text (kept deliberately per Christian: useful a11y/UX affordance
+for the exact truncated content, not meaningful inconsistency with the untitled `customerName`/
+`descriptionPreview` truncation elsewhere in the file).
+
+No unresolved decisions. Presentation-only, `ophalo-app` layer.
+
+Verified: focused `RequestRow` suite 39/39 passing, `tsc --noEmit` clean, `git diff --check` clean.
+
 ### Frontend — Customer Tracker status badge — implementation-ready
 
 **Goal:** add a status badge to `TrackerStatusCard.tsx` (customer-facing tracker page,

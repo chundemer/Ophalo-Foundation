@@ -470,7 +470,7 @@ export function RequestRow({ row, onSelect, onSelectFocused, onActionClick, onSh
             </KeepBadge>
           )}
           {promoted && (
-            <span className="text-sm text-[var(--ophalo-muted)]">Next: {promoted.label}</span>
+            <span className="text-sm text-[var(--ophalo-muted)] truncate max-w-full" title={`Next: ${promoted.label}`}>Next: {promoted.label}</span>
           )}
         </div>
       </div>
