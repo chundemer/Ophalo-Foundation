@@ -151,7 +151,7 @@ export function DetailHeroBadges({ detail }: DetailHeroProps) {
       <span className="font-mono text-xs text-[var(--ophalo-muted)] shrink-0">{detail.referenceCode}</span>
       <KeepBadge variant={statusBadgeVariant(detail.status)}>{statusLabel(detail.status)}</KeepBadge>
       {hasAttention && attention.reason && (
-        <KeepBadge variant="attention">
+        <KeepBadge variant={attention.level === "overdue" ? "danger" : "attention"}>
           {attention.level === "overdue" ? (
             <AlertTriangle className="h-3 w-3 mr-1 shrink-0" />
           ) : (

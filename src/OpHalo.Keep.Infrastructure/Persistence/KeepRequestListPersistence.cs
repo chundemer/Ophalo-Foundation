@@ -79,6 +79,11 @@ public sealed class KeepRequestListPersistence(OpHaloDbContext dbContext, IClock
 
         var nowUtc = clock.UtcNow;
         var today = DateOnly.FromDateTime(nowUtc);
+        // The calm Resolved exclusion keeps the unfiltered Default queue focused on live work
+        // (ADR-437). An explicit Status=resolved filter is an intentional retrieval request,
+        // however, and must be able to find those rows rather than yielding an impossible empty
+        // result set after the status selector has offered that value.
+        var explicitlyFilteringResolved = filters.Status == KeepRequestStatus.Resolved;
 
         IQueryable<KeepRequest> query = view switch
         {
@@ -89,7 +94,9 @@ public sealed class KeepRequestListPersistence(OpHaloDbContext dbContext, IClock
             ActiveViewKind.Default => scopedBase.Where(r =>
                 r.Status != KeepRequestStatus.Closed && r.Status != KeepRequestStatus.Cancelled
                 && r.Status != KeepRequestStatus.Spam && r.Status != KeepRequestStatus.Test
-                && (r.Status != KeepRequestStatus.Resolved || r.AttentionLevel != AttentionLevel.None)),
+                && (r.Status != KeepRequestStatus.Resolved
+                    || r.AttentionLevel != AttentionLevel.None
+                    || explicitlyFilteringResolved)),
 
             ActiveViewKind.AssignedToMe => scopedBase.Where(r =>
                 r.Status != KeepRequestStatus.Closed

@@ -1,5 +1,7 @@
 import { Check, Copy, Share2 } from "lucide-react";
 import { type CustomerEventItem, statusHeadline, statusSubtext, formatDate } from "./tracker-types";
+import { KeepBadge } from "@/components/keep/KeepBadge";
+import { statusLabel, statusBadgeVariant } from "@/lib/requestStatus";
 
 export function TrackerStatusCard({
   status,
@@ -24,9 +26,12 @@ export function TrackerStatusCard({
     <div className="rounded-2xl border border-[var(--ophalo-border)] bg-card px-5 py-5 shadow-sm">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
-          <p className="text-[10px] font-semibold uppercase tracking-widest text-[var(--keep-accent)]">
-            Current Status
-          </p>
+          <div className="flex items-center gap-2">
+            <p className="text-[10px] font-semibold uppercase tracking-widest text-[var(--keep-accent)]">
+              Current Status
+            </p>
+            <KeepBadge variant={statusBadgeVariant(status)}>{statusLabel(status)}</KeepBadge>
+          </div>
           <h1 className="mt-1 text-2xl font-bold leading-tight text-foreground sm:text-[26px]">
             {statusHeadline(status, origin)}
           </h1>

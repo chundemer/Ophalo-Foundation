@@ -1,11 +1,12 @@
 import type { ReactNode } from "react";
 
-export type KeepBadgeVariant = "teal" | "attention" | "success" | "default";
+export type KeepBadgeVariant = "teal" | "attention" | "success" | "info" | "default";
 
 const variantClasses: Record<KeepBadgeVariant, string> = {
   teal: "bg-[var(--keep-accent-bg)] text-[var(--keep-accent)]",
   attention: "bg-[var(--ophalo-attention-bg)] text-[var(--ophalo-attention)]",
   success: "bg-[var(--ophalo-success-bg)] text-[var(--ophalo-success)]",
+  info: "bg-[var(--keep-info-bg)] text-[var(--keep-info)]",
   default: "bg-muted text-muted-foreground",
 };
 

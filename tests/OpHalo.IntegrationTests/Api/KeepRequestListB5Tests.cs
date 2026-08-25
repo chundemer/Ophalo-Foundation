@@ -471,6 +471,25 @@ public sealed class KeepRequestListB5Tests : IClassFixture<KeepApiWebFactory>, I
     }
 
     [Fact]
+    public async Task Explicit_work_completed_filter_finds_calm_resolved_request_in_default_list()
+    {
+        // A status filter is an intentional retrieval request. It must override only Default's
+        // unfiltered calm-Resolved exclusion, so a reference search plus Work completed can find
+        // the exact request without turning the normal queue into a closeout list.
+        using var req = WithCookie(
+            HttpMethod.Get,
+            "/keep/requests?status=resolved&q=B5-RSV-001",
+            _ownerCookie);
+        var response = await _client.SendAsync(req);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<B5RequestListBody>(
+            new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+        Assert.NotNull(body);
+        Assert.Contains(body.Requests, r => r.Id == _resolvedRequestId && r.Status == "resolved");
+    }
+
+    [Fact]
     public async Task Calm_resolved_present_in_ready_to_close()
     {
         // ADR-437: calm Resolved moves to ready_to_close, not Default Queue.

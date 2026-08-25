@@ -14,6 +14,58 @@
 
 ## Current work
 
+### Frontend — DetailHero danger variant for legitimate overdue states — complete (2026-08-25)
+
+**Origin:** a UI screenshot review surfaced that a request's exception reads amber ("Customer
+message") in the Request Detail hero while the same request reads red/danger ("Customer replied ·
+Aug 24") in the queue list. Preflight against ADR-489/ADR-490 and the
+[Request Detail API preflight](ux-design/v2/request-detail-workbench-api-preflight.md) traced this
+to two distinct findings — one scoped out, one confirmed in scope:
+
+**Scoped out (2026-08-25) — case-1 (persisted attention) severity divergence is intentional, not a bug.**
+The list's red coloring for this specific request comes from `overdueBusinessWaiting`
+(`GetKeepRequestListService.cs:687`, live-checks `WaitingDirection.Business` +
+`NextAttentionAtUtc < now`), which folds into the same `"overdue_business_waiting"` ranking group
+as `firstResponseOverdue` (`GetKeepRequestListService.cs:827-828`) — the group backing the ADR-192
+"Response overdue" badge. The API preflight doc explicitly cross-checked ADR-192 and recorded it as
+**"list-side... list-only, not detail, and not contradicted by anything proposed here"**
+(`request-detail-workbench-api-preflight.md:301`). `KeepRequestDetailMapper.cs`'s case-1 branch
+(`ComputeEffectiveAttention`) returns `MapAttentionLevel(request.AttentionLevel)` with no equivalent
+live-deadline check — this is that locked list-only boundary holding, not an oversight. Decision
+(Christian, 2026-08-25): the explicit ADR-192 cross-check outweighs the plausible "stale case-1"
+reading; queue's red escalation is intentional list-level triage. Detail's persisted-attention
+presentation stays amber unless a future decision reopens this contract. No code change from this
+finding.
+
+**Confirmed in scope — `DetailHeroBadges` ignores `effectiveAttention.level` for cases the detail API
+already legitimately computes.** `DetailHero.tsx:153` hardcodes `variant="attention"` on the
+exception `KeepBadge` and only swaps the icon (`AlertTriangle` vs `Clock`) when
+`attention.level === "overdue"` — color never changes. This is independent of the case-1 question
+above: ADR-489/490 already give the detail API legitimate `"overdue"` levels for case 2
+(Follow-Up due/overdue) and case 3 (first-response overdue) via `ComputeEffectiveAttention`:
+`KeepRequestDetailMapper.cs:410`. Those overdue states should render as `danger`, matching
+`RequestRow.tsx`'s `exceptionVariant()` pattern (`tone === "danger" ? "danger" : "attention"`), not
+stay amber.
+
+**Deferred separately, not part of this fix:** the label-text mismatch (`RequestRow.tsx:31`
+`"Customer replied"` vs `helpers.ts:151` `"Customer message"` for the same `customer_message`
+reason) — still unconfirmed whether the two registers (list scanning vs. detail current-state
+framing) are intentional. Needs its own copy decision, not automatic centralization.
+
+**Fix:** `DetailHero.tsx`'s `DetailHeroBadges` now renders `variant={attention.level === "overdue" ?
+"danger" : "attention"}` on the exception `KeepBadge`, matching `RequestRow.tsx`'s
+`exceptionVariant()` pattern and the shared `--ophalo-danger`/`--ophalo-danger-bg` tokens. One call
+site (`RequestDetailAnchor.tsx`); no other caller depended on the always-amber assumption.
+
+Files: `web/ophalo-app/src/pages/request-detail/DetailHero.tsx`,
+`web/ophalo-app/src/pages/request-detail/__tests__/DetailHeroBadges.attentionVariant.test.tsx` (new).
+
+No unresolved decisions.
+
+Verified: new focused test 2/2 passing (danger variant on `overdue`, attention variant otherwise);
+full `request-detail/__tests__` suite 209/209 passing (no regressions); `tsc --noEmit` clean;
+`git diff --check` clean.
+
 ### Frontend — request-card "Next:" action truncation — complete (2026-08-25)
 
 **Goal:** prevent overflow/wrap of the `Next: {promoted.label}` cue in the operator queue row
@@ -46,12 +98,12 @@ No unresolved decisions. Presentation-only, `ophalo-app` layer.
 
 Verified: focused `RequestRow` suite 39/39 passing, `tsc --noEmit` clean, `git diff --check` clean.
 
-### Frontend — Customer Tracker status badge — implementation-ready
+### Frontend — Customer Tracker status badge — complete (2026-08-25)
 
 **Goal:** add a status badge to `TrackerStatusCard.tsx` (customer-facing tracker page,
 `ophalo-web`), matching the operator workbench's `KeepBadge` variant system
-(`ophalo-app/src/lib/requestStatus.ts`'s `statusBadgeVariant`/`statusLabel`). Currently the
-tracker header shows only a plain-text headline, no badge.
+(`ophalo-app/src/lib/requestStatus.ts`'s `statusBadgeVariant`/`statusLabel`). Previously the
+tracker header showed only a plain-text headline, no badge.
 
 **Decisions locked (2026-08-24):**
 - Port `statusBadgeVariant()`/status-label mapping into a new `ophalo-web/src/lib/requestStatus.ts`
@@ -69,6 +121,48 @@ Files: `web/ophalo-web/src/lib/requestStatus.ts` (new), `web/ophalo-web/src/comp
 `web/ophalo-web/src/app/keep/r/[pageToken]/TrackerStatusCard.tsx`.
 
 No unresolved decisions. No architectural layers beyond `ophalo-web` presentation code.
+
+Verified: `--keep-info`/`--keep-info-bg` confirmed present in both `web/shared/styles/ophalo-tokens.css`
+and the inlined `ophalo-web/src/app/globals.css` block (no new undefined-token risk per GAP-028);
+`tsc --noEmit` clean (`ophalo-web` has no component test runner wired up yet).
+
+### Backend — explicit `Status=resolved` filter returned empty result on Default view — complete (2026-08-25)
+
+**Bug:** `KeepRequestListPersistence.cs`'s `ActiveViewKind.Default` query unconditionally excludes
+calm-Resolved rows (`Status == Resolved && AttentionLevel == None`) per ADR-437, so that the
+unfiltered queue stays focused on live work. That exclusion was also applying when a caller passed
+an explicit `status=resolved` filter, making it impossible to ever retrieve a calm-resolved request
+by status — an intentional, explicit retrieval request yielded an impossible empty result set.
+
+**Fix:** added `explicitlyFilteringResolved` (`filters.Status == KeepRequestStatus.Resolved`) and
+OR'd it into the calm-Resolved exclusion clause, so an explicit status filter overrides only that
+one unfiltered-queue exclusion without changing Default's unfiltered behavior or any other view.
+
+Files: `src/OpHalo.Keep.Infrastructure/Persistence/KeepRequestListPersistence.cs`,
+`tests/OpHalo.IntegrationTests/Api/KeepRequestListB5Tests.cs` (new regression test
+`Explicit_work_completed_filter_finds_calm_resolved_request_in_default_list`).
+
+No unresolved decisions. Infrastructure-layer query fix only.
+
+Verified: focused `KeepRequestListB5Tests` suite 33/33 passing (including the new regression test),
+`git diff --check` clean.
+
+### Frontend — `ophalo-app` mock client drift on business-update event contract — complete (2026-08-25)
+
+**Bug:** `mockApiClient.ts`'s simulated `BusinessUpdateSent` event used `visibility: "public"` and
+`messageIntent: "update"` — values that don't exist in the real backend contract. The backend maps
+`KeepRequestEventVisibility.All` → `"all"` and `MessageIntent.BusinessUpdate` → `"business_update"`
+(`KeepRequestDetailMapper.cs:544,565`), so mock-mode dev/testing of the update composer diverged
+from real API responses for this event.
+
+**Fix:** changed the mock event to `visibility: "all"`, `messageIntent: "business_update"` to match
+the real mapper output.
+
+Files: `web/ophalo-app/src/mocks/mockApiClient.ts`.
+
+No unresolved decisions. Mock-data-only change, no production code path affected.
+
+Verified: `tsc --noEmit` clean, `BusinessSection.notify.test.tsx` 3/3 passing.
 
 ### Frontend — customer-update composer: post + prepare in one click — complete (2026-08-25)
 

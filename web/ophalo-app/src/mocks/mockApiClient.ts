@@ -608,8 +608,8 @@ export function installMockApi(): void {
         eventType: "BusinessUpdateSent",
         occurredAtUtc: new Date().toISOString(),
         content: body.message,
-        visibility: "public",
-        messageIntent: "update",
+        visibility: "all",
+        messageIntent: "business_update",
         statusAfter: body.setStatus ?? null,
       },
     );
