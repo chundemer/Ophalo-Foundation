@@ -188,6 +188,50 @@ duplicated per surface), and when any other combination is ambiguous or metadata
 neutral review context — never invent a lifecycle or attention primary that the derivation cannot
 support.
 
+### Session 0A locked decision (2026-08-25)
+
+Christian locked the precedence rule and the field shape below. This supersedes the "mark work
+done with attention remaining" candidate key above — that composite state is no longer a
+`PrimaryAction` value.
+
+**Precedence, evaluated in this order by `KeepRequestActionPolicy`:**
+
+1. **Effective attention active:** if a server-known attention-resolution route exists (e.g.
+   `respond_to_customer`, `acknowledge_attention`, `resolve_follow_up`, `log_external_contact`),
+   that is `PrimaryAction`. Mark work done / Close never take the primary slot while attention is
+   active, regardless of `CanChangeStatus`/`CanClose`.
+2. **Effective attention active, no actionable resolution route:** `PrimaryAction = null`. Work
+   completion/closeout is never promoted past unresolved attention, even as a fallback.
+3. **No effective attention, Resolved + `CanClose`:** `PrimaryAction = close_request`.
+4. **No effective attention, eligible non-resolved request:** `PrimaryAction = mark_work_done`.
+5. **No effective attention, none of the above:** `PrimaryAction = null`.
+
+Mark work done remains an authorized **secondary** action whenever `CanChangeStatus &&
+AllowedStatuses.includes("resolved")` is true, independent of the primary slot. When attention is
+active, its secondary metadata must carry the "attention remains" consequence/warning as
+server-authored data (not a distinct `PrimaryAction` key) — e.g. a `consequence`/`warning` field on
+the secondary-action entry, so the client renders the warning copy without inferring it from
+`AttentionLevel` itself.
+
+**Field shape addition — `Target`:** `PrimaryAction` (and, where applicable, other structured
+action entries) must carry a closed `Target` field alongside `key`/`label`, naming the concrete UI
+surface the client invokes — the client performs no key-to-behavior translation of its own:
+
+```text
+Target: "mutation" | "customer_update_composer" | "attention_sheet" | "contact_sheet"
+       | "follow_up_sheet"
+```
+
+`Target` is more specific than the `containment` field proposed above (`inline | drawer | dialog |
+workspace`, a presentation category) — `Target` names the actual component/handler, and replaces
+`containment` for `PrimaryAction` specifically. `mutation` covers direct-call actions like
+`mark_work_done`/`close_request`; the sheet/composer values route to the corresponding existing UI
+surface (inline composer, attention drawer, contact drawer, follow-up drawer) rather than letting
+each surface reinterpret `key`.
+
+This is scope only — no implementation is authorized by this document. Backend contract addition,
+policy precedence logic, and both DTO/frontend migrations remain a separate approved batch.
+
 ## Needs Attention queue-membership vs. detail-guidance gap (added 2026-08-22)
 
 **Discovered during Workbench visual verification, not during original preflight authoring.**

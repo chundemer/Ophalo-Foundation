@@ -760,12 +760,24 @@ earlier contract/routing slice.
 
 ### 0. Server-primary action and route preflight — no UI build
 
-- Confirm the selected-request response emits exactly one primary action (`primary: true`) and all
-  label, authorization, mutation, confirmation, and current-version metadata necessary to render it.
-- Confirm the existing client routing can meet the durable mobile `#/request/{id}` contract. Current
-  `ophalo-app` route state must not be mistaken for deep-link-safe routing.
-- Record exact files, request states/permissions to exercise, and any API discrepancy before changing
-  the mobile presentation.
+- Route contract: **complete (2026-08-25).** `web/ophalo-app/src/App.tsx:191` already pushes the
+  durable `#/request/{id}` route. No drift found.
+- Server-primary-action contract: **blocked — not yet implemented.** Confirmed the backend does not
+  emit a structured `PrimaryAction`; the client currently derives "Mark work done" vs "Close
+  request" itself (`RequestDetailAnchor.tsx`, `BusinessSection.tsx`). Mobile must not inherit this
+  client-derived rule — the safety model requires server-authoritative primary-action selection.
+
+### 0A. Server-authored primary action contract — locked scope (2026-08-25), not yet implemented
+
+Blocking gate before Slice 1. Full scope, precedence rule, and field shape (including the new
+`Target` field) are locked in the
+[Request Detail API preflight, "Session 0A locked decision"](ux-design/v2/request-detail-workbench-api-preflight.md#session-0a-locked-decision-2026-08-25).
+Summary: add `KeepRequestActionPolicy`-computed `PrimaryAction` (attention-resolution route first,
+then `close_request`/`mark_work_done` only when no attention is active, else `null`); keep
+`CanClose`/`CanChangeStatus`/etc. as capability flags only; migrate desktop's
+`WorkDoneCard`/`CloseRequestCard` compact primary slot to read the new field; add backend policy
+tests and a frontend contract test. Requires its own approved implementation batch before Mobile V2
+Slice 1 begins.
 
 ### 1. Mobile shell and Queue return path
 
