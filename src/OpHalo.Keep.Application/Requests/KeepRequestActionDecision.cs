@@ -29,6 +29,7 @@ public sealed record KeepRequestActionDecision(
     bool CanMarkFeedbackReviewed,
     bool CanSetFollowUpOn,
     bool CanSetPlannedFor,
+    bool CanResolveFollowUp,
     bool CanClose,
     bool CanClassify,
     bool CanRecordShareIntent,

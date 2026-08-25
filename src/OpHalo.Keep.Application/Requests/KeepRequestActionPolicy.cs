@@ -29,6 +29,7 @@ public static class KeepRequestActionPolicy
         CanMarkFeedbackReviewed:  false,
         CanSetFollowUpOn:         false,
         CanSetPlannedFor:         false,
+        CanResolveFollowUp:       false,
         CanClose:                       false,
         CanClassify:                    false,
         CanRecordShareIntent:           false,
@@ -88,6 +89,13 @@ public static class KeepRequestActionPolicy
             && request.Status == KeepRequestStatus.Resolved
             && request.AttentionLevel == AttentionLevel.None;
 
+        // Resolve follow-up: same structural gate as KeepRequest.ResolveFollowUp (ADR-Session-0A) —
+        // canSetTiming already matches its IsActive status predicate exactly; FollowUpOnDate must
+        // be set, matching the domain method's own FollowUpOnNotSet guard. Equivalence with the
+        // mutation is verified by KeepRequestActionPolicyTests so the detail contract can never
+        // advertise an action ResolveFollowUpAsync would reject.
+        var canResolveFollowUp = canSetTiming && request.FollowUpOnDate.HasValue;
+
         return new KeepRequestActionDecision(
             CanChangeStatus:          isNonTerminal,
             CanSendBusinessUpdate:    isNonTerminal,
@@ -105,6 +113,7 @@ public static class KeepRequestActionPolicy
             CanMarkFeedbackReviewed:  CanMarkFeedbackReviewedCore(isOwnerAdmin, request),
             CanSetFollowUpOn:         canSetTiming,
             CanSetPlannedFor:         canSetTiming,
+            CanResolveFollowUp:       canResolveFollowUp,
             CanClose:                       canClose,
             CanClassify:                    isOwnerAdmin && isNonTerminal,
             CanRecordShareIntent:           true,
@@ -159,4 +168,75 @@ public static class KeepRequestActionPolicy
 
             _ => throw new InvalidOperationException($"Unknown KeepRequestStatus: {current}")
         };
+
+    /// <summary>
+    /// Session 0A: server-authoritative single current primary action. Pure — no clock, EF, HTTP,
+    /// or client input; effectiveAttention must already be computed by the caller (the only
+    /// clock-dependent step lives in KeepRequestDetailMapper.ComputeEffectiveAttention). Attention
+    /// resolution always outranks work completion/closeout: while effective attention is active,
+    /// Mark work done and Close never occupy the primary slot even when otherwise eligible.
+    /// Reads only capability flags and mapped AllowedStatuses already present on
+    /// AvailableActionsMetadata — the server's own authoritative projection of the action
+    /// decision, not client input — never labels, client state, or UI inference.
+    /// </summary>
+    public static PrimaryActionMetadata? SelectPrimaryAction(
+        AvailableActionsMetadata availableActions,
+        EffectiveAttentionResult effectiveAttention,
+        KeepRequestStatus status)
+    {
+        if (effectiveAttention.Level != "none")
+        {
+            return effectiveAttention.GuidanceKey switch
+            {
+                "acknowledge_attention" when availableActions.CanAcknowledgeAttention =>
+                    new PrimaryActionMetadata("acknowledge_attention", "Acknowledge attention",
+                        "attention_sheet", RequiresConfirmation: false, ConfirmationCopy: null),
+
+                "resolve_follow_up" when availableActions.CanResolveFollowUp =>
+                    new PrimaryActionMetadata("resolve_follow_up", "Resolve follow-up",
+                        "follow_up_sheet", RequiresConfirmation: false, ConfirmationCopy: null),
+
+                "respond_to_customer" when availableActions.CanSendBusinessUpdate =>
+                    new PrimaryActionMetadata("respond_to_customer", "Send update",
+                        "customer_update_composer", RequiresConfirmation: false, ConfirmationCopy: null),
+
+                "log_external_contact" when availableActions.CanLogExternalContact =>
+                    new PrimaryActionMetadata("log_external_contact", "Log contact",
+                        "contact_sheet", RequiresConfirmation: false, ConfirmationCopy: null),
+
+                // Guidance names a route the actor isn't authorized for, or names no route at all —
+                // never fall through to work completion/closeout while attention remains active.
+                _ => null,
+            };
+        }
+
+        if (availableActions.CanClose && status == KeepRequestStatus.Resolved)
+            return new PrimaryActionMetadata("close_request", "Close request", "mutation",
+                RequiresConfirmation: true, ConfirmationCopy: "Close this request?");
+
+        if (CanMarkWorkDone(availableActions, status))
+            return new PrimaryActionMetadata("mark_work_done", "Mark work done", "mutation",
+                RequiresConfirmation: false, ConfirmationCopy: null);
+
+        return null;
+    }
+
+    /// <summary>
+    /// Session 0A: populated only when Mark work done is authorized but effective attention keeps
+    /// it out of the primary slot. Never returned alongside a "mark_work_done" PrimaryAction —
+    /// SelectPrimaryAction never selects mark_work_done while attention is active, so the two are
+    /// mutually exclusive by construction, not by a runtime exclusivity check here.
+    /// </summary>
+    public static MarkWorkDoneSecondaryMetadata? SelectMarkWorkDoneSecondary(
+        AvailableActionsMetadata availableActions,
+        EffectiveAttentionResult effectiveAttention,
+        KeepRequestStatus status) =>
+        effectiveAttention.Level != "none" && CanMarkWorkDone(availableActions, status)
+            ? new MarkWorkDoneSecondaryMetadata("Mark work done", "mutation", "attention_remains")
+            : null;
+
+    private static bool CanMarkWorkDone(AvailableActionsMetadata availableActions, KeepRequestStatus status) =>
+        availableActions.CanChangeStatus
+        && availableActions.AllowedStatuses.Contains("resolved")
+        && status != KeepRequestStatus.Resolved;
 }

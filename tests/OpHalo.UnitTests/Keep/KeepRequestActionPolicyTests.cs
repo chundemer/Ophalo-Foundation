@@ -2,6 +2,7 @@ using OpHalo.Foundation.Core.Entities.Accounts.Enums;
 using OpHalo.Keep.Application.Requests;
 using OpHalo.Keep.Core.Entities;
 using OpHalo.Keep.Core.Entities.Enums;
+using OpHalo.Keep.Core.Errors;
 
 namespace OpHalo.UnitTests.Keep;
 
@@ -749,4 +750,228 @@ public class KeepRequestActionPolicyTests
     [Fact]
     public void CreateFollowUpRequest_Owner_on_Cancelled_is_false()
         => Assert.False(KeepRequestActionPolicy.Evaluate(MakeCancelled(), OwnerWrite()).CanCreateFollowUpRequest);
+
+    // -----------------------------------------------------------------------
+    // CanResolveFollowUp (Session 0A)
+    // -----------------------------------------------------------------------
+
+    [Fact]
+    public void CanResolveFollowUp_Owner_active_with_followup_set_is_true()
+    {
+        var r = MakeReceived();
+        r.SetFollowUpOn(DateOnly.FromDateTime(Now.AddDays(3)), null, null, ActorId, ActorName, Now);
+        Assert.True(KeepRequestActionPolicy.Evaluate(r, OwnerWrite()).CanResolveFollowUp);
+    }
+
+    [Fact]
+    public void CanResolveFollowUp_Operator_active_with_followup_set_is_true()
+    {
+        var r = MakeReceived();
+        r.SetFollowUpOn(DateOnly.FromDateTime(Now.AddDays(3)), null, null, ActorId, ActorName, Now);
+        Assert.True(KeepRequestActionPolicy.Evaluate(r, OperatorWrite()).CanResolveFollowUp);
+    }
+
+    [Fact]
+    public void CanResolveFollowUp_Owner_active_without_followup_is_false()
+        => Assert.False(KeepRequestActionPolicy.Evaluate(MakeReceived(), OwnerWrite()).CanResolveFollowUp);
+
+    [Fact]
+    public void CanResolveFollowUp_Owner_Resolved_with_followup_set_is_false()
+    {
+        var r = MakeReceived();
+        r.SetFollowUpOn(DateOnly.FromDateTime(Now.AddDays(3)), null, null, ActorId, ActorName, Now);
+        r.ChangeStatus(KeepRequestStatus.Resolved, null, ActorId, ActorName, Now.AddHours(-1));
+        Assert.False(KeepRequestActionPolicy.Evaluate(r, OwnerWrite()).CanResolveFollowUp);
+    }
+
+    [Fact]
+    public void CanResolveFollowUp_Owner_Closed_with_followup_set_is_false()
+        => Assert.False(KeepRequestActionPolicy.Evaluate(MakeClosed(), OwnerWrite()).CanResolveFollowUp);
+
+    // Equivalence: CanResolveFollowUp must track KeepRequest.ResolveFollowUp's own structural
+    // gate exactly, so the detail contract never advertises an action the mutation rejects.
+    [Theory]
+    [InlineData(/* active */ true,  /* followUpSet */ true)]
+    [InlineData(/* active */ true,  /* followUpSet */ false)]
+    [InlineData(/* active */ false, /* followUpSet */ true)]
+    [InlineData(/* active */ false, /* followUpSet */ false)]
+    public void CanResolveFollowUp_matches_ResolveFollowUp_structural_gate(bool active, bool followUpSet)
+    {
+        var r = MakeReceived();
+        if (followUpSet)
+            r.SetFollowUpOn(DateOnly.FromDateTime(Now.AddDays(3)), null, null, ActorId, ActorName, Now);
+        if (!active)
+            r.ChangeStatus(KeepRequestStatus.Resolved, null, ActorId, ActorName, Now.AddHours(-1));
+
+        var canResolve = KeepRequestActionPolicy.Evaluate(r, OwnerWrite()).CanResolveFollowUp;
+
+        var mutationResult = r.ResolveFollowUp(
+            FollowUpResolutionOutcome.Complete, FollowUpCompletionReason.WorkCompleted, null,
+            null, null, ActorId, ActorName, Now.AddHours(1));
+
+        var mutationRejectsStructurally = mutationResult.IsFailure
+            && (mutationResult.Error == KeepRequestErrors.FollowUpOnRequiresActiveRequest
+                || mutationResult.Error == KeepRequestErrors.FollowUpOnNotSet);
+
+        Assert.Equal(canResolve, !mutationRejectsStructurally);
+    }
+
+    // -----------------------------------------------------------------------
+    // SelectPrimaryAction (Session 0A)
+    // -----------------------------------------------------------------------
+
+    static readonly EffectiveAttentionResult NoAttention = new("none", null, null, null, null);
+
+    static EffectiveAttentionResult AttentionWithGuidance(string guidanceKey) =>
+        new("needs_attention", "customer_message", null, null, guidanceKey);
+
+    // Selectors read AvailableActionsMetadata (the server's own already-mapped projection of the
+    // decision), not the raw KeepRequestActionDecision — this fixture mirrors what
+    // KeepRequestDetailMapper.ToDetailResult actually passes them.
+    static AvailableActionsMetadata Actions(KeepRequest r, KeepRequestActionContext ctx) =>
+        KeepRequestDetailMapper.ToAvailableActionsMetadata(KeepRequestActionPolicy.Evaluate(r, ctx));
+
+    [Fact]
+    public void SelectPrimaryAction_no_attention_Resolved_CanClose_returns_close_request()
+    {
+        var r = MakeReceived();
+        r.ChangeStatus(KeepRequestStatus.Resolved, null, ActorId, ActorName, Now.AddHours(-1));
+        var actions = Actions(r, OwnerWrite());
+
+        var primary = KeepRequestActionPolicy.SelectPrimaryAction(actions, NoAttention, r.Status);
+
+        Assert.NotNull(primary);
+        Assert.Equal("close_request", primary!.Key);
+        Assert.Equal("mutation", primary.Target);
+        Assert.True(primary.RequiresConfirmation);
+    }
+
+    [Fact]
+    public void SelectPrimaryAction_no_attention_eligible_nonresolved_returns_mark_work_done()
+    {
+        var r = MakeReceived();
+        var actions = Actions(r, OwnerWrite());
+
+        var primary = KeepRequestActionPolicy.SelectPrimaryAction(actions, NoAttention, r.Status);
+
+        Assert.NotNull(primary);
+        Assert.Equal("mark_work_done", primary!.Key);
+        Assert.Equal("mutation", primary.Target);
+        Assert.False(primary.RequiresConfirmation);
+    }
+
+    [Fact]
+    public void SelectPrimaryAction_attention_with_actionable_guidance_outranks_mark_work_done()
+    {
+        var r = MakeReceived();
+        var actions = Actions(r, OwnerWrite());
+        var attention = AttentionWithGuidance("respond_to_customer");
+
+        var primary = KeepRequestActionPolicy.SelectPrimaryAction(actions, attention, r.Status);
+
+        Assert.NotNull(primary);
+        Assert.Equal("respond_to_customer", primary!.Key);
+        Assert.Equal("customer_update_composer", primary.Target);
+    }
+
+    [Fact]
+    public void SelectPrimaryAction_attention_guidance_gate_unauthorized_returns_null()
+    {
+        // Simulate an actor for whom the guided capability is false (e.g. CanResolveFollowUp
+        // false because no follow-up is actually set), and assert no fallback to work completion.
+        var r = MakeReceived();
+        var actions = Actions(r, OwnerWrite());
+        var attention = AttentionWithGuidance("resolve_follow_up");
+
+        var primary = KeepRequestActionPolicy.SelectPrimaryAction(actions, attention, r.Status);
+
+        Assert.Null(primary);
+    }
+
+    [Fact]
+    public void SelectPrimaryAction_attention_with_no_guidance_key_returns_null_not_work_done()
+    {
+        var r = MakeReceived();
+        var actions = Actions(r, OwnerWrite());
+        var attention = new EffectiveAttentionResult("needs_attention", "customer_message", null, null, null);
+
+        var primary = KeepRequestActionPolicy.SelectPrimaryAction(actions, attention, r.Status);
+
+        Assert.Null(primary);
+    }
+
+    [Fact]
+    public void SelectPrimaryAction_terminal_status_returns_null()
+        => Assert.Null(KeepRequestActionPolicy.SelectPrimaryAction(
+            Actions(MakeClosed(), OwnerWrite()), NoAttention, KeepRequestStatus.Closed));
+
+    [Theory]
+    [MemberData(nameof(AllPrimaryActionCases))]
+    public void SelectPrimaryAction_RequiresConfirmation_implies_nonempty_ConfirmationCopy(
+        AvailableActionsMetadata actions, EffectiveAttentionResult attention, KeepRequestStatus status)
+    {
+        var primary = KeepRequestActionPolicy.SelectPrimaryAction(actions, attention, status);
+        if (primary is null) return;
+
+        if (primary.RequiresConfirmation)
+            Assert.False(string.IsNullOrEmpty(primary.ConfirmationCopy));
+        else
+            Assert.Null(primary.ConfirmationCopy);
+    }
+
+    public static IEnumerable<object[]> AllPrimaryActionCases()
+    {
+        var receivedOwner = Actions(MakeReceived(), OwnerWrite());
+        yield return [receivedOwner, NoAttention, KeepRequestStatus.Received];
+        yield return [receivedOwner, AttentionWithGuidance("respond_to_customer"), KeepRequestStatus.Received];
+        yield return [receivedOwner, AttentionWithGuidance("log_external_contact"), KeepRequestStatus.Received];
+        yield return [receivedOwner, AttentionWithGuidance("acknowledge_attention"), KeepRequestStatus.Received];
+        yield return [receivedOwner, AttentionWithGuidance("resolve_follow_up"), KeepRequestStatus.Received];
+
+        var resolved = MakeReceived();
+        resolved.ChangeStatus(KeepRequestStatus.Resolved, null, ActorId, ActorName, Now.AddHours(-1));
+        var resolvedOwner = Actions(resolved, OwnerWrite());
+        yield return [resolvedOwner, NoAttention, KeepRequestStatus.Resolved];
+    }
+
+    // -----------------------------------------------------------------------
+    // SelectMarkWorkDoneSecondary (Session 0A)
+    // -----------------------------------------------------------------------
+
+    [Fact]
+    public void SelectMarkWorkDoneSecondary_null_when_no_attention_because_it_is_primary_instead()
+    {
+        var r = MakeReceived();
+        var actions = Actions(r, OwnerWrite());
+
+        Assert.Null(KeepRequestActionPolicy.SelectMarkWorkDoneSecondary(actions, NoAttention, r.Status));
+    }
+
+    [Fact]
+    public void SelectMarkWorkDoneSecondary_populated_when_eligible_and_attention_active()
+    {
+        var r = MakeReceived();
+        var actions = Actions(r, OwnerWrite());
+        var attention = AttentionWithGuidance("respond_to_customer");
+
+        var secondary = KeepRequestActionPolicy.SelectMarkWorkDoneSecondary(actions, attention, r.Status);
+
+        Assert.NotNull(secondary);
+        Assert.Equal("mutation", secondary!.Target);
+        Assert.Equal("attention_remains", secondary.Consequence);
+
+        // Never coexists with mark_work_done as PrimaryAction.
+        var primary = KeepRequestActionPolicy.SelectPrimaryAction(actions, attention, r.Status);
+        Assert.NotEqual("mark_work_done", primary?.Key);
+    }
+
+    [Fact]
+    public void SelectMarkWorkDoneSecondary_null_when_not_eligible_even_with_attention()
+    {
+        var r = MakeClosed();
+        var actions = Actions(r, OwnerWrite());
+        var attention = AttentionWithGuidance("respond_to_customer");
+
+        Assert.Null(KeepRequestActionPolicy.SelectMarkWorkDoneSecondary(actions, attention, r.Status));
+    }
 }

@@ -55,6 +55,18 @@ internal static class KeepRequestDetailMapper
                 CanConfirmAsCurrentUser: request.PendingNotificationPreparedByAccountUserId == currentUserId)
             : null;
 
+        // Session 0A: EffectiveAttention must be computed before PrimaryAction/MarkWorkDoneSecondary
+        // — it is the only clock-dependent input the pure selectors need. availableActions is the
+        // server's own authoritative projection of the action decision, never client input.
+        var effectiveAttention = ComputeEffectiveAttention(request, nowUtc);
+        var availableActionsWithPrimary = availableActions with
+        {
+            PrimaryAction = KeepRequestActionPolicy.SelectPrimaryAction(
+                availableActions, effectiveAttention, request.Status),
+            MarkWorkDoneSecondary = KeepRequestActionPolicy.SelectMarkWorkDoneSecondary(
+                availableActions, effectiveAttention, request.Status),
+        };
+
         return new(
         RequestId: request.Id,
         ReferenceCode: request.ReferenceCode,
@@ -83,7 +95,7 @@ internal static class KeepRequestDetailMapper
         WaitingDirection: MapWaitingDirection(request.WaitingDirection),
         AttentionReason: request.AttentionReason.HasValue
             ? MapAttentionReason(request.AttentionReason.Value) : null,
-        EffectiveAttention: ComputeEffectiveAttention(request, nowUtc),
+        EffectiveAttention: effectiveAttention,
         PriorityBand: MapPriorityBand(request.PriorityBand),
         AttentionSinceUtc: request.AttentionSinceUtc,
         NextAttentionAtUtc: request.NextAttentionAtUtc,
@@ -117,16 +129,19 @@ internal static class KeepRequestDetailMapper
         Participants: participants.Select(MapParticipant).ToList(),
         CurrentUserParticipation: currentUserParticipation,
         Events: events.Select(MapEvent).ToList(),
-        AvailableActions: availableActions,
+        AvailableActions: availableActionsWithPrimary,
         Validation: ValidationHints,
         Navigation: navigation,
         PendingNotification: pendingNotification);
     }
 
     /// <summary>
-    /// Converts a shared action decision to the 11-field AvailableActionsMetadata response contract.
+    /// Converts a shared action decision to the AvailableActionsMetadata response contract.
     /// Services must use this method; they must not reconstruct the fields independently (ADR-328).
     /// AllowedStatuses are mapped to string slugs here; the decision carries enum values internally.
+    /// PrimaryAction/MarkWorkDoneSecondary are left null here — they depend on EffectiveAttentionResult,
+    /// which only ToDetailResult can compute (the sole clock-dependent step); ToDetailResult fills
+    /// them in via SelectPrimaryAction/SelectMarkWorkDoneSecondary before returning.
     /// </summary>
     internal static AvailableActionsMetadata ToAvailableActionsMetadata(KeepRequestActionDecision decision) =>
         new(
@@ -143,11 +158,14 @@ internal static class KeepRequestDetailMapper
             CanMarkFeedbackReviewed: decision.CanMarkFeedbackReviewed,
             CanSetFollowUpOn:        decision.CanSetFollowUpOn,
             CanSetPlannedFor:        decision.CanSetPlannedFor,
+            CanResolveFollowUp:      decision.CanResolveFollowUp,
             CanClose:                    decision.CanClose,
             CanClassify:                 decision.CanClassify,
             CanRecordShareIntent:        decision.CanRecordShareIntent,
             CanCreateFollowUpRequest:    decision.CanCreateFollowUpRequest,
-            AllowedStatuses:             decision.AllowedStatuses.Select(MapStatus).ToList());
+            AllowedStatuses:             decision.AllowedStatuses.Select(MapStatus).ToList(),
+            PrimaryAction:               null,
+            MarkWorkDoneSecondary:       null);
 
     internal static KeepRequestStatus? ParseStatusSlug(string? slug)
     {

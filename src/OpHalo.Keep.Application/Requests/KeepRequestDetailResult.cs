@@ -113,6 +113,33 @@ public sealed record PendingNotificationSummary(
     bool CanConfirmAsCurrentUser);
 
 /// <summary>
+/// Server-authorized single current primary action for a request (Session 0A). Null when no
+/// action is safely recommendable. Target names the concrete UI surface the client must invoke —
+/// the client performs no key-to-behavior translation. RequiresConfirmation true always pairs
+/// with a non-null, non-empty ConfirmationCopy; false always pairs with a null ConfirmationCopy.
+/// </summary>
+public sealed record PrimaryActionMetadata(
+    string Key,              // acknowledge_attention | resolve_follow_up | respond_to_customer
+                              // | log_external_contact | mark_work_done | close_request
+    string Label,
+    string Target,           // mutation | customer_update_composer | attention_sheet
+                              // | contact_sheet | follow_up_sheet
+    bool RequiresConfirmation,
+    string? ConfirmationCopy);
+
+/// <summary>
+/// Server-authored secondary "mark work done" surface for the one case where the action is
+/// authorized but effective attention keeps it out of the primary slot (Session 0A). Never
+/// populated alongside PrimaryAction carrying "mark_work_done" — precedence guarantees the two
+/// are mutually exclusive. Consequence is a bounded key, not prose; today's only value is
+/// "attention_remains".
+/// </summary>
+public sealed record MarkWorkDoneSecondaryMetadata(
+    string Label,
+    string Target,           // always "mutation"
+    string Consequence);
+
+/// <summary>
 /// Server-computed UI metadata so the frontend can render action buttons and inline
 /// validation hints without extra round-trips. Server validation remains authoritative.
 /// </summary>
@@ -130,11 +157,14 @@ public sealed record AvailableActionsMetadata(
     bool CanMarkFeedbackReviewed,
     bool CanSetFollowUpOn,
     bool CanSetPlannedFor,
+    bool CanResolveFollowUp,
     bool CanClose,
     bool CanClassify,
     bool CanRecordShareIntent,
     bool CanCreateFollowUpRequest,
-    IReadOnlyList<string> AllowedStatuses);
+    IReadOnlyList<string> AllowedStatuses,
+    PrimaryActionMetadata? PrimaryAction,
+    MarkWorkDoneSecondaryMetadata? MarkWorkDoneSecondary);
 
 /// <summary>
 /// Static validation constants for operator write actions. Sent with every operator
