@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { User, X } from "lucide-react";
-import { api, ApiError, type KeepRequestDetailResult } from "../../lib/apiClient";
+import { api, ApiError, type KeepRequestDetailResult, type ListMembersResponse } from "../../lib/apiClient";
 import { FOCUS_RING } from "./helpers";
 import { ResponsiveSheet } from "../../components/keep/ResponsiveSheet";
 import { KeepButton } from "../../components/keep/KeepButton";
@@ -20,15 +20,17 @@ interface TeamSectionProps {
   bare?: boolean;
   // Required when compact — opens OwnerReassignmentSheet. Unused in full mode.
   onOpenReassign?: () => void;
+  // Required when compact — opens WatchersSheet (controller-owned overlay, same pattern as
+  // onOpenReassign). Unused in full mode, which renders the watcher list inline instead.
+  onOpenWatchers?: () => void;
 }
 
-export function TeamSection({ requestId, detail, onDetailUpdated, compact = false, bare = false, onOpenReassign }: TeamSectionProps) {
+export function TeamSection({ requestId, detail, onDetailUpdated, compact = false, bare = false, onOpenReassign, onOpenWatchers }: TeamSectionProps) {
   const { canWatch, canUnwatch, canMute, canUnmute, canAssignResponsible } =
     detail.availableActions;
 
   const [submitting, setSubmitting] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [addWatcherUserId, setAddWatcherUserId] = useState("");
 
   const { data: membersData } = useQuery({
     queryKey: ["members"],
@@ -48,14 +50,12 @@ export function TeamSection({ requestId, detail, onDetailUpdated, compact = fals
   const watchers = detail.participants.filter(
     (p) => p.participationType === "watching" && !p.detachedAtUtc,
   );
-  const watcherIds = useMemo(() => new Set(watchers.map((w) => w.accountUserId)), [watchers]);
-  const addableWatchers = activeMembers.filter((m) => !watcherIds.has(m.accountUserId));
 
   // compact (Anchor owner context): show if there's an owner to display or a way to assign one.
   // full (record-details disclosure): the assigned-owner row is omitted (Anchor already shows
   // it), so this mode is only worth rendering for watcher/mute content.
   const hasTeamContent = compact
-    ? !!responsible || canAssignResponsible
+    ? !!responsible || canAssignResponsible || canWatch || canUnwatch || watchers.length > 0
     : canWatch || canUnwatch || canMute || canUnmute || watchers.length > 0;
 
   if (!hasTeamContent) return null;
@@ -77,8 +77,6 @@ export function TeamSection({ requestId, detail, onDetailUpdated, compact = fals
       setSubmitting(null);
     }
   }
-
-  const inlineBtnCls = `rounded-md px-2.5 py-1.5 text-xs font-semibold bg-[var(--ophalo-navy)] text-white hover:opacity-90 disabled:opacity-50 transition-colors ${FOCUS_RING}`;
 
   const errorBlock = error && (
     <p className="rounded-lg p-2 text-xs bg-[var(--ophalo-danger-bg)] text-[var(--ophalo-danger)]">
@@ -140,6 +138,44 @@ export function TeamSection({ requestId, detail, onDetailUpdated, compact = fals
       <div className="flex flex-col gap-1">
         {errorBlock}
         {assignedBlock}
+        {/* One-click Watch/Watching toggle (desktop closeout, 2026-08-25) — a notification
+            subscription, not assignment or responsibility. */}
+        {(canWatch || canUnwatch) && (
+          <button
+            type="button"
+            disabled={!!submitting}
+            aria-pressed={canUnwatch}
+            onClick={() =>
+              void act(canWatch ? "watch" : "unwatch", () =>
+                canWatch
+                  ? api.selfWatch(requestId, detail.version)
+                  : api.selfUnwatch(requestId, detail.version),
+              )
+            }
+            className={`text-xs font-semibold text-left disabled:opacity-60 transition-colors ${FOCUS_RING} rounded ${
+              canUnwatch ? "text-[var(--ophalo-ink)]" : "text-[var(--keep-accent)] hover:underline"
+            }`}
+          >
+            {submitting === "watch"
+              ? "Watching…"
+              : submitting === "unwatch"
+                ? "Unwatching…"
+                : canUnwatch
+                  ? "Watching"
+                  : "Watch"}
+          </button>
+        )}
+        {/* Broader watcher management stays behind a disclosure — same add/remove authorization,
+            error handling, and role visibility as the Record Details surface (locked 2026-08-25). */}
+        {(watchers.length > 0 || canAssignResponsible) && (
+          <button
+            type="button"
+            onClick={onOpenWatchers}
+            className={`text-xs font-semibold text-left text-[var(--keep-accent)] hover:underline transition-colors ${FOCUS_RING} rounded`}
+          >
+            Watchers &middot; {watchers.length}
+          </button>
+        )}
       </div>
     );
   }
@@ -153,63 +189,14 @@ export function TeamSection({ requestId, detail, onDetailUpdated, compact = fals
       {/* Assigned owner is already shown in the Anchor's compact owner context — not repeated here. */}
 
       {/* Watching */}
-      {(watchers.length > 0 || canAssignResponsible) && (
-        <div>
-          <p className="text-xs text-[var(--ophalo-muted)] mb-1">Watching</p>
-          {watchers.length === 0 && (
-            <p className="text-xs text-[var(--ophalo-muted)]">No watchers</p>
-          )}
-          {watchers.map((w) => (
-            <div key={w.accountUserId} className="flex items-center justify-between gap-2 mb-1">
-              <span className="text-xs text-[var(--ophalo-ink)]">{w.displayName}</span>
-              {canAssignResponsible && (
-                <button
-                  type="button"
-                  disabled={!!submitting}
-                  onClick={() =>
-                    void act(`remove-watcher-${w.accountUserId}`, () =>
-                      api.removeWatcher(requestId, w.accountUserId, detail.version),
-                    )
-                  }
-                  className={`text-xs text-[var(--ophalo-muted)] underline hover:text-[var(--ophalo-ink)] disabled:opacity-50 transition-colors ${FOCUS_RING}`}
-                >
-                  {submitting === `remove-watcher-${w.accountUserId}` ? "Removing…" : "Remove"}
-                </button>
-              )}
-            </div>
-          ))}
-          {canAssignResponsible && addableWatchers.length > 0 && (
-            <div className="flex gap-2 mt-1.5">
-              <label htmlFor="add-watcher-select" className="sr-only">Add watcher</label>
-              <select
-                id="add-watcher-select"
-                value={addWatcherUserId}
-                onChange={(e) => setAddWatcherUserId(e.target.value)}
-                disabled={!!submitting}
-                className={`flex-1 min-w-0 rounded-lg border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-2 py-1.5 text-xs text-[var(--ophalo-ink)] disabled:opacity-60 focus:outline-none focus:ring-1 focus:ring-[var(--keep-accent)]`}
-              >
-                <option value="">Add watcher…</option>
-                {addableWatchers.map((m) => (
-                  <option key={m.accountUserId} value={m.accountUserId}>{m.email}</option>
-                ))}
-              </select>
-              <button
-                type="button"
-                disabled={!addWatcherUserId || !!submitting}
-                onClick={() => {
-                  if (!addWatcherUserId) return;
-                  void act("add-watcher", () =>
-                    api.addWatcher(requestId, addWatcherUserId, detail.version),
-                  ).then(() => setAddWatcherUserId(""));
-                }}
-                className={inlineBtnCls}
-              >
-                {submitting === "add-watcher" ? "Adding…" : "Add"}
-              </button>
-            </div>
-          )}
-        </div>
-      )}
+      <WatcherListFields
+        requestId={requestId}
+        detail={detail}
+        onDetailUpdated={onDetailUpdated}
+        watchers={watchers}
+        canAssignResponsible={canAssignResponsible}
+        activeMembers={activeMembers}
+      />
 
       {/* Self participation: watch / mute */}
       {(canWatch || canUnwatch || canMute || canUnmute) && (
@@ -258,6 +245,190 @@ export function TeamSection({ requestId, detail, onDetailUpdated, compact = fals
       )}
 
     </div>
+  );
+}
+
+interface WatcherListFieldsProps {
+  requestId: string;
+  detail: KeepRequestDetailResult;
+  onDetailUpdated: (updated: KeepRequestDetailResult) => void;
+  watchers: KeepRequestDetailResult["participants"];
+  canAssignResponsible: boolean;
+  activeMembers: ListMembersResponse["members"];
+}
+
+/**
+ * Watcher list + add/remove markup, shared by TeamSection's full/bare Record details card and
+ * WatchersSheet's compact-column disclosure — one copy of the add/remove authorization, error
+ * handling, and role visibility so the two surfaces can't drift apart.
+ */
+function WatcherListFields({
+  requestId,
+  detail,
+  onDetailUpdated,
+  watchers,
+  canAssignResponsible,
+  activeMembers,
+}: WatcherListFieldsProps) {
+  const [submitting, setSubmitting] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [addWatcherUserId, setAddWatcherUserId] = useState("");
+
+  const watcherIds = useMemo(() => new Set(watchers.map((w) => w.accountUserId)), [watchers]);
+  // Responsible and Watching are mutually exclusive (ADR-224/230) — the backend rejects adding
+  // the current owner as a watcher, so exclude them here too rather than surfacing a generic
+  // "Action failed" on submit. Same exclusion OwnerReassignmentSheet's "Reassign to" list applies.
+  const responsible = detail.participants.find(
+    (p) => p.participationType === "responsible" && !p.detachedAtUtc,
+  );
+  const addableWatchers = activeMembers.filter(
+    (m) => !watcherIds.has(m.accountUserId) && m.accountUserId !== responsible?.accountUserId,
+  );
+
+  async function act(key: string, fn: () => Promise<KeepRequestDetailResult>) {
+    if (submitting) return;
+    setSubmitting(key);
+    setError(null);
+    try {
+      const updated = await fn();
+      onDetailUpdated(updated);
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 409) {
+        setError("Updated by another team member. Refresh to retry.");
+      } else {
+        setError("Action failed. Try again.");
+      }
+    } finally {
+      setSubmitting(null);
+    }
+  }
+
+  if (!(watchers.length > 0 || canAssignResponsible)) return null;
+
+  const inlineBtnCls = `rounded-md px-2.5 py-1.5 text-xs font-semibold bg-[var(--ophalo-navy)] text-white hover:opacity-90 disabled:opacity-50 transition-colors ${FOCUS_RING}`;
+
+  return (
+    <div>
+      {error && (
+        <p className="rounded-lg p-2 text-xs mb-1.5 bg-[var(--ophalo-danger-bg)] text-[var(--ophalo-danger)]">
+          {error}
+        </p>
+      )}
+      <p className="text-xs text-[var(--ophalo-muted)] mb-1">Watching</p>
+      {watchers.length === 0 && (
+        <p className="text-xs text-[var(--ophalo-muted)]">No watchers</p>
+      )}
+      {watchers.map((w) => (
+        <div key={w.accountUserId} className="flex items-center justify-between gap-2 mb-1">
+          <span className="text-xs text-[var(--ophalo-ink)]">{w.displayName}</span>
+          {canAssignResponsible && (
+            <button
+              type="button"
+              disabled={!!submitting}
+              onClick={() =>
+                void act(`remove-watcher-${w.accountUserId}`, () =>
+                  api.removeWatcher(requestId, w.accountUserId, detail.version),
+                )
+              }
+              className={`text-xs text-[var(--ophalo-muted)] underline hover:text-[var(--ophalo-ink)] disabled:opacity-50 transition-colors ${FOCUS_RING}`}
+            >
+              {submitting === `remove-watcher-${w.accountUserId}` ? "Removing…" : "Remove"}
+            </button>
+          )}
+        </div>
+      ))}
+      {canAssignResponsible && addableWatchers.length > 0 && (
+        <div className="flex gap-2 mt-1.5">
+          <label htmlFor="add-watcher-select" className="sr-only">Add watcher</label>
+          <select
+            id="add-watcher-select"
+            value={addWatcherUserId}
+            onChange={(e) => setAddWatcherUserId(e.target.value)}
+            disabled={!!submitting}
+            className={`flex-1 min-w-0 rounded-lg border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-2 py-1.5 text-xs text-[var(--ophalo-ink)] disabled:opacity-60 focus:outline-none focus:ring-1 focus:ring-[var(--keep-accent)]`}
+          >
+            <option value="">Add watcher…</option>
+            {addableWatchers.map((m) => (
+              <option key={m.accountUserId} value={m.accountUserId}>{m.email}</option>
+            ))}
+          </select>
+          <button
+            type="button"
+            disabled={!addWatcherUserId || !!submitting}
+            onClick={() => {
+              if (!addWatcherUserId) return;
+              void act("add-watcher", () =>
+                api.addWatcher(requestId, addWatcherUserId, detail.version),
+              ).then(() => setAddWatcherUserId(""));
+            }}
+            className={inlineBtnCls}
+          >
+            {submitting === "add-watcher" ? "Adding…" : "Add"}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+interface WatchersSheetProps {
+  requestId: string;
+  detail: KeepRequestDetailResult;
+  onDetailUpdated: (updated: KeepRequestDetailResult) => void;
+  onClose: () => void;
+}
+
+/**
+ * Controller-owned overlay for the Anchor's compact Watchers·N disclosure — same pattern as
+ * OwnerReassignmentSheet. Wraps WatcherListFields, the same markup/mutation logic the Record
+ * Details card uses, so watcher management behaves identically from either entry point.
+ */
+export function WatchersSheet({ requestId, detail, onDetailUpdated, onClose }: WatchersSheetProps) {
+  const { canAssignResponsible } = detail.availableActions;
+
+  const { data: membersData } = useQuery({
+    queryKey: ["members"],
+    queryFn: () => api.listMembers(),
+    enabled: canAssignResponsible,
+    staleTime: 5 * 60 * 1000,
+  });
+  const activeMembers = useMemo(
+    () => membersData?.members.filter((m) => m.status === "active") ?? [],
+    [membersData],
+  );
+  const watchers = detail.participants.filter(
+    (p) => p.participationType === "watching" && !p.detachedAtUtc,
+  );
+
+  return (
+    <ResponsiveSheet
+      onClose={onClose}
+      labelledBy="watchers-sheet-heading"
+      header={
+        <div className="flex items-center justify-between">
+          <h2 id="watchers-sheet-heading" className="text-base font-semibold text-[var(--ophalo-ink)]">
+            Watchers
+          </h2>
+          <button
+            type="button"
+            onClick={onClose}
+            className={`text-[var(--ophalo-muted)] hover:text-[var(--ophalo-ink)] p-1 rounded-md transition-colors ${FOCUS_RING}`}
+          >
+            <X className="h-4 w-4" />
+            <span className="sr-only">Close</span>
+          </button>
+        </div>
+      }
+    >
+      <WatcherListFields
+        requestId={requestId}
+        detail={detail}
+        onDetailUpdated={onDetailUpdated}
+        watchers={watchers}
+        canAssignResponsible={canAssignResponsible}
+        activeMembers={activeMembers}
+      />
+    </ResponsiveSheet>
   );
 }
 

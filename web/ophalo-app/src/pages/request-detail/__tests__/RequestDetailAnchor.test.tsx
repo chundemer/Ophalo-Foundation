@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { RequestDetailAnchor } from "../RequestDetailAnchor";
 import { mockRequestDetails, OWNER_ACTIONS } from "../../../mocks/fixtures";
@@ -33,6 +34,7 @@ function renderAnchor(detail: KeepRequestDetailResult) {
         onContactLaunched={vi.fn()}
         onEditLocation={vi.fn()}
         onOpenReassignOwner={vi.fn()}
+        onOpenWatchers={vi.fn()}
         onRecordFollowUp={vi.fn()}
         onCreateFollowUp={vi.fn()}
         onReviewSuccess={vi.fn()}
@@ -211,5 +213,57 @@ describe("RequestDetailAnchor — three-row desktop hierarchy", () => {
     // Factual context remains visible even when no mutation is authorized
     expect(screen.getByText("Customer contact")).toBeInTheDocument();
     expect(screen.getByText("Service location")).toBeInTheDocument();
+  });
+
+  // Desktop closeout (2026-08-25): one-click Watch/Watching toggle + Watchers·N disclosure
+  // promoted into the Owner & team column.
+  it("shows a one-click Watch toggle and a Watchers·N disclosure trigger in the Owner & team column", () => {
+    const detail = baseDetail(); // OWNER_ACTIONS: canWatch true, canUnwatch false; 0 watchers
+    renderAnchor(detail);
+
+    expect(screen.getByRole("button", { name: "Watch" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Watchers · 0" })).toBeInTheDocument();
+  });
+
+  it("shows 'Watching' (pressed) instead of 'Watch' once the viewer is already watching", () => {
+    const detail: KeepRequestDetailResult = {
+      ...baseDetail(),
+      availableActions: { ...OWNER_ACTIONS, canWatch: false, canUnwatch: true },
+    };
+    renderAnchor(detail);
+
+    const button = screen.getByRole("button", { name: "Watching" });
+    expect(button).toHaveAttribute("aria-pressed", "true");
+    expect(screen.queryByRole("button", { name: "Watch" })).not.toBeInTheDocument();
+  });
+
+  it("invokes onOpenWatchers when the Watchers·N trigger is clicked", async () => {
+    const detail = baseDetail();
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const onOpenWatchers = vi.fn();
+    render(
+      <QueryClientProvider client={queryClient}>
+        <RequestDetailAnchor
+          requestId="req-1"
+          detail={detail}
+          highlights={{}}
+          showProminentFeedbackCard={false}
+          onDetailUpdated={vi.fn()}
+          onContactLaunched={vi.fn()}
+          onEditLocation={vi.fn()}
+          onOpenReassignOwner={vi.fn()}
+          onOpenWatchers={onOpenWatchers}
+          onRecordFollowUp={vi.fn()}
+          onCreateFollowUp={vi.fn()}
+          onReviewSuccess={vi.fn()}
+          canRecordShareIntent={false}
+          needsShare={false}
+          onOpenShareDrawer={vi.fn()}
+        />
+      </QueryClientProvider>,
+    );
+
+    await userEvent.setup().click(screen.getByRole("button", { name: "Watchers · 0" }));
+    expect(onOpenWatchers).toHaveBeenCalledTimes(1);
   });
 });

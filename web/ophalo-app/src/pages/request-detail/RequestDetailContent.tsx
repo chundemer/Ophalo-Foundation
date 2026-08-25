@@ -47,8 +47,8 @@ interface RequestDetailContentProps extends RequestDetailLayoutProps {
 // Scope is explicitly deferred from this pilot Workbench (locked spec §1.7/§3) and is not wired
 // here.
 export function RequestDetailContent(props: RequestDetailContentProps) {
-  const { detail, requestId, highlights, showProminentFeedbackCard, onDetailUpdated, onContactLaunched, onEditLocation, onOpenReassignOwner, onRecordFollowUp, onCreateFollowUp, onReviewSuccess, onOpenClearAttention } = props;
-  const layoutProps: RequestDetailLayoutProps = { requestId, detail, highlights, showProminentFeedbackCard, onDetailUpdated, onContactLaunched, onEditLocation, onOpenReassignOwner, onRecordFollowUp, onCreateFollowUp, onReviewSuccess };
+  const { detail, requestId, highlights, showProminentFeedbackCard, onDetailUpdated, onContactLaunched, onEditLocation, onOpenReassignOwner, onOpenWatchers, onRecordFollowUp, onCreateFollowUp, onReviewSuccess, onOpenClearAttention } = props;
+  const layoutProps: RequestDetailLayoutProps = { requestId, detail, highlights, showProminentFeedbackCard, onDetailUpdated, onContactLaunched, onEditLocation, onOpenReassignOwner, onOpenWatchers, onRecordFollowUp, onCreateFollowUp, onReviewSuccess };
   const actualWorkCapture = useActualWorkCapture(requestId);
   const actualWorkHistory = useActualWorkHistory(requestId);
   const actualWorkCardVisible = actualWorkCapture.state.status === "no-draft" || actualWorkCapture.state.status === "draft";

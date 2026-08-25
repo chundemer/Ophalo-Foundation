@@ -65,6 +65,7 @@ describe("RequestDetailContent — Canvas max-width frame", () => {
         onContactLaunched={vi.fn()}
         onEditLocation={vi.fn()}
         onOpenReassignOwner={vi.fn()}
+        onOpenWatchers={vi.fn()}
         onOpenClearAttention={vi.fn()}
         onRecordFollowUp={vi.fn()}
         onCreateFollowUp={vi.fn()}

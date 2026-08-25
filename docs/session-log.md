@@ -14,93 +14,68 @@
 
 ## Current work
 
-### Frontend — DetailHero danger variant for legitimate overdue states — complete (2026-08-25)
+No active batch. Two design questions are still unscheduled — not implementation-ready, no code
+selected:
 
-**Origin:** a UI screenshot review surfaced that a request's exception reads amber ("Customer
-message") in the Request Detail hero while the same request reads red/danger ("Customer replied ·
-Aug 24") in the queue list. Preflight against ADR-489/ADR-490 and the
-[Request Detail API preflight](ux-design/v2/request-detail-workbench-api-preflight.md) traced this
-to two distinct findings — one scoped out, one confirmed in scope:
+- **Latest customer message companion.** Do not add a new tab merely to show the initial request
+  and latest customer message — the permanent **Customer need** module already owns the original
+  request and a tab would hide it and duplicate timeline state. If screenshot review shows
+  insufficient scanability, consider a compact, non-tab **Latest customer message** companion
+  beneath Customer need, only when a customer message exists, with a path to the full history.
+- **Actual Work draft badge.** `ActualWorkCard` already says `Draft visit started` / `Draft visit
+  in progress`. Evaluate a small, persistent **Draft — not submitted** badge next to the Actual
+  work title for an open draft. Use attention/neutral styling — not danger or success — and
+  retain the existing line-count and Resume/Continue copy. Do not conflate with customer-update
+  text drafts or proposed-scope drafts.
 
-**Scoped out (2026-08-25) — case-1 (persisted attention) severity divergence is intentional, not a bug.**
-The list's red coloring for this specific request comes from `overdueBusinessWaiting`
-(`GetKeepRequestListService.cs:687`, live-checks `WaitingDirection.Business` +
-`NextAttentionAtUtc < now`), which folds into the same `"overdue_business_waiting"` ranking group
-as `firstResponseOverdue` (`GetKeepRequestListService.cs:827-828`) — the group backing the ADR-192
-"Response overdue" badge. The API preflight doc explicitly cross-checked ADR-192 and recorded it as
-**"list-side... list-only, not detail, and not contradicted by anything proposed here"**
-(`request-detail-workbench-api-preflight.md:301`). `KeepRequestDetailMapper.cs`'s case-1 branch
-(`ComputeEffectiveAttention`) returns `MapAttentionLevel(request.AttentionLevel)` with no equivalent
-live-deadline check — this is that locked list-only boundary holding, not an oversight. Decision
-(Christian, 2026-08-25): the explicit ADR-192 cross-check outweighs the plausible "stale case-1"
-reading; queue's red escalation is intentional list-level triage. Detail's persisted-attention
-presentation stays amber unless a future decision reopens this contract. No code change from this
-finding.
+The 2026-08-24/25 resolved defects and attention-presentation decisions are recorded in the
+[pilot-readiness bug tracker](pilot-readiness-bug-tracker.md#p0p1-pilot-flow-bugs).
 
-**Confirmed in scope — `DetailHeroBadges` ignores `effectiveAttention.level` for cases the detail API
-already legitimately computes.** `DetailHero.tsx:153` hardcodes `variant="attention"` on the
-exception `KeepBadge` and only swaps the icon (`AlertTriangle` vs `Clock`) when
-`attention.level === "overdue"` — color never changes. This is independent of the case-1 question
-above: ADR-489/490 already give the detail API legitimate `"overdue"` levels for case 2
-(Follow-Up due/overdue) and case 3 (first-response overdue) via `ComputeEffectiveAttention`:
-`KeepRequestDetailMapper.cs:410`. Those overdue states should render as `danger`, matching
-`RequestRow.tsx`'s `exceptionVariant()` pattern (`tone === "danger" ? "danger" : "attention"`), not
-stay amber.
+## Completed-work archive
 
-**Resolved (2026-08-25) — label-text divergence is intentional, not a bug.** The list-scan
-`"Customer replied"` (`RequestRow.tsx:31`) vs. detail current-state `"Customer message"`
-(`helpers.ts:151`) wording for the same `customer_message` reason is a deliberate register
-difference, not drift. Decision (Christian, 2026-08-25): `"Customer replied"` is compact scanning
-language for the queue; `"Customer message"` is the more neutral, accurate label for the request's
-current-state detail context. Since severity behavior for this same reason is also intentionally
-different by surface (see the case-1 scoped-out finding above), forcing identical wording would
-imply a shared meaning the UI does not actually use. No code change; both labels stay as-is.
+### Frontend — Desktop closeout: header contact preference + Watch/Watchers disclosure — complete (2026-08-25)
 
-**Fix:** `DetailHero.tsx`'s `DetailHeroBadges` now renders `variant={attention.level === "overdue" ?
-"danger" : "attention"}` on the exception `KeepBadge`, matching `RequestRow.tsx`'s
-`exceptionVariant()` pattern and the shared `--ophalo-danger`/`--ophalo-danger-bg` tokens. One call
-site (`RequestDetailAnchor.tsx`); no other caller depended on the always-amber assumption.
+**Goal:** make the customer's communication preference and the current operator's watch state
+visible above the fold without turning the Request Detail header into a dense control dashboard.
 
-Files: `web/ophalo-app/src/pages/request-detail/DetailHero.tsx`,
-`web/ophalo-app/src/pages/request-detail/__tests__/DetailHeroBadges.attentionVariant.test.tsx` (new).
+**Decisions locked:**
+- Header contact preference (`CustomerContactStrip`) is source-agnostic — shown whenever a real
+  preference is set, omitted for `no_preference`/unset. Record Details' `CustomerSignalPanel`
+  keeps its own public-intake-gated visibility and still shows "No preference" as intake-audit
+  context. Both surfaces share one `contactPreferenceLabel()` mapping (`DetailPanels.tsx`) so
+  wording can't drift, even though visibility rules differ by design.
+- One-click Watch/Watching toggle promoted into the Owner & team column, using the existing
+  `canWatch`/`canUnwatch`/`selfWatch`/`selfUnwatch` contract.
+- Broader watcher management stays behind a `Watchers · N` disclosure (`WatchersSheet`,
+  controller-owned overlay in `RequestDetail.tsx`, same pattern as `OwnerReassignmentSheet`). The
+  watcher list/add/remove markup was extracted into a shared `WatcherListFields` component reused
+  by both the sheet and the untouched Record Details card — one copy of the authorization/error
+  logic instead of two.
 
-No unresolved decisions.
+Files: `CustomerContactStrip.tsx`, `DetailPanels.tsx`, `RequestDetailAnchor.tsx`,
+`RequestDetailContent.tsx`, `TeamSection.tsx`, `RequestDetail.tsx`, plus updated/new focused tests.
 
-Verified: new focused test 2/2 passing (danger variant on `overdue`, attention variant otherwise);
-full `request-detail/__tests__` suite 209/209 passing (no regressions); `tsc --noEmit` clean;
-`git diff --check` clean.
+No unresolved decisions. Presentation-layer only; no customer-contact, assignment, or notification
+authority changed.
 
-### Frontend — request-card "Next:" action truncation — complete (2026-08-25)
+Verified: `tsc --noEmit` clean; full `request-detail` suite 218/218 passing; `git diff --check`
+clean.
 
-**Goal:** prevent overflow/wrap of the `Next: {promoted.label}` cue in the operator queue row
-(`ophalo-app`'s `RequestRow.tsx`). Confirmed via preflight: the span at
-`components/RequestRow.tsx:473` has no `truncate` class, so a long promoted-action label (e.g. a
-long next-step string) will wrap or overflow the card instead of clipping.
+### Frontend — Add-watcher list allowed selecting the current owner (BUG-010) — complete (2026-08-25)
 
-**Scope decision (2026-08-25):** raised alongside three other visual-bug observations from a UI
-screenshot review; only this one survived preflight as a real, unscoped gap. The other three were
-evaluated and dropped from this batch:
-- Tab active-state pill ("Attention" looking like an isolated badge) — not a bug: pane-mode tabs
-  already render equal-width (`flex-1`), and the filled-pill active state is the deliberate output
-  of the 2026-08-24 desktop-polish-pass decision (see that entry below), not a regression. Left
-  alone; would need a separate decision to change intentionally.
-- Dropdown-arrow padding on Internal Priority/Planned/Follow-up selects — the same 2026-08-24 batch
-  already checked this exact control and recorded "already adequately padded, no gap found." New
-  screenshot claim contradicts that finding; not re-opened without a fresh, closer measurement.
-- Red text on "Customer replied" exception badges — not a hardcoded color bug. Traced through
-  `RequestRow.tsx`'s `resolveException()`: the icon is already differentiated (`MessageSquare`, not
-  `AlertTriangle`) for that reason, and the color comes from `severityToTone(row.ranking.severity)`,
-  a backend-computed field — likely reflects a genuinely overdue response despite the customer
-  reply, not a copy/paste error. Left alone; would need backend ranking context to revisit.
+**Bug:** `KeepRequestParticipationService` already enforces Responsible/Watching mutual exclusion
+server-side (ADR-224/230), but `TeamSection.tsx`'s `addableWatchers` filter only excluded existing
+watchers, not the current Responsible — selecting them from "Add watcher…" and submitting failed
+with a generic "Action failed" message instead of being prevented up front.
 
-Files: `components/RequestRow.tsx` — `Next:` span (line 473) gets `truncate max-w-full` plus a
-`title` tooltip carrying the full text (kept deliberately per Christian: useful a11y/UX affordance
-for the exact truncated content, not meaningful inconsistency with the untitled `customerName`/
-`descriptionPreview` truncation elsewhere in the file).
+**Fix:** excluded the current Responsible from `addableWatchers`, matching
+`OwnerReassignmentSheet`'s existing exclusion of the same person from its "Reassign to" list.
 
-No unresolved decisions. Presentation-only, `ophalo-app` layer.
+Files: `TeamSection.tsx`; new test `TeamSection.watchers.test.tsx`.
 
-Verified: focused `RequestRow` suite 39/39 passing, `tsc --noEmit` clean, `git diff --check` clean.
+No unresolved decisions. Presentation-layer fix only; backend policy unchanged (already correct).
+
+Verified: full `request-detail` suite 218/218 passing.
 
 ### Frontend — Customer Tracker status badge — complete (2026-08-25)
 

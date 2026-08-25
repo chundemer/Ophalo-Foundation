@@ -9,7 +9,10 @@ profile safety, pilot value/support/observability/marketing gates, authenticated
 and list-scale/history/readability readiness, request-detail reliability/customer-continuity work,
 and frontend robustness/consistency findings from the 2026-07-17 launch verification review. Build
 087 is paused until they are triaged and the selected fixes are complete.
-**Recently resolved:** GAP-034 — `/start` conversion and existing-session redirect (commit
+**Recently resolved:** BUG-006 — explicit `status=resolved` returned no calm-resolved rows;
+BUG-007 — mock business-update event drift; BUG-008 — queue-row `Next:` cue overflow; BUG-009 —
+DetailHero rendered legitimate overdue attention amber; BUG-010 — add-watcher list allowed
+selecting the current owner (all resolved 2026-08-25); GAP-034 — `/start` conversion and existing-session redirect (commit
 `45cea22`, documentation completion `dfa554a`); GAP-036 — public-link/profile safety (GAP-036a
 `8085971`, GAP-036b `014bae5`, focus containment follow-up `aae9257`; live desktop/mobile keyboard
 verification completed 2026-07-19); GAP-035 — auth, invite, and recovery entry states (R90c-1
@@ -1576,6 +1579,77 @@ without recording it, so Needs Share can continue nagging after the operator alr
 
 Expected fix: after successful post-capture copy, call share-intent and refresh/align request detail
 state as needed.
+
+### BUG-006 — Explicit `status=resolved` filter returned no calm-resolved rows
+
+**Status:** Resolved — 2026-08-25
+**Severity:** P1
+**Area:** Keep request-list persistence
+
+**Cause:** The Default-view query excluded calm-resolved rows even when the caller explicitly
+requested `status=resolved`, making an intentional retrieval impossible.
+
+**Resolution:** The calm-resolved exclusion now yields to an explicit resolved-status filter while
+leaving the unfiltered Default queue focused on live work. Focused `KeepRequestListB5Tests`:
+33/33 passing.
+
+### BUG-007 — Mock business-update events diverged from the backend contract
+
+**Status:** Resolved — 2026-08-25
+**Severity:** P2
+**Area:** `ophalo-app` mock API client
+
+**Cause:** The mock emitted `visibility: "public"` and `messageIntent: "update"` for a business
+update, although the backend emits `"all"` and `"business_update"`.
+
+**Resolution:** Aligned the mock event values with `KeepRequestDetailMapper`; TypeScript and the
+focused notification test passed.
+
+### BUG-008 — Long request-row `Next:` cues could overflow the queue card
+
+**Status:** Resolved — 2026-08-25
+**Severity:** P2
+**Area:** `ophalo-app` request queue presentation
+
+**Cause:** The promoted-action span had no truncation constraint, allowing long labels to wrap or
+overflow a compact queue row.
+
+**Resolution:** Added `truncate max-w-full` and a full-text `title` tooltip to the `Next:` cue.
+Focused `RequestRow` tests: 39/39 passing.
+
+### BUG-009 — Detail Hero rendered legitimate overdue attention as amber
+
+**Status:** Resolved — 2026-08-25
+**Severity:** P2
+**Area:** `ophalo-app` Request Detail hero
+
+**Cause:** `DetailHeroBadges` always selected the attention badge variant, even when the detail
+API legitimately returned `effectiveAttention.level === "overdue"`; only its icon changed.
+
+**Resolution:** The hero now selects the danger variant for overdue effective attention and the
+attention variant otherwise. Focused coverage: 2/2; full request-detail suite: 209/209.
+
+**Related decisions:** The queue's live `overdueBusinessWaiting` escalation remains list-only per
+the ADR-192 cross-check; persisted detail attention stays amber unless that contract is reopened.
+`"Customer replied"` (queue scan) and `"Customer message"` (detail state) are intentional
+surface-specific wording, not a label-consistency defect.
+
+### BUG-010 — Add-watcher list let the current owner be selected
+
+**Status:** Resolved — 2026-08-25
+**Severity:** P2
+**Area:** `ophalo-app` Request Detail — watcher management
+
+**Cause:** `KeepRequestParticipationService` already enforces Responsible/Watching mutual
+exclusion server-side (ADR-224/230, `ParticipationResponsibleCannotWatch`), but the "Add
+watcher…" dropdown's `addableWatchers` filter only excluded existing watchers, not the current
+Responsible — selecting them and submitting failed with a generic "Action failed" message.
+Pre-existing; not introduced by the 2026-08-25 desktop closeout, just carried forward when that
+batch extracted the shared `WatcherListFields` component.
+
+**Resolution:** Excluded the current Responsible from `addableWatchers`, matching
+`OwnerReassignmentSheet`'s existing exclusion of the same person from its "Reassign to" list.
+New regression test `TeamSection.watchers.test.tsx`; full request-detail suite: 218/218.
 
 ## Locked-Scope Gaps
 

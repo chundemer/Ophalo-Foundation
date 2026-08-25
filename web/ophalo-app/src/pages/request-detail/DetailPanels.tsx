@@ -44,6 +44,7 @@ export interface RequestDetailLayoutProps {
   onContactLaunched: (direction: string, channel: string) => void;
   onEditLocation: () => void;
   onOpenReassignOwner: () => void;
+  onOpenWatchers: () => void;
   onRecordFollowUp: () => void;
   onCreateFollowUp: () => void;
   onReviewSuccess: () => void;
@@ -736,6 +737,25 @@ export function ServiceLocationPanel({ detail, onEditLocation }: ServiceLocation
   );
 }
 
+// Shared wording for the customer's set contact preference. Consumed by both the header's
+// source-agnostic CustomerContactStrip and the public-intake-gated CustomerSignalPanel below —
+// the two surfaces intentionally differ in *visibility* (header omits "no_preference", Record
+// details keeps it as intake-audit context), not in wording.
+export function contactPreferenceLabel(preference: string | null | undefined): string | null {
+  switch (preference) {
+    case "phone_call":
+      return "Prefers call";
+    case "text_message":
+      return "Prefers text";
+    case "email":
+      return "Prefers email";
+    case "no_preference":
+      return "No preference";
+    default:
+      return null;
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Customer signal panel — record-details-only surface for intake urgency/contact preference
 // ---------------------------------------------------------------------------
@@ -756,10 +776,9 @@ export function CustomerSignalPanel({ detail, bare = false }: CustomerSignalPane
       <div className="flex flex-wrap gap-1.5 mb-1.5">
         {detail.intakeUrgency === "urgent" && <KeepBadge variant="attention">Customer marked urgent</KeepBadge>}
         {detail.intakeUrgency === "soon" && <KeepBadge variant="default">Customer asked for soon follow-up</KeepBadge>}
-        {detail.contactPreference === "phone_call" && <KeepBadge variant="default">Prefers call</KeepBadge>}
-        {detail.contactPreference === "text_message" && <KeepBadge variant="default">Prefers text</KeepBadge>}
-        {detail.contactPreference === "email" && <KeepBadge variant="default">Prefers email</KeepBadge>}
-        {detail.contactPreference === "no_preference" && <KeepBadge variant="default">No preference</KeepBadge>}
+        {contactPreferenceLabel(detail.contactPreference) && (
+          <KeepBadge variant="default">{contactPreferenceLabel(detail.contactPreference)}</KeepBadge>
+        )}
       </div>
       <p className="text-xs text-[var(--ophalo-muted)]">
         Review the request, then update the customer or log contact if needed.

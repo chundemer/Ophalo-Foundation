@@ -37,6 +37,7 @@ export function RequestDetailAnchor({
   onContactLaunched,
   onEditLocation,
   onOpenReassignOwner,
+  onOpenWatchers,
   canRecordShareIntent,
   needsShare,
   onOpenShareDrawer,
@@ -79,11 +80,12 @@ export function RequestDetailAnchor({
             <CustomerContactStrip
               phone={detail.customerPhone ?? null}
               email={detail.customerEmail ?? null}
+              contactPreference={detail.contactPreference ?? null}
               onContactLaunched={onContactLaunched}
             />
             <ServiceLocationPanel detail={detail} onEditLocation={onEditLocation} />
             <div className="flex flex-col gap-1.5">
-              <TeamSection requestId={requestId} detail={detail} onDetailUpdated={onDetailUpdated} compact onOpenReassign={onOpenReassignOwner} />
+              <TeamSection requestId={requestId} detail={detail} onDetailUpdated={onDetailUpdated} compact onOpenReassign={onOpenReassignOwner} onOpenWatchers={onOpenWatchers} />
               {detail.pageToken && (
                 <CustomerPageHeroActions
                   pageToken={detail.pageToken}

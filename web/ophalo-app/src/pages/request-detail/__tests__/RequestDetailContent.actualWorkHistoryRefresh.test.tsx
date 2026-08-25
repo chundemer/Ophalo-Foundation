@@ -83,6 +83,7 @@ describe("RequestDetailContent — Actual Work submit refreshes history (Batch 5
         onContactLaunched={vi.fn()}
         onEditLocation={vi.fn()}
         onOpenReassignOwner={vi.fn()}
+        onOpenWatchers={vi.fn()}
         onOpenClearAttention={vi.fn()}
         onRecordFollowUp={vi.fn()}
         onCreateFollowUp={vi.fn()}
@@ -120,6 +121,7 @@ describe("RequestDetailContent — Proposed Scope removal (locked Workbench spec
         onContactLaunched={vi.fn()}
         onEditLocation={vi.fn()}
         onOpenReassignOwner={vi.fn()}
+        onOpenWatchers={vi.fn()}
         onOpenClearAttention={vi.fn()}
         onRecordFollowUp={vi.fn()}
         onCreateFollowUp={vi.fn()}
