@@ -47,10 +47,14 @@ above: ADR-489/490 already give the detail API legitimate `"overdue"` levels for
 `RequestRow.tsx`'s `exceptionVariant()` pattern (`tone === "danger" ? "danger" : "attention"`), not
 stay amber.
 
-**Deferred separately, not part of this fix:** the label-text mismatch (`RequestRow.tsx:31`
-`"Customer replied"` vs `helpers.ts:151` `"Customer message"` for the same `customer_message`
-reason) — still unconfirmed whether the two registers (list scanning vs. detail current-state
-framing) are intentional. Needs its own copy decision, not automatic centralization.
+**Resolved (2026-08-25) — label-text divergence is intentional, not a bug.** The list-scan
+`"Customer replied"` (`RequestRow.tsx:31`) vs. detail current-state `"Customer message"`
+(`helpers.ts:151`) wording for the same `customer_message` reason is a deliberate register
+difference, not drift. Decision (Christian, 2026-08-25): `"Customer replied"` is compact scanning
+language for the queue; `"Customer message"` is the more neutral, accurate label for the request's
+current-state detail context. Since severity behavior for this same reason is also intentionally
+different by surface (see the case-1 scoped-out finding above), forcing identical wording would
+imply a shared meaning the UI does not actually use. No code change; both labels stay as-is.
 
 **Fix:** `DetailHero.tsx`'s `DetailHeroBadges` now renders `variant={attention.level === "overdue" ?
 "danger" : "attention"}` on the exception `KeepBadge`, matching `RequestRow.tsx`'s
