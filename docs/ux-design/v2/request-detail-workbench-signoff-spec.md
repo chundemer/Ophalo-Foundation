@@ -1,6 +1,6 @@
 # Request Detail / Workbench — Production Interaction Specification
 
-**Status:** Locked — approved 2026-08-22; amended 2026-08-22 for Actual Work-only pilot scope  
+**Status:** Locked — approved 2026-08-22; amended 2026-08-22 for Actual Work-only pilot scope; amended 2026-08-25 for desktop closeout
 **Purpose:** One implementation-facing specification of the already locked Request Detail decisions.
 **Authority:** UI-001 through UI-013 in the [V2 Decision Register](keep-ui-production-decision-register.md), plus ADR-380, ADR-434 through ADR-441, ADR-482, ADR-487, and server-authored detail/action metadata. Where a server response does not authorize an action, this specification requires the UI to omit it.
 
@@ -30,15 +30,50 @@ The product owner approved the following reconciled interaction model on 2026-08
     internal timing context, not a scheduling system; Close request is confirmed, Owner/Admin-only,
     and server-authorized.
 11. Narrow/mobile uses a focused single-column Request presentation with one dominant permitted
-    action and a full focused workspace for Actual Work.
+action and a full focused workspace for Actual Work.
+
+### Amendment — desktop closeout (2026-08-25)
+
+The desktop implementation now additionally locks the following presentation refinements. They do
+not change server authority, mutation behavior, or the mobile information architecture:
+
+1. The Queue's primary scope row contains exactly three equal-width pane controls: **Attention**,
+   **All**, and **Mine**. **Views** is a compact utility disclosure for saved views and filtering;
+   it is not a fourth primary scope. Labels truncate rather than widen or overflow a pane.
+2. The Anchor remains one card with identity/action rows, a three-column context ledger, and a
+   compact three-control Internal Planning row. Planning controls stay persistently labelled,
+   bordered select-style controls; they stack safely at narrow widths rather than becoming dense
+   chip buttons.
+3. Customer contact may show an explicit preference only when one is set. It is advisory context
+   beside the contact affordances—not a success/completion signal—and no empty `No preference`
+   marker appears in the Anchor.
+4. The customer-page link belongs beside the request name and customer-page viewed state. Share
+   Link belongs with Call, Text, and Email in Customer contact. They remain distinct actions with
+   their existing share-intent and customer-receipt rules.
+5. Owner/team context distinguishes personal notification subscription from assignment: **Watch** /
+   **Watching** is the current user's state; **Watchers · N** opens the authorized watcher
+   management sheet. Neither implies responsibility for the Request.
+6. Active attention is a compact conditional rail above the permanent **Customer need** module.
+   Why/Resolve-by detail is available on demand; the rail may wrap safely and is not a fixed-height
+   requirement. Customer need remains mounted after attention clears and must accommodate the
+   original request's real length.
+7. An authorized open Actual Work draft is visibly marked **Draft — not submitted** in the compact
+   Actual Work strip, including a zero-line draft. Submitted visits remain locked; draft state is
+   neither a danger alert nor a completed outcome.
 
 ## 1. Product decisions
 
 1. Desktop is a two-pane workbench only when the application workspace is at least 1001 CSS px: a 320–360 px Request Queue, a 1 px divider, and a protected 640 px Workbench. Otherwise use one-pane Queue → Request drill-down. There is no manual Queue collapse control in this release.
 2. The Queue and the Workbench may each have one independent page-level scroll surface. Inside the Workbench, there is exactly one vertical scroll surface: the Work Canvas. Do not introduce a scrollable desktop right rail, stacked pane, or card body.
 3. A selected Request has a compact sticky Request Anchor above the Work Canvas. It is neither a dashboard nor a permanently oversized header.
-4. Without scrolling, the Anchor exposes: customer name, request reference, status, active attention/risk (when present), the current server-valid primary action, phone, service location, and responsible owner.
-5. The Work Canvas order is fixed by operational urgency: active attention guidance; original customer need; authorized active work context; customer communication/private-note composition; activity/history; lower-frequency record context.
+4. Without scrolling, the Anchor exposes: customer name/request reference/status, active
+   attention/risk when present, the current server-valid primary action, phone/contact affordances,
+   explicit customer preference when set, service location, responsible owner, and permitted
+   Watch/Watchers context. The Customer Page navigation link is adjacent to customer identity.
+5. The Work Canvas order is fixed by operational urgency: compact active-attention guidance;
+   permanent original customer need; authorized active-work context; customer communication/private-
+   note composition; activity/history; lower-frequency record context. Internal Priority, Planned
+   Work Date, and Internal Follow-up remain in the Anchor's planning row.
 6. At rest there is one enabled local-task primary. The server determines whether it is an attention-resolution or lifecycle action. A valid customer-update composer temporarily owns primary emphasis. The client never fabricates a recommended action, transition, clearance effect, or permission.
 7. Customer updates and internal notes share a composition region but never share meaning: updates say **Visible on the customer page**; notes say **Internal only**. Actual Work is factual and price-blind. Proposed Scope is outside this controlled-pilot Workbench scope.
 
@@ -64,18 +99,18 @@ The product owner approved the following reconciled interaction model on 2026-08
 | Send customer update | Visible first-canvas composition action; teal submit is primary only while its composer is active | Inline; label **Visible on the customer page**. Do not claim delivery/read/realtime. |
 | Add internal note | Visible first-canvas composition action, adjacent to update but visually secondary | Inline; label **Internal only**. |
 | Assign / reassign responsible owner | Persistent visible secondary in Anchor owner context | Inline assignment control. Omit when unauthorized. |
-| Watch / unwatch | Low-frequency utility near Anchor participation context | Quiet control; not hidden among routine work. |
+| Watch / unwatch | Quiet Anchor owner/team context | Shows the current user's notification subscription only; not assignment or responsibility. |
 | Mute / unmute | Low-frequency utility near Watch state | Quiet control; only where the server permits the current participant. |
 | Set Follow Up On | Persistent visible secondary in first-canvas timing context | Inline; requires date + reason; note required for `other`. |
 | Complete or move Follow Up On | Relevant contextual module: active/due/overdue Follow Up card | Narrow resolution flow: complete (reason), move, or retain after activity. No silent clear. |
 | Set/change/remove Planned For | Persistent visible secondary in first-canvas timing context | Inline timing control; past date shows **Planned date passed**, not a missed customer promise. |
 | Clear / acknowledge authorized attention | Primary only when server-authorized as the current attention-resolution action; otherwise its explicit attention-guidance module | Attention guidance explains **Why** and **Resolve by**. Never a generic client “Resolve” action. |
-| Capture/view Actual Work | Relevant contextual module only when entitled and authorized; capture opens as focused workspace | Price-blind factual capture. No right-rail card/composer. Show actual-work review/history only when authorized. |
+| Capture/view Actual Work | Relevant contextual module only when entitled and authorized; capture opens as focused workspace | Price-blind factual capture. No right-rail card/composer. A compact open draft is explicitly marked **Draft — not submitted**; submitted history stays locked. |
 | Mark work done | Anchor primary when server authorizes completion and no active attention | If completion is authorized during attention, it may appear only as an explicit demoted warning action: **Mark work done, attention remains**. |
 | Close request | Relevant closeout module / Anchor primary only when server authorizes `canClose` | Owner/Admin only; red filled action plus confirmation. Never a routine “More” action. |
 | Edit service location | Relevant contextual record-details module | Inline edit. Detail-owned; no generic Queue mutation. |
 | Set internal priority | First-canvas timing/planning context, aligned with Follow Up On and Planned For (locked exception, 2026-08-22 — see note below) | Inline edit. Must remain visually and semantically distinct from customer urgency. |
-| Share customer-page link | Low-frequency utility in Anchor | Use server-authorized share intent/page token. Never show raw token; sharing does not prove customer receipt or clear attention unless confirmed by the server’s separate flow. |
+| Share customer-page link | Quiet Customer contact utility beside Call/Text/Email | Use server-authorized share intent/page token. Never show raw token; sharing does not prove customer receipt or clear attention unless confirmed by the server’s separate flow. |
 | Generic status change | Relevant contextual lifecycle module only when server exposes it | Detail-owned; do not turn status into a default action menu. |
 
 ## 4. Lifecycle and attention matrix
@@ -96,21 +131,21 @@ The product owner approved the following reconciled interaction model on 2026-08
 
 ```text
 ┌──────────────────── Request Queue (320–360 px) ───────────────────┬──────────── Selected Request Workbench (min 640 px) ────────────┐
-│ Needs Attention                                                     │ STICKY REQUEST ANCHOR (not independently scrollable)               │
-│ All Work | My Work                                                  │ Customer name · Request ref · source/submission · Status            │
-│ Office Review (Owner/Admin, conditional)                            │ Active attention/risk, if any       [server-valid primary action]  │
-│ Views | History · Search/filter · ranked Request rows               │ Phone: Call / Text | Service location: Maps | Owner: Assign         │
+│ Attention | All | Mine                                              │ STICKY REQUEST ANCHOR (not independently scrollable)               │
+│ Search/filter                                  [Views ▾]            │ Request ref · Status · active attention     [primary action]        │
+│ ranked Request rows                                                 │ Customer name · viewed state · View customer page                    │
+│                                                                      │ Contact: Call/Text/Email/Share · preference | Location | Owner/team │
+│                                                                      │ Priority | Planned Work Date | Internal Follow-up                   │
 │                                                                      ├───────────────────────────────────────────────────────────────────┤
 │ [Queue has its own scroll surface]                                  │ WORK CANVAS — the Workbench's only vertical scroll surface          │
-│                                                                      │  1. Needs Attention: Why / Resolve by / authorized action           │
-│                                                                      │  2. Customer's original need (verbatim)                             │
-│                                                                      │  3. Authorized, real Actual Work context                             │
+│                                                                      │  1. Compact Needs Attention rail; Why/Resolve by on demand           │
+│                                                                      │  2. Permanent Customer need (original request, readable length)     │
+│                                                                      │  3. Authorized Actual Work context; open draft is not submitted      │
 │                                                                      │     (omit when absent; capture opens focused workspace)              │
 │                                                                      │  4. Communicate: [Customer update] [Internal note]                  │
 │                                                                      │     explicit customer-visible/internal disclosure                    │
-│                                                                      │  5. Timing/planning: Follow Up On / Planned For / Internal priority  │
-│                                                                      │  6. Activity and history                                              │
-│                                                                      │  7. Record details: location, watch/mute, share                     │
+│                                                                      │  5. Activity and history                                              │
+│                                                                      │  6. Record details: lower-frequency context                           │
 └────────────────────────────────────────────────────────────────────┴───────────────────────────────────────────────────────────────────┘
 ```
 
@@ -121,7 +156,7 @@ No desktop sidebar, right rail, or action-card dashboard is permitted within the
 1. Below the protected desktop workspace, use a focused request route with a clear return to Requests; retain the same detail/action/version engine.
 2. Keep customer, phone, service location, original need, and one safe currently permitted action in the first useful viewport.
 3. Use a persistent 48 px+ mobile action area only for actual permitted work (for example Call, Maps, Send update, Log contact, or capture). One action remains dominant. Hide/unpin the bar while a text input is focused.
-4. Customer update and internal note remain inline. Log Contact and similar focused edits use a full-height drawer. Close, discard, required attention reason, and conflict recovery use a dialog. Actual Work uses a full focused workspace with Back to Request.
+4. Customer update and internal note remain inline. Log Contact and similar focused edits use a full-height drawer. Close, discard, required attention reason, and conflict recovery use a dialog. Actual Work uses a full focused workspace with Back to Request. The desktop closeout does not authorize a different mobile sheet height, autosave indicator, or submission-footer contract.
 5. Phone/text/email launches remain intent only. On return, one replaceable, non-blocking prompt may offer **Log contact** or **Dismiss**. Maps never prompts to log contact.
 6. Authorization changes available content/actions, not the truth of the layout. Field capture remains price-blind for every recorder, including Owner/Admin.
 

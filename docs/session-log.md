@@ -14,7 +14,22 @@
 
 ## Current work
 
-No active batch. Awaiting the next repository brief.
+### Mobile V2 — responsive authenticated PWA — preflight requested
+
+**Go-live target:** next week's Mobile V2 work applies only to the responsive authenticated PWA
+(`web/ophalo-app`). The separate Expo/native client (`mobile/ophalo-mobile`) is not a launch
+dependency and receives no parity or implementation work in this phase.
+
+**Preflight/design gate:** produce a Mobile Request Workspace V2 guide before code. It must lock
+the focused one-pane route/back behavior; mobile information order; one server-permitted dominant
+action and its text-entry/external-handoff behavior; which Anchor context remains first-viewport
+content; sheet/dialog and Actual Work interruption/return behavior; and real-device acceptance for
+safe areas, keyboard, 44px/48px targets, long data, offline/error/conflict recovery.
+
+**Preserve:** translate the desktop hierarchy rather than squeezing the desktop ledger onto a
+phone—attention, permanent Customer need, contact/location, Actual Work, composition, then timing,
+team context, and activity. Actual Work remains a focused workspace with Back to Request; no fixed
+sheet height, autosave indicator, or new submission-footer contract is implied.
 
 **Deferred design question:** do not add a new tab for initial request/latest customer message.
 The permanent **Customer need** module already owns the original request; a tab would hide it and

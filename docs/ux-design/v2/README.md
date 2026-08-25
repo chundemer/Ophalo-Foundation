@@ -12,6 +12,7 @@ production UI upgrade. V2 does not silently erase or rewrite prior records.
 | [Design Model V2](keep-ui-design-model-v2.md) | Active cross-surface design doctrine after a rule is locked |
 | [Component Spec V2](keep-component-spec-v2.md) | Exact reusable component recipes under locked V2 decisions |
 | [Review Rubric V2](keep-review-rubric-v2.md) | Production-review and release criteria for V2 surfaces |
+| [PWA Mobile Workflow Specification](pwa-mobile-workflow-spec.md) | Cross-app mobile navigation, workflow, authorization, and recovery contract |
 
 ## Migration posture
 
