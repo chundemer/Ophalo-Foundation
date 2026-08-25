@@ -750,6 +750,87 @@ Automated verification: full frontend suite 615/615 tests passed (68 files, incl
 `src/pages/request-detail` coverage), `pnpm typecheck` clean, `pnpm check:tokens` passed. This
 closes the approved Request Detail action-surface implementation sequence (steps 0-6).
 
+## PWA mobile pilot workflow — approved code slices (2026-08-25)
+
+**Authority:** `docs/ux-design/v2/pwa-mobile-workflow-spec.md` — locked for the next business-pilot
+build. The pilot is request-focused, connected-only, and has no persistent mobile bottom tab bar.
+
+Implement in the following reviewable vertical slices. Do not merge later visual polish into an
+earlier contract/routing slice.
+
+### 0. Server-primary action and route preflight — no UI build
+
+- Confirm the selected-request response emits exactly one primary action (`primary: true`) and all
+  label, authorization, mutation, confirmation, and current-version metadata necessary to render it.
+- Confirm the existing client routing can meet the durable mobile `#/request/{id}` contract. Current
+  `ophalo-app` route state must not be mistaken for deep-link-safe routing.
+- Record exact files, request states/permissions to exercise, and any API discrepancy before changing
+  the mobile presentation.
+
+### 1. Mobile shell and Queue return path
+
+- At viewports below 1001 CSS px, establish the one-column Queue → Request drill-down shell.
+- Use the Queue header for navigation and return; retain **My Work** as a fast Queue scope.
+- Do not add a persistent bottom navigation tab bar. On `#/request/{id}`, do not mount competing
+  bottom navigation; only the authorized request action rail may persist there.
+- Apply the mobile form-control rule: every `<input>`, `<textarea>`, and `<select>` uses at least
+  16 CSS px (`text-base`) below 1001 CSS px. Do not use `text-xs` or `text-sm` for editable controls.
+
+### 2. Request Anchor and server-authorized action rail
+
+- Implement the compact mobile Request Anchor and one keyboard-safe sticky action rail.
+- Render only the server-designated `primary: true` action. The client performs no attention,
+  lifecycle, work-state, or closeout precedence sorting.
+- Hide/unpin the rail during text entry; retain close confirmation when the server action requires it.
+- Verify attention, work-completion, close, read-only, and text-composition states on real phones.
+
+### 3. Request work canvas
+
+- Establish the mobile order: identity/status, attention, contact/service location, verbatim Customer
+  Need, Actual Work context, authorized communication, activity, then quiet record utilities.
+- Make call/text/maps intent controls and the customer need immediately reachable.
+- Put permitted lower-frequency administration in **Details** without concealing urgent attention,
+  Customer Need, mutation feedback, or the current primary action.
+
+### 4. Actual Work focused workspace
+
+- Deliver the full-screen, price-blind Actual Work workspace with clear Back to Request behavior.
+- Make draft versus submitted state explicit; submitted visits remain locked.
+- Verify capture, interruption, return, submission, and retained request context at job-site viewport
+  sizes. Do not add proposal, price, payment, inventory, scheduling, or accounting authority.
+
+### 5. Connected-only failure, accessibility, and device pass
+
+- Implement clear non-destructive mutation failure feedback: **Couldn't save — check connection**
+  with manual **Retry**. Do not imply offline queueing, local draft persistence, or saved status
+  until the server confirms the write.
+- Exercise conflict, permission-denied, loading, empty, safe-area, keyboard, screen-reader, zoom,
+  and interrupted-navigation states.
+- Price Book, Settings, and Account Administration are out of scope for the mobile PWA pilot and
+  must be omitted rather than rendered as disabled or desktop-only destinations.
+
+### Local-phone verification loop
+
+Use a phone and development Mac on the same Wi-Fi network. Start Vite with LAN binding and use the
+Mac's LAN address—not `localhost`, which resolves to the phone itself:
+
+```bash
+LAN_IP=$(ipconfig getifaddr en0)
+cd web/ophalo-app
+VITE_API_BASE_URL=http://$LAN_IP:5092 pnpm dev -- --host 0.0.0.0
+```
+
+Encode `http://$LAN_IP:5173` as a QR code for scan-to-open, for example:
+
+```bash
+pnpm dlx qrcode-terminal "http://$LAN_IP:5173"
+```
+
+For end-to-end testing, the API must bind to the Mac LAN interface and allow the resulting LAN origin
+in CORS. Public/auth URLs and locally generated magic links must likewise use the LAN host for phone
+sign-in. Plain LAN HTTP supports visual and normal-browser testing; use HTTPS/tunnelling later for
+PWA-install or service-worker verification.
+
 ## Other active work
 
 ### Two-domain customer communication (ADR-491) — complete (2026-08-23)

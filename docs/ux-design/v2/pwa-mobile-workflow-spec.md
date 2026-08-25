@@ -1,6 +1,6 @@
 # PWA Mobile Workflow Specification
 
-**Status:** Draft — proposed cross-app mobile contract; requires decision review before implementation  
+**Status:** Locked for the next business-pilot build — 2026-08-25
 **Purpose:** Define how Keep behaves as a coherent, safe, touch-first PWA across staff and customer journeys. This document owns mobile workflow hierarchy and containment; it does not create new server permissions, lifecycle transitions, pricing authority, or delivery guarantees.  
 **Companion authority:** [V2 Decision Register](keep-ui-production-decision-register.md), [Design Model V2](keep-ui-design-model-v2.md), and [Request Detail / Workbench specification](request-detail-workbench-signoff-spec.md) remain authoritative where they already define a request, action, data, or recovery rule.
 
@@ -30,18 +30,13 @@ An individual may move between office and field responsibilities during the day.
 
 ## 3. Mobile information architecture
 
-### 3.1 Persistent destinations
+### 3.1 Pilot navigation
 
-The authenticated shell should reserve persistent thumb access for only the highest-frequency, cross-record destinations:
+The initial mobile pilot has **no persistent bottom navigation tab bar**. This avoids competing with the request action rail and preserves vertical space for the request canvas.
 
-| Destination | Job | Notes |
-| --- | --- | --- |
-| **Requests** | Find, triage, and resume request work | Default operational destination; preserves selected queue context when returning from a request. |
-| **My Work** | Return to the current user's authorized active work | A scoped request list, not a separate record type or local task system. |
-| **Capture** | Start an authorized new request or quick capture flow | Opens focused containment; it does not compete with a selected request's primary action. |
-| **More** | Lower-frequency account, help, and authorized configuration destinations | Shows only server-authorized destinations. |
+On Queue/List routes, the existing Queue header provides route navigation, list controls, and a fast **My Work** scope. **My Work** is a Requests scope, not a separate tab, record type, or local task system. New Request/Quick Capture remains an authorized focused action from its established entry point; it is not a persistent bottom tab.
 
-**Decision required:** Validate the final persistent-navigation labels and whether **My Work** is a top-level tab or a saved Requests scope. Until that decision is locked, the shell must not assume that desktop navigation maps one-for-one to a mobile tab bar.
+On `#/request/{id}`, the Queue header provides the clear return path to Requests. No bottom navigation bar is mounted on the detail route. The only persistent bottom control on a request is the single action rail, when the server authorizes one.
 
 Public intake and customer request pages have their own intentionally limited navigation. They never mount authenticated staff navigation.
 
@@ -70,14 +65,7 @@ The anchor keeps the customer, request reference, status, active attention when 
 
 ### 4.2 One primary action rail
 
-The sticky bottom action rail is the priority engine, not a shortcut tray. It shows exactly one enabled local-task primary action at rest, chosen from the server-authorized action metadata.
-
-Priority is:
-
-1. active attention that requires an authorized response or clearance;
-2. the next blocking, authorized work-state action;
-3. an authorized lifecycle action such as **Mark Work Done**; then
-4. an authorized terminal **Close Request** action, always with confirmation.
+The sticky bottom action rail is the server-authorized primary-action surface, not a shortcut tray or client-side priority engine. It renders the single action designated as primary by the server response metadata (`primary: true`). The client performs zero client-side precedence sorting among attention, work-state, lifecycle, or closeout actions. A server-designated close action still requires its prescribed confirmation.
 
 Customer-visible composition temporarily owns primary emphasis while text is being written. The rail hides or unpins while a text input is focused so the keyboard does not obscure the field or submit action. It reappears safely when focus ends.
 
@@ -126,7 +114,7 @@ Roles describe possible capabilities; they do not prescribe separate mobile appl
 | Can communicate | Expose the appropriate composer with durable visibility disclosure. |
 | Can record work | Expose **Add Work** and the focused Actual Work workspace. |
 | Can assign or administer | Expose those tools inside Details when server-authorized. |
-| Can resolve attention | Allow the authorized attention action to take priority in the action rail. |
+| Can resolve attention | Render the attention action in the action rail only when the server authorizes and designates it primary. |
 | Can complete or close | Surface the valid lifecycle action only when its server preconditions are met; close requires confirmation. |
 
 A user whose permissions change, whose assignment changes, or whose request becomes unavailable must receive the returned server state. The client removes invalid actions and provides a concise explanation without pretending that the previous local layout remains authoritative.
@@ -151,6 +139,7 @@ The customer Request page is a capability-link view of one request. It shows onl
 - On conflict, retain the local draft where possible, explain the changed server state, and require an explicit reapply/review decision before resubmission.
 - Make general controls at least 44 CSS px; persistent field primary actions at least 48 CSS px.
 - Use at least 16 CSS px editable text on iOS-facing mobile/public forms to prevent auto-zoom.
+- On viewports below 1001 CSS px, every `<input>`, `<textarea>`, and `<select>` uses `text-base` (16 CSS px) or its exact CSS equivalent. `text-xs` (12 CSS px) and `text-sm` (14 CSS px) are prohibited on those editable controls; iOS Safari auto-zoom would break sticky-header and action-rail alignment.
 - Do not rely on hover, color alone, hidden swipe gestures, or device orientation for essential actions.
 - Support keyboard, screen reader, zoom, safe-area insets, loading, offline/interrupted, empty, error, permission-denied, and stale-data states.
 
@@ -160,19 +149,18 @@ This specification is ready to implement only when the following can be demonstr
 
 1. Any authorized user can open a deep-linked request on a phone, understand its customer need and current safe action, act if permitted, and return to the correct request context.
 2. A person with both office and field permissions sees contextual priority rather than an Office/Field toggle or a screen full of simultaneous controls.
-3. Active attention takes precedence over ordinary lifecycle actions, while customer composition safely owns the action area during writing.
+3. The server-designated primary action is the only action in the rail at rest, while customer composition safely owns the action area during writing.
 4. A field user can call/text/map, capture Actual Work, submit it, and return to the request without losing context or seeing price authority.
 5. Administrative utilities are reachable through Details only when authorized and do not bury urgent attention, customer need, or the primary action.
 6. Read-only, denied, conflict, loading, empty, and interrupted states remain clear and recoverable.
 7. Customer-facing mobile pages remain separate from staff navigation and expose only authorized public information and actions.
 
-## 11. Decisions to lock before build
+## 11. Pilot locks and deferred scope
 
-1. Final authenticated mobile persistent-navigation destinations and labels.
-2. Whether My Work is a persistent destination or an always-visible Requests scope.
-3. The exact server action metadata and ordering contract consumed by the mobile action rail.
-4. Which non-request product areas are available on mobile in the first release, especially Price Book, settings, and account administration.
-5. Offline scope: read-only cache, local drafts, queued mutations, or an explicitly online-only contract.
-6. Push/deep-link entry behavior and notification preference surface.
+1. **Navigation and My Work:** The initial pilot has no persistent mobile bottom tab bar. Use the Queue header for list navigation and return; **My Work** is a fast scope inside that header.
+2. **Action rail contract:** The server response designates exactly one primary action with `primary: true`; the mobile client renders that action and performs no precedence sorting. Response metadata must include all authorization, label, mutation, confirmation, and current-version information required to render and execute it safely.
+3. **Non-request mobile scope:** Price Book, Settings, and Account Administration are out of scope for mobile PWA go-live. They are omitted from mobile interfaces rather than shown as incomplete, disabled, or desktop-only destinations.
+4. **Connectivity:** The pilot is connected-only. It provides no offline index, local draft queue, or queued mutation contract. A failed save shows a clear non-destructive failure message such as **Couldn't save — check connection** and a manual **Retry** trigger; data is not represented as saved until the server confirms it.
+5. **Push/deep links:** Deep links retain the durable authorized request route and safe return behavior. Push entry and notification preferences are deferred; the pilot must not rely on push for workflow completion.
 
-Until these are locked, implementation may build the shared request detail and focused-work patterns already authorized by the V2 documents, but must not invent navigation, offline, or cross-product capabilities.
+These locks authorize implementation of the mobile request and focused-work pilot. Any expansion into bottom navigation, non-request areas, or offline capability requires an explicit V2 amendment.
