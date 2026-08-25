@@ -1,4 +1,5 @@
 import { ClipboardList } from "lucide-react";
+import { KeepBadge } from "../../components/keep/KeepBadge";
 import { KeepButton } from "../../components/keep/KeepButton";
 import { type ActualWorkCaptureState } from "./useActualWorkCapture";
 
@@ -43,7 +44,10 @@ export function ActualWorkCard({ state, onStartCapture, bare = false }: ActualWo
     <div className={wrapperCls}>
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-sm font-semibold text-[var(--ophalo-ink)]">Actual work</p>
+          <div className="flex items-center gap-1.5">
+            <p className="text-sm font-semibold text-[var(--ophalo-ink)]">Actual work</p>
+            {isDraft && <KeepBadge variant="attention">Draft — not submitted</KeepBadge>}
+          </div>
           <p className="text-xs text-[var(--ophalo-muted)] truncate">{summary}</p>
         </div>
         {/* secondary, not teal — the Anchor owns the one primary-weight action (locked spec);

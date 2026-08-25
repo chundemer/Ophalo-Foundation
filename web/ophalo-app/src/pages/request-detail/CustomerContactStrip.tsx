@@ -3,6 +3,7 @@ import { FOCUS_RING } from "./helpers";
 import { formatNaPhone } from "../../components/quick-capture/utils";
 import { KeepBadge } from "../../components/keep/KeepBadge";
 import { contactPreferenceLabel } from "./DetailPanels";
+import { ShareLinkAction } from "./DetailHero";
 
 interface CustomerContactStripProps {
   phone: string | null;
@@ -12,14 +13,26 @@ interface CustomerContactStripProps {
   // details' CustomerSignalPanel keeps its own public-intake-gated "No preference" audit context.
   contactPreference: string | null;
   onContactLaunched: (direction: string, channel: string) => void;
+  // Share Link placement (locked 2026-08-25): lives with Call/Text/Email, not the Owner column.
+  canRecordShareIntent: boolean;
+  needsShare: boolean;
+  onOpenShareDrawer: () => void;
 }
 
 /**
  * Request Anchor contact context. These are shortcuts into the one Contact customer drawer;
  * they never launch a separate QR/modal workflow or create an activity record on their own.
  */
-export function CustomerContactStrip({ phone, email, contactPreference, onContactLaunched }: CustomerContactStripProps) {
-  if (!phone && !email) return null;
+export function CustomerContactStrip({
+  phone,
+  email,
+  contactPreference,
+  onContactLaunched,
+  canRecordShareIntent,
+  needsShare,
+  onOpenShareDrawer,
+}: CustomerContactStripProps) {
+  if (!phone && !email && !canRecordShareIntent) return null;
 
   const preferenceLabel = contactPreference !== "no_preference" ? contactPreferenceLabel(contactPreference) : null;
 
@@ -63,6 +76,11 @@ export function CustomerContactStrip({ phone, email, contactPreference, onContac
           </button>
         )}
       </div>
+      <ShareLinkAction
+        canRecordShareIntent={canRecordShareIntent}
+        needsShare={needsShare}
+        onOpenShareDrawer={onOpenShareDrawer}
+      />
     </div>
   );
 }

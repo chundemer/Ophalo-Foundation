@@ -14,24 +14,50 @@
 
 ## Current work
 
-No active batch. Two design questions are still unscheduled — not implementation-ready, no code
-selected:
+No active batch. Awaiting the next repository brief.
 
-- **Latest customer message companion.** Do not add a new tab merely to show the initial request
-  and latest customer message — the permanent **Customer need** module already owns the original
-  request and a tab would hide it and duplicate timeline state. If screenshot review shows
-  insufficient scanability, consider a compact, non-tab **Latest customer message** companion
-  beneath Customer need, only when a customer message exists, with a path to the full history.
-- **Actual Work draft badge.** `ActualWorkCard` already says `Draft visit started` / `Draft visit
-  in progress`. Evaluate a small, persistent **Draft — not submitted** badge next to the Actual
-  work title for an open draft. Use attention/neutral styling — not danger or success — and
-  retain the existing line-count and Resume/Continue copy. Do not conflate with customer-update
-  text drafts or proposed-scope drafts.
+**Deferred design question:** do not add a new tab for initial request/latest customer message.
+The permanent **Customer need** module already owns the original request; a tab would hide it and
+duplicate timeline state. Revisit only if screenshot review demonstrates a genuine scanability gap.
 
 The 2026-08-24/25 resolved defects and attention-presentation decisions are recorded in the
 [pilot-readiness bug tracker](pilot-readiness-bug-tracker.md#p0p1-pilot-flow-bugs).
 
 ## Completed-work archive
+
+### Frontend — Actual Work Draft indicator — complete (2026-08-25)
+
+**Goal:** reduce reading and prevent an open Actual Work visit being mistaken for submitted work.
+Added a compact, persistent **Draft — not submitted** badge (`KeepBadge variant="attention"`,
+matching the existing "Not shared"/"Needs review" precedent) beside the **Actual work** title
+whenever `state.status === "draft"`, including a zero-line draft. Unmounts for `no-draft`, loading,
+hidden, and error states.
+
+Files: `ActualWorkCard.tsx`, `__tests__/ActualWorkCard.test.tsx`. Presentation-only; no API,
+authorization, state-machine, or mutation-contract change.
+
+Verified: focused test 3/3 passing, `tsc --noEmit` clean, `git diff --check` clean.
+
+### Frontend — Desktop closeout screenshot correction: hero link placement — complete (2026-08-25)
+
+**Bug (screenshot review of `83fb91f`):** "View customer page" and "Share Link" were still grouped
+under the Owner column instead of matching the agreed layout — "View customer page" belongs beside
+"Viewed …ago" on the title line, and "Share Link" belongs with Call/Text/Email in Customer contact.
+
+**Fix:** split the former `CustomerPageHeroActions` into `CustomerPageLink` (rendered inline in
+`DetailHeroName`, next to the Viewed/Not yet viewed indicator) and `ShareLinkAction` (the "Not
+shared" badge + Share Link button, rendered inside `CustomerContactStrip`, which now also renders
+when a customer has no phone/email on file but is share-eligible).
+
+**Verified as correct, not a bug:** the personal Watch/Watching toggle was absent in the reviewed
+screenshot because the logged-in user was also the request's Responsible — `KeepRequestActionPolicy`
+requires `ActiveParticipation == null` for `CanWatch` (ADR-224/230 mutual exclusion), so the toggle
+correctly does not render for a Responsible viewing their own request. No code change.
+
+Files: `DetailHero.tsx`, `CustomerContactStrip.tsx`, `RequestDetailAnchor.tsx`, plus 3 updated
+`CustomerContactStrip` tests.
+
+Verified: full `request-detail` suite 218/218 passing; `tsc --noEmit` clean; `git diff --check` clean.
 
 ### Frontend — Desktop closeout: header contact preference + Watch/Watchers disclosure — complete (2026-08-25)
 

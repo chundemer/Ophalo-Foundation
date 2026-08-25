@@ -1,5 +1,5 @@
 import { type RequestDetailLayoutProps } from "./DetailPanels";
-import { DetailHeroBadges, DetailHeroName, CustomerPageHeroActions } from "./DetailHero";
+import { DetailHeroBadges, DetailHeroName } from "./DetailHero";
 import { CustomerContactStrip } from "./CustomerContactStrip";
 import { ServiceLocationPanel, TriagePanel } from "./DetailPanels";
 import { TeamSection } from "./TeamSection";
@@ -82,18 +82,13 @@ export function RequestDetailAnchor({
               email={detail.customerEmail ?? null}
               contactPreference={detail.contactPreference ?? null}
               onContactLaunched={onContactLaunched}
+              canRecordShareIntent={canRecordShareIntent}
+              needsShare={needsShare}
+              onOpenShareDrawer={onOpenShareDrawer}
             />
             <ServiceLocationPanel detail={detail} onEditLocation={onEditLocation} />
             <div className="flex flex-col gap-1.5">
               <TeamSection requestId={requestId} detail={detail} onDetailUpdated={onDetailUpdated} compact onOpenReassign={onOpenReassignOwner} onOpenWatchers={onOpenWatchers} />
-              {detail.pageToken && (
-                <CustomerPageHeroActions
-                  pageToken={detail.pageToken}
-                  canRecordShareIntent={canRecordShareIntent}
-                  needsShare={needsShare}
-                  onOpenShareDrawer={onOpenShareDrawer}
-                />
-              )}
             </div>
           </div>
         </div>

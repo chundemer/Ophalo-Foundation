@@ -7,7 +7,17 @@ describe("CustomerContactStrip — Contact customer shortcuts", () => {
   it("routes call and text through the one contact-drawer entry point", async () => {
     const user = userEvent.setup();
     const onContactLaunched = vi.fn();
-    render(<CustomerContactStrip phone="5555550101" email={null} contactPreference={null} onContactLaunched={onContactLaunched} />);
+    render(
+      <CustomerContactStrip
+        phone="5555550101"
+        email={null}
+        contactPreference={null}
+        onContactLaunched={onContactLaunched}
+        canRecordShareIntent={false}
+        needsShare={false}
+        onOpenShareDrawer={vi.fn()}
+      />,
+    );
     await user.click(screen.getByRole("button", { name: "Call" }));
     await user.click(screen.getByRole("button", { name: "Text" }));
     expect(onContactLaunched).toHaveBeenNthCalledWith(1, "outbound", "phone");

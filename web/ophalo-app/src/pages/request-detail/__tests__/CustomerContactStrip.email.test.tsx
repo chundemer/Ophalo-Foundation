@@ -7,7 +7,17 @@ describe("CustomerContactStrip — email shortcut", () => {
   it("opens the shared contact workflow instead of bypassing its audit record", async () => {
     const user = userEvent.setup();
     const onContactLaunched = vi.fn();
-    render(<CustomerContactStrip phone={null} email="customer@example.com" contactPreference={null} onContactLaunched={onContactLaunched} />);
+    render(
+      <CustomerContactStrip
+        phone={null}
+        email="customer@example.com"
+        contactPreference={null}
+        onContactLaunched={onContactLaunched}
+        canRecordShareIntent={false}
+        needsShare={false}
+        onOpenShareDrawer={vi.fn()}
+      />,
+    );
     await user.click(screen.getByRole("button", { name: "Email" }));
     expect(onContactLaunched).toHaveBeenCalledWith("outbound", "email");
   });

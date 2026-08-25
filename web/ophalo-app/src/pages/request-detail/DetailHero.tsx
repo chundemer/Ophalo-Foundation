@@ -18,44 +18,51 @@ import {
 // Customer page sharing (hero links)
 // ---------------------------------------------------------------------------
 
-interface CustomerPageHeroActionsProps {
+// Title-line "View customer page" link (placement locked, 2026-08-25) — sits beside the
+// Viewed/Not yet viewed indicator in DetailHeroName, not with the Owner/team context column.
+interface CustomerPageLinkProps {
   pageToken: string;
+}
+
+export function CustomerPageLink({ pageToken }: CustomerPageLinkProps) {
+  const publicBaseUrl = import.meta.env.VITE_PUBLIC_BASE_URL as string;
+  const customerPageUrl = `${publicBaseUrl}/keep/r/${pageToken}`;
+
+  return (
+    <a
+      href={customerPageUrl}
+      target="_blank"
+      rel="noreferrer"
+      className={`inline-flex items-center gap-1 text-xs font-semibold text-[var(--keep-accent)] hover:underline transition-colors ${FOCUS_RING}`}
+    >
+      <ExternalLink className="h-3.5 w-3.5 shrink-0" />
+      View customer page
+    </a>
+  );
+}
+
+// Share Link action (placement locked, 2026-08-25) — sits with Call/Text/Email inside Customer
+// contact, not with Owner/team context. Includes its own "Not shared" attention badge.
+interface ShareLinkActionProps {
   canRecordShareIntent: boolean;
   needsShare: boolean;
   onOpenShareDrawer: () => void;
 }
 
-export function CustomerPageHeroActions({
-  pageToken,
-  canRecordShareIntent,
-  needsShare,
-  onOpenShareDrawer,
-}: CustomerPageHeroActionsProps) {
-  const publicBaseUrl = import.meta.env.VITE_PUBLIC_BASE_URL as string;
-  const customerPageUrl = `${publicBaseUrl}/keep/r/${pageToken}`;
+export function ShareLinkAction({ canRecordShareIntent, needsShare, onOpenShareDrawer }: ShareLinkActionProps) {
+  if (!canRecordShareIntent) return null;
 
   return (
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
-      {canRecordShareIntent && needsShare && <KeepBadge variant="attention">Not shared</KeepBadge>}
-      <a
-        href={customerPageUrl}
-        target="_blank"
-        rel="noreferrer"
-        className={`inline-flex items-center gap-1 font-semibold text-[var(--keep-accent)] hover:underline transition-colors ${FOCUS_RING}`}
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+      {needsShare && <KeepBadge variant="attention">Not shared</KeepBadge>}
+      <button
+        type="button"
+        onClick={onOpenShareDrawer}
+        className={`inline-flex items-center gap-1.5 text-sm font-semibold text-[var(--keep-accent)] hover:underline transition-colors ${FOCUS_RING} rounded`}
       >
-        <ExternalLink className="h-3.5 w-3.5 shrink-0" />
-        View customer page
-      </a>
-      {canRecordShareIntent && (
-        <button
-          type="button"
-          onClick={onOpenShareDrawer}
-          className={`inline-flex items-center gap-1 font-semibold text-[var(--keep-accent)] hover:underline transition-colors ${FOCUS_RING}`}
-        >
-          <Share2 className="h-3.5 w-3.5 shrink-0" />
-          Share Link
-        </button>
-      )}
+        <Share2 className="h-3.5 w-3.5 shrink-0" />
+        Share Link
+      </button>
     </div>
   );
 }
@@ -167,6 +174,7 @@ export function DetailHeroBadges({ detail }: DetailHeroProps) {
 // Anchor row 2 (three-row correction, 2026-08-22): customer identity as its own full-width row,
 // beneath the reference/status/attention row and above the contact/location/owner row.
 export function DetailHeroName({ detail }: DetailHeroProps) {
+  const pageToken = detail.pageToken;
   // ADR-150: customer page viewed info shown alongside identity
   const pageViewedInfo = useMemo(() => {
     if (detail.customerPageLastViewedAtUtc) {
@@ -196,6 +204,7 @@ export function DetailHeroName({ detail }: DetailHeroProps) {
           {pageViewedInfo.text}
         </span>
       )}
+      {pageToken && <CustomerPageLink pageToken={pageToken} />}
     </div>
   );
 }

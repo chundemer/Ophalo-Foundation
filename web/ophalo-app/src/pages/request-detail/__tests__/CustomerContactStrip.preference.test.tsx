@@ -12,6 +12,9 @@ describe("CustomerContactStrip — contact preference", () => {
         email={null}
         contactPreference="text_message"
         onContactLaunched={vi.fn()}
+        canRecordShareIntent={false}
+        needsShare={false}
+        onOpenShareDrawer={vi.fn()}
       />,
     );
     expect(screen.getByText("Prefers text")).toBeInTheDocument();
@@ -24,6 +27,9 @@ describe("CustomerContactStrip — contact preference", () => {
         email={null}
         contactPreference="no_preference"
         onContactLaunched={vi.fn()}
+        canRecordShareIntent={false}
+        needsShare={false}
+        onOpenShareDrawer={vi.fn()}
       />,
     );
     expect(screen.queryByText(/prefers|no preference/i)).not.toBeInTheDocument();
@@ -36,6 +42,9 @@ describe("CustomerContactStrip — contact preference", () => {
         email={null}
         contactPreference={null}
         onContactLaunched={vi.fn()}
+        canRecordShareIntent={false}
+        needsShare={false}
+        onOpenShareDrawer={vi.fn()}
       />,
     );
     expect(screen.queryByText(/prefers|no preference/i)).not.toBeInTheDocument();
