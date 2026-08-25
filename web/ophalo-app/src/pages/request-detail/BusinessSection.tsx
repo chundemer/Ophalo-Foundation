@@ -9,8 +9,9 @@ import {
   highlightBoxShadow,
   RecommendedActionBadge,
 } from "./highlights";
-import { INPUT_CLS, statusLabel } from "./helpers";
+import { INPUT_CLS, statusLabel, suggestedNotifyChannel, notifyChannelLabel, type NotifyChannel } from "./helpers";
 import { NotifyCustomerPanel } from "./NotifyCustomerPanel";
+import { KeepSplitButton } from "../../components/keep/KeepSplitButton";
 
 // ---------------------------------------------------------------------------
 // Work Done card
@@ -451,6 +452,20 @@ export function BusinessUpdateSection({
   const [conflictDisabled, setConflictDisabled] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [justPostedEventId, setJustPostedEventId] = useState<string | null>(null);
+  const [notifyChannel, setNotifyChannel] = useState<NotifyChannel>(suggestedNotifyChannel(detail));
+  const [autoPrepareError, setAutoPrepareError] = useState<string | null>(null);
+  const [pageOnlySuccess, setPageOnlySuccess] = useState(false);
+  const pageOnlySuccessTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (pageOnlySuccessTimerRef.current !== null) clearTimeout(pageOnlySuccessTimerRef.current);
+    };
+  }, []);
+
+  useEffect(() => {
+    setNotifyChannel(suggestedNotifyChannel(detail));
+  }, [detail.customerEmail, detail.contactPreference]);
 
   if (!canSendBusinessUpdate) return null;
 
@@ -473,11 +488,19 @@ export function BusinessUpdateSection({
       : hasStatus
         ? "Update status"
         : "Post customer-page update";
+  const alternateNotifyChannel: NotifyChannel | null =
+    notifyChannel === "sms" ? (detail.customerEmail ? "email" : null) : "sms";
 
-  async function doSubmit() {
+  async function doSubmit(channelToPrepare: NotifyChannel | null) {
     if (!canSubmit) return;
     setIsSubmitting(true);
     setError(null);
+    setAutoPrepareError(null);
+    setPageOnlySuccess(false);
+    if (pageOnlySuccessTimerRef.current !== null) {
+      clearTimeout(pageOnlySuccessTimerRef.current);
+      pageOnlySuccessTimerRef.current = null;
+    }
     try {
       const statusUsesStatusEndpoint =
         selectedStatus !== "" && BUSINESS_UPDATE_EXCLUDED_STATUSES.has(selectedStatus);
@@ -507,7 +530,36 @@ export function BusinessUpdateSection({
             (e) => e.messageIntent === "business_update" && e.visibility === "all",
           )
         : undefined;
-      setJustPostedEventId(postedMessageEvent?.id ?? null);
+      const postedEventId = postedMessageEvent?.id ?? null;
+
+      // "Post to page only" (channelToPrepare === null) is an explicit choice not to notify —
+      // it must not surface NotifyCustomerPanel at all, the same as the old "Not now" dismissal.
+      if (postedEventId && channelToPrepare) {
+        setJustPostedEventId(postedEventId);
+        // GAP-052b/ADR-451: post and prepare remain separate durable facts (two mutations) —
+        // this just fires prepare immediately after a successful post so the operator doesn't
+        // need a second screen. Confirm (the actual "notified" claim) always stays its own
+        // explicit click in NotifyCustomerPanel. If prepare fails here, fall through to that
+        // panel's selection phase instead of silently dropping the notify step.
+        try {
+          const withNotification = await api.prepareUpdateNotification(
+            requestId,
+            { relatedUpdateEventId: postedEventId, channel: channelToPrepare },
+            updated.version,
+          );
+          onDetailUpdated(withNotification);
+        } catch {
+          setAutoPrepareError(
+            "Posted, but couldn't prepare the notification automatically. Pick a channel below to try again.",
+          );
+        }
+      } else {
+        setJustPostedEventId(null);
+        if (postedEventId) {
+          setPageOnlySuccess(true);
+          pageOnlySuccessTimerRef.current = setTimeout(() => setPageOnlySuccess(false), 4000);
+        }
+      }
     } catch (e) {
       if (e instanceof ApiError && e.status === 409) {
         setConflictDisabled(true);
@@ -522,13 +574,13 @@ export function BusinessUpdateSection({
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    await doSubmit();
+    await doSubmit(hasMessage ? notifyChannel : null);
   }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
     if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
       e.preventDefault();
-      void doSubmit();
+      void doSubmit(hasMessage ? notifyChannel : null);
     }
   }
 
@@ -601,14 +653,39 @@ export function BusinessUpdateSection({
       )}
       <p className="text-xs text-[var(--ophalo-muted)]">
         {hasMessage
-          ? "Visible on the customer page. The customer will not be notified unless you send a text or email."
+          ? "Visible on the customer page. Nothing is marked as notified until you confirm you actually sent the text or email."
           : "No customer-page update will be posted."}
         {selectedStatus && ` Status will change to ${statusLabel(selectedStatus)}.`}
         {statusRequiresMessage && !hasMessage && " Add a message for this status."}
       </p>
-      <KeepButton type="submit" variant="teal" disabled={!canSubmit} className="w-full">
-        {isSubmitting ? "Saving…" : submitLabel}
-      </KeepButton>
+      {hasMessage ? (
+        <KeepSplitButton
+          label={isSubmitting ? "Saving…" : `Post & prepare ${notifyChannelLabel(notifyChannel)}`}
+          onClick={() => void doSubmit(notifyChannel)}
+          disabled={!canSubmit}
+          className="w-full"
+          options={[
+            ...(alternateNotifyChannel
+              ? [
+                  {
+                    key: "alternate-channel",
+                    label: `Post & prepare ${notifyChannelLabel(alternateNotifyChannel)}`,
+                    onSelect: () => void doSubmit(alternateNotifyChannel),
+                  },
+                ]
+              : []),
+            {
+              key: "page-only",
+              label: "Post to page only (no notify)",
+              onSelect: () => void doSubmit(null),
+            },
+          ]}
+        />
+      ) : (
+        <KeepButton type="submit" variant="teal" disabled={!canSubmit} className="w-full">
+          {isSubmitting ? "Saving…" : submitLabel}
+        </KeepButton>
+      )}
     </form>
   );
 
@@ -618,12 +695,24 @@ export function BusinessUpdateSection({
   const notifyPanel = notifyEventId && (
     <div className="mt-3">
       <NotifyCustomerPanel
+        key={notifyEventId}
         requestId={requestId}
         detail={detail}
         relatedUpdateEventId={notifyEventId}
         onDetailUpdated={onDetailUpdated}
         onDone={() => setJustPostedEventId(null)}
+        initialError={autoPrepareError}
       />
+    </div>
+  );
+
+  const pageOnlySuccessBanner = pageOnlySuccess && (
+    <div
+      role="status"
+      aria-live="polite"
+      className="mt-3 rounded-xl border border-[var(--ophalo-success)] bg-[var(--ophalo-success-bg)] px-4 py-3 text-sm font-medium text-[var(--ophalo-success)]"
+    >
+      Posted to the customer page.
     </div>
   );
 
@@ -639,6 +728,7 @@ export function BusinessUpdateSection({
         {sharedErrorBlock}
         {sharedForm}
         {notifyPanel}
+        {pageOnlySuccessBanner}
       </div>
     );
   }

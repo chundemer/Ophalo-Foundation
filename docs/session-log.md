@@ -1,6 +1,6 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-08-24
+**Last updated:** 2026-08-25
 **Deployment posture:** Not pilot-ready.
 **Purpose:** active handoff only. Completed implementation narratives belong in Git history and the relevant build log, not here.
 
@@ -14,7 +14,62 @@
 
 ## Current work
 
-None queued. Next batch to be defined by Christian.
+### Frontend — Customer Tracker status badge — implementation-ready
+
+**Goal:** add a status badge to `TrackerStatusCard.tsx` (customer-facing tracker page,
+`ophalo-web`), matching the operator workbench's `KeepBadge` variant system
+(`ophalo-app/src/lib/requestStatus.ts`'s `statusBadgeVariant`/`statusLabel`). Currently the
+tracker header shows only a plain-text headline, no badge.
+
+**Decisions locked (2026-08-24):**
+- Port `statusBadgeVariant()`/status-label mapping into a new `ophalo-web/src/lib/requestStatus.ts`
+  (same teal=Active, success=Resolved/Closed, info=Received/Scheduled, default=other mapping).
+- Add the missing `info` variant to `ophalo-web`'s `KeepBadge.tsx` (mirror is currently missing it;
+  `ophalo-app`'s copy already has it).
+- Render the badge in `TrackerStatusCard.tsx` next to the existing headline.
+- Customer Need module (`TrackerInitialRequestCard.tsx`) stays as-is — "Initial Request" / "Your
+  original message" is intentionally customer-facing language, distinct from the operator side's
+  "Customer need" label. Not part of this batch.
+- Quick Action grid and history timeline were reviewed against the operator workbench and found
+  already aligned (tokens, icons, structure) — no changes needed.
+
+Files: `web/ophalo-web/src/lib/requestStatus.ts` (new), `web/ophalo-web/src/components/keep/KeepBadge.tsx`,
+`web/ophalo-web/src/app/keep/r/[pageToken]/TrackerStatusCard.tsx`.
+
+No unresolved decisions. No architectural layers beyond `ophalo-web` presentation code.
+
+### Frontend — customer-update composer: post + prepare in one click — complete (2026-08-25)
+
+**Goal:** reduce the click count in the "Customer-page update" composer (`ophalo-app`) without
+loosening [ADR-451](decisions/ADR-451-customer-update-notification-integrity.md)'s post/prepare/
+confirm separation. Previously: post → wait for a separate "choose channel" panel → click
+Continue → external send → confirm (4 required clicks after posting a message with a channel
+change). Now: one primary action posts the update and immediately calls `prepareUpdateNotification`
+for the pre-selected preferred channel; confirm remains its own explicit click.
+
+**Decisions locked (2026-08-25, UX-only, no ADR change — same durable facts/contract):**
+- New `KeepSplitButton` (`components/keep/KeepSplitButton.tsx`) reuses `KeepButton`'s teal design
+  tokens; primary action is `Post & prepare <preferred channel>`, caret menu offers the alternate
+  channel and an explicit `Post to page only (no notify)` — the "Not now" equivalent, which must
+  render no notify panel and no `pendingNotification` record.
+- If the auto-prepare call fails after a successful post, fall through to
+  `NotifyCustomerPanel`'s existing channel-selection phase (now also given `key={notifyEventId}`
+  to avoid stale state across posts) with the failure surfaced via a new `initialError` prop —
+  never silently drop the notify step.
+- "Post to page only" now shows a 4s auto-dismissing success banner (same pattern/tokens as
+  `RequestDetail.tsx`'s `reviewSuccessMsg`) in the slot the notify panel would otherwise occupy, so
+  every successful post gives visible confirmation regardless of which button was used.
+- Resumed-notification banner polish (compact strip instead of the current full panel on
+  reload/navigate-away) was scoped out of this batch — deferred, not blocking.
+
+Files: `pages/request-detail/BusinessSection.tsx`, `pages/request-detail/NotifyCustomerPanel.tsx`,
+`pages/request-detail/helpers.ts` (new `NotifyChannel` type, `suggestedNotifyChannel`,
+`notifyChannelLabel`), `components/keep/KeepSplitButton.tsx` (new),
+`pages/request-detail/__tests__/BusinessSection.notify.test.tsx`.
+
+Verified: `tsc --noEmit` clean, `git diff --check` clean, full `src/pages/request-detail` suite
+207/207 passing (includes a regression test for the page-only path, added after review caught it
+initially still surfacing the notify panel).
 
 ### Frontend — possible-existing-customer lookup + reuse contract — complete (2026-08-24)
 

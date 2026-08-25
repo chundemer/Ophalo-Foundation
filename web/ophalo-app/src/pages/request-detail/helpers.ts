@@ -109,6 +109,17 @@ export const INPUT_CLS =
 export const STATUS_CONFLICT_MESSAGE =
   "This request has been updated by another team member. Copy your unsaved notes and refresh the workbench to load the latest history.";
 
+export type NotifyChannel = "sms" | "email";
+
+// GAP-052b / ADR-451: this only picks a default — the operator can always override it.
+export function suggestedNotifyChannel(detail: KeepRequestDetailResult): NotifyChannel {
+  return detail.customerEmail && detail.contactPreference === "email" ? "email" : "sms";
+}
+
+export function notifyChannelLabel(channel: NotifyChannel): string {
+  return channel === "sms" ? "text" : "email";
+}
+
 /**
  * Builds a follow-up description that keeps `prefix + copiedText` within
  * DESCRIPTION_MAX_LENGTH, truncating only the copied original text — never the prefix —

@@ -4,11 +4,11 @@ import { RefreshCw } from "lucide-react";
 import { api, ApiError, type KeepRequestDetailResult } from "../../lib/apiClient";
 import { KeepButton } from "../../components/keep/KeepButton";
 import { KeepBadge } from "../../components/keep/KeepBadge";
-import { formatEventTime } from "./helpers";
+import { formatEventTime, suggestedNotifyChannel, type NotifyChannel } from "./helpers";
 import { formatNaPhone } from "../../components/quick-capture/utils";
 import { useHandoffMint } from "./useHandoffMint";
 
-type Channel = "sms" | "email";
+type Channel = NotifyChannel;
 
 interface NotifyCustomerPanelProps {
   requestId: string;
@@ -16,6 +16,10 @@ interface NotifyCustomerPanelProps {
   relatedUpdateEventId: string;
   onDetailUpdated: (updated: KeepRequestDetailResult) => void;
   onDone: () => void;
+  // Set when the composer's auto-prepare (Post & Prepare <channel>) call failed right after
+  // posting — surfaces the failure here instead of dropping it, and lets the operator retry
+  // the prepare step manually from the selection phase below.
+  initialError?: string | null;
 }
 
 // GAP-052b / ADR-451: post → prepare → confirm is three distinct, separately attested actions.
@@ -30,19 +34,18 @@ export function NotifyCustomerPanel({
   relatedUpdateEventId,
   onDetailUpdated,
   onDone,
+  initialError = null,
 }: NotifyCustomerPanelProps) {
   const pending =
     detail.pendingNotification?.relatedUpdateEventId === relatedUpdateEventId
       ? detail.pendingNotification
       : null;
 
-  const suggestedChannel: Channel = detail.customerEmail && detail.contactPreference === "email"
-    ? "email"
-    : "sms";
+  const suggestedChannel: Channel = suggestedNotifyChannel(detail);
   const [selectedChannel, setSelectedChannel] = useState<Channel>(suggestedChannel);
   const [isPreparing, setIsPreparing] = useState(false);
   const [isConfirming, setIsConfirming] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(initialError);
   const [conflictDisabled, setConflictDisabled] = useState(false);
 
   const publicBaseUrl = (import.meta.env.VITE_PUBLIC_BASE_URL as string).replace(/\/$/, "");

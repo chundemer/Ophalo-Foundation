@@ -12,12 +12,14 @@ import type { KeepRequestDetailResult } from "../../../lib/apiClient";
 
 const mockPostBusinessUpdate = vi.fn();
 const mockPatchRequestStatus = vi.fn();
+const mockPrepareUpdateNotification = vi.fn();
 const notifyPanelSpy = vi.fn();
 
 vi.mock("../../../lib/apiClient", () => ({
   api: {
     postBusinessUpdate: (...args: unknown[]) => mockPostBusinessUpdate(...args),
     patchRequestStatus: (...args: unknown[]) => mockPatchRequestStatus(...args),
+    prepareUpdateNotification: (...args: unknown[]) => mockPrepareUpdateNotification(...args),
   },
   ApiError: class ApiError extends Error {
     status: number;
@@ -82,6 +84,7 @@ describe("BusinessUpdateSection — notify-step wiring (GAP-052b)", () => {
         },
       ],
     });
+    mockPrepareUpdateNotification.mockResolvedValue({ ...detail, pendingNotification: null });
 
     render(
       <BusinessUpdateSection
@@ -96,10 +99,76 @@ describe("BusinessUpdateSection — notify-step wiring (GAP-052b)", () => {
       />
     );
 
-    await user.click(screen.getByRole("button", { name: "Post customer-page update" }));
+    await user.click(screen.getByRole("button", { name: "Post & prepare text" }));
 
     await waitFor(() => expect(screen.getByTestId("notify-panel")).toBeInTheDocument());
     expect(notifyPanelSpy).toHaveBeenCalledWith("new-event-99");
+    expect(mockPrepareUpdateNotification).toHaveBeenCalledWith(
+      "req-77",
+      { relatedUpdateEventId: "new-event-99", channel: "sms" },
+      detail.version,
+    );
+  });
+
+  it("does not show NotifyCustomerPanel when the operator explicitly picks page-only", async () => {
+    const user = userEvent.setup();
+    const detail = baseDetail();
+    mockPostBusinessUpdate.mockResolvedValue({
+      ...detail,
+      events: [
+        ...detail.events,
+        {
+          id: "new-event-100",
+          eventType: "message_added",
+          content: "We're on our way.",
+          visibility: "all",
+          occurredAtUtc: "2026-07-26T20:00:00Z",
+          actorType: "AccountUser",
+          actorAccountUserId: "user-1",
+          actorDisplayName: "Jamie Reyes",
+          statusAfter: null,
+          messageIntent: "business_update",
+          communicationChannel: "in_app",
+          externalContactDirection: null,
+          externalContactChannel: null,
+          externalContactOutcome: null,
+          externalContactRequiresFollowUp: null,
+          externalContactSetFirstResponse: null,
+          externalContactClearedAttention: null,
+          participationAction: null,
+          participationTargetAccountUserId: null,
+          participationTargetDisplayName: null,
+          participationPreviousResponsibleAccountUserId: null,
+          participationInternalNote: null,
+          plannedForDate: null,
+          followUpOnDate: null,
+          followUpOnReason: null,
+          feedbackWasResolved: null,
+          relatedEventId: null,
+        },
+      ],
+    });
+
+    render(
+      <BusinessUpdateSection
+        requestId="req-77"
+        detail={detail}
+        onDetailUpdated={() => {}}
+        draft="We're on our way."
+        onDraftChange={() => {}}
+        draftStatus=""
+        onDraftStatusChange={() => {}}
+        composerMode
+      />
+    );
+
+    await user.click(screen.getByRole("button", { name: "More notify options" }));
+    await user.click(screen.getByRole("menuitem", { name: "Post to page only (no notify)" }));
+
+    await waitFor(() => expect(mockPostBusinessUpdate).toHaveBeenCalled());
+    expect(mockPrepareUpdateNotification).not.toHaveBeenCalled();
+    expect(screen.queryByTestId("notify-panel")).not.toBeInTheDocument();
+    expect(await screen.findByRole("status")).toHaveTextContent("Posted to the customer page.");
   });
 
   it("does not show NotifyCustomerPanel for a status-only change with no message", async () => {
