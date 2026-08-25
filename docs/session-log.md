@@ -767,17 +767,39 @@ earlier contract/routing slice.
   request" itself (`RequestDetailAnchor.tsx`, `BusinessSection.tsx`). Mobile must not inherit this
   client-derived rule — the safety model requires server-authoritative primary-action selection.
 
-### 0A. Server-authored primary action contract — locked scope (2026-08-25), not yet implemented
+### 0A. Server-authored primary action contract
 
-Blocking gate before Slice 1. Full scope, precedence rule, and field shape (including the new
+Blocking gate before Slice 1. Full scope, precedence rule, and field shape (including the
 `Target` field) are locked in the
 [Request Detail API preflight, "Session 0A locked decision"](ux-design/v2/request-detail-workbench-api-preflight.md#session-0a-locked-decision-2026-08-25).
-Summary: add `KeepRequestActionPolicy`-computed `PrimaryAction` (attention-resolution route first,
-then `close_request`/`mark_work_done` only when no attention is active, else `null`); keep
-`CanClose`/`CanChangeStatus`/etc. as capability flags only; migrate desktop's
-`WorkDoneCard`/`CloseRequestCard` compact primary slot to read the new field; add backend policy
-tests and a frontend contract test. Requires its own approved implementation batch before Mobile V2
-Slice 1 begins.
+
+**Backend — complete (2026-08-25, commit `41ceda1`).** `KeepRequestActionPolicy` gained pure
+`SelectPrimaryAction`/`SelectMarkWorkDoneSecondary` (attention-resolution route always outranks
+work completion/closeout; `close_request`/`mark_work_done` only selected with no active attention;
+`null` when no route is safely recommendable) and `CanResolveFollowUp` (verified equivalent to
+`KeepRequest.ResolveFollowUp`'s own structural gate). `KeepRequestDetailMapper.ToDetailResult`
+computes `EffectiveAttentionResult` once and folds `PrimaryAction`/`MarkWorkDoneSecondary` into
+`AvailableActionsMetadata` via a single `with` expression — zero changes to any of the ~20 existing
+detail-response caller services. 101/101 focused unit tests pass (`KeepRequestActionPolicyTests`,
+new `KeepRequestDetailMapperTests`); full solution builds clean; `git diff --check` clean.
+
+**Desktop migration — approved scope, not yet started. This is the required next step before any
+Mobile V2 Slice 1 work begins:**
+- Replace the Anchor's compact `WorkDoneCard`/`CloseRequestCard` client-derived primary-slot logic
+  (`RequestDetailAnchor.tsx`, `BusinessSection.tsx`) with a renderer that reads the server's
+  `AvailableActions.PrimaryAction` directly — no client eligibility/precedence derivation survives.
+- Honor `Target` (`mutation` / `customer_update_composer` / `attention_sheet` / `contact_sheet` /
+  `follow_up_sheet`), `RequiresConfirmation`, `ConfirmationCopy`, and the `null`-primary state
+  (render nothing, not a guess).
+- Add the compact Close confirmation step that does not currently exist — today's compact
+  `CloseRequestCard` fires `patchRequestStatus` immediately on click with no confirm dialog, which
+  does not honor `RequiresConfirmation: true` on `close_request`.
+- Render the server-authored `MarkWorkDoneSecondary` (`attention_remains` consequence) as the
+  authorized secondary Work Done control when attention keeps it out of the primary slot — never a
+  second primary action.
+
+Do not begin any mobile UI work (Slice 1+) until this shared desktop renderer is working against
+the new contract.
 
 ### 1. Mobile shell and Queue return path
 
