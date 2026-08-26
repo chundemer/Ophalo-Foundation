@@ -14,7 +14,7 @@
 
 ## Current work
 
-### PWA Mobile V2 — Slice 5a complete, Slice 5b next
+### PWA Mobile V2 — Slice 5b complete; Slice 5c next
 
 **Go-live target:** Mobile V2 work applies only to the responsive authenticated PWA
 (`web/ophalo-app`). The separate Expo/native client (`mobile/ophalo-mobile`) is not a launch
@@ -130,15 +130,30 @@ payload even after the technician edits the field post-failure, a later failure 
 action replaces the earlier banner). Verified: focused `ActualWorkComposer` suite 23/23, focused
 `request-detail` suite 239/239 passing, `tsc --noEmit` clean, `git diff --check` clean.
 
-**Dropped from 5a scope (2026-08-26): `ProposedScopeComposer.tsx`.** Mechanical preflight found it is
-not mounted by any parent component anywhere in the app (only self-references, its own test, and two
-comment mentions remain) — unreachable by any user path, mobile or desktop. Spending this
-reliability batch on unreachable code doesn't deliver the batch's value. Its dead-mount status is an
-open item needing a separate ownership decision (intentionally paused feature vs. regression) before
-any future work — including a 5b/5c-style failure-feedback fix — touches it.
+**Proposed Scope status and sequencing decision (2026-08-26).** Mechanical preflight confirmed
+`ProposedScopeComposer.tsx` is not mounted by any current user path. Product ownership has now
+confirmed this is an intentional go-live pause, not dead code: the composer is retained for future
+quote production. Its connection-recovery work is therefore deferred to the post-pilot Quote
+Production Readiness Gate; it must not be remounted until those readiness slices are complete.
 
-Next: Slice 5b — remaining composer mutation-handler families (see "PWA mobile pilot workflow —
-approved code slices" below).
+**Slice 5b (Primary Action Connection Recovery): complete (2026-08-26).** `PrimaryMutationButton`
+(shared by `PrimaryActionSlot`'s mutation target and `MarkWorkDoneSecondarySlot`) had one `submit()`
+handler whose `catch` special-cased `ApiError && status === 409` (conflict, correct) but folded every
+other rejection — including a real transport failure — into a generic "Try again" string with no
+connection-specific copy and no explicit Retry. Reused 5a's `ConnectionFailureBanner` for a
+non-`ApiError` rejection; the existing 409 and non-409-`ApiError` (validation/server) branches are
+unchanged. `submit()` now takes an optional retry snapshot (`{ requestId, targetStatus, version }`)
+captured at the original attempt — not read live from props at Retry time — so a parent re-render
+with a newer `detail.version` before the operator presses Retry cannot cause Retry to replay a
+different request than the one that actually failed (same rule as 5a).
+
+Files: `PrimaryActionControl.tsx`, new `__tests__/PrimaryActionControl.test.tsx` (6 tests: success,
+409 conflict unchanged, non-409 `ApiError` unchanged, transport failure shows the banner, Retry
+replays and clears on success, Retry replays the original snapshot even after the parent supplies a
+newer `detail.version`). Verified: focused `PrimaryActionControl` suite 6/6, focused `request-detail`
+suite 245/245 passing, `tsc --noEmit` clean, `git diff --check` clean.
+
+**Next: Slice 5c — accessibility and device-state pass (required release gate).**
 
 The 2026-08-24/25 resolved defects and attention-presentation decisions are recorded in the
 [pilot-readiness bug tracker](pilot-readiness-bug-tracker.md#p0p1-pilot-flow-bugs).
@@ -1022,12 +1037,11 @@ required no changes for this slice.
 
 ### 5. Connected-only failure, accessibility, and device pass
 
-Split across three batches under the hard batch-size gate (mechanical preflight, 2026-08-26, found
-the failure-feedback work fans out to 7+ mutation-handler families / 7+ production files — well
-past the three-family/eight-file limit — with `ActualWorkComposer.tsx` and `ProposedScopeComposer.tsx`
-currently collapsing non-400 errors, including network failures, into the conflict path).
+The go-live work remains split under the hard batch-size gate. Paused Proposed Scope work is tracked
+separately under the post-pilot Quote Production Readiness Gate, rather than consuming pilot-release
+capacity.
 
-#### 5a. Shared retry UI + ActualWorkComposer — next
+#### 5a. Shared retry UI + ActualWorkComposer — complete (2026-08-26)
 
 Highest-value first: `ActualWorkComposer.tsx` currently mislabels a lost connection as a conflict
 across 6 mutations (add-line, assembly-add, suggestion-accept, draft-line update/remove, submit) —
@@ -1045,20 +1059,19 @@ for HTTP responses; a real network failure throws a non-`ApiError` rejection fro
 - Apply only to `ActualWorkComposer.tsx` in this batch. Do not touch the other composer handler
   families below.
 
-**Dropped from 5a scope (2026-08-26): `ProposedScopeComposer.tsx`.** Mechanical preflight found it is
-not mounted by any parent component anywhere in the app (only self-references, its own test, and two
-comment mentions remain) — unreachable by any user path, mobile or desktop. Spending this
-reliability batch on unreachable code doesn't deliver the batch's value. Its dead-mount status is an
-open item needing a separate ownership decision (intentionally paused feature vs. regression) before
-any future work — including a 5b/5c-style failure-feedback fix — touches it.
+`ProposedScopeComposer.tsx` was excluded because it is intentionally paused for go-live, not because
+it is obsolete. Its retained future-quote work is defined below under the Quote Production Readiness
+Gate.
 
-#### 5b. Remaining composer mutation-handler families
+#### 5b. Primary Action Connection Recovery — complete (2026-08-26)
 
-- Same connected-only failure surface and retry-on-operator-action rule as 5a, applied to the
-  remaining handler families found in preflight: `PrimaryActionControl.tsx`, `ComposerDraftList.tsx`,
-  `ComposerSearchAndAdd.tsx`, `ComposerUndoToast.tsx`, `ComposerQuickActions.tsx`,
-  `ComposerNudgePanel.tsx` (confirm this list is still current at 5b's own mechanical preflight).
-- Group within the batch-size gate; split further if the confirmed family/file count still exceeds it.
+- Apply the connected-only failure rule to live `PrimaryActionControl.tsx` only. A real API 409
+  remains its existing conflict path; a non-`ApiError` transport failure receives connection-specific
+  feedback and an explicit Retry action, with no silent replay.
+- Retry must preserve the original status-change request and clear the connection failure only after
+  server success. Keep existing confirmation, loading, and server-validation behavior intact.
+- Mechanical preflight must confirm the live call sites and current handler behavior before edits.
+  Expected scope: one mutation-handler family, one production file, and focused tests.
 
 #### 5c. Accessibility and device-state pass
 
@@ -1068,6 +1081,29 @@ any future work — including a 5b/5c-style failure-feedback fix — touches it.
 - Price Book, Settings, and Account Administration are out of scope for the mobile PWA pilot and
   must be omitted rather than rendered as disabled or desktop-only destinations.
 - Required release gate — do not drop or fold silently into 5a/5b.
+
+#### Post-pilot: Quote Production Readiness Gate
+
+`ProposedScopeComposer.tsx` is intentionally unmounted for the pilot but retained for future quote
+production. It may not be remounted or exposed to users until both slices below pass their own
+mechanical preflight, focused tests, and the hard batch-size gate (at most three mutation-handler
+families, eight production files, and twelve files total per batch). Both use the 5a model: one
+parent-owned `ConnectionFailureBanner`, real API validation/conflicts preserved, and transport
+failures retried only after explicit operator action using the original payload.
+
+##### 5b-1. Proposed Scope search, drafts, and undo
+
+- `ComposerSearchAndAdd.tsx`, `ComposerDraftList.tsx`, and `ComposerUndoToast.tsx`, with
+  `ProposedScopeComposer.tsx` owning the shared connection-failure state and banner.
+- Confirm the six writes in this group (search/select or expand, draft update/remove, and undo)
+  still have the preflighted behavior before changing code.
+
+##### 5b-2. Proposed Scope quick actions, nudges, and submit
+
+- `ComposerQuickActions.tsx`, `ComposerNudgePanel.tsx`, and the submit handler in
+  `ProposedScopeComposer.tsx`.
+- Reconfirm failure classification and retry-payload capture at that batch's own preflight; do not
+  assume the 5b-1 implementation remains mechanically current.
 
 ### Local-phone verification loop
 

@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { api, ApiError, type KeepRequestDetailResult } from "../../lib/apiClient";
 import { KeepButton } from "../../components/keep/KeepButton";
+import { ConnectionFailureBanner } from "./ConnectionFailureBanner";
 
 // Shared, exhaustive renderer over the closed server `target` vocabulary (Session 0A,
 // 2026-08-25). Exactly one of `RequestDetailAnchor` (no active attention) or
@@ -169,6 +170,10 @@ function PrimaryMutationButton({
   const [conflictDisabled, setConflictDisabled] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
+  const [connectionFailure, setConnectionFailure] = useState<{
+    message: string;
+    snapshot: { requestId: string; targetStatus: "resolved" | "closed"; version: string };
+  } | null>(null);
 
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const confirmBtnRef = useRef<HTMLButtonElement>(null);
@@ -205,25 +210,43 @@ function PrimaryMutationButton({
 
   useEffect(() => () => clearTimer(), [clearTimer]);
 
-  async function submit() {
+  async function submit(retrySnapshot?: { requestId: string; targetStatus: "resolved" | "closed"; version: string }) {
     if (isSubmitting || conflictDisabled) return;
+    // Snapshot at the original attempt (not read live from props at retry time) so a Retry
+    // replays the exact request that failed, even if the parent re-renders with a newer
+    // `detail.version` before the operator presses Retry — same rule as 5a's
+    // ActualWorkComposer retries.
+    const snapshot = retrySnapshot ?? { requestId, targetStatus, version: detail.version };
     clearTimer();
     setConfirming(false);
     setIsSubmitting(true);
     setError(null);
+    setConnectionFailure(null);
     try {
-      const updated = await api.patchRequestStatus(requestId, { status: targetStatus }, detail.version);
+      const updated = await api.patchRequestStatus(snapshot.requestId, { status: snapshot.targetStatus }, snapshot.version);
       onDetailUpdated(updated);
     } catch (e) {
-      if (e instanceof ApiError && e.status === 409) {
-        setConflictDisabled(true);
-        setError("This request was updated. Refresh to see the latest state.");
+      if (e instanceof ApiError) {
+        if (e.status === 409) {
+          setConflictDisabled(true);
+          setError("This request was updated. Refresh to see the latest state.");
+        } else {
+          setError(snapshot.targetStatus === "resolved" ? "Could not mark work done. Try again." : "Could not close request. Try again.");
+        }
       } else {
-        setError(targetStatus === "resolved" ? "Could not mark work done. Try again." : "Could not close request. Try again.");
+        setConnectionFailure({
+          message: snapshot.targetStatus === "resolved" ? "Couldn't mark work done." : "Couldn't close request.",
+          snapshot,
+        });
       }
     } finally {
       setIsSubmitting(false);
     }
+  }
+
+  function handleRetry() {
+    if (!connectionFailure) return;
+    void submit(connectionFailure.snapshot);
   }
 
   function handleClick() {
@@ -248,6 +271,9 @@ function PrimaryMutationButton({
 
   return (
     <div className="flex flex-col gap-1">
+      {connectionFailure && (
+        <ConnectionFailureBanner message={connectionFailure.message} onRetry={handleRetry} isRetrying={isSubmitting} />
+      )}
       {error && (
         <p
           aria-live="polite"
