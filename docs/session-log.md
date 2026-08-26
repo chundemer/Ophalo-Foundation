@@ -1,6 +1,6 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-08-25
+**Last updated:** 2026-08-26
 **Deployment posture:** Not pilot-ready.
 **Purpose:** active handoff only. Completed implementation narratives belong in Git history and the relevant build log, not here.
 
@@ -14,7 +14,7 @@
 
 ## Current work
 
-### PWA Mobile V2 — Slice 2 complete, Slice 3 next
+### PWA Mobile V2 — Slice 3 complete, Slice 4 next
 
 **Go-live target:** Mobile V2 work applies only to the responsive authenticated PWA
 (`web/ophalo-app`). The separate Expo/native client (`mobile/ophalo-mobile`) is not a launch
@@ -51,9 +51,35 @@ off-screen, so its action drops out of the keyboard tab order.
 Files: `MobileRequestAnchor.tsx` (new), `RequestDetailContent.tsx`,
 `__tests__/MobileRequestAnchor.test.tsx` (new), plus 2 existing `RequestDetailContent` test files'
 mocks updated for the new responsive branch. Verified: focused `request-detail` suite 224/224
-passing, `tsc --noEmit` clean, `git diff --check` clean. Next: Slice 3 — Request work canvas
-reorder (contact/service-location strip, Customer Need, Actual Work, communication, activity,
-record utilities — see "PWA mobile pilot workflow — approved code slices" below).
+passing, `tsc --noEmit` clean, `git diff --check` clean.
+
+**Slice 3 (Request work canvas — contact/location, native call/text/maps): complete (2026-08-26).**
+Field-operations decision (2026-08-26): Call/Text must be ordinary native `tel:`/`sms:` anchors
+reachable directly from the mobile canvas, not buttons that only open the contact-logging modal —
+no `preventDefault`, no client-side navigation, no reload. Added `MobileContactLocationCard.tsx`,
+mounted in `RequestDetailContent.tsx`'s canvas only when `!isWide`, between the Anchor and
+Customer Need. Renders native `tel:+1${digits}`/`sms:+1${digits}` anchors (phone normalized via
+the existing `normalizeNaPhoneInput()` — not `stripToDigits().slice(0, 10)`, which would keep a
+leading "1" from a stored E.164 value and misdial), a native external Maps anchor
+(`target="_blank"`, `rel="noopener noreferrer"`, `encodeURIComponent`-ed query built from
+independently-present address parts, gated on a non-empty composed query rather than the broader
+`line1 || city` presence check), the existing `ServiceLocationPanel` for address text/edit, and
+the existing (previously unmounted) `LogContactCard` as the one separate, explicit audit path —
+none of the native handoffs create an automatic contact-logged activity. Desktop is unchanged:
+contact/location stays solely in `RequestDetailAnchor`/`CustomerContactStrip`.
+
+Also fixed a canvas-order drift found in mechanical preflight: the shared canvas had Activity
+rendering below "Record details," contradicting the locked mobile order (Attention → Contact/
+Location → Customer Need → Actual Work → Communication → Activity → Record Details). Swapped the
+two blocks, but scoped the swap to `!isWide` only — desktop keeps its own separately locked order
+(Record details above Activity, slice 5, 2026-08-23) unchanged.
+
+Files: `MobileContactLocationCard.tsx` (new), `RequestDetailContent.tsx`,
+`__tests__/MobileContactLocationCard.test.tsx` (new, 8 tests), 2 existing `RequestDetailContent`
+test files' `DetailPanels`/new-component mocks updated, plus a DOM-order (not snapshot) assertion
+for the full mobile canvas sequence. Verified: focused `request-detail` suite 233/233 passing,
+`tsc --noEmit` clean, `git diff --check` clean. Next: Slice 4 — Actual Work focused workspace (see
+"PWA mobile pilot workflow — approved code slices" below).
 
 The 2026-08-24/25 resolved defects and attention-presentation decisions are recorded in the
 [pilot-readiness bug tracker](pilot-readiness-bug-tracker.md#p0p1-pilot-flow-bugs).

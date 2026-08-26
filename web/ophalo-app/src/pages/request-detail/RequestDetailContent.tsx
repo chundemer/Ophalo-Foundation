@@ -15,6 +15,7 @@ import {
 import { TodayPromiseBanner } from "./DetailHero";
 import { RequestDetailAnchor } from "./RequestDetailAnchor";
 import { MobileRequestAnchor, MobileActionRail } from "./MobileRequestAnchor";
+import { MobileContactLocationCard } from "./MobileContactLocationCard";
 import { UnifiedComposer, type UnifiedComposerHandle } from "./UnifiedComposer";
 import { KeepButton } from "../../components/keep/KeepButton";
 import { RequestDetailActivity } from "./RequestDetailActivity";
@@ -44,10 +45,12 @@ interface RequestDetailContentProps extends RequestDetailLayoutProps {
 }
 
 // Work Canvas — the Workbench's sole vertical scroll surface (locked spec §1.2, §1.5, §5, §7.1).
-// Fixed module order: attention guidance -> original customer need -> Actual Work context ->
-// communication/note composition -> activity/history -> lower-frequency record context. Proposed
-// Scope is explicitly deferred from this pilot Workbench (locked spec §1.7/§3) and is not wired
-// here.
+// Desktop module order: attention guidance -> Customer Need -> Actual Work context ->
+// communication -> record details -> activity. Mobile (Slice 3, 2026-08-26) inserts a
+// contact/service-location card after attention and swaps the last two: attention -> contact/
+// location -> Customer Need -> Actual Work -> communication -> activity -> record details.
+// Proposed Scope is explicitly deferred from this pilot Workbench (locked spec §1.7/§3) and is
+// not wired here.
 export function RequestDetailContent(props: RequestDetailContentProps) {
   const { detail, requestId, highlights, showProminentFeedbackCard, onDetailUpdated, onContactLaunched, onEditLocation, onOpenReassignOwner, onOpenWatchers, onRecordFollowUp, onCreateFollowUp, onReviewSuccess, onOpenClearAttention } = props;
   const layoutProps: RequestDetailLayoutProps = { requestId, detail, highlights, showProminentFeedbackCard, onDetailUpdated, onContactLaunched, onEditLocation, onOpenReassignOwner, onOpenWatchers, onRecordFollowUp, onCreateFollowUp, onReviewSuccess };
@@ -101,6 +104,31 @@ export function RequestDetailContent(props: RequestDetailContentProps) {
     [isTextEntryElement],
   );
 
+  const activityBlock = (
+    <RequestDetailActivity timelineFilter={props.timelineFilter} onTimelineFilterChange={props.onTimelineFilterChange} displayedEvents={props.displayedEvents} />
+  );
+
+  const recordDetailsBlock = (
+    <details className="group rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-4 py-3">
+      <summary
+        className={`flex cursor-pointer list-none items-center justify-between text-xs font-semibold uppercase tracking-widest text-[var(--ophalo-muted)] ${FOCUS_RING} rounded`}
+      >
+        Record details
+        <span className="text-[var(--ophalo-muted)] transition-transform group-open:rotate-180">⌄</span>
+      </summary>
+      {/* Each panel self-hides (returns null) when it has nothing meaningful to show;
+          divide-y only borders elements with an actual preceding DOM sibling, so a hidden
+          panel never leaves a divider/empty gap. */}
+      <div className="mt-3 rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] divide-y divide-[var(--ophalo-border)]">
+        <CustomerSignalPanel detail={detail} bare />
+        <RelatedWorkPanel requestId={requestId} onNavigate={props.onNavigate} bare />
+        <TeamSection requestId={requestId} detail={detail} onDetailUpdated={onDetailUpdated} bare />
+        {!showProminentFeedbackCard && <FeedbackSummaryCard detail={detail} bare />}
+        <SourceMetaPanel detail={detail} bare />
+      </div>
+    </details>
+  );
+
   return (
     <div ref={rootRef} onFocus={handleCanvasFocus} onBlur={handleCanvasBlur} className="flex flex-1 min-h-0 flex-col">
       {isWide ? (
@@ -131,11 +159,17 @@ export function RequestDetailContent(props: RequestDetailContentProps) {
           <TodayPromiseBanner detail={detail} onRecordFollowUp={onRecordFollowUp} />
         </div>
 
-        {/* 2. Customer need — permanent, always mounted regardless of attention state
+        {/* 2. Contact/service location — mobile canvas only (Slice 3, 2026-08-26); desktop
+            keeps this content solely in RequestDetailAnchor/CustomerContactStrip. */}
+        {!isWide && (
+          <MobileContactLocationCard detail={detail} onContactLaunched={onContactLaunched} onEditLocation={onEditLocation} />
+        )}
+
+        {/* 3. Customer need — permanent, always mounted regardless of attention state
             (locked spec, 2026-08-24: decoupled from the conditional attention rail). */}
         <OriginalRequestCard detail={detail} />
 
-        {/* 3. Work execution — Actual Work, one compact module (locked exception, 2026-08-22:
+        {/* 4. Work execution — Actual Work, one compact module (locked exception, 2026-08-22:
             capture and visit history share one enclosing card; visit history renders only when
             visits actually exist, no "no visits submitted" filler). Whole module self-hides when
             neither has content. */}
@@ -150,9 +184,10 @@ export function RequestDetailContent(props: RequestDetailContentProps) {
           </div>
         )}
 
-        {/* 4. Communication — composer only; Follow-Up/Planned-For and priority moved to the
-            Anchor's compact Internal Planning strip (locked 2026-08-24). Log Contact's one entry
-            point lives in the Anchor too, not duplicated here. */}
+        {/* 5. Communication — composer only; Follow-Up/Planned-For and priority moved to the
+            Anchor's compact Internal Planning strip (locked 2026-08-24). Desktop's one Log Contact
+            entry point lives in the Anchor; mobile's lives in the Contact/Location card above
+            (Slice 3), not duplicated here. */}
         <div className="space-y-3">
           {showProminentFeedbackCard && <ProminentFeedbackCard requestId={requestId} detail={detail} onDetailUpdated={onDetailUpdated} onReviewSuccess={onReviewSuccess} />}
           {props.reviewSuccessMsg && <div role="status" aria-live="polite" className="rounded-xl border border-[var(--ophalo-success)] bg-[var(--ophalo-success-bg)] px-4 py-3 text-sm text-[var(--ophalo-success)] font-medium">{props.reviewSuccessMsg}</div>}
@@ -187,31 +222,22 @@ export function RequestDetailContent(props: RequestDetailContentProps) {
           </div>
         )}
 
-        {/* 5. Lower-frequency record context — concise disclosure, not a stack of full-width
-            cards (locked correction, 2026-08-22). Owner/contact are already in the Anchor, so
-            they are not repeated here; TeamSection's assigned-owner row is omitted in this mode. */}
-        <details className="group rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-4 py-3">
-          <summary
-            className={`flex cursor-pointer list-none items-center justify-between text-xs font-semibold uppercase tracking-widest text-[var(--ophalo-muted)] ${FOCUS_RING} rounded`}
-          >
-            Record details
-            <span className="text-[var(--ophalo-muted)] transition-transform group-open:rotate-180">⌄</span>
-          </summary>
-          {/* Each panel self-hides (returns null) when it has nothing meaningful to show;
-              divide-y only borders elements with an actual preceding DOM sibling, so a hidden
-              panel never leaves a divider/empty gap. */}
-          <div className="mt-3 rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] divide-y divide-[var(--ophalo-border)]">
-            <CustomerSignalPanel detail={detail} bare />
-            <RelatedWorkPanel requestId={requestId} onNavigate={props.onNavigate} bare />
-            <TeamSection requestId={requestId} detail={detail} onDetailUpdated={onDetailUpdated} bare />
-            {!showProminentFeedbackCard && <FeedbackSummaryCard detail={detail} bare />}
-            <SourceMetaPanel detail={detail} bare />
-          </div>
-        </details>
-
-        {/* 6. Activity — one chronological timeline, collapsed at rest, moved below Record
-            details (slice 5, 2026-08-23). Still the canvas's sole timeline render. */}
-        <RequestDetailActivity timelineFilter={props.timelineFilter} onTimelineFilterChange={props.onTimelineFilterChange} displayedEvents={props.displayedEvents} />
+        {/* 6/7. Activity and lower-frequency record context. Desktop keeps its locked order
+            (Record details above Activity, slice 5, 2026-08-23) — unchanged. Mobile's locked
+            canvas order (Slice 3, 2026-08-26) puts Activity above Record details, so the two
+            blocks below swap only when !isWide. Each still self-hides/collapses exactly as
+            before; only their relative order changes. */}
+        {isWide ? (
+          <>
+            {recordDetailsBlock}
+            {activityBlock}
+          </>
+        ) : (
+          <>
+            {activityBlock}
+            {recordDetailsBlock}
+          </>
+        )}
       </div>
       </div>
       {!isWide && (
