@@ -14,7 +14,7 @@
 
 ## Current work
 
-### PWA Mobile V2 — Slice 5b complete; Slice 5c next
+### PWA Mobile V2 — Slice 5c pass 1 complete; pass 2 (required) next
 
 **Go-live target:** Mobile V2 work applies only to the responsive authenticated PWA
 (`web/ophalo-app`). The separate Expo/native client (`mobile/ophalo-mobile`) is not a launch
@@ -153,7 +153,57 @@ replays and clears on success, Retry replays the original snapshot even after th
 newer `detail.version`). Verified: focused `PrimaryActionControl` suite 6/6, focused `request-detail`
 suite 245/245 passing, `tsc --noEmit` clean, `git diff --check` clean.
 
-**Next: Slice 5c — accessibility and device-state pass (required release gate).**
+**Mobile administration pilot posture (locked 2026-08-26, breakpoint corrected 2026-08-26).** The
+next-week pilot is deliberately focused on the phone-safe operational loop (Queue → Request →
+customer context → communication → Actual Work). Price Book, Settings, and Account Administration
+remain available on their existing desktop/tablet routes; they are not being removed from the
+product. They must be omitted from the phone overflow menu rather than exposed as known-unoptimized
+tables, disabled destinations, or an escape hatch. **Getting Started** remains available.
+
+**Correction:** the initial same-day direction named the request-workspace's 1001px
+`PROTECTED_WORKSPACE_MIN_PX` boundary as the omission gate. That boundary is unrelated to the
+application-shell's actual phone/desktop split, which is Tailwind's `md:`/768px — the same
+breakpoint that gates both the mobile header holding the overflow menu's only trigger and the
+desktop nav (sidebar, or the workbench header's own nav on workbench routes) that still carries
+these items. A code review caught that gating the filter on a synthetic 1001px `ResizeObserver`
+measurement made the "keeps them above 1001px" branch unreachable in production — the menu can only
+ever open below 768px, where that branch never fires. Corrected: the phone overflow menu omits
+Price Book/Settings unconditionally (no width measurement needed, since the menu is already only
+ever reachable at the one width where desktop/tablet nav is unavailable). Post-pilot, prioritize a
+phone-safe read-only Price Book lookup; later administrative editing requires dedicated
+mobile-native views rather than a desktop-table port.
+
+**Slice 5c, structural piece 1 (safe-area insets + phone nav omission): complete (2026-08-26).**
+Added `viewport-fit=cover` to `index.html`'s viewport meta (required for any `env(safe-area-inset-*)`
+to resolve non-zero on iOS). Added `env(safe-area-inset-top)` padding to both `App.tsx`'s `md:hidden`
+mobile top bar (the element actually touching the physical top edge/notch on phone) and
+`MobileRequestAnchor`'s sticky top bar, per the originally named gate. Added top/bottom safe-area
+padding to `ActualWorkComposer`'s full-bleed (`!isWide`) branch only — the header block and the new
+`isWide` prop threaded into `ActualWorkSubmitFooter` — leaving the `isWide` right-drawer branch
+unpadded since it isn't flush against any physical edge. `MobileActionRail`'s bottom inset already
+existed from Slice 2 and was left as-is.
+
+Added phone-navigation omission: `App.tsx` filters Price Book and Settings out of the items passed
+to `MobileNavMenu` unconditionally — no width measurement, per the breakpoint correction above.
+Getting Started stays. Account Administration has no independent nav entry (it lives inside
+Settings), so omitting Settings omits it too; a test asserts it never appears independently in the
+phone menu, and a second test confirms the desktop workbench header (the actual ≥768px path, not
+the sidebar) still carries both.
+
+Files: `index.html`, `App.tsx`, `MobileRequestAnchor.tsx`, `ActualWorkComposer.tsx`, `App.test.tsx`
+(3 new tests: phone omits Price Book/Settings/Account Administration, desktop workbench header
+keeps them, mobile top bar carries the safe-area class), `__tests__/MobileRequestAnchor.test.tsx`
+(1 new test), `__tests__/ActualWorkComposer.test.tsx` (1 new test: full-bleed header/footer padded,
+drawer branch unpadded). Verified: focused `App`/`MobileRequestAnchor`/`ActualWorkComposer` suites
+and focused `request-detail` suite 247/247 passing, `tsc --noEmit` clean, `git diff --check` clean.
+
+**Slice 5c is not complete until its second, required pass lands:** the broader accessibility and
+device-state audit (conflict, permission-denied, loading, empty, keyboard, screen-reader, zoom, and
+interrupted-navigation states across the mobile canvas) — locked as Slice 5c's own required second
+pass, not a deferred/optional follow-up. The pilot remains not release-ready until that pass is
+verified complete.
+
+**Next: Slice 5c, pass 2 — accessibility and device-state audit (required release gate).**
 
 The 2026-08-24/25 resolved defects and attention-presentation decisions are recorded in the
 [pilot-readiness bug tracker](pilot-readiness-bug-tracker.md#p0p1-pilot-flow-bugs).
@@ -1077,9 +1127,16 @@ Gate.
 
 - Exercise conflict, permission-denied, loading, empty, safe-area, keyboard, screen-reader, zoom,
   and interrupted-navigation states.
-- Includes the safe-area inset padding explicitly deferred from Slice 4.
-- Price Book, Settings, and Account Administration are out of scope for the mobile PWA pilot and
-  must be omitted rather than rendered as disabled or desktop-only destinations.
+- Includes the safe-area inset padding explicitly deferred from Slice 4: add `viewport-fit=cover`
+  to the PWA viewport declaration, then verify top/bottom inset treatment for the mobile anchor,
+  action rail, and full-bleed Actual Work composer.
+- The pilot's phone navigation omits Price Book, Settings, and Account Administration at the
+  navigation data boundary — the application shell's actual phone/desktop split, Tailwind's
+  `md:`/768px, not `RequestWorkbenchShell`'s unrelated 1001px request-workspace pane-split
+  boundary. Keep their existing desktop/tablet routes and keep Getting Started available; do not
+  render excluded destinations as disabled links or unoptimized mobile escape hatches.
+- A phone-safe read-only Price Book lookup is the first post-pilot administration candidate;
+  editable administration requires a separately scoped mobile-native design.
 - Required release gate — do not drop or fold silently into 5a/5b.
 
 #### Post-pilot: Quote Production Readiness Gate

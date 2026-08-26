@@ -125,7 +125,11 @@ export function ActualWorkComposer({
           : "fixed inset-0 h-[100dvh] w-full flex flex-col bg-[var(--ophalo-card)]"
       }
     >
-      <div className="px-4 py-4 border-b border-[var(--ophalo-border)] shrink-0">
+      <div
+        className={`px-4 py-4 border-b border-[var(--ophalo-border)] shrink-0 ${
+          isWide ? "" : "pt-[max(1rem,env(safe-area-inset-top))]"
+        }`}
+      >
         <div className="flex items-start justify-between gap-3">
           <div>
             <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--ophalo-muted)]">Work execution manager</p>
@@ -256,6 +260,7 @@ export function ActualWorkComposer({
       <ActualWorkSubmitFooter
         draft={draft}
         submitted={submitted}
+        isWide={isWide}
         onSaveDraft={onClose}
         onConflict={onConflict}
         onConnectionFailure={reportConnectionFailure}
@@ -828,6 +833,7 @@ function ActualWorkDraftLine({
 interface ActualWorkSubmitFooterProps {
   draft: ActualWorkDraft;
   submitted: boolean;
+  isWide: boolean;
   onSaveDraft: () => void;
   onConflict: (message?: string) => void;
   onConnectionFailure: (message: string, retry: () => void) => void;
@@ -840,6 +846,7 @@ interface ActualWorkSubmitFooterProps {
 function ActualWorkSubmitFooter({
   draft,
   submitted,
+  isWide,
   onSaveDraft,
   onConflict,
   onConnectionFailure,
@@ -873,7 +880,11 @@ function ActualWorkSubmitFooter({
 
   if (submitted) {
     return (
-      <div className="px-4 py-3 border-t border-[var(--ophalo-border)] shrink-0">
+      <div
+        className={`px-4 py-3 border-t border-[var(--ophalo-border)] shrink-0 ${
+          isWide ? "" : "pb-[max(0.75rem,env(safe-area-inset-bottom))]"
+        }`}
+      >
         <p role="status" aria-live="polite" className="text-center text-sm font-medium text-[var(--ophalo-ink)]">
           Submitted to office — awaiting review
         </p>
@@ -884,7 +895,11 @@ function ActualWorkSubmitFooter({
   const canSubmit = zeroLine ? outcome !== "" && completionNote.trim().length > 0 : true;
 
   return (
-    <div className="px-4 py-3 border-t border-[var(--ophalo-border)] shrink-0 space-y-2">
+    <div
+      className={`px-4 py-3 border-t border-[var(--ophalo-border)] shrink-0 space-y-2 ${
+        isWide ? "" : "pb-[max(0.75rem,env(safe-area-inset-bottom))]"
+      }`}
+    >
       {zeroLine && (
         <>
           <select

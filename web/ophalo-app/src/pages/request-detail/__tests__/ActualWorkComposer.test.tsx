@@ -115,6 +115,37 @@ describe("ActualWorkComposer", () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
+  it("pads the full-bleed header/footer for the notch/home-indicator below isWide, and leaves the isWide drawer unpadded (Slice 5c)", () => {
+    const { rerender } = renderComposer({ isWide: false });
+
+    const narrowHeader = screen.getByRole("button", { name: "← Back to Request" }).parentElement?.parentElement;
+    expect(narrowHeader?.className).toContain("safe-area-inset-top");
+    const narrowFooter = screen.getByLabelText("Visit outcome").parentElement;
+    expect(narrowFooter?.className).toContain("safe-area-inset-bottom");
+
+    rerender(
+      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+        <ActualWorkComposer
+          draft={emptyDraft()}
+          conflictNotice={null}
+          isWide={true}
+          onClose={vi.fn()}
+          onCommitted={vi.fn()}
+          onConflict={vi.fn()}
+          onDismissNotice={vi.fn()}
+          onRetryReconciliation={vi.fn()}
+          onSubmitted={vi.fn()}
+          onDiscarded={vi.fn()}
+        />
+      </QueryClientProvider>,
+    );
+
+    const wideHeader = screen.getByRole("button", { name: "Close" }).parentElement?.parentElement;
+    expect(wideHeader?.className).not.toContain("safe-area-inset-top");
+    const wideFooter = screen.getByLabelText("Visit outcome").parentElement;
+    expect(wideFooter?.className).not.toContain("safe-area-inset-bottom");
+  });
+
   it("submitting a zero-line draft is disabled until an outcome and completion note are both provided", async () => {
     const user = userEvent.setup();
     renderComposer();

@@ -18,6 +18,16 @@ import { api, type AccountRole, type KeepRequestViewCounts } from "./lib/apiClie
 // ADR-462: AccountCapabilityPackageEnrollment.FeatureKeys.PriceBookQuotesMaterials.
 const PRICE_BOOK_FEATURE_KEY = "keep.price_book_quotes_materials";
 
+// Application-shell nav boundary is Tailwind's md:/768px — the same breakpoint that gates the
+// mobile top bar's hamburger trigger (the only way to open MobileNavMenu) and the desktop
+// sidebar/aside. This is a different boundary from RequestWorkbenchShell's 1001px request-
+// workspace pane split; do not conflate the two (correction, 2026-08-26). Slice 5c: the phone
+// menu omits Price Book/Settings/Account Administration (which lives inside Settings, with no
+// independent entry) unconditionally — there is no reachable width where the phone menu opens
+// and desktop/tablet nav (sidebar) is also available, so the omission does not need to be width-
+// gated in code; it already only ever renders in the phone menu.
+const PHONE_OMITTED_NAV_IDS: ReadonlySet<NavItem["id"]> = new Set(["pricebook", "settings"]);
+
 // Shell-level access flags (isReadOnly, isPastDue) are intentionally not derived here.
 // GET /keep/setup/onboarding checks Keep.SettingsManage before account access, so Operators
 // always get 403 from that endpoint regardless of commercial state. No endpoint in the current
@@ -159,6 +169,7 @@ function AppShell() {
     capabilityPackages?.some((c) => c.featureKey === PRICE_BOOK_FEATURE_KEY && c.enabled) ?? false;
 
   const navItems = getNavItems(role, priceBookEntitled);
+  const phoneNavItems = navItems.filter((item) => !PHONE_OMITTED_NAV_IDS.has(item.id));
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   // Incremented only by an explicit Requests navigation. The wide workbench consumes this as a
   // fresh-entry intent without remounting its Queue pane (so filters and scroll still persist).
@@ -272,7 +283,7 @@ function AppShell() {
     >
       {/* Top bar — mobile only, all routes: logo + hamburger trigger for MobileNavMenu. */}
       {role !== "unknown" && (
-        <header className="md:hidden flex items-center justify-between px-4 h-14 shrink-0 bg-[var(--ophalo-card)] border-b border-[var(--ophalo-border)]">
+        <header className="md:hidden flex items-center justify-between px-4 min-h-14 shrink-0 bg-[var(--ophalo-card)] border-b border-[var(--ophalo-border)] pt-[env(safe-area-inset-top)]">
           <button
             type="button"
             onClick={navigateToRequests}
@@ -594,11 +605,16 @@ function AppShell() {
         />
       )}
 
-      {/* Mobile overflow nav — the only mobile-discoverable path to Getting Started, Settings,
-          and Price Book (Session 2e.4, build-log/112: no manually-known URL required). */}
+      {/* Mobile overflow nav — the only mobile-discoverable path to Getting Started (Session 2e.4,
+          build-log/112: no manually-known URL required). Settings and Price Book (and, since
+          Account Administration lives inside Settings, that too) are unconditionally omitted from
+          `items` — phone pilot posture locked/corrected 2026-08-26. This menu only ever opens
+          below md:/768px (the header holding its trigger is `md:hidden`), which is also the only
+          width where the desktop sidebar/aside — where these routes remain reachable — is absent;
+          there is no width where both this menu and the sidebar are unavailable. */}
       {mobileMenuOpen && (
         <MobileNavMenu
-          items={navItems}
+          items={phoneNavItems}
           activeId={activeNavId}
           roleLabel={roleLabel(role)}
           onNavigate={(id) => id === "requests" ? navigateToRequests() : navigate({ page: id })}

@@ -37,6 +37,14 @@ describe("MobileRequestAnchor", () => {
     expect(screen.getByText(detail.referenceCode)).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: detail.customerName })).toBeInTheDocument();
   });
+
+  it("pads for the top safe area via env(safe-area-inset-top) (Slice 5c)", () => {
+    const detail = mockRequestDetails["mock-req-001"];
+    render(<MobileRequestAnchor detail={detail} />);
+    expect(screen.getByText(detail.referenceCode).closest(".sticky")?.className).toContain(
+      "safe-area-inset-top",
+    );
+  });
 });
 
 describe("MobileActionRail", () => {

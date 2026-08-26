@@ -503,3 +503,64 @@ describe("getNavItems", () => {
     expect(ids).toEqual(["requests", "home", "pricebook", "settings"]);
   });
 });
+
+// Mobile administration pilot posture (locked 2026-08-26, corrected 2026-08-26 / Slice 5c): Price
+// Book, Settings, and Account Administration (reachable only inside Settings — there is no
+// independent nav entry for it) are unconditionally omitted from the phone overflow menu. The
+// application shell's real phone/desktop boundary is Tailwind's md:/768px — the same breakpoint
+// that gates both the mobile header holding this menu's only trigger and the desktop nav that
+// still carries these items — not RequestWorkbenchShell's unrelated 1001px request-workspace pane
+// split; the two must not be conflated (correction to the same-day initial implementation, which
+// wrongly gated this filter on a synthetic ResizeObserver measurement the real hamburger trigger
+// can never reach).
+describe("App — phone navigation omits Price Book, Settings, and Account Administration", () => {
+  beforeEach(() => {
+    window.location.hash = "";
+    mockGetMe.mockReset().mockResolvedValue({
+      accountUserId: "u1",
+      accountId: "a1",
+      isAuthenticated: true,
+      isVerified: true,
+      accountRole: "owner",
+      businessName: "Acme HVAC",
+    });
+    mockGetCapabilityPackages.mockReset().mockResolvedValue([
+      { featureKey: "keep.price_book_quotes_materials", enabled: true },
+    ]);
+  });
+
+  it("phone overflow menu hides Price Book and Settings, keeps Requests and Getting Started, and never surfaces an independent Account Administration entry", async () => {
+    const user = userEvent.setup();
+    renderApp();
+    await waitFor(() => expect(screen.getByLabelText("Open navigation menu")).toBeInTheDocument());
+
+    await user.click(screen.getByLabelText("Open navigation menu"));
+    const menu = within(screen.getByRole("dialog", { name: "Navigation menu" }));
+
+    expect(menu.getByRole("button", { name: "Requests" })).toBeInTheDocument();
+    expect(menu.getByRole("button", { name: "Getting Started" })).toBeInTheDocument();
+    expect(menu.queryByRole("button", { name: "Price Book" })).not.toBeInTheDocument();
+    expect(menu.queryByRole("button", { name: "Settings" })).not.toBeInTheDocument();
+    expect(menu.queryByText(/Account Administration/i)).not.toBeInTheDocument();
+  });
+
+  it("desktop workbench header (the actual ≥768px path, not the sidebar) still carries Price Book and Settings", async () => {
+    window.location.hash = "";
+    const { container } = renderApp();
+    await waitFor(() => expect(screen.getAllByText("Price Book").length).toBeGreaterThan(0));
+
+    const header = getDesktopHeader(container);
+    expect(within(header).getByRole("button", { name: /Price Book/ })).toBeInTheDocument();
+    expect(within(header).getByRole("button", { name: /Settings/ })).toBeInTheDocument();
+  });
+
+  it("pads the mobile top bar for the notch/Dynamic Island via env(safe-area-inset-top), the physical top-of-viewport element on phone (Slice 5c)", async () => {
+    const { container } = renderApp();
+    await waitFor(() => expect(screen.getByLabelText("Open navigation menu")).toBeInTheDocument());
+    const header = Array.from(container.querySelectorAll("header")).find((h) =>
+      h.className.includes("md:hidden"),
+    );
+    expect(header).toBeDefined();
+    expect(header?.className).toContain("safe-area-inset-top");
+  });
+});
