@@ -17,6 +17,7 @@ import {
 } from "../../lib/apiClient";
 import { ACTUAL_WORK_RECONCILE_RELOAD_FAILURE_NOTICE } from "./useActualWorkCapture";
 import { ConnectionFailureBanner } from "./ConnectionFailureBanner";
+import { announcePolite } from "../../lib/liveAnnouncer";
 
 type ActualWorkDraft = NonNullable<ActualWorkHistoryResult["openDraft"]>;
 
@@ -95,6 +96,13 @@ export function ActualWorkComposer({
   }
 
   function clearConnectionFailure() {
+    // Only a retry-driven recovery is announced — an unrelated mutation's ordinary first-attempt
+    // success also clears a stale banner (Slice 5a's "any other mutation's success" rule) but
+    // that isn't the operator's retry succeeding, so it stays silent. Announced via the
+    // root-mounted live region (`liveAnnouncer.ts`), not local state: a successful submit retry
+    // closes this composer (`onSubmitted`) in the same commit, so a local `role="status"` region
+    // would never reach the DOM.
+    if (connectionFailure && isRetryingConnectionFailure) announcePolite("Retry succeeded.");
     setConnectionFailure(null);
     setIsRetryingConnectionFailure(false);
   }

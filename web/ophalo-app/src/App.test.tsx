@@ -564,3 +564,29 @@ describe("App — phone navigation omits Price Book, Settings, and Account Admin
     expect(header?.className).toContain("safe-area-inset-top");
   });
 });
+
+describe("App — root-mounted live announcer (Slice 5c-2A)", () => {
+  beforeEach(() => {
+    window.location.hash = "";
+    mockGetMe.mockReset().mockResolvedValue({
+      accountUserId: "u1",
+      accountId: "a1",
+      isAuthenticated: true,
+      isVerified: true,
+      accountRole: "owner",
+      businessName: "Acme HVAC",
+    });
+    mockGetCapabilityPackages.mockReset().mockResolvedValue([
+      { featureKey: "keep.price_book_quotes_materials", enabled: true },
+    ]);
+  });
+
+  it("mounts exactly one polite live-announcer status region at the app root, outside AppShell's route content", async () => {
+    renderApp();
+    await waitFor(() => expect(screen.getByLabelText("Open navigation menu")).toBeInTheDocument());
+
+    const regions = screen.getAllByRole("status").filter((el) => el.getAttribute("aria-live") === "polite" && el.className.includes("sr-only"));
+    expect(regions).toHaveLength(1);
+    expect(regions[0]).toHaveTextContent("");
+  });
+});

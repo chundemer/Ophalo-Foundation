@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -5,6 +6,7 @@ import { PrimaryActionSlot } from "../PrimaryActionControl";
 import { ApiError } from "../../../lib/apiClient";
 import { mockRequestDetails } from "../../../mocks/fixtures";
 import type { KeepRequestDetailResult } from "../../../lib/apiClient";
+import { LiveAnnouncerRegion } from "../../../components/a11y/LiveAnnouncerRegion";
 
 const mockPatchRequestStatus = vi.fn();
 
@@ -169,5 +171,68 @@ describe("PrimaryActionControl — connection recovery", () => {
 
     await waitFor(() => expect(mockPatchRequestStatus).toHaveBeenCalledTimes(2));
     expect(mockPatchRequestStatus).toHaveBeenNthCalledWith(2, "req-1", { status: "resolved" }, "v1");
+  });
+
+  // Slice 5c-2A: `PrimaryActionSlot` returns null once `detail.availableActions.primaryAction`
+  // is gone — a retry success that removes the primary action unmounts `PrimaryActionControl` in
+  // the same commit as `onDetailUpdated`. This host actually re-renders with that updated
+  // `detail` (unlike `renderSlot`'s static detail) to prove the announcement survives via the
+  // root-mounted `LiveAnnouncerRegion`, not local component state.
+  function RetrySuccessHost() {
+    const [detail, setDetail] = useState(detailWithMarkWorkDone());
+    return (
+      <>
+        <LiveAnnouncerRegion />
+        <PrimaryActionSlot
+          requestId="req-1"
+          detail={detail}
+          onDetailUpdated={setDetail}
+          onOpenClearAttention={vi.fn()}
+          onRecordFollowUp={vi.fn()}
+          onContactLaunched={vi.fn()}
+          onActivateCustomerUpdateComposer={vi.fn()}
+        />
+      </>
+    );
+  }
+
+  it("announces 'Retry succeeded.' via the persistent live region after a retry succeeds and the primary action (and control) disappears", async () => {
+    const user = userEvent.setup();
+    const detail = detailWithMarkWorkDone();
+    mockPatchRequestStatus.mockRejectedValueOnce(new TypeError("Failed to fetch"));
+    mockPatchRequestStatus.mockResolvedValueOnce({
+      ...detail,
+      version: "v2",
+      availableActions: { ...detail.availableActions, primaryAction: null },
+    });
+    render(<RetrySuccessHost />);
+
+    await clickThenConfirm(user);
+    await screen.findByRole("alert");
+
+    await user.click(screen.getByRole("button", { name: "Retry" }));
+
+    await waitFor(() => expect(mockPatchRequestStatus).toHaveBeenCalledTimes(2));
+    // The control (and its local banner) is gone — the only way this text can be in the DOM is
+    // via the root-mounted region, which outlived it.
+    await waitFor(() => expect(screen.queryByRole("button", { name: "Mark work done" })).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Retry succeeded."));
+  });
+
+  it("does not announce 'Retry succeeded.' for an ordinary first-attempt success", async () => {
+    const user = userEvent.setup();
+    const detail = detailWithMarkWorkDone();
+    mockPatchRequestStatus.mockResolvedValueOnce({
+      ...detail,
+      version: "v2",
+      availableActions: { ...detail.availableActions, primaryAction: null },
+    });
+    render(<RetrySuccessHost />);
+
+    await clickThenConfirm(user);
+
+    await waitFor(() => expect(mockPatchRequestStatus).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.queryByRole("button", { name: "Mark work done" })).not.toBeInTheDocument());
+    expect(screen.getByRole("status")).toHaveTextContent("");
   });
 });

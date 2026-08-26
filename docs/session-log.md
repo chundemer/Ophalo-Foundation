@@ -203,7 +203,57 @@ interrupted-navigation states across the mobile canvas) — locked as Slice 5c's
 pass, not a deferred/optional follow-up. The pilot remains not release-ready until that pass is
 verified complete.
 
-**Next: Slice 5c, pass 2 — accessibility and device-state audit (required release gate).**
+**Slice 5c, pass 2 is split into three required audit slices** (2026-08-26; each is a required
+release-gate audit, not a promise that every slice needs code changes):
+- **5c-2A — Screen-reader and live-state audit** (`ConnectionFailureBanner`, Actual Work/Primary
+  Action connection recovery, action-rail visibility): complete, see below.
+- **5c-2B — Mobile state rendering:** loading, empty, permission-denied, and stale-data behavior.
+  Start with the request canvas; include Queue/search only if file/test count stays within the
+  batch gate, otherwise split Queue/search into 5c-2B2. Not started.
+- **5c-2C — Keyboard, zoom, and interrupted-navigation verification:** primarily real-browser/
+  local-phone verification; remains a release requirement even if no code changes result. Not
+  started.
+
+**Slice 5c-2A (screen-reader and live-state audit): complete (2026-08-26).** Targeted audit (not a
+broad file read) of `ConnectionFailureBanner`, the Actual Work/Primary Action connection-recovery
+paths, and `MobileActionRail` visibility found the failure path already correct
+(`role="alert"` on the banner announces without stealing focus; `MobileActionRail` toggles
+`aria-hidden`/`inert` correctly) but a real gap on the *recovery* path: when a connection-failure
+retry succeeds, the banner just disappears with no announcement that the retry worked.
+
+A per-component local fix was not viable: `PrimaryActionSlot` returns `null` once
+`detail.availableActions.primaryAction` clears, and `ActualWorkComposer`'s submit-retry-success
+calls `onSubmitted()` — both unmount the component (and any local `role="status"` state) in the
+same React commit as the success update, so a local live region would never reach the DOM. Added a
+framework-free `liveAnnouncer.ts` emitter and a `LiveAnnouncerRegion` (one visually-hidden,
+`role="status"`/`aria-live="polite"` region, never focus-stealing, owns one auto-clear timer with
+unmount cleanup) mounted once at the true app root in `App.tsx` (sibling to `AppShell` inside
+`AuthGuard`), so it outlives every such unmount. Both recovery paths call
+`announcePolite("Retry succeeded.")` only when the success followed an operator-initiated retry
+(tracked via `PrimaryActionControl`'s existing retry-snapshot argument and
+`ActualWorkComposer`'s existing `isRetryingConnectionFailure` flag) — never on an ordinary
+first-attempt success.
+
+Review correction (2026-08-26): the region's post-announce `requestAnimationFrame` (the
+clear-then-set trick that forces a repeated identical message to re-announce) was neither
+retained nor cancelled on unmount — only the 5-second auto-clear timeout was. An announce
+immediately followed by unmount left the frame pending, able to call `setState` after unmount.
+Fixed by storing the frame id in a ref and cancelling it both before scheduling a replacement and
+in the effect's cleanup, matching the existing timer-ref pattern.
+
+Files: `liveAnnouncer.ts` (new), `LiveAnnouncerRegion.tsx` (new), `App.tsx`,
+`ActualWorkComposer.tsx`, `PrimaryActionControl.tsx`, plus
+`__tests__/LiveAnnouncerRegion.test.tsx` (new, 6 tests: region rendering, announce-while-mounted,
+auto-clear + timer cleanup, animation-frame cancellation on immediate unmount,
+unsubscribe-on-unmount, emitter unsubscribe), 2 new `ActualWorkComposer.test.tsx` tests and 2 new
+`PrimaryActionControl.test.tsx` tests (each pair: announces after a retry succeeds and the
+initiating component unmounts, proven via a host that actually unmounts the component rather than
+a static test stub; does not announce on an ordinary first-attempt success), and 1 new
+`App.test.tsx` test asserting exactly one root-mounted region. Verified: focused
+`App`/`ActualWorkComposer`/`PrimaryActionControl`/`LiveAnnouncerRegion` suites and focused
+`request-detail` suite 285/285 passing, `tsc --noEmit` clean, `git diff --check` clean.
+
+**Next: Slice 5c-2B — mobile state rendering (loading/empty/permission-denied/stale-data).**
 
 The 2026-08-24/25 resolved defects and attention-presentation decisions are recorded in the
 [pilot-readiness bug tracker](pilot-readiness-bug-tracker.md#p0p1-pilot-flow-bugs).

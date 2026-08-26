@@ -2,9 +2,11 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { useState } from "react";
 import { ActualWorkComposer } from "../ActualWorkComposer";
 import { ApiError } from "../../../lib/apiClient";
 import type { ActualWorkHistoryResult } from "../../../lib/apiClient";
+import { LiveAnnouncerRegion } from "../../../components/a11y/LiveAnnouncerRegion";
 
 const mockGetFieldScopeSearch = vi.fn();
 const mockAddActualWorkLine = vi.fn();
@@ -550,6 +552,68 @@ describe("ActualWorkComposer", () => {
     await user.click(screen.getByRole("button", { name: "Remove" }));
     await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("Couldn't remove this item."));
     expect(screen.getAllByRole("alert")).toHaveLength(1);
+  });
+
+  // Slice 5c-2A: submit's retry-success closes the composer (`onSubmitted`) in the same commit
+  // that clears the connection failure, so this uses a wrapper that actually unmounts
+  // `ActualWorkComposer` on `onSubmitted` (unlike `renderComposer`'s inert stub) to prove the
+  // root-mounted `LiveAnnouncerRegion` — not local composer state — is what carries the
+  // announcement.
+  function RetrySuccessHost() {
+    const [open, setOpen] = useState(true);
+    return (
+      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+        <LiveAnnouncerRegion />
+        {open && (
+          <ActualWorkComposer
+            draft={emptyDraft()}
+            conflictNotice={null}
+            isWide={true}
+            onClose={vi.fn()}
+            onCommitted={vi.fn()}
+            onConflict={vi.fn()}
+            onDismissNotice={vi.fn()}
+            onRetryReconciliation={vi.fn()}
+            onSubmitted={() => setOpen(false)}
+            onDiscarded={vi.fn()}
+          />
+        )}
+      </QueryClientProvider>
+    );
+  }
+
+  it("announces 'Retry succeeded.' via the persistent live region after a submit retry succeeds and closes the composer", async () => {
+    const user = userEvent.setup();
+    mockSubmitActualWork.mockRejectedValueOnce(new TypeError("Failed to fetch"));
+    mockSubmitActualWork.mockResolvedValueOnce({ concurrencyVersion: "v2" });
+    render(<RetrySuccessHost />);
+
+    await user.selectOptions(screen.getByLabelText("Visit outcome"), "NoAccess");
+    await user.type(screen.getByPlaceholderText(/Completion note/), "Gate locked, no one home.");
+    await user.click(screen.getByRole("button", { name: "Submit visit to office" }));
+    await screen.findByRole("alert");
+
+    await user.click(screen.getByRole("button", { name: "Retry" }));
+
+    await waitFor(() => expect(mockSubmitActualWork).toHaveBeenCalledTimes(2));
+    // The composer (and its local connection-failure banner) is gone — the announcement can only
+    // have reached the DOM through the root-mounted region, which outlived it.
+    await waitFor(() => expect(screen.queryByRole("alert")).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Retry succeeded."));
+  });
+
+  it("does not announce 'Retry succeeded.' for an ordinary first-attempt submit success", async () => {
+    const user = userEvent.setup();
+    mockSubmitActualWork.mockResolvedValueOnce({ concurrencyVersion: "v2" });
+    render(<RetrySuccessHost />);
+
+    await user.selectOptions(screen.getByLabelText("Visit outcome"), "NoAccess");
+    await user.type(screen.getByPlaceholderText(/Completion note/), "Gate locked, no one home.");
+    await user.click(screen.getByRole("button", { name: "Submit visit to office" }));
+
+    await waitFor(() => expect(mockSubmitActualWork).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.queryByText(/Record completed work/)).not.toBeInTheDocument());
+    expect(screen.getByRole("status")).toHaveTextContent("");
   });
 
   it("renders the conflict notice with a dismiss action", async () => {

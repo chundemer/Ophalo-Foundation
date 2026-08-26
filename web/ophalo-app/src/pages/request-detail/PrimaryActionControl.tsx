@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { api, ApiError, type KeepRequestDetailResult } from "../../lib/apiClient";
 import { KeepButton } from "../../components/keep/KeepButton";
 import { ConnectionFailureBanner } from "./ConnectionFailureBanner";
+import { announcePolite } from "../../lib/liveAnnouncer";
 
 // Shared, exhaustive renderer over the closed server `target` vocabulary (Session 0A,
 // 2026-08-25). Exactly one of `RequestDetailAnchor` (no active attention) or
@@ -217,6 +218,7 @@ function PrimaryMutationButton({
     // `detail.version` before the operator presses Retry — same rule as 5a's
     // ActualWorkComposer retries.
     const snapshot = retrySnapshot ?? { requestId, targetStatus, version: detail.version };
+    const isRetry = retrySnapshot !== undefined;
     clearTimer();
     setConfirming(false);
     setIsSubmitting(true);
@@ -224,6 +226,10 @@ function PrimaryMutationButton({
     setConnectionFailure(null);
     try {
       const updated = await api.patchRequestStatus(snapshot.requestId, { status: snapshot.targetStatus }, snapshot.version);
+      // `onDetailUpdated` can make the server-authored primary action disappear (and this
+      // component with it) in the same commit — announce via the root-mounted live region
+      // (`liveAnnouncer.ts`) rather than local state, which would never reach the DOM.
+      if (isRetry) announcePolite("Retry succeeded.");
       onDetailUpdated(updated);
     } catch (e) {
       if (e instanceof ApiError) {

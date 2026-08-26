@@ -12,6 +12,7 @@ import { PriceBook } from "./pages/PriceBook";
 import { CatalogItemDetail } from "./pages/CatalogItemDetail";
 import { OfferingAssemblyDetail } from "./pages/OfferingAssemblyDetail";
 import { MobileNavMenu } from "./components/layout/MobileNavMenu";
+import { LiveAnnouncerRegion } from "./components/a11y/LiveAnnouncerRegion";
 import { Plus, Inbox, Settings as SettingsIcon, Tag, Menu } from "lucide-react";
 import { api, type AccountRole, type KeepRequestViewCounts } from "./lib/apiClient";
 
@@ -628,6 +629,7 @@ function AppShell() {
 export function App() {
   return (
     <AuthGuard>
+      <LiveAnnouncerRegion />
       <AppShell />
     </AuthGuard>
   );
