@@ -851,7 +851,7 @@ export function TriagePanel({ detail, onDetailUpdated, bare = false, strip = fal
               value={displayPriority ?? ""}
               disabled={prioritySubmitting || priorityConflictDisabled}
               onChange={(e) => void handlePriorityChange(e.target.value || null)}
-              className={`w-full appearance-none rounded-lg border bg-[var(--ophalo-card)] pl-3 pr-7 py-2 text-sm disabled:opacity-60 disabled:cursor-not-allowed transition-colors focus:outline-none focus:ring-2 focus:ring-[var(--keep-accent)] focus:border-[var(--keep-accent)] ${
+              className={`w-full appearance-none rounded-lg border bg-[var(--ophalo-card)] pl-3 pr-7 py-2 text-base min-[1001px]:text-sm disabled:opacity-60 disabled:cursor-not-allowed transition-colors focus:outline-none focus:ring-2 focus:ring-[var(--keep-accent)] focus:border-[var(--keep-accent)] ${
                 emphasize ? "border-[var(--ophalo-danger)] text-[var(--ophalo-danger)] font-semibold" : "border-[var(--ophalo-border)] text-[var(--ophalo-ink)]"
               }`}
             >
@@ -884,7 +884,7 @@ export function TriagePanel({ detail, onDetailUpdated, bare = false, strip = fal
                 value={displayPriority ?? ""}
                 disabled={prioritySubmitting || priorityConflictDisabled}
                 onChange={(e) => void handlePriorityChange(e.target.value || null)}
-                className="w-full text-sm text-[var(--ophalo-ink)] bg-transparent border border-[var(--ophalo-border)] rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-[var(--keep-accent)] disabled:opacity-60 disabled:cursor-not-allowed"
+                className="w-full text-base min-[1001px]:text-sm text-[var(--ophalo-ink)] bg-transparent border border-[var(--ophalo-border)] rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-[var(--keep-accent)] disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 <option value="">Not set</option>
                 <option value="routine">Routine</option>

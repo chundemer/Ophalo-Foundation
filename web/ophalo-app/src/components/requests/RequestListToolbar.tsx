@@ -336,7 +336,7 @@ export function RequestListToolbar({
                 onChange={(e) => onDraftQChange(e.target.value)}
                 placeholder={paneMode ? "Search…" : presentAsHistory ? "Search closed & cancelled history…" : "Search requests…"}
                 aria-label="Search requests"
-                className={`w-full pl-8 py-1.5 text-sm border border-[var(--ophalo-border)] rounded-lg bg-[var(--ophalo-card)] text-[var(--ophalo-ink)] placeholder:text-[var(--ophalo-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-offset-1 ${draftQ.length > 0 ? "pr-7" : "pr-3"}`}
+                className={`w-full pl-8 py-1.5 text-base min-[1001px]:text-sm border border-[var(--ophalo-border)] rounded-lg bg-[var(--ophalo-card)] text-[var(--ophalo-ink)] placeholder:text-[var(--ophalo-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-offset-1 ${draftQ.length > 0 ? "pr-7" : "pr-3"}`}
               />
               {draftQ.length > 0 && (
                 <button

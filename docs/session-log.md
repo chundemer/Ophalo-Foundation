@@ -14,7 +14,7 @@
 
 ## Current work
 
-### PWA Mobile V2 — Slice 1 mechanical preflight complete, blocked on one decision
+### PWA Mobile V2 — Slice 1 complete, Slice 2 next
 
 **Go-live target:** Mobile V2 work applies only to the responsive authenticated PWA
 (`web/ophalo-app`). The separate Expo/native client (`mobile/ophalo-mobile`) is not a launch
@@ -25,13 +25,15 @@ dependency and receives no parity or implementation work in this phase.
 "PWA mobile pilot workflow — approved code slices" below for the authoritative, implementation-
 ready batch sequence. Slice 0/0A (server-primary action contract, desktop migration) are complete.
 
-**Slice 1 (Mobile shell and Queue return path): mechanical preflight complete (2026-08-25)** — see
-that section below for full findings. Most of Slice 1 already exists in the codebase
-(`RequestWorkbenchShell.tsx`'s 1001px split, the Requests-header back link, the **Mine** Queue
-scope, no competing bottom nav). Real drift found: the mobile 16px form-control rule is violated
-in three places today (`helpers.ts`'s `INPUT_CLS`, the Queue search input, the Anchor's Internal
-priority select). **Blocked on one small decision before implementation:** named Tailwind
-breakpoint vs. inline arbitrary `min-[1001px]:` variant — flagged for Christian, resume there.
+**Slice 1 (Mobile shell and Queue return path): complete (2026-08-26).** Most of Slice 1 already
+existed in the codebase (`RequestWorkbenchShell.tsx`'s 1001px split, the Requests-header back link,
+the **Mine** Queue scope, no competing bottom nav). Fixed the mobile 16px form-control rule using
+the inline `min-[1001px]:text-sm` variant (Christian's call — matches `RequestWorkbenchShell.tsx`'s
+existing convention, no new named breakpoint) in four places: `helpers.ts`'s `INPUT_CLS`,
+`RequestListToolbar.tsx`'s search input, and both `DetailPanels.tsx` Internal Priority `<select>`s
+(strip and compact variants). Verified: focused `request-detail`/`RequestListToolbar` suite 218/218
+passing, `tsc --noEmit` clean, `git diff --check` clean. Next: Slice 2 — Request Anchor and
+server-authorized action rail (see "PWA mobile pilot workflow — approved code slices" below).
 
 The 2026-08-24/25 resolved defects and attention-presentation decisions are recorded in the
 [pilot-readiness bug tracker](pilot-readiness-bug-tracker.md#p0p1-pilot-flow-bugs).
@@ -872,24 +874,23 @@ verified cases:
 3. `DetailPanels.tsx:852` — the Anchor's always-visible "Internal priority" `<select>` is
    unconditionally `text-sm`.
 
-No Tailwind breakpoint exists at 1001px today (config has no custom breakpoints; defaults are
-640/768/1024/1280) — the fix needs either a custom named breakpoint or an arbitrary
-`min-[1001px]:` variant.
+**Resolved (2026-08-26):** Christian chose the inline arbitrary `min-[1001px]:` variant over a
+named Tailwind breakpoint to avoid a one-off config entry. Note: `RequestWorkbenchShell.tsx`'s
+1001px split is JS-driven (`window` width → `isWide` state), not a Tailwind class — this is the
+first use of a `min-[1001px]:` CSS variant in the codebase, so it aligns with the shell's numeric
+threshold but does not reuse an existing Tailwind-class pattern. No `tailwind.config.ts` change.
 
-**Next batch — implementation, file-level gate:**
-1. `src/pages/request-detail/helpers.ts` — fix `INPUT_CLS`.
-2. `src/components/requests/RequestListToolbar.tsx` — fix search input.
-3. `src/pages/request-detail/DetailPanels.tsx` — fix Internal Priority select (and any sibling
-   selects/inputs in the same file using the same unconditional `text-sm`, confirmed at
-   implementation time).
-4. Possibly `tailwind.config.ts`, depending on the open decision below.
+**Implemented:**
+1. `src/pages/request-detail/helpers.ts` — `INPUT_CLS` now `text-base min-[1001px]:text-sm`.
+2. `src/components/requests/RequestListToolbar.tsx` — search input now
+   `text-base min-[1001px]:text-sm`.
+3. `src/pages/request-detail/DetailPanels.tsx` — both Internal Priority `<select>`s (strip variant
+   at the former line 852, compact variant at the former line 887) now
+   `text-base min-[1001px]:text-sm`. The two `<textarea>` elements in this file already used
+   `INPUT_CLS` and needed no direct change.
 
-**Blocking decision for Christian before implementation starts:** named Tailwind breakpoint (e.g.
-`keep-mobile: '1001px'` in `tailwind.config.ts`, used as `keep-mobile:text-sm`) vs. inline
-arbitrary `min-[1001px]:text-sm` at each call site. Leaning toward the named breakpoint since
-`1001px` is already a locked, reused threshold (`PROTECTED_WORKSPACE_MIN_PX`) — one source of
-truth. No other open decisions; `RequestWorkbenchShell.tsx`, `RequestDetailHeader.tsx`,
-`RequestQueueNavigation.tsx`, and `App.tsx` need no changes for this slice.
+`RequestWorkbenchShell.tsx`, `RequestDetailHeader.tsx`, `RequestQueueNavigation.tsx`, and `App.tsx`
+required no changes for this slice.
 
 ### 2. Request Anchor and server-authorized action rail
 
