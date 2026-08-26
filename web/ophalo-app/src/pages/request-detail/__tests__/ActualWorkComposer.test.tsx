@@ -449,6 +449,78 @@ describe("ActualWorkComposer", () => {
     await waitFor(() => expect(onConflict).toHaveBeenCalled());
   });
 
+  it("a network failure on remove shows the composer-level connection banner instead of onConflict", async () => {
+    const user = userEvent.setup();
+    mockRemoveActualWorkLine.mockRejectedValueOnce(new TypeError("Failed to fetch"));
+    const { onConflict } = renderComposer({ draft: emptyDraft({ lines: [draftLine] }) });
+
+    await user.click(screen.getByRole("button", { name: "Remove" }));
+
+    const banner = await screen.findByRole("alert");
+    expect(banner).toHaveTextContent("Couldn't remove this item. Check your connection and retry.");
+    expect(onConflict).not.toHaveBeenCalled();
+  });
+
+  it("Retry on the connection banner re-invokes the exact failed operation and clears the banner on success", async () => {
+    const user = userEvent.setup();
+    mockRemoveActualWorkLine.mockRejectedValueOnce(new TypeError("Failed to fetch"));
+    mockRemoveActualWorkLine.mockResolvedValueOnce({ concurrencyVersion: "v2" });
+    const { onCommitted } = renderComposer({ draft: emptyDraft({ lines: [draftLine] }) });
+
+    await user.click(screen.getByRole("button", { name: "Remove" }));
+    await screen.findByRole("alert");
+
+    await user.click(screen.getByRole("button", { name: "Retry" }));
+
+    await waitFor(() => expect(mockRemoveActualWorkLine).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(onCommitted).toHaveBeenCalled());
+    await waitFor(() => expect(screen.queryByRole("alert")).not.toBeInTheDocument());
+  });
+
+  it("Retry replays the original payload even if the technician edited fields after the failure", async () => {
+    const user = userEvent.setup();
+    mockUpdateActualWorkLine.mockRejectedValueOnce(new TypeError("Failed to fetch"));
+    mockUpdateActualWorkLine.mockResolvedValueOnce({ concurrencyVersion: "v2" });
+    renderComposer({ draft: emptyDraft({ lines: [draftLine] }) });
+
+    await user.click(screen.getByRole("button", { name: "Edit" }));
+    const quantityInput = screen.getByLabelText("Quantity");
+    await user.clear(quantityInput);
+    await user.type(quantityInput, "5");
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    await screen.findByRole("alert");
+    // The failed Save exits editing mode, so re-enter it and change the field before retrying —
+    // Retry must still replay the quantity that was actually submitted (5), not the edited one (9).
+    await user.click(screen.getByRole("button", { name: "Edit" }));
+    const quantityInputAfterFailure = screen.getByLabelText("Quantity");
+    await user.clear(quantityInputAfterFailure);
+    await user.type(quantityInputAfterFailure, "9");
+
+    await user.click(screen.getByRole("button", { name: "Retry" }));
+
+    await waitFor(() => expect(mockUpdateActualWorkLine).toHaveBeenCalledTimes(2));
+    expect(mockUpdateActualWorkLine).toHaveBeenLastCalledWith("draft-1", "line-1", { actualQuantity: 5, note: null }, "v1");
+  });
+
+  it("a later connection failure on a different action replaces the earlier banner", async () => {
+    const user = userEvent.setup();
+    mockAddActualWorkLine.mockRejectedValueOnce(new TypeError("Failed to fetch"));
+    mockRemoveActualWorkLine.mockRejectedValueOnce(new TypeError("Failed to fetch"));
+    renderComposer({ draft: emptyDraft({ lines: [draftLine] }) });
+
+    await user.type(screen.getByPlaceholderText("Search by name or SKU..."), "gasket");
+    await waitFor(() => expect(screen.getByText("Add as custom item")).toBeInTheDocument());
+    await user.click(screen.getByText("Add as custom item"));
+    await user.type(screen.getByPlaceholderText("Describe the item"), "Rubber gasket");
+    await user.click(screen.getByRole("button", { name: "Add item" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Couldn't add actual work.");
+
+    await user.click(screen.getByRole("button", { name: "Remove" }));
+    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("Couldn't remove this item."));
+    expect(screen.getAllByRole("alert")).toHaveLength(1);
+  });
+
   it("renders the conflict notice with a dismiss action", async () => {
     const user = userEvent.setup();
     const { onDismissNotice } = renderComposer({ conflictNotice: "This visit changed elsewhere — refreshed with the latest draft. Try again." });

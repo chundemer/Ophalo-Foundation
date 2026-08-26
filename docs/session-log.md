@@ -14,7 +14,7 @@
 
 ## Current work
 
-### PWA Mobile V2 — Slice 4 complete, Slice 5 next
+### PWA Mobile V2 — Slice 5a complete, Slice 5b next
 
 **Go-live target:** Mobile V2 work applies only to the responsive authenticated PWA
 (`web/ophalo-app`). The separate Expo/native client (`mobile/ophalo-mobile`) is not a launch
@@ -97,8 +97,48 @@ Slice 5, which owns that pass.
 Files: `ActualWorkComposer.tsx`, `RequestDetailContent.tsx`, `__tests__/ActualWorkComposer.test.tsx`
 (2 new tests for the isWide/close-control branch, plus 2 existing render call sites updated for the
 new required prop). Verified: focused `request-detail` suite 235/235 passing, `tsc --noEmit`
-clean, `git diff --check` clean. Next: Slice 5 — Connected-only failure, accessibility, and device
-pass (see "PWA mobile pilot workflow — approved code slices" below).
+clean, `git diff --check` clean.
+
+**Slice 5a (shared retry UI + ActualWorkComposer): complete (2026-08-26).** Added
+`ConnectionFailureBanner.tsx` — one composer-level, non-dismissable failure surface
+(`{ message, onRetry, isRetrying }`, `role="alert"`, owns the fixed copy "Check your connection and
+retry.") rendered in `ActualWorkComposer` directly below the header and above the editable work
+area. All 6 of `ActualWorkComposer`'s mutations (add-line, expand-assembly, nudge-suggestion-accept,
+draft-line update, draft-line remove, submit) now classify a non-`ApiError` rejection (network/
+transport failure) as a connection failure routed to one composer-level `connectionFailure` state
+with an operation-specific message and a retry closure that replays the exact failed call with its
+original arguments (mutation variables, not just a bare re-`mutate()`, where applicable). Existing
+`ApiError`-based validation (400) and conflict (409) treatment is unchanged — only the
+previously-misrouted non-`ApiError` branches (formerly folded into `onConflict()` in 3 of the 6
+handlers) were reclassified. A later failure replaces the earlier one (single global banner); the
+banner clears on that operation's successful retry or any other mutation's success.
+`discardMutation` was left unchanged — out of the six handlers named in preflight/scope.
+
+Review correction (2026-08-26): add-line, draft-line update, and submit initially retried by
+re-reading current component state (`selection`/`quantity`/`note`/`outcome`/`completionNote`) at
+retry time, so an edit made after the failure and before pressing Retry would replay a different
+payload than the one that actually failed. Fixed by converting those three mutations to take
+explicit variables (`ActualWorkAddLineBody`/`ActualWorkUpdateLineBody`/`ActualWorkSubmitBody`,
+plus the add-line nudge trigger) snapshotted at the original click, with the retry closure
+capturing that same snapshot. Assembly-expand and nudge-accept already received their payload as
+mutation variables; remove takes no payload.
+
+Files: `ConnectionFailureBanner.tsx` (new), `ActualWorkComposer.tsx`,
+`__tests__/ActualWorkComposer.test.tsx` (4 new tests: network failure shows the banner instead of
+`onConflict`, Retry replays the exact operation and clears on success, Retry replays the original
+payload even after the technician edits the field post-failure, a later failure on a different
+action replaces the earlier banner). Verified: focused `ActualWorkComposer` suite 23/23, focused
+`request-detail` suite 239/239 passing, `tsc --noEmit` clean, `git diff --check` clean.
+
+**Dropped from 5a scope (2026-08-26): `ProposedScopeComposer.tsx`.** Mechanical preflight found it is
+not mounted by any parent component anywhere in the app (only self-references, its own test, and two
+comment mentions remain) — unreachable by any user path, mobile or desktop. Spending this
+reliability batch on unreachable code doesn't deliver the batch's value. Its dead-mount status is an
+open item needing a separate ownership decision (intentionally paused feature vs. regression) before
+any future work — including a 5b/5c-style failure-feedback fix — touches it.
+
+Next: Slice 5b — remaining composer mutation-handler families (see "PWA mobile pilot workflow —
+approved code slices" below).
 
 The 2026-08-24/25 resolved defects and attention-presentation decisions are recorded in the
 [pilot-readiness bug tracker](pilot-readiness-bug-tracker.md#p0p1-pilot-flow-bugs).
@@ -982,13 +1022,52 @@ required no changes for this slice.
 
 ### 5. Connected-only failure, accessibility, and device pass
 
-- Implement clear non-destructive mutation failure feedback: **Couldn't save — check connection**
-  with manual **Retry**. Do not imply offline queueing, local draft persistence, or saved status
-  until the server confirms the write.
+Split across three batches under the hard batch-size gate (mechanical preflight, 2026-08-26, found
+the failure-feedback work fans out to 7+ mutation-handler families / 7+ production files — well
+past the three-family/eight-file limit — with `ActualWorkComposer.tsx` and `ProposedScopeComposer.tsx`
+currently collapsing non-400 errors, including network failures, into the conflict path).
+
+#### 5a. Shared retry UI + ActualWorkComposer — next
+
+Highest-value first: `ActualWorkComposer.tsx` currently mislabels a lost connection as a conflict
+across 6 mutations (add-line, assembly-add, suggestion-accept, draft-line update/remove, submit) —
+confirmed in mechanical preflight (2026-08-26): `ApiError` (`src/lib/apiClient.ts:3`) is thrown only
+for HTTP responses; a real network failure throws a non-`ApiError` rejection from `fetch`, and
+`!(err instanceof ApiError)` is currently routed to `onConflict()`.
+
+- Add one reusable connected-only failure surface: **Couldn't save — check your connection** plus an
+  explicit **Retry**. Do not imply offline queueing, local draft persistence, or saved status until
+  the server confirms the write.
+- Preserve the exact failed operation and retry it only on operator action; never silently replay a
+  mutation.
+- Classify network/transport failures separately from server validation/conflict failures. Keep the
+  existing conflict treatment for real conflicts (409 / genuine version mismatch).
+- Apply only to `ActualWorkComposer.tsx` in this batch. Do not touch the other composer handler
+  families below.
+
+**Dropped from 5a scope (2026-08-26): `ProposedScopeComposer.tsx`.** Mechanical preflight found it is
+not mounted by any parent component anywhere in the app (only self-references, its own test, and two
+comment mentions remain) — unreachable by any user path, mobile or desktop. Spending this
+reliability batch on unreachable code doesn't deliver the batch's value. Its dead-mount status is an
+open item needing a separate ownership decision (intentionally paused feature vs. regression) before
+any future work — including a 5b/5c-style failure-feedback fix — touches it.
+
+#### 5b. Remaining composer mutation-handler families
+
+- Same connected-only failure surface and retry-on-operator-action rule as 5a, applied to the
+  remaining handler families found in preflight: `PrimaryActionControl.tsx`, `ComposerDraftList.tsx`,
+  `ComposerSearchAndAdd.tsx`, `ComposerUndoToast.tsx`, `ComposerQuickActions.tsx`,
+  `ComposerNudgePanel.tsx` (confirm this list is still current at 5b's own mechanical preflight).
+- Group within the batch-size gate; split further if the confirmed family/file count still exceeds it.
+
+#### 5c. Accessibility and device-state pass
+
 - Exercise conflict, permission-denied, loading, empty, safe-area, keyboard, screen-reader, zoom,
   and interrupted-navigation states.
+- Includes the safe-area inset padding explicitly deferred from Slice 4.
 - Price Book, Settings, and Account Administration are out of scope for the mobile PWA pilot and
   must be omitted rather than rendered as disabled or desktop-only destinations.
+- Required release gate — do not drop or fold silently into 5a/5b.
 
 ### Local-phone verification loop
 

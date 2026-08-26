@@ -6,13 +6,17 @@ import { KeepButton } from "../../components/keep/KeepButton";
 import {
   api,
   ApiError,
+  type ActualWorkAddLineBody,
   type ActualWorkHistoryResult,
   type ActualWorkLineHistoryEntry,
   type ActualWorkNudgeSuggestionFieldRowResponse,
+  type ActualWorkSubmitBody,
   type ActualWorkSubmittedVisitEntry,
+  type ActualWorkUpdateLineBody,
   type FieldScopeSearchResultResponse,
 } from "../../lib/apiClient";
 import { ACTUAL_WORK_RECONCILE_RELOAD_FAILURE_NOTICE } from "./useActualWorkCapture";
+import { ConnectionFailureBanner } from "./ConnectionFailureBanner";
 
 type ActualWorkDraft = NonNullable<ActualWorkHistoryResult["openDraft"]>;
 
@@ -78,6 +82,28 @@ export function ActualWorkComposer({
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [submitted, setSubmitted] = useState(false);
   const readOnly = submitted || draft.status !== "Draft";
+
+  // Slice 5a: one composer-level connection-failure recovery point rather than six inline ones —
+  // a later failure replaces the earlier one, since only one operation's recovery is ever pending
+  // at a time. `retry` re-invokes the exact failed operation, captured with its original arguments.
+  const [connectionFailure, setConnectionFailure] = useState<{ message: string; retry: () => void } | null>(null);
+  const [isRetryingConnectionFailure, setIsRetryingConnectionFailure] = useState(false);
+
+  function reportConnectionFailure(message: string, retry: () => void) {
+    setIsRetryingConnectionFailure(false);
+    setConnectionFailure({ message, retry });
+  }
+
+  function clearConnectionFailure() {
+    setConnectionFailure(null);
+    setIsRetryingConnectionFailure(false);
+  }
+
+  function retryConnectionFailure() {
+    if (!connectionFailure) return;
+    setIsRetryingConnectionFailure(true);
+    connectionFailure.retry();
+  }
 
   const discardMutation = useMutation({
     mutationFn: () => api.discardActualWork(draft.id, draft.concurrencyVersion),
@@ -161,12 +187,30 @@ export function ActualWorkComposer({
           </div>
         )}
 
+        {connectionFailure && (
+          <ConnectionFailureBanner
+            message={connectionFailure.message}
+            onRetry={retryConnectionFailure}
+            isRetrying={isRetryingConnectionFailure}
+          />
+        )}
+
         <section className="rounded-xl border border-sky-200 bg-sky-50/55 p-3 space-y-3">
           <div className="flex items-center justify-between gap-2">
             <div><h3 className="text-xs font-bold uppercase tracking-wide text-[var(--ophalo-ink)]">Active visit draft</h3><p className="mt-0.5 text-xs text-[var(--ophalo-muted)]">Editable work for this visit</p></div>
             <span className="rounded border border-sky-300 bg-white px-2 py-0.5 text-xs font-semibold text-sky-800">Editable</span>
           </div>
-          {!readOnly && <ActualWorkSearchAndAdd ref={searchInputRef} actualWorkId={draft.id} version={draft.concurrencyVersion} onCommitted={onCommitted} onConflict={onConflict} />}
+          {!readOnly && (
+            <ActualWorkSearchAndAdd
+              ref={searchInputRef}
+              actualWorkId={draft.id}
+              version={draft.concurrencyVersion}
+              onCommitted={onCommitted}
+              onConflict={onConflict}
+              onConnectionFailure={reportConnectionFailure}
+              onConnectionRecovered={clearConnectionFailure}
+            />
+          )}
         <div className="space-y-2">
           {draft.lines.length === 0 && (
             <p className="text-xs text-[var(--ophalo-muted)]">No items added yet.</p>
@@ -180,6 +224,8 @@ export function ActualWorkComposer({
               version={draft.concurrencyVersion}
               onCommitted={onCommitted}
               onConflict={onConflict}
+              onConnectionFailure={reportConnectionFailure}
+              onConnectionRecovered={clearConnectionFailure}
             />
           ))}
         </div>
@@ -212,6 +258,8 @@ export function ActualWorkComposer({
         submitted={submitted}
         onSaveDraft={onClose}
         onConflict={onConflict}
+        onConnectionFailure={reportConnectionFailure}
+        onConnectionRecovered={clearConnectionFailure}
         onSubmitted={() => {
           setSubmitted(true);
           onSubmitted();
@@ -231,12 +279,14 @@ interface ActualWorkSearchAndAddProps {
   version: string;
   onCommitted: () => Promise<void>;
   onConflict: (message?: string) => void;
+  onConnectionFailure: (message: string, retry: () => void) => void;
+  onConnectionRecovered: () => void;
 }
 
 type Selection = { kind: "catalog"; item: FieldScopeSearchResultResponse } | { kind: "custom" };
 
 const ActualWorkSearchAndAdd = forwardRef<HTMLInputElement, ActualWorkSearchAndAddProps>(function ActualWorkSearchAndAdd(
-  { actualWorkId, version, onCommitted, onConflict },
+  { actualWorkId, version, onCommitted, onConflict, onConnectionFailure, onConnectionRecovered },
   ref,
 ) {
   const [searchText, setSearchText] = useState("");
@@ -294,37 +344,34 @@ const ActualWorkSearchAndAdd = forwardRef<HTMLInputElement, ActualWorkSearchAndA
     setNote("");
   }
 
+  // The mutation takes an explicit, click-time snapshot of the payload/trigger rather than reading
+  // `selection`/`quantity`/`note`/`customDescription` state — a technician can edit those fields
+  // after a connection failure before pressing Retry, and the retry closure must replay the exact
+  // operation that failed, not whatever the fields currently hold.
+  type AddLineVariables = { body: ActualWorkAddLineBody; trigger: { triggerCatalogItemId: string } | null };
+
   const addMutation = useMutation({
-    mutationFn: () => {
-      if (selection?.kind === "catalog") {
-        return api.addActualWorkLine(
-          actualWorkId,
-          { catalogItemId: selection.item.id, actualQuantity: Number(quantity), note: note.trim() || null },
-          version,
-        );
-      }
-      return api.addActualWorkLine(
-        actualWorkId,
-        { offCatalogDescription: customDescription, actualQuantity: Number(quantity), note: note.trim() || null },
-        version,
-      );
-    },
-    onSuccess: async () => {
-      const trigger = selection?.kind === "catalog" ? { triggerCatalogItemId: selection.item.id } : null;
+    mutationFn: (variables: AddLineVariables) => api.addActualWorkLine(actualWorkId, variables.body, version),
+    onSuccess: async (_data, variables) => {
       resetAfterSuccess();
+      onConnectionRecovered();
       await onCommitted();
-      if (trigger) void fetchNudge(trigger);
+      if (variables.trigger) void fetchNudge(variables.trigger);
     },
-    onError: (err) => {
-      if (err instanceof ApiError && err.status === 409) {
+    onError: (err, variables) => {
+      if (!(err instanceof ApiError)) {
+        onConnectionFailure("Couldn't add actual work.", () => addMutation.mutate(variables));
+        return;
+      }
+      if (err.status === 409) {
         onConflict();
         return;
       }
-      if (err instanceof ApiError && err.status !== 400) {
+      if (err.status !== 400) {
         onConflict();
         return;
       }
-      setError(err instanceof ApiError ? err.message : "Something went wrong. Try again.");
+      setError(err.message);
     },
   });
 
@@ -338,11 +385,16 @@ const ActualWorkSearchAndAdd = forwardRef<HTMLInputElement, ActualWorkSearchAndA
           : `${result.lineIds.length} assembly item${result.lineIds.length === 1 ? "" : "s"} added; ${result.skippedCatalogItemIds.length} already on this visit.`,
       );
       setError(null);
+      onConnectionRecovered();
       await onCommitted();
       void fetchNudge({ triggerOfferingAssemblyId: assembly.id });
     },
-    onError: (err) => {
-      if (!(err instanceof ApiError) || err.status !== 400) {
+    onError: (err, assembly) => {
+      if (!(err instanceof ApiError)) {
+        onConnectionFailure("Couldn't add assembly items.", () => expandAssemblyMutation.mutate(assembly));
+        return;
+      }
+      if (err.status !== 400) {
         onConflict();
         return;
       }
@@ -440,6 +492,8 @@ const ActualWorkSearchAndAdd = forwardRef<HTMLInputElement, ActualWorkSearchAndA
                 setNudge(null);
                 onConflict(message);
               }}
+              onConnectionFailure={onConnectionFailure}
+              onConnectionRecovered={onConnectionRecovered}
               onDismiss={() => {
                 retiredRuleIdsRef.current.add(nudge.ruleId);
                 setNudge(null);
@@ -483,7 +537,14 @@ const ActualWorkSearchAndAdd = forwardRef<HTMLInputElement, ActualWorkSearchAndA
             <KeepButton
               variant="teal"
               disabled={!canAdd || addMutation.isPending}
-              onClick={() => addMutation.mutate()}
+              onClick={() => {
+                const body: ActualWorkAddLineBody =
+                  selection?.kind === "catalog"
+                    ? { catalogItemId: selection.item.id, actualQuantity: Number(quantity), note: note.trim() || null }
+                    : { offCatalogDescription: customDescription, actualQuantity: Number(quantity), note: note.trim() || null };
+                const trigger = selection?.kind === "catalog" ? { triggerCatalogItemId: selection.item.id } : null;
+                addMutation.mutate({ body, trigger });
+              }}
               className="flex-1"
             >
               Add item
@@ -511,6 +572,8 @@ interface ActualWorkNudgeChipsProps {
   nudge: { ruleId: string; suggestions: ActualWorkNudgeSuggestionFieldRowResponse[] };
   onAccepted: () => void;
   onConflict: (message?: string) => void;
+  onConnectionFailure: (message: string, retry: () => void) => void;
+  onConnectionRecovered: () => void;
   onDismiss: () => void;
 }
 
@@ -524,7 +587,16 @@ interface ActualWorkNudgeChipsProps {
  * `onConflict` handles reconciliation — and any other failure keeps the panel up so the technician
  * can retry.
  */
-function ActualWorkNudgeChips({ actualWorkId, version, nudge, onAccepted, onConflict, onDismiss }: ActualWorkNudgeChipsProps) {
+function ActualWorkNudgeChips({
+  actualWorkId,
+  version,
+  nudge,
+  onAccepted,
+  onConflict,
+  onConnectionFailure,
+  onConnectionRecovered,
+  onDismiss,
+}: ActualWorkNudgeChipsProps) {
   const [error, setError] = useState<string | null>(null);
 
   const acceptMutation = useMutation({
@@ -544,10 +616,15 @@ function ActualWorkNudgeChips({ actualWorkId, version, nudge, onAccepted, onConf
     },
     onSuccess: () => {
       setError(null);
+      onConnectionRecovered();
       onAccepted();
     },
-    onError: (err) => {
-      if (err instanceof ApiError && err.status === 409) {
+    onError: (err, suggestion) => {
+      if (!(err instanceof ApiError)) {
+        onConnectionFailure("Couldn't add suggested item.", () => acceptMutation.mutate(suggestion));
+        return;
+      }
+      if (err.status === 409) {
         onConflict();
         return;
       }
@@ -595,9 +672,20 @@ interface ActualWorkDraftLineProps {
   version: string;
   onCommitted: () => Promise<void>;
   onConflict: (message?: string) => void;
+  onConnectionFailure: (message: string, retry: () => void) => void;
+  onConnectionRecovered: () => void;
 }
 
-function ActualWorkDraftLine({ line, readOnly, actualWorkId, version, onCommitted, onConflict }: ActualWorkDraftLineProps) {
+function ActualWorkDraftLine({
+  line,
+  readOnly,
+  actualWorkId,
+  version,
+  onCommitted,
+  onConflict,
+  onConnectionFailure,
+  onConnectionRecovered,
+}: ActualWorkDraftLineProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [quantity, setQuantity] = useState(String(line.actualQuantity));
   const [note, setNote] = useState(line.note ?? "");
@@ -609,13 +697,13 @@ function ActualWorkDraftLine({ line, readOnly, actualWorkId, version, onCommitte
     setError(null);
   }
 
-  function onMutationError(err: unknown) {
-    if (err instanceof ApiError && err.status === 409) {
-      onConflict();
+  function onMutationError(err: unknown, retry: () => void, connectionMessage: string) {
+    if (!(err instanceof ApiError)) {
+      onConnectionFailure(connectionMessage, retry);
       setIsEditing(false);
       return;
     }
-    if (!(err instanceof ApiError)) {
+    if (err.status === 409) {
       onConflict();
       setIsEditing(false);
       return;
@@ -629,19 +717,23 @@ function ActualWorkDraftLine({ line, readOnly, actualWorkId, version, onCommitte
   }
 
   const updateMutation = useMutation({
-    mutationFn: () => api.updateActualWorkLine(actualWorkId, line.id, { actualQuantity: Number(quantity), note: note.trim() || null }, version),
+    mutationFn: (body: ActualWorkUpdateLineBody) => api.updateActualWorkLine(actualWorkId, line.id, body, version),
     onSuccess: async () => {
       setError(null);
       setIsEditing(false);
+      onConnectionRecovered();
       await onCommitted();
     },
-    onError: onMutationError,
+    onError: (err, body) => onMutationError(err, () => updateMutation.mutate(body), "Couldn't save changes to this item."),
   });
 
   const removeMutation = useMutation({
     mutationFn: () => api.removeActualWorkLine(actualWorkId, line.id, version),
-    onSuccess: onCommitted,
-    onError: onMutationError,
+    onSuccess: async () => {
+      onConnectionRecovered();
+      await onCommitted();
+    },
+    onError: (err) => onMutationError(err, () => removeMutation.mutate(), "Couldn't remove this item."),
   });
 
   if (readOnly) {
@@ -710,7 +802,12 @@ function ActualWorkDraftLine({ line, readOnly, actualWorkId, version, onCommitte
       </div>
       {error && <p className="text-xs text-[var(--ophalo-danger,#c0392b)]">{error}</p>}
       <div className="flex gap-2">
-        <KeepButton variant="teal" disabled={updateMutation.isPending} onClick={() => updateMutation.mutate()} className="flex-1">
+        <KeepButton
+          variant="teal"
+          disabled={updateMutation.isPending}
+          onClick={() => updateMutation.mutate({ actualQuantity: Number(quantity), note: note.trim() || null })}
+          className="flex-1"
+        >
           Save
         </KeepButton>
         <KeepButton
@@ -733,12 +830,22 @@ interface ActualWorkSubmitFooterProps {
   submitted: boolean;
   onSaveDraft: () => void;
   onConflict: (message?: string) => void;
+  onConnectionFailure: (message: string, retry: () => void) => void;
+  onConnectionRecovered: () => void;
   onSubmitted: () => void;
 }
 
 /** Zero-line submit requires a truthful outcome + non-whitespace completion note
  * (ActualWork.Submit, build-log/129); a submit with at least one line accepts both as optional. */
-function ActualWorkSubmitFooter({ draft, submitted, onSaveDraft, onConflict, onSubmitted }: ActualWorkSubmitFooterProps) {
+function ActualWorkSubmitFooter({
+  draft,
+  submitted,
+  onSaveDraft,
+  onConflict,
+  onConnectionFailure,
+  onConnectionRecovered,
+  onSubmitted,
+}: ActualWorkSubmitFooterProps) {
   const [outcome, setOutcome] = useState("");
   const [completionNote, setCompletionNote] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -746,15 +853,17 @@ function ActualWorkSubmitFooter({ draft, submitted, onSaveDraft, onConflict, onS
   const zeroLine = draft.lines.length === 0;
 
   const submitMutation = useMutation({
-    mutationFn: () =>
-      api.submitActualWork(
-        draft.id,
-        { outcome: outcome || null, completionNote: completionNote.trim() || null },
-        draft.concurrencyVersion,
-      ),
-    onSuccess: onSubmitted,
-    onError: (err) => {
-      if (err instanceof ApiError && err.status === 400) {
+    mutationFn: (body: ActualWorkSubmitBody) => api.submitActualWork(draft.id, body, draft.concurrencyVersion),
+    onSuccess: () => {
+      onConnectionRecovered();
+      onSubmitted();
+    },
+    onError: (err, body) => {
+      if (!(err instanceof ApiError)) {
+        onConnectionFailure("Couldn't submit this visit.", () => submitMutation.mutate(body));
+        return;
+      }
+      if (err.status === 400) {
         setError(err.message);
         return;
       }
@@ -808,7 +917,7 @@ function ActualWorkSubmitFooter({ draft, submitted, onSaveDraft, onConflict, onS
         <button
           type="button"
           disabled={!canSubmit || submitMutation.isPending}
-          onClick={() => submitMutation.mutate()}
+          onClick={() => submitMutation.mutate({ outcome: outcome || null, completionNote: completionNote.trim() || null })}
           className={`rounded-lg bg-[var(--keep-accent)] px-3 py-2.5 text-sm font-semibold text-white ${FOCUS_RING} disabled:opacity-50`}
         >
           Submit visit to office
