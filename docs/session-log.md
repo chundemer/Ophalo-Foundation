@@ -14,7 +14,7 @@
 
 ## Current work
 
-### PWA Mobile V2 — Slice 5c pass 1 complete; pass 2 (required) next
+### PWA Mobile V2 — Slice 5c pass 1 complete; pass 2 (required) in progress (5c-2A, 5c-2B request canvas complete)
 
 **Go-live target:** Mobile V2 work applies only to the responsive authenticated PWA
 (`web/ophalo-app`). The separate Expo/native client (`mobile/ophalo-mobile`) is not a launch
@@ -208,8 +208,7 @@ release-gate audit, not a promise that every slice needs code changes):
 - **5c-2A — Screen-reader and live-state audit** (`ConnectionFailureBanner`, Actual Work/Primary
   Action connection recovery, action-rail visibility): complete, see below.
 - **5c-2B — Mobile state rendering:** loading, empty, permission-denied, and stale-data behavior.
-  Start with the request canvas; include Queue/search only if file/test count stays within the
-  batch gate, otherwise split Queue/search into 5c-2B2. Not started.
+  Request canvas: complete, see below. Queue/search deferred to 5c-2B2 (not started).
 - **5c-2C — Keyboard, zoom, and interrupted-navigation verification:** primarily real-browser/
   local-phone verification; remains a release requirement even if no code changes result. Not
   started.
@@ -253,7 +252,25 @@ a static test stub; does not announce on an ordinary first-attempt success), and
 `App`/`ActualWorkComposer`/`PrimaryActionControl`/`LiveAnnouncerRegion` suites and focused
 `request-detail` suite 285/285 passing, `tsc --noEmit` clean, `git diff --check` clean.
 
-**Next: Slice 5c-2B — mobile state rendering (loading/empty/permission-denied/stale-data).**
+**Slice 5c-2B, request canvas (mobile state rendering): complete (2026-08-26), uncommitted.**
+Targeted audit of `RequestDetail.tsx`/`RequestDetailStates.tsx` and empty-state coverage across
+`request-detail/*` found loading (skeleton), permission-denied (403/404 with no retry button), and
+empty states (timeline, Actual Work composer/history, watchers) already correct and mobile-inclusive.
+Found one real gap: `RequestDetailStates` only branched on `isLoading`/`isError`, so a background
+refetch of already-cached detail (`isFetching` true, `isLoading` false — e.g. prev/next navigation
+between requests already in the query cache) rendered the stale cached record with no affordance
+that a refresh was in flight. Added a thin, non-blocking `role="status"` progress bar
+(`aria-label="Refreshing request"`, `animate-pulse`, `motion-reduce` respected) below the header,
+shown only when `isFetching && !isLoading && !isError`.
+
+Files: `RequestDetailStates.tsx`, new `__tests__/RequestDetailStates.test.tsx` (4 tests: skeleton
+with no refetch bar during initial load, nothing when idle, refetch bar during background fetch,
+error state suppresses the bar). Verified: focused `RequestDetail`/`request-detail` suite 255/255
+passing, `tsc --noEmit` clean, `git diff --check` clean. Not yet committed — pending Christian's
+explicit commit approval.
+
+**Next: Slice 5c-2B2 — Queue/search mobile state rendering (loading/empty/stale-data), then
+Slice 5c-2C — keyboard, zoom, and interrupted-navigation verification.**
 
 The 2026-08-24/25 resolved defects and attention-presentation decisions are recorded in the
 [pilot-readiness bug tracker](pilot-readiness-bug-tracker.md#p0p1-pilot-flow-bugs).

@@ -23,9 +23,21 @@ function RequestDetailSkeleton() {
   );
 }
 
+function RequestDetailRefetchBar() {
+  return (
+    <div
+      role="status"
+      aria-label="Refreshing request"
+      className="h-0.5 w-full overflow-hidden bg-[var(--ophalo-border)]"
+    >
+      <div className="h-full w-full animate-pulse motion-reduce:animate-none bg-[var(--ophalo-accent)]" />
+    </div>
+  );
+}
+
 export function RequestDetailStates({ isLoading, isError, error, isFetching, onRetry }: RequestDetailStatesProps) {
   if (isLoading) return <RequestDetailSkeleton />;
-  if (!isError) return null;
+  if (!isError) return isFetching ? <RequestDetailRefetchBar /> : null;
   const inaccessible = error instanceof ApiError && (error.status === 403 || error.status === 404);
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-3 px-4">
