@@ -32,6 +32,11 @@ const INPUT_CLS =
 interface ActualWorkComposerProps {
   draft: ActualWorkDraft;
   conflictNotice: string | null;
+  // Slice 4 (2026-08-26): full-bleed workspace below 1001px, right-drawer at/above it — same
+  // 1001px threshold RequestDetailContent measures via ResizeObserver. Threaded as a prop rather
+  // than a `min-[1001px]:` CSS pair so only one close control (X vs "Back to Request") ever
+  // exists in the DOM/accessibility tree at a time, matching Slice 2/3's convention.
+  isWide: boolean;
   onClose: () => void;
   // Returns the in-flight refetch — each mutation's onSuccess awaits it before settling, so
   // TanStack Query keeps the mutation (and its disabled controls) pending until the composer's
@@ -60,6 +65,7 @@ interface ActualWorkComposerProps {
 export function ActualWorkComposer({
   draft,
   conflictNotice,
+  isWide,
   onClose,
   onCommitted,
   onConflict,
@@ -87,8 +93,10 @@ export function ActualWorkComposer({
       overlayClassName="flex justify-end"
       backdropClassName="bg-slate-950/35 backdrop-blur-[1px]"
       panelClassName={
-        "fixed inset-y-0 right-0 h-[100dvh] w-full max-w-[420px] flex flex-col bg-[var(--ophalo-card)] " +
-        "border-l border-[var(--ophalo-border)] shadow-2xl"
+        isWide
+          ? "fixed inset-y-0 right-0 h-[100dvh] w-full max-w-[420px] flex flex-col bg-[var(--ophalo-card)] " +
+            "border-l border-[var(--ophalo-border)] shadow-2xl"
+          : "fixed inset-0 h-[100dvh] w-full flex flex-col bg-[var(--ophalo-card)]"
       }
     >
       <div className="px-4 py-4 border-b border-[var(--ophalo-border)] shrink-0">
@@ -99,14 +107,24 @@ export function ActualWorkComposer({
           Record completed work
             </h2>
           </div>
-          <button
-          type="button"
-          onClick={onClose}
-          className={`text-[var(--ophalo-muted)] hover:text-[var(--ophalo-ink)] p-1 rounded-md transition-colors ${FOCUS_RING}`}
-          >
-            <X className="h-4 w-4" />
-            <span className="sr-only">Close</span>
-          </button>
+          {isWide ? (
+            <button
+            type="button"
+            onClick={onClose}
+            className={`text-[var(--ophalo-muted)] hover:text-[var(--ophalo-ink)] p-1 rounded-md transition-colors ${FOCUS_RING}`}
+            >
+              <X className="h-4 w-4" />
+              <span className="sr-only">Close</span>
+            </button>
+          ) : (
+            <button
+            type="button"
+            onClick={onClose}
+            className={`shrink-0 text-sm font-medium text-[var(--keep-accent)] hover:underline rounded ${FOCUS_RING}`}
+            >
+              ← Back to Request
+            </button>
+          )}
         </div>
         <div className="mt-2 flex items-center justify-between gap-2">
           <p className="text-xs text-[var(--ophalo-muted)]">Changes are saved automatically.</p>

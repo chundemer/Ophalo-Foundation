@@ -70,6 +70,7 @@ function renderComposer(overrides: Partial<React.ComponentProps<typeof ActualWor
       <ActualWorkComposer
         draft={emptyDraft()}
         conflictNotice={null}
+        isWide={true}
         onClose={onClose}
         onCommitted={onCommitted}
         onConflict={onConflict}
@@ -96,6 +97,24 @@ beforeEach(() => {
 });
 
 describe("ActualWorkComposer", () => {
+  it("shows the icon-only close control at isWide and calls onClose", async () => {
+    const user = userEvent.setup();
+    const { onClose } = renderComposer({ isWide: true });
+
+    expect(screen.queryByText("← Back to Request")).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Close" }));
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows a Back to Request control below isWide and calls the same onClose handler", async () => {
+    const user = userEvent.setup();
+    const { onClose } = renderComposer({ isWide: false });
+
+    expect(screen.queryByRole("button", { name: "Close" })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "← Back to Request" }));
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
   it("submitting a zero-line draft is disabled until an outcome and completion note are both provided", async () => {
     const user = userEvent.setup();
     renderComposer();
@@ -381,6 +400,7 @@ describe("ActualWorkComposer", () => {
         <ActualWorkComposer
           draft={emptyDraft({ lines: [draftLine] })}
           conflictNotice={null}
+          isWide={true}
           onClose={vi.fn()}
           onCommitted={onCommitted}
           onConflict={vi.fn()}

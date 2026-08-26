@@ -250,6 +250,7 @@ export function RequestDetailContent(props: RequestDetailContentProps) {
       )}
       {actualWorkCapture.isModalOpen && actualWorkCapture.state.status === "draft" && (
         <ActualWorkComposer
+          isWide={isWide}
           draft={actualWorkCapture.state.draft}
           conflictNotice={actualWorkCapture.conflictNotice}
           onClose={actualWorkCapture.closeModal}

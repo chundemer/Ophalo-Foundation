@@ -14,7 +14,7 @@
 
 ## Current work
 
-### PWA Mobile V2 — Slice 3 complete, Slice 4 next
+### PWA Mobile V2 — Slice 4 complete, Slice 5 next
 
 **Go-live target:** Mobile V2 work applies only to the responsive authenticated PWA
 (`web/ophalo-app`). The separate Expo/native client (`mobile/ophalo-mobile`) is not a launch
@@ -78,8 +78,27 @@ Files: `MobileContactLocationCard.tsx` (new), `RequestDetailContent.tsx`,
 `__tests__/MobileContactLocationCard.test.tsx` (new, 8 tests), 2 existing `RequestDetailContent`
 test files' `DetailPanels`/new-component mocks updated, plus a DOM-order (not snapshot) assertion
 for the full mobile canvas sequence. Verified: focused `request-detail` suite 233/233 passing,
-`tsc --noEmit` clean, `git diff --check` clean. Next: Slice 4 — Actual Work focused workspace (see
-"PWA mobile pilot workflow — approved code slices" below).
+`tsc --noEmit` clean, `git diff --check` clean.
+
+**Slice 4 (Actual Work focused workspace): complete (2026-08-26).** Design decision (2026-08-26):
+below 1001px, `ActualWorkComposer` renders full-bleed (`fixed inset-0`, no `max-w-[420px]` cap, no
+drawer border/shadow) instead of the existing right-side drawer, with a visible `← Back to
+Request` text control replacing the icon-only `X`; at/above 1001px the existing drawer and
+icon-only close are unchanged. Threaded as a new `isWide: boolean` prop (from
+`RequestDetailContent.tsx`'s existing `ResizeObserver`-measured state) rather than a
+`min-[1001px]:` CSS pair, so only one close control ever exists in the DOM/accessibility tree at a
+time (Slice 2/3's convention) instead of two simultaneously-mounted, differently-labeled
+controls. Both close paths call the identical `onClose` handler — no new dirty-draft confirmation
+logic; the composer already auto-saves. The entry point (`ActualWorkCard`'s "Add actual
+work"/"Resume draft" button) already lived in the shared canvas prior to this slice, so no new
+wiring was needed there. Safe-area inset padding (notch/home-indicator) is explicitly deferred to
+Slice 5, which owns that pass.
+
+Files: `ActualWorkComposer.tsx`, `RequestDetailContent.tsx`, `__tests__/ActualWorkComposer.test.tsx`
+(2 new tests for the isWide/close-control branch, plus 2 existing render call sites updated for the
+new required prop). Verified: focused `request-detail` suite 235/235 passing, `tsc --noEmit`
+clean, `git diff --check` clean. Next: Slice 5 — Connected-only failure, accessibility, and device
+pass (see "PWA mobile pilot workflow — approved code slices" below).
 
 The 2026-08-24/25 resolved defects and attention-presentation decisions are recorded in the
 [pilot-readiness bug tracker](pilot-readiness-bug-tracker.md#p0p1-pilot-flow-bugs).
