@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useState } from "react";
 import { api, ApiError, type KeepRequestDetailResult } from "../../lib/apiClient";
 import { KeepButton } from "../../components/keep/KeepButton";
 import { INPUT_CLS } from "./helpers";
@@ -31,7 +31,15 @@ type ActiveTab = "customerUpdate" | "internalNote";
 const NOTE_CONFLICT_MESSAGE =
   "This request was updated. Refresh to see the latest state. Your note is saved here.";
 
-export function UnifiedComposer({
+// Imperative activation only — the server-authored "Respond to customer" primary action (Session
+// 0A), rendered by whichever of the Anchor/HeroAttentionBanner currently owns the primary slot, is
+// the sole trigger. Never invoked on load/mount, so the composer never auto-switches tabs or
+// auto-focuses merely because the request loaded.
+export interface UnifiedComposerHandle {
+  activateCustomerUpdate: () => void;
+}
+
+export const UnifiedComposer = forwardRef<UnifiedComposerHandle, UnifiedComposerProps>(function UnifiedComposer({
   requestId,
   detail,
   onDetailUpdated,
@@ -41,10 +49,38 @@ export function UnifiedComposer({
   onCustomerUpdateDraftStatusChange,
   highlight,
   bare = false,
-}: UnifiedComposerProps) {
+}, ref) {
   const { canSendBusinessUpdate, canAddInternalNote } = detail.availableActions;
   const defaultTab: ActiveTab = canSendBusinessUpdate ? "customerUpdate" : "internalNote";
   const [activeTab, setActiveTab] = useState<ActiveTab>(defaultTab);
+
+  // Starts at 0 so the scroll/focus effect below never fires on mount — only an explicit tap
+  // through the imperative handle increments it.
+  const [customerUpdateFocusSignal, setCustomerUpdateFocusSignal] = useState(0);
+
+  useImperativeHandle(ref, () => ({
+    activateCustomerUpdate: () => {
+      setActiveTab("customerUpdate");
+      setCustomerUpdateFocusSignal((n) => n + 1);
+    },
+  }));
+
+  useEffect(() => {
+    if (customerUpdateFocusSignal === 0) return;
+    const container = document.getElementById("focus-panel-update");
+    const canvas = container?.closest<HTMLElement>("[data-request-detail-work-canvas]");
+    const reduceMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
+    if (canvas && container) {
+      const canvasRect = canvas.getBoundingClientRect();
+      const containerRect = container.getBoundingClientRect();
+      canvas.scrollTo({
+        top: Math.max(0, canvas.scrollTop + containerRect.top - canvasRect.top - 24),
+        behavior: reduceMotion ? "auto" : "smooth",
+      });
+    }
+    document.getElementById("business-update-message")?.focus();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [customerUpdateFocusSignal]);
 
   const [note, setNote] = useState("");
   const [noteSubmitting, setNoteSubmitting] = useState(false);
@@ -211,4 +247,4 @@ export function UnifiedComposer({
       )}
     </div>
   );
-}
+});

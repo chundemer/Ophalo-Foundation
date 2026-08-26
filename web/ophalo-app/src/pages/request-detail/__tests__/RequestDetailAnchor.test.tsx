@@ -41,6 +41,8 @@ function renderAnchor(detail: KeepRequestDetailResult) {
         canRecordShareIntent={false}
         needsShare={false}
         onOpenShareDrawer={vi.fn()}
+        onOpenClearAttention={vi.fn()}
+        onActivateCustomerUpdateComposer={vi.fn()}
       />
     </QueryClientProvider>,
   );
@@ -76,12 +78,42 @@ describe("RequestDetailAnchor — three-row desktop hierarchy", () => {
     expect(screen.getByRole("button", { name: "Mark work done" })).toBeInTheDocument();
   });
 
-  it("demotes Mark work done and hides Close when active attention exists", () => {
+  it("requires a local confirm step before submitting Mark work done, even though the server's requiresConfirmation is false (regression, 2026-08-25)", async () => {
+    // Mark work done predates and is independent of PrimaryActionMetadata.RequiresConfirmation —
+    // it must always confirm locally (click -> inline Confirm/Cancel -> Confirm), matching the
+    // app's existing convention. Removing this step when introducing the server-authored
+    // contract was an unintended regression, not an approved behavior change.
+    const detail: KeepRequestDetailResult = { ...baseDetail(), attentionLevel: "none" };
+    renderAnchor(detail);
+
+    await userEvent.setup().click(screen.getByRole("button", { name: "Mark work done" }));
+    expect(screen.getByText("Confirm work is done?")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Confirm" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Cancel" })).toBeInTheDocument();
+  });
+
+  it("does not mount the primary-action slot while active attention exists — HeroAttentionBanner owns it instead — but keeps the demoted Mark work done secondary", () => {
+    // mock-req-002: effectiveAttention.level is active (guidanceKey "respond_to_customer"). The
+    // Anchor must not render detail.availableActions.primaryAction at all in this state (Session
+    // 0A attention/no-attention mount split, 2026-08-25) — see HeroAttentionBanner.test.tsx for
+    // coverage of the primary slot itself, including the respond_to_customer-falls-back-to-
+    // contact regression.
     const detail = mockRequestDetails["mock-req-002"];
     renderAnchor(detail);
 
-    expect(screen.getByRole("button", { name: "Mark work done, attention remains" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Respond to customer" })).not.toBeInTheDocument();
+    const contactButton = screen.getByRole("button", { name: "Contact customer" });
+    expect(contactButton).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Close request" })).not.toBeInTheDocument();
+
+    // The consequence must be plainly visible before the user acts (2026-08-25 correction) — not
+    // hidden in an aria-label-only suffix — and the control must read as visibly subordinate to
+    // Contact customer, never an equal-weight outline button beside it.
+    const markWorkDoneButton = screen.getByRole("button", { name: "Mark work done, attention remains" });
+    expect(markWorkDoneButton).toBeInTheDocument();
+    expect(markWorkDoneButton.textContent).toBe("Mark work done, attention remains");
+    expect(markWorkDoneButton.className).not.toEqual(contactButton.className);
+    expect(markWorkDoneButton.className).not.toContain("border");
   });
 
   it("shows Close as the primary action when resolved, attention-free, and authorized", () => {
@@ -89,12 +121,53 @@ describe("RequestDetailAnchor — three-row desktop hierarchy", () => {
       ...baseDetail(),
       status: "resolved",
       attentionLevel: "none",
-      availableActions: { ...OWNER_ACTIONS },
+      availableActions: {
+        ...OWNER_ACTIONS,
+        primaryAction: { key: "close_request", label: "Close request", target: "mutation", requiresConfirmation: true, confirmationCopy: "Close this request?" },
+      },
     };
     renderAnchor(detail);
 
     expect(screen.getByRole("button", { name: "Close request" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /mark work done/i })).not.toBeInTheDocument();
+  });
+
+  it("requires confirmation before closing, using the server-authored confirmation copy", async () => {
+    const detail: KeepRequestDetailResult = {
+      ...baseDetail(),
+      status: "resolved",
+      attentionLevel: "none",
+      availableActions: {
+        ...OWNER_ACTIONS,
+        primaryAction: { key: "close_request", label: "Close request", target: "mutation", requiresConfirmation: true, confirmationCopy: "Close this request?" },
+      },
+    };
+    renderAnchor(detail);
+
+    await userEvent.setup().click(screen.getByRole("button", { name: "Close request" }));
+    expect(screen.getByText("Close this request?")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Confirm" })).toBeInTheDocument();
+  });
+
+  it("fails safely with factual unavailable feedback for an unrecognized target, never falling back to capability-flag inference", () => {
+    const detail: KeepRequestDetailResult = {
+      ...baseDetail(),
+      availableActions: {
+        ...OWNER_ACTIONS,
+        // Malformed/future value outside the closed client vocabulary.
+        primaryAction: {
+          key: "close_request",
+          label: "Close request",
+          target: "unknown_future_target",
+          requiresConfirmation: false,
+          confirmationCopy: null,
+        } as unknown as KeepRequestDetailResult["availableActions"]["primaryAction"],
+      },
+    };
+    renderAnchor(detail);
+
+    expect(screen.getByText("Primary action unavailable")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Close request" })).not.toBeInTheDocument();
   });
 
   it("Row 4 (locked correction, 2026-08-24): renders three persistently labeled controls in locked order — Internal priority, Planned work date, Set internal follow-up", () => {
@@ -259,6 +332,8 @@ describe("RequestDetailAnchor — three-row desktop hierarchy", () => {
           canRecordShareIntent={false}
           needsShare={false}
           onOpenShareDrawer={vi.fn()}
+          onOpenClearAttention={vi.fn()}
+          onActivateCustomerUpdateComposer={vi.fn()}
         />
       </QueryClientProvider>,
     );

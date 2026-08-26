@@ -5,7 +5,10 @@ import type {
   KeepRequestDetailResult,
   KeepRequestEventItem,
   KeepRequestSummary,
+  MarkWorkDoneSecondaryMetadata,
+  PrimaryActionMetadata,
 } from "../lib/apiClient";
+import type { EffectiveAttentionInfo } from "../lib/apiClient.types";
 import {
   MOCK_USER_ID,
   MOCK_VALIDATION,
@@ -62,11 +65,14 @@ function actionsForRole(base: AvailableActionsMetadata, role: AccountRole): Avai
       canMarkFeedbackReviewed: false,
       canSetFollowUpOn: false,
       canSetPlannedFor: false,
+      canResolveFollowUp: false,
       canClose: false,
       canClassify: false,
       canRecordShareIntent: false,
       canCreateFollowUpRequest: false,
       allowedStatuses: [],
+      primaryAction: null,
+      markWorkDoneSecondary: null,
     };
   }
   if (role === "operator") {
@@ -83,8 +89,75 @@ function actionsForRole(base: AvailableActionsMetadata, role: AccountRole): Avai
   return base;
 }
 
+// Mirrors the backend's KeepRequestActionPolicy.SelectPrimaryAction/SelectMarkWorkDoneSecondary
+// (Session 0A) so the mock server keeps availableActions.primaryAction/markWorkDoneSecondary
+// consistent with role, status, and effective attention as mutations change them.
+function canMarkWorkDone(a: AvailableActionsMetadata, status: string): boolean {
+  return a.canChangeStatus && a.allowedStatuses.includes("resolved") && status !== "resolved";
+}
+
+function selectPrimaryAction(
+  a: AvailableActionsMetadata,
+  attention: EffectiveAttentionInfo,
+  status: string,
+): PrimaryActionMetadata | null {
+  if (attention.level !== "none") {
+    switch (attention.guidanceKey) {
+      case "acknowledge_attention":
+        return a.canAcknowledgeAttention
+          ? { key: "acknowledge_attention", label: "Acknowledge attention", target: "attention_sheet", requiresConfirmation: false, confirmationCopy: null }
+          : null;
+      case "resolve_follow_up":
+        return a.canResolveFollowUp
+          ? { key: "resolve_follow_up", label: "Resolve follow-up", target: "follow_up_sheet", requiresConfirmation: false, confirmationCopy: null }
+          : null;
+      case "respond_to_customer":
+        // Two authorized resolution routes exist for this guidance — a customer-page update and
+        // an external contact log. Fall back to the contact route rather than null when the
+        // update route isn't authorized (2026-08-25 regression fix).
+        if (a.canSendBusinessUpdate) {
+          return { key: "respond_to_customer", label: "Respond to customer", target: "customer_update_composer", requiresConfirmation: false, confirmationCopy: null };
+        }
+        return a.canLogExternalContact
+          ? { key: "log_external_contact", label: "Contact customer", target: "contact_sheet", requiresConfirmation: false, confirmationCopy: null }
+          : null;
+      case "log_external_contact":
+        return a.canLogExternalContact
+          ? { key: "log_external_contact", label: "Log contact", target: "contact_sheet", requiresConfirmation: false, confirmationCopy: null }
+          : null;
+      default:
+        return null;
+    }
+  }
+  if (a.canClose && status === "resolved") {
+    return { key: "close_request", label: "Close request", target: "mutation", requiresConfirmation: true, confirmationCopy: "Close this request?" };
+  }
+  if (canMarkWorkDone(a, status)) {
+    return { key: "mark_work_done", label: "Mark work done", target: "mutation", requiresConfirmation: false, confirmationCopy: null };
+  }
+  return null;
+}
+
+function selectMarkWorkDoneSecondary(
+  a: AvailableActionsMetadata,
+  attention: EffectiveAttentionInfo,
+  status: string,
+): MarkWorkDoneSecondaryMetadata | null {
+  return attention.level !== "none" && canMarkWorkDone(a, status)
+    ? { label: "Mark work done", target: "mutation", consequence: "attention_remains" }
+    : null;
+}
+
 function withRoleActions(d: KeepRequestDetailResult): KeepRequestDetailResult {
-  return { ...d, availableActions: actionsForRole(d.availableActions, currentMockRole) };
+  const availableActions = actionsForRole(d.availableActions, currentMockRole);
+  return {
+    ...d,
+    availableActions: {
+      ...availableActions,
+      primaryAction: selectPrimaryAction(availableActions, d.effectiveAttention, d.status),
+      markWorkDoneSecondary: selectMarkWorkDoneSecondary(availableActions, d.effectiveAttention, d.status),
+    },
+  };
 }
 
 function appendEvent(

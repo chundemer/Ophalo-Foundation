@@ -783,23 +783,63 @@ computes `EffectiveAttentionResult` once and folds `PrimaryAction`/`MarkWorkDone
 detail-response caller services. 101/101 focused unit tests pass (`KeepRequestActionPolicyTests`,
 new `KeepRequestDetailMapperTests`); full solution builds clean; `git diff --check` clean.
 
-**Desktop migration — approved scope, not yet started. This is the required next step before any
-Mobile V2 Slice 1 work begins:**
-- Replace the Anchor's compact `WorkDoneCard`/`CloseRequestCard` client-derived primary-slot logic
-  (`RequestDetailAnchor.tsx`, `BusinessSection.tsx`) with a renderer that reads the server's
-  `AvailableActions.PrimaryAction` directly — no client eligibility/precedence derivation survives.
-- Honor `Target` (`mutation` / `customer_update_composer` / `attention_sheet` / `contact_sheet` /
-  `follow_up_sheet`), `RequiresConfirmation`, `ConfirmationCopy`, and the `null`-primary state
-  (render nothing, not a guess).
-- Add the compact Close confirmation step that does not currently exist — today's compact
-  `CloseRequestCard` fires `patchRequestStatus` immediately on click with no confirm dialog, which
-  does not honor `RequiresConfirmation: true` on `close_request`.
-- Render the server-authored `MarkWorkDoneSecondary` (`attention_remains` consequence) as the
-  authorized secondary Work Done control when attention keeps it out of the primary slot — never a
-  second primary action.
+**Desktop migration — complete (2026-08-25), verified by Christian's live-app pass.**
 
-Do not begin any mobile UI work (Slice 1+) until this shared desktop renderer is working against
-the new contract.
+**Primary-action slot, split by attention state.** A shared, exhaustive renderer
+(`PrimaryActionControl.tsx`: `PrimaryActionSlot`, `MarkWorkDoneSecondarySlot`,
+`PrimaryMutationButton`) reads `detail.availableActions.primaryAction` and switches over the
+closed server `target` vocabulary (`mutation` / `customer_update_composer` / `attention_sheet` /
+`contact_sheet` / `follow_up_sheet`); an unrecognized target/key combination renders a factual
+"Primary action unavailable" message rather than falling back to capability-flag inference.
+Exactly one of two components mounts `PrimaryActionSlot` for a given request, never both:
+- `HeroAttentionBanner` (`DetailPanels.tsx`) mounts it while `effectiveAttention.level !== "none"`
+  — the amber rail is the sole renderer of the primary action during active attention, beside the
+  attention reason it resolves.
+- `RequestDetailAnchor.tsx` mounts it only when `effectiveAttention.level === "none"` — during
+  active attention the Anchor stays utility-focused (secondary "Contact customer",
+  `MarkWorkDoneSecondarySlot`'s demoted "Mark work done, attention remains"), never a competing
+  primary/lifecycle action. The demoted secondary renders as a quiet muted-text trigger (no
+  border, not a `KeepButton`) — visually distinct from the outlined "Contact customer" button —
+  with the full consequence phrase ("...attention remains") as its actual visible text, not hidden
+  in an aria-label-only suffix (2026-08-25 visual correction, caught in live-app review).
+- `WorkDoneCard`/`CloseRequestCard`'s old `compact` prop/branches (dead once the Anchor stopped
+  calling them) were removed, along with the obsolete `BusinessSection.compactPrimary.test.tsx`;
+  their full-card (non-compact) render paths are untouched.
+
+**Confirm-before-mutate is always shown**, for both `mark_work_done` and `close_request`,
+independent of the server's `RequiresConfirmation` flag — a regression was caught and fixed here.
+`RequiresConfirmation`/`ConfirmationCopy` only control whether server-authored copy text is
+mandatory (`close_request` today); the app's pre-existing "click → inline Confirm/Cancel" UX for
+Mark work done predates Session 0A and must not be skipped just because the server doesn't require
+its own copy for that key. Falls back to the app's existing "Confirm work is done?" prompt when the
+server supplies no `ConfirmationCopy`.
+
+**Backend regression fixed:** `KeepRequestActionPolicy.SelectPrimaryAction`'s `respond_to_customer`
+case previously returned `null` whenever `CanSendBusinessUpdate` was false, even if
+`CanLogExternalContact` was true — silently dropping an available contact route. Now falls back to
+`log_external_contact`/`contact_sheet`/"Contact customer" in that case; returns `null` only when
+neither route is authorized. The authorized label is "Respond to customer" (not "Send first
+response" — the removed legacy Hero copy — and not "Post customer-page update", an interim label
+corrected during this same batch). 3 new backend regression tests
+(`KeepRequestActionPolicyTests.cs`).
+
+**`customer_update_composer`** activates the existing always-mounted inline `UnifiedComposer` (no
+new desktop sheet). `UnifiedComposer` exposes an imperative `activateCustomerUpdate()` handle
+(ref-based, only ever called from an explicit tap — never on mount/load) that switches to its
+Customer-update tab, scrolls the composer into view (respecting `prefers-reduced-motion`), and
+focuses `#business-update-message` directly. Both tab panels stay mounted, so no draft is ever
+discarded by the switch.
+
+`AvailableActionsMetadata` gained `canResolveFollowUp`, `primaryAction`, `markWorkDoneSecondary`
+client-side; `apiClient.ts` re-exports the new `PrimaryActionMetadata`/`PrimaryActionKey`/
+`PrimaryActionTarget`/`MarkWorkDoneSecondaryMetadata` types. Mocks (`fixtures.ts`,
+`mockApiClient.ts`) mirror the backend's `SelectPrimaryAction`/`SelectMarkWorkDoneSecondary`
+precedence, including the contact-route fallback, so dev/test data stays representative.
+
+**Verification:** full `tsc --noEmit` clean; full frontend suite (645 tests) passes; full backend
+unit suite (1,626 tests) passes; `git diff --check` clean.
+
+Mobile V2 Slice 1 work may begin now that this is committed.
 
 ### 1. Mobile shell and Queue return path
 

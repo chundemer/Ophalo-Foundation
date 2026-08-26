@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import { type KeepRequestDetailResult } from "../../lib/apiClient";
 import { type TimelineFilter } from "./TimelineEvent";
 import {
@@ -13,7 +14,7 @@ import {
 } from "./DetailPanels";
 import { TodayPromiseBanner } from "./DetailHero";
 import { RequestDetailAnchor } from "./RequestDetailAnchor";
-import { UnifiedComposer } from "./UnifiedComposer";
+import { UnifiedComposer, type UnifiedComposerHandle } from "./UnifiedComposer";
 import { KeepButton } from "../../components/keep/KeepButton";
 import { RequestDetailActivity } from "./RequestDetailActivity";
 import { useActualWorkCapture } from "./useActualWorkCapture";
@@ -49,6 +50,7 @@ interface RequestDetailContentProps extends RequestDetailLayoutProps {
 export function RequestDetailContent(props: RequestDetailContentProps) {
   const { detail, requestId, highlights, showProminentFeedbackCard, onDetailUpdated, onContactLaunched, onEditLocation, onOpenReassignOwner, onOpenWatchers, onRecordFollowUp, onCreateFollowUp, onReviewSuccess, onOpenClearAttention } = props;
   const layoutProps: RequestDetailLayoutProps = { requestId, detail, highlights, showProminentFeedbackCard, onDetailUpdated, onContactLaunched, onEditLocation, onOpenReassignOwner, onOpenWatchers, onRecordFollowUp, onCreateFollowUp, onReviewSuccess };
+  const composerRef = useRef<UnifiedComposerHandle>(null);
   const actualWorkCapture = useActualWorkCapture(requestId);
   const actualWorkHistory = useActualWorkHistory(requestId);
   const actualWorkCardVisible = actualWorkCapture.state.status === "no-draft" || actualWorkCapture.state.status === "draft";
@@ -62,16 +64,21 @@ export function RequestDetailContent(props: RequestDetailContentProps) {
         canRecordShareIntent={props.canRecordShareIntent}
         needsShare={props.needsShare}
         onOpenShareDrawer={props.onOpenShareDrawer}
+        onOpenClearAttention={onOpenClearAttention}
+        onActivateCustomerUpdateComposer={() => composerRef.current?.activateCustomerUpdate()}
       />
       <div data-request-detail-work-canvas className="flex-1 min-h-0 overflow-y-auto px-4 md:px-6 py-5">
       <div className="max-w-4xl mx-auto w-full space-y-3">
         {/* 1. Active attention guidance */}
         <div id="focus-panel-attention" className="space-y-3">
           <HeroAttentionBanner
+            requestId={requestId}
             detail={detail}
+            onDetailUpdated={onDetailUpdated}
+            onOpenClearAttention={onOpenClearAttention}
             onRecordFollowUp={onRecordFollowUp}
             onContactLaunched={onContactLaunched}
-            onOpenClearAttention={onOpenClearAttention}
+            onActivateCustomerUpdateComposer={() => composerRef.current?.activateCustomerUpdate()}
           />
           <TodayPromiseBanner detail={detail} onRecordFollowUp={onRecordFollowUp} />
         </div>
@@ -106,7 +113,7 @@ export function RequestDetailContent(props: RequestDetailContentProps) {
             tabIndex={-1}
             className="rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] focus:outline-none focus:ring-2 focus:ring-[var(--keep-accent)]"
           >
-            <UnifiedComposer requestId={requestId} detail={detail} onDetailUpdated={onDetailUpdated} customerUpdateDraft={props.customerUpdateDraft} onCustomerUpdateDraftChange={props.onCustomerUpdateDraftChange} customerUpdateDraftStatus={props.customerUpdateDraftStatus} onCustomerUpdateDraftStatusChange={props.onCustomerUpdateDraftStatusChange} highlight={highlights.sendUpdate} bare />
+            <UnifiedComposer ref={composerRef} requestId={requestId} detail={detail} onDetailUpdated={onDetailUpdated} customerUpdateDraft={props.customerUpdateDraft} onCustomerUpdateDraftChange={props.onCustomerUpdateDraftChange} customerUpdateDraftStatus={props.customerUpdateDraftStatus} onCustomerUpdateDraftStatusChange={props.onCustomerUpdateDraftStatusChange} highlight={highlights.sendUpdate} bare />
           </div>
         </div>
 

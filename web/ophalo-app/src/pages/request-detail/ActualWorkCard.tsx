@@ -51,7 +51,7 @@ export function ActualWorkCard({ state, onStartCapture, bare = false }: ActualWo
           <p className="text-xs text-[var(--ophalo-muted)] truncate">{summary}</p>
         </div>
         {/* secondary, not teal — the Anchor owns the one primary-weight action (locked spec);
-            this module's CTA must not visually compete with it or the composer's Send update. */}
+            this module's CTA must not visually compete with it or the composer's submit button. */}
         <KeepButton
           variant="secondary"
           onClick={onStartCapture}

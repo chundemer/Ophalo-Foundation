@@ -875,6 +875,51 @@ public class KeepRequestActionPolicyTests
     }
 
     [Fact]
+    public void SelectPrimaryAction_respond_to_customer_authorized_returns_customer_update_composer()
+    {
+        var r = MakeReceived();
+        var actions = Actions(r, OwnerWrite()) with { CanSendBusinessUpdate = true, CanLogExternalContact = true };
+        var attention = AttentionWithGuidance("respond_to_customer");
+
+        var primary = KeepRequestActionPolicy.SelectPrimaryAction(actions, attention, r.Status);
+
+        Assert.NotNull(primary);
+        Assert.Equal("respond_to_customer", primary!.Key);
+        Assert.Equal("customer_update_composer", primary.Target);
+        Assert.Equal("Respond to customer", primary.Label);
+    }
+
+    [Fact]
+    public void SelectPrimaryAction_respond_to_customer_falls_back_to_contact_when_update_unauthorized()
+    {
+        // Regression (2026-08-25): the update-only guard previously dropped straight to null when
+        // CanSendBusinessUpdate was false, even though an authorized contact route existed — the
+        // customer message still needs a response route, not a silently empty primary slot.
+        var r = MakeReceived();
+        var actions = Actions(r, OwnerWrite()) with { CanSendBusinessUpdate = false, CanLogExternalContact = true };
+        var attention = AttentionWithGuidance("respond_to_customer");
+
+        var primary = KeepRequestActionPolicy.SelectPrimaryAction(actions, attention, r.Status);
+
+        Assert.NotNull(primary);
+        Assert.Equal("log_external_contact", primary!.Key);
+        Assert.Equal("contact_sheet", primary.Target);
+        Assert.Equal("Contact customer", primary.Label);
+    }
+
+    [Fact]
+    public void SelectPrimaryAction_respond_to_customer_returns_null_when_neither_route_authorized()
+    {
+        var r = MakeReceived();
+        var actions = Actions(r, OwnerWrite()) with { CanSendBusinessUpdate = false, CanLogExternalContact = false };
+        var attention = AttentionWithGuidance("respond_to_customer");
+
+        var primary = KeepRequestActionPolicy.SelectPrimaryAction(actions, attention, r.Status);
+
+        Assert.Null(primary);
+    }
+
+    [Fact]
     public void SelectPrimaryAction_attention_guidance_gate_unauthorized_returns_null()
     {
         // Simulate an actor for whom the guided capability is false (e.g. CanResolveFollowUp

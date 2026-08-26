@@ -3,31 +3,33 @@ import { DetailHeroBadges, DetailHeroName } from "./DetailHero";
 import { CustomerContactStrip } from "./CustomerContactStrip";
 import { ServiceLocationPanel, TriagePanel } from "./DetailPanels";
 import { TeamSection } from "./TeamSection";
-import { WorkDoneCard, CloseRequestCard } from "./BusinessSection";
 import { TimingPanel } from "./TimingPanel";
 import { KeepButton } from "../../components/keep/KeepButton";
+import { PrimaryActionSlot, MarkWorkDoneSecondarySlot } from "./PrimaryActionControl";
 
 // Sticky Request Anchor (three-row correction, 2026-08-22): one outer bordered/rounded card with
 // a deliberate three-row desktop hierarchy — not a single flattened horizontal strip and not a
 // stack of independently card-shaped children.
-//   Row 1: reference/status/attention (left, DetailHeroBadges) | Log contact + the one compact
-//          primary action (right).
+//   Row 1: reference/status/attention (left, DetailHeroBadges) | Log contact + the
+//          no-attention lifecycle primary action, plus its authorized secondary Mark work done
+//          control (right).
 //   Row 2: customer identity, full width (DetailHeroName).
 //   Divider, then Row 3: three stable context columns — customer contact, service location, and
 //          owner/share utilities — each chrome-free inline content inside the one outer card.
 //
-// Primary-action slot: only two already-authorized, mutually-exclusive-by-status derivations are
-// shown here — ADR-434 "Mark work done" (WorkDoneCard) and the locked spec's own Close-request-
-// as-Anchor-primary rule for canClose (CloseRequestCard) — both rendered via their `compact` prop
-// so at most one small, normal-height button appears, never full card chrome. Both self-guard on
-// their own eligibility, so at most one is ever visible (never both at once). No other
-// client-side action-choice/recommendation logic — the backend does not yet expose a
-// server-authored PrimaryAction field (API preflight gap 5), so every other case renders no
-// primary rather than inventing one.
+// Primary-action slot (Session 0A, 2026-08-25; attention/no-attention split 2026-08-25): the
+// Anchor only mounts the shared `PrimaryActionSlot` while `effectiveAttention.level === "none"` —
+// while attention is active, `HeroAttentionBanner` is the sole renderer of
+// `detail.availableActions.primaryAction`, beside the attention reason it names. The Anchor stays
+// utility-focused during active attention: the always-on secondary Contact customer button and
+// the demoted `MarkWorkDoneSecondarySlot` remain, but no primary/lifecycle action competes with
+// the rail. See `PrimaryActionControl.tsx` for the shared, exhaustive target-vocabulary renderer.
 interface RequestDetailAnchorProps extends RequestDetailLayoutProps {
   canRecordShareIntent: boolean;
   needsShare: boolean;
   onOpenShareDrawer: () => void;
+  onOpenClearAttention: () => void;
+  onActivateCustomerUpdateComposer: () => void;
 }
 
 export function RequestDetailAnchor({
@@ -38,10 +40,15 @@ export function RequestDetailAnchor({
   onEditLocation,
   onOpenReassignOwner,
   onOpenWatchers,
+  onRecordFollowUp,
+  onOpenClearAttention,
+  onActivateCustomerUpdateComposer,
   canRecordShareIntent,
   needsShare,
   onOpenShareDrawer,
 }: RequestDetailAnchorProps) {
+  const hasActiveAttention = detail.effectiveAttention.level !== "none";
+
   return (
     <div className="shrink-0 bg-[var(--ophalo-canvas)] px-4 md:px-6 py-3">
       <div className="rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] shadow-sm px-4 py-3 md:px-5 md:py-4">
@@ -63,8 +70,18 @@ export function RequestDetailAnchor({
                 Contact customer
               </KeepButton>
             )}
-            <WorkDoneCard requestId={requestId} detail={detail} onDetailUpdated={onDetailUpdated} compact />
-            <CloseRequestCard requestId={requestId} detail={detail} onDetailUpdated={onDetailUpdated} compact />
+            <MarkWorkDoneSecondarySlot requestId={requestId} detail={detail} onDetailUpdated={onDetailUpdated} />
+            {!hasActiveAttention && (
+              <PrimaryActionSlot
+                requestId={requestId}
+                detail={detail}
+                onDetailUpdated={onDetailUpdated}
+                onOpenClearAttention={onOpenClearAttention}
+                onRecordFollowUp={onRecordFollowUp}
+                onContactLaunched={onContactLaunched}
+                onActivateCustomerUpdateComposer={onActivateCustomerUpdateComposer}
+              />
+            )}
           </div>
         </div>
 

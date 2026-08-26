@@ -23,12 +23,9 @@ interface WorkDoneCardProps {
   requestId: string;
   detail: KeepRequestDetailResult;
   onDetailUpdated: (updated: KeepRequestDetailResult) => void;
-  // compact: render as the Anchor's one authorized primary control — no card chrome, heading,
-  // description, or badge, just the button (plus its existing confirm/error behavior unchanged).
-  compact?: boolean;
 }
 
-export function WorkDoneCard({ requestId, detail, onDetailUpdated, compact = false }: WorkDoneCardProps) {
+export function WorkDoneCard({ requestId, detail, onDetailUpdated }: WorkDoneCardProps) {
   const baseEligible =
     detail.availableActions.canChangeStatus &&
     detail.availableActions.allowedStatuses.includes("resolved") &&
@@ -163,54 +160,6 @@ export function WorkDoneCard({ requestId, detail, onDetailUpdated, compact = fal
     );
   }
 
-  const label = isNormalPath
-    ? "Mark work done"
-    : isReceivedPath
-      ? "Mark work done"
-      : "Mark work done, attention remains";
-  const buttonVariant = isNormalPath ? "teal" : "secondary";
-
-  if (compact) {
-    return (
-      <div className="flex flex-col gap-1">
-        {error && (
-          <p
-            aria-live="polite"
-            className={`text-xs ${conflictDisabled ? "text-[var(--ophalo-attention)]" : "text-[var(--ophalo-danger)]"}`}
-          >
-            {error}
-          </p>
-        )}
-        {confirming ? (
-          renderConfirmation()
-        ) : isDemotedPath ? (
-          // Subordinate to the amber attention rail's own actions (locked desktop-polish
-          // decision, 2026-08-24): a quiet text-style trigger, not an equal-weight outline
-          // button competing with Contact customer.
-          <button
-            ref={triggerBtnRef}
-            type="button"
-            disabled={isSubmitting || conflictDisabled}
-            onClick={enterConfirming}
-            className="px-2 text-sm font-medium text-[var(--ophalo-muted)] hover:text-[var(--ophalo-ink)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-offset-2 rounded"
-          >
-            {label}
-          </button>
-        ) : (
-          <KeepButton
-            ref={triggerBtnRef}
-            type="button"
-            variant={buttonVariant}
-            disabled={isSubmitting || conflictDisabled}
-            onClick={enterConfirming}
-          >
-            {label}
-          </KeepButton>
-        )}
-      </div>
-    );
-  }
-
   if (isNormalPath) {
     return (
       <div className="rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-5 py-5">
@@ -311,12 +260,9 @@ interface CloseRequestCardProps {
   requestId: string;
   detail: KeepRequestDetailResult;
   onDetailUpdated: (updated: KeepRequestDetailResult) => void;
-  // compact: render as the Anchor's one authorized primary control — no card chrome, heading,
-  // description, or badge, just the button (same authorization/submit/error behavior unchanged).
-  compact?: boolean;
 }
 
-export function CloseRequestCard({ requestId, detail, onDetailUpdated, compact = false }: CloseRequestCardProps) {
+export function CloseRequestCard({ requestId, detail, onDetailUpdated }: CloseRequestCardProps) {
   const canClose =
     detail.availableActions.canClose &&
     detail.availableActions.allowedStatuses.includes("closed") &&
@@ -349,29 +295,6 @@ export function CloseRequestCard({ requestId, detail, onDetailUpdated, compact =
     } finally {
       setIsSubmitting(false);
     }
-  }
-
-  if (compact) {
-    return (
-      <div className="flex flex-col gap-1">
-        {error && (
-          <p
-            aria-live="polite"
-            className={`text-xs ${conflictDisabled ? "text-[var(--ophalo-attention)]" : "text-[var(--ophalo-danger)]"}`}
-          >
-            {error}
-          </p>
-        )}
-        <KeepButton
-          type="button"
-          variant="teal"
-          disabled={isSubmitting || conflictDisabled}
-          onClick={() => void handleClose()}
-        >
-          {isSubmitting ? "Closing…" : "Close request"}
-        </KeepButton>
-      </div>
-    );
   }
 
   return (

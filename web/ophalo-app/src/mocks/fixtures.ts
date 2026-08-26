@@ -213,6 +213,7 @@ export const OWNER_ACTIONS: AvailableActionsMetadata = {
   canMarkFeedbackReviewed: false,
   canSetFollowUpOn: true,
   canSetPlannedFor: true,
+  canResolveFollowUp: true,
   canClose: true,
   canClassify: true,
   canRecordShareIntent: true,
@@ -226,6 +227,10 @@ export const OWNER_ACTIONS: AvailableActionsMetadata = {
     "closed",
     "cancelled",
   ],
+  // Mock-only placeholder — each mockRequestDetails entry below sets its own value to mirror the
+  // server's per-request precedence (KeepRequestActionPolicy.SelectPrimaryAction).
+  primaryAction: null,
+  markWorkDoneSecondary: null,
 };
 
 // ---------------------------------------------------------------------------
@@ -848,7 +853,10 @@ export const mockRequestDetails: Record<string, KeepRequestDetailResult> = {
         statusAfter: "in_progress",
       }),
     ],
-    availableActions: { ...OWNER_ACTIONS },
+    availableActions: {
+      ...OWNER_ACTIONS,
+      primaryAction: { key: "mark_work_done", label: "Mark work done", target: "mutation", requiresConfirmation: false, confirmationCopy: null },
+    },
     validation: MOCK_VALIDATION,
     navigation: null,
     pendingNotification: null,
@@ -931,7 +939,12 @@ export const mockRequestDetails: Record<string, KeepRequestDetailResult> = {
         actorDisplayName: "Daniela Cruz",
       }),
     ],
-    availableActions: { ...OWNER_ACTIONS, canAcknowledgeAttention: true },
+    availableActions: {
+      ...OWNER_ACTIONS,
+      canAcknowledgeAttention: true,
+      primaryAction: { key: "respond_to_customer", label: "Respond to customer", target: "customer_update_composer", requiresConfirmation: false, confirmationCopy: null },
+      markWorkDoneSecondary: { label: "Mark work done", target: "mutation", consequence: "attention_remains" },
+    },
     validation: MOCK_VALIDATION,
     navigation: null,
     pendingNotification: null,
@@ -1046,7 +1059,12 @@ export const mockRequestDetails: Record<string, KeepRequestDetailResult> = {
         statusAfter: "pending_customer",
       }),
     ],
-    availableActions: { ...OWNER_ACTIONS, canWatch: false, canUnwatch: true },
+    availableActions: {
+      ...OWNER_ACTIONS,
+      canWatch: false,
+      canUnwatch: true,
+      primaryAction: { key: "mark_work_done", label: "Mark work done", target: "mutation", requiresConfirmation: false, confirmationCopy: null },
+    },
     validation: MOCK_VALIDATION,
     navigation: null,
     pendingNotification: null,
@@ -1157,7 +1175,12 @@ export const mockRequestDetails: Record<string, KeepRequestDetailResult> = {
         visibility: "public",
       }),
     ],
-    availableActions: { ...OWNER_ACTIONS, canMarkFeedbackReviewed: true, canRecordShareIntent: false },
+    availableActions: {
+      ...OWNER_ACTIONS,
+      canMarkFeedbackReviewed: true,
+      canRecordShareIntent: false,
+      primaryAction: { key: "close_request", label: "Close request", target: "mutation", requiresConfirmation: true, confirmationCopy: "Close this request?" },
+    },
     validation: MOCK_VALIDATION,
     navigation: null,
     pendingNotification: null,
@@ -1232,7 +1255,10 @@ export const mockRequestDetails: Record<string, KeepRequestDetailResult> = {
     events: [
       ev("mock-event-005-1", "RequestCreated", "2026-06-30T09:30:00Z", { statusAfter: "received" }),
     ],
-    availableActions: { ...OWNER_ACTIONS },
+    availableActions: {
+      ...OWNER_ACTIONS,
+      primaryAction: { key: "mark_work_done", label: "Mark work done", target: "mutation", requiresConfirmation: false, confirmationCopy: null },
+    },
     validation: MOCK_VALIDATION,
     navigation: null,
     pendingNotification: null,

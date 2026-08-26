@@ -8,6 +8,7 @@ import {
 } from "../../lib/apiClient";
 import { KeepButton } from "../../components/keep/KeepButton";
 import { ResponsiveSheet } from "../../components/keep/ResponsiveSheet";
+import { PrimaryActionSlot } from "./PrimaryActionControl";
 import { formatNaPhone } from "../../components/quick-capture/utils";
 import { KeepBadge, type KeepBadgeVariant } from "../../components/keep/KeepBadge";
 import { useCopyFeedback } from "../../hooks/useCopyFeedback";
@@ -955,74 +956,24 @@ export function SourceMetaPanel({ detail, bare = false }: { detail: KeepRequestD
 // acknowledgement is separately authorized. Conditional: absent entirely when
 // there is no active guidance. Customer Need (OriginalRequestCard) is now a
 // permanent, separate module — no longer coupled to this rail.
-// acknowledge_attention and log_external_contact/resolve_follow_up route to the
-// locked ResponsiveSheet workflows (step 4); respond_to_customer still scrolls
-// to the always-open composer within the Work Canvas pending the
-// collapsed-composer migration.
+//
+// This banner is the sole renderer of the server-authored primary action while attention is
+// active (attention/no-attention mount split, 2026-08-25): the shared `PrimaryActionSlot`
+// (`PrimaryActionControl.tsx`) mounts here, beside the attention reason it resolves, and the
+// Anchor above the canvas does not mount it for the same request at the same time — the Anchor
+// only shows its own utility controls (Contact customer, demoted Mark work done) while attention
+// is active. Never derive a second, locally-guessed action from `guidanceKey` here — consume the
+// same `detail.availableActions.primaryAction` the shared slot reads.
 // ---------------------------------------------------------------------------
 
 interface HeroAttentionBannerProps {
+  requestId: string;
   detail: KeepRequestDetailResult;
+  onDetailUpdated: (updated: KeepRequestDetailResult) => void;
+  onOpenClearAttention: () => void;
   onRecordFollowUp: () => void;
   onContactLaunched: (direction: string, channel: string) => void;
-  onOpenClearAttention: () => void;
-}
-
-function scrollAndFocusWithinWorkCanvas(id: string) {
-  const target = document.getElementById(id);
-  if (!target) return;
-
-  const canvas = target.closest<HTMLElement>("[data-request-detail-work-canvas]");
-  if (canvas) {
-    const canvasRect = canvas.getBoundingClientRect();
-    const targetRect = target.getBoundingClientRect();
-    canvas.scrollTo({
-      top: Math.max(0, canvas.scrollTop + targetRect.top - canvasRect.top - 24),
-      behavior: "smooth",
-    });
-  }
-
-  target.focus({ preventScroll: true });
-}
-
-function resolveNextStep(
-  detail: KeepRequestDetailResult,
-  callbacks: Pick<HeroAttentionBannerProps, "onRecordFollowUp" | "onContactLaunched" | "onOpenClearAttention">,
-): { buttonLabel: string; onActivate: () => void } | null {
-  const { guidanceKey } = detail.effectiveAttention;
-  const { canAcknowledgeAttention, canSetFollowUpOn, canSendBusinessUpdate, canLogExternalContact } =
-    detail.availableActions;
-  const { onRecordFollowUp, onContactLaunched, onOpenClearAttention } = callbacks;
-
-  switch (guidanceKey) {
-    case "acknowledge_attention":
-      if (!canAcknowledgeAttention) return null;
-      return { buttonLabel: "Go to Clear attention", onActivate: onOpenClearAttention };
-    case "resolve_follow_up":
-      if (!canSetFollowUpOn) return null;
-      return { buttonLabel: "Resolve follow-up", onActivate: onRecordFollowUp };
-    case "respond_to_customer":
-      // Two authorized resolution routes exist for this key — a customer update and an
-      // external contact log. Only render no CTA when neither is authorized.
-      if (canSendBusinessUpdate) {
-        return {
-          buttonLabel: "Send first response",
-          onActivate: () => scrollAndFocusWithinWorkCanvas("focus-panel-update"),
-        };
-      }
-      if (canLogExternalContact) {
-        const contactChannel = detail.customerPhone ? "phone" : detail.customerEmail ? "email" : "other";
-        return { buttonLabel: "Log contact", onActivate: () => onContactLaunched("outbound", contactChannel) };
-      }
-      return null;
-    case "log_external_contact": {
-      if (!canLogExternalContact) return null;
-      const contactChannel = detail.customerPhone ? "phone" : detail.customerEmail ? "email" : "other";
-      return { buttonLabel: "Log contact", onActivate: () => onContactLaunched("outbound", contactChannel) };
-    }
-    default:
-      return null;
-  }
+  onActivateCustomerUpdateComposer: () => void;
 }
 
 function AttentionGuidanceDisclosure({ guidance }: { guidance: AttentionGuidance }) {
@@ -1112,12 +1063,19 @@ function AttentionGuidanceDisclosure({ guidance }: { guidance: AttentionGuidance
   );
 }
 
-export function HeroAttentionBanner({ detail, onRecordFollowUp, onContactLaunched, onOpenClearAttention }: HeroAttentionBannerProps) {
+export function HeroAttentionBanner({
+  requestId,
+  detail,
+  onDetailUpdated,
+  onOpenClearAttention,
+  onRecordFollowUp,
+  onContactLaunched,
+  onActivateCustomerUpdateComposer,
+}: HeroAttentionBannerProps) {
   const guidance = buildAttentionGuidance(detail);
   if (!guidance) return null;
 
   const isOverdue = detail.effectiveAttention.level === "overdue";
-  const nextStep = resolveNextStep(detail, { onRecordFollowUp, onContactLaunched, onOpenClearAttention });
   // Secondary Clear attention entry point: only when acknowledgement is separately authorized
   // and isn't already the routed primary CTA (acknowledge_attention already routes there).
   const showSecondaryClear =
@@ -1149,7 +1107,15 @@ export function HeroAttentionBanner({ detail, onRecordFollowUp, onContactLaunche
               Clear attention
             </button>
           )}
-          {nextStep && <KeepButton onClick={nextStep.onActivate}>{nextStep.buttonLabel}</KeepButton>}
+          <PrimaryActionSlot
+            requestId={requestId}
+            detail={detail}
+            onDetailUpdated={onDetailUpdated}
+            onOpenClearAttention={onOpenClearAttention}
+            onRecordFollowUp={onRecordFollowUp}
+            onContactLaunched={onContactLaunched}
+            onActivateCustomerUpdateComposer={onActivateCustomerUpdateComposer}
+          />
         </div>
       </div>
     </section>

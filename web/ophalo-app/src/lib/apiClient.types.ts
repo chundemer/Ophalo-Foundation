@@ -149,6 +149,42 @@ export interface CreateRequestBody {
   existingCustomerId?: string;
 }
 
+// Server-authorized single current primary action for a request (Session 0A). Null when no
+// action is safely recommendable. `target` names the concrete UI surface the client must invoke —
+// the client performs no key-to-behavior translation. `requiresConfirmation: true` always pairs
+// with a non-null, non-empty `confirmationCopy`; false always pairs with a null `confirmationCopy`.
+export type PrimaryActionKey =
+  | "acknowledge_attention"
+  | "resolve_follow_up"
+  | "respond_to_customer"
+  | "log_external_contact"
+  | "mark_work_done"
+  | "close_request";
+
+export type PrimaryActionTarget =
+  | "mutation"
+  | "customer_update_composer"
+  | "attention_sheet"
+  | "contact_sheet"
+  | "follow_up_sheet";
+
+export interface PrimaryActionMetadata {
+  key: PrimaryActionKey;
+  label: string;
+  target: PrimaryActionTarget;
+  requiresConfirmation: boolean;
+  confirmationCopy: string | null;
+}
+
+// Server-authored secondary "mark work done" surface for the one case where the action is
+// authorized but effective attention keeps it out of the primary slot (Session 0A). Never
+// populated alongside a PrimaryAction carrying "mark_work_done".
+export interface MarkWorkDoneSecondaryMetadata {
+  label: string;
+  target: "mutation";
+  consequence: "attention_remains";
+}
+
 export interface AvailableActionsMetadata {
   canChangeStatus: boolean;
   canSendBusinessUpdate: boolean;
@@ -163,11 +199,14 @@ export interface AvailableActionsMetadata {
   canMarkFeedbackReviewed: boolean;
   canSetFollowUpOn: boolean;
   canSetPlannedFor: boolean;
+  canResolveFollowUp: boolean;
   canClose: boolean;
   canClassify: boolean;
   canRecordShareIntent: boolean;
   canCreateFollowUpRequest: boolean;
   allowedStatuses: string[];
+  primaryAction: PrimaryActionMetadata | null;
+  markWorkDoneSecondary: MarkWorkDoneSecondaryMetadata | null;
 }
 
 export interface ValidationHintsMetadata {

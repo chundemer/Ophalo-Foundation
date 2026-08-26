@@ -196,9 +196,19 @@ public static class KeepRequestActionPolicy
                     new PrimaryActionMetadata("resolve_follow_up", "Resolve follow-up",
                         "follow_up_sheet", RequiresConfirmation: false, ConfirmationCopy: null),
 
-                "respond_to_customer" when availableActions.CanSendBusinessUpdate =>
-                    new PrimaryActionMetadata("respond_to_customer", "Send update",
-                        "customer_update_composer", RequiresConfirmation: false, ConfirmationCopy: null),
+                // Two authorized resolution routes exist for this guidance — a customer-page
+                // update and an external contact log. Fall back to the contact route rather than
+                // null when the update route isn't authorized; only render no primary when
+                // neither authorized route exists (2026-08-25 regression fix — the update-only
+                // guard silently dropped an available contact route to null).
+                "respond_to_customer" =>
+                    availableActions.CanSendBusinessUpdate
+                        ? new PrimaryActionMetadata("respond_to_customer", "Respond to customer",
+                            "customer_update_composer", RequiresConfirmation: false, ConfirmationCopy: null)
+                        : availableActions.CanLogExternalContact
+                            ? new PrimaryActionMetadata("log_external_contact", "Contact customer",
+                                "contact_sheet", RequiresConfirmation: false, ConfirmationCopy: null)
+                            : null,
 
                 "log_external_contact" when availableActions.CanLogExternalContact =>
                     new PrimaryActionMetadata("log_external_contact", "Log contact",
