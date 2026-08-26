@@ -377,6 +377,7 @@ export function Requests({
     : listQuery.data?.pageInfo;
 
   const isLoading = isAvailableTab ? availableQuery.isLoading : listQuery.isLoading;
+  const isFetching = isAvailableTab ? availableQuery.isFetching : listQuery.isFetching;
   const isError = isAvailableTab ? availableQuery.isError : listQuery.isError;
   const error = isAvailableTab ? availableQuery.error : listQuery.error;
   const isForbidden = isError && error instanceof ApiError && error.status === 403;
@@ -598,6 +599,7 @@ export function Requests({
           heading={{
             headingText: pageHeadingText,
             isLoading,
+            isFetching,
             isError,
             isForbidden,
             emptyState,

@@ -7,10 +7,19 @@ import { RequestRowSkeleton } from "./RequestRowSkeleton";
 interface RequestListHeadingState {
   headingText: string;
   isLoading: boolean;
+  isFetching: boolean;
   isError: boolean;
   isForbidden: boolean;
   emptyState: { heading: string; detail: string; isFiltered?: boolean };
   onClearFilters: () => void;
+}
+
+function RequestListRefetchBar() {
+  return (
+    <div role="status" aria-label="Refreshing requests" className="h-0.5 w-full overflow-hidden bg-[var(--ophalo-border)]">
+      <div className="h-full w-full animate-pulse motion-reduce:animate-none bg-[var(--ophalo-accent)]" />
+    </div>
+  );
 }
 
 interface RequestListRowsState {
@@ -49,10 +58,11 @@ export function RequestListContent({
   rows,
   pager,
 }: RequestListContentProps) {
-  const { headingText, isLoading, isError, isForbidden, emptyState, onClearFilters } = heading;
+  const { headingText, isLoading, isFetching, isError, isForbidden, emptyState, onClearFilters } = heading;
 
   return (
     <>
+      {isFetching && !isLoading && !isError && <RequestListRefetchBar />}
       {/* Content — scrollable, canvas background shows between cards */}
       <div
         ref={listRegionRef}

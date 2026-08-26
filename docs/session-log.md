@@ -14,7 +14,7 @@
 
 ## Current work
 
-### PWA Mobile V2 — Slice 5c pass 1 complete; pass 2 (required) in progress (5c-2A, 5c-2B request canvas complete)
+### PWA Mobile V2 — Slice 5c pass 1 complete; pass 2 (required) in progress (5c-2A/5c-2B complete; 5c-2C next)
 
 **Go-live target:** Mobile V2 work applies only to the responsive authenticated PWA
 (`web/ophalo-app`). The separate Expo/native client (`mobile/ophalo-mobile`) is not a launch
@@ -208,7 +208,7 @@ release-gate audit, not a promise that every slice needs code changes):
 - **5c-2A — Screen-reader and live-state audit** (`ConnectionFailureBanner`, Actual Work/Primary
   Action connection recovery, action-rail visibility): complete, see below.
 - **5c-2B — Mobile state rendering:** loading, empty, permission-denied, and stale-data behavior.
-  Request canvas: complete, see below. Queue/search deferred to 5c-2B2 (not started).
+  Request canvas and Queue/search (5c-2B2): both complete, see below.
 - **5c-2C — Keyboard, zoom, and interrupted-navigation verification:** primarily real-browser/
   local-phone verification; remains a release requirement even if no code changes result. Not
   started.
@@ -266,11 +266,30 @@ shown only when `isFetching && !isLoading && !isError`.
 Files: `RequestDetailStates.tsx`, new `__tests__/RequestDetailStates.test.tsx` (4 tests: skeleton
 with no refetch bar during initial load, nothing when idle, refetch bar during background fetch,
 error state suppresses the bar). Verified: focused `RequestDetail`/`request-detail` suite 255/255
-passing, `tsc --noEmit` clean, `git diff --check` clean. Not yet committed — pending Christian's
-explicit commit approval.
+passing, `tsc --noEmit` clean, `git diff --check` clean. Committed (`64e77f6`).
 
-**Next: Slice 5c-2B2 — Queue/search mobile state rendering (loading/empty/stale-data), then
-Slice 5c-2C — keyboard, zoom, and interrupted-navigation verification.**
+**Slice 5c-2B2, Queue/search (mobile state rendering): complete (2026-08-26).** Targeted audit of
+`RequestListContent.tsx` and `Requests.tsx`'s query wiring found loading (skeleton),
+permission-denied ("You don't have access to this view."), and empty states (including
+filtered-empty with "Clear filters") already correct and mobile-inclusive. Found the same
+stale-data gap as 5c-2B, more likely to trigger here: `listQuery`/`availableQuery` both run
+`refetchInterval: 30_000` and `refetchOnWindowFocus: true` on the first page, but `isFetching` was
+never read from either query or passed to `RequestListContent` — so the queue's landing page could
+silently reorder/update rows under the user every 30s or on mobile tab/app refocus with no visual
+signal. Added the same thin, non-blocking `role="status"` bar pattern used in 5c-2B
+(`aria-label="Refreshing requests"`), shown when `isFetching && !isLoading && !isError`; scroll-
+freezing during a poll was considered and deliberately deferred unless observed row-shift proves
+disruptive. Review tab (`ActualWorkReviewQueueList`) confirmed out of scope — its query has no
+`refetchInterval`/`refetchOnWindowFocus`, so it can't hit this gap.
+
+Files: `RequestListContent.tsx`, `Requests.tsx`, new
+`__tests__/RequestListContent.test.tsx` (4 tests: bar shown while fetching, suppressed during
+initial load, suppressed on error, absent when idle). Verified: focused `Requests`/
+`components/requests` suite 47/47 passing, `tsc --noEmit` clean, `git diff --check` clean.
+Committed.
+
+**Next: Slice 5c-2C — keyboard, zoom, and interrupted-navigation verification** (primarily
+real-browser/local-phone verification; a release requirement even if no code changes result).
 
 The 2026-08-24/25 resolved defects and attention-presentation decisions are recorded in the
 [pilot-readiness bug tracker](pilot-readiness-bug-tracker.md#p0p1-pilot-flow-bugs).
