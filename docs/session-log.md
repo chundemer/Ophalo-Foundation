@@ -14,7 +14,7 @@
 
 ## Current work
 
-### PWA Mobile V2 — Slice 1 complete, Slice 2 next
+### PWA Mobile V2 — Slice 2 complete, Slice 3 next
 
 **Go-live target:** Mobile V2 work applies only to the responsive authenticated PWA
 (`web/ophalo-app`). The separate Expo/native client (`mobile/ophalo-mobile`) is not a launch
@@ -32,8 +32,28 @@ the inline `min-[1001px]:text-sm` variant (Christian's call — matches `Request
 existing convention, no new named breakpoint) in four places: `helpers.ts`'s `INPUT_CLS`,
 `RequestListToolbar.tsx`'s search input, and both `DetailPanels.tsx` Internal Priority `<select>`s
 (strip and compact variants). Verified: focused `request-detail`/`RequestListToolbar` suite 218/218
-passing, `tsc --noEmit` clean, `git diff --check` clean. Next: Slice 2 — Request Anchor and
-server-authorized action rail (see "PWA mobile pilot workflow — approved code slices" below).
+passing, `tsc --noEmit` clean, `git diff --check` clean.
+
+**Slice 2 (Request Anchor and server-authorized action rail): complete (2026-08-26).** Added
+`MobileRequestAnchor.tsx` — a compact top sticky Anchor (`DetailHeroBadges`/`DetailHeroName`,
+reused verbatim from desktop, same tokens) and a bottom sticky `MobileActionRail` wrapping the
+existing `PrimaryActionSlot`, mounted only when `effectiveAttention.level === "none"` (same
+exclusivity invariant as desktop's `RequestDetailAnchor`/`HeroAttentionBanner` split — never two
+renderers of the same server-authored primary action at once). `RequestDetailContent.tsx` branches
+on a `ResizeObserver`-measured `isWide` (1001px threshold, same pattern as
+`RequestWorkbenchShell.tsx`) between the desktop Anchor and the new mobile pair. The rail
+hides/unpins during text entry via scoped `onFocus`/`onBlur` on the canvas root (React's
+synthetic focus events bubble as `focusin`/`focusout`, so no document listener or prop-threading
+through sheets/composer internals), with a `relatedTarget` guard against field-to-field focus
+flicker. While hidden, the rail is `inert` (and `aria-hidden`) rather than merely translated
+off-screen, so its action drops out of the keyboard tab order.
+
+Files: `MobileRequestAnchor.tsx` (new), `RequestDetailContent.tsx`,
+`__tests__/MobileRequestAnchor.test.tsx` (new), plus 2 existing `RequestDetailContent` test files'
+mocks updated for the new responsive branch. Verified: focused `request-detail` suite 224/224
+passing, `tsc --noEmit` clean, `git diff --check` clean. Next: Slice 3 — Request work canvas
+reorder (contact/service-location strip, Customer Need, Actual Work, communication, activity,
+record utilities — see "PWA mobile pilot workflow — approved code slices" below).
 
 The 2026-08-24/25 resolved defects and attention-presentation decisions are recorded in the
 [pilot-readiness bug tracker](pilot-readiness-bug-tracker.md#p0p1-pilot-flow-bugs).

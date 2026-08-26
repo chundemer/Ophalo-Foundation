@@ -23,6 +23,7 @@ vi.mock("../DetailPanels", () => ({
 }));
 vi.mock("../CustomerContactStrip", () => ({ CustomerContactStrip: () => null }));
 vi.mock("../RequestDetailAnchor", () => ({ RequestDetailAnchor: () => null }));
+vi.mock("../MobileRequestAnchor", () => ({ MobileRequestAnchor: () => null, MobileActionRail: () => null }));
 vi.mock("../TimingPanel", () => ({ TimingPanel: () => null }));
 vi.mock("../BusinessSection", () => ({ CloseRequestCard: () => null, WorkDoneCard: () => null }));
 vi.mock("../TeamSection", () => ({ TeamSection: () => null }));

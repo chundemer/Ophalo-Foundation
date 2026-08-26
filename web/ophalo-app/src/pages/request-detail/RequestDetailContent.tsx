@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useRef, useState, useEffect, useCallback } from "react";
 import { type KeepRequestDetailResult } from "../../lib/apiClient";
 import { type TimelineFilter } from "./TimelineEvent";
 import {
@@ -14,6 +14,7 @@ import {
 } from "./DetailPanels";
 import { TodayPromiseBanner } from "./DetailHero";
 import { RequestDetailAnchor } from "./RequestDetailAnchor";
+import { MobileRequestAnchor, MobileActionRail } from "./MobileRequestAnchor";
 import { UnifiedComposer, type UnifiedComposerHandle } from "./UnifiedComposer";
 import { KeepButton } from "../../components/keep/KeepButton";
 import { RequestDetailActivity } from "./RequestDetailActivity";
@@ -57,16 +58,63 @@ export function RequestDetailContent(props: RequestDetailContentProps) {
   const actualWorkHistoryVisible =
     actualWorkHistory.state.status === "error" ||
     (actualWorkHistory.state.status === "loaded" && actualWorkHistory.state.submittedVisits.length > 0);
+
+  // Locked in keep-ui-design-model-v2.md §13 (build-log 133); duplicated rather than imported —
+  // same rule `RequestWorkbenchShell.tsx`'s `PROTECTED_WORKSPACE_MIN_PX` measures.
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const [isWide, setIsWide] = useState(false);
+  useEffect(() => {
+    const el = rootRef.current;
+    if (!el) return;
+    const observer = new ResizeObserver((entries) => {
+      const width = entries[0]?.contentRect.width ?? 0;
+      setIsWide(width >= 1001);
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  // Mobile action-rail hide/unpin while text is being entered (Slice 2, locked spec §4.2).
+  // Scoped `focus`/`blur` on the canvas root rather than document, and rather than threading a
+  // prop through every sheet/composer — React's `onFocus`/`onBlur` bubble via `focusin`/
+  // `focusout` under the hood, so one pair of handlers on the outer wrapper covers every
+  // descendant field with no cleanup/effect needed. `relatedTarget` guards the field-to-field
+  // flicker case (e.g. tabbing straight from one text field into another).
+  const [isTextEditing, setIsTextEditing] = useState(false);
+  const isTextEntryElement = useCallback((el: EventTarget | null): boolean => {
+    if (!(el instanceof HTMLElement)) return false;
+    const tag = el.tagName;
+    return tag === "INPUT" || tag === "TEXTAREA" || el.isContentEditable;
+  }, []);
+  const handleCanvasFocus = useCallback(
+    (e: React.FocusEvent<HTMLDivElement>) => {
+      if (isTextEntryElement(e.target)) setIsTextEditing(true);
+    },
+    [isTextEntryElement],
+  );
+  const handleCanvasBlur = useCallback(
+    (e: React.FocusEvent<HTMLDivElement>) => {
+      if (!isTextEntryElement(e.target)) return;
+      if (isTextEntryElement(e.relatedTarget)) return;
+      setIsTextEditing(false);
+    },
+    [isTextEntryElement],
+  );
+
   return (
-    <div className="flex flex-1 min-h-0 flex-col">
-      <RequestDetailAnchor
-        {...layoutProps}
-        canRecordShareIntent={props.canRecordShareIntent}
-        needsShare={props.needsShare}
-        onOpenShareDrawer={props.onOpenShareDrawer}
-        onOpenClearAttention={onOpenClearAttention}
-        onActivateCustomerUpdateComposer={() => composerRef.current?.activateCustomerUpdate()}
-      />
+    <div ref={rootRef} onFocus={handleCanvasFocus} onBlur={handleCanvasBlur} className="flex flex-1 min-h-0 flex-col">
+      {isWide ? (
+        <RequestDetailAnchor
+          {...layoutProps}
+          canRecordShareIntent={props.canRecordShareIntent}
+          needsShare={props.needsShare}
+          onOpenShareDrawer={props.onOpenShareDrawer}
+          onOpenClearAttention={onOpenClearAttention}
+          onActivateCustomerUpdateComposer={() => composerRef.current?.activateCustomerUpdate()}
+        />
+      ) : (
+        <MobileRequestAnchor detail={detail} />
+      )}
       <div data-request-detail-work-canvas className="flex-1 min-h-0 overflow-y-auto px-4 md:px-6 py-5">
       <div className="max-w-4xl mx-auto w-full space-y-3">
         {/* 1. Active attention guidance */}
@@ -166,6 +214,14 @@ export function RequestDetailContent(props: RequestDetailContentProps) {
         <RequestDetailActivity timelineFilter={props.timelineFilter} onTimelineFilterChange={props.onTimelineFilterChange} displayedEvents={props.displayedEvents} />
       </div>
       </div>
+      {!isWide && (
+        <MobileActionRail
+          {...layoutProps}
+          onOpenClearAttention={onOpenClearAttention}
+          onActivateCustomerUpdateComposer={() => composerRef.current?.activateCustomerUpdate()}
+          hidden={isTextEditing}
+        />
+      )}
       {actualWorkCapture.isModalOpen && actualWorkCapture.state.status === "draft" && (
         <ActualWorkComposer
           draft={actualWorkCapture.state.draft}
