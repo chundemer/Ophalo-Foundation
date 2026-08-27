@@ -11,9 +11,13 @@ import { api, ApiError, type ActualWorkHistoryResult } from "../../lib/apiClient
  * GAP-055 recorder ownership: only the Draft's current recorder may edit it. `openDraft` comes
  * back populated for the recorder (`isRecorder: true`) and, read-only, for Owner/Admin
  * (`isRecorder: false`); `openDraftHeldByOther` is the presence-only signal for a qualified
- * non-recorder who is not an Owner/Admin. Both non-recorder cases land in `held-by-other`, a
- * non-actionable informational state — no composer, no start affordance. The deliberate
- * recorder-transfer workflow is a separate batch.
+ * non-recorder who is not an Owner/Admin.
+ *
+ * A qualified non-Owner/Admin lands in `held-by-other`, a non-actionable informational state.
+ * An Owner/Admin who is not the recorder lands in `owner-recovery` (1a-ii-b): the populated
+ * (read-only) Draft is retained — version, lines, and current-recorder identity — so the
+ * reason-required, immutable-audited recorder-transfer control can submit against the exact
+ * version and exclude the current recorder from its candidate list.
  */
 export type ActualWorkCaptureState =
   | { status: "loading" }
@@ -21,16 +25,33 @@ export type ActualWorkCaptureState =
   | { status: "error"; message: string }
   | { status: "no-draft"; submittedCount: number }
   | { status: "held-by-other"; submittedCount: number }
+  | { status: "owner-recovery"; draft: NonNullable<ActualWorkHistoryResult["openDraft"]>; submittedCount: number }
   | { status: "draft"; draft: NonNullable<ActualWorkHistoryResult["openDraft"]>; submittedCount: number };
 
-/** Routes a history read into the resume/informational/empty states. `hidden` and `error` are
- * handled by the caller (they depend on how the read failed), not here. */
+/** A transient banner shown on the Actual Work card after a recorder transfer resolves — kept in
+ * hook state (not the drawer) so it survives the drawer unmounting and displays over whichever
+ * post-transfer card state the re-probe lands on (the new recorder's `draft`, or `held-by-other`
+ * when the Owner/Admin handed it to someone else). */
+export type ActualWorkRecoveryNotice = { tone: "success" | "warning"; text: string };
+
+/** The outcome of a recorder-transfer attempt, returned to the drawer so it can react: close on a
+ * settled outcome, or stay open and let the Owner/Admin retry on a recoverable one. */
+export type ActualWorkTransferOutcome = "transferred" | "ineligible" | "stale" | "failed";
+
+export const ACTUAL_WORK_TRANSFER_STALE_NOTICE =
+  "This draft changed elsewhere — refreshed with the latest state. Review before reassigning again.";
+
+/** Routes a history read into the resume/recovery/informational/empty states. `hidden` and `error`
+ * are handled by the caller (they depend on how the read failed), not here. */
 function routeHistory(result: ActualWorkHistoryResult): ActualWorkCaptureState {
   const submittedCount = result.submittedVisits.length;
   if (result.openDraft && result.openDraft.isRecorder) {
     return { status: "draft", draft: result.openDraft, submittedCount };
   }
-  if (result.openDraft || result.openDraftHeldByOther) {
+  if (result.openDraft) {
+    return { status: "owner-recovery", draft: result.openDraft, submittedCount };
+  }
+  if (result.openDraftHeldByOther) {
     return { status: "held-by-other", submittedCount };
   }
   return { status: "no-draft", submittedCount };
@@ -47,6 +68,7 @@ export function useActualWorkCapture(requestId: string) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [conflictNotice, setConflictNotice] = useState<string | null>(null);
   const [pendingReconcileMessage, setPendingReconcileMessage] = useState<string | null>(null);
+  const [recoveryNotice, setRecoveryNotice] = useState<ActualWorkRecoveryNotice | null>(null);
 
   const probe = useCallback(async () => {
     setState({ status: "loading" });
@@ -182,6 +204,49 @@ export function useActualWorkCapture(requestId: string) {
     void probe();
   }, [probe]);
 
+  // 1a-ii-b: Owner/Admin recorder-transfer recovery. Submits against the exact retained Draft
+  // version; on success re-probes (the caller may have handed it to someone else -> `held-by-other`,
+  // or to themselves -> `draft`) and records a transient confirmation the card shows over either
+  // state. `ineligible` (422) / `failed` keep the drawer open for a retry; `stale` (the Draft moved
+  // or was already reviewed) re-probes and surfaces a warning so the Owner/Admin reorients.
+  const transferRecorder = useCallback(
+    async (
+      newRecorderAccountUserId: string,
+      newRecorderDisplayName: string,
+      reason: string,
+    ): Promise<ActualWorkTransferOutcome> => {
+      if (state.status !== "owner-recovery") return "stale";
+      try {
+        await api.transferActualWorkDraftRecorder(
+          state.draft.id,
+          { newRecorderAccountUserId, reason },
+          state.draft.concurrencyVersion,
+        );
+        setRecoveryNotice({ tone: "success", text: `Recording handed to ${newRecorderDisplayName}.` });
+        await probe();
+        return "transferred";
+      } catch (err) {
+        if (err instanceof ApiError && err.code === "ActualWork.RecorderTransferTargetIneligible") {
+          return "ineligible";
+        }
+        if (
+          err instanceof ApiError &&
+          (err.code === "ActualWork.VersionMismatch" ||
+            err.code === "ActualWork.AlreadyReviewed" ||
+            err.code === "ActualWork.NotDraft")
+        ) {
+          setRecoveryNotice({ tone: "warning", text: ACTUAL_WORK_TRANSFER_STALE_NOTICE });
+          await probe();
+          return "stale";
+        }
+        return "failed";
+      }
+    },
+    [state, probe],
+  );
+
+  const clearRecoveryNotice = useCallback(() => setRecoveryNotice(null), []);
+
   return {
     state,
     isModalOpen,
@@ -194,5 +259,8 @@ export function useActualWorkCapture(requestId: string) {
     clearConflictNotice,
     markSubmitted,
     onDraftDiscarded,
+    transferRecorder,
+    recoveryNotice,
+    clearRecoveryNotice,
   };
 }

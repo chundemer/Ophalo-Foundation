@@ -24,6 +24,7 @@ import { ActualWorkCard } from "./ActualWorkCard";
 import { useActualWorkHistory } from "./useActualWorkHistory";
 import { ActualWorkHistoryCard } from "./ActualWorkHistoryCard";
 import { ActualWorkComposer } from "./ActualWorkComposer";
+import { ActualWorkRecoveryDrawer } from "./ActualWorkRecoveryDrawer";
 import { TeamSection } from "./TeamSection";
 import { FOCUS_RING } from "./helpers";
 
@@ -57,11 +58,15 @@ export function RequestDetailContent(props: RequestDetailContentProps) {
   const composerRef = useRef<UnifiedComposerHandle>(null);
   const actualWorkCapture = useActualWorkCapture(requestId);
   const actualWorkHistory = useActualWorkHistory(requestId);
+  const [recorderDrawerOpen, setRecorderDrawerOpen] = useState(false);
   // Editable capture states — the recorder's own resume/start affordance.
   const actualWorkCaptureEditable = actualWorkCapture.state.status === "no-draft" || actualWorkCapture.state.status === "draft";
   // Also render the compact strip for the non-actionable "another team member is recording this
   // visit" state (GAP-055), so a qualified non-recorder still sees why there is no entry point.
-  const actualWorkCardVisible = actualWorkCaptureEditable || actualWorkCapture.state.status === "held-by-other";
+  const actualWorkCardVisible =
+    actualWorkCaptureEditable ||
+    actualWorkCapture.state.status === "held-by-other" ||
+    actualWorkCapture.state.status === "owner-recovery";
   const actualWorkHistoryVisible =
     actualWorkHistory.state.status === "error" ||
     (actualWorkHistory.state.status === "loaded" && actualWorkHistory.state.submittedVisits.length > 0);
@@ -182,6 +187,9 @@ export function RequestDetailContent(props: RequestDetailContentProps) {
             <ActualWorkCard
               state={actualWorkCapture.state}
               onStartCapture={() => void actualWorkCapture.startCapture()}
+              onReassignRecorder={() => setRecorderDrawerOpen(true)}
+              recoveryNotice={actualWorkCapture.recoveryNotice}
+              onDismissRecoveryNotice={actualWorkCapture.clearRecoveryNotice}
               bare
             />
             {!actualWorkCaptureEditable && <ActualWorkHistoryCard state={actualWorkHistory.state} onRetry={() => void actualWorkHistory.retry()} bare />}
@@ -270,6 +278,13 @@ export function RequestDetailContent(props: RequestDetailContentProps) {
           }}
           onDiscarded={actualWorkCapture.onDraftDiscarded}
           submittedVisits={actualWorkHistory.state.status === "loaded" ? actualWorkHistory.state.submittedVisits : []}
+        />
+      )}
+      {recorderDrawerOpen && actualWorkCapture.state.status === "owner-recovery" && (
+        <ActualWorkRecoveryDrawer
+          draft={actualWorkCapture.state.draft}
+          onClose={() => setRecorderDrawerOpen(false)}
+          onTransfer={actualWorkCapture.transferRecorder}
         />
       )}
     </div>

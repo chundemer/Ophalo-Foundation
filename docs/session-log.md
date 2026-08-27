@@ -42,13 +42,13 @@ four card states (no-draft, recorder, held, Owner/Admin non-recorder).
 
 The Actual Work nudge UI (slice 3) stays paused until it consumes this `held-by-other` Draft state.
 
-#### 1a. P0 — Owner/Admin Draft recorder-transfer recovery UI
+#### 1a. P0 — Owner/Admin Draft recorder-transfer recovery UI — COMPLETE (2026-08-27)
 
 Split into two batches (option C — recorder eligibility is a server-side invariant, not just a
 picker concern; a stale/malicious client must not be able to strand a Draft with a member who
-cannot record it).
+cannot record it). 1a-i + 1a-ii-a committed; 1a-ii-b below is the final commit for this slice.
 
-**1a-i — server-side eligibility invariant — COMPLETE (2026-08-27, uncommitted).** The
+**1a-i — server-side eligibility invariant — COMPLETE (2026-08-27, `48de17f`).** The
 `transfer-recorder` endpoint now rejects a target who is not an active account member holding
 `RequestsOperate` + `ActualWorkCapture`. New `ActualWork.RecorderTransferTargetIneligible` (422,
 mirroring `KeepRequest.ParticipationTargetIneligible`; message "That team member can't be assigned
@@ -81,14 +81,31 @@ new `GetActualWorkRecorderCandidatesService.cs`, `KeepEndpoints.cs`,
 (6 tests). Verified: `~ActualWork` integration 157/157 (+6), `~ActualWork` unit 55/55,
 architecture 14/14, app suite 755/755, `tsc`, `git diff --check` clean.
 
-**1a-ii-b — recovery UI / tests (second).** Owner/Admin-only Draft-recovery control on the
-request-detail Actual Work surface: eligible-recorder selection (current recorder excluded),
-required reason, exact-version submission, `ActualWork.AlreadyReviewed`/stale-version/
-`RecorderTransferTargetIneligible` conflict recovery, immutable-audit confirmation, and clear
-handoff to the new recorder. `useActualWorkCapture` currently discards the populated `openDraft`
-for the Owner/Admin non-recorder case — add an `owner-recovery` state that retains it (version +
-lines + recorder identity). Qualified non-Owner/Admin members keep the current
-privacy-preserving informational card — no recovery affordance. Do not fold into slice 2.
+**1a-ii-b — recovery UI — COMPLETE (2026-08-27, uncommitted).** `useActualWorkCapture` gains an `owner-recovery`
+state: `routeHistory` now retains the populated read-only `openDraft` (`isRecorder: false`) for the
+Owner/Admin non-recorder instead of collapsing it into `held-by-other` — version, lines, and current
+recorder identity are kept for the transfer control. New `transferRecorder(id, displayName, reason)`
+submits against the exact `concurrencyVersion`, then re-probes: an Owner/Admin who hands the draft to
+someone else lands on `held-by-other`, one who self-assigns lands back on the editable `draft` state,
+and either way a transient `recoveryNotice` ({tone,text}) — "Recording handed to {name}." — is stored
+in hook state (survives the drawer unmounting) and rendered over the resolved card state. 422
+`RecorderTransferTargetIneligible` → `ineligible` (drawer stays open, refetches candidates, no state
+change); 409 `VersionMismatch`/`AlreadyReviewed`/`NotDraft` → `stale` (re-probe + warning notice,
+drawer closes); other → `failed` (generic inline error, drawer open). New
+`ActualWorkRecoveryDrawer.tsx` (`KeepModal`, right sheet): loads `getActualWorkRecorderCandidates`
+via `useQuery`, excludes `draft.recorderAccountUserId`, required reason (500 max), disabled submit +
+"No other team member is eligible" when the filtered list is empty, retry on candidate-load error.
+`ActualWorkCard` renders the `owner-recovery` strip ("{recorder} is recording this visit." +
+secondary "Reassign recorder") and the dismissible recovery banner over every non-hidden state;
+qualified non-Owner/Admin `held-by-other` is unchanged (no affordance). `RequestDetailContent` adds
+`owner-recovery` to card visibility, threads the notice props, and mounts the drawer.
+Files: `useActualWorkCapture.ts`, `ActualWorkCard.tsx`, `RequestDetailContent.tsx`, new
+`ActualWorkRecoveryDrawer.tsx`; tests `useActualWorkCapture.test.ts` (+6, existing Owner/Admin
+held-by-other case re-pointed to `owner-recovery`; the stale path is parameterized across
+`VersionMismatch`/`AlreadyReviewed`/`NotDraft`, each asserting `stale` + re-probe + warning notice),
+`ActualWorkCard.test.tsx` (+2), new `ActualWorkRecoveryDrawer.test.tsx` (6, incl. `stale` closes the
+drawer). Verified: full app suite 770/770 (+15), `tsc` clean, `check:tokens` passed, `git diff
+--check` clean.
 
 #### 2. P0 — Owner/Admin Actual Work audit, approval, and financial review UI (slice 8)
 

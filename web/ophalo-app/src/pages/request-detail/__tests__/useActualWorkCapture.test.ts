@@ -4,12 +4,14 @@ import {
   useActualWorkCapture,
   ACTUAL_WORK_CONFLICT_NOTICE,
   ACTUAL_WORK_RECONCILE_RELOAD_FAILURE_NOTICE,
+  ACTUAL_WORK_TRANSFER_STALE_NOTICE,
 } from "../useActualWorkCapture";
 import { ApiError } from "../../../lib/apiClient";
 import type { ActualWorkHistoryResult } from "../../../lib/apiClient";
 
 const mockGetActualWorkHistoryForRequest = vi.fn();
 const mockCreateActualWork = vi.fn();
+const mockTransferActualWorkDraftRecorder = vi.fn();
 
 vi.mock("../../../lib/apiClient", async () => {
   const actual = await vi.importActual<typeof import("../../../lib/apiClient")>("../../../lib/apiClient");
@@ -19,6 +21,7 @@ vi.mock("../../../lib/apiClient", async () => {
       ...actual.api,
       getActualWorkHistoryForRequest: (...args: unknown[]) => mockGetActualWorkHistoryForRequest(...args),
       createActualWork: (...args: unknown[]) => mockCreateActualWork(...args),
+      transferActualWorkDraftRecorder: (...args: unknown[]) => mockTransferActualWorkDraftRecorder(...args),
     },
   };
 });
@@ -342,7 +345,7 @@ describe("useActualWorkCapture", () => {
     await waitFor(() => expect(result.current.state).toEqual({ status: "held-by-other", submittedCount: 1 }));
   });
 
-  it("reports held-by-other when an Owner/Admin gets a non-editable openDraft (isRecorder false)", async () => {
+  it("routes an Owner/Admin non-editable openDraft (isRecorder false) to owner-recovery, retaining the draft", async () => {
     const openDraft = {
       id: "draft-1",
       status: "Draft",
@@ -351,12 +354,16 @@ describe("useActualWorkCapture", () => {
       submittedAtUtc: null,
       concurrencyVersion: "v1",
       isRecorder: false,
+      recorderAccountUserId: "au-current",
+      recorderDisplayName: "Sam Field",
       lines: [],
     };
     mockGetActualWorkHistoryForRequest.mockResolvedValueOnce(history({ openDraft }));
     const { result } = renderHook(() => useActualWorkCapture("request-1"));
 
-    await waitFor(() => expect(result.current.state).toEqual({ status: "held-by-other", submittedCount: 0 }));
+    await waitFor(() =>
+      expect(result.current.state).toEqual({ status: "owner-recovery", draft: openDraft, submittedCount: 0 }),
+    );
   });
 
   it("startCapture 409 lands on held-by-other with no modal and no conflict notice when someone else holds the Draft", async () => {
@@ -374,5 +381,115 @@ describe("useActualWorkCapture", () => {
     expect(result.current.state).toEqual({ status: "held-by-other", submittedCount: 0 });
     expect(result.current.isModalOpen).toBe(false);
     expect(result.current.conflictNotice).toBeNull();
+  });
+});
+
+describe("useActualWorkCapture — recorder transfer (1a-ii-b)", () => {
+  function ownerRecoveryDraft() {
+    return {
+      id: "draft-1",
+      status: "Draft",
+      outcome: null,
+      completionNote: null,
+      submittedAtUtc: null,
+      concurrencyVersion: "v3",
+      isRecorder: false,
+      recorderAccountUserId: "au-current",
+      recorderDisplayName: "Sam Field",
+      lines: [],
+    };
+  }
+
+  async function renderInOwnerRecovery() {
+    mockGetActualWorkHistoryForRequest.mockResolvedValueOnce(history({ openDraft: ownerRecoveryDraft() }));
+    const hook = renderHook(() => useActualWorkCapture("request-1"));
+    await waitFor(() => expect(hook.result.current.state.status).toBe("owner-recovery"));
+    return hook;
+  }
+
+  it("submits the exact retained version, re-probes, and records a success notice on transfer", async () => {
+    const { result } = await renderInOwnerRecovery();
+    mockTransferActualWorkDraftRecorder.mockResolvedValueOnce({ concurrencyVersion: "v4" });
+    mockGetActualWorkHistoryForRequest.mockResolvedValueOnce(history({ openDraftHeldByOther: true }));
+
+    let outcome: string | undefined;
+    await act(async () => {
+      outcome = await result.current.transferRecorder("au-next", "Jordan Lead", "Sam went home sick");
+    });
+
+    expect(outcome).toBe("transferred");
+    expect(mockTransferActualWorkDraftRecorder).toHaveBeenCalledWith(
+      "draft-1",
+      { newRecorderAccountUserId: "au-next", reason: "Sam went home sick" },
+      "v3",
+    );
+    expect(result.current.state.status).toBe("held-by-other");
+    expect(result.current.recoveryNotice).toEqual({ tone: "success", text: "Recording handed to Jordan Lead." });
+  });
+
+  it("routes an Owner/Admin self-assignment back to the editable draft state", async () => {
+    const { result } = await renderInOwnerRecovery();
+    mockTransferActualWorkDraftRecorder.mockResolvedValueOnce({ concurrencyVersion: "v4" });
+    const selfDraft = { ...ownerRecoveryDraft(), isRecorder: true, concurrencyVersion: "v4" };
+    mockGetActualWorkHistoryForRequest.mockResolvedValueOnce(history({ openDraft: selfDraft }));
+
+    await act(async () => {
+      await result.current.transferRecorder("au-me", "Me", "Taking this over");
+    });
+
+    expect(result.current.state).toMatchObject({ status: "draft" });
+    expect(result.current.recoveryNotice).toEqual({ tone: "success", text: "Recording handed to Me." });
+  });
+
+  it("returns 'ineligible' without changing state on a 422", async () => {
+    const { result } = await renderInOwnerRecovery();
+    mockTransferActualWorkDraftRecorder.mockRejectedValueOnce(
+      new ApiError(422, "ActualWork.RecorderTransferTargetIneligible", "nope"),
+    );
+
+    let outcome: string | undefined;
+    await act(async () => {
+      outcome = await result.current.transferRecorder("au-next", "Jordan Lead", "reason");
+    });
+
+    expect(outcome).toBe("ineligible");
+    expect(result.current.state.status).toBe("owner-recovery");
+    expect(result.current.recoveryNotice).toBeNull();
+  });
+
+  it.each([
+    ["ActualWork.VersionMismatch"],
+    ["ActualWork.AlreadyReviewed"],
+    ["ActualWork.NotDraft"],
+  ])("returns 'stale' and re-probes with a warning notice on %s", async (code) => {
+    const { result } = await renderInOwnerRecovery();
+    mockTransferActualWorkDraftRecorder.mockRejectedValueOnce(new ApiError(409, code, "stale"));
+    mockGetActualWorkHistoryForRequest.mockResolvedValueOnce(history({ openDraftHeldByOther: true }));
+
+    let outcome: string | undefined;
+    await act(async () => {
+      outcome = await result.current.transferRecorder("au-next", "Jordan Lead", "reason");
+    });
+
+    expect(outcome).toBe("stale");
+    expect(mockGetActualWorkHistoryForRequest).toHaveBeenCalledTimes(2);
+    expect(result.current.state.status).toBe("held-by-other");
+    expect(result.current.recoveryNotice).toEqual({
+      tone: "warning",
+      text: ACTUAL_WORK_TRANSFER_STALE_NOTICE,
+    });
+  });
+
+  it("returns 'failed' on an unclassified error without changing state", async () => {
+    const { result } = await renderInOwnerRecovery();
+    mockTransferActualWorkDraftRecorder.mockRejectedValueOnce(new Error("network down"));
+
+    let outcome: string | undefined;
+    await act(async () => {
+      outcome = await result.current.transferRecorder("au-next", "Jordan Lead", "reason");
+    });
+
+    expect(outcome).toBe("failed");
+    expect(result.current.state.status).toBe("owner-recovery");
   });
 });

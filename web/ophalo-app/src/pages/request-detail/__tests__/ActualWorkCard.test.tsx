@@ -62,4 +62,44 @@ describe("ActualWorkCard", () => {
     expect(screen.getByText(/2 prior visits recorded/)).toBeInTheDocument();
     expect(screen.queryByRole("button")).not.toBeInTheDocument();
   });
+
+  const ownerRecoveryState: ActualWorkCaptureState = {
+    status: "owner-recovery",
+    draft: {
+      id: "d1",
+      status: "Draft",
+      outcome: null,
+      completionNote: null,
+      submittedAtUtc: null,
+      concurrencyVersion: "v1",
+      isRecorder: false,
+      recorderAccountUserId: "au-current",
+      recorderDisplayName: "Sam Field",
+      lines: [],
+    },
+    submittedCount: 0,
+  };
+
+  it("shows the current recorder and a Reassign recorder action for owner-recovery", () => {
+    const onReassign = vi.fn();
+    render(<ActualWorkCard state={ownerRecoveryState} onStartCapture={vi.fn()} onReassignRecorder={onReassign} />);
+    expect(screen.getByText(/Sam Field is recording this visit/)).toBeInTheDocument();
+    screen.getByRole("button", { name: /Reassign recorder/ }).click();
+    expect(onReassign).toHaveBeenCalled();
+  });
+
+  it("renders a dismissible recovery notice over the resolved state", () => {
+    const onDismiss = vi.fn();
+    render(
+      <ActualWorkCard
+        state={{ status: "held-by-other", submittedCount: 0 }}
+        onStartCapture={vi.fn()}
+        recoveryNotice={{ tone: "success", text: "Recording handed to Jordan Lead." }}
+        onDismissRecoveryNotice={onDismiss}
+      />,
+    );
+    expect(screen.getByText(/Recording handed to Jordan Lead/)).toBeInTheDocument();
+    screen.getByRole("button", { name: /Dismiss/ }).click();
+    expect(onDismiss).toHaveBeenCalled();
+  });
 });
