@@ -232,6 +232,40 @@ describe("CatalogItemDetail", () => {
     ));
   });
 
+  it("returns focus to the Edit trigger after the drawer is dismissed", async () => {
+    const user = userEvent.setup();
+    mockGetCatalogItem.mockResolvedValue(baseItem);
+    renderDetail();
+
+    await waitFor(() => expect(screen.getByText("Condensate Pump")).toBeInTheDocument());
+    await user.click(screen.getByRole("button", { name: "Edit" }));
+    await user.keyboard("{Escape}");
+
+    await waitFor(() => expect(screen.getByRole("button", { name: "Edit" })).toHaveFocus());
+  });
+
+  it("moves focus to the conflict banner when a version conflict sends the user back to review", async () => {
+    const user = userEvent.setup();
+    const updatedByOtherEditor: CatalogItemDetailResult = {
+      ...baseItem,
+      item: { ...baseItem.item, displayName: "Condensate Pump (renamed by teammate)", concurrencyVersion: "v2" },
+    };
+    mockGetCatalogItem.mockResolvedValueOnce(baseItem).mockResolvedValue(updatedByOtherEditor);
+    mockUpdateCatalogItemHeader.mockRejectedValueOnce(
+      new ApiError(409, "CatalogItem.VersionMismatch", "conflict"),
+    );
+    renderDetail();
+
+    await waitFor(() => expect(screen.getByText("Condensate Pump")).toBeInTheDocument());
+    await user.click(screen.getByRole("button", { name: "Edit" }));
+    await user.type(screen.getByLabelText("Name"), "!");
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() =>
+      expect(screen.getByText(/This item was changed by someone else/)).toHaveFocus(),
+    );
+  });
+
   it("editing the header offers the same shared, creatable CategoryCombobox as the create drawer", async () => {
     const user = userEvent.setup();
     mockGetCatalogItem.mockResolvedValue(baseItem);

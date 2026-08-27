@@ -13,6 +13,10 @@
 
 ## Active handoff — Price Book visual polish
 
+Items 0–2 are all COMPLETE (2026-08-27). Next approved work is in **Deferred / still required**
+below — the auth-expiry redirect and the Actual Work composer real-device zoom check are the
+highest-priority remaining items.
+
 ### 0. Migrate Settings and Getting Started to the V2 application layout — COMPLETE (2026-08-27)
 
 **Shell migration.** `App.tsx` `isWorkbench` → `usesTopNavShell`, now covering `home` and
@@ -44,47 +48,48 @@ back to role-only when absent. No email fallback. Sidebar and mobile identity la
 Verified: `AuthApiTests` 34/34, `App.test.tsx` + `CompanySection.phone.test.tsx` 34/34,
 `tsc --noEmit` clean. See Git history for the change set.
 
-### 2. Coherent Price Book editing model
+### 2. Coherent Price Book editing model — COMPLETE (2026-08-27)
 
-**Decision:** Use a responsive side drawer for a focused edit of one object's header/settings. Use
-the detail page for multi-step management that benefits from context. On phone, the same surface
-must use the established responsive full-height/bottom-sheet treatment, not a desktop form squeezed
-into the page.
+Catalog item identity/settings edit (display name, SKU, category, Common Item) and offering/
+assembly header edit (name, primary item, price treatment) now open dedicated responsive side
+drawers — `CatalogItemEditDrawer.tsx` and `OfferingAssemblyHeaderEditDrawer.tsx` — matching the
+create/Nudge drawer pattern (`KeepModal` shell, `w-full sm:w-[480px]/[520px]`, focus trap/restore,
+Escape, `backdropClosable={false}`, nested discard-confirm on a dirty dismiss). The inline
+header-edit `<form>` states are removed from `CatalogItemDetail.tsx` and `OfferingAssemblyDetail.tsx`.
 
-| Task | Surface |
-| --- | --- |
-| Create catalog item or offering/assembly | Existing responsive side drawer |
-| Edit catalog item identity/settings | New responsive side drawer |
-| Edit offering/assembly header | New responsive side drawer |
-| Catalog pricing/cost, aliases, activation | Existing detail-page flows |
-| Assembly components, pricing/eligibility, activation | Existing detail-page flows |
-| Create/edit Nudge rule | Existing responsive side drawer |
+Ownership split: each drawer owns form state, validation presentation, dirty-dismiss protection,
+and field-level API errors; the detail page keeps refresh/invalidation and version-conflict
+recovery. On `VersionMismatch` the drawer hands the draft back via `onVersionConflict`; the page
+stores it, closes the drawer, refetches, disables Edit during the refresh, and restores that draft
+once into the next deliberate Edit (unchanged `conflictDraft` / `conflictRefreshPending` behavior,
+now consumed via a separate `editSessionDraft`). Catalog `categoryPending` gate preserved. No
+shared helper module (small local drawer-shell/discard duplication accepted). Aliases, catalog
+pricing/cost, and assembly component editing untouched. No backend changes.
 
-**Catalog scope:** `Edit` opens a drawer for display name, SKU/external key, category, and Common
-Item. `Update pricing & cost` remains explicit. Alias management remains inline because it is a
-small, repeated in-context action.
+**Production-hardening corrections made during this slice's validation pass:**
 
-**Assembly scope:** move only the header form (name, primary item, price treatment) to the drawer.
-Keep associated-item add/edit/remove and pricing, eligibility, and state actions on the detail page.
+- **Save version frozen at drawer open** (`versionRef`) — a background refetch can no longer let a
+  save land against a `concurrencyVersion` the user never saw.
+- **Restored conflict drafts read as dirty** — baseline is always the item as loaded, so
+  abandoning a re-apply routes through the discard confirmation instead of dropping silently.
+- **No modal close path bypasses dirty-dismiss** — `backdropClosable={false}` plus
+  `attemptClose` no-op while a save is in flight; Escape and header-Close both route through the
+  confirm.
+- **Focus return after the drawer closes** (WCAG 2.4.3) — detail-page effect focuses the Edit
+  trigger on a normal cancel/save, or the conflict banner after a version conflict.
+- **Intentional correction, not preserved behavior:** `OfferingAssemblyDetail` now renders a
+  version-conflict banner (catalog already had one; assembly previously set `conflictDraft` but
+  showed nothing). It gives the user feedback and a valid post-conflict focus destination.
 
-**Rationale:** The current catalog and assembly detail pages replace their normal content with large
-inline forms (`CatalogItemDetail.tsx`, `OfferingAssemblyDetail.tsx`), visually breaking from Price
-Book. Catalog/assembly creation and Nudge editing already use the focused drawer pattern.
+Verified: full `web/ophalo-app` suite 741/741 (+33 across the two new drawer specs and
+`CatalogItemDetail`/`OfferingAssemblyDetail` additions covering version-freeze-across-rerender,
+backdrop/Escape while dirty, restored-draft guard, and focus return), existing detail-page tests
+pass unmodified, `tsc --noEmit` clean, `check:tokens` pass, `git diff --check` clean. See Git
+history for the change set.
 
-**Claude implementation handoff:**
-
-1. Preflight the shell and current forms: `KeepModal.tsx`, `CatalogItemDrawer.tsx`,
-   `OfferingAssemblyDrawer.tsx`, and `ScopeNudgeRuleModal.tsx`. Confirm responsive sizing,
-   focus trapping/restoration, Escape, backdrop and dirty-dismiss behavior before extracting code.
-2. Prefer dedicated edit drawers or a readable parameterized editor. Reuse existing mutations,
-   query invalidation, optimistic concurrency, validation, and conflict recovery; do not weaken
-   them.
-3. Remove inline header-edit states from `CatalogItemDetail.tsx` and
-   `OfferingAssemblyDetail.tsx` only after drawers preserve validation, cancellation,
-   version-mismatch recovery, catalog category-create/pending protection, and focus return to Edit.
-4. Do not move aliases, catalog pricing/cost, or assembly component editing into this first pass.
-5. Add desktop and phone-width tests for open, validation, cancel/close, success, and conflict.
-   Run focused tests, `pnpm exec tsc --noEmit`, and `git diff --check`.
+Known adjacent issue (not touched): the create `OfferingAssemblyDrawer` renders its discard
+confirmation inside its own `inert` form — the buttons would be non-interactive in a real
+browser. The new edit drawers place the confirmation outside the form.
 
 ## Deferred / still required
 

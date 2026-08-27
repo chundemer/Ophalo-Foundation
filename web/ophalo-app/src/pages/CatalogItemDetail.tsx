@@ -1,30 +1,15 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Tag } from "lucide-react";
-import { api, ApiError, type AccountRole, type CatalogItemResponse } from "../lib/apiClient";
+import { api, ApiError, type AccountRole } from "../lib/apiClient";
 import { CatalogItemPricePublishForm } from "./CatalogItemPricePublishForm";
-import { CategoryCombobox } from "../components/keep/CategoryCombobox";
+import {
+  CatalogItemEditDrawer,
+  type CatalogItemHeaderDraft,
+} from "../components/keep/CatalogItemEditDrawer";
 
 const INPUT_CLS =
   "w-full rounded-lg border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] text-base text-[var(--ophalo-ink)] px-3 py-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-offset-1";
-
-const ERROR_INPUT_CLS = "border-[var(--ophalo-danger)]";
-
-interface HeaderFormState {
-  displayName: string;
-  externalKey: string;
-  categoryId: string;
-  isCommonItem: boolean;
-}
-
-function toFormState(item: CatalogItemResponse): HeaderFormState {
-  return {
-    displayName: item.displayName,
-    externalKey: item.externalKey ?? "",
-    categoryId: item.categoryId ?? "",
-    isCommonItem: item.isCommonItem,
-  };
-}
 
 interface CatalogItemDetailProps {
   catalogItemId: string;
@@ -143,100 +128,51 @@ export function CatalogItemDetail({
   });
 
   const [isEditing, setIsEditing] = useState(false);
-  const [form, setForm] = useState<HeaderFormState | null>(null);
-  // Set instead of the form itself when a save hits a version conflict (build-log/113, review
-  // 2026-08-07): the form unmounts and the read-only view refreshes to the concurrent editor's
-  // latest values, so a resave can't silently overwrite them. Re-entering Edit restores this draft
-  // as the deliberate, explicit retry.
-  const [conflictDraft, setConflictDraft] = useState<HeaderFormState | null>(null);
+  // Set when a save hits a version conflict (build-log/113, review 2026-08-07): the drawer
+  // closes and the read-only view refreshes to the concurrent editor's latest values, so a
+  // resave can't silently overwrite them. Consumed once into `editSessionDraft` when the user
+  // deliberately reopens Edit; a later Edit re-seeds fresh from the refreshed item.
+  const [conflictDraft, setConflictDraft] = useState<CatalogItemHeaderDraft | null>(null);
+  // The draft handed to the edit drawer for the current edit session (the restored conflict
+  // draft, or null to seed from the item). Cleared on cancel or successful save.
+  const [editSessionDraft, setEditSessionDraft] = useState<CatalogItemHeaderDraft | null>(null);
   // True from the moment a conflict is detected until the refetch it triggers lands. Edit stays
-  // disabled for this window so a fast double-click can't reopen the form and resave against the
-  // still-stale `data.item.concurrencyVersion` before the refreshed item is actually rendered.
+  // disabled for this window so a fast double-click can't reopen the drawer and resave against
+  // the still-stale `data.item.concurrencyVersion` before the refreshed item is rendered.
   const [conflictRefreshPending, setConflictRefreshPending] = useState(false);
-  const [formError, setFormError] = useState<string | null>(null);
-  const [fieldErrors, setFieldErrors] = useState<{ displayName?: string; externalKey?: string; categoryId?: string }>({});
-  // Reported by CategoryCombobox (Session 2e.7b, build-log/114): true from the start of a
-  // category-create attempt until it resolves — blocks Save so it can never fire against an
-  // uncommitted category intent, matching the create-drawer's contract.
-  const [categoryPending, setCategoryPending] = useState(false);
+
+  // The read-only "Edit" trigger and the version-conflict banner: after the drawer closes, focus
+  // returns to the trigger on a normal cancel/save, or to the banner when a conflict sent the
+  // user back to review the concurrent editor's values (WCAG 2.4.3).
+  const editTriggerRef = useRef<HTMLButtonElement>(null);
+  const conflictBannerRef = useRef<HTMLDivElement>(null);
+  const restoreEditFocusRef = useRef(false);
 
   function startEditing() {
     if (!data || itemBusy) return;
-    setForm(conflictDraft ?? toFormState(data.item));
+    setEditSessionDraft(conflictDraft);
     setConflictDraft(null);
-    setFormError(null);
-    setFieldErrors({});
-    setCategoryPending(false);
+    restoreEditFocusRef.current = true;
     setIsEditing(true);
   }
 
   function cancelEditing() {
     setIsEditing(false);
-    setForm(null);
-    setFormError(null);
-    setFieldErrors({});
-    setCategoryPending(false);
+    setEditSessionDraft(null);
   }
 
-  const updateHeaderMutation = useMutation({
-    mutationFn: (input: HeaderFormState) => {
-      if (!data) throw new Error("Catalog item not loaded.");
-      return api.updateCatalogItemHeader(
-        catalogItemId,
-        {
-          displayName: input.displayName.trim(),
-          externalKey: input.externalKey.trim() === "" ? null : input.externalKey.trim(),
-          categoryId: input.categoryId === "" ? null : input.categoryId,
-          isCommonItem: input.isCommonItem,
-        },
-        data.item.concurrencyVersion,
-      );
-    },
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["catalogItem", catalogItemId] });
-      setConflictDraft(null);
-      cancelEditing();
-    },
-    onError: (err: unknown, input) => {
-      if (err instanceof ApiError && err.code === "CatalogItem.VersionMismatch") {
-        setConflictDraft(input);
-        setIsEditing(false);
-        setForm(null);
-        setFormError(null);
-        setFieldErrors({});
-        setConflictRefreshPending(true);
-        void queryClient.invalidateQueries({ queryKey: ["catalogItem", catalogItemId] }).then(() => {
-          setConflictRefreshPending(false);
-        });
-        return;
-      }
-      if (err instanceof ApiError && err.code === "CatalogItem.DisplayNameRequired") {
-        setFieldErrors({ displayName: "Display name is required." });
-        return;
-      }
-      if (err instanceof ApiError && err.code === "CatalogItem.DisplayNameTooLong") {
-        setFieldErrors({ displayName: "Display name must not exceed 200 characters." });
-        return;
-      }
-      if (err instanceof ApiError && err.code === "CatalogItem.InvalidExternalKey") {
-        setFieldErrors({ externalKey: "SKU must contain at least one letter or number." });
-        return;
-      }
-      if (err instanceof ApiError && err.code === "CatalogItem.ExternalKeyAlreadyExists") {
-        setFieldErrors({ externalKey: "A catalog item with this SKU already exists." });
-        return;
-      }
-      if (err instanceof ApiError && err.code === "CatalogCategory.NotFound") {
-        setFieldErrors({ categoryId: "This category no longer exists. Reload and pick another." });
-        return;
-      }
-      if (err instanceof ApiError && err.code === "CatalogCategory.NotActive") {
-        setFieldErrors({ categoryId: "This category is no longer active. Reload and pick another." });
-        return;
-      }
-      setFormError("Could not save changes. Try again.");
-    },
-  });
+  useEffect(() => {
+    if (isEditing || conflictRefreshPending) return;
+    if (conflictDraft) {
+      restoreEditFocusRef.current = false;
+      conflictBannerRef.current?.focus();
+      return;
+    }
+    if (restoreEditFocusRef.current) {
+      restoreEditFocusRef.current = false;
+      editTriggerRef.current?.focus();
+    }
+  }, [isEditing, conflictRefreshPending, conflictDraft]);
 
   // Session 2e.6c, build-log/113: reactivate and alias-management wiring. Both stay pending
   // (blocking Edit and every alias control) until the refetch they trigger lands, for the same
@@ -411,14 +347,6 @@ export function CatalogItemDetail({
   // below-cost confirmation, mutation/conflict handling, cache invalidation) lives in
   // CatalogItemPricePublishForm — only the trigger and open/closed state stay here.
   const [showPublishForm, setShowPublishForm] = useState(false);
-
-  function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!form || updateHeaderMutation.isPending || categoryPending) return;
-    setFieldErrors({});
-    setFormError(null);
-    updateHeaderMutation.mutate(form);
-  }
 
   // Mirrors PriceBook's guard order (build-log/113): a direct #/pricebook/:id URL must resolve
   // the same role/entitlement gates as arriving via the list, not fall through to the query and
@@ -600,6 +528,7 @@ export function CatalogItemDetail({
                   </button>
                 )}
                 <button
+                  ref={editTriggerRef}
                   type="button"
                   onClick={startEditing}
                   disabled={itemBusy}
@@ -655,7 +584,11 @@ export function CatalogItemDetail({
               )}
 
             {conflictDraft && (
-              <div className="rounded-lg border border-[var(--ophalo-danger)] p-3 text-sm text-[var(--ophalo-danger)]">
+              <div
+                ref={conflictBannerRef}
+                tabIndex={-1}
+                className="rounded-lg border border-[var(--ophalo-danger)] p-3 text-sm text-[var(--ophalo-danger)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)]"
+              >
                 This item was changed by someone else while you were editing. We kept your unsaved
                 edits — review the latest values below, then Edit to re-apply them.
               </div>
@@ -799,102 +732,32 @@ export function CatalogItemDetail({
           </div>
         )}
 
-        {!isLoading && !isError && data && isEditing && form && (
-          <form onSubmit={handleSubmit} className="max-w-2xl space-y-6">
-            <div className="rounded-xl border border-[var(--ophalo-border)] p-4 space-y-4">
-              <div>
-                <label htmlFor="header-display-name" className="text-xs font-medium text-[var(--ophalo-muted)]">
-                  Name
-                </label>
-                <input
-                  id="header-display-name"
-                  type="text"
-                  value={form.displayName}
-                  onChange={(e) => setForm({ ...form, displayName: e.target.value })}
-                  disabled={updateHeaderMutation.isPending}
-                  className={`mt-1 ${INPUT_CLS} ${fieldErrors.displayName ? ERROR_INPUT_CLS : ""}`}
-                />
-                {fieldErrors.displayName && (
-                  <p className="mt-1 text-xs text-[var(--ophalo-danger)]">{fieldErrors.displayName}</p>
-                )}
-              </div>
-
-              <div>
-                <label htmlFor="header-external-key" className="text-xs font-medium text-[var(--ophalo-muted)]">
-                  SKU
-                </label>
-                <input
-                  id="header-external-key"
-                  type="text"
-                  value={form.externalKey}
-                  onChange={(e) => setForm({ ...form, externalKey: e.target.value })}
-                  disabled={updateHeaderMutation.isPending}
-                  className={`mt-1 ${INPUT_CLS} ${fieldErrors.externalKey ? ERROR_INPUT_CLS : ""}`}
-                />
-                {fieldErrors.externalKey && (
-                  <p className="mt-1 text-xs text-[var(--ophalo-danger)]">{fieldErrors.externalKey}</p>
-                )}
-              </div>
-
-              <div>
-                <label htmlFor="header-category" className="text-xs font-medium text-[var(--ophalo-muted)]">
-                  Category
-                </label>
-                <div className="mt-1">
-                  <CategoryCombobox
-                    id="header-category"
-                    categories={(categoriesQuery.data?.categories ?? []).filter(
-                      (c) => c.activeState === "Active" || c.id === data.category?.id,
-                    )}
-                    currentCategoryId={form.categoryId === "" ? null : form.categoryId}
-                    onSelect={(categoryId) => setForm({ ...form, categoryId: categoryId ?? "" })}
-                    creatable
-                    disabled={updateHeaderMutation.isPending}
-                    invalid={!!fieldErrors.categoryId}
-                    onCategoriesChanged={() => void queryClient.invalidateQueries({ queryKey: ["catalogCategories"] })}
-                    onPendingChange={setCategoryPending}
-                  />
-                </div>
-                {fieldErrors.categoryId && (
-                  <p className="mt-1 text-xs text-[var(--ophalo-danger)]">{fieldErrors.categoryId}</p>
-                )}
-              </div>
-
-              <label className="flex items-center gap-2 text-sm text-[var(--ophalo-ink)]">
-                <input
-                  type="checkbox"
-                  checked={form.isCommonItem}
-                  onChange={(e) => setForm({ ...form, isCommonItem: e.target.checked })}
-                  disabled={updateHeaderMutation.isPending}
-                />
-                Common item
-              </label>
-            </div>
-
-            {formError && (
-              <div className="rounded-lg border border-[var(--ophalo-danger)] p-3 text-sm text-[var(--ophalo-danger)]">
-                {formError}
-              </div>
-            )}
-
-            <div className="flex items-center gap-3">
-              <button
-                type="submit"
-                disabled={updateHeaderMutation.isPending || categoryPending}
-                className="rounded-lg bg-[var(--keep-accent)] px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
-              >
-                {updateHeaderMutation.isPending ? "Saving…" : "Save"}
-              </button>
-              <button
-                type="button"
-                onClick={cancelEditing}
-                disabled={updateHeaderMutation.isPending}
-                className="rounded-lg border border-[var(--ophalo-border)] px-4 py-2 text-sm font-medium text-[var(--ophalo-ink)]"
-              >
-                Cancel
-              </button>
-            </div>
-          </form>
+        {!isLoading && !isError && data && isEditing && (
+          <CatalogItemEditDrawer
+            item={data.item}
+            currentCategory={data.category}
+            categories={categoriesQuery.data?.categories ?? []}
+            initialDraft={editSessionDraft}
+            onCategoriesChanged={() =>
+              void queryClient.invalidateQueries({ queryKey: ["catalogCategories"] })
+            }
+            onClose={cancelEditing}
+            onSaved={() => {
+              void queryClient.invalidateQueries({ queryKey: ["catalogItem", catalogItemId] });
+              setConflictDraft(null);
+              setEditSessionDraft(null);
+              setIsEditing(false);
+            }}
+            onVersionConflict={(draft) => {
+              setConflictDraft(draft);
+              setEditSessionDraft(null);
+              setIsEditing(false);
+              setConflictRefreshPending(true);
+              void queryClient
+                .invalidateQueries({ queryKey: ["catalogItem", catalogItemId] })
+                .then(() => setConflictRefreshPending(false));
+            }}
+          />
         )}
       </div>
     </div>

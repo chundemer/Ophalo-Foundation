@@ -204,6 +204,21 @@ describe("OfferingAssemblyDetail", () => {
 
     await waitFor(() => expect(screen.getByText("Furnace Tune-Up (renamed)")).toBeInTheDocument());
     expect(screen.queryByLabelText("Name")).not.toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.getByText(/was changed by someone else/)).toHaveFocus(),
+    );
+  });
+
+  it("returns focus to the Edit trigger after the header drawer is dismissed", async () => {
+    const user = userEvent.setup();
+    mockGetOfferingAssembly.mockResolvedValue(baseAssembly);
+    renderDetail();
+
+    await waitFor(() => expect(screen.getByText("Furnace Tune-Up")).toBeInTheDocument());
+    await user.click(screen.getByRole("button", { name: "Edit" }));
+    await user.keyboard("{Escape}");
+
+    await waitFor(() => expect(screen.getByRole("button", { name: "Edit" })).toHaveFocus());
   });
 
   it("activating an inactive assembly calls activateOfferingAssembly and invalidates the list", async () => {

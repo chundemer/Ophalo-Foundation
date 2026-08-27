@@ -1,14 +1,16 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Package } from "lucide-react";
-import { api, ApiError, type AccountRole, type OfferingAssemblyDetailResult } from "../lib/apiClient";
+import { api, ApiError, type AccountRole } from "../lib/apiClient";
 import { CatalogItemPicker } from "../components/keep/CatalogItemPicker";
 import { KeepBadge } from "../components/keep/KeepBadge";
+import {
+  OfferingAssemblyHeaderEditDrawer,
+  type OfferingAssemblyHeaderDraft,
+} from "../components/keep/OfferingAssemblyHeaderEditDrawer";
 
 const INPUT_CLS =
   "w-full rounded-lg border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] text-base text-[var(--ophalo-ink)] px-3 py-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-offset-1";
-
-const ERROR_INPUT_CLS = "border-[var(--ophalo-danger)]";
 
 const ELIGIBILITY_REASON_LABELS: Record<string, string> = {
   AssemblyInactive: "This assembly is inactive.",
@@ -33,22 +35,6 @@ const MARGIN_REASON_LABELS: Record<string, string> = {
 
 function formatCurrency(value: number): string {
   return value.toLocaleString(undefined, { style: "currency", currency: "USD" });
-}
-
-interface HeaderFormState {
-  primaryCatalogItemId: string;
-  primaryCatalogItemDisplayName: string;
-  name: string;
-  priceTreatment: "Summed" | "AllInclusive";
-}
-
-function toFormState(item: OfferingAssemblyDetailResult): HeaderFormState {
-  return {
-    primaryCatalogItemId: item.primaryCatalogItemId,
-    primaryCatalogItemDisplayName: item.primaryCatalogItemDisplayName,
-    name: item.name,
-    priceTreatment: item.priceTreatment as "Summed" | "AllInclusive",
-  };
 }
 
 interface OfferingAssemblyDetailProps {
@@ -102,11 +88,11 @@ export function OfferingAssemblyDetail({
   }
 
   const [isEditing, setIsEditing] = useState(false);
-  const [form, setForm] = useState<HeaderFormState | null>(null);
-  const [conflictDraft, setConflictDraft] = useState<HeaderFormState | null>(null);
+  // Conflict recovery stays page-owned (mirrors CatalogItemDetail). The draft is consumed once
+  // into `editSessionDraft` when the user deliberately reopens Edit; a later Edit re-seeds fresh.
+  const [conflictDraft, setConflictDraft] = useState<OfferingAssemblyHeaderDraft | null>(null);
+  const [editSessionDraft, setEditSessionDraft] = useState<OfferingAssemblyHeaderDraft | null>(null);
   const [conflictRefreshPending, setConflictRefreshPending] = useState(false);
-  const [formError, setFormError] = useState<string | null>(null);
-  const [fieldErrors, setFieldErrors] = useState<{ name?: string; primary?: string }>({});
 
   const [activatePending, setActivatePending] = useState(false);
   const [activateError, setActivateError] = useState<string | null>(null);
@@ -123,63 +109,37 @@ export function OfferingAssemblyDetail({
 
   const itemBusy = conflictRefreshPending || activatePending || inactivatePending || itemActionPending;
 
+  // After the drawer closes, return focus to the "Edit" trigger on a normal cancel/save, or to
+  // the version-conflict banner when a conflict sent the user back to review (WCAG 2.4.3).
+  const editTriggerRef = useRef<HTMLButtonElement>(null);
+  const conflictBannerRef = useRef<HTMLDivElement>(null);
+  const restoreEditFocusRef = useRef(false);
+
   function startEditing() {
     if (!data || itemBusy) return;
-    setForm(conflictDraft ?? toFormState(data));
+    setEditSessionDraft(conflictDraft);
     setConflictDraft(null);
-    setFormError(null);
-    setFieldErrors({});
+    restoreEditFocusRef.current = true;
     setIsEditing(true);
   }
 
   function cancelEditing() {
     setIsEditing(false);
-    setForm(null);
-    setFormError(null);
-    setFieldErrors({});
+    setEditSessionDraft(null);
   }
 
-  const updateHeaderMutation = useMutation({
-    mutationFn: (input: HeaderFormState) => {
-      if (!data) throw new Error("Offering/assembly not loaded.");
-      return api.updateOfferingAssemblyHeader(
-        offeringAssemblyId,
-        { primaryCatalogItemId: input.primaryCatalogItemId, name: input.name.trim(), priceTreatment: input.priceTreatment },
-        data.concurrencyVersion,
-      );
-    },
-    onSuccess: () => {
-      void invalidateDetail();
-      setConflictDraft(null);
-      cancelEditing();
-    },
-    onError: (err: unknown, input) => {
-      if (err instanceof ApiError && err.code === "OfferingAssembly.VersionMismatch") {
-        setConflictDraft(input);
-        setIsEditing(false);
-        setForm(null);
-        setFormError(null);
-        setFieldErrors({});
-        setConflictRefreshPending(true);
-        void invalidateDetail().then(() => setConflictRefreshPending(false));
-        return;
-      }
-      if (err instanceof ApiError && (err.code === "OfferingAssembly.NameRequired" || err.code === "OfferingAssembly.NameTooLong")) {
-        setFieldErrors({ name: err.code === "OfferingAssembly.NameRequired" ? "Name is required." : "Name must not exceed 200 characters." });
-        return;
-      }
-      if (
-        err instanceof ApiError &&
-        (err.code === "OfferingAssembly.PrimaryCatalogItemRequired" ||
-          err.code === "OfferingAssembly.PrimaryCatalogItemAlreadyClaimed" ||
-          err.code === "OfferingAssembly.PrimaryCatalogItemAlreadyAssociated")
-      ) {
-        setFieldErrors({ primary: err.message });
-        return;
-      }
-      setFormError("Could not save changes. Try again.");
-    },
-  });
+  useEffect(() => {
+    if (isEditing || conflictRefreshPending) return;
+    if (conflictDraft) {
+      restoreEditFocusRef.current = false;
+      conflictBannerRef.current?.focus();
+      return;
+    }
+    if (restoreEditFocusRef.current) {
+      restoreEditFocusRef.current = false;
+      editTriggerRef.current?.focus();
+    }
+  }, [isEditing, conflictRefreshPending, conflictDraft]);
 
   const activateMutation = useMutation({
     mutationFn: () => {
@@ -311,14 +271,6 @@ export function OfferingAssemblyDetail({
       setItemActionError(err instanceof ApiError ? err.message : "Could not remove this item. Try again.");
     },
   });
-
-  function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!form || updateHeaderMutation.isPending) return;
-    setFieldErrors({});
-    setFormError(null);
-    updateHeaderMutation.mutate(form);
-  }
 
   if (role === "unknown") {
     return (
@@ -470,6 +422,7 @@ export function OfferingAssemblyDetail({
                 )}
                 {!confirmInactivate && (
                   <button
+                    ref={editTriggerRef}
                     type="button"
                     onClick={startEditing}
                     disabled={itemBusy}
@@ -480,6 +433,17 @@ export function OfferingAssemblyDetail({
                 )}
               </div>
             </div>
+
+            {conflictDraft && (
+              <div
+                ref={conflictBannerRef}
+                tabIndex={-1}
+                className="rounded-lg border border-[var(--ophalo-danger)] p-3 text-sm text-[var(--ophalo-danger)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)]"
+              >
+                This offering/assembly was changed by someone else while you were editing. We kept
+                your unsaved edits — review the latest values below, then Edit to re-apply them.
+              </div>
+            )}
 
             {activateError && <p className="text-sm text-[var(--ophalo-danger)]">{activateError}</p>}
             {inactivateError && <p className="text-sm text-[var(--ophalo-danger)]">{inactivateError}</p>}
@@ -683,65 +647,25 @@ export function OfferingAssemblyDetail({
           </div>
         )}
 
-        {!isLoading && !isError && data && isEditing && form && (
-          <form onSubmit={handleSubmit} className="max-w-2xl space-y-4">
-            {formError && (
-              <div className="rounded-lg bg-[var(--ophalo-danger-bg)] px-3 py-2 text-sm text-[var(--ophalo-danger)]">{formError}</div>
-            )}
-            <div>
-              <label htmlFor="assembly-edit-name" className="block text-sm font-medium text-[var(--ophalo-ink)] mb-1">
-                Name
-              </label>
-              <input
-                id="assembly-edit-name"
-                type="text"
-                value={form.name}
-                onChange={(e) => setForm({ ...form, name: e.target.value })}
-                className={`${INPUT_CLS} ${fieldErrors.name ? ERROR_INPUT_CLS : ""}`}
-              />
-              {fieldErrors.name && <p className="mt-1 text-sm text-[var(--ophalo-danger)]">{fieldErrors.name}</p>}
-            </div>
-            <div>
-              <label htmlFor="assembly-edit-primary" className="block text-sm font-medium text-[var(--ophalo-ink)] mb-1">
-                Primary catalog item
-              </label>
-              <CatalogItemPicker
-                id="assembly-edit-primary"
-                selectedItemId={form.primaryCatalogItemId}
-                selectedItemDisplayName={form.primaryCatalogItemDisplayName}
-                onSelect={(row) => setForm({ ...form, primaryCatalogItemId: row.item.id, primaryCatalogItemDisplayName: row.item.displayName })}
-                invalid={!!fieldErrors.primary}
-              />
-              {fieldErrors.primary && <p className="mt-1 text-sm text-[var(--ophalo-danger)]">{fieldErrors.primary}</p>}
-            </div>
-            <div>
-              <span className="block text-sm font-medium text-[var(--ophalo-ink)] mb-1">Price treatment</span>
-              <div className="flex gap-4">
-                {(["Summed", "AllInclusive"] as const).map((option) => (
-                  <label key={option} className="flex items-center gap-2 text-sm text-[var(--ophalo-ink)]">
-                    <input type="radio" name="priceTreatmentEdit" checked={form.priceTreatment === option} onChange={() => setForm({ ...form, priceTreatment: option })} />
-                    {option === "Summed" ? "Summed" : "All-inclusive"}
-                  </label>
-                ))}
-              </div>
-            </div>
-            <div className="flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={cancelEditing}
-                className="rounded-lg border border-[var(--ophalo-border)] px-3 py-1.5 text-sm font-medium text-[var(--ophalo-ink)] hover:bg-[var(--ophalo-canvas)]"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={updateHeaderMutation.isPending}
-                className="rounded-lg bg-[var(--keep-accent)] px-3 py-1.5 text-sm font-medium text-white hover:opacity-90 disabled:opacity-60"
-              >
-                {updateHeaderMutation.isPending ? "Saving…" : "Save"}
-              </button>
-            </div>
-          </form>
+        {!isLoading && !isError && data && isEditing && (
+          <OfferingAssemblyHeaderEditDrawer
+            assembly={data}
+            initialDraft={editSessionDraft}
+            onClose={cancelEditing}
+            onSaved={() => {
+              void invalidateDetail();
+              setConflictDraft(null);
+              setEditSessionDraft(null);
+              setIsEditing(false);
+            }}
+            onVersionConflict={(draft) => {
+              setConflictDraft(draft);
+              setEditSessionDraft(null);
+              setIsEditing(false);
+              setConflictRefreshPending(true);
+              void invalidateDetail().then(() => setConflictRefreshPending(false));
+            }}
+          />
         )}
       </div>
     </div>
