@@ -130,6 +130,19 @@ the authoritative record to reconcile stale/already-reviewed states. Successful 
 visit history and invalidates both the review queue and authoritative queue-count. Queue rows now
 navigate with `focus=actual-work-review` and smoothly scroll to the module after it loads.
 
+Slice 2 review corrections (2026-08-27, second commit): (1) `ActualWorkFinancialDetailResult` gains
+`ReviewedByDisplayName`, resolved server-side via
+`IKeepRequestOperatePersistence.GetActorDisplayNameAsync` (mirrors the 1a-ii-a recorder-identity
+pattern) — the card shows the reviewer name, never the raw id. (2) Incomplete-financial-data copy
+corrected: totals/margin are "unavailable", not "estimated" (ADR-487: never a fabricated total or
+margin). (3) Zero-line diagnostic visits render the structured outcome + completion note and an
+explicit "no work lines" state. (4) The 409 conflict notice is persistent (no longer swallowed when
+the visit flips to reviewed). (5) Successful review shows a transient confirmation. Files:
+`ActualWorkFinancialReadApiService.cs`, `KeepEndpoints.cs`, `ActualWorkFinancialReadApiTests.cs`,
+`apiClient.types.ts`, `ActualWorkReviewCard.tsx`, `RequestDetail.tsx`, +tests. Verified: full app
+suite 780/780, `~ActualWork` integration 157/157, `~ActualWork` unit 55/55, architecture 14/14,
+`tsc`, `check:tokens`, `git diff --check` clean.
+
 #### 3. P1 — Actual Work field-assist nudge UI
 
 The price-blind Actual Work nudge backend is complete. After slice 1 establishes safe ownership

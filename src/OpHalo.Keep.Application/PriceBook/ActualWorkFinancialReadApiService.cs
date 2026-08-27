@@ -4,6 +4,7 @@ using OpHalo.Foundation.Application.Accounts.Authorization;
 using OpHalo.Foundation.Application.Accounts.Entitlements;
 using OpHalo.Foundation.Core.Entities.Accounts;
 using OpHalo.Foundation.Core.Entities.Accounts.Enums;
+using OpHalo.Keep.Application.Requests;
 using OpHalo.Keep.Core.Entities;
 using OpHalo.Keep.Core.Entities.Enums;
 using OpHalo.Keep.Core.Errors;
@@ -65,6 +66,7 @@ public sealed record ActualWorkFinancialDetailResult(
     DateTime SubmittedAtUtc,
     DateTime? ReviewedAtUtc,
     Guid? ReviewedByAccountUserId,
+    string? ReviewedByDisplayName,
     string? ReviewNote,
     bool HasIncompleteFinancialData,
     decimal? TotalSalesPrice,
@@ -87,6 +89,7 @@ public sealed record ActualWorkFinancialDetailResult(
 public sealed class ActualWorkFinancialReadApiService(
     IActualWorkFinancialReviewPersistence financialReviewPersistence,
     IActualWorkPersistence actualWorkPersistence,
+    IKeepRequestOperatePersistence operatePersistence,
     IAccountAccessSnapshotPersistence snapshotPersistence,
     ICurrentUser currentUser,
     IAccountAccessPolicy accountAccessPolicy,
@@ -138,7 +141,14 @@ public sealed class ActualWorkFinancialReadApiService(
         if (visit.Status != ActualWorkStatus.Submitted)
             return Result<ActualWorkFinancialDetailResult>.Failure(ActualWorkErrors.NotSubmitted);
 
-        return Result<ActualWorkFinancialDetailResult>.Success(ToDetailResult(visit));
+        // Resolve the reviewer's display name so the review card can name who reviewed the visit
+        // rather than surface a raw account-user id (mirrors the recorder-identity resolution the
+        // history read added in 1a-ii-a). Null for a not-yet-reviewed visit.
+        var reviewedByDisplayName = visit.ReviewedByAccountUserId is { } reviewerId
+            ? await operatePersistence.GetActorDisplayNameAsync(reviewerId, ct)
+            : null;
+
+        return Result<ActualWorkFinancialDetailResult>.Success(ToDetailResult(visit, reviewedByDisplayName));
     }
 
     private static ActualWorkReviewQueueEntry ToQueueEntry(ActualWorkReviewQueueSourceRow row)
@@ -150,7 +160,7 @@ public sealed class ActualWorkFinancialReadApiService(
             totals.TotalSalesPrice, totals.TotalStandardExpectedDirectCost, totals.TotalMargin);
     }
 
-    private static ActualWorkFinancialDetailResult ToDetailResult(ActualWork visit)
+    private static ActualWorkFinancialDetailResult ToDetailResult(ActualWork visit, string? reviewedByDisplayName)
     {
         var lines = visit.Lines.OrderBy(l => l.CreatedAtUtc).ThenBy(l => l.Id).ToArray();
         var totals = ActualWorkFinancialProjection.ComputeVisitTotals(lines);
@@ -158,7 +168,7 @@ public sealed class ActualWorkFinancialReadApiService(
         return new ActualWorkFinancialDetailResult(
             visit.Id, visit.RequestId, visit.Status, visit.Outcome, visit.CompletionNote,
             visit.RecorderAccountUserId, visit.SubmittedAtUtc!.Value, visit.ReviewedAtUtc,
-            visit.ReviewedByAccountUserId, visit.ReviewNote, totals.HasIncompleteFinancialData,
+            visit.ReviewedByAccountUserId, reviewedByDisplayName, visit.ReviewNote, totals.HasIncompleteFinancialData,
             totals.TotalSalesPrice, totals.TotalStandardExpectedDirectCost, totals.TotalMargin,
             lines.Select(ActualWorkFinancialProjection.ToLineEntry).ToArray(), visit.ConcurrencyVersion);
     }

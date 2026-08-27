@@ -688,6 +688,9 @@ export function RequestDetail({ requestId, focusPanel, onBack, prevId, nextId, o
   }
 
   function handleActualWorkReviewSuccess() {
+    if (reviewSuccessTimerRef.current) clearTimeout(reviewSuccessTimerRef.current);
+    setReviewSuccessMsg("Visit marked as reviewed.");
+    reviewSuccessTimerRef.current = setTimeout(() => setReviewSuccessMsg(null), 4000);
     void queryClient.invalidateQueries({ queryKey: ["actual-work-review-queue"] });
     void queryClient.invalidateQueries({ queryKey: ["actual-work-review-queue-count"] });
   }

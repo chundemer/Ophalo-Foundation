@@ -13,6 +13,12 @@ interface ActualWorkReviewCardProps {
   focusOnMount?: boolean;
 }
 
+const OUTCOME_LABELS: Record<string, string> = {
+  DiagnosticOnly: "Diagnostic only — no work performed",
+  NoWorkAuthorized: "No work authorized",
+  NoAccess: "No access to the site",
+};
+
 function currency(value: number | null) {
   return value == null ? "—" : value.toLocaleString(undefined, { style: "currency", currency: "USD" });
 }
@@ -34,17 +40,26 @@ function Visit({ visit, index, onReview, onReviewSuccess }: {
 }) {
   const [note, setNote] = useState(visit.reviewNote ?? "");
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const reviewed = visit.reviewedAtUtc != null;
+  const zeroLine = visit.lines.length === 0;
+  const outcomeLabel = visit.outcome ? OUTCOME_LABELS[visit.outcome] ?? visit.outcome : null;
 
   async function markReviewed() {
     if (submitting) return;
     setSubmitting(true);
-    setError(null);
+    setNotice(null);
     const result = await onReview(visit, note.trim() || null);
     setSubmitting(false);
-    if (result.ok) onReviewSuccess();
-    else setError(result.conflict ? "This visit changed or was already reviewed. The latest record has been refreshed." : "Unable to mark this visit reviewed. Try again.");
+    if (result.ok) {
+      onReviewSuccess();
+      return;
+    }
+    setNotice(
+      result.conflict
+        ? "This visit was already reviewed or changed. The latest record is shown below."
+        : "Unable to mark this visit reviewed. Try again.",
+    );
   }
 
   return (
@@ -57,22 +72,39 @@ function Visit({ visit, index, onReview, onReviewSuccess }: {
         </div>
         {reviewed ? <span className="inline-flex items-center gap-1 text-xs font-semibold text-[var(--ophalo-success)]"><Check className="h-3.5 w-3.5" /> Reviewed</span> : <span className="text-xs font-semibold text-[var(--ophalo-attention)]">Unreviewed</span>}
       </div>
-      {reviewed && <p className="mt-1 text-xs text-[var(--ophalo-muted)]">Reviewed {formatDate(visit.reviewedAtUtc!)} by {visit.reviewedByAccountUserId ?? "an authorized reviewer"}{visit.reviewNote ? ` · “${visit.reviewNote}”` : ""}</p>}
+      {reviewed && <p className="mt-1 text-xs text-[var(--ophalo-muted)]">Reviewed {formatDate(visit.reviewedAtUtc!)} by {visit.reviewedByDisplayName ?? "an authorized reviewer"}{visit.reviewNote ? ` · “${visit.reviewNote}”` : ""}</p>}
       </summary>
-      {visit.hasIncompleteFinancialData && <p className="mt-3 flex items-center gap-1.5 rounded-lg bg-[var(--ophalo-attention-bg)] px-3 py-2 text-xs font-medium text-[var(--ophalo-attention)]"><CircleAlert className="h-4 w-4 shrink-0" />Missing cost data — margin is estimated.</p>}
+
+      {notice && <p role="alert" className="mt-3 text-xs text-[var(--ophalo-danger)]">{notice}</p>}
+
+      {(outcomeLabel || visit.completionNote) && (
+        <div className="mt-3 rounded-lg bg-[var(--ophalo-canvas)] px-3 py-2 text-xs">
+          {outcomeLabel && <p className="font-semibold text-[var(--ophalo-ink)]">{outcomeLabel}</p>}
+          {visit.completionNote && <p className="mt-0.5 text-[var(--ophalo-muted)]">{visit.completionNote}</p>}
+        </div>
+      )}
+
+      {visit.hasIncompleteFinancialData && <p className="mt-3 flex items-center gap-1.5 rounded-lg bg-[var(--ophalo-attention-bg)] px-3 py-2 text-xs font-medium text-[var(--ophalo-attention)]"><CircleAlert className="h-4 w-4 shrink-0" />Missing cost data — visit totals and margin are unavailable.</p>}
+
       <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-4">
         <Metric label="Sales price" value={currency(visit.totalSalesPrice)} />
         <Metric label="Std direct cost" value={currency(visit.totalStandardExpectedDirectCost)} />
         <Metric label="Expected margin" value={currency(visit.totalMargin)} />
         <Metric label="Margin %" value={marginPercent(visit.totalSalesPrice, visit.totalMargin)} />
       </div>
-      <div className="mt-4 border-t border-[var(--ophalo-border)] pt-3">
-        <p className="text-xs font-semibold text-[var(--ophalo-ink)]">Line item breakdown</p>
-        <ul className="mt-2 space-y-2">
-          {visit.lines.map((line) => <li key={line.id} className="flex flex-wrap justify-between gap-x-4 gap-y-0.5 text-xs"><span className="text-[var(--ophalo-ink)]">{line.actualQuantity}× {line.displayNameSnapshot}{!line.isFinancialDataComplete && <span className="ml-1 font-medium text-[var(--ophalo-attention)]">(cost missing)</span>}</span><span className="text-[var(--ophalo-muted)]">Price {currency(line.lineSalesTotal)} · Cost {currency(line.lineStandardExpectedDirectCostTotal)} · {marginPercent(line.lineSalesTotal, line.lineMargin)} margin</span></li>)}
-        </ul>
-      </div>
-      {!reviewed && <div className="mt-4"><label className="text-xs font-semibold text-[var(--ophalo-ink)]" htmlFor={`review-note-${visit.id}`}>Reviewer note <span className="font-normal text-[var(--ophalo-muted)]">(optional)</span></label><textarea id={`review-note-${visit.id}`} value={note} onChange={(event) => setNote(event.target.value)} placeholder="Add internal note for billing/payroll…" rows={2} className="mt-1 w-full rounded-lg border border-[var(--ophalo-border)] bg-[var(--ophalo-canvas)] px-3 py-2 text-sm text-[var(--ophalo-ink)]" />{error && <p role="alert" className="mt-2 text-xs text-[var(--ophalo-danger)]">{error}</p>}<div className="mt-3 flex justify-end"><KeepButton onClick={() => void markReviewed()} disabled={submitting}>{submitting ? "Marking reviewed…" : "Mark visit reviewed"}</KeepButton></div></div>}
+
+      {zeroLine ? (
+        <p className="mt-4 border-t border-[var(--ophalo-border)] pt-3 text-xs text-[var(--ophalo-muted)]">No work lines were recorded for this visit.</p>
+      ) : (
+        <div className="mt-4 border-t border-[var(--ophalo-border)] pt-3">
+          <p className="text-xs font-semibold text-[var(--ophalo-ink)]">Line item breakdown</p>
+          <ul className="mt-2 space-y-2">
+            {visit.lines.map((line) => <li key={line.id} className="flex flex-wrap justify-between gap-x-4 gap-y-0.5 text-xs"><span className="text-[var(--ophalo-ink)]">{line.actualQuantity}× {line.displayNameSnapshot}{!line.isFinancialDataComplete && <span className="ml-1 font-medium text-[var(--ophalo-attention)]">(cost missing)</span>}</span><span className="text-[var(--ophalo-muted)]">Price {currency(line.lineSalesTotal)} · Cost {currency(line.lineStandardExpectedDirectCostTotal)} · {marginPercent(line.lineSalesTotal, line.lineMargin)} margin</span></li>)}
+          </ul>
+        </div>
+      )}
+
+      {!reviewed && <div className="mt-4"><label className="text-xs font-semibold text-[var(--ophalo-ink)]" htmlFor={`review-note-${visit.id}`}>Reviewer note <span className="font-normal text-[var(--ophalo-muted)]">(optional)</span></label><textarea id={`review-note-${visit.id}`} value={note} onChange={(event) => setNote(event.target.value)} placeholder="Add internal note for billing/payroll…" rows={2} className="mt-1 w-full rounded-lg border border-[var(--ophalo-border)] bg-[var(--ophalo-canvas)] px-3 py-2 text-sm text-[var(--ophalo-ink)]" /><div className="mt-3 flex justify-end"><KeepButton onClick={() => void markReviewed()} disabled={submitting}>{submitting ? "Marking reviewed…" : "Mark visit reviewed"}</KeepButton></div></div>}
     </details>
   );
 }

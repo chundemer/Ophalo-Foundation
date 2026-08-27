@@ -41,6 +41,12 @@ vi.mock("../UnifiedComposer", () => ({ UnifiedComposer: () => null }));
 vi.mock("../RequestDetailActivity", () => ({ RequestDetailActivity: () => null }));
 vi.mock("../ActualWorkCard", () => ({ ActualWorkCard: () => null }));
 vi.mock("../ActualWorkHistoryCard", () => ({ ActualWorkHistoryCard: () => null }));
+vi.mock("../useActualWorkFinancialReview", () => ({
+  useActualWorkFinancialReview: () => ({ state: { status: "loaded", visits: [{ id: "aw-1" }] }, retry: vi.fn(), review: vi.fn() }),
+}));
+vi.mock("../ActualWorkReviewCard", () => ({
+  ActualWorkReviewCard: () => <div>Actual Work financial review</div>,
+}));
 vi.mock("../useActualWorkHistory", () => ({
   useActualWorkHistory: () => ({ state: { status: "loaded", submittedVisits: [] }, retry: mockHistoryRetry }),
 }));
@@ -109,6 +115,45 @@ describe("RequestDetailContent — Actual Work submit refreshes history (Batch 5
 
     expect(mockMarkSubmitted).toHaveBeenCalledTimes(1);
     expect(mockHistoryRetry).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("RequestDetailContent — Actual Work financial review card gating (Slice 2)", () => {
+  const commonProps = {
+    detail: baseDetail(),
+    requestId: "req-1",
+    highlights: {},
+    showProminentFeedbackCard: false,
+    onDetailUpdated: vi.fn(),
+    onContactLaunched: vi.fn(),
+    onEditLocation: vi.fn(),
+    onOpenReassignOwner: vi.fn(),
+    onOpenWatchers: vi.fn(),
+    onOpenClearAttention: vi.fn(),
+    onRecordFollowUp: vi.fn(),
+    onCreateFollowUp: vi.fn(),
+    onReviewSuccess: vi.fn(),
+    canRecordShareIntent: false,
+    needsShare: false,
+    onOpenShareDrawer: vi.fn(),
+    customerUpdateDraft: "",
+    onCustomerUpdateDraftChange: vi.fn(),
+    customerUpdateDraftStatus: "idle",
+    onCustomerUpdateDraftStatusChange: vi.fn(),
+    reviewSuccessMsg: null,
+    timelineFilter: "all" as const,
+    onTimelineFilterChange: vi.fn(),
+    displayedEvents: [],
+  };
+
+  it("does not render the financial review card for a non-Owner/Admin caller", () => {
+    render(<RequestDetailContent {...commonProps} />);
+    expect(screen.queryByText("Actual Work financial review")).not.toBeInTheDocument();
+  });
+
+  it("renders the financial review card when canReviewActualWork is true", () => {
+    render(<RequestDetailContent {...commonProps} canReviewActualWork />);
+    expect(screen.getByText("Actual Work financial review")).toBeInTheDocument();
   });
 });
 

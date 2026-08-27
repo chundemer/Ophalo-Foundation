@@ -234,6 +234,7 @@ public sealed class ActualWorkFinancialReadApiTests : IClassFixture<KeepApiWebFa
         Assert.Equal("Submitted", body.GetProperty("status").GetString());
         Assert.Equal(ownerId, body.GetProperty("recorderAccountUserId").GetGuid());
         Assert.Equal(JsonValueKind.Null, body.GetProperty("reviewedAtUtc").ValueKind);
+        Assert.Equal(JsonValueKind.Null, body.GetProperty("reviewedByDisplayName").ValueKind);
         Assert.False(body.GetProperty("hasIncompleteFinancialData").GetBoolean());
         Assert.Equal(85.00m, body.GetProperty("totalSalesPrice").GetDecimal());
         Assert.Equal(36.00m, body.GetProperty("totalStandardExpectedDirectCost").GetDecimal());
@@ -287,6 +288,9 @@ public sealed class ActualWorkFinancialReadApiTests : IClassFixture<KeepApiWebFa
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
         Assert.NotEqual(JsonValueKind.Null, body.GetProperty("reviewedAtUtc").ValueKind);
         Assert.Equal(ownerId, body.GetProperty("reviewedByAccountUserId").GetGuid());
+        // The reviewer identity is resolved to a human-readable name for the review card, not a
+        // raw account-user id (falls back to email when the user has no display name).
+        Assert.Equal("Owner", body.GetProperty("reviewedByDisplayName").GetString());
         Assert.Equal("Looks good.", body.GetProperty("reviewNote").GetString());
     }
 

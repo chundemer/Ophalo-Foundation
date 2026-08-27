@@ -1338,6 +1338,9 @@ export interface ActualWorkFinancialDetailResult {
   submittedAtUtc: string;
   reviewedAtUtc: string | null;
   reviewedByAccountUserId: string | null;
+  // Resolved human-readable reviewer name (display name, else email); null until reviewed. The
+  // review card shows this, never the raw account-user id.
+  reviewedByDisplayName: string | null;
   reviewNote: string | null;
   hasIncompleteFinancialData: boolean;
   totalSalesPrice: number | null;

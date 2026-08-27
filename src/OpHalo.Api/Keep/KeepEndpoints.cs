@@ -1226,6 +1226,7 @@ public static class KeepEndpoints
         submittedAtUtc = result.SubmittedAtUtc,
         reviewedAtUtc = result.ReviewedAtUtc,
         reviewedByAccountUserId = result.ReviewedByAccountUserId,
+        reviewedByDisplayName = result.ReviewedByDisplayName,
         reviewNote = result.ReviewNote,
         hasIncompleteFinancialData = result.HasIncompleteFinancialData,
         totalSalesPrice = result.TotalSalesPrice,
