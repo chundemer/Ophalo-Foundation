@@ -244,6 +244,26 @@ public sealed class AuthApiTests : IClassFixture<KeepApiWebFactory>, IAsyncLifet
     }
 
     [Fact]
+    public async Task Me_InactiveSession_Returns401()
+    {
+        // Created SessionInactivityWindowDays + 1 days ago and never used since: the
+        // absolute deadline (createdAt + SessionAbsoluteExpiryDays) is still in the
+        // future, so this exercises the inactivity window specifically.
+        Assert.True(
+            AuthConstants.SessionInactivityWindowDays + 1 < AuthConstants.SessionAbsoluteExpiryDays,
+            "This test only isolates the inactivity window while it closes before the absolute deadline.");
+
+        var rawToken = await _factory.SeedSessionAsync(
+            _ownerAccountUserId, _accountId,
+            overrideCreatedAt: DateTime.UtcNow.AddDays(-(AuthConstants.SessionInactivityWindowDays + 1)));
+
+        using var request = WithCookie(HttpMethod.Get, "/auth/me", rawToken);
+        var response = await _client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
     public async Task Me_SuspendedMember_Returns401()
     {
         // Fresh user — we're about to suspend them, which must not affect other tests.

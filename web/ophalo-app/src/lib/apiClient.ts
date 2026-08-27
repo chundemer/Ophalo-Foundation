@@ -1,3 +1,5 @@
+import { redirectToSignInOnce } from "./redirectToSignIn";
+
 const API_BASE = import.meta.env.VITE_API_BASE_URL;
 
 export class ApiError extends Error {
@@ -22,6 +24,9 @@ async function apiFetchVoid(path: string, init?: RequestInit): Promise<void> {
     },
   });
   if (!response.ok) {
+    // Authentication (not authorization): a later protected-call 401 means the SPA's
+    // session is gone. Route to sign-in once; still throw so the in-flight caller unwinds.
+    if (response.status === 401) redirectToSignInOnce();
     let code: string | undefined;
     let extensions: Record<string, unknown> | undefined;
     try {
@@ -48,6 +53,9 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   });
 
   if (!response.ok) {
+    // Authentication (not authorization): a later protected-call 401 means the SPA's
+    // session is gone. Route to sign-in once; still throw so the in-flight caller unwinds.
+    if (response.status === 401) redirectToSignInOnce();
     let code: string | undefined;
     let extensions: Record<string, unknown> | undefined;
     try {
@@ -76,6 +84,9 @@ async function apiFetchMaybeJson<T>(path: string, init?: RequestInit): Promise<T
     },
   });
   if (!response.ok) {
+    // Authentication (not authorization): a later protected-call 401 means the SPA's
+    // session is gone. Route to sign-in once; still throw so the in-flight caller unwinds.
+    if (response.status === 401) redirectToSignInOnce();
     let code: string | undefined;
     let extensions: Record<string, unknown> | undefined;
     try {

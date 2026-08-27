@@ -1,7 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { api, ApiError } from "../lib/apiClient";
-
-const PUBLIC_BASE = import.meta.env.VITE_PUBLIC_BASE_URL;
+import { redirectToSignInOnce } from "../lib/redirectToSignIn";
 
 export function AuthGuard({ children }: { children: React.ReactNode }) {
   const { data, isLoading, error } = useQuery({
@@ -20,11 +19,12 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
   }
 
   if (error) {
-    const is401 =
-      error instanceof ApiError && error.status === 401;
+    const is401 = error instanceof ApiError && error.status === 401;
 
     if (is401 || !data?.isAuthenticated) {
-      window.location.href = `${PUBLIC_BASE}/signin`;
+      // Same guarded redirect the apiClient wrappers use, so a 401 that surfaces
+      // through both the initial /auth/me and this guard navigates only once.
+      redirectToSignInOnce();
       return null;
     }
   }

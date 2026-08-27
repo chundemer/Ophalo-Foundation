@@ -11,11 +11,102 @@
 - Request Detail interaction contract: [Workbench signoff specification](ux-design/v2/request-detail-workbench-signoff-spec.md)
 - Mobile workflow: [PWA mobile workflow specification](ux-design/v2/pwa-mobile-workflow-spec.md)
 
-## Active handoff — Price Book visual polish
+## Active handoff — next-week controlled field pilot
 
-Items 0–2 are all COMPLETE (2026-08-27). Next approved work is in **Deferred / still required**
-below — the auth-expiry redirect and the Actual Work composer real-device zoom check are the
-highest-priority remaining items.
+Price Book visual-polish items 0–2 below are complete. The next release is a controlled field
+pilot: Keep is the primary factual field record for supported work while the contractor's existing
+system remains authoritative for estimates, invoices, payments, and accounting. Do not compress
+unfinished slices into cutover; retain the existing-ticket workflow as the explicit outage fallback.
+
+### Ordered next-week code slices
+
+#### 1. P0 — Correct Actual Work Draft recorder ownership (GAP-055)
+
+This is the first implementation gate. Dispatch `Responsible` is routing context, not authority to
+record factual work. Any active member with `RequestsOperate` and `ActualWorkCapture` must be able
+to create the one open Actual Work Draft for a request. Creation retains immutable
+`CreatedByUserId` authorship and sets exclusive `RecorderAccountUserId` ownership; only the
+recorder can change, discard, or submit the Draft. Owner/Admin transfer must require a reason and
+write an immutable audit record/event. No shared mutable Drafts, silent takeover, or parallel
+Drafts.
+
+Before code, re-preflight and split the migration/domain, API/authorization, UI-copy, and focused
+regression-test batches. Audit every existing active-Responsible gate: create, edit, discard,
+submit, assembly expansion, nudge read, history/probe, endpoints, and client wording. Preserve the
+single-open-Draft database constraint and optimistic concurrency. The pending Actual Work nudge UI
+remains paused until this correction lands.
+
+Acceptance: a qualified technician can record completed work without office reassignment; only the
+recording owner can mutate it except through an explicit audited transfer; concurrent starts yield
+one recoverable winner/loser outcome.
+
+#### 2. P0 — Owner/Admin Actual Work audit, approval, and financial review UI (slice 8)
+
+The Actual Work backend foundation is complete through review mutation and financial reads. Build
+the Owner/Admin-only **Actual Work Review** tab in the existing Requests workspace plus a
+request-detail review card. Show the FIFO queue of submitted/unreviewed visits; show immutable
+sales-price, Standard/Expected Direct Cost, margin, totals, and explicit incomplete-financial-data
+cues per visit; retain price blindness for field/Operator workflows. The review action must submit
+the exact returned concurrency version and, on `ActualWork.AlreadyReviewed`, refresh to show the
+actual reviewer/note. Successful review must update both queue and visit history.
+
+Preflight the bounded frontend/API-type/test batch after recorder ownership is corrected. Quietly
+hide 403/entitlement-denied surfaces; do not add a new top-level navigation item. Manual acceptance
+must cover submitted, reviewed, stale-version, already-reviewed, incomplete-financial-data,
+zero-line diagnostic, and role/entitlement-denial paths.
+
+#### 3. P1 — Centralized SPA session-expiry redirect — COMPLETE (2026-08-27)
+
+`redirectToSignInOnce()` is a browser-safe, module-guarded shared redirect helper that navigates to
+`${VITE_PUBLIC_BASE_URL}/signin` at most once. All three API fetch wrappers invoke it before
+throwing an `ApiError` for a 401, and `AuthGuard` uses the same helper for its initial `/auth/me`
+401 path. A full-page navigation clears in-memory query state, so no QueryClient-specific wiring
+was added. 403, validation, conflict, transport, and server failures retain their local treatment;
+there is no backend authorization change.
+
+Verified: app suite 750/750 (+9), `AuthApiTests` 35/35 (+1, including a 31-day inactive-session
+401 while the absolute deadline remains future), `tsc --noEmit`, `check:tokens`, and
+`git diff --check` all clean. Focused browser coverage proves a redirect for a 401 through each
+of the three wrappers (`apiFetch`, `apiFetchVoid`, `apiFetchMaybeJson`), a single redirect for
+sequential 401s, and no redirect for 403, 500, or transport failures; AuthGuard withholds
+children and redirects once for `/auth/me` 401.
+
+#### 4. P1 — Production error/usage insight and friction loop
+
+Complete the errors-only Sentry slice with release/correlation metadata, PII/secret/token removal,
+and founder alert routing. Add only privacy-safe daily pilot counters: sign-in, request created,
+Actual Work Draft started, Actual Work submitted/failed, and Report Friction submitted. Provide an
+authenticated Report Friction or equally visible support route with useful account/screen context
+but no customer free-text capture by default. Assign a daily owner for alerts, failure counts,
+usage, and friction reports.
+
+#### 5. P1 — Pilot acceptance, real-device validation, and production rehearsal
+
+Perform the remaining real-phone/browser-zoom check for Actual Work's full-bleed fixed composer;
+the CSS zoom proxy is insufficient. Then rehearse deployed normal-repair and diagnostic/no-work
+flows, review office history/approval, verify alert and feedback routing, and publish the concise
+field fallback/escalation guide. Record real device evidence in the tracker/build log. Include a
+targeted phone/tablet/desktop UI-quality pass for loading, error, empty, focus, and touch-target
+states.
+
+#### 6. P2 — Correct Price Book nudge suggestion ordinals
+
+The nudge domain/API contract is one-based: suggestion `Order` is valid from 1 through 3. The
+Price Book Nudge card currently sorts by that value but displays `order + 1`, so the first
+suggestion is incorrectly labeled `2.` (as in the Blower Motor example). Change the card to render
+the returned ordinal directly; do not change the persisted/API numbering or the composer behavior.
+Update the Price Book nudge fixture and add/assert regression coverage for one-, two-, and
+three-suggestion rules displaying `1.`, `2.`, and `3.` in their saved order.
+
+### Next after the release gate — triage, do not silently bundle
+
+Prioritize the remaining active pilot bugs by production evidence after the active release slices
+above:
+public-intake trust/return continuity (GAP-033); request workspace identity, scale/history,
+search/filter, priority-update, private-link-email, and closed-follow-up gaps (GAP-041–049);
+phone-entry parity and Quick Capture customer recognition (GAP-016, GAP-021, GAP-025, GAP-051);
+and queue/action hierarchy review (GAP-053–054). Use the pilot tracker for their individual
+acceptance criteria; none is automatically authorized as part of the Actual Work release.
 
 ### 0. Migrate Settings and Getting Started to the V2 application layout — COMPLETE (2026-08-27)
 
@@ -96,8 +187,8 @@ browser. The new edit drawers place the confirmation outside the form.
 ### Deferred — post-V2 business-page polish and onboarding information architecture
 
 The V2 shell migration for Getting Started and Settings is complete. The following are deliberate
-follow-ups, not acceptance defects in that migration, and must stay behind the higher-priority
-Price Book edit-drawer and authentication-expiry work.
+follow-ups, not acceptance defects in that migration, and stay behind the ordered field-pilot
+slices above.
 
 **Getting Started: server-backed setup checklist.** Replace the current passive three-card
 orientation with a truthful progress view and direct actions. Use existing server-owned onboarding
@@ -124,35 +215,6 @@ when all required setup work is complete; do not replace it with a permanent "Ge
 (Completed)" item. This is a separate navigation/authentication accessibility slice—not an
 incidental visual change—and needs an explicit product decision before implementation. The current
 V2 top navigation remains the approved interim design.
-
-### Authentication UX follow-up — redirect immediately when an open SPA session expires
-
-**Verified current policy:** Browser sessions have a **60-day absolute lifetime** and a **30-day
-inactivity window**. Every authenticated request rechecks the opaque-token hash, absolute expiry,
-inactivity, revocation, account/user integrity, and Active membership. Activity is persisted no
-more often than every five minutes, but never extends the 60-day absolute deadline. Therefore, an
-actively used session remaining signed in for more than 30 days is expected; the user should be
-challenged at the earlier of 30 days with no authenticated API activity or 60 days after sign-in.
-
-**Gap:** `AuthGuard.tsx` redirects to sign-in when its initial `GET /auth/me` receives 401, but
-ordinary API calls made later by an already-open SPA have no centralized 401 handling. The server
-correctly rejects them, but the user may see an action-level error until a refresh instead of being
-sent directly to sign-in.
-
-**Claude implementation handoff:**
-
-1. Preflight every `apiFetch` family in `web/ophalo-app/src/lib/apiClient.ts` and the app's
-   sign-in/public-base URL handling. Add one centralized, loop-safe 401 path that clears any
-   relevant client query state and navigates to `${VITE_PUBLIC_BASE_URL}/signin`.
-2. Do not redirect for 403: it is an authenticated authorization/entitlement result and must keep
-   its existing local treatment. Do not turn transport, validation, conflict, or server errors into
-   sign-in redirects.
-3. Avoid redirect loops for an auth endpoint/sign-in route and avoid performing browser navigation
-   from test or non-browser environments without a safe boundary.
-4. Add focused tests proving: the initial AuthGuard path remains correct; a later protected-call
-   401 redirects once; 403 and non-401 failures do not redirect; and the user cannot continue to
-   mutate after session expiry. Also add explicit API integration coverage for the 30-day
-   inactivity boundary and the 60-day absolute-expiry boundary if it is not already present.
 
 ### Pilot release gate — Actual Work composer real-device zoom
 
@@ -183,12 +245,14 @@ Preserve server validation/conflict behavior. Transport failures need explicit r
 captured payload. Batch gate: at most three mutation-handler families, eight production files, and
 twelve files total per batch.
 
-### Deferred — Owner/Admin Actual Work financial review UI (8B)
+### Deferred — Actual Work closeout, accounting export, and reconciliation
 
-Revalidate before implementation. Backend financial-detail and review endpoints exist and return a
-concurrency version. The UI must be Owner/Admin only; quietly hide 403/entitlement denial; load per
-submitted visit; submit the exact returned version; and refresh on `ActualWork.AlreadyReviewed` to
-show the actual reviewer/note. Keep it separate from price-blind Operator/field workflows.
+The Owner/Admin audit/approval and financial-review UI is active slice 2 above. It does **not**
+authorize office closeout, CSV export, invoice/reference capture, reconciliation, QuickBooks sync,
+invoicing, payments, tax, or an Accountant role/UI. Before a later closeout/export slice, lock
+reviewed-visit eligibility (including the hard incomplete-financial-data block), immutable CSV
+schemas, export audit/idempotency/retry behavior, correction rules, invoice/reference validation,
+and the required `Other` outcome note.
 
 ## Guardrails
 
