@@ -14,7 +14,7 @@
 
 ## Current work
 
-### PWA Mobile V2 — Slice 5c pass 1 complete; pass 2 (required) in progress (5c-2A/5c-2B complete; 5c-2C next)
+### PWA Mobile V2 — Slice 5c pass 1 and pass 2 (5c-2A/5c-2B/5c-2C) complete; real-device zoom check on Actual Work composer outstanding
 
 **Go-live target:** Mobile V2 work applies only to the responsive authenticated PWA
 (`web/ophalo-app`). The separate Expo/native client (`mobile/ophalo-mobile`) is not a launch
