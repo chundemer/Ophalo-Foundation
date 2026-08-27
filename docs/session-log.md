@@ -209,9 +209,9 @@ release-gate audit, not a promise that every slice needs code changes):
   Action connection recovery, action-rail visibility): complete, see below.
 - **5c-2B — Mobile state rendering:** loading, empty, permission-denied, and stale-data behavior.
   Request canvas and Queue/search (5c-2B2): both complete, see below.
-- **5c-2C — Keyboard, zoom, and interrupted-navigation verification:** primarily real-browser/
-  local-phone verification; remains a release requirement even if no code changes result. Not
-  started.
+- **5c-2C — Keyboard, zoom, and interrupted-navigation verification:** Chrome-automation pass
+  complete (2026-08-26), no code changes required; real-device pinch-zoom on the fixed-position
+  Actual Work composer remains outstanding — see below.
 
 **Slice 5c-2A (screen-reader and live-state audit): complete (2026-08-26).** Targeted audit (not a
 broad file read) of `ConnectionFailureBanner`, the Actual Work/Primary Action connection-recovery
@@ -288,8 +288,33 @@ initial load, suppressed on error, absent when idle). Verified: focused `Request
 `components/requests` suite 47/47 passing, `tsc --noEmit` clean, `git diff --check` clean.
 Committed.
 
-**Next: Slice 5c-2C — keyboard, zoom, and interrupted-navigation verification** (primarily
-real-browser/local-phone verification; a release requirement even if no code changes result).
+**Slice 5c-2C (keyboard, zoom, and interrupted-navigation verification): complete (2026-08-26), no
+code changes.** Chrome-automation pass against the mobile canvas (`web/ophalo-app` at the
+sub-1001px breakpoint, real DOM reflow forced via a scoped `#root` width override, not screenshot
+scaling) on a live request (`Post Restart Verify`):
+
+- **Keyboard tab order:** walked the full canvas (Anchor → attention banner → Call/Text/Maps →
+  Service Location Edit → Log external contact → Actual Work → Communication composer tabs),
+  matching the locked mobile order exactly. `tel:`/`sms:`/Maps anchors are reachable and correctly
+  typed (`A[href]`, not button-wrapped divs).
+- **Focus trap and return:** both sheets exercised (`Contact customer`, `Clear attention`) trap Tab
+  correctly (cycles within the sheet, no leak to background) and `Escape` closes and returns focus
+  to the exact trigger button in both cases — no regression from 5c-2A's live-region work.
+- **Interrupted navigation:** opening a sheet then routing away (`#/requests`) unmounts it cleanly
+  with no leftover `aria-hidden`/`inert`/body-lock state. Browser back from the full-bleed Actual
+  Work composer exits to the prior route (composer close is an explicit control, not
+  history-integrated — by design per Slice 4) with no crash; the draft's auto-saved state
+  (4 items, "Draft — not submitted") survived the interruption intact.
+- **Zoom:** `index.html`'s viewport meta has no `maximum-scale`/`user-scalable=no` (pinch-zoom
+  unblocked). A reflow-based 200% zoom proxy on the standard (non-fixed) canvas sections showed
+  correct wrapping/truncation with no overlap or clipping.
+- **Known verification gap:** the CSS-zoom proxy does not reliably exercise the Actual Work
+  composer's `fixed inset-0` full-bleed layout (fixed-position elements didn't scale with the
+  proxy, unlike real browser/pinch zoom) — this one surface still needs a real-device or real
+  browser-zoom pass before release sign-off; no code change is implicated by anything found so far.
+
+No files changed. This closes Slice 5c pass 2's three required audit slices (5c-2A/2B/2C); the
+one outstanding item is the real-device zoom check on the full-bleed composer noted above.
 
 The 2026-08-24/25 resolved defects and attention-presentation decisions are recorded in the
 [pilot-readiness bug tracker](pilot-readiness-bug-tracker.md#p0p1-pilot-flow-bugs).
