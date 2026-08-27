@@ -58,6 +58,7 @@ const baseMe: MeResponse = {
   isVerified: true,
   accountRole: "owner",
   businessName: "Apex Home Services",
+  userName: "Riley Owner",
 };
 
 function renderSettings() {

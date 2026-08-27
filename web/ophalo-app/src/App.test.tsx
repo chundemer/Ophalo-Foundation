@@ -118,6 +118,48 @@ describe("App — desktop New Request CTA on Price Book routes", () => {
   });
 });
 
+describe("App — signed-in user name beside role", () => {
+  beforeEach(() => {
+    window.location.hash = "";
+    mockGetCapabilityPackages.mockReset().mockResolvedValue([]);
+    mockGetCatalogItems.mockReset().mockResolvedValue({ items: [], limit: 50, hasMore: false, nextCursor: null });
+    mockGetCatalogCategories.mockReset().mockResolvedValue({ categories: [] });
+  });
+
+  it("renders `name · role` in the desktop workbench header when a name exists", async () => {
+    mockGetMe.mockReset().mockResolvedValue({
+      accountUserId: "u1",
+      accountId: "a1",
+      isAuthenticated: true,
+      isVerified: true,
+      accountRole: "owner",
+      businessName: "Acme HVAC",
+      userName: "Christian",
+    });
+    const { container } = renderApp();
+    await waitFor(() =>
+      expect(within(getDesktopHeader(container)).getByText("Christian · Owner")).toBeInTheDocument(),
+    );
+  });
+
+  it("falls back to role only when no name exists", async () => {
+    mockGetMe.mockReset().mockResolvedValue({
+      accountUserId: "u1",
+      accountId: "a1",
+      isAuthenticated: true,
+      isVerified: true,
+      accountRole: "owner",
+      businessName: "Acme HVAC",
+      userName: null,
+    });
+    const { container } = renderApp();
+    await waitFor(() =>
+      expect(within(getDesktopHeader(container)).getByText("Owner")).toBeInTheDocument(),
+    );
+    expect(within(getDesktopHeader(container)).queryByText(/·/)).not.toBeInTheDocument();
+  });
+});
+
 describe("App — brand navigation", () => {
   beforeEach(() => {
     window.location.hash = "";

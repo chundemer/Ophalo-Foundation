@@ -31,6 +31,7 @@ export const mockMeByRole: Record<AccountRole, MeResponse> = {
     isVerified: true,
     accountRole: "owner",
     businessName: "Apex Home Services",
+    userName: "Riley Owner",
   },
   admin: {
     accountUserId: MOCK_USER_ID,
@@ -39,6 +40,7 @@ export const mockMeByRole: Record<AccountRole, MeResponse> = {
     isVerified: true,
     accountRole: "admin",
     businessName: "Apex Home Services",
+    userName: "Avery Admin",
   },
   operator: {
     accountUserId: MOCK_USER_ID,
@@ -47,6 +49,7 @@ export const mockMeByRole: Record<AccountRole, MeResponse> = {
     isVerified: true,
     accountRole: "operator",
     businessName: "Apex Home Services",
+    userName: "Quinn Operator",
   },
   viewer: {
     accountUserId: MOCK_USER_ID,
@@ -55,6 +58,7 @@ export const mockMeByRole: Record<AccountRole, MeResponse> = {
     isVerified: true,
     accountRole: "viewer",
     businessName: "Apex Home Services",
+    userName: "Sam Viewer",
   },
   unknown: {
     accountUserId: MOCK_USER_ID,
@@ -63,6 +67,7 @@ export const mockMeByRole: Record<AccountRole, MeResponse> = {
     isVerified: false,
     accountRole: "unknown",
     businessName: null,
+    userName: null,
   },
 };
 

@@ -155,9 +155,14 @@ public sealed class EfMemberManagementPersistence(OpHaloDbContext db) : IMemberM
         var row = await db.AccountUsers
             .AsNoTracking()
             .Where(au => au.Id == accountUserId && au.AccountId == accountId)
-            .Select(au => new { au.Role, au.Account.BusinessName })
+            .Select(au => new
+            {
+                au.Role,
+                au.Account.BusinessName,
+                UserName = au.User != null ? au.User.Name : null,
+            })
             .FirstOrDefaultAsync(ct);
 
-        return row is null ? null : new AuthenticatedWorkspaceIdentity(row.Role, row.BusinessName);
+        return row is null ? null : new AuthenticatedWorkspaceIdentity(row.Role, row.BusinessName, row.UserName);
     }
 }

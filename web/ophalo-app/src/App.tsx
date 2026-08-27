@@ -463,7 +463,9 @@ function AppShell() {
 
           <div className="ml-auto flex items-center gap-3">
             {role !== "unknown" && (
-              <span className="text-xs text-[var(--ophalo-muted)] font-medium">{roleLabel(role)}</span>
+              <span className="text-xs text-[var(--ophalo-muted)] font-medium">
+                {me?.userName ? `${me.userName} · ${roleLabel(role)}` : roleLabel(role)}
+              </span>
             )}
             {/* PWA UI-quality correction (2026-08-12): Price Book, Catalog Item Detail, and
                 Offering/Assembly Detail each carry their own dominant contextual CTA — a second

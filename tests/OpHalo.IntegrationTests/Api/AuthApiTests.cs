@@ -125,6 +125,24 @@ public sealed class AuthApiTests : IClassFixture<KeepApiWebFactory>, IAsyncLifet
         Assert.True(body.IsVerified);
         Assert.Equal("owner", body.AccountRole);
         Assert.Equal("Auth Test Co", body.BusinessName);
+        Assert.Equal("Auth Test Owner", body.UserName);
+    }
+
+    [Fact]
+    public async Task Me_UserWithNoName_ReturnsNullUserName()
+    {
+        var (accountUserId, accountId) = await SeedMinimalAccountAsync(
+            "nameless@auth-api-tests.com", name: null);
+        var rawToken = await _factory.SeedSessionAsync(accountUserId, accountId);
+
+        using var request = WithCookie(HttpMethod.Get, "/auth/me", rawToken);
+        var response = await _client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<MeBody>(
+            new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+        Assert.NotNull(body);
+        Assert.Null(body.UserName);
     }
 
     [Fact]
@@ -380,12 +398,13 @@ public sealed class AuthApiTests : IClassFixture<KeepApiWebFactory>, IAsyncLifet
     /// Use for tests that only need a valid authenticated session — auth checks do not
     /// require entitlements; the session handler only checks MembershipStatus.
     /// </summary>
-    private async Task<(Guid AccountUserId, Guid AccountId)> SeedMinimalAccountAsync(string email)
+    private async Task<(Guid AccountUserId, Guid AccountId)> SeedMinimalAccountAsync(
+        string email, string? name = "Minimal User")
     {
         var now = DateTime.UtcNow;
         var provisionResult = new AccountProvisioningService().CreateVerified(
             email: email,
-            name: "Minimal User",
+            name: name,
             businessName: "Minimal Co",
             purpose: AccountPurpose.Business,
             timeZone: "Australia/Sydney",
@@ -425,5 +444,6 @@ public sealed class AuthApiTests : IClassFixture<KeepApiWebFactory>, IAsyncLifet
         bool IsAuthenticated,
         bool IsVerified,
         string AccountRole,
-        string? BusinessName);
+        string? BusinessName,
+        string? UserName);
 }

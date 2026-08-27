@@ -7,6 +7,7 @@ export interface MeResponse {
   isVerified: boolean;
   accountRole: AccountRole;
   businessName: string | null;
+  userName: string | null;
 }
 
 export interface OnboardingChecklist {

@@ -148,7 +148,8 @@ public static class AuthEndpoints
             isAuthenticated = currentUser.IsAuthenticated,
             isVerified = currentUser.IsVerified,
             accountRole,
-            businessName = identity?.BusinessName
+            businessName = identity?.BusinessName,
+            userName = string.IsNullOrWhiteSpace(identity?.UserName) ? null : identity!.UserName
         });
     }
 
