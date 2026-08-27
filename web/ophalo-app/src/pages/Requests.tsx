@@ -589,7 +589,7 @@ export function Requests({
           isLoading={reviewQueueQuery.isLoading}
           isError={reviewQueueQuery.isError}
           onRetry={() => void reviewQueueQuery.refetch()}
-          onSelectRequest={(requestId) => onSelectRequest(requestId)}
+          onSelectRequest={(requestId, focus) => onSelectRequest(requestId, undefined, focus)}
         />
       ) : (
         <RequestListContent

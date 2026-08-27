@@ -6,7 +6,7 @@ interface ActualWorkReviewQueueListProps {
   isLoading: boolean;
   isError: boolean;
   onRetry: () => void;
-  onSelectRequest: (requestId: string) => void;
+  onSelectRequest: (requestId: string, focus?: string) => void;
 }
 
 function formatCurrency(value: number | null): string {
@@ -64,7 +64,7 @@ export function ActualWorkReviewQueueList({
           <button
             key={entry.actualWorkId}
             type="button"
-            onClick={() => onSelectRequest(entry.requestId)}
+            onClick={() => onSelectRequest(entry.requestId, "actual-work-review")}
             className="w-full flex items-center justify-between gap-4 px-4 sm:px-6 py-4 text-left hover:bg-[var(--ophalo-canvas)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-inset"
           >
             <div className="min-w-0">

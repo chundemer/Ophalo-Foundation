@@ -687,6 +687,11 @@ export function RequestDetail({ requestId, focusPanel, onBack, prevId, nextId, o
     void queryClient.invalidateQueries({ queryKey: ["requests"] });
   }
 
+  function handleActualWorkReviewSuccess() {
+    void queryClient.invalidateQueries({ queryKey: ["actual-work-review-queue"] });
+    void queryClient.invalidateQueries({ queryKey: ["actual-work-review-queue-count"] });
+  }
+
   function handleShareCleared() {
     setShareCleared(true);
     setShareModalOpen(false);
@@ -818,6 +823,9 @@ export function RequestDetail({ requestId, focusPanel, onBack, prevId, nextId, o
         onTimelineFilterChange={setTimelineFilter}
         displayedEvents={displayedEvents}
         onNavigate={onNavigate}
+        canReviewActualWork={meQuery.data?.accountRole === "owner" || meQuery.data?.accountRole === "admin"}
+        focusPanel={focusPanel}
+        onActualWorkReviewSuccess={handleActualWorkReviewSuccess}
       />}
     </div>
   );

@@ -122,6 +122,14 @@ hide 403/entitlement-denied surfaces; do not add a new top-level navigation item
 must cover submitted, reviewed, stale-version, already-reviewed, incomplete-financial-data,
 zero-line diagnostic, and role/entitlement-denial paths.
 
+Slice 2 implemented (2026-08-27): the request-detail canvas now adds an Owner/Admin-only Actual
+Work financial review module immediately below Work execution. It reads every submitted visit's
+financial detail, presents immutable totals and line breakdowns, marks missing cost data explicitly,
+and reviews with the returned concurrency version. A 403 returns no financial UI; a 409 refreshes
+the authoritative record to reconcile stale/already-reviewed states. Successful review refreshes
+visit history and invalidates both the review queue and authoritative queue-count. Queue rows now
+navigate with `focus=actual-work-review` and smoothly scroll to the module after it loads.
+
 #### 3. P1 — Actual Work field-assist nudge UI
 
 The price-blind Actual Work nudge backend is complete. After slice 1 establishes safe ownership

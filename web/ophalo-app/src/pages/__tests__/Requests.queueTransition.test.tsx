@@ -287,7 +287,7 @@ describe("Requests — Slice 8A / UI-004 amendment Actual Work Review (Office Re
 
     const row = await screen.findByText("Marcus Reyes");
     fireEvent.click(row);
-    expect(onSelectRequest).toHaveBeenCalledWith("req-1");
+    expect(onSelectRequest).toHaveBeenCalledWith("req-1", undefined, "actual-work-review");
   });
 
   it("Office Review shows a Retry affordance (not a perpetual loading placeholder) when the count query fails", async () => {

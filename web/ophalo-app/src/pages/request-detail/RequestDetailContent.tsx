@@ -27,6 +27,8 @@ import { ActualWorkComposer } from "./ActualWorkComposer";
 import { ActualWorkRecoveryDrawer } from "./ActualWorkRecoveryDrawer";
 import { TeamSection } from "./TeamSection";
 import { FOCUS_RING } from "./helpers";
+import { useActualWorkFinancialReview } from "./useActualWorkFinancialReview";
+import { ActualWorkReviewCard } from "./ActualWorkReviewCard";
 
 interface RequestDetailContentProps extends RequestDetailLayoutProps {
   detail: KeepRequestDetailResult;
@@ -43,6 +45,9 @@ interface RequestDetailContentProps extends RequestDetailLayoutProps {
   displayedEvents: KeepRequestDetailResult["events"];
   onNavigate?: (id: string) => void;
   onOpenClearAttention: () => void;
+  canReviewActualWork?: boolean;
+  focusPanel?: string;
+  onActualWorkReviewSuccess?: () => void;
 }
 
 // Work Canvas — the Workbench's sole vertical scroll surface (locked spec §1.2, §1.5, §5, §7.1).
@@ -58,6 +63,9 @@ export function RequestDetailContent(props: RequestDetailContentProps) {
   const composerRef = useRef<UnifiedComposerHandle>(null);
   const actualWorkCapture = useActualWorkCapture(requestId);
   const actualWorkHistory = useActualWorkHistory(requestId);
+  const actualWorkFinancialReview = useActualWorkFinancialReview(
+    props.canReviewActualWork && actualWorkHistory.state.status === "loaded" ? actualWorkHistory.state.submittedVisits : [],
+  );
   const [recorderDrawerOpen, setRecorderDrawerOpen] = useState(false);
   // Editable capture states — the recorder's own resume/start affordance.
   const actualWorkCaptureEditable = actualWorkCapture.state.status === "no-draft" || actualWorkCapture.state.status === "draft";
@@ -194,6 +202,19 @@ export function RequestDetailContent(props: RequestDetailContentProps) {
             />
             {!actualWorkCaptureEditable && <ActualWorkHistoryCard state={actualWorkHistory.state} onRetry={() => void actualWorkHistory.retry()} bare />}
           </div>
+        )}
+
+        {props.canReviewActualWork && (
+          <ActualWorkReviewCard
+            state={actualWorkFinancialReview.state}
+            onRetry={() => void actualWorkFinancialReview.retry()}
+            onReview={actualWorkFinancialReview.review}
+            focusOnMount={props.focusPanel === "actual-work-review"}
+            onReviewSuccess={() => {
+              void actualWorkHistory.retry();
+              void props.onActualWorkReviewSuccess?.();
+            }}
+          />
         )}
 
         {/* 5. Communication — composer only; Follow-Up/Planned-For and priority moved to the
