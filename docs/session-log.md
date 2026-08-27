@@ -63,7 +63,7 @@ unit 55/55, architecture 14/14, `git diff --check` clean.
 **1a-ii — recovery UI. Split approved 2026-08-27 into two commits (over the 8-production-file
 gate; backend reads land and test independently of the UI that consumes them).**
 
-**1a-ii-a — backend reads / types / tests — COMPLETE (2026-08-27, uncommitted).**
+**1a-ii-a — backend reads / types / tests — COMPLETE (2026-08-27, `7bdd857`).**
 `ActualWorkOpenDraftEntry` gains `RecorderAccountUserId` + `RecorderDisplayName`, populated only
 for the Owner/Admin non-recorder view (resolved via `IKeepRequestOperatePersistence.
 GetActorDisplayNameAsync`, now injected into the history read); null for the recorder's own view;
