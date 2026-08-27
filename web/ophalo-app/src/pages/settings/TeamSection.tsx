@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api, type AccountRole, type MemberItem, ApiError } from "../../lib/apiClient";
+import { KeepButton } from "../../components/keep/KeepButton";
 
 // ─── Shared helpers ───────────────────────────────────────────────────────────
 
@@ -175,15 +176,15 @@ function MemberRow({ member, callerRole, onRefresh }: MemberRowProps) {
   const canRemoveActive = member.status === "active" && canManageTarget;
 
   return (
-    <div className="py-3 border-b border-slate-100 last:border-b-0">
+    <div className="py-3.5 border-b border-[var(--ophalo-border)] last:border-b-0">
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
-          <p className="text-sm font-medium text-slate-900 truncate">
+          <p className="text-sm font-medium text-[var(--ophalo-ink)] truncate">
             {member.email}
-            {member.isCurrentUser && <span className="ml-1.5 text-xs font-normal text-slate-400">(you)</span>}
-            {member.isPrimaryOwner && <span className="ml-1.5 text-xs font-normal text-slate-400">(primary owner)</span>}
+            {member.isCurrentUser && <span className="ml-1.5 text-xs font-normal text-[var(--ophalo-muted)]">(you)</span>}
+            {member.isPrimaryOwner && <span className="ml-1.5 text-xs font-normal text-[var(--ophalo-muted)]">(primary owner)</span>}
           </p>
-          <p className="text-xs text-slate-500">{roleLabel(member.role)} · {statusLabel(member.status)}</p>
+          <p className="text-xs text-[var(--ophalo-muted)]">{roleLabel(member.role)} · {statusLabel(member.status)}</p>
         </div>
 
         <div className="flex flex-col items-end gap-1 shrink-0">
@@ -196,7 +197,7 @@ function MemberRow({ member, callerRole, onRefresh }: MemberRowProps) {
                     value={selectedRole}
                     onChange={(e) => setSelectedRole(e.target.value)}
                     disabled={busy}
-                    className="rounded border border-slate-300 px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-slate-400"
+                    className="rounded-md border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-2 py-1 text-xs text-[var(--ophalo-ink)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)]"
                   >
                     {callerRole === "owner" && <option value="owner">Owner</option>}
                     <option value="admin">Admin</option>
@@ -206,13 +207,13 @@ function MemberRow({ member, callerRole, onRefresh }: MemberRowProps) {
                   <button
                     onClick={handleChangeRole}
                     disabled={busy || selectedRole === member.role}
-                    className="text-xs font-medium text-slate-900 disabled:opacity-40 hover:underline"
+                    className="text-xs font-medium text-[var(--ophalo-navy)] disabled:opacity-40 hover:underline"
                   >
                     Save
                   </button>
                   <button
                     onClick={() => { setChangingRole(false); setSelectedRole(member.role); }}
-                    className="text-xs text-slate-500 hover:underline"
+                    className="text-xs text-[var(--ophalo-muted)] hover:underline"
                   >
                     Cancel
                   </button>
@@ -220,7 +221,7 @@ function MemberRow({ member, callerRole, onRefresh }: MemberRowProps) {
               ) : canChangeRole ? (
                 <button
                   onClick={() => { clearState(); setChangingRole(true); }}
-                  className="text-xs text-slate-600 hover:underline"
+                  className="text-xs text-[var(--ophalo-muted)] hover:text-[var(--ophalo-ink)] hover:underline"
                 >
                   Change role
                 </button>
@@ -233,18 +234,18 @@ function MemberRow({ member, callerRole, onRefresh }: MemberRowProps) {
                       <button
                         onClick={handleSuspend}
                         disabled={busy}
-                        className="text-xs font-medium text-red-700 hover:underline disabled:opacity-40"
+                        className="text-xs font-medium text-[var(--ophalo-danger)] hover:underline disabled:opacity-40"
                       >
                         Confirm suspend
                       </button>
-                      <button onClick={() => setConfirmSuspend(false)} className="text-xs text-slate-500 hover:underline">
+                      <button onClick={() => setConfirmSuspend(false)} className="text-xs text-[var(--ophalo-muted)] hover:underline">
                         Cancel
                       </button>
                     </div>
                   ) : (
                     <button
                       onClick={() => { clearState(); setConfirmSuspend(true); }}
-                      className="text-xs text-slate-600 hover:underline"
+                      className="text-xs text-[var(--ophalo-muted)] hover:text-[var(--ophalo-ink)] hover:underline"
                     >
                       Suspend
                     </button>
@@ -259,18 +260,18 @@ function MemberRow({ member, callerRole, onRefresh }: MemberRowProps) {
                       <button
                         onClick={handleRemove}
                         disabled={busy}
-                        className="text-xs font-medium text-red-700 hover:underline disabled:opacity-40"
+                        className="text-xs font-medium text-[var(--ophalo-danger)] hover:underline disabled:opacity-40"
                       >
                         Confirm remove
                       </button>
-                      <button onClick={() => setConfirmRemove(false)} className="text-xs text-slate-500 hover:underline">
+                      <button onClick={() => setConfirmRemove(false)} className="text-xs text-[var(--ophalo-muted)] hover:underline">
                         Cancel
                       </button>
                     </div>
                   ) : (
                     <button
                       onClick={() => { clearState(); setConfirmRemove(true); }}
-                      className="text-xs text-slate-600 hover:underline"
+                      className="text-xs text-[var(--ophalo-muted)] hover:text-[var(--ophalo-ink)] hover:underline"
                     >
                       Remove
                     </button>
@@ -283,18 +284,18 @@ function MemberRow({ member, callerRole, onRefresh }: MemberRowProps) {
           {/* Invited row actions */}
           {member.status === "invited" && (
             <>
-              {resentEmail && <span className="text-xs text-green-700">Invite resent.</span>}
+              {resentEmail && <span className="text-xs text-[var(--ophalo-success)]">Invite resent.</span>}
               <button
                 onClick={handleResendEmail}
                 disabled={busy}
-                className="text-xs text-slate-600 hover:underline disabled:opacity-40"
+                className="text-xs text-[var(--ophalo-muted)] hover:text-[var(--ophalo-ink)] hover:underline disabled:opacity-40"
               >
                 Resend invite
               </button>
               <button
                 onClick={handleManualShare}
                 disabled={busy}
-                className="text-xs text-slate-500 hover:underline disabled:opacity-40"
+                className="text-xs text-[var(--ophalo-muted)] hover:underline disabled:opacity-40"
               >
                 Manual share
               </button>
@@ -307,7 +308,7 @@ function MemberRow({ member, callerRole, onRefresh }: MemberRowProps) {
               <button
                 onClick={handleReactivate}
                 disabled={busy}
-                className="text-xs text-slate-600 hover:underline disabled:opacity-40"
+                className="text-xs text-[var(--ophalo-muted)] hover:text-[var(--ophalo-ink)] hover:underline disabled:opacity-40"
               >
                 Reactivate
               </button>
@@ -316,18 +317,18 @@ function MemberRow({ member, callerRole, onRefresh }: MemberRowProps) {
                   <button
                     onClick={handleRemove}
                     disabled={busy}
-                    className="text-xs font-medium text-red-700 hover:underline disabled:opacity-40"
+                    className="text-xs font-medium text-[var(--ophalo-danger)] hover:underline disabled:opacity-40"
                   >
                     Confirm remove
                   </button>
-                  <button onClick={() => setConfirmRemove(false)} className="text-xs text-slate-500 hover:underline">
+                  <button onClick={() => setConfirmRemove(false)} className="text-xs text-[var(--ophalo-muted)] hover:underline">
                     Cancel
                   </button>
                 </div>
               ) : (
                 <button
                   onClick={() => { clearState(); setConfirmRemove(true); }}
-                  className="text-xs text-slate-600 hover:underline"
+                  className="text-xs text-[var(--ophalo-muted)] hover:text-[var(--ophalo-ink)] hover:underline"
                 >
                   Remove
                 </button>
@@ -338,18 +339,18 @@ function MemberRow({ member, callerRole, onRefresh }: MemberRowProps) {
           {/* Removed invite row actions */}
           {isRemovedInvite && (
             <>
-              {resentEmail && <span className="text-xs text-green-700">Invite resent.</span>}
+              {resentEmail && <span className="text-xs text-[var(--ophalo-success)]">Invite resent.</span>}
               <button
                 onClick={handleResendEmail}
                 disabled={busy}
-                className="text-xs text-slate-600 hover:underline disabled:opacity-40"
+                className="text-xs text-[var(--ophalo-muted)] hover:text-[var(--ophalo-ink)] hover:underline disabled:opacity-40"
               >
                 Resend invite
               </button>
               <button
                 onClick={handleManualShare}
                 disabled={busy}
-                className="text-xs text-slate-500 hover:underline disabled:opacity-40"
+                className="text-xs text-[var(--ophalo-muted)] hover:underline disabled:opacity-40"
               >
                 Manual share
               </button>
@@ -358,18 +359,18 @@ function MemberRow({ member, callerRole, onRefresh }: MemberRowProps) {
                   <button
                     onClick={handleRemove}
                     disabled={busy}
-                    className="text-xs font-medium text-red-700 hover:underline disabled:opacity-40"
+                    className="text-xs font-medium text-[var(--ophalo-danger)] hover:underline disabled:opacity-40"
                   >
                     Confirm remove
                   </button>
-                  <button onClick={() => setConfirmRemove(false)} className="text-xs text-slate-500 hover:underline">
+                  <button onClick={() => setConfirmRemove(false)} className="text-xs text-[var(--ophalo-muted)] hover:underline">
                     Cancel
                   </button>
                 </div>
               ) : (
                 <button
                   onClick={() => { clearState(); setConfirmRemove(true); }}
-                  className="text-xs text-slate-600 hover:underline"
+                  className="text-xs text-[var(--ophalo-muted)] hover:text-[var(--ophalo-ink)] hover:underline"
                 >
                   Remove
                 </button>
@@ -383,7 +384,7 @@ function MemberRow({ member, callerRole, onRefresh }: MemberRowProps) {
               <button
                 onClick={handleReactivate}
                 disabled={busy}
-                className="text-xs text-slate-600 hover:underline disabled:opacity-40"
+                className="text-xs text-[var(--ophalo-muted)] hover:text-[var(--ophalo-ink)] hover:underline disabled:opacity-40"
               >
                 Reactivate
               </button>
@@ -392,18 +393,18 @@ function MemberRow({ member, callerRole, onRefresh }: MemberRowProps) {
                   <button
                     onClick={handleRemove}
                     disabled={busy}
-                    className="text-xs font-medium text-red-700 hover:underline disabled:opacity-40"
+                    className="text-xs font-medium text-[var(--ophalo-danger)] hover:underline disabled:opacity-40"
                   >
                     Confirm remove
                   </button>
-                  <button onClick={() => setConfirmRemove(false)} className="text-xs text-slate-500 hover:underline">
+                  <button onClick={() => setConfirmRemove(false)} className="text-xs text-[var(--ophalo-muted)] hover:underline">
                     Cancel
                   </button>
                 </div>
               ) : (
                 <button
                   onClick={() => { clearState(); setConfirmRemove(true); }}
-                  className="text-xs text-slate-600 hover:underline"
+                  className="text-xs text-[var(--ophalo-muted)] hover:text-[var(--ophalo-ink)] hover:underline"
                 >
                   Remove
                 </button>
@@ -413,23 +414,23 @@ function MemberRow({ member, callerRole, onRefresh }: MemberRowProps) {
         </div>
       </div>
 
-      {rowError && <p className="mt-1.5 text-xs text-red-600">{rowError}</p>}
+      {rowError && <p className="mt-1.5 text-xs text-[var(--ophalo-danger)]">{rowError}</p>}
       {manualShareUrl && (
-        <div className="mt-2 rounded-md bg-amber-50 border border-amber-200 p-2">
+        <div className="mt-2 rounded-lg bg-[var(--ophalo-attention-bg)] border border-[var(--ophalo-attention)]/25 p-2">
           <div className="flex items-start justify-between gap-2">
-            <p className="text-xs text-amber-800 mb-1">
+            <p className="text-xs text-[var(--ophalo-attention)] mb-1">
               Use this only if the invite email was not received. Anyone with this link can accept the invite.
             </p>
             <button
               type="button"
               onClick={() => setManualShareUrl(null)}
-              className="text-amber-600 hover:text-amber-900 shrink-0"
+              className="text-[var(--ophalo-attention)] hover:text-[var(--ophalo-ink)] shrink-0"
               aria-label="Dismiss"
             >
               ×
             </button>
           </div>
-          <p className="text-xs font-mono text-amber-900 break-all">{manualShareUrl}</p>
+          <p className="text-xs font-mono text-[var(--ophalo-ink)] break-all">{manualShareUrl}</p>
         </div>
       )}
     </div>
@@ -478,32 +479,33 @@ function InviteForm({ atLimit, maxSeats, limitApplies, onSuccess }: InviteFormPr
           placeholder="Email address"
           required
           disabled={atLimit}
-          className="flex-1 rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400 disabled:opacity-50"
+          className="flex-1 rounded-lg border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-3 py-2 text-sm text-[var(--ophalo-ink)] placeholder:text-[var(--ophalo-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] disabled:opacity-50"
         />
         <select
           value={role}
           onChange={(e) => setRole(e.target.value)}
           disabled={atLimit}
-          className="rounded-md border border-slate-300 px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400 disabled:opacity-50"
+          className="rounded-lg border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-2 py-2 text-sm text-[var(--ophalo-ink)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] disabled:opacity-50"
         >
           <option value="admin">Admin</option>
           <option value="operator">Operator</option>
           <option value="viewer">Viewer</option>
         </select>
-        <button
+        <KeepButton
           type="submit"
+          variant="primary"
           disabled={submitting || atLimit}
-          className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-50 whitespace-nowrap"
+          className="whitespace-nowrap"
         >
           {atLimit ? "Team limit reached" : (submitting ? "Inviting…" : "Invite team member")}
-        </button>
+        </KeepButton>
       </div>
       {atLimit && limitApplies && (
-        <p className="text-xs text-slate-500">
+        <p className="text-xs text-[var(--ophalo-muted)]">
           Your plan includes {maxSeats} team seats. Contact support to add more.
         </p>
       )}
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {error && <p className="text-sm text-[var(--ophalo-danger)]">{error}</p>}
     </form>
   );
 }
@@ -534,14 +536,14 @@ export function TeamSection({ callerRole }: { callerRole: AccountRole }) {
   }
 
   return (
-    <section>
-      <h2 className="text-base font-semibold text-slate-900 mb-1.5">Team</h2>
-      <p className="text-sm text-slate-500 mb-4">
+    <section className="rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] p-5 shadow-sm sm:p-6">
+      <h2 className="keep-row-title mb-1.5">Team</h2>
+      <p className="text-sm text-[var(--ophalo-muted)] mb-4">
         Keep works great for solo businesses — no team required. When you're ready, invite the people who help answer customers or handle work.
       </p>
 
       {seatUsage?.limitApplies && (
-        <p className="text-sm text-slate-600 mb-4">
+        <p className="text-sm text-[var(--ophalo-ink)] mb-4">
           Team seats: {seatUsage.occupiedSeats} of {seatUsage.maxSeats} used
         </p>
       )}
@@ -554,33 +556,33 @@ export function TeamSection({ callerRole }: { callerRole: AccountRole }) {
           onSuccess={handleInviteSuccess}
         />
         {inviteSuccess && (
-          <p className="mt-2 text-sm text-green-700">
+          <p className="mt-2 text-sm text-[var(--ophalo-success)]">
             Invite sent to {inviteSuccess}. They'll receive an email link to set up their account.
           </p>
         )}
       </div>
 
-      {isLoading && <p className="text-sm text-slate-400">Loading…</p>}
-      {isError && <p className="text-sm text-slate-500">Could not load team members.</p>}
+      {isLoading && <p className="text-sm text-[var(--ophalo-muted)]">Loading…</p>}
+      {isError && <p className="text-sm text-[var(--ophalo-muted)]">Could not load team members.</p>}
 
       {!isLoading && !isError && (
         <>
-          <div className="divide-y divide-slate-100 border-t border-slate-100">
+          <div className="divide-y divide-[var(--ophalo-border)] border-t border-[var(--ophalo-border)]">
             {members.map((m: MemberItem) => (
               <MemberRow key={m.accountUserId} member={m} callerRole={callerRole} onRefresh={() => void refetch()} />
             ))}
             {members.length === 0 && (
-              <p className="py-4 text-sm text-slate-400">Just you for now — use the form above to invite someone when you're ready.</p>
+              <p className="py-4 text-sm text-[var(--ophalo-muted)]">Just you for now — use the form above to invite someone when you're ready.</p>
             )}
           </div>
 
           <div className="mt-3">
-            <label className="flex items-center gap-2 text-xs text-slate-500 cursor-pointer">
+            <label className="flex items-center gap-2 text-xs text-[var(--ophalo-muted)] cursor-pointer">
               <input
                 type="checkbox"
                 checked={includeRemoved}
                 onChange={(e) => setIncludeRemoved(e.target.checked)}
-                className="rounded border-slate-300"
+                className="rounded border-[var(--ophalo-border)]"
               />
               Show removed members
             </label>

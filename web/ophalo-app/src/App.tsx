@@ -267,20 +267,23 @@ function AppShell() {
     : route.page === "pricebook" || route.page === "pricebook-item" || route.page === "pricebook-assembly" ? "pricebook"
     : "requests";
 
-  const isWorkbench =
+  // V2 application shell: one horizontal top-nav header above the content, no desktop
+  // left sidebar. Every authenticated desktop route now uses it.
+  const usesTopNavShell =
     route.page === "requests" ||
     route.page === "detail" ||
+    route.page === "home" ||
+    route.page === "settings" ||
     route.page === "pricebook" ||
     route.page === "pricebook-item" ||
     route.page === "pricebook-assembly";
 
-  // Mobile is always column (top bar above content); desktop non-workbench switches to a row
-  // (sidebar beside content) — workbench stays column at every size (header above main).
+  // Every route is a column: mobile top bar or desktop top-nav header above the content.
   return (
     <div
       className={`flex flex-col bg-[var(--ophalo-canvas)] ${
         workbenchWideActive ? "h-dvh overflow-hidden" : "min-h-screen"
-      } ${isWorkbench ? "" : "md:flex-row"}`}
+      } ${usesTopNavShell ? "" : "md:flex-row"}`}
     >
       {/* Top bar — mobile only, all routes: logo + hamburger trigger for MobileNavMenu. */}
       {role !== "unknown" && (
@@ -310,80 +313,8 @@ function AppShell() {
         </header>
       )}
 
-      {/* Left sidebar — desktop, non-workbench routes only */}
-      {!isWorkbench && (
-        <aside className="hidden md:flex md:flex-col md:w-56 lg:w-64 md:shrink-0 bg-[var(--ophalo-card)] border-r border-[var(--ophalo-border)]">
-          <div className="px-4 py-4 border-b border-[var(--ophalo-border)]">
-            <button
-              type="button"
-              onClick={navigateToRequests}
-              aria-label="Go to requests"
-              className="block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-offset-2 rounded"
-            >
-              <img
-                src="/brand/ophalo-keep-lockup-color.svg"
-                alt="OpHalo Keep"
-                className="h-8 w-auto"
-                draggable={false}
-              />
-            </button>
-          </div>
-          <nav className="flex-1 px-3 py-4 space-y-0.5">
-            {navItems.map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() => item.id === "requests" ? navigateToRequests() : navigate({ page: item.id })}
-                className={`w-full flex items-center gap-2.5 rounded-md px-3 py-2.5 text-sm text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-offset-2 ${
-                  activeNavId === item.id
-                    ? "font-semibold bg-[var(--keep-accent-bg)] text-[var(--ophalo-navy)]"
-                    : "font-medium text-[var(--ophalo-muted)] hover:bg-[var(--ophalo-canvas)] hover:text-[var(--ophalo-ink)]"
-                }`}
-              >
-                {item.icon}
-                <span>{item.label}</span>
-                {item.id === "requests" && viewCounts != null && (() => {
-                  const total = (role === "owner" || role === "admin")
-                    ? viewCounts.default
-                    : viewCounts.assignedToMe + viewCounts.needsAttention;
-                  return total > 0 ? (
-                    <span className={`ml-auto text-xs font-semibold rounded-full px-1.5 py-0.5 ${
-                      activeNavId === "requests"
-                        ? "bg-[var(--keep-accent)] text-white"
-                        : "bg-[var(--keep-accent-bg)] text-[var(--keep-accent)]"
-                    }`}>
-                      {total}
-                    </span>
-                  ) : null;
-                })()}
-              </button>
-            ))}
-          </nav>
-          {/* D2: Price Book owns its contextual create action. Requests remains one navigation
-              click away, but a second global create button would compete with catalog/assembly
-              creation in this desktop workspace. */}
-          {activeNavId !== "pricebook" && (
-            <div className="px-3 pb-4">
-              <KeepButton
-                variant="primary"
-                onClick={openCapture}
-                className="w-full gap-2"
-              >
-                <Plus className="h-4 w-4" />
-                New Request
-              </KeepButton>
-            </div>
-          )}
-          {role !== "unknown" && (
-            <div className="px-4 py-3 border-t border-[var(--ophalo-border)]">
-              <p className="text-xs text-[var(--ophalo-muted)]">{roleLabel(role)}</p>
-            </div>
-          )}
-        </aside>
-      )}
-
-      {/* Top nav — desktop workbench (requests + detail) */}
-      {isWorkbench && (
+      {/* Top nav — every authenticated desktop route */}
+      {usesTopNavShell && (
         <header className="hidden md:flex items-center gap-3 px-4 h-14 shrink-0 bg-[var(--ophalo-card)] border-b border-[var(--ophalo-border)]">
           <button
             type="button"
@@ -431,7 +362,11 @@ function AppShell() {
                 <button
                   type="button"
                   onClick={() => navigate({ page: "home" })}
-                  className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium text-[var(--ophalo-muted)] hover:bg-[var(--ophalo-canvas)] hover:text-[var(--ophalo-ink)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-offset-2"
+                  className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-offset-2 ${
+                    activeNavId === "home"
+                      ? "bg-[var(--keep-accent-bg)] text-[var(--ophalo-navy)] font-semibold"
+                      : "text-[var(--ophalo-muted)] hover:bg-[var(--ophalo-canvas)] hover:text-[var(--ophalo-ink)]"
+                  }`}
                 >
                   Getting Started
                 </button>
@@ -452,7 +387,11 @@ function AppShell() {
                 <button
                   type="button"
                   onClick={() => navigate({ page: "settings" })}
-                  className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium text-[var(--ophalo-muted)] hover:bg-[var(--ophalo-canvas)] hover:text-[var(--ophalo-ink)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-offset-2"
+                  className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-offset-2 ${
+                    activeNavId === "settings"
+                      ? "bg-[var(--keep-accent-bg)] text-[var(--ophalo-navy)] font-semibold"
+                      : "text-[var(--ophalo-muted)] hover:bg-[var(--ophalo-canvas)] hover:text-[var(--ophalo-ink)]"
+                  }`}
                 >
                   <SettingsIcon className="h-4 w-4" />
                   Settings

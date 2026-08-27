@@ -607,6 +607,52 @@ describe("App — phone navigation omits Price Book, Settings, and Account Admin
   });
 });
 
+// Section 0 shell migration: Getting Started and Settings join Requests/Detail/Price Book in the
+// V2 top-nav application shell — one horizontal header, no desktop left <aside> sidebar.
+describe("App — V2 top-nav shell covers Getting Started and Settings", () => {
+  beforeEach(() => {
+    window.location.hash = "";
+    mockGetMe.mockReset().mockResolvedValue({
+      accountUserId: "u1",
+      accountId: "a1",
+      isAuthenticated: true,
+      isVerified: true,
+      accountRole: "owner",
+      businessName: "Acme HVAC",
+    });
+    mockGetCapabilityPackages.mockReset().mockResolvedValue([
+      { featureKey: "keep.price_book_quotes_materials", enabled: true },
+    ]);
+  });
+
+  it("keeps the desktop top-nav header (and no <aside> sidebar) after navigating to Getting Started", async () => {
+    const user = userEvent.setup();
+    const { container } = renderApp();
+
+    const header = await waitFor(() => getDesktopHeader(container));
+    await user.click(within(header).getByRole("button", { name: /Getting Started/ }));
+
+    await screen.findByRole("heading", { name: "Getting started", level: 1 });
+    expect(container.querySelector("aside")).toBeNull();
+    expect(getDesktopHeader(container)).toBe(header);
+    // Global New Request CTA stays available on this route (unlike Price Book).
+    expect(within(header).getByRole("button", { name: /New Request/ })).toBeInTheDocument();
+  });
+
+  it("keeps the desktop top-nav header (and no <aside> sidebar) after navigating to Settings", async () => {
+    const user = userEvent.setup();
+    const { container } = renderApp();
+
+    const header = await waitFor(() => getDesktopHeader(container));
+    await user.click(within(header).getByRole("button", { name: /Settings/ }));
+
+    await screen.findByRole("heading", { name: "Settings", level: 1 });
+    expect(container.querySelector("aside")).toBeNull();
+    expect(getDesktopHeader(container)).toBe(header);
+    expect(within(header).getByRole("button", { name: /New Request/ })).toBeInTheDocument();
+  });
+});
+
 describe("App — root-mounted live announcer (Slice 5c-2A)", () => {
   beforeEach(() => {
     window.location.hash = "";

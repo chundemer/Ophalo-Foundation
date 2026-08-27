@@ -13,35 +13,27 @@
 
 ## Active handoff — Price Book visual polish
 
-### 0. Migrate Settings and Getting Started to the V2 application layout
+### 0. Migrate Settings and Getting Started to the V2 application layout — COMPLETE (2026-08-27)
 
-**Verified:** Both routes remain on the legacy standalone layout rather than the current V2
-application-shell visual language. `web/ophalo-app/src/pages/Settings.tsx` uses the old narrow,
-centered form canvas and legacy `slate-*` tab/control styling; its child sections
-(`CompanySection.tsx`, `PolicySection.tsx`, `PublicLinkSection.tsx`, and `TeamSection.tsx`) retain
-the same legacy controls. `web/ophalo-app/src/pages/Home.tsx` (Getting Started) likewise uses the
-older serif heading, narrow centered column, and legacy white/slate cards.
+**Shell migration.** `App.tsx` `isWorkbench` → `usesTopNavShell`, now covering `home` and
+`settings` as well as requests/detail/pricebook. Getting Started and Settings render in the V2
+top-nav application shell — one horizontal header, no desktop left `<aside>` (the sidebar block was
+dead once every authenticated route used the header, and was removed). Header "Getting Started" and
+"Settings" buttons gained the active-nav styling the other items already had. Mobile is unchanged:
+`md:hidden` top bar + `MobileNavMenu`, with Price Book and Settings still omitted from the phone
+overflow (`PHONE_OMITTED_NAV_IDS`). Global "New Request" CTA shows on Getting Started and Settings,
+still suppressed on Price Book routes.
 
-**Decision:** Bring Settings and Getting Started into the V2 desktop/tablet shell so they match
-Requests and Price Book: shared canvas/card/border/text tokens, V2 page heading and spacing, and
-consistent buttons, tabs, form controls, loading/empty/error states. Preserve every current
-workflow, route, role gate, API contract, and desktop/tablet navigation behavior. The current
-phone-administration posture remains unchanged: Settings is not exposed in the phone overflow, and
-this work does not authorize exposing it there.
+**Inner-page migration.** `Settings.tsx` and `Home.tsx` (Owner + Operator) use `max-w-[1440px]`
+page rhythm, `keep-page-title`/`keep-page-subtitle` headings, token tab bar, and `--ophalo-*` /
+`--keep-*` primitives. All four settings sections are card surfaces with tokenized form controls,
+`KeepButton` submit/invite actions, and token loading/error/saved states; Settings keeps a readable
+`max-w-2xl` inner form column, Getting Started a `max-w-xl` column. Replace-link confirmation, Team
+role/status actions, public-link preview mock (incl. `object-contain`), routes, role gates, and
+`scrollToSection` unchanged — token/component migration only.
 
-**Claude implementation handoff:**
-
-1. Mechanically compare the V2 visual primitives in the current app shell, Requests/workbench, and
-   Price Book with `Settings.tsx` and `Home.tsx`; reuse existing tokens/components such as
-   `KeepButton`, `KeepBadge`, and the established `--ophalo-*` / `--keep-*` variables instead of
-   adding another styling system.
-2. Migrate the Settings page and all four settings sections as one visual pass. Preserve public
-   link preview behavior, tabs, team-management permissions, validation, dialogs, and all mutation
-   semantics. Do not merely restyle the outer page while leaving old controls inside it.
-3. Migrate both Owner and Operator Getting Started states. Keep their current role-specific content
-   and destinations, including the Quick Capture and Settings actions.
-4. Test desktop/tablet responsiveness, keyboard focus, tabs, forms, dialogs, loading/error states,
-   and existing role gates. Run focused tests, `pnpm exec tsc --noEmit`, and `git diff --check`.
+Verified: full `web/ophalo-app` suite 708/708 (new `Settings.v2Shell.test.tsx` +2 App shell tests),
+`tsc --noEmit` clean, `git diff --check` clean. See Git history for the change set.
 
 ### 1. Signed-in user name beside role — COMPLETE (2026-08-27)
 
@@ -95,6 +87,38 @@ Book. Catalog/assembly creation and Nudge editing already use the focused drawer
    Run focused tests, `pnpm exec tsc --noEmit`, and `git diff --check`.
 
 ## Deferred / still required
+
+### Deferred — post-V2 business-page polish and onboarding information architecture
+
+The V2 shell migration for Getting Started and Settings is complete. The following are deliberate
+follow-ups, not acceptance defects in that migration, and must stay behind the higher-priority
+Price Book edit-drawer and authentication-expiry work.
+
+**Getting Started: server-backed setup checklist.** Replace the current passive three-card
+orientation with a truthful progress view and direct actions. Use existing server-owned onboarding
+facts; never add client-only/manual completion checkboxes. Required steps must be distinct from
+optional team invitation so a solo business can complete setup. Completed steps remain reviewable
+but visually quiet; the next incomplete step is prominent. Candidate actions: copy/open public
+link, create a request, and jump to Team. Preflight the current onboarding response before deciding
+the exact step-to-data mapping and completion wording.
+
+**Settings: Team management polish.** Retain readable `max-w-2xl` form tabs, but allow the Team
+tab its own wider desktop content region when members justify it. Replace parenthetical identity
+text such as `(you) (primary owner)` with structured identity/role/status badges. Verify the
+authorized action matrix for active, invited, suspended, and removed members before adding or
+repositioning controls; the primary owner must never receive unsafe self-management actions. Add a
+clear empty state for "Show removed members" when there are none. A desktop table is appropriate
+only if the actual member count/columns make it more readable than the responsive list.
+
+Do not add a seat-purchase/billing link unless a real, authorized billing destination exists.
+
+**Future header architecture decision.** Consider reducing permanent primary navigation to
+Requests and Price Book, with a temporary `Setup n/m` pill while setup is incomplete and an
+accessible user menu containing Settings, Team, and Log out. The Setup control should disappear
+when all required setup work is complete; do not replace it with a permanent "Getting Started
+(Completed)" item. This is a separate navigation/authentication accessibility slice—not an
+incidental visual change—and needs an explicit product decision before implementation. The current
+V2 top navigation remains the approved interim design.
 
 ### Authentication UX follow-up — redirect immediately when an open SPA session expires
 

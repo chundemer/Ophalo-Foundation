@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, type IntakeStatusResult, ApiError } from "../../lib/apiClient";
 import { useCopyFeedback } from "../../hooks/useCopyFeedback";
+import { KeepButton } from "../../components/keep/KeepButton";
 
 const REPLACE_CONFIRMATION_VALUE = "REPLACE";
 
@@ -116,23 +117,23 @@ function ReplaceLinkDialog({ replacing, error, onConfirm, onClose, triggerRef }:
     >
       <div
         data-testid="replace-link-dialog-backdrop"
-        className="absolute inset-0 bg-black/50"
+        className="absolute inset-0 bg-black/40"
         onClick={() => { if (!replacing) onClose(); }}
       />
       <div
         ref={panelRef}
         tabIndex={-1}
-        className="relative w-full max-w-sm rounded-lg bg-white p-4 shadow-xl space-y-3 focus:outline-none"
+        className="relative w-full max-w-sm rounded-xl bg-[var(--ophalo-card)] p-5 shadow-xl space-y-3 focus:outline-none"
       >
-        <h3 id="replace-link-dialog-title" className="text-sm font-semibold text-amber-800">
+        <h3 id="replace-link-dialog-title" className="font-serif text-lg font-semibold text-[var(--ophalo-ink)]">
           Replace this link?
         </h3>
-        <p className="text-xs text-amber-700">
+        <p className="text-xs text-[var(--ophalo-attention)]">
           Your current public link and every previously shared link or link name — including any
           you emailed or posted — will stop working immediately. This cannot be undone.
         </p>
         <div className="space-y-1">
-          <label htmlFor="replace-link-confirmation" className="text-xs font-medium text-slate-600">
+          <label htmlFor="replace-link-confirmation" className="text-xs font-medium text-[var(--ophalo-muted)]">
             Type REPLACE to confirm
           </label>
           <input
@@ -143,25 +144,27 @@ function ReplaceLinkDialog({ replacing, error, onConfirm, onClose, triggerRef }:
             onChange={(e) => setConfirmation(e.target.value)}
             disabled={replacing}
             autoComplete="off"
-            className="w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm focus:border-slate-500 focus:outline-none disabled:opacity-50"
+            className="w-full rounded-lg border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-3 py-1.5 text-sm text-[var(--ophalo-ink)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] disabled:opacity-50"
             onKeyDown={(e) => {
               if (e.key === "Enter" && canConfirm) onConfirm(confirmation);
             }}
           />
         </div>
-        {error && <p className="text-xs text-red-600">{error}</p>}
+        {error && <p className="text-xs text-[var(--ophalo-danger)]">{error}</p>}
         <div className="flex gap-2 pt-1">
           <button
             onClick={() => onConfirm(confirmation)}
             disabled={!canConfirm}
-            className="rounded-md bg-amber-800 px-3 py-1.5 text-xs font-medium text-white hover:bg-amber-700 disabled:opacity-50"
+            className="rounded-lg bg-[var(--ophalo-danger)] px-3 py-1.5 text-xs font-medium text-white hover:opacity-90 disabled:opacity-50
+              focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-offset-1"
           >
             {replacing ? "Replacing…" : "Yes, replace link"}
           </button>
           <button
             onClick={onClose}
             disabled={replacing}
-            className="rounded-md border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+            className="rounded-lg border border-[var(--ophalo-border)] px-3 py-1.5 text-xs font-medium text-[var(--ophalo-ink)] hover:bg-[var(--ophalo-canvas)] disabled:opacity-50
+              focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-offset-1"
           >
             Cancel
           </button>
@@ -297,26 +300,27 @@ export function PublicLinkSection({ businessName, logoUrl }: PublicLinkSectionPr
   const activeSlug = intake?.publicSlug ?? null;
 
   return (
-    <section className="space-y-6">
+    <section className="rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] p-5 shadow-sm sm:p-6 space-y-6">
       <div>
-        <h2 className="text-base font-semibold text-slate-900 mb-1">Public link</h2>
-        <p className="text-sm text-slate-500">
+        <h2 className="keep-row-title mb-1">Public link</h2>
+        <p className="text-sm text-[var(--ophalo-muted)]">
           Customers use this link to send you a request. Copy it anywhere — your website, email signature, or text messages.
         </p>
       </div>
 
-      {isLoading && <p className="text-sm text-slate-400">Loading…</p>}
+      {isLoading && <p className="text-sm text-[var(--ophalo-muted)]">Loading…</p>}
 
       {/* shown-once raw-token banner (after ensure or replace) */}
       {newIntakeRawUrl && (
-        <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3 space-y-2">
-          <p className="text-xs font-medium text-emerald-800">
+        <div className="rounded-lg border border-[var(--ophalo-success)]/25 bg-[var(--ophalo-success-bg)] p-3 space-y-2">
+          <p className="text-xs font-medium text-[var(--ophalo-success)]">
             Link created — copy now. This direct URL is shown once.
           </p>
-          <p className="text-xs font-mono text-emerald-900 break-all">{newIntakeRawUrl}</p>
+          <p className="text-xs font-mono text-[var(--ophalo-ink)] break-all">{newIntakeRawUrl}</p>
           <button
             onClick={() => void handleCopyRawUrl()}
-            className="rounded-md bg-emerald-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-600"
+            className="rounded-lg bg-[var(--ophalo-navy)] px-3 py-1.5 text-xs font-medium text-white hover:opacity-90
+              focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-offset-1"
           >
             {linkCopiedId === "rawUrl" ? "Copied!" : linkCopyFailedId === "rawUrl" ? "Couldn't copy" : "Copy"}
           </button>
@@ -326,14 +330,10 @@ export function PublicLinkSection({ businessName, logoUrl }: PublicLinkSectionPr
       {/* no active link */}
       {!isLoading && intake && !intake.hasActiveLink && (
         <div className="space-y-3">
-          <p className="text-sm text-slate-600">No public link yet.</p>
-          <button
-            onClick={() => void handleEnsure()}
-            disabled={ensuring}
-            className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-50"
-          >
+          <p className="text-sm text-[var(--ophalo-ink)]">No public link yet.</p>
+          <KeepButton variant="primary" onClick={() => void handleEnsure()} disabled={ensuring}>
             {ensuring ? "Creating…" : "Create public link"}
-          </button>
+          </KeepButton>
         </div>
       )}
 
@@ -341,13 +341,14 @@ export function PublicLinkSection({ businessName, logoUrl }: PublicLinkSectionPr
       {intake?.hasActiveLink && activeSlug && (
         <div className="space-y-4">
           {/* durable slug URL */}
-          <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
-            <p className="text-xs text-slate-500 mb-1">Your public link</p>
-            <p className="text-sm font-mono text-slate-900 break-all mb-2">{slugUrl(activeSlug)}</p>
+          <div className="rounded-lg border border-[var(--ophalo-border)] bg-[var(--ophalo-canvas)] p-3">
+            <p className="text-xs text-[var(--ophalo-muted)] mb-1">Your public link</p>
+            <p className="text-sm font-mono text-[var(--ophalo-ink)] break-all mb-2">{slugUrl(activeSlug)}</p>
             <div className="flex gap-2">
               <button
                 onClick={() => void handleCopySlugUrl()}
-                className="rounded-md bg-slate-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-slate-700"
+                className="rounded-lg bg-[var(--ophalo-navy)] px-3 py-1.5 text-xs font-medium text-white hover:opacity-90
+                  focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-offset-1"
               >
                 {linkCopiedId === "slugUrl" ? "Copied!" : linkCopyFailedId === "slugUrl" ? "Couldn't copy" : "Copy link"}
               </button>
@@ -355,7 +356,8 @@ export function PublicLinkSection({ businessName, logoUrl }: PublicLinkSectionPr
                 href={slugUrl(activeSlug)}
                 target="_blank"
                 rel="noreferrer"
-                className="rounded-md border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-100"
+                className="rounded-lg border border-[var(--ophalo-border)] px-3 py-1.5 text-xs font-medium text-[var(--ophalo-ink)] hover:bg-[var(--ophalo-canvas)]
+                  focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-offset-1"
               >
                 Open ↗
               </a>
@@ -366,13 +368,13 @@ export function PublicLinkSection({ businessName, logoUrl }: PublicLinkSectionPr
           {!editingName ? (
             <button
               onClick={() => { setEditingName(true); setError(null); }}
-              className="text-sm text-slate-500 hover:text-slate-800 underline"
+              className="text-sm font-medium text-[var(--keep-accent)] hover:underline"
             >
               Edit link name
             </button>
           ) : (
             <div className="space-y-2">
-              <p className="text-xs text-slate-500">
+              <p className="text-xs text-[var(--ophalo-muted)]">
                 Enter your business name or a short label. Previous link names keep working and redirect customers to your current link.
               </p>
               <div className="flex gap-2 items-center flex-wrap">
@@ -382,20 +384,22 @@ export function PublicLinkSection({ businessName, logoUrl }: PublicLinkSectionPr
                   onChange={(e) => setNameInput(e.target.value)}
                   placeholder="e.g. Acme Plumbing"
                   disabled={savingName}
-                  className="flex-1 min-w-0 rounded-md border border-slate-300 px-3 py-1.5 text-sm focus:border-slate-500 focus:outline-none disabled:opacity-50"
+                  className="flex-1 min-w-0 rounded-lg border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-3 py-1.5 text-sm text-[var(--ophalo-ink)] placeholder:text-[var(--ophalo-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] disabled:opacity-50"
                   onKeyDown={(e) => { if (e.key === "Enter") void handleSaveName(); }}
                 />
                 <button
                   onClick={() => void handleSaveName()}
                   disabled={savingName || !nameInput.trim()}
-                  className="rounded-md bg-slate-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-slate-700 disabled:opacity-50"
+                  className="rounded-lg bg-[var(--ophalo-navy)] px-3 py-1.5 text-xs font-medium text-white hover:opacity-90 disabled:opacity-50
+                    focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-offset-1"
                 >
                   {savingName ? "Saving…" : "Save"}
                 </button>
                 <button
                   onClick={() => { setEditingName(false); setNameInput(""); setError(null); }}
                   disabled={savingName}
-                  className="rounded-md border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                  className="rounded-lg border border-[var(--ophalo-border)] px-3 py-1.5 text-xs font-medium text-[var(--ophalo-ink)] hover:bg-[var(--ophalo-canvas)] disabled:opacity-50
+                    focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-offset-1"
                 >
                   Cancel
                 </button>
@@ -404,11 +408,11 @@ export function PublicLinkSection({ businessName, logoUrl }: PublicLinkSectionPr
           )}
 
           {/* replace link — destructive / exceptional */}
-          <div className="pt-1 border-t border-slate-100">
+          <div className="pt-1 border-t border-[var(--ophalo-border)]">
             <button
               ref={replaceTriggerRef}
               onClick={() => setShowReplaceDialog(true)}
-              className="text-xs text-slate-400 hover:text-slate-700 underline"
+              className="text-xs text-[var(--ophalo-muted)] hover:text-[var(--ophalo-ink)] underline"
             >
               Replace link (breaks old shared links)
             </button>
@@ -426,7 +430,7 @@ export function PublicLinkSection({ businessName, logoUrl }: PublicLinkSectionPr
         />
       )}
 
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {error && <p className="text-sm text-[var(--ophalo-danger)]">{error}</p>}
 
       {/* phone-sized customer preview — reflects unsaved draft, never fetched from the live public page */}
       {intake?.hasActiveLink && (

@@ -48,45 +48,53 @@ export function Settings({
   const needsSetup = activeTab === "public-profile" || activeTab === "policy";
 
   return (
-    <div className="flex-1 overflow-y-auto">
-      <div className="max-w-2xl mx-auto px-4 pt-8">
-        <h1 className="text-xl font-semibold text-slate-900 mb-6">Settings</h1>
+    <div className="flex-1 min-w-0 flex flex-col">
+      <div className="mx-auto w-full max-w-[1440px] px-4 pt-6 pb-4 sm:px-6 sm:pt-8">
+        <h1 className="keep-page-title tracking-tight">Settings</h1>
+        <p className="mt-1.5 keep-page-subtitle">
+          Manage your public request link, response policy, and team.
+        </p>
+      </div>
 
-        <div className="flex border-b border-slate-200 mb-8">
+      <div className="mx-auto w-full max-w-[1440px] px-4 sm:px-6" role="tablist" aria-label="Settings sections">
+        <div className="flex gap-5 border-b border-[var(--ophalo-border)]">
           {TABS.map((tab) => (
             <button
               key={tab.id}
               type="button"
+              role="tab"
+              aria-selected={activeTab === tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-offset-2 rounded-t-sm ${
+              className={`relative -mb-px px-0.5 py-3 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-offset-2 ${
                 activeTab === tab.id
-                  ? "border-[var(--keep-accent)] text-[var(--ophalo-navy)]"
-                  : "border-transparent text-slate-500 hover:text-slate-800 hover:border-slate-300"
+                  ? "border-b-2 border-[var(--keep-accent)] text-[var(--ophalo-navy)]"
+                  : "border-b-2 border-transparent text-[var(--ophalo-muted)] hover:text-[var(--ophalo-ink)]"
               }`}
             >
               {tab.label}
             </button>
           ))}
         </div>
+      </div>
 
-        <div className="pb-8">
+      <div className="mx-auto w-full max-w-[1440px] px-4 sm:px-6 pt-8 pb-10">
+        <div className="max-w-2xl">
           {activeTab === "team" ? (
             <TeamSection callerRole={callerRole} />
           ) : needsSetup && setupLoading ? (
             <div className="flex items-center justify-center py-16">
-              <span className="text-slate-400 text-sm">Loading…</span>
+              <span className="text-[var(--ophalo-muted)] text-sm">Loading…</span>
             </div>
           ) : needsSetup && (setupError || !setup) ? (
             <div className="flex items-center justify-center py-16">
-              <span className="text-slate-500 text-sm">Could not load settings.</span>
+              <span className="text-[var(--ophalo-muted)] text-sm">Could not load settings.</span>
             </div>
           ) : setup && profileDraft && activeTab === "public-profile" ? (
-            <div className="space-y-10">
+            <div className="space-y-6">
               <CompanySection
                 draft={profileDraft}
                 onDraftChange={(patch) => setProfileDraft({ ...profileDraft, ...patch })}
               />
-              <hr className="border-slate-200" />
               <PublicLinkSection
                 businessName={profileDraft.businessName}
                 logoUrl={profileDraft.logoUrl}
