@@ -81,7 +81,7 @@ new `GetActualWorkRecorderCandidatesService.cs`, `KeepEndpoints.cs`,
 (6 tests). Verified: `~ActualWork` integration 157/157 (+6), `~ActualWork` unit 55/55,
 architecture 14/14, app suite 755/755, `tsc`, `git diff --check` clean.
 
-**1a-ii-b — recovery UI — COMPLETE (2026-08-27, uncommitted).** `useActualWorkCapture` gains an `owner-recovery`
+**1a-ii-b — recovery UI — COMPLETE (2026-08-27, `de40491`).** `useActualWorkCapture` gains an `owner-recovery`
 state: `routeHistory` now retains the populated read-only `openDraft` (`isRecorder: false`) for the
 Owner/Admin non-recorder instead of collapsing it into `held-by-other` — version, lines, and current
 recorder identity are kept for the transfer control. New `transferRecorder(id, displayName, reason)`
