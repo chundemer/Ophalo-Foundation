@@ -1162,6 +1162,7 @@ public static class KeepEndpoints
     {
         canCaptureActualWork = result.CanCaptureActualWork,
         openDraft = result.OpenDraft is null ? null : ToOpenDraftResponse(result.OpenDraft),
+        openDraftHeldByOther = result.OpenDraftHeldByOther,
         submittedVisits = result.SubmittedVisits.Select(ToSubmittedVisitResponse),
     };
 

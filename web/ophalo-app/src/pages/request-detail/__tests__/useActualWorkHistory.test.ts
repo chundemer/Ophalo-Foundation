@@ -21,6 +21,7 @@ function history(overrides: Partial<ActualWorkHistoryResult> = {}): ActualWorkHi
   return {
     canCaptureActualWork: true,
     openDraft: null,
+    openDraftHeldByOther: false,
     submittedVisits: [],
     ...overrides,
   };

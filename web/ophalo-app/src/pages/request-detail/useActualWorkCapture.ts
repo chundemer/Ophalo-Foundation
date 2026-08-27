@@ -3,17 +3,38 @@ import { api, ApiError, type ActualWorkHistoryResult } from "../../lib/apiClient
 
 /**
  * Batch 5b, build-log/129: mirrors useProposedScopeCapture's probe/draft/modal state machine.
- * The only read path is the visit-history endpoint (Batch 5a) — its `canCaptureActualWork` flag
- * (true only for the request's active Responsible recorder) disambiguates a null `openDraft`
- * from "not allowed to capture here", so `hidden` covers both a 403 and a visible-but-not-
- * Responsible caller.
+ * The only read path is the visit-history endpoint (Batch 5a). `canCaptureActualWork` (GAP-055:
+ * `RequestsOperate` + `ActualWorkCapture`, not active-Responsible participation) separates a
+ * qualified caller from a visible-but-not-permitted one, so `hidden` covers both a 403 and a
+ * Viewer.
+ *
+ * GAP-055 recorder ownership: only the Draft's current recorder may edit it. `openDraft` comes
+ * back populated for the recorder (`isRecorder: true`) and, read-only, for Owner/Admin
+ * (`isRecorder: false`); `openDraftHeldByOther` is the presence-only signal for a qualified
+ * non-recorder who is not an Owner/Admin. Both non-recorder cases land in `held-by-other`, a
+ * non-actionable informational state — no composer, no start affordance. The deliberate
+ * recorder-transfer workflow is a separate batch.
  */
 export type ActualWorkCaptureState =
   | { status: "loading" }
   | { status: "hidden" }
   | { status: "error"; message: string }
   | { status: "no-draft"; submittedCount: number }
+  | { status: "held-by-other"; submittedCount: number }
   | { status: "draft"; draft: NonNullable<ActualWorkHistoryResult["openDraft"]>; submittedCount: number };
+
+/** Routes a history read into the resume/informational/empty states. `hidden` and `error` are
+ * handled by the caller (they depend on how the read failed), not here. */
+function routeHistory(result: ActualWorkHistoryResult): ActualWorkCaptureState {
+  const submittedCount = result.submittedVisits.length;
+  if (result.openDraft && result.openDraft.isRecorder) {
+    return { status: "draft", draft: result.openDraft, submittedCount };
+  }
+  if (result.openDraft || result.openDraftHeldByOther) {
+    return { status: "held-by-other", submittedCount };
+  }
+  return { status: "no-draft", submittedCount };
+}
 
 export const ACTUAL_WORK_CONFLICT_NOTICE =
   "This visit changed elsewhere — refreshed with the latest draft. Try again.";
@@ -35,11 +56,7 @@ export function useActualWorkCapture(requestId: string) {
         setState({ status: "hidden" });
         return;
       }
-      if (result.openDraft) {
-        setState({ status: "draft", draft: result.openDraft, submittedCount: result.submittedVisits.length });
-      } else {
-        setState({ status: "no-draft", submittedCount: result.submittedVisits.length });
-      }
+      setState(routeHistory(result));
     } catch (err) {
       if (err instanceof ApiError && err.status === 403) {
         setState({ status: "hidden" });
@@ -54,14 +71,13 @@ export function useActualWorkCapture(requestId: string) {
   }, [probe]);
 
   // Every composer mutation calls this to replace local state with the authoritative snapshot
-  // (mutation responses carry only ids/versions, never the full line set).
+  // (mutation responses carry only ids/versions, never the full line set). Returns the state it
+  // applied so callers can react to a Draft that is gone or has been transferred away.
   const refetchDraft = useCallback(async () => {
     const result = await api.getActualWorkHistoryForRequest(requestId);
-    if (result.openDraft) {
-      setState({ status: "draft", draft: result.openDraft, submittedCount: result.submittedVisits.length });
-    } else {
-      setState({ status: "no-draft", submittedCount: result.submittedVisits.length });
-    }
+    const next = routeHistory(result);
+    setState(next);
+    return next;
   }, [requestId]);
 
   const startCapture = useCallback(async () => {
@@ -81,21 +97,25 @@ export function useActualWorkCapture(requestId: string) {
           completionNote: null,
           submittedAtUtc: null,
           concurrencyVersion: created.concurrencyVersion,
+          isRecorder: true,
           lines: [],
         },
         submittedCount: state.submittedCount,
       });
       setIsModalOpen(true);
     } catch (err) {
-      // Another session/tab may have opened this request's one Draft between the probe and this
-      // create call (ActualWork.DraftAlreadyOpenForRequest, 409) — reconcile onto the now-
-      // authoritative Draft and open it, rather than reporting a fabricated "unable to start"
-      // error for what is actually a resumable Draft.
+      // Another session/tab opened this request's one Draft between the probe and this create
+      // call (ActualWork.DraftAlreadyOpenForRequest, 409). Reconcile onto the authoritative read:
+      // if this caller turns out to be the recorder, resume it with a conflict notice; if someone
+      // else holds it (GAP-055), land on the non-actionable informational card with no modal and
+      // no generic conflict notice — the card itself is the recovery outcome.
       if (err instanceof ApiError && err.status === 409) {
         try {
-          await refetchDraft();
-          setConflictNotice(ACTUAL_WORK_CONFLICT_NOTICE);
-          setIsModalOpen(true);
+          const next = await refetchDraft();
+          if (next.status === "draft") {
+            setConflictNotice(ACTUAL_WORK_CONFLICT_NOTICE);
+            setIsModalOpen(true);
+          }
         } catch {
           setState({ status: "error", message: "Unable to start a visit." });
         }

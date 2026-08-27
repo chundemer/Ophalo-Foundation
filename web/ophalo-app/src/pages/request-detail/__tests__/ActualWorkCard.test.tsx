@@ -22,6 +22,7 @@ describe("ActualWorkCard", () => {
         completionNote: null,
         submittedAtUtc: null,
         concurrencyVersion: "v1",
+        isRecorder: true,
         lines: [],
       },
       submittedCount: 0,
@@ -42,6 +43,7 @@ describe("ActualWorkCard", () => {
         completionNote: null,
         submittedAtUtc: null,
         concurrencyVersion: "v1",
+        isRecorder: true,
         lines: [
           { id: "l1", displayNameSnapshot: "Filter", unitOfMeasureSnapshot: null, actualQuantity: 1, note: null },
         ],
@@ -51,5 +53,13 @@ describe("ActualWorkCard", () => {
     render(<ActualWorkCard state={state} onStartCapture={vi.fn()} />);
     expect(screen.getByRole("button", { name: /Continue draft/ })).toBeInTheDocument();
     expect(screen.getByText(/Draft — not submitted/)).toBeInTheDocument();
+  });
+
+  it("shows a non-actionable notice for held-by-other, with no start or resume button", () => {
+    const state: ActualWorkCaptureState = { status: "held-by-other", submittedCount: 2 };
+    render(<ActualWorkCard state={state} onStartCapture={vi.fn()} />);
+    expect(screen.getByText(/Another team member is recording this visit/)).toBeInTheDocument();
+    expect(screen.getByText(/2 prior visits recorded/)).toBeInTheDocument();
+    expect(screen.queryByRole("button")).not.toBeInTheDocument();
   });
 });

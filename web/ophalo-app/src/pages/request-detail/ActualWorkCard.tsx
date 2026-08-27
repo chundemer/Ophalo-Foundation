@@ -12,14 +12,37 @@ interface ActualWorkCardProps {
 }
 
 /**
- * Batch 5b entry point: "Record completed work". `canCaptureActualWork` (Batch 5a) means this
- * only renders for the request's active Responsible recorder — loading/hidden/error states
- * render nothing, same as ProposedScopeCard, so a transient probe failure never blocks the rest
- * of the request-detail cards and a non-Responsible watcher never sees an action that would fail.
+ * Batch 5b entry point: "Record completed work". Renders for any caller who holds
+ * `RequestsOperate` + `ActualWorkCapture` (GAP-055 — not tied to dispatch assignment); loading/
+ * hidden/error states render nothing, same as ProposedScopeCard, so a transient probe failure
+ * never blocks the rest of the request-detail cards and a Viewer never sees an action that would
+ * fail. When another team member already owns the request's one open Draft, this shows a
+ * non-actionable notice instead of an entry point (`held-by-other`) — only that recorder may edit
+ * it, and the deliberate transfer workflow is a separate surface.
  */
 export function ActualWorkCard({ state, onStartCapture, bare = false }: ActualWorkCardProps) {
   if (state.status === "loading" || state.status === "hidden" || state.status === "error") {
     return null;
+  }
+
+  if (state.status === "held-by-other") {
+    const wrapperCls = bare
+      ? "px-4 py-2"
+      : "rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-4 py-2";
+    const priorVisits =
+      state.submittedCount === 0
+        ? ""
+        : ` ${state.submittedCount} prior visit${state.submittedCount === 1 ? "" : "s"} recorded · locked.`;
+    return (
+      <div className={wrapperCls}>
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-[var(--ophalo-ink)]">Actual work</p>
+          <p className="text-xs text-[var(--ophalo-muted)]">
+            Another team member is recording this visit.{priorVisits}
+          </p>
+        </div>
+      </div>
+    );
   }
 
   // This is deliberately a one-line execution strip.  Line items live in the drawer so

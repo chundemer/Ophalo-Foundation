@@ -27,6 +27,7 @@ function history(overrides: Partial<ActualWorkHistoryResult> = {}): ActualWorkHi
   return {
     canCaptureActualWork: true,
     openDraft: null,
+    openDraftHeldByOther: false,
     submittedVisits: [],
     ...overrides,
   };
@@ -68,6 +69,7 @@ describe("useActualWorkCapture", () => {
       completionNote: null,
       submittedAtUtc: null,
       concurrencyVersion: "v1",
+      isRecorder: true,
       lines: [],
     };
     mockGetActualWorkHistoryForRequest.mockResolvedValueOnce(history({ openDraft }));
@@ -84,6 +86,7 @@ describe("useActualWorkCapture", () => {
       completionNote: null,
       submittedAtUtc: null,
       concurrencyVersion: "v1",
+      isRecorder: true,
       lines: [],
     };
     mockGetActualWorkHistoryForRequest.mockResolvedValueOnce(history({ openDraft }));
@@ -120,6 +123,7 @@ describe("useActualWorkCapture", () => {
         completionNote: null,
         submittedAtUtc: null,
         concurrencyVersion: "v1",
+        isRecorder: true,
         lines: [],
       },
       submittedCount: 0,
@@ -134,6 +138,7 @@ describe("useActualWorkCapture", () => {
       completionNote: null,
       submittedAtUtc: null,
       concurrencyVersion: "v1",
+      isRecorder: true,
       lines: [],
     };
     mockGetActualWorkHistoryForRequest.mockResolvedValueOnce(history({ openDraft }));
@@ -159,6 +164,7 @@ describe("useActualWorkCapture", () => {
       completionNote: null,
       submittedAtUtc: null,
       concurrencyVersion: "v1",
+      isRecorder: true,
       lines: [],
     };
     mockGetActualWorkHistoryForRequest.mockResolvedValueOnce(history({ openDraft }));
@@ -183,6 +189,7 @@ describe("useActualWorkCapture", () => {
       completionNote: null,
       submittedAtUtc: null,
       concurrencyVersion: "v1",
+      isRecorder: true,
       lines: [],
     };
     mockGetActualWorkHistoryForRequest.mockResolvedValueOnce(history({ openDraft }));
@@ -209,6 +216,7 @@ describe("useActualWorkCapture", () => {
       completionNote: null,
       submittedAtUtc: null,
       concurrencyVersion: "v1",
+      isRecorder: true,
       lines: [],
     };
     mockGetActualWorkHistoryForRequest.mockResolvedValueOnce(history({ openDraft }));
@@ -235,6 +243,7 @@ describe("useActualWorkCapture", () => {
       completionNote: null,
       submittedAtUtc: null,
       concurrencyVersion: "v1",
+      isRecorder: true,
       lines: [],
     };
     mockGetActualWorkHistoryForRequest.mockResolvedValueOnce(history({ openDraft }));
@@ -263,6 +272,7 @@ describe("useActualWorkCapture", () => {
       completionNote: null,
       submittedAtUtc: null,
       concurrencyVersion: "v1",
+      isRecorder: true,
       lines: [],
     };
     mockGetActualWorkHistoryForRequest.mockResolvedValueOnce(history({ openDraft }));
@@ -292,6 +302,7 @@ describe("useActualWorkCapture", () => {
       completionNote: null,
       submittedAtUtc: null,
       concurrencyVersion: "v9",
+      isRecorder: true,
       lines: [],
     };
     mockGetActualWorkHistoryForRequest.mockResolvedValueOnce(history({ openDraft: raceDraft }));
@@ -320,5 +331,48 @@ describe("useActualWorkCapture", () => {
 
     expect(result.current.state).toEqual({ status: "error", message: "Unable to start a visit." });
     expect(result.current.isModalOpen).toBe(false);
+  });
+
+  it("reports held-by-other from the presence-only signal (qualified non-recorder)", async () => {
+    mockGetActualWorkHistoryForRequest.mockResolvedValueOnce(
+      history({ openDraftHeldByOther: true, submittedVisits: [{ id: "v1", status: "SubmittedToOffice", outcome: null, completionNote: null, submittedAtUtc: "2026-01-01", lines: [] }] }),
+    );
+    const { result } = renderHook(() => useActualWorkCapture("request-1"));
+
+    await waitFor(() => expect(result.current.state).toEqual({ status: "held-by-other", submittedCount: 1 }));
+  });
+
+  it("reports held-by-other when an Owner/Admin gets a non-editable openDraft (isRecorder false)", async () => {
+    const openDraft = {
+      id: "draft-1",
+      status: "Draft",
+      outcome: null,
+      completionNote: null,
+      submittedAtUtc: null,
+      concurrencyVersion: "v1",
+      isRecorder: false,
+      lines: [],
+    };
+    mockGetActualWorkHistoryForRequest.mockResolvedValueOnce(history({ openDraft }));
+    const { result } = renderHook(() => useActualWorkCapture("request-1"));
+
+    await waitFor(() => expect(result.current.state).toEqual({ status: "held-by-other", submittedCount: 0 }));
+  });
+
+  it("startCapture 409 lands on held-by-other with no modal and no conflict notice when someone else holds the Draft", async () => {
+    mockGetActualWorkHistoryForRequest.mockResolvedValueOnce(history());
+    mockCreateActualWork.mockRejectedValueOnce(new ApiError(409, "ActualWork.DraftAlreadyOpenForRequest", "conflict"));
+    const { result } = renderHook(() => useActualWorkCapture("request-1"));
+    await waitFor(() => expect(result.current.state.status).toBe("no-draft"));
+
+    mockGetActualWorkHistoryForRequest.mockResolvedValueOnce(history({ openDraftHeldByOther: true }));
+
+    await act(async () => {
+      await result.current.startCapture();
+    });
+
+    expect(result.current.state).toEqual({ status: "held-by-other", submittedCount: 0 });
+    expect(result.current.isModalOpen).toBe(false);
+    expect(result.current.conflictNotice).toBeNull();
   });
 });

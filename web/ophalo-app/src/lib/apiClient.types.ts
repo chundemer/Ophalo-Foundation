@@ -1218,6 +1218,10 @@ export interface ActualWorkOpenDraftEntry {
   completionNote: string | null;
   submittedAtUtc: string | null;
   concurrencyVersion: string;
+  /** GAP-055: true only when the caller is the Draft's current recorder. false means the caller is
+   * an Owner/Admin viewing it for a recorder-transfer decision — the field UI must not open the
+   * editable composer for them. */
+  isRecorder: boolean;
   lines: ActualWorkLineHistoryEntry[];
 }
 
@@ -1230,14 +1234,20 @@ export interface ActualWorkSubmittedVisitEntry {
   lines: ActualWorkLineHistoryEntry[];
 }
 
-/** `canCaptureActualWork` disambiguates a null `openDraft`: true only when the caller is the
- * request's active Responsible recorder AND holds `RequestsOperate` and `ActualWorkCapture`
- * (whether or not a Draft is open yet) — the capture UI must gate on this, not on
- * `openDraft === null` alone, or a caller without capture permission (e.g. a Viewer) would see an
- * action that fails on create. */
+/** `canCaptureActualWork` is true whenever the caller holds `RequestsOperate` and
+ * `ActualWorkCapture` (GAP-055 — no longer tied to active-Responsible participation), whether or
+ * not a Draft is open and whether or not someone else already holds it. The capture UI must gate
+ * its entry point on this AND on `openDraftHeldByOther`, not on `openDraft === null` alone.
+ *
+ * `openDraft` is populated only for the current recorder (`isRecorder: true`) and, read-only, for
+ * Owner/Admin (`isRecorder: false`). `openDraftHeldByOther` is the presence-only signal for a
+ * qualified non-recorder who is not an Owner/Admin: an open Draft exists but they cannot edit it,
+ * so the UI shows a non-actionable "another team member is recording this visit" state. It never
+ * carries recorder identity and is mutually exclusive with a populated `openDraft`. */
 export interface ActualWorkHistoryResult {
   canCaptureActualWork: boolean;
   openDraft: ActualWorkOpenDraftEntry | null;
+  openDraftHeldByOther: boolean;
   submittedVisits: ActualWorkSubmittedVisitEntry[];
 }
 

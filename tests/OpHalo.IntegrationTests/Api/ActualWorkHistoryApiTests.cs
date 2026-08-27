@@ -55,6 +55,7 @@ public sealed class ActualWorkHistoryApiTests : IClassFixture<KeepApiWebFactory>
         Assert.True(body.TryGetProperty("openDraft", out var openDraft));
         Assert.Equal(draftVersion, openDraft.GetProperty("concurrencyVersion").GetGuid());
         Assert.True(openDraft.GetProperty("isRecorder").GetBoolean());
+        Assert.False(body.GetProperty("openDraftHeldByOther").GetBoolean());
         Assert.Equal(1, body.GetProperty("submittedVisits").GetArrayLength());
     }
 
@@ -72,6 +73,7 @@ public sealed class ActualWorkHistoryApiTests : IClassFixture<KeepApiWebFactory>
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
         Assert.True(body.GetProperty("canCaptureActualWork").GetBoolean());
         Assert.Equal(JsonValueKind.Null, body.GetProperty("openDraft").ValueKind);
+        Assert.False(body.GetProperty("openDraftHeldByOther").GetBoolean());
     }
 
     [Fact]
@@ -101,6 +103,8 @@ public sealed class ActualWorkHistoryApiTests : IClassFixture<KeepApiWebFactory>
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
         Assert.True(body.GetProperty("canCaptureActualWork").GetBoolean());
         Assert.Equal(JsonValueKind.Null, body.GetProperty("openDraft").ValueKind);
+        // Presence-only signal: a Draft exists but this caller can neither edit nor read it.
+        Assert.True(body.GetProperty("openDraftHeldByOther").GetBoolean());
         Assert.Equal(1, body.GetProperty("submittedVisits").GetArrayLength());
     }
 
@@ -124,6 +128,8 @@ public sealed class ActualWorkHistoryApiTests : IClassFixture<KeepApiWebFactory>
         Assert.True(body.TryGetProperty("openDraft", out var openDraft));
         Assert.Equal(draftVersion, openDraft.GetProperty("concurrencyVersion").GetGuid());
         Assert.False(openDraft.GetProperty("isRecorder").GetBoolean());
+        // Owner/Admin get the Draft itself, so the presence-only signal stays false for them.
+        Assert.False(body.GetProperty("openDraftHeldByOther").GetBoolean());
     }
 
     [Fact]

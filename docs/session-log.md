@@ -20,25 +20,35 @@ unfinished slices into cutover; retain the existing-ticket workflow as the expli
 
 ### Ordered next-week code slices
 
-#### 1. P0 — Correct Actual Work Draft recorder ownership (GAP-055)
+#### 1. P0 — Actual Work recorder ownership (GAP-055) — COMPLETE (2026-08-27)
 
-This is the first implementation gate. Dispatch `Responsible` is routing context, not authority to
-record factual work. Any active member with `RequestsOperate` and `ActualWorkCapture` must be able
-to create the one open Actual Work Draft for a request. Creation retains immutable
-`CreatedByUserId` authorship and sets exclusive `RecorderAccountUserId` ownership; only the
-recorder can change, discard, or submit the Draft. Owner/Admin transfer must require a reason and
-write an immutable audit record/event. No shared mutable Drafts, silent takeover, or parallel
-Drafts.
+**Backend (Batches A–D):** `b3b3d41`, `d26b955`, `72ce6a5`, `c7ce822` (documented by `7fc575a`).
+Dispatch `Responsible` is routing context, not authority to record factual work. Any qualified
+member may create the one open Draft; immutable `CreatedByUserId` retains authorship, exclusive
+`RecorderAccountUserId` owns mutation/submission, Owner/Admin may perform a reason-required,
+immutable-audited Draft-only transfer. Active-Draft constraint, concurrency token, write
+authorization, assembly expansion, history, and nudge-read seams use the recorder model.
 
-Before code, re-preflight and split the migration/domain, API/authorization, UI-copy, and focused
-regression-test batches. Audit every existing active-Responsible gate: create, edit, discard,
-submit, assembly expansion, nudge read, history/probe, endpoints, and client wording. Preserve the
-single-open-Draft database constraint and optimistic concurrency. The pending Actual Work nudge UI
-remains paused until this correction lands.
+**Frontend state/copy + presence signal:** `ActualWorkHistoryResult` gains `openDraftHeldByOther`
+(presence-only; never exposes recorder identity, mutually exclusive with a populated `openDraft`).
+`useActualWorkCapture` routes both non-recorder cases — `openDraft.isRecorder === false`
+(Owner/Admin) and `openDraftHeldByOther` (qualified non-recorder) — into one non-actionable
+`held-by-other` state rendering “Another team member is recording this visit.”; no composer, no
+start affordance. A create-time 409 re-probes into that state with no modal and no conflict notice.
+Stale active-Responsible comments corrected in card/hook/types. Verified: app suite 754/754 (+4),
+`ActualWorkHistoryApiTests` + all `~ActualWork` integration 148/148, `~ActualWork` unit 55/55,
+architecture 14/14, `tsc`, `check:tokens`, `git diff --check` clean. Chrome check confirmed all
+four card states (no-draft, recorder, held, Owner/Admin non-recorder).
 
-Acceptance: a qualified technician can record completed work without office reassignment; only the
-recording owner can mutate it except through an explicit audited transfer; concurrent starts yield
-one recoverable winner/loser outcome.
+The Actual Work nudge UI (slice 3) stays paused until it consumes this `held-by-other` Draft state.
+
+#### 1a. P0 — Owner/Admin Draft recorder-transfer recovery UI
+
+Backend transfer API/audit is complete (`c7ce822`). Build the Owner/Admin-only Draft-recovery
+control on the request-detail Actual Work surface: eligible-recorder selection, required reason,
+exact-version submission, `ActualWork.AlreadyReviewed`/stale-version conflict recovery, immutable-
+audit confirmation, and clear handoff to the new recorder. Do not fold into slice 2. Do not surface
+a partial transfer control incidentally. Preflight the bounded frontend/API-type/test batch.
 
 #### 2. P0 — Owner/Admin Actual Work audit, approval, and financial review UI (slice 8)
 
@@ -55,21 +65,15 @@ hide 403/entitlement-denied surfaces; do not add a new top-level navigation item
 must cover submitted, reviewed, stale-version, already-reviewed, incomplete-financial-data,
 zero-line diagnostic, and role/entitlement-denial paths.
 
-#### 3. P1 — Centralized SPA session-expiry redirect — COMPLETE (2026-08-27)
+#### 3. P1 — Actual Work field-assist nudge UI
 
-`redirectToSignInOnce()` is a browser-safe, module-guarded shared redirect helper that navigates to
-`${VITE_PUBLIC_BASE_URL}/signin` at most once. All three API fetch wrappers invoke it before
-throwing an `ApiError` for a 401, and `AuthGuard` uses the same helper for its initial `/auth/me`
-401 path. A full-page navigation clears in-memory query state, so no QueryClient-specific wiring
-was added. 403, validation, conflict, transport, and server failures retain their local treatment;
-there is no backend authorization change.
-
-Verified: app suite 750/750 (+9), `AuthApiTests` 35/35 (+1, including a 31-day inactive-session
-401 while the absolute deadline remains future), `tsc --noEmit`, `check:tokens`, and
-`git diff --check` all clean. Focused browser coverage proves a redirect for a 401 through each
-of the three wrappers (`apiFetch`, `apiFetchVoid`, `apiFetchMaybeJson`), a single redirect for
-sequential 401s, and no redirect for 403, 500, or transport failures; AuthGuard withholds
-children and redirects once for `/auth/me` 401.
+The price-blind Actual Work nudge backend is complete. After slice 1 establishes safe ownership
+states, wire the existing nudge suggestions into the field composer: fetch after the qualifying
+catalog-item/assembly commit, render the session-only “Often added together” choices, add a chosen
+catalog item or assembly through the existing mutation path, dismiss without persistence, and
+reconcile a 409 without retrying the mutation. Do not expose pricing, auto-add work, or blur these
+factual-completion nudges with Proposed Scope's commercial recommendations. Test catalog and
+assembly triggers, accept/dismiss, conflict reconciliation, and the non-recorder state.
 
 #### 4. P1 — Production error/usage insight and friction loop
 
@@ -84,10 +88,10 @@ usage, and friction reports.
 
 Perform the remaining real-phone/browser-zoom check for Actual Work's full-bleed fixed composer;
 the CSS zoom proxy is insufficient. Then rehearse deployed normal-repair and diagnostic/no-work
-flows, review office history/approval, verify alert and feedback routing, and publish the concise
-field fallback/escalation guide. Record real device evidence in the tracker/build log. Include a
-targeted phone/tablet/desktop UI-quality pass for loading, error, empty, focus, and touch-target
-states.
+flows, including a non-recorder attempt and the Owner/Admin office-review loop; verify alert and
+feedback routing; and publish the concise field fallback/escalation guide. Record real device
+evidence in the tracker/build log. Include a targeted phone/tablet/desktop UI-quality pass for
+loading, error, empty, focus, and touch-target states.
 
 #### 6. P2 — Correct Price Book nudge suggestion ordinals
 
@@ -97,6 +101,24 @@ suggestion is incorrectly labeled `2.` (as in the Blower Motor example). Change 
 the returned ordinal directly; do not change the persisted/API numbering or the composer behavior.
 Update the Price Book nudge fixture and add/assert regression coverage for one-, two-, and
 three-suggestion rules displaying `1.`, `2.`, and `3.` in their saved order.
+
+### Recently completed
+
+#### Centralized SPA session-expiry redirect — COMPLETE (2026-08-27)
+
+`redirectToSignInOnce()` is a browser-safe, module-guarded shared redirect helper that navigates to
+`${VITE_PUBLIC_BASE_URL}/signin` at most once. All three API fetch wrappers invoke it before
+throwing an `ApiError` for a 401, and `AuthGuard` uses the same helper for its initial `/auth/me`
+401 path. A full-page navigation clears in-memory query state, so no QueryClient-specific wiring
+was added. 403, validation, conflict, transport, and server failures retain their local treatment;
+there is no backend authorization change.
+
+Verified: app suite 750/750 (+9), `AuthApiTests` 35/35 (+1, including a 31-day inactive-session
+401 while the absolute deadline remains future), `tsc --noEmit`, `check:tokens`, and
+`git diff --check` all clean. Focused browser coverage proves a redirect for a 401 through each
+of the three wrappers (`apiFetch`, `apiFetchVoid`, `apiFetchMaybeJson`), a single redirect for
+sequential 401s, and no redirect for 403, 500, or transport failures; AuthGuard withholds
+children and redirects once for `/auth/me` 401.
 
 ### Next after the release gate — triage, do not silently bundle
 

@@ -53,6 +53,7 @@ function emptyDraft(overrides: Partial<ActualWorkDraft> = {}): ActualWorkDraft {
     completionNote: null,
     submittedAtUtc: null,
     concurrencyVersion: "v1",
+    isRecorder: true,
     lines: [],
     ...overrides,
   };

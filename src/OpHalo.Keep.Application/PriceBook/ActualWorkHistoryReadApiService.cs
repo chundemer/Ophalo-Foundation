@@ -44,9 +44,16 @@ public sealed record ActualWorkSubmittedVisitEntry(
 /// this, not on <c>OpenDraft is null</c> alone — a qualified caller who is not the current recorder
 /// still sees this as true, and a create call under those conditions returns the same opaque
 /// <c>DraftAlreadyOpenForRequest</c> conflict as any other caller (GAP-055's create-conflict stays
-/// opaque; no recorder identity is leaked there).</summary>
+/// opaque; no recorder identity is leaked there).
+/// <para><see cref="OpenDraftHeldByOther"/> is the presence-only signal for that last case: true
+/// when an open Draft exists but the caller is neither its recorder nor an Owner/Admin, so the
+/// field UI can show a non-actionable "another team member is recording this visit" state instead
+/// of an entry point that only fails on create. It never carries recorder identity, and it is
+/// mutually exclusive with a populated <see cref="OpenDraft"/> (recorder and Owner/Admin get the
+/// Draft itself; everyone else gets only this boolean).</para></summary>
 public sealed record ActualWorkHistoryResult(
-    bool CanCaptureActualWork, ActualWorkOpenDraftEntry? OpenDraft, IReadOnlyList<ActualWorkSubmittedVisitEntry> SubmittedVisits);
+    bool CanCaptureActualWork, ActualWorkOpenDraftEntry? OpenDraft, bool OpenDraftHeldByOther,
+    IReadOnlyList<ActualWorkSubmittedVisitEntry> SubmittedVisits);
 
 /// <summary>
 /// API-facing read orchestration for Actual Work visit history (Batch 5a, build-log/129):
@@ -96,6 +103,7 @@ public sealed class ActualWorkHistoryReadApiService(
         var isOwnerOrAdmin = gate.Value.RoleSnapshot.Role is AccountUserRole.Owner or AccountUserRole.Admin;
 
         ActualWorkOpenDraftEntry? openDraft = null;
+        var openDraftHeldByOther = false;
         if (canCaptureActualWork || isOwnerOrAdmin)
         {
             var draft = await persistence.GetOpenDraftForRequestAsync(currentUser.AccountId, requestId, ct);
@@ -104,13 +112,17 @@ public sealed class ActualWorkHistoryReadApiService(
                 var isRecorder = draft.RecorderAccountUserId == currentUser.UserId;
                 if (isRecorder || isOwnerOrAdmin)
                     openDraft = ToOpenDraftEntry(draft, isRecorder);
+                else
+                    openDraftHeldByOther = true;
             }
         }
 
         var submittedVisits = await persistence.GetSubmittedVisitsForRequestAsync(currentUser.AccountId, requestId, ct);
 
         return Result<ActualWorkHistoryResult>.Success(
-            new ActualWorkHistoryResult(canCaptureActualWork, openDraft, submittedVisits.Select(ToSubmittedVisitEntry).ToArray()));
+            new ActualWorkHistoryResult(
+                canCaptureActualWork, openDraft, openDraftHeldByOther,
+                submittedVisits.Select(ToSubmittedVisitEntry).ToArray()));
     }
 
     private static ActualWorkOpenDraftEntry ToOpenDraftEntry(ActualWork visit, bool isRecorder) => new(
