@@ -40,7 +40,9 @@ Stale active-Responsible comments corrected in card/hook/types. Verified: app su
 architecture 14/14, `tsc`, `check:tokens`, `git diff --check` clean. Chrome check confirmed all
 four card states (no-draft, recorder, held, Owner/Admin non-recorder).
 
-The Actual Work nudge UI (slice 3) stays paused until it consumes this `held-by-other` Draft state.
+The Actual Work nudge UI (slice 3) is complete — the composer that hosts the nudge chips only
+mounts in the recorder's editable `draft` state, so it never renders for `held-by-other` /
+`owner-recovery`.
 
 #### 1a. P0 — Owner/Admin Draft recorder-transfer recovery UI — COMPLETE (2026-08-27)
 
@@ -143,15 +145,25 @@ the visit flips to reviewed). (5) Successful review shows a transient confirmati
 suite 780/780, `~ActualWork` integration 157/157, `~ActualWork` unit 55/55, architecture 14/14,
 `tsc`, `check:tokens`, `git diff --check` clean.
 
-#### 3. P1 — Actual Work field-assist nudge UI
+#### 3. P1 — Actual Work field-assist nudge UI — COMPLETE (shipped in `6543f81`, Batch 5d-ii-d)
 
-The price-blind Actual Work nudge backend is complete. After slice 1 establishes safe ownership
-states, wire the existing nudge suggestions into the field composer: fetch after the qualifying
-catalog-item/assembly commit, render the session-only “Often added together” choices, add a chosen
-catalog item or assembly through the existing mutation path, dismiss without persistence, and
-reconcile a 409 without retrying the mutation. Do not expose pricing, auto-add work, or blur these
-factual-completion nudges with Proposed Scope's commercial recommendations. Test catalog and
-assembly triggers, accept/dismiss, conflict reconciliation, and the non-recorder state.
+Delivered by build-log 129 Batch 5d-ii-d (`6543f81`), which landed on top of GAP-055 Batches A–C.
+`ActualWorkComposer` fetches nudges after a catalog-item add or assembly expansion (generation-
+guarded so the newest trigger wins), renders the session-only price-blind "Often added together"
+chip panel inline, adds an accepted catalog item via `addActualWorkLine` / assembly via
+`expandActualWorkAssembly`, dismisses without persistence, retires a rule only on explicit
+accept/dismiss, and clears the panel on a 409 (defers to the existing `onConflict` path, no retry).
+Manual field acceptance recorded in `7b29e25`.
+
+Non-recorder state: no additional work needed. `useActualWorkCapture` routes every non-recorder to
+`held-by-other` / `owner-recovery` with `isModalOpen === false` (proven in `useActualWorkCapture.
+test.ts`), and `RequestDetailContent` mounts `ActualWorkComposer` only when `isModalOpen &&
+state.status === "draft"` — the composer and its nudge chips never mount outside the recorder's
+editable Draft.
+
+Verified 2026-08-27: `ActualWorkComposer.test.tsx` 26/26 (catalog + assembly triggers, tap-to-add,
+dismiss, 409-reconcile), focused ActualWork frontend suite 60/60, full app suite 780/780, `tsc`
+clean, `check:tokens` passed.
 
 #### 4. P1 — Production error/usage insight and friction loop
 
