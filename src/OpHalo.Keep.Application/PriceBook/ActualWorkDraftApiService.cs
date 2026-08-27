@@ -334,6 +334,23 @@ public sealed class ActualWorkDraftApiService(
         if (string.IsNullOrWhiteSpace(command.Reason))
             return Result<Guid>.Failure(ActualWorkErrors.RecorderTransferReasonRequired);
 
+        // Option C invariant: only a member who could record this work may hold its Draft. A
+        // non-member and an unqualified member collapse to one error so this endpoint cannot be
+        // used to enumerate account membership. Command-shape check — precedes loading the aggregate
+        // and the version/Draft-state checks below.
+        var targetSnapshot = await snapshotPersistence.GetAccountUserRoleSnapshotAsync(
+            currentUser.AccountId, command.NewRecorderAccountUserId, ct);
+        if (targetSnapshot is null ||
+            !userAccessPolicy.IsPermitted(
+                targetSnapshot.Role, targetSnapshot.MembershipStatus, gate.Value.Purpose,
+                PermissionKeys.Keep.RequestsOperate) ||
+            !userAccessPolicy.IsPermitted(
+                targetSnapshot.Role, targetSnapshot.MembershipStatus, gate.Value.Purpose,
+                PermissionKeys.Keep.ActualWorkCapture))
+        {
+            return Result<Guid>.Failure(ActualWorkErrors.RecorderTransferTargetIneligible);
+        }
+
         var actualWork = await persistence.GetByIdAsync(currentUser.AccountId, actualWorkId, ct);
         if (actualWork is null)
             return Result<Guid>.Failure(ActualWorkErrors.NotFound);
@@ -395,9 +412,11 @@ public sealed class ActualWorkDraftApiService(
     }
 
     /// <summary>Row-authorization scope (derived from role) plus the caller's <see cref="Role"/>
-    /// itself — Role is needed only by <see cref="TransferRecorderAsync"/>'s Owner/Admin-only gate;
-    /// every other caller uses <see cref="Scope"/> alone.</summary>
-    private sealed record ActualWorkAuthorization(KeepRequestVisibilityScope Scope, AccountUserRole Role);
+    /// itself — <see cref="Role"/> is needed only by <see cref="TransferRecorderAsync"/>'s
+    /// Owner/Admin-only gate and <see cref="Purpose"/> only by that same method's target-eligibility
+    /// check; every other caller uses <see cref="Scope"/> alone.</summary>
+    private sealed record ActualWorkAuthorization(
+        KeepRequestVisibilityScope Scope, AccountUserRole Role, AccountPurpose Purpose);
 
     /// <summary>Returns the row-authorization scope (derived from role) on success, matching
     /// <see cref="ProposedScopeApiService.AuthorizeAsync"/> exactly except gate 3 checks
@@ -450,6 +469,7 @@ public sealed class ActualWorkDraftApiService(
             ? KeepRequestVisibilityScope.AccountWide
             : KeepRequestVisibilityScope.MyWork;
 
-        return Result<ActualWorkAuthorization>.Success(new ActualWorkAuthorization(scope, roleSnapshot.Role));
+        return Result<ActualWorkAuthorization>.Success(
+            new ActualWorkAuthorization(scope, roleSnapshot.Role, accountSnapshot.Purpose));
     }
 }

@@ -44,11 +44,31 @@ The Actual Work nudge UI (slice 3) stays paused until it consumes this `held-by-
 
 #### 1a. P0 — Owner/Admin Draft recorder-transfer recovery UI
 
-Backend transfer API/audit is complete (`c7ce822`). Build the Owner/Admin-only Draft-recovery
-control on the request-detail Actual Work surface: eligible-recorder selection, required reason,
-exact-version submission, `ActualWork.AlreadyReviewed`/stale-version conflict recovery, immutable-
-audit confirmation, and clear handoff to the new recorder. Do not fold into slice 2. Do not surface
-a partial transfer control incidentally. Preflight the bounded frontend/API-type/test batch.
+Split into two batches (option C — recorder eligibility is a server-side invariant, not just a
+picker concern; a stale/malicious client must not be able to strand a Draft with a member who
+cannot record it).
+
+**1a-i — server-side eligibility invariant — COMPLETE (2026-08-27, uncommitted).** The
+`transfer-recorder` endpoint now rejects a target who is not an active account member holding
+`RequestsOperate` + `ActualWorkCapture`. New `ActualWork.RecorderTransferTargetIneligible` (422,
+mirroring `KeepRequest.ParticipationTargetIneligible`; message "That team member can't be assigned
+as the recorder." — no permission detail leaked). Non-member and unqualified collapse to one error
+(no membership enumeration). Check is command-shape, ahead of the load/version/Draft-state guards.
+Files: `ActualWorkErrors.cs`, `ActualWorkDraftApiService.cs` (`ActualWorkAuthorization` gains
+`Purpose`), `ErrorHttpMapper.cs`, `ActualWorkRecorderTransferApiTests.cs` (+3 tests: Viewer,
+non-member, non-active Operator — each asserts recorder + version unchanged and no audit record).
+Verified: `~ActualWorkRecorderTransfer` 10/10, `~ActualWork` integration 151/151 (+3), `~ActualWork`
+unit 55/55, architecture 14/14, `git diff --check` clean.
+
+**1a-ii — recovery UI (next).** Expose the current recorder's identity on the Owner/Admin
+`openDraft` read; add an entitlement-filtered transfer-candidate read; build the Owner/Admin-only
+Draft-recovery control on the request-detail Actual Work surface: eligible-recorder selection,
+required reason, exact-version submission, `ActualWork.AlreadyReviewed`/stale-version/
+`RecorderTransferTargetIneligible` conflict recovery, immutable-audit confirmation, and clear
+handoff to the new recorder. The `useActualWorkCapture` state machine currently discards the
+populated `openDraft` for the Owner/Admin non-recorder case — it must retain it (version + lines +
+recorder identity) to drive this control. Do not fold into slice 2. Do not surface a partial
+transfer control incidentally. Preflight the bounded frontend/API-type/test batch.
 
 #### 2. P0 — Owner/Admin Actual Work audit, approval, and financial review UI (slice 8)
 

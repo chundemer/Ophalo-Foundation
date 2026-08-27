@@ -95,6 +95,13 @@ public static class ActualWorkErrors
     public static readonly Error RecorderTransferTargetRequired =
         Error.Create("ActualWork.RecorderTransferTargetRequired", "A new recorder is required to transfer the recorder.");
 
+    /// <summary>GAP-055 (option C): the transfer target is not an account member, or does not hold
+    /// <c>RequestsOperate</c> + <c>ActualWorkCapture</c> — only a qualified recorder may hold a
+    /// Draft. Non-member and unqualified collapse to one error so the endpoint cannot be used to
+    /// enumerate account membership.</summary>
+    public static readonly Error RecorderTransferTargetIneligible =
+        Error.Create("ActualWork.RecorderTransferTargetIneligible", "That team member can't be assigned as the recorder.");
+
     /// <summary>Batch 6: only a Submitted visit may be marked reviewed — it is still Draft.</summary>
     public static readonly Error NotSubmitted =
         Error.Create("ActualWork.NotSubmitted", "This actual work visit has not been submitted yet.");

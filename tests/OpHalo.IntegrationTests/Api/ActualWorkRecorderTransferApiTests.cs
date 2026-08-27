@@ -163,9 +163,71 @@ public sealed class ActualWorkRecorderTransferApiTests : IClassFixture<KeepApiWe
         Assert.Equal("ActualWork.NotDraft", body.GetProperty("code").GetString());
     }
 
+    [Fact]
+    public async Task Transfer_TargetIsViewer_Returns422AndLeavesDraftUnchanged()
+    {
+        var (accountId, ownerId, ownerCookie) = await SeedAccountAsync("transfer-target-viewer");
+        await EnrollAsync(accountId, ownerId);
+        var requestId = await SeedRequestAsync(accountId);
+        var (actualWorkId, version) = await CreateDraftAsync(ownerCookie, requestId);
+        var viewerId = await SeedViewerAsync(accountId, "transfer-target-viewer");
+
+        var response = await PostTransferAsync(ownerCookie, actualWorkId, version, viewerId, "Viewer cannot record.");
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("ActualWork.RecorderTransferTargetIneligible", body.GetProperty("code").GetString());
+        await AssertNoTransferOccurredAsync(actualWorkId, expectedRecorderId: ownerId, expectedVersion: version);
+    }
+
+    [Fact]
+    public async Task Transfer_TargetIsNotAMember_Returns422AndLeavesDraftUnchanged()
+    {
+        var (accountId, ownerId, ownerCookie) = await SeedAccountAsync("transfer-target-nonmember");
+        await EnrollAsync(accountId, ownerId);
+        var requestId = await SeedRequestAsync(accountId);
+        var (actualWorkId, version) = await CreateDraftAsync(ownerCookie, requestId);
+
+        var response = await PostTransferAsync(ownerCookie, actualWorkId, version, Guid.CreateVersion7(), "Stranger.");
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("ActualWork.RecorderTransferTargetIneligible", body.GetProperty("code").GetString());
+        await AssertNoTransferOccurredAsync(actualWorkId, expectedRecorderId: ownerId, expectedVersion: version);
+    }
+
+    [Fact]
+    public async Task Transfer_TargetIsNonActiveMember_Returns422AndLeavesDraftUnchanged()
+    {
+        var (accountId, ownerId, ownerCookie) = await SeedAccountAsync("transfer-target-pending");
+        await EnrollAsync(accountId, ownerId);
+        var requestId = await SeedRequestAsync(accountId);
+        var (actualWorkId, version) = await CreateDraftAsync(ownerCookie, requestId);
+        var pendingOperatorId = await SeedPendingOperatorAsync(accountId, "transfer-target-pending");
+
+        var response = await PostTransferAsync(ownerCookie, actualWorkId, version, pendingOperatorId, "Not activated yet.");
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("ActualWork.RecorderTransferTargetIneligible", body.GetProperty("code").GetString());
+        await AssertNoTransferOccurredAsync(actualWorkId, expectedRecorderId: ownerId, expectedVersion: version);
+    }
+
     // -------------------------------------------------------------------------
     // Helpers
     // -------------------------------------------------------------------------
+
+    /// <summary>Proves the eligibility invariant fails atomically: the Draft's recorder and
+    /// concurrency version are untouched and no immutable transfer audit record was written.</summary>
+    private async Task AssertNoTransferOccurredAsync(Guid actualWorkId, Guid expectedRecorderId, Guid expectedVersion)
+    {
+        await using var scope = _factory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+        var work = await db.Set<ActualWork>().SingleAsync(x => x.Id == actualWorkId);
+        Assert.Equal(expectedRecorderId, work.RecorderAccountUserId);
+        Assert.Equal(expectedVersion, work.ConcurrencyVersion);
+        Assert.False(await db.Set<ActualWorkDraftRecorderTransfer>().AnyAsync(x => x.ActualWorkId == actualWorkId));
+    }
 
     private async Task<HttpResponseMessage> PostTransferAsync(
         string cookie, Guid actualWorkId, Guid expectedVersion, Guid newRecorderAccountUserId, string reason)
@@ -291,6 +353,41 @@ public sealed class ActualWorkRecorderTransferApiTests : IClassFixture<KeepApiWe
         await using var scope = _factory.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
         db.Users.Add(user);
+        db.AccountUsers.Add(member);
+        await db.SaveChangesAsync();
+        return member.Id;
+    }
+
+    private async Task<Guid> SeedViewerAsync(Guid accountId, string slug)
+    {
+        var now = DateTime.UtcNow;
+        var email = $"viewer@{slug}.com";
+        var user = User.CreateVerified(email, null, now);
+        var member = AccountUser.CreatePendingInvite(
+            accountId, email, EmailNormalizer.Normalize(email), AccountUserRole.Viewer,
+            inviteTokenHash: $"{slug}_viewer_hash", inviteExpiresAtUtc: now.AddDays(7), nowUtc: now);
+        member.Activate(user.Id, now);
+
+        await using var scope = _factory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+        db.Users.Add(user);
+        db.AccountUsers.Add(member);
+        await db.SaveChangesAsync();
+        return member.Id;
+    }
+
+    /// <summary>An Operator-role member with a still-pending invite — the role would qualify, but the
+    /// non-active membership status must not.</summary>
+    private async Task<Guid> SeedPendingOperatorAsync(Guid accountId, string slug)
+    {
+        var now = DateTime.UtcNow;
+        var email = $"pending-operator@{slug}.com";
+        var member = AccountUser.CreatePendingInvite(
+            accountId, email, EmailNormalizer.Normalize(email), AccountUserRole.Operator,
+            inviteTokenHash: $"{slug}_pending_operator_hash", inviteExpiresAtUtc: now.AddDays(7), nowUtc: now);
+
+        await using var scope = _factory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
         db.AccountUsers.Add(member);
         await db.SaveChangesAsync();
         return member.Id;

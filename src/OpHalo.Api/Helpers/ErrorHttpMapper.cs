@@ -210,6 +210,9 @@ public static class ErrorHttpMapper
             var c when c == "ActualWork.VersionMismatch"           => (StatusCodes.Status409Conflict, "Conflict.", null),
             var c when c == "ActualWork.DraftAlreadyOpenForRequest" => (StatusCodes.Status409Conflict, "Conflict.", null),
             var c when c == "ActualWork.NotDraft"                  => (StatusCodes.Status409Conflict, "Conflict.", null),
+            // GAP-055 option C — an ineligible transfer target is a semantically-invalid target,
+            // not malformed input; mirrors KeepRequest.ParticipationTargetIneligible.
+            var c when c == "ActualWork.RecorderTransferTargetIneligible" => (StatusCodes.Status422UnprocessableEntity, "Unprocessable entity.", null),
 
             // --- Direct Actual Work expand-assembly (build-log/129, 5d-i) ---
             var c when c == "ActualWork.ExpandAssemblyNotOperationallyEligible" => (StatusCodes.Status409Conflict, "Conflict.", null),
