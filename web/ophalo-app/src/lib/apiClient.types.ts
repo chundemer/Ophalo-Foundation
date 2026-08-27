@@ -1222,7 +1222,32 @@ export interface ActualWorkOpenDraftEntry {
    * an Owner/Admin viewing it for a recorder-transfer decision — the field UI must not open the
    * editable composer for them. */
   isRecorder: boolean;
+  /** Populated only for the Owner/Admin non-recorder view (1a-ii recovery UI): identifies the
+   * member who currently holds the Draft. The recovery control needs the id to exclude the current
+   * recorder from the transfer-candidate list — a "transfer" back to the current holder is a
+   * meaningless no-op that would still write an audit event. Both are null for the recorder's own
+   * view and are never sent to field users. */
+  recorderAccountUserId?: string | null;
+  recorderDisplayName?: string | null;
   lines: ActualWorkLineHistoryEntry[];
+}
+
+/** 1a-ii: one member eligible to be assigned as an Actual Work Draft recorder — an active member
+ * holding `RequestsOperate` + `ActualWorkCapture` (the GAP-055 recorder predicate). Returned only
+ * to Owner/Admin from `getActualWorkRecorderCandidates`. */
+export interface ActualWorkRecorderCandidateItem {
+  accountUserId: string;
+  displayName: string;
+  role: string;
+}
+
+export interface ActualWorkRecorderCandidatesResult {
+  candidates: ActualWorkRecorderCandidateItem[];
+}
+
+export interface ActualWorkTransferRecorderBody {
+  newRecorderAccountUserId: string;
+  reason: string;
 }
 
 export interface ActualWorkSubmittedVisitEntry {

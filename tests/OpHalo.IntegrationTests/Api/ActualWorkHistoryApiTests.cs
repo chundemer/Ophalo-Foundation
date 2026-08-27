@@ -55,6 +55,10 @@ public sealed class ActualWorkHistoryApiTests : IClassFixture<KeepApiWebFactory>
         Assert.True(body.TryGetProperty("openDraft", out var openDraft));
         Assert.Equal(draftVersion, openDraft.GetProperty("concurrencyVersion").GetGuid());
         Assert.True(openDraft.GetProperty("isRecorder").GetBoolean());
+        // 1a-ii: recorder identity is never surfaced to the recorder's own view — only to the
+        // Owner/Admin non-recorder view that drives the transfer-recovery control.
+        Assert.Equal(JsonValueKind.Null, openDraft.GetProperty("recorderAccountUserId").ValueKind);
+        Assert.Equal(JsonValueKind.Null, openDraft.GetProperty("recorderDisplayName").ValueKind);
         Assert.False(body.GetProperty("openDraftHeldByOther").GetBoolean());
         Assert.Equal(1, body.GetProperty("submittedVisits").GetArrayLength());
     }
@@ -128,6 +132,13 @@ public sealed class ActualWorkHistoryApiTests : IClassFixture<KeepApiWebFactory>
         Assert.True(body.TryGetProperty("openDraft", out var openDraft));
         Assert.Equal(draftVersion, openDraft.GetProperty("concurrencyVersion").GetGuid());
         Assert.False(openDraft.GetProperty("isRecorder").GetBoolean());
+        // 1a-ii: the Owner/Admin non-recorder view carries the current recorder's identity so the
+        // recovery control can name the holder and exclude them from the candidate list. Name falls
+        // back to email when the user has no display name.
+        Assert.Equal(operatorId, openDraft.GetProperty("recorderAccountUserId").GetGuid());
+        Assert.Equal(
+            "operator@history-owner-views-other-recorder.com",
+            openDraft.GetProperty("recorderDisplayName").GetString());
         // Owner/Admin get the Draft itself, so the presence-only signal stays false for them.
         Assert.False(body.GetProperty("openDraftHeldByOther").GetBoolean());
     }

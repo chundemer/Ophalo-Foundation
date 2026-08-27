@@ -24,10 +24,17 @@ public sealed record ActualWorkLineHistoryEntry(
 /// recorder transfer even when they are not the recorder. <see cref="IsRecorder"/> disambiguates
 /// which case this is: false means the composer must render read-only, never offer the mutation
 /// actions a recorder gets. Carries <see cref="ConcurrencyVersion"/> because it is the
-/// resume-after-reload projection the capture composer edits against.</summary>
+/// resume-after-reload projection the capture composer edits against.
+/// <para><see cref="RecorderAccountUserId"/> and <see cref="RecorderDisplayName"/> are populated
+/// only for the Owner/Admin non-recorder case (1a-ii) — the recovery UI needs the id to exclude
+/// the current recorder from the transfer-candidate list (a "transfer" back to the current holder
+/// is a meaningless no-op that would still write an audit event) and the name to identify who
+/// holds the Draft. Both stay null for the recorder's own view and are never exposed to field
+/// users (who receive only the <c>OpenDraftHeldByOther</c> boolean).</para></summary>
 public sealed record ActualWorkOpenDraftEntry(
     Guid Id, ActualWorkStatus Status, ActualWorkOutcome? Outcome, string? CompletionNote,
     DateTime? SubmittedAtUtc, Guid ConcurrencyVersion, bool IsRecorder,
+    Guid? RecorderAccountUserId, string? RecorderDisplayName,
     IReadOnlyList<ActualWorkLineHistoryEntry> Lines);
 
 /// <summary>A submitted, immutable visit — no <c>ConcurrencyVersion</c>, since nothing here is ever
@@ -68,6 +75,7 @@ public sealed record ActualWorkHistoryResult(
 public sealed class ActualWorkHistoryReadApiService(
     IActualWorkPersistence persistence,
     IKeepRequestDetailPersistence requestPersistence,
+    IKeepRequestOperatePersistence operatePersistence,
     IAccountAccessSnapshotPersistence snapshotPersistence,
     ICurrentUser currentUser,
     IAccountAccessPolicy accountAccessPolicy,
@@ -110,10 +118,23 @@ public sealed class ActualWorkHistoryReadApiService(
             if (draft is not null)
             {
                 var isRecorder = draft.RecorderAccountUserId == currentUser.UserId;
-                if (isRecorder || isOwnerOrAdmin)
-                    openDraft = ToOpenDraftEntry(draft, isRecorder);
+                if (isRecorder)
+                {
+                    openDraft = ToOpenDraftEntry(draft, isRecorder: true, recorderAccountUserId: null, recorderDisplayName: null);
+                }
+                else if (isOwnerOrAdmin)
+                {
+                    // Owner/Admin viewing another member's Draft: surface the recorder identity so
+                    // the recovery UI can name the current holder and exclude them from the
+                    // transfer-candidate list.
+                    var recorderDisplayName = await operatePersistence.GetActorDisplayNameAsync(draft.RecorderAccountUserId, ct);
+                    openDraft = ToOpenDraftEntry(
+                        draft, isRecorder: false, draft.RecorderAccountUserId, recorderDisplayName);
+                }
                 else
+                {
                     openDraftHeldByOther = true;
+                }
             }
         }
 
@@ -125,9 +146,10 @@ public sealed class ActualWorkHistoryReadApiService(
                 submittedVisits.Select(ToSubmittedVisitEntry).ToArray()));
     }
 
-    private static ActualWorkOpenDraftEntry ToOpenDraftEntry(ActualWork visit, bool isRecorder) => new(
+    private static ActualWorkOpenDraftEntry ToOpenDraftEntry(
+        ActualWork visit, bool isRecorder, Guid? recorderAccountUserId, string? recorderDisplayName) => new(
         visit.Id, visit.Status, visit.Outcome, visit.CompletionNote, visit.SubmittedAtUtc,
-        visit.ConcurrencyVersion, isRecorder, ToLineEntries(visit));
+        visit.ConcurrencyVersion, isRecorder, recorderAccountUserId, recorderDisplayName, ToLineEntries(visit));
 
     private static ActualWorkSubmittedVisitEntry ToSubmittedVisitEntry(ActualWork visit) => new(
         visit.Id, visit.Status, visit.Outcome, visit.CompletionNote, visit.SubmittedAtUtc, ToLineEntries(visit));

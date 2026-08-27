@@ -207,6 +207,10 @@ public static class KeepServiceCollectionExtensions
         // persistence registration needed.
         services.AddScoped<ActualWorkHistoryReadApiService>();
 
+        // Direct Actual Work — Owner/Admin-only recorder-transfer candidate list (1a-ii). Reuses
+        // IKeepRequestOperatePersistence (registered above); no new persistence registration.
+        services.AddScoped<GetActualWorkRecorderCandidatesService>();
+
         // Direct Actual Work — technician field-read nudge suggestions (5d-ii-c, build-log/129).
         // Reuses IActualWorkPersistence/IActualWorkNudgeRulePersistence/ICatalogReadPersistence/
         // IOfferingAssemblyPersistence (all registered above); no new persistence registration

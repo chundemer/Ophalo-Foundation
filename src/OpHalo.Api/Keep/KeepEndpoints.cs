@@ -930,6 +930,16 @@ public static class KeepEndpoints
             return result.IsSuccess ? Results.Ok(ToActualWorkHistoryResponse(result.Value)) : ErrorHttpMapper.ToHttpResult(result.Error);
         }).RequireAuthorization();
 
+        // 1a-ii — Owner/Admin-only account-wide list of members eligible to be assigned as an
+        // Actual Work Draft recorder (drives the Draft-recovery transfer control).
+        app.MapGet("/keep/pricebook/actual-work/recorder-candidates", async (
+            GetActualWorkRecorderCandidatesService service,
+            CancellationToken ct) =>
+        {
+            var result = await service.ExecuteAsync(ct);
+            return result.IsSuccess ? Results.Ok(result.Value) : ErrorHttpMapper.ToHttpResult(result.Error);
+        }).RequireAuthorization();
+
         // Batch 7 — Owner/Admin-only account-wide unreviewed-review queue.
         app.MapGet("/keep/pricebook/actual-work/review-queue", async (
             ActualWorkFinancialReadApiService service,
@@ -1175,6 +1185,9 @@ public static class KeepEndpoints
         submittedAtUtc = draft.SubmittedAtUtc,
         concurrencyVersion = draft.ConcurrencyVersion,
         isRecorder = draft.IsRecorder,
+        // Populated only for the Owner/Admin non-recorder view (1a-ii recovery UI); null otherwise.
+        recorderAccountUserId = draft.RecorderAccountUserId,
+        recorderDisplayName = draft.RecorderDisplayName,
         lines = draft.Lines.Select(ToLineHistoryResponse),
     };
 

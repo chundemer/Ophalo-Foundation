@@ -238,6 +238,9 @@ import type {
   ActualWorkOpenDraftEntry,
   ActualWorkSubmittedVisitEntry,
   ActualWorkHistoryResult,
+  ActualWorkRecorderCandidateItem,
+  ActualWorkRecorderCandidatesResult,
+  ActualWorkTransferRecorderBody,
   ActualWorkNudgeSuggestionFieldRowResponse,
   ActualWorkNudgeFieldResultResponse,
   ActualWorkReviewQueueEntry,
@@ -380,6 +383,9 @@ export type {
   ActualWorkOpenDraftEntry,
   ActualWorkSubmittedVisitEntry,
   ActualWorkHistoryResult,
+  ActualWorkRecorderCandidateItem,
+  ActualWorkRecorderCandidatesResult,
+  ActualWorkTransferRecorderBody,
   ActualWorkNudgeSuggestionFieldRowResponse,
   ActualWorkNudgeFieldResultResponse,
   ActualWorkReviewQueueEntry,
@@ -969,6 +975,15 @@ export const api = {
     apiFetchVoid(`/keep/pricebook/actual-work/${actualWorkId}`, {
       method: "DELETE",
       headers: { "X-Keep-ActualWork-Version": version },
+    }),
+  // 1a-ii — Owner/Admin Draft recorder-transfer recovery.
+  getActualWorkRecorderCandidates: () =>
+    apiFetch<ActualWorkRecorderCandidatesResult>("/keep/pricebook/actual-work/recorder-candidates"),
+  transferActualWorkDraftRecorder: (actualWorkId: string, body: ActualWorkTransferRecorderBody, version: string) =>
+    apiFetch<ActualWorkConcurrencyVersionResult>(`/keep/pricebook/actual-work/${actualWorkId}/transfer-recorder`, {
+      method: "POST",
+      headers: { "X-Keep-ActualWork-Version": version },
+      body: JSON.stringify(body),
     }),
   // Slice 8A, build-log/129: Owner/Admin unreviewed-review queue and per-visit financial detail.
   getActualWorkReviewQueue: () =>

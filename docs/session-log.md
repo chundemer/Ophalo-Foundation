@@ -60,15 +60,35 @@ non-member, non-active Operator — each asserts recorder + version unchanged an
 Verified: `~ActualWorkRecorderTransfer` 10/10, `~ActualWork` integration 151/151 (+3), `~ActualWork`
 unit 55/55, architecture 14/14, `git diff --check` clean.
 
-**1a-ii — recovery UI (next).** Expose the current recorder's identity on the Owner/Admin
-`openDraft` read; add an entitlement-filtered transfer-candidate read; build the Owner/Admin-only
-Draft-recovery control on the request-detail Actual Work surface: eligible-recorder selection,
+**1a-ii — recovery UI. Split approved 2026-08-27 into two commits (over the 8-production-file
+gate; backend reads land and test independently of the UI that consumes them).**
+
+**1a-ii-a — backend reads / types / tests — COMPLETE (2026-08-27, uncommitted).**
+`ActualWorkOpenDraftEntry` gains `RecorderAccountUserId` + `RecorderDisplayName`, populated only
+for the Owner/Admin non-recorder view (resolved via `IKeepRequestOperatePersistence.
+GetActorDisplayNameAsync`, now injected into the history read); null for the recorder's own view;
+field users still receive no `openDraft`. New account-wide `GET
+/keep/pricebook/actual-work/recorder-candidates` — Owner/Admin-only, guard order per ADR-462
+(account-access gate → entitlement resolver → `RequestsOperate` → Owner/Admin), filters
+`GetParticipantCandidatesAsync` to the exact GAP-055 recorder predicate (`RequestsOperate` +
+`ActualWorkCapture`) so Viewers and pending invites are excluded; non-qualified callers get an
+opaque 403 (no enumeration). `apiClient` gains `getActualWorkRecorderCandidates` +
+`transferActualWorkDraftRecorder` (sends `X-Keep-ActualWork-Version`); the two new open-draft
+fields are optional on `ActualWorkOpenDraftEntry`. Files: `ActualWorkHistoryReadApiService.cs`,
+new `GetActualWorkRecorderCandidatesService.cs`, `KeepEndpoints.cs`,
+`KeepServiceCollectionExtensions.cs`, `apiClient.types.ts`, `apiClient.ts`; tests
+`ActualWorkHistoryApiTests` (+identity assertions) + new `ActualWorkRecorderCandidatesApiTests`
+(6 tests). Verified: `~ActualWork` integration 157/157 (+6), `~ActualWork` unit 55/55,
+architecture 14/14, app suite 755/755, `tsc`, `git diff --check` clean.
+
+**1a-ii-b — recovery UI / tests (second).** Owner/Admin-only Draft-recovery control on the
+request-detail Actual Work surface: eligible-recorder selection (current recorder excluded),
 required reason, exact-version submission, `ActualWork.AlreadyReviewed`/stale-version/
 `RecorderTransferTargetIneligible` conflict recovery, immutable-audit confirmation, and clear
-handoff to the new recorder. The `useActualWorkCapture` state machine currently discards the
-populated `openDraft` for the Owner/Admin non-recorder case — it must retain it (version + lines +
-recorder identity) to drive this control. Do not fold into slice 2. Do not surface a partial
-transfer control incidentally. Preflight the bounded frontend/API-type/test batch.
+handoff to the new recorder. `useActualWorkCapture` currently discards the populated `openDraft`
+for the Owner/Admin non-recorder case — add an `owner-recovery` state that retains it (version +
+lines + recorder identity). Qualified non-Owner/Admin members keep the current
+privacy-preserving informational card — no recovery affordance. Do not fold into slice 2.
 
 #### 2. P0 — Owner/Admin Actual Work audit, approval, and financial review UI (slice 8)
 
