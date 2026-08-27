@@ -106,6 +106,35 @@ describe("HeroAttentionBanner — unknown/malformed target", () => {
   });
 });
 
+describe("HeroAttentionBanner — phone-width action wrapping", () => {
+  // Mobile responsive-layout regression (2026-08-27): the outer banner row wraps (flex-wrap), so
+  // the server-authored primary action drops onto its own line at phone widths instead of forcing
+  // horizontal overflow / clipping off the right edge. The action group itself stays shrink-0 so
+  // the button never collapses; the outer row does the wrapping.
+  it("wraps via the outer row while the primary-action group stays shrink-0, and keeps the action inside the banner", () => {
+    const detail = detailWith("respond_to_customer", {
+      canSendBusinessUpdate: true,
+      canAcknowledgeAttention: true,
+      primaryAction: { key: "respond_to_customer", label: "Respond to customer", target: "customer_update_composer", requiresConfirmation: false, confirmationCopy: null },
+    });
+    const { container } = render(<HeroAttentionBanner detail={detail} {...requiredProps()} />);
+
+    const banner = container.querySelector("section")!;
+    const outerRow = banner.querySelector(":scope > div")!;
+    expect(outerRow.className).toContain("flex-wrap");
+
+    const primary = screen.getByRole("button", { name: "Respond to customer" });
+    const clear = screen.getByRole("button", { name: "Clear attention" });
+    expect(banner.contains(primary)).toBe(true);
+
+    const actionGroup = primary.closest("div")!;
+    expect(actionGroup.className).toContain("shrink-0");
+    // Attention/no-attention primary-action exclusivity is unaffected: the secondary Clear
+    // attention link and the single server-authored primary action still co-exist here.
+    expect(actionGroup.contains(clear)).toBe(true);
+  });
+});
+
 describe("HeroAttentionBanner — guidance disclosure and empty states", () => {
   it("shows the guidance badge and Why/Resolve-by disclosure", async () => {
     const user = userEvent.setup();

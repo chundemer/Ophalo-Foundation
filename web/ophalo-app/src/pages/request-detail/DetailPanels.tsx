@@ -1097,7 +1097,7 @@ export function HeroAttentionBanner({
           <AttentionGuidanceDisclosure guidance={guidance} />
         </div>
 
-        <div className="flex items-center gap-3 ml-auto">
+        <div className="flex shrink-0 items-center gap-3 ml-auto">
           {showSecondaryClear && (
             <button
               type="button"

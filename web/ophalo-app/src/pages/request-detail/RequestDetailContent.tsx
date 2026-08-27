@@ -130,7 +130,7 @@ export function RequestDetailContent(props: RequestDetailContentProps) {
   );
 
   return (
-    <div ref={rootRef} onFocus={handleCanvasFocus} onBlur={handleCanvasBlur} className="flex flex-1 min-h-0 flex-col">
+    <div ref={rootRef} onFocus={handleCanvasFocus} onBlur={handleCanvasBlur} className="flex flex-1 min-h-0 min-w-0 flex-col">
       {isWide ? (
         <RequestDetailAnchor
           {...layoutProps}
@@ -143,7 +143,7 @@ export function RequestDetailContent(props: RequestDetailContentProps) {
       ) : (
         <MobileRequestAnchor detail={detail} />
       )}
-      <div data-request-detail-work-canvas className="flex-1 min-h-0 overflow-y-auto px-4 md:px-6 py-5">
+      <div data-request-detail-work-canvas className="flex-1 min-h-0 min-w-0 overflow-y-auto px-4 md:px-6 py-5">
       <div className="max-w-4xl mx-auto w-full space-y-3">
         {/* 1. Active attention guidance */}
         <div id="focus-panel-attention" className="space-y-3">
