@@ -347,12 +347,18 @@ twelve files total per batch.
 
 ### Deferred — Actual Work closeout, accounting export, and reconciliation
 
-The Owner/Admin audit/approval and financial-review UI is active slice 2 above. It does **not**
-authorize office closeout, CSV export, invoice/reference capture, reconciliation, QuickBooks sync,
-invoicing, payments, tax, or an Accountant role/UI. Before a later closeout/export slice, lock
-reviewed-visit eligibility (including the hard incomplete-financial-data block), immutable CSV
-schemas, export audit/idempotency/retry behavior, correction rules, invoice/reference validation,
-and the required `Other` outcome note.
+After the active release slices and rehearsal gate, the next Actual Work product preflight is the
+**Minimum Office Closeout foundation** (ADR-493; Build Log 129). It is not a queue-polish task:
+it introduces immutable per-line office financial resolution, server-derived visit billing
+eligibility, request-bound Billing Revisions for manual legacy-system handoff/future export, and
+explicit Addendum/Replacement correction semantics. It must prove revision-membership uniqueness,
+pre/post-handoff correction behavior, authorization, concurrency, and the manual billing-summary
+read before implementation. Do not expose a "Ready for billing" list without the durable Billing
+Revision record that prevents duplicate handoff.
+
+CSV generation, QuickBooks/API integration, invoice creation, payments, tax, inventory,
+reconciliation, and an Accountant role/UI remain deferred. Future export serializes the immutable
+Billing Revision; it must not rebuild financial facts from live visits.
 
 ## Guardrails
 

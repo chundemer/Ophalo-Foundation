@@ -148,6 +148,12 @@ separate deferred workflows for this release.
 rule. First-recorder ownership is now the pilot decision; Build Log 129 owns the migration,
 authorization, transfer, UI-copy, and regression-test remediation plan.
 
+**Amended 2026-08-27:** ADR-493 locks the later office-financial-resolution and Billing Revision
+contract. It preserves the immutable submitted field fact while allowing Owner/Admin to supply
+missing financial values through separate audited records, supports progressive visit-level billing,
+and makes a Billing Revision—not a live request read—the future export boundary. It supersedes this
+ADR's deferred linked-correction wording only for that later, explicitly scoped closeout phase.
+
 ## Non-goals
 
 - Technician pricing authority or technician commercial-delta classification.

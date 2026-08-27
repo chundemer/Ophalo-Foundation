@@ -722,6 +722,26 @@ review, snapshot, and visibility behavior. The later closeout/export preflight m
    role/membership and UI work remains a deliberate later slice.
 4. Exact invoice/reference and `Other`-note validation.
 
+### Minimum Office Closeout foundation — locked product contract (2026-08-27)
+
+ADR-493 now resolves the above product decisions before the later mechanical preflight. Submitted
+field facts remain immutable; missing sell-price or Standard/Expected Direct Cost snapshots are
+completed only through immutable, Owner/Admin-audited per-line financial-resolution records. Review
+produces a server-derived visit billing-eligibility result with blockers rather than a client-written
+flag. A request-bound Billing Revision selects 1..N eligible visits and freezes them for manual
+handoff/future export: `Draft -> ReadyForBilling -> HandedOffToBilling -> Voided`.
+
+Progressive billing is allowed while a request remains operationally open. A visit has at most one
+active revision membership; a change voids a pre-handoff revision with a reason rather than changing
+membership in place. Addendum and Replacement are explicit correction kinds; after handoff, a
+replacement becomes a later adjustment revision and never rewrites the prior handoff. Zero-line
+visits require a no-charge disposition or a real billed/addendum line before billing eligibility.
+
+The later implementation preflight must now prove persistence/migration shape, revision-membership
+uniqueness, authorization, all concurrency boundaries, the adjustment path, financial-resolution
+validation, and manual-summary/export read consistency. CSV generation and external accounting
+integration remain deferred.
+
 ## Non-goals
 
 - Customer quote delivery, acceptance, signatures, invoices, payment collection, QuickBooks sync,
