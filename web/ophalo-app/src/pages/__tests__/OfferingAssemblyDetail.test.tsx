@@ -109,6 +109,18 @@ describe("OfferingAssemblyDetail", () => {
     expect(screen.queryByText("Needs review")).not.toBeInTheDocument();
   });
 
+  it("keeps the assembly detail visible behind the header edit drawer", async () => {
+    const user = userEvent.setup();
+    mockGetOfferingAssembly.mockResolvedValue(baseAssembly);
+    renderDetail();
+
+    await user.click(await screen.findByRole("button", { name: "Edit" }));
+
+    expect(screen.getByRole("dialog", { name: "Edit offering/assembly" })).toBeInTheDocument();
+    expect(screen.getByText("Furnace Tune-Up")).toBeInTheDocument();
+    expect(screen.getByText("Filter")).toBeInTheDocument();
+  });
+
   it("shows a Needs review badge and the eligibility reasons when the assembly is not operationally eligible", async () => {
     mockGetOfferingAssembly.mockResolvedValue({
       ...baseAssembly,

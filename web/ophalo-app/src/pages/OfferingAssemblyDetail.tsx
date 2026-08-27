@@ -368,7 +368,9 @@ export function OfferingAssemblyDetail({
           </div>
         )}
 
-        {!isLoading && !isError && data && !isEditing && (
+        {/* Keep the assembly detail mounted behind its edit drawer. This matches the nudge
+            editor and preserves context while the modal owns focus and interaction. */}
+        {!isLoading && !isError && data && (
           <div className="max-w-2xl space-y-6">
             <div className="flex items-start justify-between gap-4">
               <div>
