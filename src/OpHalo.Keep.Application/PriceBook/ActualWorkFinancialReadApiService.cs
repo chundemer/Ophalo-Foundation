@@ -47,7 +47,23 @@ public sealed record ActualWorkFinancialLineEntry(
     decimal? StandardExpectedDirectCostSnapshot,
     decimal? LineSalesTotal,
     decimal? LineStandardExpectedDirectCostTotal,
-    decimal? LineMargin);
+    decimal? LineMargin,
+    bool SellPriceResolved,
+    decimal? ResolvedSellPrice,
+    string? ResolvedSellPriceBasis,
+    bool DirectCostResolved,
+    decimal? ResolvedStandardExpectedDirectCost,
+    string? ResolvedStandardExpectedDirectCostBasis);
+
+/// <summary>One unresolved line component blocking financial completeness of a submitted visit
+/// (BL135 §4 Batch 3a-iii). A line appears once, naming whichever of its two components still has
+/// neither a captured snapshot nor an effective financial resolution. Covers line components only —
+/// the zero-line no-charge disposition path is Batch 3b (build-log/135 §5 proof 1).</summary>
+public sealed record ActualWorkFinancialBlocker(
+    Guid LineId,
+    string DisplayNameSnapshot,
+    bool SellPriceMissing,
+    bool StandardExpectedDirectCostMissing);
 
 /// <summary>The full factual and financial record of one submitted visit, for the Owner/Admin
 /// request-detail review card (Batch 7, build-log/129). Supports both an unreviewed and an already-
@@ -73,7 +89,8 @@ public sealed record ActualWorkFinancialDetailResult(
     decimal? TotalStandardExpectedDirectCost,
     decimal? TotalMargin,
     IReadOnlyList<ActualWorkFinancialLineEntry> Lines,
-    Guid ConcurrencyVersion);
+    Guid ConcurrencyVersion,
+    IReadOnlyList<ActualWorkFinancialBlocker> Blockers);
 
 /// <summary>
 /// API-facing read orchestration for Owner/Admin Actual Work financial review (Batch 7,
@@ -89,6 +106,7 @@ public sealed record ActualWorkFinancialDetailResult(
 public sealed class ActualWorkFinancialReadApiService(
     IActualWorkFinancialReviewPersistence financialReviewPersistence,
     IActualWorkPersistence actualWorkPersistence,
+    IActualWorkFinancialResolutionPersistence financialResolutionPersistence,
     IKeepRequestOperatePersistence operatePersistence,
     IAccountAccessSnapshotPersistence snapshotPersistence,
     ICurrentUser currentUser,
@@ -148,29 +166,47 @@ public sealed class ActualWorkFinancialReadApiService(
             ? await operatePersistence.GetActorDisplayNameAsync(reviewerId, ct)
             : null;
 
-        return Result<ActualWorkFinancialDetailResult>.Success(ToDetailResult(visit, reviewedByDisplayName));
+        // Effective per-component financial state folds in every resolution appended before review
+        // (BL135 §4 Batch 3a-iii). Account-scoped, newest-first from the seam; the projection
+        // resolves sell price and direct cost independently, each from its own most-recent
+        // supplying row.
+        var resolutions = await financialResolutionPersistence.GetResolutionsForVisitAsync(
+            currentUser.AccountId, actualWorkId, ct);
+
+        return Result<ActualWorkFinancialDetailResult>.Success(
+            ToDetailResult(visit, reviewedByDisplayName, resolutions));
     }
+
+    /// <summary>The review-queue source seam does not carry financial-resolution rows, so queue-row
+    /// totals stay snapshot-only: a visit whose blockers have since been resolved still reads
+    /// pessimistically incomplete in the queue until Batch 3b-ii's transactional review gate. The
+    /// direction is safe — the queue never reports "ready" when it is not.</summary>
+    private static readonly IReadOnlyList<ActualWorkLineFinancialResolution> NoResolutions =
+        Array.Empty<ActualWorkLineFinancialResolution>();
 
     private static ActualWorkReviewQueueEntry ToQueueEntry(ActualWorkReviewQueueSourceRow row)
     {
-        var totals = ActualWorkFinancialProjection.ComputeVisitTotals(row.Visit.Lines);
+        var totals = ActualWorkFinancialProjection.ProjectVisit(row.Visit.Lines, NoResolutions).Totals;
         return new ActualWorkReviewQueueEntry(
             row.Visit.Id, row.Visit.RequestId, row.ReferenceCode, row.CustomerName,
             row.Visit.SubmittedAtUtc!.Value, totals.HasIncompleteFinancialData, totals.IncompleteLineCount,
             totals.TotalSalesPrice, totals.TotalStandardExpectedDirectCost, totals.TotalMargin);
     }
 
-    private static ActualWorkFinancialDetailResult ToDetailResult(ActualWork visit, string? reviewedByDisplayName)
+    private static ActualWorkFinancialDetailResult ToDetailResult(
+        ActualWork visit, string? reviewedByDisplayName,
+        IReadOnlyList<ActualWorkLineFinancialResolution> resolutions)
     {
         var lines = visit.Lines.OrderBy(l => l.CreatedAtUtc).ThenBy(l => l.Id).ToArray();
-        var totals = ActualWorkFinancialProjection.ComputeVisitTotals(lines);
+        var projection = ActualWorkFinancialProjection.ProjectVisit(lines, resolutions);
+        var totals = projection.Totals;
 
         return new ActualWorkFinancialDetailResult(
             visit.Id, visit.RequestId, visit.Status, visit.Outcome, visit.CompletionNote,
             visit.RecorderAccountUserId, visit.SubmittedAtUtc!.Value, visit.ReviewedAtUtc,
             visit.ReviewedByAccountUserId, reviewedByDisplayName, visit.ReviewNote, totals.HasIncompleteFinancialData,
             totals.TotalSalesPrice, totals.TotalStandardExpectedDirectCost, totals.TotalMargin,
-            lines.Select(ActualWorkFinancialProjection.ToLineEntry).ToArray(), visit.ConcurrencyVersion);
+            projection.Lines, visit.ConcurrencyVersion, projection.Blockers);
     }
 
     /// <summary>Owner/Admin office-review gate: authenticated, non-blocked/read-only account access,
@@ -241,36 +277,136 @@ internal static class ActualWorkFinancialProjection
         decimal? TotalStandardExpectedDirectCost,
         decimal? TotalMargin);
 
-    /// <summary>A line is incomplete when either required financial snapshot is missing —
-    /// <see cref="ActualWorkLine.SellPriceSnapshot"/> or
-    /// <see cref="ActualWorkLine.StandardExpectedDirectCostSnapshot"/> null. Deliberately not based
-    /// on <see cref="ActualWorkLine.PriceBookVersionLineId"/> — the domain does not guarantee the two
-    /// snapshot fields are non-null whenever that id is set (build-log/129, "7 preflight —
-    /// corrected 2026-08-21").</summary>
-    internal static bool IsLineComplete(ActualWorkLine line) =>
-        line.SellPriceSnapshot is not null && line.StandardExpectedDirectCostSnapshot is not null;
-
-    internal static VisitTotals ComputeVisitTotals(IReadOnlyCollection<ActualWorkLine> lines)
+    /// <summary>The single per-line financial fold (BL135 §4 Batch 3a-iii): the effective value of
+    /// each component is its captured snapshot, or — only when the snapshot is missing — the
+    /// most-recent financial-resolution row supplying that component. Sell price and direct cost
+    /// resolve independently, each carrying its own provenance (build-log/135 §5 proof 2). Line
+    /// completeness, line totals, and the blocker list are all derived from this one value so they
+    /// cannot drift in the mixed-provenance case.</summary>
+    internal readonly record struct EffectiveLineFinancials(
+        decimal? SellPrice,
+        bool SellPriceResolved,
+        FinancialResolutionBasis? SellPriceBasis,
+        decimal? StandardExpectedDirectCost,
+        bool StandardExpectedDirectCostResolved,
+        FinancialResolutionBasis? StandardExpectedDirectCostBasis)
     {
-        var incompleteCount = lines.Count(l => !IsLineComplete(l));
-        if (incompleteCount > 0)
-            return new VisitTotals(true, incompleteCount, null, null, null);
+        internal bool IsComplete => SellPrice is not null && StandardExpectedDirectCost is not null;
+    }
 
-        var totalSales = lines.Sum(l => l.SellPriceSnapshot!.Value * l.ActualQuantity);
-        var totalCost = lines.Sum(l => l.StandardExpectedDirectCostSnapshot!.Value * l.ActualQuantity);
+    /// <summary>ADR-467: traditional round-half-up, applied to each computed line total
+    /// independently. Financial inputs and quantities are non-negative in this domain, so
+    /// <see cref="MidpointRounding.AwayFromZero"/> is round-half-up. Visit totals are the sum of
+    /// these already-rounded line totals — never one rounding of an unrounded sum. No reusable
+    /// quote-line helper exists yet; Batch 7b's snapshot writer reuses this one.</summary>
+    internal static decimal RoundMoney(decimal value) =>
+        decimal.Round(value, 2, MidpointRounding.AwayFromZero);
+
+    /// <summary>Fold one line against the visit's resolution rows, which the caller
+    /// (<see cref="ProjectVisit"/>) has already ordered <c>ResolvedAtUtc DESC, Id DESC</c> — so the
+    /// first supplying row per component is the most recent one.</summary>
+    private static EffectiveLineFinancials ComputeEffective(
+        ActualWorkLine line, IReadOnlyList<ActualWorkLineFinancialResolution> orderedResolutions)
+    {
+        var lineRows = orderedResolutions.Where(r => r.ActualWorkLineId == line.Id).ToArray();
+
+        var sell = line.SellPriceSnapshot;
+        var sellResolved = false;
+        FinancialResolutionBasis? sellBasis = null;
+        if (sell is null)
+        {
+            var row = lineRows.FirstOrDefault(r => r.ResolvedUnitSellPrice is not null);
+            if (row is not null)
+            {
+                sell = row.ResolvedUnitSellPrice;
+                sellResolved = true;
+                sellBasis = row.Basis;
+            }
+        }
+
+        var cost = line.StandardExpectedDirectCostSnapshot;
+        var costResolved = false;
+        FinancialResolutionBasis? costBasis = null;
+        if (cost is null)
+        {
+            var row = lineRows.FirstOrDefault(r => r.ResolvedUnitStandardExpectedDirectCost is not null);
+            if (row is not null)
+            {
+                cost = row.ResolvedUnitStandardExpectedDirectCost;
+                costResolved = true;
+                costBasis = row.Basis;
+            }
+        }
+
+        return new EffectiveLineFinancials(
+            sell, sellResolved, sellBasis, cost, costResolved, costBasis);
+    }
+
+    /// <summary>Totals, line DTOs, and blockers for one visit, all derived from a single per-line
+    /// fold.</summary>
+    internal sealed record VisitProjection(
+        VisitTotals Totals,
+        IReadOnlyList<ActualWorkFinancialLineEntry> Lines,
+        IReadOnlyList<ActualWorkFinancialBlocker> Blockers);
+
+    /// <summary>The one entry point for a visit's financial read (BL135 §4 Batch 3a-iii): resolution
+    /// rows are ordered once (<c>ResolvedAtUtc DESC, Id DESC</c>), each line's effective per-component
+    /// state is computed once, and completeness, rounded totals, line DTOs, and the blocker list are
+    /// every one derived from that same per-line state — so they cannot drift in the mixed-provenance
+    /// case. The persistence seam already returns rows newest-first; the re-order here also lets unit
+    /// tests pass rows in any order.</summary>
+    internal static VisitProjection ProjectVisit(
+        IReadOnlyCollection<ActualWorkLine> lines,
+        IReadOnlyList<ActualWorkLineFinancialResolution> resolutions)
+    {
+        var orderedResolutions = resolutions
+            .OrderByDescending(r => r.ResolvedAtUtc)
+            .ThenByDescending(r => r.Id)
+            .ToArray();
+
+        var folds = lines
+            .Select(line => (Line: line, Fin: ComputeEffective(line, orderedResolutions)))
+            .ToArray();
+
+        var incompleteCount = folds.Count(f => !f.Fin.IsComplete);
+        var totals = incompleteCount > 0
+            ? new VisitTotals(true, incompleteCount, null, null, null)
+            : BuildCompleteTotals(folds);
+
+        var lineEntries = folds.Select(f => ToLineEntry(f.Line, f.Fin)).ToArray();
+
+        var blockers = folds
+            .Where(f => !f.Fin.IsComplete)
+            .Select(f => new ActualWorkFinancialBlocker(
+                f.Line.Id, f.Line.DisplayNameSnapshot,
+                SellPriceMissing: f.Fin.SellPrice is null,
+                StandardExpectedDirectCostMissing: f.Fin.StandardExpectedDirectCost is null))
+            .ToArray();
+
+        return new VisitProjection(totals, lineEntries, blockers);
+    }
+
+    private static VisitTotals BuildCompleteTotals(
+        IReadOnlyList<(ActualWorkLine Line, EffectiveLineFinancials Fin)> folds)
+    {
+        // ADR-467: each line total rounded independently; visit totals are the exact sum of those.
+        var totalSales = folds.Sum(f => RoundMoney(f.Fin.SellPrice!.Value * f.Line.ActualQuantity));
+        var totalCost = folds.Sum(f => RoundMoney(f.Fin.StandardExpectedDirectCost!.Value * f.Line.ActualQuantity));
         return new VisitTotals(false, 0, totalSales, totalCost, totalSales - totalCost);
     }
 
-    internal static ActualWorkFinancialLineEntry ToLineEntry(ActualWorkLine line)
+    private static ActualWorkFinancialLineEntry ToLineEntry(ActualWorkLine line, EffectiveLineFinancials fin)
     {
-        var isComplete = IsLineComplete(line);
-        var lineSalesTotal = isComplete ? line.SellPriceSnapshot!.Value * line.ActualQuantity : (decimal?)null;
-        var lineCostTotal = isComplete ? line.StandardExpectedDirectCostSnapshot!.Value * line.ActualQuantity : (decimal?)null;
-        var lineMargin = isComplete ? lineSalesTotal - lineCostTotal : (decimal?)null;
+        var lineSalesTotal = fin.IsComplete ? RoundMoney(fin.SellPrice!.Value * line.ActualQuantity) : (decimal?)null;
+        var lineCostTotal = fin.IsComplete ? RoundMoney(fin.StandardExpectedDirectCost!.Value * line.ActualQuantity) : (decimal?)null;
+        var lineMargin = fin.IsComplete ? lineSalesTotal - lineCostTotal : (decimal?)null;
 
         return new ActualWorkFinancialLineEntry(
             line.Id, line.DisplayNameSnapshot, line.UnitOfMeasureSnapshot, line.ActualQuantity, line.Note,
-            isComplete, line.SellPriceSnapshot, line.StandardExpectedDirectCostSnapshot,
-            lineSalesTotal, lineCostTotal, lineMargin);
+            fin.IsComplete, line.SellPriceSnapshot, line.StandardExpectedDirectCostSnapshot,
+            lineSalesTotal, lineCostTotal, lineMargin,
+            fin.SellPriceResolved, fin.SellPriceResolved ? fin.SellPrice : null, fin.SellPriceBasis?.ToString(),
+            fin.StandardExpectedDirectCostResolved, fin.StandardExpectedDirectCostResolved ? fin.StandardExpectedDirectCost : null,
+            fin.StandardExpectedDirectCostBasis?.ToString());
     }
 }

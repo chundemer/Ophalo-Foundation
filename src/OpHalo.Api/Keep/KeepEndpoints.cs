@@ -1258,6 +1258,13 @@ public static class KeepEndpoints
         totalMargin = result.TotalMargin,
         lines = result.Lines.Select(ToFinancialLineResponse),
         concurrencyVersion = result.ConcurrencyVersion,
+        blockers = result.Blockers.Select(b => new
+        {
+            lineId = b.LineId,
+            displayNameSnapshot = b.DisplayNameSnapshot,
+            sellPriceMissing = b.SellPriceMissing,
+            standardExpectedDirectCostMissing = b.StandardExpectedDirectCostMissing,
+        }),
     };
 
     private static object ToFinancialLineResponse(ActualWorkFinancialLineEntry line) => new
@@ -1273,6 +1280,12 @@ public static class KeepEndpoints
         lineSalesTotal = line.LineSalesTotal,
         lineStandardExpectedDirectCostTotal = line.LineStandardExpectedDirectCostTotal,
         lineMargin = line.LineMargin,
+        sellPriceResolved = line.SellPriceResolved,
+        resolvedSellPrice = line.ResolvedSellPrice,
+        resolvedSellPriceBasis = line.ResolvedSellPriceBasis,
+        directCostResolved = line.DirectCostResolved,
+        resolvedStandardExpectedDirectCost = line.ResolvedStandardExpectedDirectCost,
+        resolvedStandardExpectedDirectCostBasis = line.ResolvedStandardExpectedDirectCostBasis,
     };
 
     private static object ToLineHistoryResponse(ActualWorkLineHistoryEntry line) => new

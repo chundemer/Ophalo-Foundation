@@ -300,16 +300,38 @@ returned version succeeds); +2 `ActualWorkTests` unit cases for the domain metho
 unit suite 1658/1658 (+2), `~ActualWork` integration 189/189, architecture 14/14,
 `git diff --check` clean.
 
-**Exact target for the next coding session:** **BL135 Batch 3a-iii — financial-resolution read
-projection fold**. `ActualWorkFinancialReadApiService.cs` only (`ActualWorkFinancialProjection` +
-the DTO records) plus the API response mappers in `KeepEndpoints.cs`: load the visit's resolutions,
-compute the **effective** value per component independently (`ResolvedAtUtc DESC, Id DESC`, each
-with its own provenance), fold into `ComputeVisitTotals` / `ToLineEntry`; a line is complete when
-snapshot-or-resolution covers both components; apply ADR-467 line rounding (D3); add per-component
-`IsResolved` + resolved value + basis and a `Blockers` list. Tests: extend
-`ActualWorkFinancialProjectionTests` (rounding + effective-resolution folding) and
-`ActualWorkFinancialReadApiTests` (detail carries resolutions + blockers). Follow BL135 §4
-"Batch 3a-ii" item 4 (now 3a-iii); do not re-run discovery.
+**Batch 3a-iii (financial-resolution read-projection fold — read only) — COMPLETE (2026-08-28).**
+Application projection + API mappers; 0 families; 2 prod / 2 test (4 changed files, no new files, no
+DI change — resolution persistence + read service were already registered in 3a-ii).
+`ActualWorkFinancialReadApiService` gains an `IActualWorkFinancialResolutionPersistence` ctor
+dependency; `GetFinancialDetailAsync` loads `GetResolutionsForVisitAsync` and folds it in. New
+`ActualWorkFinancialProjection.ProjectVisit(lines, resolutions)` is the one read entry point:
+it orders the resolution rows once (`ResolvedAtUtc DESC, Id DESC`), folds each line once into an
+effective per-component struct (each component's value is its snapshot, or — only if the snapshot
+is missing — the most-recent supplying row; sell price and direct cost resolved independently, each
+with its own provenance), and returns totals + line DTOs + blockers all derived from that same
+per-line struct. `ToDetailResult` and `ToQueueEntry` each call it exactly once. New
+`RoundMoney` = `decimal.Round(v, 2, MidpointRounding.AwayFromZero)` (ADR-467 round-half-up;
+inputs/quantities are non-negative in this domain); each line total rounded independently, visit
+totals = sum of already-rounded line totals, margin = rounded-sales − rounded-cost (all three
+reconcile). DTO additions: `ActualWorkFinancialLineEntry` per-component `…Resolved` bool + resolved
+value + basis string; `ActualWorkFinancialDetailResult.Blockers` (new
+`ActualWorkFinancialBlocker` record — line components only, not disposition). `KeepEndpoints`
+`ToActualWorkFinancialDetailResponse` / `ToFinancialLineResponse` extended.
+
+*Known follow-up (not a bug):* the review-queue source seam carries no resolution rows, so queue-row
+`hasIncompleteFinancialData` / `incompleteLineCount` / totals stay **snapshot-only** — a visit whose
+blockers have since been resolved still reads pessimistically incomplete in the queue until Batch
+3b-ii's transactional review gate. Safe direction (never reports "ready" when it is not); the
+authoritative readiness check is 3b-ii, not the queue. Making the queue resolution-aware needs an
+`IActualWorkFinancialReviewPersistence` seam change — out of this batch's gate.
+
+Verified: full unit suite 1663/1663 (+5), `~ActualWork` integration 191/191 (+2),
+`~ActualWorkFinancialRead`/`~ActualWorkFinancialResolution` 51/51, architecture 14/14,
+`git diff --check` clean.
+
+**Exact target for the next coding session:** **BL135 Batch 3b-i — zero-line no-charge disposition
+API + persistence**. Follow BL135 §4 "Batch 3b-i"; do not re-run discovery.
 
 ### Next after the release gate — triage, do not silently bundle
 

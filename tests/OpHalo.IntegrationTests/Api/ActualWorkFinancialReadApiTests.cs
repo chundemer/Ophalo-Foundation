@@ -366,9 +366,92 @@ public sealed class ActualWorkFinancialReadApiTests : IClassFixture<KeepApiWebFa
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
 
+    // --- BL135 Batch 3a-iii: financial-detail effective resolution folding + blockers ---
+
+    [Fact]
+    public async Task FinancialDetail_UnresolvedLine_ListsBothComponentsAsBlockers()
+    {
+        var (accountId, ownerId, ownerCookie) = await SeedAccountAsync("detail-blockers");
+        await EnrollAsync(accountId, ownerId);
+        var requestId = await SeedRequestAsync(accountId, "Jane Customer");
+        var visitId = await CreateVisitAsync(
+            accountId, requestId, ownerId, submit: true, review: false,
+            lines: [((Guid?)null, (Guid?)null, (decimal?)null, (decimal?)null, 2m)]);
+
+        var body = await (await GetDetailAsync(ownerCookie, visitId)).Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.True(body.GetProperty("hasIncompleteFinancialData").GetBoolean());
+        var blocker = Assert.Single(body.GetProperty("blockers").EnumerateArray().ToArray());
+        Assert.True(blocker.GetProperty("sellPriceMissing").GetBoolean());
+        Assert.True(blocker.GetProperty("standardExpectedDirectCostMissing").GetBoolean());
+    }
+
+    [Fact]
+    public async Task FinancialDetail_FoldsEffectiveResolutions_PerComponent_WithProvenanceAndRounding()
+    {
+        var (accountId, ownerId, ownerCookie) = await SeedAccountAsync("detail-resolution-fold");
+        await EnrollAsync(accountId, ownerId);
+        var requestId = await SeedRequestAsync(accountId, "Jane Customer");
+        var visitId = await CreateVisitAsync(
+            accountId, requestId, ownerId, submit: true, review: false,
+            lines: [((Guid?)null, (Guid?)null, (decimal?)null, (decimal?)null, 3m)]);
+        var lineId = await FirstLineIdAsync(visitId);
+
+        // Sell price supplied by an older row, then superseded; direct cost by a separate newer row.
+        var t0 = DateTime.UtcNow.AddMinutes(-10);
+        await SeedResolutionAsync(accountId, visitId, lineId, sell: 2.00m, cost: null,
+            FinancialResolutionBasis.SupplierReceipt, t0, ownerId);
+        await SeedResolutionAsync(accountId, visitId, lineId, sell: 3.335m, cost: null,
+            FinancialResolutionBasis.OwnerSetPrice, t0.AddMinutes(2), ownerId);
+        await SeedResolutionAsync(accountId, visitId, lineId, sell: null, cost: 1.11m,
+            FinancialResolutionBasis.FixedAgreement, t0.AddMinutes(4), ownerId);
+
+        var body = await (await GetDetailAsync(ownerCookie, visitId)).Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.False(body.GetProperty("hasIncompleteFinancialData").GetBoolean());
+        Assert.Empty(body.GetProperty("blockers").EnumerateArray().ToArray());
+
+        var line = body.GetProperty("lines").EnumerateArray().Single();
+        Assert.True(line.GetProperty("sellPriceResolved").GetBoolean());
+        Assert.Equal(3.335m, line.GetProperty("resolvedSellPrice").GetDecimal());
+        Assert.Equal("OwnerSetPrice", line.GetProperty("resolvedSellPriceBasis").GetString());
+        Assert.True(line.GetProperty("directCostResolved").GetBoolean());
+        Assert.Equal("FixedAgreement", line.GetProperty("resolvedStandardExpectedDirectCostBasis").GetString());
+
+        // 3.335 * 3 = 10.005 -> round-half-up 10.01; 1.11 * 3 = 3.33.
+        Assert.Equal(10.01m, line.GetProperty("lineSalesTotal").GetDecimal());
+        Assert.Equal(3.33m, line.GetProperty("lineStandardExpectedDirectCostTotal").GetDecimal());
+        Assert.Equal(10.01m, body.GetProperty("totalSalesPrice").GetDecimal());
+        Assert.Equal(3.33m, body.GetProperty("totalStandardExpectedDirectCost").GetDecimal());
+        Assert.Equal(6.68m, body.GetProperty("totalMargin").GetDecimal());
+    }
+
     // -------------------------------------------------------------------------
     // Helpers
     // -------------------------------------------------------------------------
+
+    private async Task<Guid> FirstLineIdAsync(Guid visitId)
+    {
+        await using var scope = _factory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+        var line = await db.Set<ActualWorkLine>()
+            .Where(l => l.ActualWorkId == visitId)
+            .OrderBy(l => l.CreatedAtUtc).ThenBy(l => l.Id)
+            .FirstAsync();
+        return line.Id;
+    }
+
+    private async Task SeedResolutionAsync(
+        Guid accountId, Guid visitId, Guid lineId, decimal? sell, decimal? cost,
+        FinancialResolutionBasis basis, DateTime resolvedAtUtc, Guid actorAccountUserId)
+    {
+        await using var scope = _factory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+        var resolution = ActualWorkLineFinancialResolution.Create(
+            accountId, visitId, lineId, sell, cost, basis, "office resolution", actorAccountUserId, resolvedAtUtc).Value;
+        db.Add(resolution);
+        await db.SaveChangesAsync();
+    }
 
     private async Task<HttpResponseMessage> GetQueueAsync(string cookie) =>
         await AuthRequest(cookie).GetAsync("/keep/pricebook/actual-work/review-queue");

@@ -1,9 +1,9 @@
 # Build Log 135 — Minimum Office Closeout: Mechanical Preflight (Batch 0, no code)
 
 **Status:** Mechanical preflight complete (rev. 6 — fourteen review corrections applied over five
-review rounds) — implementation batches gated. Batches 1 (`56b8b7f`), 2 (`946481a`), and 3a-i
-(`00684dd`) committed; 3a-ii implemented (pending review); Batch 3a-iii (read-projection fold) is
-the next coding session.
+review rounds) — implementation batches gated. Batches 1 (`56b8b7f`), 2 (`946481a`), 3a-i
+(`00684dd`), and 3a-ii (`d2d1d6a`) committed; 3a-iii implemented (pending review); Batch 3b-i
+(zero-line no-charge disposition API) is the next coding session.
 **Date:** 2026-08-27
 **Related:** ADR-493, ADR-487, ADR-467, ADR-468, ADR-462, ADR-463, ADR-480; Build Log 129
 ("Minimum Office Closeout implementation sequence — locked"); session-log "Next after the release
@@ -344,6 +344,23 @@ test — Admin/Owner hold `AccountingManage`, Operator/Viewer do not); extend
 > Batch 3a-iii** (read-projection fold: effective per-component resolution, ADR-467 line rounding,
 > per-component `IsResolved`/value/basis, `Blockers`). The result enum landed as
 > `ActualWorkResolutionResult`; guard order is unchanged from item 3.
+>
+> **Batch 3a-iii implemented (2026-08-28):** item 4 + the two `KeepEndpoints` mappers, read only,
+> 2 prod / 2 test, no new files, no DI change. One entry point
+> `ActualWorkFinancialProjection.ProjectVisit(lines, resolutions)` orders the resolution rows once,
+> folds each line once into an effective per-component struct, and returns totals + line DTOs +
+> blockers all derived from that same struct; `ToDetailResult` / `ToQueueEntry` call it once each.
+> `RoundMoney` =
+> `decimal.Round(v, 2, MidpointRounding.AwayFromZero)` (round-half-up; inputs/quantities non-negative
+> in this domain); each line total rounded independently, visit totals = sum of already-rounded line
+> totals, margin = rounded-sales − rounded-cost. Sell price and direct cost resolve independently,
+> each keeping its own provenance row (defensive re-sort by `ResolvedAtUtc DESC, Id DESC`).
+> `ActualWorkFinancialLineEntry` gained per-component `…Resolved`/value/basis;
+> `ActualWorkFinancialDetailResult` gained `Blockers` (new `ActualWorkFinancialBlocker` — line
+> components only, no disposition). **Known follow-up:** the review-queue source seam
+> (`ActualWorkReviewQueueSourceRow`) carries no resolution rows, so queue-row
+> completeness/`incompleteLineCount`/totals stay snapshot-only (pessimistic) until Batch 3b-ii's
+> transactional review gate — safe direction; 3b-ii is the authoritative readiness check.
 
 **Layer:** Application + API + one Core seam. **Families:** 1 (create financial resolution).
 **Files (3a-ii):** 8 prod / 2 test.
