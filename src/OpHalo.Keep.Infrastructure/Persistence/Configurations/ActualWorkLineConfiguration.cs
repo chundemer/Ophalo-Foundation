@@ -57,6 +57,13 @@ internal sealed class ActualWorkLineConfiguration : BaseEntityConfiguration<Actu
 
         builder.HasIndex(x => new { x.AccountId, x.ActualWorkId });
 
+        // Alternate key (build-log/135 §4 Batch 2, drift D2) — the (AccountId, ActualWorkId, Id)
+        // principal key that ActualWorkLineFinancialResolution's three-column FK references,
+        // proving a resolved line belongs to that exact visit. Additive: the tuple is already
+        // unique via the single-column PK on Id.
+        builder.HasAlternateKey(x => new { x.AccountId, x.ActualWorkId, x.Id })
+            .HasName("ak_keep_actual_work_lines_account_visit_id");
+
         builder.HasOne<Account>()
             .WithMany()
             .HasForeignKey(x => x.AccountId)
