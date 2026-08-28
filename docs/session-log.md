@@ -210,6 +210,28 @@ of the three wrappers (`apiFetch`, `apiFetchVoid`, `apiFetchMaybeJson`), a singl
 sequential 401s, and no redirect for 403, 500, or transport failures; AuthGuard withholds
 children and redirects once for `/auth/me` 401.
 
+### Next after the release gate — Minimum Office Closeout
+
+**Batch 0 (mechanical preflight) — COMPLETE (2026-08-27, `80f8065`).**
+[`docs/build-log/135-minimum-office-closeout-mechanical-preflight.md`](build-log/135-minimum-office-closeout-mechanical-preflight.md)
+(rev. 4, eleven review corrections over three rounds). It maps the ADR-493 / BL129 sequence into
+gated slices — target files, DTOs, endpoints, error mapping, permission/entitlement gates,
+transaction/concurrency boundaries, DB constraints, and focused tests, with per-batch file/family
+counts against the batch gate. It carries the four required proofs (visit-level zero-line NoCharge
+disposition; effective financial-resolution supersession; one unreleased Billing Revision membership
+per visit; one Draft/ReadyForBilling revision per request) plus the immutable revision snapshot
+model. Locked there: `AccountingManage` at Admin tier (Owner inherits; existing review/financial
+reads retrofitted); `NoCharge` disposition zero-line-only; single-shot handoff. Sequence renumbered
+in BL135 §4: Batch 3a → 3a-i / 3a-ii, Batch 3b → 3b-i / 3b-ii; Batches 2 and 6 defer DI.
+
+**Exact target for the next coding session:** **BL135 Batch 1 — Financial-resolution and
+zero-line-disposition domain foundation** (Core only, 0 mutation families, 5 prod / 2 test files).
+Add the immutable `ActualWorkLineFinancialResolution` and visit-level
+`ActualWorkOfficeFinancialDisposition` records, the `FinancialResolutionBasis` /
+`OfficeFinancialDispositionKind` enums, `ActualWorkFinancialResolutionErrors`, and isolated unit
+tests. No persistence, migration, API, or UI. Follow BL135 §4 "Batch 1" exactly; do not re-run
+discovery.
+
 ### Next after the release gate — triage, do not silently bundle
 
 Prioritize the remaining active pilot bugs by production evidence after the active release slices
