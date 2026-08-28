@@ -921,6 +921,30 @@ public static class KeepEndpoints
                 : ErrorHttpMapper.ToHttpResult(result.Error);
         }).RequireAuthorization();
 
+        // BL135 §4 Batch 3a-ii — Owner/Admin office resolution of a missing per-line financial
+        // component on a submitted, not-yet-reviewed visit. Rotates the visit concurrency version
+        // so a stale review command is rejected as a conflict. Read-projection fold is Batch 3a-iii.
+        app.MapPost("/keep/pricebook/actual-work/{actualWorkId:guid}/lines/{lineId:guid}/financial-resolution", async (
+            Guid actualWorkId,
+            Guid lineId,
+            ActualWorkFinancialResolutionBody body,
+            HttpRequest httpRequest,
+            ActualWorkFinancialResolutionApiService service,
+            CancellationToken ct) =>
+        {
+            var versionResult = ParseActualWorkVersion(httpRequest.Headers);
+            if (!versionResult.IsSuccess)
+                return ErrorHttpMapper.ToHttpResult(versionResult.Error);
+
+            var command = new ActualWorkFinancialResolutionCommand(
+                body.ResolvedUnitSellPrice, body.ResolvedUnitStandardExpectedDirectCost, body.Basis, body.Reason);
+
+            var result = await service.CreateResolutionAsync(actualWorkId, lineId, command, versionResult.Value, ct);
+            return result.IsSuccess
+                ? Results.Ok(new ActualWorkConcurrencyVersionResponse(result.Value))
+                : ErrorHttpMapper.ToHttpResult(result.Error);
+        }).RequireAuthorization();
+
         app.MapGet("/keep/pricebook/actual-work/request/{requestId:guid}/history", async (
             Guid requestId,
             ActualWorkHistoryReadApiService service,
@@ -1302,6 +1326,14 @@ file sealed record ActualWorkSubmitBody(string? Outcome, string? CompletionNote)
 file sealed record ActualWorkTransferRecorderBody(Guid NewRecorderAccountUserId, string Reason);
 
 file sealed record ActualWorkReviewBody(string? ReviewNote);
+
+/// <summary>BL135 §4 Batch 3a-ii. <see cref="Basis"/> is parsed to <c>FinancialResolutionBasis</c>
+/// (case-insensitive) in the API service; at least one resolved value must be supplied.</summary>
+file sealed record ActualWorkFinancialResolutionBody(
+    decimal? ResolvedUnitSellPrice,
+    decimal? ResolvedUnitStandardExpectedDirectCost,
+    string? Basis,
+    string? Reason);
 
 file sealed record ActualWorkLineAddedResponse(Guid LineId, Guid ActualWorkConcurrencyVersion);
 

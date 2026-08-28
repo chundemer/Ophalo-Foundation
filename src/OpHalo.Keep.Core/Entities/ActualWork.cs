@@ -242,4 +242,19 @@ public sealed class ActualWork : BaseEntity
         ConcurrencyVersion = Guid.NewGuid();
         return Result.Success();
     }
+
+    /// <summary>
+    /// Rotates <see cref="ConcurrencyVersion"/> after an immutable per-line financial resolution has
+    /// been appended for this visit (BL135 §4 Batch 3a-ii). It exists solely to invalidate a stale
+    /// financial-review command: the resolution row lives in a separate append-only entity, but it
+    /// changes the effective financial state the Owner/Admin review card renders, so a review
+    /// submitted against the pre-resolution version must be rejected as a conflict. This is the only
+    /// sanctioned way for the financial-resolution persistence transaction to advance the visit
+    /// token — it must not be used for any other purpose, and the transaction owns whether an
+    /// append actually occurred before calling it.
+    /// </summary>
+    public void RefreshConcurrencyVersionForFinancialResolution()
+    {
+        ConcurrencyVersion = Guid.NewGuid();
+    }
 }

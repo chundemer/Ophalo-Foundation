@@ -35,6 +35,28 @@ public static class ActualWorkFinancialResolutionErrors
             "ActualWork.FinancialResolutionReasonTooLong",
             "Reason must not exceed 2000 characters.");
 
+    /// <summary>Batch 3a-ii: the targeted line id does not belong to the loaded visit (wrong visit,
+    /// deleted, or unknown). Maps to 404.</summary>
+    public static readonly Error FinancialResolutionLineNotFound =
+        Error.Create(
+            "ActualWork.FinancialResolutionLineNotFound",
+            "That line is not part of this visit.");
+
+    /// <summary>Batch 3a-ii: a resolution may only supply a component whose captured snapshot is
+    /// missing. The targeted component already has a non-null snapshot on the line. Maps to 409.</summary>
+    public static readonly Error FinancialResolutionSnapshotComponentAlreadyValid =
+        Error.Create(
+            "ActualWork.FinancialResolutionSnapshotComponentAlreadyValid",
+            "That line component already has a captured value and cannot be resolved.");
+
+    /// <summary>Batch 3a-ii (drift D5): the visit has been financially reviewed
+    /// (<c>ReviewedAtUtc != null</c>); a resolution would mutate effective financial facts after the
+    /// Owner/Admin's approval. Post-review changes are the deferred correction path. Maps to 409.</summary>
+    public static readonly Error FinancialResolutionVisitAlreadyReviewed =
+        Error.Create(
+            "ActualWork.FinancialResolutionVisitAlreadyReviewed",
+            "This visit has already been reviewed and can no longer be resolved.");
+
     public static readonly Error DispositionInvalidKind =
         Error.Create(
             "ActualWork.DispositionInvalidKind",

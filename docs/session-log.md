@@ -266,14 +266,50 @@ Tests: `UserAccessPolicyTests` matrix rows (Admin/Owner hold it, Operator/Viewer
 helper in each API test class. Verified: full unit suite 1656/1656 (+4), `~ActualWorkReview` /
 `~ActualWorkFinancialRead` integration 28/28, architecture 14/14, `git diff --check` clean.
 
-**Exact target for the next coding session:** **BL135 Batch 3a-ii — financial-resolution mutation
-API + read projection fold**. Application + API; 1 family (create financial resolution); 8 prod /
-3 test. New `ActualWorkFinancialResolutionApiService` (copy the now-`AccountingManage`-gated
-`ActualWorkFinancialReadApiService.AuthorizeAsync`); `IActualWorkFinancialResolutionPersistence` /
-`EfActualWorkFinancialResolutionPersistence` gain the transactional `CreateResolutionAsync`
-orchestrator (guard order incl. D5 `VisitAlreadyReviewed`); read projection folds effective
-per-component resolution + line rounding (ADR-467); DI registration lands here (first consumer).
-Follow BL135 §4 "Batch 3a-ii" exactly; do not re-run discovery.
+**Batch 3a-ii (financial-resolution mutation API — mutation only) — COMPLETE (2026-08-28).**
+Split approved by Christian: the read-projection fold moved to a new Batch 3a-iii so the mutation
+plus its required domain seam stays within the file gate. Application + API + one Core seam;
+1 family (create financial resolution); 8 prod / 2 test (the "3 test" label was stale — the
+stale-version review proof lives inside the new API test class, not a separate file).
+
+New `ActualWorkFinancialResolutionApiService` (auth copied from the `AccountingManage`-gated
+`ActualWorkFinancialReadApiService.AuthorizeAsync`; parses `Basis`, runs domain value validation via
+`ActualWorkLineFinancialResolution.Create`, maps the outcome). `IActualWorkFinancialResolutionPersistence`
+gains `CreateResolutionAsync` + `ActualWorkResolutionResult` / `ActualWorkResolutionOutcome` /
+`ActualWorkFinancialResolutionCommand`; `EfActualWorkFinancialResolutionPersistence` implements the
+transactional orchestrator — `BeginTransaction` → tracked visit load with `Lines` → guards in fixed
+order (not found → `ConcurrencyVersion` mismatch → `Status != Submitted` → `ReviewedAtUtc != null`
+[D5] → line not on visit → targeted component snapshot already non-null) → stage via `AddResolutionAsync`
+→ `visit.RefreshConcurrencyVersionForFinancialResolution()` → `SaveChanges` (catch
+`DbUpdateConcurrencyException` → `VersionMismatch`) → commit; returns the rotated visit version.
+
+`ActualWork.RefreshConcurrencyVersionForFinancialResolution()` is a **public** domain method (not
+internal — the EF orchestrator is in a different assembly with no `InternalsVisibleTo`), documented
+as existing solely to invalidate a stale financial-review command after an immutable resolution
+append. `ActualWorkFinancialResolutionErrors` gains `FinancialResolutionLineNotFound` (404),
+`…SnapshotComponentAlreadyValid` (409), `…VisitAlreadyReviewed` (409); `ErrorHttpMapper` maps those
+plus the existing value/basis/reason codes (400). New endpoint
+`POST /keep/pricebook/actual-work/{actualWorkId:guid}/lines/{lineId:guid}/financial-resolution`
+(`X-Keep-ActualWork-Version` header, `ActualWorkConcurrencyVersionResponse`). DI registration for
+`IActualWorkFinancialResolutionPersistence` (deferred from Batch 2) + the new service lands here.
+
+Tests: `ActualWorkFinancialResolutionApiTests` (new, 19 — auth matrix, every guard, missing-header,
+domain validation, chained-append ordering, and the token-rotation proof: resolve returns a new
+version → review with the stale version is 409 `ActualWork.VersionMismatch` → review with the
+returned version succeeds); +2 `ActualWorkTests` unit cases for the domain method. Verified: full
+unit suite 1658/1658 (+2), `~ActualWork` integration 189/189, architecture 14/14,
+`git diff --check` clean.
+
+**Exact target for the next coding session:** **BL135 Batch 3a-iii — financial-resolution read
+projection fold**. `ActualWorkFinancialReadApiService.cs` only (`ActualWorkFinancialProjection` +
+the DTO records) plus the API response mappers in `KeepEndpoints.cs`: load the visit's resolutions,
+compute the **effective** value per component independently (`ResolvedAtUtc DESC, Id DESC`, each
+with its own provenance), fold into `ComputeVisitTotals` / `ToLineEntry`; a line is complete when
+snapshot-or-resolution covers both components; apply ADR-467 line rounding (D3); add per-component
+`IsResolved` + resolved value + basis and a `Blockers` list. Tests: extend
+`ActualWorkFinancialProjectionTests` (rounding + effective-resolution folding) and
+`ActualWorkFinancialReadApiTests` (detail carries resolutions + blockers). Follow BL135 §4
+"Batch 3a-ii" item 4 (now 3a-iii); do not re-run discovery.
 
 ### Next after the release gate — triage, do not silently bundle
 

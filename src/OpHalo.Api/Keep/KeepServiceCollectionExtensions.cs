@@ -229,6 +229,12 @@ public static class KeepServiceCollectionExtensions
         services.AddScoped<IActualWorkFinancialReviewPersistence, EfActualWorkFinancialReviewPersistence>();
         services.AddScoped<ActualWorkFinancialReadApiService>();
 
+        // Direct Actual Work — Owner/Admin financial-resolution mutation (BL135 §4 Batch 3a-ii,
+        // ADR-493). First consumer of IActualWorkFinancialResolutionPersistence (added without a
+        // consumer in Batch 2); registration was deferred to this batch.
+        services.AddScoped<IActualWorkFinancialResolutionPersistence, EfActualWorkFinancialResolutionPersistence>();
+        services.AddScoped<ActualWorkFinancialResolutionApiService>();
+
         return services;
     }
 }

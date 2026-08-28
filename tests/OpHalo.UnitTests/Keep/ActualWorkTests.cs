@@ -494,4 +494,34 @@ public class ActualWorkTests
         Assert.Equal(firstReviewedAt, work.ReviewedAtUtc);
         Assert.Equal("First review.", work.ReviewNote);
     }
+
+    // --- RefreshConcurrencyVersionForFinancialResolution (BL135 §4 Batch 3a-ii) ---
+
+    [Fact]
+    public void RefreshConcurrencyVersionForFinancialResolution_rotates_the_token()
+    {
+        var work = New().Value;
+        AddCatalogBackedLine(work);
+        work.Submit(DateTime.UtcNow, outcome: null, completionNote: null);
+        var versionBefore = work.ConcurrencyVersion;
+
+        work.RefreshConcurrencyVersionForFinancialResolution();
+
+        Assert.NotEqual(versionBefore, work.ConcurrencyVersion);
+        Assert.NotEqual(Guid.Empty, work.ConcurrencyVersion);
+    }
+
+    [Fact]
+    public void RefreshConcurrencyVersionForFinancialResolution_touches_only_the_token()
+    {
+        var work = New().Value;
+        AddCatalogBackedLine(work);
+        work.Submit(DateTime.UtcNow, outcome: null, completionNote: null);
+
+        work.RefreshConcurrencyVersionForFinancialResolution();
+
+        Assert.Equal(ActualWorkStatus.Submitted, work.Status);
+        Assert.Null(work.ReviewedAtUtc);
+        Assert.Single(work.Lines);
+    }
 }

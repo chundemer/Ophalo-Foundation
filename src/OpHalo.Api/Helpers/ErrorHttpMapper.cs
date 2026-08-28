@@ -223,6 +223,16 @@ public static class ErrorHttpMapper
             var c when c == "ActualWork.AlreadyReviewed"  => (StatusCodes.Status409Conflict, "Conflict.", null),
             var c when c == "ActualWork.ReviewNoteTooLong" => (StatusCodes.Status400BadRequest, "Bad request.", null),
 
+            // --- Financial resolution mutation (BL135 §4 Batch 3a-ii, ADR-493) ---
+            var c when c == "ActualWork.FinancialResolutionLineNotFound" => (StatusCodes.Status404NotFound, "Resource not found.", null),
+            var c when c == "ActualWork.FinancialResolutionSnapshotComponentAlreadyValid" => (StatusCodes.Status409Conflict, "Conflict.", null),
+            var c when c == "ActualWork.FinancialResolutionVisitAlreadyReviewed" => (StatusCodes.Status409Conflict, "Conflict.", null),
+            var c when c == "ActualWork.FinancialResolutionValueRequired" => (StatusCodes.Status400BadRequest, "Bad request.", null),
+            var c when c == "ActualWork.FinancialResolutionValueNegative" => (StatusCodes.Status400BadRequest, "Bad request.", null),
+            var c when c == "ActualWork.FinancialResolutionInvalidBasis" => (StatusCodes.Status400BadRequest, "Bad request.", null),
+            var c when c == "ActualWork.FinancialResolutionReasonRequired" => (StatusCodes.Status400BadRequest, "Bad request.", null),
+            var c when c == "ActualWork.FinancialResolutionReasonTooLong" => (StatusCodes.Status400BadRequest, "Bad request.", null),
+
             // --- Price book publish lock conflict (Session 2d.2, ADR-470) ---
             var c when c == "PriceBookVersion.PublishLockConflict" => (StatusCodes.Status409Conflict, "Conflict.", null),
             var c when c == "PriceBookVersion.CatalogItemNotActive" => (StatusCodes.Status409Conflict, "Conflict.", null),

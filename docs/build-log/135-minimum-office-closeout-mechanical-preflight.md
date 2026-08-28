@@ -1,8 +1,9 @@
 # Build Log 135 — Minimum Office Closeout: Mechanical Preflight (Batch 0, no code)
 
-**Status:** Mechanical preflight complete (rev. 5 — thirteen review corrections applied over four
-review rounds) — implementation batches gated. Batch 1 committed (`56b8b7f`); Batch 2 is the next
-coding session.
+**Status:** Mechanical preflight complete (rev. 6 — fourteen review corrections applied over five
+review rounds) — implementation batches gated. Batches 1 (`56b8b7f`), 2 (`946481a`), and 3a-i
+(`00684dd`) committed; 3a-ii implemented (pending review); Batch 3a-iii (read-projection fold) is
+the next coding session.
 **Date:** 2026-08-27
 **Related:** ADR-493, ADR-487, ADR-467, ADR-468, ADR-462, ADR-463, ADR-480; Build Log 129
 ("Minimum Office Closeout implementation sequence — locked"); session-log "Next after the release
@@ -55,6 +56,21 @@ Rev. 4 applies two final consistency corrections from the review of rev. 3:
 11. **Batch 7b test-file count** — two integration test files
     (`BillingRevisionLifecycleApiTests`, `BillingRevisionFreezeTests`), so 6 prod / 2 test, total
     8 (was mislabelled 1 test). Still within the gate.
+
+Rev. 6 applies two corrections from the Batch 3a-ii implementation preflight:
+
+14. **Batch 3a-ii split into 3a-ii (mutation) + 3a-iii (read-projection fold).** The visit
+    concurrency token has a private setter and is bumped only inside `ActualWork` domain
+    transitions, so the resolution orchestrator needs a new public domain method
+    `ActualWork.RefreshConcurrencyVersionForFinancialResolution()` — a 9th production file / new
+    layer. Rather than exceed the "exactly 8" gate, the read-projection fold (old item 4 plus the
+    response mappers in old item 7) moved to Batch 3a-iii. 3a-ii ships the mutation, the domain
+    seam, errors, mapper, endpoint, and DI (8 prod / 2 test). The method must be **public**, not
+    internal — the EF orchestrator is in `OpHalo.Keep.Infrastructure` with no `InternalsVisibleTo`
+    from `OpHalo.Keep.Core` — and is documented as existing solely to invalidate a stale
+    financial-review command after an immutable resolution append. The 3a-ii API integration test
+    proves that purpose (resolve returns a new version; the old version is rejected by
+    `POST .../review` as a conflict; the returned version proceeds).
 
 Rev. 5 applies two corrections from Christian's review of the Batch 2 preflight gate:
 
@@ -321,8 +337,16 @@ test — Admin/Owner hold `AccountingManage`, Operator/Viewer do not); extend
 
 ### Batch 3a-ii — Financial-resolution mutation API + read projection fold
 
-**Layer:** Application + API. **Families:** 1 (create financial resolution). **Files:** 8 prod /
-3 test.
+> **Rev. 6 split (implemented 2026-08-28):** items 1–3, 5, 6, the endpoint half of item 7, and
+> item 8 shipped as **Batch 3a-ii** together with a new public domain seam
+> `ActualWork.RefreshConcurrencyVersionForFinancialResolution()` (8 prod / 2 test). **Item 4 and
+> the `ToActualWorkFinancialDetailResponse` / `ToFinancialLineResponse` changes in item 7 are
+> Batch 3a-iii** (read-projection fold: effective per-component resolution, ADR-467 line rounding,
+> per-component `IsResolved`/value/basis, `Blockers`). The result enum landed as
+> `ActualWorkResolutionResult`; guard order is unchanged from item 3.
+
+**Layer:** Application + API + one Core seam. **Families:** 1 (create financial resolution).
+**Files (3a-ii):** 8 prod / 2 test.
 
 1. `PriceBook/ActualWorkFinancialResolutionApiService.cs` — new. Auth: copy the (now
    `AccountingManage`-gated) `ActualWorkFinancialReadApiService.AuthorizeAsync`.
@@ -660,7 +684,8 @@ Locked with Christian's review of rev. 1; no further confirmation needed before 
 | 1 | 5 | 7 | 0 | yes |
 | 2 | 5 | ~9 | 0 | yes |
 | 3a-i | 4 | 6 | 0 | yes |
-| 3a-ii | 8 | 11 | 1 | yes (exactly 8 — split off a 3a-iii read-projection slice if the real diff grows) |
+| 3a-ii | 8 | 10 | 1 | yes — mutation + domain token seam only; read-projection fold split to 3a-iii (rev. 6) |
+| 3a-iii | 1 (+ endpoint mappers) | ~4 | 0 | yes — effective per-component resolution fold + ADR-467 rounding + `Blockers` DTO |
 | 3b-i | 6 | 8 | 1 | yes |
 | 3b-ii | 6 | 8 | 1 | yes |
 | 4 | ~5 | ~9 | 0 | yes |
