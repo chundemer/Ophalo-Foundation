@@ -102,6 +102,29 @@ reconciliation remain separate work. The initial implementation must first creat
 financial-resolution and Billing Revision records; it must not ship a “Ready for billing” list that
 cannot prevent duplicate manual handoff.
 
+### 6. Required persistence and execution safeguards
+
+The closeout implementation must make the following mechanics explicit before code, rather than
+leaving them as UI or parent-status assumptions:
+
+- A zero-line visit needs its own immutable, visit-level Office Financial Disposition (including
+  `NoCharge`); a line-level financial resolution cannot represent it.
+- Financial resolution corrections are additive. The read model selects one effective resolution per
+  missing value component and retains prior resolution evidence; it does not merely reject every
+  second resolution as a duplicate.
+- Billing Revision membership must support a database-proven reservation lifecycle. A membership
+  records release/audit data when its unhanded revision is voided, and a partial uniqueness rule
+  prevents a visit from having more than one unreleased membership. A cross-table index based on the
+  parent revision's status is not an acceptable substitute.
+- The database also permits at most one request-level `Draft` or `ReadyForBilling` revision at a
+  time. `HandedOffToBilling` revisions retain their memberships permanently; only an unhanded void
+  releases a visit.
+
+Financial-resolution controls belong only to Owner/Admin office-review surfaces, beginning with
+`ActualWorkReviewCard`. They must never be added to the price-blind `ActualWorkComposer` field
+surface. Queue expansion may reuse the review card only in a separately bounded Office Review UI
+slice.
+
 ## Consequences
 
 - Field price blindness and submitted factual immutability are preserved.

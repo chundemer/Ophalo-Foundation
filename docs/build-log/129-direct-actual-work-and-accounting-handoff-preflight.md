@@ -742,6 +742,47 @@ uniqueness, authorization, all concurrency boundaries, the adjustment path, fina
 validation, and manual-summary/export read consistency. CSV generation and external accounting
 integration remain deferred.
 
+### Minimum Office Closeout implementation sequence — locked (2026-08-27)
+
+The implementation is intentionally split into narrow sessions. Each coding session must publish
+exact production/test file counts and remain within the repository batch gate. Do not collapse these
+into a single "closeout feature" batch.
+
+0. **Mechanical preflight only — no code.** Map the existing Actual Work aggregate, financial
+   projection/read service, review mutation, permission gates, money/currency contracts, migrations,
+   and tests. Lock exact DTOs, endpoints, error mapping, constraints, and file/test targets for all
+   later sessions.
+1. **Financial-resolution and zero-line-disposition domain foundation.** Add immutable per-line
+   resolution and visit-level Office Financial Disposition domain records, enums, validation/errors,
+   persistence contracts, and isolated unit tests. The disposition is required because a zero-line
+   visit cannot have a line resolution.
+2. **Financial-resolution/disposition persistence.** Add EF mappings, migration, persistence
+   implementation, non-negative-money/non-empty-reason constraints, and real-database integrity
+   proofs. Define effective-resolution/supersession behavior here; do not forbid all later
+   resolutions as "duplicates."
+3a. **Financial-resolution API and read projection.** Owner/Admin resolution mutation, concurrency,
+   authorization, and recalculated financial-detail blockers.
+3b. **Hard review gate and no-charge disposition API.** Mark Reviewed rejects incomplete financial
+   data and zero-line visits lacking explicit no-charge disposition. The mechanical preflight chooses
+   the HTTP error mapping by repository convention; the server-side product rule is mandatory.
+4. **Office financial-resolution UI.** Add inputs and blocking explanation to `ActualWorkReviewCard`,
+   never `ActualWorkComposer`. Queue expansion is not included unless separately preflighted.
+5. **Billing Revision domain foundation.** Add revision/membership aggregates, lifecycle invariants,
+   audit fields, and unit tests.
+6. **Billing Revision persistence.** Add EF/migration/persistence and two proven invariants: one
+   unreleased membership per Actual Work visit, and one `Draft`/`ReadyForBilling` revision per
+   request. Membership release remains auditable.
+7a. **Billing Revision Draft assembly and detail read API.** Assemble selected eligible visits
+   transactionally and return the immutable summary read.
+7b. **Ready for Billing and Void API.** Require confirmation for ready and a reason for void;
+   voiding an unhanded revision releases its memberships without editing historical membership.
+7c. **Handed Off to Billing API.** Record actor, time, and optional external billing reference;
+   prove idempotency/concurrency behavior.
+8. **Billing Revision summary UI.** Owner/Admin-only, copyable/printable summary of the selected
+   revision—not an unreserved list of all reviewed visits.
+9. **Corrections and adjustments preflight.** Before code, lock `AdjustmentBillingRevision` debit/
+   credit presentation and post-handoff Addendum/Replacement mechanics.
+
 ## Non-goals
 
 - Customer quote delivery, acceptance, signatures, invoices, payment collection, QuickBooks sync,
