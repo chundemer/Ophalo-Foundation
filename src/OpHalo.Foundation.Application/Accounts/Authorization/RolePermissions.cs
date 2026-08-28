@@ -51,6 +51,7 @@ public static class RolePermissions
         PermissionKeys.Account.AuditView,
         PermissionKeys.Keep.SettingsManage,
         PermissionKeys.Keep.PriceBookCatalogManage,
+        PermissionKeys.Keep.AccountingManage,   // ADR-493 / BL135 §6.1: Admin tier, Owner inherits
     ];
 
     static readonly string[] OwnerBase =

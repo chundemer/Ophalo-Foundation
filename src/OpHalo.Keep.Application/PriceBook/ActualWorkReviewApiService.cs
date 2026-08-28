@@ -57,7 +57,8 @@ public sealed class ActualWorkReviewApiService(
     }
 
     /// <summary>Owner/Admin office-review gate: authenticated, non-blocked/read-only account access,
-    /// the Price Book entitlement, <c>RequestsOperate</c>, and an explicit Owner/Admin role check —
+    /// the Price Book entitlement, <c>RequestsOperate</c>, the <c>AccountingManage</c> office-financial
+    /// permission (ADR-493 / BL135), and an explicit Owner/Admin role check for defense-in-depth —
     /// no <c>ActualWorkCapture</c>. Distinct from <c>ActualWorkDraftApiService.AuthorizeAsync</c>,
     /// which is the field-recorder's three-gate composition and would wrongly admit a non-office
     /// Operator here.</summary>
@@ -101,6 +102,11 @@ public sealed class ActualWorkReviewApiService(
         if (!userAccessPolicy.IsPermitted(
                 roleSnapshot.Role, roleSnapshot.MembershipStatus, accountSnapshot.Purpose,
                 PermissionKeys.Keep.RequestsOperate))
+            return Result.Failure(Forbidden);
+
+        if (!userAccessPolicy.IsPermitted(
+                roleSnapshot.Role, roleSnapshot.MembershipStatus, accountSnapshot.Purpose,
+                PermissionKeys.Keep.AccountingManage))
             return Result.Failure(Forbidden);
 
         return Result.Success();

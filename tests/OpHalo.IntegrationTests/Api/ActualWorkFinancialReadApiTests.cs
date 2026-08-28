@@ -351,6 +351,21 @@ public sealed class ActualWorkFinancialReadApiTests : IClassFixture<KeepApiWebFa
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
 
+    [Fact]
+    public async Task FinancialDetail_Viewer_Returns403()
+    {
+        var (accountId, ownerId, _) = await SeedAccountAsync("detail-viewer-forbidden");
+        await EnrollAsync(accountId, ownerId);
+        var requestId = await SeedRequestAsync(accountId, "Jane Customer");
+        var visitId = await CreateVisitAsync(accountId, requestId, ownerId, submit: true, review: false);
+        var viewerId = await SeedViewerAsync(accountId, "detail-viewer-forbidden");
+        var viewerCookie = await GetCookieAsync(viewerId, accountId);
+
+        var response = await GetDetailAsync(viewerCookie, visitId);
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
     // -------------------------------------------------------------------------
     // Helpers
     // -------------------------------------------------------------------------
@@ -498,6 +513,24 @@ public sealed class ActualWorkFinancialReadApiTests : IClassFixture<KeepApiWebFa
         var member = AccountUser.CreatePendingInvite(
             accountId, email, EmailNormalizer.Normalize(email), AccountUserRole.Operator,
             inviteTokenHash: $"{slug}_operator_hash", inviteExpiresAtUtc: now.AddDays(7), nowUtc: now);
+        member.Activate(user.Id, now);
+
+        await using var scope = _factory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+        db.Users.Add(user);
+        db.AccountUsers.Add(member);
+        await db.SaveChangesAsync();
+        return member.Id;
+    }
+
+    private async Task<Guid> SeedViewerAsync(Guid accountId, string slug)
+    {
+        var now = DateTime.UtcNow;
+        var email = $"viewer@{slug}.com";
+        var user = User.CreateVerified(email, null, now);
+        var member = AccountUser.CreatePendingInvite(
+            accountId, email, EmailNormalizer.Normalize(email), AccountUserRole.Viewer,
+            inviteTokenHash: $"{slug}_viewer_hash", inviteExpiresAtUtc: now.AddDays(7), nowUtc: now);
         member.Activate(user.Id, now);
 
         await using var scope = _factory.CreateScope();

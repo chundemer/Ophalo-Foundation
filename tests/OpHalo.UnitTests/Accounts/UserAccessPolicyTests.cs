@@ -42,6 +42,7 @@ public class UserAccessPolicyTests
     [InlineData(PermissionKeys.Keep.RequestsCreate, false)]
     [InlineData(PermissionKeys.Account.SettingsManage, false)]
     [InlineData(PermissionKeys.Account.BillingManage, false)]
+    [InlineData(PermissionKeys.Keep.AccountingManage, false)]   // ADR-493 / BL135 §6.1: Admin tier
     public void Viewer_has_read_only_base_access(string key, bool expected) =>
         Assert.Equal(expected, Permitted(key, AccountUserRole.Viewer));
 
@@ -58,6 +59,7 @@ public class UserAccessPolicyTests
     [InlineData(PermissionKeys.Keep.InsightsView, true)]        // locked: operators get operational insight
     [InlineData(PermissionKeys.Keep.SettingsManage, false)]
     [InlineData(PermissionKeys.Account.MembersManage, false)]
+    [InlineData(PermissionKeys.Keep.AccountingManage, false)]   // ADR-493 / BL135 §6.1: Admin tier
     public void Operator_has_request_actions_but_not_account_management(string key, bool expected) =>
         Assert.Equal(expected, Permitted(key, AccountUserRole.Operator));
 
@@ -70,6 +72,7 @@ public class UserAccessPolicyTests
     [InlineData(PermissionKeys.Account.AuditView, true)]
     [InlineData(PermissionKeys.Keep.SettingsManage, true)]
     [InlineData(PermissionKeys.Keep.RequestsCreate, true)]
+    [InlineData(PermissionKeys.Keep.AccountingManage, true)]    // ADR-493 / BL135 §6.1: Admin tier
     [InlineData(PermissionKeys.Account.BillingManage, false)]   // billing is Owner-only
     public void Admin_manages_account_but_not_billing(string key, bool expected) =>
         Assert.Equal(expected, Permitted(key, AccountUserRole.Admin));
@@ -80,6 +83,7 @@ public class UserAccessPolicyTests
     [InlineData(PermissionKeys.Account.BillingManage)]
     [InlineData(PermissionKeys.Account.MembersManage)]
     [InlineData(PermissionKeys.Keep.RequestsRespond)]
+    [InlineData(PermissionKeys.Keep.AccountingManage)]   // ADR-493 / BL135 §6.1: Owner inherits Admin tier
     public void Owner_has_full_base_access_including_billing(string key) =>
         Assert.True(Permitted(key, AccountUserRole.Owner));
 

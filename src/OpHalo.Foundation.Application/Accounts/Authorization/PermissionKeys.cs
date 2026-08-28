@@ -56,6 +56,13 @@ public static class PermissionKeys
         /// one of three independent gates on every Actual Work draft mutation, alongside
         /// RequestsOperate, the Price Book entitlement, and the active-Responsible row check.</summary>
         public const string ActualWorkCapture = "keep.pricebook.actualwork.capture";
+
+        /// <summary>Office-financial closeout authority (ADR-493, build-log/135, Batch 3a-i) — the
+        /// single permission seam shared by every office-financial surface: Actual Work financial
+        /// reads, the review mutation, financial-resolution / disposition, and all Billing Revision
+        /// transitions. Admin tier (Owner inherits); Operator / Viewer do not hold it. Retained
+        /// alongside the explicit Owner/Admin role check for defense-in-depth.</summary>
+        public const string AccountingManage = "keep.accounting.manage";
     }
 
     // internal.* keys require AccountPurpose.Internal (see InternalPrefix). Broader

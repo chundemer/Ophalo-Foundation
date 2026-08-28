@@ -174,7 +174,8 @@ public sealed class ActualWorkFinancialReadApiService(
     }
 
     /// <summary>Owner/Admin office-review gate: authenticated, non-blocked/read-only account access,
-    /// the Price Book entitlement, <c>RequestsOperate</c>, and an explicit Owner/Admin role check —
+    /// the Price Book entitlement, <c>RequestsOperate</c>, the <c>AccountingManage</c> office-financial
+    /// permission (ADR-493 / BL135), and an explicit Owner/Admin role check for defense-in-depth —
     /// no <c>ActualWorkCapture</c>. Identical composition to
     /// <see cref="ActualWorkReviewApiService.AuthorizeAsync"/>.</summary>
     private async Task<Result> AuthorizeAsync(CancellationToken ct)
@@ -217,6 +218,11 @@ public sealed class ActualWorkFinancialReadApiService(
         if (!userAccessPolicy.IsPermitted(
                 roleSnapshot.Role, roleSnapshot.MembershipStatus, accountSnapshot.Purpose,
                 PermissionKeys.Keep.RequestsOperate))
+            return Result.Failure(Forbidden);
+
+        if (!userAccessPolicy.IsPermitted(
+                roleSnapshot.Role, roleSnapshot.MembershipStatus, accountSnapshot.Purpose,
+                PermissionKeys.Keep.AccountingManage))
             return Result.Failure(Forbidden);
 
         return Result.Success();

@@ -93,6 +93,22 @@ public sealed class ActualWorkReviewApiTests : IClassFixture<KeepApiWebFactory>,
     }
 
     [Fact]
+    public async Task Review_Viewer_Returns403()
+    {
+        var (accountId, ownerId, ownerCookie) = await SeedAccountAsync("review-viewer-forbidden");
+        await EnrollAsync(accountId, ownerId);
+        var requestId = await SeedRequestAsync(accountId);
+        var (actualWorkId, draftVersion) = await CreateDraftAsync(ownerCookie, requestId);
+        var submittedVersion = await SubmitAsync(actualWorkId, accountId, draftVersion);
+        var viewerId = await SeedViewerAsync(accountId, "review-viewer-forbidden");
+        var viewerCookie = await GetCookieAsync(viewerId, accountId);
+
+        var response = await PostReviewAsync(viewerCookie, actualWorkId, submittedVersion, "Trying to review as a viewer.");
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
     public async Task Review_WithoutPriceBookEntitlement_Returns403()
     {
         var (accountId, ownerId, ownerCookie) = await SeedAccountAsync("review-no-entitlement");
@@ -268,6 +284,24 @@ public sealed class ActualWorkReviewApiTests : IClassFixture<KeepApiWebFactory>,
         var member = AccountUser.CreatePendingInvite(
             accountId, email, EmailNormalizer.Normalize(email), AccountUserRole.Operator,
             inviteTokenHash: $"{slug}_operator_hash", inviteExpiresAtUtc: now.AddDays(7), nowUtc: now);
+        member.Activate(user.Id, now);
+
+        await using var scope = _factory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+        db.Users.Add(user);
+        db.AccountUsers.Add(member);
+        await db.SaveChangesAsync();
+        return member.Id;
+    }
+
+    private async Task<Guid> SeedViewerAsync(Guid accountId, string slug)
+    {
+        var now = DateTime.UtcNow;
+        var email = $"viewer@{slug}.com";
+        var user = User.CreateVerified(email, null, now);
+        var member = AccountUser.CreatePendingInvite(
+            accountId, email, EmailNormalizer.Normalize(email), AccountUserRole.Viewer,
+            inviteTokenHash: $"{slug}_viewer_hash", inviteExpiresAtUtc: now.AddDays(7), nowUtc: now);
         member.Activate(user.Id, now);
 
         await using var scope = _factory.CreateScope();

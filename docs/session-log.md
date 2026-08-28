@@ -1,6 +1,6 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-08-27
+**Last updated:** 2026-08-28
 **Purpose:** active handoff only. Completed work belongs in Git history and the relevant build log.
 
 ## Authoritative sources
@@ -253,16 +253,27 @@ integration 168/168, `~ActualWork` unit 81/81, architecture 14/14, `git diff --c
 Non-blocking follow-ups noted in review: no explicit cross-account read-isolation assertion; ordering
 tests use distinct timestamps so the `Id DESC` tie-breaker is unexercised (code implements both).
 
-**Exact target for the next coding session:** **BL135 Batch 3a-i — `AccountingManage` permission
-seam (authorization only)**. Foundation authorization + two existing Application auth copies; 0
-families; 4 prod / 2 test. Add `PermissionKeys.Keep.AccountingManage` (`"keep.accounting.manage"`);
-add it to `AdminBase` in `RolePermissions` (Owner inherits; Operator/Viewer do not — locked §6.1);
-add an `AccountingManage` check to `ActualWorkReviewApiService.AuthorizeAsync` and
-`ActualWorkFinancialReadApiService.AuthorizeAsync` alongside the retained explicit Owner/Admin role
-check (defense-in-depth). Behaviour unchanged for Owner/Admin today. Tests: role-permission matrix
-(Admin/Owner hold it, Operator/Viewer do not) + extend the `ActualWorkReviewApiTests` /
-`ActualWorkFinancialReadApiTests` auth matrices. Follow BL135 §4 "Batch 3a-i" exactly; do not
-re-run discovery.
+**Batch 3a-i (`AccountingManage` permission seam, authorization only) — COMPLETE (2026-08-28).**
+Foundation authorization + two existing Application auth copies; 0 families; 4 prod / 3 test
+(the rev.-4 "2 test" header was stale — role-permission matrix plus both API auth matrices).
+`PermissionKeys.Keep.AccountingManage` (`"keep.accounting.manage"`) added to `AdminBase` in
+`RolePermissions` (Owner inherits; Operator/Viewer do not — locked §6.1). Both
+`ActualWorkReviewApiService.AuthorizeAsync` and `ActualWorkFinancialReadApiService.AuthorizeAsync`
+gained an `AccountingManage` `IsPermitted` check after the `RequestsOperate` check, alongside the
+retained explicit Owner/Admin role check (defense-in-depth). Behaviour unchanged for Owner/Admin.
+Tests: `UserAccessPolicyTests` matrix rows (Admin/Owner hold it, Operator/Viewer do not) +
+`Review_Viewer_Returns403` / `FinancialDetail_Viewer_Returns403` with a new `SeedViewerAsync`
+helper in each API test class. Verified: full unit suite 1656/1656 (+4), `~ActualWorkReview` /
+`~ActualWorkFinancialRead` integration 28/28, architecture 14/14, `git diff --check` clean.
+
+**Exact target for the next coding session:** **BL135 Batch 3a-ii — financial-resolution mutation
+API + read projection fold**. Application + API; 1 family (create financial resolution); 8 prod /
+3 test. New `ActualWorkFinancialResolutionApiService` (copy the now-`AccountingManage`-gated
+`ActualWorkFinancialReadApiService.AuthorizeAsync`); `IActualWorkFinancialResolutionPersistence` /
+`EfActualWorkFinancialResolutionPersistence` gain the transactional `CreateResolutionAsync`
+orchestrator (guard order incl. D5 `VisitAlreadyReviewed`); read projection folds effective
+per-component resolution + line rounding (ADR-467); DI registration lands here (first consumer).
+Follow BL135 §4 "Batch 3a-ii" exactly; do not re-run discovery.
 
 ### Next after the release gate — triage, do not silently bundle
 
@@ -434,6 +445,16 @@ Draft/Ready revision per request.
 CSV generation, QuickBooks/API integration, invoice creation, payments, tax, inventory,
 reconciliation, and an Accountant role/UI remain deferred. Future export serializes the immutable
 Billing Revision; it must not rebuild financial facts from live visits.
+
+**Deferred follow-up — office-financial role model (do not silently implement).**
+`PermissionKeys.Keep.AccountingManage` is now the shared office-financial permission seam, but the
+current closeout surfaces intentionally retain their explicit Owner/Admin role gate. Before a
+narrower accounting or Accountant role can use that seam, run a dedicated authorization/product
+discovery: define the role's membership and invitation model, exact read/mutation authority across
+review, resolution, disposition, Billing Revisions and export, field-price-blindness boundaries,
+UI/navigation exposure, audit requirements, and migration/compatibility plan. Until that decision
+is approved, AccountingManage remains Admin-tier (with Owner inheritance) and does not by itself
+admit a new role. Source: BL135 §6.1 / ADR-493.
 
 ## Guardrails
 
