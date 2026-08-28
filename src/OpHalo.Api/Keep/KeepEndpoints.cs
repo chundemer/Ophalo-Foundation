@@ -945,6 +945,28 @@ public static class KeepEndpoints
                 : ErrorHttpMapper.ToHttpResult(result.Error);
         }).RequireAuthorization();
 
+        // BL135 §4 Batch 3b-i — Owner/Admin office no-charge disposition of a zero-line submitted,
+        // not-yet-reviewed visit (locked §6.2). Rotates the visit concurrency version so a stale
+        // review command is rejected as a conflict. Hard review gate is Batch 3b-ii.
+        app.MapPost("/keep/pricebook/actual-work/{actualWorkId:guid}/financial-disposition", async (
+            Guid actualWorkId,
+            ActualWorkFinancialDispositionBody body,
+            HttpRequest httpRequest,
+            ActualWorkOfficeFinancialDispositionApiService service,
+            CancellationToken ct) =>
+        {
+            var versionResult = ParseActualWorkVersion(httpRequest.Headers);
+            if (!versionResult.IsSuccess)
+                return ErrorHttpMapper.ToHttpResult(versionResult.Error);
+
+            var command = new ActualWorkDispositionCommand(body.Kind, body.Reason);
+
+            var result = await service.RecordDispositionAsync(actualWorkId, command, versionResult.Value, ct);
+            return result.IsSuccess
+                ? Results.Ok(new ActualWorkConcurrencyVersionResponse(result.Value))
+                : ErrorHttpMapper.ToHttpResult(result.Error);
+        }).RequireAuthorization();
+
         app.MapGet("/keep/pricebook/actual-work/request/{requestId:guid}/history", async (
             Guid requestId,
             ActualWorkHistoryReadApiService service,
@@ -1347,6 +1369,11 @@ file sealed record ActualWorkFinancialResolutionBody(
     decimal? ResolvedUnitStandardExpectedDirectCost,
     string? Basis,
     string? Reason);
+
+/// <summary>BL135 §4 Batch 3b-i. <see cref="Kind"/> is parsed to
+/// <c>OfficeFinancialDispositionKind</c> (trimmed, case-insensitive) in the API service;
+/// <see cref="Reason"/> is validated/normalized by the domain factory.</summary>
+file sealed record ActualWorkFinancialDispositionBody(string? Kind, string? Reason);
 
 file sealed record ActualWorkLineAddedResponse(Guid LineId, Guid ActualWorkConcurrencyVersion);
 

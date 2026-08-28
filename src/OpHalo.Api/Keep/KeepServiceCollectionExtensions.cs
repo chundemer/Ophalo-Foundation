@@ -235,6 +235,10 @@ public static class KeepServiceCollectionExtensions
         services.AddScoped<IActualWorkFinancialResolutionPersistence, EfActualWorkFinancialResolutionPersistence>();
         services.AddScoped<ActualWorkFinancialResolutionApiService>();
 
+        // Direct Actual Work — Owner/Admin zero-line no-charge office disposition (BL135 §4
+        // Batch 3b-i, ADR-493). Reuses IActualWorkFinancialResolutionPersistence (registered above).
+        services.AddScoped<ActualWorkOfficeFinancialDispositionApiService>();
+
         return services;
     }
 }

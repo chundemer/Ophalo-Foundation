@@ -330,8 +330,27 @@ Verified: full unit suite 1663/1663 (+5), `~ActualWork` integration 191/191 (+2)
 `~ActualWorkFinancialRead`/`~ActualWorkFinancialResolution` 51/51, architecture 14/14,
 `git diff --check` clean.
 
-**Exact target for the next coding session:** **BL135 Batch 3b-i — zero-line no-charge disposition
-API + persistence**. Follow BL135 §4 "Batch 3b-i"; do not re-run discovery.
+**Batch 3b-i (zero-line no-charge disposition API + persistence) — COMPLETE (2026-08-28).**
+Application + API + one domain method; 1 family; 8 prod / 1 test (9 changed). New
+`ActualWorkOfficeFinancialDispositionApiService` (dedicated class, `AccountingManage`-gated
+composition identical to the resolution service; parses `Kind` trimmed/case-insensitive →
+`DispositionInvalidKind`; domain factory owns reason validation).
+`IActualWorkFinancialResolutionPersistence` gains `RecordDispositionAsync` + `ActualWorkDispositionResult`
+(`Committed, VisitNotFound, VersionMismatch, VisitNotSubmitted, VisitAlreadyReviewed, VisitHasLines`).
+EF orchestrator: one transaction, guard order **not-found → version → not-submitted → already-reviewed
+(D5) → `Lines.Count > 0` → `VisitHasLines`** (version ahead of every business guard; already-reviewed
+ahead of has-lines), stage row → `RefreshConcurrencyVersionForOfficeFinancialDisposition()` (new,
+parallel to the resolution token method) → save (catch `DbUpdateConcurrencyException` →
+`VersionMismatch`, pre-commit return, no persisted row) → commit. Dispositions are append-only; the
+effective one is the most-recent — repeats on a still-eligible visit are permitted by design.
+Errors `DispositionVisitHasLines` / `DispositionVisitAlreadyReviewed` → 409; `Disposition*` reason/kind
+→ 400. `POST /keep/pricebook/actual-work/{actualWorkId:guid}/financial-disposition`, body
+`(Kind, Reason)`, `X-Keep-ActualWork-Version`. Verified: `~ActualWorkDisposition` API 21/21,
+`~ActualWorkFinancialResolution`/`~ActualWorkReview` API + `~ActualWorkFinancialResolutionPersistence`
+green, `~ActualWork` unit 88/88, architecture 14/14, `git diff --check` clean.
+
+**Exact target for the next coding session:** **BL135 Batch 3b-ii — hard `MarkReviewed` gate +
+review transaction/read integration**. Follow BL135 §4 "Batch 3b-ii"; do not re-run discovery.
 
 ### Next after the release gate — triage, do not silently bundle
 

@@ -30,6 +30,34 @@ public enum ActualWorkResolutionResult
     SnapshotComponentAlreadyValid,
 }
 
+/// <summary>Outcome of the transactional <see cref="IActualWorkFinancialResolutionPersistence.RecordDispositionAsync"/>
+/// orchestrator (BL135 §4 Batch 3b-i). <see cref="ActualWorkDispositionResult.Committed"/> is the
+/// only success; every other value maps to a stable API error. Guards are applied in the same fixed
+/// order as <see cref="ActualWorkResolutionResult"/>: not found → version → not submitted → already
+/// reviewed → visit has lines.</summary>
+public enum ActualWorkDispositionResult
+{
+    Committed,
+
+    /// <summary>No visit for <c>(accountId, actualWorkId)</c>.</summary>
+    VisitNotFound,
+
+    /// <summary>The loaded visit's <c>ConcurrencyVersion</c> did not match the caller's expected
+    /// version, or the row changed under the save (EF concurrency-token mismatch). Checked ahead of
+    /// every business guard, so a stale request on a since-reviewed/lined visit still returns this.</summary>
+    VersionMismatch,
+
+    /// <summary>The visit is still <c>Draft</c> — a disposition applies only to a submitted visit.</summary>
+    VisitNotSubmitted,
+
+    /// <summary>Drift D5: the visit has already been financially reviewed.</summary>
+    VisitAlreadyReviewed,
+
+    /// <summary>The visit has at least one line — locked §6.2: a <c>NoCharge</c> disposition is
+    /// zero-line only.</summary>
+    VisitHasLines,
+}
+
 /// <summary>The immutable field payload of one financial-resolution append (BL135 §4 Batch 3a-ii).
 /// <see cref="Basis"/> is the raw request string, parsed to <see cref="FinancialResolutionBasis"/>
 /// by <c>ActualWorkFinancialResolutionApiService</c>. At least one resolved component must be
@@ -46,6 +74,19 @@ public sealed record ActualWorkFinancialResolutionCommand(
 /// review card must echo on a subsequent <c>POST .../review</c>.</summary>
 public sealed record ActualWorkResolutionOutcome(
     ActualWorkResolutionResult Result, Guid? NewVisitConcurrencyVersion = null);
+
+/// <summary>The immutable field payload of one office financial disposition append (BL135 §4
+/// Batch 3b-i). <see cref="Kind"/> is the raw request string, parsed to
+/// <see cref="Core.Entities.Enums.OfficeFinancialDispositionKind"/> (trimmed, case-insensitive) by
+/// <c>ActualWorkOfficeFinancialDispositionApiService</c>. <see cref="Reason"/> is validated and
+/// normalized by <see cref="Core.Entities.ActualWorkOfficeFinancialDisposition.Create"/>.</summary>
+public sealed record ActualWorkDispositionCommand(string? Kind, string? Reason);
+
+/// <summary><see cref="NewVisitConcurrencyVersion"/> is set only when <see cref="Result"/> is
+/// <see cref="ActualWorkDispositionResult.Committed"/> — the visit token after the append, which a
+/// subsequent <c>POST .../review</c> must echo.</summary>
+public sealed record ActualWorkDispositionOutcome(
+    ActualWorkDispositionResult Result, Guid? NewVisitConcurrencyVersion = null);
 
 /// <summary>
 /// Persistence seam for per-line financial resolutions and visit-level office financial
@@ -99,4 +140,23 @@ public interface IActualWorkFinancialResolutionPersistence
     /// set. Same contract as <see cref="AddResolutionAsync"/>; the Batch 3b-i consumer owns the
     /// transaction.</summary>
     Task AddDispositionAsync(ActualWorkOfficeFinancialDisposition disposition, CancellationToken ct);
+
+    /// <summary>
+    /// Transactional orchestrator for a single office-financial-disposition append (BL135 §4
+    /// Batch 3b-i). Loads the visit tracked by <c>(AccountId, Id)</c> with its lines and applies the
+    /// guards in a fixed order matching <see cref="CreateResolutionAsync"/>: visit not found →
+    /// <c>ConcurrencyVersion != expectedVisitVersion</c> → <c>Status != Submitted</c> →
+    /// <c>ReviewedAtUtc != null</c> (drift D5) → <b>the visit has ≥1 line</b> (locked §6.2 —
+    /// <c>NoCharge</c> is zero-line only). On success it stages <paramref name="disposition"/> via
+    /// <see cref="AddDispositionAsync"/>, calls
+    /// <see cref="Core.Entities.ActualWork.RefreshConcurrencyVersionForOfficeFinancialDisposition"/>
+    /// to invalidate any stale review command, saves, and commits in one transaction — a concurrency
+    /// exception leaves no persisted row. Returns the post-append visit <c>ConcurrencyVersion</c>.
+    /// Domain validation of the reason has already happened in
+    /// <see cref="Core.Entities.ActualWorkOfficeFinancialDisposition.Create"/> before this call.
+    /// Multiple dispositions on a still-eligible visit are permitted — the row is append-only and
+    /// the effective disposition is the most-recent one.
+    /// </summary>
+    Task<ActualWorkDispositionOutcome> RecordDispositionAsync(
+        ActualWorkOfficeFinancialDisposition disposition, Guid expectedVisitVersion, CancellationToken ct);
 }

@@ -78,6 +78,45 @@ public sealed class EfActualWorkFinancialResolutionPersistence(OpHaloDbContext d
         return new ActualWorkResolutionOutcome(ActualWorkResolutionResult.Committed, visit.ConcurrencyVersion);
     }
 
+    public async Task<ActualWorkDispositionOutcome> RecordDispositionAsync(
+        ActualWorkOfficeFinancialDisposition disposition, Guid expectedVisitVersion, CancellationToken ct)
+    {
+        await using var tx = await dbContext.Database.BeginTransactionAsync(ct);
+
+        var visit = await dbContext.Set<ActualWork>()
+            .Include(x => x.Lines)
+            .FirstOrDefaultAsync(x => x.AccountId == disposition.AccountId && x.Id == disposition.ActualWorkId, ct);
+        if (visit is null)
+            return new ActualWorkDispositionOutcome(ActualWorkDispositionResult.VisitNotFound);
+
+        if (visit.ConcurrencyVersion != expectedVisitVersion)
+            return new ActualWorkDispositionOutcome(ActualWorkDispositionResult.VersionMismatch);
+
+        if (visit.Status != ActualWorkStatus.Submitted)
+            return new ActualWorkDispositionOutcome(ActualWorkDispositionResult.VisitNotSubmitted);
+
+        if (visit.ReviewedAtUtc is not null)
+            return new ActualWorkDispositionOutcome(ActualWorkDispositionResult.VisitAlreadyReviewed);
+
+        if (visit.Lines.Count > 0)
+            return new ActualWorkDispositionOutcome(ActualWorkDispositionResult.VisitHasLines);
+
+        await AddDispositionAsync(disposition, ct);
+        visit.RefreshConcurrencyVersionForOfficeFinancialDisposition();
+
+        try
+        {
+            await dbContext.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return new ActualWorkDispositionOutcome(ActualWorkDispositionResult.VersionMismatch);
+        }
+
+        await tx.CommitAsync(ct);
+        return new ActualWorkDispositionOutcome(ActualWorkDispositionResult.Committed, visit.ConcurrencyVersion);
+    }
+
     public Task AddResolutionAsync(ActualWorkLineFinancialResolution resolution, CancellationToken ct)
     {
         dbContext.Set<ActualWorkLineFinancialResolution>().Add(resolution);

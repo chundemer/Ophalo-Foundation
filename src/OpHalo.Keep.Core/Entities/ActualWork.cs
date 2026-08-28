@@ -257,4 +257,20 @@ public sealed class ActualWork : BaseEntity
     {
         ConcurrencyVersion = Guid.NewGuid();
     }
+
+    /// <summary>
+    /// Rotates <see cref="ConcurrencyVersion"/> after an immutable office financial disposition has
+    /// been appended for this visit (BL135 §4 Batch 3b-i). Parallel to
+    /// <see cref="RefreshConcurrencyVersionForFinancialResolution"/>: the disposition row lives in a
+    /// separate append-only entity but changes the effective financial state the Owner/Admin review
+    /// card renders (a zero-line visit becomes billing-eligible), so a review submitted against the
+    /// pre-disposition version must be rejected as a conflict. This is the only sanctioned way for
+    /// the disposition persistence transaction to advance the visit token — it must not be used for
+    /// any other purpose, and the transaction owns whether an append actually occurred before
+    /// calling it.
+    /// </summary>
+    public void RefreshConcurrencyVersionForOfficeFinancialDisposition()
+    {
+        ConcurrencyVersion = Guid.NewGuid();
+    }
 }

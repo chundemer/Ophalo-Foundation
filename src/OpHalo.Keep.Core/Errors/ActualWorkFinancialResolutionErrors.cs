@@ -71,4 +71,19 @@ public static class ActualWorkFinancialResolutionErrors
         Error.Create(
             "ActualWork.DispositionReasonTooLong",
             "Reason must not exceed 2000 characters.");
+
+    /// <summary>Batch 3b-i (locked §6.2): a <c>NoCharge</c> office financial disposition is
+    /// zero-line only; the targeted visit has at least one line. Maps to 409.</summary>
+    public static readonly Error DispositionVisitHasLines =
+        Error.Create(
+            "ActualWork.DispositionVisitHasLines",
+            "This visit has line items and cannot be disposed as no-charge.");
+
+    /// <summary>Batch 3b-i (drift D5): the visit has been financially reviewed
+    /// (<c>ReviewedAtUtc != null</c>); a disposition would mutate effective financial facts after the
+    /// Owner/Admin's approval. Post-review changes are the deferred correction path. Maps to 409.</summary>
+    public static readonly Error DispositionVisitAlreadyReviewed =
+        Error.Create(
+            "ActualWork.DispositionVisitAlreadyReviewed",
+            "This visit has already been reviewed and can no longer be disposed.");
 }

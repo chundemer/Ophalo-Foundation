@@ -233,6 +233,13 @@ public static class ErrorHttpMapper
             var c when c == "ActualWork.FinancialResolutionReasonRequired" => (StatusCodes.Status400BadRequest, "Bad request.", null),
             var c when c == "ActualWork.FinancialResolutionReasonTooLong" => (StatusCodes.Status400BadRequest, "Bad request.", null),
 
+            // --- Office financial disposition mutation (BL135 §4 Batch 3b-i, ADR-493) ---
+            var c when c == "ActualWork.DispositionInvalidKind" => (StatusCodes.Status400BadRequest, "Bad request.", null),
+            var c when c == "ActualWork.DispositionReasonRequired" => (StatusCodes.Status400BadRequest, "Bad request.", null),
+            var c when c == "ActualWork.DispositionReasonTooLong" => (StatusCodes.Status400BadRequest, "Bad request.", null),
+            var c when c == "ActualWork.DispositionVisitHasLines" => (StatusCodes.Status409Conflict, "Conflict.", null),
+            var c when c == "ActualWork.DispositionVisitAlreadyReviewed" => (StatusCodes.Status409Conflict, "Conflict.", null),
+
             // --- Price book publish lock conflict (Session 2d.2, ADR-470) ---
             var c when c == "PriceBookVersion.PublishLockConflict" => (StatusCodes.Status409Conflict, "Conflict.", null),
             var c when c == "PriceBookVersion.CatalogItemNotActive" => (StatusCodes.Status409Conflict, "Conflict.", null),

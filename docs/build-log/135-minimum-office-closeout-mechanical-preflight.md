@@ -2,8 +2,8 @@
 
 **Status:** Mechanical preflight complete (rev. 6 — fourteen review corrections applied over five
 review rounds) — implementation batches gated. Batches 1 (`56b8b7f`), 2 (`946481a`), 3a-i
-(`00684dd`), and 3a-ii (`d2d1d6a`) committed; 3a-iii implemented (pending review); Batch 3b-i
-(zero-line no-charge disposition API) is the next coding session.
+(`00684dd`), 3a-ii (`d2d1d6a`), 3a-iii (`055e63d`), and 3b-i (zero-line no-charge disposition API +
+persistence) committed; Batch 3b-ii (hard `MarkReviewed` gate) is the next coding session.
 **Date:** 2026-08-27
 **Related:** ADR-493, ADR-487, ADR-467, ADR-468, ADR-462, ADR-463, ADR-480; Build Log 129
 ("Minimum Office Closeout implementation sequence — locked"); session-log "Next after the release
