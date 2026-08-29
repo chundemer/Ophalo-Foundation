@@ -64,6 +64,14 @@ public sealed class EfActualWorkAssemblyExpansionPersistence(
         if (actualWork.Status != ActualWorkStatus.Draft)
             return new ActualWorkExpandAssemblyOutcome(ActualWorkExpandAssemblyResult.NotDraft);
 
+        // ADR-494 D2 (4c-i-a-2): assembly expansion attributes every line it creates to the
+        // persisted ticket default. With no default there is no performer to record, so return an
+        // explicit PerformerRequired outcome (never NotDraft) here — immediately after the row-locked
+        // Draft/status checks, before any assembly/eligibility work or AddLine/write. The transaction
+        // is rolled back on dispose and zero lines are written.
+        if (actualWork.DefaultPerformedByAccountUserId is null)
+            return new ActualWorkExpandAssemblyOutcome(ActualWorkExpandAssemblyResult.PerformerRequired);
+
         if (PostDraftLockHook is not null)
             await PostDraftLockHook(ct);
 
@@ -167,10 +175,9 @@ public sealed class EfActualWorkAssemblyExpansionPersistence(
                 ? 1m
                 : defaultQuantities[catalogItemId];
 
-            // ADR-494 D2: assembly expansion attributes every line it creates to the persisted
-            // ticket default. 4c-i-a-1 threads it (compile-level); the explicit no-default outcome
-            // (PerformerRequired, no partial writes) is 4c-i-a-2 — today any AddLine failure,
-            // including a missing default, still collapses to NotDraft here.
+            // ADR-494 D2: every expanded line carries the persisted ticket default (guaranteed
+            // non-null by the PerformerRequired guard above). A NotDraft from the aggregate still
+            // maps to NotDraft.
             var addResult = actualWork.AddLine(
                 detail.Item.Id, priceBookVersionLineId, displayNameSnapshot, unitOfMeasureSnapshot,
                 quantity, sellPriceSnapshot, standardExpectedDirectCostSnapshot,

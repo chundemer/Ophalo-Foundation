@@ -208,6 +208,8 @@ public sealed class ActualWorkDraftApiService(
                 Result<ExpandActualWorkAssemblyResult>.Failure(ActualWorkErrors.VersionMismatch),
             ActualWorkExpandAssemblyResult.NotDraft =>
                 Result<ExpandActualWorkAssemblyResult>.Failure(ActualWorkErrors.NotDraft),
+            ActualWorkExpandAssemblyResult.PerformerRequired =>
+                Result<ExpandActualWorkAssemblyResult>.Failure(ActualWorkErrors.PerformerRequired),
             ActualWorkExpandAssemblyResult.AssemblyNotFound =>
                 Result<ExpandActualWorkAssemblyResult>.Failure(OfferingAssemblyErrors.NotFound),
             ActualWorkExpandAssemblyResult.AssemblyNotOperationallyEligible =>

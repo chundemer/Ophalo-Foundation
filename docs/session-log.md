@@ -408,7 +408,7 @@ correction applied pre-commit: partial-component resolution + client negative ch
 full frontend suite **799/799** (90 files, +4), `tsc --noEmit` clean, `check:tokens` passed,
 `git diff --check` clean.
 
-### Claude handoff — 4c-i `4c-i-a-1` + `4c-i-mig` DONE (mig applied locally); next is Session 3 (`4c-i-a-2`); see session plan below
+### Claude handoff — 4c-i `4c-i-a-2` DONE (pending commit approval); next is Session 4 (`4c-i-b`); see session plan below
 
 **BL136 P (workflow/mechanical preflight) is complete.** ADR-494 (D1–D12) committed at `2118293`;
 the ADR-487 wording fix + 4c-i seam preflight rev. 3 committed at `644aa4a`; the rev. 4 docs
@@ -464,11 +464,24 @@ add-line fails `PerformerRequired`). When the slice is complete: verify prod
 `SELECT count(*) FROM keep_actual_work_lines` is 0 (ADR-494 D1 — expected; no cleanup needed if so),
 flip the Railway migrate-on-start variable, deploy the whole merged slice, smoke-test capture.
 
-**Next — Session 3 (`4c-i-a-2`), fresh Claude session.** Assembly-expansion outcome contract:
-`EfActualWorkAssemblyExpansionPersistence` returns an explicit `PerformerRequired` outcome (never
-`NotDraft`) with **no partial writes** when the Draft has no ticket default; genuine non-`Draft`
-still returns its not-a-draft outcome. 3 prod + 1 test (`ActualWorkAssemblyExpansionPersistenceTests`
-moves here). Depends on `4c-i-a-1` only, not the migration.
+**Session 3 (`4c-i-a-2`) — COMPLETE (2026-08-29), `b73079c`.** Assembly-expansion
+outcome contract, 4 files (3 prod + 1 test): `ActualWorkExpandAssemblyResult.PerformerRequired`
+added; `EfActualWorkAssemblyExpansionPersistence` returns it (never `NotDraft`) when the row-locked
+Draft has `DefaultPerformedByAccountUserId is null`, guard placed **immediately after the row-locked
+Draft/status checks** (before any assembly/eligibility work or write, per the locked contract) —
+transaction rolls back, zero lines written; genuine non-`Draft` still returns `NotDraft`. The race
+test's Draft is now seeded with a default so it keeps proving the eligibility-recheck path.
+`ActualWorkDraftApiService` maps `PerformerRequired` →
+`ActualWorkErrors.PerformerRequired` (falls through `ErrorHttpMapper` to 400, no mapper change).
+`ActualWorkAssemblyExpansionPersistenceTests` gains 3 facts (no default → `PerformerRequired` +
+zero lines; valid default → both expanded lines carry it; `Submitted` → `NotDraft`). Verified:
+`~ActualWorkAssemblyExpansionPersistence` 4/4, architecture 14/14, Api + Infrastructure build
+0 warnings, `git diff --check` clean. The pre-planned 8 red HTTP tests are unchanged (still
+`4c-i-b`).
+
+**Next — Session 4 (`4c-i-b`), fresh Claude session.** Performer-candidate read + `SetDefaultPerformer`
+API gate + create/add-line performer + the 8 HTTP test fixes (6 prod + 6 test); split to `b-1`/`b-2`
+if it hits the file gate.
 
 **rev. 4 changes (committed `52e490d`), from the advisor review:**
 - **Assembly expansion is a third line-creation route.** `EfActualWorkAssemblyExpansionPersistence`
@@ -499,7 +512,7 @@ total / ≤ 8 production / ≤ 1 mutation family — proven per-commit counts in
 | 1 | *done* | `4c-i-r` `ea4f9b8` + `4c-i-0a` `79008bd` + `4c-i-0b` `03a081f` | — | seam prep, no behaviour change |
 | 2 | *done* | `4c-i-a-1` `d49e5b3` + follow-up `4526564` — domain + persistence + EF config (7 prod + 4 test) | 1 | committed; all persistence + unit + arch tests green post-mig |
 | — | *done — Christian* | `4c-i-mig` — `AddActualWorkPerformer` authored + applied locally (hand-edited: no backfill); 3 generated files still to `git commit` | 2 | not a Claude session |
-| 3 | *next* — `4c-i-a-2` | assembly-expansion outcome contract (3 prod + 1 test) | 2 (not the migration) | 8 HTTP tests stay red until `4c-i-b` |
+| 3 | *done* — `4c-i-a-2` | assembly-expansion outcome contract (3 prod + 1 test) | 2 (not the migration) | 8 HTTP tests stay red until `4c-i-b` |
 | 4 | `4c-i-b` | performer-candidate read + `SetDefaultPerformer` + create/add-line performer + HTTP test fixes (6 prod + 6 test) | 2, `4c-i-mig` | at the file gate; split to `b-1`/`b-2` if needed |
 | 5 | `4c-i-c` | minimum functional frontend (6 prod + 3 test) | 4 | last commit of the slice; deploy the whole slice after this |
 

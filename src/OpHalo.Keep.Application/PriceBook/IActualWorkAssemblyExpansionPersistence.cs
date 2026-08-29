@@ -15,6 +15,13 @@ public enum ActualWorkExpandAssemblyResult
 
     AssemblyNotFound,
 
+    /// <summary>ADR-494 D2 (4c-i-a-2): the row-locked Draft has no persisted "Performed by" default,
+    /// so assembly expansion — which attributes every line it creates to that default — cannot
+    /// proceed. Returned before any <c>AddLine</c>/write; zero lines are written and the transaction
+    /// is rolled back. Distinct from <see cref="NotDraft"/>: the visit is a Draft, it just lacks a
+    /// performer. Maps to <c>ActualWork.PerformerRequired</c>.</summary>
+    PerformerRequired,
+
     /// <summary>The ADR-479 operational-eligibility predicate, recomputed from the row-locked
     /// assembly/catalog-item state, failed. Zero lines are ever written for this outcome.</summary>
     AssemblyNotOperationallyEligible,

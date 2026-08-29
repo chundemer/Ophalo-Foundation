@@ -65,14 +65,11 @@ public sealed class ActualWorkAssemblyExpansionPersistenceTests : IClassFixture<
         await using var seedCtx = CreateContext();
         var primaryId = await SeedPricedCatalogItemAsync(seedCtx, CatalogItemActiveState.Active);
         var assemblyId = await SeedAssemblyAsync(seedCtx, primaryId);
-        var visitId = await SeedDraftVisitAsync(seedCtx);
+        var visitId = await SeedDraftVisitAsync(seedCtx, defaultPerformedBy: OwnerId);
         var version = await GetVersionAsync(visitId);
 
         await using var expandCtx = CreateContext();
-        var persistence = new EfActualWorkAssemblyExpansionPersistence(
-            expandCtx,
-            new EfOfferingAssemblyPersistence(expandCtx),
-            new EfCatalogReadPersistence(expandCtx));
+        var persistence = NewPersistence(expandCtx);
         persistence.PostDraftLockHook = async _ =>
         {
             await using var raceCtx = CreateContext();
@@ -92,14 +89,84 @@ public sealed class ActualWorkAssemblyExpansionPersistenceTests : IClassFixture<
         Assert.False(await verifyCtx.Set<ActualWorkLine>().AnyAsync(l => l.ActualWorkId == visitId));
     }
 
+    /// <summary>
+    /// ADR-494 D2 (4c-i-a-2): a Draft with no persisted "Performed by" default returns an explicit
+    /// <see cref="ActualWorkExpandAssemblyResult.PerformerRequired"/> — never <c>NotDraft</c> — and
+    /// writes zero lines. The guard runs before any <c>AddLine</c>, so the transaction rolls back
+    /// with no partial writes.
+    /// </summary>
+    [Fact]
+    public async Task ExpandAsync_with_no_ticket_default_returns_PerformerRequired_and_writes_no_lines()
+    {
+        await using var seedCtx = CreateContext();
+        var primaryId = await SeedPricedCatalogItemAsync(seedCtx, CatalogItemActiveState.Active);
+        var assemblyId = await SeedAssemblyAsync(seedCtx, primaryId);
+        var visitId = await SeedDraftVisitAsync(seedCtx);
+        var version = await GetVersionAsync(visitId);
+
+        await using var expandCtx = CreateContext();
+        var outcome = await NewPersistence(expandCtx).ExpandAsync(
+            AccountId, visitId, version, assemblyId, [], OwnerId, CancellationToken.None);
+
+        Assert.Equal(ActualWorkExpandAssemblyResult.PerformerRequired, outcome.Result);
+
+        await using var verifyCtx = CreateContext();
+        Assert.False(await verifyCtx.Set<ActualWorkLine>().AnyAsync(l => l.ActualWorkId == visitId));
+    }
+
+    /// <summary>A Draft with a persisted default: every line the expansion creates carries it.</summary>
+    [Fact]
+    public async Task ExpandAsync_with_a_ticket_default_attributes_every_expanded_line_to_it()
+    {
+        await using var seedCtx = CreateContext();
+        var primaryId = await SeedPricedCatalogItemAsync(seedCtx, CatalogItemActiveState.Active);
+        var associatedId = await SeedPricedCatalogItemAsync(seedCtx, CatalogItemActiveState.Active);
+        var assemblyId = await SeedAssemblyAsync(seedCtx, primaryId, (associatedId, IsOptional: false));
+        var visitId = await SeedDraftVisitAsync(seedCtx, defaultPerformedBy: OwnerId);
+        var version = await GetVersionAsync(visitId);
+
+        await using var expandCtx = CreateContext();
+        var outcome = await NewPersistence(expandCtx).ExpandAsync(
+            AccountId, visitId, version, assemblyId, [], OwnerId, CancellationToken.None);
+
+        Assert.Equal(ActualWorkExpandAssemblyResult.Committed, outcome.Result);
+
+        await using var verifyCtx = CreateContext();
+        var lines = await verifyCtx.Set<ActualWorkLine>().Where(l => l.ActualWorkId == visitId).ToListAsync();
+        Assert.Equal(2, lines.Count);
+        Assert.All(lines, l => Assert.Equal(OwnerId, l.PerformedByAccountUserId));
+    }
+
+    /// <summary>A genuinely non-Draft visit still returns <c>NotDraft</c>, not <c>PerformerRequired</c>.</summary>
+    [Fact]
+    public async Task ExpandAsync_on_a_submitted_visit_still_returns_NotDraft()
+    {
+        await using var seedCtx = CreateContext();
+        var primaryId = await SeedPricedCatalogItemAsync(seedCtx, CatalogItemActiveState.Active);
+        var assemblyId = await SeedAssemblyAsync(seedCtx, primaryId);
+        var visitId = await SeedDraftVisitAsync(seedCtx);
+        var version = await GetVersionAsync(visitId);
+        await seedCtx.Database.ExecuteSqlInterpolatedAsync(
+            $"UPDATE keep_actual_works SET status = 'Submitted' WHERE id = {visitId}");
+
+        await using var expandCtx = CreateContext();
+        var outcome = await NewPersistence(expandCtx).ExpandAsync(
+            AccountId, visitId, version, assemblyId, [], OwnerId, CancellationToken.None);
+
+        Assert.Equal(ActualWorkExpandAssemblyResult.NotDraft, outcome.Result);
+    }
+
     // -------------------------------------------------------------------------
     // Seeding
     // -------------------------------------------------------------------------
 
-    private async Task<Guid> SeedDraftVisitAsync(OpHaloDbContext ctx)
+    private static EfActualWorkAssemblyExpansionPersistence NewPersistence(OpHaloDbContext ctx) =>
+        new(ctx, new EfOfferingAssemblyPersistence(ctx), new EfCatalogReadPersistence(ctx));
+
+    private async Task<Guid> SeedDraftVisitAsync(OpHaloDbContext ctx, Guid? defaultPerformedBy = null)
     {
         var persistence = new EfActualWorkPersistence(ctx);
-        var visit = ActualWork.Create(AccountId, RequestId, OwnerId).Value;
+        var visit = ActualWork.Create(AccountId, RequestId, OwnerId, defaultPerformedBy).Value;
         await persistence.AddAsync(visit, CancellationToken.None);
         return visit.Id;
     }
