@@ -9,6 +9,7 @@ using OpHalo.Foundation.Core.Entities.Accounts.Enums;
 using OpHalo.Foundation.Core.Entities.Users;
 using OpHalo.Foundation.Core.Helpers;
 using OpHalo.Foundation.Infrastructure.Persistence;
+using OpHalo.IntegrationTests.Support;
 using OpHalo.Keep.Core.Entities;
 using OpHalo.Keep.Core.Entities.Enums;
 using Xunit;
@@ -394,7 +395,8 @@ public sealed class ActualWorkFinancialResolutionApiTests : IClassFixture<KeepAp
 
         var now = DateTime.UtcNow;
         var visit = ActualWork.Create(accountId, requestId, ownerId).Value;
-        var addResult = visit.AddLine(
+        var addResult = ActualWorkTestData.AddLine(
+            visit,
             catalogItemId, priceBookVersionLineId, "Partial line", "each", 2m,
             sellPriceSnapshot: 50.00m, standardExpectedDirectCostSnapshot: null,
             note: null, commercialBaselineSourceLineId: null, ownerId);

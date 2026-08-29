@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using OpHalo.Foundation.Application.Accounts.Provisioning;
 using OpHalo.Foundation.Core.Entities.Accounts.Enums;
 using OpHalo.Foundation.Infrastructure.Persistence;
+using OpHalo.IntegrationTests.Support;
 using OpHalo.Keep.Application.PriceBook;
 using OpHalo.Keep.Core.Entities;
 using OpHalo.Keep.Core.Entities.Enums;
@@ -272,8 +273,8 @@ public sealed class ActualWorkReviewPersistenceTests : IClassFixture<PostgresFix
         // supplies only the missing direct cost. The Batch 3b-ii gate must agree with the read
         // projection that this line is now complete.
         var (catalogItemId, priceBookVersionLineId) = await SeedCatalogItemWithSnapshotAsync();
-        var visitId = await SeedSubmittedVisitAsync(v => v.AddLine(
-            catalogItemId, priceBookVersionLineId, "Partial-snapshot line", "each", 1m, 42.50m, null, null, null, OwnerId));
+        var visitId = await SeedSubmittedVisitAsync(v => ActualWorkTestData.AddLine(
+            v, catalogItemId, priceBookVersionLineId, "Partial-snapshot line", "each", 1m, 42.50m, null, null, null, OwnerId));
         var lineId = await GetFirstLineIdAsync(visitId);
         await InsertResolutionRawAsync(visitId, lineId, sell: null, cost: 45m);
 
@@ -325,8 +326,8 @@ public sealed class ActualWorkReviewPersistenceTests : IClassFixture<PostgresFix
     private async Task<Guid> SeedSubmittedVisitAsync()
     {
         var (catalogItemId, priceBookVersionLineId) = await SeedCatalogItemWithSnapshotAsync();
-        return await SeedSubmittedVisitAsync(v => v.AddLine(
-            catalogItemId, priceBookVersionLineId, "Drain pan replacement", "each", 1m, 42.50m, 18.00m, null, null, OwnerId));
+        return await SeedSubmittedVisitAsync(v => ActualWorkTestData.AddLine(
+            v, catalogItemId, priceBookVersionLineId, "Drain pan replacement", "each", 1m, 42.50m, 18.00m, null, null, OwnerId));
     }
 
     private async Task<(Guid CatalogItemId, Guid PriceBookVersionLineId)> SeedCatalogItemWithSnapshotAsync()
@@ -371,7 +372,7 @@ public sealed class ActualWorkReviewPersistenceTests : IClassFixture<PostgresFix
     /// <summary>Submitted visit with one custom line carrying neither snapshot — financially
     /// incomplete, so it is blocked by the Batch 3b-ii review gate until resolved.</summary>
     private Task<Guid> SeedSubmittedVisitWithIncompleteLineAsync() =>
-        SeedSubmittedVisitAsync(v => v.AddLine(null, null, "Off-catalog part", "each", 1m, null, null, null, null, OwnerId));
+        SeedSubmittedVisitAsync(v => ActualWorkTestData.AddLine(v, null, null, "Off-catalog part", "each", 1m, null, null, null, null, OwnerId));
 
     /// <summary>Submitted zero-line diagnostic visit — financially vacuously complete, but blocked
     /// by the Batch 3b-ii review gate until a no-charge disposition exists.</summary>

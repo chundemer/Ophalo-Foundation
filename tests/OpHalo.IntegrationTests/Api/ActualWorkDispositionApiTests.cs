@@ -9,6 +9,7 @@ using OpHalo.Foundation.Core.Entities.Accounts.Enums;
 using OpHalo.Foundation.Core.Entities.Users;
 using OpHalo.Foundation.Core.Helpers;
 using OpHalo.Foundation.Infrastructure.Persistence;
+using OpHalo.IntegrationTests.Support;
 using OpHalo.Keep.Core.Entities;
 using OpHalo.Keep.Core.Entities.Enums;
 using Xunit;
@@ -411,7 +412,8 @@ public sealed class ActualWorkDispositionApiTests : IClassFixture<KeepApiWebFact
         if (withLine)
         {
             var (catalogItemId, priceBookVersionLineId) = await SeedCatalogItemWithSnapshotAsync(accountId, ownerId);
-            var addResult = visit.AddLine(
+            var addResult = ActualWorkTestData.AddLine(
+                visit,
                 catalogItemId, priceBookVersionLineId, "Line", "each", 1m,
                 sellPriceSnapshot: 50.00m, standardExpectedDirectCostSnapshot: 18.00m,
                 note: null, commercialBaselineSourceLineId: null, ownerId);

@@ -3,6 +3,7 @@ using Npgsql;
 using OpHalo.Foundation.Application.Accounts.Provisioning;
 using OpHalo.Foundation.Core.Entities.Accounts.Enums;
 using OpHalo.Foundation.Infrastructure.Persistence;
+using OpHalo.IntegrationTests.Support;
 using OpHalo.Keep.Application.PriceBook;
 using OpHalo.Keep.Core.Entities;
 using OpHalo.Keep.Core.Entities.Enums;
@@ -338,7 +339,7 @@ public sealed class ActualWorkFinancialResolutionPersistenceTests
         var persistence = new EfActualWorkPersistence(ctx);
         var visit = ActualWork.Create(AccountId, RequestId, OwnerId).Value;
         for (var i = 0; i < lineCount; i++)
-            visit.AddLine(null, null, $"Line {i + 1}", "each", 1m, null, null, null, null, OwnerId);
+            ActualWorkTestData.AddLine(visit, null, null, $"Line {i + 1}", "each", 1m, null, null, null, null, OwnerId);
         await persistence.AddAsync(visit, CancellationToken.None);
 
         var lineIds = visit.Lines.Select(l => l.Id).ToArray();

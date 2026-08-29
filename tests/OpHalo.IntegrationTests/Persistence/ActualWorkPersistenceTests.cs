@@ -3,6 +3,7 @@ using Npgsql;
 using OpHalo.Foundation.Application.Accounts.Provisioning;
 using OpHalo.Foundation.Core.Entities.Accounts.Enums;
 using OpHalo.Foundation.Infrastructure.Persistence;
+using OpHalo.IntegrationTests.Support;
 using OpHalo.Keep.Application.PriceBook;
 using OpHalo.Keep.Core.Entities;
 using OpHalo.Keep.Core.Entities.Enums;
@@ -112,7 +113,7 @@ public sealed class ActualWorkPersistenceTests : IClassFixture<PostgresFixture>,
         var editPersistence = new EfActualWorkPersistence(editCtx);
         var loaded = await editPersistence.GetByIdAsync(AccountId, visit.Id, CancellationToken.None);
         loaded!.Submit(Now, ActualWorkOutcome.NoWorkAuthorized, "No access to unit.");
-        await editPersistence.CommitAsync(loaded, CancellationToken.None);
+        await editPersistence.CommitAsync(loaded!, CancellationToken.None);
 
         await using var readCtx = CreateContext();
         var readPersistence = new EfActualWorkPersistence(readCtx);
@@ -138,10 +139,11 @@ public sealed class ActualWorkPersistenceTests : IClassFixture<PostgresFixture>,
         await using var editCtx = CreateContext();
         var editPersistence = new EfActualWorkPersistence(editCtx);
         var loaded = await editPersistence.GetByIdAsync(AccountId, visit.Id, CancellationToken.None);
-        loaded!.AddLine(
+        ActualWorkTestData.AddLine(
+            loaded!,
             catalogItemId, priceBookVersionLineId, "Compressor replacement", "each", 1m,
             450m, 210m, null, null, OwnerId);
-        var commitResult = await editPersistence.CommitAsync(loaded, CancellationToken.None);
+        var commitResult = await editPersistence.CommitAsync(loaded!, CancellationToken.None);
 
         Assert.Equal(ActualWorkCommitResult.Committed, commitResult);
 
@@ -166,11 +168,11 @@ public sealed class ActualWorkPersistenceTests : IClassFixture<PostgresFixture>,
         await using var ctxB = CreateContext();
         var loadedB = await new EfActualWorkPersistence(ctxB).GetByIdAsync(AccountId, visit.Id, CancellationToken.None);
 
-        loadedA!.AddLine(null, null, "Custom labor", null, 1m, null, null, null, null, OwnerId);
-        await new EfActualWorkPersistence(ctxA).CommitAsync(loadedA, CancellationToken.None);
+        ActualWorkTestData.AddLine(loadedA!, null, null, "Custom labor", null, 1m, null, null, null, null, OwnerId);
+        await new EfActualWorkPersistence(ctxA).CommitAsync(loadedA!, CancellationToken.None);
 
-        loadedB!.AddLine(null, null, "Another custom labor", null, 2m, null, null, null, null, OwnerId);
-        var staleResult = await new EfActualWorkPersistence(ctxB).CommitAsync(loadedB, CancellationToken.None);
+        ActualWorkTestData.AddLine(loadedB!, null, null, "Another custom labor", null, 2m, null, null, null, null, OwnerId);
+        var staleResult = await new EfActualWorkPersistence(ctxB).CommitAsync(loadedB!, CancellationToken.None);
 
         Assert.Equal(ActualWorkCommitResult.ConcurrencyConflict, staleResult);
     }
@@ -185,7 +187,7 @@ public sealed class ActualWorkPersistenceTests : IClassFixture<PostgresFixture>,
         await using var ctx = CreateContext();
         var persistence = new EfActualWorkPersistence(ctx);
         var visit = ActualWork.Create(AccountId, RequestId, OwnerId).Value;
-        visit.AddLine(null, null, "Custom labor", null, 1m, null, null, null, null, OwnerId);
+        ActualWorkTestData.AddLine(visit, null, null, "Custom labor", null, 1m, null, null, null, null, OwnerId);
         await persistence.AddAsync(visit, CancellationToken.None);
 
         var discardResult = await persistence.DiscardAsync(visit, CancellationToken.None);
@@ -210,8 +212,8 @@ public sealed class ActualWorkPersistenceTests : IClassFixture<PostgresFixture>,
         await using var ctxB = CreateContext();
         var loadedB = await new EfActualWorkPersistence(ctxB).GetByIdAsync(AccountId, visit.Id, CancellationToken.None);
 
-        loadedA!.AddLine(null, null, "Custom labor", null, 1m, null, null, null, null, OwnerId);
-        await new EfActualWorkPersistence(ctxA).CommitAsync(loadedA, CancellationToken.None);
+        ActualWorkTestData.AddLine(loadedA!, null, null, "Custom labor", null, 1m, null, null, null, null, OwnerId);
+        await new EfActualWorkPersistence(ctxA).CommitAsync(loadedA!, CancellationToken.None);
 
         var staleResult = await new EfActualWorkPersistence(ctxB).DiscardAsync(loadedB!, CancellationToken.None);
 
@@ -377,7 +379,7 @@ public sealed class ActualWorkPersistenceTests : IClassFixture<PostgresFixture>,
         await using var ctx = CreateContext();
         var persistence = new EfActualWorkPersistence(ctx);
         var visit = ActualWork.Create(AccountId, RequestId, OwnerId).Value;
-        visit.AddLine(null, null, "Drain pan replacement", "each", 1m, null, null, null, null, OwnerId);
+        ActualWorkTestData.AddLine(visit, null, null, "Drain pan replacement", "each", 1m, null, null, null, null, OwnerId);
         await persistence.AddAsync(visit, CancellationToken.None);
 
         var submitResult = visit.Submit(submittedAtUtc, null, null);

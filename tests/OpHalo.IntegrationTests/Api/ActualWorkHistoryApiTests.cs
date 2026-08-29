@@ -9,6 +9,7 @@ using OpHalo.Foundation.Core.Entities.Accounts.Enums;
 using OpHalo.Foundation.Core.Entities.Users;
 using OpHalo.Foundation.Core.Helpers;
 using OpHalo.Foundation.Infrastructure.Persistence;
+using OpHalo.IntegrationTests.Support;
 using OpHalo.Keep.Application.PriceBook;
 using OpHalo.Keep.Core.Entities;
 using OpHalo.Keep.Core.Entities.Enums;
@@ -273,17 +274,17 @@ public sealed class ActualWorkHistoryApiTests : IClassFixture<KeepApiWebFactory>
         var persistence = new EfActualWorkPersistence(db);
 
         var visit = ActualWork.Create(accountId, requestId, ownerId).Value;
-        visit.AddLine(null, null, "Line recorded first", "each", 1m, null, null, null, null, ownerId);
+        ActualWorkTestData.AddLine(visit, null, null, "Line recorded first", "each", 1m, null, null, null, null, ownerId);
         await persistence.AddAsync(visit, CancellationToken.None);
 
         var reloaded = await persistence.GetByIdAsync(accountId, visit.Id, CancellationToken.None);
-        reloaded!.AddLine(null, null, "Line recorded second", "each", 1m, null, null, null, null, ownerId);
-        var addResult = await persistence.CommitAsync(reloaded, CancellationToken.None);
+        ActualWorkTestData.AddLine(reloaded!, null, null, "Line recorded second", "each", 1m, null, null, null, null, ownerId);
+        var addResult = await persistence.CommitAsync(reloaded!, CancellationToken.None);
         Assert.Equal(ActualWorkCommitResult.Committed, addResult);
 
-        var submitResult = reloaded.Submit(DateTime.UtcNow, null, null);
+        var submitResult = reloaded!.Submit(DateTime.UtcNow, null, null);
         Assert.True(submitResult.IsSuccess);
-        var commitResult = await persistence.CommitAsync(reloaded, CancellationToken.None);
+        var commitResult = await persistence.CommitAsync(reloaded!, CancellationToken.None);
         Assert.Equal(ActualWorkCommitResult.Committed, commitResult);
     }
 
@@ -293,7 +294,7 @@ public sealed class ActualWorkHistoryApiTests : IClassFixture<KeepApiWebFactory>
         var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
         var persistence = new EfActualWorkPersistence(db);
         var visit = ActualWork.Create(accountId, requestId, ownerId).Value;
-        visit.AddLine(null, null, "Drain pan replacement", "each", 1m, null, null, null, null, ownerId);
+        ActualWorkTestData.AddLine(visit, null, null, "Drain pan replacement", "each", 1m, null, null, null, null, ownerId);
         await persistence.AddAsync(visit, CancellationToken.None);
 
         var submitResult = visit.Submit(DateTime.UtcNow, null, null);

@@ -9,6 +9,7 @@ using OpHalo.Foundation.Core.Entities.Accounts.Enums;
 using OpHalo.Foundation.Core.Entities.Users;
 using OpHalo.Foundation.Core.Helpers;
 using OpHalo.Foundation.Infrastructure.Persistence;
+using OpHalo.IntegrationTests.Support;
 using OpHalo.Keep.Application.PriceBook;
 using OpHalo.Keep.Core.Entities;
 using OpHalo.Keep.Core.Entities.Enums;
@@ -291,7 +292,7 @@ public sealed class ActualWorkReviewApiTests : IClassFixture<KeepApiWebFactory>,
         var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
         var visit = await db.Set<ActualWork>().Include(x => x.Lines)
             .SingleAsync(x => x.AccountId == accountId && x.Id == actualWorkId);
-        Assert.True(visit.AddLine(null, null, "Off-catalog part", "each", 1m, null, null, null, null, ownerId).IsSuccess);
+        Assert.True(ActualWorkTestData.AddLine(visit, null, null, "Off-catalog part", "each", 1m, null, null, null, null, ownerId).IsSuccess);
         await db.SaveChangesAsync();
         return visit.ConcurrencyVersion;
     }

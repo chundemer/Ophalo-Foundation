@@ -9,6 +9,7 @@ using OpHalo.Foundation.Core.Entities.Accounts.Enums;
 using OpHalo.Foundation.Core.Entities.Users;
 using OpHalo.Foundation.Core.Helpers;
 using OpHalo.Foundation.Infrastructure.Persistence;
+using OpHalo.IntegrationTests.Support;
 using OpHalo.Keep.Core.Entities;
 using OpHalo.Keep.Core.Entities.Enums;
 using Xunit;
@@ -544,7 +545,8 @@ public sealed class ActualWorkFinancialReadApiTests : IClassFixture<KeepApiWebFa
 
         foreach (var line in lines ?? [])
         {
-            var addResult = visit.AddLine(
+            var addResult = ActualWorkTestData.AddLine(
+                visit,
                 line.CatalogItemId, line.PriceBookVersionLineId, "Test line", "each", line.Quantity,
                 line.SellPrice, line.Cost, note: null, commercialBaselineSourceLineId: null, recorderAccountUserId);
             Assert.True(addResult.IsSuccess);
