@@ -408,7 +408,7 @@ correction applied pre-commit: partial-component resolution + client negative ch
 full frontend suite **799/799** (90 files, +4), `tsc --noEmit` clean, `check:tokens` passed,
 `git diff --check` clean.
 
-### Claude handoff — 4c-i Session 2 (`4c-i-a-1`) COMPLETE; next is Christian's `4c-i-mig`, then Session 3 (`4c-i-a-2`); see session plan below
+### Claude handoff — 4c-i `4c-i-a-1` + `4c-i-mig` DONE (mig applied locally); next is Session 3 (`4c-i-a-2`); see session plan below
 
 **BL136 P (workflow/mechanical preflight) is complete.** ADR-494 (D1–D12) committed at `2118293`;
 the ADR-487 wording fix + 4c-i seam preflight rev. 3 committed at `644aa4a`; the rev. 4 docs
@@ -436,14 +436,39 @@ assembly no-default outcome is `4c-i-a-2`, failures still collapse to `NotDraft`
 performer to `createdByUserId` — fixture setup only; `PerformerRequired` tests call the domain
 directly with explicit `null`). Verified: full unit **1679/1679** (`ActualWork`-filtered 104),
 architecture **14/14**, full solution build 0 warnings, `git diff --check` clean. The persistence
-round-trip test in `ActualWorkPersistenceTests` is added and compiles but **executes only after
-`4c-i-mig`** — a-1's new EF columns are not in migration history yet, so the integration suite is
-red until Christian applies the migration.
+round-trip test in `ActualWorkPersistenceTests` runs only after `4c-i-mig` (below).
+Follow-up commit `4526564` fixed 5 post-migration integration failures inside a-1 scope: 4
+raw-SQL `INSERT`s in `ActualWorkPersistenceTests` gained `performed_by_account_user_id` (these
+raw sites were not in the seam's `.AddLine(` inventory), and the new round-trip test now calls
+`visit.AddLine(... performedByAccountUserId: null)` directly instead of the helper (the helper
+substitutes an explicit performer, defeating ticket-default seeding).
 
-**Next — Christian's `4c-i-mig`.** Run the local Actual Work reset (`4c-i-r`, still un-executed)
-first, then `dotnet ef migrations add AddActualWorkPerformer --startup-project
-src/OpHalo.Keep.Infrastructure` (ADR-049), apply locally, and run the focused integration suite
-including `ActualWorkPersistenceTests`.
+**`4c-i-mig` — migration authored + applied locally by Christian (2026-08-29).** Local Actual Work
+tables truncated first (29 line rows; `4c-i-r` SQL run by hand). `20260829213733_AddActualWorkPerformer`
+generated, then **hand-edited**: EF's auto-generated `defaultValue: Guid.Empty` removed from the
+non-null `performed_by_account_user_id` add (ADR-494 D1 — strict, no backfill, fail loudly on a
+non-empty table). Snapshot/Designer already clean. Applied locally via `dotnet ef database update`.
+The 3 generated files are Christian's to commit as `4c-i-mig` (`git add
+src/OpHalo.Foundation.Infrastructure/Migrations`). **Not yet deployed** — see the deploy gate below.
+
+**Known intermediate state between `4c-i-mig` and `4c-i-b`: 8 red HTTP integration tests.**
+`ActualWorkDraftApiTests` (7) + `ActualWorkNudgeFieldReadApiTests` (1) now return 400
+`PerformerRequired` / 409 on add-line and assembly expansion because their per-file
+`CreateDraftAsync` HTTP helper does not yet send a ticket default. This is the pre-planned `4c-i-b`
+breakage (BL136-P preflight rows for those two files); `ActualWorkPersistenceTests` and the full
+unit + architecture suites are green. Do not treat these 8 as regressions — `4c-i-b` fixes them.
+
+**Deploy gate — nothing ships until `4c-i-c`.** `4c-i` is one deployable slice = 8 commits, none
+deployed until all merge (ADR-494 D2: the frontend cannot be deferred or the live composer's next
+add-line fails `PerformerRequired`). When the slice is complete: verify prod
+`SELECT count(*) FROM keep_actual_work_lines` is 0 (ADR-494 D1 — expected; no cleanup needed if so),
+flip the Railway migrate-on-start variable, deploy the whole merged slice, smoke-test capture.
+
+**Next — Session 3 (`4c-i-a-2`), fresh Claude session.** Assembly-expansion outcome contract:
+`EfActualWorkAssemblyExpansionPersistence` returns an explicit `PerformerRequired` outcome (never
+`NotDraft`) with **no partial writes** when the Draft has no ticket default; genuine non-`Draft`
+still returns its not-a-draft outcome. 3 prod + 1 test (`ActualWorkAssemblyExpansionPersistenceTests`
+moves here). Depends on `4c-i-a-1` only, not the migration.
 
 **rev. 4 changes (committed `52e490d`), from the advisor review:**
 - **Assembly expansion is a third line-creation route.** `EfActualWorkAssemblyExpansionPersistence`
@@ -472,9 +497,9 @@ total / ≤ 8 production / ≤ 1 mutation family — proven per-commit counts in
 |---|---|---|---|---|
 | — | *done (`52e490d`)* | rev. 4 docs committed | approval | no code |
 | 1 | *done* | `4c-i-r` `ea4f9b8` + `4c-i-0a` `79008bd` + `4c-i-0b` `03a081f` | — | seam prep, no behaviour change |
-| 2 | *done* | `4c-i-a-1` — domain + persistence + EF config (7 prod + 4 test) | 1 | committed; integration round-trip runs after `4c-i-mig` |
-| — | *Christian — next* | `4c-i-mig` — author + apply `AddActualWorkPerformer` (`--startup-project src/OpHalo.Keep.Infrastructure`) | 2 | not a Claude session; reset local DB via `4c-i-r` first |
-| 3 | `4c-i-a-2` | assembly-expansion outcome contract (3 prod + 1 test) | 2 (not the migration) | |
+| 2 | *done* | `4c-i-a-1` `d49e5b3` + follow-up `4526564` — domain + persistence + EF config (7 prod + 4 test) | 1 | committed; all persistence + unit + arch tests green post-mig |
+| — | *done — Christian* | `4c-i-mig` — `AddActualWorkPerformer` authored + applied locally (hand-edited: no backfill); 3 generated files still to `git commit` | 2 | not a Claude session |
+| 3 | *next* — `4c-i-a-2` | assembly-expansion outcome contract (3 prod + 1 test) | 2 (not the migration) | 8 HTTP tests stay red until `4c-i-b` |
 | 4 | `4c-i-b` | performer-candidate read + `SetDefaultPerformer` + create/add-line performer + HTTP test fixes (6 prod + 6 test) | 2, `4c-i-mig` | at the file gate; split to `b-1`/`b-2` if needed |
 | 5 | `4c-i-c` | minimum functional frontend (6 prod + 3 test) | 4 | last commit of the slice; deploy the whole slice after this |
 
