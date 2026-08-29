@@ -33,13 +33,15 @@ public class ActualWorkFinancialProjectionTests
             AccountId, WorkId, lineId, sell, cost, basis, "resolved for test", Actor, resolvedAt).Value;
 
     static Result<ActualWorkLine> AddCompleteCatalogLine(ActualWork work, decimal quantity, decimal sellPrice, decimal cost) =>
-        work.AddLine(
+        ActualWorkTestData.AddLine(
+            work,
             CatalogItemId, PriceBookVersionLineId, "Drain Pan", "each", quantity,
             sellPriceSnapshot: sellPrice, standardExpectedDirectCostSnapshot: cost,
             note: null, commercialBaselineSourceLineId: null, Actor);
 
     static Result<ActualWorkLine> AddCustomLine(ActualWork work, decimal quantity = 1m) =>
-        work.AddLine(
+        ActualWorkTestData.AddLine(
+            work,
             catalogItemId: null, priceBookVersionLineId: null, "3/4 inch copper elbow", null, quantity,
             sellPriceSnapshot: null, standardExpectedDirectCostSnapshot: null,
             note: null, commercialBaselineSourceLineId: null, Actor);
@@ -47,7 +49,7 @@ public class ActualWorkFinancialProjectionTests
     [Fact]
     public void All_complete_lines_compute_correct_totals_and_margin()
     {
-        var work = ActualWork.Create(AccountId, RequestId, Actor).Value;
+        var work = ActualWorkTestData.CreateDraft(AccountId, RequestId, Actor).Value;
         AddCompleteCatalogLine(work, quantity: 2m, sellPrice: 10m, cost: 4m);
         AddCompleteCatalogLine(work, quantity: 1m, sellPrice: 50m, cost: 20m);
 
@@ -69,11 +71,12 @@ public class ActualWorkFinancialProjectionTests
     [Fact]
     public void Null_sell_price_snapshot_makes_line_and_visit_incomplete_with_null_totals()
     {
-        var work = ActualWork.Create(AccountId, RequestId, Actor).Value;
+        var work = ActualWorkTestData.CreateDraft(AccountId, RequestId, Actor).Value;
         // A catalog line whose price-book snapshot did not carry a sell price, but did carry a cost —
         // constructible because ActualWorkLine.Create only requires both null when PriceBookVersionLineId
         // is null, not that both be set together when it IS set.
-        var addResult = work.AddLine(
+        var addResult = ActualWorkTestData.AddLine(
+            work,
             CatalogItemId, PriceBookVersionLineId, "Drain Pan", "each", 1m,
             sellPriceSnapshot: null, standardExpectedDirectCostSnapshot: 18m,
             note: null, commercialBaselineSourceLineId: null, Actor);
@@ -97,8 +100,9 @@ public class ActualWorkFinancialProjectionTests
     [Fact]
     public void Null_cost_snapshot_makes_line_and_visit_incomplete()
     {
-        var work = ActualWork.Create(AccountId, RequestId, Actor).Value;
-        var addResult = work.AddLine(
+        var work = ActualWorkTestData.CreateDraft(AccountId, RequestId, Actor).Value;
+        var addResult = ActualWorkTestData.AddLine(
+            work,
             CatalogItemId, PriceBookVersionLineId, "Drain Pan", "each", 1m,
             sellPriceSnapshot: 42.50m, standardExpectedDirectCostSnapshot: null,
             note: null, commercialBaselineSourceLineId: null, Actor);
@@ -114,7 +118,7 @@ public class ActualWorkFinancialProjectionTests
     [Fact]
     public void Zero_line_submitted_visit_is_complete_with_zero_totals()
     {
-        var work = ActualWork.Create(AccountId, RequestId, Actor).Value;
+        var work = ActualWorkTestData.CreateDraft(AccountId, RequestId, Actor).Value;
 
         var totals = ActualWorkFinancialProjection.ProjectVisit(work.Lines, NoResolutions).Totals;
 
@@ -128,7 +132,7 @@ public class ActualWorkFinancialProjectionTests
     [Fact]
     public void Custom_off_catalog_line_is_incomplete()
     {
-        var work = ActualWork.Create(AccountId, RequestId, Actor).Value;
+        var work = ActualWorkTestData.CreateDraft(AccountId, RequestId, Actor).Value;
         var addResult = AddCustomLine(work);
         Assert.True(addResult.IsSuccess);
 
@@ -142,10 +146,11 @@ public class ActualWorkFinancialProjectionTests
     [Fact]
     public void Catalog_item_without_price_book_snapshot_is_incomplete()
     {
-        var work = ActualWork.Create(AccountId, RequestId, Actor).Value;
+        var work = ActualWorkTestData.CreateDraft(AccountId, RequestId, Actor).Value;
         // State 2: CatalogItemId set, PriceBookVersionLineId null — the item currently carries no
         // price-book entry.
-        var addResult = work.AddLine(
+        var addResult = ActualWorkTestData.AddLine(
+            work,
             CatalogItemId, priceBookVersionLineId: null, "Drain Pan", "each", 1m,
             sellPriceSnapshot: null, standardExpectedDirectCostSnapshot: null,
             note: null, commercialBaselineSourceLineId: null, Actor);
@@ -161,7 +166,7 @@ public class ActualWorkFinancialProjectionTests
     [Fact]
     public void Line_totals_round_half_up_and_the_three_visit_totals_reconcile()
     {
-        var work = ActualWork.Create(AccountId, RequestId, Actor).Value;
+        var work = ActualWorkTestData.CreateDraft(AccountId, RequestId, Actor).Value;
         // 10.005 * 1 -> 10.005: round-half-up = 10.01 (banker's/ToEven would give 10.00).
         AddCompleteCatalogLine(work, quantity: 1m, sellPrice: 10.005m, cost: 3.334m);
         // 2.225 * 1 -> 2.225: round-half-up = 2.23.
@@ -186,9 +191,10 @@ public class ActualWorkFinancialProjectionTests
     [Fact]
     public void Resolution_supplies_a_missing_component_only_a_snapshot_always_wins()
     {
-        var work = ActualWork.Create(AccountId, RequestId, Actor).Value;
+        var work = ActualWorkTestData.CreateDraft(AccountId, RequestId, Actor).Value;
         // Snapshot carries sell price only; direct cost is missing.
-        var line = work.AddLine(
+        var line = ActualWorkTestData.AddLine(
+            work,
             CatalogItemId, PriceBookVersionLineId, "Drain Pan", "each", 2m,
             sellPriceSnapshot: 10m, standardExpectedDirectCostSnapshot: null,
             note: null, commercialBaselineSourceLineId: null, Actor).Value;
@@ -214,7 +220,7 @@ public class ActualWorkFinancialProjectionTests
     [Fact]
     public void Newest_supplying_row_wins_per_component()
     {
-        var work = ActualWork.Create(AccountId, RequestId, Actor).Value;
+        var work = ActualWorkTestData.CreateDraft(AccountId, RequestId, Actor).Value;
         var line = AddCustomLine(work).Value;
 
         var resolutions = new[]
@@ -233,7 +239,7 @@ public class ActualWorkFinancialProjectionTests
     [Fact]
     public void Each_component_keeps_its_own_provenance_in_the_mixed_case()
     {
-        var work = ActualWork.Create(AccountId, RequestId, Actor).Value;
+        var work = ActualWorkTestData.CreateDraft(AccountId, RequestId, Actor).Value;
         var line = AddCustomLine(work).Value;
 
         var resolutions = new[]
@@ -255,7 +261,7 @@ public class ActualWorkFinancialProjectionTests
     [Fact]
     public void Blockers_name_only_the_still_missing_component_after_a_partial_resolution()
     {
-        var work = ActualWork.Create(AccountId, RequestId, Actor).Value;
+        var work = ActualWorkTestData.CreateDraft(AccountId, RequestId, Actor).Value;
         var line = AddCustomLine(work).Value; // both components missing
 
         // Only the sell price is resolved; direct cost is still a blocker.

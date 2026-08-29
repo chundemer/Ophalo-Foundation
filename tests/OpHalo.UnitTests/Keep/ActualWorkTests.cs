@@ -21,16 +21,18 @@ public class ActualWorkTests
     static readonly Guid PriceBookVersionLineId = Guid.CreateVersion7();
     static readonly Guid CommercialBaselineSourceLineId = Guid.CreateVersion7();
 
-    static Result<ActualWork> New() => ActualWork.Create(AccountId, RequestId, Actor);
+    static Result<ActualWork> New() => ActualWorkTestData.CreateDraft(AccountId, RequestId, Actor);
 
     static Result<ActualWorkLine> AddCatalogBackedLine(ActualWork work, decimal quantity = 1m) =>
-        work.AddLine(
+        ActualWorkTestData.AddLine(
+            work,
             CatalogItemId, PriceBookVersionLineId, "Drain Pan", "each", quantity,
             sellPriceSnapshot: 42.50m, standardExpectedDirectCostSnapshot: 18.00m,
             note: null, commercialBaselineSourceLineId: null, Actor);
 
     static Result<ActualWorkLine> AddCustomLine(ActualWork work, decimal quantity = 1m) =>
-        work.AddLine(
+        ActualWorkTestData.AddLine(
+            work,
             catalogItemId: null, priceBookVersionLineId: null, "3/4 inch copper elbow", null, quantity,
             sellPriceSnapshot: null, standardExpectedDirectCostSnapshot: null,
             note: null, commercialBaselineSourceLineId: null, Actor);
@@ -91,7 +93,8 @@ public class ActualWorkTests
     {
         var work = New().Value;
 
-        var result = work.AddLine(
+        var result = ActualWorkTestData.AddLine(
+            work,
             catalogItemId: null, PriceBookVersionLineId, "Drain Pan", "each", 1m,
             42.50m, 18.00m, null, null, Actor);
 
@@ -104,7 +107,8 @@ public class ActualWorkTests
     {
         var work = New().Value;
 
-        var result = work.AddLine(
+        var result = ActualWorkTestData.AddLine(
+            work,
             CatalogItemId, priceBookVersionLineId: null, "Drain Pan", "each", 1m,
             42.50m, null, null, null, Actor);
 
@@ -119,7 +123,8 @@ public class ActualWorkTests
     {
         var work = New().Value;
 
-        var result = work.AddLine(
+        var result = ActualWorkTestData.AddLine(
+            work,
             CatalogItemId, priceBookVersionLineId: null, "Drain Pan", "each", 1m,
             sellPriceSnapshot: null, standardExpectedDirectCostSnapshot: null, null, null, Actor);
 
@@ -136,7 +141,8 @@ public class ActualWorkTests
     {
         var work = New().Value;
 
-        var result = work.AddLine(
+        var result = ActualWorkTestData.AddLine(
+            work,
             catalogItemId: Guid.Empty, priceBookVersionLineId: null, "3/4 inch copper elbow", null, 1m,
             null, null, null, null, Actor);
 
@@ -149,7 +155,8 @@ public class ActualWorkTests
     {
         var work = New().Value;
 
-        var result = work.AddLine(
+        var result = ActualWorkTestData.AddLine(
+            work,
             CatalogItemId, priceBookVersionLineId: Guid.Empty, "Drain Pan", "each", 1m,
             null, null, null, null, Actor);
 
@@ -179,7 +186,8 @@ public class ActualWorkTests
     {
         var work = New().Value;
 
-        var result = work.AddLine(
+        var result = ActualWorkTestData.AddLine(
+            work,
             CatalogItemId, PriceBookVersionLineId, "Drain Pan", "each", 1m,
             42.50m, 18.00m, null, CommercialBaselineSourceLineId, Actor);
 
@@ -194,7 +202,8 @@ public class ActualWorkTests
     {
         var work = New().Value;
 
-        var result = work.AddLine(
+        var result = ActualWorkTestData.AddLine(
+            work,
             CatalogItemId, PriceBookVersionLineId, "  ", "each", 1m, 42.50m, 18.00m, null, null, Actor);
 
         Assert.True(result.IsFailure);
@@ -206,7 +215,8 @@ public class ActualWorkTests
     {
         var work = New().Value;
 
-        var result = work.AddLine(
+        var result = ActualWorkTestData.AddLine(
+            work,
             CatalogItemId, PriceBookVersionLineId, "Drain Pan", "each", 0m, 42.50m, 18.00m, null, null, Actor);
 
         Assert.True(result.IsFailure);
