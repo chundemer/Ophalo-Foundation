@@ -34,9 +34,9 @@ The design is not ready until it can be walked through end-to-end for:
 
 ## Delivery sequence
 
-### P — workflow and mechanical preflight (no code)
+### P — workflow and mechanical preflight (no code) — COMPLETE (2026-08-29)
 
-Lock the authority rules for office Draft transcription and handoff; performer cardinality, historical attribution, and inactive users; Draft-note validation and visibility; replacement-copy lifecycle, signals, financial/billing exclusion, and retry/concurrency behavior; workspace interaction details (including route versus sheet, Request List/Request Detail styling, focus, dirty close, and narrow-screen fallback); and request-close eligibility. Reconcile the decisions with ADR-487 and ADR-493 before file-level implementation plans are approved.
+All P questions are locked in **[ADR-494](../decisions/ADR-494-actual-work-paper-compatible-pilot-upgrade.md)** (D1–D12): performer semantics and selection rules, `VisitNote`, office Draft authority/handoff, the pre-review replacement/supersession lifecycle and chain rules, review-signal reconciliation, superseded-work inertness, the Ticket Workspace route, the authoritative close gate, and the developer-only local reset/seed boundary. ADR-487 and ADR-493 carry pointer amendments. The per-slice implementation split for 4c–4g is below.
 
 ### 4c — attribution and Draft note foundation
 
@@ -57,6 +57,27 @@ Deliver the desktop-first workspace and a safe narrow/mobile fallback. Financial
 ### 4g — request-close eligibility gate
 
 Make request close reflect outstanding relevant Actual Work. Define and test how Draft, submitted-unreviewed, reviewed, superseded/excluded, and replacement successor tickets affect eligibility.
+
+### Per-slice implementation split (from the P preflight)
+
+Each slice is independently compiling and sized against the CLAUDE.md batch gate (≤3 mutation
+families / ≤8 production files / ≤12 total). 4c, 4e, and 4f are split; 4d and 4g are single slices.
+
+- **4c-i** — performer + note-validation lock: `ActualWorkLine.PerformedByAccountUserId` (non-null) + `ActualWork.DefaultPerformedByAccountUserId` + `CompletionNote` trimmed-to-null / ≤2000 guard in `Submit` (D3) + EF config + `AddActualWorkPerformer` migration + errors + the checked-in local reset/seed tool (D12). Domain + Infrastructure.
+- **4c-ii** — performer + `VisitNote` API: draft-API accepts the line performer; new `SetVisitNote` Draft-guarded route (≤2000, trimmed-to-null, recorder-only); history + financial reads project performer display name and `VisitNote`; shared performer-eligibility read. Application + Api.
+- **4c-iii** — field UI: composer per-line performer + ticket default + `VisitNote` textarea (price-blind); history card shows both read-only. `web/ophalo-app`.
+- **4d** — recorder-initiated handoff: relax `TransferRecorderAsync` to allow the current recorder to transfer their own unsubmitted Draft (system reason); "hand off to office" UI. Application + Api + frontend.
+- **4e-0** — extract the signal-reconciliation seam (prep, no behaviour change): new `IActualWorkReviewSignalReconciliation` (Application) declared with domain scalars only (`accountId`, `requestId`, `nowUtc`, `ct`) — no `DbContext` / transaction in the interface; one Infrastructure impl taking the request-scoped `OpHaloDbContext` via DI (EF auto-enlists in an open transaction). `RaiseAsync` = the existing idempotent upsert/reopen; `ResolveIfClearAsync` owns the single shared "open outstanding review" predicate constant. Repoint `EfActualWorkSubmissionPersistence` (raise) and `EfActualWorkReviewPersistence` (resolve) at it; existing tests green unchanged. Application + Infrastructure.
+- **4e-i** — supersession marker + signal predicate + transaction seam: `ActualWork` marker columns + `ActualWork.Supersede(...)` (guards only) + `SetZeroLineDisposition(outcome, completionNote)` Draft-only recorder-only setter (D5) + successor factory + unique index + `ActualWorkErrors.Superseded` + widen the `ResolveIfClearAsync` predicate (the one shared with the D8 operational reads) to include `AND superseded_at_utc IS NULL` — one place; `RaiseAsync` unchanged + a persistence seam owning one transaction (concurrency-check source → mark superseded → add the provided successor → call 4e-0 resolve-if-clear → save/commit) + `AddActualWorkSupersession` migration. Core + Infrastructure.
+- **4e-ii** — replacement-copy application/API + operational filters: `ActualWorkReplacementApiService` (Owner/Admin gate; no-open-Draft precondition; **builds the successor aggregate from the loaded source**, copying zero-line `Outcome`/`CompletionNote` via `SetZeroLineDisposition`; hands it to the 4e-i seam), `POST .../replace`, new `SetZeroLineDisposition` Draft route (recorder-only, concurrency-checked), add `superseded_at_utc IS NULL` to the review-queue list + count + single-visit financial-detail read + eligible-visit reads (**leave `GetSubmittedVisitsForRequestAsync` unfiltered**), superseded-source mutation + live-read rejection returning `ActualWork.Superseded` after the version-mismatch check, history lineage flags on the history DTO. Application + Api.
+- **4e-iii** — replacement-copy UI: reason-required "Correct this visit" on an unreviewed submitted visit; the successor Draft's zero-line disposition fields prefilled from the source and editable (persisted, survive reload); history lineage badges; outcome mapping. `web/ophalo-app`.
+- **4f-i** — workspace route shell + field region: dedicated route, ticket context, lines, `VisitNote`, performer, narrow-screen fallback. `web/ophalo-app`.
+- **4f-ii** — workspace office region: composes the existing `FinancialResolutionForm` / `NoChargeDispositionForm` / review controls + blocker list + totals, capability-gated, line-adjacent. `web/ophalo-app`.
+- **4g** — close gate: authoritative predicate in the status-change path (`EXISTS` open Draft OR `Submitted ∧ ¬Reviewed ∧ ¬Superseded`); `KeepRequestErrors.CloseBlockedByOutstandingActualWork`; `KeepRequestActionPolicy` derived hint. Core + Application + Api + frontend.
+
+Migrations (Christian authors, `--startup-project src/OpHalo.Keep.Infrastructure`):
+`AddActualWorkPerformer`, `AddActualWorkVisitNote` (may fold into the first), `AddActualWorkSupersession`.
+The local reset/seed tool is developer-only and never runs from a migration or deploy path (ADR-494 D12).
 
 ### Resume BL135 Batch 5 — Billing Revision
 

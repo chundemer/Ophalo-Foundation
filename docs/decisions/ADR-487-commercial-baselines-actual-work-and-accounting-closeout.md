@@ -2,7 +2,7 @@
 
 **Status:** Locked  
 **Date:** 2026-08-17  
-**Amended:** 2026-08-19 — controlled parallel-pilot Actual Work foundation; 2026-08-20 — first-recorder Draft ownership
+**Amended:** 2026-08-19 — controlled parallel-pilot Actual Work foundation; 2026-08-20 — first-recorder Draft ownership; 2026-08-29 — ADR-494 (paper-compatible pilot upgrade)
 **Related:** ADR-453, ADR-456, ADR-463, ADR-465, ADR-473, ADR-475, ADR-478; Build Logs 116, 117, 126
 
 ## Decision
@@ -119,9 +119,11 @@ The later Actual Work and closeout preflights must lock the following before cod
   The UI identifies each blocking line; it never exports a silent $0 financial value. The later
   contract must separately decide whether a commercial-baseline job with missing cost blocks export
   or permits a clearly marked incomplete-cost operational export.
-- **Per-line field attribution.** Every `ActualWorkLine` records `RecordedByAccountUserId` and its
-  record time independently of optional `DerivedFromCommercialRevisionLineId`, so work performed by
-  a different technician remains attributable line by line.
+- **Per-line field attribution.** Every `ActualWorkLine` records who performed its work,
+  independently of optional `DerivedFromCommercialRevisionLineId`, so work performed by a different
+  technician remains attributable line by line. *Superseded by ADR-494:* the persisted per-line
+  fact is `PerformedByAccountUserId` (who performed the work), non-null; `CreatedByUserId` already
+  records authorship (who entered the line).
 
 ## Consequences
 

@@ -30,6 +30,13 @@ successor-copy correction path that retains the source record, a usable Ticket W
 request-close eligibility. Billing Revision resumes only after that sequence; the upgrade does not
 authorize reopening or deleting submitted facts or financial evidence.
 
+The pre-review replacement/supersession lifecycle is defined in ADR-494. §4's post-handoff
+`Replacement` correction consumes ADR-494's `SupersededByActualWorkId` links rather than
+introducing a separate mechanism, and the aggregate review-signal predicate in §2 is corrected by
+ADR-494 D7 to exclude superseded visits (`status = 'Submitted' AND reviewed_at_utc IS NULL AND
+superseded_at_utc IS NULL`). A superseded visit is inert to review, financial resolution,
+no-charge disposition, and billing eligibility (ADR-494 D8).
+
 ### 1. Immutable field fact; separate office financial resolution
 
 `ActualWork` and `ActualWorkLine` remain immutable after submission. Owner/Admin may resolve a
