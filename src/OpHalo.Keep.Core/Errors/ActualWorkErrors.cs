@@ -70,6 +70,15 @@ public static class ActualWorkErrors
     public static readonly Error PerformerRequired =
         Error.Create("ActualWork.PerformerRequired", "Select who performed this work before adding lines.");
 
+    /// <summary>ADR-494 D2 (4c-i-b): a caller-supplied performer id — the ticket default at create /
+    /// <c>SetDefaultPerformer</c>, or an explicit per-line performer — is not an active, account-scoped
+    /// staff member holding <c>RequestsOperate</c> + <c>ActualWorkCapture</c>. Non-member, cross-account,
+    /// inactive, empty guid, and permission-ineligible all collapse to this one 422 so the endpoint can
+    /// never enumerate account membership. An <b>inherited</b> ticket default is frozen at selection and
+    /// is never revalidated here.</summary>
+    public static readonly Error PerformerIneligible =
+        Error.Create("ActualWork.PerformerIneligible", "That team member can't be recorded as the performer.");
+
     /// <summary>Build-log/129: a zero-line submit requires a non-whitespace completion note.</summary>
     public static readonly Error ZeroLineCompletionNoteRequired =
         Error.Create("ActualWork.ZeroLineCompletionNoteRequired", "A completion note is required to submit a visit with no lines.");

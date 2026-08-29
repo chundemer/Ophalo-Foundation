@@ -297,6 +297,22 @@ local DB fails loudly as designed.
 **Gate:** an Operator office transcriber can list candidates, persist a ticket default (and reload
 it), and add a line that inherits it; every persisted line has a real validated performer.
 
+**Split executed (Christian-approved, 2026-08-29) — the 12-file ceiling left no review headroom.**
+- **`4c-i-b-1` — DONE (pending commit).** Performer-candidate read + create/add-line explicit
+  performer + the 8 HTTP test fixes. **11 files (7 prod + 4 test).** The 7th prod file is a 1-line
+  `ErrorHttpMapper` entry mapping `ActualWork.PerformerIneligible` → 422 (the a-1/a-2
+  `PerformerRequired` fell through to 400; the new ineligible error needs an explicit 422 map like
+  `RecorderTransferTargetIneligible`). `ActualWorkFinancialResolutionApiTests` was **not** touched —
+  it seeds lines through the domain `AddLine` helper, never the HTTP add-line route, so it was never
+  in the red-8. **Locked here: an inherited ticket default is frozen at selection** — only a
+  caller-supplied performer id (create default, explicit per-line performer, and b-2's
+  `SetDefaultPerformer`) is revalidated; add-line and assembly expansion never recheck an inherited
+  default (Christian decision — it is persisted historical assignment state, and reassignment must
+  be an explicit `SetDefaultPerformer` call, not a silent attribution change).
+- **`4c-i-b-2` — pending.** `SetDefaultPerformer` route + `SetDefaultPerformerAsync` +
+  `ActualWorkDefaultPerformerApiTests` = 3 files. Reuses `4c-i-b-1`'s `ValidateSuppliedPerformerAsync`
+  for the non-null-value recheck.
+
 #### Slice 4c-i-c — minimum functional frontend (part of the deployable slice)
 **Layer:** `web/ophalo-app`. **Prod (6):**
 - `apiClient.types.ts` — `ActualWorkCreateBody` + `defaultPerformedByAccountUserId`;

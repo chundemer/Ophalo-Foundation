@@ -278,7 +278,10 @@ public sealed class ActualWorkNudgeFieldReadApiTests : IClassFixture<KeepApiWebF
         var requestId = await SeedRequestAsync(accountId);
         await SeedResponsibleAsync(requestId, accountId, ownerId);
 
-        var createResult = ActualWork.Create(accountId, requestId, ownerId);
+        // ADR-494 D2: a Draft needs a persisted ticket default before an HTTP add-line / assembly
+        // expansion can create lines; the recorder (owner) records their own work here.
+        var createResult = ActualWork.Create(
+            accountId, requestId, ownerId, defaultPerformedByAccountUserId: ownerId);
         Assert.True(createResult.IsSuccess);
         var actualWork = createResult.Value;
 

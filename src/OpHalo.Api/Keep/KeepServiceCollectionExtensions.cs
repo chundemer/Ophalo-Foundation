@@ -211,6 +211,11 @@ public static class KeepServiceCollectionExtensions
         // IKeepRequestOperatePersistence (registered above); no new persistence registration.
         services.AddScoped<GetActualWorkRecorderCandidatesService>();
 
+        // Direct Actual Work — performer-candidate list (ADR-494 D2, 4c-i-b). Not Owner/Admin-only:
+        // an Operator office transcriber records work on a technician's behalf. Reuses
+        // IKeepRequestOperatePersistence (registered above); no new persistence registration.
+        services.AddScoped<GetActualWorkPerformerCandidatesService>();
+
         // Direct Actual Work — technician field-read nudge suggestions (5d-ii-c, build-log/129).
         // Reuses IActualWorkPersistence/IActualWorkNudgeRulePersistence/ICatalogReadPersistence/
         // IOfferingAssemblyPersistence (all registered above); no new persistence registration

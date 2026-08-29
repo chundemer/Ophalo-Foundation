@@ -183,7 +183,7 @@ public sealed class ActualWorkDraftApiTests : IClassFixture<KeepApiWebFactory>, 
         await EnrollAsync(accountId, ownerId);
         var requestId = await SeedRequestAsync(accountId);
         await SeedResponsibleAsync(requestId, accountId, ownerId);
-        var (actualWorkId, version) = await CreateDraftAsync(ownerCookie, requestId);
+        var (actualWorkId, version) = await CreateDraftAsync(ownerCookie, requestId, ownerId);
         var item = await SeedPricedCatalogItemAsync(accountId, ownerId, "1-inch Filter");
 
         var request = new HttpRequestMessage(HttpMethod.Post, $"/keep/pricebook/actual-work/{actualWorkId}/lines")
@@ -213,7 +213,7 @@ public sealed class ActualWorkDraftApiTests : IClassFixture<KeepApiWebFactory>, 
         await EnrollAsync(accountId, ownerId);
         var requestId = await SeedRequestAsync(accountId);
         await SeedResponsibleAsync(requestId, accountId, ownerId);
-        var (actualWorkId, version) = await CreateDraftAsync(ownerCookie, requestId);
+        var (actualWorkId, version) = await CreateDraftAsync(ownerCookie, requestId, ownerId);
 
         var request = new HttpRequestMessage(HttpMethod.Post, $"/keep/pricebook/actual-work/{actualWorkId}/lines")
         {
@@ -242,7 +242,7 @@ public sealed class ActualWorkDraftApiTests : IClassFixture<KeepApiWebFactory>, 
         await EnrollAsync(accountId, ownerId);
         var requestId = await SeedRequestAsync(accountId);
         await SeedResponsibleAsync(requestId, accountId, ownerId);
-        var (actualWorkId, _) = await CreateDraftAsync(ownerCookie, requestId);
+        var (actualWorkId, _) = await CreateDraftAsync(ownerCookie, requestId, ownerId);
 
         var response = await AuthRequest(ownerCookie).PostAsJsonAsync(
             $"/keep/pricebook/actual-work/{actualWorkId}/lines",
@@ -258,7 +258,7 @@ public sealed class ActualWorkDraftApiTests : IClassFixture<KeepApiWebFactory>, 
         await EnrollAsync(accountId, ownerId);
         var requestId = await SeedRequestAsync(accountId);
         await SeedResponsibleAsync(requestId, accountId, ownerId);
-        var (actualWorkId, _) = await CreateDraftAsync(ownerCookie, requestId);
+        var (actualWorkId, _) = await CreateDraftAsync(ownerCookie, requestId, ownerId);
 
         var request = new HttpRequestMessage(HttpMethod.Post, $"/keep/pricebook/actual-work/{actualWorkId}/lines")
         {
@@ -283,7 +283,7 @@ public sealed class ActualWorkDraftApiTests : IClassFixture<KeepApiWebFactory>, 
         var operatorId = await SeedOperatorAsync(accountId, "addline-not-the-recorder");
         var operatorCookie = await GetCookieAsync(operatorId, accountId);
         var requestId = await SeedRequestAsync(accountId);
-        var (actualWorkId, version) = await CreateDraftAsync(ownerCookie, requestId);
+        var (actualWorkId, version) = await CreateDraftAsync(ownerCookie, requestId, ownerId);
 
         var request = new HttpRequestMessage(HttpMethod.Post, $"/keep/pricebook/actual-work/{actualWorkId}/lines")
         {
@@ -305,7 +305,7 @@ public sealed class ActualWorkDraftApiTests : IClassFixture<KeepApiWebFactory>, 
         await EnrollAsync(accountId, ownerId);
         var requestId = await SeedRequestAsync(accountId);
         await SeedResponsibleAsync(requestId, accountId, ownerId);
-        var (actualWorkId, version) = await CreateDraftAsync(ownerCookie, requestId);
+        var (actualWorkId, version) = await CreateDraftAsync(ownerCookie, requestId, ownerId);
 
         var request = new HttpRequestMessage(HttpMethod.Delete, $"/keep/pricebook/actual-work/{actualWorkId}");
         request.Headers.Add("X-Keep-ActualWork-Version", version.ToString("D"));
@@ -327,7 +327,7 @@ public sealed class ActualWorkDraftApiTests : IClassFixture<KeepApiWebFactory>, 
         await EnrollAsync(accountId, ownerId);
         var requestId = await SeedRequestAsync(accountId);
         await SeedResponsibleAsync(requestId, accountId, ownerId);
-        var (actualWorkId, _) = await CreateDraftAsync(ownerCookie, requestId);
+        var (actualWorkId, _) = await CreateDraftAsync(ownerCookie, requestId, ownerId);
         var submittedVersion = await SubmitAsync(actualWorkId, accountId);
 
         var request = new HttpRequestMessage(HttpMethod.Delete, $"/keep/pricebook/actual-work/{actualWorkId}");
@@ -349,7 +349,7 @@ public sealed class ActualWorkDraftApiTests : IClassFixture<KeepApiWebFactory>, 
         await EnrollAsync(accountId, ownerId);
         var requestId = await SeedRequestAsync(accountId);
         await SeedResponsibleAsync(requestId, accountId, ownerId);
-        var (actualWorkId, version) = await CreateDraftAsync(ownerCookie, requestId);
+        var (actualWorkId, version) = await CreateDraftAsync(ownerCookie, requestId, ownerId);
         var item = await SeedPricedCatalogItemAsync(accountId, ownerId, "Ambiguous line item");
 
         var request = new HttpRequestMessage(HttpMethod.Post, $"/keep/pricebook/actual-work/{actualWorkId}/lines")
@@ -372,7 +372,7 @@ public sealed class ActualWorkDraftApiTests : IClassFixture<KeepApiWebFactory>, 
         await EnrollAsync(accountId, ownerId);
         var requestId = await SeedRequestAsync(accountId);
         await SeedResponsibleAsync(requestId, accountId, ownerId);
-        var (actualWorkId, version) = await CreateDraftAsync(ownerCookie, requestId);
+        var (actualWorkId, version) = await CreateDraftAsync(ownerCookie, requestId, ownerId);
 
         var request = new HttpRequestMessage(HttpMethod.Post, $"/keep/pricebook/actual-work/{actualWorkId}/lines")
         {
@@ -394,7 +394,7 @@ public sealed class ActualWorkDraftApiTests : IClassFixture<KeepApiWebFactory>, 
         await EnrollAsync(accountId, ownerId);
         var requestId = await SeedRequestAsync(accountId);
         await SeedResponsibleAsync(requestId, accountId, ownerId);
-        var (actualWorkId, version) = await CreateDraftAsync(ownerCookie, requestId);
+        var (actualWorkId, version) = await CreateDraftAsync(ownerCookie, requestId, ownerId);
         await AddOffCatalogLineAsync(ownerCookie, actualWorkId, version);
 
         var request = new HttpRequestMessage(HttpMethod.Post, $"/keep/pricebook/actual-work/{actualWorkId}/submit")
@@ -425,7 +425,7 @@ public sealed class ActualWorkDraftApiTests : IClassFixture<KeepApiWebFactory>, 
         await EnrollAsync(accountId, ownerId);
         var requestId = await SeedRequestAsync(accountId);
         await SeedResponsibleAsync(requestId, accountId, ownerId);
-        var (actualWorkId, version) = await CreateDraftAsync(ownerCookie, requestId);
+        var (actualWorkId, version) = await CreateDraftAsync(ownerCookie, requestId, ownerId);
 
         var request = new HttpRequestMessage(HttpMethod.Post, $"/keep/pricebook/actual-work/{actualWorkId}/submit")
         {
@@ -449,7 +449,7 @@ public sealed class ActualWorkDraftApiTests : IClassFixture<KeepApiWebFactory>, 
         await EnrollAsync(accountId, ownerId);
         var requestId = await SeedRequestAsync(accountId);
         await SeedResponsibleAsync(requestId, accountId, ownerId);
-        var (actualWorkId, version) = await CreateDraftAsync(ownerCookie, requestId);
+        var (actualWorkId, version) = await CreateDraftAsync(ownerCookie, requestId, ownerId);
 
         var request = new HttpRequestMessage(HttpMethod.Post, $"/keep/pricebook/actual-work/{actualWorkId}/submit")
         {
@@ -468,7 +468,7 @@ public sealed class ActualWorkDraftApiTests : IClassFixture<KeepApiWebFactory>, 
         await EnrollAsync(accountId, ownerId);
         var requestId = await SeedRequestAsync(accountId);
         await SeedResponsibleAsync(requestId, accountId, ownerId);
-        var (actualWorkId, version) = await CreateDraftAsync(ownerCookie, requestId);
+        var (actualWorkId, version) = await CreateDraftAsync(ownerCookie, requestId, ownerId);
 
         var request = new HttpRequestMessage(HttpMethod.Post, $"/keep/pricebook/actual-work/{actualWorkId}/submit")
         {
@@ -493,7 +493,7 @@ public sealed class ActualWorkDraftApiTests : IClassFixture<KeepApiWebFactory>, 
         await EnrollAsync(accountId, ownerId);
         var requestId = await SeedRequestAsync(accountId);
         await SeedResponsibleAsync(requestId, accountId, ownerId);
-        var (actualWorkId, version) = await CreateDraftAsync(ownerCookie, requestId);
+        var (actualWorkId, version) = await CreateDraftAsync(ownerCookie, requestId, ownerId);
         await AddOffCatalogLineAsync(ownerCookie, actualWorkId, version);
 
         var request = new HttpRequestMessage(HttpMethod.Post, $"/keep/pricebook/actual-work/{actualWorkId}/submit")
@@ -518,7 +518,7 @@ public sealed class ActualWorkDraftApiTests : IClassFixture<KeepApiWebFactory>, 
         var operatorCookie = await GetCookieAsync(operatorId, accountId);
         var requestId = await SeedRequestAsync(accountId);
         await SeedResponsibleAsync(requestId, accountId, ownerId);
-        var (actualWorkId, version) = await CreateDraftAsync(ownerCookie, requestId);
+        var (actualWorkId, version) = await CreateDraftAsync(ownerCookie, requestId, ownerId);
 
         var request = new HttpRequestMessage(HttpMethod.Post, $"/keep/pricebook/actual-work/{actualWorkId}/submit")
         {
@@ -539,7 +539,7 @@ public sealed class ActualWorkDraftApiTests : IClassFixture<KeepApiWebFactory>, 
         var viewerCookie = await GetCookieAsync(viewerId, accountId);
         var requestId = await SeedRequestAsync(accountId);
         await SeedResponsibleAsync(requestId, accountId, ownerId);
-        var (actualWorkId, version) = await CreateDraftAsync(ownerCookie, requestId);
+        var (actualWorkId, version) = await CreateDraftAsync(ownerCookie, requestId, ownerId);
 
         var request = new HttpRequestMessage(HttpMethod.Post, $"/keep/pricebook/actual-work/{actualWorkId}/submit")
         {
@@ -558,7 +558,7 @@ public sealed class ActualWorkDraftApiTests : IClassFixture<KeepApiWebFactory>, 
         await EnrollAsync(accountId, ownerId);
         var requestId = await SeedRequestAsync(accountId);
         await SeedResponsibleAsync(requestId, accountId, ownerId);
-        var (actualWorkId, _) = await CreateDraftAsync(ownerCookie, requestId);
+        var (actualWorkId, _) = await CreateDraftAsync(ownerCookie, requestId, ownerId);
         var submittedVersion = await SubmitAsync(actualWorkId, accountId);
 
         var request = new HttpRequestMessage(HttpMethod.Post, $"/keep/pricebook/actual-work/{actualWorkId}/submit")
@@ -586,7 +586,7 @@ public sealed class ActualWorkDraftApiTests : IClassFixture<KeepApiWebFactory>, 
         await EnrollAsync(accountId, ownerId);
         var requestId = await SeedRequestAsync(accountId);
         await SeedResponsibleAsync(requestId, accountId, ownerId);
-        var (actualWorkId, version) = await CreateDraftAsync(ownerCookie, requestId);
+        var (actualWorkId, version) = await CreateDraftAsync(ownerCookie, requestId, ownerId);
         var primary = await SeedPricedCatalogItemAsync(accountId, ownerId, "Condenser Unit");
         var required = await SeedPricedCatalogItemAsync(accountId, ownerId, "Refrigerant Line Set");
         var optional = await SeedPricedCatalogItemAsync(accountId, ownerId, "Optional Surge Protector");
@@ -623,7 +623,7 @@ public sealed class ActualWorkDraftApiTests : IClassFixture<KeepApiWebFactory>, 
         await EnrollAsync(accountId, ownerId);
         var requestId = await SeedRequestAsync(accountId);
         await SeedResponsibleAsync(requestId, accountId, ownerId);
-        var (actualWorkId, version) = await CreateDraftAsync(ownerCookie, requestId);
+        var (actualWorkId, version) = await CreateDraftAsync(ownerCookie, requestId, ownerId);
         var primary = await SeedPricedCatalogItemAsync(accountId, ownerId, "Condenser Unit");
         var optional = await SeedPricedCatalogItemAsync(accountId, ownerId, "Optional Surge Protector");
         var assemblyId = await SeedAssemblyAsync(accountId, ownerId, primary.Id, (optional.Id, IsOptional: true));
@@ -657,7 +657,7 @@ public sealed class ActualWorkDraftApiTests : IClassFixture<KeepApiWebFactory>, 
         await EnrollAsync(accountId, ownerId);
         var requestId = await SeedRequestAsync(accountId);
         await SeedResponsibleAsync(requestId, accountId, ownerId);
-        var (actualWorkId, version) = await CreateDraftAsync(ownerCookie, requestId);
+        var (actualWorkId, version) = await CreateDraftAsync(ownerCookie, requestId, ownerId);
         var primary = await SeedPricedCatalogItemAsync(accountId, ownerId, "Condenser Unit");
         var required = await SeedPricedCatalogItemAsync(accountId, ownerId, "Refrigerant Line Set");
         var assemblyId = await SeedAssemblyAsync(accountId, ownerId, primary.Id, (required.Id, IsOptional: false));
@@ -702,7 +702,7 @@ public sealed class ActualWorkDraftApiTests : IClassFixture<KeepApiWebFactory>, 
         await EnrollAsync(accountId, ownerId);
         var requestId = await SeedRequestAsync(accountId);
         await SeedResponsibleAsync(requestId, accountId, ownerId);
-        var (actualWorkId, version) = await CreateDraftAsync(ownerCookie, requestId);
+        var (actualWorkId, version) = await CreateDraftAsync(ownerCookie, requestId, ownerId);
         var primary = await SeedPricedCatalogItemAsync(accountId, ownerId, "Condenser Unit");
         var assemblyId = await SeedAssemblyAsync(accountId, ownerId, primary.Id);
 
@@ -727,7 +727,7 @@ public sealed class ActualWorkDraftApiTests : IClassFixture<KeepApiWebFactory>, 
         await EnrollAsync(accountId, ownerId);
         var requestId = await SeedRequestAsync(accountId);
         await SeedResponsibleAsync(requestId, accountId, ownerId);
-        var (actualWorkId, _) = await CreateDraftAsync(ownerCookie, requestId);
+        var (actualWorkId, _) = await CreateDraftAsync(ownerCookie, requestId, ownerId);
         var primary = await SeedPricedCatalogItemAsync(accountId, ownerId, "Condenser Unit");
         var assemblyId = await SeedAssemblyAsync(accountId, ownerId, primary.Id);
 
@@ -749,7 +749,7 @@ public sealed class ActualWorkDraftApiTests : IClassFixture<KeepApiWebFactory>, 
         var operatorId = await SeedOperatorAsync(accountId, "expand-not-the-recorder");
         var requestId = await SeedRequestAsync(accountId);
         await SeedResponsibleAsync(requestId, accountId, operatorId);
-        var (actualWorkId, version) = await CreateDraftAsync(await GetCookieAsync(operatorId, accountId), requestId);
+        var (actualWorkId, version) = await CreateDraftAsync(await GetCookieAsync(operatorId, accountId), requestId, operatorId);
         var primary = await SeedPricedCatalogItemAsync(accountId, ownerId, "Condenser Unit");
         var assemblyId = await SeedAssemblyAsync(accountId, ownerId, primary.Id);
 
@@ -774,7 +774,7 @@ public sealed class ActualWorkDraftApiTests : IClassFixture<KeepApiWebFactory>, 
         var viewerCookie = await GetCookieAsync(viewerId, accountId);
         var requestId = await SeedRequestAsync(accountId);
         await SeedResponsibleAsync(requestId, accountId, ownerId);
-        var (actualWorkId, version) = await CreateDraftAsync(ownerCookie, requestId);
+        var (actualWorkId, version) = await CreateDraftAsync(ownerCookie, requestId, ownerId);
         var primary = await SeedPricedCatalogItemAsync(accountId, ownerId, "Condenser Unit");
         var assemblyId = await SeedAssemblyAsync(accountId, ownerId, primary.Id);
 
@@ -789,8 +789,201 @@ public sealed class ActualWorkDraftApiTests : IClassFixture<KeepApiWebFactory>, 
     }
 
     // -------------------------------------------------------------------------
+    // ADR-494 D2 (4c-i-b) — performer selection: ticket default at create + explicit per-line
+    // performer. A caller-supplied id is revalidated server-side; an inherited default is frozen
+    // at selection and never rechecked.
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public async Task Create_WithValidExplicitDefault_PersistsTicketDefault()
+    {
+        var (accountId, ownerId, ownerCookie) = await SeedAccountAsync("create-default-valid");
+        await EnrollAsync(accountId, ownerId);
+        var operatorId = await SeedOperatorAsync(accountId, "create-default-valid");
+        var requestId = await SeedRequestAsync(accountId);
+        await SeedResponsibleAsync(requestId, accountId, ownerId);
+
+        var response = await AuthRequest(ownerCookie).PostAsJsonAsync(
+            "/keep/pricebook/actual-work/create",
+            new { requestId, defaultPerformedByAccountUserId = operatorId });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        await using var scope = _factory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+        var work = await db.Set<ActualWork>().SingleAsync(x => x.RequestId == requestId);
+        Assert.Equal(operatorId, work.DefaultPerformedByAccountUserId);
+    }
+
+    [Fact]
+    public async Task Create_WithoutDefault_Succeeds_ButFirstLineWithoutPerformerReturns400()
+    {
+        var (accountId, ownerId, ownerCookie) = await SeedAccountAsync("create-no-default");
+        await EnrollAsync(accountId, ownerId);
+        var requestId = await SeedRequestAsync(accountId);
+        await SeedResponsibleAsync(requestId, accountId, ownerId);
+
+        var createResponse = await AuthRequest(ownerCookie).PostAsJsonAsync(
+            "/keep/pricebook/actual-work/create", new { requestId });
+        Assert.Equal(HttpStatusCode.OK, createResponse.StatusCode);
+        var created = await createResponse.Content.ReadFromJsonAsync<JsonElement>();
+        var actualWorkId = created.GetProperty("id").GetGuid();
+        var version = created.GetProperty("concurrencyVersion").GetGuid();
+
+        var request = new HttpRequestMessage(HttpMethod.Post, $"/keep/pricebook/actual-work/{actualWorkId}/lines")
+        {
+            Content = JsonContent.Create(new
+            {
+                catalogItemId = (Guid?)null, offCatalogDescription = "Gasket", actualQuantity = 1m, note = (string?)null
+            })
+        };
+        request.Headers.Add("X-Keep-ActualWork-Version", version.ToString("D"));
+        var response = await AuthRequest(ownerCookie).SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("ActualWork.PerformerRequired", body.GetProperty("code").GetString());
+    }
+
+    [Theory]
+    [InlineData("empty-guid")]
+    [InlineData("cross-account")]
+    [InlineData("viewer")]
+    public async Task Create_WithIneligibleDefault_Returns422AndCreatesNothing(string kind)
+    {
+        var (accountId, ownerId, ownerCookie) = await SeedAccountAsync($"create-default-{kind}");
+        await EnrollAsync(accountId, ownerId);
+        var requestId = await SeedRequestAsync(accountId);
+        await SeedResponsibleAsync(requestId, accountId, ownerId);
+
+        var badId = kind switch
+        {
+            "empty-guid" => Guid.Empty,
+            "cross-account" => (await SeedAccountAsync($"other-{kind}")).OwnerAccountUserId,
+            "viewer" => await SeedViewerAsync(accountId, $"create-default-{kind}"),
+            _ => throw new ArgumentOutOfRangeException(nameof(kind)),
+        };
+
+        var response = await AuthRequest(ownerCookie).PostAsJsonAsync(
+            "/keep/pricebook/actual-work/create",
+            new { requestId, defaultPerformedByAccountUserId = badId });
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+        await using var scope = _factory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+        Assert.False(await db.Set<ActualWork>().AnyAsync(x => x.RequestId == requestId));
+    }
+
+    [Fact]
+    public async Task AddLine_ExplicitEligiblePerformer_OverridesTicketDefault()
+    {
+        var (accountId, ownerId, ownerCookie) = await SeedAccountAsync("addline-explicit-performer");
+        await EnrollAsync(accountId, ownerId);
+        var operatorId = await SeedOperatorAsync(accountId, "addline-explicit-performer");
+        var requestId = await SeedRequestAsync(accountId);
+        await SeedResponsibleAsync(requestId, accountId, ownerId);
+        var (actualWorkId, version) = await CreateDraftAsync(ownerCookie, requestId, ownerId);
+
+        var request = new HttpRequestMessage(HttpMethod.Post, $"/keep/pricebook/actual-work/{actualWorkId}/lines")
+        {
+            Content = JsonContent.Create(new
+            {
+                catalogItemId = (Guid?)null, offCatalogDescription = "Coil clean", actualQuantity = 1m,
+                note = (string?)null, performedByAccountUserId = operatorId
+            })
+        };
+        request.Headers.Add("X-Keep-ActualWork-Version", version.ToString("D"));
+        var response = await AuthRequest(ownerCookie).SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        await using var scope = _factory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+        var line = await db.Set<ActualWorkLine>().SingleAsync(x => x.ActualWorkId == actualWorkId);
+        Assert.Equal(operatorId, line.PerformedByAccountUserId);
+    }
+
+    [Theory]
+    [InlineData("empty-guid")]
+    [InlineData("cross-account")]
+    [InlineData("viewer")]
+    public async Task AddLine_IneligibleExplicitPerformer_Returns422_NoLine_NoVersionRotation(string kind)
+    {
+        var (accountId, ownerId, ownerCookie) = await SeedAccountAsync($"addline-bad-{kind}");
+        await EnrollAsync(accountId, ownerId);
+        var requestId = await SeedRequestAsync(accountId);
+        await SeedResponsibleAsync(requestId, accountId, ownerId);
+        var (actualWorkId, version) = await CreateDraftAsync(ownerCookie, requestId, ownerId);
+
+        var badId = kind switch
+        {
+            "empty-guid" => Guid.Empty,
+            "cross-account" => (await SeedAccountAsync($"other-addline-{kind}")).OwnerAccountUserId,
+            "viewer" => await SeedViewerAsync(accountId, $"addline-bad-{kind}"),
+            _ => throw new ArgumentOutOfRangeException(nameof(kind)),
+        };
+
+        var request = new HttpRequestMessage(HttpMethod.Post, $"/keep/pricebook/actual-work/{actualWorkId}/lines")
+        {
+            Content = JsonContent.Create(new
+            {
+                catalogItemId = (Guid?)null, offCatalogDescription = "Gasket", actualQuantity = 1m,
+                note = (string?)null, performedByAccountUserId = badId
+            })
+        };
+        request.Headers.Add("X-Keep-ActualWork-Version", version.ToString("D"));
+        var response = await AuthRequest(ownerCookie).SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+        Assert.Equal(version, await GetVersionAsync(actualWorkId));
+        await using var scope = _factory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+        Assert.False(await db.Set<ActualWorkLine>().AnyAsync(x => x.ActualWorkId == actualWorkId));
+    }
+
+    [Fact]
+    public async Task AddLine_InheritedDefaultPerformerLaterSuspended_StillRecordsLineToThatPerformer()
+    {
+        // Frozen at selection (Christian, 2026-08-29): an inherited ticket default is trusted once
+        // SetDefaultPerformer/create validated it. A performer who later leaves the account keeps
+        // being attributed on new lines of the same Draft — reassignment requires an explicit
+        // default-performer update, never a silent change to historical attribution.
+        var (accountId, ownerId, ownerCookie) = await SeedAccountAsync("addline-frozen-default");
+        await EnrollAsync(accountId, ownerId);
+        var operatorId = await SeedOperatorAsync(accountId, "addline-frozen-default");
+        var requestId = await SeedRequestAsync(accountId);
+        await SeedResponsibleAsync(requestId, accountId, ownerId);
+        var (actualWorkId, version) = await CreateDraftAsync(ownerCookie, requestId, operatorId);
+
+        await SuspendMemberAsync(accountId, operatorId);
+
+        var request = new HttpRequestMessage(HttpMethod.Post, $"/keep/pricebook/actual-work/{actualWorkId}/lines")
+        {
+            Content = JsonContent.Create(new
+            {
+                catalogItemId = (Guid?)null, offCatalogDescription = "Filter swap", actualQuantity = 1m, note = (string?)null
+            })
+        };
+        request.Headers.Add("X-Keep-ActualWork-Version", version.ToString("D"));
+        var response = await AuthRequest(ownerCookie).SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        await using var scope = _factory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+        var line = await db.Set<ActualWorkLine>().SingleAsync(x => x.ActualWorkId == actualWorkId);
+        Assert.Equal(operatorId, line.PerformedByAccountUserId);
+    }
+
+    // -------------------------------------------------------------------------
     // Seeding helpers
     // -------------------------------------------------------------------------
+
+    private async Task SuspendMemberAsync(Guid accountId, Guid accountUserId)
+    {
+        await using var scope = _factory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+        var member = await db.AccountUsers.SingleAsync(x => x.AccountId == accountId && x.Id == accountUserId);
+        Assert.True(member.Suspend().IsSuccess);
+        await db.SaveChangesAsync();
+    }
 
     private async Task AddOffCatalogLineAsync(string cookie, Guid actualWorkId, Guid version)
     {
@@ -826,9 +1019,12 @@ public sealed class ActualWorkDraftApiTests : IClassFixture<KeepApiWebFactory>, 
         return actualWork.ConcurrencyVersion;
     }
 
-    private async Task<(Guid ActualWorkId, Guid ConcurrencyVersion)> CreateDraftAsync(string cookie, Guid requestId)
+    private async Task<(Guid ActualWorkId, Guid ConcurrencyVersion)> CreateDraftAsync(
+        string cookie, Guid requestId, Guid defaultPerformedByAccountUserId)
     {
-        var response = await AuthRequest(cookie).PostAsJsonAsync("/keep/pricebook/actual-work/create", new { requestId });
+        var response = await AuthRequest(cookie).PostAsJsonAsync(
+            "/keep/pricebook/actual-work/create",
+            new { requestId, defaultPerformedByAccountUserId });
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
         return (body.GetProperty("id").GetGuid(), body.GetProperty("concurrencyVersion").GetGuid());

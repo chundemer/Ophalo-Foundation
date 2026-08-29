@@ -21,7 +21,12 @@ public sealed record AddActualWorkLineApiCommand(
     Guid? CatalogItemId,
     string? OffCatalogDescription,
     decimal ActualQuantity,
-    string? Note);
+    string? Note,
+    // ADR-494 D2 (4c-i-b): an optional explicit per-line performer. Null → the line inherits the
+    // persisted ticket default (frozen at selection, never revalidated here); with neither the
+    // domain returns PerformerRequired. A non-null value is revalidated server-side against the
+    // account membership snapshot exactly as the ticket default is.
+    Guid? PerformedByAccountUserId = null);
 
 /// <summary>The new line's id plus the parent visit's post-mutation ConcurrencyVersion — same
 /// contract-detail reasoning as ProposedScope's <c>AddProposedScopeLineResult</c>: an add spends the
@@ -77,18 +82,29 @@ public sealed class ActualWorkDraftApiService(
     private static readonly Error Forbidden =
         Error.Create("auth.forbidden", "You do not have permission to perform this action.");
 
-    public async Task<Result<ActualWork>> CreateAsync(Guid requestId, CancellationToken ct)
+    public async Task<Result<ActualWork>> CreateAsync(
+        Guid requestId, Guid? defaultPerformedByAccountUserId, CancellationToken ct)
     {
         var gate = await AuthorizeAsync(ct);
         if (gate.IsFailure)
             return Result<ActualWork>.Failure(gate.Error);
+
+        // ADR-494 D2: a caller-supplied ticket default is revalidated server-side. Command-shape
+        // check — precedes loading the request aggregate; nothing is created on failure.
+        if (defaultPerformedByAccountUserId is { } defaultPerformer)
+        {
+            var eligibility = await ValidateSuppliedPerformerAsync(defaultPerformer, gate.Value.Purpose, ct);
+            if (eligibility.IsFailure)
+                return Result<ActualWork>.Failure(eligibility.Error);
+        }
 
         var request = await requestOperatePersistence.GetVisibleRequestForUpdateAsync(
             requestId, currentUser.AccountId, currentUser.UserId, gate.Value.Scope, ct);
         if (request is null)
             return Result<ActualWork>.Failure(KeepRequestErrors.NotFound);
 
-        var createResult = ActualWork.Create(currentUser.AccountId, requestId, currentUser.UserId);
+        var createResult = ActualWork.Create(
+            currentUser.AccountId, requestId, currentUser.UserId, defaultPerformedByAccountUserId);
         if (createResult.IsFailure)
             return createResult;
 
@@ -112,6 +128,19 @@ public sealed class ActualWorkDraftApiService(
 
         if (actualWork.ConcurrencyVersion != expectedVersion)
             return Result<AddActualWorkLineResult>.Failure(ActualWorkErrors.VersionMismatch);
+
+        // ADR-494 D2: an explicit per-line performer is revalidated server-side before any mutation
+        // or commit, so an ineligible id never rotates the version. An inherited ticket default is
+        // NOT rechecked here — it is frozen at selection (Christian, 2026-08-29).
+        if (command.PerformedByAccountUserId is { } explicitPerformer)
+        {
+            var accountSnapshot = await snapshotPersistence.GetAccountAccessSnapshotAsync(currentUser.AccountId, ct);
+            if (accountSnapshot is null)
+                return Result<AddActualWorkLineResult>.Failure(Forbidden);
+            var eligibility = await ValidateSuppliedPerformerAsync(explicitPerformer, accountSnapshot.Purpose, ct);
+            if (eligibility.IsFailure)
+                return Result<AddActualWorkLineResult>.Failure(eligibility.Error);
+        }
 
         string displayNameSnapshot;
         string? unitOfMeasureSnapshot = null;
@@ -154,14 +183,14 @@ public sealed class ActualWorkDraftApiService(
             displayNameSnapshot = command.OffCatalogDescription.Trim();
         }
 
-        // ADR-494 D2 (4c-i-a-1): thread the persisted ticket default as the line performer. An
-        // explicit per-line performer from the request is wired in 4c-i-b; today this is the only
-        // source, and AddLine still returns PerformerRequired when the Draft has no default.
+        // ADR-494 D2: an explicit per-line performer (validated above) wins; otherwise the line
+        // inherits the persisted ticket default. The domain returns PerformerRequired when both are
+        // absent — the gate that forces the office transcriber to pick a technician first.
         var addResult = actualWork.AddLine(
             catalogItemId, priceBookVersionLineId, displayNameSnapshot, unitOfMeasureSnapshot,
             command.ActualQuantity, sellPriceSnapshot, standardExpectedDirectCostSnapshot,
             command.Note, commercialBaselineSourceLineId: null, currentUser.UserId,
-            performedByAccountUserId: actualWork.DefaultPerformedByAccountUserId);
+            performedByAccountUserId: command.PerformedByAccountUserId ?? actualWork.DefaultPerformedByAccountUserId);
         if (addResult.IsFailure)
             return Result<AddActualWorkLineResult>.Failure(addResult.Error);
 
@@ -391,6 +420,29 @@ public sealed class ActualWorkDraftApiService(
             ActualWorkCommitResult.ConcurrencyConflict => Result<Guid>.Failure(ActualWorkErrors.VersionMismatch),
             _ => throw new InvalidOperationException($"Unexpected commit result: {commitResult}"),
         };
+    }
+
+    /// <summary>ADR-494 D2: revalidate a <b>caller-supplied</b> performer id — the ticket default at
+    /// create / <c>SetDefaultPerformer</c>, or an explicit per-line performer. Non-member,
+    /// cross-account (the snapshot read is tenant-scoped), inactive, empty guid, and
+    /// permission-ineligible all collapse to <see cref="ActualWorkErrors.PerformerIneligible"/> so
+    /// this can never enumerate account membership. Never called for an inherited ticket default.</summary>
+    private async Task<Result> ValidateSuppliedPerformerAsync(
+        Guid performerAccountUserId, AccountPurpose accountPurpose, CancellationToken ct)
+    {
+        if (performerAccountUserId == Guid.Empty)
+            return Result.Failure(ActualWorkErrors.PerformerIneligible);
+
+        var snapshot = await snapshotPersistence.GetAccountUserRoleSnapshotAsync(
+            currentUser.AccountId, performerAccountUserId, ct);
+        if (snapshot is null ||
+            !ActualWorkPerformerEligibility.IsEligible(
+                userAccessPolicy, snapshot.Role, snapshot.MembershipStatus, accountPurpose))
+        {
+            return Result.Failure(ActualWorkErrors.PerformerIneligible);
+        }
+
+        return Result.Success();
     }
 
     /// <summary>Gate 1-3, then load the visit and confirm it is still a Draft owned by the caller's

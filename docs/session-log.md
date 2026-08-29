@@ -408,7 +408,7 @@ correction applied pre-commit: partial-component resolution + client negative ch
 full frontend suite **799/799** (90 files, +4), `tsc --noEmit` clean, `check:tokens` passed,
 `git diff --check` clean.
 
-### Claude handoff — 4c-i `4c-i-a-2` DONE (pending commit approval); next is Session 4 (`4c-i-b`); see session plan below
+### Claude handoff — 4c-i `4c-i-b-1` DONE (pending commit); next is `4c-i-b-2` then `4c-i-c`; see session plan below
 
 **BL136 P (workflow/mechanical preflight) is complete.** ADR-494 (D1–D12) committed at `2118293`;
 the ADR-487 wording fix + 4c-i seam preflight rev. 3 committed at `644aa4a`; the rev. 4 docs
@@ -458,7 +458,8 @@ src/OpHalo.Foundation.Infrastructure/Migrations`). **Not yet deployed** — see 
 breakage (BL136-P preflight rows for those two files); `ActualWorkPersistenceTests` and the full
 unit + architecture suites are green. Do not treat these 8 as regressions — `4c-i-b` fixes them.
 
-**Deploy gate — nothing ships until `4c-i-c`.** `4c-i` is one deployable slice = 8 commits, none
+**Deploy gate — nothing ships until `4c-i-c`.** `4c-i` is one deployable slice = 9 commits (`4c-i-b`
+split into `b-1` + `b-2`), none
 deployed until all merge (ADR-494 D2: the frontend cannot be deferred or the live composer's next
 add-line fails `PerformerRequired`). When the slice is complete: verify prod
 `SELECT count(*) FROM keep_actual_work_lines` is 0 (ADR-494 D1 — expected; no cleanup needed if so),
@@ -479,9 +480,30 @@ zero lines; valid default → both expanded lines carry it; `Submitted` → `Not
 0 warnings, `git diff --check` clean. The pre-planned 8 red HTTP tests are unchanged (still
 `4c-i-b`).
 
-**Next — Session 4 (`4c-i-b`), fresh Claude session.** Performer-candidate read + `SetDefaultPerformer`
-API gate + create/add-line performer + the 8 HTTP test fixes (6 prod + 6 test); split to `b-1`/`b-2`
-if it hits the file gate.
+**Session 4 (`4c-i-b-1`) — COMPLETE (2026-08-29), pending commit.** Split executed (Christian
+approved b-1/b-2). 11 files (7 prod + 4 test): new `ActualWorkErrors.PerformerIneligible` (422 via
+new `ErrorHttpMapper` entry — the 7th prod file, drift from BL136-P's 6, still ≤ gate); new
+`ActualWorkPerformerEligibility` predicate (active + `RequestsOperate` + `ActualWorkCapture`, no
+Owner/Admin); new `GetActualWorkPerformerCandidatesService` + `GET
+/keep/pricebook/actual-work/performer-candidates` (Operator-callable, not Owner/Admin);
+`ActualWorkDraftApiService.CreateAsync` takes an optional ticket default and `AddLineAsync` an
+optional explicit per-line performer, both revalidating a **caller-supplied** id
+(`ValidateSuppliedPerformerAsync` — tenant-scoped role snapshot; empty-guid / cross-account /
+inactive / unpermitted all collapse to `PerformerIneligible`; runs before mutation, no version
+rotation on failure). **Inherited ticket default is frozen at selection — never rechecked at
+add-line or expansion** (Christian decision, 2026-08-29; regression test proves an inherited default
+whose performer is later suspended still records the line to them). `ActualWorkFinancialResolutionApiTests`
+was **not** touched — it seeds via domain `AddLine`, never the HTTP route, so it was never red.
+Verified: `~ActualWork` integration **243/243**, `~ActualWork` unit **111/111** + new predicate unit
+**7/7**, architecture **14/14**, `OpHalo.Api` 0 warnings, `git diff --check` clean.
+
+**Next — `4c-i-b-2`, fresh Claude session.** `SetDefaultPerformer` API gate: `PUT
+/keep/pricebook/actual-work/{id}/default-performer` (Draft-only, recorder-only, existing
+`X-Keep-ActualWork-Version` protocol, body = target id or null) + `SetDefaultPerformerAsync` in
+`ActualWorkDraftApiService` (loads Draft, recorder gate, version check, `ActualWork.SetDefaultPerformer`
+from `4c-i-a-1`, revalidates a non-null value via the same `ValidateSuppliedPerformerAsync`, returns
+rotated version) + `ActualWorkDefaultPerformerApiTests` (set / replace / clear / recorder-only /
+stale-version 409 / inactive + cross-account 422 / existing lines keep their performer). 3 files.
 
 **rev. 4 changes (committed `52e490d`), from the advisor review:**
 - **Assembly expansion is a third line-creation route.** `EfActualWorkAssemblyExpansionPersistence`
@@ -500,7 +522,8 @@ if it hits the file gate.
   `ParseActualWorkVersion` + `ActualWorkConcurrencyVersionResponse`; migration deploys through the
   normal production path, prod has zero rows).
 
-**4c-i is one deployable slice = eight commits**, none deployed until all merge; every commit ≤ 12
+**4c-i is one deployable slice = nine commits** (`4c-i-b` split into `b-1` + `b-2` at the file
+gate, Christian-approved), none deployed until all merge; every commit ≤ 12
 total / ≤ 8 production / ≤ 1 mutation family — proven per-commit counts in
 [BL136 P preflight → Slice 4c-i](build-log/136-P-preflight.md).
 
@@ -513,8 +536,9 @@ total / ≤ 8 production / ≤ 1 mutation family — proven per-commit counts in
 | 2 | *done* | `4c-i-a-1` `d49e5b3` + follow-up `4526564` — domain + persistence + EF config (7 prod + 4 test) | 1 | committed; all persistence + unit + arch tests green post-mig |
 | — | *done — Christian* | `4c-i-mig` — `AddActualWorkPerformer` authored + applied locally (hand-edited: no backfill); 3 generated files still to `git commit` | 2 | not a Claude session |
 | 3 | *done* — `4c-i-a-2` | assembly-expansion outcome contract (3 prod + 1 test) | 2 (not the migration) | 8 HTTP tests stay red until `4c-i-b` |
-| 4 | `4c-i-b` | performer-candidate read + `SetDefaultPerformer` + create/add-line performer + HTTP test fixes (6 prod + 6 test) | 2, `4c-i-mig` | at the file gate; split to `b-1`/`b-2` if needed |
-| 5 | `4c-i-c` | minimum functional frontend (6 prod + 3 test) | 4 | last commit of the slice; deploy the whole slice after this |
+| 4a | *done* — `4c-i-b-1` | performer-candidate read + create/add-line explicit performer + HTTP test fixes (7 prod + 4 test) | 2, `4c-i-mig` | pending commit; inherited default frozen at selection |
+| 4b | `4c-i-b-2` | `SetDefaultPerformer` route + service + tests (3 files) | 4a | recorder-only Draft mutation, existing concurrency protocol |
+| 5 | `4c-i-c` | minimum functional frontend (6 prod + 3 test) | 4b | last commit of the slice; deploy the whole slice after this |
 
 After `4c-i` deploys: `4c-ii` (VisitNote API), `4c-iii` (rich UI), `4d`, `4e-0/i/ii/iii`, `4f-i/ii`,
 `4g` — each its own session(s), per the BL136 per-slice split. Then BL135 Batch 5 (Billing Revision)

@@ -780,7 +780,7 @@ public static class KeepEndpoints
             ActualWorkDraftApiService service,
             CancellationToken ct) =>
         {
-            var result = await service.CreateAsync(body.RequestId, ct);
+            var result = await service.CreateAsync(body.RequestId, body.DefaultPerformedByAccountUserId, ct);
             return result.IsSuccess ? Results.Ok(ToActualWorkResponse(result.Value)) : ErrorHttpMapper.ToHttpResult(result.Error);
         }).RequireAuthorization();
 
@@ -796,7 +796,8 @@ public static class KeepEndpoints
                 return ErrorHttpMapper.ToHttpResult(versionResult.Error);
 
             var command = new AddActualWorkLineApiCommand(
-                body.CatalogItemId, body.OffCatalogDescription, body.ActualQuantity, body.Note);
+                body.CatalogItemId, body.OffCatalogDescription, body.ActualQuantity, body.Note,
+                body.PerformedByAccountUserId);
             var result = await service.AddLineAsync(actualWorkId, command, versionResult.Value, ct);
             return result.IsSuccess
                 ? Results.Ok(new ActualWorkLineAddedResponse(result.Value.LineId, result.Value.ActualWorkConcurrencyVersion))
@@ -980,6 +981,17 @@ public static class KeepEndpoints
         // Actual Work Draft recorder (drives the Draft-recovery transfer control).
         app.MapGet("/keep/pricebook/actual-work/recorder-candidates", async (
             GetActualWorkRecorderCandidatesService service,
+            CancellationToken ct) =>
+        {
+            var result = await service.ExecuteAsync(ct);
+            return result.IsSuccess ? Results.Ok(result.Value) : ErrorHttpMapper.ToHttpResult(result.Error);
+        }).RequireAuthorization();
+
+        // ADR-494 D2 (4c-i-b) — account-wide list of members who may be recorded as the performer of
+        // Actual Work. NOT Owner/Admin-only: an Operator office transcriber records a paper ticket on
+        // a technician's behalf, so the caller gate is the performer predicate itself.
+        app.MapGet("/keep/pricebook/actual-work/performer-candidates", async (
+            GetActualWorkPerformerCandidatesService service,
             CancellationToken ct) =>
         {
             var result = await service.ExecuteAsync(ct);
@@ -1343,13 +1355,14 @@ public static class KeepEndpoints
     }
 }
 
-file sealed record ActualWorkCreateBody(Guid RequestId);
+file sealed record ActualWorkCreateBody(Guid RequestId, Guid? DefaultPerformedByAccountUserId = null);
 
 file sealed record ActualWorkAddLineBody(
     Guid? CatalogItemId,
     string? OffCatalogDescription,
     decimal ActualQuantity,
-    string? Note);
+    string? Note,
+    Guid? PerformedByAccountUserId = null);
 
 file sealed record ActualWorkUpdateLineBody(decimal ActualQuantity, string? Note);
 

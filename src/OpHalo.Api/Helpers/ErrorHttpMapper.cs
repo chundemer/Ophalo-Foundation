@@ -213,6 +213,9 @@ public static class ErrorHttpMapper
             // GAP-055 option C — an ineligible transfer target is a semantically-invalid target,
             // not malformed input; mirrors KeepRequest.ParticipationTargetIneligible.
             var c when c == "ActualWork.RecorderTransferTargetIneligible" => (StatusCodes.Status422UnprocessableEntity, "Unprocessable entity.", null),
+            // A caller-supplied performer that is not an active eligible staff member — a state
+            // rejection, not malformed input; mirrors ActualWork.RecorderTransferTargetIneligible.
+            var c when c == "ActualWork.PerformerIneligible" => (StatusCodes.Status422UnprocessableEntity, "Unprocessable entity.", null),
 
             // --- Direct Actual Work expand-assembly (build-log/129, 5d-i) ---
             var c when c == "ActualWork.ExpandAssemblyNotOperationallyEligible" => (StatusCodes.Status409Conflict, "Conflict.", null),
