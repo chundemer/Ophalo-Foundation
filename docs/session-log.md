@@ -349,8 +349,32 @@ Errors `DispositionVisitHasLines` / `DispositionVisitAlreadyReviewed` → 409; `
 `~ActualWorkFinancialResolution`/`~ActualWorkReview` API + `~ActualWorkFinancialResolutionPersistence`
 green, `~ActualWork` unit 88/88, architecture 14/14, `git diff --check` clean.
 
-**Exact target for the next coding session:** **BL135 Batch 3b-ii — hard `MarkReviewed` gate +
-review transaction/read integration**. Follow BL135 §4 "Batch 3b-ii"; do not re-run discovery.
+**Batch 3b-ii (hard `MarkReviewed` gate + review transaction/read integration) — COMPLETE
+(2026-08-28, `19a3918`).** Domain + Application + Infrastructure; 1 family (`MarkReviewed`); 6 prod /
+6 test (12 changed, no new files, no DI-registration change). `ActualWork.MarkReviewed` gains
+`bool financialDataComplete, bool zeroLineDispositionSatisfied` (stays pure — the orchestration
+supplies them). New guards run **after** the existing `NotSubmitted` / `AlreadyReviewed` /
+note-length guards and before the state write, so every previously-valid API failure mode is
+unchanged: `!financialDataComplete` → `ReviewBlockedIncompleteFinancials`;
+`_lines.Count == 0 && !zeroLineDispositionSatisfied` → `ReviewBlockedZeroLineDispositionRequired`.
+`ActualWorkReviewResult` gains `BlockedIncompleteFinancials` / `BlockedZeroLineDisposition`; both new
+errors → 409. `EfActualWorkReviewPersistence` injects `IActualWorkFinancialResolutionPersistence`
+(already registered) and, inside the existing Read-Committed transaction after the version check,
+loads `.Include(x => x.Lines)` + account-scoped resolutions + dispositions and computes the two
+booleans via a private `AllLinesFinanciallyComplete` — a deliberate one-way restatement of the
+read-side `ActualWorkFinancialProjection` completeness rule (Infrastructure must not consume
+Application internals; the projection is the other site to keep in step). `zeroLineDispositionSatisfied`
+= any `NoCharge` disposition, not a row count. The visit concurrency token stays the race guard — a
+resolution/disposition appended after the gate reads loses the token race on save. Blocked outcomes
+return before the signal-resolve SQL; only `Committed` advances review state or resolves the work
+signal. **No revision-membership check (D4).** Verified: full unit 1666/1666 (+3), `~ActualWork`
+integration 219/219 (blocked path asserts reviewer/timestamp null + signal unresolved;
+mixed snapshot+resolution provenance), architecture 14/14, `git diff --check` clean.
+
+**Exact target for the next coding session:** **BL135 Batch 4 — Office financial-resolution UI**
+(review-card surface consuming the 3a-iii blockers/detail read and the 3b-i/3b-ii resolution +
+disposition + hard-gate contract). Follow BL135 §4 "Batch 4"; the office-closeout backend contract
+(Batches 3a–3b) is complete — do not re-run discovery.
 
 ### Next after the release gate — triage, do not silently bundle
 
