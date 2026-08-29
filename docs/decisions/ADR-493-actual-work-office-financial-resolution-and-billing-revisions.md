@@ -19,6 +19,17 @@ existing accounting system.
 
 ## Decision
 
+### 2026-08-29 pilot usability sequencing amendment
+
+This ADR's immutable submitted-fact and append-only financial-evidence decisions remain locked.
+Before beginning its Billing Revision implementation sequence, Keep must deliver the
+paper-compatible Actual Work pilot upgrade defined in
+[Build Log 136](../build-log/136-actual-work-paper-compatible-pilot-upgrade.md): controlled office
+Draft transcription/handoff, per-line performer attribution, Draft-only visit notes, an auditable
+successor-copy correction path that retains the source record, a usable Ticket Workspace, and
+request-close eligibility. Billing Revision resumes only after that sequence; the upgrade does not
+authorize reopening or deleting submitted facts or financial evidence.
+
 ### 1. Immutable field fact; separate office financial resolution
 
 `ActualWork` and `ActualWorkLine` remain immutable after submission. Owner/Admin may resolve a

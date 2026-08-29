@@ -15,6 +15,18 @@ Keep is not a task-routing, payment-processing, accounting, or QuickBooks-sync p
 preflight uses the existing responsibility/ownership language; it introduces no separate routing
 state, board, or route model.
 
+## 2026-08-29 pilot operating-model amendment
+
+The first pilot must be paper-compatible: office staff need a practical way to transcribe paper
+tickets while a smaller group of technicians adopts Keep gradually. The follow-on work is defined
+in [Build Log 136](136-actual-work-paper-compatible-pilot-upgrade.md): controlled office Draft
+entry/handoff, per-line performer attribution, a Draft-only visit note, pre-review
+replacement-copy correction, a usable Actual Work Ticket Workspace, and a request-close gate.
+
+This amendment does **not** authorize shared concurrent Draft editing, silent edits to submitted
+facts, deletion of submitted financial evidence, field price visibility, or accounting/QuickBooks
+scope. Those boundaries remain the reason the pilot can be flexible without weakening auditability.
+
 ## Native field outcomes
 
 ```text

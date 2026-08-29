@@ -1,6 +1,6 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-08-28
+**Last updated:** 2026-08-29
 **Purpose:** active handoff only. Completed work belongs in Git history and the relevant build log.
 
 ## Authoritative sources
@@ -408,9 +408,50 @@ correction applied pre-commit: partial-component resolution + client negative ch
 full frontend suite **799/799** (90 files, +4), `tsc --noEmit` clean, `check:tokens` passed,
 `git diff --check` clean.
 
-**Exact target for the next coding session:** BL135 Batch 5 — Billing Revision domain foundation
-(Core only, 5 prod / 2 test). Follow BL135 §4 "Batch 5". Batch 4 (office financial-resolution) is
-now fully landed end-to-end (domain 1 → persistence 2 → API 3a/3b → UI 4a/4b).
+### Claude handoff — required reading, scope, and response for BL136 P
+
+**Read in this order before acting:**
+
+1. This active handoff, starting with the Batch 4 completion entry above and continuing through the
+   sequencing amendment below.
+2. [Build Log 136 — Actual Work Paper-Compatible Pilot Upgrade](build-log/136-actual-work-paper-compatible-pilot-upgrade.md)
+   — the active product direction, pilot walkthroughs, and 4c–4g sequence.
+3. [Build Log 129 — Direct Actual Work and Accounting Handoff](build-log/129-direct-actual-work-and-accounting-handoff-preflight.md)
+   — original Actual Work boundary and its 2026-08-29 operating-model amendment.
+4. [ADR-493 — Actual Work Office Financial Resolution and Billing Revisions](decisions/ADR-493-actual-work-office-financial-resolution-and-billing-revisions.md)
+   — immutable submitted facts, append-only financial evidence, and the Billing Revision pause.
+5. ADR-487 and the current Actual Work, request-close, authorization, persistence/API, and Request
+   Detail code needed to verify the preflight. Do not re-run discovery for completed Batch 4
+   financial-resolution behavior.
+
+**Current implementation truth:** Actual Work has exclusive recorder-owned Drafts and immutable
+submitted facts. Financial resolution/disposition and review are complete end-to-end and must be
+preserved. There is no existing per-line performer, Draft visit note, office transcription authority,
+replacement-copy correction flow, Actual Work superseded/void lifecycle, or full Ticket Workspace.
+Do not assume a policy stated in a future-facing ADR is already implemented.
+
+**BL136 P scope:** inspect and return a no-code, implementation-ready preflight. Lock or explicitly
+ask for a decision on office Draft authority/handoff; performer cardinality, historical attribution,
+and inactive users; note ownership/visibility; atomic replacement-copy lifecycle, source/successor
+linkage, uniqueness, concurrency/retry, audit, signals, zero-line behavior, and finance/billing
+exclusion; request-close eligibility; and Workspace route/sheet, Request List/Request Detail styling,
+focus, dirty-close, reconciliation, and mobile fallback. Identify migrations/backfill, authorization,
+and test implications.
+
+**Required response format:** begin with gaps or conflicts in the current direction; then list each
+decision requiring owner approval and its recommendation; then provide the exact ordered code slices
+(4c–4g), file-level gates, migrations, and acceptance tests. Do not edit code, tests, migrations, or
+documentation during P. Do not start a slice until its preflight is approved. Do not bundle the
+deferred Request Workbench tab-selection bug into this work.
+
+**Sequencing amendment (2026-08-29) — Billing Revision is paused.** Batch 4 (office
+financial-resolution) is fully landed end-to-end (domain 1 → persistence 2 → API 3a/3b → UI
+4a/4b), but do **not** start BL135 Batch 5 yet. The exact target for the next coding session is
+[Build Log 136 — P: Actual Work Paper-Compatible Pilot Upgrade workflow/mechanical preflight](build-log/136-actual-work-paper-compatible-pilot-upgrade.md)
+(no code). Lock office Draft transcription/handoff, per-line performer attribution, Draft-only visit
+notes, pre-review replacement-copy correction, the usable Ticket Workspace, and request-close
+eligibility before approving 4c–4g. Submitted facts and financial-resolution evidence remain
+immutable/append-only; this sequence does not introduce reopen or delete authority.
 
 **Deferred UI follow-up — Request Workbench primary-tab selection (2026-08-28).** In the wide
 two-pane Request Workbench, selecting a primary queue tab such as **Mine** currently preserves an

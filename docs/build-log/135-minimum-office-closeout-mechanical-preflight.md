@@ -475,7 +475,14 @@ boundary callout above). Queue expansion is out of scope. Manual acceptance: inc
 resolved → totals appear; zero-line visit → no-charge disposition unblocks review; a reviewed visit
 shows resolution controls **disabled**; 403 hides the controls; stale version reconciles.
 
-### Batch 5 — Billing Revision domain foundation
+### 2026-08-29 sequencing amendment — Batch 5 paused
+
+Build Log 136 changes the immediate implementation order. Batches 1–4 remain valid and landed;
+they are not undone. Do **not** implement Batch 5 until Build Log 136's workflow/mechanical
+preflight and slices 4c–4g have established the paper-compatible capture, correction, workspace,
+and close-eligibility model that Billing Revision must consume.
+
+### Batch 5 — Billing Revision domain foundation (paused pending Build Log 136)
 
 **Layer:** Core only. **Families:** 0. **Files:** 5 prod / 2 test.
 
