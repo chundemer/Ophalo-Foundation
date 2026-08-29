@@ -885,6 +885,25 @@ public static class KeepEndpoints
                 : ErrorHttpMapper.ToHttpResult(result.Error);
         }).RequireAuthorization();
 
+        // ADR-494 D2 (4c-i-b) — recorder-only Draft ticket-default performer set/clear.
+        app.MapPut("/keep/pricebook/actual-work/{actualWorkId:guid}/default-performer", async (
+            Guid actualWorkId,
+            ActualWorkDefaultPerformerBody body,
+            HttpRequest httpRequest,
+            ActualWorkDraftApiService service,
+            CancellationToken ct) =>
+        {
+            var versionResult = ParseActualWorkVersion(httpRequest.Headers);
+            if (!versionResult.IsSuccess)
+                return ErrorHttpMapper.ToHttpResult(versionResult.Error);
+
+            var result = await service.SetDefaultPerformerAsync(
+                actualWorkId, body.PerformedByAccountUserId, versionResult.Value, ct);
+            return result.IsSuccess
+                ? Results.Ok(new ActualWorkConcurrencyVersionResponse(result.Value))
+                : ErrorHttpMapper.ToHttpResult(result.Error);
+        }).RequireAuthorization();
+
         // GAP-055 — Owner/Admin-only, reason-required Draft recorder-ownership transfer.
         app.MapPost("/keep/pricebook/actual-work/{actualWorkId:guid}/transfer-recorder", async (
             Guid actualWorkId,
@@ -1373,6 +1392,10 @@ file sealed record ActualWorkUpdateLineBody(decimal ActualQuantity, string? Note
 file sealed record ActualWorkSubmitBody(string? Outcome, string? CompletionNote);
 
 file sealed record ActualWorkTransferRecorderBody(Guid NewRecorderAccountUserId, string Reason);
+
+/// <summary>ADR-494 D2 (4c-i-b). A null <see cref="PerformedByAccountUserId"/> clears the visit's
+/// ticket default; a non-null value is revalidated server-side (empty guid collapses to 422).</summary>
+file sealed record ActualWorkDefaultPerformerBody(Guid? PerformedByAccountUserId);
 
 file sealed record ActualWorkReviewBody(string? ReviewNote);
 

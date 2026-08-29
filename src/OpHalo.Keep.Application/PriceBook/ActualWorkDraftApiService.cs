@@ -344,6 +344,43 @@ public sealed class ActualWorkDraftApiService(
     }
 
     /// <summary>
+    /// ADR-494 D2 (4c-i-b): recorder-only Draft mutation that sets or clears the visit's ticket
+    /// default performer. Shares the ordinary <see cref="AuthorizeAndLoadDraftAsync"/> row-auth +
+    /// Draft-status gate and the <c>X-Keep-ActualWork-Version</c> optimistic-concurrency protocol
+    /// with the line editor. A non-null target is revalidated via
+    /// <see cref="ValidateSuppliedPerformerAsync"/> before any mutation, so an ineligible id
+    /// (<see cref="Guid.Empty"/> included) never rotates the version. Passing null clears the
+    /// default; existing line performers are untouched (the domain method seeds new lines only).
+    /// </summary>
+    public async Task<Result<Guid>> SetDefaultPerformerAsync(
+        Guid actualWorkId, Guid? performedByAccountUserId, Guid expectedVersion, CancellationToken ct)
+    {
+        var loadResult = await AuthorizeAndLoadDraftAsync(actualWorkId, ct);
+        if (loadResult.IsFailure)
+            return Result<Guid>.Failure(loadResult.Error);
+        var actualWork = loadResult.Value;
+
+        if (actualWork.ConcurrencyVersion != expectedVersion)
+            return Result<Guid>.Failure(ActualWorkErrors.VersionMismatch);
+
+        if (performedByAccountUserId is { } performer)
+        {
+            var accountSnapshot = await snapshotPersistence.GetAccountAccessSnapshotAsync(currentUser.AccountId, ct);
+            if (accountSnapshot is null)
+                return Result<Guid>.Failure(Forbidden);
+            var eligibility = await ValidateSuppliedPerformerAsync(performer, accountSnapshot.Purpose, ct);
+            if (eligibility.IsFailure)
+                return Result<Guid>.Failure(eligibility.Error);
+        }
+
+        var setResult = actualWork.SetDefaultPerformer(performedByAccountUserId);
+        if (setResult.IsFailure)
+            return Result<Guid>.Failure(setResult.Error);
+
+        return await CommitAsync(actualWork, ct);
+    }
+
+    /// <summary>
     /// GAP-055: Owner/Admin-only, reason-required recorder-ownership transfer of an unsubmitted
     /// Draft. Deliberately does not reuse <see cref="AuthorizeAndLoadDraftAsync"/> — that helper's
     /// row-authorization check requires the caller to already be the current recorder, which is

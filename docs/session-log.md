@@ -408,7 +408,7 @@ correction applied pre-commit: partial-component resolution + client negative ch
 full frontend suite **799/799** (90 files, +4), `tsc --noEmit` clean, `check:tokens` passed,
 `git diff --check` clean.
 
-### Claude handoff — 4c-i `4c-i-b-1` DONE (pending commit); next is `4c-i-b-2` then `4c-i-c`; see session plan below
+### Claude handoff — 4c-i `4c-i-b-2` DONE (pending commit); next is `4c-i-c` (last commit of the slice); see session plan below
 
 **BL136 P (workflow/mechanical preflight) is complete.** ADR-494 (D1–D12) committed at `2118293`;
 the ADR-487 wording fix + 4c-i seam preflight rev. 3 committed at `644aa4a`; the rev. 4 docs
@@ -497,13 +497,26 @@ was **not** touched — it seeds via domain `AddLine`, never the HTTP route, so 
 Verified: `~ActualWork` integration **243/243**, `~ActualWork` unit **111/111** + new predicate unit
 **7/7**, architecture **14/14**, `OpHalo.Api` 0 warnings, `git diff --check` clean.
 
-**Next — `4c-i-b-2`, fresh Claude session.** `SetDefaultPerformer` API gate: `PUT
-/keep/pricebook/actual-work/{id}/default-performer` (Draft-only, recorder-only, existing
-`X-Keep-ActualWork-Version` protocol, body = target id or null) + `SetDefaultPerformerAsync` in
-`ActualWorkDraftApiService` (loads Draft, recorder gate, version check, `ActualWork.SetDefaultPerformer`
-from `4c-i-a-1`, revalidates a non-null value via the same `ValidateSuppliedPerformerAsync`, returns
-rotated version) + `ActualWorkDefaultPerformerApiTests` (set / replace / clear / recorder-only /
-stale-version 409 / inactive + cross-account 422 / existing lines keep their performer). 3 files.
+**Session 5 (`4c-i-b-2`) — COMPLETE (2026-08-29), pending commit.** `SetDefaultPerformer` API gate,
+3 files: `PUT /keep/pricebook/actual-work/{id}/default-performer` (Draft-only, recorder-only,
+existing `X-Keep-ActualWork-Version` protocol, body `{ performedByAccountUserId }` = target id or
+null) + new `ActualWorkDefaultPerformerBody` file record in `KeepEndpoints.cs`;
+`SetDefaultPerformerAsync` in `ActualWorkDraftApiService` reuses `AuthorizeAndLoadDraftAsync`
+(recorder-ownership → 404, non-Draft → 409) → version check → revalidates a non-null value via
+`ValidateSuppliedPerformerAsync` (re-reads the account snapshot for `Purpose`, mirroring
+`AddLineAsync`; empty guid / cross-account / inactive all collapse to `PerformerIneligible` 422 with
+no version rotation) → `ActualWork.SetDefaultPerformer` (from `4c-i-a-1`) → `CommitAsync` returns the
+rotated version. New `ActualWorkDefaultPerformerApiTests` (9 facts): set-from-none, replace, clear
+(+ the cleared default then forces `PerformerRequired` on the next unperformered add-line),
+non-recorder 404, stale-version 409, `[Theory]` empty-guid/cross-account/inactive 422 (default +
+version unchanged), and the frozen-history regression (changing the default never rewrites an
+existing line's `PerformedByAccountUserId`). No domain / migration / frontend change. Verified:
+`~ActualWork` integration **252/252** (+9), `~ActualWork` unit **111/111**, architecture **14/14**,
+`OpHalo.Api` 0 warnings, `git diff --check` clean.
+
+**Next — `4c-i-c`, fresh Claude session.** Minimum functional frontend (6 prod + 3 test); last
+commit of the slice — deploy the whole merged `4c-i` slice after it lands (see the deploy gate
+above).
 
 **rev. 4 changes (committed `52e490d`), from the advisor review:**
 - **Assembly expansion is a third line-creation route.** `EfActualWorkAssemblyExpansionPersistence`
@@ -537,7 +550,7 @@ total / ≤ 8 production / ≤ 1 mutation family — proven per-commit counts in
 | — | *done — Christian* | `4c-i-mig` — `AddActualWorkPerformer` authored + applied locally (hand-edited: no backfill); 3 generated files still to `git commit` | 2 | not a Claude session |
 | 3 | *done* — `4c-i-a-2` | assembly-expansion outcome contract (3 prod + 1 test) | 2 (not the migration) | 8 HTTP tests stay red until `4c-i-b` |
 | 4a | *done* — `4c-i-b-1` | performer-candidate read + create/add-line explicit performer + HTTP test fixes (7 prod + 4 test) | 2, `4c-i-mig` | pending commit; inherited default frozen at selection |
-| 4b | `4c-i-b-2` | `SetDefaultPerformer` route + service + tests (3 files) | 4a | recorder-only Draft mutation, existing concurrency protocol |
+| 4b | *done* — `4c-i-b-2` | `SetDefaultPerformer` route + service + tests (3 files) | 4a | pending commit; recorder-only Draft mutation, existing concurrency protocol |
 | 5 | `4c-i-c` | minimum functional frontend (6 prod + 3 test) | 4b | last commit of the slice; deploy the whole slice after this |
 
 After `4c-i` deploys: `4c-ii` (VisitNote API), `4c-iii` (rich UI), `4d`, `4e-0/i/ii/iii`, `4f-i/ii`,
