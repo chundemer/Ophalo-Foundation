@@ -167,10 +167,15 @@ public sealed class EfActualWorkAssemblyExpansionPersistence(
                 ? 1m
                 : defaultQuantities[catalogItemId];
 
+            // ADR-494 D2: assembly expansion attributes every line it creates to the persisted
+            // ticket default. 4c-i-a-1 threads it (compile-level); the explicit no-default outcome
+            // (PerformerRequired, no partial writes) is 4c-i-a-2 — today any AddLine failure,
+            // including a missing default, still collapses to NotDraft here.
             var addResult = actualWork.AddLine(
                 detail.Item.Id, priceBookVersionLineId, displayNameSnapshot, unitOfMeasureSnapshot,
                 quantity, sellPriceSnapshot, standardExpectedDirectCostSnapshot,
-                note: null, commercialBaselineSourceLineId: null, callerAccountUserId);
+                note: null, commercialBaselineSourceLineId: null, callerAccountUserId,
+                performedByAccountUserId: actualWork.DefaultPerformedByAccountUserId);
             if (addResult.IsFailure)
                 return new ActualWorkExpandAssemblyOutcome(ActualWorkExpandAssemblyResult.NotDraft);
             lineIds.Add(addResult.Value.Id);

@@ -64,6 +64,12 @@ public static class ActualWorkErrors
     public static readonly Error LineSnapshotValuesRequirePriceBookVersionLine =
         Error.Create("ActualWork.LineSnapshotValuesRequirePriceBookVersionLine", "Sell price and direct cost require a price book snapshot.");
 
+    /// <summary>ADR-494 D1/D2: every line carries a non-null performer. A line is created with neither
+    /// an explicit performer nor a persisted ticket-level default to seed from — the recording user
+    /// must pick a technician first; the server never substitutes the creator or current recorder.</summary>
+    public static readonly Error PerformerRequired =
+        Error.Create("ActualWork.PerformerRequired", "Select who performed this work before adding lines.");
+
     /// <summary>Build-log/129: a zero-line submit requires a non-whitespace completion note.</summary>
     public static readonly Error ZeroLineCompletionNoteRequired =
         Error.Create("ActualWork.ZeroLineCompletionNoteRequired", "A completion note is required to submit a visit with no lines.");

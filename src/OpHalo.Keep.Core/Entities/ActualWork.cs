@@ -63,6 +63,12 @@ public sealed class ActualWork : BaseEntity
     /// <see cref="TransferRecorder"/>.</summary>
     public Guid RecorderAccountUserId { get; private set; }
 
+    /// <summary>ADR-494 D2: an optional, mutable Draft-level "Performed by" default that seeds the
+    /// performer of <em>new</em> lines only — it never rewrites an existing line's captured
+    /// performer, and Draft handoff leaves it untouched. Null until set; cleared by passing null to
+    /// <see cref="SetDefaultPerformer"/>. Never server-derived from the creator or recorder.</summary>
+    public Guid? DefaultPerformedByAccountUserId { get; private set; }
+
     /// <summary>
     /// Application-managed opaque concurrency token — same pattern as
     /// <see cref="ProposedScope.ConcurrencyVersion"/>.
@@ -79,7 +85,11 @@ public sealed class ActualWork : BaseEntity
     {
     }
 
-    public static Result<ActualWork> Create(Guid accountId, Guid requestId, Guid createdByUserId)
+    public static Result<ActualWork> Create(
+        Guid accountId,
+        Guid requestId,
+        Guid createdByUserId,
+        Guid? defaultPerformedByAccountUserId = null)
     {
         if (accountId == Guid.Empty)
             throw new ArgumentException("AccountId must not be empty.", nameof(accountId));
@@ -87,6 +97,12 @@ public sealed class ActualWork : BaseEntity
             throw new ArgumentException("RequestId must not be empty.", nameof(requestId));
         if (createdByUserId == Guid.Empty)
             throw new ArgumentException("CreatedByUserId must not be empty.", nameof(createdByUserId));
+        // An explicitly supplied ticket default must be a real id or omitted — an empty guid is a
+        // caller bug, never a silent "no default" (ADR-494 D2: never server-derived).
+        if (defaultPerformedByAccountUserId == Guid.Empty)
+            throw new ArgumentException(
+                "DefaultPerformedByAccountUserId must not be an empty guid; omit it to create the draft with no default.",
+                nameof(defaultPerformedByAccountUserId));
 
         return Result<ActualWork>.Success(new ActualWork
         {
@@ -95,6 +111,7 @@ public sealed class ActualWork : BaseEntity
             RequestId = requestId,
             Status = ActualWorkStatus.Draft,
             RecorderAccountUserId = createdByUserId,
+            DefaultPerformedByAccountUserId = defaultPerformedByAccountUserId,
             ConcurrencyVersion = Guid.NewGuid(),
         });
     }
@@ -119,6 +136,27 @@ public sealed class ActualWork : BaseEntity
         return Result.Success();
     }
 
+    /// <summary>ADR-494 D2: sets or clears the Draft-level "Performed by" default. Allowed only while
+    /// <see cref="Status"/> is <see cref="ActualWorkStatus.Draft"/>; passing null clears it. Never
+    /// touches existing line performers — the default seeds new lines only. Recorder-ownership
+    /// authorization is the API layer's responsibility (BL136 4c-i-b), mirroring
+    /// <see cref="TransferRecorder"/> and <see cref="AddLine"/>; this method enforces only the
+    /// Draft-only domain invariant.</summary>
+    public Result SetDefaultPerformer(Guid? performedByAccountUserId)
+    {
+        if (performedByAccountUserId == Guid.Empty)
+            throw new ArgumentException(
+                "PerformedByAccountUserId must not be an empty guid; pass null to clear the default.",
+                nameof(performedByAccountUserId));
+
+        if (Status != ActualWorkStatus.Draft)
+            return Result.Failure(ActualWorkErrors.NotDraft);
+
+        DefaultPerformedByAccountUserId = performedByAccountUserId;
+        ConcurrencyVersion = Guid.NewGuid();
+        return Result.Success();
+    }
+
     public Result<ActualWorkLine> AddLine(
         Guid? catalogItemId,
         Guid? priceBookVersionLineId,
@@ -129,15 +167,21 @@ public sealed class ActualWork : BaseEntity
         decimal? standardExpectedDirectCostSnapshot,
         string? note,
         Guid? commercialBaselineSourceLineId,
-        Guid createdByUserId)
+        Guid createdByUserId,
+        Guid? performedByAccountUserId = null)
     {
         if (Status != ActualWorkStatus.Draft)
             return Result<ActualWorkLine>.Failure(ActualWorkErrors.NotDraft);
 
+        // ADR-494 D2: an explicit performer wins; otherwise seed from the persisted ticket default.
+        // With neither, Guid.Empty flows to ActualWorkLine.Create, which returns PerformerRequired —
+        // the server never falls back to the creator or recorder.
+        var performedBy = performedByAccountUserId ?? DefaultPerformedByAccountUserId ?? Guid.Empty;
+
         var createResult = ActualWorkLine.Create(
             AccountId, Id, catalogItemId, priceBookVersionLineId, displayNameSnapshot,
             unitOfMeasureSnapshot, actualQuantity, sellPriceSnapshot, standardExpectedDirectCostSnapshot,
-            note, commercialBaselineSourceLineId, createdByUserId);
+            note, commercialBaselineSourceLineId, createdByUserId, performedBy);
         if (createResult.IsFailure)
             return createResult;
 

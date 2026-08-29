@@ -408,7 +408,7 @@ correction applied pre-commit: partial-component resolution + client negative ch
 full frontend suite **799/799** (90 files, +4), `tsc --noEmit` clean, `check:tokens` passed,
 `git diff --check` clean.
 
-### Claude handoff — 4c-i seam prep (Session 1) COMPLETE; next target is Session 2 (`4c-i-a-1`); see session plan below
+### Claude handoff — 4c-i Session 2 (`4c-i-a-1`) COMPLETE; next is Christian's `4c-i-mig`, then Session 3 (`4c-i-a-2`); see session plan below
 
 **BL136 P (workflow/mechanical preflight) is complete.** ADR-494 (D1–D12) committed at `2118293`;
 the ADR-487 wording fix + 4c-i seam preflight rev. 3 committed at `644aa4a`; the rev. 4 docs
@@ -421,6 +421,29 @@ runbook note, checked in inert — **not executed**), `4c-i-0a` `79008bd` (unit-
 integration 222/222, 0 warnings). No production code. The reset tool is run **only later, by
 Christian, immediately before `4c-i-mig`**, to validate the strict migration on a local DB — never
 during seam prep, never from app migration/startup/deploy (ADR-494 D12).
+
+**Session 2 (`4c-i-a-1`) — COMPLETE (2026-08-29).** Domain + persistence + EF config, 11 files
+(7 prod + 4 test): `ActualWorkLine.PerformedByAccountUserId` (non-null, `PerformerRequired` on empty
+guid); `ActualWork.DefaultPerformedByAccountUserId` (nullable) + optional default arg on `Create` +
+`AddLine` optional explicit performer that seeds from the ticket default and returns
+`PerformerRequired` when both absent (**no creator/recorder fallback**) + Draft-only
+`SetDefaultPerformer(Guid?)` (recorder authorization stays an API-layer gate for `4c-i-b`, matching
+`TransferRecorder`); `ActualWorkErrors.PerformerRequired`; EF config (line column `IsRequired`, no
+FK; nullable default column + `(AccountId, DefaultPerformedByAccountUserId)` index); both existing
+`AddLine` prod call sites thread `actualWork.DefaultPerformedByAccountUserId` (compile-level — the
+assembly no-default outcome is `4c-i-a-2`, failures still collapse to `NotDraft`); both
+`ActualWorkTestData` helpers gain the default/performer args (helper `AddLine` resolves an omitted
+performer to `createdByUserId` — fixture setup only; `PerformerRequired` tests call the domain
+directly with explicit `null`). Verified: full unit **1679/1679** (`ActualWork`-filtered 104),
+architecture **14/14**, full solution build 0 warnings, `git diff --check` clean. The persistence
+round-trip test in `ActualWorkPersistenceTests` is added and compiles but **executes only after
+`4c-i-mig`** — a-1's new EF columns are not in migration history yet, so the integration suite is
+red until Christian applies the migration.
+
+**Next — Christian's `4c-i-mig`.** Run the local Actual Work reset (`4c-i-r`, still un-executed)
+first, then `dotnet ef migrations add AddActualWorkPerformer --startup-project
+src/OpHalo.Keep.Infrastructure` (ADR-049), apply locally, and run the focused integration suite
+including `ActualWorkPersistenceTests`.
 
 **rev. 4 changes (committed `52e490d`), from the advisor review:**
 - **Assembly expansion is a third line-creation route.** `EfActualWorkAssemblyExpansionPersistence`
@@ -449,8 +472,8 @@ total / ≤ 8 production / ≤ 1 mutation family — proven per-commit counts in
 |---|---|---|---|---|
 | — | *done (`52e490d`)* | rev. 4 docs committed | approval | no code |
 | 1 | *done* | `4c-i-r` `ea4f9b8` + `4c-i-0a` `79008bd` + `4c-i-0b` `03a081f` | — | seam prep, no behaviour change |
-| 2 | `4c-i-a-1` | domain + persistence + EF config (7 prod + 4 test) | 1 | ends at reviewed diff |
-| — | *Christian* | `4c-i-mig` — author + apply `AddActualWorkPerformer` (`--startup-project src/OpHalo.Keep.Infrastructure`) | 2 | not a Claude session |
+| 2 | *done* | `4c-i-a-1` — domain + persistence + EF config (7 prod + 4 test) | 1 | committed; integration round-trip runs after `4c-i-mig` |
+| — | *Christian — next* | `4c-i-mig` — author + apply `AddActualWorkPerformer` (`--startup-project src/OpHalo.Keep.Infrastructure`) | 2 | not a Claude session; reset local DB via `4c-i-r` first |
 | 3 | `4c-i-a-2` | assembly-expansion outcome contract (3 prod + 1 test) | 2 (not the migration) | |
 | 4 | `4c-i-b` | performer-candidate read + `SetDefaultPerformer` + create/add-line performer + HTTP test fixes (6 prod + 6 test) | 2, `4c-i-mig` | at the file gate; split to `b-1`/`b-2` if needed |
 | 5 | `4c-i-c` | minimum functional frontend (6 prod + 3 test) | 4 | last commit of the slice; deploy the whole slice after this |

@@ -154,10 +154,14 @@ public sealed class ActualWorkDraftApiService(
             displayNameSnapshot = command.OffCatalogDescription.Trim();
         }
 
+        // ADR-494 D2 (4c-i-a-1): thread the persisted ticket default as the line performer. An
+        // explicit per-line performer from the request is wired in 4c-i-b; today this is the only
+        // source, and AddLine still returns PerformerRequired when the Draft has no default.
         var addResult = actualWork.AddLine(
             catalogItemId, priceBookVersionLineId, displayNameSnapshot, unitOfMeasureSnapshot,
             command.ActualQuantity, sellPriceSnapshot, standardExpectedDirectCostSnapshot,
-            command.Note, commercialBaselineSourceLineId: null, currentUser.UserId);
+            command.Note, commercialBaselineSourceLineId: null, currentUser.UserId,
+            performedByAccountUserId: actualWork.DefaultPerformedByAccountUserId);
         if (addResult.IsFailure)
             return Result<AddActualWorkLineResult>.Failure(addResult.Error);
 

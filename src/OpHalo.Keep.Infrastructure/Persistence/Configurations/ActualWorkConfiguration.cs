@@ -44,6 +44,14 @@ internal sealed class ActualWorkConfiguration : BaseEntityConfiguration<ActualWo
         builder.Property(x => x.RecorderAccountUserId)
             .IsRequired();
 
+        // ADR-494 D2: optional Draft-level "Performed by" default that seeds new lines. Nullable, no
+        // FK (an account-user id, same rationale as the line's PerformedByAccountUserId).
+        builder.Property(x => x.DefaultPerformedByAccountUserId);
+
+        // Account-scoped lookup of the visits carrying a given user as the ticket default —
+        // supports the performer-candidate / "my open drafts" reads in later 4c-i slices.
+        builder.HasIndex(x => new { x.AccountId, x.DefaultPerformedByAccountUserId });
+
         // Application-managed opaque uuid token — same pattern as
         // ProposedScope.ConcurrencyVersion (ADR-330).
         builder.Property(x => x.ConcurrencyVersion)

@@ -20,6 +20,8 @@ public class ActualWorkTests
     static readonly Guid CatalogItemId = Guid.CreateVersion7();
     static readonly Guid PriceBookVersionLineId = Guid.CreateVersion7();
     static readonly Guid CommercialBaselineSourceLineId = Guid.CreateVersion7();
+    static readonly Guid TicketDefaultPerformer = Guid.CreateVersion7();
+    static readonly Guid ExplicitPerformer = Guid.CreateVersion7();
 
     static Result<ActualWork> New() => ActualWorkTestData.CreateDraft(AccountId, RequestId, Actor);
 
@@ -234,6 +236,157 @@ public class ActualWorkTests
 
         Assert.True(result.IsFailure);
         Assert.Equal(ActualWorkErrors.NotDraft, result.Error);
+    }
+
+    // --- Performer attribution (ADR-494 D1/D2) ---
+
+    [Fact]
+    public void Create_accepts_an_optional_ticket_default_performer()
+    {
+        var result = ActualWork.Create(AccountId, RequestId, Actor, TicketDefaultPerformer);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(TicketDefaultPerformer, result.Value.DefaultPerformedByAccountUserId);
+    }
+
+    [Fact]
+    public void Create_without_a_ticket_default_leaves_it_null()
+    {
+        Assert.Null(New().Value.DefaultPerformedByAccountUserId);
+    }
+
+    [Fact]
+    public void Create_rejects_an_empty_guid_ticket_default()
+    {
+        Assert.Throws<ArgumentException>(
+            () => ActualWork.Create(AccountId, RequestId, Actor, Guid.Empty));
+    }
+
+    [Fact]
+    public void AddLine_with_neither_an_explicit_performer_nor_a_ticket_default_returns_PerformerRequired()
+    {
+        var work = New().Value;
+
+        var result = work.AddLine(
+            CatalogItemId, PriceBookVersionLineId, "Drain Pan", "each", 1m,
+            42.50m, 18.00m, null, null, Actor, performedByAccountUserId: null);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(ActualWorkErrors.PerformerRequired, result.Error);
+        Assert.Empty(work.Lines);
+    }
+
+    [Fact]
+    public void AddLine_rejects_an_empty_guid_explicit_performer()
+    {
+        var work = ActualWork.Create(AccountId, RequestId, Actor, TicketDefaultPerformer).Value;
+
+        var result = work.AddLine(
+            CatalogItemId, PriceBookVersionLineId, "Drain Pan", "each", 1m,
+            42.50m, 18.00m, null, null, Actor, performedByAccountUserId: Guid.Empty);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(ActualWorkErrors.PerformerRequired, result.Error);
+    }
+
+    [Fact]
+    public void AddLine_seeds_the_line_performer_from_the_ticket_default()
+    {
+        var work = ActualWork.Create(AccountId, RequestId, Actor, TicketDefaultPerformer).Value;
+
+        var result = work.AddLine(
+            CatalogItemId, PriceBookVersionLineId, "Drain Pan", "each", 1m,
+            42.50m, 18.00m, null, null, Actor, performedByAccountUserId: null);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(TicketDefaultPerformer, result.Value.PerformedByAccountUserId);
+    }
+
+    [Fact]
+    public void AddLine_explicit_performer_overrides_the_ticket_default()
+    {
+        var work = ActualWork.Create(AccountId, RequestId, Actor, TicketDefaultPerformer).Value;
+
+        var result = work.AddLine(
+            CatalogItemId, PriceBookVersionLineId, "Drain Pan", "each", 1m,
+            42.50m, 18.00m, null, null, Actor, performedByAccountUserId: ExplicitPerformer);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(ExplicitPerformer, result.Value.PerformedByAccountUserId);
+    }
+
+    [Fact]
+    public void AddLine_does_not_validate_performer_eligibility_at_the_domain()
+    {
+        // Any non-empty id is accepted here — active/eligible/account-scoped checks are the API
+        // layer's job (ADR-494 D2), and an inactive former user must stay valid on their lines.
+        var inactiveFormerUser = Guid.CreateVersion7();
+        var work = New().Value;
+
+        var result = work.AddLine(
+            CatalogItemId, PriceBookVersionLineId, "Drain Pan", "each", 1m,
+            42.50m, 18.00m, null, null, Actor, performedByAccountUserId: inactiveFormerUser);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(inactiveFormerUser, result.Value.PerformedByAccountUserId);
+    }
+
+    [Fact]
+    public void SetDefaultPerformer_sets_the_default_and_rotates_the_version_on_a_draft()
+    {
+        var work = New().Value;
+        var before = work.ConcurrencyVersion;
+
+        var result = work.SetDefaultPerformer(TicketDefaultPerformer);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(TicketDefaultPerformer, work.DefaultPerformedByAccountUserId);
+        Assert.NotEqual(before, work.ConcurrencyVersion);
+    }
+
+    [Fact]
+    public void SetDefaultPerformer_clears_the_default_when_passed_null()
+    {
+        var work = ActualWork.Create(AccountId, RequestId, Actor, TicketDefaultPerformer).Value;
+
+        var result = work.SetDefaultPerformer(null);
+
+        Assert.True(result.IsSuccess);
+        Assert.Null(work.DefaultPerformedByAccountUserId);
+    }
+
+    [Fact]
+    public void SetDefaultPerformer_does_not_rewrite_an_existing_line_performer()
+    {
+        var work = ActualWork.Create(AccountId, RequestId, Actor, TicketDefaultPerformer).Value;
+        var line = work.AddLine(
+            CatalogItemId, PriceBookVersionLineId, "Drain Pan", "each", 1m,
+            42.50m, 18.00m, null, null, Actor).Value;
+
+        work.SetDefaultPerformer(ExplicitPerformer);
+
+        Assert.Equal(TicketDefaultPerformer, line.PerformedByAccountUserId);
+    }
+
+    [Fact]
+    public void SetDefaultPerformer_after_submit_fails()
+    {
+        var work = ActualWork.Create(AccountId, RequestId, Actor, TicketDefaultPerformer).Value;
+        work.AddLine(
+            CatalogItemId, PriceBookVersionLineId, "Drain Pan", "each", 1m,
+            42.50m, 18.00m, null, null, Actor);
+        work.Submit(DateTime.UtcNow, null, null);
+
+        var result = work.SetDefaultPerformer(ExplicitPerformer);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(ActualWorkErrors.NotDraft, result.Error);
+    }
+
+    [Fact]
+    public void SetDefaultPerformer_rejects_an_empty_guid()
+    {
+        Assert.Throws<ArgumentException>(() => New().Value.SetDefaultPerformer(Guid.Empty));
     }
 
     // --- UpdateLine / RemoveLine ---

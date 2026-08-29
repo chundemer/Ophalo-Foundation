@@ -56,6 +56,13 @@ public sealed class ActualWorkLine : BaseEntity
     /// baseline entity yet.</summary>
     public Guid? CommercialBaselineSourceLineId { get; private set; }
 
+    /// <summary>ADR-494 D1: who performed this line's work — non-null and authoritative once the line
+    /// exists. Distinct from <see cref="Foundation.Core.Entities.Shared.BaseEntity.CreatedByUserId"/>
+    /// (who entered the line): office transcription makes recorder and performer materially
+    /// different. An inactive former user stays valid here for historical truth on a line already
+    /// attributed to them — selection-time eligibility is enforced in the API layer, never here.</summary>
+    public Guid PerformedByAccountUserId { get; private set; }
+
     private ActualWorkLine()
     {
     }
@@ -72,10 +79,17 @@ public sealed class ActualWorkLine : BaseEntity
         decimal? standardExpectedDirectCostSnapshot,
         string? note,
         Guid? commercialBaselineSourceLineId,
-        Guid createdByUserId)
+        Guid createdByUserId,
+        Guid performedByAccountUserId)
     {
         if (createdByUserId == Guid.Empty)
             throw new ArgumentException("CreatedByUserId must not be empty.", nameof(createdByUserId));
+
+        // ADR-494 D2: neither an explicit performer nor a ticket default was available. The caller
+        // (domain AddLine, the add-line endpoint, or assembly expansion) must supply one — the
+        // server never derives it from the creator or recorder.
+        if (performedByAccountUserId == Guid.Empty)
+            return Result<ActualWorkLine>.Failure(ActualWorkErrors.PerformerRequired);
 
         if (string.IsNullOrWhiteSpace(displayNameSnapshot))
             return Result<ActualWorkLine>.Failure(ActualWorkErrors.LineDisplayNameSnapshotRequired);
@@ -122,6 +136,7 @@ public sealed class ActualWorkLine : BaseEntity
             StandardExpectedDirectCostSnapshot = standardExpectedDirectCostSnapshot,
             Note = note,
             CommercialBaselineSourceLineId = commercialBaselineSourceLineId,
+            PerformedByAccountUserId = performedByAccountUserId,
         });
     }
 

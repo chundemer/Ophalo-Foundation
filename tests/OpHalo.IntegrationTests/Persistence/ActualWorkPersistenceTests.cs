@@ -221,6 +221,51 @@ public sealed class ActualWorkPersistenceTests : IClassFixture<PostgresFixture>,
     }
 
     // -------------------------------------------------------------------------
+    // Performer attribution (ADR-494 D1/D2) — executed after 4c-i-mig adds the columns
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public async Task Performer_default_and_per_line_performer_round_trip()
+    {
+        var technician = Guid.CreateVersion7();
+        var otherTechnician = Guid.CreateVersion7();
+
+        await using var ctx = CreateContext();
+        var persistence = new EfActualWorkPersistence(ctx);
+        var visit = ActualWork.Create(AccountId, RequestId, OwnerId, technician).Value;
+        // Seeded from the ticket default.
+        var seededLine = ActualWorkTestData.AddLine(
+            visit, null, null, "Custom labor", null, 1m, null, null, null, null, OwnerId).Value;
+        // Explicit performer overrides the default.
+        var explicitLine = ActualWorkTestData.AddLine(
+            visit, null, null, "Second labor", null, 2m, null, null, null, null, OwnerId,
+            performedByAccountUserId: otherTechnician).Value;
+        await persistence.AddAsync(visit, CancellationToken.None);
+
+        await using var verifyCtx = CreateContext();
+        var reloaded = await verifyCtx.Set<ActualWork>()
+            .Include(x => x.Lines)
+            .SingleAsync(x => x.Id == visit.Id);
+
+        Assert.Equal(technician, reloaded.DefaultPerformedByAccountUserId);
+        Assert.Equal(technician, reloaded.Lines.Single(l => l.Id == seededLine.Id).PerformedByAccountUserId);
+        Assert.Equal(otherTechnician, reloaded.Lines.Single(l => l.Id == explicitLine.Id).PerformedByAccountUserId);
+    }
+
+    [Fact]
+    public async Task Visit_created_without_a_ticket_default_persists_a_null_default()
+    {
+        await using var ctx = CreateContext();
+        var persistence = new EfActualWorkPersistence(ctx);
+        var visit = ActualWork.Create(AccountId, RequestId, OwnerId).Value;
+        await persistence.AddAsync(visit, CancellationToken.None);
+
+        await using var verifyCtx = CreateContext();
+        var reloaded = await verifyCtx.Set<ActualWork>().SingleAsync(x => x.Id == visit.Id);
+        Assert.Null(reloaded.DefaultPerformedByAccountUserId);
+    }
+
+    // -------------------------------------------------------------------------
     // ck_keep_actual_work_lines_three_state_linkage — database check constraint
     // -------------------------------------------------------------------------
 

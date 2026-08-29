@@ -55,6 +55,12 @@ internal sealed class ActualWorkLineConfiguration : BaseEntityConfiguration<Actu
 
         builder.Property(x => x.CommercialBaselineSourceLineId);
 
+        // ADR-494 D1: non-null per-line performer attribution. No FK — an account-user id, like the
+        // BaseEntity CreatedByUserId authorship column; an inactive user stays valid here for
+        // historical truth, so a Restrict FK to a membership table would be wrong.
+        builder.Property(x => x.PerformedByAccountUserId)
+            .IsRequired();
+
         builder.HasIndex(x => new { x.AccountId, x.ActualWorkId });
 
         // Alternate key (build-log/135 §4 Batch 2, drift D2) — the (AccountId, ActualWorkId, Id)
