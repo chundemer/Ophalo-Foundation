@@ -408,7 +408,7 @@ correction applied pre-commit: partial-component resolution + client negative ch
 full frontend suite **799/799** (90 files, +4), `tsc --noEmit` clean, `check:tokens` passed,
 `git diff --check` clean.
 
-### Claude handoff — 4c-i `4c-i-b-2` DONE (pending commit); next is `4c-i-c` (last commit of the slice); see session plan below
+### Claude handoff — 4c-i `4c-i-b-2` DONE (`6150363`); next is `4c-i-c` (last commit of the slice); see session plan below
 
 **BL136 P (workflow/mechanical preflight) is complete.** ADR-494 (D1–D12) committed at `2118293`;
 the ADR-487 wording fix + 4c-i seam preflight rev. 3 committed at `644aa4a`; the rev. 4 docs
@@ -497,7 +497,7 @@ was **not** touched — it seeds via domain `AddLine`, never the HTTP route, so 
 Verified: `~ActualWork` integration **243/243**, `~ActualWork` unit **111/111** + new predicate unit
 **7/7**, architecture **14/14**, `OpHalo.Api` 0 warnings, `git diff --check` clean.
 
-**Session 5 (`4c-i-b-2`) — COMPLETE (2026-08-29), pending commit.** `SetDefaultPerformer` API gate,
+**Session 5 (`4c-i-b-2`) — COMPLETE (2026-08-29), `6150363`.** `SetDefaultPerformer` API gate,
 3 files: `PUT /keep/pricebook/actual-work/{id}/default-performer` (Draft-only, recorder-only,
 existing `X-Keep-ActualWork-Version` protocol, body `{ performedByAccountUserId }` = target id or
 null) + new `ActualWorkDefaultPerformerBody` file record in `KeepEndpoints.cs`;
@@ -550,7 +550,7 @@ total / ≤ 8 production / ≤ 1 mutation family — proven per-commit counts in
 | — | *done — Christian* | `4c-i-mig` — `AddActualWorkPerformer` authored + applied locally (hand-edited: no backfill); 3 generated files still to `git commit` | 2 | not a Claude session |
 | 3 | *done* — `4c-i-a-2` | assembly-expansion outcome contract (3 prod + 1 test) | 2 (not the migration) | 8 HTTP tests stay red until `4c-i-b` |
 | 4a | *done* — `4c-i-b-1` | performer-candidate read + create/add-line explicit performer + HTTP test fixes (7 prod + 4 test) | 2, `4c-i-mig` | pending commit; inherited default frozen at selection |
-| 4b | *done* — `4c-i-b-2` | `SetDefaultPerformer` route + service + tests (3 files) | 4a | pending commit; recorder-only Draft mutation, existing concurrency protocol |
+| 4b | *done* — `4c-i-b-2` `6150363` | `SetDefaultPerformer` route + service + tests (3 files) | 4a | recorder-only Draft mutation, existing concurrency protocol |
 | 5 | `4c-i-c` | minimum functional frontend (6 prod + 3 test) | 4b | last commit of the slice; deploy the whole slice after this |
 
 After `4c-i` deploys: `4c-ii` (VisitNote API), `4c-iii` (rich UI), `4d`, `4e-0/i/ii/iii`, `4f-i/ii`,
