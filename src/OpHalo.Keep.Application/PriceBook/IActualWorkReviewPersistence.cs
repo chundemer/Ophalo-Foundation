@@ -16,6 +16,15 @@ public enum ActualWorkReviewResult
 
     /// <summary>The row changed since the caller last read it (EF concurrency-token mismatch).</summary>
     VersionMismatch,
+
+    /// <summary>BL135 §4 Batch 3b-ii: at least one line still lacks an effective sell price or direct
+    /// cost. Maps to <see cref="Core.Errors.ActualWorkErrors.ReviewBlockedIncompleteFinancials"/>.</summary>
+    BlockedIncompleteFinancials,
+
+    /// <summary>BL135 §4 Batch 3b-ii: a zero-line visit has no <c>NoCharge</c> office financial
+    /// disposition. Maps to
+    /// <see cref="Core.Errors.ActualWorkErrors.ReviewBlockedZeroLineDispositionRequired"/>.</summary>
+    BlockedZeroLineDisposition,
 }
 
 /// <summary><see cref="ConcurrencyVersion"/> is set only when <see cref="Result"/> is

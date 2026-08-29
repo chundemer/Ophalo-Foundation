@@ -415,7 +415,9 @@ public class ActualWorkTests
         var reviewedAt = DateTime.UtcNow;
         var versionBefore = work.ConcurrencyVersion;
 
-        var result = work.MarkReviewed(reviewer, "Looks good.", reviewedAt);
+        var result = work.MarkReviewed(
+            reviewer, "Looks good.", reviewedAt,
+            financialDataComplete: true, zeroLineDispositionSatisfied: true);
 
         Assert.True(result.IsSuccess);
         Assert.Equal(reviewedAt, work.ReviewedAtUtc);
@@ -432,7 +434,9 @@ public class ActualWorkTests
         AddCatalogBackedLine(work);
         work.Submit(DateTime.UtcNow, outcome: null, completionNote: null);
 
-        var result = work.MarkReviewed(Guid.CreateVersion7(), "   ", DateTime.UtcNow);
+        var result = work.MarkReviewed(
+            Guid.CreateVersion7(), "   ", DateTime.UtcNow,
+            financialDataComplete: true, zeroLineDispositionSatisfied: true);
 
         Assert.True(result.IsSuccess);
         Assert.Null(work.ReviewNote);
@@ -445,7 +449,9 @@ public class ActualWorkTests
         AddCatalogBackedLine(work);
         work.Submit(DateTime.UtcNow, outcome: null, completionNote: null);
 
-        var result = work.MarkReviewed(Guid.CreateVersion7(), "  Looks good.  ", DateTime.UtcNow);
+        var result = work.MarkReviewed(
+            Guid.CreateVersion7(), "  Looks good.  ", DateTime.UtcNow,
+            financialDataComplete: true, zeroLineDispositionSatisfied: true);
 
         Assert.True(result.IsSuccess);
         Assert.Equal("Looks good.", work.ReviewNote);
@@ -458,7 +464,9 @@ public class ActualWorkTests
         AddCatalogBackedLine(work);
         work.Submit(DateTime.UtcNow, outcome: null, completionNote: null);
 
-        var result = work.MarkReviewed(Guid.CreateVersion7(), new string('x', 2001), DateTime.UtcNow);
+        var result = work.MarkReviewed(
+            Guid.CreateVersion7(), new string('x', 2001), DateTime.UtcNow,
+            financialDataComplete: true, zeroLineDispositionSatisfied: true);
 
         Assert.True(result.IsFailure);
         Assert.Equal(ActualWorkErrors.ReviewNoteTooLong, result.Error);
@@ -470,7 +478,9 @@ public class ActualWorkTests
     {
         var work = New().Value;
 
-        var result = work.MarkReviewed(Guid.CreateVersion7(), null, DateTime.UtcNow);
+        var result = work.MarkReviewed(
+            Guid.CreateVersion7(), null, DateTime.UtcNow,
+            financialDataComplete: true, zeroLineDispositionSatisfied: true);
 
         Assert.True(result.IsFailure);
         Assert.Equal(ActualWorkErrors.NotSubmitted, result.Error);
@@ -484,15 +494,65 @@ public class ActualWorkTests
         work.Submit(DateTime.UtcNow, outcome: null, completionNote: null);
         var firstReviewer = Guid.CreateVersion7();
         var firstReviewedAt = DateTime.UtcNow;
-        work.MarkReviewed(firstReviewer, "First review.", firstReviewedAt);
+        work.MarkReviewed(
+            firstReviewer, "First review.", firstReviewedAt,
+            financialDataComplete: true, zeroLineDispositionSatisfied: true);
 
-        var result = work.MarkReviewed(Guid.CreateVersion7(), "Second review.", DateTime.UtcNow);
+        var result = work.MarkReviewed(
+            Guid.CreateVersion7(), "Second review.", DateTime.UtcNow,
+            financialDataComplete: true, zeroLineDispositionSatisfied: true);
 
         Assert.True(result.IsFailure);
         Assert.Equal(ActualWorkErrors.AlreadyReviewed, result.Error);
         Assert.Equal(firstReviewer, work.ReviewedByAccountUserId);
         Assert.Equal(firstReviewedAt, work.ReviewedAtUtc);
         Assert.Equal("First review.", work.ReviewNote);
+    }
+
+    [Fact]
+    public void MarkReviewed_is_blocked_when_financial_data_is_incomplete()
+    {
+        var work = New().Value;
+        AddCatalogBackedLine(work);
+        work.Submit(DateTime.UtcNow, outcome: null, completionNote: null);
+
+        var result = work.MarkReviewed(
+            Guid.CreateVersion7(), null, DateTime.UtcNow,
+            financialDataComplete: false, zeroLineDispositionSatisfied: true);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(ActualWorkErrors.ReviewBlockedIncompleteFinancials, result.Error);
+        Assert.Null(work.ReviewedAtUtc);
+        Assert.Null(work.ReviewedByAccountUserId);
+    }
+
+    [Fact]
+    public void MarkReviewed_is_blocked_on_a_zero_line_visit_with_no_disposition()
+    {
+        var work = New().Value;
+        work.Submit(DateTime.UtcNow, outcome: ActualWorkOutcome.NoWorkAuthorized, completionNote: "No work needed.");
+
+        var result = work.MarkReviewed(
+            Guid.CreateVersion7(), null, DateTime.UtcNow,
+            financialDataComplete: true, zeroLineDispositionSatisfied: false);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(ActualWorkErrors.ReviewBlockedZeroLineDispositionRequired, result.Error);
+        Assert.Null(work.ReviewedAtUtc);
+    }
+
+    [Fact]
+    public void MarkReviewed_succeeds_on_a_zero_line_visit_once_disposition_is_satisfied()
+    {
+        var work = New().Value;
+        work.Submit(DateTime.UtcNow, outcome: ActualWorkOutcome.NoWorkAuthorized, completionNote: "No work needed.");
+
+        var result = work.MarkReviewed(
+            Guid.CreateVersion7(), null, DateTime.UtcNow,
+            financialDataComplete: true, zeroLineDispositionSatisfied: true);
+
+        Assert.True(result.IsSuccess);
+        Assert.NotNull(work.ReviewedAtUtc);
     }
 
     // --- RefreshConcurrencyVersionForFinancialResolution (BL135 §4 Batch 3a-ii) ---

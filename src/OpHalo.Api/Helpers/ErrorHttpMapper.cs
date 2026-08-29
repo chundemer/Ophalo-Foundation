@@ -222,6 +222,8 @@ public static class ErrorHttpMapper
             var c when c == "ActualWork.NotSubmitted"     => (StatusCodes.Status409Conflict, "Conflict.", null),
             var c when c == "ActualWork.AlreadyReviewed"  => (StatusCodes.Status409Conflict, "Conflict.", null),
             var c when c == "ActualWork.ReviewNoteTooLong" => (StatusCodes.Status400BadRequest, "Bad request.", null),
+            var c when c == "ActualWork.ReviewBlockedIncompleteFinancials" => (StatusCodes.Status409Conflict, "Conflict.", null),
+            var c when c == "ActualWork.ReviewBlockedZeroLineDispositionRequired" => (StatusCodes.Status409Conflict, "Conflict.", null),
 
             // --- Financial resolution mutation (BL135 §4 Batch 3a-ii, ADR-493) ---
             var c when c == "ActualWork.FinancialResolutionLineNotFound" => (StatusCodes.Status404NotFound, "Resource not found.", null),

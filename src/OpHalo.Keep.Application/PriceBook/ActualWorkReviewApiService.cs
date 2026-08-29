@@ -52,6 +52,10 @@ public sealed class ActualWorkReviewApiService(
             ActualWorkReviewResult.NotSubmitted => Result<Guid>.Failure(ActualWorkErrors.NotSubmitted),
             ActualWorkReviewResult.AlreadyReviewed => Result<Guid>.Failure(ActualWorkErrors.AlreadyReviewed),
             ActualWorkReviewResult.ReviewNoteTooLong => Result<Guid>.Failure(ActualWorkErrors.ReviewNoteTooLong),
+            ActualWorkReviewResult.BlockedIncompleteFinancials =>
+                Result<Guid>.Failure(ActualWorkErrors.ReviewBlockedIncompleteFinancials),
+            ActualWorkReviewResult.BlockedZeroLineDisposition =>
+                Result<Guid>.Failure(ActualWorkErrors.ReviewBlockedZeroLineDispositionRequired),
             _ => Result<Guid>.Failure(ActualWorkErrors.VersionMismatch),
         };
     }

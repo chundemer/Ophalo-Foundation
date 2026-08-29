@@ -224,7 +224,17 @@ public sealed class ActualWork : BaseEntity
     /// resolving the request's Actual Work review signal is a separate atomic persistence operation
     /// (Batch 6), never a side effect of this aggregate's own state change, mirroring <see cref="Submit"/>.
     /// </summary>
-    public Result MarkReviewed(Guid reviewedByAccountUserId, string? reviewNote, DateTime reviewedAtUtc)
+    /// <param name="financialDataComplete">BL135 §4 Batch 3b-ii: every line on the visit has both an
+    /// effective sell price and an effective direct cost (captured snapshot, or a financial resolution
+    /// supplying that component). Computed by the review orchestration from the visit's lines and its
+    /// account-scoped resolution rows — this method stays pure and loads nothing. Vacuously true for a
+    /// zero-line visit.</param>
+    /// <param name="zeroLineDispositionSatisfied">BL135 §4 Batch 3b-ii: the visit carries at least one
+    /// <c>NoCharge</c> office financial disposition. Only consulted for a zero-line visit — a lined
+    /// visit reaches billing eligibility through <paramref name="financialDataComplete"/>.</param>
+    public Result MarkReviewed(
+        Guid reviewedByAccountUserId, string? reviewNote, DateTime reviewedAtUtc,
+        bool financialDataComplete, bool zeroLineDispositionSatisfied)
     {
         if (Status != ActualWorkStatus.Submitted)
             return Result.Failure(ActualWorkErrors.NotSubmitted);
@@ -235,6 +245,15 @@ public sealed class ActualWork : BaseEntity
         var trimmedNote = string.IsNullOrWhiteSpace(reviewNote) ? null : reviewNote.Trim();
         if (trimmedNote is not null && trimmedNote.Length > 2000)
             return Result.Failure(ActualWorkErrors.ReviewNoteTooLong);
+
+        // BL135 §4 Batch 3b-ii — hard billing-readiness gate, ordered after the existing state/repeat/
+        // note guards so previously-valid API failure modes are unchanged. Incomplete line financials
+        // block first; the zero-line no-charge disposition requirement is the zero-line path only.
+        if (!financialDataComplete)
+            return Result.Failure(ActualWorkErrors.ReviewBlockedIncompleteFinancials);
+
+        if (_lines.Count == 0 && !zeroLineDispositionSatisfied)
+            return Result.Failure(ActualWorkErrors.ReviewBlockedZeroLineDispositionRequired);
 
         ReviewedAtUtc = reviewedAtUtc;
         ReviewedByAccountUserId = reviewedByAccountUserId;

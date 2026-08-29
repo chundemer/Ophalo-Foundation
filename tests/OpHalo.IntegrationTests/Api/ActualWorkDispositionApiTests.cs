@@ -427,7 +427,7 @@ public sealed class ActualWorkDispositionApiTests : IClassFixture<KeepApiWebFact
         }
 
         if (review)
-            Assert.True(visit.MarkReviewed(ownerId, null, now).IsSuccess);
+            Assert.True(visit.MarkReviewed(ownerId, null, now, financialDataComplete: true, zeroLineDispositionSatisfied: true).IsSuccess);
 
         await using (var scope = _factory.CreateScope())
         {

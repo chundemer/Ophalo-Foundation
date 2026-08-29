@@ -191,6 +191,44 @@ public sealed class ActualWorkReviewApiTests : IClassFixture<KeepApiWebFactory>,
         Assert.Equal("First review.", work.ReviewNote);
     }
 
+    [Fact]
+    public async Task Review_VisitWithIncompleteLineFinancials_Returns409()
+    {
+        var (accountId, ownerId, ownerCookie) = await SeedAccountAsync("review-incomplete");
+        await EnrollAsync(accountId, ownerId);
+        var requestId = await SeedRequestAsync(accountId);
+        var (actualWorkId, draftVersion) = await CreateDraftAsync(ownerCookie, requestId);
+        var linedVersion = await AddIncompleteCustomLineAsync(actualWorkId, accountId, ownerId);
+        var submittedVersion = await SubmitOnlyAsync(actualWorkId, accountId, linedVersion);
+
+        var response = await PostReviewAsync(ownerCookie, actualWorkId, submittedVersion, null);
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("ActualWork.ReviewBlockedIncompleteFinancials", body.GetProperty("code").GetString());
+
+        await using var scope = _factory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+        var work = await db.Set<ActualWork>().SingleAsync(x => x.Id == actualWorkId);
+        Assert.Null(work.ReviewedAtUtc);
+    }
+
+    [Fact]
+    public async Task Review_ZeroLineVisitWithoutDisposition_Returns409()
+    {
+        var (accountId, ownerId, ownerCookie) = await SeedAccountAsync("review-nodisp");
+        await EnrollAsync(accountId, ownerId);
+        var requestId = await SeedRequestAsync(accountId);
+        var (actualWorkId, draftVersion) = await CreateDraftAsync(ownerCookie, requestId);
+        var submittedVersion = await SubmitOnlyAsync(actualWorkId, accountId, draftVersion);
+
+        var response = await PostReviewAsync(ownerCookie, actualWorkId, submittedVersion, null);
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("ActualWork.ReviewBlockedZeroLineDispositionRequired", body.GetProperty("code").GetString());
+    }
+
     // -------------------------------------------------------------------------
     // Helpers
     // -------------------------------------------------------------------------
@@ -206,7 +244,33 @@ public sealed class ActualWorkReviewApiTests : IClassFixture<KeepApiWebFactory>,
         return await AuthRequest(cookie).SendAsync(request);
     }
 
+    /// <summary>Submits the (zero-line) visit and, unless it carries lines, records a no-charge
+    /// office financial disposition so it clears the BL135 §4 Batch 3b-ii hard review gate —
+    /// every visit seeded here is a zero-line NoWorkAuthorized visit heading toward review.
+    /// <see cref="SubmitOnlyAsync"/> is the variant that deliberately leaves the gate unsatisfied.</summary>
     private async Task<Guid> SubmitAsync(Guid actualWorkId, Guid accountId, Guid expectedVersion)
+    {
+        var version = await SubmitOnlyAsync(actualWorkId, accountId, expectedVersion);
+
+        await using var scope = _factory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+        var hasLines = await db.Set<ActualWork>().Where(x => x.Id == actualWorkId).SelectMany(x => x.Lines).AnyAsync();
+        if (!hasLines)
+        {
+            await db.Database.ExecuteSqlInterpolatedAsync($@"
+                INSERT INTO keep_actual_work_office_financial_dispositions
+                  (id, created_at_utc, updated_at_utc, account_id, actual_work_id, kind, reason,
+                   disposed_by_account_user_id, disposed_at_utc)
+                VALUES
+                  ({Guid.NewGuid()}, {DateTime.UtcNow}, {DateTime.UtcNow}, {accountId}, {actualWorkId},
+                   {nameof(OfficeFinancialDispositionKind.NoCharge)}, {"no billable work"},
+                   {Guid.NewGuid()}, {DateTime.UtcNow})");
+        }
+
+        return version;
+    }
+
+    private async Task<Guid> SubmitOnlyAsync(Guid actualWorkId, Guid accountId, Guid expectedVersion)
     {
         await using var scope = _factory.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
@@ -216,6 +280,20 @@ public sealed class ActualWorkReviewApiTests : IClassFixture<KeepApiWebFactory>,
             DateTime.UtcNow, CancellationToken.None);
         Assert.Equal(ActualWorkSubmissionResult.Committed, outcome.Result);
         return outcome.ConcurrencyVersion!.Value;
+    }
+
+    /// <summary>Adds one custom (off-catalog, no-snapshot) line to a Draft visit through the domain
+    /// aggregate, returning the rotated concurrency version. Financially incomplete by construction,
+    /// so a review is blocked until the line is resolved.</summary>
+    private async Task<Guid> AddIncompleteCustomLineAsync(Guid actualWorkId, Guid accountId, Guid ownerId)
+    {
+        await using var scope = _factory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+        var visit = await db.Set<ActualWork>().Include(x => x.Lines)
+            .SingleAsync(x => x.AccountId == accountId && x.Id == actualWorkId);
+        Assert.True(visit.AddLine(null, null, "Off-catalog part", "each", 1m, null, null, null, null, ownerId).IsSuccess);
+        await db.SaveChangesAsync();
+        return visit.ConcurrencyVersion;
     }
 
     private async Task<(Guid ActualWorkId, Guid ConcurrencyVersion)> CreateDraftAsync(string cookie, Guid requestId)

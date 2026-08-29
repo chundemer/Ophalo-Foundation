@@ -261,7 +261,12 @@ public sealed class ActualWorkFinancialReadApiTests : IClassFixture<KeepApiWebFa
         var (accountId, ownerId, ownerCookie) = await SeedAccountAsync("detail-version-roundtrip");
         await EnrollAsync(accountId, ownerId);
         var requestId = await SeedRequestAsync(accountId, "Jane Customer");
-        var visitId = await CreateVisitAsync(accountId, requestId, ownerId, submit: true, review: false);
+        // Financially complete so the BL135 §4 Batch 3b-ii review gate is satisfied — this test
+        // exercises the version round trip through the real /review endpoint.
+        var (catalogItemId, priceBookVersionLineId) = await SeedCatalogItemWithSnapshotAsync(accountId, ownerId);
+        var visitId = await CreateVisitAsync(
+            accountId, requestId, ownerId, submit: true, review: false,
+            lines: [(catalogItemId, priceBookVersionLineId, 42.50m, 18.00m, 1m)]);
 
         var detailResponse = await GetDetailAsync(ownerCookie, visitId);
         Assert.Equal(HttpStatusCode.OK, detailResponse.StatusCode);
@@ -499,7 +504,7 @@ public sealed class ActualWorkFinancialReadApiTests : IClassFixture<KeepApiWebFa
 
         if (review)
         {
-            var reviewResult = visit.MarkReviewed(recorderAccountUserId, reviewNote, now);
+            var reviewResult = visit.MarkReviewed(recorderAccountUserId, reviewNote, now, financialDataComplete: true, zeroLineDispositionSatisfied: true);
             Assert.True(reviewResult.IsSuccess);
         }
 

@@ -114,4 +114,19 @@ public static class ActualWorkErrors
     /// <summary>Batch 6: matches the feedback-review note convention (max 2,000 characters).</summary>
     public static readonly Error ReviewNoteTooLong =
         Error.Create("ActualWork.ReviewNoteTooLong", "The review note must be 2,000 characters or fewer.");
+
+    /// <summary>BL135 §4 Batch 3b-ii: the visit cannot be marked reviewed because at least one line
+    /// still lacks an effective sell price or direct cost (no captured snapshot and no financial
+    /// resolution supplying it). Maps to 409.</summary>
+    public static readonly Error ReviewBlockedIncompleteFinancials =
+        Error.Create(
+            "ActualWork.ReviewBlockedIncompleteFinancials",
+            "This visit still has line items with incomplete financial data and cannot be reviewed.");
+
+    /// <summary>BL135 §4 Batch 3b-ii: a zero-line visit cannot be marked reviewed until it carries a
+    /// <c>NoCharge</c> office financial disposition recording why no work is billed. Maps to 409.</summary>
+    public static readonly Error ReviewBlockedZeroLineDispositionRequired =
+        Error.Create(
+            "ActualWork.ReviewBlockedZeroLineDispositionRequired",
+            "This visit has no line items and needs a no-charge disposition before it can be reviewed.");
 }
