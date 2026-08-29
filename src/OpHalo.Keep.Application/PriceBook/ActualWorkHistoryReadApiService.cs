@@ -30,11 +30,19 @@ public sealed record ActualWorkLineHistoryEntry(
 /// the current recorder from the transfer-candidate list (a "transfer" back to the current holder
 /// is a meaningless no-op that would still write an audit event) and the name to identify who
 /// holds the Draft. Both stay null for the recorder's own view and are never exposed to field
-/// users (who receive only the <c>OpenDraftHeldByOther</c> boolean).</para></summary>
+/// users (who receive only the <c>OpenDraftHeldByOther</c> boolean).</para>
+/// <para><see cref="DefaultPerformedByAccountUserId"/> and <see cref="DefaultPerformerDisplayName"/>
+/// carry the Draft's persisted ticket-default performer (ADR-494 D2, 4c-i). They are the
+/// resume-after-reload signal the capture composer gates its whole add region on: a server-persisted
+/// office-transcription default must reappear on the client after a reload, not silently vanish.
+/// Both are null while no default is set. Populated for the recorder's own view <i>and</i> the
+/// Owner/Admin read-only view — this is not recorder identity, it is which technician the work is
+/// attributed to.</para></summary>
 public sealed record ActualWorkOpenDraftEntry(
     Guid Id, ActualWorkStatus Status, ActualWorkOutcome? Outcome, string? CompletionNote,
     DateTime? SubmittedAtUtc, Guid ConcurrencyVersion, bool IsRecorder,
     Guid? RecorderAccountUserId, string? RecorderDisplayName,
+    Guid? DefaultPerformedByAccountUserId, string? DefaultPerformerDisplayName,
     IReadOnlyList<ActualWorkLineHistoryEntry> Lines);
 
 /// <summary>A submitted, immutable visit — no <c>ConcurrencyVersion</c>, since nothing here is ever
@@ -117,10 +125,20 @@ public sealed class ActualWorkHistoryReadApiService(
             var draft = await persistence.GetOpenDraftForRequestAsync(currentUser.AccountId, requestId, ct);
             if (draft is not null)
             {
+                // Persisted ticket-default performer (4c-i): resolved once here and surfaced to both
+                // the recorder and the Owner/Admin read-only view — it is work attribution, not
+                // recorder identity. Null name when no default is set or the user has since been
+                // removed; the composer only needs the id to un-gate its add region.
+                var defaultPerformerDisplayName = draft.DefaultPerformedByAccountUserId is { } defaultPerformerId
+                    ? await operatePersistence.GetActorDisplayNameAsync(defaultPerformerId, ct)
+                    : null;
+
                 var isRecorder = draft.RecorderAccountUserId == currentUser.UserId;
                 if (isRecorder)
                 {
-                    openDraft = ToOpenDraftEntry(draft, isRecorder: true, recorderAccountUserId: null, recorderDisplayName: null);
+                    openDraft = ToOpenDraftEntry(
+                        draft, isRecorder: true, recorderAccountUserId: null, recorderDisplayName: null,
+                        defaultPerformerDisplayName);
                 }
                 else if (isOwnerOrAdmin)
                 {
@@ -129,7 +147,8 @@ public sealed class ActualWorkHistoryReadApiService(
                     // transfer-candidate list.
                     var recorderDisplayName = await operatePersistence.GetActorDisplayNameAsync(draft.RecorderAccountUserId, ct);
                     openDraft = ToOpenDraftEntry(
-                        draft, isRecorder: false, draft.RecorderAccountUserId, recorderDisplayName);
+                        draft, isRecorder: false, draft.RecorderAccountUserId, recorderDisplayName,
+                        defaultPerformerDisplayName);
                 }
                 else
                 {
@@ -147,9 +166,11 @@ public sealed class ActualWorkHistoryReadApiService(
     }
 
     private static ActualWorkOpenDraftEntry ToOpenDraftEntry(
-        ActualWork visit, bool isRecorder, Guid? recorderAccountUserId, string? recorderDisplayName) => new(
+        ActualWork visit, bool isRecorder, Guid? recorderAccountUserId, string? recorderDisplayName,
+        string? defaultPerformerDisplayName) => new(
         visit.Id, visit.Status, visit.Outcome, visit.CompletionNote, visit.SubmittedAtUtc,
-        visit.ConcurrencyVersion, isRecorder, recorderAccountUserId, recorderDisplayName, ToLineEntries(visit));
+        visit.ConcurrencyVersion, isRecorder, recorderAccountUserId, recorderDisplayName,
+        visit.DefaultPerformedByAccountUserId, defaultPerformerDisplayName, ToLineEntries(visit));
 
     private static ActualWorkSubmittedVisitEntry ToSubmittedVisitEntry(ActualWork visit) => new(
         visit.Id, visit.Status, visit.Outcome, visit.CompletionNote, visit.SubmittedAtUtc, ToLineEntries(visit));

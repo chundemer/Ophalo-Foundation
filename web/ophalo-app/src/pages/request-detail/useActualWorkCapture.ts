@@ -2,6 +2,17 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { api, ApiError, type ActualWorkHistoryResult } from "../../lib/apiClient";
 
 /**
+ * ADR-494 D2 (4c-i): the UI-only entry intent chosen on the card before a Draft is created. Not a
+ * persisted `EntrySource` — only the interaction branch:
+ * - `record-mine` — the caller is the technician; the Draft is created with the caller as its
+ *   explicit ticket-default performer, shown preset in the composer.
+ * - `transcribe` — an office user recording a paper ticket; the Draft is created with no default,
+ *   and the composer's entire add region stays disabled until a performer is selected and
+ *   persisted via `setActualWorkDefaultPerformer` (survives reload).
+ */
+export type ActualWorkEntryIntent = "record-mine" | "transcribe";
+
+/**
  * Batch 5b, build-log/129: mirrors useProposedScopeCapture's probe/draft/modal state machine.
  * The only read path is the visit-history endpoint (Batch 5a). `canCaptureActualWork` (GAP-055:
  * `RequestsOperate` + `ActualWorkCapture`, not active-Responsible participation) separates a
@@ -63,7 +74,7 @@ export const ACTUAL_WORK_CONFLICT_NOTICE =
 export const ACTUAL_WORK_RECONCILE_RELOAD_FAILURE_NOTICE =
   "Unable to refresh this visit. Check your connection and try again.";
 
-export function useActualWorkCapture(requestId: string) {
+export function useActualWorkCapture(requestId: string, currentAccountUserId?: string) {
   const [state, setState] = useState<ActualWorkCaptureState>({ status: "loading" });
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [conflictNotice, setConflictNotice] = useState<string | null>(null);
@@ -102,14 +113,23 @@ export function useActualWorkCapture(requestId: string) {
     return next;
   }, [requestId]);
 
-  const startCapture = useCallback(async () => {
+  const startCapture = useCallback(async (intent: ActualWorkEntryIntent = "transcribe") => {
     if (state.status === "draft") {
       setIsModalOpen(true);
       return;
     }
     if (state.status !== "no-draft") return;
+    // "Record my work" seeds the Draft with the caller as its ticket-default performer; "Transcribe
+    // work" (and the legacy no-arg call) creates with no default and the composer gates its add
+    // region until one is persisted.
+    const presetPerformerId =
+      intent === "record-mine" && currentAccountUserId ? currentAccountUserId : null;
     try {
-      const created = await api.createActualWork({ requestId });
+      const created = await api.createActualWork(
+        presetPerformerId
+          ? { requestId, defaultPerformedByAccountUserId: presetPerformerId }
+          : { requestId },
+      );
       setState({
         status: "draft",
         draft: {
@@ -120,6 +140,8 @@ export function useActualWorkCapture(requestId: string) {
           submittedAtUtc: null,
           concurrencyVersion: created.concurrencyVersion,
           isRecorder: true,
+          defaultPerformedByAccountUserId: presetPerformerId,
+          defaultPerformerDisplayName: null,
           lines: [],
         },
         submittedCount: state.submittedCount,
@@ -145,7 +167,7 @@ export function useActualWorkCapture(requestId: string) {
       }
       setState({ status: "error", message: "Unable to start a visit." });
     }
-  }, [state, requestId, refetchDraft]);
+  }, [state, requestId, currentAccountUserId, refetchDraft]);
 
   // Session-scoped: set when a submit succeeds while the composer is showing its own submitted
   // confirmation (see markSubmitted below). closeModal only reprobes card state (draft ->
@@ -187,6 +209,40 @@ export function useActualWorkCapture(requestId: string) {
   );
 
   const clearConflictNotice = useCallback(() => setConflictNotice(null), []);
+
+  // ADR-494 D2 (4c-i): the office-transcription path persists the selected technician as the Draft's
+  // ticket default. Recorder-only, Draft-only, existing version protocol. On success the rotated
+  // version + resolved performer name are pulled back through `refetchDraft` so the composer un-gates
+  // its add region from the authoritative projection (and stays un-gated across a reload). A stale
+  // version / non-Draft collapses onto the reconcile path; a 422 (`PerformerIneligible`) is returned
+  // so the selector can surface it without disturbing state.
+  const setDefaultPerformer = useCallback(
+    async (performerId: string | null): Promise<"set" | "ineligible" | "stale" | "failed"> => {
+      if (state.status !== "draft") return "stale";
+      try {
+        await api.setActualWorkDefaultPerformer(
+          state.draft.id,
+          performerId,
+          state.draft.concurrencyVersion,
+        );
+        await refetchDraft();
+        return "set";
+      } catch (err) {
+        if (err instanceof ApiError && err.code === "ActualWork.PerformerIneligible") {
+          return "ineligible";
+        }
+        if (
+          err instanceof ApiError &&
+          (err.code === "ActualWork.VersionMismatch" || err.code === "ActualWork.NotDraft")
+        ) {
+          await reconcileAfterConflict();
+          return "stale";
+        }
+        return "failed";
+      }
+    },
+    [state, refetchDraft, reconcileAfterConflict],
+  );
 
   // After a successful submit the draft is gone (Draft -> Submitted), but the composer keeps
   // showing its own submitted confirmation until the user closes it (mirrors
@@ -253,6 +309,7 @@ export function useActualWorkCapture(requestId: string) {
     startCapture,
     closeModal,
     refetchDraft,
+    setDefaultPerformer,
     conflictNotice,
     reconcileAfterConflict,
     retryReconciliation,

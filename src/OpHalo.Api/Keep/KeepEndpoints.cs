@@ -1265,6 +1265,10 @@ public static class KeepEndpoints
         // Populated only for the Owner/Admin non-recorder view (1a-ii recovery UI); null otherwise.
         recorderAccountUserId = draft.RecorderAccountUserId,
         recorderDisplayName = draft.RecorderDisplayName,
+        // ADR-494 D2 (4c-i): persisted ticket-default performer, surfaced to both the recorder and
+        // the Owner/Admin read-only view so the composer can restore its add region after a reload.
+        defaultPerformedByAccountUserId = draft.DefaultPerformedByAccountUserId,
+        defaultPerformerDisplayName = draft.DefaultPerformerDisplayName,
         lines = draft.Lines.Select(ToLineHistoryResponse),
     };
 

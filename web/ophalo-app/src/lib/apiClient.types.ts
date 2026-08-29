@@ -1167,6 +1167,11 @@ export interface GetFieldScopeSearchParams {
 // Direct Actual Work (ADR-487, build-log/129, Batch 5b) — price-blind field capture composer.
 export interface ActualWorkCreateBody {
   requestId: string;
+  /** ADR-494 D2 (4c-i): "Record my work" sends the caller's own account-user id as the Draft's
+   * ticket-default performer; "Transcribe work" omits it and persists one later via
+   * `setActualWorkDefaultPerformer`. The server revalidates the id (active member holding
+   * `RequestsOperate` + `ActualWorkCapture`) and 422s an ineligible one. */
+  defaultPerformedByAccountUserId?: string | null;
 }
 
 export interface ActualWorkResult {
@@ -1181,6 +1186,11 @@ export interface ActualWorkAddLineBody {
   offCatalogDescription?: string | null;
   actualQuantity: number;
   note?: string | null;
+  /** ADR-494 D2 (4c-i): an explicit per-line performer. Omitted, the server seeds the line from the
+   * Draft's persisted ticket default; with no default and no explicit performer it returns
+   * `ActualWork.PerformerRequired`. A supplied id is revalidated; an inherited default is frozen at
+   * selection and never rechecked. */
+  performedByAccountUserId?: string | null;
 }
 
 export interface ActualWorkUpdateLineBody {
@@ -1229,6 +1239,13 @@ export interface ActualWorkOpenDraftEntry {
    * view and are never sent to field users. */
   recorderAccountUserId?: string | null;
   recorderDisplayName?: string | null;
+  /** ADR-494 D2 (4c-i): the Draft's persisted ticket-default performer. Null until one is set. The
+   * capture composer keeps its entire add region — direct add-line, assembly expansion, and
+   * nudge-driven adds — disabled until this is populated (the office-transcription path selects and
+   * persists a performer first; it must survive a reload). Populated for the recorder's own view
+   * and the Owner/Admin read-only view alike — this is work attribution, not recorder identity. */
+  defaultPerformedByAccountUserId?: string | null;
+  defaultPerformerDisplayName?: string | null;
   lines: ActualWorkLineHistoryEntry[];
 }
 
@@ -1243,6 +1260,20 @@ export interface ActualWorkRecorderCandidateItem {
 
 export interface ActualWorkRecorderCandidatesResult {
   candidates: ActualWorkRecorderCandidateItem[];
+}
+
+/** ADR-494 D2 (4c-i): one member who may be recorded as the performer of Actual Work — an active
+ * account member holding `RequestsOperate` + `ActualWorkCapture`. Unlike the recorder-candidate
+ * read this is not Owner/Admin-only: an Operator office transcriber selects the technician a paper
+ * ticket belongs to. Returned by `getActualWorkPerformerCandidates`. */
+export interface ActualWorkPerformerCandidateItem {
+  accountUserId: string;
+  displayName: string;
+  role: string;
+}
+
+export interface ActualWorkPerformerCandidatesResult {
+  candidates: ActualWorkPerformerCandidateItem[];
 }
 
 export interface ActualWorkTransferRecorderBody {

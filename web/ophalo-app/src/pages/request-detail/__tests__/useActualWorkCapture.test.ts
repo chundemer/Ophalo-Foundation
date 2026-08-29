@@ -12,6 +12,7 @@ import type { ActualWorkHistoryResult } from "../../../lib/apiClient";
 const mockGetActualWorkHistoryForRequest = vi.fn();
 const mockCreateActualWork = vi.fn();
 const mockTransferActualWorkDraftRecorder = vi.fn();
+const mockSetActualWorkDefaultPerformer = vi.fn();
 
 vi.mock("../../../lib/apiClient", async () => {
   const actual = await vi.importActual<typeof import("../../../lib/apiClient")>("../../../lib/apiClient");
@@ -22,9 +23,23 @@ vi.mock("../../../lib/apiClient", async () => {
       getActualWorkHistoryForRequest: (...args: unknown[]) => mockGetActualWorkHistoryForRequest(...args),
       createActualWork: (...args: unknown[]) => mockCreateActualWork(...args),
       transferActualWorkDraftRecorder: (...args: unknown[]) => mockTransferActualWorkDraftRecorder(...args),
+      setActualWorkDefaultPerformer: (...args: unknown[]) => mockSetActualWorkDefaultPerformer(...args),
     },
   };
 });
+
+const DRAFT_NO_DEFAULT = {
+  id: "draft-1",
+  status: "Draft",
+  outcome: null,
+  completionNote: null,
+  submittedAtUtc: null,
+  concurrencyVersion: "v1",
+  isRecorder: true,
+  defaultPerformedByAccountUserId: null,
+  defaultPerformerDisplayName: null,
+  lines: [],
+};
 
 function history(overrides: Partial<ActualWorkHistoryResult> = {}): ActualWorkHistoryResult {
   return {
@@ -127,9 +142,58 @@ describe("useActualWorkCapture", () => {
         submittedAtUtc: null,
         concurrencyVersion: "v1",
         isRecorder: true,
+        defaultPerformedByAccountUserId: null,
+        defaultPerformerDisplayName: null,
         lines: [],
       },
       submittedCount: 0,
+    });
+  });
+
+  it("startCapture('record-mine') creates the Draft with the caller as its ticket-default performer", async () => {
+    mockGetActualWorkHistoryForRequest.mockResolvedValueOnce(history());
+    mockCreateActualWork.mockResolvedValueOnce({
+      id: "draft-3",
+      requestId: "request-1",
+      status: "Draft",
+      concurrencyVersion: "v1",
+    });
+    const { result } = renderHook(() => useActualWorkCapture("request-1", "me-au-1"));
+    await waitFor(() => expect(result.current.state.status).toBe("no-draft"));
+
+    await act(async () => {
+      await result.current.startCapture("record-mine");
+    });
+
+    expect(mockCreateActualWork).toHaveBeenCalledWith({
+      requestId: "request-1",
+      defaultPerformedByAccountUserId: "me-au-1",
+    });
+    expect(result.current.state).toMatchObject({
+      status: "draft",
+      draft: { defaultPerformedByAccountUserId: "me-au-1" },
+    });
+  });
+
+  it("startCapture('transcribe') creates the Draft with no default performer", async () => {
+    mockGetActualWorkHistoryForRequest.mockResolvedValueOnce(history());
+    mockCreateActualWork.mockResolvedValueOnce({
+      id: "draft-4",
+      requestId: "request-1",
+      status: "Draft",
+      concurrencyVersion: "v1",
+    });
+    const { result } = renderHook(() => useActualWorkCapture("request-1", "me-au-1"));
+    await waitFor(() => expect(result.current.state.status).toBe("no-draft"));
+
+    await act(async () => {
+      await result.current.startCapture("transcribe");
+    });
+
+    expect(mockCreateActualWork).toHaveBeenCalledWith({ requestId: "request-1" });
+    expect(result.current.state).toMatchObject({
+      status: "draft",
+      draft: { defaultPerformedByAccountUserId: null },
     });
   });
 
@@ -491,5 +555,76 @@ describe("useActualWorkCapture — recorder transfer (1a-ii-b)", () => {
 
     expect(outcome).toBe("failed");
     expect(result.current.state.status).toBe("owner-recovery");
+  });
+
+  describe("setDefaultPerformer (office-transcription path)", () => {
+    async function renderInTranscribeDraft() {
+      mockGetActualWorkHistoryForRequest.mockResolvedValueOnce(history({ openDraft: DRAFT_NO_DEFAULT }));
+      const hook = renderHook(() => useActualWorkCapture("request-1", "me-au-1"));
+      await waitFor(() => expect(hook.result.current.state.status).toBe("draft"));
+      return hook;
+    }
+
+    it("persists the performer, then applies the refreshed projection (rotated version + name)", async () => {
+      const { result } = await renderInTranscribeDraft();
+      mockSetActualWorkDefaultPerformer.mockResolvedValueOnce({ concurrencyVersion: "v2" });
+      mockGetActualWorkHistoryForRequest.mockResolvedValueOnce(
+        history({
+          openDraft: {
+            ...DRAFT_NO_DEFAULT,
+            concurrencyVersion: "v2",
+            defaultPerformedByAccountUserId: "tech-au-9",
+            defaultPerformerDisplayName: "Sam Tech",
+          },
+        }),
+      );
+
+      let outcome: string | undefined;
+      await act(async () => {
+        outcome = await result.current.setDefaultPerformer("tech-au-9");
+      });
+
+      expect(outcome).toBe("set");
+      expect(mockSetActualWorkDefaultPerformer).toHaveBeenCalledWith("draft-1", "tech-au-9", "v1");
+      expect(result.current.state).toMatchObject({
+        status: "draft",
+        draft: {
+          concurrencyVersion: "v2",
+          defaultPerformedByAccountUserId: "tech-au-9",
+          defaultPerformerDisplayName: "Sam Tech",
+        },
+      });
+    });
+
+    it("returns 'ineligible' on a 422 without disturbing state", async () => {
+      const { result } = await renderInTranscribeDraft();
+      mockSetActualWorkDefaultPerformer.mockRejectedValueOnce(
+        new ApiError(422, "ActualWork.PerformerIneligible", "That team member can't be recorded as the performer."),
+      );
+
+      let outcome: string | undefined;
+      await act(async () => {
+        outcome = await result.current.setDefaultPerformer("tech-au-9");
+      });
+
+      expect(outcome).toBe("ineligible");
+      expect(result.current.state).toMatchObject({ draft: { defaultPerformedByAccountUserId: null } });
+    });
+
+    it("returns 'stale' and reconciles on a version mismatch", async () => {
+      const { result } = await renderInTranscribeDraft();
+      mockSetActualWorkDefaultPerformer.mockRejectedValueOnce(
+        new ApiError(409, "ActualWork.VersionMismatch", "changed by someone else"),
+      );
+      mockGetActualWorkHistoryForRequest.mockResolvedValueOnce(history({ openDraft: DRAFT_NO_DEFAULT }));
+
+      let outcome: string | undefined;
+      await act(async () => {
+        outcome = await result.current.setDefaultPerformer("tech-au-9");
+      });
+
+      expect(outcome).toBe("stale");
+      expect(result.current.conflictNotice).toBe(ACTUAL_WORK_CONFLICT_NOTICE);
+    });
   });
 });

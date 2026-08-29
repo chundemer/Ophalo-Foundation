@@ -60,8 +60,38 @@ public sealed class ActualWorkHistoryApiTests : IClassFixture<KeepApiWebFactory>
         // Owner/Admin non-recorder view that drives the transfer-recovery control.
         Assert.Equal(JsonValueKind.Null, openDraft.GetProperty("recorderAccountUserId").ValueKind);
         Assert.Equal(JsonValueKind.Null, openDraft.GetProperty("recorderDisplayName").ValueKind);
+        // 4c-i: a Draft created with no ticket default carries null performer fields — this is the
+        // office-transcription entry state the composer gates its add region on.
+        Assert.Equal(JsonValueKind.Null, openDraft.GetProperty("defaultPerformedByAccountUserId").ValueKind);
+        Assert.Equal(JsonValueKind.Null, openDraft.GetProperty("defaultPerformerDisplayName").ValueKind);
         Assert.False(body.GetProperty("openDraftHeldByOther").GetBoolean());
         Assert.Equal(1, body.GetProperty("submittedVisits").GetArrayLength());
+    }
+
+    [Fact]
+    public async Task GetHistory_RecorderView_ExposesPersistedDefaultPerformer()
+    {
+        // 4c-i: a server-persisted ticket-default performer must reappear on the client after a
+        // reload — the recorder's own history read carries the id and a resolved display name so the
+        // composer can restore its add region without re-selecting.
+        var (accountId, ownerId, _) = await SeedAccountAsync("history-default-performer");
+        await EnrollAsync(accountId, ownerId);
+        var operatorId = await SeedOperatorAsync(accountId, "history-default-performer");
+        var operatorCookie = await GetCookieAsync(operatorId, accountId);
+        var requestId = await SeedRequestAsync(accountId);
+        await SeedWatcherAsync(requestId, accountId, operatorId);
+        await CreateDraftAsync(operatorCookie, requestId, defaultPerformedByAccountUserId: operatorId);
+
+        var response = await AuthRequest(operatorCookie).GetAsync($"/keep/pricebook/actual-work/request/{requestId}/history");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.True(body.TryGetProperty("openDraft", out var openDraft));
+        Assert.True(openDraft.GetProperty("isRecorder").GetBoolean());
+        Assert.Equal(operatorId, openDraft.GetProperty("defaultPerformedByAccountUserId").GetGuid());
+        Assert.Equal(
+            "operator@history-default-performer.com",
+            openDraft.GetProperty("defaultPerformerDisplayName").GetString());
     }
 
     [Fact]
@@ -124,7 +154,8 @@ public sealed class ActualWorkHistoryApiTests : IClassFixture<KeepApiWebFactory>
         var operatorCookie = await GetCookieAsync(operatorId, accountId);
         var requestId = await SeedRequestAsync(accountId);
         await SeedWatcherAsync(requestId, accountId, operatorId);
-        var (_, draftVersion) = await CreateDraftAsync(operatorCookie, requestId);
+        var (_, draftVersion) = await CreateDraftAsync(
+            operatorCookie, requestId, defaultPerformedByAccountUserId: operatorId);
 
         var response = await AuthRequest(ownerCookie).GetAsync($"/keep/pricebook/actual-work/request/{requestId}/history");
 
@@ -133,6 +164,9 @@ public sealed class ActualWorkHistoryApiTests : IClassFixture<KeepApiWebFactory>
         Assert.True(body.TryGetProperty("openDraft", out var openDraft));
         Assert.Equal(draftVersion, openDraft.GetProperty("concurrencyVersion").GetGuid());
         Assert.False(openDraft.GetProperty("isRecorder").GetBoolean());
+        // 4c-i: the ticket-default performer is work attribution, not recorder identity — the
+        // Owner/Admin read-only view carries it too.
+        Assert.Equal(operatorId, openDraft.GetProperty("defaultPerformedByAccountUserId").GetGuid());
         // 1a-ii: the Owner/Admin non-recorder view carries the current recorder's identity so the
         // recovery control can name the holder and exclude them from the candidate list. Name falls
         // back to email when the user has no display name.
@@ -303,9 +337,13 @@ public sealed class ActualWorkHistoryApiTests : IClassFixture<KeepApiWebFactory>
         Assert.Equal(ActualWorkCommitResult.Committed, commitResult);
     }
 
-    private async Task<(Guid ActualWorkId, Guid ConcurrencyVersion)> CreateDraftAsync(string cookie, Guid requestId)
+    private async Task<(Guid ActualWorkId, Guid ConcurrencyVersion)> CreateDraftAsync(
+        string cookie, Guid requestId, Guid? defaultPerformedByAccountUserId = null)
     {
-        var response = await AuthRequest(cookie).PostAsJsonAsync("/keep/pricebook/actual-work/create", new { requestId });
+        object payload = defaultPerformedByAccountUserId is { } performer
+            ? new { requestId, defaultPerformedByAccountUserId = performer }
+            : new { requestId };
+        var response = await AuthRequest(cookie).PostAsJsonAsync("/keep/pricebook/actual-work/create", payload);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
         return (body.GetProperty("id").GetGuid(), body.GetProperty("concurrencyVersion").GetGuid());

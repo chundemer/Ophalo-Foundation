@@ -240,6 +240,8 @@ import type {
   ActualWorkHistoryResult,
   ActualWorkRecorderCandidateItem,
   ActualWorkRecorderCandidatesResult,
+  ActualWorkPerformerCandidateItem,
+  ActualWorkPerformerCandidatesResult,
   ActualWorkTransferRecorderBody,
   ActualWorkNudgeSuggestionFieldRowResponse,
   ActualWorkNudgeFieldResultResponse,
@@ -388,6 +390,8 @@ export type {
   ActualWorkHistoryResult,
   ActualWorkRecorderCandidateItem,
   ActualWorkRecorderCandidatesResult,
+  ActualWorkPerformerCandidateItem,
+  ActualWorkPerformerCandidatesResult,
   ActualWorkTransferRecorderBody,
   ActualWorkNudgeSuggestionFieldRowResponse,
   ActualWorkNudgeFieldResultResponse,
@@ -985,6 +989,20 @@ export const api = {
   // 1a-ii — Owner/Admin Draft recorder-transfer recovery.
   getActualWorkRecorderCandidates: () =>
     apiFetch<ActualWorkRecorderCandidatesResult>("/keep/pricebook/actual-work/recorder-candidates"),
+  // 4c-i (ADR-494 D2): performer candidates for the capture composer's office-transcription path.
+  // Operator-callable (not Owner/Admin-only) — the transcriber picks the technician a ticket
+  // belongs to.
+  getActualWorkPerformerCandidates: () =>
+    apiFetch<ActualWorkPerformerCandidatesResult>("/keep/pricebook/actual-work/performer-candidates"),
+  // Recorder-only Draft ticket-default performer set/clear. `performerId` null clears it (a later
+  // unperformered add-line then fails `PerformerRequired`). Sends the version header, returns the
+  // rotated version like every other Draft mutation.
+  setActualWorkDefaultPerformer: (actualWorkId: string, performerId: string | null, version: string) =>
+    apiFetch<ActualWorkConcurrencyVersionResult>(`/keep/pricebook/actual-work/${actualWorkId}/default-performer`, {
+      method: "PUT",
+      headers: { "X-Keep-ActualWork-Version": version },
+      body: JSON.stringify({ performedByAccountUserId: performerId }),
+    }),
   transferActualWorkDraftRecorder: (actualWorkId: string, body: ActualWorkTransferRecorderBody, version: string) =>
     apiFetch<ActualWorkConcurrencyVersionResult>(`/keep/pricebook/actual-work/${actualWorkId}/transfer-recorder`, {
       method: "POST",
