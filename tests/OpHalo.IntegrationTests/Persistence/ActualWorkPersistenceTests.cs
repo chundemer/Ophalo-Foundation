@@ -233,12 +233,13 @@ public sealed class ActualWorkPersistenceTests : IClassFixture<PostgresFixture>,
         await using var ctx = CreateContext();
         var persistence = new EfActualWorkPersistence(ctx);
         var visit = ActualWork.Create(AccountId, RequestId, OwnerId, technician).Value;
-        // Seeded from the ticket default.
-        var seededLine = ActualWorkTestData.AddLine(
-            visit, null, null, "Custom labor", null, 1m, null, null, null, null, OwnerId).Value;
-        // Explicit performer overrides the default.
-        var explicitLine = ActualWorkTestData.AddLine(
-            visit, null, null, "Second labor", null, 2m, null, null, null, null, OwnerId,
+        // Domain directly, not the helper: the helper substitutes an explicit performer for an
+        // omitted one, which would defeat the ticket-default seeding this test checks.
+        var seededLine = visit.AddLine(
+            null, null, "Custom labor", null, 1m, null, null, null, null, OwnerId,
+            performedByAccountUserId: null).Value;
+        var explicitLine = visit.AddLine(
+            null, null, "Second labor", null, 2m, null, null, null, null, OwnerId,
             performedByAccountUserId: otherTechnician).Value;
         await persistence.AddAsync(visit, CancellationToken.None);
 
@@ -281,10 +282,11 @@ public sealed class ActualWorkPersistenceTests : IClassFixture<PostgresFixture>,
                 (id, account_id, actual_work_id, catalog_item_id, price_book_version_line_id,
                  display_name_snapshot, unit_of_measure_snapshot, actual_quantity,
                  sell_price_snapshot, standard_expected_direct_cost_snapshot, note,
-                 commercial_baseline_source_line_id, created_at_utc, updated_at_utc)
+                 commercial_baseline_source_line_id, performed_by_account_user_id,
+                 created_at_utc, updated_at_utc)
             VALUES
                 ({Guid.NewGuid()}, {AccountId}, {visitId}, NULL, {priceBookVersionLineId},
-                 'Bad row', NULL, 1, NULL, NULL, NULL, NULL, {Now}, {Now})
+                 'Bad row', NULL, 1, NULL, NULL, NULL, NULL, {Guid.NewGuid()}, {Now}, {Now})
             """));
 
         Assert.Equal(PostgresErrorCodes.CheckViolation, ex.SqlState);
@@ -302,10 +304,11 @@ public sealed class ActualWorkPersistenceTests : IClassFixture<PostgresFixture>,
                 (id, account_id, actual_work_id, catalog_item_id, price_book_version_line_id,
                  display_name_snapshot, unit_of_measure_snapshot, actual_quantity,
                  sell_price_snapshot, standard_expected_direct_cost_snapshot, note,
-                 commercial_baseline_source_line_id, created_at_utc, updated_at_utc)
+                 commercial_baseline_source_line_id, performed_by_account_user_id,
+                 created_at_utc, updated_at_utc)
             VALUES
                 ({Guid.NewGuid()}, {AccountId}, {visitId}, {catalogItemId}, NULL,
-                 'Bad row', NULL, 1, 100, 50, NULL, NULL, {Now}, {Now})
+                 'Bad row', NULL, 1, 100, 50, NULL, NULL, {Guid.NewGuid()}, {Now}, {Now})
             """));
 
         Assert.Equal(PostgresErrorCodes.CheckViolation, ex.SqlState);
@@ -323,10 +326,11 @@ public sealed class ActualWorkPersistenceTests : IClassFixture<PostgresFixture>,
                 (id, account_id, actual_work_id, catalog_item_id, price_book_version_line_id,
                  display_name_snapshot, unit_of_measure_snapshot, actual_quantity,
                  sell_price_snapshot, standard_expected_direct_cost_snapshot, note,
-                 commercial_baseline_source_line_id, created_at_utc, updated_at_utc)
+                 commercial_baseline_source_line_id, performed_by_account_user_id,
+                 created_at_utc, updated_at_utc)
             VALUES
                 ({Guid.NewGuid()}, {AccountId}, {visitId}, {catalogItemId}, NULL,
-                 'Catalog item with no price book entry', NULL, 1, NULL, NULL, NULL, NULL, {Now}, {Now})
+                 'Catalog item with no price book entry', NULL, 1, NULL, NULL, NULL, NULL, {Guid.NewGuid()}, {Now}, {Now})
             """);
 
         var count = await ctx.Set<ActualWorkLine>().CountAsync(x => x.ActualWorkId == visitId);
@@ -351,10 +355,11 @@ public sealed class ActualWorkPersistenceTests : IClassFixture<PostgresFixture>,
                 (id, account_id, actual_work_id, catalog_item_id, price_book_version_line_id,
                  display_name_snapshot, unit_of_measure_snapshot, actual_quantity,
                  sell_price_snapshot, standard_expected_direct_cost_snapshot, note,
-                 commercial_baseline_source_line_id, created_at_utc, updated_at_utc)
+                 commercial_baseline_source_line_id, performed_by_account_user_id,
+                 created_at_utc, updated_at_utc)
             VALUES
                 ({Guid.NewGuid()}, {AccountId}, {visitId}, {unrelatedCatalogItemId}, {priceBookVersionLineId},
-                 'Mismatched snapshot', NULL, 1, 450, 210, NULL, NULL, {Now}, {Now})
+                 'Mismatched snapshot', NULL, 1, 450, 210, NULL, NULL, {Guid.NewGuid()}, {Now}, {Now})
             """));
 
         Assert.Equal(PostgresErrorCodes.ForeignKeyViolation, ex.SqlState);
