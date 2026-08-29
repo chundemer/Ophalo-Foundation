@@ -408,18 +408,19 @@ correction applied pre-commit: partial-component resolution + client negative ch
 full frontend suite **799/799** (90 files, +4), `tsc --noEmit` clean, `check:tokens` passed,
 `git diff --check` clean.
 
-### Claude handoff — 4c-i seam prep is the next target (Session 1: `4c-i-r` → `4c-i-0a` → `4c-i-0b`); see session plan below
+### Claude handoff — 4c-i seam prep (Session 1) COMPLETE; next target is Session 2 (`4c-i-a-1`); see session plan below
 
 **BL136 P (workflow/mechanical preflight) is complete.** ADR-494 (D1–D12) committed at `2118293`;
 the ADR-487 wording fix + 4c-i seam preflight rev. 3 committed at `644aa4a`; the rev. 4 docs
 (ADR-494, BL136, BL136 P preflight, session-log) committed at `52e490d`.
 
-**Next target — Session 1 (seam prep), three independently committed slices, no production code:**
-`4c-i-r` (developer-only reset/seed tool + usage note — **checked in inert; not executed this
-session**), then `4c-i-0a` (unit-test helper extraction), then `4c-i-0b` (integration-test helper
-extraction). The reset tool is run **only later, by Christian, immediately before `4c-i-mig`**, to
-validate the strict migration on a local DB — never during seam prep, never from app
-migration/startup/deploy (ADR-494 D12).
+**Session 1 (seam prep) — COMPLETE (2026-08-29).** `4c-i-r` `ea4f9b8` (developer-only reset tool +
+runbook note, checked in inert — **not executed**), `4c-i-0a` `79008bd` (unit-test
+`ActualWorkTestData` seam; `ActualWork`-filtered unit 91/91), `4c-i-0b` `03a081f` (integration
+`ActualWorkTestData` seam under `Support/`; 18 `AddLine` sites across 9 files; `ActualWork`-filtered
+integration 222/222, 0 warnings). No production code. The reset tool is run **only later, by
+Christian, immediately before `4c-i-mig`**, to validate the strict migration on a local DB — never
+during seam prep, never from app migration/startup/deploy (ADR-494 D12).
 
 **rev. 4 changes (committed `52e490d`), from the advisor review:**
 - **Assembly expansion is a third line-creation route.** `EfActualWorkAssemblyExpansionPersistence`
@@ -447,7 +448,7 @@ total / ≤ 8 production / ≤ 1 mutation family — proven per-commit counts in
 | # | Session | Produces | Depends on | Notes |
 |---|---|---|---|---|
 | — | *done (`52e490d`)* | rev. 4 docs committed | approval | no code |
-| 1 | seam prep | `4c-i-r` + `4c-i-0a` + `4c-i-0b` | — | all no-behaviour-change; fork the bulk test migration; may split if context tight |
+| 1 | *done* | `4c-i-r` `ea4f9b8` + `4c-i-0a` `79008bd` + `4c-i-0b` `03a081f` | — | seam prep, no behaviour change |
 | 2 | `4c-i-a-1` | domain + persistence + EF config (7 prod + 4 test) | 1 | ends at reviewed diff |
 | — | *Christian* | `4c-i-mig` — author + apply `AddActualWorkPerformer` (`--startup-project src/OpHalo.Keep.Infrastructure`) | 2 | not a Claude session |
 | 3 | `4c-i-a-2` | assembly-expansion outcome contract (3 prod + 1 test) | 2 (not the migration) | |
