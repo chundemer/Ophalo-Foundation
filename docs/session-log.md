@@ -408,7 +408,7 @@ correction applied pre-commit: partial-component resolution + client negative ch
 full frontend suite **799/799** (90 files, +4), `tsc --noEmit` clean, `check:tokens` passed,
 `git diff --check` clean.
 
-### Claude handoff — 4c-i `4c-i-b-2` DONE (`6150363`); next is `4c-i-c` (last commit of the slice); see session plan below
+### Claude handoff — 4c-i `4c-i-c-1` DONE (`4a0d8ff`); next is `4c-i-c-2` (last commit of the slice); see session plan below
 
 **BL136 P (workflow/mechanical preflight) is complete.** ADR-494 (D1–D12) committed at `2118293`;
 the ADR-487 wording fix + 4c-i seam preflight rev. 3 committed at `644aa4a`; the rev. 4 docs
@@ -458,8 +458,9 @@ src/OpHalo.Foundation.Infrastructure/Migrations`). **Not yet deployed** — see 
 breakage (BL136-P preflight rows for those two files); `ActualWorkPersistenceTests` and the full
 unit + architecture suites are green. Do not treat these 8 as regressions — `4c-i-b` fixes them.
 
-**Deploy gate — nothing ships until `4c-i-c`.** `4c-i` is one deployable slice = 9 commits (`4c-i-b`
-split into `b-1` + `b-2`), none
+**Deploy gate — nothing ships until `4c-i-c-2`.** `4c-i` is one deployable slice = 10 commits
+(`4c-i-b` split into `b-1` + `b-2`; `4c-i-c` split into `c-1` + `c-2` — see the `4c-i-c` gate rev
+below), none
 deployed until all merge (ADR-494 D2: the frontend cannot be deferred or the live composer's next
 add-line fails `PerformerRequired`). When the slice is complete: verify prod
 `SELECT count(*) FROM keep_actual_work_lines` is 0 (ADR-494 D1 — expected; no cleanup needed if so),
@@ -514,9 +515,51 @@ existing line's `PerformedByAccountUserId`). No domain / migration / frontend ch
 `~ActualWork` integration **252/252** (+9), `~ActualWork` unit **111/111**, architecture **14/14**,
 `OpHalo.Api` 0 warnings, `git diff --check` clean.
 
-**Next — `4c-i-c`, fresh Claude session.** Minimum functional frontend (6 prod + 3 test); last
-commit of the slice — deploy the whole merged `4c-i` slice after it lands (see the deploy gate
-above).
+**Session 6 (`4c-i-c-1`) — COMPLETE (2026-08-29), `4a0d8ff`.** Open-draft default-performer read +
+api client/hook, 7 files (5 prod + 2 test), 0 mutation families. Preflight drift resolved
+(Christian-approved): BL136-P scoped `4c-i-c` as "`web/ophalo-app` only, 6 prod + 3 test" and named
+`ComposerSearchAndAdd.tsx` / `ComposerQuickActions` / `ComposerNudgePanel` — those are **ProposedScope**
+components; ActualWork's search/add + nudge chips are inline in `ActualWorkComposer.tsx` (one file).
+And the transcribe-path "survives reload" requirement needs the open-draft projection to expose the
+persisted default, which it did not. So `4c-i-c` split into `c-1` (read + client, this commit) and
+`c-2` (card + composer + wiring). `ActualWorkOpenDraftEntry` gains
+`DefaultPerformedByAccountUserId` + `DefaultPerformerDisplayName`, populated for the recorder view
+**and** the Owner/Admin read-only view (work attribution, not recorder identity); name resolved via
+`operatePersistence.GetActorDisplayNameAsync` only when a default is set. API `ToOpenDraftResponse`
+emits both; no new endpoint. Frontend: `apiClient` gains `getActualWorkPerformerCandidates` +
+`setActualWorkDefaultPerformer(id, performerId|null, version)` (version header, rotated version) and
+the optional performer fields on create/add-line body types + `ActualWorkPerformerCandidatesResult`;
+`useActualWorkCapture` gains `ActualWorkEntryIntent`, `startCapture(intent = "transcribe")`
+(`record-mine` + `currentAccountUserId` → create with self as default; `transcribe`/legacy no-arg →
+no default), a `currentAccountUserId?` param, and a recorder-only `setDefaultPerformer` action that
+refetches so the rotated version + resolved name become authoritative (survives reload); `422` →
+`"ineligible"`, version-mismatch / non-`Draft` → reconcile + `"stale"`. Verified: `~ActualWork`
+integration **253/253** (+1), `~ActualWork` unit **111/111**, architecture **14/14**, `OpHalo.Api`
+0 warnings; frontend `tsc` + `check:tokens` clean, full app suite **804/804**; `git diff --check`
+clean.
+
+**Next — `4c-i-c-2`, fresh Claude session.** Card + composer + wiring; last commit of the slice —
+deploy the whole merged `4c-i` slice after it lands (see the deploy gate above). Scope:
+- `ActualWorkCard.tsx` — UI-only "Record my work" vs "Transcribe work" choice in the `no-draft`
+  state, before Draft creation (not a persisted `EntrySource`); calls `onStartCapture(intent)`.
+- `ActualWorkComposer.tsx` — gate the **entire add region** until
+  `draft.defaultPerformedByAccountUserId` is populated: `ActualWorkSearchAndAdd` (direct add-line),
+  `expandAssemblyMutation` (assembly expansion, `:391`), **and** `ActualWorkNudgeChips` (nudge
+  accept). Transcribe path renders a technician selector (candidates via a composer-level
+  `useQuery` on `getActualWorkPerformerCandidates`) that persists through
+  `actualWorkCapture.setDefaultPerformer`; "Record my work" path shows the preset default (name
+  from the projection after the c-1 refetch, or "You" when null and id === self).
+- `RequestDetailContent.tsx` — thread the intent through `onStartCapture`.
+- `RequestDetail.tsx` — pass `currentAccountUserId={meQuery.data?.accountUserId}` into
+  `RequestDetailContent` → `useActualWorkCapture`.
+- Tests (2): `ActualWorkCard.test.tsx` (both entry choices; payload differs),
+  `ActualWorkComposer.test.tsx` (transcribe path blocks add-line **and** expand-assembly until the
+  default persists, then both inherit it).
+- Gate: `check:tokens`, `tsc --noEmit`, full frontend suite; no money field on the field surface;
+  no add-region affordance (line / assembly / nudge) live before a default exists.
+- Note: `ActualWorkPerformerEligibility` does **not** exclude Owner/Admin (only the recorder-
+  *candidate service caller* is Owner/Admin-only) — an Owner holding `RequestsOperate` +
+  `ActualWorkCapture` is a valid "Record my work" performer.
 
 **rev. 4 changes (committed `52e490d`), from the advisor review:**
 - **Assembly expansion is a third line-creation route.** `EfActualWorkAssemblyExpansionPersistence`
@@ -524,7 +567,7 @@ above).
   Locked: expansion uses the persisted ticket default; no default → explicit `PerformerRequired`
   outcome (never `NotDraft`), **no partial writes**; genuine non-`Draft` → still `NotDraft`. New
   commit **`4c-i-a-2`** (3 prod + 1 test); `4c-i-a` renamed `4c-i-a-1`. `4c-i-c` also gates
-  assembly + nudge, not just the line editor.
+  assembly + nudge, not just the line editor (now enforced in `4c-i-c-2`).
 - **Inventory re-derived across all three routes: 13 test files.** Two HTTP-only files
   (`ActualWorkDraftApiTests`, `ActualWorkNudgeFieldReadApiTests`) + `ActualWorkFinancialResolutionApiTests`
   break at `4c-i-b` (their per-file `CreateDraftAsync` must send a default); `ActualWorkAssemblyExpansionPersistenceTests`
@@ -535,10 +578,12 @@ above).
   `ParseActualWorkVersion` + `ActualWorkConcurrencyVersionResponse`; migration deploys through the
   normal production path, prod has zero rows).
 
-**4c-i is one deployable slice = nine commits** (`4c-i-b` split into `b-1` + `b-2` at the file
-gate, Christian-approved), none deployed until all merge; every commit ≤ 12
-total / ≤ 8 production / ≤ 1 mutation family — proven per-commit counts in
-[BL136 P preflight → Slice 4c-i](build-log/136-P-preflight.md).
+**4c-i is one deployable slice = ten commits** (`4c-i-b` split into `b-1` + `b-2`; `4c-i-c` split
+into `c-1` + `c-2` — both Christian-approved at the file gate), none deployed until all merge; every
+commit ≤ 12 total / ≤ 8 production / ≤ 1 mutation family — proven per-commit counts in
+[BL136 P preflight → Slice 4c-i](build-log/136-P-preflight.md). `4c-i-c-1` also added a
+read-only exposure on the open-draft projection (BL136-P's `4c-i-c` box said frontend-only; the
+transcribe reload-persistence requirement made it necessary — 0 mutation families).
 
 **Session plan (one Claude session per commit unless noted; fresh session after each approved commit):**
 
@@ -551,7 +596,8 @@ total / ≤ 8 production / ≤ 1 mutation family — proven per-commit counts in
 | 3 | *done* — `4c-i-a-2` | assembly-expansion outcome contract (3 prod + 1 test) | 2 (not the migration) | 8 HTTP tests stay red until `4c-i-b` |
 | 4a | *done* — `4c-i-b-1` | performer-candidate read + create/add-line explicit performer + HTTP test fixes (7 prod + 4 test) | 2, `4c-i-mig` | pending commit; inherited default frozen at selection |
 | 4b | *done* — `4c-i-b-2` `6150363` | `SetDefaultPerformer` route + service + tests (3 files) | 4a | recorder-only Draft mutation, existing concurrency protocol |
-| 5 | `4c-i-c` | minimum functional frontend (6 prod + 3 test) | 4b | last commit of the slice; deploy the whole slice after this |
+| 5a | *done* — `4c-i-c-1` `4a0d8ff` | open-draft default-performer read + api client/hook (5 prod + 2 test) | 4b | 0 mutation families; added the projection exposure BL136-P missed |
+| 5b | `4c-i-c-2` | card + composer add-region gate + wiring (4 prod + 2 test) | 5a | last commit of the slice; deploy the whole slice after this |
 
 After `4c-i` deploys: `4c-ii` (VisitNote API), `4c-iii` (rich UI), `4d`, `4e-0/i/ii/iii`, `4f-i/ii`,
 `4g` — each its own session(s), per the BL136 per-slice split. Then BL135 Batch 5 (Billing Revision)
