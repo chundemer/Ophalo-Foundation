@@ -464,7 +464,7 @@ add-line fails `PerformerRequired`). When the slice is complete: verify prod
 `SELECT count(*) FROM keep_actual_work_lines` is 0 (ADR-494 D1 — expected; no cleanup needed if so),
 flip the Railway migrate-on-start variable, deploy the whole merged slice, smoke-test capture.
 
-**Session 3 (`4c-i-a-2`) — COMPLETE (2026-08-29), `b73079c`.** Assembly-expansion
+**Session 3 (`4c-i-a-2`) — COMPLETE (2026-08-29), `04963f2`.** Assembly-expansion
 outcome contract, 4 files (3 prod + 1 test): `ActualWorkExpandAssemblyResult.PerformerRequired`
 added; `EfActualWorkAssemblyExpansionPersistence` returns it (never `NotDraft`) when the row-locked
 Draft has `DefaultPerformedByAccountUserId is null`, guard placed **immediately after the row-locked
