@@ -1326,6 +1326,24 @@ export interface ActualWorkFinancialLineEntry {
   lineSalesTotal: number | null;
   lineStandardExpectedDirectCostTotal: number | null;
   lineMargin: number | null;
+  // BL135 Batch 3a-iii read-projection fold: an office financial resolution supplied the missing
+  // component. `*Resolved` flags mean the effective value came from a resolution, not the field
+  // capture snapshot; the review card labels a resolved value so it is never read as an estimate.
+  sellPriceResolved: boolean;
+  resolvedSellPrice: number | null;
+  resolvedSellPriceBasis: string | null;
+  directCostResolved: boolean;
+  resolvedStandardExpectedDirectCost: number | null;
+  resolvedStandardExpectedDirectCostBasis: string | null;
+}
+
+// BL135 Batch 3a-iii: one still-incomplete line on a submitted visit and which component(s) the
+// office must resolve. Drives the resolution form — it offers only the missing component(s).
+export interface ActualWorkFinancialBlockerEntry {
+  lineId: string;
+  displayNameSnapshot: string;
+  sellPriceMissing: boolean;
+  standardExpectedDirectCostMissing: boolean;
 }
 
 export interface ActualWorkFinancialDetailResult {
@@ -1350,8 +1368,30 @@ export interface ActualWorkFinancialDetailResult {
   // Slice 8A contract patch: the review card's only source for the review mutation's expected
   // X-Keep-ActualWork-Version — the review-queue list does not carry it.
   concurrencyVersion: string;
+  // BL135 Batch 4a: a NoCharge disposition has been recorded for this (zero-line) visit. The
+  // no-charge form renders only when this is false; the hard MarkReviewed gate stays the backstop.
+  hasNoChargeDisposition: boolean;
+  // BL135 Batch 3a-iii: the still-incomplete lines the office must resolve before review.
+  blockers: ActualWorkFinancialBlockerEntry[];
 }
 
 export interface ActualWorkReviewBody {
   reviewNote: string | null;
+}
+
+// BL135 Batch 3a-ii. At least one resolved value must be non-null; `basis` is a
+// `FinancialResolutionBasis` name (SupplierReceipt | OwnerSetPrice | FixedAgreement | Other);
+// `reason` is required. The form sends only the component(s) the blocker names as missing.
+export interface ActualWorkFinancialResolutionBody {
+  resolvedUnitSellPrice: number | null;
+  resolvedUnitStandardExpectedDirectCost: number | null;
+  basis: string;
+  reason: string;
+}
+
+// BL135 Batch 3b-i. `kind` is an `OfficeFinancialDispositionKind` name — `NoCharge` is the only
+// kind this phase; `reason` is required.
+export interface ActualWorkFinancialDispositionBody {
+  kind: string;
+  reason: string;
 }

@@ -209,6 +209,9 @@ export function RequestDetailContent(props: RequestDetailContentProps) {
             state={actualWorkFinancialReview.state}
             onRetry={() => void actualWorkFinancialReview.retry()}
             onReview={actualWorkFinancialReview.review}
+            onResolveLine={actualWorkFinancialReview.resolveLine}
+            onRecordNoChargeDisposition={actualWorkFinancialReview.recordNoChargeDisposition}
+            isVisitMutating={actualWorkFinancialReview.isVisitMutating}
             focusOnMount={props.focusPanel === "actual-work-review"}
             onReviewSuccess={() => {
               void actualWorkHistory.retry();

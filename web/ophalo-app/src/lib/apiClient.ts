@@ -246,6 +246,9 @@ import type {
   ActualWorkReviewQueueEntry,
   ActualWorkReviewQueueCountResult,
   ActualWorkFinancialDetailResult,
+  ActualWorkFinancialBlockerEntry,
+  ActualWorkFinancialResolutionBody,
+  ActualWorkFinancialDispositionBody,
   ActualWorkReviewBody,
 } from "./apiClient.types";
 
@@ -391,6 +394,9 @@ export type {
   ActualWorkReviewQueueEntry,
   ActualWorkReviewQueueCountResult,
   ActualWorkFinancialDetailResult,
+  ActualWorkFinancialBlockerEntry,
+  ActualWorkFinancialResolutionBody,
+  ActualWorkFinancialDispositionBody,
   ActualWorkReviewBody,
 };
 
@@ -999,4 +1005,34 @@ export const api = {
       headers: { "X-Keep-ActualWork-Version": version },
       body: JSON.stringify(body),
     }),
+  // BL135 Batch 3a-ii / 3b-i — Owner/Admin office financial resolution of a missing per-line
+  // component, and no-charge disposition of a zero-line visit. Both rotate the visit concurrency
+  // version, so the caller must reload before issuing a dependent review command.
+  createActualWorkFinancialResolution: (
+    actualWorkId: string,
+    lineId: string,
+    body: ActualWorkFinancialResolutionBody,
+    version: string,
+  ) =>
+    apiFetch<ActualWorkConcurrencyVersionResult>(
+      `/keep/pricebook/actual-work/${actualWorkId}/lines/${lineId}/financial-resolution`,
+      {
+        method: "POST",
+        headers: { "X-Keep-ActualWork-Version": version },
+        body: JSON.stringify(body),
+      },
+    ),
+  recordActualWorkFinancialDisposition: (
+    actualWorkId: string,
+    body: ActualWorkFinancialDispositionBody,
+    version: string,
+  ) =>
+    apiFetch<ActualWorkConcurrencyVersionResult>(
+      `/keep/pricebook/actual-work/${actualWorkId}/financial-disposition`,
+      {
+        method: "POST",
+        headers: { "X-Keep-ActualWork-Version": version },
+        body: JSON.stringify(body),
+      },
+    ),
 };

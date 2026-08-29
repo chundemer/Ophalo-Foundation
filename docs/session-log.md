@@ -384,22 +384,33 @@ disposition → false; after a recorded `NoCharge` → true; visit with lines �
 API integration 24/24, `~ActualWorkReviewApi`/`~ActualWorkDispositionApi`/`~ActualWorkFinancialResolutionApi`
 51/51, `~ActualWork` unit 91/91, full unit 1666/1666, architecture 14/14, `git diff --check` clean.
 
-**Exact target for the next coding session:** **BL135 Batch 4b — Office financial-resolution UI**
-(review-card surface consuming the 3a-iii blockers/detail read, the new 4a `hasNoChargeDisposition`
-flag, and the 3b-i/3b-ii resolution + disposition + hard-gate contract). `web/ophalo-app` only,
-7 prod / 4 test = 11 files. Prod: `lib/apiClient.ts`, `lib/apiClient.types.ts`,
-`pages/request-detail/useActualWorkFinancialReview.ts`, `ActualWorkReviewCard.tsx`,
-`RequestDetailContent.tsx` (thread the two new callbacks into the card — no second hook), new
-`FinancialResolutionForm.tsx` / `NoChargeDispositionForm.tsx`. Locked contract: the hook callbacks
-must return a **discriminated outcome** (success / validation-failure / reconciled-conflict-or-not-found
-/ hidden-forbidden) so the forms can preserve drafts and focus the first errored field on 400 without
-guessing. Resolution entry point only for incomplete lines and only the missing component(s);
-per-visit mutation serialization with authoritative reload before re-enabling; distinguish the two
-`ReviewBlocked*` codes in the notice without leaking financial detail on 403; 404/409 from a
-resolution/disposition reloads the visit and clears stale form state. Visual: existing request-page
-Work Canvas language (one `rounded-xl` card, native `<details>`, `KeepButton`, tokens, inline
-alerts) with compact inline expandable forms — no drawer/modal; the request list stays a queue
-surface. Follow BL135 §4 "Batch 4"; backend contract complete — do not re-run discovery.
+**Batch 4b (Office financial-resolution UI) — COMPLETE (2026-08-28).** `web/ophalo-app` only;
+0 families; 7 prod / 4 test = 11 files. `useActualWorkFinancialReview.ts` (the existing hook — no
+second hook) now exposes `review`, `resolveLine`, `recordNoChargeDisposition`, all returning one
+`FinancialReviewOutcome` family: `success | validation-failure{code} | reconciled{code} |
+review-blocked-incomplete | review-blocked-zero-line | hidden`. The two 409 hard-gate codes
+(`ReviewBlockedIncompleteFinancials` / `ReviewBlockedZeroLineDispositionRequired`) map to their own
+variants and still reload; other 409/404 → `reconciled` + authoritative reload; 400 → `validation-failure`
+with the stable code; 403 → `hidden`. Mutations are serialized per visit via a promise chain **and**
+the hook exposes `mutatingVisitIds` / `isVisitMutating(id)`, threaded through `RequestDetailContent.tsx`
+to `ActualWorkReviewCard` so the review button and both inline forms disable for a visit for the full
+duration of any mutation and its reload. `apiClient` gains `createActualWorkFinancialResolution` +
+`recordActualWorkFinancialDisposition` (both send `X-Keep-ActualWork-Version`); `apiClient.types.ts`
+gains `hasNoChargeDisposition`, `blockers[]`, the six resolved-`*` line fields, and the two request
+body types. New `FinancialResolutionForm.tsx` — inline `<details>`, offers only the component(s) the
+blocker names as missing, **allows resolving one or both** (untouched component sent as `null`),
+client-side non-negative validation (`type=number min=0 step=0.01` + explicit guard), draft
+preserved and first errored field focused on a 400. New `NoChargeDispositionForm.tsx` renders only
+for an unreviewed zero-line visit with `hasNoChargeDisposition === false`; a reviewed or
+already-dispositioned visit shows read-only state only. No drawer/modal; existing Work Canvas
+language (`rounded-xl` card, native `<details>`, `KeepButton`, tokens, inline alerts). Review
+correction applied pre-commit: partial-component resolution + client negative check. Verified:
+full frontend suite **799/799** (90 files, +4), `tsc --noEmit` clean, `check:tokens` passed,
+`git diff --check` clean.
+
+**Exact target for the next coding session:** BL135 Batch 5 — Billing Revision domain foundation
+(Core only, 5 prod / 2 test). Follow BL135 §4 "Batch 5". Batch 4 (office financial-resolution) is
+now fully landed end-to-end (domain 1 → persistence 2 → API 3a/3b → UI 4a/4b).
 
 **Deferred UI follow-up — Request Workbench primary-tab selection (2026-08-28).** In the wide
 two-pane Request Workbench, selecting a primary queue tab such as **Mine** currently preserves an
