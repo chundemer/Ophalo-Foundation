@@ -119,11 +119,12 @@ The later Actual Work and closeout preflights must lock the following before cod
   The UI identifies each blocking line; it never exports a silent $0 financial value. The later
   contract must separately decide whether a commercial-baseline job with missing cost blocks export
   or permits a clearly marked incomplete-cost operational export.
-- **Per-line field attribution.** Every `ActualWorkLine` records who performed its work,
-  independently of optional `DerivedFromCommercialRevisionLineId`, so work performed by a different
-  technician remains attributable line by line. *Superseded by ADR-494:* the persisted per-line
-  fact is `PerformedByAccountUserId` (who performed the work), non-null; `CreatedByUserId` already
-  records authorship (who entered the line).
+- **Per-line field attribution.** Every `ActualWorkLine` must attribute its work to a specific
+  performer, independently of optional `DerivedFromCommercialRevisionLineId`, so work performed by a
+  different technician remains attributable line by line. *This constraint originally specified a
+  `RecordedByAccountUserId` column; superseded by ADR-494:* the persisted per-line fact is non-null
+  `PerformedByAccountUserId` (who performed the work), while `CreatedByUserId` already records
+  authorship (who entered the line). ADR-487 no longer introduces `RecordedByAccountUserId`.
 
 ## Consequences
 

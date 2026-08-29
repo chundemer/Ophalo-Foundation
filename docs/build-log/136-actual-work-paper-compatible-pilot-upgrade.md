@@ -63,9 +63,54 @@ Make request close reflect outstanding relevant Actual Work. Define and test how
 Each slice is independently compiling and sized against the CLAUDE.md batch gate (≤3 mutation
 families / ≤8 production files / ≤12 total). 4c, 4e, and 4f are split; 4d and 4g are single slices.
 
-- **4c-i** — performer + note-validation lock: `ActualWorkLine.PerformedByAccountUserId` (non-null) + `ActualWork.DefaultPerformedByAccountUserId` + `CompletionNote` trimmed-to-null / ≤2000 guard in `Submit` (D3) + EF config + `AddActualWorkPerformer` migration + errors + the checked-in local reset/seed tool (D12). Domain + Infrastructure.
-- **4c-ii** — performer + `VisitNote` API: draft-API accepts the line performer; new `SetVisitNote` Draft-guarded route (≤2000, trimmed-to-null, recorder-only); history + financial reads project performer display name and `VisitNote`; shared performer-eligibility read. Application + Api.
-- **4c-iii** — field UI: composer per-line performer + ticket default + `VisitNote` textarea (price-blind); history card shows both read-only. `web/ophalo-app`.
+- **4c-i** — performer attribution, delivered as **one deployable vertical slice** across seven
+  gate-compliant commits, none deployed until all merge. Rollout seam
+  (ADR-494 D1–D2): a strict non-null `PerformedByAccountUserId` must never sit behind an old API/UI
+  that would fall back to a recorder default — the false office attribution this upgrade eliminates.
+  Exact impacted-file inventory and proven per-commit file counts are in the
+  [P preflight → Slice 4c-i](136-P-preflight.md).
+  - **4c-i-r** — developer reset/seed tool (D12) in its **own gated commit before the migration**:
+    a checked-in script/seeder + usage note (2 files); no production code, no DI, no
+    migration/startup/deploy wiring.
+  - **4c-i-0a / 4c-i-0b** — test-construction seam (tests only, no production code, no behaviour
+    change): one `ActualWorkTestData` helper per test project (the projects do not cross-reference)
+    wrapping `ActualWork.Create` + `AddLine`, migrating the **11 test files / 34 `ActualWork.AddLine`
+    call sites** enumerated in the P preflight. 0a = unit (3 files), 0b = integration (10). Forked.
+  - **4c-i-a** (Core + Infrastructure) — `ActualWorkLine.PerformedByAccountUserId` (non-null)
+    threaded through `Create`; `ActualWork.DefaultPerformedByAccountUserId` (nullable) + Draft-only
+    recorder-only `SetDefaultPerformer` + optional default arg on `Create`; `AddLine` takes an
+    optional explicit performer, seeds from the ticket default, returns `ActualWork.PerformerRequired`
+    when both absent (**no creator/recorder fallback**); `CompletionNote` trimmed-to-null / ≤2000
+    guard in `Submit` (D3); EF config; `ActualWorkErrors.PerformerRequired`; the two existing
+    `AddLine` callers thread the ticket default only (compile-level); both `ActualWorkTestData`
+    helpers gain the default. 7 prod + 4 test.
+  - **4c-i-mig** — `AddActualWorkPerformer` EF migration, **authored and committed by Christian**
+    (`dotnet ef migrations add … --startup-project src/OpHalo.Keep.Infrastructure`, ADR-049) once
+    4c-i-a's config merges. 3 generated files (migration + `.Designer` + `OpHaloDbContextModelSnapshot`
+    diff), 0 logic, 0 test. No backfill. Rollout: validated locally after the explicit 4c-i-r
+    reset, then deployed through the **normal production migration path** with the slice; production
+    holds zero Actual Work rows, so the strict non-null migration succeeds there without a backfill;
+    the reset tool is local-only and is never invoked by the migration or the deployment.
+  - **4c-i-b** (Application + Api) — new `GetActualWorkPerformerCandidatesService` **callable by any
+    active `RequestsOperate` + `ActualWorkCapture` holder** (an Operator office transcriber), **not**
+    the Owner/Admin-only `GetActualWorkRecorderCandidatesService`; new
+    `/actual-work/performer-candidates` route + DI registration; new **Draft-only recorder-only
+    `PUT …/default-performer` (`SetDefaultPerformer`)** route that persists / clears the ticket
+    default, using the **existing Actual Work concurrency protocol** — `X-Keep-ActualWork-Version`
+    request header via `ParseActualWorkVersion`, no body version, `ActualWorkConcurrencyVersionResponse`
+    on success; `ActualWorkDraftApiService` create-draft accepts the explicit optional ticket
+    default and add-line the explicit optional performer, all server-validated for the same
+    eligibility; `ActualWorkErrors.PerformerIneligible` (422). 6 prod + 3 test (set / replace /
+    clear / recorder-only / stale-version / ineligible cases).
+  - **4c-i-c** — **minimum functional frontend** (`web/ophalo-app`), part of the deployable slice,
+    not deferred. An explicit **UI-only** entry-intent choice *before* Draft creation (not a
+    persisted `EntrySource`): **"Record my work"** → sends the current user as the visible ticket
+    default; **"Transcribe work"** → sends no default and requires a technician selection (from the
+    new performer-candidate read) **persisted via `SetDefaultPerformer`** before line entry, so it
+    survives reload and later lines inherit it. Add-line sends the explicit performer or the
+    persisted default. 5 prod + 3 test. Rich performer UI + history display remain 4c-iii.
+- **4c-ii** — `VisitNote` API + read projections: new `SetVisitNote` Draft-guarded route (≤2000, trimmed-to-null, recorder-only); history + financial reads project performer display name and `VisitNote`. Application + Api.
+- **4c-iii** — rich field UI: composer per-line performer refinement + `VisitNote` textarea (price-blind); history card shows performer + `VisitNote` read-only. `web/ophalo-app`.
 - **4d** — recorder-initiated handoff: relax `TransferRecorderAsync` to allow the current recorder to transfer their own unsubmitted Draft (system reason); "hand off to office" UI. Application + Api + frontend.
 - **4e-0** — extract the signal-reconciliation seam (prep, no behaviour change): new `IActualWorkReviewSignalReconciliation` (Application) declared with domain scalars only (`accountId`, `requestId`, `nowUtc`, `ct`) — no `DbContext` / transaction in the interface; one Infrastructure impl taking the request-scoped `OpHaloDbContext` via DI (EF auto-enlists in an open transaction). `RaiseAsync` = the existing idempotent upsert/reopen; `ResolveIfClearAsync` owns the single shared "open outstanding review" predicate constant. Repoint `EfActualWorkSubmissionPersistence` (raise) and `EfActualWorkReviewPersistence` (resolve) at it; existing tests green unchanged. Application + Infrastructure.
 - **4e-i** — supersession marker + signal predicate + transaction seam: `ActualWork` marker columns + `ActualWork.Supersede(...)` (guards only) + `SetZeroLineDisposition(outcome, completionNote)` Draft-only recorder-only setter (D5) + successor factory + unique index + `ActualWorkErrors.Superseded` + widen the `ResolveIfClearAsync` predicate (the one shared with the D8 operational reads) to include `AND superseded_at_utc IS NULL` — one place; `RaiseAsync` unchanged + a persistence seam owning one transaction (concurrency-check source → mark superseded → add the provided successor → call 4e-0 resolve-if-clear → save/commit) + `AddActualWorkSupersession` migration. Core + Infrastructure.

@@ -132,35 +132,214 @@ Each slice is sized against the CLAUDE.md gate (≤3 mutation families, ≤8 pro
 Slices are independently compiling. `4c`/`4e`/`4f` as written in BL136 each exceed the gate and are split
 below. Migrations are authored by Christian on approval of each slice's preflight.
 
-### Slice 4c-i — performer attribution: domain + persistence
-**Layer:** Core + Infrastructure + Foundation migration. **Families:** 0 (constructor/factory change).
-**Prod (≈6):** `ActualWorkLine.cs` (add non-null `PerformedByAccountUserId`, thread through `Create`/parent
-`AddLine`), `ActualWork.cs` (add nullable `DefaultPerformedByAccountUserId` + setter guard; thread into
-`AddLine` as the seed for a line that does not specify its own performer), `ActualWorkLineConfiguration.cs`
-(column + index), `ActualWorkConfiguration.cs` (default column), migration `AddActualWorkPerformer`,
-`ActualWorkErrors.cs` (`PerformerRequired`). Also: the checked-in local reset/seed snippet.
-**Tests (≈4):** `ActualWorkTests` / `ActualWorkLineTests` (performer required — empty guid rejected;
-`DefaultPerformedByAccountUserId` seeds a line that omits its own; explicit line performer overrides the
-default; inactive-user id accepted at the domain layer), persistence round-trip.
-**Gate:** domain rejects a line with empty performer; no line can exist without one; the default only seeds,
-never overrides an explicit value.
+### Slice 4c-i — performer attribution (one deployable vertical slice, seven commits)
 
-### Slice 4c-ii — performer + VisitNote: API + read models + resolver
-**Layer:** Application + Api. **Families:** 1 (add-line command gains `PerformedByAccountUserId`; new
-`SetVisitNote` route). **Prod (≈6):** `ActualWorkDraftApiService` (accept performer on add/update-line;
-new `SetVisitNoteAsync` — Draft+recorder+concurrency); `KeepEndpoints.cs` (route + body records);
-`ActualWorkHistoryReadApiService` (project performer display name + `VisitNote`);
-`ActualWorkFinancialReadApiService` (project performer + `VisitNote` on line/visit DTOs); a shared
-performer-eligibility read (active members ∪ current); `ActualWorkErrors` additions.
+**Rollout seam.** `AddLine` must produce a non-null `PerformedByAccountUserId` from day one. Its two
+production callers carry no performer until the API/UI changes land; a strict schema behind the old
+API/UI would force a `createdByUserId` / recorder fallback — the false office attribution ADR-494
+eliminates. So the schema, the performer-input API, **and a minimum functional frontend** must reach
+production together. Seven commits — `4c-i-r` (dev tool), `4c-i-0a`, `4c-i-0b` (test seam),
+`4c-i-a` (Core + Infra), `4c-i-mig` (Christian-authored EF migration), `4c-i-b` (API), `4c-i-c`
+(frontend) — split only for review/compile isolation and the CLAUDE.md file gate; none deploys
+until all merge.
+
+#### Exact impacted-file inventory (verified 2026-08-29)
+
+**Production callers of `ActualWork.AddLine` (2):** `ActualWorkDraftApiService.AddLineAsync:157`,
+`EfActualWorkAssemblyExpansionPersistence.cs:170`. **`ActualWork.Create` callers:** the new default
+arg is optional (`Guid? = null`) → no compile impact; confirm in the 4c-i-a preflight.
+
+**Test files calling `ActualWork.AddLine` — 11 files, 34 call sites** (receiver `work` / `visit` /
+`v` / reloaded locals; `ProposedScope.AddLine` sites excluded):
+
+| Project | File | sites |
+|---|---|---|
+| UnitTests | `Keep/ActualWorkTests.cs` | 10 |
+| UnitTests | `Keep/ActualWorkFinancialProjectionTests.cs` | 6 |
+| IntegrationTests | `Persistence/ActualWorkPersistenceTests.cs` | 6 |
+| IntegrationTests | `Persistence/ActualWorkReviewPersistenceTests.cs` | 3 |
+| IntegrationTests | `Persistence/ActualWorkSubmissionTests.cs` | 1 |
+| IntegrationTests | `Persistence/ActualWorkFinancialResolutionPersistenceTests.cs` | 1 |
+| IntegrationTests | `Api/ActualWorkHistoryApiTests.cs` | 3 |
+| IntegrationTests | `Api/ActualWorkFinancialResolutionApiTests.cs` | 1 |
+| IntegrationTests | `Api/ActualWorkReviewApiTests.cs` | 1 |
+| IntegrationTests | `Api/ActualWorkFinancialReadApiTests.cs` | 1 |
+| IntegrationTests | `Api/ActualWorkDispositionApiTests.cs` | 1 |
+
+8 production files + 11 test files in one commit = **19, over the 12-file gate.** The test churn is
+isolated into a no-behaviour-change seam commit first. `OpHalo.UnitTests` and `OpHalo.IntegrationTests`
+have no shared test-support project and do not cross-reference, so the helper is one static class per
+project.
+
+#### Slice 4c-i-r — developer reset/seed tool (own gated commit, before the migration)
+The local demo-data reset/seed (ADR-494 D12) lands in its **own commit ahead of the migration**, not
+folded into 4c-i-a. **2 files:** a checked-in `scripts/reset-local-actual-work.*` (or a dev-only
+seeder class under `tools/`) + a one-line README/usage note. **No production code, no DI, no
+migration/startup/deploy wiring.** Gate: the tool is inert to the running application; running it
+against a local DB clears Actual Work rows only.
+
+#### Slice 4c-i-0a — test seam (unit project, tests only, no behaviour change)
+New `OpHalo.UnitTests/Keep/ActualWorkTestData.cs` (wraps `ActualWork.Create` + `AddLine` with
+explicit defaults) + migrate `ActualWorkTests.cs`, `ActualWorkFinancialProjectionTests.cs` to it.
+**3 files.** Forked. Gate: unit suite green, count unchanged.
+
+#### Slice 4c-i-0b — test seam (integration project, tests only, no behaviour change)
+New `OpHalo.IntegrationTests/Support/ActualWorkTestData.cs` + migrate the 4 persistence + 5 API files
+above. **10 files.** Forked; split persistence vs API if a reviewer prefers ≤6. Gate: integration
+suite green, count unchanged.
+
+#### Slice 4c-i-a — domain + persistence (no migration in this commit)
+**Layer:** Core + Infrastructure. **Families:** 0 (factory/constructor change).
+**Prod (7):** `ActualWorkLine.cs` (non-null `PerformedByAccountUserId` through `Create`),
+`ActualWork.cs` (nullable `DefaultPerformedByAccountUserId`; optional arg on `Create`; Draft-only
+recorder-only `SetDefaultPerformer` guard; `AddLine` takes an optional explicit performer, seeds from
+the ticket default, returns `PerformerRequired` when both absent — **no creator/recorder fallback**),
+`ActualWorkLineConfiguration.cs`, `ActualWorkConfiguration.cs` (column + index + default column),
+`ActualWorkErrors.cs` (`PerformerRequired`), `ActualWorkDraftApiService.cs` +
+`EfActualWorkAssemblyExpansionPersistence.cs` (compile-level: pass the ticket default only).
+**Tests (4):** both `ActualWorkTestData` helpers gain the default arg; new `ActualWorkTests` cases
+(empty performer rejected; default seeds; explicit overrides default; `PerformerRequired` when
+neither; inactive-user id accepted at domain; `SetDefaultPerformer` Draft-only + recorder-only);
+`ActualWorkPersistenceTests` round-trip. **Total 11 (7 prod + 4 test).**
+**Gate:** compiles and green; **not deployed alone**; no line without a performer; server never
+derives one.
+
+#### Commit 4c-i-mig — `AddActualWorkPerformer` migration (Christian-authored, explicitly gated)
+**Author:** Christian, `dotnet ef migrations add AddActualWorkPerformer --startup-project
+src/OpHalo.Keep.Infrastructure` (ADR-049 / memory), after `4c-i-a`'s EF config merges.
+**Files (3, all EF-generated, no hand-written logic):**
+`src/OpHalo.Foundation.Infrastructure/Migrations/<ts>_AddActualWorkPerformer.cs`,
+`<ts>_AddActualWorkPerformer.Designer.cs`,
+`src/OpHalo.Foundation.Infrastructure/Migrations/OpHaloDbContextModelSnapshot.cs` (diff only).
+0 production-logic files, 0 tests. Non-null `PerformedByAccountUserId` column on
+`actual_work_lines`, nullable `DefaultPerformedByAccountUserId` on `actual_work`, **no backfill**
+(D1/D12).
+**Rollout:** (1) validated locally first, after the explicit `4c-i-r` local reset; (2) then
+deployed through the **normal production migration path** with the rest of the slice — production
+receives the columns like any other migration; (3) production holds **zero Actual Work rows**, so
+the strict non-null migration succeeds there with no backfill; (4) the `4c-i-r` reset tool is
+local-only and is **never invoked by the migration or the deployment**.
+**Gate:** migration `Up`/`Down` reviewed; local apply against a reset DB succeeds; a non-empty
+local DB fails loudly as designed.
+
+#### Slice 4c-i-b — performer-input API + dedicated performer-candidate read
+**Layer:** Application + Api. **Families:** 1 (create-draft + add-line command shape).
+**Prod (6):**
+- `GetActualWorkPerformerCandidatesService.cs` **(new)** — gates 1–3 as
+  `GetActualWorkRecorderCandidatesService` (account access → entitlement → `RequestsOperate`) but
+  **no Owner/Admin gate**; additionally requires `ActualWorkCapture`; returns active,
+  account-scoped, performer-eligible members. Does **not** reuse the recorder-candidate service,
+  which is Owner/Admin-only (`GetActualWorkRecorderCandidatesService.cs:81` `Role is not (Owner or
+  Admin)` → 403 for an Operator transcriber).
+- `KeepEndpoints.cs` — new `MapGet /keep/pricebook/actual-work/performer-candidates`; new
+  **`PUT /keep/pricebook/actual-work/{id}/default-performer`** (`SetDefaultPerformer` — Draft-only,
+  recorder-only). **Concurrency uses the existing Actual Work protocol, not a new one:** the
+  `X-Keep-ActualWork-Version` request header parsed by the existing `ParseActualWorkVersion`; **no
+  version in the body**; success returns the existing `ActualWorkConcurrencyVersionResponse` (the
+  rotated version — the client re-reads the Draft for the stored default value, as the other
+  mutations do). Body carries only the target performer id or `null` (clear). Create + add-line
+  body records gain the performer / ticket-default fields.
+- `KeepServiceCollectionExtensions.cs` — `AddScoped<GetActualWorkPerformerCandidatesService>()`.
+- `ActualWorkDraftApiService.cs` — create-draft accepts the explicit optional ticket default;
+  add-line accepts the explicit optional performer; new `SetDefaultPerformerAsync` (loads Draft,
+  recorder gate, version check, `ActualWork.SetDefaultPerformer` from `4c-i-a`, revalidates
+  eligibility for a non-null value, commits, returns the rotated `ConcurrencyVersion`); all
+  validate the same eligibility server-side against the membership snapshot.
+- `ActualWorkErrors.cs` — `PerformerIneligible` (422; no membership enumeration, mirrors
+  `RecorderTransferTargetIneligible`).
+- a small `ActualWorkPerformerEligibility` predicate helper shared by the candidate service and the
+  draft service (fold into the service if it stays one call site).
+**Tests (3):** `ActualWorkPerformerCandidatesApiTests` **(new)** — Operator caller succeeds,
+Viewer/unauth 403, inactive excluded, current-value union; `ActualWorkDraftApiTests` — create with/
+without default; add-line with explicit performer / inheriting default / `PerformerRequired` with
+neither; **`SetDefaultPerformer` set, replace, clear, recorder-only (non-recorder 404/403),
+stale-version 409, inactive + cross-account rejected (422), existing lines keep their own performer**;
+a resolver unit test.
+**Total 9 (6 prod + 3 test).** The `SetDefaultPerformer` route/method reuse the existing files —
+they add test cases, not files; if `ActualWorkDraftApiTests` becomes unwieldy split its
+`SetDefaultPerformer` cases into `ActualWorkDefaultPerformerApiTests` (→ 4 test files, still ≤ 12).
+**Gate:** an Operator office transcriber can list candidates, persist a ticket default (and reload
+it), and add a line that inherits it; every persisted line has a real validated performer.
+
+#### Slice 4c-i-c — minimum functional frontend (part of the deployable slice)
+**Layer:** `web/ophalo-app`. **Prod (5):**
+- `apiClient.types.ts` — `ActualWorkCreateBody` + `defaultPerformedByAccountUserId`;
+  `ActualWorkAddLineBody` + `performedByAccountUserId`; `ActualWorkPerformerCandidatesResult`.
+- `apiClient.ts` — create/add-line bodies; new `getActualWorkPerformerCandidates(requestId?)`;
+  new `setActualWorkDefaultPerformer(id, performerId | null, version)` — sends the
+  `X-Keep-ActualWork-Version` header, returns the existing `ActualWorkConcurrencyVersionResult`.
+- `useActualWorkCapture.ts` — entry-intent parameter on the start-capture path; create payload
+  (`defaultPerformedByAccountUserId` = self for "Record my work", omitted for "Transcribe work");
+  transcribe path calls `setActualWorkDefaultPerformer`, applies the rotated version and refetches
+  the Draft (for the stored default) before enabling line entry; add-line payload carries the
+  explicit performer or the persisted default; fetch candidates.
+- `ActualWorkCard.tsx` — the explicit **UI-only** entry-intent choice *before* Draft creation:
+  **"Record my work"** (current user as visible default) vs **"Transcribe work"** (no default). Not
+  a persisted `EntrySource` — only the interaction branch.
+- `ActualWorkComposer.tsx` — "Transcribe work" path: technician selector that **persists via
+  `SetDefaultPerformer`** and gates the line editor until it succeeds; "Record my work" path: shows
+  the preset default; the default is reloadable and later lines inherit it.
+**Tests (3):** `ActualWorkCard.test.tsx` (both entry choices; payload differs); `ActualWorkComposer.test.tsx`
+(transcribe path blocks line entry until the default persists; line entry then inherits it);
+`useActualWorkCapture.test.ts` (rotated-version handling on `SetDefaultPerformer`).
+**Total 8 (5 prod + 3 test).** Split into `4c-i-c-1` (api client + hook) / `4c-i-c-2` (card +
+composer) if a reviewer prefers.
+**Gate:** `check:tokens`, `tsc --noEmit`, full frontend suite; no money field on the field surface.
+
+#### Deployment-sequence proof (4c-i)
+1. **What must land together.** `4c-i-a` (schema) + Christian's migration + `4c-i-b` (API) + `4c-i-c`
+   (minimum frontend) are one production deployment. `4c-i-r` and `4c-i-0a/0b` are prerequisite
+   commits with no runtime effect. Without `4c-i-c` the live composer would create a Draft with no
+   default and its next `AddLine` would fail `PerformerRequired` — the frontend cannot be deferred.
+2. **Explicit entry intent (no silent classification).** `4c-i-c` presents "Record my work" vs
+   "Transcribe work" before Draft creation. The generic single "Record completed work" entry point
+   cannot tell a technician from an office transcriber, so it is replaced by this choice. UI-only,
+   not persisted.
+3. **Technician Draft visible self default.** "Record my work" sends the current user as
+   `defaultPerformedByAccountUserId`; shown and editable before any line is added.
+4. **Office transcription requires a technician first, persisted.** "Transcribe work" sends no
+   default; `4c-i-c` gates the line editor behind a technician selection (from the new
+   performer-candidate read, callable by the Operator transcriber) that is **persisted via the
+   `SetDefaultPerformer` route** (`4c-i-b`) — so it survives reload and later lines inherit it.
+   `AddLine` returns `ActualWork.PerformerRequired` as the server backstop.
+5. **Existing lines across handoff.** A recorder transfer changes only edit ownership; every
+   already-recorded line keeps its captured performer (domain — `4c-i-a`; no rewrite path exists).
+6. **Migration rollout.** `4c-i-r`'s local-only tool wipes local Actual Work rows first, so the
+   migration can be **validated locally**. It then **deploys through the normal production migration
+   path** with the slice; production holds zero Actual Work rows, so the strict non-null migration
+   succeeds there with no backfill. The reset tool is never invoked by the migration or the
+   deployment.
+7. **File gate proven, not estimated.**
+
+   | Commit | Files | Author |
+   |---|---|---|
+   | `4c-i-r` | 2 (script + note) | Claude |
+   | `4c-i-0a` | 3 (helper + 2 unit files) | Claude, forked |
+   | `4c-i-0b` | 10 (helper + 9 integration files) | Claude, forked |
+   | `4c-i-a` | 7 prod + 4 test = 11 | Claude |
+   | `4c-i-mig` | 3 EF-generated (migration + designer + snapshot diff), 0 logic, 0 test | Christian |
+   | `4c-i-b` | 6 prod + 3 test = 9 (4 test files if `SetDefaultPerformer` cases are split out) | Claude |
+   | `4c-i-c` | 5 prod + 3 test = 8 | Claude |
+
+   Every commit ≤ 12 total, ≤ 8 production, ≤ 1 mutation family.
+
+### Slice 4c-ii — VisitNote API + read-model projections
+**Layer:** Application + Api. **Families:** 1 (new `SetVisitNote` route). **Prod (≈5):**
+`ActualWorkDraftApiService` (`SetVisitNoteAsync` — Draft+recorder+concurrency); `KeepEndpoints.cs`
+(route + body records); `ActualWorkHistoryReadApiService` (project performer display name +
+`VisitNote`); `ActualWorkFinancialReadApiService` (project performer + `VisitNote` on line/visit
+DTOs); `ActualWorkErrors` additions.
 **Tests (≈5):** draft-API integration (set/clear VisitNote, Draft-only, recorder-only, concurrency),
 history + financial read include performer/VisitNote.
 **Gate:** VisitNote settable only on own Draft; frozen after submit; performer name in both reads.
 
-### Slice 4c-iii — performer + VisitNote: field UI
-**Layer:** `web/ophalo-app` only. **Prod (≈5):** `ActualWorkComposer.tsx` (per-line performer select +
-header default + VisitNote textarea, all price-blind), `useActualWorkCapture.ts` (mutations),
-`apiClient` + `apiClient.types.ts`, `ActualWorkHistoryCard.tsx` (show performer + VisitNote read-only).
-**Tests (≈4):** composer performer/VisitNote interaction; history card render.
+### Slice 4c-iii — rich performer + VisitNote field UI
+**Layer:** `web/ophalo-app` only. Builds on the minimum selector shipped in 4c-i-c.
+**Prod (≈5):** `ActualWorkComposer.tsx` (per-line performer override beyond the ticket default +
+`VisitNote` textarea, all price-blind), `useActualWorkCapture.ts` (VisitNote mutation),
+`apiClient` + `apiClient.types.ts` (VisitNote), `ActualWorkHistoryCard.tsx` (show performer +
+VisitNote read-only).
+**Tests (≈4):** composer per-line performer + VisitNote interaction; history card render.
 **Gate:** `check:tokens`, `tsc --noEmit`, full frontend suite; no money field appears on the field surface.
 
 ### Slice 4d — recorder-initiated handoff (authority relax + UI)
@@ -325,3 +504,21 @@ declared with domain scalars only — no `DbContext`/transaction on the interfac
 
 Implement 4c–4g against ADR-494 for the locked decisions and against Part 3 here for the file-level
 slice gates, migrations, and regression cases.
+
+**2026-08-29 slice-boundary correction (rev. 3).** `4c-i` is one deployable vertical slice across
+**seven commits**: `4c-i-r` (dev reset/seed tool, own commit before the migration), `4c-i-0a` /
+`4c-i-0b` (tests-only construction seam, forked; exact churn 11 test files / 34 `ActualWork.AddLine`
+sites), `4c-i-a` (Core + Infra), `4c-i-mig` (Christian-authored EF migration, 3 generated files,
+explicitly gated), `4c-i-b` (performer-input API — dedicated `RequestsOperate` + `ActualWorkCapture`
+performer-candidate read, **not** the Owner/Admin-only recorder-candidate service — **plus a
+Draft-only recorder-only `SetDefaultPerformer` route using the existing Actual Work concurrency
+protocol** (`X-Keep-ActualWork-Version` header + `ParseActualWorkVersion`, no body version,
+`ActualWorkConcurrencyVersionResponse`) that persists / clears the ticket default), `4c-i-c`
+(minimum functional frontend). None deployed
+until all merge. The frontend adds an explicit **UI-only** entry-intent choice before Draft creation
+("Record my work" → self as default; "Transcribe work" → no default, technician selection persisted
+via `SetDefaultPerformer` before line entry) so an office admin is never silently classified as a
+performer, and later lines inherit the persisted default. No server-side performer derivation:
+`AddLine` returns `ActualWork.PerformerRequired` unless an explicit performer or a valid,
+server-validated ticket default is present. Proven per-commit file counts and the exact
+impacted-file inventory are in "Slice 4c-i" above. See ADR-494 D1–D2.

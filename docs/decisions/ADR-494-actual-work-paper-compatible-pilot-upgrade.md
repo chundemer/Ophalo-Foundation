@@ -34,25 +34,58 @@ a nullable `DefaultPerformedByAccountUserId` that seeds new lines only; the per-
 authoritative and always present once a line exists.
 
 Because no production Actual Work data exists, the strict non-null migration is safe with **no
-backfill of any kind** — it must never manufacture performer attribution. Local demo data must be
-reset before the migration is applied (D12). If a developer applies the migration against a local
-database that still holds Actual Work rows, **the migration fails loudly**; that is the intended
-behaviour, not a case to paper over with a deterministic fill.
+backfill of any kind** — it must never manufacture performer attribution. The migration is
+validated locally first (after the explicit local reset — D12), then **deploys through the normal
+production migration path** with the rest of the slice; production holds zero Actual Work rows, so
+it succeeds there without a backfill. If a developer applies the migration against a local database
+that still holds Actual Work rows, **the migration fails loudly**; that is the intended behaviour,
+not a case to paper over with a deterministic fill.
 
 ### D2 — Performer selection rules
 
-- A newly selected performer must be an **active, account-scoped, eligible staff user** (holds the
-  capture-eligible permission set), validated server-side against the account membership snapshot —
-  never a free-form id, never a cross-account user.
+- A newly selected performer must be an **active, account-scoped, eligible staff user** (holds
+  `RequestsOperate` + `ActualWorkCapture`), validated server-side against the account membership
+  snapshot — never a free-form id, never a cross-account user.
+- **The performer-candidate read is its own contract.** It is callable by any active account user
+  holding `RequestsOperate` + `ActualWorkCapture` (so an Operator office transcriber can use it) and
+  returns the active, account-scoped, performer-eligible members. It **does not reuse the
+  Owner/Admin-only recorder-candidate read** (`GetActualWorkRecorderCandidatesService`), which would
+  403 that transcriber. Create, ticket-default, and add-line validate the same eligibility
+  server-side.
 - An **inactive former user remains valid on an already-recorded line** for historical truth. The
   performer picker offers active eligible members ∪ {the line's current value}, so a now-inactive
   technician stays selectable and displayed on lines already attributed to them.
-- The ticket-level "Performed by" default is visible and editable **before lines are added**:
-  - Technician-created Draft → default to that technician.
-  - Office-transcribed Draft → the office user selects the technician first; new lines inherit it.
+- The ticket-level "Performed by" default is visible and editable **before lines are added**. The
+  capture UI presents an explicit, **UI-only** entry-intent choice before Draft creation — it is
+  not a persisted `EntrySource` (§D9 keeps that omitted), only the interaction branch needed so an
+  office admin is never silently classified as a performer:
+  - **"Record my work"** → sends the current user as the visible ticket default.
+  - **"Transcribe work"** → sends no default; a technician must be selected before the line editor
+    is usable; new lines then inherit that selection.
+- **Draft creation accepts an explicit, optional ticket default performer**, validated server-side
+  against the account membership snapshot exactly as a line performer is. It is not derived: the
+  server **never** substitutes the creator or the current recorder as the default or the line
+  performer.
+- **The ticket default is a persisted, mutable Draft field with its own route.** A Draft-only,
+  current-recorder `SetDefaultPerformer` mutation sets or clears it, using the **existing Actual
+  Work optimistic-concurrency protocol** — the `X-Keep-ActualWork-Version` request header (existing
+  `ParseActualWorkVersion`), no version in the body, `ActualWorkConcurrencyVersionResponse` on
+  success — not a new convention. A non-null selection revalidates the same performer eligibility;
+  clearing is allowed while `Status = Draft` and never touches existing line performers. The client
+  re-reads the Draft for the stored default after the rotated version comes back; later lines
+  inherit it. The transcribe flow calls this before line entry is enabled.
+- **`AddLine` requires either an explicitly supplied line performer or an already-selected valid
+  ticket default**; with neither it returns `ActualWork.PerformerRequired`. This is the gate that
+  makes the office user pick a technician first.
 - **Draft handoff never rewrites existing line performers.** A recorder-ownership transfer changes
   only who may edit the Draft; every already-recorded line keeps its captured performer.
-- The line performer is **never silently defaulted to the current Draft recorder.**
+- The line performer is **never silently defaulted to the current Draft recorder** — a strict
+  non-null schema is never deployed behind an old API/UI relying on a temporary recorder default,
+  which would recreate the false office attribution this upgrade exists to eliminate. The
+  domain/schema change (4c-i-a), the performer-input API (4c-i-b), and the minimum functional
+  frontend that sends the default / performer (4c-i-c) ship as **one deployable slice** — the
+  frontend cannot be deferred, or the live composer's next `AddLine` fails `PerformerRequired`
+  (see Build Log 136).
 
 ### D3 — The three note types and one validation convention
 
@@ -226,11 +259,12 @@ here; it does not introduce a separate mechanism.
 The local demo-data reset that precedes the strict `PerformedByAccountUserId` migration is an
 explicit, local-only developer reset/seed tool run deliberately by a developer. It **must never run
 from an application migration, startup, or deployment path** and is never a fallback the migration
-invokes. Production has no Actual Work data and is untouched, so the strict non-null migration is
-safe there. On a local database, the migration is expected to **fail loudly** if Actual Work rows
-still exist — the developer resets first, then applies the migration, then reseeds demo tickets
-through the normal capture flow so every seeded line has a deliberately chosen performer. The
-migration never manufactures performer attribution.
+invokes. The migration itself **deploys through the normal production migration path**; production
+holds zero Actual Work rows, so the strict non-null migration succeeds there without a backfill. On
+a local database the migration is expected to **fail loudly** if Actual Work rows still exist — the
+developer runs the reset tool first (validating the migration locally), then applies the migration,
+then reseeds demo tickets through the normal capture flow so every seeded line has a deliberately
+chosen performer. The migration never manufactures performer attribution.
 
 ## Consequences
 

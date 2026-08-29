@@ -408,21 +408,45 @@ correction applied pre-commit: partial-component resolution + client negative ch
 full frontend suite **799/799** (90 files, +4), `tsc --noEmit` clean, `check:tokens` passed,
 `git diff --check` clean.
 
-### Claude handoff — BL136 P complete; next is the ADR-494 docs commit, then slice 4c-i
+### Claude handoff — ADR-487 fix + 4c-i seam preflight drafted (uncommitted); next: approve the seam, then code
 
-**BL136 P (workflow/mechanical preflight) is complete.** Its decisions are locked in
-[ADR-494 — Actual Work Paper-Compatible Pilot Upgrade](decisions/ADR-494-actual-work-paper-compatible-pilot-upgrade.md)
-(D1–D12), with pointer amendments in ADR-487 and ADR-493 and the per-slice 4c–4g split recorded in
-[Build Log 136](build-log/136-actual-work-paper-compatible-pilot-upgrade.md).
+**BL136 P (workflow/mechanical preflight) is complete** and its decisions are committed
+(`2118293` ADR-494, `f18b4ff` BL136 P preflight). Decisions locked in
+[ADR-494](decisions/ADR-494-actual-work-paper-compatible-pilot-upgrade.md) (D1–D12).
 
-**Exact target for the next session (no code):** produce and commit the docs-only amendment
-described above if not already committed — the new ADR-494 file plus the ADR-487/493,
-decision-index, BL136, and session-log edits — as a single reviewed docs commit.
+**Uncommitted docs edits pending review (5 files):** the ADR-487 wording correction (restores the
+superseded `RecordedByAccountUserId` reference) — sound, ready to commit — plus the 4c-i
+slice-boundary preflight in ADR-494 D2 / BL136 / the P preflight (rev. 3). That preflight resolves
+the non-null performer rollout seam: **4c-i is one deployable vertical slice across seven
+gate-compliant commits** —
+- `4c-i-r` — dev reset/seed tool, own commit before the migration (2 files, no runtime wiring);
+- `4c-i-0a` / `4c-i-0b` — tests-only construction seam, forked (11 test files / 34
+  `ActualWork.AddLine` sites; one `ActualWorkTestData` helper per project);
+- `4c-i-a` — Core + Infra (7 prod + 4 test);
+- `4c-i-mig` — Christian-authored `AddActualWorkPerformer` EF migration (3 generated files, 0 logic,
+  0 test; no backfill). Validated locally after the explicit reset, then deployed through the
+  **normal production migration path** with the slice; production has zero Actual Work rows so it
+  succeeds without a backfill; the reset tool is local-only and never invoked by migration/deploy;
+- `4c-i-b` — performer-input API (6 prod + 3 test): a **dedicated performer-candidate read** callable
+  by any `RequestsOperate` + `ActualWorkCapture` holder (not the Owner/Admin-only recorder-candidate
+  service, which 403s an Operator transcriber), **plus a Draft-only recorder-only `SetDefaultPerformer`
+  route** that persists/clears the ticket default using the **existing Actual Work concurrency
+  protocol** (`X-Keep-ActualWork-Version` header + `ParseActualWorkVersion`, no body version,
+  `ActualWorkConcurrencyVersionResponse`);
+- `4c-i-c` — minimum functional frontend (5 prod + 3 test): explicit UI-only entry-intent choice
+  before Draft creation — "Record my work" (self as default) vs "Transcribe work" (no default,
+  technician selection persisted via `SetDefaultPerformer` before line entry, inherited by later
+  lines); not a persisted `EntrySource`.
 
-**Then, first implementation slice:** BL136 **4c-i** — `ActualWorkLine.PerformedByAccountUserId`
-(non-null) + `ActualWork.DefaultPerformedByAccountUserId` + EF config + `AddActualWorkPerformer`
-migration + errors + the checked-in developer-only local reset/seed tool. Domain + Infrastructure;
-follow the per-slice split in BL136. Read ADR-494 first.
+None deployed until all merge. No server-side creator/recorder = performer fallback; `AddLine`
+returns `ActualWork.PerformerRequired` without an explicit performer or a valid ticket default.
+Every commit ≤ 12 total / ≤ 8 production / ≤ 1 mutation family — proven per-commit counts in the
+P preflight.
+
+**Next:** Christian reviews and approves the rev. 3 4c-i deployable seam in
+[BL136 P preflight → Slice 4c-i](build-log/136-P-preflight.md). **Then** start code at `4c-i-0a`
+(`4c-i-r` may land in parallel; both precede the migration). Do not begin 4c-i code before that
+approval.
 
 **Still locked / preserved:** submitted facts and financial resolution/disposition evidence remain
 immutable and append-only; this sequence introduces no reopen or delete authority. Superseding a
