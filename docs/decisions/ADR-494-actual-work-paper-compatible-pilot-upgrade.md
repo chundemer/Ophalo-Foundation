@@ -77,15 +77,21 @@ not a case to paper over with a deterministic fill.
 - **`AddLine` requires either an explicitly supplied line performer or an already-selected valid
   ticket default**; with neither it returns `ActualWork.PerformerRequired`. This is the gate that
   makes the office user pick a technician first.
+- **Every route that creates a line obeys the same rule.** A line is created by three routes —
+  direct `AddLine`, the HTTP add-line endpoint, and **assembly expansion**. Assembly expansion uses
+  the **persisted ticket default** for every line it creates; a Draft with no default returns an
+  explicit `PerformerRequired` outcome (**never a misleading "not a draft"**) and makes **no partial
+  changes**; a genuinely non-`Draft` visit still returns its not-a-draft outcome. The capture UI
+  gates the whole add region — line, assembly, nudge-accept — until the default is persisted.
 - **Draft handoff never rewrites existing line performers.** A recorder-ownership transfer changes
   only who may edit the Draft; every already-recorded line keeps its captured performer.
 - The line performer is **never silently defaulted to the current Draft recorder** — a strict
   non-null schema is never deployed behind an old API/UI relying on a temporary recorder default,
   which would recreate the false office attribution this upgrade exists to eliminate. The
-  domain/schema change (4c-i-a), the performer-input API (4c-i-b), and the minimum functional
-  frontend that sends the default / performer (4c-i-c) ship as **one deployable slice** — the
-  frontend cannot be deferred, or the live composer's next `AddLine` fails `PerformerRequired`
-  (see Build Log 136).
+  domain/schema change (4c-i-a-1), the assembly-expansion outcome contract (4c-i-a-2), the
+  performer-input API (4c-i-b), and the minimum functional frontend that sends the default /
+  performer (4c-i-c) ship as **one deployable slice** — the frontend cannot be deferred, or the
+  live composer's next add-line or expansion fails `PerformerRequired` (see Build Log 136).
 
 ### D3 — The three note types and one validation convention
 
@@ -101,9 +107,15 @@ characters**, and are never interchangeable:
 `VisitNote` is a new nullable `ActualWork` column, editable only while `Status = Draft` and only by
 the current recorder, through a dedicated Draft-guarded mutation path with the same authorization and
 optimistic-concurrency contract as line edits. It carries no financial content and is never a
-substitute for a submitted factual line. `CompletionNote`'s 2,000-character / trimmed-to-null rule is
-**locked here** (it was previously unbounded); it stays required only for zero-line submission. A
-zero-line visit may carry `VisitNote` and `CompletionNote` independently.
+substitute for a submitted factual line. A zero-line visit may carry `VisitNote` and `CompletionNote`
+independently.
+
+`CompletionNote`'s 2,000-character / trimmed-to-null convention is the **intent** recorded here (it
+is currently unbounded), but its `Submit`-guard **implementation is not part of the performer slice
+(BL136 4c-i)**. It changes stored values for existing submit tests and is an independent
+note-validation behaviour; it needs its own bounded slice and preflight (it may pair with 4c-ii's
+`VisitNote` work, but only under that preflight — never folded into 4c-i silently). `CompletionNote`
+stays required only for zero-line submission.
 
 ### D4 — Office Draft authority and handoff
 

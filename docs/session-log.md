@@ -408,45 +408,48 @@ correction applied pre-commit: partial-component resolution + client negative ch
 full frontend suite **799/799** (90 files, +4), `tsc --noEmit` clean, `check:tokens` passed,
 `git diff --check` clean.
 
-### Claude handoff — ADR-487 fix + 4c-i seam preflight drafted (uncommitted); next: approve the seam, then code
+### Claude handoff — 4c-i seam preflight rev. 4 uncommitted; approve + commit docs this session, then fresh session for code (see session plan below)
 
-**BL136 P (workflow/mechanical preflight) is complete** and its decisions are committed
-(`2118293` ADR-494, `f18b4ff` BL136 P preflight). Decisions locked in
-[ADR-494](decisions/ADR-494-actual-work-paper-compatible-pilot-upgrade.md) (D1–D12).
+**BL136 P (workflow/mechanical preflight) is complete.** ADR-494 (D1–D12) committed at `2118293`;
+the ADR-487 wording fix + 4c-i seam preflight rev. 3 committed at `644aa4a`.
 
-**Uncommitted docs edits pending review (5 files):** the ADR-487 wording correction (restores the
-superseded `RecordedByAccountUserId` reference) — sound, ready to commit — plus the 4c-i
-slice-boundary preflight in ADR-494 D2 / BL136 / the P preflight (rev. 3). That preflight resolves
-the non-null performer rollout seam: **4c-i is one deployable vertical slice across seven
-gate-compliant commits** —
-- `4c-i-r` — dev reset/seed tool, own commit before the migration (2 files, no runtime wiring);
-- `4c-i-0a` / `4c-i-0b` — tests-only construction seam, forked (11 test files / 34
-  `ActualWork.AddLine` sites; one `ActualWorkTestData` helper per project);
-- `4c-i-a` — Core + Infra (7 prod + 4 test);
-- `4c-i-mig` — Christian-authored `AddActualWorkPerformer` EF migration (3 generated files, 0 logic,
-  0 test; no backfill). Validated locally after the explicit reset, then deployed through the
-  **normal production migration path** with the slice; production has zero Actual Work rows so it
-  succeeds without a backfill; the reset tool is local-only and never invoked by migration/deploy;
-- `4c-i-b` — performer-input API (6 prod + 3 test): a **dedicated performer-candidate read** callable
-  by any `RequestsOperate` + `ActualWorkCapture` holder (not the Owner/Admin-only recorder-candidate
-  service, which 403s an Operator transcriber), **plus a Draft-only recorder-only `SetDefaultPerformer`
-  route** that persists/clears the ticket default using the **existing Actual Work concurrency
-  protocol** (`X-Keep-ActualWork-Version` header + `ParseActualWorkVersion`, no body version,
-  `ActualWorkConcurrencyVersionResponse`);
-- `4c-i-c` — minimum functional frontend (5 prod + 3 test): explicit UI-only entry-intent choice
-  before Draft creation — "Record my work" (self as default) vs "Transcribe work" (no default,
-  technician selection persisted via `SetDefaultPerformer` before line entry, inherited by later
-  lines); not a persisted `EntrySource`.
+**Uncommitted (4 files) — rev. 4, from the advisor review** (ADR-494, BL136, BL136 P preflight,
+session-log; ADR-487 already committed in `644aa4a`, unchanged):
+- **Assembly expansion is a third line-creation route.** `EfActualWorkAssemblyExpansionPersistence`
+  collapses every `AddLine` failure to `NotDraft`; `PerformerRequired` becomes newly reachable.
+  Locked: expansion uses the persisted ticket default; no default → explicit `PerformerRequired`
+  outcome (never `NotDraft`), **no partial writes**; genuine non-`Draft` → still `NotDraft`. New
+  commit **`4c-i-a-2`** (3 prod + 1 test); `4c-i-a` renamed `4c-i-a-1`. `4c-i-c` also gates
+  assembly + nudge, not just the line editor.
+- **Inventory re-derived across all three routes: 13 test files.** Two HTTP-only files
+  (`ActualWorkDraftApiTests`, `ActualWorkNudgeFieldReadApiTests`) + `ActualWorkFinancialResolutionApiTests`
+  break at `4c-i-b` (their per-file `CreateDraftAsync` must send a default); `ActualWorkAssemblyExpansionPersistenceTests`
+  moves to `4c-i-a-2`. `4c-i-b` is now 6 prod + 6 test = 12.
+- **`CompletionNote` ≤2000/trim guard removed from 4c-i entirely** — separate note-validation
+  behaviour, own bounded slice/preflight (ADR-494 D3 keeps the intent only).
+- version-header/migration wording from the prior round is retained (`X-Keep-ActualWork-Version` +
+  `ParseActualWorkVersion` + `ActualWorkConcurrencyVersionResponse`; migration deploys through the
+  normal production path, prod has zero rows).
 
-None deployed until all merge. No server-side creator/recorder = performer fallback; `AddLine`
-returns `ActualWork.PerformerRequired` without an explicit performer or a valid ticket default.
-Every commit ≤ 12 total / ≤ 8 production / ≤ 1 mutation family — proven per-commit counts in the
-P preflight.
+**4c-i is one deployable slice = eight commits**, none deployed until all merge; every commit ≤ 12
+total / ≤ 8 production / ≤ 1 mutation family — proven per-commit counts in
+[BL136 P preflight → Slice 4c-i](build-log/136-P-preflight.md).
 
-**Next:** Christian reviews and approves the rev. 3 4c-i deployable seam in
-[BL136 P preflight → Slice 4c-i](build-log/136-P-preflight.md). **Then** start code at `4c-i-0a`
-(`4c-i-r` may land in parallel; both precede the migration). Do not begin 4c-i code before that
-approval.
+**Session plan (one Claude session per commit unless noted; fresh session after each approved commit):**
+
+| # | Session | Produces | Depends on | Notes |
+|---|---|---|---|---|
+| — | *this session* | commit the rev. 4 docs, then stop | approval | no code this session |
+| 1 | seam prep | `4c-i-r` + `4c-i-0a` + `4c-i-0b` | — | all no-behaviour-change; fork the bulk test migration; may split if context tight |
+| 2 | `4c-i-a-1` | domain + persistence + EF config (7 prod + 4 test) | 1 | ends at reviewed diff |
+| — | *Christian* | `4c-i-mig` — author + apply `AddActualWorkPerformer` (`--startup-project src/OpHalo.Keep.Infrastructure`) | 2 | not a Claude session |
+| 3 | `4c-i-a-2` | assembly-expansion outcome contract (3 prod + 1 test) | 2 (not the migration) | |
+| 4 | `4c-i-b` | performer-candidate read + `SetDefaultPerformer` + create/add-line performer + HTTP test fixes (6 prod + 6 test) | 2, `4c-i-mig` | at the file gate; split to `b-1`/`b-2` if needed |
+| 5 | `4c-i-c` | minimum functional frontend (6 prod + 3 test) | 4 | last commit of the slice; deploy the whole slice after this |
+
+After `4c-i` deploys: `4c-ii` (VisitNote API), `4c-iii` (rich UI), `4d`, `4e-0/i/ii/iii`, `4f-i/ii`,
+`4g` — each its own session(s), per the BL136 per-slice split. Then BL135 Batch 5 (Billing Revision)
+resumes.
 
 **Still locked / preserved:** submitted facts and financial resolution/disposition evidence remain
 immutable and append-only; this sequence introduces no reopen or delete authority. Superseding a

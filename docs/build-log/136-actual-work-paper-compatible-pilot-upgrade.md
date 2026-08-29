@@ -63,34 +63,41 @@ Make request close reflect outstanding relevant Actual Work. Define and test how
 Each slice is independently compiling and sized against the CLAUDE.md batch gate (≤3 mutation
 families / ≤8 production files / ≤12 total). 4c, 4e, and 4f are split; 4d and 4g are single slices.
 
-- **4c-i** — performer attribution, delivered as **one deployable vertical slice** across seven
+- **4c-i** — performer attribution, delivered as **one deployable vertical slice** across eight
   gate-compliant commits, none deployed until all merge. Rollout seam
   (ADR-494 D1–D2): a strict non-null `PerformedByAccountUserId` must never sit behind an old API/UI
   that would fall back to a recorder default — the false office attribution this upgrade eliminates.
-  Exact impacted-file inventory and proven per-commit file counts are in the
-  [P preflight → Slice 4c-i](136-P-preflight.md).
+  An `ActualWorkLine` is created by **three routes** — direct `AddLine`, HTTP `POST …/lines`,
+  assembly expansion — all covered. Exact impacted-file inventory (13 test files) and proven
+  per-commit file counts are in the [P preflight → Slice 4c-i](136-P-preflight.md).
   - **4c-i-r** — developer reset/seed tool (D12) in its **own gated commit before the migration**:
     a checked-in script/seeder + usage note (2 files); no production code, no DI, no
     migration/startup/deploy wiring.
   - **4c-i-0a / 4c-i-0b** — test-construction seam (tests only, no production code, no behaviour
     change): one `ActualWorkTestData` helper per test project (the projects do not cross-reference)
-    wrapping `ActualWork.Create` + `AddLine`, migrating the **11 test files / 34 `ActualWork.AddLine`
-    call sites** enumerated in the P preflight. 0a = unit (3 files), 0b = integration (10). Forked.
-  - **4c-i-a** (Core + Infrastructure) — `ActualWorkLine.PerformedByAccountUserId` (non-null)
+    wrapping `ActualWork.Create` + `AddLine`, migrating the **11 direct-`AddLine` test files / 34
+    call sites**. 0a = unit (3 files), 0b = integration (10). Forked.
+  - **4c-i-a-1** (Core + Infrastructure) — `ActualWorkLine.PerformedByAccountUserId` (non-null)
     threaded through `Create`; `ActualWork.DefaultPerformedByAccountUserId` (nullable) + Draft-only
     recorder-only `SetDefaultPerformer` + optional default arg on `Create`; `AddLine` takes an
     optional explicit performer, seeds from the ticket default, returns `ActualWork.PerformerRequired`
-    when both absent (**no creator/recorder fallback**); `CompletionNote` trimmed-to-null / ≤2000
-    guard in `Submit` (D3); EF config; `ActualWorkErrors.PerformerRequired`; the two existing
-    `AddLine` callers thread the ticket default only (compile-level); both `ActualWorkTestData`
-    helpers gain the default. 7 prod + 4 test.
+    when both absent (**no creator/recorder fallback**); EF config; `ActualWorkErrors.PerformerRequired`;
+    the two existing `AddLine` callers thread the ticket default (compile-level — the assembly path's
+    proper outcome is `4c-i-a-2`); both `ActualWorkTestData` helpers gain the default. 7 prod + 4
+    test. *(No `CompletionNote` change — that guard is out of 4c-i, see below.)*
   - **4c-i-mig** — `AddActualWorkPerformer` EF migration, **authored and committed by Christian**
     (`dotnet ef migrations add … --startup-project src/OpHalo.Keep.Infrastructure`, ADR-049) once
-    4c-i-a's config merges. 3 generated files (migration + `.Designer` + `OpHaloDbContextModelSnapshot`
+    4c-i-a-1's config merges. 3 generated files (migration + `.Designer` + `OpHaloDbContextModelSnapshot`
     diff), 0 logic, 0 test. No backfill. Rollout: validated locally after the explicit 4c-i-r
     reset, then deployed through the **normal production migration path** with the slice; production
     holds zero Actual Work rows, so the strict non-null migration succeeds there without a backfill;
     the reset tool is local-only and is never invoked by the migration or the deployment.
+  - **4c-i-a-2** (Application + Infrastructure) — assembly expansion uses the **persisted ticket
+    default** for every line; a Draft with no default returns an explicit
+    `ActualWorkExpandAssemblyResult.PerformerRequired` (**never `NotDraft`**) with **no partial
+    writes**; a genuine non-`Draft` visit still returns `NotDraft`. `IActualWorkAssemblyExpansionPersistence`
+    (enum value) + `EfActualWorkAssemblyExpansionPersistence` (up-front default check, rollback) +
+    `ActualWorkDraftApiService` (map to `ActualWorkErrors.PerformerRequired`). 3 prod + 1 test.
   - **4c-i-b** (Application + Api) — new `GetActualWorkPerformerCandidatesService` **callable by any
     active `RequestsOperate` + `ActualWorkCapture` holder** (an Operator office transcriber), **not**
     the Owner/Admin-only `GetActualWorkRecorderCandidatesService`; new
@@ -100,15 +107,24 @@ families / ≤8 production files / ≤12 total). 4c, 4e, and 4f are split; 4d an
     request header via `ParseActualWorkVersion`, no body version, `ActualWorkConcurrencyVersionResponse`
     on success; `ActualWorkDraftApiService` create-draft accepts the explicit optional ticket
     default and add-line the explicit optional performer, all server-validated for the same
-    eligibility; `ActualWorkErrors.PerformerIneligible` (422). 6 prod + 3 test (set / replace /
-    clear / recorder-only / stale-version / ineligible cases).
+    eligibility; `ActualWorkErrors.PerformerIneligible` (422). 6 prod + 6 test — the three per-file
+    HTTP `CreateDraftAsync` helpers (`ActualWorkDraftApiTests`, `ActualWorkNudgeFieldReadApiTests`,
+    `ActualWorkFinancialResolutionApiTests`) each start sending a default; plus the new candidate
+    tests and `SetDefaultPerformer` cases (set / replace / clear / recorder-only / stale-version /
+    ineligible). Splits to `4c-i-b-1` + `4c-i-b-2` if review wants headroom.
   - **4c-i-c** — **minimum functional frontend** (`web/ophalo-app`), part of the deployable slice,
     not deferred. An explicit **UI-only** entry-intent choice *before* Draft creation (not a
     persisted `EntrySource`): **"Record my work"** → sends the current user as the visible ticket
     default; **"Transcribe work"** → sends no default and requires a technician selection (from the
     new performer-candidate read) **persisted via `SetDefaultPerformer`** before line entry, so it
-    survives reload and later lines inherit it. Add-line sends the explicit performer or the
-    persisted default. 5 prod + 3 test. Rich performer UI + history display remain 4c-iii.
+    survives reload and later lines inherit it. **Gates the whole add region — line, assembly
+    (`expandAssemblyMutation`), nudge-accept — until the default is persisted.** Add-line sends the
+    explicit performer or the persisted default. 6 prod + 3 test. Rich performer UI + history
+    display remain 4c-iii.
+  - **Deferred, not in 4c-i:** the `CompletionNote` trimmed-to-null / ≤2000 `Submit` guard (D3
+    intent). It is a separate note-validation behaviour that changes existing submit tests and is
+    unrelated to the performer seam; it needs its own bounded slice/preflight (may pair with 4c-ii's
+    `VisitNote` work, but only under its own preflight).
 - **4c-ii** — `VisitNote` API + read projections: new `SetVisitNote` Draft-guarded route (≤2000, trimmed-to-null, recorder-only); history + financial reads project performer display name and `VisitNote`. Application + Api.
 - **4c-iii** — rich field UI: composer per-line performer refinement + `VisitNote` textarea (price-blind); history card shows performer + `VisitNote` read-only. `web/ophalo-app`.
 - **4d** — recorder-initiated handoff: relax `TransferRecorderAsync` to allow the current recorder to transfer their own unsubmitted Draft (system reason); "hand off to office" UI. Application + Api + frontend.
