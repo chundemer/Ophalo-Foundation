@@ -371,10 +371,47 @@ signal. **No revision-membership check (D4).** Verified: full unit 1666/1666 (+3
 integration 219/219 (blocked path asserts reviewer/timestamp null + signal unresolved;
 mixed snapshot+resolution provenance), architecture 14/14, `git diff --check` clean.
 
-**Exact target for the next coding session:** **BL135 Batch 4 — Office financial-resolution UI**
-(review-card surface consuming the 3a-iii blockers/detail read and the 3b-i/3b-ii resolution +
-disposition + hard-gate contract). Follow BL135 §4 "Batch 4"; the office-closeout backend contract
-(Batches 3a–3b) is complete — do not re-run discovery.
+**Batch 4a (`hasNoChargeDisposition` on the financial-detail read) — COMPLETE (2026-08-28).**
+Backend read prerequisite split out of Batch 4 so the UI stays within the file gate. Application +
+API; 0 families; 2 prod / 1 test. `ActualWorkFinancialDetailResult` gains `bool HasNoChargeDisposition`;
+`GetFinancialDetailAsync` calls the already-injected `GetDispositionsForVisitAsync` and sets it to
+`dispositions.Any(d => d.Kind == NoCharge)` (always false for a visit with lines — disposition is
+zero-line-only). `KeepEndpoints` `ToActualWorkFinancialDetailResponse` serializes
+`hasNoChargeDisposition`. Gives the Batch 4b zero-line review card a truthful post-reload
+"disposition recorded" state instead of inferring it from a successful mutation; the hard review
+gate stays the race backstop. Tests: 3 cases in `ActualWorkFinancialReadApiTests` (zero-line no
+disposition → false; after a recorded `NoCharge` → true; visit with lines → false). Verified: read
+API integration 24/24, `~ActualWorkReviewApi`/`~ActualWorkDispositionApi`/`~ActualWorkFinancialResolutionApi`
+51/51, `~ActualWork` unit 91/91, full unit 1666/1666, architecture 14/14, `git diff --check` clean.
+
+**Exact target for the next coding session:** **BL135 Batch 4b — Office financial-resolution UI**
+(review-card surface consuming the 3a-iii blockers/detail read, the new 4a `hasNoChargeDisposition`
+flag, and the 3b-i/3b-ii resolution + disposition + hard-gate contract). `web/ophalo-app` only,
+7 prod / 4 test = 11 files. Prod: `lib/apiClient.ts`, `lib/apiClient.types.ts`,
+`pages/request-detail/useActualWorkFinancialReview.ts`, `ActualWorkReviewCard.tsx`,
+`RequestDetailContent.tsx` (thread the two new callbacks into the card — no second hook), new
+`FinancialResolutionForm.tsx` / `NoChargeDispositionForm.tsx`. Locked contract: the hook callbacks
+must return a **discriminated outcome** (success / validation-failure / reconciled-conflict-or-not-found
+/ hidden-forbidden) so the forms can preserve drafts and focus the first errored field on 400 without
+guessing. Resolution entry point only for incomplete lines and only the missing component(s);
+per-visit mutation serialization with authoritative reload before re-enabling; distinguish the two
+`ReviewBlocked*` codes in the notice without leaking financial detail on 403; 404/409 from a
+resolution/disposition reloads the visit and clears stale form state. Visual: existing request-page
+Work Canvas language (one `rounded-xl` card, native `<details>`, `KeepButton`, tokens, inline
+alerts) with compact inline expandable forms — no drawer/modal; the request list stays a queue
+surface. Follow BL135 §4 "Batch 4"; backend contract complete — do not re-run discovery.
+
+**Deferred UI follow-up — Request Workbench primary-tab selection (2026-08-28).** In the wide
+two-pane Request Workbench, selecting a primary queue tab such as **Mine** currently preserves an
+already-open detail even when that request is outside the newly selected queue. This follows the
+existing no-reselection implementation, but is not the intended business behavior: explicitly
+choosing a primary queue is a work-context switch. Address after the Actual Work release slices in
+a separately preflighted UI change: once the selected tab's settled ranked queue loads, select its
+first visible/API-ranked request; if empty, show that queue's empty/preview state rather than an
+unrelated detail. Search and secondary-filter changes may preserve the open detail while it remains
+in the result set, clearing it only once it no longer matches. Test Mine selection, empty queues,
+and the distinction between primary-tab switches and secondary filters. Do not silently promote an
+attention request ahead of the first ranked row.
 
 ### Next after the release gate — triage, do not silently bundle
 

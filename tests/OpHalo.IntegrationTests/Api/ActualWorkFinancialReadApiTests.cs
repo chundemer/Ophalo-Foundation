@@ -431,9 +431,65 @@ public sealed class ActualWorkFinancialReadApiTests : IClassFixture<KeepApiWebFa
         Assert.Equal(6.68m, body.GetProperty("totalMargin").GetDecimal());
     }
 
+    // --- BL135 Batch 4a: financial-detail hasNoChargeDisposition flag ---
+
+    [Fact]
+    public async Task FinancialDetail_ZeroLineVisit_WithoutDisposition_HasNoChargeDispositionFalse()
+    {
+        var (accountId, ownerId, ownerCookie) = await SeedAccountAsync("detail-disp-none");
+        await EnrollAsync(accountId, ownerId);
+        var requestId = await SeedRequestAsync(accountId, "Jane Customer");
+        var visitId = await CreateVisitAsync(accountId, requestId, ownerId, submit: true, review: false);
+
+        var body = await (await GetDetailAsync(ownerCookie, visitId)).Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.Empty(body.GetProperty("lines").EnumerateArray().ToArray());
+        Assert.False(body.GetProperty("hasNoChargeDisposition").GetBoolean());
+    }
+
+    [Fact]
+    public async Task FinancialDetail_ZeroLineVisit_WithNoChargeDisposition_HasNoChargeDispositionTrue()
+    {
+        var (accountId, ownerId, ownerCookie) = await SeedAccountAsync("detail-disp-recorded");
+        await EnrollAsync(accountId, ownerId);
+        var requestId = await SeedRequestAsync(accountId, "Jane Customer");
+        var visitId = await CreateVisitAsync(accountId, requestId, ownerId, submit: true, review: false);
+        await SeedDispositionAsync(accountId, visitId, ownerId);
+
+        var body = await (await GetDetailAsync(ownerCookie, visitId)).Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.True(body.GetProperty("hasNoChargeDisposition").GetBoolean());
+    }
+
+    [Fact]
+    public async Task FinancialDetail_VisitWithLines_HasNoChargeDispositionFalse()
+    {
+        var (accountId, ownerId, ownerCookie) = await SeedAccountAsync("detail-disp-with-lines");
+        await EnrollAsync(accountId, ownerId);
+        var requestId = await SeedRequestAsync(accountId, "Jane Customer");
+        var visitId = await CreateVisitAsync(
+            accountId, requestId, ownerId, submit: true, review: false,
+            lines: [((Guid?)null, (Guid?)null, (decimal?)null, (decimal?)null, 1m)]);
+
+        var body = await (await GetDetailAsync(ownerCookie, visitId)).Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.False(body.GetProperty("hasNoChargeDisposition").GetBoolean());
+    }
+
     // -------------------------------------------------------------------------
     // Helpers
     // -------------------------------------------------------------------------
+
+    private async Task SeedDispositionAsync(Guid accountId, Guid visitId, Guid actorAccountUserId)
+    {
+        await using var scope = _factory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+        var disposition = ActualWorkOfficeFinancialDisposition.Create(
+            accountId, visitId, OfficeFinancialDispositionKind.NoCharge, "no charge",
+            actorAccountUserId, DateTime.UtcNow).Value;
+        db.Add(disposition);
+        await db.SaveChangesAsync();
+    }
 
     private async Task<Guid> FirstLineIdAsync(Guid visitId)
     {

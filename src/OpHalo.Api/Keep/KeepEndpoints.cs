@@ -1280,6 +1280,7 @@ public static class KeepEndpoints
         totalMargin = result.TotalMargin,
         lines = result.Lines.Select(ToFinancialLineResponse),
         concurrencyVersion = result.ConcurrencyVersion,
+        hasNoChargeDisposition = result.HasNoChargeDisposition,
         blockers = result.Blockers.Select(b => new
         {
             lineId = b.LineId,

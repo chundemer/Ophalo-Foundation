@@ -90,7 +90,12 @@ public sealed record ActualWorkFinancialDetailResult(
     decimal? TotalMargin,
     IReadOnlyList<ActualWorkFinancialLineEntry> Lines,
     Guid ConcurrencyVersion,
-    IReadOnlyList<ActualWorkFinancialBlocker> Blockers);
+    IReadOnlyList<ActualWorkFinancialBlocker> Blockers,
+    // BL135 §4 Batch 4a: true once a NoCharge office disposition has been recorded for this visit.
+    // The zero-line review card reads this for a truthful post-reload "disposition recorded" state
+    // rather than inferring it from a successful mutation; the hard review gate stays the race
+    // backstop. Always false for a visit that has lines (disposition is zero-line-only).
+    bool HasNoChargeDisposition);
 
 /// <summary>
 /// API-facing read orchestration for Owner/Admin Actual Work financial review (Batch 7,
@@ -173,8 +178,15 @@ public sealed class ActualWorkFinancialReadApiService(
         var resolutions = await financialResolutionPersistence.GetResolutionsForVisitAsync(
             currentUser.AccountId, actualWorkId, ct);
 
+        // BL135 §4 Batch 4a: expose whether a zero-line NoCharge disposition already exists so the
+        // review card can render a truthful recorded state after an authoritative reload.
+        var dispositions = await financialResolutionPersistence.GetDispositionsForVisitAsync(
+            currentUser.AccountId, actualWorkId, ct);
+        var hasNoChargeDisposition =
+            dispositions.Any(d => d.Kind == OfficeFinancialDispositionKind.NoCharge);
+
         return Result<ActualWorkFinancialDetailResult>.Success(
-            ToDetailResult(visit, reviewedByDisplayName, resolutions));
+            ToDetailResult(visit, reviewedByDisplayName, resolutions, hasNoChargeDisposition));
     }
 
     /// <summary>The review-queue source seam does not carry financial-resolution rows, so queue-row
@@ -195,7 +207,8 @@ public sealed class ActualWorkFinancialReadApiService(
 
     private static ActualWorkFinancialDetailResult ToDetailResult(
         ActualWork visit, string? reviewedByDisplayName,
-        IReadOnlyList<ActualWorkLineFinancialResolution> resolutions)
+        IReadOnlyList<ActualWorkLineFinancialResolution> resolutions,
+        bool hasNoChargeDisposition)
     {
         var lines = visit.Lines.OrderBy(l => l.CreatedAtUtc).ThenBy(l => l.Id).ToArray();
         var projection = ActualWorkFinancialProjection.ProjectVisit(lines, resolutions);
@@ -206,7 +219,7 @@ public sealed class ActualWorkFinancialReadApiService(
             visit.RecorderAccountUserId, visit.SubmittedAtUtc!.Value, visit.ReviewedAtUtc,
             visit.ReviewedByAccountUserId, reviewedByDisplayName, visit.ReviewNote, totals.HasIncompleteFinancialData,
             totals.TotalSalesPrice, totals.TotalStandardExpectedDirectCost, totals.TotalMargin,
-            projection.Lines, visit.ConcurrencyVersion, projection.Blockers);
+            projection.Lines, visit.ConcurrencyVersion, projection.Blockers, hasNoChargeDisposition);
     }
 
     /// <summary>Owner/Admin office-review gate: authenticated, non-blocked/read-only account access,
