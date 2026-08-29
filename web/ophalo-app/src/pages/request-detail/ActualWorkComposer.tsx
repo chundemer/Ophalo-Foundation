@@ -16,6 +16,10 @@ import {
   type FieldScopeSearchResultResponse,
 } from "../../lib/apiClient";
 import { ACTUAL_WORK_RECONCILE_RELOAD_FAILURE_NOTICE } from "./useActualWorkCapture";
+
+/** Mirrors `useActualWorkCapture`'s `setDefaultPerformer` return contract (kept local — the hook
+ * declares it inline). `set` unmounts this gate on the parent's refetch; the rest stay in place. */
+type SetDefaultPerformerOutcome = "set" | "ineligible" | "stale" | "failed";
 import { ConnectionFailureBanner } from "./ConnectionFailureBanner";
 import { announcePolite } from "../../lib/liveAnnouncer";
 
@@ -55,6 +59,14 @@ interface ActualWorkComposerProps {
   onSubmitted: () => void;
   onDiscarded: () => void;
   submittedVisits?: ActualWorkSubmittedVisitEntry[];
+  // 4c-i-c-2 (ADR-494 D2): the caller's own account-user id, used only to render "you" in the
+  // performer caption when the Draft's persisted default is the current user and its display name
+  // has not yet been resolved by the projection.
+  currentAccountUserId?: string;
+  // Persists the office-transcription path's selected technician as the Draft's ticket default
+  // (recorder-only, Draft-only, existing version protocol). Until it resolves `"set"`, the entire
+  // add region — direct add-line, assembly expansion, nudge-accept — stays gated.
+  onSetDefaultPerformer: (performerId: string | null) => Promise<SetDefaultPerformerOutcome>;
 }
 
 /**
@@ -79,10 +91,16 @@ export function ActualWorkComposer({
   onSubmitted,
   onDiscarded,
   submittedVisits = [],
+  currentAccountUserId,
+  onSetDefaultPerformer,
 }: ActualWorkComposerProps) {
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [submitted, setSubmitted] = useState(false);
   const readOnly = submitted || draft.status !== "Draft";
+  // ADR-494 D2: no line-creation route opens until the Draft carries a ticket-default performer.
+  // "Record my work" seeds it at create time; "Transcribe work" leaves it null and the gate below
+  // collects + persists one first (and stays gated across a reload until the projection confirms).
+  const needsPerformer = !readOnly && !draft.defaultPerformedByAccountUserId;
 
   // Slice 5a: one composer-level connection-failure recovery point rather than six inline ones —
   // a later failure replaces the earlier one, since only one operation's recovery is ever pending
@@ -212,16 +230,28 @@ export function ActualWorkComposer({
             <div><h3 className="text-xs font-bold uppercase tracking-wide text-[var(--ophalo-ink)]">Active visit draft</h3><p className="mt-0.5 text-xs text-[var(--ophalo-muted)]">Editable work for this visit</p></div>
             <span className="rounded border border-sky-300 bg-white px-2 py-0.5 text-xs font-semibold text-sky-800">Editable</span>
           </div>
-          {!readOnly && (
-            <ActualWorkSearchAndAdd
-              ref={searchInputRef}
-              actualWorkId={draft.id}
-              version={draft.concurrencyVersion}
-              onCommitted={onCommitted}
-              onConflict={onConflict}
-              onConnectionFailure={reportConnectionFailure}
-              onConnectionRecovered={clearConnectionFailure}
-            />
+          {needsPerformer && (
+            <ActualWorkPerformerGate onSetDefaultPerformer={onSetDefaultPerformer} />
+          )}
+          {!readOnly && !needsPerformer && (
+            <>
+              <ActualWorkPerformerCaption
+                name={draft.defaultPerformerDisplayName ?? null}
+                isSelf={
+                  !!currentAccountUserId &&
+                  draft.defaultPerformedByAccountUserId === currentAccountUserId
+                }
+              />
+              <ActualWorkSearchAndAdd
+                ref={searchInputRef}
+                actualWorkId={draft.id}
+                version={draft.concurrencyVersion}
+                onCommitted={onCommitted}
+                onConflict={onConflict}
+                onConnectionFailure={reportConnectionFailure}
+                onConnectionRecovered={clearConnectionFailure}
+              />
+            </>
           )}
         <div className="space-y-2">
           {draft.lines.length === 0 && (
@@ -285,6 +315,88 @@ export function ActualWorkComposer({
 function SubmittedVisits({ visits }: { visits: ActualWorkSubmittedVisitEntry[] }) {
   if (visits.length === 0) return null;
   return <section className="border-t border-[var(--ophalo-border)] pt-4"><div className="mb-2 flex items-center justify-between"><h3 className="text-xs font-bold uppercase tracking-wide text-[var(--ophalo-muted)]">Submitted visits (locked)</h3><span className="text-[11px] text-[var(--ophalo-muted)]">Read-only audit record</span></div><div className="space-y-2">{visits.map((visit, index) => <details key={visit.id} className="group rounded-lg border border-[var(--ophalo-border)] bg-[var(--ophalo-canvas)]"><summary className={`flex cursor-pointer list-none items-center justify-between gap-2 px-3 py-2 text-xs font-medium text-[var(--ophalo-ink)] ${FOCUS_RING}`}><span className="flex items-center gap-2"><Lock className="h-3.5 w-3.5 text-[var(--ophalo-muted)]" />Visit #{visits.length - index} · {visit.submittedAtUtc ? new Date(visit.submittedAtUtc).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : "Submitted"}<span className="rounded bg-slate-200 px-1.5 py-0.5 text-[10px]">{visit.lines.length} item{visit.lines.length === 1 ? "" : "s"}</span></span><ChevronRight className="h-3.5 w-3.5 transition-transform group-open:rotate-90" /></summary><div className="border-t border-[var(--ophalo-border)] px-3 py-2 space-y-1">{visit.lines.map((line) => <p key={line.id} className="text-xs text-[var(--ophalo-muted)]">{line.displayNameSnapshot} — {line.actualQuantity} {line.unitOfMeasureSnapshot ?? ""}</p>)}</div></details>)}</div></section>;
+}
+
+/** ADR-494 D2: the office-transcription entry point. No add-line / assembly / nudge affordance is
+ * mounted while this is showing — the caller must pick the technician the paper ticket belongs to
+ * and persist it as the Draft's ticket default first. On a `"set"` outcome the parent refetches and
+ * this subtree unmounts; every other outcome keeps the selector in place. */
+function ActualWorkPerformerGate({
+  onSetDefaultPerformer,
+}: {
+  onSetDefaultPerformer: (performerId: string | null) => Promise<SetDefaultPerformerOutcome>;
+}) {
+  const [selected, setSelected] = useState("");
+  const [status, setStatus] = useState<"idle" | "saving" | "ineligible" | "stale" | "failed">("idle");
+
+  const { data, isLoading } = useQuery({
+    queryKey: ["actualWorkPerformerCandidates"],
+    queryFn: () => api.getActualWorkPerformerCandidates(),
+  });
+  const candidates = data?.candidates ?? [];
+
+  async function confirm() {
+    if (!selected || status === "saving") return;
+    setStatus("saving");
+    const outcome = await onSetDefaultPerformer(selected);
+    setStatus(outcome === "set" ? "idle" : outcome);
+  }
+
+  const message =
+    status === "ineligible"
+      ? "That person can't be recorded as the performer."
+      : status === "stale"
+        ? "This draft changed elsewhere — reopen it to continue."
+        : status === "failed"
+          ? "Couldn't save. Try again."
+          : null;
+
+  return (
+    <div className="rounded-lg border border-[var(--ophalo-border)] p-3 space-y-2">
+      <div>
+        <p className="text-sm font-medium text-[var(--ophalo-ink)]">Whose work is this?</p>
+        <p className="mt-0.5 text-xs text-[var(--ophalo-muted)]">
+          Add items after you pick the technician this ticket belongs to.
+        </p>
+      </div>
+      <select
+        value={selected}
+        onChange={(e) => setSelected(e.target.value)}
+        disabled={isLoading || status === "saving"}
+        aria-label="Technician"
+        className={INPUT_CLS}
+      >
+        <option value="">{isLoading ? "Loading…" : "Select a technician"}</option>
+        {candidates.map((candidate) => (
+          <option key={candidate.accountUserId} value={candidate.accountUserId}>
+            {candidate.displayName} — {candidate.role}
+          </option>
+        ))}
+      </select>
+      {message && <p className="text-xs text-[var(--ophalo-danger,#c0392b)]">{message}</p>}
+      <KeepButton
+        variant="teal"
+        disabled={!selected || status === "saving"}
+        onClick={() => void confirm()}
+        className="w-full"
+      >
+        Confirm technician
+      </KeepButton>
+    </div>
+  );
+}
+
+/** One-line attribution above the add region once a ticket default exists: the resolved performer
+ * name from the projection, or "you" when the default is the current user and the name has not been
+ * resolved yet (the optimistic "Record my work" create carries no display name). */
+function ActualWorkPerformerCaption({ name, isSelf }: { name: string | null; isSelf: boolean }) {
+  const label = name ?? (isSelf ? "you" : null);
+  if (!label) return null;
+  return (
+    <p className="text-xs text-[var(--ophalo-muted)]">
+      Recording work for <span className="font-medium text-[var(--ophalo-ink)]">{label}</span>
+    </p>
+  );
 }
 
 interface ActualWorkSearchAndAddProps {

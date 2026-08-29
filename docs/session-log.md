@@ -408,7 +408,7 @@ correction applied pre-commit: partial-component resolution + client negative ch
 full frontend suite **799/799** (90 files, +4), `tsc --noEmit` clean, `check:tokens` passed,
 `git diff --check` clean.
 
-### Claude handoff — 4c-i `4c-i-c-1` DONE (`4a0d8ff`); next is `4c-i-c-2` (last commit of the slice); see session plan below
+### Claude handoff — 4c-i `4c-i-c-2` DONE (pending commit) — slice code-complete (10/10); deploy the merged slice per the gate below
 
 **BL136 P (workflow/mechanical preflight) is complete.** ADR-494 (D1–D12) committed at `2118293`;
 the ADR-487 wording fix + 4c-i seam preflight rev. 3 committed at `644aa4a`; the rev. 4 docs
@@ -538,28 +538,31 @@ integration **253/253** (+1), `~ActualWork` unit **111/111**, architecture **14/
 0 warnings; frontend `tsc` + `check:tokens` clean, full app suite **804/804**; `git diff --check`
 clean.
 
-**Next — `4c-i-c-2`, fresh Claude session.** Card + composer + wiring; last commit of the slice —
-deploy the whole merged `4c-i` slice after it lands (see the deploy gate above). Scope:
-- `ActualWorkCard.tsx` — UI-only "Record my work" vs "Transcribe work" choice in the `no-draft`
-  state, before Draft creation (not a persisted `EntrySource`); calls `onStartCapture(intent)`.
-- `ActualWorkComposer.tsx` — gate the **entire add region** until
-  `draft.defaultPerformedByAccountUserId` is populated: `ActualWorkSearchAndAdd` (direct add-line),
-  `expandAssemblyMutation` (assembly expansion, `:391`), **and** `ActualWorkNudgeChips` (nudge
-  accept). Transcribe path renders a technician selector (candidates via a composer-level
-  `useQuery` on `getActualWorkPerformerCandidates`) that persists through
-  `actualWorkCapture.setDefaultPerformer`; "Record my work" path shows the preset default (name
-  from the projection after the c-1 refetch, or "You" when null and id === self).
-- `RequestDetailContent.tsx` — thread the intent through `onStartCapture`.
-- `RequestDetail.tsx` — pass `currentAccountUserId={meQuery.data?.accountUserId}` into
-  `RequestDetailContent` → `useActualWorkCapture`.
-- Tests (2): `ActualWorkCard.test.tsx` (both entry choices; payload differs),
-  `ActualWorkComposer.test.tsx` (transcribe path blocks add-line **and** expand-assembly until the
-  default persists, then both inherit it).
-- Gate: `check:tokens`, `tsc --noEmit`, full frontend suite; no money field on the field surface;
-  no add-region affordance (line / assembly / nudge) live before a default exists.
-- Note: `ActualWorkPerformerEligibility` does **not** exclude Owner/Admin (only the recorder-
-  *candidate service caller* is Owner/Admin-only) — an Owner holding `RequestsOperate` +
-  `ActualWorkCapture` is a valid "Record my work" performer.
+**Session 7 (`4c-i-c-2`) — COMPLETE (2026-08-29), pending commit.** Card + composer add-region gate
++ wiring, 6 files (4 prod + 2 test), 0 mutation families. `ActualWorkCard` `no-draft` state now
+offers the UI-only entry-intent choice — **"Record my work"** (`record-mine`) vs **"Enter a tech's
+work"** (`transcribe`, label changed from "Transcribe work" — Christian, 2026-08-29); resume/draft
+states unchanged; `onStartCapture` is `(intent?) => void`. `ActualWorkComposer` gains
+`currentAccountUserId?` + `onSetDefaultPerformer` props: `needsPerformer = !readOnly &&
+!draft.defaultPerformedByAccountUserId` swaps the whole `ActualWorkSearchAndAdd` subtree (direct
+add-line, `expandAssemblyMutation`, `ActualWorkNudgeChips` — all inline in it) for a new
+`ActualWorkPerformerGate` (composer-level `useQuery` on `getActualWorkPerformerCandidates`, `<select>`
++ "Confirm technician", inline `ineligible`/`stale`/`failed` messages); once a default exists a new
+`ActualWorkPerformerCaption` shows "Recording work for {name}" / "you" (self + unresolved name) above
+the live add region. Add-line sends no explicit performer — the server seeds every route from the
+persisted ticket default. `RequestDetailContent` gains `currentAccountUserId?` → threaded into
+`useActualWorkCapture` + the composer; intent flows through `onStartCapture`. `RequestDetail` passes
+`currentAccountUserId={meQuery.data?.accountUserId}`. Tests: `ActualWorkCard.test.tsx` (both entry
+choices + intent payload), `ActualWorkComposer.test.tsx` (`emptyDraft` helper seeds a default so
+existing add/assembly/nudge tests stay green; +3 gate facts — region blocked until persist, then
+add-line **and** expand-assembly both un-gate and inherit it; `ineligible` stays on the gate).
+Verified: `tsc --noEmit` clean, `check:tokens` passed, full frontend suite **808/808** (90 files,
++4), `git diff --check` clean. No money field on the field surface; no add affordance live before a
+default exists.
+
+**`4c-i` slice is now code-complete (10/10 commits).** Deploy gate above applies: verify prod
+`SELECT count(*) FROM keep_actual_work_lines` is 0, flip the Railway migrate-on-start variable,
+deploy the whole merged slice, smoke-test capture.
 
 **rev. 4 changes (committed `52e490d`), from the advisor review:**
 - **Assembly expansion is a third line-creation route.** `EfActualWorkAssemblyExpansionPersistence`
@@ -597,7 +600,7 @@ transcribe reload-persistence requirement made it necessary — 0 mutation famil
 | 4a | *done* — `4c-i-b-1` | performer-candidate read + create/add-line explicit performer + HTTP test fixes (7 prod + 4 test) | 2, `4c-i-mig` | pending commit; inherited default frozen at selection |
 | 4b | *done* — `4c-i-b-2` `6150363` | `SetDefaultPerformer` route + service + tests (3 files) | 4a | recorder-only Draft mutation, existing concurrency protocol |
 | 5a | *done* — `4c-i-c-1` `4a0d8ff` | open-draft default-performer read + api client/hook (5 prod + 2 test) | 4b | 0 mutation families; added the projection exposure BL136-P missed |
-| 5b | `4c-i-c-2` | card + composer add-region gate + wiring (4 prod + 2 test) | 5a | last commit of the slice; deploy the whole slice after this |
+| 5b | *done* — `4c-i-c-2` | card + composer add-region gate + wiring (4 prod + 2 test) | 5a | pending commit; last commit of the slice — deploy the whole merged slice after it lands |
 
 After `4c-i` deploys: `4c-ii` (VisitNote API), `4c-iii` (rich UI), `4d`, `4e-0/i/ii/iii`, `4f-i/ii`,
 `4g` — each its own session(s), per the BL136 per-slice split. Then BL135 Batch 5 (Billing Revision)

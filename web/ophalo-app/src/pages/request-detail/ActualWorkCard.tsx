@@ -1,11 +1,18 @@
 import { ClipboardList } from "lucide-react";
 import { KeepBadge } from "../../components/keep/KeepBadge";
 import { KeepButton } from "../../components/keep/KeepButton";
-import { type ActualWorkCaptureState, type ActualWorkRecoveryNotice } from "./useActualWorkCapture";
+import {
+  type ActualWorkCaptureState,
+  type ActualWorkEntryIntent,
+  type ActualWorkRecoveryNotice,
+} from "./useActualWorkCapture";
 
 interface ActualWorkCardProps {
   state: ActualWorkCaptureState;
-  onStartCapture: () => void;
+  // 4c-i-c-2 (ADR-494 D2): the UI-only entry intent. Only meaningful in the `no-draft` state, where
+  // the card offers "Record my work" (`record-mine`) vs "Enter a tech's work" (`transcribe`); resuming
+  // an existing Draft passes no intent (the persisted default already decided it).
+  onStartCapture: (intent?: ActualWorkEntryIntent) => void;
   // 1a-ii-b: opens the Owner/Admin recorder-transfer recovery drawer. Only wired for the
   // `owner-recovery` state.
   onReassignRecorder?: () => void;
@@ -141,15 +148,37 @@ export function ActualWorkCard({
           <p className="text-xs text-[var(--ophalo-muted)] truncate">{summary}</p>
         </div>
         {/* secondary, not teal — the Anchor owns the one primary-weight action (locked spec);
-            this module's CTA must not visually compete with it or the composer's submit button. */}
-        <KeepButton
-          variant="secondary"
-          onClick={onStartCapture}
-          className="shrink-0 inline-flex items-center gap-1.5"
-        >
-          <ClipboardList className="h-3.5 w-3.5 shrink-0" />
-          {isDraft ? (hasSavedLines ? "Continue draft" : "Resume draft") : "Add actual work"}
-        </KeepButton>
+            this module's CTA must not visually compete with it or the composer's submit button.
+            4c-i-c-2: before a Draft exists, the recorder chooses the entry intent (own work vs
+            transcribing a paper ticket) — a UI-only branch, never a persisted EntrySource. */}
+        {isNoDraft ? (
+          <div className="flex shrink-0 items-center gap-2">
+            <KeepButton
+              variant="secondary"
+              onClick={() => onStartCapture("record-mine")}
+              className="inline-flex items-center gap-1.5"
+            >
+              <ClipboardList className="h-3.5 w-3.5 shrink-0" />
+              Record my work
+            </KeepButton>
+            <KeepButton
+              variant="secondary"
+              onClick={() => onStartCapture("transcribe")}
+              className="inline-flex items-center gap-1.5"
+            >
+              Enter a tech&apos;s work
+            </KeepButton>
+          </div>
+        ) : (
+          <KeepButton
+            variant="secondary"
+            onClick={() => onStartCapture()}
+            className="shrink-0 inline-flex items-center gap-1.5"
+          >
+            <ClipboardList className="h-3.5 w-3.5 shrink-0" />
+            {hasSavedLines ? "Continue draft" : "Resume draft"}
+          </KeepButton>
+        )}
       </div>
     </div>
   );

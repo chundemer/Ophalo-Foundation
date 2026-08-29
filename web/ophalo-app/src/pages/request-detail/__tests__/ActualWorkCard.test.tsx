@@ -4,12 +4,25 @@ import { ActualWorkCard } from "../ActualWorkCard";
 import type { ActualWorkCaptureState } from "../useActualWorkCapture";
 
 describe("ActualWorkCard", () => {
-  it("labels an empty draft (no open draft) as 'Add actual work', never 'Resume'", () => {
+  it("offers the two entry-intent choices (no draft yet), never a Resume label", () => {
     const state: ActualWorkCaptureState = { status: "no-draft", submittedCount: 0 };
     render(<ActualWorkCard state={state} onStartCapture={vi.fn()} />);
-    expect(screen.getByRole("button", { name: /Add actual work/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Record my work/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Enter a tech's work/ })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Resume/ })).not.toBeInTheDocument();
     expect(screen.queryByText(/Draft — not submitted/)).not.toBeInTheDocument();
+  });
+
+  it("passes 'record-mine' from Record my work and 'transcribe' from Enter a tech's work", () => {
+    const onStartCapture = vi.fn();
+    const state: ActualWorkCaptureState = { status: "no-draft", submittedCount: 0 };
+    render(<ActualWorkCard state={state} onStartCapture={onStartCapture} />);
+
+    screen.getByRole("button", { name: /Record my work/ }).click();
+    expect(onStartCapture).toHaveBeenLastCalledWith("record-mine");
+
+    screen.getByRole("button", { name: /Enter a tech's work/ }).click();
+    expect(onStartCapture).toHaveBeenLastCalledWith("transcribe");
   });
 
   it("labels an open draft with zero lines as 'Resume draft', never 'Add actual work'", () => {

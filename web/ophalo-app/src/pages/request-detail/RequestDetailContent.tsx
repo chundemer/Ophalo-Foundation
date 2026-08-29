@@ -46,6 +46,9 @@ interface RequestDetailContentProps extends RequestDetailLayoutProps {
   onNavigate?: (id: string) => void;
   onOpenClearAttention: () => void;
   canReviewActualWork?: boolean;
+  // 4c-i-c-2: the signed-in member's account-user id, threaded into useActualWorkCapture so
+  // "Record my work" can seed the Draft's ticket-default performer with the caller.
+  currentAccountUserId?: string;
   focusPanel?: string;
   onActualWorkReviewSuccess?: () => void;
 }
@@ -61,7 +64,7 @@ export function RequestDetailContent(props: RequestDetailContentProps) {
   const { detail, requestId, highlights, showProminentFeedbackCard, onDetailUpdated, onContactLaunched, onEditLocation, onOpenReassignOwner, onOpenWatchers, onRecordFollowUp, onCreateFollowUp, onReviewSuccess, onOpenClearAttention } = props;
   const layoutProps: RequestDetailLayoutProps = { requestId, detail, highlights, showProminentFeedbackCard, onDetailUpdated, onContactLaunched, onEditLocation, onOpenReassignOwner, onOpenWatchers, onRecordFollowUp, onCreateFollowUp, onReviewSuccess };
   const composerRef = useRef<UnifiedComposerHandle>(null);
-  const actualWorkCapture = useActualWorkCapture(requestId);
+  const actualWorkCapture = useActualWorkCapture(requestId, props.currentAccountUserId);
   const actualWorkHistory = useActualWorkHistory(requestId);
   const actualWorkFinancialReview = useActualWorkFinancialReview(
     props.canReviewActualWork && actualWorkHistory.state.status === "loaded" ? actualWorkHistory.state.submittedVisits : [],
@@ -194,7 +197,7 @@ export function RequestDetailContent(props: RequestDetailContentProps) {
           <div className="rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] divide-y divide-[var(--ophalo-border)]">
             <ActualWorkCard
               state={actualWorkCapture.state}
-              onStartCapture={() => void actualWorkCapture.startCapture()}
+              onStartCapture={(intent) => void actualWorkCapture.startCapture(intent)}
               onReassignRecorder={() => setRecorderDrawerOpen(true)}
               recoveryNotice={actualWorkCapture.recoveryNotice}
               onDismissRecoveryNotice={actualWorkCapture.clearRecoveryNotice}
@@ -302,6 +305,8 @@ export function RequestDetailContent(props: RequestDetailContentProps) {
           }}
           onDiscarded={actualWorkCapture.onDraftDiscarded}
           submittedVisits={actualWorkHistory.state.status === "loaded" ? actualWorkHistory.state.submittedVisits : []}
+          currentAccountUserId={props.currentAccountUserId}
+          onSetDefaultPerformer={actualWorkCapture.setDefaultPerformer}
         />
       )}
       {recorderDrawerOpen && actualWorkCapture.state.status === "owner-recovery" && (

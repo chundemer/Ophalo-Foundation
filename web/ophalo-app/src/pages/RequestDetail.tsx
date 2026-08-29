@@ -827,6 +827,7 @@ export function RequestDetail({ requestId, focusPanel, onBack, prevId, nextId, o
         displayedEvents={displayedEvents}
         onNavigate={onNavigate}
         canReviewActualWork={meQuery.data?.accountRole === "owner" || meQuery.data?.accountRole === "admin"}
+        currentAccountUserId={meQuery.data?.accountUserId}
         focusPanel={focusPanel}
         onActualWorkReviewSuccess={handleActualWorkReviewSuccess}
       />}

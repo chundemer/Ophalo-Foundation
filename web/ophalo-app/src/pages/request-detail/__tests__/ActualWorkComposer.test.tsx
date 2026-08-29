@@ -16,6 +16,7 @@ const mockSubmitActualWork = vi.fn();
 const mockDiscardActualWork = vi.fn();
 const mockExpandActualWorkAssembly = vi.fn();
 const mockGetActualWorkNudgeFieldSuggestions = vi.fn();
+const mockGetActualWorkPerformerCandidates = vi.fn();
 
 vi.mock("../../../lib/apiClient", async () => {
   const actual = await vi.importActual<typeof import("../../../lib/apiClient")>("../../../lib/apiClient");
@@ -31,6 +32,7 @@ vi.mock("../../../lib/apiClient", async () => {
       discardActualWork: (...args: unknown[]) => mockDiscardActualWork(...args),
       expandActualWorkAssembly: (...args: unknown[]) => mockExpandActualWorkAssembly(...args),
       getActualWorkNudgeFieldSuggestions: (...args: unknown[]) => mockGetActualWorkNudgeFieldSuggestions(...args),
+      getActualWorkPerformerCandidates: (...args: unknown[]) => mockGetActualWorkPerformerCandidates(...args),
     },
   };
 });
@@ -54,6 +56,10 @@ function emptyDraft(overrides: Partial<ActualWorkDraft> = {}): ActualWorkDraft {
     submittedAtUtc: null,
     concurrencyVersion: "v1",
     isRecorder: true,
+    // 4c-i-c-2: a persisted ticket-default performer is the precondition for the add region. Every
+    // existing add/assembly/nudge test assumes it is present; the gate tests override it to null.
+    defaultPerformedByAccountUserId: "au-self",
+    defaultPerformerDisplayName: "Sam Field",
     lines: [],
     ...overrides,
   };
@@ -68,6 +74,7 @@ function renderComposer(overrides: Partial<React.ComponentProps<typeof ActualWor
   const onRetryReconciliation = vi.fn();
   const onSubmitted = vi.fn();
   const onDiscarded = vi.fn();
+  const onSetDefaultPerformer = vi.fn().mockResolvedValue("set");
   const utils = render(
     <QueryClientProvider client={queryClient}>
       <ActualWorkComposer
@@ -81,11 +88,12 @@ function renderComposer(overrides: Partial<React.ComponentProps<typeof ActualWor
         onRetryReconciliation={onRetryReconciliation}
         onSubmitted={onSubmitted}
         onDiscarded={onDiscarded}
+        onSetDefaultPerformer={onSetDefaultPerformer}
         {...overrides}
       />
     </QueryClientProvider>,
   );
-  return { ...utils, onClose, onCommitted, onConflict, onDismissNotice, onRetryReconciliation, onSubmitted, onDiscarded };
+  return { ...utils, onClose, onCommitted, onConflict, onDismissNotice, onRetryReconciliation, onSubmitted, onDiscarded, onSetDefaultPerformer };
 }
 
 beforeEach(() => {
@@ -96,6 +104,12 @@ beforeEach(() => {
     triggerCatalogItemId: null,
     triggerOfferingAssemblyId: null,
     suggestions: [],
+  });
+  mockGetActualWorkPerformerCandidates.mockResolvedValue({
+    candidates: [
+      { accountUserId: "au-tech", displayName: "Dana Tech", role: "operator" },
+      { accountUserId: "au-other", displayName: "Lee Field", role: "operator" },
+    ],
   });
 });
 
@@ -139,6 +153,7 @@ describe("ActualWorkComposer", () => {
           onRetryReconciliation={vi.fn()}
           onSubmitted={vi.fn()}
           onDiscarded={vi.fn()}
+          onSetDefaultPerformer={vi.fn().mockResolvedValue("set")}
         />
       </QueryClientProvider>,
     );
@@ -442,6 +457,7 @@ describe("ActualWorkComposer", () => {
           onRetryReconciliation={vi.fn()}
           onSubmitted={vi.fn()}
           onDiscarded={vi.fn()}
+          onSetDefaultPerformer={vi.fn().mockResolvedValue("set")}
         />
       </QueryClientProvider>,
     );
@@ -577,6 +593,7 @@ describe("ActualWorkComposer", () => {
             onRetryReconciliation={vi.fn()}
             onSubmitted={() => setOpen(false)}
             onDiscarded={vi.fn()}
+            onSetDefaultPerformer={vi.fn().mockResolvedValue("set")}
           />
         )}
       </QueryClientProvider>
@@ -625,5 +642,97 @@ describe("ActualWorkComposer", () => {
     await user.click(screen.getByRole("button", { name: "Dismiss" }));
 
     expect(onDismissNotice).toHaveBeenCalled();
+  });
+
+  describe("performer gate (transcribe path)", () => {
+    const noDefaultDraft = () =>
+      emptyDraft({ defaultPerformedByAccountUserId: null, defaultPerformerDisplayName: null });
+
+    it("blocks the entire add region — search, assembly, nudge — until a default performer is persisted", () => {
+      renderComposer({ draft: noDefaultDraft() });
+
+      expect(screen.queryByPlaceholderText("Search by name or SKU...")).not.toBeInTheDocument();
+      expect(screen.getByText("Whose work is this?")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Confirm technician" })).toBeDisabled();
+    });
+
+    it("persists the selected technician, then un-gates add-line and expand-assembly which both inherit it", async () => {
+      const user = userEvent.setup();
+      mockGetFieldScopeSearch.mockResolvedValue({
+        items: [
+          { kind: "CatalogItem", id: "item-1", displayName: "Filter", defaultItemCount: null, catalogItemType: "Part", externalKey: null },
+          { kind: "OfferingAssembly", id: "assembly-1", displayName: "Furnace tune-up", defaultItemCount: 3, catalogItemType: null, externalKey: null },
+        ],
+        limit: 20,
+        hasMore: false,
+        nextCursor: null,
+      });
+      mockAddActualWorkLine.mockResolvedValue({ lineId: "line-2", actualWorkConcurrencyVersion: "v1" });
+      mockExpandActualWorkAssembly.mockResolvedValue({ lineIds: ["line-3"], skippedCatalogItemIds: [], actualWorkConcurrencyVersion: "v1" });
+
+      // The composer re-renders with a populated default once the parent hook refetches; model that
+      // by swapping the draft prop after onSetDefaultPerformer resolves.
+      const onSetDefaultPerformer = vi.fn().mockResolvedValue("set");
+      function Host() {
+        const [draft, setDraft] = useState(noDefaultDraft());
+        return (
+          <ActualWorkComposer
+            draft={draft}
+            conflictNotice={null}
+            isWide
+            onClose={vi.fn()}
+            onCommitted={vi.fn().mockResolvedValue(undefined)}
+            onConflict={vi.fn()}
+            onDismissNotice={vi.fn()}
+            onRetryReconciliation={vi.fn()}
+            onSubmitted={vi.fn()}
+            onDiscarded={vi.fn()}
+            currentAccountUserId="au-recorder"
+            onSetDefaultPerformer={async (id) => {
+              const outcome = await onSetDefaultPerformer(id);
+              setDraft(emptyDraft({ defaultPerformedByAccountUserId: id, defaultPerformerDisplayName: "Dana Tech" }));
+              return outcome;
+            }}
+          />
+        );
+      }
+      const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+      render(
+        <QueryClientProvider client={queryClient}>
+          <Host />
+        </QueryClientProvider>,
+      );
+
+      await screen.findByRole("option", { name: /Dana Tech/ });
+      await user.selectOptions(screen.getByLabelText("Technician"), "au-tech");
+      await user.click(screen.getByRole("button", { name: "Confirm technician" }));
+      expect(onSetDefaultPerformer).toHaveBeenCalledWith("au-tech");
+
+      // Add region is now live and attributes to the persisted performer.
+      await screen.findByText(/Recording work for/);
+      await user.type(await screen.findByPlaceholderText("Search by name or SKU..."), "furnace");
+      await user.click(await screen.findByText("Filter"));
+      await user.click(screen.getByRole("button", { name: "Add item" }));
+      await waitFor(() => expect(mockAddActualWorkLine).toHaveBeenCalledWith("draft-1", expect.any(Object), "v1"));
+
+      await user.type(screen.getByPlaceholderText("Search by name or SKU..."), "furnace");
+      await user.click(await screen.findByRole("button", { name: /Furnace tune-up/ }));
+      await waitFor(() => expect(mockExpandActualWorkAssembly).toHaveBeenCalled());
+    });
+
+    it("surfaces an ineligible outcome without leaving the gate", async () => {
+      const user = userEvent.setup();
+      renderComposer({
+        draft: noDefaultDraft(),
+        onSetDefaultPerformer: vi.fn().mockResolvedValue("ineligible"),
+      });
+
+      await screen.findByRole("option", { name: /Dana Tech/ });
+      await user.selectOptions(screen.getByLabelText("Technician"), "au-tech");
+      await user.click(screen.getByRole("button", { name: "Confirm technician" }));
+
+      expect(await screen.findByText("That person can't be recorded as the performer.")).toBeInTheDocument();
+      expect(screen.queryByPlaceholderText("Search by name or SKU...")).not.toBeInTheDocument();
+    });
   });
 });
