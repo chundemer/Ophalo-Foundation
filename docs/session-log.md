@@ -1,6 +1,6 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-08-30 (4e-ii-b-2 implemented locally, awaiting commit; 4e-ii-b-1 `2be5203`)
+**Last updated:** 2026-08-30 (4e-ii-c committed locally as `e19e5f9`; 4e-ii-b-2 `29db179`)
 **Purpose:** active handoff only. Completed implementation detail belongs in Git history and the
 relevant build log.
 
@@ -23,8 +23,8 @@ existing-ticket workflow as the explicit outage fallback.
 
 `main` at `8495ba3` (pushed 2026-08-30) carries the 4e-0 signal seam, 4e-i supersession foundation,
 and `AddActualWorkSupersession`. Railway deployment completed and the migration is applied —
-confirmed 2026-08-30; `ActualWorkSupersessionPersistenceTests` (4) pass. Local commits for 4e-ii-c,
-`29db179` (4e-ii-b-2), `2be5203` (4e-ii-b-1), `82d9b9e` (4e-ii-a) and earlier are **not yet
+confirmed 2026-08-30; `ActualWorkSupersessionPersistenceTests` (4) pass. Local commits `e19e5f9`
+(4e-ii-c), `29db179` (4e-ii-b-2), `2be5203` (4e-ii-b-1), `82d9b9e` (4e-ii-a) and earlier are **not yet
 pushed**. No migration since 4e-i (4e-ii-a/b-1/b-2/c are code-only: services, read/mutation guards,
 routes, mapper, response shape).
 
@@ -62,7 +62,7 @@ orchestrators; the three ApiServices map the new outcome to `ActualWorkErrors.Su
 409-reconcilable from 4e-ii-b-1). No migration. Verification: integration 30 pass in the two touched
 persistence classes (+6 new), architecture 14, related ActualWork API/supersession 55, focused unit 140.
 
-### Completed this session — 4e-ii-c (local commit)
+### Completed this session — 4e-ii-c (local commit `e19e5f9`)
 
 Final API-exposure slice for replacement-copy. No migration.
 
