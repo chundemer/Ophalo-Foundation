@@ -78,6 +78,7 @@ function renderComposer(overrides: Partial<React.ComponentProps<typeof ActualWor
   const onDiscarded = vi.fn();
   const onSetDefaultPerformer = vi.fn().mockResolvedValue("set");
   const onSetVisitNote = vi.fn().mockResolvedValue("set");
+  const onSetZeroLineDisposition = vi.fn().mockResolvedValue("set");
   const onHandOffToOffice = vi.fn().mockResolvedValue("handed-off");
   const utils = render(
     <QueryClientProvider client={queryClient}>
@@ -94,12 +95,13 @@ function renderComposer(overrides: Partial<React.ComponentProps<typeof ActualWor
         onDiscarded={onDiscarded}
         onSetDefaultPerformer={onSetDefaultPerformer}
         onSetVisitNote={onSetVisitNote}
+        onSetZeroLineDisposition={onSetZeroLineDisposition}
         onHandOffToOffice={onHandOffToOffice}
         {...overrides}
       />
     </QueryClientProvider>,
   );
-  return { ...utils, onClose, onCommitted, onConflict, onDismissNotice, onRetryReconciliation, onSubmitted, onDiscarded, onSetDefaultPerformer, onSetVisitNote, onHandOffToOffice };
+  return { ...utils, onClose, onCommitted, onConflict, onDismissNotice, onRetryReconciliation, onSubmitted, onDiscarded, onSetDefaultPerformer, onSetVisitNote, onSetZeroLineDisposition, onHandOffToOffice };
 }
 
 beforeEach(() => {
@@ -161,6 +163,7 @@ describe("ActualWorkComposer", () => {
           onDiscarded={vi.fn()}
           onSetDefaultPerformer={vi.fn().mockResolvedValue("set")}
           onSetVisitNote={vi.fn().mockResolvedValue("set")}
+          onSetZeroLineDisposition={vi.fn().mockResolvedValue("set")}
           onHandOffToOffice={vi.fn().mockResolvedValue("handed-off")}
         />
       </QueryClientProvider>,
@@ -211,6 +214,70 @@ describe("ActualWorkComposer", () => {
 
     expect(screen.getByRole("button", { name: "Submit visit to office" })).toBeEnabled();
     expect(screen.queryByLabelText("Visit outcome")).not.toBeInTheDocument();
+  });
+
+  it("prefills the zero-line outcome and completion note from the draft (BL136 4e-iii)", () => {
+    renderComposer({
+      draft: emptyDraft({ outcome: "NoAccess", completionNote: "Gate locked, no one home." }),
+    });
+
+    expect(screen.getByLabelText("Visit outcome")).toHaveValue("NoAccess");
+    expect(screen.getByPlaceholderText(/Completion note/)).toHaveValue("Gate locked, no one home.");
+    expect(screen.getByRole("button", { name: "Submit visit to office" })).toBeEnabled();
+  });
+
+  it("persists the zero-line disposition on blur once a valid outcome exists, sending outcome + note together", async () => {
+    const user = userEvent.setup();
+    const { onSetZeroLineDisposition } = renderComposer();
+
+    // A completion-note blur with no outcome yet does not persist (the route rejects a blank outcome).
+    await user.type(screen.getByPlaceholderText(/Completion note/), "Checked unit.");
+    await user.tab();
+    expect(onSetZeroLineDisposition).not.toHaveBeenCalled();
+
+    await user.selectOptions(screen.getByLabelText("Visit outcome"), "DiagnosticOnly");
+    await user.tab();
+    await waitFor(() =>
+      expect(onSetZeroLineDisposition).toHaveBeenCalledWith("DiagnosticOnly", "Checked unit."),
+    );
+  });
+
+  it("surfaces an invalid-outcome rejection inline without disturbing the fields", async () => {
+    const user = userEvent.setup();
+    const { onSetZeroLineDisposition } = renderComposer();
+    onSetZeroLineDisposition.mockResolvedValue("invalid");
+
+    await user.type(screen.getByPlaceholderText(/Completion note/), "note");
+    await user.tab();
+    await user.selectOptions(screen.getByLabelText("Visit outcome"), "NoAccess");
+    await user.tab();
+
+    await waitFor(() =>
+      expect(screen.getByText("The visit outcome is not a valid value.")).toBeInTheDocument(),
+    );
+    expect(screen.getByLabelText("Visit outcome")).toHaveValue("NoAccess");
+  });
+
+  it("clicking Submit from the completion-note field submits only, never the disposition route", async () => {
+    const user = userEvent.setup();
+    mockSubmitActualWork.mockResolvedValueOnce({ concurrencyVersion: "v2" });
+    const { onSetZeroLineDisposition } = renderComposer();
+
+    await user.selectOptions(screen.getByLabelText("Visit outcome"), "NoAccess");
+    await user.type(screen.getByPlaceholderText(/Completion note/), "Gate locked.");
+    // Ignore any field-to-field persist from the select→textarea blur; assert only about the click.
+    onSetZeroLineDisposition.mockClear();
+    // Focus is in the textarea; the click's blur must not start a disposition write.
+    await user.click(screen.getByRole("button", { name: "Submit visit to office" }));
+
+    await waitFor(() =>
+      expect(mockSubmitActualWork).toHaveBeenCalledWith(
+        "draft-1",
+        { outcome: "NoAccess", completionNote: "Gate locked." },
+        "v1",
+      ),
+    );
+    expect(onSetZeroLineDisposition).not.toHaveBeenCalled();
   });
 
   it("adds a custom off-catalog line with quantity and note", async () => {
@@ -467,6 +534,7 @@ describe("ActualWorkComposer", () => {
           onDiscarded={vi.fn()}
           onSetDefaultPerformer={vi.fn().mockResolvedValue("set")}
           onSetVisitNote={vi.fn().mockResolvedValue("set")}
+          onSetZeroLineDisposition={vi.fn().mockResolvedValue("set")}
           onHandOffToOffice={vi.fn().mockResolvedValue("handed-off")}
         />
       </QueryClientProvider>,
@@ -663,6 +731,7 @@ describe("ActualWorkComposer", () => {
             onDiscarded={vi.fn()}
             onSetDefaultPerformer={vi.fn().mockResolvedValue("set")}
             onSetVisitNote={vi.fn().mockResolvedValue("set")}
+            onSetZeroLineDisposition={vi.fn().mockResolvedValue("set")}
           onHandOffToOffice={vi.fn().mockResolvedValue("handed-off")}
           />
         )}
@@ -764,6 +833,7 @@ describe("ActualWorkComposer", () => {
               return outcome;
             }}
             onSetVisitNote={vi.fn().mockResolvedValue("set")}
+            onSetZeroLineDisposition={vi.fn().mockResolvedValue("set")}
           onHandOffToOffice={vi.fn().mockResolvedValue("handed-off")}
           />
         );

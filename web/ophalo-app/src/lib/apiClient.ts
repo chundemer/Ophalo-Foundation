@@ -1015,6 +1015,25 @@ export const api = {
       headers: { "X-Keep-ActualWork-Version": version },
       body: JSON.stringify({ visitNote }),
     }),
+  // BL136 §4e-iii: recorder-only Draft zero-line disposition write (outcome + completion note) so a
+  // replacement Draft's copied values are editable and survive a reload before the zero-line
+  // `Submit` rules re-validate them. `outcome` must be an enum-valid value or the server returns 400
+  // (`ActualWork.InvalidOutcome`); `completionNote` is trimmed to null with no length guard here.
+  // Sends the version header, returns the rotated version.
+  setActualWorkZeroLineDisposition: (
+    actualWorkId: string,
+    outcome: string,
+    completionNote: string | null,
+    version: string,
+  ) =>
+    apiFetch<ActualWorkConcurrencyVersionResult>(
+      `/keep/pricebook/actual-work/${actualWorkId}/zero-line-disposition`,
+      {
+        method: "PUT",
+        headers: { "X-Keep-ActualWork-Version": version },
+        body: JSON.stringify({ outcome, completionNote }),
+      },
+    ),
   transferActualWorkDraftRecorder: (actualWorkId: string, body: ActualWorkTransferRecorderBody, version: string) =>
     apiFetch<ActualWorkConcurrencyVersionResult>(`/keep/pricebook/actual-work/${actualWorkId}/transfer-recorder`, {
       method: "POST",

@@ -1,6 +1,6 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-08-30 (4e-iii-a implemented locally, commit pending; 4e-ii-c `e19e5f9`)
+**Last updated:** 2026-08-30 (4e-iii-b implemented locally, commit pending; 4e-iii-a commit pending; 4e-ii-c `e19e5f9`)
 **Purpose:** active handoff only. Completed implementation detail belongs in Git history and the
 relevant build log.
 
@@ -102,13 +102,34 @@ UI-only, `web/ophalo-app`. 9 production + 5 test-file extensions. No backend, no
   "Correction of an earlier visit" from the DTO lineage fields.
 - Verification: `tsc` clean, full web suite 843 pass (90 files), CSS token check, `git diff --check`.
 
-### Next code slice — 4e-iii-b composer zero-line disposition prefill/persistence (fresh session)
+### Completed this session — 4e-iii-b composer zero-line disposition prefill/persistence (local commit pending)
 
-UI-only, `web/ophalo-app` (BL136 §4e-iii): `ActualWorkComposer` `ActualWorkSubmitFooter` — prefill
-the zero-line `outcome` / `completionNote` from `draft.outcome` / `draft.completionNote` and persist
-edits on blur via `PUT .../zero-line-disposition` (rotate the concurrency version, survive reload),
-mirroring `ActualWorkVisitNoteEditor`. 4g / Billing-Revision deferrals (eligible-visit filter,
-Resolved→Closed close gate, revoke-on-replace) remain out of scope.
+UI-only, `web/ophalo-app` (BL136 §4e-iii). 4 production + 2 test files. No backend, no migration.
+
+- **Client:** `api.setActualWorkZeroLineDisposition(id, outcome, completionNote, version)` →
+  `PUT /keep/pricebook/actual-work/{id}/zero-line-disposition` (version header, body
+  `{ outcome, completionNote }`, returns the rotated version).
+- **Hook:** `useActualWorkCapture.setZeroLineDisposition` mirrors `setVisitNote` — `refetchDraft`
+  on success; `ActualWork.InvalidOutcome` (400) → `"invalid"`; `VersionMismatch` / `NotDraft` →
+  shared reconcile + `"stale"`; else `"failed"`.
+- **`ActualWorkSubmitFooter`:** zero-line `outcome` / `completionNote` seed from `draft.outcome` /
+  `draft.completionNote`; call site keys the footer on `` `${draft.outcome}|${draft.completionNote}` ``
+  so a persisted write re-seeds from the server trim and survives reload. Blur persists via the hook
+  **only once a valid outcome exists** (the route rejects a blank outcome; the note stays local
+  until then), sending outcome + note together. `"invalid"` shown inline. Fields disabled while a
+  blur write is pending (serialises the two field writes). **Blur/submit race guard:** a blur into
+  the Submit control skips the disposition write (`submitIntentRef`, set on the button's
+  pointer-down), and Submit is disabled while an ordinary blur write is in flight — so the autosave
+  and the final submit can never issue against the same pre-write version. The final `Submit` still
+  sends the local fields.
+- Verification: `tsc` clean, full web suite 850 pass (90 files), `git diff --check` clean.
+
+### Next code slice — 4e-iii-a review follow-up (fresh session)
+
+Focused follow-up on the -a replacement-copy correction UI, kept separate from the -b persistence
+slice: capture-permission gating, successor-ID verification, and the session replacement notice.
+4g / Billing-Revision deferrals (eligible-visit filter, Resolved→Closed close gate,
+revoke-on-replace) remain out of scope.
 
 ### Remaining pilot/release work
 

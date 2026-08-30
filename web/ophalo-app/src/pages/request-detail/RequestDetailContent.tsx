@@ -350,6 +350,7 @@ export function RequestDetailContent(props: RequestDetailContentProps) {
           currentAccountUserId={props.currentAccountUserId}
           onSetDefaultPerformer={actualWorkCapture.setDefaultPerformer}
           onSetVisitNote={actualWorkCapture.setVisitNote}
+          onSetZeroLineDisposition={actualWorkCapture.setZeroLineDisposition}
           onHandOffToOffice={actualWorkCapture.handOffToOffice}
         />
       )}

@@ -290,6 +290,43 @@ export function useActualWorkCapture(requestId: string, currentAccountUserId?: s
     [state, refetchDraft, reconcileAfterConflict],
   );
 
+  // BL136 §4e-iii: recorder-only, Draft-only zero-line disposition (outcome + completion note).
+  // Mirrors `setVisitNote` — the composer footer autosaves on blur once a valid outcome exists, so
+  // on success the rotated version + server-trimmed values are pulled back through `refetchDraft`
+  // (the fields survive a reload). A stale version / non-Draft collapses onto the shared reconcile
+  // path; an enum-invalid outcome (400) is returned as `"invalid"` without disturbing state.
+  const setZeroLineDisposition = useCallback(
+    async (
+      outcome: string,
+      completionNote: string | null,
+    ): Promise<"set" | "invalid" | "stale" | "failed"> => {
+      if (state.status !== "draft") return "stale";
+      try {
+        await api.setActualWorkZeroLineDisposition(
+          state.draft.id,
+          outcome,
+          completionNote,
+          state.draft.concurrencyVersion,
+        );
+        await refetchDraft();
+        return "set";
+      } catch (err) {
+        if (err instanceof ApiError && err.code === "ActualWork.InvalidOutcome") {
+          return "invalid";
+        }
+        if (
+          err instanceof ApiError &&
+          (err.code === "ActualWork.VersionMismatch" || err.code === "ActualWork.NotDraft")
+        ) {
+          await reconcileAfterConflict();
+          return "stale";
+        }
+        return "failed";
+      }
+    },
+    [state, refetchDraft, reconcileAfterConflict],
+  );
+
   // After a successful submit the draft is gone (Draft -> Submitted), but the composer keeps
   // showing its own submitted confirmation until the user closes it (mirrors
   // ProposedScopeComposer). Marks the pending reprobe for closeModal to run instead of running it
@@ -421,6 +458,7 @@ export function useActualWorkCapture(requestId: string, currentAccountUserId?: s
     refetchDraft,
     setDefaultPerformer,
     setVisitNote,
+    setZeroLineDisposition,
     conflictNotice,
     reconcileAfterConflict,
     retryReconciliation,

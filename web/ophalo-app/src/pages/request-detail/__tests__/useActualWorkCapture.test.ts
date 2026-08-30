@@ -15,6 +15,7 @@ const mockCreateActualWork = vi.fn();
 const mockTransferActualWorkDraftRecorder = vi.fn();
 const mockSetActualWorkDefaultPerformer = vi.fn();
 const mockSetActualWorkVisitNote = vi.fn();
+const mockSetActualWorkZeroLineDisposition = vi.fn();
 
 vi.mock("../../../lib/apiClient", async () => {
   const actual = await vi.importActual<typeof import("../../../lib/apiClient")>("../../../lib/apiClient");
@@ -27,6 +28,7 @@ vi.mock("../../../lib/apiClient", async () => {
       transferActualWorkDraftRecorder: (...args: unknown[]) => mockTransferActualWorkDraftRecorder(...args),
       setActualWorkDefaultPerformer: (...args: unknown[]) => mockSetActualWorkDefaultPerformer(...args),
       setActualWorkVisitNote: (...args: unknown[]) => mockSetActualWorkVisitNote(...args),
+      setActualWorkZeroLineDisposition: (...args: unknown[]) => mockSetActualWorkZeroLineDisposition(...args),
     },
   };
 });
@@ -738,6 +740,77 @@ describe("useActualWorkCapture — recorder transfer (1a-ii-b)", () => {
       let outcome: string | undefined;
       await act(async () => {
         outcome = await result.current.setVisitNote("Gate code 4321");
+      });
+
+      expect(outcome).toBe("stale");
+      expect(result.current.conflictNotice).toBe(ACTUAL_WORK_CONFLICT_NOTICE);
+    });
+  });
+
+  describe("setZeroLineDisposition (BL136 4e-iii)", () => {
+    async function renderInDraft() {
+      mockGetActualWorkHistoryForRequest.mockResolvedValueOnce(history({ openDraft: DRAFT_NO_DEFAULT }));
+      const hook = renderHook(() => useActualWorkCapture("request-1", "me-au-1"));
+      await waitFor(() => expect(hook.result.current.state.status).toBe("draft"));
+      return hook;
+    }
+
+    it("writes outcome + note against the current version, then applies the refreshed projection", async () => {
+      const { result } = await renderInDraft();
+      mockSetActualWorkZeroLineDisposition.mockResolvedValueOnce({ concurrencyVersion: "v2" });
+      mockGetActualWorkHistoryForRequest.mockResolvedValueOnce(
+        history({
+          openDraft: {
+            ...DRAFT_NO_DEFAULT,
+            concurrencyVersion: "v2",
+            outcome: "NoAccess",
+            completionNote: "Gate locked.",
+          },
+        }),
+      );
+
+      let outcome: string | undefined;
+      await act(async () => {
+        outcome = await result.current.setZeroLineDisposition("NoAccess", "Gate locked.");
+      });
+
+      expect(outcome).toBe("set");
+      expect(mockSetActualWorkZeroLineDisposition).toHaveBeenCalledWith(
+        "draft-1",
+        "NoAccess",
+        "Gate locked.",
+        "v1",
+      );
+      expect(result.current.state).toMatchObject({
+        draft: { concurrencyVersion: "v2", outcome: "NoAccess", completionNote: "Gate locked." },
+      });
+    });
+
+    it("returns 'invalid' on a 400 without disturbing state", async () => {
+      const { result } = await renderInDraft();
+      mockSetActualWorkZeroLineDisposition.mockRejectedValueOnce(
+        new ApiError(400, "ActualWork.InvalidOutcome", "The visit outcome is not a valid value."),
+      );
+
+      let outcome: string | undefined;
+      await act(async () => {
+        outcome = await result.current.setZeroLineDisposition("Bogus", null);
+      });
+
+      expect(outcome).toBe("invalid");
+      expect(result.current.conflictNotice).toBeNull();
+    });
+
+    it("returns 'stale' and reconciles on a version mismatch", async () => {
+      const { result } = await renderInDraft();
+      mockSetActualWorkZeroLineDisposition.mockRejectedValueOnce(
+        new ApiError(409, "ActualWork.VersionMismatch", "changed by someone else"),
+      );
+      mockGetActualWorkHistoryForRequest.mockResolvedValueOnce(history({ openDraft: DRAFT_NO_DEFAULT }));
+
+      let outcome: string | undefined;
+      await act(async () => {
+        outcome = await result.current.setZeroLineDisposition("NoAccess", "Gate locked.");
       });
 
       expect(outcome).toBe("stale");
