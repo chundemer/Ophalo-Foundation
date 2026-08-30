@@ -57,6 +57,28 @@ internal sealed class ActualWorkConfiguration : BaseEntityConfiguration<ActualWo
         // supports the performer-candidate / "my open drafts" reads in later 4c-i slices.
         builder.HasIndex(x => new { x.AccountId, x.DefaultPerformedByAccountUserId });
 
+        // ADR-494 D4/D6/D6b — supersession marker columns. Nullable on a live visit; all four are
+        // set together by ActualWork.Supersede when an erroneous submitted visit is replaced.
+        builder.Property(x => x.SupersededAtUtc);
+        builder.Property(x => x.SupersededByAccountUserId);
+        builder.Property(x => x.SupersessionReason)
+            .HasMaxLength(2000);
+
+        // Self-reference to the single direct successor, composite on (AccountId, Id) so a
+        // supersession link can never cross accounts (same discipline as the KeepRequest FK below).
+        builder.Property(x => x.SupersededByActualWorkId);
+        builder.HasOne<ActualWork>()
+            .WithMany()
+            .HasForeignKey(x => new { x.AccountId, x.SupersededByActualWorkId })
+            .HasPrincipalKey(x => new { x.AccountId, x.Id })
+            .OnDelete(DeleteBehavior.Restrict);
+
+        // ADR-494 D6b — one-to-one supersession: a given successor supersedes exactly one source.
+        builder.HasIndex(x => x.SupersededByActualWorkId)
+            .IsUnique()
+            .HasFilter("superseded_by_actual_work_id IS NOT NULL")
+            .HasDatabaseName("ux_keep_actual_works_superseded_by");
+
         // Application-managed opaque uuid token — same pattern as
         // ProposedScope.ConcurrencyVersion (ADR-330).
         builder.Property(x => x.ConcurrencyVersion)

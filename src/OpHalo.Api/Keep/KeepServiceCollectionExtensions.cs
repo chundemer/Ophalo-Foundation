@@ -201,6 +201,10 @@ public static class KeepServiceCollectionExtensions
         // seams below; its statements auto-enlist in the caller's open transaction.
         services.AddScoped<IActualWorkReviewSignalReconciliation, EfActualWorkReviewSignalReconciliation>();
 
+        // Direct Actual Work — supersession (ADR-494 D4/D6/D6b, 4e-i). Atomic supersede-source +
+        // insert-replacement-Draft + resolve-if-clear seam; first Application consumer lands in 4e-ii.
+        services.AddScoped<IActualWorkSupersessionPersistence, EfActualWorkSupersessionPersistence>();
+
         // Direct Actual Work — submit/review-signal (Batch 4, build-log/129). Atomic seam separate
         // from IActualWorkPersistence, matching IProposedScopeSubmissionPersistence.
         services.AddScoped<IActualWorkSubmissionPersistence, EfActualWorkSubmissionPersistence>();

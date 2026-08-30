@@ -77,6 +77,25 @@ public sealed class ActualWork : BaseEntity
     /// (zero-line submit outcome) and <see cref="ActualWorkLine.Note"/> (per-line).</summary>
     public string? VisitNote { get; private set; }
 
+    /// <summary>ADR-494 D4/D6: set once by <see cref="Supersede"/> when an erroneous submitted visit
+    /// is replaced by a correction. The visit keeps <see cref="ActualWorkStatus.Submitted"/> and is
+    /// never reviewed; every operational read/list/signal/billing/close query excludes a superseded
+    /// row (D8), while the history read keeps returning it with lineage links. Null on a live
+    /// visit.</summary>
+    public DateTime? SupersededAtUtc { get; private set; }
+
+    /// <summary>ADR-494 D6b: the single direct successor <see cref="ActualWork"/> that replaced this
+    /// visit (self-reference by id only). A unique index plus the <see cref="Supersede"/> guard
+    /// enforce one-to-one supersession — a source is never replaced twice.</summary>
+    public Guid? SupersededByActualWorkId { get; private set; }
+
+    /// <summary>ADR-494 D4: the Owner/Admin who performed the supersession.</summary>
+    public Guid? SupersededByAccountUserId { get; private set; }
+
+    /// <summary>ADR-494 D4: required, trimmed, max 2,000 characters when superseded — the truthful
+    /// reason the original submitted visit was replaced. Null on a live visit.</summary>
+    public string? SupersessionReason { get; private set; }
+
     /// <summary>
     /// Application-managed opaque concurrency token — same pattern as
     /// <see cref="ProposedScope.ConcurrencyVersion"/>.
@@ -181,6 +200,27 @@ public sealed class ActualWork : BaseEntity
             return Result.Failure(ActualWorkErrors.VisitNoteTooLong);
 
         VisitNote = trimmed;
+        ConcurrencyVersion = Guid.NewGuid();
+        return Result.Success();
+    }
+
+    /// <summary>ADR-494 D5/D6: Draft-only setter for the zero-line disposition (<see cref="Outcome"/>
+    /// + <see cref="CompletionNote"/>) so a replacement Draft's copied zero-line values are editable
+    /// and survive reload before the normal zero-line <see cref="Submit"/> rules re-validate them.
+    /// <paramref name="outcome"/> must be a defined <see cref="ActualWorkOutcome"/>;
+    /// <paramref name="completionNote"/> is trimmed to null. No length guard is applied here — the
+    /// <see cref="Submit"/>-time completion-note validation slice owns that bound. Recorder-ownership
+    /// authorization is the API layer's responsibility, mirroring <see cref="SetVisitNote"/>.</summary>
+    public Result SetZeroLineDisposition(ActualWorkOutcome outcome, string? completionNote)
+    {
+        if (Status != ActualWorkStatus.Draft)
+            return Result.Failure(ActualWorkErrors.NotDraft);
+
+        if (!Enum.IsDefined(outcome))
+            return Result.Failure(ActualWorkErrors.InvalidOutcome);
+
+        Outcome = outcome;
+        CompletionNote = string.IsNullOrWhiteSpace(completionNote) ? null : completionNote.Trim();
         ConcurrencyVersion = Guid.NewGuid();
         return Result.Success();
     }
@@ -330,6 +370,44 @@ public sealed class ActualWork : BaseEntity
         ReviewedAtUtc = reviewedAtUtc;
         ReviewedByAccountUserId = reviewedByAccountUserId;
         ReviewNote = trimmedNote;
+        ConcurrencyVersion = Guid.NewGuid();
+        return Result.Success();
+    }
+
+    /// <summary>
+    /// ADR-494 D4/D6/D6b: marks this submitted visit superseded by a correction. Guards only —
+    /// constructing the successor aggregate and persisting both rows in one transaction is the
+    /// persistence seam's job (<c>IActualWorkSupersessionPersistence</c>). Allowed exactly once, and
+    /// only on a <see cref="ActualWorkStatus.Submitted"/>, not-yet-<see cref="ReviewedAtUtc">reviewed</see>,
+    /// not-already-superseded visit — every other state fails closed. The caller's Owner/Admin
+    /// authority and the audit trail live in the API/persistence layer.
+    /// </summary>
+    public Result Supersede(Guid bySuccessorActualWorkId, Guid byAccountUserId, string reason, DateTime atUtc)
+    {
+        if (bySuccessorActualWorkId == Guid.Empty)
+            throw new ArgumentException("BySuccessorActualWorkId must not be empty.", nameof(bySuccessorActualWorkId));
+        if (bySuccessorActualWorkId == Id)
+            throw new ArgumentException("A visit cannot supersede itself.", nameof(bySuccessorActualWorkId));
+        if (byAccountUserId == Guid.Empty)
+            throw new ArgumentException("ByAccountUserId must not be empty.", nameof(byAccountUserId));
+
+        var trimmedReason = string.IsNullOrWhiteSpace(reason) ? null : reason.Trim();
+        if (trimmedReason is null)
+            return Result.Failure(ActualWorkErrors.SupersessionReasonRequired);
+        if (trimmedReason.Length > 2000)
+            return Result.Failure(ActualWorkErrors.SupersessionReasonTooLong);
+
+        if (Status != ActualWorkStatus.Submitted)
+            return Result.Failure(ActualWorkErrors.NotSubmitted);
+        if (ReviewedAtUtc is not null)
+            return Result.Failure(ActualWorkErrors.AlreadyReviewed);
+        if (SupersededAtUtc is not null)
+            return Result.Failure(ActualWorkErrors.AlreadySuperseded);
+
+        SupersededAtUtc = atUtc;
+        SupersededByActualWorkId = bySuccessorActualWorkId;
+        SupersededByAccountUserId = byAccountUserId;
+        SupersessionReason = trimmedReason;
         ConcurrencyVersion = Guid.NewGuid();
         return Result.Success();
     }

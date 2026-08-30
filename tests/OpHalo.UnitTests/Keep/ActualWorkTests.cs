@@ -804,4 +804,156 @@ public class ActualWorkTests
         Assert.Null(work.ReviewedAtUtc);
         Assert.Single(work.Lines);
     }
+
+    // --- SetZeroLineDisposition (ADR-494 D5/D6, 4e-i) ---
+
+    [Fact]
+    public void SetZeroLineDisposition_on_a_draft_sets_outcome_and_completion_note()
+    {
+        var work = New().Value;
+        var before = work.ConcurrencyVersion;
+
+        var result = work.SetZeroLineDisposition(ActualWorkOutcome.NoAccess, "Gate locked.");
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(ActualWorkOutcome.NoAccess, work.Outcome);
+        Assert.Equal("Gate locked.", work.CompletionNote);
+        Assert.NotEqual(before, work.ConcurrencyVersion);
+    }
+
+    [Fact]
+    public void SetZeroLineDisposition_trims_the_note_and_maps_whitespace_to_null()
+    {
+        var work = New().Value;
+
+        work.SetZeroLineDisposition(ActualWorkOutcome.DiagnosticOnly, "  Diagnosed only.  ");
+        Assert.Equal("Diagnosed only.", work.CompletionNote);
+
+        work.SetZeroLineDisposition(ActualWorkOutcome.DiagnosticOnly, "   ");
+        Assert.Null(work.CompletionNote);
+    }
+
+    [Fact]
+    public void SetZeroLineDisposition_with_an_undefined_outcome_fails()
+    {
+        var work = New().Value;
+
+        var result = work.SetZeroLineDisposition((ActualWorkOutcome)999, "note");
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(ActualWorkErrors.InvalidOutcome, result.Error);
+    }
+
+    [Fact]
+    public void SetZeroLineDisposition_on_a_submitted_visit_fails()
+    {
+        var work = New().Value;
+        work.Submit(DateTime.UtcNow, ActualWorkOutcome.NoWorkAuthorized, "No work needed.");
+
+        var result = work.SetZeroLineDisposition(ActualWorkOutcome.NoAccess, "changed");
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(ActualWorkErrors.NotDraft, result.Error);
+    }
+
+    // --- Supersede (ADR-494 D4/D6/D6b, 4e-i) ---
+
+    static readonly Guid SuccessorId = Guid.CreateVersion7();
+    static readonly Guid SupersedingUser = Guid.CreateVersion7();
+
+    static ActualWork SubmittedVisit()
+    {
+        var work = New().Value;
+        AddCatalogBackedLine(work);
+        work.Submit(DateTime.UtcNow, outcome: null, completionNote: null);
+        return work;
+    }
+
+    [Fact]
+    public void Supersede_on_a_submitted_unreviewed_visit_sets_all_markers()
+    {
+        var work = SubmittedVisit();
+        var before = work.ConcurrencyVersion;
+        var at = DateTime.UtcNow;
+
+        var result = work.Supersede(SuccessorId, SupersedingUser, "  Wrong panel size.  ", at);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(at, work.SupersededAtUtc);
+        Assert.Equal(SuccessorId, work.SupersededByActualWorkId);
+        Assert.Equal(SupersedingUser, work.SupersededByAccountUserId);
+        Assert.Equal("Wrong panel size.", work.SupersessionReason);
+        Assert.Equal(ActualWorkStatus.Submitted, work.Status);
+        Assert.NotEqual(before, work.ConcurrencyVersion);
+    }
+
+    [Fact]
+    public void Supersede_requires_a_reason()
+    {
+        var result = SubmittedVisit().Supersede(SuccessorId, SupersedingUser, "   ", DateTime.UtcNow);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(ActualWorkErrors.SupersessionReasonRequired, result.Error);
+    }
+
+    [Fact]
+    public void Supersede_with_a_reason_over_2000_characters_fails()
+    {
+        var result = SubmittedVisit().Supersede(
+            SuccessorId, SupersedingUser, new string('x', 2001), DateTime.UtcNow);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(ActualWorkErrors.SupersessionReasonTooLong, result.Error);
+    }
+
+    [Fact]
+    public void Supersede_on_a_draft_fails()
+    {
+        var result = New().Value.Supersede(SuccessorId, SupersedingUser, "reason", DateTime.UtcNow);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(ActualWorkErrors.NotSubmitted, result.Error);
+    }
+
+    [Fact]
+    public void Supersede_on_a_reviewed_visit_fails()
+    {
+        var work = SubmittedVisit();
+        work.MarkReviewed(
+            Guid.CreateVersion7(), reviewNote: null, DateTime.UtcNow,
+            financialDataComplete: true, zeroLineDispositionSatisfied: true);
+
+        var result = work.Supersede(SuccessorId, SupersedingUser, "reason", DateTime.UtcNow);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(ActualWorkErrors.AlreadyReviewed, result.Error);
+    }
+
+    [Fact]
+    public void Supersede_twice_fails_with_already_superseded()
+    {
+        var work = SubmittedVisit();
+        work.Supersede(SuccessorId, SupersedingUser, "first", DateTime.UtcNow);
+
+        var result = work.Supersede(Guid.CreateVersion7(), SupersedingUser, "second", DateTime.UtcNow);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(ActualWorkErrors.AlreadySuperseded, result.Error);
+    }
+
+    [Fact]
+    public void Supersede_with_an_empty_successor_id_throws()
+    {
+        Assert.Throws<ArgumentException>(
+            () => SubmittedVisit().Supersede(Guid.Empty, SupersedingUser, "reason", DateTime.UtcNow));
+    }
+
+    [Fact]
+    public void Supersede_by_its_own_id_throws()
+    {
+        var work = SubmittedVisit();
+
+        Assert.Throws<ArgumentException>(
+            () => work.Supersede(work.Id, SupersedingUser, "reason", DateTime.UtcNow));
+    }
 }

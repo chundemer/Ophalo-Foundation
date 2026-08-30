@@ -19,11 +19,12 @@ public sealed class EfActualWorkReviewSignalReconciliation(OpHaloDbContext dbCon
     /// <summary>
     /// The single shared "open outstanding review" predicate (ADR-494 D4): a <c>keep_actual_works</c>
     /// row that still owes office review. Owned here and evaluated only by
-    /// <see cref="ResolveIfClearAsync"/>; 4e-i widens this one constant with
-    /// <c>AND superseded_at_utc IS NULL</c>.
+    /// <see cref="ResolveIfClearAsync"/>. 4e-i widened it with <c>AND superseded_at_utc IS NULL</c>
+    /// (ADR-494 D4/D8): a superseded submitted visit is never reviewed, so it must not keep the
+    /// aggregate review signal raised.
     /// </summary>
     private const string OpenOutstandingReviewPredicate =
-        "status = 'Submitted' AND reviewed_at_utc IS NULL AND deleted_at_utc IS NULL";
+        "status = 'Submitted' AND reviewed_at_utc IS NULL AND deleted_at_utc IS NULL AND superseded_at_utc IS NULL";
 
     /// <summary>
     /// Native atomic upsert (ADR-463): a currently active signal (<c>resolved_at_utc IS NULL</c>)

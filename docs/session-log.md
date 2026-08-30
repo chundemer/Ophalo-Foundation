@@ -422,14 +422,40 @@ correction applied pre-commit: partial-component resolution + client negative ch
 full frontend suite **799/799** (90 files, +4), `tsc --noEmit` clean, `check:tokens` passed,
 `git diff --check` clean.
 
-### Claude handoff — 4c/4d/4e-0 (attribution, Draft note, recorder hand-off, signal seam) — COMPLETE
+### Claude handoff — 4c/4d/4e-0/4e-i (attribution, Draft note, recorder hand-off, signal seam, supersession marker) — COMPLETE
 
-**➡ NEXT SESSION: 4e-i — supersession marker + zero-line Draft setter + predicate widen.** Full
-spec in [BL136 P preflight → Slice 4e-i](build-log/136-P-preflight.md) (§"Slice 4e-i"); Core +
-Infrastructure + migration `AddActualWorkSupersession`, then 4e-ii/iii. 4e-i widens exactly one
-constant — `EfActualWorkReviewSignalReconciliation.OpenOutstandingReviewPredicate` — with
-`AND superseded_at_utc IS NULL`, and adds `IActualWorkSupersessionPersistence` owning the one
-supersede+successor transaction that also calls `ResolveIfClearAsync`.
+**➡ NEXT SESSION: 4e-ii — replacement-copy: application + API + operational filters.** Full spec in
+[BL136 P preflight → Slice 4e-ii](build-log/136-P-preflight.md) (§"Slice 4e-ii"); Application + Api,
+1 family (`CreateReplacementAsync`). New `ActualWorkReplacementApiService` (Owner/Admin gate,
+no-open-Draft precondition) builds the successor aggregate from the loaded source — lines +
+performers + `VisitNote`, and for a zero-line source copies `Outcome`/`CompletionNote` via
+`SetZeroLineDisposition` — and hands it to the 4e-i `IActualWorkSupersessionPersistence` seam. Adds
+`POST .../{id}/replace` + a Draft `SetZeroLineDisposition` route; widens the `superseded_at_utc IS
+NULL` filter into the review queue/count/single-visit financial detail/eligible-visit reads
+(`ActualWorkFinancialReadApiService`); a superseded-visit detail read returns the reconcilable
+`ActualWork.Superseded`; `ActualWorkHistoryReadApiService` stays **unfiltered** and gains
+`superseded`/`supersededBy`/`supersedes` markers; superseded-source mutation rejection on
+review/resolution/disposition/replace after their existing version check. Then 4e-iii (UI).
+
+**4e-i — supersession marker + zero-line Draft setter + predicate widen — COMPLETE (2026-08-30),
+commit pending (recorded next).** Core + Infrastructure; migration `AddActualWorkSupersession`
+(Christian authors — 4 nullable columns + composite self-FK + filtered unique index
+`ux_keep_actual_works_superseded_by`; no backfill). `ActualWork` gains `SupersededAtUtc` /
+`SupersededByActualWorkId` / `SupersededByAccountUserId` / `SupersessionReason` markers,
+`Supersede(bySuccessorId, byUser, reason, atUtc)` (guards only — Submitted, not-Reviewed,
+not-already-superseded; fail-closed; ≤2000 reason), and `SetZeroLineDisposition(outcome,
+completionNote)` (Draft-only, trims note, validates defined outcome, no length guard). New errors
+`SupersessionReasonRequired` / `SupersessionReasonTooLong` / `AlreadySuperseded` / `Superseded`
+(409). `EfActualWorkReviewSignalReconciliation.OpenOutstandingReviewPredicate` widened with
+`AND superseded_at_utc IS NULL` (one constant; `ResolveIfClearAsync` only, `RaiseAsync` untouched).
+New `IActualWorkSupersessionPersistence` + `EfActualWorkSupersessionPersistence` owning the one
+transaction: load source → version check → `Supersede` → insert caller-built successor Draft
+(unique-violation → `DraftAlreadyOpenForRequest`) → `ResolveIfClearAsync` → commit. Registered
+`AddScoped` beside the reconciliation seam. Files: 5 prod modified + 2 prod new
+(`IActualWorkSupersessionPersistence.cs`, `EfActualWorkSupersessionPersistence.cs`) + 1 unit test
+modified + 1 integration test new. Verified: build 0 warnings, unit 1704/1704 (+~20), architecture
+14/14. Integration (`ActualWorkSupersessionPersistenceTests`) written but pending the migration.
+Not yet deployed.
 
 **4e-0 — extract the signal-reconciliation seam — COMPLETE (2026-08-30), commit `631aacb`.**
 No behaviour change. New `IActualWorkReviewSignalReconciliation` (Application, domain scalars only —

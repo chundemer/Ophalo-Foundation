@@ -148,4 +148,24 @@ public static class ActualWorkErrors
         Error.Create(
             "ActualWork.ReviewBlockedZeroLineDispositionRequired",
             "This visit has no line items and needs a no-charge disposition before it can be reviewed.");
+
+    /// <summary>ADR-494 D4: a supersession must always state why the original submitted visit was
+    /// replaced.</summary>
+    public static readonly Error SupersessionReasonRequired =
+        Error.Create("ActualWork.SupersessionReasonRequired", "A reason is required to replace this visit.");
+
+    /// <summary>ADR-494 D4: the supersession reason exceeds the 2,000-character bound.</summary>
+    public static readonly Error SupersessionReasonTooLong =
+        Error.Create("ActualWork.SupersessionReasonTooLong", "The replacement reason must be 2,000 characters or fewer.");
+
+    /// <summary>ADR-494 D6b: the source visit has already been superseded — a source is replaced at
+    /// most once (sibling replacements are forbidden).</summary>
+    public static readonly Error AlreadySuperseded =
+        Error.Create("ActualWork.AlreadySuperseded", "This visit has already been replaced.");
+
+    /// <summary>ADR-494 D6c: a superseded visit is inert. Mutations fail closed after the
+    /// version-mismatch check, and a direct live read of a superseded visit returns this reconcilable
+    /// outcome so a stale deep link routes to the replacement. Maps to 409.</summary>
+    public static readonly Error Superseded =
+        Error.Create("ActualWork.Superseded", "This visit was replaced. Reload to see the current version.");
 }
