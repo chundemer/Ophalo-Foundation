@@ -441,7 +441,7 @@ commit would touch 8 production files across Core + Infrastructure + Application
 estimated "Application + Api, ≈5"). Neither sub-slice is user-facing; both deploy together with
 4c-iii's field UI.
 
-- **4c-ii-a — VisitNote write path — COMPLETE (2026-08-30), `6f6c4ae`.**
+- **4c-ii-a — VisitNote write path — COMPLETE (2026-08-29), `6f6c4ae`.**
   Migration `20260830010613_AddActualWorkVisitNote` (nullable `varchar(2000)` on `keep_actual_works`,
   applied locally by Christian). `ActualWork.VisitNote` + `SetVisitNote(note)` (Draft-only,
   trim-to-null, ≤2000 → `ActualWorkErrors.VisitNoteTooLong`, version rotates); `ActualWorkConfiguration`
@@ -465,7 +465,7 @@ estimated "Application + Api, ≈5"). Neither sub-slice is user-facing; both dep
   Tests: `ActualWorkHistoryApiTests`, `ActualWorkFinancialReadApiTests`. ~3 prod + 2 test, 0
   mutation families.
 
-**Migration — DONE (Christian, 2026-08-30).** `20260830010613_AddActualWorkVisitNote` — nullable
+**Migration — DONE (Christian, 2026-08-29).** `20260830010613_AddActualWorkVisitNote` — nullable
 `varchar(2000)` on `keep_actual_works`, no hand-edit, no backfill, no local table reset. Applied
 locally; deploys through the normal production path with the merged 4c-ii / 4c-iii slice.
 
