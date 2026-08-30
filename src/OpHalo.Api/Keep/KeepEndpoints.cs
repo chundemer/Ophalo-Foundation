@@ -1289,6 +1289,9 @@ public static class KeepEndpoints
         // the Owner/Admin read-only view so the composer can restore its add region after a reload.
         defaultPerformedByAccountUserId = draft.DefaultPerformedByAccountUserId,
         defaultPerformerDisplayName = draft.DefaultPerformerDisplayName,
+        // ADR-494 D5 (4c-ii): visit-level note, readable on history so the composer textarea
+        // restores across reload. Latent until the 4c-iii field UI consumes it.
+        visitNote = draft.VisitNote,
         lines = draft.Lines.Select(ToLineHistoryResponse),
     };
 
@@ -1299,6 +1302,7 @@ public static class KeepEndpoints
         outcome = visit.Outcome?.ToString(),
         completionNote = visit.CompletionNote,
         submittedAtUtc = visit.SubmittedAtUtc,
+        visitNote = visit.VisitNote,
         lines = visit.Lines.Select(ToLineHistoryResponse),
     };
 
@@ -1323,6 +1327,7 @@ public static class KeepEndpoints
         status = result.Status.ToString(),
         outcome = result.Outcome?.ToString(),
         completionNote = result.CompletionNote,
+        visitNote = result.VisitNote,
         recorderAccountUserId = result.RecorderAccountUserId,
         submittedAtUtc = result.SubmittedAtUtc,
         reviewedAtUtc = result.ReviewedAtUtc,
@@ -1352,6 +1357,8 @@ public static class KeepEndpoints
         unitOfMeasureSnapshot = line.UnitOfMeasureSnapshot,
         actualQuantity = line.ActualQuantity,
         note = line.Note,
+        performedByAccountUserId = line.PerformedByAccountUserId,
+        performerDisplayName = line.PerformerDisplayName,
         isFinancialDataComplete = line.IsFinancialDataComplete,
         sellPriceSnapshot = line.SellPriceSnapshot,
         standardExpectedDirectCostSnapshot = line.StandardExpectedDirectCostSnapshot,
@@ -1373,6 +1380,8 @@ public static class KeepEndpoints
         unitOfMeasureSnapshot = line.UnitOfMeasureSnapshot,
         actualQuantity = line.ActualQuantity,
         note = line.Note,
+        performedByAccountUserId = line.PerformedByAccountUserId,
+        performerDisplayName = line.PerformerDisplayName,
     };
 
     /// <summary>Strict parser for the <c>X-Keep-ActualWork-Version</c> optimistic-concurrency

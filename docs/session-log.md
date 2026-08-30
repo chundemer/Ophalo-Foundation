@@ -422,41 +422,33 @@ correction applied pre-commit: partial-component resolution + client negative ch
 full frontend suite **799/799** (90 files, +4), `tsc --noEmit` clean, `check:tokens` passed,
 `git diff --check` clean.
 
-### Claude handoff — 4c-ii (VisitNote API + read projections) — split into 4c-ii-a (DONE) / 4c-ii-b (NEXT)
+### Claude handoff — 4c-ii (VisitNote API + read projections) — COMPLETE (4c-ii-a + 4c-ii-b)
 
-**➡ NEXT SESSION: 4c-ii-b — VisitNote + performer read projections.** Layer: Application + Api. 0
-mutation families, ~3 prod + 2 test. Full spec in
-[BL136 P preflight → Slice 4c-ii](build-log/136-P-preflight.md) (§"Slice 4c-ii") and ADR-494 D5;
-preflight decisions already locked by Christian (2026-08-29) — do the mechanical preflight, not a
-re-discovery. Exact work:
+**➡ NEXT SESSION: 4c-iii — rich performer + VisitNote field UI.** Layer: `web/ophalo-app` only.
+1 mutation family (VisitNote mutation, route already shipped in 4c-ii-a). Full spec in
+[BL136 P preflight → Slice 4c-iii](build-log/136-P-preflight.md) (§"Slice 4c-iii"); ADR-494 D5.
+Consumes everything 4c-ii-a/b shipped — the VisitNote write route + concurrency header, and the
+`visitNote` / `performedByAccountUserId` / `performerDisplayName` fields now latent on the history
+and financial-detail reads. Exact work (do a mechanical preflight against the current
+`web/ophalo-app` surface — the API contract is locked, the frontend types are not yet touched):
 
-1. `ActualWorkHistoryReadApiService.cs` — add `VisitNote` to `ActualWorkOpenDraftEntry` **and**
-   `ActualWorkSubmittedVisitEntry` (open-draft included so the 4c-iii composer textarea restores
-   across reload — ADR-494 D5 "readable on history / financial detail / workspace", same rationale
-   that forced the 4c-i-c-1 `DefaultPerformerDisplayName` addition). Add per-line performer id +
-   display name to `ActualWorkLineHistoryEntry`. Populate in `ToOpenDraftEntry` / `ToSubmittedVisitEntry`
-   / `ToLineEntries`. `DefaultPerformerDisplayName` is already resolved here via
-   `operatePersistence.GetActorDisplayNameAsync` — reuse that call.
-2. `ActualWorkFinancialReadApiService.cs` — add `VisitNote` to `ActualWorkFinancialDetailResult`
-   (visit-level); add performer id + display name to `ActualWorkFinancialLineEntry`. It already
-   resolves `ReviewedByDisplayName` via the same call.
-3. **Performer-name resolution (locked decision):** per-distinct-id **memoized** loop over
-   `GetActorDisplayNameAsync` inside each read method (`Dictionary<Guid,string?>` local cache;
-   visits carry 1–2 distinct performers). Do **not** add a batch method to
-   `IKeepRequestOperatePersistence` — the interface stays unchanged.
-4. `KeepEndpoints.cs` — extend the anonymous response mappers: `ToOpenDraftResponse`,
-   `ToSubmittedVisitResponse`, `ToLineHistoryResponse`, `ToActualWorkFinancialDetailResponse`,
-   `ToFinancialLineResponse` with `visitNote` / `performedByAccountUserId` / `performerDisplayName`.
-   No new response records (all anonymous). Frontend `apiClient.types.ts` stays untouched — that is
-   4c-iii; the new fields are latent until then.
-5. Tests: `ActualWorkHistoryApiTests` (VisitNote on open draft + submitted visit; per-line performer
-   name present; VisitNote frozen/readable after submit), `ActualWorkFinancialReadApiTests` (VisitNote
-   + per-line performer name in financial detail).
+1. `apiClient.types.ts` + `apiClient` — surface `visitNote` on the open-draft / submitted-visit /
+   financial-detail read types, and per-line `performedByAccountUserId` / `performerDisplayName`;
+   add the `PUT /keep/pricebook/actual-work/{id}/visit-note` call (X-Keep-ActualWork-Version header,
+   returns `ActualWorkConcurrencyVersionResponse`).
+2. `useActualWorkCapture.ts` — VisitNote mutation (mirrors the default-performer mutation: optimistic
+   version echo, 409 re-probe into the existing conflict handling, no new modal).
+3. `ActualWorkComposer.tsx` — `VisitNote` textarea + per-line performer override beyond the ticket
+   default; all price-blind, only mounts in the recorder's editable `draft` state.
+4. `ActualWorkHistoryCard.tsx` — show performer name + VisitNote read-only for submitted visits.
+5. Tests (~4): composer per-line performer + VisitNote interaction; history-card render.
 
-Out of 4c-ii-b scope: `SetZeroLineDisposition` (D5, replacement slice); `CompletionNote` trim/≤2000
-guard (D3 intent — its own later slice + preflight, see the deferred note below). After 4c-ii-b,
-4c-iii (`web/ophalo-app` field UI) consumes all of it; the merged 4c-ii + 4c-iii slice deploys
-together.
+Gate: `check:tokens`, `tsc --noEmit`, full frontend suite; no money field appears on the field
+surface. After 4c-iii the merged 4c-ii + 4c-iii slice deploys together (migration
+`20260830010613_AddActualWorkVisitNote` applies on that release).
+
+Out of 4c-iii scope: `SetZeroLineDisposition` (ADR-494 D5, replacement slice); `CompletionNote`
+trim/≤2000 guard (D3 intent — its own later slice + preflight, see the deferred note below).
 
 ---
 
@@ -493,7 +485,18 @@ estimated "Application + Api, ≈5"). Neither sub-slice is user-facing; both dep
   generated migration + 3 test. Verified: `~ActualWork` unit **117/117**, `~ActualWork` integration
   **265/265**, architecture **14/14**, `OpHalo.Api` build 0 warnings, `git diff --check` clean.
   **Not deployed as a user-facing change — additive route + column, nothing calls it until 4c-iii.**
-- **4c-ii-b — read projections — NEXT (spec above).**
+- **4c-ii-b — read projections — COMPLETE (2026-08-30), `PENDING_HASH`.**
+  `VisitNote` added to `ActualWorkOpenDraftEntry` + `ActualWorkSubmittedVisitEntry` +
+  `ActualWorkFinancialDetailResult`; per-line `PerformedByAccountUserId` + `PerformerDisplayName` on
+  `ActualWorkLineHistoryEntry` + `ActualWorkFinancialLineEntry`. Performer names resolved per-distinct-id
+  memoized (`Dictionary<Guid,string?>`) inside each read method via the existing
+  `GetActorDisplayNameAsync` seam — `IKeepRequestOperatePersistence` unchanged, no batch method.
+  `ProjectVisit` gained an optional `performerNames` param (null on the review-queue path).
+  `KeepEndpoints.cs` — `visitNote` / `performedByAccountUserId` / `performerDisplayName` on the 5
+  anonymous response mappers; no new records; `apiClient.types.ts` untouched (4c-iii). 3 prod + 2
+  test. Verified: `~ActualWork` unit **117/117**, `~ActualWork` integration **268/268** (+3),
+  architecture **14/14**, `OpHalo.Api` build 0 warnings, `git diff --check` clean. Not user-facing —
+  fields latent until 4c-iii consumes them.
 
 **Out of 4c-ii scope (confirmed):** `CompletionNote` trim/≤2000 guard (ADR-494 D3 intent) — its own
 later bounded slice + preflight; `SetZeroLineDisposition` (D5) — belongs to the replacement slice.

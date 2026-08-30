@@ -17,7 +17,8 @@ namespace OpHalo.Keep.Application.PriceBook;
 /// <see cref="ActualWorkSubmittedVisitEntry"/> — no catalog/price-book ids, price, cost, recorder
 /// identity, or recorded time (build-log/129, not yet approved for this field-facing view).</summary>
 public sealed record ActualWorkLineHistoryEntry(
-    Guid Id, string DisplayNameSnapshot, string? UnitOfMeasureSnapshot, decimal ActualQuantity, string? Note);
+    Guid Id, string DisplayNameSnapshot, string? UnitOfMeasureSnapshot, decimal ActualQuantity, string? Note,
+    Guid PerformedByAccountUserId, string? PerformerDisplayName);
 
 /// <summary>The open Draft for this request, returned to its current recorder (GAP-055) for
 /// resume-after-reload editing, or to Owner/Admin read-only so they have grounds to decide on a
@@ -43,13 +44,14 @@ public sealed record ActualWorkOpenDraftEntry(
     DateTime? SubmittedAtUtc, Guid ConcurrencyVersion, bool IsRecorder,
     Guid? RecorderAccountUserId, string? RecorderDisplayName,
     Guid? DefaultPerformedByAccountUserId, string? DefaultPerformerDisplayName,
+    string? VisitNote,
     IReadOnlyList<ActualWorkLineHistoryEntry> Lines);
 
 /// <summary>A submitted, immutable visit — no <c>ConcurrencyVersion</c>, since nothing here is ever
 /// mutated through this read.</summary>
 public sealed record ActualWorkSubmittedVisitEntry(
     Guid Id, ActualWorkStatus Status, ActualWorkOutcome? Outcome, string? CompletionNote,
-    DateTime? SubmittedAtUtc, IReadOnlyList<ActualWorkLineHistoryEntry> Lines);
+    DateTime? SubmittedAtUtc, string? VisitNote, IReadOnlyList<ActualWorkLineHistoryEntry> Lines);
 
 /// <summary><see cref="CanCaptureActualWork"/> disambiguates a null <see cref="OpenDraft"/>: it is
 /// true whenever the caller has both <c>RequestsOperate</c> and <c>ActualWorkCapture</c> (GAP-055 —
@@ -118,71 +120,95 @@ public sealed class ActualWorkHistoryReadApiService(
 
         var isOwnerOrAdmin = gate.Value.RoleSnapshot.Role is AccountUserRole.Owner or AccountUserRole.Admin;
 
-        ActualWorkOpenDraftEntry? openDraft = null;
+        ActualWork? draft = null;
         var openDraftHeldByOther = false;
+        var draftVisibleToCaller = false;
+        Guid? recorderIdForRecovery = null;
         if (canCaptureActualWork || isOwnerOrAdmin)
         {
-            var draft = await persistence.GetOpenDraftForRequestAsync(currentUser.AccountId, requestId, ct);
+            draft = await persistence.GetOpenDraftForRequestAsync(currentUser.AccountId, requestId, ct);
             if (draft is not null)
             {
-                // Persisted ticket-default performer (4c-i): resolved once here and surfaced to both
-                // the recorder and the Owner/Admin read-only view — it is work attribution, not
-                // recorder identity. Null name when no default is set or the user has since been
-                // removed; the composer only needs the id to un-gate its add region.
-                var defaultPerformerDisplayName = draft.DefaultPerformedByAccountUserId is { } defaultPerformerId
-                    ? await operatePersistence.GetActorDisplayNameAsync(defaultPerformerId, ct)
-                    : null;
-
                 var isRecorder = draft.RecorderAccountUserId == currentUser.UserId;
                 if (isRecorder)
-                {
-                    openDraft = ToOpenDraftEntry(
-                        draft, isRecorder: true, recorderAccountUserId: null, recorderDisplayName: null,
-                        defaultPerformerDisplayName);
-                }
+                    draftVisibleToCaller = true;
                 else if (isOwnerOrAdmin)
                 {
-                    // Owner/Admin viewing another member's Draft: surface the recorder identity so
-                    // the recovery UI can name the current holder and exclude them from the
-                    // transfer-candidate list.
-                    var recorderDisplayName = await operatePersistence.GetActorDisplayNameAsync(draft.RecorderAccountUserId, ct);
-                    openDraft = ToOpenDraftEntry(
-                        draft, isRecorder: false, draft.RecorderAccountUserId, recorderDisplayName,
-                        defaultPerformerDisplayName);
+                    draftVisibleToCaller = true;
+                    recorderIdForRecovery = draft.RecorderAccountUserId;
                 }
                 else
-                {
                     openDraftHeldByOther = true;
-                }
             }
         }
 
         var submittedVisits = await persistence.GetSubmittedVisitsForRequestAsync(currentUser.AccountId, requestId, ct);
 
+        // Per-distinct-id memoized performer-name resolution (locked 2026-08-29): one
+        // GetActorDisplayNameAsync call per distinct id across the visible draft and every
+        // submitted visit; visits carry 1–2 distinct performers. No batch seam method.
+        var performerNames = new Dictionary<Guid, string?>();
+        var idsToResolve = new HashSet<Guid>();
+        if (draftVisibleToCaller && draft is not null)
+        {
+            foreach (var line in draft.Lines)
+                idsToResolve.Add(line.PerformedByAccountUserId);
+            if (draft.DefaultPerformedByAccountUserId is { } d)
+                idsToResolve.Add(d);
+        }
+        if (recorderIdForRecovery is { } r)
+            idsToResolve.Add(r);
+        foreach (var visit in submittedVisits)
+            foreach (var line in visit.Lines)
+                idsToResolve.Add(line.PerformedByAccountUserId);
+        foreach (var id in idsToResolve)
+            performerNames[id] = await operatePersistence.GetActorDisplayNameAsync(id, ct);
+
+        ActualWorkOpenDraftEntry? openDraft = null;
+        if (draftVisibleToCaller && draft is not null)
+        {
+            var defaultPerformerDisplayName = draft.DefaultPerformedByAccountUserId is { } defaultPerformerId
+                ? performerNames.GetValueOrDefault(defaultPerformerId)
+                : null;
+            openDraft = recorderIdForRecovery is { } recorderId
+                ? ToOpenDraftEntry(
+                    draft, isRecorder: false, recorderId, performerNames.GetValueOrDefault(recorderId),
+                    defaultPerformerDisplayName, performerNames)
+                : ToOpenDraftEntry(
+                    draft, isRecorder: true, recorderAccountUserId: null, recorderDisplayName: null,
+                    defaultPerformerDisplayName, performerNames);
+        }
+
         return Result<ActualWorkHistoryResult>.Success(
             new ActualWorkHistoryResult(
                 canCaptureActualWork, openDraft, openDraftHeldByOther,
-                submittedVisits.Select(ToSubmittedVisitEntry).ToArray()));
+                submittedVisits.Select(v => ToSubmittedVisitEntry(v, performerNames)).ToArray()));
     }
 
     private static ActualWorkOpenDraftEntry ToOpenDraftEntry(
         ActualWork visit, bool isRecorder, Guid? recorderAccountUserId, string? recorderDisplayName,
-        string? defaultPerformerDisplayName) => new(
+        string? defaultPerformerDisplayName, IReadOnlyDictionary<Guid, string?> performerNames) => new(
         visit.Id, visit.Status, visit.Outcome, visit.CompletionNote, visit.SubmittedAtUtc,
         visit.ConcurrencyVersion, isRecorder, recorderAccountUserId, recorderDisplayName,
-        visit.DefaultPerformedByAccountUserId, defaultPerformerDisplayName, ToLineEntries(visit));
+        visit.DefaultPerformedByAccountUserId, defaultPerformerDisplayName, visit.VisitNote,
+        ToLineEntries(visit, performerNames));
 
-    private static ActualWorkSubmittedVisitEntry ToSubmittedVisitEntry(ActualWork visit) => new(
-        visit.Id, visit.Status, visit.Outcome, visit.CompletionNote, visit.SubmittedAtUtc, ToLineEntries(visit));
+    private static ActualWorkSubmittedVisitEntry ToSubmittedVisitEntry(
+        ActualWork visit, IReadOnlyDictionary<Guid, string?> performerNames) => new(
+        visit.Id, visit.Status, visit.Outcome, visit.CompletionNote, visit.SubmittedAtUtc, visit.VisitNote,
+        ToLineEntries(visit, performerNames));
 
     /// <summary><c>Include(Lines)</c> does not guarantee collection order, so capture order is
     /// made explicit here rather than left to reload-time happenstance: <c>CreatedAtUtc ASC, Id
     /// ASC</c>, matching the order lines were actually added in.</summary>
-    private static IReadOnlyList<ActualWorkLineHistoryEntry> ToLineEntries(ActualWork visit) =>
+    private static IReadOnlyList<ActualWorkLineHistoryEntry> ToLineEntries(
+        ActualWork visit, IReadOnlyDictionary<Guid, string?> performerNames) =>
         visit.Lines
             .OrderBy(l => l.CreatedAtUtc)
             .ThenBy(l => l.Id)
-            .Select(l => new ActualWorkLineHistoryEntry(l.Id, l.DisplayNameSnapshot, l.UnitOfMeasureSnapshot, l.ActualQuantity, l.Note))
+            .Select(l => new ActualWorkLineHistoryEntry(
+                l.Id, l.DisplayNameSnapshot, l.UnitOfMeasureSnapshot, l.ActualQuantity, l.Note,
+                l.PerformedByAccountUserId, performerNames.GetValueOrDefault(l.PerformedByAccountUserId)))
             .ToArray();
 
     /// <summary>Returns the request-visibility scope and resolved authorization facts on success.

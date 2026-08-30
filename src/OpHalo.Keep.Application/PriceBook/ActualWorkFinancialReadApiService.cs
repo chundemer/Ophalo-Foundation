@@ -42,6 +42,8 @@ public sealed record ActualWorkFinancialLineEntry(
     string? UnitOfMeasureSnapshot,
     decimal ActualQuantity,
     string? Note,
+    Guid PerformedByAccountUserId,
+    string? PerformerDisplayName,
     bool IsFinancialDataComplete,
     decimal? SellPriceSnapshot,
     decimal? StandardExpectedDirectCostSnapshot,
@@ -78,6 +80,7 @@ public sealed record ActualWorkFinancialDetailResult(
     ActualWorkStatus Status,
     ActualWorkOutcome? Outcome,
     string? CompletionNote,
+    string? VisitNote,
     Guid RecorderAccountUserId,
     DateTime SubmittedAtUtc,
     DateTime? ReviewedAtUtc,
@@ -185,8 +188,15 @@ public sealed class ActualWorkFinancialReadApiService(
         var hasNoChargeDisposition =
             dispositions.Any(d => d.Kind == OfficeFinancialDispositionKind.NoCharge);
 
+        // Per-distinct-id memoized performer-name resolution (locked 2026-08-29): one
+        // GetActorDisplayNameAsync call per distinct line performer; a visit carries 1–2. No batch
+        // seam method — mirrors the ReviewedByDisplayName resolution above.
+        var performerNames = new Dictionary<Guid, string?>();
+        foreach (var performerId in visit.Lines.Select(l => l.PerformedByAccountUserId).Distinct())
+            performerNames[performerId] = await operatePersistence.GetActorDisplayNameAsync(performerId, ct);
+
         return Result<ActualWorkFinancialDetailResult>.Success(
-            ToDetailResult(visit, reviewedByDisplayName, resolutions, hasNoChargeDisposition));
+            ToDetailResult(visit, reviewedByDisplayName, resolutions, hasNoChargeDisposition, performerNames));
     }
 
     /// <summary>The review-queue source seam does not carry financial-resolution rows, so queue-row
@@ -208,14 +218,15 @@ public sealed class ActualWorkFinancialReadApiService(
     private static ActualWorkFinancialDetailResult ToDetailResult(
         ActualWork visit, string? reviewedByDisplayName,
         IReadOnlyList<ActualWorkLineFinancialResolution> resolutions,
-        bool hasNoChargeDisposition)
+        bool hasNoChargeDisposition,
+        IReadOnlyDictionary<Guid, string?> performerNames)
     {
         var lines = visit.Lines.OrderBy(l => l.CreatedAtUtc).ThenBy(l => l.Id).ToArray();
-        var projection = ActualWorkFinancialProjection.ProjectVisit(lines, resolutions);
+        var projection = ActualWorkFinancialProjection.ProjectVisit(lines, resolutions, performerNames);
         var totals = projection.Totals;
 
         return new ActualWorkFinancialDetailResult(
-            visit.Id, visit.RequestId, visit.Status, visit.Outcome, visit.CompletionNote,
+            visit.Id, visit.RequestId, visit.Status, visit.Outcome, visit.CompletionNote, visit.VisitNote,
             visit.RecorderAccountUserId, visit.SubmittedAtUtc!.Value, visit.ReviewedAtUtc,
             visit.ReviewedByAccountUserId, reviewedByDisplayName, visit.ReviewNote, totals.HasIncompleteFinancialData,
             totals.TotalSalesPrice, totals.TotalStandardExpectedDirectCost, totals.TotalMargin,
@@ -368,9 +379,12 @@ internal static class ActualWorkFinancialProjection
     /// every one derived from that same per-line state — so they cannot drift in the mixed-provenance
     /// case. The persistence seam already returns rows newest-first; the re-order here also lets unit
     /// tests pass rows in any order.</summary>
+    /// <summary>Per-distinct-id performer display names (4c-ii-b). Optional — the review-queue
+    /// projection needs only totals, so it omits it; the financial-detail read supplies it.</summary>
     internal static VisitProjection ProjectVisit(
         IReadOnlyCollection<ActualWorkLine> lines,
-        IReadOnlyList<ActualWorkLineFinancialResolution> resolutions)
+        IReadOnlyList<ActualWorkLineFinancialResolution> resolutions,
+        IReadOnlyDictionary<Guid, string?>? performerNames = null)
     {
         var orderedResolutions = resolutions
             .OrderByDescending(r => r.ResolvedAtUtc)
@@ -386,7 +400,7 @@ internal static class ActualWorkFinancialProjection
             ? new VisitTotals(true, incompleteCount, null, null, null)
             : BuildCompleteTotals(folds);
 
-        var lineEntries = folds.Select(f => ToLineEntry(f.Line, f.Fin)).ToArray();
+        var lineEntries = folds.Select(f => ToLineEntry(f.Line, f.Fin, performerNames)).ToArray();
 
         var blockers = folds
             .Where(f => !f.Fin.IsComplete)
@@ -408,7 +422,8 @@ internal static class ActualWorkFinancialProjection
         return new VisitTotals(false, 0, totalSales, totalCost, totalSales - totalCost);
     }
 
-    private static ActualWorkFinancialLineEntry ToLineEntry(ActualWorkLine line, EffectiveLineFinancials fin)
+    private static ActualWorkFinancialLineEntry ToLineEntry(
+        ActualWorkLine line, EffectiveLineFinancials fin, IReadOnlyDictionary<Guid, string?>? performerNames)
     {
         var lineSalesTotal = fin.IsComplete ? RoundMoney(fin.SellPrice!.Value * line.ActualQuantity) : (decimal?)null;
         var lineCostTotal = fin.IsComplete ? RoundMoney(fin.StandardExpectedDirectCost!.Value * line.ActualQuantity) : (decimal?)null;
@@ -416,6 +431,8 @@ internal static class ActualWorkFinancialProjection
 
         return new ActualWorkFinancialLineEntry(
             line.Id, line.DisplayNameSnapshot, line.UnitOfMeasureSnapshot, line.ActualQuantity, line.Note,
+            line.PerformedByAccountUserId,
+            performerNames is null ? null : performerNames.GetValueOrDefault(line.PerformedByAccountUserId),
             fin.IsComplete, line.SellPriceSnapshot, line.StandardExpectedDirectCostSnapshot,
             lineSalesTotal, lineCostTotal, lineMargin,
             fin.SellPriceResolved, fin.SellPriceResolved ? fin.SellPrice : null, fin.SellPriceBasis?.ToString(),

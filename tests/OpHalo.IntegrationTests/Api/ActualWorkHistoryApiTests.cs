@@ -95,6 +95,52 @@ public sealed class ActualWorkHistoryApiTests : IClassFixture<KeepApiWebFactory>
     }
 
     [Fact]
+    public async Task GetHistory_RecorderView_ExposesVisitNoteAndPerLinePerformer()
+    {
+        // 4c-ii-b (ADR-494 D5): the open Draft carries VisitNote so the composer textarea restores
+        // across a reload, and each line carries its performer id + resolved display name.
+        var (accountId, ownerId, _) = await SeedAccountAsync("history-visit-note-draft");
+        await EnrollAsync(accountId, ownerId);
+        var operatorId = await SeedOperatorAsync(accountId, "history-visit-note-draft");
+        var operatorCookie = await GetCookieAsync(operatorId, accountId);
+        var requestId = await SeedRequestAsync(accountId);
+        await SeedWatcherAsync(requestId, accountId, operatorId);
+        await SeedOpenDraftWithLineAsync(accountId, requestId, operatorId, operatorId, "Attic access via hallway hatch.");
+
+        var response = await AuthRequest(operatorCookie).GetAsync($"/keep/pricebook/actual-work/request/{requestId}/history");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        var openDraft = body.GetProperty("openDraft");
+        Assert.Equal("Attic access via hallway hatch.", openDraft.GetProperty("visitNote").GetString());
+        var line = openDraft.GetProperty("lines")[0];
+        Assert.Equal(operatorId, line.GetProperty("performedByAccountUserId").GetGuid());
+        Assert.Equal("operator@history-visit-note-draft.com", line.GetProperty("performerDisplayName").GetString());
+    }
+
+    [Fact]
+    public async Task GetHistory_SubmittedVisit_VisitNoteFrozenAndReadableWithPerformer()
+    {
+        // 4c-ii-b: VisitNote is set on the Draft, frozen at submit, and still readable on the
+        // submitted-visit projection; per-line performer name is resolved there too.
+        var (accountId, ownerId, ownerCookie) = await SeedAccountAsync("history-visit-note-submitted");
+        await EnrollAsync(accountId, ownerId);
+        var operatorId = await SeedOperatorAsync(accountId, "history-visit-note-submitted");
+        var requestId = await SeedRequestAsync(accountId);
+        await SeedResponsibleAsync(requestId, accountId, ownerId);
+        await SeedSubmittedVisitAsync(accountId, requestId, ownerId, operatorId, "Customer requested morning arrival next time.");
+
+        var response = await AuthRequest(ownerCookie).GetAsync($"/keep/pricebook/actual-work/request/{requestId}/history");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var visit = (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("submittedVisits")[0];
+        Assert.Equal("Customer requested morning arrival next time.", visit.GetProperty("visitNote").GetString());
+        var line = visit.GetProperty("lines")[0];
+        Assert.Equal(operatorId, line.GetProperty("performedByAccountUserId").GetGuid());
+        Assert.Equal("operator@history-visit-note-submitted.com", line.GetProperty("performerDisplayName").GetString());
+    }
+
+    [Fact]
     public async Task GetHistory_ActiveResponsibleWithoutDraft_CanCaptureActualWorkIsTrue()
     {
         var (accountId, ownerId, ownerCookie) = await SeedAccountAsync("history-responsible-no-draft");
@@ -322,19 +368,37 @@ public sealed class ActualWorkHistoryApiTests : IClassFixture<KeepApiWebFactory>
         Assert.Equal(ActualWorkCommitResult.Committed, commitResult);
     }
 
-    private async Task SeedSubmittedVisitAsync(Guid accountId, Guid requestId, Guid ownerId)
+    private async Task SeedSubmittedVisitAsync(
+        Guid accountId, Guid requestId, Guid ownerId, Guid? performerId = null, string? visitNote = null)
     {
         await using var scope = _factory.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
         var persistence = new EfActualWorkPersistence(db);
         var visit = ActualWork.Create(accountId, requestId, ownerId).Value;
-        ActualWorkTestData.AddLine(visit, null, null, "Drain pan replacement", "each", 1m, null, null, null, null, ownerId);
+        ActualWorkTestData.AddLine(
+            visit, null, null, "Drain pan replacement", "each", 1m, null, null, null, null, ownerId, performerId ?? ownerId);
+        if (visitNote is not null)
+            Assert.True(visit.SetVisitNote(visitNote).IsSuccess);
         await persistence.AddAsync(visit, CancellationToken.None);
 
         var submitResult = visit.Submit(DateTime.UtcNow, null, null);
         Assert.True(submitResult.IsSuccess);
         var commitResult = await persistence.CommitAsync(visit, CancellationToken.None);
         Assert.Equal(ActualWorkCommitResult.Committed, commitResult);
+    }
+
+    private async Task SeedOpenDraftWithLineAsync(
+        Guid accountId, Guid requestId, Guid recorderId, Guid performerId, string? visitNote)
+    {
+        await using var scope = _factory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+        var persistence = new EfActualWorkPersistence(db);
+        var visit = ActualWork.Create(accountId, requestId, recorderId).Value;
+        ActualWorkTestData.AddLine(
+            visit, null, null, "Capacitor replacement", "each", 1m, null, null, null, null, recorderId, performerId);
+        if (visitNote is not null)
+            Assert.True(visit.SetVisitNote(visitNote).IsSuccess);
+        await persistence.AddAsync(visit, CancellationToken.None);
     }
 
     private async Task<(Guid ActualWorkId, Guid ConcurrencyVersion)> CreateDraftAsync(

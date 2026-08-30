@@ -254,6 +254,30 @@ public sealed class ActualWorkFinancialReadApiTests : IClassFixture<KeepApiWebFa
     }
 
     [Fact]
+    public async Task FinancialDetail_IncludesVisitNoteAndPerLinePerformerName()
+    {
+        // 4c-ii-b (ADR-494 D5): the financial detail read surfaces the visit-level VisitNote and
+        // each line's performer id + resolved display name for the Owner/Admin review card.
+        var (accountId, ownerId, ownerCookie) = await SeedAccountAsync("detail-visit-note");
+        await EnrollAsync(accountId, ownerId);
+        var requestId = await SeedRequestAsync(accountId, "Note Customer");
+        var (catalogItemId, priceBookVersionLineId) = await SeedCatalogItemWithSnapshotAsync(accountId, ownerId);
+        var visitId = await CreateVisitAsync(
+            accountId, requestId, ownerId, submit: true, review: false,
+            visitNote: "Roof unit; ladder required.",
+            lines: [(catalogItemId, priceBookVersionLineId, 42.50m, 18.00m, 2m)]);
+
+        var response = await GetDetailAsync(ownerCookie, visitId);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("Roof unit; ladder required.", body.GetProperty("visitNote").GetString());
+        var line = body.GetProperty("lines").EnumerateArray().Single();
+        Assert.Equal(ownerId, line.GetProperty("performedByAccountUserId").GetGuid());
+        Assert.Equal("Owner", line.GetProperty("performerDisplayName").GetString());
+    }
+
+    [Fact]
     public async Task FinancialDetail_ConcurrencyVersion_CanBeUsedToReview()
     {
         // Slice 8A contract patch: the review card's only source for the review mutation's
@@ -537,7 +561,7 @@ public sealed class ActualWorkFinancialReadApiTests : IClassFixture<KeepApiWebFa
 
     private async Task<Guid> CreateVisitAsync(
         Guid accountId, Guid requestId, Guid recorderAccountUserId, bool submit, bool review,
-        DateTime? submittedAtUtc = null, string? reviewNote = null,
+        DateTime? submittedAtUtc = null, string? reviewNote = null, string? visitNote = null,
         IReadOnlyList<(Guid? CatalogItemId, Guid? PriceBookVersionLineId, decimal? SellPrice, decimal? Cost, decimal Quantity)>? lines = null)
     {
         var now = DateTime.UtcNow;
@@ -551,6 +575,9 @@ public sealed class ActualWorkFinancialReadApiTests : IClassFixture<KeepApiWebFa
                 line.SellPrice, line.Cost, note: null, commercialBaselineSourceLineId: null, recorderAccountUserId);
             Assert.True(addResult.IsSuccess);
         }
+
+        if (visitNote is not null)
+            Assert.True(visit.SetVisitNote(visitNote).IsSuccess);
 
         if (submit || review)
         {
