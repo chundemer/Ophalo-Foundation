@@ -1286,7 +1286,9 @@ export interface ActualWorkPerformerCandidatesResult {
 
 export interface ActualWorkTransferRecorderBody {
   newRecorderAccountUserId: string;
-  reason: string;
+  /** Required for an Owner/Admin recovery transfer; omitted for a recorder-initiated "hand off to
+   * office" (Slice 4d) — the server records a fixed system reason in that case. */
+  reason?: string;
 }
 
 /** ADR-494 D5 (4c-ii): recorder-only Draft visit-note write. The server trims to null and rejects

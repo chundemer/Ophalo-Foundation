@@ -15,7 +15,10 @@ import {
   type ActualWorkUpdateLineBody,
   type FieldScopeSearchResultResponse,
 } from "../../lib/apiClient";
-import { ACTUAL_WORK_RECONCILE_RELOAD_FAILURE_NOTICE } from "./useActualWorkCapture";
+import {
+  ACTUAL_WORK_RECONCILE_RELOAD_FAILURE_NOTICE,
+  type ActualWorkHandoffOutcome,
+} from "./useActualWorkCapture";
 
 /** Mirrors `useActualWorkCapture`'s `setDefaultPerformer` return contract (kept local — the hook
  * declares it inline). `set` unmounts this gate on the parent's refetch; the rest stay in place. */
@@ -75,6 +78,10 @@ interface ActualWorkComposerProps {
   // version protocol). A `too-long` outcome is surfaced under the textarea; `stale` reconciles
   // through the shared conflict path.
   onSetVisitNote: (visitNote: string | null) => Promise<SetVisitNoteOutcome>;
+  // Slice 4d: the current recorder hands their own unsubmitted Draft to a chosen office member
+  // (the `transfer-recorder` endpoint with the reason omitted). On `"handed-off"` / `"stale"` the
+  // composer is already closing; `"ineligible"` / `"failed"` keep the picker open for a retry.
+  onHandOffToOffice: (newRecorderAccountUserId: string) => Promise<ActualWorkHandoffOutcome>;
 }
 
 /**
@@ -102,6 +109,7 @@ export function ActualWorkComposer({
   currentAccountUserId,
   onSetDefaultPerformer,
   onSetVisitNote,
+  onHandOffToOffice,
 }: ActualWorkComposerProps) {
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [submitted, setSubmitted] = useState(false);
@@ -326,6 +334,13 @@ export function ActualWorkComposer({
         )}
 
         {!readOnly && (
+          <ActualWorkHandoffControl
+            currentAccountUserId={currentAccountUserId}
+            onHandOffToOffice={onHandOffToOffice}
+          />
+        )}
+
+        {!readOnly && (
           <div className="pt-1">
             <button
               ref={discardTriggerRef}
@@ -404,6 +419,171 @@ export function ActualWorkComposer({
 function SubmittedVisits({ visits }: { visits: ActualWorkSubmittedVisitEntry[] }) {
   if (visits.length === 0) return null;
   return <section className="border-t border-[var(--ophalo-border)] pt-4"><div className="mb-2 flex items-center justify-between"><h3 className="text-xs font-bold uppercase tracking-wide text-[var(--ophalo-muted)]">Submitted visits (locked)</h3><span className="text-[11px] text-[var(--ophalo-muted)]">Read-only audit record</span></div><div className="space-y-2">{visits.map((visit, index) => <details key={visit.id} className="group rounded-lg border border-[var(--ophalo-border)] bg-[var(--ophalo-canvas)]"><summary className={`flex cursor-pointer list-none items-center justify-between gap-2 px-3 py-2 text-xs font-medium text-[var(--ophalo-ink)] ${FOCUS_RING}`}><span className="flex items-center gap-2"><Lock className="h-3.5 w-3.5 text-[var(--ophalo-muted)]" />Visit #{visits.length - index} · {visit.submittedAtUtc ? new Date(visit.submittedAtUtc).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : "Submitted"}<span className="rounded bg-slate-200 px-1.5 py-0.5 text-[10px]">{visit.lines.length} item{visit.lines.length === 1 ? "" : "s"}</span></span><ChevronRight className="h-3.5 w-3.5 transition-transform group-open:rotate-90" /></summary><div className="border-t border-[var(--ophalo-border)] px-3 py-2 space-y-1">{visit.visitNote ? <p className="text-xs text-[var(--ophalo-muted)]"><span className="font-semibold text-[var(--ophalo-ink)]">Visit note:</span> {visit.visitNote}</p> : null}{visit.lines.map((line) => <p key={line.id} className="text-xs text-[var(--ophalo-muted)]">{line.displayNameSnapshot} — {line.actualQuantity} {line.unitOfMeasureSnapshot ?? ""} · Performed by {line.performerDisplayName ?? "Unknown performer"}</p>)}</div></details>)}</div></section>;
+}
+
+/** Slice 4d: a field recorder hands their own unsubmitted Draft to a chosen office member. The
+ * trigger is a subordinate button; the actual transfer only fires from the nested confirmation
+ * alertdialog (mirrors the discard-confirm pattern — capture-phase Escape + Tab-wrap between the
+ * two buttons, focus returns to the trigger on close). The candidate list is the same
+ * `performer-candidates` read the office-transcription gate uses (recorder-callable; identical
+ * eligibility predicate to a recorder), minus the caller. `"handed-off"` / `"stale"` close the
+ * composer from the parent, so only the recoverable outcomes update local state. */
+function ActualWorkHandoffControl({
+  currentAccountUserId,
+  onHandOffToOffice,
+}: {
+  currentAccountUserId?: string;
+  onHandOffToOffice: (newRecorderAccountUserId: string) => Promise<ActualWorkHandoffOutcome>;
+}) {
+  const [open, setOpen] = useState(false);
+  const [selected, setSelected] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const cancelRef = useRef<HTMLButtonElement>(null);
+  const confirmRef = useRef<HTMLButtonElement>(null);
+
+  const candidatesQuery = useQuery({
+    queryKey: ["actualWorkPerformerCandidates"],
+    queryFn: () => api.getActualWorkPerformerCandidates(),
+    enabled: open,
+  });
+  const candidates = (candidatesQuery.data?.candidates ?? []).filter(
+    (candidate) => candidate.accountUserId !== currentAccountUserId,
+  );
+
+  useEffect(() => {
+    if (!open) return;
+    cancelRef.current?.focus();
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        e.stopPropagation();
+        if (!submitting) setOpen(false);
+        return;
+      }
+      if (e.key !== "Tab") return;
+      e.preventDefault();
+      e.stopPropagation();
+      const first = cancelRef.current;
+      const last = confirmRef.current;
+      if (!first || !last) return;
+      (document.activeElement === first ? last : first).focus();
+    }
+    document.addEventListener("keydown", onKeyDown, true);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown, true);
+      triggerRef.current?.focus();
+    };
+  }, [open, submitting]);
+
+  async function submit() {
+    if (!selected) return;
+    setSubmitting(true);
+    setError(null);
+    const outcome = await onHandOffToOffice(selected);
+    setSubmitting(false);
+    if (outcome === "handed-off" || outcome === "stale") return; // parent closes the composer
+    if (outcome === "ineligible") {
+      setError("That team member can't take over this visit. Pick someone else.");
+      setSelected("");
+      void candidatesQuery.refetch();
+      return;
+    }
+    setError("Couldn't hand off this visit. Check your connection and try again.");
+  }
+
+  return (
+    <div className="pt-1">
+      <button
+        ref={triggerRef}
+        type="button"
+        onClick={() => {
+          setOpen(true);
+          setError(null);
+          setSelected("");
+        }}
+        className={`inline-flex items-center gap-1.5 rounded-lg border border-[var(--ophalo-border)] px-3 py-1.5 text-xs font-semibold text-[var(--ophalo-ink)] hover:bg-[var(--ophalo-canvas)] ${FOCUS_RING}`}
+      >
+        Hand off to office
+      </button>
+      {open && (
+        <div
+          role="alertdialog"
+          aria-modal="true"
+          aria-labelledby="actual-work-handoff-heading"
+          aria-describedby="actual-work-handoff-body"
+          className="absolute inset-0 z-10 flex items-center justify-center bg-black/30 px-6"
+        >
+          <div className="max-w-sm w-full rounded-lg bg-[var(--ophalo-card)] shadow-xl p-4 flex flex-col gap-3">
+            <h3
+              id="actual-work-handoff-heading"
+              className="font-serif text-lg font-semibold text-[var(--ophalo-ink)]"
+            >
+              Hand off to office
+            </h3>
+            <p id="actual-work-handoff-body" className="text-sm text-[var(--ophalo-muted)]">
+              The office takes over recording this visit. The work you have already recorded stays on it.
+            </p>
+            {candidatesQuery.isLoading && (
+              <p className="text-sm text-[var(--ophalo-muted)]">Loading team members…</p>
+            )}
+            {candidatesQuery.isError && (
+              <p className="text-sm text-[var(--ophalo-danger)]">
+                Couldn&apos;t load team members.{" "}
+                <button type="button" className="underline" onClick={() => void candidatesQuery.refetch()}>
+                  Retry
+                </button>
+              </p>
+            )}
+            {candidatesQuery.isSuccess && candidates.length === 0 && (
+              <p className="text-sm text-[var(--ophalo-muted)]">
+                No one else on the team can take over this visit.
+              </p>
+            )}
+            {candidatesQuery.isSuccess && candidates.length > 0 && (
+              <label className="flex flex-col gap-1 text-sm">
+                <span className="font-medium text-[var(--ophalo-ink)]">Hand off to</span>
+                <select
+                  className={INPUT_CLS}
+                  value={selected}
+                  onChange={(e) => setSelected(e.target.value)}
+                >
+                  <option value="">Select a team member…</option>
+                  {candidates.map((candidate) => (
+                    <option key={candidate.accountUserId} value={candidate.accountUserId}>
+                      {candidate.displayName}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+            {error && <p className="text-sm text-[var(--ophalo-danger)]">{error}</p>}
+            <div className="flex items-center justify-end gap-3">
+              <button
+                ref={cancelRef}
+                type="button"
+                disabled={submitting}
+                onClick={() => setOpen(false)}
+                className={`text-sm font-medium text-[var(--ophalo-muted)] hover:text-[var(--ophalo-ink)] rounded disabled:opacity-50 ${FOCUS_RING}`}
+              >
+                Keep editing
+              </button>
+              <button
+                ref={confirmRef}
+                type="button"
+                disabled={submitting || !selected}
+                onClick={() => void submit()}
+                className={`px-3 py-1.5 rounded-lg text-sm font-semibold bg-[var(--keep-accent)] text-white hover:opacity-90 disabled:opacity-50 ${FOCUS_RING}`}
+              >
+                {submitting ? "Handing off…" : "Hand off"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 /** ADR-494 D2: the office-transcription entry point. No add-line / assembly / nudge affordance is

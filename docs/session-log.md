@@ -422,18 +422,33 @@ correction applied pre-commit: partial-component resolution + client negative ch
 full frontend suite **799/799** (90 files, +4), `tsc --noEmit` clean, `check:tokens` passed,
 `git diff --check` clean.
 
-### Claude handoff — 4c (attribution + Draft note foundation) — COMPLETE (4c-i, 4c-ii-a/b, 4c-iii)
+### Claude handoff — 4c/4d (attribution, Draft note, recorder hand-off) — COMPLETE
 
-**➡ NEXT SESSION: 4d — recorder-initiated handoff (authority relax + UI).** Layers: Application +
-Api + `web/ophalo-app`. 1 mutation family (`transfer-recorder` gate change — no new route). Full
-spec in [BL136 P preflight → Slice 4d](build-log/136-P-preflight.md) (§"Slice 4d"). Relax
-`ActualWorkDraftApiService.TransferRecorderAsync` so the current recorder may transfer their own
-unsubmitted Draft (system-default `Reason` when recorder-initiated; keep the Owner/Admin path and
-every existing guard — target still must hold `RequestsOperate` + `ActualWorkCapture`, audit event
-still written). Frontend: a "Hand off to office" action in the composer / recovery drawer.
+**➡ NEXT SESSION: 4e-0 — extract the signal-reconciliation seam (prep, no behaviour change).** Full
+spec in [BL136 P preflight → Slice 4e-0](build-log/136-P-preflight.md) (§"Slice 4e-0"), then 4e-i/ii/iii.
 
-Gate: transfer audit invariants preserved; no shared concurrent editing introduced; focused
-Application + integration + frontend tests.
+**4d — recorder-initiated hand-off — COMPLETE (2026-08-30), commit `PENDING`.** Same
+`transfer-recorder` endpoint, authority relaxed: the current recorder may now transfer their **own**
+unsubmitted Draft (no new route). `TransferRecorderAsync` decides `isElevatedTransfer` from the
+caller's role — an Owner/Admin transfers any request's Draft with a required `Reason`; every other
+caller may transfer only the Draft they currently hold and the audit record carries the fixed
+`ActualWorkDraftApiService.RecorderInitiatedHandoffReason` ("Handed off to the office by the field
+recorder.") — a supplied reason is ignored. Guard order: gate → target-required → (reason-required
+if elevated) → load → caller-authority (non-recorder non-Owner/Admin → `NotFound`) →
+target-eligibility (still `RequestsOperate` + `ActualWorkCapture`) → version → domain
+`TransferRecorder` → immutable `ActualWorkDraftRecorderTransfer` audit → atomic commit. Endpoint body
+`Reason` is now optional. Frontend: `useActualWorkCapture.handOffToOffice(targetId)` (recorder
+`draft` state only; on success closes the composer, re-probes to `held-by-other`, shows a transient
+banner); `ActualWorkComposer` gains a subordinate "Hand off to office" button opening a confirm
+dialog with a `getActualWorkPerformerCandidates` picker (caller excluded), mirroring the
+discard-confirm pattern. `ActualWorkRecoveryDrawer` stays Owner/Admin-only. Files: 6 prod
+(`ActualWorkDraftApiService.cs`, `KeepEndpoints.cs`, `apiClient.types.ts`, `useActualWorkCapture.ts`,
+`ActualWorkComposer.tsx`, `RequestDetailContent.tsx`) + 3 test. Verified: `~ActualWorkRecorderTransfer`
+13/13 (+3, one Owner/Admin-only 403 test re-pointed to the recorder-hand-off 200 path). Full
+suite: backend unit 1692/1692, architecture 14/14, integration 1535/1536 (the one failure —
+`CatalogItemCreateAndActivateApiTests.Create_TwoConcurrentCreatesInSameAccount_ExactlyOneWins` —
+is a pre-existing parallel-run flake unrelated to this slice; passes in isolation). Frontend
+830/830 (+7), `tsc`, `check:tokens`, `git diff --check` clean. Not yet deployed.
 
 **4c-iii — rich performer + VisitNote field UI — COMPLETE (2026-08-30), `1deed43`.**
 `web/ophalo-app` only, 11 files (6 prod + 5 test). `apiClient.types.ts` — `visitNote` on the open-draft / submitted-visit

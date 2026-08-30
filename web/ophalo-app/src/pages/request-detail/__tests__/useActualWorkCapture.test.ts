@@ -5,6 +5,7 @@ import {
   ACTUAL_WORK_CONFLICT_NOTICE,
   ACTUAL_WORK_RECONCILE_RELOAD_FAILURE_NOTICE,
   ACTUAL_WORK_TRANSFER_STALE_NOTICE,
+  ACTUAL_WORK_HANDOFF_STALE_NOTICE,
 } from "../useActualWorkCapture";
 import { ApiError } from "../../../lib/apiClient";
 import type { ActualWorkHistoryResult } from "../../../lib/apiClient";
@@ -684,6 +685,95 @@ describe("useActualWorkCapture — recorder transfer (1a-ii-b)", () => {
 
       expect(outcome).toBe("stale");
       expect(result.current.conflictNotice).toBe(ACTUAL_WORK_CONFLICT_NOTICE);
+    });
+  });
+
+  describe("handOffToOffice (Slice 4d)", () => {
+    async function renderInRecorderDraft() {
+      mockGetActualWorkHistoryForRequest.mockResolvedValueOnce(history({ openDraft: DRAFT_NO_DEFAULT }));
+      const hook = renderHook(() => useActualWorkCapture("request-1", "me-au-1"));
+      await waitFor(() => expect(hook.result.current.state.status).toBe("draft"));
+      return hook;
+    }
+
+    it("transfers to the chosen member without a reason, closes the composer, and re-probes", async () => {
+      const { result } = await renderInRecorderDraft();
+      await act(async () => {
+        await result.current.startCapture();
+      });
+      expect(result.current.isModalOpen).toBe(true);
+      mockTransferActualWorkDraftRecorder.mockResolvedValueOnce({ concurrencyVersion: "v2" });
+      mockGetActualWorkHistoryForRequest.mockResolvedValueOnce(history({ openDraftHeldByOther: true }));
+
+      let outcome: string | undefined;
+      await act(async () => {
+        outcome = await result.current.handOffToOffice("au-office");
+      });
+
+      expect(outcome).toBe("handed-off");
+      expect(mockTransferActualWorkDraftRecorder).toHaveBeenCalledWith(
+        "draft-1",
+        { newRecorderAccountUserId: "au-office" },
+        "v1",
+      );
+      expect(result.current.isModalOpen).toBe(false);
+      expect(result.current.state.status).toBe("held-by-other");
+      expect(result.current.recoveryNotice).toEqual({
+        tone: "success",
+        text: "Visit handed off to the office.",
+      });
+    });
+
+    it("returns 'ineligible' without changing state on a 422", async () => {
+      const { result } = await renderInRecorderDraft();
+      mockTransferActualWorkDraftRecorder.mockRejectedValueOnce(
+        new ApiError(422, "ActualWork.RecorderTransferTargetIneligible", "nope"),
+      );
+
+      let outcome: string | undefined;
+      await act(async () => {
+        outcome = await result.current.handOffToOffice("au-office");
+      });
+
+      expect(outcome).toBe("ineligible");
+      expect(result.current.state.status).toBe("draft");
+      expect(result.current.recoveryNotice).toBeNull();
+    });
+
+    it("returns 'stale', closes the composer, and re-probes with a warning on a 409", async () => {
+      const { result } = await renderInRecorderDraft();
+      await act(async () => {
+        await result.current.startCapture();
+      });
+      mockTransferActualWorkDraftRecorder.mockRejectedValueOnce(
+        new ApiError(409, "ActualWork.VersionMismatch", "stale"),
+      );
+      mockGetActualWorkHistoryForRequest.mockResolvedValueOnce(history({ openDraftHeldByOther: true }));
+
+      let outcome: string | undefined;
+      await act(async () => {
+        outcome = await result.current.handOffToOffice("au-office");
+      });
+
+      expect(outcome).toBe("stale");
+      expect(result.current.isModalOpen).toBe(false);
+      expect(result.current.recoveryNotice).toEqual({
+        tone: "warning",
+        text: ACTUAL_WORK_HANDOFF_STALE_NOTICE,
+      });
+    });
+
+    it("returns 'failed' on an unclassified error without changing state", async () => {
+      const { result } = await renderInRecorderDraft();
+      mockTransferActualWorkDraftRecorder.mockRejectedValueOnce(new Error("network down"));
+
+      let outcome: string | undefined;
+      await act(async () => {
+        outcome = await result.current.handOffToOffice("au-office");
+      });
+
+      expect(outcome).toBe("failed");
+      expect(result.current.state.status).toBe("draft");
     });
   });
 });

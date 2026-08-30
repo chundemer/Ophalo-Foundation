@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useState } from "react";
@@ -78,6 +78,7 @@ function renderComposer(overrides: Partial<React.ComponentProps<typeof ActualWor
   const onDiscarded = vi.fn();
   const onSetDefaultPerformer = vi.fn().mockResolvedValue("set");
   const onSetVisitNote = vi.fn().mockResolvedValue("set");
+  const onHandOffToOffice = vi.fn().mockResolvedValue("handed-off");
   const utils = render(
     <QueryClientProvider client={queryClient}>
       <ActualWorkComposer
@@ -93,11 +94,12 @@ function renderComposer(overrides: Partial<React.ComponentProps<typeof ActualWor
         onDiscarded={onDiscarded}
         onSetDefaultPerformer={onSetDefaultPerformer}
         onSetVisitNote={onSetVisitNote}
+        onHandOffToOffice={onHandOffToOffice}
         {...overrides}
       />
     </QueryClientProvider>,
   );
-  return { ...utils, onClose, onCommitted, onConflict, onDismissNotice, onRetryReconciliation, onSubmitted, onDiscarded, onSetDefaultPerformer, onSetVisitNote };
+  return { ...utils, onClose, onCommitted, onConflict, onDismissNotice, onRetryReconciliation, onSubmitted, onDiscarded, onSetDefaultPerformer, onSetVisitNote, onHandOffToOffice };
 }
 
 beforeEach(() => {
@@ -159,6 +161,7 @@ describe("ActualWorkComposer", () => {
           onDiscarded={vi.fn()}
           onSetDefaultPerformer={vi.fn().mockResolvedValue("set")}
           onSetVisitNote={vi.fn().mockResolvedValue("set")}
+          onHandOffToOffice={vi.fn().mockResolvedValue("handed-off")}
         />
       </QueryClientProvider>,
     );
@@ -464,6 +467,7 @@ describe("ActualWorkComposer", () => {
           onDiscarded={vi.fn()}
           onSetDefaultPerformer={vi.fn().mockResolvedValue("set")}
           onSetVisitNote={vi.fn().mockResolvedValue("set")}
+          onHandOffToOffice={vi.fn().mockResolvedValue("handed-off")}
         />
       </QueryClientProvider>,
     );
@@ -659,6 +663,7 @@ describe("ActualWorkComposer", () => {
             onDiscarded={vi.fn()}
             onSetDefaultPerformer={vi.fn().mockResolvedValue("set")}
             onSetVisitNote={vi.fn().mockResolvedValue("set")}
+          onHandOffToOffice={vi.fn().mockResolvedValue("handed-off")}
           />
         )}
       </QueryClientProvider>
@@ -759,6 +764,7 @@ describe("ActualWorkComposer", () => {
               return outcome;
             }}
             onSetVisitNote={vi.fn().mockResolvedValue("set")}
+          onHandOffToOffice={vi.fn().mockResolvedValue("handed-off")}
           />
         );
       }
@@ -894,6 +900,52 @@ describe("ActualWorkComposer", () => {
 
       expect(screen.getByText("Dana Tech")).toBeInTheDocument();
       expect(screen.getByText("Unknown performer")).toBeInTheDocument();
+    });
+  });
+
+  describe("hand off to office (Slice 4d)", () => {
+    it("hands the visit to a chosen office member and does not send a reason", async () => {
+      const user = userEvent.setup();
+      const onHandOffToOffice = vi.fn().mockResolvedValue("handed-off");
+      renderComposer({ currentAccountUserId: "au-self", onHandOffToOffice });
+
+      await user.click(screen.getByRole("button", { name: "Hand off to office" }));
+      const dialog = await screen.findByRole("alertdialog");
+      await user.selectOptions(screen.getByLabelText("Hand off to"), "au-tech");
+      await user.click(within(dialog).getByRole("button", { name: "Hand off" }));
+
+      expect(onHandOffToOffice).toHaveBeenCalledWith("au-tech");
+      expect(onHandOffToOffice).toHaveBeenCalledTimes(1);
+    });
+
+    it("keeps the dialog open with an error when the target is ineligible", async () => {
+      const user = userEvent.setup();
+      const onHandOffToOffice = vi.fn().mockResolvedValue("ineligible");
+      renderComposer({ currentAccountUserId: "au-self", onHandOffToOffice });
+
+      await user.click(screen.getByRole("button", { name: "Hand off to office" }));
+      await user.selectOptions(await screen.findByLabelText("Hand off to"), "au-tech");
+      await user.click(screen.getByRole("button", { name: "Hand off" }));
+
+      expect(await screen.findByText(/can't take over this visit/i)).toBeInTheDocument();
+      expect(screen.getByRole("alertdialog")).toBeInTheDocument();
+    });
+
+    it("excludes the current recorder from the candidate list", async () => {
+      const user = userEvent.setup();
+      mockGetActualWorkPerformerCandidates.mockResolvedValue({
+        candidates: [
+          { accountUserId: "au-self", displayName: "Sam Field", role: "operator" },
+          { accountUserId: "au-tech", displayName: "Dana Tech", role: "operator" },
+        ],
+      });
+      renderComposer({ currentAccountUserId: "au-self", onHandOffToOffice: vi.fn() });
+
+      await user.click(screen.getByRole("button", { name: "Hand off to office" }));
+      await screen.findByLabelText("Hand off to");
+
+      expect(screen.getByRole("option", { name: "Dana Tech" })).toBeInTheDocument();
+      expect(screen.queryByRole("option", { name: "Sam Field" })).not.toBeInTheDocument();
     });
   });
 });

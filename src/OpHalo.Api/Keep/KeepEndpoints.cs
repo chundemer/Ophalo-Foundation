@@ -924,7 +924,9 @@ public static class KeepEndpoints
                 : ErrorHttpMapper.ToHttpResult(result.Error);
         }).RequireAuthorization();
 
-        // GAP-055 — Owner/Admin-only, reason-required Draft recorder-ownership transfer.
+        // GAP-055 + BL136 Slice 4d — Draft recorder-ownership transfer. Owner/Admin: any request,
+        // reason required. Current recorder: their own Draft only, reason omitted (a fixed system
+        // reason is recorded). Every other caller gets NotFound.
         app.MapPost("/keep/pricebook/actual-work/{actualWorkId:guid}/transfer-recorder", async (
             Guid actualWorkId,
             ActualWorkTransferRecorderBody body,
@@ -936,7 +938,8 @@ public static class KeepEndpoints
             if (!versionResult.IsSuccess)
                 return ErrorHttpMapper.ToHttpResult(versionResult.Error);
 
-            var command = new TransferActualWorkDraftRecorderApiCommand(body.NewRecorderAccountUserId, body.Reason);
+            var command = new TransferActualWorkDraftRecorderApiCommand(
+                body.NewRecorderAccountUserId, body.Reason ?? string.Empty);
             var result = await service.TransferRecorderAsync(actualWorkId, command, versionResult.Value, ct);
             return result.IsSuccess
                 ? Results.Ok(new ActualWorkConcurrencyVersionResponse(result.Value))
@@ -1424,7 +1427,9 @@ file sealed record ActualWorkUpdateLineBody(decimal ActualQuantity, string? Note
 /// <c>NoWorkAuthorized</c>, <c>NoAccess</c> (case-insensitive).</summary>
 file sealed record ActualWorkSubmitBody(string? Outcome, string? CompletionNote);
 
-file sealed record ActualWorkTransferRecorderBody(Guid NewRecorderAccountUserId, string Reason);
+/// <summary><c>Reason</c> is required for an Owner/Admin transfer and omitted for a recorder-initiated
+/// hand-off (Slice 4d) — the service records a fixed system reason in that case.</summary>
+file sealed record ActualWorkTransferRecorderBody(Guid NewRecorderAccountUserId, string? Reason = null);
 
 /// <summary>ADR-494 D2 (4c-i-b). A null <see cref="PerformedByAccountUserId"/> clears the visit's
 /// ticket default; a non-null value is revalidated server-side (empty guid collapses to 422).</summary>

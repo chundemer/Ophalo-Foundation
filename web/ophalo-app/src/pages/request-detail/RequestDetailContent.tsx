@@ -308,6 +308,7 @@ export function RequestDetailContent(props: RequestDetailContentProps) {
           currentAccountUserId={props.currentAccountUserId}
           onSetDefaultPerformer={actualWorkCapture.setDefaultPerformer}
           onSetVisitNote={actualWorkCapture.setVisitNote}
+          onHandOffToOffice={actualWorkCapture.handOffToOffice}
         />
       )}
       {recorderDrawerOpen && actualWorkCapture.state.status === "owner-recovery" && (

@@ -18,12 +18,14 @@ using Xunit;
 namespace OpHalo.IntegrationTests.Api;
 
 /// <summary>
-/// HTTP integration tests for GAP-055's Owner/Admin Draft recorder-ownership transfer (Batch D):
+/// HTTP integration tests for the Draft recorder-ownership transfer:
 ///   POST /keep/pricebook/actual-work/{actualWorkId}/transfer-recorder
 ///
-/// Covers the Owner/Admin-only role gate (not the ordinary three-gate + recorder-ownership check
-/// every other Draft mutation uses), the required-reason/required-target validation, version
-/// conflict, the Draft-only invariant, and the atomic RecorderAccountUserId change plus immutable
+/// Covers the Owner/Admin path (GAP-055 Batch D — reason required, any request) and the
+/// recorder-initiated hand-off (BL136 Slice 4d — the current recorder hands their own Draft to the
+/// office, reason omitted, fixed system reason recorded). Every other caller gets NotFound. Also
+/// covers required-target validation, version conflict, the Draft-only invariant, target
+/// eligibility, and the atomic RecorderAccountUserId change plus immutable
 /// <c>ActualWorkDraftRecorderTransfer</c> audit record.
 /// </summary>
 public sealed class ActualWorkRecorderTransferApiTests : IClassFixture<KeepApiWebFactory>, IAsyncLifetime
@@ -83,22 +85,94 @@ public sealed class ActualWorkRecorderTransferApiTests : IClassFixture<KeepApiWe
     }
 
     [Fact]
-    public async Task Transfer_Operator_Returns403()
+    public async Task Transfer_RecorderHandsOffOwnDraft_Returns200AndRecordsSystemReason()
     {
-        // Even the Draft's own current recorder cannot self-service a transfer — GAP-055 locks
-        // this to Owner/Admin only.
-        var (accountId, ownerId, ownerCookie) = await SeedAccountAsync("transfer-operator-forbidden");
+        // BL136 Slice 4d: the current recorder may hand their own unsubmitted Draft to the office.
+        // Any reason string in the body is ignored — the audit record carries the fixed system reason.
+        var (accountId, ownerId, ownerCookie) = await SeedAccountAsync("transfer-recorder-handoff");
         await EnrollAsync(accountId, ownerId);
         var requestId = await SeedRequestAsync(accountId);
-        var operatorId = await SeedOperatorAsync(accountId, "transfer-operator-forbidden");
+        var operatorId = await SeedOperatorAsync(accountId, "transfer-recorder-handoff");
         await SeedWatchingAsync(requestId, accountId, operatorId);
         var operatorCookie = await GetCookieAsync(operatorId, accountId);
         var (actualWorkId, version) = await CreateDraftAsync(operatorCookie, requestId);
-        var otherOperatorId = await SeedOperatorAsync(accountId, "transfer-operator-forbidden-2");
+        var officeId = await SeedOperatorAsync(accountId, "transfer-recorder-handoff-office");
 
-        var response = await PostTransferAsync(operatorCookie, actualWorkId, version, otherOperatorId, "Trying to self-transfer.");
+        var response = await PostTransferAsync(operatorCookie, actualWorkId, version, officeId, "client-supplied text is ignored");
 
-        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        await using var scope = _factory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+        var work = await db.Set<ActualWork>().SingleAsync(x => x.Id == actualWorkId);
+        Assert.Equal(officeId, work.RecorderAccountUserId);
+        Assert.Equal(operatorId, work.CreatedByUserId);
+
+        var audit = await db.Set<ActualWorkDraftRecorderTransfer>().SingleAsync(x => x.ActualWorkId == actualWorkId);
+        Assert.Equal(operatorId, audit.ActorAccountUserId);
+        Assert.Equal(operatorId, audit.PriorRecorderAccountUserId);
+        Assert.Equal(officeId, audit.NewRecorderAccountUserId);
+        Assert.Equal(ActualWorkDraftApiService.RecorderInitiatedHandoffReason, audit.Reason);
+    }
+
+    [Fact]
+    public async Task Transfer_RecorderHandsOffOwnDraft_NoReasonInBody_Returns200()
+    {
+        var (accountId, ownerId, ownerCookie) = await SeedAccountAsync("transfer-recorder-noreason");
+        await EnrollAsync(accountId, ownerId);
+        var requestId = await SeedRequestAsync(accountId);
+        var operatorId = await SeedOperatorAsync(accountId, "transfer-recorder-noreason");
+        await SeedWatchingAsync(requestId, accountId, operatorId);
+        var operatorCookie = await GetCookieAsync(operatorId, accountId);
+        var (actualWorkId, version) = await CreateDraftAsync(operatorCookie, requestId);
+        var officeId = await SeedOperatorAsync(accountId, "transfer-recorder-noreason-office");
+
+        var response = await PostTransferNoReasonAsync(operatorCookie, actualWorkId, version, officeId);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        await using var scope = _factory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+        var audit = await db.Set<ActualWorkDraftRecorderTransfer>().SingleAsync(x => x.ActualWorkId == actualWorkId);
+        Assert.Equal(ActualWorkDraftApiService.RecorderInitiatedHandoffReason, audit.Reason);
+    }
+
+    [Fact]
+    public async Task Transfer_NonRecorderOperator_Returns404AndLeavesDraftUnchanged()
+    {
+        // A qualified Operator who is not the current recorder and not Owner/Admin cannot transfer
+        // someone else's Draft — the endpoint returns NotFound (mirrors every other Draft mutation).
+        var (accountId, ownerId, ownerCookie) = await SeedAccountAsync("transfer-nonrecorder-operator");
+        await EnrollAsync(accountId, ownerId);
+        var requestId = await SeedRequestAsync(accountId);
+        var (actualWorkId, version) = await CreateDraftAsync(ownerCookie, requestId);
+        var operatorId = await SeedOperatorAsync(accountId, "transfer-nonrecorder-operator");
+        var operatorCookie = await GetCookieAsync(operatorId, accountId);
+
+        var response = await PostTransferNoReasonAsync(operatorCookie, actualWorkId, version, operatorId);
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        await AssertNoTransferOccurredAsync(actualWorkId, expectedRecorderId: ownerId, expectedVersion: version);
+    }
+
+    [Fact]
+    public async Task Transfer_RecorderHandsOffToIneligibleTarget_Returns422AndLeavesDraftUnchanged()
+    {
+        var (accountId, ownerId, ownerCookie) = await SeedAccountAsync("transfer-recorder-ineligible");
+        await EnrollAsync(accountId, ownerId);
+        var requestId = await SeedRequestAsync(accountId);
+        var operatorId = await SeedOperatorAsync(accountId, "transfer-recorder-ineligible");
+        await SeedWatchingAsync(requestId, accountId, operatorId);
+        var operatorCookie = await GetCookieAsync(operatorId, accountId);
+        var (actualWorkId, version) = await CreateDraftAsync(operatorCookie, requestId);
+        var viewerId = await SeedViewerAsync(accountId, "transfer-recorder-ineligible");
+
+        var response = await PostTransferNoReasonAsync(operatorCookie, actualWorkId, version, viewerId);
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("ActualWork.RecorderTransferTargetIneligible", body.GetProperty("code").GetString());
+        await AssertNoTransferOccurredAsync(actualWorkId, expectedRecorderId: operatorId, expectedVersion: version);
     }
 
     [Fact]
@@ -235,6 +309,18 @@ public sealed class ActualWorkRecorderTransferApiTests : IClassFixture<KeepApiWe
         var request = new HttpRequestMessage(HttpMethod.Post, $"/keep/pricebook/actual-work/{actualWorkId}/transfer-recorder")
         {
             Content = JsonContent.Create(new { newRecorderAccountUserId, reason })
+        };
+        request.Headers.Add("X-Keep-ActualWork-Version", expectedVersion.ToString("D"));
+        return await AuthRequest(cookie).SendAsync(request);
+    }
+
+    /// <summary>Slice 4d: the recorder-initiated hand-off body carries only the target — no reason.</summary>
+    private async Task<HttpResponseMessage> PostTransferNoReasonAsync(
+        string cookie, Guid actualWorkId, Guid expectedVersion, Guid newRecorderAccountUserId)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Post, $"/keep/pricebook/actual-work/{actualWorkId}/transfer-recorder")
+        {
+            Content = JsonContent.Create(new { newRecorderAccountUserId })
         };
         request.Headers.Add("X-Keep-ActualWork-Version", expectedVersion.ToString("D"));
         return await AuthRequest(cookie).SendAsync(request);

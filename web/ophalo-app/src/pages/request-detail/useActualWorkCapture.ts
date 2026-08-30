@@ -52,6 +52,13 @@ export type ActualWorkTransferOutcome = "transferred" | "ineligible" | "stale" |
 export const ACTUAL_WORK_TRANSFER_STALE_NOTICE =
   "This draft changed elsewhere — refreshed with the latest state. Review before reassigning again.";
 
+/** Outcome of a recorder-initiated "hand off to office" attempt (Slice 4d), returned to the
+ * composer so it can keep the picker open on a recoverable failure or close on success. */
+export type ActualWorkHandoffOutcome = "handed-off" | "ineligible" | "stale" | "failed";
+
+export const ACTUAL_WORK_HANDOFF_STALE_NOTICE =
+  "This visit changed elsewhere — refreshed with the latest state.";
+
 /** Routes a history read into the resume/recovery/informational/empty states. `hidden` and `error`
  * are handled by the caller (they depend on how the read failed), not here. */
 function routeHistory(result: ActualWorkHistoryResult): ActualWorkCaptureState {
@@ -334,6 +341,45 @@ export function useActualWorkCapture(requestId: string, currentAccountUserId?: s
     [state, probe],
   );
 
+  // Slice 4d: the current recorder hands their own unsubmitted Draft to a chosen office member.
+  // Same `transfer-recorder` endpoint as the Owner/Admin recovery path, with the reason omitted —
+  // the server records a fixed system reason. On success the composer closes and the re-probe
+  // lands the (now former) recorder on `held-by-other`; a transient banner shows over it. A
+  // recoverable failure (`ineligible` / `failed`) keeps the composer's picker open for a retry.
+  const handOffToOffice = useCallback(
+    async (newRecorderAccountUserId: string): Promise<ActualWorkHandoffOutcome> => {
+      if (state.status !== "draft") return "stale";
+      try {
+        await api.transferActualWorkDraftRecorder(
+          state.draft.id,
+          { newRecorderAccountUserId },
+          state.draft.concurrencyVersion,
+        );
+        setRecoveryNotice({ tone: "success", text: "Visit handed off to the office." });
+        setIsModalOpen(false);
+        await probe();
+        return "handed-off";
+      } catch (err) {
+        if (err instanceof ApiError && err.code === "ActualWork.RecorderTransferTargetIneligible") {
+          return "ineligible";
+        }
+        if (
+          err instanceof ApiError &&
+          (err.code === "ActualWork.VersionMismatch" ||
+            err.code === "ActualWork.AlreadyReviewed" ||
+            err.code === "ActualWork.NotDraft")
+        ) {
+          setRecoveryNotice({ tone: "warning", text: ACTUAL_WORK_HANDOFF_STALE_NOTICE });
+          setIsModalOpen(false);
+          await probe();
+          return "stale";
+        }
+        return "failed";
+      }
+    },
+    [state, probe],
+  );
+
   const clearRecoveryNotice = useCallback(() => setRecoveryNotice(null), []);
 
   return {
@@ -351,6 +397,7 @@ export function useActualWorkCapture(requestId: string, currentAccountUserId?: s
     markSubmitted,
     onDraftDiscarded,
     transferRecorder,
+    handOffToOffice,
     recoveryNotice,
     clearRecoveryNotice,
   };

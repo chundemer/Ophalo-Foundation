@@ -44,9 +44,10 @@ public sealed record ExpandActualWorkAssemblyApiCommand(
 public sealed record ExpandActualWorkAssemblyResult(
     IReadOnlyList<Guid> LineIds, IReadOnlyList<Guid> SkippedCatalogItemIds, Guid ActualWorkConcurrencyVersion);
 
-/// <summary>GAP-055: <see cref="Reason"/> is required, never inferred — an Owner/Admin transfer
-/// must always state why, for the immutable <c>ActualWorkDraftRecorderTransferred</c> audit
-/// record.</summary>
+/// <summary>GAP-055: an Owner/Admin transfer must always state <see cref="Reason"/>, for the
+/// immutable <c>ActualWorkDraftRecorderTransferred</c> audit record. A recorder-initiated hand-off
+/// (BL136 Slice 4d) ignores any supplied <see cref="Reason"/> and records
+/// <see cref="ActualWorkDraftApiService.RecorderInitiatedHandoffReason"/> instead.</summary>
 public sealed record TransferActualWorkDraftRecorderApiCommand(Guid NewRecorderAccountUserId, string Reason);
 
 /// <summary>
@@ -406,15 +407,24 @@ public sealed class ActualWorkDraftApiService(
         return await CommitAsync(actualWork, ct);
     }
 
+    /// <summary>System <c>Reason</c> written to the immutable transfer audit record when the current
+    /// recorder hands their own Draft to the office (BL136 Slice 4d). A recorder-initiated hand-off
+    /// never carries caller-supplied audit text; only the Owner/Admin path states its own reason.</summary>
+    public const string RecorderInitiatedHandoffReason = "Handed off to the office by the field recorder.";
+
     /// <summary>
-    /// GAP-055: Owner/Admin-only, reason-required recorder-ownership transfer of an unsubmitted
-    /// Draft. Deliberately does not reuse <see cref="AuthorizeAndLoadDraftAsync"/> — that helper's
-    /// row-authorization check requires the caller to already be the current recorder, which is
-    /// exactly the constraint a transfer must bypass for the acting Owner/Admin. Instead this loads
-    /// the Draft directly after the three-gate auth plus an explicit Owner/Admin role check, then
-    /// delegates to the domain's <see cref="ActualWork.TransferRecorder"/> (Draft-only invariant)
-    /// and commits the visit's <c>RecorderAccountUserId</c> change atomically with the immutable
-    /// <see cref="ActualWorkDraftRecorderTransfer"/> audit record via
+    /// GAP-055 + BL136 Slice 4d: reason-required recorder-ownership transfer of an unsubmitted Draft.
+    /// Two callers are allowed: an Owner/Admin transferring any request's Draft (must state a reason),
+    /// and the <b>current recorder</b> handing their own Draft to the office (fixed
+    /// <see cref="RecorderInitiatedHandoffReason"/>; any caller-supplied reason is ignored). Every
+    /// other caller — including a non-recorder who is not Owner/Admin — gets
+    /// <see cref="ActualWorkErrors.NotFound"/>. Deliberately does not reuse
+    /// <see cref="AuthorizeAndLoadDraftAsync"/> — that helper's row-authorization check requires the
+    /// caller to already be the current recorder, which is exactly the constraint the Owner/Admin
+    /// path must bypass. Instead this loads the Draft directly after the three-gate auth, applies the
+    /// caller-shape guard, then delegates to the domain's <see cref="ActualWork.TransferRecorder"/>
+    /// (Draft-only invariant) and commits the visit's <c>RecorderAccountUserId</c> change atomically
+    /// with the immutable <see cref="ActualWorkDraftRecorderTransfer"/> audit record via
     /// <see cref="IActualWorkPersistence"/>'s transfer-aware <c>CommitAsync</c> overload.
     /// </summary>
     public async Task<Result<Guid>> TransferRecorderAsync(
@@ -424,18 +434,31 @@ public sealed class ActualWorkDraftApiService(
         if (gate.IsFailure)
             return Result<Guid>.Failure(gate.Error);
 
-        if (gate.Value.Role is not (AccountUserRole.Owner or AccountUserRole.Admin))
-            return Result<Guid>.Failure(Forbidden);
+        var isElevatedTransfer = gate.Value.Role is AccountUserRole.Owner or AccountUserRole.Admin;
 
         if (command.NewRecorderAccountUserId == Guid.Empty)
             return Result<Guid>.Failure(ActualWorkErrors.RecorderTransferTargetRequired);
-        if (string.IsNullOrWhiteSpace(command.Reason))
+
+        // Only an Owner/Admin transfer states its own reason; a recorder-initiated hand-off always
+        // uses the fixed system reason and must not be able to inject audit text.
+        if (isElevatedTransfer && string.IsNullOrWhiteSpace(command.Reason))
             return Result<Guid>.Failure(ActualWorkErrors.RecorderTransferReasonRequired);
+
+        var actualWork = await persistence.GetByIdAsync(currentUser.AccountId, actualWorkId, ct);
+        if (actualWork is null)
+            return Result<Guid>.Failure(ActualWorkErrors.NotFound);
+
+        // Caller authority, ahead of any other failure the caller shouldn't be able to observe: an
+        // Owner/Admin may transfer any Draft; every other caller may transfer only the one they
+        // currently hold (Slice 4d). A non-recorder non-Owner/Admin gets NotFound (mirrors
+        // AuthorizeAndLoadDraftAsync) so this endpoint never reveals an unrelated Draft's existence
+        // or its target-eligibility outcome.
+        if (!isElevatedTransfer && actualWork.RecorderAccountUserId != currentUser.UserId)
+            return Result<Guid>.Failure(ActualWorkErrors.NotFound);
 
         // Option C invariant: only a member who could record this work may hold its Draft. A
         // non-member and an unqualified member collapse to one error so this endpoint cannot be
-        // used to enumerate account membership. Command-shape check — precedes loading the aggregate
-        // and the version/Draft-state checks below.
+        // used to enumerate account membership.
         var targetSnapshot = await snapshotPersistence.GetAccountUserRoleSnapshotAsync(
             currentUser.AccountId, command.NewRecorderAccountUserId, ct);
         if (targetSnapshot is null ||
@@ -449,12 +472,10 @@ public sealed class ActualWorkDraftApiService(
             return Result<Guid>.Failure(ActualWorkErrors.RecorderTransferTargetIneligible);
         }
 
-        var actualWork = await persistence.GetByIdAsync(currentUser.AccountId, actualWorkId, ct);
-        if (actualWork is null)
-            return Result<Guid>.Failure(ActualWorkErrors.NotFound);
-
         if (actualWork.ConcurrencyVersion != expectedVersion)
             return Result<Guid>.Failure(ActualWorkErrors.VersionMismatch);
+
+        var reason = isElevatedTransfer ? command.Reason : RecorderInitiatedHandoffReason;
 
         var priorRecorderAccountUserId = actualWork.RecorderAccountUserId;
         var transferResult = actualWork.TransferRecorder(command.NewRecorderAccountUserId);
@@ -463,7 +484,7 @@ public sealed class ActualWorkDraftApiService(
 
         var transferEvent = ActualWorkDraftRecorderTransfer.Create(
             currentUser.AccountId, actualWork.Id, currentUser.UserId, priorRecorderAccountUserId,
-            command.NewRecorderAccountUserId, command.Reason, clock.UtcNow);
+            command.NewRecorderAccountUserId, reason, clock.UtcNow);
 
         var commitResult = await persistence.CommitAsync(actualWork, transferEvent, ct);
         return commitResult switch
@@ -533,9 +554,9 @@ public sealed class ActualWorkDraftApiService(
     }
 
     /// <summary>Row-authorization scope (derived from role) plus the caller's <see cref="Role"/>
-    /// itself — <see cref="Role"/> is needed only by <see cref="TransferRecorderAsync"/>'s
-    /// Owner/Admin-only gate and <see cref="Purpose"/> only by that same method's target-eligibility
-    /// check; every other caller uses <see cref="Scope"/> alone.</summary>
+    /// itself — <see cref="Role"/> is needed only by <see cref="TransferRecorderAsync"/> to tell an
+    /// Owner/Admin transfer from a recorder-initiated hand-off, and <see cref="Purpose"/> only by that
+    /// same method's target-eligibility check; every other caller uses <see cref="Scope"/> alone.</summary>
     private sealed record ActualWorkAuthorization(
         KeepRequestVisibilityScope Scope, AccountUserRole Role, AccountPurpose Purpose);
 
