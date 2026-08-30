@@ -23,8 +23,8 @@ existing-ticket workflow as the explicit outage fallback.
 
 `main` at `8495ba3` (pushed 2026-08-30) carries the 4e-0 signal seam, 4e-i supersession foundation,
 and `AddActualWorkSupersession`. Railway deployment completed and the migration is applied —
-confirmed 2026-08-30; `ActualWorkSupersessionPersistenceTests` (4) pass. Local commits for
-4e-ii-b-2, `2be5203` (4e-ii-b-1), `82d9b9e` (4e-ii-a) and earlier are **not yet pushed**. No
+confirmed 2026-08-30; `ActualWorkSupersessionPersistenceTests` (4) pass. Local commits `29db179`
+(4e-ii-b-2), `2be5203` (4e-ii-b-1), `82d9b9e` (4e-ii-a) and earlier are **not yet pushed**. No
 migration since 4e-i (4e-ii-a/b-1/b-2 are code-only: services, read/mutation guards, mapper,
 response shape).
 
@@ -51,7 +51,7 @@ introduced early.
   `supersedesActualWorkId`. `KeepEndpoints` emits the three fields.
 - Verification: integration 41 pass (2 new), architecture 14 pass, focused unit 140 pass.
 
-### Completed this session — 4e-ii-b-2 (local commit)
+### Completed this session — 4e-ii-b-2 (local commit `29db179`)
 
 Superseded-source mutation rejection. New `Superseded` result value on the review /
 financial-resolution / zero-line-disposition seams (`ActualWorkReviewResult`,
