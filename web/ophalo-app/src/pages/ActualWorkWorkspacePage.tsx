@@ -1,6 +1,15 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+  type RefObject,
+} from "react";
 import { useQuery } from "@tanstack/react-query";
-import { api } from "../lib/apiClient";
+import { ChevronRight } from "lucide-react";
+import { api, type KeepRequestDetailResult } from "../lib/apiClient";
 import { statusLabel, statusBadgeVariant } from "../lib/requestStatus";
 import { KeepBadge } from "../components/keep/KeepBadge";
 import { KeepButton } from "../components/keep/KeepButton";
@@ -95,85 +104,61 @@ export function ActualWorkWorkspacePage({
   if (!isWide) return null;
 
   const request = requestQuery.data;
-  const header = (
-    <div className="border-b border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-4 py-3 md:px-6">
-      <div className="mx-auto flex w-full max-w-4xl items-start justify-between gap-3">
-        <div className="min-w-0">
-          <button
-            type="button"
-            onClick={onExit}
-            className="text-sm font-medium text-[var(--keep-accent)] hover:underline rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)]"
-          >
-            ← Back to Request
-          </button>
-          <h1
-            ref={headingRef}
-            tabIndex={-1}
-            className="mt-1 truncate font-serif text-xl font-semibold text-[var(--ophalo-ink)] focus:outline-none"
-          >
-            Actual Work{request ? ` — ${request.customerName}` : ""}
-          </h1>
-          {request && (
-            <p className="mt-0.5 flex items-center gap-2 text-xs text-[var(--ophalo-muted)]">
-              <span>{request.referenceCode}</span>
-              <KeepBadge variant={statusBadgeVariant(request.status)}>{statusLabel(request.status)}</KeepBadge>
-            </p>
-          )}
-        </div>
-      </div>
-    </div>
-  );
+  const contextBand = <TicketContextBand request={request} onExit={onExit} headingRef={headingRef} />;
 
-  // Editable Draft path — host the composer unmodified. It renders as its own full-bleed surface
-  // (with its own "← Back to Request"), so the page header is not rendered alongside it.
+  // Editable Draft path — host the composer inline below the persistent Keep top nav and the
+  // ticket-context band, so the operator always sees which request they are recording against.
   if (visit === "draft" || visit === "new") {
-    if (capture.state.status === "draft") {
-      return (
-        <ActualWorkComposer
-          isWide={false}
-          draft={capture.state.draft}
-          replacementCorrection={capture.replacementCorrection}
-          conflictNotice={capture.conflictNotice}
-          onClose={onExit}
-          onCommitted={async () => {
-            await capture.refetchDraft();
-          }}
-          onConflict={(message) => void capture.reconcileAfterConflict(message)}
-          onDismissNotice={capture.clearConflictNotice}
-          onRetryReconciliation={() => void capture.retryReconciliation()}
-          onSubmitted={() => {
-            capture.markSubmitted();
-            void history.retry();
-          }}
-          onDiscarded={onExit}
-          submittedVisits={history.state.status === "loaded" ? history.state.submittedVisits : []}
-          currentAccountUserId={meQuery.data?.accountUserId}
-          onSetDefaultPerformer={capture.setDefaultPerformer}
-          onSetVisitNote={capture.setVisitNote}
-          onSetZeroLineDisposition={capture.setZeroLineDisposition}
-          onHandOffToOffice={capture.handOffToOffice}
-        />
-      );
-    }
     return (
-      <div className="flex flex-1 flex-col">
-        {header}
-        <div className="mx-auto w-full max-w-4xl px-4 py-6 md:px-6">
-          {capture.state.status === "loading" || visit === "new" ? (
-            <p className="text-sm text-[var(--ophalo-muted)]">Loading…</p>
-          ) : (
-            <WorkspaceNotice state={capture.state.status} onExit={onExit} />
-          )}
-        </div>
+      <div className="flex min-h-0 flex-1 flex-col">
+        {contextBand}
+        {capture.state.status === "draft" ? (
+          <ActualWorkComposer
+            presentation="inline"
+            isWide={false}
+            draft={capture.state.draft}
+            replacementCorrection={capture.replacementCorrection}
+            conflictNotice={capture.conflictNotice}
+            onClose={onExit}
+            onCommitted={async () => {
+              await capture.refetchDraft();
+            }}
+            onConflict={(message) => void capture.reconcileAfterConflict(message)}
+            onDismissNotice={capture.clearConflictNotice}
+            onRetryReconciliation={() => void capture.retryReconciliation()}
+            onSubmitted={() => {
+              capture.markSubmitted();
+              void history.retry();
+            }}
+            onDiscarded={onExit}
+            submittedVisits={history.state.status === "loaded" ? history.state.submittedVisits : []}
+            currentAccountUserId={meQuery.data?.accountUserId}
+            onSetDefaultPerformer={capture.setDefaultPerformer}
+            onSetVisitNote={capture.setVisitNote}
+            onSetZeroLineDisposition={capture.setZeroLineDisposition}
+            onHandOffToOffice={capture.handOffToOffice}
+          />
+        ) : (
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            <div className="mx-auto w-full max-w-4xl px-4 py-6 md:px-6">
+              {capture.state.status === "loading" || visit === "new" ? (
+                <p className="text-sm text-[var(--ophalo-muted)]">Loading…</p>
+              ) : (
+                <WorkspaceNotice state={capture.state.status} onExit={onExit} />
+              )}
+            </div>
+          </div>
+        )}
       </div>
     );
   }
 
   // Read-only submitted visit.
   return (
-    <div className="flex flex-1 flex-col">
-      {header}
-      <div className="mx-auto w-full max-w-4xl space-y-3 px-4 py-6 md:px-6">
+    <div className="flex min-h-0 flex-1 flex-col">
+      {contextBand}
+      <div className="min-h-0 flex-1 overflow-y-auto">
+       <div className="mx-auto w-full max-w-4xl space-y-3 px-4 py-6 md:px-6">
         {history.state.status === "loading" && (
           <p className="text-sm text-[var(--ophalo-muted)]">Loading visit…</p>
         )}
@@ -213,6 +198,119 @@ export function ActualWorkWorkspacePage({
               ) : null
             }
           />
+        )}
+       </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * BL136 4f-iii: the compact, persistently pinned ticket-context band above the Actual Work
+ * capture surface. Field-focused — reference / customer / service location / status plus a
+ * visually secondary, collapsible Customer Need. No prices, costs, or office-only controls.
+ * Reuses the Request List/Detail visual language (tokens, `KeepBadge`, rounded card language).
+ */
+function TicketContextBand({
+  request,
+  onExit,
+  headingRef,
+}: {
+  request: KeepRequestDetailResult | undefined;
+  onExit: () => void;
+  headingRef?: RefObject<HTMLHeadingElement | null>;
+}) {
+  const [needExpanded, setNeedExpanded] = useState(false);
+  const [needClipped, setNeedClipped] = useState(false);
+  const needRef = useRef<HTMLParagraphElement>(null);
+  // Only offer the expand/collapse control when the two-line clamp actually hides text. Measured
+  // against the live layout and re-measured on resize, so a wide viewport that fits the whole
+  // need on two lines shows no control.
+  useLayoutEffect(() => {
+    const el = needRef.current;
+    if (!el || needExpanded) return;
+    const measure = () => setNeedClipped(el.scrollHeight - el.clientHeight > 1);
+    measure();
+    if (typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [request?.description, needExpanded]);
+
+  const address = request
+    ? [
+        request.serviceAddressLine1,
+        request.serviceAddressLine2,
+        request.serviceCity && request.serviceState
+          ? `${request.serviceCity}, ${request.serviceState}${request.serviceZip ? ` ${request.serviceZip}` : ""}`
+          : null,
+      ]
+        .filter(Boolean)
+        .join(", ")
+    : "";
+
+  return (
+    <div className="shrink-0 border-b border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-4 py-3 md:px-6">
+      <div className="mx-auto w-full max-w-4xl">
+        <button
+          type="button"
+          onClick={onExit}
+          className="text-sm font-medium text-[var(--keep-accent)] hover:underline rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-offset-2"
+        >
+          ← Back to Request
+        </button>
+        <p className="mt-1 text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--ophalo-muted)]">
+          Actual Work visit
+        </p>
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+          <h1
+            ref={headingRef}
+            tabIndex={-1}
+            className="max-w-full truncate font-serif text-lg font-semibold text-[var(--ophalo-ink)] focus:outline-none"
+          >
+            {request?.customerName ?? "Actual Work"}
+          </h1>
+          {request && (
+            <KeepBadge variant={statusBadgeVariant(request.status)}>{statusLabel(request.status)}</KeepBadge>
+          )}
+        </div>
+        {request && (
+          <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-[var(--ophalo-muted)]">
+            <span className="font-medium text-[var(--ophalo-ink)]">{request.referenceCode}</span>
+            {address ? (
+              <span className="truncate">· {address}</span>
+            ) : (
+              <span>· Service location not on file</span>
+            )}
+          </div>
+        )}
+        {request?.description && (
+          <div className="mt-1.5">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--ophalo-muted)]">
+              Customer need
+            </p>
+            <p
+              ref={needRef}
+              className={`whitespace-pre-wrap text-sm leading-6 text-[var(--ophalo-ink)] ${
+                needExpanded ? "" : "line-clamp-2"
+              }`}
+            >
+              {request.description}
+            </p>
+            {(needClipped || needExpanded) && (
+              <button
+                type="button"
+                onClick={() => setNeedExpanded((v) => !v)}
+                aria-expanded={needExpanded}
+                className="mt-0.5 inline-flex items-center gap-0.5 rounded text-xs font-semibold text-[var(--keep-accent)] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-offset-2"
+              >
+                <ChevronRight
+                  className={`h-3.5 w-3.5 transition-transform ${needExpanded ? "rotate-90" : ""}`}
+                />
+                {needExpanded ? "Show less" : "Show full customer need"}
+              </button>
+            )}
+          </div>
         )}
       </div>
     </div>

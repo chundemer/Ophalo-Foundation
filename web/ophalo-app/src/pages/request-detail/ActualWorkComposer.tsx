@@ -62,6 +62,12 @@ interface ActualWorkComposerProps {
   // than a `min-[1001px]:` CSS pair so only one close control (X vs "Back to Request") ever
   // exists in the DOM/accessibility tree at a time, matching Slice 2/3's convention.
   isWide: boolean;
+  // BL136 4f-iii: `"modal"` (default) keeps the historical full-bleed / right-drawer `KeepModal`
+  // presentation used from Request Detail. `"inline"` renders the same capture surface as a plain
+  // in-page region (no overlay, no backdrop, no Escape/focus trap) so the dedicated Actual Work
+  // workspace route can show it beneath the persistent Keep top nav and ticket-context band. No
+  // capture logic differs between the two.
+  presentation?: "modal" | "inline";
   onClose: () => void;
   // Returns the in-flight refetch — each mutation's onSuccess awaits it before settling, so
   // TanStack Query keeps the mutation (and its disabled controls) pending until the composer's
@@ -116,6 +122,7 @@ export function ActualWorkComposer({
   replacementCorrection = false,
   conflictNotice,
   isWide,
+  presentation = "modal",
   onClose,
   onCommitted,
   onConflict,
@@ -208,25 +215,14 @@ export function ActualWorkComposer({
     };
   }, [showDiscardConfirm, discardMutation.isPending]);
 
-  return (
-    <KeepModal
-      onClose={onClose}
-      labelledBy="actual-work-composer-heading"
-      initialFocus={searchInputRef}
-      overlayClassName="flex justify-end"
-      backdropClassName="bg-slate-950/35 backdrop-blur-[1px]"
-      panelClassName={
-        isWide
-          ? "fixed inset-y-0 right-0 h-[100dvh] w-full max-w-[420px] flex flex-col bg-[var(--ophalo-card)] " +
-            "border-l border-[var(--ophalo-border)] shadow-2xl"
-          : "fixed inset-0 h-[100dvh] w-full flex flex-col bg-[var(--ophalo-card)]"
-      }
-    >
+  const composerBody = (
+    <>
       <div
         className={`px-4 py-4 border-b border-[var(--ophalo-border)] shrink-0 ${
-          isWide ? "" : "pt-[max(1rem,env(safe-area-inset-top))]"
+          isWide || presentation === "inline" ? "" : "pt-[max(1rem,env(safe-area-inset-top))]"
         }`}
       >
+       <div className="min-[1001px]:mx-auto min-[1001px]:max-w-3xl">
         <div className="flex items-start justify-between gap-3">
           <div>
             <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--ophalo-muted)]">Work execution manager</p>
@@ -234,7 +230,9 @@ export function ActualWorkComposer({
           Record completed work
             </h2>
           </div>
-          {isWide ? (
+          {/* BL136 4f-iii: inline (workspace-route) presentation delegates "Back to Request" to
+              the page's ticket-context band, so the composer header carries no close control. */}
+          {presentation === "inline" ? null : isWide ? (
             <button
             type="button"
             onClick={onClose}
@@ -257,9 +255,11 @@ export function ActualWorkComposer({
           <p className="text-xs text-[var(--ophalo-muted)]">Changes are saved automatically.</p>
           <span className="inline-flex items-center gap-1 rounded-full border border-[var(--ophalo-success)] bg-[var(--ophalo-success-bg)] px-2 py-0.5 text-[11px] font-semibold text-[var(--ophalo-success)]"><Check className="h-3 w-3" /> Auto-saved</span>
         </div>
+       </div>
       </div>
 
-      <div className="flex-1 min-h-0 overflow-y-auto px-4 py-3 space-y-4">
+      <div className="flex-1 min-h-0 overflow-y-auto px-4 py-3">
+       <div className="space-y-4 min-[1001px]:mx-auto min-[1001px]:max-w-3xl">
         {replacementCorrection && (
           <div
             role="status"
@@ -335,9 +335,18 @@ export function ActualWorkComposer({
             </>
           )}
         <div className="space-y-2">
-          {draft.lines.length === 0 && (
-            <p className="text-xs text-[var(--ophalo-muted)]">No items added yet.</p>
-          )}
+          {draft.lines.length === 0 &&
+            (readOnly || needsPerformer ? (
+              <p className="text-xs text-[var(--ophalo-muted)]">No items added yet.</p>
+            ) : (
+              <div className="rounded-lg border border-dashed border-[var(--ophalo-border)] bg-[var(--ophalo-canvas)] px-3 py-2.5 text-xs text-[var(--ophalo-muted)]">
+                <p className="font-semibold text-[var(--ophalo-ink)]">No items added yet.</p>
+                <p className="mt-0.5">
+                  Add line items with the search above, or record a zero-line outcome
+                  (diagnostic only, no work authorized, or no access) in the submit area below.
+                </p>
+              </div>
+            ))}
           {draft.lines.map((line) => (
             <ActualWorkDraftLine
               key={line.id}
@@ -369,13 +378,14 @@ export function ActualWorkComposer({
         )}
 
         {!readOnly && (
-          <div className="pt-1">
+          <div className="mt-3 flex items-center justify-between gap-3 border-t border-[var(--ophalo-border)] pt-3">
+            <span className="text-[11px] text-[var(--ophalo-muted)]">Removes this unfinished visit and its recorded work.</span>
             <button
               ref={discardTriggerRef}
               type="button"
               disabled={discardMutation.isPending}
               onClick={() => setShowDiscardConfirm(true)}
-              className={`inline-flex items-center gap-1.5 rounded-lg border border-[var(--ophalo-danger)] px-3 py-1.5 text-xs font-semibold text-[var(--ophalo-danger)] hover:bg-[var(--ophalo-danger-bg)] disabled:opacity-50 ${FOCUS_RING}`}
+              className={`inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-[var(--ophalo-danger)] px-3 py-1.5 text-xs font-semibold text-[var(--ophalo-danger)] hover:bg-[var(--ophalo-danger-bg)] disabled:opacity-50 ${FOCUS_RING}`}
             >
               <X className="h-3.5 w-3.5" />
               Discard this visit
@@ -383,6 +393,7 @@ export function ActualWorkComposer({
           </div>
         )}</section>
         <SubmittedVisits visits={submittedVisits} />
+       </div>
       </div>
 
       <ActualWorkSubmitFooter
@@ -442,6 +453,35 @@ export function ActualWorkComposer({
           </div>
         </div>
       )}
+    </>
+  );
+
+  if (presentation === "inline") {
+    return (
+      <section
+        aria-labelledby="actual-work-composer-heading"
+        className="relative flex min-h-0 flex-1 flex-col bg-[var(--ophalo-card)]"
+      >
+        {composerBody}
+      </section>
+    );
+  }
+
+  return (
+    <KeepModal
+      onClose={onClose}
+      labelledBy="actual-work-composer-heading"
+      initialFocus={searchInputRef}
+      overlayClassName="flex justify-end"
+      backdropClassName="bg-slate-950/35 backdrop-blur-[1px]"
+      panelClassName={
+        isWide
+          ? "fixed inset-y-0 right-0 h-[100dvh] w-full max-w-[420px] flex flex-col bg-[var(--ophalo-card)] " +
+            "border-l border-[var(--ophalo-border)] shadow-2xl"
+          : "fixed inset-0 h-[100dvh] w-full flex flex-col bg-[var(--ophalo-card)]"
+      }
+    >
+      {composerBody}
     </KeepModal>
   );
 }
@@ -653,9 +693,12 @@ function ActualWorkPerformerGate({
   return (
     <div className="rounded-lg border border-[var(--ophalo-border)] p-3 space-y-2">
       <div>
-        <p className="text-sm font-medium text-[var(--ophalo-ink)]">Whose work is this?</p>
+        <p className="flex items-center gap-1 text-sm font-medium text-[var(--ophalo-ink)]">
+          Whose work is this?
+          <span aria-hidden="true" className="text-[var(--ophalo-danger)]">*</span>
+        </p>
         <p className="mt-0.5 text-xs text-[var(--ophalo-muted)]">
-          Add items after you pick the technician this ticket belongs to.
+          Required — add items after you pick the technician this ticket belongs to.
         </p>
       </div>
       <select
@@ -673,14 +716,16 @@ function ActualWorkPerformerGate({
         ))}
       </select>
       {message && <p className="text-xs text-[var(--ophalo-danger,#c0392b)]">{message}</p>}
-      <KeepButton
-        variant="teal"
-        disabled={!selected || status === "saving"}
-        onClick={() => void confirm()}
-        className="w-full"
-      >
-        Confirm technician
-      </KeepButton>
+      <div className="min-[1001px]:flex min-[1001px]:justify-end">
+        <KeepButton
+          variant="teal"
+          disabled={!selected || status === "saving"}
+          onClick={() => void confirm()}
+          className="w-full min-[1001px]:w-auto min-[1001px]:px-6"
+        >
+          Confirm technician
+        </KeepButton>
+      </div>
     </div>
   );
 }
@@ -715,16 +760,19 @@ function ActualWorkVisitNoteField({
 
   return (
     <div className="pt-1 space-y-1">
-      <label htmlFor="actual-work-visit-note" className="text-xs font-semibold text-[var(--ophalo-ink)]">
-        Visit note
-      </label>
+      <div className="flex items-baseline gap-1.5">
+        <label htmlFor="actual-work-visit-note" className="text-xs font-semibold text-[var(--ophalo-ink)]">
+          Visit note
+        </label>
+        <span className="text-[10px] font-medium uppercase tracking-wide text-[var(--ophalo-muted)]">Optional</span>
+      </div>
       <textarea
         id="actual-work-visit-note"
         value={value}
         onChange={(e) => setValue(e.target.value)}
         onBlur={() => void onBlur()}
         rows={3}
-        placeholder="Notes about this visit (optional)"
+        placeholder="Notes about this visit"
         className={`${INPUT_CLS} resize-y`}
       />
       {saving && <p className="text-xs text-[var(--ophalo-muted)]">Saving…</p>}
@@ -1464,44 +1512,79 @@ function ActualWorkSubmitFooter({
 
   return (
     <div
-      className={`px-4 py-3 border-t border-[var(--ophalo-border)] shrink-0 space-y-2 ${
+      className={`px-4 py-3 border-t border-[var(--ophalo-border)] shrink-0 ${
         isWide ? "" : "pb-[max(0.75rem,env(safe-area-inset-bottom))]"
       }`}
     >
+     <div className="space-y-2 min-[1001px]:mx-auto min-[1001px]:max-w-3xl">
       {zeroLine && (
-        <>
-          <select
-            value={outcome}
-            onChange={(e) => setOutcome(e.target.value)}
-            onFocus={() => { submitIntentRef.current = false; }}
-            onBlur={() => persistOnBlur(outcome, completionNote)}
-            disabled={persisting || submitMutation.isPending}
-            className={INPUT_CLS}
-            aria-label="Visit outcome"
-          >
-            <option value="">Select outcome...</option>
-            {OUTCOME_OPTIONS.map((o) => (
-              <option key={o.value} value={o.value}>
-                {o.label}
-              </option>
-            ))}
-          </select>
-          <textarea
-            value={completionNote}
-            onChange={(e) => setCompletionNote(e.target.value)}
-            onFocus={() => { submitIntentRef.current = false; }}
-            onBlur={() => persistOnBlur(outcome, completionNote)}
-            disabled={persisting || submitMutation.isPending}
-            placeholder="Completion note (required — no items added)"
-            className={INPUT_CLS}
-            rows={2}
-          />
+        <div className="space-y-2 rounded-lg border border-[var(--ophalo-border)] bg-[var(--ophalo-canvas)] p-3">
+          <p className="text-xs text-[var(--ophalo-muted)]">
+            No line items added — submit a zero-line outcome instead.
+          </p>
+          <div className="space-y-1">
+            <div className="flex items-center gap-1">
+              <label
+                htmlFor="actual-work-zeroline-outcome"
+                className="text-xs font-semibold text-[var(--ophalo-ink)]"
+              >
+                Visit outcome
+              </label>
+              <span aria-hidden="true" className="text-[var(--ophalo-danger)]">*</span>
+            </div>
+            <select
+              id="actual-work-zeroline-outcome"
+              value={outcome}
+              aria-required="true"
+              aria-label="Visit outcome"
+              onChange={(e) => setOutcome(e.target.value)}
+              onFocus={() => { submitIntentRef.current = false; }}
+              onBlur={() => persistOnBlur(outcome, completionNote)}
+              disabled={persisting || submitMutation.isPending}
+              className={INPUT_CLS}
+            >
+              <option value="">Select outcome...</option>
+              {OUTCOME_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="space-y-1">
+            <div className="flex items-center gap-1">
+              <label
+                htmlFor="actual-work-zeroline-note"
+                className="text-xs font-semibold text-[var(--ophalo-ink)]"
+              >
+                Completion note
+              </label>
+              <span aria-hidden="true" className="text-[var(--ophalo-danger)]">*</span>
+            </div>
+            <textarea
+              id="actual-work-zeroline-note"
+              value={completionNote}
+              aria-required="true"
+              onChange={(e) => setCompletionNote(e.target.value)}
+              onFocus={() => { submitIntentRef.current = false; }}
+              onBlur={() => persistOnBlur(outcome, completionNote)}
+              disabled={persisting || submitMutation.isPending}
+              placeholder="Completion note — what happened on this visit"
+              className={INPUT_CLS}
+              rows={2}
+            />
+          </div>
           {persisting && <p className="text-xs text-[var(--ophalo-muted)]">Saving…</p>}
-        </>
+        </div>
       )}
       {error && <p className="text-xs text-[var(--ophalo-danger,#c0392b)]">{error}</p>}
-      <div className="grid grid-cols-2 gap-3">
-        <KeepButton variant="secondary" onClick={onSaveDraft} disabled={submitMutation.isPending}>
+      <div className="grid grid-cols-2 gap-3 min-[1001px]:flex min-[1001px]:justify-end">
+        <KeepButton
+          variant="secondary"
+          onClick={onSaveDraft}
+          disabled={submitMutation.isPending}
+          className="min-[1001px]:px-6"
+        >
           Save draft &amp; exit
         </KeepButton>
         <button
@@ -1509,16 +1592,17 @@ function ActualWorkSubmitFooter({
           onPointerDown={() => { submitIntentRef.current = true; }}
           disabled={!canSubmit || submitMutation.isPending || persisting}
           onClick={() => submitMutation.mutate({ outcome: outcome || null, completionNote: completionNote.trim() || null })}
-          className={`rounded-lg bg-[var(--keep-accent)] px-3 py-2.5 text-sm font-semibold text-white ${FOCUS_RING} disabled:opacity-50`}
+          className={`rounded-lg bg-[var(--keep-accent)] px-3 py-2.5 text-sm font-semibold text-white ${FOCUS_RING} disabled:opacity-50 min-[1001px]:px-6`}
         >
           Submit visit to office
         </button>
       </div>
       {zeroLine && !canSubmit && (
-        <p className="text-center text-xs text-[var(--ophalo-muted)]">
+        <p className="text-center text-xs text-[var(--ophalo-muted)] min-[1001px]:text-right">
           Select an outcome and add a completion note, or add at least one item, before submitting.
         </p>
       )}
+     </div>
     </div>
   );
 }

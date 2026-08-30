@@ -1,6 +1,6 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-08-30 (4f-ii workspace office region `144bee6`; 4f-i `144e458`; 4e-iii-a review follow-up `8095611`)
+**Last updated:** 2026-08-30 (4f-iii workspace shell + ticket-context band `10acda1`; 4f-ii `144bee6`; 4f-i `144e458`)
 **Purpose:** active handoff only. Completed implementation detail belongs in Git history and the
 relevant build log.
 
@@ -23,12 +23,13 @@ existing-ticket workflow as the explicit outage fallback.
 
 `main` at `8495ba3` (pushed 2026-08-30) carries the 4e-0 signal seam, 4e-i supersession foundation,
 and `AddActualWorkSupersession`. Railway deployment completed and the migration is applied —
-confirmed 2026-08-30; `ActualWorkSupersessionPersistenceTests` (4) pass. Local commits — `144bee6`
-(4f-ii), `144e458` (4f-i), the 4e-iii-a review follow-up `8095611`, `9084985` (4e-iii-b), `a18219e` (4e-iii-a),
-`e19e5f9` (4e-ii-c), `29db179` (4e-ii-b-2), `2be5203` (4e-ii-b-1), `82d9b9e` (4e-ii-a) and earlier —
-are **not yet pushed**. No migration since 4e-i (4e-ii, 4e-iii, 4f-i, and 4f-ii are code-only /
-UI-only: services, read/mutation guards, routes, mapper, response shape, the workspace route shell,
-and now the workspace office region + its removal from wide-viewport Request Detail).
+confirmed 2026-08-30; `ActualWorkSupersessionPersistenceTests` (4) pass. Local commits — `PENDING`
+(4f-iii), `144bee6` (4f-ii), `144e458` (4f-i), the 4e-iii-a review follow-up `8095611`, `9084985` (4e-iii-b),
+`a18219e` (4e-iii-a), `e19e5f9` (4e-ii-c), `29db179` (4e-ii-b-2), `2be5203` (4e-ii-b-1), `82d9b9e` (4e-ii-a)
+and earlier — are **not yet pushed**. No migration since 4e-i (4e-ii, 4e-iii, 4f-i, 4f-ii, and 4f-iii
+are code-only / UI-only: services, read/mutation guards, routes, mapper, response shape, the workspace
+route shell, the workspace office region + its removal from wide-viewport Request Detail, and now the
+inline composer presentation + persistent Keep shell / ticket-context band).
 
 ### Prior slice — 4e-ii-a (local commit `82d9b9e`)
 
@@ -212,6 +213,35 @@ UI-only, `web/ophalo-app`. 7 production + 4 test files. No backend, no migration
   type-only); tests: new `ActualWorkWorkspacePage.officeRegion.test.tsx` + updates to
   `RequestDetailContent.actualWorkHistoryRefresh`, `RequestDetailContent.actualWorkWorkspaceRoute`,
   `ActualWorkHistoryCard` tests.
+
+### Prior slice — 4f-iii workspace shell + ticket-context band (local commit `10acda1`)
+
+UI-only, `web/ophalo-app`. 3 production + 2 test files. No backend / API-client / migration.
+Frontend suite 883/883, `tsc` clean, `check:tokens` passed, `git diff --check` clean. Christian
+reviewed and approved for commit.
+
+- **Composition change, not a fork:** `ActualWorkComposer` gains `presentation?: "modal" | "inline"`
+  (default `"modal"` — `RequestDetailContent` call site untouched). `"inline"` renders the same
+  capture body as a plain `<section aria-labelledby>` instead of `KeepModal` (no overlay/backdrop/
+  Escape/focus-trap) and omits the header close/back control. No capture logic differs.
+- **Workspace is now a first-class Keep page:** `App.tsx` adds `actual-work` to `usesTopNavShell`
+  (persistent top nav) and a `boundedShell` flag (`workbenchWideActive || route.page === "actual-work"`)
+  that gives the route the `h-dvh`/`overflow-hidden` ancestor the inline composer's scroll region +
+  pinned band resolve against.
+- **`TicketContextBand`** (in `ActualWorkWorkspacePage.tsx`) above both the editable-draft and
+  read-only branches: `← Back to Request`, `ACTUAL WORK VISIT` eyebrow, customer name as page `<h1>`
+  (keeps the read-only `headingRef` focus-on-mount), status `KeepBadge`, `reference · service address`,
+  and a visually-secondary Customer Need (`line-clamp-2`; `Show full customer need` toggle with
+  `aria-expanded`, shown only when a `useLayoutEffect` + `ResizeObserver` measurement finds the clamp
+  actually clips). Price-blind — description/address/status/reference only.
+- Narrow deep-links still redirect to Request Detail and render nothing (unchanged). Also folds in
+  the earlier composer desktop-formatting polish (centered `max-w-3xl` content column at
+  `min-[1001px]:`, natural-width footer actions, isolated discard, required markers on the zero-line
+  outcome/note, subdued "Optional" on the visit note, inline empty-state cue).
+- Files: `App.tsx`, `ActualWorkWorkspacePage.tsx`, `ActualWorkComposer.tsx`; tests:
+  `ActualWorkWorkspacePage.test.tsx`, `ActualWorkComposer.test.tsx`.
+- Follow-up (non-blocking, deferred): shared `formatServiceAddress(detail)` helper (now inlined in
+  3 places); optional deliberate focus target on draft entry; `Escape → onExit` on the route.
 
 ### Next code slice — 4g request-close eligibility gate (fresh session)
 

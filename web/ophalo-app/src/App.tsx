@@ -300,13 +300,20 @@ function AppShell() {
     route.page === "settings" ||
     route.page === "pricebook" ||
     route.page === "pricebook-item" ||
-    route.page === "pricebook-assembly";
+    route.page === "pricebook-assembly" ||
+    route.page === "actual-work";
+
+  // BL136 4f-iii: the Actual Work workspace hosts the composer inline (not as a full-bleed
+  // modal), so it needs the same bounded-height ancestor the wide Workbench uses — its header
+  // band stays pinned and the capture surface owns its own scroll, rather than the document
+  // growing past the viewport.
+  const boundedShell = workbenchWideActive || route.page === "actual-work";
 
   // Every route is a column: mobile top bar or desktop top-nav header above the content.
   return (
     <div
       className={`flex flex-col bg-[var(--ophalo-canvas)] ${
-        workbenchWideActive ? "h-dvh overflow-hidden" : "min-h-screen"
+        boundedShell ? "h-dvh overflow-hidden" : "min-h-screen"
       } ${usesTopNavShell ? "" : "md:flex-row"}`}
     >
       {/* Top bar — mobile only, all routes: logo + hamburger trigger for MobileNavMenu. */}
@@ -447,7 +454,7 @@ function AppShell() {
       )}
 
       {/* Main content */}
-      <main className={`flex-1 min-w-0 flex flex-col ${workbenchWideActive ? "min-h-0 overflow-hidden" : ""}`}>
+      <main className={`flex-1 min-w-0 flex flex-col ${boundedShell ? "min-h-0 overflow-hidden" : ""}`}>
         {route.page === "requests" && role === "unknown" && (
           <div className="flex flex-1 items-center justify-center">
             <span className="text-[var(--ophalo-muted)] text-sm">Loading…</span>

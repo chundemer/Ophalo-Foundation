@@ -143,9 +143,9 @@ describe("ActualWorkComposer", () => {
   it("pads the full-bleed header/footer for the notch/home-indicator below isWide, and leaves the isWide drawer unpadded (Slice 5c)", () => {
     const { rerender } = renderComposer({ isWide: false });
 
-    const narrowHeader = screen.getByRole("button", { name: "← Back to Request" }).parentElement?.parentElement;
+    const narrowHeader = screen.getByRole("button", { name: "← Back to Request" }).closest("div.shrink-0");
     expect(narrowHeader?.className).toContain("safe-area-inset-top");
-    const narrowFooter = screen.getByLabelText("Visit outcome").parentElement;
+    const narrowFooter = screen.getByLabelText("Visit outcome").closest("div.shrink-0");
     expect(narrowFooter?.className).toContain("safe-area-inset-bottom");
 
     rerender(
@@ -169,9 +169,9 @@ describe("ActualWorkComposer", () => {
       </QueryClientProvider>,
     );
 
-    const wideHeader = screen.getByRole("button", { name: "Close" }).parentElement?.parentElement;
+    const wideHeader = screen.getByRole("button", { name: "Close" }).closest("div.shrink-0");
     expect(wideHeader?.className).not.toContain("safe-area-inset-top");
-    const wideFooter = screen.getByLabelText("Visit outcome").parentElement;
+    const wideFooter = screen.getByLabelText("Visit outcome").closest("div.shrink-0");
     expect(wideFooter?.className).not.toContain("safe-area-inset-bottom");
   });
 
@@ -875,6 +875,50 @@ describe("ActualWorkComposer", () => {
 
       expect(await screen.findByText("That person can't be recorded as the performer.")).toBeInTheDocument();
       expect(screen.queryByPlaceholderText("Search by name or SKU...")).not.toBeInTheDocument();
+    });
+  });
+
+  describe("inline (workspace-route) presentation", () => {
+    it("renders as a plain region with no dialog chrome and no header close/back control", () => {
+      renderComposer({ presentation: "inline", isWide: false });
+
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "Close" })).not.toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "← Back to Request" })).not.toBeInTheDocument();
+      // Capture surface and its autosave state are still present.
+      expect(screen.getByRole("heading", { name: "Record completed work" })).toBeInTheDocument();
+      expect(screen.getByText("Auto-saved")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Submit visit to office" })).toBeInTheDocument();
+    });
+  });
+
+  describe("desktop composer formatting", () => {
+    it("shows an inline empty-state cue pointing to lines or a zero-line outcome when the draft has no lines", () => {
+      renderComposer();
+
+      expect(
+        screen.getByText(/record a zero-line outcome .* in the submit area below/i),
+      ).toBeInTheDocument();
+    });
+
+    it("drops the empty-state cue once a line exists", () => {
+      renderComposer({ draft: emptyDraft({ lines: [draftLine] }) });
+
+      expect(screen.queryByText(/record a zero-line outcome/i)).not.toBeInTheDocument();
+    });
+
+    it("marks the zero-line outcome and completion note as required", () => {
+      renderComposer();
+
+      expect(screen.getByLabelText("Visit outcome")).toHaveAttribute("aria-required", "true");
+      expect(screen.getByPlaceholderText(/Completion note/)).toHaveAttribute("aria-required", "true");
+    });
+
+    it("labels the visit note as optional", () => {
+      renderComposer();
+
+      expect(screen.getByText("Optional")).toBeInTheDocument();
+      expect(screen.getByLabelText("Visit note")).toBeInTheDocument();
     });
   });
 
