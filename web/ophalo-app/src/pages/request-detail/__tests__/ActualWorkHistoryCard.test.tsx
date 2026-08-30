@@ -164,6 +164,22 @@ describe("ActualWorkHistoryCard", () => {
     expect(screen.getByText("1 line")).toBeInTheDocument();
   });
 
+  it("BL136 4f-ii: offers an 'Open in workspace' link per visit only when onOpenVisit is set", async () => {
+    const state: ActualWorkHistoryState = {
+      status: "loaded",
+      submittedVisits: [
+        { id: "v1", status: "SubmittedToOffice", outcome: null, completionNote: null, submittedAtUtc: "2026-01-15T18:30:00Z", visitNote: null, lines: [] },
+      ],
+    };
+    const { rerender } = render(<ActualWorkHistoryCard state={state} onRetry={vi.fn()} />);
+    expect(screen.queryByRole("button", { name: /Open in workspace/i })).not.toBeInTheDocument();
+
+    const onOpenVisit = vi.fn();
+    rerender(<ActualWorkHistoryCard state={state} onRetry={vi.fn()} onOpenVisit={onOpenVisit} />);
+    await userEvent.click(screen.getByRole("button", { name: /Open in workspace/i }));
+    expect(onOpenVisit).toHaveBeenCalledWith("v1");
+  });
+
   it("null-guards a missing submittedAtUtc without affecting the summary count", () => {
     const state: ActualWorkHistoryState = {
       status: "loaded",

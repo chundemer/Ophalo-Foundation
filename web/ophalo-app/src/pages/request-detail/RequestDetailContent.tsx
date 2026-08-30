@@ -46,7 +46,7 @@ interface RequestDetailContentProps extends RequestDetailLayoutProps {
   onNavigate?: (id: string) => void;
   // BL136 4f-i: wide-screen capture navigates to the dedicated workspace route instead of opening
   // the in-page modal. Undefined below 1001px — capture stays a full-bleed modal here.
-  onNavigateToActualWorkspace?: (requestId: string, visit?: "new" | "draft") => void;
+  onNavigateToActualWorkspace?: (requestId: string, visit?: "new" | "draft" | (string & {})) => void;
   onOpenClearAttention: () => void;
   canReviewActualWork?: boolean;
   // 4c-i-c-2: the signed-in member's account-user id, threaded into useActualWorkCapture so
@@ -69,10 +69,33 @@ export function RequestDetailContent(props: RequestDetailContentProps) {
   const composerRef = useRef<UnifiedComposerHandle>(null);
   const actualWorkCapture = useActualWorkCapture(requestId, props.currentAccountUserId);
   const actualWorkHistory = useActualWorkHistory(requestId);
+
+  // BL136 4f-i: the route-vs-modal decision must use the *viewport* 1001px predicate, matching
+  // `ActualWorkWorkspacePage`. In Workbench two-pane mode the detail container is < 1001px at
+  // viewports up to ~1360px (a 360px queue pane sits beside it), but a direct workspace deep-link
+  // renders the desktop workspace at those same viewports — so the container width (`isWide` below)
+  // would wrongly keep the in-page modal there. `matchMedia` mirrors the workspace page's own guard.
+  const [isViewportWide, setIsViewportWide] = useState(
+    () => typeof window?.matchMedia === "function" && window.matchMedia("(min-width: 1001px)").matches,
+  );
+  useEffect(() => {
+    if (typeof window?.matchMedia !== "function") return;
+    const mq = window.matchMedia("(min-width: 1001px)");
+    const sync = () => setIsViewportWide(mq.matches);
+    mq.addEventListener("change", sync);
+    return () => mq.removeEventListener("change", sync);
+  }, []);
+  // On a wide viewport the capture entry point AND the Owner/Admin office financial review live on
+  // the dedicated workspace route; below 1001px both stay on this page (the workspace has no narrow
+  // form and redirects narrow deep-links back here). The two are mutually exclusive by width.
+  const useWorkspaceRoute = isViewportWide && !!props.onNavigateToActualWorkspace;
+
   const actualWorkFinancialReview = useActualWorkFinancialReview(
-    // BL136 4e-iii: a superseded source is inert for financial review — its detail read returns 409
-    // — so it must be excluded here even though the history read stays unfiltered for lineage.
-    props.canReviewActualWork && actualWorkHistory.state.status === "loaded"
+    // BL136 4f-ii: on a wide viewport office financial review is rendered only in the workspace, so
+    // this hook is fed nothing here (no detail reads fire). BL136 4e-iii: a superseded source is
+    // inert for financial review — its detail read returns 409 — so it is excluded even below
+    // 1001px, though the history read stays unfiltered for lineage.
+    !useWorkspaceRoute && props.canReviewActualWork && actualWorkHistory.state.status === "loaded"
       ? actualWorkHistory.state.submittedVisits.filter((visit) => !visit.superseded)
       : [],
   );
@@ -95,24 +118,6 @@ export function RequestDetailContent(props: RequestDetailContentProps) {
     return () => observer.disconnect();
   }, []);
 
-  // BL136 4f-i: the route-vs-modal decision must use the *viewport* 1001px predicate, matching
-  // `ActualWorkWorkspacePage`. In Workbench two-pane mode the detail container is < 1001px at
-  // viewports up to ~1360px (a 360px queue pane sits beside it), but a direct workspace deep-link
-  // renders the desktop workspace at those same viewports — so the container width above would
-  // wrongly keep the in-page modal there. `matchMedia` mirrors the workspace page's own guard.
-  const [isViewportWide, setIsViewportWide] = useState(
-    () => typeof window?.matchMedia === "function" && window.matchMedia("(min-width: 1001px)").matches,
-  );
-  useEffect(() => {
-    if (typeof window?.matchMedia !== "function") return;
-    const mq = window.matchMedia("(min-width: 1001px)");
-    const sync = () => setIsViewportWide(mq.matches);
-    mq.addEventListener("change", sync);
-    return () => mq.removeEventListener("change", sync);
-  }, []);
-  // On a wide viewport the capture entry point navigates to the dedicated workspace route;
-  // otherwise it opens the existing full-bleed modal on this page.
-  const useWorkspaceRoute = isViewportWide && !!props.onNavigateToActualWorkspace;
   // BL136 4e-iii: holds the successor Draft id when a replacement-copy correction succeeded but the
   // Draft could not be auto-opened (e.g. the acting user lacks ActualWorkCapture, or another
   // session opened a different Draft first) — surfaces an explicit "open the replacement draft"
@@ -263,11 +268,27 @@ export function RequestDetailContent(props: RequestDetailContentProps) {
               onDismissRecoveryNotice={actualWorkCapture.clearRecoveryNotice}
               bare
             />
-            {!actualWorkCaptureEditable && <ActualWorkHistoryCard state={actualWorkHistory.state} onRetry={() => void actualWorkHistory.retry()} bare />}
+            {!actualWorkCaptureEditable && (
+              <ActualWorkHistoryCard
+                state={actualWorkHistory.state}
+                onRetry={() => void actualWorkHistory.retry()}
+                // BL136 4f-ii: on a wide viewport each submitted visit opens in the Actual Work
+                // workspace (where the Owner/Admin office region now lives); below 1001px the
+                // review card renders inline on this page instead, so no per-visit link is offered.
+                onOpenVisit={
+                  useWorkspaceRoute
+                    ? (visitId) => props.onNavigateToActualWorkspace!(requestId, visitId)
+                    : undefined
+                }
+                bare
+              />
+            )}
           </div>
         )}
 
-        {props.canReviewActualWork && (
+        {/* BL136 4f-ii: below 1001px only — on a wide viewport office financial review and the
+            "Correct this visit" affordance live exclusively on the workspace route. */}
+        {!useWorkspaceRoute && props.canReviewActualWork && (
           <ActualWorkReviewCard
             state={actualWorkFinancialReview.state}
             onRetry={() => void actualWorkFinancialReview.retry()}
@@ -284,7 +305,7 @@ export function RequestDetailContent(props: RequestDetailContentProps) {
           />
         )}
 
-        {replacementRecoverySuccessorId && (
+        {!useWorkspaceRoute && replacementRecoverySuccessorId && (
           <div role="status" className="rounded-xl border border-[var(--ophalo-attention)] bg-[var(--ophalo-attention-bg)] px-4 py-3 text-sm text-[var(--ophalo-attention)]">
             <p className="font-medium">The correction draft was created.</p>
             <p className="mt-0.5 text-xs">Open it to review and submit the replacement visit.</p>

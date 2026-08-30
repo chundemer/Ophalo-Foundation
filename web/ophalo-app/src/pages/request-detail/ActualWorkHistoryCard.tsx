@@ -9,6 +9,10 @@ interface ActualWorkHistoryCardProps {
   // bare: no outer card chrome — used when a parent shares one enclosing Work Execution module
   // with ActualWorkCard (locked exception, 2026-08-22).
   bare?: boolean;
+  // BL136 4f-ii: when set (wide viewport only), each submitted visit offers an "Open in workspace"
+  // link to the dedicated Actual Work Ticket Workspace route for that visit, where the Owner/Admin
+  // office financial-review region lives. Undefined below 1001px — review stays inline on the page.
+  onOpenVisit?: (visitId: string) => void;
 }
 
 function formatSubmittedAt(iso: string | null): string {
@@ -42,7 +46,13 @@ function LineageBadge({ visit }: { visit: ActualWorkSubmittedVisitEntry }) {
   return null;
 }
 
-function SubmittedVisitDetails({ visit }: { visit: ActualWorkSubmittedVisitEntry }) {
+function SubmittedVisitDetails({
+  visit,
+  onOpenVisit,
+}: {
+  visit: ActualWorkSubmittedVisitEntry;
+  onOpenVisit?: (visitId: string) => void;
+}) {
   return (
     <details className="group rounded-lg border border-[var(--ophalo-border)] bg-[var(--ophalo-canvas)]">
       <summary className="flex cursor-pointer list-none flex-wrap items-center justify-between gap-2 px-3 py-2 text-xs font-medium text-[var(--ophalo-ink)]">
@@ -55,6 +65,15 @@ function SubmittedVisitDetails({ visit }: { visit: ActualWorkSubmittedVisitEntry
         </span>
       </summary>
       <div className="space-y-2 border-t border-[var(--ophalo-border)] px-3 py-2">
+        {onOpenVisit && (
+          <button
+            type="button"
+            onClick={() => onOpenVisit(visit.id)}
+            className="text-xs font-medium text-[var(--keep-accent)] hover:underline rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)]"
+          >
+            Open in workspace →
+          </button>
+        )}
         {visit.visitNote ? (
           <p className="text-xs text-[var(--ophalo-muted)]">
             <span className="font-semibold text-[var(--ophalo-ink)]">Visit note</span>
@@ -92,7 +111,7 @@ function SubmittedVisitDetails({ visit }: { visit: ActualWorkSubmittedVisitEntry
  * (no visibility) never blocks the rest of request-detail; a transport/other failure renders a
  * compact retry affordance instead of a generic error card.
  */
-export function ActualWorkHistoryCard({ state, onRetry, bare = false }: ActualWorkHistoryCardProps) {
+export function ActualWorkHistoryCard({ state, onRetry, bare = false, onOpenVisit }: ActualWorkHistoryCardProps) {
   if (state.status === "loading" || state.status === "hidden") {
     return null;
   }
@@ -128,7 +147,7 @@ export function ActualWorkHistoryCard({ state, onRetry, bare = false }: ActualWo
       </div>
       <div className="mt-3 space-y-2">
         {state.submittedVisits.map((visit) => (
-          <SubmittedVisitDetails key={visit.id} visit={visit} />
+          <SubmittedVisitDetails key={visit.id} visit={visit} onOpenVisit={onOpenVisit} />
         ))}
       </div>
     </div>

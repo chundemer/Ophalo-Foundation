@@ -28,7 +28,7 @@ interface RequestWorkbenchShellProps {
   onStartCapture: () => void;
   // BL136 4f-i: opens the dedicated Actual Work Ticket Workspace route from Request Detail's
   // capture entry point (wide screens only).
-  onNavigateToActualWorkspace?: (requestId: string, visit?: "new" | "draft") => void;
+  onNavigateToActualWorkspace?: (requestId: string, visit?: "new" | "draft" | (string & {})) => void;
   // Bumped only for an explicit Requests navigation. It restarts initial selection without
   // remounting Requests, preserving the Queue pane's filters and scroll position.
   requestEntryIntent?: number;

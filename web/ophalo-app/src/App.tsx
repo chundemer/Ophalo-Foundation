@@ -262,7 +262,10 @@ function AppShell() {
   // BL136 4f-i: open the dedicated Actual Work Ticket Workspace route (wide screens only — the
   // card entry point never calls this below 1001px, and the page itself redirects a narrow
   // deep-link back to Request Detail).
-  function navigateToActualWorkspace(requestId: string, visit: "new" | "draft" = "draft") {
+  function navigateToActualWorkspace(
+    requestId: string,
+    visit: "new" | "draft" | (string & {}) = "draft",
+  ) {
     navigate({ page: "actual-work", requestId, visit });
   }
 

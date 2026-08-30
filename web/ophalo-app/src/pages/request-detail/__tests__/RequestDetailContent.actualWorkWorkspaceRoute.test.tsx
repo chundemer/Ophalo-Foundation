@@ -99,7 +99,9 @@ function stubMatchMedia() {
   })) as unknown as typeof window.matchMedia;
 }
 
-function renderContent(onNavigateToActualWorkspace?: (id: string, visit?: "new" | "draft") => void) {
+function renderContent(
+  onNavigateToActualWorkspace?: (id: string, visit?: "new" | "draft" | (string & {})) => void,
+) {
   const detail: KeepRequestDetailResult = mockRequestDetails["mock-req-001"];
   return render(
     <RequestDetailContent

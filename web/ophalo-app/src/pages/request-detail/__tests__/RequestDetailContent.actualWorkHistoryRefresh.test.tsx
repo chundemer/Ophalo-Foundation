@@ -170,9 +170,31 @@ describe("RequestDetailContent — Actual Work financial review card gating (Sli
     expect(screen.queryByText("Actual Work financial review")).not.toBeInTheDocument();
   });
 
-  it("renders the financial review card when canReviewActualWork is true", () => {
+  it("renders the financial review card when canReviewActualWork is true (below 1001px)", () => {
     render(<RequestDetailContent {...commonProps} canReviewActualWork />);
     expect(screen.getByText("Actual Work financial review")).toBeInTheDocument();
+  });
+
+  it("BL136 4f-ii: moves the financial review card off Request Detail on a wide viewport (workspace route)", () => {
+    const originalMatchMedia = window.matchMedia;
+    window.matchMedia = ((query: string) => ({
+      matches: true,
+      media: query,
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    })) as unknown as typeof window.matchMedia;
+    try {
+      render(
+        <RequestDetailContent {...commonProps} canReviewActualWork onNavigateToActualWorkspace={vi.fn()} />,
+      );
+      expect(screen.queryByText("Actual Work financial review")).not.toBeInTheDocument();
+    } finally {
+      window.matchMedia = originalMatchMedia;
+    }
   });
 });
 

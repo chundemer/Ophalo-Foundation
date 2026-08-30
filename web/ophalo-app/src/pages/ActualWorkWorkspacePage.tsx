@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../lib/apiClient";
 import { statusLabel, statusBadgeVariant } from "../lib/requestStatus";
 import { KeepBadge } from "../components/keep/KeepBadge";
 import { KeepButton } from "../components/keep/KeepButton";
 import { ActualWorkComposer } from "./request-detail/ActualWorkComposer";
+import { ActualWorkReviewCard } from "./request-detail/ActualWorkReviewCard";
 import { useActualWorkWorkspace } from "./request-detail/useActualWorkWorkspace";
 
 // Same 1001px protected-workspace minimum RequestWorkbenchShell measures (build-log 133 §13).
@@ -58,9 +59,17 @@ export function ActualWorkWorkspacePage({
   }, [isWide, onExit]);
 
   const meQuery = useQuery({ queryKey: ["me"], queryFn: api.getMe });
-  const { capture, history, requestQuery, submittedVisit } = useActualWorkWorkspace(
+  // BL136 4f-ii: on a wide viewport the Owner/Admin office financial-review region lives here
+  // (moved off Request Detail, which keeps it only below 1001px). Same role check RequestDetail
+  // applies. A 403 on the financial-detail read still degrades the region to nothing.
+  const canReviewActualWork =
+    meQuery.data?.accountRole === "owner" || meQuery.data?.accountRole === "admin";
+  const reviewVisitId = visit !== "new" && visit !== "draft" ? visit : undefined;
+  const { capture, history, requestQuery, submittedVisit, financialReview } = useActualWorkWorkspace(
     requestId,
     meQuery.data?.accountUserId,
+    canReviewActualWork,
+    reviewVisitId,
   );
 
   // `"new"` compatibility path: create (or confirm) the Draft, then hand back to the caller to
@@ -174,7 +183,37 @@ export function ActualWorkWorkspacePage({
         {history.state.status === "loaded" && !readOnlyVisit && (
           <p className="text-sm text-[var(--ophalo-muted)]">This visit is not available.</p>
         )}
-        {readOnlyVisit && <ReadOnlyVisit visit={readOnlyVisit} />}
+        {readOnlyVisit && (
+          <ReadOnlyVisit
+            visit={readOnlyVisit}
+            officeRegion={
+              canReviewActualWork && !readOnlyVisit.superseded ? (
+                <ActualWorkReviewCard
+                  state={financialReview.state}
+                  onRetry={() => void financialReview.retry()}
+                  onReview={financialReview.review}
+                  onResolveLine={financialReview.resolveLine}
+                  onRecordNoChargeDisposition={financialReview.recordNoChargeDisposition}
+                  onReplace={async (v, reason) => {
+                    const outcome = await financialReview.replace(v, reason);
+                    if (outcome.kind === "replaced") {
+                      await history.retry();
+                      // This page instance is retained across the `:visitId` → `draft` route
+                      // change, so the capture hook still holds its pre-replacement (typically
+                      // `no-draft`) state. Re-probe it onto the successor Draft the service just
+                      // created *before* switching the route, or `/draft` renders "no open draft".
+                      await capture.refetchDraft();
+                      onResolvedToDraft();
+                    }
+                    return outcome;
+                  }}
+                  isVisitMutating={financialReview.isVisitMutating}
+                  onReviewSuccess={() => void history.retry()}
+                />
+              ) : null
+            }
+          />
+        )}
       </div>
     </div>
   );
@@ -203,8 +242,12 @@ function WorkspaceNotice({ state, onExit }: { state: string; onExit: () => void 
 
 function ReadOnlyVisit({
   visit,
+  officeRegion,
 }: {
   visit: NonNullable<ReturnType<ReturnType<typeof useActualWorkWorkspace>["submittedVisit"]>>;
+  /** BL136 4f-ii: the capability-gated office region (reused `ActualWorkReviewCard`), rendered
+   *  line-adjacent below the visit note. Null for a non-reviewer or a superseded source. */
+  officeRegion?: ReactNode;
 }) {
   const submittedAt = useMemo(
     () => (visit.submittedAtUtc ? new Date(visit.submittedAtUtc).toLocaleString() : null),
@@ -265,8 +308,11 @@ function ReadOnlyVisit({
         )}
       </div>
 
-      {/* BL136 4f-ii: the capability-gated office region (financial resolution / disposition /
-          review controls, blocker list, and real totals) composes here, line-adjacent. */}
+      {/* BL136 4f-ii: the capability-gated office region — the existing `ActualWorkReviewCard`
+          (financial resolution / no-charge disposition / review controls / "Correct this visit" /
+          real totals), composed here line-adjacent. Hidden for a non-reviewer (or degraded to
+          nothing by a 403) and for a superseded source. */}
+      {officeRegion}
     </>
   );
 }

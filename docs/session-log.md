@@ -1,6 +1,6 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-08-30 (4f-i workspace route shell `144e458`; 4e-iii-a review follow-up `8095611`; 4e-iii-b `9084985`)
+**Last updated:** 2026-08-30 (4f-ii workspace office region — pending review; 4f-i `144e458`; 4e-iii-a review follow-up `8095611`)
 **Purpose:** active handoff only. Completed implementation detail belongs in Git history and the
 relevant build log.
 
@@ -26,8 +26,9 @@ and `AddActualWorkSupersession`. Railway deployment completed and the migration 
 confirmed 2026-08-30; `ActualWorkSupersessionPersistenceTests` (4) pass. Local commits — `144e458`
 (4f-i), the 4e-iii-a review follow-up `8095611`, `9084985` (4e-iii-b), `a18219e` (4e-iii-a),
 `e19e5f9` (4e-ii-c), `29db179` (4e-ii-b-2), `2be5203` (4e-ii-b-1), `82d9b9e` (4e-ii-a) and earlier —
-are **not yet pushed**. No migration since 4e-i (4e-ii, 4e-iii, and 4f-i are code-only / UI-only:
-services, read/mutation guards, routes, mapper, response shape, and now the workspace route shell).
+are **not yet pushed**. No migration since 4e-i (4e-ii, 4e-iii, 4f-i, and 4f-ii are code-only /
+UI-only: services, read/mutation guards, routes, mapper, response shape, the workspace route shell,
+and now the workspace office region + its removal from wide-viewport Request Detail).
 
 ### Prior slice — 4e-ii-a (local commit `82d9b9e`)
 
@@ -181,16 +182,43 @@ UI-only, `web/ophalo-app` (BL136 §4f-i, D7). 7 production + 4 test files. No ba
 - Verification: `tsc` clean, full web suite 867 pass (93 files), `check:tokens` passed,
   `git diff --check` clean.
 
-### Next code slice — 4f-ii Actual Work Ticket Workspace office region (fresh session)
+### Prior slice — 4f-ii Actual Work Ticket Workspace office region (local commit — pending review)
 
-4f-i delivered the route shell + price-blind field region. Next is BL136 **4f-ii** — the
-capability-gated office region inside the workspace route: composes the **existing**
-`FinancialResolutionForm` / `NoChargeDispositionForm` / review controls + blocker list + real
-totals, gated on `canReviewActualWork`, placed line-adjacent, never sharing a line renderer with
-the field region (ADR-493 §5 / D7 price-blindness hard rule — a reviewed visit shows read-only).
-`web/ophalo-app`. Do pre-work/preflight against BL136 §4f-ii and P-preflight slice 4f-ii before
-implementation. The 4f-i placeholder comment in `ActualWorkWorkspacePage`'s read-only view marks
-the compose point.
+UI-only, `web/ophalo-app`. 7 production + 4 test files. No backend, no migration. Frontend suite
+874/874, `tsc` clean, `check:tokens` passed, `git diff --check` clean.
+
+- **Reuse, scoped:** the workspace read-only submitted-visit view now composes the existing
+  `ActualWorkReviewCard` wholesale (ADR-493 §5 authorizes the review card in "a separately bounded
+  Office Review UI slice") — financial resolution / no-charge disposition / review / "Correct this
+  visit" / real totals. `useActualWorkWorkspace(requestId, meId, canReviewActualWork, reviewVisitId)`
+  owns one `useActualWorkFinancialReview` scoped to that single non-superseded visit; a 403 degrades
+  the region to nothing; a superseded source renders no office region. Replace success →
+  `history.retry()` + **`await capture.refetchDraft()`** + `onResolvedToDraft()` — the page instance
+  is retained across the `:visitId` → `draft` route change, so the capture hook must be re-probed
+  onto the just-created successor Draft *before* the route flips or `/draft` renders "no open draft".
+  `canReviewActualWork` = owner/admin, same check as `RequestDetail`.
+- **Move, not addition:** on a wide viewport (`useWorkspaceRoute` — now driven by the same
+  viewport-level `matchMedia("(min-width: 1001px)")` predicate as `ActualWorkWorkspacePage`, not the
+  detail-pane container measurement) `RequestDetailContent` no longer renders `ActualWorkReviewCard`
+  or the replacement-recovery block, and feeds `useActualWorkFinancialReview` an empty list (no
+  detail reads fire). Below 1001px both stay on Request Detail unchanged — the workspace has no
+  narrow form and redirects narrow deep-links back. The two are mutually exclusive by width.
+- **Navigation:** `ActualWorkHistoryCard` gains an optional `onOpenVisit(visitId)` → an "Open in
+  workspace →" link per submitted visit, wired only on a wide viewport. `navigateToActualWorkspace`
+  / `onNavigateToActualWorkspace` signatures widened to accept a visit id (route grammar + parse
+  already supported it since 4f-i).
+- Files: `ActualWorkWorkspacePage.tsx`, `useActualWorkWorkspace.ts`, `RequestDetailContent.tsx`,
+  `ActualWorkHistoryCard.tsx`, `App.tsx`, `RequestDetail.tsx`, `RequestWorkbenchShell.tsx` (last two
+  type-only); tests: new `ActualWorkWorkspacePage.officeRegion.test.tsx` + updates to
+  `RequestDetailContent.actualWorkHistoryRefresh`, `RequestDetailContent.actualWorkWorkspaceRoute`,
+  `ActualWorkHistoryCard` tests.
+
+### Next code slice — 4g request-close eligibility gate (fresh session)
+
+BL136 **4g** (P-preflight slice 4g): domain-authoritative Resolved→Closed gate on outstanding
+Actual Work (open Draft OR submitted∧¬reviewed∧¬superseded), advisory policy hint, API error
+mapping, frontend Close disable + reason copy. Core + Application + Api + frontend, 1 mutation
+family. Full unit + architecture + focused integration at the gate.
 
 ### Remaining pilot/release work
 

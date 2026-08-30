@@ -588,7 +588,7 @@ interface RequestDetailProps {
   // BL136 4f-i: opens the dedicated Actual Work Ticket Workspace route from the capture entry
   // point. Set on wide screens only; undefined below 1001px, where capture stays a full-bleed
   // modal on this page.
-  onNavigateToActualWorkspace?: (requestId: string, visit?: "new" | "draft") => void;
+  onNavigateToActualWorkspace?: (requestId: string, visit?: "new" | "draft" | (string & {})) => void;
   // Step 5: set only by RequestWorkbenchShell's wide two-pane render. The Queue pane already
   // supplies navigation context in that layout, so the header's Back control is redundant/
   // ambiguous there — identity and Prev/Next stay, modal behavior is untouched.
