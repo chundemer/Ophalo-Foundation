@@ -69,6 +69,14 @@ public sealed class ActualWork : BaseEntity
     /// <see cref="SetDefaultPerformer"/>. Never server-derived from the creator or recorder.</summary>
     public Guid? DefaultPerformedByAccountUserId { get; private set; }
 
+    /// <summary>ADR-494 D5: optional free-text field context / uncertainty / office-follow-up note
+    /// for the visit. Trimmed-to-null, max 2,000 characters. Editable only while <see cref="Status"/>
+    /// is <see cref="ActualWorkStatus.Draft"/> (via <see cref="SetVisitNote"/>) and frozen at
+    /// <see cref="Submit"/>; readable on every downstream read. Carries no financial content and is
+    /// never a substitute for a submitted factual line. Distinct from <see cref="CompletionNote"/>
+    /// (zero-line submit outcome) and <see cref="ActualWorkLine.Note"/> (per-line).</summary>
+    public string? VisitNote { get; private set; }
+
     /// <summary>
     /// Application-managed opaque concurrency token — same pattern as
     /// <see cref="ProposedScope.ConcurrencyVersion"/>.
@@ -153,6 +161,26 @@ public sealed class ActualWork : BaseEntity
             return Result.Failure(ActualWorkErrors.NotDraft);
 
         DefaultPerformedByAccountUserId = performedByAccountUserId;
+        ConcurrencyVersion = Guid.NewGuid();
+        return Result.Success();
+    }
+
+    /// <summary>ADR-494 D5: sets or clears the Draft's <see cref="VisitNote"/>. Allowed only while
+    /// <see cref="Status"/> is <see cref="ActualWorkStatus.Draft"/>; the note is trimmed, an
+    /// empty/whitespace value clears it, and anything over 2,000 characters is rejected. Recorder-
+    /// ownership authorization is the API layer's responsibility (BL136 4c-ii), mirroring
+    /// <see cref="SetDefaultPerformer"/>; this method enforces only the Draft-only domain invariant
+    /// and the length bound.</summary>
+    public Result SetVisitNote(string? visitNote)
+    {
+        if (Status != ActualWorkStatus.Draft)
+            return Result.Failure(ActualWorkErrors.NotDraft);
+
+        var trimmed = string.IsNullOrWhiteSpace(visitNote) ? null : visitNote.Trim();
+        if (trimmed is not null && trimmed.Length > 2000)
+            return Result.Failure(ActualWorkErrors.VisitNoteTooLong);
+
+        VisitNote = trimmed;
         ConcurrencyVersion = Guid.NewGuid();
         return Result.Success();
     }

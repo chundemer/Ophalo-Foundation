@@ -130,6 +130,10 @@ public static class ActualWorkErrors
     public static readonly Error ReviewNoteTooLong =
         Error.Create("ActualWork.ReviewNoteTooLong", "The review note must be 2,000 characters or fewer.");
 
+    /// <summary>ADR-494 D5 (4c-ii): the Draft visit note exceeds the 2,000-character bound.</summary>
+    public static readonly Error VisitNoteTooLong =
+        Error.Create("ActualWork.VisitNoteTooLong", "The visit note must be 2,000 characters or fewer.");
+
     /// <summary>BL135 §4 Batch 3b-ii: the visit cannot be marked reviewed because at least one line
     /// still lacks an effective sell price or direct cost (no captured snapshot and no financial
     /// resolution supplying it). Maps to 409.</summary>

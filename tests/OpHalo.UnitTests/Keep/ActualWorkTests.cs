@@ -389,6 +389,63 @@ public class ActualWorkTests
         Assert.Throws<ArgumentException>(() => New().Value.SetDefaultPerformer(Guid.Empty));
     }
 
+    // --- SetVisitNote (ADR-494 D5) ---
+
+    [Fact]
+    public void SetVisitNote_trims_and_stores_the_note_and_rotates_the_version_on_a_draft()
+    {
+        var work = New().Value;
+        var before = work.ConcurrencyVersion;
+
+        var result = work.SetVisitNote("  customer reports intermittent fault  ");
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal("customer reports intermittent fault", work.VisitNote);
+        Assert.NotEqual(before, work.ConcurrencyVersion);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void SetVisitNote_clears_the_note_for_a_blank_value(string? blank)
+    {
+        var work = New().Value;
+        work.SetVisitNote("something");
+
+        var result = work.SetVisitNote(blank);
+
+        Assert.True(result.IsSuccess);
+        Assert.Null(work.VisitNote);
+    }
+
+    [Fact]
+    public void SetVisitNote_rejects_a_note_over_2000_characters()
+    {
+        var work = New().Value;
+
+        var result = work.SetVisitNote(new string('x', 2001));
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(ActualWorkErrors.VisitNoteTooLong, result.Error);
+        Assert.Null(work.VisitNote);
+    }
+
+    [Fact]
+    public void SetVisitNote_after_submit_fails()
+    {
+        var work = ActualWork.Create(AccountId, RequestId, Actor, TicketDefaultPerformer).Value;
+        work.AddLine(
+            CatalogItemId, PriceBookVersionLineId, "Drain Pan", "each", 1m,
+            42.50m, 18.00m, null, null, Actor);
+        work.Submit(DateTime.UtcNow, null, null);
+
+        var result = work.SetVisitNote("late addition");
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(ActualWorkErrors.NotDraft, result.Error);
+    }
+
     // --- UpdateLine / RemoveLine ---
 
     [Fact]

@@ -904,6 +904,26 @@ public static class KeepEndpoints
                 : ErrorHttpMapper.ToHttpResult(result.Error);
         }).RequireAuthorization();
 
+        // ADR-494 D5 (4c-ii) — recorder-only Draft visit note. Same auth + concurrency contract as
+        // the line editor and default-performer route.
+        app.MapPut("/keep/pricebook/actual-work/{actualWorkId:guid}/visit-note", async (
+            Guid actualWorkId,
+            ActualWorkVisitNoteBody body,
+            HttpRequest httpRequest,
+            ActualWorkDraftApiService service,
+            CancellationToken ct) =>
+        {
+            var versionResult = ParseActualWorkVersion(httpRequest.Headers);
+            if (!versionResult.IsSuccess)
+                return ErrorHttpMapper.ToHttpResult(versionResult.Error);
+
+            var result = await service.SetVisitNoteAsync(
+                actualWorkId, body.VisitNote, versionResult.Value, ct);
+            return result.IsSuccess
+                ? Results.Ok(new ActualWorkConcurrencyVersionResponse(result.Value))
+                : ErrorHttpMapper.ToHttpResult(result.Error);
+        }).RequireAuthorization();
+
         // GAP-055 — Owner/Admin-only, reason-required Draft recorder-ownership transfer.
         app.MapPost("/keep/pricebook/actual-work/{actualWorkId:guid}/transfer-recorder", async (
             Guid actualWorkId,
@@ -1400,6 +1420,10 @@ file sealed record ActualWorkTransferRecorderBody(Guid NewRecorderAccountUserId,
 /// <summary>ADR-494 D2 (4c-i-b). A null <see cref="PerformedByAccountUserId"/> clears the visit's
 /// ticket default; a non-null value is revalidated server-side (empty guid collapses to 422).</summary>
 file sealed record ActualWorkDefaultPerformerBody(Guid? PerformedByAccountUserId);
+
+/// <summary>ADR-494 D5 (4c-ii). A null/blank <see cref="VisitNote"/> clears the Draft's visit note;
+/// the domain trims it and rejects anything over 2,000 characters (<c>ActualWork.VisitNoteTooLong</c>).</summary>
+file sealed record ActualWorkVisitNoteBody(string? VisitNote);
 
 file sealed record ActualWorkReviewBody(string? ReviewNote);
 

@@ -381,6 +381,32 @@ public sealed class ActualWorkDraftApiService(
     }
 
     /// <summary>
+    /// ADR-494 D5 (4c-ii): recorder-only Draft mutation that sets or clears the visit's free-text
+    /// note. Shares the <see cref="AuthorizeAndLoadDraftAsync"/> row-auth + Draft-status gate and the
+    /// <c>X-Keep-ActualWork-Version</c> optimistic-concurrency protocol with the line editor. The
+    /// domain method (<see cref="ActualWork.SetVisitNote"/>) trims the value, treats blank as a
+    /// clear, and rejects anything over 2,000 characters; a rejected value never rotates the version
+    /// because the guard runs before any state change.
+    /// </summary>
+    public async Task<Result<Guid>> SetVisitNoteAsync(
+        Guid actualWorkId, string? visitNote, Guid expectedVersion, CancellationToken ct)
+    {
+        var loadResult = await AuthorizeAndLoadDraftAsync(actualWorkId, ct);
+        if (loadResult.IsFailure)
+            return Result<Guid>.Failure(loadResult.Error);
+        var actualWork = loadResult.Value;
+
+        if (actualWork.ConcurrencyVersion != expectedVersion)
+            return Result<Guid>.Failure(ActualWorkErrors.VersionMismatch);
+
+        var setResult = actualWork.SetVisitNote(visitNote);
+        if (setResult.IsFailure)
+            return Result<Guid>.Failure(setResult.Error);
+
+        return await CommitAsync(actualWork, ct);
+    }
+
+    /// <summary>
     /// GAP-055: Owner/Admin-only, reason-required recorder-ownership transfer of an unsubmitted
     /// Draft. Deliberately does not reuse <see cref="AuthorizeAndLoadDraftAsync"/> — that helper's
     /// row-authorization check requires the caller to already be the current recorder, which is

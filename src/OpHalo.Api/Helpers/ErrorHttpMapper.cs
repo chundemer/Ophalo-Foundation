@@ -216,6 +216,8 @@ public static class ErrorHttpMapper
             // A caller-supplied performer that is not an active eligible staff member — a state
             // rejection, not malformed input; mirrors ActualWork.RecorderTransferTargetIneligible.
             var c when c == "ActualWork.PerformerIneligible" => (StatusCodes.Status422UnprocessableEntity, "Unprocessable entity.", null),
+            // ADR-494 D5 (4c-ii) — Draft visit note over the 2,000-character bound; malformed input.
+            var c when c == "ActualWork.VisitNoteTooLong" => (StatusCodes.Status400BadRequest, "Bad request.", null),
 
             // --- Direct Actual Work expand-assembly (build-log/129, 5d-i) ---
             var c when c == "ActualWork.ExpandAssemblyNotOperationallyEligible" => (StatusCodes.Status409Conflict, "Conflict.", null),

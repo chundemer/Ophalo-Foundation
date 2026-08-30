@@ -39,6 +39,11 @@ internal sealed class ActualWorkConfiguration : BaseEntityConfiguration<ActualWo
         builder.Property(x => x.ReviewNote)
             .HasMaxLength(2000);
 
+        // ADR-494 D5 (4c-ii): optional Draft-editable field note, frozen at submit. Nullable,
+        // trimmed-to-null and length-bounded by the domain (ActualWork.SetVisitNote).
+        builder.Property(x => x.VisitNote)
+            .HasMaxLength(2000);
+
         // Current recorder-ownership holder (GAP-055) — distinct from the immutable
         // CreatedByUserId authorship column already mapped by BaseEntityConfiguration.
         builder.Property(x => x.RecorderAccountUserId)

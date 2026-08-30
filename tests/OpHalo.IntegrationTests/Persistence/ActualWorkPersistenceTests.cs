@@ -266,6 +266,21 @@ public sealed class ActualWorkPersistenceTests : IClassFixture<PostgresFixture>,
         Assert.Null(reloaded.DefaultPerformedByAccountUserId);
     }
 
+    [Fact]
+    public async Task VisitNote_round_trips_through_persistence()
+    {
+        await using var ctx = CreateContext();
+        var persistence = new EfActualWorkPersistence(ctx);
+        var visit = ActualWork.Create(AccountId, RequestId, OwnerId).Value;
+        Assert.Null(visit.VisitNote);
+        Assert.True(visit.SetVisitNote("  intermittent fault, left message  ").IsSuccess);
+        await persistence.AddAsync(visit, CancellationToken.None);
+
+        await using var verifyCtx = CreateContext();
+        var reloaded = await verifyCtx.Set<ActualWork>().SingleAsync(x => x.Id == visit.Id);
+        Assert.Equal("intermittent fault, left message", reloaded.VisitNote);
+    }
+
     // -------------------------------------------------------------------------
     // ck_keep_actual_work_lines_three_state_linkage — database check constraint
     // -------------------------------------------------------------------------

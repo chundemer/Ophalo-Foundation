@@ -422,7 +422,60 @@ correction applied pre-commit: partial-component resolution + client negative ch
 full frontend suite **799/799** (90 files, +4), `tsc --noEmit` clean, `check:tokens` passed,
 `git diff --check` clean.
 
-### Claude handoff — 4c-i `4c-i-c-2` DONE (`ffc5d71`) — slice code-complete (10/10); deploy the merged slice per the gate below
+### Claude handoff — 4c-ii (VisitNote API + read projections) — ACTIVE, split into 4c-ii-a / 4c-ii-b
+
+**➡ NEXT SESSION: 4c-ii-b — read projections.** 4c-ii-a is committed and done (see below). Start a
+fresh session: project `VisitNote` on `ActualWorkOpenDraftEntry` + `ActualWorkSubmittedVisitEntry` +
+`ActualWorkFinancialDetailResult`, and per-line performer display name on `ActualWorkLineHistoryEntry`
++ `ActualWorkFinancialLineEntry` (per-distinct-id memoized `GetActorDisplayNameAsync`, no interface
+change); extend the API response mappers in `KeepEndpoints.cs`; tests in `ActualWorkHistoryApiTests`
++ `ActualWorkFinancialReadApiTests`. ~3 prod + 2 test, 0 mutation families. Then 4c-iii (field UI)
+consumes all of it, and the merged 4c-ii + 4c-iii slice deploys together.
+
+**4c-i (performer slice, 10 commits) — DEPLOYED to production (2026-08-29).** All 10 commits merged to
+`main` and shipped; migrate-on-start applied, capture smoke-tested. `keep_actual_work_lines` prod
+row count was 0 as expected (ADR-494 D1). The discard-confirm composer polish (`ad1ea9d`) also shipped.
+
+**4c-ii is split (Christian-approved, 2026-08-29), matching the 4c-i-b / 4c-i-c precedent** — one
+commit would touch 8 production files across Core + Infrastructure + Application + Api (BL136-P
+estimated "Application + Api, ≈5"). Neither sub-slice is user-facing; both deploy together with
+4c-iii's field UI.
+
+- **4c-ii-a — VisitNote write path — COMPLETE (2026-08-30), `PENDING-HASH`.**
+  Migration `20260830010613_AddActualWorkVisitNote` (nullable `varchar(2000)` on `keep_actual_works`,
+  applied locally by Christian). `ActualWork.VisitNote` + `SetVisitNote(note)` (Draft-only,
+  trim-to-null, ≤2000 → `ActualWorkErrors.VisitNoteTooLong`, version rotates); `ActualWorkConfiguration`
+  maps `visit_note` `HasMaxLength(2000)`; `SetVisitNoteAsync` in `ActualWorkDraftApiService` (mirrors
+  `SetDefaultPerformerAsync` — `AuthorizeAndLoadDraftAsync` recorder/Draft gate → version check →
+  domain call → `CommitAsync`; no performer-eligibility branch); `PUT
+  /keep/pricebook/actual-work/{id}/visit-note` + `ActualWorkVisitNoteBody(string? VisitNote)` in
+  `KeepEndpoints.cs` (`X-Keep-ActualWork-Version` header); `ErrorHttpMapper` maps
+  `ActualWork.VisitNoteTooLong` → 400. Tests: `ActualWorkTests` +6 domain facts; new
+  `ActualWorkVisitNoteApiTests` (set/replace/trim/clear, exactly-2000 ok, >2000 → 400 with value +
+  version unchanged, non-recorder 404, stale 409, frozen after submit → 409); `ActualWorkPersistenceTests`
+  round-trip. 8 prod files + 3 test + migration. Verified: `~ActualWork` unit **117/117**, `~ActualWork`
+  integration **265/265**, architecture **14/14**, `OpHalo.Api` build 0 warnings, `git diff --check`
+  clean. **Not deployed — ships with the merged 4c-ii / 4c-iii slice.**
+- **4c-ii-b — read projections.** `VisitNote` on `ActualWorkOpenDraftEntry` **and**
+  `ActualWorkSubmittedVisitEntry` (open-draft included so the 4c-iii composer textarea restores
+  after reload — ADR-494 D5 "readable on history"); `VisitNote` on `ActualWorkFinancialDetailResult`;
+  per-line performer display name on `ActualWorkLineHistoryEntry` + `ActualWorkFinancialLineEntry`,
+  resolved via **per-distinct-id memoized `GetActorDisplayNameAsync`** (no batch method, persistence
+  interface unchanged — Christian decision). API response mappers in `KeepEndpoints.cs` extended.
+  Tests: `ActualWorkHistoryApiTests`, `ActualWorkFinancialReadApiTests`. ~3 prod + 2 test, 0
+  mutation families.
+
+**Migration — DONE (Christian, 2026-08-30).** `20260830010613_AddActualWorkVisitNote` — nullable
+`varchar(2000)` on `keep_actual_works`, no hand-edit, no backfill, no local table reset. Applied
+locally; deploys through the normal production path with the merged 4c-ii / 4c-iii slice.
+
+**Out of 4c-ii scope (confirmed):** `CompletionNote` trim/≤2000 guard (ADR-494 D3 intent) — its own
+later bounded slice + preflight; `SetZeroLineDisposition` (D5) — belongs to the replacement slice.
+
+**Deferred — `CompletionNote` note-validation guard.** ADR-494 D3 records the intent that
+`CompletionNote` become trimmed-to-null / ≤2000 (currently unbounded; EF maps it at `HasMaxLength(1000)`).
+Separate submit-validation behaviour, changes stored values for existing submit tests. Needs its own
+bounded slice + preflight; explicitly not folded into 4c-ii.
 
 **BL136 P (workflow/mechanical preflight) is complete.** ADR-494 (D1–D12) committed at `2118293`;
 the ADR-487 wording fix + 4c-i seam preflight rev. 3 committed at `644aa4a`; the rev. 4 docs
