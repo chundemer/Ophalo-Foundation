@@ -1,6 +1,6 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-08-30 (4e-iii-b implemented locally, commit pending; 4e-iii-a commit pending; 4e-ii-c `e19e5f9`)
+**Last updated:** 2026-08-30 (4e-iii-b `9084985`; 4e-iii-a `a18219e`; 4e-ii-c `e19e5f9`)
 **Purpose:** active handoff only. Completed implementation detail belongs in Git history and the
 relevant build log.
 
@@ -102,7 +102,7 @@ UI-only, `web/ophalo-app`. 9 production + 5 test-file extensions. No backend, no
   "Correction of an earlier visit" from the DTO lineage fields.
 - Verification: `tsc` clean, full web suite 843 pass (90 files), CSS token check, `git diff --check`.
 
-### Completed this session — 4e-iii-b composer zero-line disposition prefill/persistence (local commit pending)
+### Prior slice — 4e-iii-b composer zero-line disposition prefill/persistence (local commit `9084985`)
 
 UI-only, `web/ophalo-app` (BL136 §4e-iii). 4 production + 2 test files. No backend, no migration.
 
