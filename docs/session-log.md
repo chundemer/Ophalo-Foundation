@@ -1,6 +1,6 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-08-30 (4e-ii-b-1 implemented, awaiting review; 4e-ii-a committed locally as `82d9b9e`)
+**Last updated:** 2026-08-30 (4e-ii-b-1 committed locally as `2be5203`; 4e-ii-a as `82d9b9e`)
 **Purpose:** active handoff only. Completed implementation detail belongs in Git history and the
 relevant build log.
 
@@ -23,29 +23,23 @@ existing-ticket workflow as the explicit outage fallback.
 
 `main` at `8495ba3` (pushed 2026-08-30) carries the 4e-0 signal seam, 4e-i supersession foundation,
 and `AddActualWorkSupersession`. Railway deployment completed and the migration is applied —
-confirmed 2026-08-30; `ActualWorkSupersessionPersistenceTests` (4) pass. Local commits `82d9b9e`
-(4e-ii-a) and earlier are **not yet pushed**.
+confirmed 2026-08-30; `ActualWorkSupersessionPersistenceTests` (4) pass. Local commits `2be5203`
+(4e-ii-b-1), `82d9b9e` (4e-ii-a) and earlier are **not yet pushed**. No migration in 4e-ii-b-1
+(read-path + mapper + response-shape only).
 
-### Completed this session — 4e-ii-a (local commit `82d9b9e`)
+### Prior slice — 4e-ii-a (local commit `82d9b9e`)
 
-- **Supersede guard widened** from not-yet-reviewed to the ADR-494 locked pre-export rule (review is
-  not a correction lock; no export marker exists yet, so a `Submitted`, not-superseded visit is
-  always eligible). Removed the now-unreachable `SourceAlreadyReviewed` seam outcome.
-- **`ActualWorkReplacementApiService`** added (Application): Owner/Admin gate mirroring
-  `ActualWorkReviewApiService`, no-open-Draft precondition, builds the Draft successor from the
-  source (lines + performers + snapshots + `VisitNote`, zero-line `Outcome`/`CompletionNote`), hands
-  it to the existing `IActualWorkSupersessionPersistence` seam. DI-registered. **No public route.**
-- Line performers copied verbatim (no eligibility re-validation — past work stays correctable); the
-  ticket-level default performer is not copied.
-- Verification: unit 1715 pass (11 new), architecture 14 pass, supersession persistence 4 pass.
+`Supersede` guard widened to the ADR-494 pre-export rule; `ActualWorkReplacementApiService` added
+(Application, DI-registered, **no public route**) building the Draft successor from the source and
+handing it to `IActualWorkSupersessionPersistence`. Full detail in Git history / BL136.
 
-### Next code slice — 4e-ii-b operational hardening (split; b-1 done, b-2 next)
+### Completed this session — 4e-ii-b-1 (local commit `2be5203`)
 
-Scope: [BL136 P → Slice 4e-ii](build-log/136-P-preflight.md), D6c. Split into two independently
-compiling slices to stay within the batch gate. Eligible-visit filtering and the Resolved→Closed
-close gate are **deferred to 4g / Billing-Revision work** per BL136 D8 — not introduced early.
+BL136 D6c operational hardening, reads only (no mutation family). Slice 4e-ii was split into two
+independently compiling slices to stay within the batch gate. Eligible-visit filtering and the
+Resolved→Closed close gate are **deferred to 4g / Billing-Revision work** per BL136 D8 — not
+introduced early.
 
-**4e-ii-b-1 — error mapping + operational read exclusion (implemented, awaiting review):**
 - `ErrorHttpMapper` ← `ActualWork.Superseded` (409, reconcilable).
 - `superseded_at_utc IS NULL` on the unreviewed review-queue list + count
   (`EfActualWorkFinancialReviewPersistence`).
@@ -53,12 +47,18 @@ close gate are **deferred to 4g / Billing-Revision work** per BL136 D8 — not i
   superseded source (`ActualWorkFinancialReadApiService`, after `NotFound`).
 - `ActualWorkHistoryReadApiService` stays **unfiltered**; each `submittedVisits` entry now carries
   explicit-direction lineage: source → `superseded: true` + `supersededByActualWorkId`; successor →
-  `supersedesActualWorkId`.
+  `supersedesActualWorkId`. `KeepEndpoints` emits the three fields.
 - Verification: integration 41 pass (2 new), architecture 14 pass, focused unit 140 pass.
 
-**4e-ii-b-2 — superseded-source mutation rejection (next):** new `Superseded` result value on the
-review / financial-resolution / zero-line-disposition seams; Infra guard **after** each path's
-existing version-mismatch check; ApiService maps to `ActualWork.Superseded`. 3 mutation families.
+### Next code slice — 4e-ii-b-2 (start a fresh session)
+
+Superseded-source mutation rejection. New `Superseded` result value on the review /
+financial-resolution / zero-line-disposition seams (`IActualWorkReviewPersistence`,
+`ActualWorkResolutionResult` + `ActualWorkDispositionResult`); Infra guard
+(`if (visit.SupersededAtUtc is not null)`) **after** each path's existing version-mismatch check;
+each ApiService maps the new outcome to `ActualWorkErrors.Superseded`. 3 mutation families, ~7 prod
+files. Tests: per path, stale client → `VersionMismatch` first, current client on a superseded
+source → `ActualWork.Superseded`.
 
 Then **4e-ii-c**: map `POST .../{id}/replace` and the Draft `SetZeroLineDisposition` route
 (recorder-only + concurrency-checked). Then **4e-iii** replacement UI. Preserve field price
