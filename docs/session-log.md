@@ -1,6 +1,6 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-08-30 (4f-i workspace route shell pending; 4e-iii-a review follow-up pending; 4e-iii-b `9084985`; 4e-iii-a `a18219e`)
+**Last updated:** 2026-08-30 (4f-i workspace route shell `144e458`; 4e-iii-a review follow-up `8095611`; 4e-iii-b `9084985`)
 **Purpose:** active handoff only. Completed implementation detail belongs in Git history and the
 relevant build log.
 
@@ -23,8 +23,8 @@ existing-ticket workflow as the explicit outage fallback.
 
 `main` at `8495ba3` (pushed 2026-08-30) carries the 4e-0 signal seam, 4e-i supersession foundation,
 and `AddActualWorkSupersession`. Railway deployment completed and the migration is applied —
-confirmed 2026-08-30; `ActualWorkSupersessionPersistenceTests` (4) pass. Local commits — 4f-i
-(pending), the 4e-iii-a review follow-up (pending), `9084985` (4e-iii-b), `a18219e` (4e-iii-a),
+confirmed 2026-08-30; `ActualWorkSupersessionPersistenceTests` (4) pass. Local commits — `144e458`
+(4f-i), the 4e-iii-a review follow-up `8095611`, `9084985` (4e-iii-b), `a18219e` (4e-iii-a),
 `e19e5f9` (4e-ii-c), `29db179` (4e-ii-b-2), `2be5203` (4e-ii-b-1), `82d9b9e` (4e-ii-a) and earlier —
 are **not yet pushed**. No migration since 4e-i (4e-ii, 4e-iii, and 4f-i are code-only / UI-only:
 services, read/mutation guards, routes, mapper, response shape, and now the workspace route shell).
@@ -143,7 +143,7 @@ UI-only, `web/ophalo-app`. 1 production + 1 test file. No backend, no migration.
 - 4g / Billing-Revision deferrals (eligible-visit filter, Resolved→Closed close gate,
   revoke-on-replace) remain out of scope. Findings 1–3 are now fully closed.
 
-### Prior slice — 4f-i Actual Work Ticket Workspace route shell (local commit pending)
+### Prior slice — 4f-i Actual Work Ticket Workspace route shell (local commit `144e458`)
 
 UI-only, `web/ophalo-app` (BL136 §4f-i, D7). 7 production + 4 test files. No backend, no migration.
 
