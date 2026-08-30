@@ -485,7 +485,7 @@ estimated "Application + Api, ≈5"). Neither sub-slice is user-facing; both dep
   generated migration + 3 test. Verified: `~ActualWork` unit **117/117**, `~ActualWork` integration
   **265/265**, architecture **14/14**, `OpHalo.Api` build 0 warnings, `git diff --check` clean.
   **Not deployed as a user-facing change — additive route + column, nothing calls it until 4c-iii.**
-- **4c-ii-b — read projections — COMPLETE (2026-08-30), `PENDING_HASH`.**
+- **4c-ii-b — read projections — COMPLETE (2026-08-30), `bc2ee68`.**
   `VisitNote` added to `ActualWorkOpenDraftEntry` + `ActualWorkSubmittedVisitEntry` +
   `ActualWorkFinancialDetailResult`; per-line `PerformedByAccountUserId` + `PerformerDisplayName` on
   `ActualWorkLineHistoryEntry` + `ActualWorkFinancialLineEntry`. Performer names resolved per-distinct-id
