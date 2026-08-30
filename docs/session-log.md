@@ -427,7 +427,7 @@ full frontend suite **799/799** (90 files, +4), `tsc --noEmit` clean, `check:tok
 **➡ NEXT SESSION: 4e-0 — extract the signal-reconciliation seam (prep, no behaviour change).** Full
 spec in [BL136 P preflight → Slice 4e-0](build-log/136-P-preflight.md) (§"Slice 4e-0"), then 4e-i/ii/iii.
 
-**4d — recorder-initiated hand-off — COMPLETE (2026-08-30), commit `PENDING`.** Same
+**4d — recorder-initiated hand-off — COMPLETE (2026-08-30), commit `a187316`.** Same
 `transfer-recorder` endpoint, authority relaxed: the current recorder may now transfer their **own**
 unsubmitted Draft (no new route). `TransferRecorderAsync` decides `isElevatedTransfer` from the
 caller's role — an Owner/Admin transfers any request's Draft with a required `Reason`; every other
