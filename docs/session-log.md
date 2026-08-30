@@ -435,8 +435,8 @@ still written). Frontend: a "Hand off to office" action in the composer / recove
 Gate: transfer audit invariants preserved; no shared concurrent editing introduced; focused
 Application + integration + frontend tests.
 
-**4c-iii — rich performer + VisitNote field UI — COMPLETE (2026-08-30).** `web/ophalo-app` only,
-11 files (6 prod + 5 test). `apiClient.types.ts` — `visitNote` on the open-draft / submitted-visit
+**4c-iii — rich performer + VisitNote field UI — COMPLETE (2026-08-30), `1deed43`.**
+`web/ophalo-app` only, 11 files (6 prod + 5 test). `apiClient.types.ts` — `visitNote` on the open-draft / submitted-visit
 / financial-detail read types, required per-line `performedByAccountUserId` + `performerDisplayName`
 on `ActualWorkLineHistoryEntry` + `ActualWorkFinancialLineEntry`, new `ActualWorkVisitNoteBody`.
 `apiClient.ts` — `setActualWorkVisitNote` (PUT `…/visit-note`, `X-Keep-ActualWork-Version`, returns
