@@ -252,6 +252,8 @@ import type {
   ActualWorkFinancialResolutionBody,
   ActualWorkFinancialDispositionBody,
   ActualWorkReviewBody,
+  ActualWorkReplaceBody,
+  ActualWorkReplacementCreatedResult,
 } from "./apiClient.types";
 
 export type {
@@ -402,6 +404,8 @@ export type {
   ActualWorkFinancialResolutionBody,
   ActualWorkFinancialDispositionBody,
   ActualWorkReviewBody,
+  ActualWorkReplaceBody,
+  ActualWorkReplacementCreatedResult,
 };
 
 export type { FollowUpResolutionOutcome, FollowUpCompletionReason } from "./apiClient.types";
@@ -1055,6 +1059,19 @@ export const api = {
   ) =>
     apiFetch<ActualWorkConcurrencyVersionResult>(
       `/keep/pricebook/actual-work/${actualWorkId}/financial-disposition`,
+      {
+        method: "POST",
+        headers: { "X-Keep-ActualWork-Version": version },
+        body: JSON.stringify(body),
+      },
+    ),
+  // ADR-494 D6 (BL136 4e-ii-c / 4e-iii) — Owner/Admin office replacement of a pre-export submitted
+  // visit (reviewed or not). Supersedes the source and returns the new successor Draft's id.
+  // Conflicts: `ActualWork.VersionMismatch` / `ActualWork.AlreadySuperseded` /
+  // `ActualWork.DraftAlreadyOpenForRequest` (409); 403 degrades the whole review surface.
+  replaceActualWork: (actualWorkId: string, body: ActualWorkReplaceBody, version: string) =>
+    apiFetch<ActualWorkReplacementCreatedResult>(
+      `/keep/pricebook/actual-work/${actualWorkId}/replace`,
       {
         method: "POST",
         headers: { "X-Keep-ActualWork-Version": version },

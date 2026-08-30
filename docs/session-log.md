@@ -1,6 +1,6 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-08-30 (4e-ii-c committed locally as `e19e5f9`; 4e-ii-b-2 `29db179`)
+**Last updated:** 2026-08-30 (4e-iii-a implemented locally, commit pending; 4e-ii-c `e19e5f9`)
 **Purpose:** active handoff only. Completed implementation detail belongs in Git history and the
 relevant build log.
 
@@ -62,7 +62,7 @@ orchestrators; the three ApiServices map the new outcome to `ActualWorkErrors.Su
 409-reconcilable from 4e-ii-b-1). No migration. Verification: integration 30 pass in the two touched
 persistence classes (+6 new), architecture 14, related ActualWork API/supersession 55, focused unit 140.
 
-### Completed this session — 4e-ii-c (local commit `e19e5f9`)
+### Prior slice — 4e-ii-c (local commit `e19e5f9`)
 
 Final API-exposure slice for replacement-copy. No migration.
 
@@ -82,13 +82,33 @@ Final API-exposure slice for replacement-copy. No migration.
 - Verification: integration 19 in that class (+7), architecture 14, 290 ActualWork integration,
   replacement-service unit 12, `git diff --check` clean.
 
-### Next code slice — 4e-iii replacement-copy UI (start a fresh session)
+### Completed this session — 4e-iii-a replacement-copy correction UI (local commit pending)
 
-UI-only, `web/ophalo-app` (BL136 §4e-iii): `ActualWorkReviewCard.tsx` + new `ReplaceVisitForm.tsx`
-— an Owner/Admin "Replace visit" action on a pre-export submitted visit that POSTs `.../replace`
-with the correction reason, then routes to the successor Draft. Preserve field price blindness and
-all source history. 4g / Billing-Revision deferrals (eligible-visit filter, Resolved→Closed close
-gate, revoke-on-replace) remain out of scope.
+UI-only, `web/ophalo-app`. 9 production + 5 test-file extensions. No backend, no migration.
+
+- **Correction action:** new `ReplaceVisitForm.tsx` (reason-required disclosure, ≤2000) on every
+  visit in `ActualWorkReviewCard` — reviewed or not. `useActualWorkFinancialReview.replace()` joins
+  the outcome family: 409 `DraftAlreadyOpenForRequest` → `replace-blocked-open-draft`; 409
+  version / `AlreadySuperseded` → `reconciled`+reload; 403 → hidden; 400 → validation-failure.
+- **Auto-open:** `RequestDetailContent` filters `superseded` visits out of the review-hook input
+  (history read stays unfiltered for lineage), then on `replaced` refreshes history and calls
+  `useActualWorkCapture.openReplacementDraft(successorId)` — opens the composer **only** when the
+  authoritative read confirms `canCaptureActualWork` **and** the open Draft id === the returned
+  successor id (guards the no-capture 403 path and the concurrent-Draft race). Otherwise an
+  explicit "Open replacement draft" recovery affordance is shown.
+- **Composer banner:** session-scoped `replacementCorrection` flag (set only after a confirmed
+  auto-open, cleared on close/submit) drives a "this draft replaces a superseded visit" notice.
+- **Lineage badges:** `ActualWorkHistoryCard` — "Superseded · replaced by a correction" /
+  "Correction of an earlier visit" from the DTO lineage fields.
+- Verification: `tsc` clean, full web suite 843 pass (90 files), CSS token check, `git diff --check`.
+
+### Next code slice — 4e-iii-b composer zero-line disposition prefill/persistence (fresh session)
+
+UI-only, `web/ophalo-app` (BL136 §4e-iii): `ActualWorkComposer` `ActualWorkSubmitFooter` — prefill
+the zero-line `outcome` / `completionNote` from `draft.outcome` / `draft.completionNote` and persist
+edits on blur via `PUT .../zero-line-disposition` (rotate the concurrency version, survive reload),
+mirroring `ActualWorkVisitNoteEditor`. 4g / Billing-Revision deferrals (eligible-visit filter,
+Resolved→Closed close gate, revoke-on-replace) remain out of scope.
 
 ### Remaining pilot/release work
 

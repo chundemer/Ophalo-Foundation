@@ -87,6 +87,11 @@ export function useActualWorkCapture(requestId: string, currentAccountUserId?: s
   const [conflictNotice, setConflictNotice] = useState<string | null>(null);
   const [pendingReconcileMessage, setPendingReconcileMessage] = useState<string | null>(null);
   const [recoveryNotice, setRecoveryNotice] = useState<ActualWorkRecoveryNotice | null>(null);
+  // BL136 4e-iii: session-scoped flag — set only after a confirmed replacement-copy correction that
+  // this session auto-opened, so the composer can show "this replaces a superseded visit" guidance.
+  // UI-only: the durable lineage lives on the history record, so a hard reload simply loses the
+  // banner (the Draft still opens normally). Cleared when the composer closes or submits.
+  const [replacementCorrection, setReplacementCorrection] = useState(false);
 
   const probe = useCallback(async () => {
     setState({ status: "loading" });
@@ -185,6 +190,7 @@ export function useActualWorkCapture(requestId: string, currentAccountUserId?: s
 
   const closeModal = useCallback(() => {
     setIsModalOpen(false);
+    setReplacementCorrection(false);
     if (submittedPendingRef.current) {
       submittedPendingRef.current = false;
       void probe();
@@ -382,6 +388,31 @@ export function useActualWorkCapture(requestId: string, currentAccountUserId?: s
 
   const clearRecoveryNotice = useCallback(() => setRecoveryNotice(null), []);
 
+  // BL136 4e-iii: after an Owner/Admin replacement-copy correction the successor Draft already
+  // exists server-side. Reload the authoritative history and open the composer on it only when the
+  // read confirms (a) the caller may capture Actual Work — Owner/Admin history reads expose their
+  // own replacement Draft even without `ActualWorkCapture`, but every Draft mutation requires it,
+  // so auto-opening a non-capturer would only yield 403s — and (b) the open Draft is exactly the
+  // successor that was just created (guards a race where another session opens a different Draft
+  // first). Any other outcome returns false so the caller shows an explicit recovery affordance.
+  const openReplacementDraft = useCallback(async (successorId: string): Promise<boolean> => {
+    try {
+      const result = await api.getActualWorkHistoryForRequest(requestId);
+      if (!result.canCaptureActualWork) {
+        setState({ status: "hidden" });
+        return false;
+      }
+      const next = routeHistory(result);
+      setState(next);
+      if (next.status !== "draft" || next.draft.id !== successorId) return false;
+      setReplacementCorrection(true);
+      setIsModalOpen(true);
+      return true;
+    } catch {
+      return false;
+    }
+  }, [requestId]);
+
   return {
     state,
     isModalOpen,
@@ -400,5 +431,7 @@ export function useActualWorkCapture(requestId: string, currentAccountUserId?: s
     handOffToOffice,
     recoveryNotice,
     clearRecoveryNotice,
+    openReplacementDraft,
+    replacementCorrection,
   };
 }

@@ -8,7 +8,7 @@ const blocker = { lineId: "line-1", displayNameSnapshot: "Replacement capacitor"
 const visit = { id: "visit-1", requestId: "r1", status: "Submitted", outcome: null, completionNote: null, recorderAccountUserId: "tech", submittedAtUtc: "2026-08-27T12:00:00Z", reviewedAtUtc: null, reviewedByAccountUserId: null, reviewedByDisplayName: null, reviewNote: null, hasIncompleteFinancialData: true, totalSalesPrice: 450, totalStandardExpectedDirectCost: null, totalMargin: null, concurrencyVersion: "v1", hasNoChargeDisposition: false, blockers: [blocker], lines: [line] };
 
 const noop = () => Promise.resolve({ kind: "success" as const });
-const baseProps = { onRetry: vi.fn(), onReview: noop, onResolveLine: noop, onRecordNoChargeDisposition: noop, isVisitMutating: () => false, onReviewSuccess: vi.fn() };
+const baseProps = { onRetry: vi.fn(), onReview: noop, onResolveLine: noop, onRecordNoChargeDisposition: noop, onReplace: noop, isVisitMutating: () => false, onReviewSuccess: vi.fn() };
 
 describe("ActualWorkReviewCard", () => {
   it("calls review with an optional note and flags incomplete financial data without implying an estimate", async () => {
@@ -73,5 +73,34 @@ describe("ActualWorkReviewCard", () => {
   it("disables the review button while the visit is mutating", () => {
     render(<ActualWorkReviewCard {...baseProps} state={{ status: "loaded", visits: [{ ...visit, blockers: [] }] }} isVisitMutating={() => true} />);
     expect(screen.getByRole("button", { name: /Working…/ })).toBeDisabled();
+  });
+
+  it("offers the reason-required correction action on both an unreviewed and a reviewed visit", () => {
+    const { rerender } = render(<ActualWorkReviewCard {...baseProps} state={{ status: "loaded", visits: [{ ...visit, blockers: [] }] }} />);
+    expect(screen.getByText(/Correct this visit/)).toBeInTheDocument();
+
+    rerender(<ActualWorkReviewCard {...baseProps} state={{ status: "loaded", visits: [{ ...visit, blockers: [], reviewedAtUtc: "2026-08-27T13:00:00Z", reviewedByDisplayName: "Christian Hundemer" }] }} />);
+    expect(screen.getByText(/Correct this visit/)).toBeInTheDocument();
+  });
+
+  it("blocks a correction with no reason and does not call onReplace", async () => {
+    const user = userEvent.setup();
+    const onReplace = vi.fn();
+    render(<ActualWorkReviewCard {...baseProps} state={{ status: "loaded", visits: [{ ...visit, blockers: [] }] }} onReplace={onReplace} />);
+    await user.click(screen.getByText(/Correct this visit/));
+    await user.click(screen.getByRole("button", { name: /Start correction/ }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(/correction reason is required/i);
+    expect(onReplace).not.toHaveBeenCalled();
+  });
+
+  it("passes the trimmed reason to onReplace and surfaces the open-draft block", async () => {
+    const user = userEvent.setup();
+    const onReplace = vi.fn().mockResolvedValue({ kind: "replace-blocked-open-draft" as const });
+    render(<ActualWorkReviewCard {...baseProps} state={{ status: "loaded", visits: [{ ...visit, blockers: [] }] }} onReplace={onReplace} />);
+    await user.click(screen.getByText(/Correct this visit/));
+    await user.type(screen.getByLabelText(/Correction reason/), "  wrong capacitor part  ");
+    await user.click(screen.getByRole("button", { name: /Start correction/ }));
+    expect(onReplace).toHaveBeenCalledWith(expect.objectContaining({ id: "visit-1" }), "wrong capacitor part");
+    expect(await screen.findByRole("alert")).toHaveTextContent(/Another visit draft is already open/);
   });
 });

@@ -1305,6 +1305,14 @@ export interface ActualWorkSubmittedVisitEntry {
   submittedAtUtc: string | null;
   /** ADR-494 D5 (4c-ii): the visit-level note, frozen at submission. */
   visitNote?: string | null;
+  /** BL136 D6c (4e-ii-b): replacement-chain lineage, direction explicit. `superseded` + a
+   * populated `supersededByActualWorkId` mark the erroneous source that a correction replaced;
+   * a populated `supersedesActualWorkId` marks the successor that corrected an earlier visit.
+   * Both are absent on an ordinary standalone visit. `GetSubmittedVisitsForRequestAsync` stays
+   * unfiltered, so the review surface must exclude a `superseded` entry itself. */
+  superseded?: boolean;
+  supersededByActualWorkId?: string | null;
+  supersedesActualWorkId?: string | null;
   lines: ActualWorkLineHistoryEntry[];
 }
 
@@ -1432,6 +1440,17 @@ export interface ActualWorkFinancialDetailResult {
 
 export interface ActualWorkReviewBody {
   reviewNote: string | null;
+}
+
+/** ADR-494 D6 (BL136 4e-iii): Owner/Admin replacement-copy correction of a submitted, pre-export
+ * visit. `reason` is required and bounded at 2,000 chars server-side
+ * (`ActualWork.SupersessionReasonRequired` / `...TooLong` → 400). */
+export interface ActualWorkReplaceBody {
+  reason: string;
+}
+
+export interface ActualWorkReplacementCreatedResult {
+  successorActualWorkId: string;
 }
 
 // BL135 Batch 3a-ii. At least one resolved value must be non-null; `basis` is a

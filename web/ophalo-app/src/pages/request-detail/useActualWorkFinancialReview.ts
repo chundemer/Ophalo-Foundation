@@ -24,10 +24,13 @@ export type FinancialReviewOutcome =
   | { kind: "reconciled"; code: string | undefined }
   | { kind: "review-blocked-incomplete" }
   | { kind: "review-blocked-zero-line" }
+  | { kind: "replaced"; successorActualWorkId: string }
+  | { kind: "replace-blocked-open-draft" }
   | { kind: "hidden" };
 
 const REVIEW_BLOCKED_INCOMPLETE = "ActualWork.ReviewBlockedIncompleteFinancials";
 const REVIEW_BLOCKED_ZERO_LINE = "ActualWork.ReviewBlockedZeroLineDispositionRequired";
+const DRAFT_ALREADY_OPEN = "ActualWork.DraftAlreadyOpenForRequest";
 
 /** Owner/Admin-only financial read and review mutation for the submitted visits on one request.
  * A 403 deliberately degrades to no UI, preserving the price-blind field-work surface. Mutations
@@ -162,6 +165,27 @@ export function useActualWorkFinancialReview(submittedVisits: ActualWorkSubmitte
     [runExclusive, reload, mapMutationError],
   );
 
+  // ADR-494 D6 (BL136 4e-iii): Owner/Admin replacement-copy correction. On success the source is
+  // superseded and a successor Draft exists — the caller routes to it and refreshes history (which
+  // drops the now-superseded source from this hook's input on the next render). An open Draft on the
+  // request blocks replacement without changing any financial state, so that 409 is its own outcome
+  // rather than a reconcile-and-reload.
+  const replace = useCallback(
+    (visit: ActualWorkFinancialDetailResult, reason: string) =>
+      runExclusive(visit.id, async (): Promise<FinancialReviewOutcome> => {
+        try {
+          const result = await api.replaceActualWork(visit.id, { reason }, visit.concurrencyVersion);
+          return { kind: "replaced", successorActualWorkId: result.successorActualWorkId };
+        } catch (error) {
+          if (error instanceof ApiError && error.status === 409 && error.code === DRAFT_ALREADY_OPEN) {
+            return { kind: "replace-blocked-open-draft" };
+          }
+          return mapMutationError(error);
+        }
+      }),
+    [runExclusive, mapMutationError],
+  );
+
   const isVisitMutating = useCallback(
     (visitId: string) => mutatingVisitIds.has(visitId),
     [mutatingVisitIds],
@@ -173,6 +197,7 @@ export function useActualWorkFinancialReview(submittedVisits: ActualWorkSubmitte
     review,
     resolveLine,
     recordNoChargeDisposition,
+    replace,
     mutatingVisitIds,
     isVisitMutating,
   };

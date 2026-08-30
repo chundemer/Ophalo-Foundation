@@ -7,6 +7,7 @@ const getDetail = vi.fn();
 const review = vi.fn();
 const resolution = vi.fn();
 const disposition = vi.fn();
+const replace = vi.fn();
 
 vi.mock("../../../lib/apiClient", async () => {
   const actual = await vi.importActual<typeof import("../../../lib/apiClient")>("../../../lib/apiClient");
@@ -18,6 +19,7 @@ vi.mock("../../../lib/apiClient", async () => {
       reviewActualWork: (...args: unknown[]) => review(...args),
       createActualWorkFinancialResolution: (...args: unknown[]) => resolution(...args),
       recordActualWorkFinancialDisposition: (...args: unknown[]) => disposition(...args),
+      replaceActualWork: (...args: unknown[]) => replace(...args),
     },
   };
 });
@@ -99,6 +101,35 @@ describe("useActualWorkFinancialReview", () => {
     expect(outcome).toEqual({ kind: "success" });
     expect(disposition).toHaveBeenCalledWith("visit-1", { kind: "NoCharge", reason: "Warranty callback" }, "version-1");
     expect(getDetail).toHaveBeenCalledTimes(2);
+  });
+
+  it("returns the successor id on a replacement and sends the exact detail version", async () => {
+    getDetail.mockResolvedValue(detail);
+    replace.mockResolvedValue({ successorActualWorkId: "successor-9" });
+    const { result } = renderHook(() => useActualWorkFinancialReview(submitted));
+    await waitFor(() => expect(result.current.state).toMatchObject({ status: "loaded" }));
+
+    const outcome = await result.current.replace(visitArg, "wrong part");
+
+    expect(outcome).toEqual({ kind: "replaced", successorActualWorkId: "successor-9" });
+    expect(replace).toHaveBeenCalledWith("visit-1", { reason: "wrong part" }, "version-1");
+    // no reload — the caller refreshes history, which drops the superseded source
+    expect(getDetail).toHaveBeenCalledTimes(1);
+  });
+
+  it("maps replace conflicts: open-draft to its own outcome, concurrency/already-superseded to reconcile", async () => {
+    getDetail.mockResolvedValue(detail);
+    replace
+      .mockRejectedValueOnce(new ApiError(409, "ActualWork.DraftAlreadyOpenForRequest", "conflict"))
+      .mockRejectedValueOnce(new ApiError(409, "ActualWork.AlreadySuperseded", "conflict"))
+      .mockRejectedValueOnce(new ApiError(403, "Forbidden", "forbidden"));
+    const { result } = renderHook(() => useActualWorkFinancialReview(submitted));
+    await waitFor(() => expect(result.current.state).toMatchObject({ status: "loaded" }));
+
+    expect(await result.current.replace(visitArg, "r")).toEqual({ kind: "replace-blocked-open-draft" });
+    expect(await result.current.replace(visitArg, "r")).toEqual({ kind: "reconciled", code: "ActualWork.AlreadySuperseded" });
+    expect(await result.current.replace(visitArg, "r")).toEqual({ kind: "hidden" });
+    await waitFor(() => expect(result.current.state).toEqual({ status: "hidden" }));
   });
 
   it("flags the visit as mutating for the duration of a mutation and its reload", async () => {

@@ -75,6 +75,33 @@ describe("ActualWorkHistoryCard", () => {
     expect(screen.getByText("3 submitted visits · locked record")).toBeInTheDocument();
   });
 
+  it("badges a superseded source and the successor that corrected an earlier visit", () => {
+    const state: ActualWorkHistoryState = {
+      status: "loaded",
+      submittedVisits: [
+        { id: "v-new", status: "SubmittedToOffice", outcome: null, completionNote: null, submittedAtUtc: "2026-03-02T12:00:00Z", visitNote: null, supersedesActualWorkId: "v-old", lines: [] },
+        { id: "v-old", status: "SubmittedToOffice", outcome: null, completionNote: null, submittedAtUtc: "2026-03-01T12:00:00Z", visitNote: null, superseded: true, supersededByActualWorkId: "v-new", lines: [] },
+      ],
+    };
+    render(<ActualWorkHistoryCard state={state} onRetry={vi.fn()} />);
+
+    expect(screen.getByText("Superseded · replaced by a correction")).toBeInTheDocument();
+    expect(screen.getByText("Correction of an earlier visit")).toBeInTheDocument();
+  });
+
+  it("shows no lineage badge on an ordinary standalone visit", () => {
+    const state: ActualWorkHistoryState = {
+      status: "loaded",
+      submittedVisits: [
+        { id: "v1", status: "SubmittedToOffice", outcome: null, completionNote: null, submittedAtUtc: "2026-01-01T12:00:00Z", visitNote: null, lines: [] },
+      ],
+    };
+    render(<ActualWorkHistoryCard state={state} onRetry={vi.fn()} />);
+
+    expect(screen.queryByText(/replaced by a correction/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Correction of an earlier visit/)).not.toBeInTheDocument();
+  });
+
   it("discloses the visit note and each line's performer for a submitted visit", () => {
     const state: ActualWorkHistoryState = {
       status: "loaded",

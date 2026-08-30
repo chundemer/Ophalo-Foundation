@@ -22,13 +22,36 @@ function formatSubmittedAt(iso: string | null): string {
  * performer name. "Unknown performer" is shown when the performer id no longer resolves to a
  * display name.
  */
+/** BL136 4e-iii: replacement-copy lineage. A superseded source and the successor that corrected an
+ * earlier visit each carry an explicit badge so the locked record stays legible after a correction. */
+function LineageBadge({ visit }: { visit: ActualWorkSubmittedVisitEntry }) {
+  if (visit.superseded) {
+    return (
+      <span className="shrink-0 rounded bg-[var(--ophalo-attention-bg)] px-1.5 py-0.5 text-[10px] font-semibold text-[var(--ophalo-attention)]">
+        Superseded · replaced by a correction
+      </span>
+    );
+  }
+  if (visit.supersedesActualWorkId) {
+    return (
+      <span className="shrink-0 rounded bg-slate-200 px-1.5 py-0.5 text-[10px] font-semibold text-[var(--ophalo-muted)]">
+        Correction of an earlier visit
+      </span>
+    );
+  }
+  return null;
+}
+
 function SubmittedVisitDetails({ visit }: { visit: ActualWorkSubmittedVisitEntry }) {
   return (
     <details className="group rounded-lg border border-[var(--ophalo-border)] bg-[var(--ophalo-canvas)]">
-      <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-3 py-2 text-xs font-medium text-[var(--ophalo-ink)]">
+      <summary className="flex cursor-pointer list-none flex-wrap items-center justify-between gap-2 px-3 py-2 text-xs font-medium text-[var(--ophalo-ink)]">
         <span>{formatSubmittedAt(visit.submittedAtUtc)}</span>
-        <span className="shrink-0 rounded bg-slate-200 px-1.5 py-0.5 text-[10px] text-[var(--ophalo-muted)]">
-          {visit.lines.length} line{visit.lines.length === 1 ? "" : "s"}
+        <span className="flex items-center gap-2">
+          <LineageBadge visit={visit} />
+          <span className="shrink-0 rounded bg-slate-200 px-1.5 py-0.5 text-[10px] text-[var(--ophalo-muted)]">
+            {visit.lines.length} line{visit.lines.length === 1 ? "" : "s"}
+          </span>
         </span>
       </summary>
       <div className="space-y-2 border-t border-[var(--ophalo-border)] px-3 py-2">

@@ -47,6 +47,10 @@ const INPUT_CLS =
 
 interface ActualWorkComposerProps {
   draft: ActualWorkDraft;
+  // BL136 4e-iii: this Draft was auto-opened by an Owner/Admin replacement-copy correction in the
+  // current session — show contextual guidance that it replaces a superseded visit. UI-only and
+  // session-scoped (durable lineage is on the history record); a hard reload clears it.
+  replacementCorrection?: boolean;
   conflictNotice: string | null;
   // Slice 4 (2026-08-26): full-bleed workspace below 1001px, right-drawer at/above it — same
   // 1001px threshold RequestDetailContent measures via ResizeObserver. Threaded as a prop rather
@@ -96,6 +100,7 @@ interface ActualWorkComposerProps {
  */
 export function ActualWorkComposer({
   draft,
+  replacementCorrection = false,
   conflictNotice,
   isWide,
   onClose,
@@ -241,6 +246,15 @@ export function ActualWorkComposer({
       </div>
 
       <div className="flex-1 min-h-0 overflow-y-auto px-4 py-3 space-y-4">
+        {replacementCorrection && (
+          <div
+            role="status"
+            className="rounded-lg border border-[var(--ophalo-border)] bg-[var(--ophalo-canvas)] px-3 py-2 text-sm text-[var(--ophalo-ink)]"
+          >
+            This draft replaces a superseded visit. Review the copied work and submit when it is correct.
+          </div>
+        )}
+
         {conflictNotice && (
           <div
             role="status"

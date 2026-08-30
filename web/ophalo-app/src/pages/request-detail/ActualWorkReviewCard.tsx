@@ -12,6 +12,7 @@ import {
 } from "./useActualWorkFinancialReview";
 import { FinancialResolutionForm } from "./FinancialResolutionForm";
 import { NoChargeDispositionForm } from "./NoChargeDispositionForm";
+import { ReplaceVisitForm } from "./ReplaceVisitForm";
 
 interface ActualWorkReviewCardProps {
   state: ActualWorkFinancialReviewState;
@@ -26,6 +27,7 @@ interface ActualWorkReviewCardProps {
     visit: ActualWorkFinancialDetailResult,
     reason: string,
   ) => Promise<FinancialReviewOutcome>;
+  onReplace: (visit: ActualWorkFinancialDetailResult, reason: string) => Promise<FinancialReviewOutcome>;
   isVisitMutating: (visitId: string) => boolean;
   onReviewSuccess: () => void;
   focusOnMount?: boolean;
@@ -50,12 +52,13 @@ function Metric({ label, value }: { label: string; value: string }) {
   return <div><p className="text-[10px] font-bold uppercase tracking-[0.1em] text-[var(--ophalo-muted)]">{label}</p><p className="mt-1 text-sm font-semibold text-[var(--ophalo-ink)]">{value}</p></div>;
 }
 
-function Visit({ visit, index, onReview, onResolveLine, onRecordNoChargeDisposition, busy, onReviewSuccess }: {
+function Visit({ visit, index, onReview, onResolveLine, onRecordNoChargeDisposition, onReplace, busy, onReviewSuccess }: {
   visit: ActualWorkFinancialDetailResult;
   index: number;
   onReview: ActualWorkReviewCardProps["onReview"];
   onResolveLine: ActualWorkReviewCardProps["onResolveLine"];
   onRecordNoChargeDisposition: ActualWorkReviewCardProps["onRecordNoChargeDisposition"];
+  onReplace: ActualWorkReviewCardProps["onReplace"];
   busy: boolean;
   onReviewSuccess: () => void;
 }) {
@@ -143,15 +146,17 @@ function Visit({ visit, index, onReview, onResolveLine, onRecordNoChargeDisposit
       )}
 
       {!reviewed && <div className="mt-4"><label className="text-xs font-semibold text-[var(--ophalo-ink)]" htmlFor={`review-note-${visit.id}`}>Reviewer note <span className="font-normal text-[var(--ophalo-muted)]">(optional)</span></label><textarea id={`review-note-${visit.id}`} value={note} onChange={(event) => setNote(event.target.value)} placeholder="Add internal note for billing/payroll…" rows={2} className="mt-1 w-full rounded-lg border border-[var(--ophalo-border)] bg-[var(--ophalo-canvas)] px-3 py-2 text-sm text-[var(--ophalo-ink)]" /><div className="mt-3 flex justify-end"><KeepButton onClick={() => void markReviewed()} disabled={busy}>{busy ? "Working…" : "Mark visit reviewed"}</KeepButton></div></div>}
+
+      <ReplaceVisitForm busy={busy} onSubmit={(reason) => onReplace(visit, reason)} />
     </details>
   );
 }
 
-export function ActualWorkReviewCard({ state, onRetry, onReview, onResolveLine, onRecordNoChargeDisposition, isVisitMutating, onReviewSuccess, focusOnMount = false }: ActualWorkReviewCardProps) {
+export function ActualWorkReviewCard({ state, onRetry, onReview, onResolveLine, onRecordNoChargeDisposition, onReplace, isVisitMutating, onReviewSuccess, focusOnMount = false }: ActualWorkReviewCardProps) {
   useEffect(() => {
     if (focusOnMount && state.status === "loaded" && state.visits.length) document.getElementById("focus-panel-actual-work-review")?.scrollIntoView({ behavior: "smooth", block: "nearest" });
   }, [focusOnMount, state]);
   if (state.status === "loading" || state.status === "hidden" || (state.status === "loaded" && !state.visits.length)) return null;
   if (state.status === "error") return <div id="focus-panel-actual-work-review" className="rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] px-4 py-4"><p className="text-sm text-[var(--ophalo-muted)]">Unable to load financial review.</p><KeepButton variant="secondary" className="mt-3" onClick={onRetry}>Retry</KeepButton></div>;
-  return <div id="focus-panel-actual-work-review" className="rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] divide-y divide-[var(--ophalo-border)]"><div className="px-4 py-3"><p className="text-sm font-semibold text-[var(--ophalo-ink)]">Actual Work financial review</p><p className="text-xs text-[var(--ophalo-muted)]">Owner/Admin review only</p></div>{state.visits.map((visit, index) => <Visit key={visit.id} visit={visit} index={index} onReview={onReview} onResolveLine={onResolveLine} onRecordNoChargeDisposition={onRecordNoChargeDisposition} busy={isVisitMutating(visit.id)} onReviewSuccess={onReviewSuccess} />)}</div>;
+  return <div id="focus-panel-actual-work-review" className="rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] divide-y divide-[var(--ophalo-border)]"><div className="px-4 py-3"><p className="text-sm font-semibold text-[var(--ophalo-ink)]">Actual Work financial review</p><p className="text-xs text-[var(--ophalo-muted)]">Owner/Admin review only</p></div>{state.visits.map((visit, index) => <Visit key={visit.id} visit={visit} index={index} onReview={onReview} onResolveLine={onResolveLine} onRecordNoChargeDisposition={onRecordNoChargeDisposition} onReplace={onReplace} busy={isVisitMutating(visit.id)} onReviewSuccess={onReviewSuccess} />)}</div>;
 }

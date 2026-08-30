@@ -67,9 +67,31 @@ export function RequestDetailContent(props: RequestDetailContentProps) {
   const actualWorkCapture = useActualWorkCapture(requestId, props.currentAccountUserId);
   const actualWorkHistory = useActualWorkHistory(requestId);
   const actualWorkFinancialReview = useActualWorkFinancialReview(
-    props.canReviewActualWork && actualWorkHistory.state.status === "loaded" ? actualWorkHistory.state.submittedVisits : [],
+    // BL136 4e-iii: a superseded source is inert for financial review — its detail read returns 409
+    // — so it must be excluded here even though the history read stays unfiltered for lineage.
+    props.canReviewActualWork && actualWorkHistory.state.status === "loaded"
+      ? actualWorkHistory.state.submittedVisits.filter((visit) => !visit.superseded)
+      : [],
   );
   const [recorderDrawerOpen, setRecorderDrawerOpen] = useState(false);
+  // BL136 4e-iii: holds the successor Draft id when a replacement-copy correction succeeded but the
+  // Draft could not be auto-opened (e.g. the acting user lacks ActualWorkCapture, or another
+  // session opened a different Draft first) — surfaces an explicit "open the replacement draft"
+  // recovery affordance instead of a dead-end.
+  const [replacementRecoverySuccessorId, setReplacementRecoverySuccessorId] = useState<string | null>(null);
+
+  const handleReplaceVisit = useCallback<typeof actualWorkFinancialReview.replace>(
+    async (visit, reason) => {
+      const outcome = await actualWorkFinancialReview.replace(visit, reason);
+      if (outcome.kind === "replaced") {
+        await actualWorkHistory.retry();
+        const opened = await actualWorkCapture.openReplacementDraft(outcome.successorActualWorkId);
+        setReplacementRecoverySuccessorId(opened ? null : outcome.successorActualWorkId);
+      }
+      return outcome;
+    },
+    [actualWorkFinancialReview, actualWorkHistory, actualWorkCapture],
+  );
   // Editable capture states — the recorder's own resume/start affordance.
   const actualWorkCaptureEditable = actualWorkCapture.state.status === "no-draft" || actualWorkCapture.state.status === "draft";
   // Also render the compact strip for the non-actionable "another team member is recording this
@@ -214,6 +236,7 @@ export function RequestDetailContent(props: RequestDetailContentProps) {
             onReview={actualWorkFinancialReview.review}
             onResolveLine={actualWorkFinancialReview.resolveLine}
             onRecordNoChargeDisposition={actualWorkFinancialReview.recordNoChargeDisposition}
+            onReplace={handleReplaceVisit}
             isVisitMutating={actualWorkFinancialReview.isVisitMutating}
             focusOnMount={props.focusPanel === "actual-work-review"}
             onReviewSuccess={() => {
@@ -221,6 +244,24 @@ export function RequestDetailContent(props: RequestDetailContentProps) {
               void props.onActualWorkReviewSuccess?.();
             }}
           />
+        )}
+
+        {replacementRecoverySuccessorId && (
+          <div role="status" className="rounded-xl border border-[var(--ophalo-attention)] bg-[var(--ophalo-attention-bg)] px-4 py-3 text-sm text-[var(--ophalo-attention)]">
+            <p className="font-medium">The correction draft was created.</p>
+            <p className="mt-0.5 text-xs">Open it to review and submit the replacement visit.</p>
+            <KeepButton
+              variant="secondary"
+              className="mt-2"
+              onClick={() => {
+                void actualWorkCapture
+                  .openReplacementDraft(replacementRecoverySuccessorId)
+                  .then((opened) => setReplacementRecoverySuccessorId(opened ? null : replacementRecoverySuccessorId));
+              }}
+            >
+              Open replacement draft
+            </KeepButton>
+          </div>
         )}
 
         {/* 5. Communication — composer only; Follow-Up/Planned-For and priority moved to the
@@ -291,6 +332,7 @@ export function RequestDetailContent(props: RequestDetailContentProps) {
         <ActualWorkComposer
           isWide={isWide}
           draft={actualWorkCapture.state.draft}
+          replacementCorrection={actualWorkCapture.replacementCorrection}
           conflictNotice={actualWorkCapture.conflictNotice}
           onClose={actualWorkCapture.closeModal}
           onCommitted={async () => {

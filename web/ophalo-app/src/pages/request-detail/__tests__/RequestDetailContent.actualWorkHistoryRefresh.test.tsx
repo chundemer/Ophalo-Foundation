@@ -11,6 +11,8 @@ import type { KeepRequestDetailResult } from "../../../lib/apiClient";
 
 const mockMarkSubmitted = vi.fn();
 const mockHistoryRetry = vi.fn();
+const mockReplace = vi.fn();
+const mockOpenReplacementDraft = vi.fn();
 
 vi.mock("../DetailHero", () => ({
   TodayPromiseBanner: () => null,
@@ -42,13 +44,28 @@ vi.mock("../RequestDetailActivity", () => ({ RequestDetailActivity: () => null }
 vi.mock("../ActualWorkCard", () => ({ ActualWorkCard: () => null }));
 vi.mock("../ActualWorkHistoryCard", () => ({ ActualWorkHistoryCard: () => null }));
 vi.mock("../useActualWorkFinancialReview", () => ({
-  useActualWorkFinancialReview: () => ({ state: { status: "loaded", visits: [{ id: "aw-1" }] }, retry: vi.fn(), review: vi.fn() }),
+  useActualWorkFinancialReview: (visits: unknown[]) => ({ state: { status: "loaded", visits }, retry: vi.fn(), review: vi.fn(), replace: mockReplace }),
 }));
 vi.mock("../ActualWorkReviewCard", () => ({
-  ActualWorkReviewCard: () => <div>Actual Work financial review</div>,
+  ActualWorkReviewCard: ({ state, onReplace }: { state: { visits: { id: string }[] }; onReplace: (v: unknown, r: string) => void }) => (
+    <div>
+      Actual Work financial review
+      <span>visits:{state.visits.map((v) => v.id).join(",")}</span>
+      <button onClick={() => onReplace({ id: "aw-1" }, "wrong part")}>Correct aw-1</button>
+    </div>
+  ),
 }));
 vi.mock("../useActualWorkHistory", () => ({
-  useActualWorkHistory: () => ({ state: { status: "loaded", submittedVisits: [] }, retry: mockHistoryRetry }),
+  useActualWorkHistory: () => ({
+    state: {
+      status: "loaded",
+      submittedVisits: [
+        { id: "aw-1", superseded: false },
+        { id: "aw-old", superseded: true, supersededByActualWorkId: "aw-1" },
+      ],
+    },
+    retry: mockHistoryRetry,
+  }),
 }));
 vi.mock("../useActualWorkCapture", () => ({
   useActualWorkCapture: () => ({
@@ -63,6 +80,8 @@ vi.mock("../useActualWorkCapture", () => ({
     retryReconciliation: vi.fn(),
     markSubmitted: mockMarkSubmitted,
     onDraftDiscarded: vi.fn(),
+    openReplacementDraft: mockOpenReplacementDraft,
+    replacementCorrection: false,
   }),
 }));
 vi.mock("../ActualWorkComposer", () => ({
@@ -154,6 +173,65 @@ describe("RequestDetailContent — Actual Work financial review card gating (Sli
   it("renders the financial review card when canReviewActualWork is true", () => {
     render(<RequestDetailContent {...commonProps} canReviewActualWork />);
     expect(screen.getByText("Actual Work financial review")).toBeInTheDocument();
+  });
+});
+
+describe("RequestDetailContent — replacement-copy correction (BL136 4e-iii)", () => {
+  const commonProps = {
+    detail: baseDetail(),
+    requestId: "req-1",
+    highlights: {},
+    showProminentFeedbackCard: false,
+    onDetailUpdated: vi.fn(),
+    onContactLaunched: vi.fn(),
+    onEditLocation: vi.fn(),
+    onOpenReassignOwner: vi.fn(),
+    onOpenWatchers: vi.fn(),
+    onOpenClearAttention: vi.fn(),
+    onRecordFollowUp: vi.fn(),
+    onCreateFollowUp: vi.fn(),
+    onReviewSuccess: vi.fn(),
+    canRecordShareIntent: false,
+    needsShare: false,
+    onOpenShareDrawer: vi.fn(),
+    customerUpdateDraft: "",
+    onCustomerUpdateDraftChange: vi.fn(),
+    customerUpdateDraftStatus: "idle",
+    onCustomerUpdateDraftStatusChange: vi.fn(),
+    reviewSuccessMsg: null,
+    timelineFilter: "all" as const,
+    onTimelineFilterChange: vi.fn(),
+    displayedEvents: [],
+  };
+
+  it("excludes a superseded source from the financial review surface", () => {
+    render(<RequestDetailContent {...commonProps} canReviewActualWork />);
+    expect(screen.getByText("visits:aw-1")).toBeInTheDocument();
+  });
+
+  it("on a successful replace refreshes history and auto-opens the successor draft", async () => {
+    const user = userEvent.setup();
+    mockReplace.mockResolvedValue({ kind: "replaced", successorActualWorkId: "aw-1" });
+    mockOpenReplacementDraft.mockResolvedValue(true);
+    render(<RequestDetailContent {...commonProps} canReviewActualWork />);
+
+    await user.click(screen.getByRole("button", { name: "Correct aw-1" }));
+
+    expect(mockHistoryRetry).toHaveBeenCalled();
+    expect(mockOpenReplacementDraft).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText(/The correction draft was created/)).not.toBeInTheDocument();
+  });
+
+  it("shows the explicit recovery affordance when the successor draft cannot be auto-opened", async () => {
+    const user = userEvent.setup();
+    mockReplace.mockResolvedValue({ kind: "replaced", successorActualWorkId: "aw-1" });
+    mockOpenReplacementDraft.mockResolvedValue(false);
+    render(<RequestDetailContent {...commonProps} canReviewActualWork />);
+
+    await user.click(screen.getByRole("button", { name: "Correct aw-1" }));
+
+    expect(await screen.findByText(/The correction draft was created/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Open replacement draft" })).toBeInTheDocument();
   });
 });
 

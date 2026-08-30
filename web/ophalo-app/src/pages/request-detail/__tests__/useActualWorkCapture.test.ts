@@ -449,6 +449,63 @@ describe("useActualWorkCapture", () => {
     expect(result.current.isModalOpen).toBe(false);
     expect(result.current.conflictNotice).toBeNull();
   });
+
+  it("openReplacementDraft opens the composer and flags the correction when history resolves to the successor Draft", async () => {
+    mockGetActualWorkHistoryForRequest.mockResolvedValueOnce(history());
+    const { result } = renderHook(() => useActualWorkCapture("request-1"));
+    await waitFor(() => expect(result.current.state.status).toBe("no-draft"));
+
+    mockGetActualWorkHistoryForRequest.mockResolvedValueOnce(history({ openDraft: DRAFT_NO_DEFAULT }));
+    let opened: boolean | undefined;
+    await act(async () => {
+      opened = await result.current.openReplacementDraft("draft-1");
+    });
+
+    expect(opened).toBe(true);
+    expect(result.current.isModalOpen).toBe(true);
+    expect(result.current.replacementCorrection).toBe(true);
+    expect(result.current.state.status).toBe("draft");
+
+    act(() => result.current.closeModal());
+    expect(result.current.replacementCorrection).toBe(false);
+  });
+
+  it("openReplacementDraft returns false without opening when the open Draft is not the expected successor (race)", async () => {
+    mockGetActualWorkHistoryForRequest.mockResolvedValueOnce(history());
+    const { result } = renderHook(() => useActualWorkCapture("request-1"));
+    await waitFor(() => expect(result.current.state.status).toBe("no-draft"));
+
+    mockGetActualWorkHistoryForRequest.mockResolvedValueOnce(history({ openDraft: { ...DRAFT_NO_DEFAULT, id: "some-other-draft" } }));
+    let opened: boolean | undefined;
+    await act(async () => {
+      opened = await result.current.openReplacementDraft("draft-1");
+    });
+
+    expect(opened).toBe(false);
+    expect(result.current.isModalOpen).toBe(false);
+    expect(result.current.replacementCorrection).toBe(false);
+  });
+
+  it("openReplacementDraft does not open the composer for a permitted replacer who cannot capture Actual Work", async () => {
+    mockGetActualWorkHistoryForRequest.mockResolvedValueOnce(history());
+    const { result } = renderHook(() => useActualWorkCapture("request-1"));
+    await waitFor(() => expect(result.current.state.status).toBe("no-draft"));
+
+    // Owner/Admin history reads expose their own replacement Draft, but every Draft mutation
+    // requires ActualWorkCapture — auto-opening would only produce 403s.
+    mockGetActualWorkHistoryForRequest.mockResolvedValueOnce(
+      history({ canCaptureActualWork: false, openDraft: DRAFT_NO_DEFAULT }),
+    );
+    let opened: boolean | undefined;
+    await act(async () => {
+      opened = await result.current.openReplacementDraft("draft-1");
+    });
+
+    expect(opened).toBe(false);
+    expect(result.current.isModalOpen).toBe(false);
+    expect(result.current.replacementCorrection).toBe(false);
+    expect(result.current.state.status).toBe("hidden");
+  });
 });
 
 describe("useActualWorkCapture — recorder transfer (1a-ii-b)", () => {
