@@ -75,6 +75,8 @@ public sealed class ActualWorkFinancialResolutionApiService(
                 Result<Guid>.Success(outcome.NewVisitConcurrencyVersion!.Value),
             ActualWorkResolutionResult.VisitNotFound =>
                 Result<Guid>.Failure(ActualWorkErrors.NotFound),
+            ActualWorkResolutionResult.Superseded =>
+                Result<Guid>.Failure(ActualWorkErrors.Superseded),
             ActualWorkResolutionResult.VisitNotSubmitted =>
                 Result<Guid>.Failure(ActualWorkErrors.NotSubmitted),
             ActualWorkResolutionResult.VisitAlreadyReviewed =>

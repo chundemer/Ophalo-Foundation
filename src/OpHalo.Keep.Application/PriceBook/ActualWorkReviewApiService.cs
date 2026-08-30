@@ -49,6 +49,7 @@ public sealed class ActualWorkReviewApiService(
         {
             ActualWorkReviewResult.Committed => Result<Guid>.Success(outcome.ConcurrencyVersion!.Value),
             ActualWorkReviewResult.NotFound => Result<Guid>.Failure(ActualWorkErrors.NotFound),
+            ActualWorkReviewResult.Superseded => Result<Guid>.Failure(ActualWorkErrors.Superseded),
             ActualWorkReviewResult.NotSubmitted => Result<Guid>.Failure(ActualWorkErrors.NotSubmitted),
             ActualWorkReviewResult.AlreadyReviewed => Result<Guid>.Failure(ActualWorkErrors.AlreadyReviewed),
             ActualWorkReviewResult.ReviewNoteTooLong => Result<Guid>.Failure(ActualWorkErrors.ReviewNoteTooLong),

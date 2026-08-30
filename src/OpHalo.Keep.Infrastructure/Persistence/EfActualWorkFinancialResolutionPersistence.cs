@@ -48,6 +48,11 @@ public sealed class EfActualWorkFinancialResolutionPersistence(OpHaloDbContext d
         if (visit.ConcurrencyVersion != expectedVisitVersion)
             return new ActualWorkResolutionOutcome(ActualWorkResolutionResult.VersionMismatch);
 
+        // BL136 D6c (slice 4e-ii-b-2) — a superseded source is inert, checked immediately after the
+        // version check so a stale client reloads for the more general reason first.
+        if (visit.SupersededAtUtc is not null)
+            return new ActualWorkResolutionOutcome(ActualWorkResolutionResult.Superseded);
+
         if (visit.Status != ActualWorkStatus.Submitted)
             return new ActualWorkResolutionOutcome(ActualWorkResolutionResult.VisitNotSubmitted);
 
@@ -91,6 +96,11 @@ public sealed class EfActualWorkFinancialResolutionPersistence(OpHaloDbContext d
 
         if (visit.ConcurrencyVersion != expectedVisitVersion)
             return new ActualWorkDispositionOutcome(ActualWorkDispositionResult.VersionMismatch);
+
+        // BL136 D6c (slice 4e-ii-b-2) — a superseded source is inert, checked immediately after the
+        // version check so a stale client reloads for the more general reason first.
+        if (visit.SupersededAtUtc is not null)
+            return new ActualWorkDispositionOutcome(ActualWorkDispositionResult.Superseded);
 
         if (visit.Status != ActualWorkStatus.Submitted)
             return new ActualWorkDispositionOutcome(ActualWorkDispositionResult.VisitNotSubmitted);

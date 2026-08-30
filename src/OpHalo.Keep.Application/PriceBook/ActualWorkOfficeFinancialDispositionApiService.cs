@@ -74,6 +74,8 @@ public sealed class ActualWorkOfficeFinancialDispositionApiService(
                 Result<Guid>.Success(outcome.NewVisitConcurrencyVersion!.Value),
             ActualWorkDispositionResult.VisitNotFound =>
                 Result<Guid>.Failure(ActualWorkErrors.NotFound),
+            ActualWorkDispositionResult.Superseded =>
+                Result<Guid>.Failure(ActualWorkErrors.Superseded),
             ActualWorkDispositionResult.VisitNotSubmitted =>
                 Result<Guid>.Failure(ActualWorkErrors.NotSubmitted),
             ActualWorkDispositionResult.VisitAlreadyReviewed =>

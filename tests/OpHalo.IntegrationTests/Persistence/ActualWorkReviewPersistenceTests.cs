@@ -207,6 +207,40 @@ public sealed class ActualWorkReviewPersistenceTests : IClassFixture<PostgresFix
         Assert.Equal("First review.", visit.ReviewNote);
     }
 
+    // --- BL136 D6c (slice 4e-ii-b-2): superseded-source mutation rejection ---
+
+    [Fact]
+    public async Task MarkReviewedAsync_with_a_stale_version_on_a_superseded_visit_returns_VersionMismatch()
+    {
+        var (visitId, _) = await SeedSupersededVisitAsync();
+
+        await using var ctx = CreateContext();
+        var persistence = new EfActualWorkReviewPersistence(ctx, new EfActualWorkFinancialResolutionPersistence(ctx), new EfActualWorkReviewSignalReconciliation(ctx));
+
+        var outcome = await persistence.MarkReviewedAsync(
+            AccountId, visitId, Guid.NewGuid(), OwnerId, null, Now, CancellationToken.None);
+
+        Assert.Equal(ActualWorkReviewResult.VersionMismatch, outcome.Result);
+    }
+
+    [Fact]
+    public async Task MarkReviewedAsync_with_the_current_version_on_a_superseded_visit_returns_Superseded()
+    {
+        var (visitId, currentVersion) = await SeedSupersededVisitAsync();
+
+        await using var ctx = CreateContext();
+        var persistence = new EfActualWorkReviewPersistence(ctx, new EfActualWorkFinancialResolutionPersistence(ctx), new EfActualWorkReviewSignalReconciliation(ctx));
+
+        var outcome = await persistence.MarkReviewedAsync(
+            AccountId, visitId, currentVersion, OwnerId, null, Now, CancellationToken.None);
+
+        Assert.Equal(ActualWorkReviewResult.Superseded, outcome.Result);
+
+        await using var verifyCtx = CreateContext();
+        var visit = await verifyCtx.Set<ActualWork>().SingleAsync(x => x.Id == visitId);
+        Assert.Null(visit.ReviewedAtUtc);
+    }
+
     // --- BL135 §4 Batch 3b-ii: hard billing-readiness review gate ---
 
     [Fact]
@@ -378,6 +412,23 @@ public sealed class ActualWorkReviewPersistenceTests : IClassFixture<PostgresFix
     /// by the Batch 3b-ii review gate until a no-charge disposition exists.</summary>
     private Task<Guid> SeedSubmittedZeroLineVisitAsync() =>
         SeedSubmittedVisitAsync(_ => { }, ActualWorkOutcome.DiagnosticOnly, "Diagnostic visit, no work performed.");
+
+    /// <summary>Seeds a submitted source visit and a submitted successor, then supersedes the source
+    /// through the domain method (which bumps its concurrency token). Returns the source id and its
+    /// post-supersede token — the "current client" version for the mutation-rejection proofs.</summary>
+    private async Task<(Guid VisitId, Guid CurrentVersion)> SeedSupersededVisitAsync()
+    {
+        var sourceId = await SeedSubmittedVisitAsync();
+        var successorId = await SeedSubmittedVisitAsync();
+
+        await using var ctx = CreateContext();
+        var source = await ctx.Set<ActualWork>().SingleAsync(x => x.Id == sourceId);
+        var result = source.Supersede(successorId, OwnerId, "Replaced during office review.", Now);
+        Assert.True(result.IsSuccess);
+        await ctx.SaveChangesAsync();
+
+        return (sourceId, source.ConcurrencyVersion);
+    }
 
     private async Task<Guid> GetFirstLineIdAsync(Guid visitId)
     {

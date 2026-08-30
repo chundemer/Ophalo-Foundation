@@ -38,6 +38,11 @@ public sealed class EfActualWorkReviewPersistence(
         if (actualWork.ConcurrencyVersion != expectedVersion)
             return new ActualWorkReviewOutcome(ActualWorkReviewResult.VersionMismatch);
 
+        // BL136 D6c (slice 4e-ii-b-2) — a superseded source is inert. Checked immediately after the
+        // version check, so a stale client is told to reload for the more general reason first.
+        if (actualWork.SupersededAtUtc is not null)
+            return new ActualWorkReviewOutcome(ActualWorkReviewResult.Superseded);
+
         // BL135 §4 Batch 3b-ii — the hard billing-readiness gate reads the same account-scoped
         // financial facts the Owner/Admin review card renders, inside this transaction, so a
         // resolution/disposition appended after this read loses the visit concurrency-token race on

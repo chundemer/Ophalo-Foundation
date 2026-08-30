@@ -273,8 +273,100 @@ public sealed class ActualWorkFinancialResolutionPersistenceTests
     }
 
     // -------------------------------------------------------------------------
+    // BL136 D6c (slice 4e-ii-b-2): superseded-source mutation rejection
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public async Task CreateResolutionAsync_with_a_stale_version_on_a_superseded_visit_returns_VersionMismatch()
+    {
+        var (visitId, lineIds, _) = await SeedSupersededVisitAsync(1);
+        var resolution = ActualWorkLineFinancialResolution.Create(
+            AccountId, visitId, lineIds[0], 100m, null,
+            FinancialResolutionBasis.SupplierReceipt, "supplier receipt", OwnerId, Now).Value;
+
+        await using var ctx = CreateContext();
+        var persistence = new EfActualWorkFinancialResolutionPersistence(ctx);
+
+        var outcome = await persistence.CreateResolutionAsync(resolution, Guid.NewGuid(), CancellationToken.None);
+
+        Assert.Equal(ActualWorkResolutionResult.VersionMismatch, outcome.Result);
+    }
+
+    [Fact]
+    public async Task CreateResolutionAsync_with_the_current_version_on_a_superseded_visit_returns_Superseded()
+    {
+        var (visitId, lineIds, currentVersion) = await SeedSupersededVisitAsync(1);
+        var resolution = ActualWorkLineFinancialResolution.Create(
+            AccountId, visitId, lineIds[0], 100m, null,
+            FinancialResolutionBasis.SupplierReceipt, "supplier receipt", OwnerId, Now).Value;
+
+        await using var ctx = CreateContext();
+        var persistence = new EfActualWorkFinancialResolutionPersistence(ctx);
+
+        var outcome = await persistence.CreateResolutionAsync(resolution, currentVersion, CancellationToken.None);
+
+        Assert.Equal(ActualWorkResolutionResult.Superseded, outcome.Result);
+
+        await using var verifyCtx = CreateContext();
+        var reader = new EfActualWorkFinancialResolutionPersistence(verifyCtx);
+        Assert.Empty(await reader.GetResolutionsForVisitAsync(AccountId, visitId, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task RecordDispositionAsync_with_a_stale_version_on_a_superseded_visit_returns_VersionMismatch()
+    {
+        var (visitId, _, _) = await SeedSupersededVisitAsync(0);
+        var disposition = ActualWorkOfficeFinancialDisposition.Create(
+            AccountId, visitId, OfficeFinancialDispositionKind.NoCharge, "customer goodwill", OwnerId, Now).Value;
+
+        await using var ctx = CreateContext();
+        var persistence = new EfActualWorkFinancialResolutionPersistence(ctx);
+
+        var outcome = await persistence.RecordDispositionAsync(disposition, Guid.NewGuid(), CancellationToken.None);
+
+        Assert.Equal(ActualWorkDispositionResult.VersionMismatch, outcome.Result);
+    }
+
+    [Fact]
+    public async Task RecordDispositionAsync_with_the_current_version_on_a_superseded_visit_returns_Superseded()
+    {
+        var (visitId, _, currentVersion) = await SeedSupersededVisitAsync(0);
+        var disposition = ActualWorkOfficeFinancialDisposition.Create(
+            AccountId, visitId, OfficeFinancialDispositionKind.NoCharge, "customer goodwill", OwnerId, Now).Value;
+
+        await using var ctx = CreateContext();
+        var persistence = new EfActualWorkFinancialResolutionPersistence(ctx);
+
+        var outcome = await persistence.RecordDispositionAsync(disposition, currentVersion, CancellationToken.None);
+
+        Assert.Equal(ActualWorkDispositionResult.Superseded, outcome.Result);
+
+        await using var verifyCtx = CreateContext();
+        var reader = new EfActualWorkFinancialResolutionPersistence(verifyCtx);
+        Assert.Empty(await reader.GetDispositionsForVisitAsync(AccountId, visitId, CancellationToken.None));
+    }
+
+    // -------------------------------------------------------------------------
     // Helpers
     // -------------------------------------------------------------------------
+
+    /// <summary>Seeds a submitted source visit (with <paramref name="lineCount"/> lines) plus a
+    /// submitted successor, then supersedes the source through the domain method — which bumps the
+    /// source's concurrency token. Returns the source id, its line ids, and its post-supersede
+    /// token (the "current client" version for the mutation-rejection proofs).</summary>
+    private async Task<(Guid VisitId, IReadOnlyList<Guid> LineIds, Guid CurrentVersion)> SeedSupersededVisitAsync(int lineCount)
+    {
+        var (sourceId, lineIds) = await SeedSubmittedVisitAsync(lineCount);
+        var (successorId, _) = await SeedSubmittedVisitAsync(0);
+
+        await using var ctx = CreateContext();
+        var source = await ctx.Set<ActualWork>().SingleAsync(x => x.Id == sourceId);
+        var result = source.Supersede(successorId, OwnerId, "Replaced during office review.", Now);
+        Assert.True(result.IsSuccess);
+        await ctx.SaveChangesAsync();
+
+        return (sourceId, lineIds, source.ConcurrencyVersion);
+    }
 
     private async Task<Guid> AppendResolutionAsync(
         Guid visitId, Guid lineId, decimal? sell, decimal? cost, DateTime resolvedAt)

@@ -16,6 +16,11 @@ public enum ActualWorkResolutionResult
     /// version, or the row changed under the save (EF concurrency-token mismatch).</summary>
     VersionMismatch,
 
+    /// <summary>BL136 D6c (slice 4e-ii-b-2): the visit has been superseded by a replacement copy.
+    /// Checked immediately after <see cref="VersionMismatch"/>. Maps to
+    /// <see cref="Core.Errors.ActualWorkErrors.Superseded"/>.</summary>
+    Superseded,
+
     /// <summary>The visit is still <c>Draft</c> — resolutions apply only to a submitted visit.</summary>
     VisitNotSubmitted,
 
@@ -33,8 +38,8 @@ public enum ActualWorkResolutionResult
 /// <summary>Outcome of the transactional <see cref="IActualWorkFinancialResolutionPersistence.RecordDispositionAsync"/>
 /// orchestrator (BL135 §4 Batch 3b-i). <see cref="ActualWorkDispositionResult.Committed"/> is the
 /// only success; every other value maps to a stable API error. Guards are applied in the same fixed
-/// order as <see cref="ActualWorkResolutionResult"/>: not found → version → not submitted → already
-/// reviewed → visit has lines.</summary>
+/// order as <see cref="ActualWorkResolutionResult"/>: not found → version → superseded → not
+/// submitted → already reviewed → visit has lines.</summary>
 public enum ActualWorkDispositionResult
 {
     Committed,
@@ -46,6 +51,11 @@ public enum ActualWorkDispositionResult
     /// version, or the row changed under the save (EF concurrency-token mismatch). Checked ahead of
     /// every business guard, so a stale request on a since-reviewed/lined visit still returns this.</summary>
     VersionMismatch,
+
+    /// <summary>BL136 D6c (slice 4e-ii-b-2): the visit has been superseded by a replacement copy.
+    /// Checked immediately after <see cref="VersionMismatch"/>. Maps to
+    /// <see cref="Core.Errors.ActualWorkErrors.Superseded"/>.</summary>
+    Superseded,
 
     /// <summary>The visit is still <c>Draft</c> — a disposition applies only to a submitted visit.</summary>
     VisitNotSubmitted,
@@ -118,7 +128,8 @@ public interface IActualWorkFinancialResolutionPersistence
     /// Transactional orchestrator for a single financial-resolution append (BL135 §4 Batch 3a-ii).
     /// Loads the visit tracked by <c>(AccountId, Id)</c> with its lines and applies the guards in a
     /// fixed order: visit not found → <c>ConcurrencyVersion != expectedVisitVersion</c> →
-    /// <c>Status != Submitted</c> → <c>ReviewedAtUtc != null</c> (drift D5) → the resolution's line
+    /// <c>SupersededAtUtc != null</c> (BL136 D6c) → <c>Status != Submitted</c> →
+    /// <c>ReviewedAtUtc != null</c> (drift D5) → the resolution's line
     /// is not on the visit → a targeted component's snapshot on the line is already non-null. On
     /// success it stages <paramref name="resolution"/> via <see cref="AddResolutionAsync"/>, calls
     /// <see cref="Core.Entities.ActualWork.RefreshConcurrencyVersionForFinancialResolution"/> to
@@ -145,7 +156,8 @@ public interface IActualWorkFinancialResolutionPersistence
     /// Transactional orchestrator for a single office-financial-disposition append (BL135 §4
     /// Batch 3b-i). Loads the visit tracked by <c>(AccountId, Id)</c> with its lines and applies the
     /// guards in a fixed order matching <see cref="CreateResolutionAsync"/>: visit not found →
-    /// <c>ConcurrencyVersion != expectedVisitVersion</c> → <c>Status != Submitted</c> →
+    /// <c>ConcurrencyVersion != expectedVisitVersion</c> → <c>SupersededAtUtc != null</c>
+    /// (BL136 D6c) → <c>Status != Submitted</c> →
     /// <c>ReviewedAtUtc != null</c> (drift D5) → <b>the visit has ≥1 line</b> (locked §6.2 —
     /// <c>NoCharge</c> is zero-line only). On success it stages <paramref name="disposition"/> via
     /// <see cref="AddDispositionAsync"/>, calls

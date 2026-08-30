@@ -17,6 +17,12 @@ public enum ActualWorkReviewResult
     /// <summary>The row changed since the caller last read it (EF concurrency-token mismatch).</summary>
     VersionMismatch,
 
+    /// <summary>BL136 D6c (slice 4e-ii-b-2): the visit has been superseded by a replacement copy.
+    /// Checked immediately after <see cref="VersionMismatch"/>, so a stale client still reloads for
+    /// the more general reason first. Maps to
+    /// <see cref="Core.Errors.ActualWorkErrors.Superseded"/>.</summary>
+    Superseded,
+
     /// <summary>BL135 §4 Batch 3b-ii: at least one line still lacks an effective sell price or direct
     /// cost. Maps to <see cref="Core.Errors.ActualWorkErrors.ReviewBlockedIncompleteFinancials"/>.</summary>
     BlockedIncompleteFinancials,
