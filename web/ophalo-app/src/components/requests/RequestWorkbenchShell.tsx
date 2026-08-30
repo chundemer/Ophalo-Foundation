@@ -26,6 +26,9 @@ interface RequestWorkbenchShellProps {
   onSelectRequest: (requestId: string, navContext?: { requestIds: string[] }, focus?: string) => void;
   onNavigateSettings: (section?: "public-profile" | "policy" | "team") => void;
   onStartCapture: () => void;
+  // BL136 4f-i: opens the dedicated Actual Work Ticket Workspace route from Request Detail's
+  // capture entry point (wide screens only).
+  onNavigateToActualWorkspace?: (requestId: string, visit?: "new" | "draft") => void;
   // Bumped only for an explicit Requests navigation. It restarts initial selection without
   // remounting Requests, preserving the Queue pane's filters and scroll position.
   requestEntryIntent?: number;
@@ -57,6 +60,7 @@ export function RequestWorkbenchShell(props: RequestWorkbenchShellProps) {
     narrowNextId,
     onNarrowNavigate,
     onWideModeChange,
+    onNavigateToActualWorkspace,
   } = props;
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [isWide, setIsWide] = useState(false);
@@ -182,6 +186,7 @@ export function RequestWorkbenchShell(props: RequestWorkbenchShellProps) {
             nextId={liveNextId}
             onNavigate={(id) => onSelectRequest(id)}
             onBack={onBack ?? (() => {})}
+            onNavigateToActualWorkspace={onNavigateToActualWorkspace}
           />
         </div>
       )}
@@ -193,6 +198,7 @@ export function RequestWorkbenchShell(props: RequestWorkbenchShellProps) {
           prevId={narrowPrevId}
           nextId={narrowNextId}
           onNavigate={onNarrowNavigate}
+          onNavigateToActualWorkspace={onNavigateToActualWorkspace}
         />
       )}
     </div>

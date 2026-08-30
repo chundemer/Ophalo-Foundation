@@ -585,13 +585,17 @@ interface RequestDetailProps {
   prevId?: string;
   nextId?: string;
   onNavigate?: (id: string) => void;
+  // BL136 4f-i: opens the dedicated Actual Work Ticket Workspace route from the capture entry
+  // point. Set on wide screens only; undefined below 1001px, where capture stays a full-bleed
+  // modal on this page.
+  onNavigateToActualWorkspace?: (requestId: string, visit?: "new" | "draft") => void;
   // Step 5: set only by RequestWorkbenchShell's wide two-pane render. The Queue pane already
   // supplies navigation context in that layout, so the header's Back control is redundant/
   // ambiguous there — identity and Prev/Next stay, modal behavior is untouched.
   paneMode?: boolean;
 }
 
-export function RequestDetail({ requestId, focusPanel, onBack, prevId, nextId, onNavigate, paneMode }: RequestDetailProps) {
+export function RequestDetail({ requestId, focusPanel, onBack, prevId, nextId, onNavigate, onNavigateToActualWorkspace, paneMode }: RequestDetailProps) {
   const [shareCleared, setShareCleared] = useState(false);
   const [shareModalOpen, setShareModalOpen] = useState(false);
   const [followUpPanelOpen, setFollowUpPanelOpen] = useState(false);
@@ -826,6 +830,7 @@ export function RequestDetail({ requestId, focusPanel, onBack, prevId, nextId, o
         onTimelineFilterChange={setTimelineFilter}
         displayedEvents={displayedEvents}
         onNavigate={onNavigate}
+        onNavigateToActualWorkspace={onNavigateToActualWorkspace}
         canReviewActualWork={meQuery.data?.accountRole === "owner" || meQuery.data?.accountRole === "admin"}
         currentAccountUserId={meQuery.data?.accountUserId}
         focusPanel={focusPanel}

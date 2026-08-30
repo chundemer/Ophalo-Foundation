@@ -181,6 +181,61 @@ export function useActualWorkCapture(requestId: string, currentAccountUserId?: s
     }
   }, [state, requestId, currentAccountUserId, refetchDraft]);
 
+  // BL136 4f-i: the wide-screen capture entry point navigates to the dedicated workspace route
+  // instead of opening the in-page modal, so it needs the Draft created (or confirmed already
+  // open) *without* the `setIsModalOpen(true)` side effect `startCapture` carries. Mirrors
+  // `startCapture`'s create + 409 reconcile, minus the modal. The workspace route then mounts its
+  // own capture hook, which re-probes and lands on the Draft.
+  const createDraft = useCallback(
+    async (
+      intent: ActualWorkEntryIntent = "transcribe",
+    ): Promise<"created" | "exists" | "held-by-other" | "failed"> => {
+      if (state.status === "draft") return "exists";
+      if (state.status !== "no-draft") return "failed";
+      const presetPerformerId =
+        intent === "record-mine" && currentAccountUserId ? currentAccountUserId : null;
+      try {
+        const created = await api.createActualWork(
+          presetPerformerId
+            ? { requestId, defaultPerformedByAccountUserId: presetPerformerId }
+            : { requestId },
+        );
+        setState({
+          status: "draft",
+          draft: {
+            id: created.id,
+            status: created.status,
+            outcome: null,
+            completionNote: null,
+            submittedAtUtc: null,
+            concurrencyVersion: created.concurrencyVersion,
+            isRecorder: true,
+            defaultPerformedByAccountUserId: presetPerformerId,
+            defaultPerformerDisplayName: null,
+            lines: [],
+          },
+          submittedCount: state.submittedCount,
+        });
+        return "created";
+      } catch (err) {
+        if (err instanceof ApiError && err.status === 409) {
+          try {
+            const next = await refetchDraft();
+            if (next.status === "draft") return "exists";
+            if (next.status === "held-by-other") return "held-by-other";
+            return "failed";
+          } catch {
+            setState({ status: "error", message: "Unable to start a visit." });
+            return "failed";
+          }
+        }
+        setState({ status: "error", message: "Unable to start a visit." });
+        return "failed";
+      }
+    },
+    [state, requestId, currentAccountUserId, refetchDraft],
+  );
+
   // Session-scoped: set when a submit succeeds while the composer is showing its own submitted
   // confirmation (see markSubmitted below). closeModal only reprobes card state (draft ->
   // no-draft/submittedCount) once the user actually dismisses that confirmation — reprobing
@@ -460,6 +515,7 @@ export function useActualWorkCapture(requestId: string, currentAccountUserId?: s
     state,
     isModalOpen,
     startCapture,
+    createDraft,
     closeModal,
     refetchDraft,
     setDefaultPerformer,

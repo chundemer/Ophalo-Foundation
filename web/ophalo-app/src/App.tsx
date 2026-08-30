@@ -6,6 +6,7 @@ import { KeepButton } from "./components/keep/KeepButton";
 import { Home } from "./pages/Home";
 import { RequestWorkbenchShell } from "./components/requests/RequestWorkbenchShell";
 import { RequestDetail } from "./pages/RequestDetail";
+import { ActualWorkWorkspacePage } from "./pages/ActualWorkWorkspacePage";
 import { AccessLimited } from "./pages/AccessLimited";
 import { Settings } from "./pages/Settings";
 import { PriceBook } from "./pages/PriceBook";
@@ -43,7 +44,12 @@ type AppRoute =
   | { page: "pricebook"; tab?: "items" | "assemblies" | "nudges" }
   | { page: "pricebook-item"; catalogItemId: string; returnToAssembly?: string; returnToAssemblyReason?: "price" | "margin" }
   | { page: "pricebook-assembly"; offeringAssemblyId: string }
-  | { page: "detail"; requestId: string; focusPanel?: string };
+  | { page: "detail"; requestId: string; focusPanel?: string }
+  // BL136 4f-i (D7): the dedicated Actual Work Ticket Workspace route. `visit` is `"new"` (a
+  // transient/deep-link entry that self-creates a Draft then replaces the URL with `"draft"`),
+  // `"draft"` (the request's one open Draft), or a submitted visit id (read-only). Capture intent
+  // (record-mine / transcribe) is chosen on the card and never encoded in the URL.
+  | { page: "actual-work"; requestId: string; visit: "new" | "draft" | (string & {}) };
 
 interface RequestNavContext {
   requestIds: string[];
@@ -55,8 +61,14 @@ function isOfferingAssemblyId(value: string | null): value is string {
   return value !== null && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
 }
 
-function getRouteFromLocation(): AppRoute {
+export function getRouteFromLocation(): AppRoute {
   const hash = window.location.hash;
+  // Checked before the generic `#/request/(.+)` pattern below — its `(.+)` would otherwise
+  // swallow `<id>/actual-work/<seg>` as the request id. Segment: `new` | `draft` | visit id.
+  const workspaceMatch = hash.match(/^#\/request\/([^/]+)\/actual-work\/([^/]+)$/);
+  if (workspaceMatch?.[1] && workspaceMatch?.[2]) {
+    return { page: "actual-work", requestId: workspaceMatch[1], visit: workspaceMatch[2] };
+  }
   const match = hash.match(/^#\/request\/(.+)$/);
   if (match?.[1]) return { page: "detail", requestId: match[1] };
   // Split the Price Book path from its query string before matching detail routes — otherwise
@@ -201,6 +213,8 @@ function AppShell() {
     const base = window.location.pathname + window.location.search;
     if (newRoute.page === "detail") {
       history.pushState(null, "", `${base}#/request/${newRoute.requestId}`);
+    } else if (newRoute.page === "actual-work") {
+      history.pushState(null, "", `${base}#/request/${newRoute.requestId}/actual-work/${newRoute.visit}`);
     } else if (newRoute.page === "pricebook") {
       const suffix =
         newRoute.tab === "assemblies"
@@ -243,6 +257,13 @@ function AppShell() {
   function selectRequest(requestId: string, context?: RequestNavContext, focus?: string) {
     navigate({ page: "detail", requestId, focusPanel: focus });
     setNavContext(context ?? null);
+  }
+
+  // BL136 4f-i: open the dedicated Actual Work Ticket Workspace route (wide screens only — the
+  // card entry point never calls this below 1001px, and the page itself redirects a narrow
+  // deep-link back to Request Detail).
+  function navigateToActualWorkspace(requestId: string, visit: "new" | "draft" = "draft") {
+    navigate({ page: "actual-work", requestId, visit });
   }
 
   function backToRequests() {
@@ -441,6 +462,22 @@ function AppShell() {
             prevId={prevRequestId}
             nextId={nextRequestId}
             onNavigate={(id) => selectRequest(id, navContext ?? undefined)}
+            onNavigateToActualWorkspace={navigateToActualWorkspace}
+          />
+        )}
+        {route.page === "actual-work" && role !== "unknown" && (
+          <ActualWorkWorkspacePage
+            requestId={route.requestId}
+            visit={route.visit}
+            onExit={() => navigate({ page: "detail", requestId: route.requestId })}
+            onResolvedToDraft={() => {
+              history.replaceState(
+                null,
+                "",
+                `${window.location.pathname}${window.location.search}#/request/${route.requestId}/actual-work/draft`,
+              );
+              setRoute({ page: "actual-work", requestId: route.requestId, visit: "draft" });
+            }}
           />
         )}
         {(route.page === "requests" || route.page === "detail") && role !== "unknown" && role !== "viewer" && (
@@ -458,6 +495,7 @@ function AppShell() {
             narrowNextId={nextRequestId}
             onNarrowNavigate={(id) => selectRequest(id, navContext ?? undefined)}
             onWideModeChange={setWorkbenchWideActive}
+            onNavigateToActualWorkspace={navigateToActualWorkspace}
           />
         )}
         {route.page === "home" && (

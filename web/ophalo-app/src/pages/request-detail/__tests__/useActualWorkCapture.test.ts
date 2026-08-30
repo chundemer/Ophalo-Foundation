@@ -942,4 +942,59 @@ describe("useActualWorkCapture — recorder transfer (1a-ii-b)", () => {
       expect(result.current.state.status).toBe("draft");
     });
   });
+
+  // BL136 4f-i: the wide-screen workspace route needs the Draft created without the modal side
+  // effect `startCapture` carries.
+  describe("createDraft (workspace route entry)", () => {
+    it("creates a Draft and moves to draft state without opening the modal", async () => {
+      mockGetActualWorkHistoryForRequest.mockResolvedValueOnce(history());
+      mockCreateActualWork.mockResolvedValueOnce({ id: "draft-9", status: "Draft", concurrencyVersion: "v1" });
+      const { result } = renderHook(() => useActualWorkCapture("request-1"));
+      await waitFor(() => expect(result.current.state.status).toBe("no-draft"));
+
+      let outcome: string | undefined;
+      await act(async () => {
+        outcome = await result.current.createDraft("transcribe");
+      });
+
+      expect(outcome).toBe("created");
+      expect(result.current.state.status).toBe("draft");
+      expect(result.current.isModalOpen).toBe(false);
+    });
+
+    it("returns 'exists' when a Draft is already open (no create call)", async () => {
+      mockGetActualWorkHistoryForRequest.mockResolvedValueOnce(history({ openDraft: { ...DRAFT_NO_DEFAULT } }));
+      const { result } = renderHook(() => useActualWorkCapture("request-1"));
+      await waitFor(() => expect(result.current.state.status).toBe("draft"));
+
+      let outcome: string | undefined;
+      await act(async () => {
+        outcome = await result.current.createDraft("transcribe");
+      });
+
+      expect(outcome).toBe("exists");
+      expect(mockCreateActualWork).not.toHaveBeenCalled();
+      expect(result.current.isModalOpen).toBe(false);
+    });
+
+    it("reconciles a 409 create onto the authoritative Draft as 'exists'", async () => {
+      mockGetActualWorkHistoryForRequest
+        .mockResolvedValueOnce(history())
+        .mockResolvedValueOnce(history({ openDraft: { ...DRAFT_NO_DEFAULT } }));
+      mockCreateActualWork.mockRejectedValueOnce(
+        new ApiError(409, "Conflict", "ActualWork.DraftAlreadyOpenForRequest"),
+      );
+      const { result } = renderHook(() => useActualWorkCapture("request-1"));
+      await waitFor(() => expect(result.current.state.status).toBe("no-draft"));
+
+      let outcome: string | undefined;
+      await act(async () => {
+        outcome = await result.current.createDraft("transcribe");
+      });
+
+      expect(outcome).toBe("exists");
+      expect(result.current.state.status).toBe("draft");
+      expect(result.current.isModalOpen).toBe(false);
+    });
+  });
 });

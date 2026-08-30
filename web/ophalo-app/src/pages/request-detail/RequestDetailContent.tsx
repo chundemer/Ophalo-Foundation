@@ -44,6 +44,9 @@ interface RequestDetailContentProps extends RequestDetailLayoutProps {
   onTimelineFilterChange: (filter: TimelineFilter) => void;
   displayedEvents: KeepRequestDetailResult["events"];
   onNavigate?: (id: string) => void;
+  // BL136 4f-i: wide-screen capture navigates to the dedicated workspace route instead of opening
+  // the in-page modal. Undefined below 1001px — capture stays a full-bleed modal here.
+  onNavigateToActualWorkspace?: (requestId: string, visit?: "new" | "draft") => void;
   onOpenClearAttention: () => void;
   canReviewActualWork?: boolean;
   // 4c-i-c-2: the signed-in member's account-user id, threaded into useActualWorkCapture so
@@ -74,38 +77,11 @@ export function RequestDetailContent(props: RequestDetailContentProps) {
       : [],
   );
   const [recorderDrawerOpen, setRecorderDrawerOpen] = useState(false);
-  // BL136 4e-iii: holds the successor Draft id when a replacement-copy correction succeeded but the
-  // Draft could not be auto-opened (e.g. the acting user lacks ActualWorkCapture, or another
-  // session opened a different Draft first) — surfaces an explicit "open the replacement draft"
-  // recovery affordance instead of a dead-end.
-  const [replacementRecoverySuccessorId, setReplacementRecoverySuccessorId] = useState<string | null>(null);
-
-  const handleReplaceVisit = useCallback<typeof actualWorkFinancialReview.replace>(
-    async (visit, reason) => {
-      const outcome = await actualWorkFinancialReview.replace(visit, reason);
-      if (outcome.kind === "replaced") {
-        await actualWorkHistory.retry();
-        const opened = await actualWorkCapture.openReplacementDraft(outcome.successorActualWorkId);
-        setReplacementRecoverySuccessorId(opened ? null : outcome.successorActualWorkId);
-      }
-      return outcome;
-    },
-    [actualWorkFinancialReview, actualWorkHistory, actualWorkCapture],
-  );
-  // Editable capture states — the recorder's own resume/start affordance.
-  const actualWorkCaptureEditable = actualWorkCapture.state.status === "no-draft" || actualWorkCapture.state.status === "draft";
-  // Also render the compact strip for the non-actionable "another team member is recording this
-  // visit" state (GAP-055), so a qualified non-recorder still sees why there is no entry point.
-  const actualWorkCardVisible =
-    actualWorkCaptureEditable ||
-    actualWorkCapture.state.status === "held-by-other" ||
-    actualWorkCapture.state.status === "owner-recovery";
-  const actualWorkHistoryVisible =
-    actualWorkHistory.state.status === "error" ||
-    (actualWorkHistory.state.status === "loaded" && actualWorkHistory.state.submittedVisits.length > 0);
 
   // Locked in keep-ui-design-model-v2.md §13 (build-log 133); duplicated rather than imported —
-  // same rule `RequestWorkbenchShell.tsx`'s `PROTECTED_WORKSPACE_MIN_PX` measures.
+  // same rule `RequestWorkbenchShell.tsx`'s `PROTECTED_WORKSPACE_MIN_PX` measures. This is the
+  // *container* width, used for Request Detail's own internal layout (mobile anchor / action
+  // rail / module order / the in-page composer's own `isWide` chrome).
   const rootRef = useRef<HTMLDivElement | null>(null);
   const [isWide, setIsWide] = useState(false);
   useEffect(() => {
@@ -118,6 +94,60 @@ export function RequestDetailContent(props: RequestDetailContentProps) {
     observer.observe(el);
     return () => observer.disconnect();
   }, []);
+
+  // BL136 4f-i: the route-vs-modal decision must use the *viewport* 1001px predicate, matching
+  // `ActualWorkWorkspacePage`. In Workbench two-pane mode the detail container is < 1001px at
+  // viewports up to ~1360px (a 360px queue pane sits beside it), but a direct workspace deep-link
+  // renders the desktop workspace at those same viewports — so the container width above would
+  // wrongly keep the in-page modal there. `matchMedia` mirrors the workspace page's own guard.
+  const [isViewportWide, setIsViewportWide] = useState(
+    () => typeof window?.matchMedia === "function" && window.matchMedia("(min-width: 1001px)").matches,
+  );
+  useEffect(() => {
+    if (typeof window?.matchMedia !== "function") return;
+    const mq = window.matchMedia("(min-width: 1001px)");
+    const sync = () => setIsViewportWide(mq.matches);
+    mq.addEventListener("change", sync);
+    return () => mq.removeEventListener("change", sync);
+  }, []);
+  // On a wide viewport the capture entry point navigates to the dedicated workspace route;
+  // otherwise it opens the existing full-bleed modal on this page.
+  const useWorkspaceRoute = isViewportWide && !!props.onNavigateToActualWorkspace;
+  // BL136 4e-iii: holds the successor Draft id when a replacement-copy correction succeeded but the
+  // Draft could not be auto-opened (e.g. the acting user lacks ActualWorkCapture, or another
+  // session opened a different Draft first) — surfaces an explicit "open the replacement draft"
+  // recovery affordance instead of a dead-end.
+  const [replacementRecoverySuccessorId, setReplacementRecoverySuccessorId] = useState<string | null>(null);
+
+  const handleReplaceVisit = useCallback<typeof actualWorkFinancialReview.replace>(
+    async (visit, reason) => {
+      const outcome = await actualWorkFinancialReview.replace(visit, reason);
+      if (outcome.kind === "replaced") {
+        await actualWorkHistory.retry();
+        if (useWorkspaceRoute) {
+          // The workspace route mounts its own capture hook, which re-probes and lands on the
+          // successor Draft (already created + source superseded by the service).
+          props.onNavigateToActualWorkspace!(requestId, "draft");
+        } else {
+          const opened = await actualWorkCapture.openReplacementDraft(outcome.successorActualWorkId);
+          setReplacementRecoverySuccessorId(opened ? null : outcome.successorActualWorkId);
+        }
+      }
+      return outcome;
+    },
+    [actualWorkFinancialReview, actualWorkHistory, actualWorkCapture, useWorkspaceRoute, props, requestId],
+  );
+  // Editable capture states — the recorder's own resume/start affordance.
+  const actualWorkCaptureEditable = actualWorkCapture.state.status === "no-draft" || actualWorkCapture.state.status === "draft";
+  // Also render the compact strip for the non-actionable "another team member is recording this
+  // visit" state (GAP-055), so a qualified non-recorder still sees why there is no entry point.
+  const actualWorkCardVisible =
+    actualWorkCaptureEditable ||
+    actualWorkCapture.state.status === "held-by-other" ||
+    actualWorkCapture.state.status === "owner-recovery";
+  const actualWorkHistoryVisible =
+    actualWorkHistory.state.status === "error" ||
+    (actualWorkHistory.state.status === "loaded" && actualWorkHistory.state.submittedVisits.length > 0);
 
   // Mobile action-rail hide/unpin while text is being entered (Slice 2, locked spec §4.2).
   // Scoped `focus`/`blur` on the canvas root rather than document, and rather than threading a
@@ -219,7 +249,15 @@ export function RequestDetailContent(props: RequestDetailContentProps) {
           <div className="rounded-xl border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] divide-y divide-[var(--ophalo-border)]">
             <ActualWorkCard
               state={actualWorkCapture.state}
-              onStartCapture={(intent) => void actualWorkCapture.startCapture(intent)}
+              onStartCapture={(intent) => {
+                if (useWorkspaceRoute) {
+                  void actualWorkCapture.createDraft(intent).then((r) => {
+                    if (r === "created" || r === "exists") props.onNavigateToActualWorkspace!(requestId, "draft");
+                  });
+                } else {
+                  void actualWorkCapture.startCapture(intent);
+                }
+              }}
               onReassignRecorder={() => setRecorderDrawerOpen(true)}
               recoveryNotice={actualWorkCapture.recoveryNotice}
               onDismissRecoveryNotice={actualWorkCapture.clearRecoveryNotice}
@@ -328,7 +366,9 @@ export function RequestDetailContent(props: RequestDetailContentProps) {
           hidden={isTextEditing}
         />
       )}
-      {actualWorkCapture.isModalOpen && actualWorkCapture.state.status === "draft" && (
+      {/* BL136 4f-i: the in-page full-bleed modal is the narrow-screen capture surface only. On
+          wide screens capture lives on the dedicated workspace route (`useWorkspaceRoute`). */}
+      {!useWorkspaceRoute && actualWorkCapture.isModalOpen && actualWorkCapture.state.status === "draft" && (
         <ActualWorkComposer
           isWide={isWide}
           draft={actualWorkCapture.state.draft}

@@ -1,6 +1,6 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-08-30 (4e-iii-a review follow-up pending; 4e-iii-b `9084985`; 4e-iii-a `a18219e`)
+**Last updated:** 2026-08-30 (4f-i workspace route shell pending; 4e-iii-a review follow-up pending; 4e-iii-b `9084985`; 4e-iii-a `a18219e`)
 **Purpose:** active handoff only. Completed implementation detail belongs in Git history and the
 relevant build log.
 
@@ -23,11 +23,11 @@ existing-ticket workflow as the explicit outage fallback.
 
 `main` at `8495ba3` (pushed 2026-08-30) carries the 4e-0 signal seam, 4e-i supersession foundation,
 and `AddActualWorkSupersession`. Railway deployment completed and the migration is applied —
-confirmed 2026-08-30; `ActualWorkSupersessionPersistenceTests` (4) pass. Local commits — the
-4e-iii-a review follow-up (pending), `9084985` (4e-iii-b), `a18219e` (4e-iii-a), `e19e5f9`
-(4e-ii-c), `29db179` (4e-ii-b-2), `2be5203` (4e-ii-b-1), `82d9b9e` (4e-ii-a) and earlier — are **not
-yet pushed**. No migration since 4e-i (4e-ii and 4e-iii are code-only / UI-only: services, read/mutation guards,
-routes, mapper, response shape).
+confirmed 2026-08-30; `ActualWorkSupersessionPersistenceTests` (4) pass. Local commits — 4f-i
+(pending), the 4e-iii-a review follow-up (pending), `9084985` (4e-iii-b), `a18219e` (4e-iii-a),
+`e19e5f9` (4e-ii-c), `29db179` (4e-ii-b-2), `2be5203` (4e-ii-b-1), `82d9b9e` (4e-ii-a) and earlier —
+are **not yet pushed**. No migration since 4e-i (4e-ii, 4e-iii, and 4f-i are code-only / UI-only:
+services, read/mutation guards, routes, mapper, response shape, and now the workspace route shell).
 
 ### Prior slice — 4e-ii-a (local commit `82d9b9e`)
 
@@ -143,12 +143,54 @@ UI-only, `web/ophalo-app`. 1 production + 1 test file. No backend, no migration.
 - 4g / Billing-Revision deferrals (eligible-visit filter, Resolved→Closed close gate,
   revoke-on-replace) remain out of scope. Findings 1–3 are now fully closed.
 
-### Next code slice — 4f-i Actual Work Ticket Workspace route shell (fresh session)
+### Prior slice — 4f-i Actual Work Ticket Workspace route shell (local commit pending)
 
-4e (pre-review replacement-copy correction) is complete through 4e-iii and its review follow-up.
-Next is BL136 **4f-i** — dedicated workspace route shell + field region (ticket context, lines,
-`VisitNote`, performer, narrow-screen fallback), `web/ophalo-app`. Do pre-work/preflight against
-BL136 §4f and the Workbench signoff spec before implementation.
+UI-only, `web/ophalo-app` (BL136 §4f-i, D7). 7 production + 4 test files. No backend, no migration.
+
+- **Route:** `#/request/:id/actual-work/:seg` → `AppRoute` variant
+  `{ page: "actual-work"; requestId; visit: "new" | "draft" | <visitId> }`, matched **before** the
+  generic `#/request/(.+)` detail pattern. `navigate` emits the hash; `getRouteFromLocation`
+  exported for tests.
+- **`ActualWorkWorkspacePage.tsx` (new):** desktop-first shell. Viewport `matchMedia("(min-width:
+  1001px)")` guard → a narrow viewport (or shrink, or hand-authored deep link) calls `onExit`,
+  redirecting to the stacked Request Detail cards (no new mobile workspace). `draft` hosts the
+  existing price-blind `ActualWorkComposer` **unmodified** (`isWide={false}` full-bleed, its own
+  "← Back to Request"); `new` is a transient/compat entry — self-creates the Draft then the caller
+  `replaceState`s to `draft`. A submitted `:visitId` renders an inline **read-only** view
+  (ticket-context header: customer · ref · status badge; history-backed lines with performer or
+  "Unknown performer"; Visit Note; completion note; superseded marker; heading focused on mount).
+  Office region (financial resolution / totals / blockers) is a placeholder comment — **4f-ii**.
+- **`useActualWorkWorkspace.ts` (new):** composition hook over `useActualWorkCapture` +
+  `useActualWorkHistory` + the `["request-detail", id]` query; `submittedVisit(id)` lookup. Adds no
+  mutation surface.
+- **`useActualWorkCapture.createDraft(intent)`:** creates (or reconciles a 409 onto) the Draft
+  **without** the `setIsModalOpen` side effect `startCapture` carries — the wide entry point
+  navigates instead. `startCapture` untouched.
+- **`RequestDetailContent`:** route-vs-modal decision uses a **viewport-level** `matchMedia`
+  predicate (`isViewportWide`), *not* the container `isWide` — in Workbench two-pane mode the
+  detail container is < 1001px up to ~1360px viewport, but the workspace deep-link renders there,
+  so the entry point must stay consistent. Container `isWide` retained for internal layout only.
+  Wide viewport: card entry → `createDraft` then `onNavigateToActualWorkspace`; replace-visit →
+  navigate (the workspace's own capture hook re-probes onto the successor Draft); the in-page
+  composer modal is gated to `!useWorkspaceRoute`. Narrow: unchanged.
+- **`RequestDetail` / `RequestWorkbenchShell`:** thread `onNavigateToActualWorkspace` (both detail
+  renders + the standalone viewer render); `App` wires it to `navigateToActualWorkspace`.
+- **Accepted tradeoff:** a wide replace→workspace navigation loses the session-scoped
+  `replacementCorrection` banner (the workspace mounts a fresh capture hook). Durable lineage is on
+  the record; UI-only, per D7.
+- Verification: `tsc` clean, full web suite 867 pass (93 files), `check:tokens` passed,
+  `git diff --check` clean.
+
+### Next code slice — 4f-ii Actual Work Ticket Workspace office region (fresh session)
+
+4f-i delivered the route shell + price-blind field region. Next is BL136 **4f-ii** — the
+capability-gated office region inside the workspace route: composes the **existing**
+`FinancialResolutionForm` / `NoChargeDispositionForm` / review controls + blocker list + real
+totals, gated on `canReviewActualWork`, placed line-adjacent, never sharing a line renderer with
+the field region (ADR-493 §5 / D7 price-blindness hard rule — a reviewed visit shows read-only).
+`web/ophalo-app`. Do pre-work/preflight against BL136 §4f-ii and P-preflight slice 4f-ii before
+implementation. The 4f-i placeholder comment in `ActualWorkWorkspacePage`'s read-only view marks
+the compose point.
 
 ### Remaining pilot/release work
 
