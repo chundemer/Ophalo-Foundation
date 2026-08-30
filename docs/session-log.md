@@ -408,7 +408,7 @@ correction applied pre-commit: partial-component resolution + client negative ch
 full frontend suite **799/799** (90 files, +4), `tsc --noEmit` clean, `check:tokens` passed,
 `git diff --check` clean.
 
-### Claude handoff — 4c-i `4c-i-c-2` DONE (pending commit) — slice code-complete (10/10); deploy the merged slice per the gate below
+### Claude handoff — 4c-i `4c-i-c-2` DONE (`ffc5d71`) — slice code-complete (10/10); deploy the merged slice per the gate below
 
 **BL136 P (workflow/mechanical preflight) is complete.** ADR-494 (D1–D12) committed at `2118293`;
 the ADR-487 wording fix + 4c-i seam preflight rev. 3 committed at `644aa4a`; the rev. 4 docs
@@ -481,7 +481,7 @@ zero lines; valid default → both expanded lines carry it; `Submitted` → `Not
 0 warnings, `git diff --check` clean. The pre-planned 8 red HTTP tests are unchanged (still
 `4c-i-b`).
 
-**Session 4 (`4c-i-b-1`) — COMPLETE (2026-08-29), pending commit.** Split executed (Christian
+**Session 4 (`4c-i-b-1`) — COMPLETE (2026-08-29), `69d310f`.** Split executed (Christian
 approved b-1/b-2). 11 files (7 prod + 4 test): new `ActualWorkErrors.PerformerIneligible` (422 via
 new `ErrorHttpMapper` entry — the 7th prod file, drift from BL136-P's 6, still ≤ gate); new
 `ActualWorkPerformerEligibility` predicate (active + `RequestsOperate` + `ActualWorkCapture`, no
@@ -538,7 +538,7 @@ integration **253/253** (+1), `~ActualWork` unit **111/111**, architecture **14/
 0 warnings; frontend `tsc` + `check:tokens` clean, full app suite **804/804**; `git diff --check`
 clean.
 
-**Session 7 (`4c-i-c-2`) — COMPLETE (2026-08-29), pending commit.** Card + composer add-region gate
+**Session 7 (`4c-i-c-2`) — COMPLETE (2026-08-29), `ffc5d71`.** Card + composer add-region gate
 + wiring, 6 files (4 prod + 2 test), 0 mutation families. `ActualWorkCard` `no-draft` state now
 offers the UI-only entry-intent choice — **"Record my work"** (`record-mine`) vs **"Enter a tech's
 work"** (`transcribe`, label changed from "Transcribe work" — Christian, 2026-08-29); resume/draft
@@ -597,10 +597,10 @@ transcribe reload-persistence requirement made it necessary — 0 mutation famil
 | 2 | *done* | `4c-i-a-1` `d49e5b3` + follow-up `4526564` — domain + persistence + EF config (7 prod + 4 test) | 1 | committed; all persistence + unit + arch tests green post-mig |
 | — | *done — Christian* | `4c-i-mig` — `AddActualWorkPerformer` authored + applied locally (hand-edited: no backfill); 3 generated files still to `git commit` | 2 | not a Claude session |
 | 3 | *done* — `4c-i-a-2` | assembly-expansion outcome contract (3 prod + 1 test) | 2 (not the migration) | 8 HTTP tests stay red until `4c-i-b` |
-| 4a | *done* — `4c-i-b-1` | performer-candidate read + create/add-line explicit performer + HTTP test fixes (7 prod + 4 test) | 2, `4c-i-mig` | pending commit; inherited default frozen at selection |
+| 4a | *done* — `4c-i-b-1` `69d310f` | performer-candidate read + create/add-line explicit performer + HTTP test fixes (7 prod + 4 test) | 2, `4c-i-mig` | inherited default frozen at selection |
 | 4b | *done* — `4c-i-b-2` `6150363` | `SetDefaultPerformer` route + service + tests (3 files) | 4a | recorder-only Draft mutation, existing concurrency protocol |
 | 5a | *done* — `4c-i-c-1` `4a0d8ff` | open-draft default-performer read + api client/hook (5 prod + 2 test) | 4b | 0 mutation families; added the projection exposure BL136-P missed |
-| 5b | *done* — `4c-i-c-2` | card + composer add-region gate + wiring (4 prod + 2 test) | 5a | pending commit; last commit of the slice — deploy the whole merged slice after it lands |
+| 5b | *done* — `4c-i-c-2` `ffc5d71` | card + composer add-region gate + wiring (4 prod + 2 test) | 5a | last commit of the slice — deploy the whole merged slice |
 
 After `4c-i` deploys: `4c-ii` (VisitNote API), `4c-iii` (rich UI), `4d`, `4e-0/i/ii/iii`, `4f-i/ii`,
 `4g` — each its own session(s), per the BL136 per-slice split. Then BL135 Batch 5 (Billing Revision)
