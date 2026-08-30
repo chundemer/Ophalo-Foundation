@@ -1,6 +1,6 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-08-30 (4e-iii-b `9084985`; 4e-iii-a `a18219e`; 4e-ii-c `e19e5f9`)
+**Last updated:** 2026-08-30 (4e-iii-a review follow-up pending; 4e-iii-b `9084985`; 4e-iii-a `a18219e`)
 **Purpose:** active handoff only. Completed implementation detail belongs in Git history and the
 relevant build log.
 
@@ -23,9 +23,10 @@ existing-ticket workflow as the explicit outage fallback.
 
 `main` at `8495ba3` (pushed 2026-08-30) carries the 4e-0 signal seam, 4e-i supersession foundation,
 and `AddActualWorkSupersession`. Railway deployment completed and the migration is applied —
-confirmed 2026-08-30; `ActualWorkSupersessionPersistenceTests` (4) pass. Local commits `e19e5f9`
-(4e-ii-c), `29db179` (4e-ii-b-2), `2be5203` (4e-ii-b-1), `82d9b9e` (4e-ii-a) and earlier are **not yet
-pushed**. No migration since 4e-i (4e-ii-a/b-1/b-2/c are code-only: services, read/mutation guards,
+confirmed 2026-08-30; `ActualWorkSupersessionPersistenceTests` (4) pass. Local commits — the
+4e-iii-a review follow-up (pending), `9084985` (4e-iii-b), `a18219e` (4e-iii-a), `e19e5f9`
+(4e-ii-c), `29db179` (4e-ii-b-2), `2be5203` (4e-ii-b-1), `82d9b9e` (4e-ii-a) and earlier — are **not
+yet pushed**. No migration since 4e-i (4e-ii and 4e-iii are code-only / UI-only: services, read/mutation guards,
 routes, mapper, response shape).
 
 ### Prior slice — 4e-ii-a (local commit `82d9b9e`)
@@ -124,12 +125,30 @@ UI-only, `web/ophalo-app` (BL136 §4e-iii). 4 production + 2 test files. No back
   sends the local fields.
 - Verification: `tsc` clean, full web suite 850 pass (90 files), `git diff --check` clean.
 
-### Next code slice — 4e-iii-a review follow-up (fresh session)
+### Prior slice — 4e-iii-a review follow-up (local commit pending)
 
-Focused follow-up on the -a replacement-copy correction UI, kept separate from the -b persistence
-slice: capture-permission gating, successor-ID verification, and the session replacement notice.
-4g / Billing-Revision deferrals (eligible-visit filter, Resolved→Closed close gate,
-revoke-on-replace) remain out of scope.
+Independent review of the corrective portion of `a18219e` (findings 1–3 from the -a review).
+UI-only, `web/ophalo-app`. 1 production + 1 test file. No backend, no migration.
+
+- **Finding 1 (capture-permission gating)** and **Finding 3 (successor-ID verification)** — verified
+  complete as committed in `a18219e`: `openReplacementDraft` does a fresh authoritative history
+  read, returns `false` (state → `hidden`) when `!canCaptureActualWork`, and opens only when
+  `status === "draft" && draft.id === successorId`. No change needed.
+- **Finding 2 (session replacement notice)** — the `replacementCorrection` flag was cleared only in
+  `closeModal`, leaking the banner onto a later same-session Draft after **discard**, and leaving it
+  rendered through the submitted-confirmation view after **submit**. Fix: `setReplacementCorrection(false)`
+  added to `onDraftDiscarded` and `markSubmitted`. Lifecycle now clears on close, submit, and discard.
+- Regression tests: auto-open → flag true → `markSubmitted()` / `onDraftDiscarded()` → flag false.
+- Verification: `tsc` clean, full web suite 852 pass (90 files), `git diff --check` clean.
+- 4g / Billing-Revision deferrals (eligible-visit filter, Resolved→Closed close gate,
+  revoke-on-replace) remain out of scope. Findings 1–3 are now fully closed.
+
+### Next code slice — 4f-i Actual Work Ticket Workspace route shell (fresh session)
+
+4e (pre-review replacement-copy correction) is complete through 4e-iii and its review follow-up.
+Next is BL136 **4f-i** — dedicated workspace route shell + field region (ticket context, lines,
+`VisitNote`, performer, narrow-screen fallback), `web/ophalo-app`. Do pre-work/preflight against
+BL136 §4f and the Workbench signoff spec before implementation.
 
 ### Remaining pilot/release work
 

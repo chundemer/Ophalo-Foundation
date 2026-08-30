@@ -508,6 +508,42 @@ describe("useActualWorkCapture", () => {
     expect(result.current.replacementCorrection).toBe(false);
     expect(result.current.state.status).toBe("hidden");
   });
+
+  it("clears the replacement-correction flag when the auto-opened successor Draft is submitted", async () => {
+    mockGetActualWorkHistoryForRequest.mockResolvedValueOnce(history());
+    const { result } = renderHook(() => useActualWorkCapture("request-1"));
+    await waitFor(() => expect(result.current.state.status).toBe("no-draft"));
+
+    mockGetActualWorkHistoryForRequest.mockResolvedValueOnce(history({ openDraft: DRAFT_NO_DEFAULT }));
+    await act(async () => {
+      await result.current.openReplacementDraft("draft-1");
+    });
+    expect(result.current.replacementCorrection).toBe(true);
+
+    act(() => result.current.markSubmitted());
+
+    expect(result.current.replacementCorrection).toBe(false);
+  });
+
+  it("clears the replacement-correction flag when the auto-opened successor Draft is discarded", async () => {
+    mockGetActualWorkHistoryForRequest.mockResolvedValueOnce(history());
+    const { result } = renderHook(() => useActualWorkCapture("request-1"));
+    await waitFor(() => expect(result.current.state.status).toBe("no-draft"));
+
+    mockGetActualWorkHistoryForRequest.mockResolvedValueOnce(history({ openDraft: DRAFT_NO_DEFAULT }));
+    await act(async () => {
+      await result.current.openReplacementDraft("draft-1");
+    });
+    expect(result.current.replacementCorrection).toBe(true);
+
+    mockGetActualWorkHistoryForRequest.mockResolvedValueOnce(history());
+    await act(async () => {
+      result.current.onDraftDiscarded();
+    });
+
+    expect(result.current.replacementCorrection).toBe(false);
+    expect(result.current.isModalOpen).toBe(false);
+  });
 });
 
 describe("useActualWorkCapture — recorder transfer (1a-ii-b)", () => {

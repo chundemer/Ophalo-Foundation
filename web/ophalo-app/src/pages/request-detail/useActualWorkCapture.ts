@@ -334,12 +334,18 @@ export function useActualWorkCapture(requestId: string, currentAccountUserId?: s
   // while hook state is "draft").
   const markSubmitted = useCallback(() => {
     submittedPendingRef.current = true;
+    // The composer stays mounted for its submitted confirmation, but the visit is no longer a
+    // replacement Draft — clear the banner now (lifecycle: clear on close, submit, or discard).
+    setReplacementCorrection(false);
   }, []);
 
   // After a successful discard the draft is gone with nothing left to show — close the composer
   // and reprobe in one step.
   const onDraftDiscarded = useCallback(() => {
     setIsModalOpen(false);
+    // Symmetric with closeModal: discarding is a composer exit, so the session-scoped replacement
+    // banner must not survive it onto a later same-session Draft opened via startCapture.
+    setReplacementCorrection(false);
     void probe();
   }, [probe]);
 
