@@ -431,7 +431,7 @@ constant — `EfActualWorkReviewSignalReconciliation.OpenOutstandingReviewPredic
 `AND superseded_at_utc IS NULL`, and adds `IActualWorkSupersessionPersistence` owning the one
 supersede+successor transaction that also calls `ResolveIfClearAsync`.
 
-**4e-0 — extract the signal-reconciliation seam — COMPLETE (2026-08-30), commit `<pending>`.**
+**4e-0 — extract the signal-reconciliation seam — COMPLETE (2026-08-30), commit `631aacb`.**
 No behaviour change. New `IActualWorkReviewSignalReconciliation` (Application, domain scalars only —
 no `DbContext`/transaction on the interface) with `RaiseAsync` + `ResolveIfClearAsync`; one Infra
 impl `EfActualWorkReviewSignalReconciliation` taking the request-scoped `OpHaloDbContext` via DI so
