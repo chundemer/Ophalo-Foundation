@@ -60,6 +60,16 @@ public sealed class ActualWorkReplacementApiService(
         if (source is null)
             return Result<Guid>.Failure(ActualWorkErrors.NotFound);
 
+        // Preserve the public conflict ordering: a stale caller must reload before any other
+        // state is reported, and a second replacement of an already superseded source must expose
+        // the stable AlreadySuperseded outcome rather than its existing successor Draft.
+        // SupersedeAsync repeats both checks inside its atomic boundary to close races.
+        if (source.ConcurrencyVersion != expectedSourceVersion)
+            return Result<Guid>.Failure(ActualWorkErrors.VersionMismatch);
+
+        if (source.SupersededAtUtc is not null)
+            return Result<Guid>.Failure(ActualWorkErrors.AlreadySuperseded);
+
         // Friendly precondition: the request may hold at most one open Draft (ADR-494 D6). The
         // persistence seam's open-Draft partial unique index stays the actual race guard.
         var openDraft = await actualWorkPersistence.GetOpenDraftForRequestAsync(

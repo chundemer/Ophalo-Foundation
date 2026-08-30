@@ -169,6 +169,22 @@ public sealed class ActualWorkReplacementApiServiceTests
         Assert.False(seam.WasCalled);
     }
 
+    [Fact]
+    public async Task Replacement_of_an_already_superseded_source_reports_the_stable_conflict_after_version_check()
+    {
+        var source = LinedSubmittedSource();
+        Assert.True(source.Supersede(Guid.CreateVersion7(), ActingUser, "First correction.", Now).IsSuccess);
+        var seam = new CapturingSupersession();
+        var sut = CreateSut(seam, source, AccountUserRole.Owner);
+
+        var stale = await sut.CreateReplacementAsync(SourceId, Guid.NewGuid(), "again", default);
+        var current = await sut.CreateReplacementAsync(SourceId, source.ConcurrencyVersion, "again", default);
+
+        Assert.Equal(ActualWorkErrors.VersionMismatch, stale.Error);
+        Assert.Equal(ActualWorkErrors.AlreadySuperseded, current.Error);
+        Assert.False(seam.WasCalled);
+    }
+
     // --- seam outcome mapping ---
 
     [Theory]

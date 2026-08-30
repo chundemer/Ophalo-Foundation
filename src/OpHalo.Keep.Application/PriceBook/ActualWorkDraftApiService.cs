@@ -407,6 +407,31 @@ public sealed class ActualWorkDraftApiService(
         return await CommitAsync(actualWork, ct);
     }
 
+    /// <summary>
+    /// ADR-494 D6 (4e-ii-c): recorder-only Draft mutation for the zero-line disposition copied
+    /// onto a replacement Draft. This deliberately has the same authorization, Draft-state, and
+    /// optimistic-concurrency contract as <see cref="SetVisitNoteAsync"/>; the aggregate remains
+    /// the owner of outcome and completion-note validation.
+    /// </summary>
+    public async Task<Result<Guid>> SetZeroLineDispositionAsync(
+        Guid actualWorkId, ActualWorkOutcome outcome, string? completionNote, Guid expectedVersion,
+        CancellationToken ct)
+    {
+        var loadResult = await AuthorizeAndLoadDraftAsync(actualWorkId, ct);
+        if (loadResult.IsFailure)
+            return Result<Guid>.Failure(loadResult.Error);
+        var actualWork = loadResult.Value;
+
+        if (actualWork.ConcurrencyVersion != expectedVersion)
+            return Result<Guid>.Failure(ActualWorkErrors.VersionMismatch);
+
+        var setResult = actualWork.SetZeroLineDisposition(outcome, completionNote);
+        if (setResult.IsFailure)
+            return Result<Guid>.Failure(setResult.Error);
+
+        return await CommitAsync(actualWork, ct);
+    }
+
     /// <summary>System <c>Reason</c> written to the immutable transfer audit record when the current
     /// recorder hands their own Draft to the office (BL136 Slice 4d). A recorder-initiated hand-off
     /// never carries caller-supplied audit text; only the Owner/Admin path states its own reason.</summary>

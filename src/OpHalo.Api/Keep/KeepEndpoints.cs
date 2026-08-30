@@ -885,6 +885,25 @@ public static class KeepEndpoints
                 : ErrorHttpMapper.ToHttpResult(result.Error);
         }).RequireAuthorization();
 
+        // ADR-494 D6 (4e-ii-c) — Owner/Admin office replacement of a pre-export submitted visit.
+        app.MapPost("/keep/pricebook/actual-work/{actualWorkId:guid}/replace", async (
+            Guid actualWorkId,
+            ActualWorkReplaceBody body,
+            HttpRequest httpRequest,
+            ActualWorkReplacementApiService service,
+            CancellationToken ct) =>
+        {
+            var versionResult = ParseActualWorkVersion(httpRequest.Headers);
+            if (!versionResult.IsSuccess)
+                return ErrorHttpMapper.ToHttpResult(versionResult.Error);
+
+            var result = await service.CreateReplacementAsync(
+                actualWorkId, versionResult.Value, body.Reason ?? string.Empty, ct);
+            return result.IsSuccess
+                ? Results.Ok(new ActualWorkReplacementCreatedResponse(result.Value))
+                : ErrorHttpMapper.ToHttpResult(result.Error);
+        }).RequireAuthorization();
+
         // ADR-494 D2 (4c-i-b) — recorder-only Draft ticket-default performer set/clear.
         app.MapPut("/keep/pricebook/actual-work/{actualWorkId:guid}/default-performer", async (
             Guid actualWorkId,
@@ -919,6 +938,29 @@ public static class KeepEndpoints
 
             var result = await service.SetVisitNoteAsync(
                 actualWorkId, body.VisitNote, versionResult.Value, ct);
+            return result.IsSuccess
+                ? Results.Ok(new ActualWorkConcurrencyVersionResponse(result.Value))
+                : ErrorHttpMapper.ToHttpResult(result.Error);
+        }).RequireAuthorization();
+
+        // ADR-494 D6 (4e-ii-c) — recorder-only Draft editing of a copied zero-line disposition.
+        app.MapPut("/keep/pricebook/actual-work/{actualWorkId:guid}/zero-line-disposition", async (
+            Guid actualWorkId,
+            ActualWorkZeroLineDispositionBody body,
+            HttpRequest httpRequest,
+            ActualWorkDraftApiService service,
+            CancellationToken ct) =>
+        {
+            var versionResult = ParseActualWorkVersion(httpRequest.Headers);
+            if (!versionResult.IsSuccess)
+                return ErrorHttpMapper.ToHttpResult(versionResult.Error);
+
+            if (body.Outcome is null ||
+                !Enum.TryParse<ActualWorkOutcome>(body.Outcome, ignoreCase: true, out var outcome))
+                return ErrorHttpMapper.ToHttpResult(ActualWorkErrors.InvalidOutcome);
+
+            var result = await service.SetZeroLineDispositionAsync(
+                actualWorkId, outcome, body.CompletionNote, versionResult.Value, ct);
             return result.IsSuccess
                 ? Results.Ok(new ActualWorkConcurrencyVersionResponse(result.Value))
                 : ErrorHttpMapper.ToHttpResult(result.Error);
@@ -1431,6 +1473,10 @@ file sealed record ActualWorkUpdateLineBody(decimal ActualQuantity, string? Note
 /// <c>NoWorkAuthorized</c>, <c>NoAccess</c> (case-insensitive).</summary>
 file sealed record ActualWorkSubmitBody(string? Outcome, string? CompletionNote);
 
+file sealed record ActualWorkReplaceBody(string? Reason);
+
+file sealed record ActualWorkZeroLineDispositionBody(string? Outcome, string? CompletionNote);
+
 /// <summary><c>Reason</c> is required for an Owner/Admin transfer and omitted for a recorder-initiated
 /// hand-off (Slice 4d) — the service records a fixed system reason in that case.</summary>
 file sealed record ActualWorkTransferRecorderBody(Guid NewRecorderAccountUserId, string? Reason = null);
@@ -1461,6 +1507,8 @@ file sealed record ActualWorkFinancialDispositionBody(string? Kind, string? Reas
 file sealed record ActualWorkLineAddedResponse(Guid LineId, Guid ActualWorkConcurrencyVersion);
 
 file sealed record ActualWorkConcurrencyVersionResponse(Guid ConcurrencyVersion);
+
+file sealed record ActualWorkReplacementCreatedResponse(Guid SuccessorActualWorkId);
 
 /// <summary>Build-log/129's 5d-i preflight lock: <see cref="IncludedOptionalItemIds"/> names the
 /// assembly's optional item ids to include; optional items default out (null/empty means none).</summary>

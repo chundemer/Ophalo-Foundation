@@ -172,6 +172,154 @@ public sealed class ActualWorkVisitNoteApiTests : IClassFixture<KeepApiWebFactor
         Assert.Equal("recorded in the field", await GetVisitNoteAsync(actualWorkId));
     }
 
+    [Fact]
+    public async Task SetZeroLineDisposition_OnDraft_PersistsAndRotatesVersion()
+    {
+        var (ctx, actualWorkId, version) = await SeedDraftAsync("zero-line-set");
+
+        var response = await PutZeroLineDispositionAsync(
+            ctx.OwnerCookie, actualWorkId, version, "NoAccess", "Customer not home");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var rotated = (await response.Content.ReadFromJsonAsync<JsonElement>())
+            .GetProperty("concurrencyVersion").GetGuid();
+        Assert.NotEqual(version, rotated);
+
+        await using var scope = _factory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+        var saved = await db.Set<ActualWork>().AsNoTracking().SingleAsync(x => x.Id == actualWorkId);
+        Assert.Equal(ActualWorkOutcome.NoAccess, saved.Outcome);
+        Assert.Equal("Customer not home", saved.CompletionNote);
+        Assert.Equal(rotated, saved.ConcurrencyVersion);
+    }
+
+    [Fact]
+    public async Task SetZeroLineDisposition_CallerNotTheRecorder_Returns404()
+    {
+        var (ctx, actualWorkId, version) = await SeedDraftAsync("zero-line-not-recorder");
+        var operatorCookie = await GetCookieAsync(ctx.OperatorId, ctx.AccountId);
+
+        var response = await PutZeroLineDispositionAsync(
+            operatorCookie, actualWorkId, version, "NoAccess", "Customer not home");
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task SetZeroLineDisposition_StaleVersion_Returns409()
+    {
+        var (ctx, actualWorkId, _) = await SeedDraftAsync("zero-line-stale");
+
+        var response = await PutZeroLineDispositionAsync(
+            ctx.OwnerCookie, actualWorkId, Guid.NewGuid(), "NoAccess", "Customer not home");
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("not-an-outcome")]
+    public async Task SetZeroLineDisposition_MissingOrInvalidOutcome_Returns400(string? outcome)
+    {
+        var (ctx, actualWorkId, version) = await SeedDraftAsync("zero-line-invalid");
+
+        var response = await PutZeroLineDispositionAsync(
+            ctx.OwnerCookie, actualWorkId, version, outcome, "Customer not home");
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("ActualWork.InvalidOutcome", body.GetProperty("code").GetString());
+    }
+
+    [Fact]
+    public async Task Replace_SubmittedVisit_CreatesDraftSuccessor_AndRepeatReturnsAlreadySuperseded()
+    {
+        var (accountId, ownerId, ownerCookie) = await SeedAccountAsync("replace-route");
+        await EnrollAsync(accountId, ownerId);
+        var requestId = await SeedRequestAsync(accountId);
+        var source = ActualWork.Create(accountId, requestId, ownerId).Value;
+        Assert.True(source.Submit(DateTime.UtcNow, ActualWorkOutcome.NoAccess, "Customer not home").IsSuccess);
+
+        await using (var scope = _factory.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+            db.Set<ActualWork>().Add(source);
+            await db.SaveChangesAsync();
+        }
+
+        var response = await PostReplacementAsync(ownerCookie, source.Id, source.ConcurrencyVersion, "Wrong visit details");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var successorId = (await response.Content.ReadFromJsonAsync<JsonElement>())
+            .GetProperty("successorActualWorkId").GetGuid();
+
+        Guid sourceVersion;
+        await using (var scope = _factory.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+            var reloadedSource = await db.Set<ActualWork>().AsNoTracking().SingleAsync(x => x.Id == source.Id);
+            var successor = await db.Set<ActualWork>().AsNoTracking().SingleAsync(x => x.Id == successorId);
+            Assert.NotNull(reloadedSource.SupersededAtUtc);
+            Assert.Equal(successorId, reloadedSource.SupersededByActualWorkId);
+            Assert.Equal(ActualWorkStatus.Draft, successor.Status);
+            Assert.Equal(ActualWorkOutcome.NoAccess, successor.Outcome);
+            Assert.Equal("Customer not home", successor.CompletionNote);
+            sourceVersion = reloadedSource.ConcurrencyVersion;
+        }
+
+        var repeated = await PostReplacementAsync(ownerCookie, source.Id, sourceVersion, "Again");
+
+        Assert.Equal(HttpStatusCode.Conflict, repeated.StatusCode);
+        var error = await repeated.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("ActualWork.AlreadySuperseded", error.GetProperty("code").GetString());
+    }
+
+    [Fact]
+    public async Task Replace_NonOwnerAdmin_Returns403()
+    {
+        var (accountId, ownerId, _) = await SeedAccountAsync("replace-forbidden");
+        await EnrollAsync(accountId, ownerId);
+        var operatorId = await SeedOperatorAsync(accountId, "replace-forbidden");
+        var requestId = await SeedRequestAsync(accountId);
+        var source = ActualWork.Create(accountId, requestId, ownerId).Value;
+        Assert.True(source.Submit(DateTime.UtcNow, ActualWorkOutcome.NoAccess, "Customer not home").IsSuccess);
+
+        await using (var scope = _factory.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+            db.Set<ActualWork>().Add(source);
+            await db.SaveChangesAsync();
+        }
+
+        var operatorCookie = await GetCookieAsync(operatorId, accountId);
+        var response = await PostReplacementAsync(operatorCookie, source.Id, source.ConcurrencyVersion, "Wrong visit details");
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Replace_StaleVersion_Returns409()
+    {
+        var (accountId, ownerId, ownerCookie) = await SeedAccountAsync("replace-stale");
+        await EnrollAsync(accountId, ownerId);
+        var requestId = await SeedRequestAsync(accountId);
+        var source = ActualWork.Create(accountId, requestId, ownerId).Value;
+        Assert.True(source.Submit(DateTime.UtcNow, ActualWorkOutcome.NoAccess, "Customer not home").IsSuccess);
+
+        await using (var scope = _factory.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+            db.Set<ActualWork>().Add(source);
+            await db.SaveChangesAsync();
+        }
+
+        var response = await PostReplacementAsync(ownerCookie, source.Id, Guid.NewGuid(), "Wrong visit details");
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        var error = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("ActualWork.VersionMismatch", error.GetProperty("code").GetString());
+    }
+
     // -------------------------------------------------------------------------
     // Helpers
     // -------------------------------------------------------------------------
@@ -196,6 +344,30 @@ public sealed class ActualWorkVisitNoteApiTests : IClassFixture<KeepApiWebFactor
             HttpMethod.Put, $"/keep/pricebook/actual-work/{actualWorkId}/visit-note")
         {
             Content = JsonContent.Create(new { visitNote }),
+        };
+        request.Headers.Add("X-Keep-ActualWork-Version", expectedVersion.ToString("D"));
+        return await AuthRequest(cookie).SendAsync(request);
+    }
+
+    private async Task<HttpResponseMessage> PutZeroLineDispositionAsync(
+        string cookie, Guid actualWorkId, Guid expectedVersion, string? outcome, string? completionNote)
+    {
+        var request = new HttpRequestMessage(
+            HttpMethod.Put, $"/keep/pricebook/actual-work/{actualWorkId}/zero-line-disposition")
+        {
+            Content = JsonContent.Create(new { outcome, completionNote }),
+        };
+        request.Headers.Add("X-Keep-ActualWork-Version", expectedVersion.ToString("D"));
+        return await AuthRequest(cookie).SendAsync(request);
+    }
+
+    private async Task<HttpResponseMessage> PostReplacementAsync(
+        string cookie, Guid actualWorkId, Guid expectedVersion, string reason)
+    {
+        var request = new HttpRequestMessage(
+            HttpMethod.Post, $"/keep/pricebook/actual-work/{actualWorkId}/replace")
+        {
+            Content = JsonContent.Create(new { reason }),
         };
         request.Headers.Add("X-Keep-ActualWork-Version", expectedVersion.ToString("D"));
         return await AuthRequest(cookie).SendAsync(request);

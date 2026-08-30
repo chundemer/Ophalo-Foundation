@@ -23,10 +23,10 @@ existing-ticket workflow as the explicit outage fallback.
 
 `main` at `8495ba3` (pushed 2026-08-30) carries the 4e-0 signal seam, 4e-i supersession foundation,
 and `AddActualWorkSupersession`. Railway deployment completed and the migration is applied —
-confirmed 2026-08-30; `ActualWorkSupersessionPersistenceTests` (4) pass. Local commits `29db179`
-(4e-ii-b-2), `2be5203` (4e-ii-b-1), `82d9b9e` (4e-ii-a) and earlier are **not yet pushed**. No
-migration since 4e-i (4e-ii-a/b-1/b-2 are code-only: services, read/mutation guards, mapper,
-response shape).
+confirmed 2026-08-30; `ActualWorkSupersessionPersistenceTests` (4) pass. Local commits for 4e-ii-c,
+`29db179` (4e-ii-b-2), `2be5203` (4e-ii-b-1), `82d9b9e` (4e-ii-a) and earlier are **not yet
+pushed**. No migration since 4e-i (4e-ii-a/b-1/b-2/c are code-only: services, read/mutation guards,
+routes, mapper, response shape).
 
 ### Prior slice — 4e-ii-a (local commit `82d9b9e`)
 
@@ -51,7 +51,7 @@ introduced early.
   `supersedesActualWorkId`. `KeepEndpoints` emits the three fields.
 - Verification: integration 41 pass (2 new), architecture 14 pass, focused unit 140 pass.
 
-### Completed this session — 4e-ii-b-2 (local commit `29db179`)
+### Prior slice — 4e-ii-b-2 (local commit `29db179`)
 
 Superseded-source mutation rejection. New `Superseded` result value on the review /
 financial-resolution / zero-line-disposition seams (`ActualWorkReviewResult`,
@@ -62,25 +62,33 @@ orchestrators; the three ApiServices map the new outcome to `ActualWorkErrors.Su
 409-reconcilable from 4e-ii-b-1). No migration. Verification: integration 30 pass in the two touched
 persistence classes (+6 new), architecture 14, related ActualWork API/supersession 55, focused unit 140.
 
-### Next code slice — 4e-ii-c (start a fresh session)
+### Completed this session — 4e-ii-c (local commit)
 
-Final API-exposure slice — the replacement backend (4e-ii-a/b) is built but has no public route.
+Final API-exposure slice for replacement-copy. No migration.
 
-- **Replacement route:** `POST /keep/pricebook/actual-work/{actualWorkId}/replace` — follows the
-  existing Actual Work route family; **no request id** (the source visit carries its request).
-  Delegates to `ActualWorkReplacementApiService.CreateReplacementAsync` (Owner/Admin, no-open-Draft
-  precondition, source-version-checked). Returns the new Draft successor id.
-- **Zero-line route:** add a new recorder-only, Draft-guarded, concurrency-checked method on
-  `ActualWorkDraftApiService` wrapping `ActualWork.SetZeroLineDisposition(outcome, completionNote)`;
-  `KeepEndpoints` calls that service, **never the aggregate directly**. Use the existing Actual Work
-  draft-route convention; return the rotated concurrency version. Makes a zero-line replacement
-  Draft's copied `Outcome`/`CompletionNote` editable and reload-stable.
-- **Repeat replacement:** surface the service/seam's stable `ActualWork.AlreadySuperseded` outcome,
-  after the source-version check (mirrors the 4e-ii-b-2 ordering on the other paths).
+- **Replacement route:** `POST /keep/pricebook/actual-work/{actualWorkId}/replace` (Actual Work
+  route family, no request id, `X-Keep-ActualWork-Version` header) → `ActualWorkReplacementApiService`
+  `.CreateReplacementAsync`; returns `{ successorActualWorkId }`.
+- **Zero-line route:** `PUT /keep/pricebook/actual-work/{actualWorkId}/zero-line-disposition` →
+  new recorder-only, Draft-guarded, concurrency-checked `ActualWorkDraftApiService.SetZeroLineDispositionAsync`
+  wrapping `ActualWork.SetZeroLineDisposition`; endpoint parses the outcome string like `/submit`
+  (null/invalid → `ActualWork.InvalidOutcome` 400); returns the rotated concurrency version.
+- **Conflict ordering** in `CreateReplacementAsync`: source-version check → `SupersededAtUtc` →
+  open-Draft precondition → build successor → atomic `SupersedeAsync` (re-checks version + supersede
+  inside the transaction). `ErrorHttpMapper` ← `ActualWork.AlreadySuperseded` (409, reconcilable).
+- **Not guarded:** the zero-line route accepts a lined Draft (mirrors `SetVisitNote`); harmless —
+  `Submit` overwrites `Outcome`/`CompletionNote` unconditionally, so no stale state survives submit.
+- Route/regression tests live in `ActualWorkVisitNoteApiTests.cs` (not a dedicated file).
+- Verification: integration 19 in that class (+7), architecture 14, 290 ActualWork integration,
+  replacement-service unit 12, `git diff --check` clean.
 
-Then **4e-iii** replacement UI (UI-only). Preserve field price blindness and all source history
-throughout. 4g / Billing-Revision deferrals (eligible-visit filter, close gate, revoke-on-replace)
-remain out of scope.
+### Next code slice — 4e-iii replacement-copy UI (start a fresh session)
+
+UI-only, `web/ophalo-app` (BL136 §4e-iii): `ActualWorkReviewCard.tsx` + new `ReplaceVisitForm.tsx`
+— an Owner/Admin "Replace visit" action on a pre-export submitted visit that POSTs `.../replace`
+with the correction reason, then routes to the successor Draft. Preserve field price blindness and
+all source history. 4g / Billing-Revision deferrals (eligible-visit filter, Resolved→Closed close
+gate, revoke-on-replace) remain out of scope.
 
 ### Remaining pilot/release work
 
