@@ -64,9 +64,23 @@ persistence classes (+6 new), architecture 14, related ActualWork API/supersessi
 
 ### Next code slice — 4e-ii-c (start a fresh session)
 
-Map `POST .../{id}/replace` and the Draft `SetZeroLineDisposition` route
-(recorder-only + concurrency-checked). Then **4e-iii** replacement UI. Preserve field price
-blindness and all source history throughout.
+Final API-exposure slice — the replacement backend (4e-ii-a/b) is built but has no public route.
+
+- **Replacement route:** `POST /keep/pricebook/actual-work/{actualWorkId}/replace` — follows the
+  existing Actual Work route family; **no request id** (the source visit carries its request).
+  Delegates to `ActualWorkReplacementApiService.CreateReplacementAsync` (Owner/Admin, no-open-Draft
+  precondition, source-version-checked). Returns the new Draft successor id.
+- **Zero-line route:** add a new recorder-only, Draft-guarded, concurrency-checked method on
+  `ActualWorkDraftApiService` wrapping `ActualWork.SetZeroLineDisposition(outcome, completionNote)`;
+  `KeepEndpoints` calls that service, **never the aggregate directly**. Use the existing Actual Work
+  draft-route convention; return the rotated concurrency version. Makes a zero-line replacement
+  Draft's copied `Outcome`/`CompletionNote` editable and reload-stable.
+- **Repeat replacement:** surface the service/seam's stable `ActualWork.AlreadySuperseded` outcome,
+  after the source-version check (mirrors the 4e-ii-b-2 ordering on the other paths).
+
+Then **4e-iii** replacement UI (UI-only). Preserve field price blindness and all source history
+throughout. 4g / Billing-Revision deferrals (eligible-visit filter, close gate, revoke-on-replace)
+remain out of scope.
 
 ### Remaining pilot/release work
 
