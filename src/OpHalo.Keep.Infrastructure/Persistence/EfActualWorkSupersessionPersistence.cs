@@ -49,8 +49,6 @@ public sealed class EfActualWorkSupersessionPersistence(
                 return new ActualWorkSupersessionOutcome(ActualWorkSupersessionResult.ReasonTooLong);
             if (error == ActualWorkErrors.NotSubmitted)
                 return new ActualWorkSupersessionOutcome(ActualWorkSupersessionResult.SourceNotSubmitted);
-            if (error == ActualWorkErrors.AlreadyReviewed)
-                return new ActualWorkSupersessionOutcome(ActualWorkSupersessionResult.SourceAlreadyReviewed);
 
             // ActualWorkErrors.AlreadySuperseded — the only remaining Supersede failure.
             return new ActualWorkSupersessionOutcome(ActualWorkSupersessionResult.SourceAlreadySuperseded);

@@ -378,9 +378,12 @@ public sealed class ActualWork : BaseEntity
     /// ADR-494 D4/D6/D6b: marks this submitted visit superseded by a correction. Guards only —
     /// constructing the successor aggregate and persisting both rows in one transaction is the
     /// persistence seam's job (<c>IActualWorkSupersessionPersistence</c>). Allowed exactly once, and
-    /// only on a <see cref="ActualWorkStatus.Submitted"/>, not-yet-<see cref="ReviewedAtUtc">reviewed</see>,
-    /// not-already-superseded visit — every other state fails closed. The caller's Owner/Admin
-    /// authority and the audit trail live in the API/persistence layer.
+    /// only on a <see cref="ActualWorkStatus.Submitted"/>, not-already-superseded, still-pre-export
+    /// visit — every other state fails closed. Correction stays available after review until the visit
+    /// is exported/handed off (ADR-494 locked policy, 2026-08-30); review is not a correction lock, and
+    /// the successor must pass review/readiness again. Export/hand-off immutability lands with Billing
+    /// Revisions — until then a <c>Submitted</c>, not-superseded visit is always eligible. The caller's
+    /// Owner/Admin authority and the audit trail live in the API/persistence layer.
     /// </summary>
     public Result Supersede(Guid bySuccessorActualWorkId, Guid byAccountUserId, string reason, DateTime atUtc)
     {
@@ -399,8 +402,9 @@ public sealed class ActualWork : BaseEntity
 
         if (Status != ActualWorkStatus.Submitted)
             return Result.Failure(ActualWorkErrors.NotSubmitted);
-        if (ReviewedAtUtc is not null)
-            return Result.Failure(ActualWorkErrors.AlreadyReviewed);
+        // ADR-494 locked correction policy (2026-08-30): review is not a correction lock — a reviewed
+        // but not-yet-exported visit is still eligible. Export/hand-off immutability arrives with
+        // Billing Revisions; there is no export marker to guard against yet.
         if (SupersededAtUtc is not null)
             return Result.Failure(ActualWorkErrors.AlreadySuperseded);
 

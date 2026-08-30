@@ -916,17 +916,26 @@ public class ActualWorkTests
     }
 
     [Fact]
-    public void Supersede_on_a_reviewed_visit_fails()
+    public void Supersede_on_a_reviewed_pre_export_visit_succeeds()
     {
+        // ADR-494 locked correction policy (2026-08-30): review is not a correction lock; a reviewed
+        // but not-yet-exported visit is still eligible for replacement (4e-ii guard widen).
         var work = SubmittedVisit();
         work.MarkReviewed(
             Guid.CreateVersion7(), reviewNote: null, DateTime.UtcNow,
             financialDataComplete: true, zeroLineDispositionSatisfied: true);
+        var before = work.ConcurrencyVersion;
+        var at = DateTime.UtcNow;
 
-        var result = work.Supersede(SuccessorId, SupersedingUser, "reason", DateTime.UtcNow);
+        var result = work.Supersede(SuccessorId, SupersedingUser, "reason", at);
 
-        Assert.True(result.IsFailure);
-        Assert.Equal(ActualWorkErrors.AlreadyReviewed, result.Error);
+        Assert.True(result.IsSuccess);
+        Assert.Equal(at, work.SupersededAtUtc);
+        Assert.Equal(SuccessorId, work.SupersededByActualWorkId);
+        Assert.Equal(SupersedingUser, work.SupersededByAccountUserId);
+        Assert.Equal(ActualWorkStatus.Submitted, work.Status);
+        Assert.NotNull(work.ReviewedAtUtc);
+        Assert.NotEqual(before, work.ConcurrencyVersion);
     }
 
     [Fact]

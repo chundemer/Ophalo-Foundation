@@ -205,6 +205,11 @@ public static class KeepServiceCollectionExtensions
         // insert-replacement-Draft + resolve-if-clear seam; first Application consumer lands in 4e-ii.
         services.AddScoped<IActualWorkSupersessionPersistence, EfActualWorkSupersessionPersistence>();
 
+        // ADR-494 D6 replacement-copy orchestration (4e-ii). First consumer of the supersession
+        // seam above. No public route yet — the endpoint is mapped in 4e-ii-c once the operational
+        // read/mutation surfaces safely exclude and reconcile superseded work (4e-ii-b).
+        services.AddScoped<ActualWorkReplacementApiService>();
+
         // Direct Actual Work — submit/review-signal (Batch 4, build-log/129). Atomic seam separate
         // from IActualWorkPersistence, matching IProposedScopeSubmissionPersistence.
         services.AddScoped<IActualWorkSubmissionPersistence, EfActualWorkSubmissionPersistence>();

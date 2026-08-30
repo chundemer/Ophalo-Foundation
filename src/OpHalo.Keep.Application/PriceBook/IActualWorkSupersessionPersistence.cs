@@ -15,10 +15,6 @@ public enum ActualWorkSupersessionResult
     /// superseded (a Draft is discarded through the normal path).</summary>
     SourceNotSubmitted,
 
-    /// <summary>ADR-494 D4: the source visit has already been reviewed — a reviewed visit is never
-    /// superseded.</summary>
-    SourceAlreadyReviewed,
-
     /// <summary>ADR-494 D6b: the source visit has already been superseded — sibling replacements are
     /// forbidden.</summary>
     SourceAlreadySuperseded,
