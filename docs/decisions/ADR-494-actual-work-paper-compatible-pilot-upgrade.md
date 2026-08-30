@@ -11,8 +11,8 @@ into Keep later, while a smaller group of technicians adopts field capture gradu
 Actual Work financial foundation (immutable submitted facts, append-only financial
 resolution/disposition, hard review gate) stays valid. What is missing is the capture and
 office-review experience around those safeguards: the person who *performs* work is now routinely
-different from the person who *records* it, a submitted visit with a pre-review factual error has no
-correction path short of the deferred Billing Revision work, and request close ignores outstanding
+different from the person who *records* it, a submitted visit with a factual error has no correction
+path short of the deferred Billing Revision work, and request close ignores outstanding
 Actual Work entirely.
 
 There is **no live Actual Work data in production**. All existing Actual Work rows are disposable
@@ -130,9 +130,11 @@ them). Draft handoff:
 - The transfer target must still hold `RequestsOperate` + `ActualWorkCapture`.
 - Shared concurrent Draft editing is not introduced. One open Draft per request, one recorder.
 
-### D5 — Pre-review replacement / supersession lifecycle
+### D5 — Pre-export replacement / supersession lifecycle
 
-A `Submitted`, not-`Reviewed` visit may be corrected by an **atomic replacement-copy**. `ActualWork`
+A `Submitted` visit may be corrected by an **atomic replacement-copy until it has been exported / handed
+off**. Review is a reversible office checkpoint, not the correction lock: a reviewed visit may still be
+replaced before export. `ActualWork`
 gains nullable marker columns — `SupersededAtUtc`, `SupersededByActualWorkId` (self-reference,
 account-composite FK, unique), `SupersededByAccountUserId`, `SupersessionReason` (required when
 superseded, ≤2,000). **`Status` stays `Submitted`; no `Reviewed` or `Superseded` status value is
@@ -165,13 +167,25 @@ pre-existing Draft returns the existing `DraftAlreadyOpenForRequest` conflict). 
 **Owner/Admin only for the pilot** (mirrors the office review gate); widening to the source recorder
 is deferred.
 
+**Ready/export rule.** “Ready to export” is reversible, not a permanent record lock. Replacing a
+reviewed visit, or a visit selected in a Draft/Ready Billing Revision, must remove/void that affected
+revision with a required correction reason; the successor begins as a Draft and must pass ordinary
+review/readiness again. Once a Billing Revision is actually handed off/exported, the exported
+revision remains immutable: a later correction is a separately reasoned adjustment/replacement,
+never an in-place edit. Until Billing Revisions exist, every visit is necessarily pre-export, so this
+rule means reviewed visits are also eligible for replacement.
+
+The initial 4e-i aggregate guard was deliberately implemented as not-yet-reviewed. Before 4e-ii
+exposes replacement, widen that guard and its tests to this pre-export rule; do not ship an endpoint
+that preserves the obsolete pre-review restriction.
+
 ### D6 — Replacement-chain rules
 
 - **One direct successor per source.** The unique index on `SupersededByActualWorkId` plus a guard
   rejecting a source that is already superseded (`AlreadySuperseded`) together forbid **sibling
   replacements** — a source is replaced at most once.
-- **A successor may itself be superseded before review.** Once submitted it is an ordinary
-  `Submitted`-unreviewed visit; correcting it again forms a chain (`v1 → v2 → v3`), each link
+- **A successor may itself be superseded before export.** Once submitted it is an ordinary live
+  visit; correcting it again forms a chain (`v1 → v2 → v3`), each link
   one-to-one. A successor still in `Draft` is discarded through the normal discard path, never
   superseded.
 - **No row is ever deleted and no `Status` ever changes.** Supersession sets marker columns only.
@@ -283,8 +297,8 @@ chosen performer. The migration never manufactures performer attribution.
 - Field price blindness and submitted factual immutability are preserved.
 - Recorder and performer are distinct, queryable facts; multi-technician and office-transcribed work
   are represented truthfully.
-- A pre-review factual error has an auditable correction path that retains the erroneous record and
-  its financial evidence.
+- A pre-export factual error has an auditable correction path that retains the erroneous record and
+  its financial evidence; review/Ready status is reversible, while exported records remain immutable.
 - The aggregate review signal can no longer be stranded by a corrected visit.
 - Request close reflects outstanding Actual Work.
 
