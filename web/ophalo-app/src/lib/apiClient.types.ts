@@ -1219,6 +1219,11 @@ export interface ActualWorkLineHistoryEntry {
   unitOfMeasureSnapshot: string | null;
   actualQuantity: number;
   note: string | null;
+  // ADR-494 D2 (4c-ii-b): the line's frozen performer. `performedByAccountUserId` is always
+  // populated (the domain requires it); `performerDisplayName` is the resolved name, null when the
+  // id no longer resolves to a display name — the field UI shows "Unknown performer" in that case.
+  performedByAccountUserId: string;
+  performerDisplayName: string | null;
 }
 
 export interface ActualWorkOpenDraftEntry {
@@ -1246,6 +1251,9 @@ export interface ActualWorkOpenDraftEntry {
    * and the Owner/Admin read-only view alike — this is work attribution, not recorder identity. */
   defaultPerformedByAccountUserId?: string | null;
   defaultPerformerDisplayName?: string | null;
+  /** ADR-494 D5 (4c-ii): the visit-level note. Readable on the open Draft so the composer textarea
+   * restores across a reload; null until the recorder sets one. */
+  visitNote?: string | null;
   lines: ActualWorkLineHistoryEntry[];
 }
 
@@ -1281,12 +1289,20 @@ export interface ActualWorkTransferRecorderBody {
   reason: string;
 }
 
+/** ADR-494 D5 (4c-ii): recorder-only Draft visit-note write. The server trims to null and rejects
+ * >2000 chars (`ActualWork.VisitNoteTooLong` → 400). */
+export interface ActualWorkVisitNoteBody {
+  visitNote: string | null;
+}
+
 export interface ActualWorkSubmittedVisitEntry {
   id: string;
   status: string;
   outcome: string | null;
   completionNote: string | null;
   submittedAtUtc: string | null;
+  /** ADR-494 D5 (4c-ii): the visit-level note, frozen at submission. */
+  visitNote?: string | null;
   lines: ActualWorkLineHistoryEntry[];
 }
 
@@ -1351,6 +1367,10 @@ export interface ActualWorkFinancialLineEntry {
   unitOfMeasureSnapshot: string | null;
   actualQuantity: number;
   note: string | null;
+  // ADR-494 D2 (4c-ii-b): the line's frozen performer; `performerDisplayName` is null when the id
+  // no longer resolves.
+  performedByAccountUserId: string;
+  performerDisplayName: string | null;
   isFinancialDataComplete: boolean;
   sellPriceSnapshot: number | null;
   standardExpectedDirectCostSnapshot: number | null;
@@ -1383,6 +1403,8 @@ export interface ActualWorkFinancialDetailResult {
   status: string;
   outcome: string | null;
   completionNote: string | null;
+  /** ADR-494 D5 (4c-ii): the visit-level note, surfaced on the financial detail read. */
+  visitNote?: string | null;
   recorderAccountUserId: string;
   submittedAtUtc: string;
   reviewedAtUtc: string | null;

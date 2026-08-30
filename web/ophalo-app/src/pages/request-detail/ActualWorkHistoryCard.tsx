@@ -1,5 +1,6 @@
 import { Lock } from "lucide-react";
 import { KeepButton } from "../../components/keep/KeepButton";
+import type { ActualWorkSubmittedVisitEntry } from "../../lib/apiClient";
 import { type ActualWorkHistoryState } from "./useActualWorkHistory";
 
 interface ActualWorkHistoryCardProps {
@@ -8,6 +9,57 @@ interface ActualWorkHistoryCardProps {
   // bare: no outer card chrome — used when a parent shares one enclosing Work Execution module
   // with ActualWorkCard (locked exception, 2026-08-22).
   bare?: boolean;
+}
+
+function formatSubmittedAt(iso: string | null): string {
+  if (!iso) return "Submitted";
+  return new Date(iso).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+}
+
+/**
+ * ADR-494 D5 (4c-iii): one submitted visit, read-only. Summary carries the submitted timestamp and
+ * line count; the body discloses the visit note (when present) and each line with its frozen
+ * performer name. "Unknown performer" is shown when the performer id no longer resolves to a
+ * display name.
+ */
+function SubmittedVisitDetails({ visit }: { visit: ActualWorkSubmittedVisitEntry }) {
+  return (
+    <details className="group rounded-lg border border-[var(--ophalo-border)] bg-[var(--ophalo-canvas)]">
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-3 py-2 text-xs font-medium text-[var(--ophalo-ink)]">
+        <span>{formatSubmittedAt(visit.submittedAtUtc)}</span>
+        <span className="shrink-0 rounded bg-slate-200 px-1.5 py-0.5 text-[10px] text-[var(--ophalo-muted)]">
+          {visit.lines.length} line{visit.lines.length === 1 ? "" : "s"}
+        </span>
+      </summary>
+      <div className="space-y-2 border-t border-[var(--ophalo-border)] px-3 py-2">
+        {visit.visitNote ? (
+          <p className="text-xs text-[var(--ophalo-muted)]">
+            <span className="font-semibold text-[var(--ophalo-ink)]">Visit note</span>
+            <br />
+            {visit.visitNote}
+          </p>
+        ) : null}
+        {visit.lines.length === 0 ? (
+          <p className="text-xs text-[var(--ophalo-muted)]">No line items.</p>
+        ) : (
+          <ul className="space-y-1">
+            {visit.lines.map((line) => (
+              <li key={line.id} className="text-xs text-[var(--ophalo-muted)]">
+                <span className="text-[var(--ophalo-ink)]">{line.displayNameSnapshot}</span> —{" "}
+                {line.actualQuantity} {line.unitOfMeasureSnapshot ?? ""}
+                {line.note ? ` — ${line.note}` : ""}
+                <br />
+                Performed by{" "}
+                <span className="text-[var(--ophalo-ink)]">
+                  {line.performerDisplayName ?? "Unknown performer"}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </details>
+  );
 }
 
 /**
@@ -50,6 +102,11 @@ export function ActualWorkHistoryCard({ state, onRetry, bare = false }: ActualWo
           <p className="text-xs text-[var(--ophalo-muted)]">{state.submittedVisits.length} submitted visit{state.submittedVisits.length === 1 ? "" : "s"} · locked record</p>
         </div>
         <Lock className="h-4 w-4 shrink-0 text-[var(--ophalo-muted)]" aria-hidden="true" />
+      </div>
+      <div className="mt-3 space-y-2">
+        {state.submittedVisits.map((visit) => (
+          <SubmittedVisitDetails key={visit.id} visit={visit} />
+        ))}
       </div>
     </div>
   );

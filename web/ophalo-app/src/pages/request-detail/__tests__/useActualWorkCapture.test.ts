@@ -13,6 +13,7 @@ const mockGetActualWorkHistoryForRequest = vi.fn();
 const mockCreateActualWork = vi.fn();
 const mockTransferActualWorkDraftRecorder = vi.fn();
 const mockSetActualWorkDefaultPerformer = vi.fn();
+const mockSetActualWorkVisitNote = vi.fn();
 
 vi.mock("../../../lib/apiClient", async () => {
   const actual = await vi.importActual<typeof import("../../../lib/apiClient")>("../../../lib/apiClient");
@@ -24,6 +25,7 @@ vi.mock("../../../lib/apiClient", async () => {
       createActualWork: (...args: unknown[]) => mockCreateActualWork(...args),
       transferActualWorkDraftRecorder: (...args: unknown[]) => mockTransferActualWorkDraftRecorder(...args),
       setActualWorkDefaultPerformer: (...args: unknown[]) => mockSetActualWorkDefaultPerformer(...args),
+      setActualWorkVisitNote: (...args: unknown[]) => mockSetActualWorkVisitNote(...args),
     },
   };
 });
@@ -621,6 +623,63 @@ describe("useActualWorkCapture — recorder transfer (1a-ii-b)", () => {
       let outcome: string | undefined;
       await act(async () => {
         outcome = await result.current.setDefaultPerformer("tech-au-9");
+      });
+
+      expect(outcome).toBe("stale");
+      expect(result.current.conflictNotice).toBe(ACTUAL_WORK_CONFLICT_NOTICE);
+    });
+  });
+
+  describe("setVisitNote (4c-iii)", () => {
+    async function renderInDraft() {
+      mockGetActualWorkHistoryForRequest.mockResolvedValueOnce(history({ openDraft: DRAFT_NO_DEFAULT }));
+      const hook = renderHook(() => useActualWorkCapture("request-1", "me-au-1"));
+      await waitFor(() => expect(hook.result.current.state.status).toBe("draft"));
+      return hook;
+    }
+
+    it("writes the note against the current version, then applies the refreshed projection", async () => {
+      const { result } = await renderInDraft();
+      mockSetActualWorkVisitNote.mockResolvedValueOnce({ concurrencyVersion: "v2" });
+      mockGetActualWorkHistoryForRequest.mockResolvedValueOnce(
+        history({ openDraft: { ...DRAFT_NO_DEFAULT, concurrencyVersion: "v2", visitNote: "Gate code 4321" } }),
+      );
+
+      let outcome: string | undefined;
+      await act(async () => {
+        outcome = await result.current.setVisitNote("Gate code 4321");
+      });
+
+      expect(outcome).toBe("set");
+      expect(mockSetActualWorkVisitNote).toHaveBeenCalledWith("draft-1", "Gate code 4321", "v1");
+      expect(result.current.state).toMatchObject({ draft: { concurrencyVersion: "v2", visitNote: "Gate code 4321" } });
+    });
+
+    it("returns 'too-long' on a 400 without disturbing state", async () => {
+      const { result } = await renderInDraft();
+      mockSetActualWorkVisitNote.mockRejectedValueOnce(
+        new ApiError(400, "ActualWork.VisitNoteTooLong", "The visit note must be 2,000 characters or fewer."),
+      );
+
+      let outcome: string | undefined;
+      await act(async () => {
+        outcome = await result.current.setVisitNote("x".repeat(2001));
+      });
+
+      expect(outcome).toBe("too-long");
+      expect(result.current.conflictNotice).toBeNull();
+    });
+
+    it("returns 'stale' and reconciles on a version mismatch", async () => {
+      const { result } = await renderInDraft();
+      mockSetActualWorkVisitNote.mockRejectedValueOnce(
+        new ApiError(409, "ActualWork.VersionMismatch", "changed by someone else"),
+      );
+      mockGetActualWorkHistoryForRequest.mockResolvedValueOnce(history({ openDraft: DRAFT_NO_DEFAULT }));
+
+      let outcome: string | undefined;
+      await act(async () => {
+        outcome = await result.current.setVisitNote("Gate code 4321");
       });
 
       expect(outcome).toBe("stale");

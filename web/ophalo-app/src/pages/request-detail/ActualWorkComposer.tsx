@@ -20,6 +20,10 @@ import { ACTUAL_WORK_RECONCILE_RELOAD_FAILURE_NOTICE } from "./useActualWorkCapt
 /** Mirrors `useActualWorkCapture`'s `setDefaultPerformer` return contract (kept local — the hook
  * declares it inline). `set` unmounts this gate on the parent's refetch; the rest stay in place. */
 type SetDefaultPerformerOutcome = "set" | "ineligible" | "stale" | "failed";
+
+/** Mirrors `useActualWorkCapture`'s `setVisitNote` return contract. `set` / `stale` settle through
+ * the parent refetch + shared reconcile; `too-long` is surfaced inline under the textarea. */
+type SetVisitNoteOutcome = "set" | "too-long" | "stale" | "failed";
 import { ConnectionFailureBanner } from "./ConnectionFailureBanner";
 import { announcePolite } from "../../lib/liveAnnouncer";
 
@@ -67,6 +71,10 @@ interface ActualWorkComposerProps {
   // (recorder-only, Draft-only, existing version protocol). Until it resolves `"set"`, the entire
   // add region — direct add-line, assembly expansion, nudge-accept — stays gated.
   onSetDefaultPerformer: (performerId: string | null) => Promise<SetDefaultPerformerOutcome>;
+  // ADR-494 D5 (4c-ii): autosaves the visit-level note on blur (recorder-only, Draft-only, existing
+  // version protocol). A `too-long` outcome is surfaced under the textarea; `stale` reconciles
+  // through the shared conflict path.
+  onSetVisitNote: (visitNote: string | null) => Promise<SetVisitNoteOutcome>;
 }
 
 /**
@@ -93,6 +101,7 @@ export function ActualWorkComposer({
   submittedVisits = [],
   currentAccountUserId,
   onSetDefaultPerformer,
+  onSetVisitNote,
 }: ActualWorkComposerProps) {
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [submitted, setSubmitted] = useState(false);
@@ -281,6 +290,7 @@ export function ActualWorkComposer({
                 ref={searchInputRef}
                 actualWorkId={draft.id}
                 version={draft.concurrencyVersion}
+                defaultPerformerName={draft.defaultPerformerDisplayName ?? null}
                 onCommitted={onCommitted}
                 onConflict={onConflict}
                 onConnectionFailure={reportConnectionFailure}
@@ -306,6 +316,14 @@ export function ActualWorkComposer({
             />
           ))}
         </div>
+
+        {!readOnly && (
+          <ActualWorkVisitNoteField
+            key={draft.visitNote ?? ""}
+            initialValue={draft.visitNote ?? ""}
+            onSetVisitNote={onSetVisitNote}
+          />
+        )}
 
         {!readOnly && (
           <div className="pt-1">
@@ -385,7 +403,7 @@ export function ActualWorkComposer({
 
 function SubmittedVisits({ visits }: { visits: ActualWorkSubmittedVisitEntry[] }) {
   if (visits.length === 0) return null;
-  return <section className="border-t border-[var(--ophalo-border)] pt-4"><div className="mb-2 flex items-center justify-between"><h3 className="text-xs font-bold uppercase tracking-wide text-[var(--ophalo-muted)]">Submitted visits (locked)</h3><span className="text-[11px] text-[var(--ophalo-muted)]">Read-only audit record</span></div><div className="space-y-2">{visits.map((visit, index) => <details key={visit.id} className="group rounded-lg border border-[var(--ophalo-border)] bg-[var(--ophalo-canvas)]"><summary className={`flex cursor-pointer list-none items-center justify-between gap-2 px-3 py-2 text-xs font-medium text-[var(--ophalo-ink)] ${FOCUS_RING}`}><span className="flex items-center gap-2"><Lock className="h-3.5 w-3.5 text-[var(--ophalo-muted)]" />Visit #{visits.length - index} · {visit.submittedAtUtc ? new Date(visit.submittedAtUtc).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : "Submitted"}<span className="rounded bg-slate-200 px-1.5 py-0.5 text-[10px]">{visit.lines.length} item{visit.lines.length === 1 ? "" : "s"}</span></span><ChevronRight className="h-3.5 w-3.5 transition-transform group-open:rotate-90" /></summary><div className="border-t border-[var(--ophalo-border)] px-3 py-2 space-y-1">{visit.lines.map((line) => <p key={line.id} className="text-xs text-[var(--ophalo-muted)]">{line.displayNameSnapshot} — {line.actualQuantity} {line.unitOfMeasureSnapshot ?? ""}</p>)}</div></details>)}</div></section>;
+  return <section className="border-t border-[var(--ophalo-border)] pt-4"><div className="mb-2 flex items-center justify-between"><h3 className="text-xs font-bold uppercase tracking-wide text-[var(--ophalo-muted)]">Submitted visits (locked)</h3><span className="text-[11px] text-[var(--ophalo-muted)]">Read-only audit record</span></div><div className="space-y-2">{visits.map((visit, index) => <details key={visit.id} className="group rounded-lg border border-[var(--ophalo-border)] bg-[var(--ophalo-canvas)]"><summary className={`flex cursor-pointer list-none items-center justify-between gap-2 px-3 py-2 text-xs font-medium text-[var(--ophalo-ink)] ${FOCUS_RING}`}><span className="flex items-center gap-2"><Lock className="h-3.5 w-3.5 text-[var(--ophalo-muted)]" />Visit #{visits.length - index} · {visit.submittedAtUtc ? new Date(visit.submittedAtUtc).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : "Submitted"}<span className="rounded bg-slate-200 px-1.5 py-0.5 text-[10px]">{visit.lines.length} item{visit.lines.length === 1 ? "" : "s"}</span></span><ChevronRight className="h-3.5 w-3.5 transition-transform group-open:rotate-90" /></summary><div className="border-t border-[var(--ophalo-border)] px-3 py-2 space-y-1">{visit.visitNote ? <p className="text-xs text-[var(--ophalo-muted)]"><span className="font-semibold text-[var(--ophalo-ink)]">Visit note:</span> {visit.visitNote}</p> : null}{visit.lines.map((line) => <p key={line.id} className="text-xs text-[var(--ophalo-muted)]">{line.displayNameSnapshot} — {line.actualQuantity} {line.unitOfMeasureSnapshot ?? ""} · Performed by {line.performerDisplayName ?? "Unknown performer"}</p>)}</div></details>)}</div></section>;
 }
 
 /** ADR-494 D2: the office-transcription entry point. No add-line / assembly / nudge affordance is
@@ -457,6 +475,54 @@ function ActualWorkPerformerGate({
   );
 }
 
+/** ADR-494 D5 (4c-ii): the visit-level note. Autosaves on blur through the composer's established
+ * automatic-save + conflict-reconciliation path (no explicit Save control) — the parent remounts
+ * this via `key={draft.visitNote}` after each successful write, so the field always reflects the
+ * server's trim and survives a reload. A `too-long` outcome is the only inline error; `stale` /
+ * `failed` are handled by the shared reconcile path in the hook. */
+function ActualWorkVisitNoteField({
+  initialValue,
+  onSetVisitNote,
+}: {
+  initialValue: string;
+  onSetVisitNote: (visitNote: string | null) => Promise<SetVisitNoteOutcome>;
+}) {
+  const [value, setValue] = useState(initialValue);
+  const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  async function onBlur() {
+    const next = value.trim();
+    if (next === initialValue.trim()) return;
+    setSaving(true);
+    setError(null);
+    const outcome = await onSetVisitNote(next.length > 0 ? next : null);
+    setSaving(false);
+    if (outcome === "too-long") {
+      setError("The visit note must be 2,000 characters or fewer.");
+    }
+  }
+
+  return (
+    <div className="pt-1 space-y-1">
+      <label htmlFor="actual-work-visit-note" className="text-xs font-semibold text-[var(--ophalo-ink)]">
+        Visit note
+      </label>
+      <textarea
+        id="actual-work-visit-note"
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        onBlur={() => void onBlur()}
+        rows={3}
+        placeholder="Notes about this visit (optional)"
+        className={`${INPUT_CLS} resize-y`}
+      />
+      {saving && <p className="text-xs text-[var(--ophalo-muted)]">Saving…</p>}
+      {error && <p className="text-xs text-[var(--ophalo-danger,#c0392b)]">{error}</p>}
+    </div>
+  );
+}
+
 /** One-line attribution above the add region once a ticket default exists: the resolved performer
  * name from the projection, or "you" when the default is the current user and the name has not been
  * resolved yet (the optimistic "Record my work" create carries no display name). */
@@ -473,6 +539,11 @@ function ActualWorkPerformerCaption({ name, isSelf }: { name: string | null; isS
 interface ActualWorkSearchAndAddProps {
   actualWorkId: string;
   version: string;
+  // ADR-494 D2 (4c-iii): the resolved name of the Draft's ticket-default performer, shown as the
+  // default option in the add panel's performer picker. A new line inherits the ticket default
+  // unless the recorder picks a different technician; existing lines cannot be re-attributed (no
+  // backend route).
+  defaultPerformerName: string | null;
   onCommitted: () => Promise<void>;
   onConflict: (message?: string) => void;
   onConnectionFailure: (message: string, retry: () => void) => void;
@@ -482,7 +553,15 @@ interface ActualWorkSearchAndAddProps {
 type Selection = { kind: "catalog"; item: FieldScopeSearchResultResponse } | { kind: "custom" };
 
 const ActualWorkSearchAndAdd = forwardRef<HTMLInputElement, ActualWorkSearchAndAddProps>(function ActualWorkSearchAndAdd(
-  { actualWorkId, version, onCommitted, onConflict, onConnectionFailure, onConnectionRecovered },
+  {
+    actualWorkId,
+    version,
+    defaultPerformerName,
+    onCommitted,
+    onConflict,
+    onConnectionFailure,
+    onConnectionRecovered,
+  },
   ref,
 ) {
   const [searchText, setSearchText] = useState("");
@@ -491,7 +570,15 @@ const ActualWorkSearchAndAdd = forwardRef<HTMLInputElement, ActualWorkSearchAndA
   const [customDescription, setCustomDescription] = useState("");
   const [quantity, setQuantity] = useState("1");
   const [note, setNote] = useState("");
+  // "" => inherit the Draft's ticket default; any other value is an explicit per-line override.
+  const [performerId, setPerformerId] = useState("");
   const [error, setError] = useState<string | null>(null);
+
+  const { data: performerCandidates } = useQuery({
+    queryKey: ["actualWorkPerformerCandidates"],
+    queryFn: () => api.getActualWorkPerformerCandidates(),
+    enabled: selection !== null,
+  });
 
   useEffect(() => {
     const handle = setTimeout(() => setDebouncedText(searchText.trim()), 250);
@@ -538,6 +625,7 @@ const ActualWorkSearchAndAdd = forwardRef<HTMLInputElement, ActualWorkSearchAndA
     setCustomDescription("");
     setQuantity("1");
     setNote("");
+    setPerformerId("");
   }
 
   // The mutation takes an explicit, click-time snapshot of the payload/trigger rather than reading
@@ -563,7 +651,9 @@ const ActualWorkSearchAndAdd = forwardRef<HTMLInputElement, ActualWorkSearchAndA
         onConflict();
         return;
       }
-      if (err.status !== 400) {
+      // 400 (validation) and 422 (`ActualWork.PerformerIneligible` — a stale per-line performer
+      // pick) both surface inline so the recorder can correct the field without a reconcile churn.
+      if (err.status !== 400 && err.status !== 422) {
         onConflict();
         return;
       }
@@ -728,16 +818,37 @@ const ActualWorkSearchAndAdd = forwardRef<HTMLInputElement, ActualWorkSearchAndA
               className={INPUT_CLS}
             />
           </div>
+          <div className="space-y-1">
+            <label htmlFor="actual-work-line-performer" className="text-xs font-medium text-[var(--ophalo-muted)]">
+              Performed by
+            </label>
+            <select
+              id="actual-work-line-performer"
+              value={performerId}
+              onChange={(e) => setPerformerId(e.target.value)}
+              className={INPUT_CLS}
+            >
+              <option value="">
+                Ticket default{defaultPerformerName ? ` (${defaultPerformerName})` : ""}
+              </option>
+              {(performerCandidates?.candidates ?? []).map((c) => (
+                <option key={c.accountUserId} value={c.accountUserId}>
+                  {c.displayName}
+                </option>
+              ))}
+            </select>
+          </div>
           {error && <p className="text-xs text-[var(--ophalo-danger,#c0392b)]">{error}</p>}
           <div className="flex gap-2">
             <KeepButton
               variant="teal"
               disabled={!canAdd || addMutation.isPending}
               onClick={() => {
+                const performer = performerId ? { performedByAccountUserId: performerId } : {};
                 const body: ActualWorkAddLineBody =
                   selection?.kind === "catalog"
-                    ? { catalogItemId: selection.item.id, actualQuantity: Number(quantity), note: note.trim() || null }
-                    : { offCatalogDescription: customDescription, actualQuantity: Number(quantity), note: note.trim() || null };
+                    ? { catalogItemId: selection.item.id, actualQuantity: Number(quantity), note: note.trim() || null, ...performer }
+                    : { offCatalogDescription: customDescription, actualQuantity: Number(quantity), note: note.trim() || null, ...performer };
                 const trigger = selection?.kind === "catalog" ? { triggerCatalogItemId: selection.item.id } : null;
                 addMutation.mutate({ body, trigger });
               }}
@@ -872,6 +983,16 @@ interface ActualWorkDraftLineProps {
   onConnectionRecovered: () => void;
 }
 
+/** ADR-494 D2 (4c-iii): read-only per-line attribution. A line's performer is frozen at creation
+ * and has no edit route; `null` means the id no longer resolves to a display name. */
+function ActualWorkLinePerformer({ name }: { name: string | null }) {
+  return (
+    <p className="text-xs text-[var(--ophalo-muted)]">
+      Performed by <span className="text-[var(--ophalo-ink)]">{name ?? "Unknown performer"}</span>
+    </p>
+  );
+}
+
 function ActualWorkDraftLine({
   line,
   readOnly,
@@ -940,6 +1061,7 @@ function ActualWorkDraftLine({
           {line.actualQuantity} {line.unitOfMeasureSnapshot ?? ""}
           {line.note ? ` — ${line.note}` : ""}
         </p>
+        <ActualWorkLinePerformer name={line.performerDisplayName} />
       </div>
     );
   }
@@ -953,6 +1075,7 @@ function ActualWorkDraftLine({
             {line.actualQuantity} {line.unitOfMeasureSnapshot ?? ""}
             {line.note ? ` — ${line.note}` : ""}
           </p>
+          <ActualWorkLinePerformer name={line.performerDisplayName} />
         </div>
         <div className="flex gap-2 shrink-0">
           <button
@@ -978,6 +1101,7 @@ function ActualWorkDraftLine({
   return (
     <div className="rounded-lg border border-[var(--ophalo-border)] px-3 py-2 space-y-2">
       <p className="text-sm text-[var(--ophalo-ink)]">{line.displayNameSnapshot}</p>
+      <ActualWorkLinePerformer name={line.performerDisplayName} />
       <div className="flex gap-2">
         <input
           type="number"

@@ -1,6 +1,6 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-08-29
+**Last updated:** 2026-08-30
 **Purpose:** active handoff only. Completed work belongs in Git history and the relevant build log.
 
 ## Authoritative sources
@@ -422,33 +422,46 @@ correction applied pre-commit: partial-component resolution + client negative ch
 full frontend suite **799/799** (90 files, +4), `tsc --noEmit` clean, `check:tokens` passed,
 `git diff --check` clean.
 
-### Claude handoff — 4c-ii (VisitNote API + read projections) — COMPLETE (4c-ii-a + 4c-ii-b)
+### Claude handoff — 4c (attribution + Draft note foundation) — COMPLETE (4c-i, 4c-ii-a/b, 4c-iii)
 
-**➡ NEXT SESSION: 4c-iii — rich performer + VisitNote field UI.** Layer: `web/ophalo-app` only.
-1 mutation family (VisitNote mutation, route already shipped in 4c-ii-a). Full spec in
-[BL136 P preflight → Slice 4c-iii](build-log/136-P-preflight.md) (§"Slice 4c-iii"); ADR-494 D5.
-Consumes everything 4c-ii-a/b shipped — the VisitNote write route + concurrency header, and the
-`visitNote` / `performedByAccountUserId` / `performerDisplayName` fields now latent on the history
-and financial-detail reads. Exact work (do a mechanical preflight against the current
-`web/ophalo-app` surface — the API contract is locked, the frontend types are not yet touched):
+**➡ NEXT SESSION: 4d — recorder-initiated handoff (authority relax + UI).** Layers: Application +
+Api + `web/ophalo-app`. 1 mutation family (`transfer-recorder` gate change — no new route). Full
+spec in [BL136 P preflight → Slice 4d](build-log/136-P-preflight.md) (§"Slice 4d"). Relax
+`ActualWorkDraftApiService.TransferRecorderAsync` so the current recorder may transfer their own
+unsubmitted Draft (system-default `Reason` when recorder-initiated; keep the Owner/Admin path and
+every existing guard — target still must hold `RequestsOperate` + `ActualWorkCapture`, audit event
+still written). Frontend: a "Hand off to office" action in the composer / recovery drawer.
 
-1. `apiClient.types.ts` + `apiClient` — surface `visitNote` on the open-draft / submitted-visit /
-   financial-detail read types, and per-line `performedByAccountUserId` / `performerDisplayName`;
-   add the `PUT /keep/pricebook/actual-work/{id}/visit-note` call (X-Keep-ActualWork-Version header,
-   returns `ActualWorkConcurrencyVersionResponse`).
-2. `useActualWorkCapture.ts` — VisitNote mutation (mirrors the default-performer mutation: optimistic
-   version echo, 409 re-probe into the existing conflict handling, no new modal).
-3. `ActualWorkComposer.tsx` — `VisitNote` textarea + per-line performer override beyond the ticket
-   default; all price-blind, only mounts in the recorder's editable `draft` state.
-4. `ActualWorkHistoryCard.tsx` — show performer name + VisitNote read-only for submitted visits.
-5. Tests (~4): composer per-line performer + VisitNote interaction; history-card render.
+Gate: transfer audit invariants preserved; no shared concurrent editing introduced; focused
+Application + integration + frontend tests.
 
-Gate: `check:tokens`, `tsc --noEmit`, full frontend suite; no money field appears on the field
-surface. After 4c-iii the merged 4c-ii + 4c-iii slice deploys together (migration
-`20260830010613_AddActualWorkVisitNote` applies on that release).
+**4c-iii — rich performer + VisitNote field UI — COMPLETE (2026-08-30).** `web/ophalo-app` only,
+11 files (6 prod + 5 test). `apiClient.types.ts` — `visitNote` on the open-draft / submitted-visit
+/ financial-detail read types, required per-line `performedByAccountUserId` + `performerDisplayName`
+on `ActualWorkLineHistoryEntry` + `ActualWorkFinancialLineEntry`, new `ActualWorkVisitNoteBody`.
+`apiClient.ts` — `setActualWorkVisitNote` (PUT `…/visit-note`, `X-Keep-ActualWork-Version`, returns
+`ActualWorkConcurrencyVersionResult`). `useActualWorkCapture.ts` — `setVisitNote` mutation mirroring
+`setDefaultPerformer` (optimistic `refetchDraft`; `VersionMismatch`/`NotDraft` → shared
+`reconcileAfterConflict`; 400 `VisitNoteTooLong` → `"too-long"`). `ActualWorkComposer.tsx` — "Visit
+note" textarea autosaving on blur through the established auto-save + reconcile path (no explicit
+Save; remounted via `key={draft.visitNote}` so it reflects the server trim across reload);
+"Performed by" `<select>` in the add panel (blank = inherit ticket default, else explicit per-line
+override sent as `performedByAccountUserId`) — add-line `onError` now surfaces 422
+`PerformerIneligible` inline; existing lines show `ActualWorkLinePerformer` read-only ("Unknown
+performer" when the id no longer resolves). `ActualWorkHistoryCard.tsx` — native `<details>` per
+submitted visit (summary: timestamp + "N line(s)"; body: "Visit note" when present, then each line
+with "Performed by" name), card-level locked-record language + lock icon preserved. Locked
+decisions: no backend sub-slice — per-line performer is add-time only; existing lines are read-only.
+`ActualWorkCard` / `ActualWorkReviewCard` test fixtures gained the two required line fields.
+Verified: `tsc --noEmit` clean, `check:tokens` passed, full frontend suite **823/823** (+11),
+`git diff --check` clean.
 
-Out of 4c-iii scope: `SetZeroLineDisposition` (ADR-494 D5, replacement slice); `CompletionNote`
-trim/≤2000 guard (D3 intent — its own later slice + preflight, see the deferred note below).
+Out of 4c-iii scope (unchanged): `SetZeroLineDisposition` (ADR-494 D5, 4e replacement slice);
+`CompletionNote` trim/≤2000 guard (D3 intent — its own later slice + preflight).
+
+**Deploy note:** the merged 4c-ii + 4c-iii slice deploys together — migration
+`20260830010613_AddActualWorkVisitNote` applies automatically on that release
+(`Database__ApplyMigrationsOnStartup` is set on Railway).
 
 ---
 

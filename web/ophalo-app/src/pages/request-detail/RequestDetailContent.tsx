@@ -307,6 +307,7 @@ export function RequestDetailContent(props: RequestDetailContentProps) {
           submittedVisits={actualWorkHistory.state.status === "loaded" ? actualWorkHistory.state.submittedVisits : []}
           currentAccountUserId={props.currentAccountUserId}
           onSetDefaultPerformer={actualWorkCapture.setDefaultPerformer}
+          onSetVisitNote={actualWorkCapture.setVisitNote}
         />
       )}
       {recorderDrawerOpen && actualWorkCapture.state.status === "owner-recovery" && (

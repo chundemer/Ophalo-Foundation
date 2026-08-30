@@ -3,6 +3,20 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { ActualWorkHistoryCard } from "../ActualWorkHistoryCard";
 import type { ActualWorkHistoryState } from "../useActualWorkHistory";
+import type { ActualWorkLineHistoryEntry } from "../../../lib/apiClient";
+
+function line(overrides: Partial<ActualWorkLineHistoryEntry> = {}): ActualWorkLineHistoryEntry {
+  return {
+    id: "l1",
+    displayNameSnapshot: "Filter",
+    unitOfMeasureSnapshot: "each",
+    actualQuantity: 2,
+    note: null,
+    performedByAccountUserId: "u-tech",
+    performerDisplayName: "Dana Tech",
+    ...overrides,
+  };
+}
 
 describe("ActualWorkHistoryCard", () => {
   it("renders nothing while loading", () => {
@@ -33,7 +47,35 @@ describe("ActualWorkHistoryCard", () => {
     expect(onRetry).toHaveBeenCalledTimes(1);
   });
 
-  it("renders a compact locked-count summary for a single submitted visit", () => {
+  it("keeps the locked-record language and icon at card level", () => {
+    const state: ActualWorkHistoryState = {
+      status: "loaded",
+      submittedVisits: [
+        { id: "v1", status: "SubmittedToOffice", outcome: null, completionNote: null, submittedAtUtc: "2026-01-01T12:00:00Z", visitNote: null, lines: [] },
+      ],
+    };
+    const { container } = render(<ActualWorkHistoryCard state={state} onRetry={vi.fn()} />);
+
+    expect(screen.getByText("Visit history")).toBeInTheDocument();
+    expect(screen.getByText("1 submitted visit · locked record")).toBeInTheDocument();
+    expect(container.querySelector("svg")).toBeInTheDocument();
+  });
+
+  it("pluralizes the locked-count summary for multiple submitted visits", () => {
+    const state: ActualWorkHistoryState = {
+      status: "loaded",
+      submittedVisits: [
+        { id: "v3", status: "SubmittedToOffice", outcome: null, completionNote: null, submittedAtUtc: "2026-03-01T12:00:00Z", visitNote: null, lines: [] },
+        { id: "v2", status: "SubmittedToOffice", outcome: null, completionNote: null, submittedAtUtc: "2026-02-01T12:00:00Z", visitNote: null, lines: [] },
+        { id: "v1", status: "SubmittedToOffice", outcome: null, completionNote: null, submittedAtUtc: "2026-01-01T12:00:00Z", visitNote: null, lines: [] },
+      ],
+    };
+    render(<ActualWorkHistoryCard state={state} onRetry={vi.fn()} />);
+
+    expect(screen.getByText("3 submitted visits · locked record")).toBeInTheDocument();
+  });
+
+  it("discloses the visit note and each line's performer for a submitted visit", () => {
     const state: ActualWorkHistoryState = {
       status: "loaded",
       submittedVisits: [
@@ -43,55 +85,68 @@ describe("ActualWorkHistoryCard", () => {
           outcome: "NoWorkAuthorized",
           completionNote: "Customer declined repair.",
           submittedAtUtc: "2026-01-15T18:30:00Z",
+          visitNote: "Gate code is 4321.",
           lines: [
-            { id: "l1", displayNameSnapshot: "Filter", unitOfMeasureSnapshot: "each", actualQuantity: 2, note: null },
+            line({ id: "l1", displayNameSnapshot: "Filter", performerDisplayName: "Dana Tech" }),
+            line({ id: "l2", displayNameSnapshot: "Coil clean", performerDisplayName: "Sam Helper" }),
           ],
         },
       ],
     };
     render(<ActualWorkHistoryCard state={state} onRetry={vi.fn()} />);
 
-    expect(screen.getByText("Visit history")).toBeInTheDocument();
-    expect(screen.getByText("1 submitted visit · locked record")).toBeInTheDocument();
-    // Per-visit outcome/note/line detail moved to the Actual Work drawer's SubmittedVisits accordion.
-    expect(screen.queryByText("No work authorized")).not.toBeInTheDocument();
-    expect(screen.queryByText("Customer declined repair.")).not.toBeInTheDocument();
+    expect(screen.getByText("Visit note")).toBeInTheDocument();
+    expect(screen.getByText("Gate code is 4321.")).toBeInTheDocument();
+    expect(screen.getByText("Filter")).toBeInTheDocument();
+    expect(screen.getByText("Dana Tech")).toBeInTheDocument();
+    expect(screen.getByText("Sam Helper")).toBeInTheDocument();
+    expect(screen.getByText("2 lines")).toBeInTheDocument();
   });
 
-  it("pluralizes the locked-count summary for multiple submitted visits", () => {
+  it("shows 'Unknown performer' when a line's performer id no longer resolves", () => {
     const state: ActualWorkHistoryState = {
       status: "loaded",
       submittedVisits: [
-        { id: "v3", status: "SubmittedToOffice", outcome: null, completionNote: "Most recent visit note", submittedAtUtc: "2026-03-01T12:00:00Z", lines: [] },
-        { id: "v2", status: "SubmittedToOffice", outcome: null, completionNote: "Middle visit note", submittedAtUtc: "2026-02-01T12:00:00Z", lines: [] },
-        { id: "v1", status: "SubmittedToOffice", outcome: null, completionNote: "Oldest visit note", submittedAtUtc: "2026-01-01T12:00:00Z", lines: [] },
+        {
+          id: "v1",
+          status: "SubmittedToOffice",
+          outcome: null,
+          completionNote: null,
+          submittedAtUtc: "2026-01-15T18:30:00Z",
+          visitNote: null,
+          lines: [line({ id: "l1", performerDisplayName: null })],
+        },
       ],
     };
     render(<ActualWorkHistoryCard state={state} onRetry={vi.fn()} />);
 
-    expect(screen.getByText("3 submitted visits · locked record")).toBeInTheDocument();
+    expect(screen.getByText("Unknown performer")).toBeInTheDocument();
+    // No visit-note label when the visit has no note.
+    expect(screen.queryByText("Visit note")).not.toBeInTheDocument();
   });
 
-  it("shows a lock affordance icon alongside the summary", () => {
+  it("summarizes each visit with its line count", () => {
     const state: ActualWorkHistoryState = {
       status: "loaded",
       submittedVisits: [
-        { id: "v1", status: "SubmittedToOffice", outcome: null, completionNote: null, submittedAtUtc: "2026-01-01T12:00:00Z", lines: [] },
+        { id: "v1", status: "SubmittedToOffice", outcome: null, completionNote: null, submittedAtUtc: "2026-01-15T18:30:00Z", visitNote: null, lines: [line({ id: "l1" })] },
       ],
     };
-    const { container } = render(<ActualWorkHistoryCard state={state} onRetry={vi.fn()} />);
-    expect(container.querySelector("svg")).toBeInTheDocument();
+    render(<ActualWorkHistoryCard state={state} onRetry={vi.fn()} />);
+
+    expect(screen.getByText("1 line")).toBeInTheDocument();
   });
 
   it("null-guards a missing submittedAtUtc without affecting the summary count", () => {
     const state: ActualWorkHistoryState = {
       status: "loaded",
       submittedVisits: [
-        { id: "v1", status: "SubmittedToOffice", outcome: null, completionNote: null, submittedAtUtc: null, lines: [] },
+        { id: "v1", status: "SubmittedToOffice", outcome: null, completionNote: null, submittedAtUtc: null, visitNote: null, lines: [] },
       ],
     };
     render(<ActualWorkHistoryCard state={state} onRetry={vi.fn()} />);
 
     expect(screen.getByText("1 submitted visit · locked record")).toBeInTheDocument();
+    expect(screen.getByText("Submitted")).toBeInTheDocument();
   });
 });

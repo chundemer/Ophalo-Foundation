@@ -244,6 +244,39 @@ export function useActualWorkCapture(requestId: string, currentAccountUserId?: s
     [state, refetchDraft, reconcileAfterConflict],
   );
 
+  // ADR-494 D5 (4c-ii): recorder-only, Draft-only visit note. Mirrors `setDefaultPerformer` — the
+  // composer autosaves on blur, so on success the rotated version + trimmed value are pulled back
+  // through `refetchDraft` (the textarea reflects the server's trim and survives a reload). A stale
+  // version / non-Draft collapses onto the shared reconcile path; a >2000 rejection (400) is
+  // returned as `"too-long"` so the textarea can surface it without disturbing state.
+  const setVisitNote = useCallback(
+    async (visitNote: string | null): Promise<"set" | "too-long" | "stale" | "failed"> => {
+      if (state.status !== "draft") return "stale";
+      try {
+        await api.setActualWorkVisitNote(
+          state.draft.id,
+          visitNote,
+          state.draft.concurrencyVersion,
+        );
+        await refetchDraft();
+        return "set";
+      } catch (err) {
+        if (err instanceof ApiError && err.code === "ActualWork.VisitNoteTooLong") {
+          return "too-long";
+        }
+        if (
+          err instanceof ApiError &&
+          (err.code === "ActualWork.VersionMismatch" || err.code === "ActualWork.NotDraft")
+        ) {
+          await reconcileAfterConflict();
+          return "stale";
+        }
+        return "failed";
+      }
+    },
+    [state, refetchDraft, reconcileAfterConflict],
+  );
+
   // After a successful submit the draft is gone (Draft -> Submitted), but the composer keeps
   // showing its own submitted confirmation until the user closes it (mirrors
   // ProposedScopeComposer). Marks the pending reprobe for closeModal to run instead of running it
@@ -310,6 +343,7 @@ export function useActualWorkCapture(requestId: string, currentAccountUserId?: s
     closeModal,
     refetchDraft,
     setDefaultPerformer,
+    setVisitNote,
     conflictNotice,
     reconcileAfterConflict,
     retryReconciliation,

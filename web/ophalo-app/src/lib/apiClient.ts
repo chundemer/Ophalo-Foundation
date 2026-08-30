@@ -1003,6 +1003,14 @@ export const api = {
       headers: { "X-Keep-ActualWork-Version": version },
       body: JSON.stringify({ performedByAccountUserId: performerId }),
     }),
+  // ADR-494 D5 (4c-ii): recorder-only Draft visit-note write. Trims server-side; >2000 chars → 400
+  // (`ActualWork.VisitNoteTooLong`). Sends the version header, returns the rotated version.
+  setActualWorkVisitNote: (actualWorkId: string, visitNote: string | null, version: string) =>
+    apiFetch<ActualWorkConcurrencyVersionResult>(`/keep/pricebook/actual-work/${actualWorkId}/visit-note`, {
+      method: "PUT",
+      headers: { "X-Keep-ActualWork-Version": version },
+      body: JSON.stringify({ visitNote }),
+    }),
   transferActualWorkDraftRecorder: (actualWorkId: string, body: ActualWorkTransferRecorderBody, version: string) =>
     apiFetch<ActualWorkConcurrencyVersionResult>(`/keep/pricebook/actual-work/${actualWorkId}/transfer-recorder`, {
       method: "POST",

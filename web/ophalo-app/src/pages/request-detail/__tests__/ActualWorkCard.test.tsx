@@ -58,7 +58,7 @@ describe("ActualWorkCard", () => {
         concurrencyVersion: "v1",
         isRecorder: true,
         lines: [
-          { id: "l1", displayNameSnapshot: "Filter", unitOfMeasureSnapshot: null, actualQuantity: 1, note: null },
+          { id: "l1", displayNameSnapshot: "Filter", unitOfMeasureSnapshot: null, actualQuantity: 1, note: null, performedByAccountUserId: "au-1", performerDisplayName: "Sam Field" },
         ],
       },
       submittedCount: 0,

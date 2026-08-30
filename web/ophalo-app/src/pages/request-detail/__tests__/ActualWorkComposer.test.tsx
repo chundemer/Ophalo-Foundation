@@ -45,6 +45,8 @@ const draftLine = {
   unitOfMeasureSnapshot: "each",
   actualQuantity: 2,
   note: null,
+  performedByAccountUserId: "au-self",
+  performerDisplayName: "Sam Field",
 };
 
 function emptyDraft(overrides: Partial<ActualWorkDraft> = {}): ActualWorkDraft {
@@ -75,6 +77,7 @@ function renderComposer(overrides: Partial<React.ComponentProps<typeof ActualWor
   const onSubmitted = vi.fn();
   const onDiscarded = vi.fn();
   const onSetDefaultPerformer = vi.fn().mockResolvedValue("set");
+  const onSetVisitNote = vi.fn().mockResolvedValue("set");
   const utils = render(
     <QueryClientProvider client={queryClient}>
       <ActualWorkComposer
@@ -89,11 +92,12 @@ function renderComposer(overrides: Partial<React.ComponentProps<typeof ActualWor
         onSubmitted={onSubmitted}
         onDiscarded={onDiscarded}
         onSetDefaultPerformer={onSetDefaultPerformer}
+        onSetVisitNote={onSetVisitNote}
         {...overrides}
       />
     </QueryClientProvider>,
   );
-  return { ...utils, onClose, onCommitted, onConflict, onDismissNotice, onRetryReconciliation, onSubmitted, onDiscarded, onSetDefaultPerformer };
+  return { ...utils, onClose, onCommitted, onConflict, onDismissNotice, onRetryReconciliation, onSubmitted, onDiscarded, onSetDefaultPerformer, onSetVisitNote };
 }
 
 beforeEach(() => {
@@ -154,6 +158,7 @@ describe("ActualWorkComposer", () => {
           onSubmitted={vi.fn()}
           onDiscarded={vi.fn()}
           onSetDefaultPerformer={vi.fn().mockResolvedValue("set")}
+          onSetVisitNote={vi.fn().mockResolvedValue("set")}
         />
       </QueryClientProvider>,
     );
@@ -458,6 +463,7 @@ describe("ActualWorkComposer", () => {
           onSubmitted={vi.fn()}
           onDiscarded={vi.fn()}
           onSetDefaultPerformer={vi.fn().mockResolvedValue("set")}
+          onSetVisitNote={vi.fn().mockResolvedValue("set")}
         />
       </QueryClientProvider>,
     );
@@ -652,6 +658,7 @@ describe("ActualWorkComposer", () => {
             onSubmitted={() => setOpen(false)}
             onDiscarded={vi.fn()}
             onSetDefaultPerformer={vi.fn().mockResolvedValue("set")}
+            onSetVisitNote={vi.fn().mockResolvedValue("set")}
           />
         )}
       </QueryClientProvider>
@@ -751,6 +758,7 @@ describe("ActualWorkComposer", () => {
               setDraft(emptyDraft({ defaultPerformedByAccountUserId: id, defaultPerformerDisplayName: "Dana Tech" }));
               return outcome;
             }}
+            onSetVisitNote={vi.fn().mockResolvedValue("set")}
           />
         );
       }
@@ -791,6 +799,101 @@ describe("ActualWorkComposer", () => {
 
       expect(await screen.findByText("That person can't be recorded as the performer.")).toBeInTheDocument();
       expect(screen.queryByPlaceholderText("Search by name or SKU...")).not.toBeInTheDocument();
+    });
+  });
+
+  describe("visit note + per-line performer (4c-iii)", () => {
+    it("autosaves the visit note on blur, trimming to null when emptied", async () => {
+      const user = userEvent.setup();
+      const { onSetVisitNote } = renderComposer();
+
+      const field = screen.getByLabelText("Visit note");
+      await user.type(field, "  Gate code 4321  ");
+      await user.tab();
+      await waitFor(() => expect(onSetVisitNote).toHaveBeenCalledWith("Gate code 4321"));
+    });
+
+    it("does not write the visit note on blur when it is unchanged", async () => {
+      const user = userEvent.setup();
+      const { onSetVisitNote } = renderComposer({
+        draft: emptyDraft({ visitNote: "Existing note" }),
+      });
+
+      const field = screen.getByLabelText("Visit note");
+      expect(field).toHaveValue("Existing note");
+      await user.click(field);
+      await user.tab();
+      expect(onSetVisitNote).not.toHaveBeenCalled();
+    });
+
+    it("surfaces the too-long outcome under the textarea", async () => {
+      const user = userEvent.setup();
+      const { onSetVisitNote } = renderComposer();
+      onSetVisitNote.mockResolvedValueOnce("too-long");
+
+      await user.type(screen.getByLabelText("Visit note"), "x");
+      await user.tab();
+
+      expect(
+        await screen.findByText("The visit note must be 2,000 characters or fewer."),
+      ).toBeInTheDocument();
+    });
+
+    it("sends an explicit per-line performer override when one is picked in the add panel", async () => {
+      const user = userEvent.setup();
+      mockAddActualWorkLine.mockResolvedValueOnce({ lineId: "line-2", actualWorkConcurrencyVersion: "v1" });
+      renderComposer();
+
+      await user.type(screen.getByPlaceholderText("Search by name or SKU..."), "gasket");
+      await waitFor(() => expect(screen.getByText("Add as custom item")).toBeInTheDocument());
+      await user.click(screen.getByText("Add as custom item"));
+      await user.type(screen.getByPlaceholderText("Describe the item"), "Rubber gasket");
+
+      await screen.findByRole("option", { name: "Dana Tech" });
+      await user.selectOptions(screen.getByLabelText("Performed by"), "au-tech");
+      await user.click(screen.getByRole("button", { name: "Add item" }));
+
+      await waitFor(() =>
+        expect(mockAddActualWorkLine).toHaveBeenCalledWith(
+          "draft-1",
+          { offCatalogDescription: "Rubber gasket", actualQuantity: 1, note: null, performedByAccountUserId: "au-tech" },
+          "v1",
+        ),
+      );
+    });
+
+    it("omits the performer field when the add panel keeps the ticket default", async () => {
+      const user = userEvent.setup();
+      mockAddActualWorkLine.mockResolvedValueOnce({ lineId: "line-2", actualWorkConcurrencyVersion: "v1" });
+      renderComposer();
+
+      await user.type(screen.getByPlaceholderText("Search by name or SKU..."), "gasket");
+      await waitFor(() => expect(screen.getByText("Add as custom item")).toBeInTheDocument());
+      await user.click(screen.getByText("Add as custom item"));
+      await user.type(screen.getByPlaceholderText("Describe the item"), "Rubber gasket");
+      await user.click(screen.getByRole("button", { name: "Add item" }));
+
+      await waitFor(() =>
+        expect(mockAddActualWorkLine).toHaveBeenCalledWith(
+          "draft-1",
+          { offCatalogDescription: "Rubber gasket", actualQuantity: 1, note: null },
+          "v1",
+        ),
+      );
+    });
+
+    it("shows each existing line's performer read-only, with a fallback for an unresolved id", () => {
+      renderComposer({
+        draft: emptyDraft({
+          lines: [
+            { ...draftLine, id: "l1", displayNameSnapshot: "Filter", performerDisplayName: "Dana Tech" },
+            { ...draftLine, id: "l2", displayNameSnapshot: "Coil", performerDisplayName: null },
+          ],
+        }),
+      });
+
+      expect(screen.getByText("Dana Tech")).toBeInTheDocument();
+      expect(screen.getByText("Unknown performer")).toBeInTheDocument();
     });
   });
 });
