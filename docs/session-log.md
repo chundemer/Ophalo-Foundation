@@ -441,7 +441,7 @@ commit would touch 8 production files across Core + Infrastructure + Application
 estimated "Application + Api, ≈5"). Neither sub-slice is user-facing; both deploy together with
 4c-iii's field UI.
 
-- **4c-ii-a — VisitNote write path — COMPLETE (2026-08-30), `PENDING-HASH`.**
+- **4c-ii-a — VisitNote write path — COMPLETE (2026-08-30), `6f6c4ae`.**
   Migration `20260830010613_AddActualWorkVisitNote` (nullable `varchar(2000)` on `keep_actual_works`,
   applied locally by Christian). `ActualWork.VisitNote` + `SetVisitNote(note)` (Draft-only,
   trim-to-null, ≤2000 → `ActualWorkErrors.VisitNoteTooLong`, version rotates); `ActualWorkConfiguration`
