@@ -131,11 +131,46 @@ export function ActualWorkComposer({
     connectionFailure.retry();
   }
 
+  // Discard is a deliberately destructive action: the trigger is a visible danger-outline button
+  // (see below) and the actual mutation only fires from the nested confirmation alertdialog. The
+  // dialog mirrors CatalogItemEditDrawer's inline discard-confirm — a capture-phase key handler
+  // owns Escape and Tab-wrapping between its two buttons so KeepModal's own traps don't reach the
+  // backgrounded composer while it is up.
+  const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
+  const discardTriggerRef = useRef<HTMLButtonElement>(null);
+  const keepEditingRef = useRef<HTMLButtonElement>(null);
+  const discardConfirmRef = useRef<HTMLButtonElement>(null);
+
   const discardMutation = useMutation({
     mutationFn: () => api.discardActualWork(draft.id, draft.concurrencyVersion),
     onSuccess: onDiscarded,
     onError: () => onConflict(),
   });
+
+  useEffect(() => {
+    if (!showDiscardConfirm) return;
+    keepEditingRef.current?.focus();
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        e.stopPropagation();
+        if (!discardMutation.isPending) setShowDiscardConfirm(false);
+        return;
+      }
+      if (e.key !== "Tab") return;
+      e.preventDefault();
+      e.stopPropagation();
+      const first = keepEditingRef.current;
+      const last = discardConfirmRef.current;
+      if (!first || !last) return;
+      (document.activeElement === first ? last : first).focus();
+    }
+    document.addEventListener("keydown", onKeyDown, true);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown, true);
+      discardTriggerRef.current?.focus();
+    };
+  }, [showDiscardConfirm, discardMutation.isPending]);
 
   return (
     <KeepModal
@@ -272,25 +307,19 @@ export function ActualWorkComposer({
           ))}
         </div>
 
-        {!readOnly && draft.lines.length > 0 && (
-          <button
-            type="button"
-            disabled={discardMutation.isPending}
-            onClick={() => discardMutation.mutate()}
-            className={`text-xs font-medium text-[var(--ophalo-muted)] hover:text-[var(--ophalo-ink)] ${FOCUS_RING} disabled:opacity-50`}
-          >
-            Discard this visit
-          </button>
-        )}
-        {!readOnly && draft.lines.length === 0 && (
-          <button
-            type="button"
-            disabled={discardMutation.isPending}
-            onClick={() => discardMutation.mutate()}
-            className={`text-xs font-medium text-[var(--ophalo-muted)] hover:text-[var(--ophalo-ink)] ${FOCUS_RING} disabled:opacity-50`}
-          >
-            Discard this visit
-          </button>
+        {!readOnly && (
+          <div className="pt-1">
+            <button
+              ref={discardTriggerRef}
+              type="button"
+              disabled={discardMutation.isPending}
+              onClick={() => setShowDiscardConfirm(true)}
+              className={`inline-flex items-center gap-1.5 rounded-lg border border-[var(--ophalo-danger)] px-3 py-1.5 text-xs font-semibold text-[var(--ophalo-danger)] hover:bg-[var(--ophalo-danger-bg)] disabled:opacity-50 ${FOCUS_RING}`}
+            >
+              <X className="h-3.5 w-3.5" />
+              Discard this visit
+            </button>
+          </div>
         )}</section>
         <SubmittedVisits visits={submittedVisits} />
       </div>
@@ -308,6 +337,48 @@ export function ActualWorkComposer({
           onSubmitted();
         }}
       />
+
+      {showDiscardConfirm && (
+        <div
+          role="alertdialog"
+          aria-modal="true"
+          aria-labelledby="actual-work-discard-confirm-heading"
+          aria-describedby="actual-work-discard-confirm-body"
+          className="absolute inset-0 z-10 flex items-center justify-center bg-black/30 px-6"
+        >
+          <div className="max-w-sm w-full rounded-lg bg-[var(--ophalo-card)] shadow-xl p-4 flex flex-col gap-3">
+            <h3
+              id="actual-work-discard-confirm-heading"
+              className="font-serif text-lg font-semibold text-[var(--ophalo-ink)]"
+            >
+              Discard this visit?
+            </h3>
+            <p id="actual-work-discard-confirm-body" className="text-sm text-[var(--ophalo-muted)]">
+              This permanently removes this unfinished visit and its recorded work.
+            </p>
+            <div className="flex items-center justify-end gap-3">
+              <button
+                ref={keepEditingRef}
+                type="button"
+                disabled={discardMutation.isPending}
+                onClick={() => setShowDiscardConfirm(false)}
+                className={`text-sm font-medium text-[var(--ophalo-muted)] hover:text-[var(--ophalo-ink)] rounded disabled:opacity-50 ${FOCUS_RING}`}
+              >
+                Keep editing
+              </button>
+              <button
+                ref={discardConfirmRef}
+                type="button"
+                disabled={discardMutation.isPending}
+                onClick={() => discardMutation.mutate()}
+                className={`px-3 py-1.5 rounded-lg text-sm font-semibold bg-[var(--ophalo-danger)] text-white hover:opacity-90 disabled:opacity-50 ${FOCUS_RING}`}
+              >
+                Discard visit
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </KeepModal>
   );
 }

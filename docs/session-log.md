@@ -194,6 +194,20 @@ three-suggestion rules displaying `1.`, `2.`, and `3.` in their saved order.
 
 ### Recently completed
 
+#### Actual Work composer discard — visible destructive confirm — COMPLETE (2026-08-29)
+
+Frontend-only polish. `ActualWorkComposer.tsx`: the two understated "Discard this visit" text
+links (one per line-count branch) are replaced by a single danger-outline button (`X` icon,
+`--ophalo-danger` border/text, `--ophalo-danger-bg` hover) rendered for every `!readOnly` state,
+including the performer-gated one. Clicking it opens a nested `role="alertdialog"` confirm
+(mirrors `CatalogItemEditDrawer`'s inline discard-confirm: capture-phase Escape + Tab-wrap between
+the two buttons, focus returns to the trigger on close) — title "Discard this visit?", body "This
+permanently removes this unfinished visit and its recorded work.", "Keep editing" / "Discard
+visit". `api.discardActualWork` fires only from the confirm button; both dialog buttons disable
+while `discardMutation.isPending`, so a double-tap cannot double-submit. No backend, API, or
+state-machine change. Verified: `ActualWorkComposer` 33/33 (+4), full app suite 812/812,
+`tsc --noEmit`, `check:tokens`, `git diff --check` all clean.
+
 #### Centralized SPA session-expiry redirect — COMPLETE (2026-08-27)
 
 `redirectToSignInOnce()` is a browser-safe, module-guarded shared redirect helper that navigates to

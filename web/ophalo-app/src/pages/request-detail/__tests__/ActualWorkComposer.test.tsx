@@ -474,15 +474,73 @@ describe("ActualWorkComposer", () => {
     await waitFor(() => expect(screen.getByRole("button", { name: "Remove" })).toBeEnabled());
   });
 
-  it("discards the draft and calls onDiscarded", async () => {
-    const user = userEvent.setup();
-    mockDiscardActualWork.mockResolvedValueOnce(undefined);
-    const { onDiscarded } = renderComposer({ draft: emptyDraft({ lines: [draftLine] }) });
+  describe("discard visit", () => {
+    it("renders discard as a visible button in the normal composer and the performer-gated state", () => {
+      const { unmount } = renderComposer({ draft: emptyDraft({ lines: [draftLine] }) });
+      expect(screen.getByRole("button", { name: "Discard this visit" })).toBeVisible();
+      unmount();
 
-    await user.click(screen.getByRole("button", { name: "Discard this visit" }));
+      renderComposer({
+        draft: emptyDraft({ defaultPerformedByAccountUserId: null, defaultPerformerDisplayName: null }),
+      });
+      expect(screen.getByText("Whose work is this?")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Discard this visit" })).toBeVisible();
+    });
 
-    await waitFor(() => expect(mockDiscardActualWork).toHaveBeenCalledWith("draft-1", "v1"));
-    await waitFor(() => expect(onDiscarded).toHaveBeenCalled());
+    it("first click opens the confirmation dialog and does not call discard", async () => {
+      const user = userEvent.setup();
+      const { onDiscarded } = renderComposer({ draft: emptyDraft({ lines: [draftLine] }) });
+
+      await user.click(screen.getByRole("button", { name: "Discard this visit" }));
+
+      const dialog = screen.getByRole("alertdialog");
+      expect(dialog).toHaveTextContent("Discard this visit?");
+      expect(dialog).toHaveTextContent("This permanently removes this unfinished visit and its recorded work.");
+      expect(mockDiscardActualWork).not.toHaveBeenCalled();
+      expect(onDiscarded).not.toHaveBeenCalled();
+    });
+
+    it("Keep editing dismisses the dialog and leaves the draft untouched", async () => {
+      const user = userEvent.setup();
+      const { onDiscarded } = renderComposer({ draft: emptyDraft({ lines: [draftLine] }) });
+
+      await user.click(screen.getByRole("button", { name: "Discard this visit" }));
+      await user.click(screen.getByRole("button", { name: "Keep editing" }));
+
+      expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+      expect(mockDiscardActualWork).not.toHaveBeenCalled();
+      expect(onDiscarded).not.toHaveBeenCalled();
+      expect(screen.getByText("Filter")).toBeInTheDocument();
+    });
+
+    it("Discard visit confirms and calls the existing discard action once", async () => {
+      const user = userEvent.setup();
+      mockDiscardActualWork.mockResolvedValueOnce(undefined);
+      const { onDiscarded } = renderComposer({ draft: emptyDraft({ lines: [draftLine] }) });
+
+      await user.click(screen.getByRole("button", { name: "Discard this visit" }));
+      await user.click(screen.getByRole("button", { name: "Discard visit" }));
+
+      await waitFor(() => expect(mockDiscardActualWork).toHaveBeenCalledWith("draft-1", "v1"));
+      await waitFor(() => expect(onDiscarded).toHaveBeenCalled());
+      expect(mockDiscardActualWork).toHaveBeenCalledTimes(1);
+    });
+
+    it("prevents duplicate discard submits while the mutation is in flight", async () => {
+      const user = userEvent.setup();
+      let resolveDiscard!: () => void;
+      mockDiscardActualWork.mockReturnValueOnce(new Promise<void>((resolve) => (resolveDiscard = resolve)));
+      renderComposer({ draft: emptyDraft({ lines: [draftLine] }) });
+
+      await user.click(screen.getByRole("button", { name: "Discard this visit" }));
+      const confirm = screen.getByRole("button", { name: "Discard visit" });
+      await user.click(confirm);
+      await waitFor(() => expect(confirm).toBeDisabled());
+      await user.click(confirm);
+
+      resolveDiscard();
+      await waitFor(() => expect(mockDiscardActualWork).toHaveBeenCalledTimes(1));
+    });
   });
 
   it("a 409 on line add surfaces onConflict rather than a field-level error", async () => {
