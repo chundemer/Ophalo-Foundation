@@ -422,19 +422,54 @@ correction applied pre-commit: partial-component resolution + client negative ch
 full frontend suite **799/799** (90 files, +4), `tsc --noEmit` clean, `check:tokens` passed,
 `git diff --check` clean.
 
-### Claude handoff — 4c-ii (VisitNote API + read projections) — ACTIVE, split into 4c-ii-a / 4c-ii-b
+### Claude handoff — 4c-ii (VisitNote API + read projections) — split into 4c-ii-a (DONE) / 4c-ii-b (NEXT)
 
-**➡ NEXT SESSION: 4c-ii-b — read projections.** 4c-ii-a is committed and done (see below). Start a
-fresh session: project `VisitNote` on `ActualWorkOpenDraftEntry` + `ActualWorkSubmittedVisitEntry` +
-`ActualWorkFinancialDetailResult`, and per-line performer display name on `ActualWorkLineHistoryEntry`
-+ `ActualWorkFinancialLineEntry` (per-distinct-id memoized `GetActorDisplayNameAsync`, no interface
-change); extend the API response mappers in `KeepEndpoints.cs`; tests in `ActualWorkHistoryApiTests`
-+ `ActualWorkFinancialReadApiTests`. ~3 prod + 2 test, 0 mutation families. Then 4c-iii (field UI)
-consumes all of it, and the merged 4c-ii + 4c-iii slice deploys together.
+**➡ NEXT SESSION: 4c-ii-b — VisitNote + performer read projections.** Layer: Application + Api. 0
+mutation families, ~3 prod + 2 test. Full spec in
+[BL136 P preflight → Slice 4c-ii](build-log/136-P-preflight.md) (§"Slice 4c-ii") and ADR-494 D5;
+preflight decisions already locked by Christian (2026-08-29) — do the mechanical preflight, not a
+re-discovery. Exact work:
 
-**4c-i (performer slice, 10 commits) — DEPLOYED to production (2026-08-29).** All 10 commits merged to
-`main` and shipped; migrate-on-start applied, capture smoke-tested. `keep_actual_work_lines` prod
-row count was 0 as expected (ADR-494 D1). The discard-confirm composer polish (`ad1ea9d`) also shipped.
+1. `ActualWorkHistoryReadApiService.cs` — add `VisitNote` to `ActualWorkOpenDraftEntry` **and**
+   `ActualWorkSubmittedVisitEntry` (open-draft included so the 4c-iii composer textarea restores
+   across reload — ADR-494 D5 "readable on history / financial detail / workspace", same rationale
+   that forced the 4c-i-c-1 `DefaultPerformerDisplayName` addition). Add per-line performer id +
+   display name to `ActualWorkLineHistoryEntry`. Populate in `ToOpenDraftEntry` / `ToSubmittedVisitEntry`
+   / `ToLineEntries`. `DefaultPerformerDisplayName` is already resolved here via
+   `operatePersistence.GetActorDisplayNameAsync` — reuse that call.
+2. `ActualWorkFinancialReadApiService.cs` — add `VisitNote` to `ActualWorkFinancialDetailResult`
+   (visit-level); add performer id + display name to `ActualWorkFinancialLineEntry`. It already
+   resolves `ReviewedByDisplayName` via the same call.
+3. **Performer-name resolution (locked decision):** per-distinct-id **memoized** loop over
+   `GetActorDisplayNameAsync` inside each read method (`Dictionary<Guid,string?>` local cache;
+   visits carry 1–2 distinct performers). Do **not** add a batch method to
+   `IKeepRequestOperatePersistence` — the interface stays unchanged.
+4. `KeepEndpoints.cs` — extend the anonymous response mappers: `ToOpenDraftResponse`,
+   `ToSubmittedVisitResponse`, `ToLineHistoryResponse`, `ToActualWorkFinancialDetailResponse`,
+   `ToFinancialLineResponse` with `visitNote` / `performedByAccountUserId` / `performerDisplayName`.
+   No new response records (all anonymous). Frontend `apiClient.types.ts` stays untouched — that is
+   4c-iii; the new fields are latent until then.
+5. Tests: `ActualWorkHistoryApiTests` (VisitNote on open draft + submitted visit; per-line performer
+   name present; VisitNote frozen/readable after submit), `ActualWorkFinancialReadApiTests` (VisitNote
+   + per-line performer name in financial detail).
+
+Out of 4c-ii-b scope: `SetZeroLineDisposition` (D5, replacement slice); `CompletionNote` trim/≤2000
+guard (D3 intent — its own later slice + preflight, see the deferred note below). After 4c-ii-b,
+4c-iii (`web/ophalo-app` field UI) consumes all of it; the merged 4c-ii + 4c-iii slice deploys
+together.
+
+---
+
+**4c-i (performer slice, 10 commits) — DEPLOYED to production (2026-08-29).** Merged to `main`,
+migrate-on-start applied, capture smoke-tested; `keep_actual_work_lines` prod row count 0 (ADR-494 D1).
+
+**Session 2026-08-29 (evening) — pushed to `origin/main` @ `014138f`:**
+- `ad1ea9d` — discard-confirm composer polish (frontend only: "Discard this visit" is now a visible
+  danger-outline button + a nested `alertdialog` confirm mirroring `CatalogItemEditDrawer`; discard
+  mutation fires only on confirm; both dialog buttons disable while in flight). App suite 812/812.
+- `6f6c4ae` — **4c-ii-a** (below). `4b02f76` / `014138f` — session-log hash + date fixes.
+- Railway `Database__ApplyMigrationsOnStartup` is set (persistent) → `20260830010613_AddActualWorkVisitNote`
+  applies automatically on the next deploy. Nothing to toggle.
 
 **4c-ii is split (Christian-approved, 2026-08-29), matching the 4c-i-b / 4c-i-c precedent** — one
 commit would touch 8 production files across Core + Infrastructure + Application + Api (BL136-P
@@ -442,32 +477,23 @@ estimated "Application + Api, ≈5"). Neither sub-slice is user-facing; both dep
 4c-iii's field UI.
 
 - **4c-ii-a — VisitNote write path — COMPLETE (2026-08-29), `6f6c4ae`.**
-  Migration `20260830010613_AddActualWorkVisitNote` (nullable `varchar(2000)` on `keep_actual_works`,
-  applied locally by Christian). `ActualWork.VisitNote` + `SetVisitNote(note)` (Draft-only,
-  trim-to-null, ≤2000 → `ActualWorkErrors.VisitNoteTooLong`, version rotates); `ActualWorkConfiguration`
-  maps `visit_note` `HasMaxLength(2000)`; `SetVisitNoteAsync` in `ActualWorkDraftApiService` (mirrors
-  `SetDefaultPerformerAsync` — `AuthorizeAndLoadDraftAsync` recorder/Draft gate → version check →
-  domain call → `CommitAsync`; no performer-eligibility branch); `PUT
-  /keep/pricebook/actual-work/{id}/visit-note` + `ActualWorkVisitNoteBody(string? VisitNote)` in
-  `KeepEndpoints.cs` (`X-Keep-ActualWork-Version` header); `ErrorHttpMapper` maps
-  `ActualWork.VisitNoteTooLong` → 400. Tests: `ActualWorkTests` +6 domain facts; new
-  `ActualWorkVisitNoteApiTests` (set/replace/trim/clear, exactly-2000 ok, >2000 → 400 with value +
-  version unchanged, non-recorder 404, stale 409, frozen after submit → 409); `ActualWorkPersistenceTests`
-  round-trip. 8 prod files + 3 test + migration. Verified: `~ActualWork` unit **117/117**, `~ActualWork`
-  integration **265/265**, architecture **14/14**, `OpHalo.Api` build 0 warnings, `git diff --check`
-  clean. **Not deployed — ships with the merged 4c-ii / 4c-iii slice.**
-- **4c-ii-b — read projections.** `VisitNote` on `ActualWorkOpenDraftEntry` **and**
-  `ActualWorkSubmittedVisitEntry` (open-draft included so the 4c-iii composer textarea restores
-  after reload — ADR-494 D5 "readable on history"); `VisitNote` on `ActualWorkFinancialDetailResult`;
-  per-line performer display name on `ActualWorkLineHistoryEntry` + `ActualWorkFinancialLineEntry`,
-  resolved via **per-distinct-id memoized `GetActorDisplayNameAsync`** (no batch method, persistence
-  interface unchanged — Christian decision). API response mappers in `KeepEndpoints.cs` extended.
-  Tests: `ActualWorkHistoryApiTests`, `ActualWorkFinancialReadApiTests`. ~3 prod + 2 test, 0
-  mutation families.
-
-**Migration — DONE (Christian, 2026-08-29).** `20260830010613_AddActualWorkVisitNote` — nullable
-`varchar(2000)` on `keep_actual_works`, no hand-edit, no backfill, no local table reset. Applied
-locally; deploys through the normal production path with the merged 4c-ii / 4c-iii slice.
+  Migration `20260830010613_AddActualWorkVisitNote` (nullable `varchar(2000)` on `keep_actual_works`;
+  plain additive, no hand-edit / backfill / reset — applied locally, pushed, deploys on next prod
+  release). `ActualWork.VisitNote` + `SetVisitNote(note)` (Draft-only → `NotDraft`, trim-to-null,
+  ≤2000 → `ActualWorkErrors.VisitNoteTooLong`, rotates `ConcurrencyVersion`);
+  `ActualWorkConfiguration` maps `visit_note` `HasMaxLength(2000)`; `SetVisitNoteAsync` in
+  `ActualWorkDraftApiService` (mirrors `SetDefaultPerformerAsync` — `AuthorizeAndLoadDraftAsync`
+  recorder/Draft gate → version check → domain call → `CommitAsync`; no performer-eligibility
+  branch); `PUT /keep/pricebook/actual-work/{id}/visit-note` + `ActualWorkVisitNoteBody(string?
+  VisitNote)` in `KeepEndpoints.cs` (`X-Keep-ActualWork-Version` header, returns
+  `ActualWorkConcurrencyVersionResponse`); `ErrorHttpMapper` maps `ActualWork.VisitNoteTooLong` →
+  400. Tests: `ActualWorkTests` +6 domain facts; new `ActualWorkVisitNoteApiTests` (set/replace/
+  trim/clear, exactly-2000 ok, >2000 → 400 with value + version unchanged, non-recorder 404, stale
+  409, frozen after submit → 409); `ActualWorkPersistenceTests` round-trip. 6 hand-written prod + 3
+  generated migration + 3 test. Verified: `~ActualWork` unit **117/117**, `~ActualWork` integration
+  **265/265**, architecture **14/14**, `OpHalo.Api` build 0 warnings, `git diff --check` clean.
+  **Not deployed as a user-facing change — additive route + column, nothing calls it until 4c-iii.**
+- **4c-ii-b — read projections — NEXT (spec above).**
 
 **Out of 4c-ii scope (confirmed):** `CompletionNote` trim/≤2000 guard (ADR-494 D3 intent) — its own
 later bounded slice + preflight; `SetZeroLineDisposition` (D5) — belongs to the replacement slice.
