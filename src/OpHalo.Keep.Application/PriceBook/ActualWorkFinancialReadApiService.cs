@@ -164,6 +164,12 @@ public sealed class ActualWorkFinancialReadApiService(
         if (visit is null)
             return Result<ActualWorkFinancialDetailResult>.Failure(ActualWorkErrors.NotFound);
 
+        // BL136 D6c (Slice 4e-ii-b): a superseded source is not a normal live surface. A stale deep
+        // link to it resolves to the reconcilable "reload / go to the replacement" outcome rather
+        // than rendering an operational review card. History (unfiltered) remains the audit view.
+        if (visit.SupersededAtUtc is not null)
+            return Result<ActualWorkFinancialDetailResult>.Failure(ActualWorkErrors.Superseded);
+
         if (visit.Status != ActualWorkStatus.Submitted)
             return Result<ActualWorkFinancialDetailResult>.Failure(ActualWorkErrors.NotSubmitted);
 

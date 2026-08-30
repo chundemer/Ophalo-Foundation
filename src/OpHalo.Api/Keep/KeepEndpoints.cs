@@ -1307,6 +1307,10 @@ public static class KeepEndpoints
         submittedAtUtc = visit.SubmittedAtUtc,
         visitNote = visit.VisitNote,
         lines = visit.Lines.Select(ToLineHistoryResponse),
+        // BL136 D6c (Slice 4e-ii-b) replacement-chain lineage, direction explicit.
+        superseded = visit.Superseded,
+        supersededByActualWorkId = visit.SupersededByActualWorkId,
+        supersedesActualWorkId = visit.SupersedesActualWorkId,
     };
 
     private static object ToActualWorkReviewQueueEntryResponse(ActualWorkReviewQueueEntry entry) => new

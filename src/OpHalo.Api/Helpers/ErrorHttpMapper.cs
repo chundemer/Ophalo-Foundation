@@ -210,6 +210,9 @@ public static class ErrorHttpMapper
             var c when c == "ActualWork.VersionMismatch"           => (StatusCodes.Status409Conflict, "Conflict.", null),
             var c when c == "ActualWork.DraftAlreadyOpenForRequest" => (StatusCodes.Status409Conflict, "Conflict.", null),
             var c when c == "ActualWork.NotDraft"                  => (StatusCodes.Status409Conflict, "Conflict.", null),
+            // --- Superseded visit inertness (BL136 D6c, Slice 4e-ii-b) — reconcilable 409:
+            // the source was replaced; the client reloads to the successor. ---
+            var c when c == "ActualWork.Superseded"                => (StatusCodes.Status409Conflict, "Conflict.", null),
             // GAP-055 option C — an ineligible transfer target is a semantically-invalid target,
             // not malformed input; mirrors KeepRequest.ParticipationTargetIneligible.
             var c when c == "ActualWork.RecorderTransferTargetIneligible" => (StatusCodes.Status422UnprocessableEntity, "Unprocessable entity.", null),

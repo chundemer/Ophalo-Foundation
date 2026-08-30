@@ -1,6 +1,6 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-08-30 (4e-ii-a committed locally as `82d9b9e`)
+**Last updated:** 2026-08-30 (4e-ii-b-1 implemented, awaiting review; 4e-ii-a committed locally as `82d9b9e`)
 **Purpose:** active handoff only. Completed implementation detail belongs in Git history and the
 relevant build log.
 
@@ -39,20 +39,26 @@ confirmed 2026-08-30; `ActualWorkSupersessionPersistenceTests` (4) pass. Local c
   ticket-level default performer is not copied.
 - Verification: unit 1715 pass (11 new), architecture 14 pass, supersession persistence 4 pass.
 
-### Next code slice — 4e-ii-b operational hardening
+### Next code slice — 4e-ii-b operational hardening (split; b-1 done, b-2 next)
 
-Full scope: [BL136 P → Slice 4e-ii](build-log/136-P-preflight.md), D6c/D8. No new mutation family;
-hardens the surfaces that must exclude and reconcile superseded work **before any route is exposed**.
+Scope: [BL136 P → Slice 4e-ii](build-log/136-P-preflight.md), D6c. Split into two independently
+compiling slices to stay within the batch gate. Eligible-visit filtering and the Resolved→Closed
+close gate are **deferred to 4g / Billing-Revision work** per BL136 D8 — not introduced early.
 
-1. `ErrorHttpMapper` ← `ActualWork.Superseded` (409, reconcilable) — do this first.
-2. Add `superseded_at_utc IS NULL` to: unreviewed review-queue list + count, single-visit financial
-   detail read, eligible-visit reads, and the Resolved→Closed close gate.
-3. Superseded-source single-visit detail read returns the `ActualWork.Superseded` reconcilable
-   outcome (not a normal live surface).
-4. Superseded-source mutation rejection on the review / financial-resolution / zero-line-disposition
-   paths, ordered **after** each path's existing version-mismatch check.
-5. `ActualWorkHistoryReadApiService` stays **unfiltered**; add `superseded` / `supersededBy` /
-   `supersedes` lineage markers to history entries.
+**4e-ii-b-1 — error mapping + operational read exclusion (implemented, awaiting review):**
+- `ErrorHttpMapper` ← `ActualWork.Superseded` (409, reconcilable).
+- `superseded_at_utc IS NULL` on the unreviewed review-queue list + count
+  (`EfActualWorkFinancialReviewPersistence`).
+- Single-visit financial-detail read returns the `ActualWork.Superseded` reconcilable outcome for a
+  superseded source (`ActualWorkFinancialReadApiService`, after `NotFound`).
+- `ActualWorkHistoryReadApiService` stays **unfiltered**; each `submittedVisits` entry now carries
+  explicit-direction lineage: source → `superseded: true` + `supersededByActualWorkId`; successor →
+  `supersedesActualWorkId`.
+- Verification: integration 41 pass (2 new), architecture 14 pass, focused unit 140 pass.
+
+**4e-ii-b-2 — superseded-source mutation rejection (next):** new `Superseded` result value on the
+review / financial-resolution / zero-line-disposition seams; Infra guard **after** each path's
+existing version-mismatch check; ApiService maps to `ActualWork.Superseded`. 3 mutation families.
 
 Then **4e-ii-c**: map `POST .../{id}/replace` and the Draft `SetZeroLineDisposition` route
 (recorder-only + concurrency-checked). Then **4e-iii** replacement UI. Preserve field price

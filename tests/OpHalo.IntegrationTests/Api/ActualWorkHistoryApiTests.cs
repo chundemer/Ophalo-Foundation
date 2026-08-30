@@ -387,6 +387,64 @@ public sealed class ActualWorkHistoryApiTests : IClassFixture<KeepApiWebFactory>
         Assert.Equal(ActualWorkCommitResult.Committed, commitResult);
     }
 
+    /// <summary>Two submitted visits on the request, the first superseded by the second (BL136 D6c).
+    /// Returns <c>(sourceId, successorId)</c>. Marker columns are written via the domain
+    /// <see cref="ActualWork.Supersede"/> transition, matching the production supersession seam.</summary>
+    private async Task<(Guid SourceId, Guid SuccessorId)> SeedSupersededVisitPairAsync(
+        Guid accountId, Guid requestId, Guid ownerId)
+    {
+        await using var scope = _factory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+        var persistence = new EfActualWorkPersistence(db);
+
+        var source = ActualWork.Create(accountId, requestId, ownerId).Value;
+        ActualWorkTestData.AddLine(source, null, null, "Drain pan replacement", "each", 1m, null, null, null, null, ownerId);
+        await persistence.AddAsync(source, CancellationToken.None);
+        Assert.True(source.Submit(DateTime.UtcNow, null, null).IsSuccess);
+        Assert.Equal(ActualWorkCommitResult.Committed, await persistence.CommitAsync(source, CancellationToken.None));
+
+        var successor = ActualWork.Create(accountId, requestId, ownerId).Value;
+        ActualWorkTestData.AddLine(successor, null, null, "Drain pan replacement", "each", 1m, null, null, null, null, ownerId);
+        await persistence.AddAsync(successor, CancellationToken.None);
+        Assert.True(successor.Submit(DateTime.UtcNow, null, null).IsSuccess);
+        Assert.Equal(ActualWorkCommitResult.Committed, await persistence.CommitAsync(successor, CancellationToken.None));
+
+        var reloadedSource = await persistence.GetByIdAsync(accountId, source.Id, CancellationToken.None);
+        Assert.True(reloadedSource!.Supersede(successor.Id, ownerId, "Corrected drain pan line", DateTime.UtcNow).IsSuccess);
+        Assert.Equal(ActualWorkCommitResult.Committed, await persistence.CommitAsync(reloadedSource, CancellationToken.None));
+
+        return (source.Id, successor.Id);
+    }
+
+    [Fact]
+    public async Task GetHistory_SupersededChain_KeepsBothVisitsWithExplicitLineageDirection()
+    {
+        // BL136 D6c (Slice 4e-ii-b): the history read is never filtered by superseded_at_utc.
+        // Both ends of the chain link stay visible, with direction explicit: the source points
+        // forward (supersededByActualWorkId), the successor points back (supersedesActualWorkId).
+        var (accountId, ownerId, ownerCookie) = await SeedAccountAsync("history-superseded-chain");
+        await EnrollAsync(accountId, ownerId);
+        var requestId = await SeedRequestAsync(accountId);
+        await SeedResponsibleAsync(requestId, accountId, ownerId);
+        var (sourceId, successorId) = await SeedSupersededVisitPairAsync(accountId, requestId, ownerId);
+
+        var response = await AuthRequest(ownerCookie).GetAsync($"/keep/pricebook/actual-work/request/{requestId}/history");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var visits = (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("submittedVisits").EnumerateArray().ToArray();
+        Assert.Equal(2, visits.Length);
+
+        var source = visits.Single(v => v.GetProperty("id").GetGuid() == sourceId);
+        Assert.True(source.GetProperty("superseded").GetBoolean());
+        Assert.Equal(successorId, source.GetProperty("supersededByActualWorkId").GetGuid());
+        Assert.Equal(JsonValueKind.Null, source.GetProperty("supersedesActualWorkId").ValueKind);
+
+        var successor = visits.Single(v => v.GetProperty("id").GetGuid() == successorId);
+        Assert.False(successor.GetProperty("superseded").GetBoolean());
+        Assert.Equal(JsonValueKind.Null, successor.GetProperty("supersededByActualWorkId").ValueKind);
+        Assert.Equal(sourceId, successor.GetProperty("supersedesActualWorkId").GetGuid());
+    }
+
     private async Task SeedOpenDraftWithLineAsync(
         Guid accountId, Guid requestId, Guid recorderId, Guid performerId, string? visitNote)
     {

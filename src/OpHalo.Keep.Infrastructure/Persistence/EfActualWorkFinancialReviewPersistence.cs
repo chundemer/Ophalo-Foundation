@@ -18,6 +18,7 @@ public sealed class EfActualWorkFinancialReviewPersistence(OpHaloDbContext dbCon
             where visit.AccountId == accountId
                   && visit.Status == ActualWorkStatus.Submitted
                   && visit.ReviewedAtUtc == null
+                  && visit.SupersededAtUtc == null
             orderby visit.SubmittedAtUtc, visit.Id
             select new { visit, request.ReferenceCode, request.CustomerName };
 
@@ -32,7 +33,8 @@ public sealed class EfActualWorkFinancialReviewPersistence(OpHaloDbContext dbCon
         return dbContext.Set<ActualWork>().CountAsync(
             visit => visit.AccountId == accountId
                      && visit.Status == ActualWorkStatus.Submitted
-                     && visit.ReviewedAtUtc == null,
+                     && visit.ReviewedAtUtc == null
+                     && visit.SupersededAtUtc == null,
             ct);
     }
 }

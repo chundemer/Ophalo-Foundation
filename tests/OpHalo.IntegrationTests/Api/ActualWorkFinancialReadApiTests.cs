@@ -71,6 +71,49 @@ public sealed class ActualWorkFinancialReadApiTests : IClassFixture<KeepApiWebFa
     }
 
     [Fact]
+    public async Task ReviewQueueAndCount_ExcludeSupersededSourceVisits()
+    {
+        // BL136 D6c / D8 (Slice 4e-ii-b): a superseded source is never an operational review-queue
+        // row and never counts — only the live successor does.
+        var (accountId, ownerId, ownerCookie) = await SeedAccountAsync("queue-superseded");
+        await EnrollAsync(accountId, ownerId);
+        var requestId = await SeedRequestAsync(accountId, "Jane Customer");
+
+        var supersededId = await CreateVisitAsync(accountId, requestId, ownerId, submit: true, review: false);
+        var successorId = await CreateVisitAsync(accountId, requestId, ownerId, submit: true, review: false);
+        await SupersedeVisitAsync(accountId, supersededId, successorId, ownerId);
+
+        var queue = await (await GetQueueAsync(ownerCookie)).Content.ReadFromJsonAsync<JsonElement>();
+        var ids = queue.EnumerateArray().Select(e => e.GetProperty("actualWorkId").GetGuid()).ToArray();
+        Assert.DoesNotContain(supersededId, ids);
+        Assert.Contains(successorId, ids);
+
+        var count = await (await GetQueueCountAsync(ownerCookie)).Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(1, count.GetProperty("count").GetInt32());
+    }
+
+    [Fact]
+    public async Task FinancialDetail_ForSupersededSource_Returns409Superseded()
+    {
+        // BL136 D6c (Slice 4e-ii-b): a direct live read of a superseded source returns the
+        // reconcilable ActualWork.Superseded outcome, not a normal review card.
+        var (accountId, ownerId, ownerCookie) = await SeedAccountAsync("detail-superseded");
+        await EnrollAsync(accountId, ownerId);
+        var requestId = await SeedRequestAsync(accountId, "Jane Customer");
+
+        var supersededId = await CreateVisitAsync(accountId, requestId, ownerId, submit: true, review: false);
+        var successorId = await CreateVisitAsync(accountId, requestId, ownerId, submit: true, review: false);
+        await SupersedeVisitAsync(accountId, supersededId, successorId, ownerId);
+
+        var response = await GetDetailAsync(ownerCookie, supersededId);
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        Assert.Equal(
+            "ActualWork.Superseded",
+            (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("code").GetString());
+    }
+
+    [Fact]
     public async Task ReviewQueue_OrdersOldestSubmittedFirst()
     {
         var (accountId, ownerId, ownerCookie) = await SeedAccountAsync("queue-order");
@@ -547,6 +590,18 @@ public sealed class ActualWorkFinancialReadApiTests : IClassFixture<KeepApiWebFa
 
     private async Task<HttpResponseMessage> GetDetailAsync(string cookie, Guid actualWorkId) =>
         await AuthRequest(cookie).GetAsync($"/keep/pricebook/actual-work/{actualWorkId}/financial-detail");
+
+    /// <summary>BL136 D6c (Slice 4e-ii-b): mark <paramref name="sourceId"/> superseded by
+    /// <paramref name="successorId"/> via the domain transition, matching the production
+    /// supersession seam.</summary>
+    private async Task SupersedeVisitAsync(Guid accountId, Guid sourceId, Guid successorId, Guid byAccountUserId)
+    {
+        await using var scope = _factory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+        var source = await db.Set<ActualWork>().FirstAsync(x => x.AccountId == accountId && x.Id == sourceId);
+        Assert.True(source.Supersede(successorId, byAccountUserId, "Corrected drain pan line", DateTime.UtcNow).IsSuccess);
+        await db.SaveChangesAsync();
+    }
 
     private async Task<HttpResponseMessage> PostReviewAsync(
         string cookie, Guid actualWorkId, Guid expectedVersion, string? reviewNote)

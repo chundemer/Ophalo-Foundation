@@ -48,10 +48,17 @@ public sealed record ActualWorkOpenDraftEntry(
     IReadOnlyList<ActualWorkLineHistoryEntry> Lines);
 
 /// <summary>A submitted, immutable visit — no <c>ConcurrencyVersion</c>, since nothing here is ever
-/// mutated through this read.</summary>
+/// mutated through this read.
+/// <para>BL136 D6c (Slice 4e-ii-b) replacement-chain lineage, direction explicit: a superseded
+/// source carries <see cref="Superseded"/> <c>= true</c> and
+/// <see cref="SupersededByActualWorkId"/> (its successor); the successor carries
+/// <see cref="SupersedesActualWorkId"/> (its source). The history read stays unfiltered, so both
+/// ends of every chain link remain visible here even though the operational surfaces show only the
+/// live head.</para></summary>
 public sealed record ActualWorkSubmittedVisitEntry(
     Guid Id, ActualWorkStatus Status, ActualWorkOutcome? Outcome, string? CompletionNote,
-    DateTime? SubmittedAtUtc, string? VisitNote, IReadOnlyList<ActualWorkLineHistoryEntry> Lines);
+    DateTime? SubmittedAtUtc, string? VisitNote, IReadOnlyList<ActualWorkLineHistoryEntry> Lines,
+    bool Superseded, Guid? SupersededByActualWorkId, Guid? SupersedesActualWorkId);
 
 /// <summary><see cref="CanCaptureActualWork"/> disambiguates a null <see cref="OpenDraft"/>: it is
 /// true whenever the caller has both <c>RequestsOperate</c> and <c>ActualWorkCapture</c> (GAP-055 —
@@ -144,6 +151,14 @@ public sealed class ActualWorkHistoryReadApiService(
 
         var submittedVisits = await persistence.GetSubmittedVisitsForRequestAsync(currentUser.AccountId, requestId, ct);
 
+        // BL136 D6c (Slice 4e-ii-b): reverse of each row's own SupersededByActualWorkId — maps a
+        // successor's id to the source it replaced, so the successor entry can carry an explicit
+        // SupersedesActualWorkId. One-to-one (unique index on SupersededByActualWorkId); both ends
+        // of every chain link are in this unfiltered list.
+        var supersedesBySuccessorId = submittedVisits
+            .Where(v => v.SupersededByActualWorkId is not null)
+            .ToDictionary(v => v.SupersededByActualWorkId!.Value, v => v.Id);
+
         // Per-distinct-id memoized performer-name resolution (locked 2026-08-29): one
         // GetActorDisplayNameAsync call per distinct id across the visible draft and every
         // submitted visit; visits carry 1–2 distinct performers. No batch seam method.
@@ -182,7 +197,7 @@ public sealed class ActualWorkHistoryReadApiService(
         return Result<ActualWorkHistoryResult>.Success(
             new ActualWorkHistoryResult(
                 canCaptureActualWork, openDraft, openDraftHeldByOther,
-                submittedVisits.Select(v => ToSubmittedVisitEntry(v, performerNames)).ToArray()));
+                submittedVisits.Select(v => ToSubmittedVisitEntry(v, performerNames, supersedesBySuccessorId)).ToArray()));
     }
 
     private static ActualWorkOpenDraftEntry ToOpenDraftEntry(
@@ -194,9 +209,13 @@ public sealed class ActualWorkHistoryReadApiService(
         ToLineEntries(visit, performerNames));
 
     private static ActualWorkSubmittedVisitEntry ToSubmittedVisitEntry(
-        ActualWork visit, IReadOnlyDictionary<Guid, string?> performerNames) => new(
+        ActualWork visit, IReadOnlyDictionary<Guid, string?> performerNames,
+        IReadOnlyDictionary<Guid, Guid> supersedesBySuccessorId) => new(
         visit.Id, visit.Status, visit.Outcome, visit.CompletionNote, visit.SubmittedAtUtc, visit.VisitNote,
-        ToLineEntries(visit, performerNames));
+        ToLineEntries(visit, performerNames),
+        Superseded: visit.SupersededAtUtc is not null,
+        SupersededByActualWorkId: visit.SupersededByActualWorkId,
+        SupersedesActualWorkId: supersedesBySuccessorId.TryGetValue(visit.Id, out var sourceId) ? sourceId : null);
 
     /// <summary><c>Include(Lines)</c> does not guarantee collection order, so capture order is
     /// made explicit here rather than left to reload-time happenstance: <c>CreatedAtUtc ASC, Id
