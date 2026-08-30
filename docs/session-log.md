@@ -422,10 +422,31 @@ correction applied pre-commit: partial-component resolution + client negative ch
 full frontend suite **799/799** (90 files, +4), `tsc --noEmit` clean, `check:tokens` passed,
 `git diff --check` clean.
 
-### Claude handoff — 4c/4d (attribution, Draft note, recorder hand-off) — COMPLETE
+### Claude handoff — 4c/4d/4e-0 (attribution, Draft note, recorder hand-off, signal seam) — COMPLETE
 
-**➡ NEXT SESSION: 4e-0 — extract the signal-reconciliation seam (prep, no behaviour change).** Full
-spec in [BL136 P preflight → Slice 4e-0](build-log/136-P-preflight.md) (§"Slice 4e-0"), then 4e-i/ii/iii.
+**➡ NEXT SESSION: 4e-i — supersession marker + zero-line Draft setter + predicate widen.** Full
+spec in [BL136 P preflight → Slice 4e-i](build-log/136-P-preflight.md) (§"Slice 4e-i"); Core +
+Infrastructure + migration `AddActualWorkSupersession`, then 4e-ii/iii. 4e-i widens exactly one
+constant — `EfActualWorkReviewSignalReconciliation.OpenOutstandingReviewPredicate` — with
+`AND superseded_at_utc IS NULL`, and adds `IActualWorkSupersessionPersistence` owning the one
+supersede+successor transaction that also calls `ResolveIfClearAsync`.
+
+**4e-0 — extract the signal-reconciliation seam — COMPLETE (2026-08-30), commit `<pending>`.**
+No behaviour change. New `IActualWorkReviewSignalReconciliation` (Application, domain scalars only —
+no `DbContext`/transaction on the interface) with `RaiseAsync` + `ResolveIfClearAsync`; one Infra
+impl `EfActualWorkReviewSignalReconciliation` taking the request-scoped `OpHaloDbContext` via DI so
+its statement auto-enlists in the caller's open transaction. `RaiseAsync` holds the ADR-463
+upsert/reopen SQL verbatim; `ResolveIfClearAsync` holds the resolve SQL and solely owns the shared
+"open outstanding review" predicate as one named constant `OpenOutstandingReviewPredicate`
+(`status = 'Submitted' AND reviewed_at_utc IS NULL AND deleted_at_utc IS NULL`).
+`EfActualWorkSubmissionPersistence` and `EfActualWorkReviewPersistence` repointed at the seam;
+their private `UpsertWorkSignalAsync` / `ResolveWorkSignalIfClearAsync` deleted. Registered
+`AddScoped` ahead of both consumers in `KeepServiceCollectionExtensions`. Files: 2 new + 3 prod
+(`EfActualWorkSubmissionPersistence.cs`, `EfActualWorkReviewPersistence.cs`,
+`KeepServiceCollectionExtensions.cs`) + 4 test (constructor call-site fan-out only, no assertion
+changes). Verified: `~ActualWorkSubmission` / `~ActualWorkReviewPersistence` /
+`~ActualWorkFinancialResolutionPersistence` / `~ActualWorkReviewApi` integration 46/46,
+architecture 14/14, `git diff --check` clean, clean build 0 warnings. Not yet deployed.
 
 **4d — recorder-initiated hand-off — COMPLETE (2026-08-30), commit `a187316`.** Same
 `transfer-recorder` endpoint, authority relaxed: the current recorder may now transfer their **own**

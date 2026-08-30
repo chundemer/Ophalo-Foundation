@@ -54,7 +54,7 @@ public sealed class ActualWorkReviewPersistenceTests : IClassFixture<PostgresFix
         var visitId = await SeedSubmittedVisitAsync();
 
         await using var ctx = CreateContext();
-        var persistence = new EfActualWorkReviewPersistence(ctx, new EfActualWorkFinancialResolutionPersistence(ctx));
+        var persistence = new EfActualWorkReviewPersistence(ctx, new EfActualWorkFinancialResolutionPersistence(ctx), new EfActualWorkReviewSignalReconciliation(ctx));
 
         var outcome = await persistence.MarkReviewedAsync(
             AccountId, visitId, await GetVersionAsync(visitId), OwnerId, "Looks good.", Now, CancellationToken.None);
@@ -81,7 +81,7 @@ public sealed class ActualWorkReviewPersistenceTests : IClassFixture<PostgresFix
         var secondVisitId = await SeedSubmittedVisitAsync();
 
         await using var ctx = CreateContext();
-        var persistence = new EfActualWorkReviewPersistence(ctx, new EfActualWorkFinancialResolutionPersistence(ctx));
+        var persistence = new EfActualWorkReviewPersistence(ctx, new EfActualWorkFinancialResolutionPersistence(ctx), new EfActualWorkReviewSignalReconciliation(ctx));
 
         var outcome = await persistence.MarkReviewedAsync(
             AccountId, firstVisitId, await GetVersionAsync(firstVisitId), OwnerId, null, Now, CancellationToken.None);
@@ -105,7 +105,7 @@ public sealed class ActualWorkReviewPersistenceTests : IClassFixture<PostgresFix
 
         await using (var ctx = CreateContext())
         {
-            var persistence = new EfActualWorkReviewPersistence(ctx, new EfActualWorkFinancialResolutionPersistence(ctx));
+            var persistence = new EfActualWorkReviewPersistence(ctx, new EfActualWorkFinancialResolutionPersistence(ctx), new EfActualWorkReviewSignalReconciliation(ctx));
             await persistence.MarkReviewedAsync(
                 AccountId, firstVisitId, await GetVersionAsync(firstVisitId), OwnerId, null, Now, CancellationToken.None);
         }
@@ -113,7 +113,7 @@ public sealed class ActualWorkReviewPersistenceTests : IClassFixture<PostgresFix
         var later = Now.AddHours(1);
         await using (var ctx = CreateContext())
         {
-            var persistence = new EfActualWorkReviewPersistence(ctx, new EfActualWorkFinancialResolutionPersistence(ctx));
+            var persistence = new EfActualWorkReviewPersistence(ctx, new EfActualWorkFinancialResolutionPersistence(ctx), new EfActualWorkReviewSignalReconciliation(ctx));
             var outcome = await persistence.MarkReviewedAsync(
                 AccountId, secondVisitId, await GetVersionAsync(secondVisitId), OwnerId, null, later, CancellationToken.None);
             Assert.Equal(ActualWorkReviewResult.Committed, outcome.Result);
@@ -129,7 +129,7 @@ public sealed class ActualWorkReviewPersistenceTests : IClassFixture<PostgresFix
     public async Task MarkReviewedAsync_for_an_unknown_visit_id_returns_NotFound()
     {
         await using var ctx = CreateContext();
-        var persistence = new EfActualWorkReviewPersistence(ctx, new EfActualWorkFinancialResolutionPersistence(ctx));
+        var persistence = new EfActualWorkReviewPersistence(ctx, new EfActualWorkFinancialResolutionPersistence(ctx), new EfActualWorkReviewSignalReconciliation(ctx));
 
         var outcome = await persistence.MarkReviewedAsync(
             AccountId, Guid.NewGuid(), Guid.NewGuid(), OwnerId, null, Now, CancellationToken.None);
@@ -143,7 +143,7 @@ public sealed class ActualWorkReviewPersistenceTests : IClassFixture<PostgresFix
         var visitId = await SeedSubmittedVisitAsync();
 
         await using var ctx = CreateContext();
-        var persistence = new EfActualWorkReviewPersistence(ctx, new EfActualWorkFinancialResolutionPersistence(ctx));
+        var persistence = new EfActualWorkReviewPersistence(ctx, new EfActualWorkFinancialResolutionPersistence(ctx), new EfActualWorkReviewSignalReconciliation(ctx));
 
         var outcome = await persistence.MarkReviewedAsync(
             OtherAccountId, visitId, await GetVersionAsync(visitId), OwnerId, null, Now, CancellationToken.None);
@@ -157,7 +157,7 @@ public sealed class ActualWorkReviewPersistenceTests : IClassFixture<PostgresFix
         var visitId = await SeedSubmittedVisitAsync();
 
         await using var ctx = CreateContext();
-        var persistence = new EfActualWorkReviewPersistence(ctx, new EfActualWorkFinancialResolutionPersistence(ctx));
+        var persistence = new EfActualWorkReviewPersistence(ctx, new EfActualWorkFinancialResolutionPersistence(ctx), new EfActualWorkReviewSignalReconciliation(ctx));
 
         var outcome = await persistence.MarkReviewedAsync(
             AccountId, visitId, Guid.NewGuid(), OwnerId, null, Now, CancellationToken.None);
@@ -174,7 +174,7 @@ public sealed class ActualWorkReviewPersistenceTests : IClassFixture<PostgresFix
     {
         await using var ctx = CreateContext();
         var visitId = await SeedDraftVisitAsync(ctx);
-        var persistence = new EfActualWorkReviewPersistence(ctx, new EfActualWorkFinancialResolutionPersistence(ctx));
+        var persistence = new EfActualWorkReviewPersistence(ctx, new EfActualWorkFinancialResolutionPersistence(ctx), new EfActualWorkReviewSignalReconciliation(ctx));
 
         var outcome = await persistence.MarkReviewedAsync(
             AccountId, visitId, await GetVersionAsync(visitId), OwnerId, null, Now, CancellationToken.None);
@@ -189,13 +189,13 @@ public sealed class ActualWorkReviewPersistenceTests : IClassFixture<PostgresFix
 
         await using (var ctx = CreateContext())
         {
-            var persistence = new EfActualWorkReviewPersistence(ctx, new EfActualWorkFinancialResolutionPersistence(ctx));
+            var persistence = new EfActualWorkReviewPersistence(ctx, new EfActualWorkFinancialResolutionPersistence(ctx), new EfActualWorkReviewSignalReconciliation(ctx));
             await persistence.MarkReviewedAsync(
                 AccountId, visitId, await GetVersionAsync(visitId), OwnerId, "First review.", Now, CancellationToken.None);
         }
 
         await using var ctx2 = CreateContext();
-        var persistence2 = new EfActualWorkReviewPersistence(ctx2, new EfActualWorkFinancialResolutionPersistence(ctx2));
+        var persistence2 = new EfActualWorkReviewPersistence(ctx2, new EfActualWorkFinancialResolutionPersistence(ctx2), new EfActualWorkReviewSignalReconciliation(ctx2));
         var outcome = await persistence2.MarkReviewedAsync(
             AccountId, visitId, await GetVersionAsync(visitId), OwnerId, "Second review.", Now.AddHours(1), CancellationToken.None);
 
@@ -215,7 +215,7 @@ public sealed class ActualWorkReviewPersistenceTests : IClassFixture<PostgresFix
         var visitId = await SeedSubmittedVisitWithIncompleteLineAsync();
 
         await using var ctx = CreateContext();
-        var persistence = new EfActualWorkReviewPersistence(ctx, new EfActualWorkFinancialResolutionPersistence(ctx));
+        var persistence = new EfActualWorkReviewPersistence(ctx, new EfActualWorkFinancialResolutionPersistence(ctx), new EfActualWorkReviewSignalReconciliation(ctx));
 
         var outcome = await persistence.MarkReviewedAsync(
             AccountId, visitId, await GetVersionAsync(visitId), OwnerId, null, Now, CancellationToken.None);
@@ -238,7 +238,7 @@ public sealed class ActualWorkReviewPersistenceTests : IClassFixture<PostgresFix
         var visitId = await SeedSubmittedZeroLineVisitAsync();
 
         await using var ctx = CreateContext();
-        var persistence = new EfActualWorkReviewPersistence(ctx, new EfActualWorkFinancialResolutionPersistence(ctx));
+        var persistence = new EfActualWorkReviewPersistence(ctx, new EfActualWorkFinancialResolutionPersistence(ctx), new EfActualWorkReviewSignalReconciliation(ctx));
 
         var outcome = await persistence.MarkReviewedAsync(
             AccountId, visitId, await GetVersionAsync(visitId), OwnerId, null, Now, CancellationToken.None);
@@ -258,7 +258,7 @@ public sealed class ActualWorkReviewPersistenceTests : IClassFixture<PostgresFix
         await InsertResolutionRawAsync(visitId, lineId, sell: 90m, cost: 30m);
 
         await using var ctx = CreateContext();
-        var persistence = new EfActualWorkReviewPersistence(ctx, new EfActualWorkFinancialResolutionPersistence(ctx));
+        var persistence = new EfActualWorkReviewPersistence(ctx, new EfActualWorkFinancialResolutionPersistence(ctx), new EfActualWorkReviewSignalReconciliation(ctx));
 
         var outcome = await persistence.MarkReviewedAsync(
             AccountId, visitId, await GetVersionAsync(visitId), OwnerId, null, Now, CancellationToken.None);
@@ -279,7 +279,7 @@ public sealed class ActualWorkReviewPersistenceTests : IClassFixture<PostgresFix
         await InsertResolutionRawAsync(visitId, lineId, sell: null, cost: 45m);
 
         await using var ctx = CreateContext();
-        var persistence = new EfActualWorkReviewPersistence(ctx, new EfActualWorkFinancialResolutionPersistence(ctx));
+        var persistence = new EfActualWorkReviewPersistence(ctx, new EfActualWorkFinancialResolutionPersistence(ctx), new EfActualWorkReviewSignalReconciliation(ctx));
 
         var outcome = await persistence.MarkReviewedAsync(
             AccountId, visitId, await GetVersionAsync(visitId), OwnerId, null, Now, CancellationToken.None);
@@ -294,7 +294,7 @@ public sealed class ActualWorkReviewPersistenceTests : IClassFixture<PostgresFix
         await InsertNoChargeDispositionRawAsync(visitId);
 
         await using var ctx = CreateContext();
-        var persistence = new EfActualWorkReviewPersistence(ctx, new EfActualWorkFinancialResolutionPersistence(ctx));
+        var persistence = new EfActualWorkReviewPersistence(ctx, new EfActualWorkFinancialResolutionPersistence(ctx), new EfActualWorkReviewSignalReconciliation(ctx));
 
         var outcome = await persistence.MarkReviewedAsync(
             AccountId, visitId, await GetVersionAsync(visitId), OwnerId, null, Now, CancellationToken.None);
@@ -361,7 +361,7 @@ public sealed class ActualWorkReviewPersistenceTests : IClassFixture<PostgresFix
         addLines(visit);
         await persistence.AddAsync(visit, CancellationToken.None);
 
-        var submissionPersistence = new EfActualWorkSubmissionPersistence(ctx);
+        var submissionPersistence = new EfActualWorkSubmissionPersistence(ctx, new EfActualWorkReviewSignalReconciliation(ctx));
         var outcomeResult = await submissionPersistence.SubmitAsync(
             AccountId, visit.Id, visit.ConcurrencyVersion, outcome, completionNote, Now, CancellationToken.None);
         Assert.Equal(ActualWorkSubmissionResult.Committed, outcomeResult.Result);

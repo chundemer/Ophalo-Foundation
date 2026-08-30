@@ -275,7 +275,7 @@ public sealed class ActualWorkReviewApiTests : IClassFixture<KeepApiWebFactory>,
     {
         await using var scope = _factory.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
-        var persistence = new EfActualWorkSubmissionPersistence(db);
+        var persistence = new EfActualWorkSubmissionPersistence(db, new EfActualWorkReviewSignalReconciliation(db));
         var outcome = await persistence.SubmitAsync(
             accountId, actualWorkId, expectedVersion, ActualWorkOutcome.NoWorkAuthorized, "No work performed.",
             DateTime.UtcNow, CancellationToken.None);

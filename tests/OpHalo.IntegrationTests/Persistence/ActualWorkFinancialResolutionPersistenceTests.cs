@@ -344,7 +344,7 @@ public sealed class ActualWorkFinancialResolutionPersistenceTests
 
         var lineIds = visit.Lines.Select(l => l.Id).ToArray();
 
-        var submission = new EfActualWorkSubmissionPersistence(ctx);
+        var submission = new EfActualWorkSubmissionPersistence(ctx, new EfActualWorkReviewSignalReconciliation(ctx));
         var outcome = await submission.SubmitAsync(
             AccountId, visit.Id, visit.ConcurrencyVersion,
             lineCount == 0 ? ActualWorkOutcome.DiagnosticOnly : null,

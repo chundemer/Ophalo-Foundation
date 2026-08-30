@@ -196,6 +196,11 @@ public static class KeepServiceCollectionExtensions
         // IActiveResponsibleCheck dependency here.
         services.AddScoped<IActualWorkAssemblyExpansionPersistence, EfActualWorkAssemblyExpansionPersistence>();
 
+        // Direct Actual Work — the single owner of the ActualWorkNeedsOfficeReview signal
+        // raise/resolve SQL (ADR-494 D4). Consumed by both the submission and review persistence
+        // seams below; its statements auto-enlist in the caller's open transaction.
+        services.AddScoped<IActualWorkReviewSignalReconciliation, EfActualWorkReviewSignalReconciliation>();
+
         // Direct Actual Work — submit/review-signal (Batch 4, build-log/129). Atomic seam separate
         // from IActualWorkPersistence, matching IProposedScopeSubmissionPersistence.
         services.AddScoped<IActualWorkSubmissionPersistence, EfActualWorkSubmissionPersistence>();

@@ -12,10 +12,14 @@ namespace OpHalo.Keep.Infrastructure.Persistence;
 /// build-log/129). See <see cref="IActualWorkSubmissionPersistence"/> for the full contract.
 /// Mirrors <see cref="EfProposedScopeSubmissionPersistence"/> exactly: default (Read Committed)
 /// isolation, the visit's own optimistic-concurrency token gates its write, the ADR-463 signal
-/// upsert is a single atomic statement, and the request's terminal-state check takes an explicit
+/// raise is delegated to the shared <see cref="IActualWorkReviewSignalReconciliation"/> seam
+/// (ADR-494 D4) whose single statement auto-enlists in this open transaction, and the request's
+/// terminal-state check takes an explicit
 /// <c>SELECT ... FOR UPDATE</c> row lock rather than relying on a stronger isolation level.
 /// </summary>
-public sealed class EfActualWorkSubmissionPersistence(OpHaloDbContext dbContext) : IActualWorkSubmissionPersistence
+public sealed class EfActualWorkSubmissionPersistence(
+    OpHaloDbContext dbContext,
+    IActualWorkReviewSignalReconciliation signalReconciliation) : IActualWorkSubmissionPersistence
 {
     public async Task<ActualWorkSubmissionOutcome> SubmitAsync(
         Guid accountId, Guid actualWorkId, Guid expectedVersion, ActualWorkOutcome? outcome,
@@ -79,41 +83,9 @@ public sealed class EfActualWorkSubmissionPersistence(OpHaloDbContext dbContext)
             return new ActualWorkSubmissionOutcome(ActualWorkSubmissionResult.VersionMismatch);
         }
 
-        await UpsertWorkSignalAsync(accountId, actualWork.RequestId, submittedAtUtc, ct);
+        await signalReconciliation.RaiseAsync(accountId, actualWork.RequestId, submittedAtUtc, ct);
 
         await tx.CommitAsync(ct);
         return new ActualWorkSubmissionOutcome(ActualWorkSubmissionResult.Committed, actualWork.ConcurrencyVersion);
-    }
-
-    /// <summary>
-    /// Native atomic upsert (ADR-463): a currently active signal (<c>resolved_at_utc IS NULL</c>)
-    /// is left completely untouched via the <c>WHERE</c> clause on the conflict target, so
-    /// <c>DO UPDATE</c> never fires for an already-active row. A resolved signal is reopened by
-    /// clearing <c>resolved_at_utc</c> and replacing <c>raised_at_utc</c>.
-    /// </summary>
-    private async Task UpsertWorkSignalAsync(Guid accountId, Guid requestId, DateTime nowUtc, CancellationToken ct)
-    {
-        var newId = Guid.CreateVersion7();
-        var newConcurrencyVersion = Guid.NewGuid();
-
-        await dbContext.Database.ExecuteSqlInterpolatedAsync(
-            $"""
-             INSERT INTO keep_request_work_signals
-                 (id, account_id, keep_request_id, source_module_key, signal_key,
-                  raised_at_utc, resolved_at_utc, concurrency_version, created_at_utc, updated_at_utc)
-             VALUES
-                 ({newId}, {accountId}, {requestId},
-                  {KeepRequestWorkSignalKeys.Modules.PriceBookQuotesMaterials},
-                  {KeepRequestWorkSignalKeys.Signals.ActualWorkNeedsOfficeReview},
-                  {nowUtc}, NULL, {newConcurrencyVersion}, {nowUtc}, {nowUtc})
-             ON CONFLICT (account_id, keep_request_id, source_module_key, signal_key)
-             DO UPDATE SET
-                 raised_at_utc = EXCLUDED.raised_at_utc,
-                 resolved_at_utc = NULL,
-                 concurrency_version = EXCLUDED.concurrency_version,
-                 updated_at_utc = EXCLUDED.updated_at_utc
-             WHERE keep_request_work_signals.resolved_at_utc IS NOT NULL
-             """,
-            ct);
     }
 }
