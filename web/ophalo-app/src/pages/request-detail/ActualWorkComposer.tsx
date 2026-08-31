@@ -1,6 +1,6 @@
 import { forwardRef, useEffect, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { Check, ChevronRight, Lock, Pencil, Plus, Trash2, X } from "lucide-react";
+import { Check, ChevronRight, Lock, Minus, Pencil, Plus, RefreshCw, Search, Trash2, X } from "lucide-react";
 import { KeepModal } from "../../components/keep/KeepModal";
 import { KeepButton } from "../../components/keep/KeepButton";
 import {
@@ -291,6 +291,10 @@ export function ActualWorkComposer({
       onConflict={onConflict}
       onConnectionFailure={reportConnectionFailure}
       onConnectionRecovered={clearConnectionFailure}
+      // Only the inline presentation hosts this inside `ActualWorkItemPickerDrawer`, where a first
+      // Escape should dismiss the open result list before the drawer closes. The modal composer
+      // keeps its existing one-Escape-to-close behavior (BL136 4f-v: modal path unchanged).
+      dismissResultsOnEscape={inline}
     />
   );
 
@@ -1040,6 +1044,10 @@ interface ActualWorkSearchAndAddProps {
   onConflict: (message?: string) => void;
   onConnectionFailure: (message: string, retry: () => void) => void;
   onConnectionRecovered: () => void;
+  /** When true (inline/drawer host only), a first Escape with results showing clears them instead
+   *  of falling straight through to the drawer's Escape-to-close. Arrow/Enter navigation is
+   *  unaffected by this flag and works in both presentations. */
+  dismissResultsOnEscape?: boolean;
 }
 
 type Selection = { kind: "catalog"; item: FieldScopeSearchResultResponse } | { kind: "custom" };
@@ -1053,9 +1061,19 @@ const ActualWorkSearchAndAdd = forwardRef<HTMLInputElement, ActualWorkSearchAndA
     onConflict,
     onConnectionFailure,
     onConnectionRecovered,
+    dismissResultsOnEscape = false,
   },
   ref,
 ) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  // Merge the forwarded ref (used by the drawer's `initialFocus`) with a local handle so the clear
+  // button can return focus to the input. Callback-ref keeps the existing install timing exactly.
+  const setInputRef = (node: HTMLInputElement | null) => {
+    inputRef.current = node;
+    if (typeof ref === "function") ref(node);
+    else if (ref) ref.current = node;
+  };
+
   const [searchText, setSearchText] = useState("");
   const [debouncedText, setDebouncedText] = useState("");
   const [selection, setSelection] = useState<Selection | null>(null);
@@ -1077,7 +1095,7 @@ const ActualWorkSearchAndAdd = forwardRef<HTMLInputElement, ActualWorkSearchAndA
     return () => clearTimeout(handle);
   }, [searchText]);
 
-  const { data: results, isLoading } = useQuery({
+  const { data: results, isLoading, isFetching } = useQuery({
     queryKey: ["fieldScopeSearch", "actualWork", debouncedText],
     queryFn: () => api.getFieldScopeSearch({ search: debouncedText, limit: 20 }),
     enabled: selection === null && debouncedText.length > 0,
@@ -1085,7 +1103,9 @@ const ActualWorkSearchAndAdd = forwardRef<HTMLInputElement, ActualWorkSearchAndA
 
   const catalogResults = (results?.items ?? []).filter((item) => item.kind === "CatalogItem");
   const assemblyResults = (results?.items ?? []).filter((item) => item.kind === "OfferingAssembly");
-  const [expansionNotice, setExpansionNotice] = useState<string | null>(null);
+  // In-drawer success feedback for both add paths (direct catalog/custom line and assembly expand).
+  // Kept open across adds; cleared when the recorder starts a new search or picks a new result.
+  const [addNotice, setAddNotice] = useState<string | null>(null);
 
   // Build Log 129, 5d-ii-d: session-only Paired Nudges state, mirroring
   // useProposedScopeCapture's nudge shape (build-log/125) but kept inline here since this
@@ -1124,12 +1144,13 @@ const ActualWorkSearchAndAdd = forwardRef<HTMLInputElement, ActualWorkSearchAndA
   // `selection`/`quantity`/`note`/`customDescription` state — a technician can edit those fields
   // after a connection failure before pressing Retry, and the retry closure must replay the exact
   // operation that failed, not whatever the fields currently hold.
-  type AddLineVariables = { body: ActualWorkAddLineBody; trigger: { triggerCatalogItemId: string } | null };
+  type AddLineVariables = { body: ActualWorkAddLineBody; trigger: { triggerCatalogItemId: string } | null; label: string };
 
   const addMutation = useMutation({
     mutationFn: (variables: AddLineVariables) => api.addActualWorkLine(actualWorkId, variables.body, version),
     onSuccess: async (_data, variables) => {
       resetAfterSuccess();
+      setAddNotice(`Added ${variables.label}.`);
       onConnectionRecovered();
       await onCommitted();
       if (variables.trigger) void fetchNudge(variables.trigger);
@@ -1157,10 +1178,11 @@ const ActualWorkSearchAndAdd = forwardRef<HTMLInputElement, ActualWorkSearchAndA
     mutationFn: (assembly: FieldScopeSearchResultResponse) =>
       api.expandActualWorkAssembly(actualWorkId, { offeringAssemblyId: assembly.id, includedOptionalItemIds: [] }, version),
     onSuccess: async (result, assembly) => {
-      setExpansionNotice(
+      const added = `Added ${assembly.displayName} (${result.lineIds.length} item${result.lineIds.length === 1 ? "" : "s"}).`;
+      setAddNotice(
         result.skippedCatalogItemIds.length === 0
-          ? `${result.lineIds.length} assembly item${result.lineIds.length === 1 ? "" : "s"} added.`
-          : `${result.lineIds.length} assembly item${result.lineIds.length === 1 ? "" : "s"} added; ${result.skippedCatalogItemIds.length} already on this visit.`,
+          ? added
+          : `${added} ${result.skippedCatalogItemIds.length} already on this visit.`,
       );
       setError(null);
       onConnectionRecovered();
@@ -1185,76 +1207,232 @@ const ActualWorkSearchAndAdd = forwardRef<HTMLInputElement, ActualWorkSearchAndA
     Number(quantity) > 0 &&
     (selection.kind === "catalog" || customDescription.trim().length > 0);
 
+  // Combobox keyboard navigation over the actionable results. Section headers and the trailing
+  // "Add as custom item" action are deliberately excluded — Arrow keys walk only the assembly and
+  // catalog options, in that display order.
+  type NavResult = { kind: "assembly" | "catalog"; item: FieldScopeSearchResultResponse };
+  const navigableResults: NavResult[] = [
+    ...assemblyResults.map((item): NavResult => ({ kind: "assembly", item })),
+    ...catalogResults.map((item): NavResult => ({ kind: "catalog", item })),
+  ];
+  const resultOptionId = (r: NavResult) => `aw-result-${r.kind}-${r.item.id}`;
+
+  const [activeResultIndex, setActiveResultIndex] = useState(-1);
+  const navResultsRef = useRef(navigableResults);
+  navResultsRef.current = navigableResults;
+  const activeResultIndexRef = useRef(activeResultIndex);
+  activeResultIndexRef.current = activeResultIndex;
+  const expandPendingRef = useRef(expandAssemblyMutation.isPending);
+  expandPendingRef.current = expandAssemblyMutation.isPending;
+  const expandMutateRef = useRef(expandAssemblyMutation.mutate);
+  expandMutateRef.current = expandAssemblyMutation.mutate;
+  const dismissResultsOnEscapeRef = useRef(dismissResultsOnEscape);
+  dismissResultsOnEscapeRef.current = dismissResultsOnEscape;
+
+  // Drop the highlight whenever the result set (or the query behind it) changes.
+  useEffect(() => {
+    setActiveResultIndex(-1);
+  }, [results, debouncedText]);
+
+  // Keep the highlighted option scrolled into view as the selection moves.
+  useEffect(() => {
+    if (activeResultIndex < 0) return;
+    const r = navResultsRef.current[activeResultIndex];
+    if (r) document.getElementById(resultOptionId(r))?.scrollIntoView({ block: "nearest" });
+  }, [activeResultIndex]);
+
+  // Capture-phase key handler (mirrors the discard-confirm pattern above): while the search input
+  // holds focus, Arrow/Enter drive the listbox in every presentation. Escape is only intercepted
+  // when `dismissResultsOnEscape` is set (inline/drawer host) — there a first Escape clears the
+  // results and only a subsequent one reaches KeepModal's Escape-to-close; the modal composer
+  // keeps its unchanged one-Escape-to-close behavior.
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if (document.activeElement !== inputRef.current) return;
+      const options = navResultsRef.current;
+      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+        if (options.length === 0) return;
+        e.preventDefault();
+        e.stopPropagation();
+        setActiveResultIndex((i) =>
+          e.key === "ArrowDown"
+            ? (i + 1) % options.length
+            : i <= 0
+              ? options.length - 1
+              : i - 1,
+        );
+      } else if (e.key === "Enter") {
+        const r = options[activeResultIndexRef.current];
+        if (!r) return;
+        e.preventDefault();
+        e.stopPropagation();
+        if (r.kind === "assembly") {
+          if (!expandPendingRef.current) expandMutateRef.current(r.item);
+        } else {
+          setAddNotice(null);
+          setSelection({ kind: "catalog", item: r.item });
+        }
+      } else if (e.key === "Escape") {
+        if (!dismissResultsOnEscapeRef.current) return;
+        if (options.length === 0 && activeResultIndexRef.current < 0) return;
+        e.preventDefault();
+        e.stopPropagation();
+        setActiveResultIndex(-1);
+        setSearchText("");
+        setDebouncedText("");
+        setAddNotice(null);
+      }
+    }
+    document.addEventListener("keydown", onKeyDown, true);
+    return () => document.removeEventListener("keydown", onKeyDown, true);
+  }, []);
+
   return (
     <div className="space-y-2">
       {selection === null ? (
         <>
-          <input
-            ref={ref}
-            type="text"
-            value={searchText}
-            onChange={(e) => setSearchText(e.target.value)}
-            placeholder="Search by name or SKU..."
-            className={INPUT_CLS}
-          />
+          <div className="relative">
+            <Search
+              aria-hidden="true"
+              className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--ophalo-muted)]"
+            />
+            <input
+              ref={setInputRef}
+              type="text"
+              value={searchText}
+              onChange={(e) => {
+                setSearchText(e.target.value);
+                setAddNotice(null);
+              }}
+              placeholder="Search by name or SKU..."
+              role="combobox"
+              aria-autocomplete="list"
+              aria-expanded={navigableResults.length > 0}
+              aria-controls="aw-results-listbox"
+              aria-activedescendant={
+                activeResultIndex >= 0 && activeResultIndex < navigableResults.length
+                  ? resultOptionId(navigableResults[activeResultIndex])
+                  : undefined
+              }
+              className={`${INPUT_CLS.replace("px-3", "pl-9 pr-16")}`}
+            />
+            <div className="absolute right-2 top-1/2 flex -translate-y-1/2 items-center gap-1">
+              {isFetching && (
+                <RefreshCw
+                  aria-hidden="true"
+                  className="h-4 w-4 animate-spin text-[var(--ophalo-muted)]"
+                />
+              )}
+              {searchText.length > 0 && (
+                <button
+                  type="button"
+                  aria-label="Clear search"
+                  onClick={() => {
+                    setSearchText("");
+                    setDebouncedText("");
+                    setAddNotice(null);
+                    inputRef.current?.focus();
+                  }}
+                  className={`rounded-md p-1 text-[var(--ophalo-muted)] hover:bg-[var(--ophalo-canvas)] ${FOCUS_RING}`}
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+          </div>
           {debouncedText.length > 0 && (
             <div className="rounded-lg border border-[var(--ophalo-border)] p-1">
               {isLoading && <p className="px-3 py-2 text-xs text-[var(--ophalo-muted)]">Searching...</p>}
               {!isLoading && (
-                <ul className="max-h-48 overflow-y-auto space-y-1">
-                  {assemblyResults.length > 0 && (
-                    <li className="rounded-lg border-l-4 border-[var(--keep-accent)] bg-[var(--ophalo-canvas)] px-3 py-2 text-xs font-bold uppercase tracking-wide text-[var(--ophalo-ink)]">
-                      Matching assemblies
-                    </li>
-                  )}
-                  {assemblyResults.map((item) => (
-                    <li key={item.id}>
-                      <button
-                        type="button"
-                        disabled={expandAssemblyMutation.isPending}
-                        onClick={() => expandAssemblyMutation.mutate(item)}
-                        className={`w-full text-left rounded-lg px-3 py-2 text-sm text-[var(--ophalo-ink)] hover:bg-[var(--ophalo-canvas)] ${FOCUS_RING} disabled:opacity-50`}
+                <>
+                  <ul
+                    id="aw-results-listbox"
+                    role="listbox"
+                    aria-label="Search results"
+                    className="max-h-48 overflow-y-auto space-y-1"
+                  >
+                    {assemblyResults.length > 0 && (
+                      <li
+                        role="presentation"
+                        className="rounded-lg border-l-4 border-[var(--keep-accent)] bg-[var(--ophalo-canvas)] px-3 py-2 text-xs font-bold uppercase tracking-wide text-[var(--ophalo-ink)]"
                       >
-                        <span>{item.displayName}</span>
-                        <span className="ml-2 rounded bg-[var(--ophalo-canvas)] px-1.5 py-0.5 text-xs font-medium text-[var(--ophalo-muted)]">
-                          Assembly
-                        </span>
-                        {item.defaultItemCount !== null && (
-                          <span className="ml-2 text-xs text-[var(--ophalo-muted)]">Expands {item.defaultItemCount} items</span>
-                        )}
-                      </button>
-                    </li>
-                  ))}
-                  {catalogResults.length > 0 && (
-                    <li className="mt-3 rounded-lg border-l-4 border-[var(--ophalo-border)] bg-[var(--ophalo-canvas)] px-3 py-2 text-xs font-bold uppercase tracking-wide text-[var(--ophalo-ink)]">
-                      Matching catalog items
-                    </li>
-                  )}
-                  {catalogResults.map((item) => (
-                    <li key={item.id}>
-                      <button
-                        type="button"
-                        onClick={() => setSelection({ kind: "catalog", item })}
-                        className={`w-full text-left rounded-lg px-3 py-2 text-sm text-[var(--ophalo-ink)] hover:bg-[var(--ophalo-canvas)] ${FOCUS_RING}`}
+                        Matching assemblies
+                      </li>
+                    )}
+                    {assemblyResults.map((item, i) => {
+                      const active = activeResultIndex === i;
+                      return (
+                        <li
+                          key={item.id}
+                          id={`aw-result-assembly-${item.id}`}
+                          role="option"
+                          aria-selected={active}
+                          aria-disabled={expandAssemblyMutation.isPending || undefined}
+                          onMouseMove={() => setActiveResultIndex(i)}
+                          onClick={() => {
+                            if (!expandAssemblyMutation.isPending) expandAssemblyMutation.mutate(item);
+                          }}
+                          className={`cursor-pointer rounded-lg px-3 py-2 text-sm text-[var(--ophalo-ink)] ${active ? "bg-[var(--ophalo-canvas)]" : "hover:bg-[var(--ophalo-canvas)]"} ${expandAssemblyMutation.isPending ? "opacity-50" : ""}`}
+                        >
+                          <span>{item.displayName}</span>
+                          <span className="ml-2 rounded bg-[var(--ophalo-canvas)] px-1.5 py-0.5 text-xs font-medium text-[var(--ophalo-muted)]">
+                            Assembly
+                          </span>
+                          {item.defaultItemCount !== null && (
+                            <span className="ml-2 text-xs text-[var(--ophalo-muted)]">Expands {item.defaultItemCount} items</span>
+                          )}
+                        </li>
+                      );
+                    })}
+                    {catalogResults.length > 0 && (
+                      <li
+                        role="presentation"
+                        className="mt-3 rounded-lg border-l-4 border-[var(--ophalo-border)] bg-[var(--ophalo-canvas)] px-3 py-2 text-xs font-bold uppercase tracking-wide text-[var(--ophalo-ink)]"
                       >
-                        {item.displayName}
-                      </button>
-                    </li>
-                  ))}
-                  <li>
-                    <button
-                      type="button"
-                      onClick={() => setSelection({ kind: "custom" })}
-                      className={`w-full text-left rounded-lg px-3 py-2 text-sm font-medium text-[var(--keep-accent)] hover:bg-[var(--ophalo-canvas)] ${FOCUS_RING}`}
-                    >
-                      Add as custom item
-                    </button>
-                  </li>
-                </ul>
+                        Matching catalog items
+                      </li>
+                    )}
+                    {catalogResults.map((item, i) => {
+                      const index = assemblyResults.length + i;
+                      const active = activeResultIndex === index;
+                      return (
+                        <li
+                          key={item.id}
+                          id={`aw-result-catalog-${item.id}`}
+                          role="option"
+                          aria-selected={active}
+                          onMouseMove={() => setActiveResultIndex(index)}
+                          onClick={() => {
+                            setAddNotice(null);
+                            setSelection({ kind: "catalog", item });
+                          }}
+                          className={`cursor-pointer rounded-lg px-3 py-2 text-sm text-[var(--ophalo-ink)] ${active ? "bg-[var(--ophalo-canvas)]" : "hover:bg-[var(--ophalo-canvas)]"}`}
+                        >
+                          {item.displayName}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAddNotice(null);
+                      setSelection({ kind: "custom" });
+                    }}
+                    className={`mt-1 w-full text-left rounded-lg px-3 py-2 text-sm font-medium text-[var(--keep-accent)] hover:bg-[var(--ophalo-canvas)] ${FOCUS_RING}`}
+                  >
+                    Add as custom item
+                  </button>
+                </>
               )}
             </div>
           )}
-          {expansionNotice && <p role="status" className="px-3 py-2 text-xs text-[var(--ophalo-muted)]">{expansionNotice}</p>}
+          {addNotice && (
+            <p role="status" aria-live="polite" className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-[var(--ophalo-ink)]">
+              <Check aria-hidden="true" className="h-3.5 w-3.5 text-[var(--keep-accent)]" />
+              {addNotice}
+            </p>
+          )}
           {error && <p className="px-3 text-xs text-[var(--ophalo-danger,#c0392b)]">{error}</p>}
           {nudge && (
             <ActualWorkNudgeChips
@@ -1293,15 +1471,40 @@ const ActualWorkSearchAndAdd = forwardRef<HTMLInputElement, ActualWorkSearchAndA
             />
           )}
           <div className="flex gap-2">
-            <input
-              type="number"
-              min="0"
-              step="any"
-              value={quantity}
-              onChange={(e) => setQuantity(e.target.value)}
-              className={`${INPUT_CLS} w-24`}
-              aria-label="Quantity"
-            />
+            <div className="flex shrink-0 items-stretch">
+              <button
+                type="button"
+                aria-label="Decrease quantity"
+                disabled={!(Number.isFinite(Number(quantity)) && Number(quantity) > 1)}
+                onClick={() => {
+                  const n = Number(quantity);
+                  setQuantity(String(Math.max(1, (Number.isFinite(n) ? n : 1) - 1)));
+                }}
+                className={`flex w-9 items-center justify-center rounded-l-lg border border-[var(--ophalo-border)] text-[var(--ophalo-ink)] hover:bg-[var(--ophalo-canvas)] disabled:opacity-40 ${FOCUS_RING}`}
+              >
+                <Minus className="h-4 w-4" />
+              </button>
+              <input
+                type="number"
+                min="0"
+                step="any"
+                value={quantity}
+                onChange={(e) => setQuantity(e.target.value)}
+                className={`${INPUT_CLS.replace("w-full ", "").replace("rounded-lg", "rounded-none")} w-16 border-x-0 text-center`}
+                aria-label="Quantity"
+              />
+              <button
+                type="button"
+                aria-label="Increase quantity"
+                onClick={() => {
+                  const n = Number(quantity);
+                  setQuantity(String((Number.isFinite(n) && n > 0 ? n : 0) + 1));
+                }}
+                className={`flex w-9 items-center justify-center rounded-r-lg border border-[var(--ophalo-border)] text-[var(--ophalo-ink)] hover:bg-[var(--ophalo-canvas)] ${FOCUS_RING}`}
+              >
+                <Plus className="h-4 w-4" />
+              </button>
+            </div>
             <input
               type="text"
               value={note}
@@ -1342,7 +1545,8 @@ const ActualWorkSearchAndAdd = forwardRef<HTMLInputElement, ActualWorkSearchAndA
                     ? { catalogItemId: selection.item.id, actualQuantity: Number(quantity), note: note.trim() || null, ...performer }
                     : { offCatalogDescription: customDescription, actualQuantity: Number(quantity), note: note.trim() || null, ...performer };
                 const trigger = selection?.kind === "catalog" ? { triggerCatalogItemId: selection.item.id } : null;
-                addMutation.mutate({ body, trigger });
+                const label = selection?.kind === "catalog" ? selection.item.displayName : customDescription.trim();
+                addMutation.mutate({ body, trigger, label });
               }}
               className="flex-1"
             >

@@ -323,7 +323,7 @@ describe("ActualWorkComposer", () => {
     const { onCommitted } = renderComposer();
 
     await user.type(screen.getByPlaceholderText("Search by name or SKU..."), "furnace");
-    await user.click(await screen.findByRole("button", { name: /Furnace tune-up/ }));
+    await user.click(await screen.findByRole("option", { name: /Furnace tune-up/ }));
 
     await waitFor(() =>
       expect(mockExpandActualWorkAssembly).toHaveBeenCalledWith(
@@ -331,7 +331,7 @@ describe("ActualWorkComposer", () => {
       ),
     );
     await waitFor(() => expect(onCommitted).toHaveBeenCalled());
-    expect(screen.getByRole("status")).toHaveTextContent("1 assembly item added; 1 already on this visit.");
+    expect(screen.getByRole("status")).toHaveTextContent("Added Furnace tune-up (1 item). 1 already on this visit.");
   });
 
   it("reconciles after a stale-version conflict while expanding an assembly", async () => {
@@ -346,7 +346,7 @@ describe("ActualWorkComposer", () => {
     const { onConflict } = renderComposer();
 
     await user.type(screen.getByPlaceholderText("Search by name or SKU..."), "furnace");
-    await user.click(await screen.findByRole("button", { name: /Furnace tune-up/ }));
+    await user.click(await screen.findByRole("option", { name: /Furnace tune-up/ }));
 
     await waitFor(() => expect(onConflict).toHaveBeenCalled());
   });
@@ -393,7 +393,7 @@ describe("ActualWorkComposer", () => {
     renderComposer();
 
     await user.type(screen.getByPlaceholderText("Search by name or SKU..."), "furnace");
-    await user.click(await screen.findByRole("button", { name: /Furnace tune-up/ }));
+    await user.click(await screen.findByRole("option", { name: /Furnace tune-up/ }));
 
     await waitFor(() =>
       expect(mockGetActualWorkNudgeFieldSuggestions).toHaveBeenCalledWith("draft-1", { triggerOfferingAssemblyId: "assembly-1" }),
@@ -862,7 +862,7 @@ describe("ActualWorkComposer", () => {
       await waitFor(() => expect(mockAddActualWorkLine).toHaveBeenCalledWith("draft-1", expect.any(Object), "v1"));
 
       await user.type(screen.getByPlaceholderText("Search by name or SKU..."), "furnace");
-      await user.click(await screen.findByRole("button", { name: /Furnace tune-up/ }));
+      await user.click(await screen.findByRole("option", { name: /Furnace tune-up/ }));
       await waitFor(() => expect(mockExpandActualWorkAssembly).toHaveBeenCalled());
     });
 
@@ -880,6 +880,27 @@ describe("ActualWorkComposer", () => {
       expect(await screen.findByText("That person can't be recorded as the performer.")).toBeInTheDocument();
       expect(screen.queryByPlaceholderText("Search by name or SKU...")).not.toBeInTheDocument();
     });
+  });
+
+  it("modal composer: Escape closes on the first press even while search results are showing", async () => {
+    const user = userEvent.setup();
+    mockGetFieldScopeSearch.mockResolvedValue({
+      items: [{ id: "c1", kind: "CatalogItem", displayName: "Air filter 20x25", sku: "AF-1", defaultItemCount: null }],
+      limit: 20, hasMore: false, nextCursor: null,
+    });
+    const { onClose } = renderComposer();
+
+    const input = screen.getByPlaceholderText("Search by name or SKU...");
+    await user.type(input, "filter");
+    await screen.findByRole("option", { name: "Air filter 20x25" });
+
+    // Arrow navigation still works in the modal...
+    await user.keyboard("{ArrowDown}");
+    expect(input).toHaveAttribute("aria-activedescendant", screen.getByRole("option", { name: "Air filter 20x25" }).id);
+
+    // ...but Escape is not intercepted here — it closes the modal on the first press.
+    await user.keyboard("{Escape}");
+    expect(onClose).toHaveBeenCalledTimes(1);
   });
 
   describe("inline (workspace-route) presentation", () => {
@@ -965,11 +986,11 @@ describe("ActualWorkComposer", () => {
       const drawer = screen.getByRole("dialog", { name: "Add work & materials" });
       await user.type(screen.getByPlaceholderText(/Search by name or SKU/), "filter");
 
-      const result = await screen.findByRole("button", { name: /Air filter 20x25/ });
+      const result = await screen.findByRole("option", { name: /Air filter 20x25/ });
       expect(drawer.contains(result)).toBe(true);
     });
 
-    it("keeps the item-picker drawer open after an add and closes it only on Done or Escape", async () => {
+    it("keeps the item-picker drawer open after an add and closes it only on Done adding or Escape", async () => {
       const user = userEvent.setup();
       mockAddActualWorkLine.mockResolvedValue({ lineId: "line-2", actualWorkConcurrencyVersion: "v1" });
       renderComposer({ presentation: "inline", isWide: false });
@@ -981,15 +1002,160 @@ describe("ActualWorkComposer", () => {
       await user.click(screen.getByRole("button", { name: "Add item" }));
       await waitFor(() => expect(mockAddActualWorkLine).toHaveBeenCalled());
 
-      // The drawer is a focused multi-add phase: it stays mounted after a successful add.
+      // The drawer is a focused multi-add phase: it stays mounted after a successful add,
+      // and reports what was just added.
       expect(screen.getByRole("dialog", { name: "Add work & materials" })).toBeInTheDocument();
+      expect(screen.getByRole("status")).toHaveTextContent("Added Rubber gasket.");
 
       await user.keyboard("{Escape}");
       expect(screen.queryByRole("dialog", { name: "Add work & materials" })).not.toBeInTheDocument();
 
       await user.click(screen.getByRole("button", { name: /Add work\/material lines/ }));
-      await user.click(screen.getByRole("button", { name: "Done" }));
+      await user.click(screen.getByRole("button", { name: "Done adding" }));
       expect(screen.queryByRole("dialog", { name: "Add work & materials" })).not.toBeInTheDocument();
+    });
+
+    it("shows a compact loading indicator while the catalog query is fetching", async () => {
+      const user = userEvent.setup();
+      let resolveSearch: (v: unknown) => void = () => {};
+      mockGetFieldScopeSearch.mockImplementation(
+        () => new Promise((resolve) => { resolveSearch = resolve; }),
+      );
+      const { container } = renderComposer({ presentation: "inline", isWide: false });
+
+      await user.click(screen.getByRole("button", { name: /Add work\/material lines/ }));
+      await user.type(screen.getByPlaceholderText("Search by name or SKU..."), "filter");
+
+      await waitFor(() => expect(container.querySelector(".animate-spin")).toBeInTheDocument());
+
+      resolveSearch({ items: [], limit: 20, hasMore: false, nextCursor: null });
+      await waitFor(() => expect(container.querySelector(".animate-spin")).not.toBeInTheDocument());
+    });
+
+    it("clears the search text and refocuses the input via the clear button", async () => {
+      const user = userEvent.setup();
+      renderComposer({ presentation: "inline", isWide: false });
+
+      await user.click(screen.getByRole("button", { name: /Add work\/material lines/ }));
+      const input = screen.getByPlaceholderText("Search by name or SKU...");
+      await user.type(input, "gasket");
+      expect(input).toHaveValue("gasket");
+
+      await user.click(screen.getByRole("button", { name: "Clear search" }));
+      expect(input).toHaveValue("");
+      expect(input).toHaveFocus();
+    });
+
+    it("increments and decrements the catalog-item quantity with the stepper", async () => {
+      const user = userEvent.setup();
+      mockGetFieldScopeSearch.mockResolvedValue({
+        items: [{ id: "c1", kind: "CatalogItem", displayName: "Air filter 20x25", sku: "AF-1", defaultItemCount: null }],
+        limit: 20,
+        hasMore: false,
+        nextCursor: null,
+      });
+      mockAddActualWorkLine.mockResolvedValue({ lineId: "line-2", actualWorkConcurrencyVersion: "v1" });
+      renderComposer({ presentation: "inline", isWide: false });
+
+      await user.click(screen.getByRole("button", { name: /Add work\/material lines/ }));
+      await user.type(screen.getByPlaceholderText("Search by name or SKU..."), "filter");
+      await user.click(await screen.findByRole("option", { name: /Air filter 20x25/ }));
+
+      const quantity = screen.getByLabelText("Quantity");
+      expect(quantity).toHaveValue(1);
+      expect(screen.getByRole("button", { name: "Decrease quantity" })).toBeDisabled();
+
+      await user.click(screen.getByRole("button", { name: "Increase quantity" }));
+      await user.click(screen.getByRole("button", { name: "Increase quantity" }));
+      expect(quantity).toHaveValue(3);
+
+      await user.click(screen.getByRole("button", { name: "Decrease quantity" }));
+      expect(quantity).toHaveValue(2);
+
+      await user.click(screen.getByRole("button", { name: "Add item" }));
+      await waitFor(() =>
+        expect(mockAddActualWorkLine).toHaveBeenLastCalledWith(
+          "draft-1", { catalogItemId: "c1", actualQuantity: 2, note: null }, "v1",
+        ),
+      );
+      expect(screen.getByRole("status")).toHaveTextContent("Added Air filter 20x25.");
+    });
+
+    describe("keyboard result navigation", () => {
+      const bothKinds = {
+        items: [
+          { kind: "OfferingAssembly", id: "assembly-1", displayName: "Furnace tune-up", defaultItemCount: 3, catalogItemType: null, externalKey: null },
+          { id: "c1", kind: "CatalogItem", displayName: "Air filter 20x25", sku: "AF-1", defaultItemCount: null },
+        ],
+        limit: 20,
+        hasMore: false,
+        nextCursor: null,
+      };
+
+      async function openWithResults() {
+        const user = userEvent.setup();
+        mockGetFieldScopeSearch.mockResolvedValue(bothKinds);
+        renderComposer({ presentation: "inline", isWide: false });
+        await user.click(screen.getByRole("button", { name: /Add work\/material lines/ }));
+        const input = screen.getByPlaceholderText("Search by name or SKU...");
+        await user.type(input, "tune");
+        await screen.findByRole("option", { name: /Furnace tune-up/ });
+        return { user, input };
+      }
+
+      it("walks Arrow keys through actionable options, skipping headers, and keeps focus in the input", async () => {
+        const { user, input } = await openWithResults();
+        const assembly = screen.getByRole("option", { name: /Furnace tune-up/ });
+        const catalog = screen.getByRole("option", { name: "Air filter 20x25" });
+
+        await user.keyboard("{ArrowDown}");
+        expect(assembly).toHaveAttribute("aria-selected", "true");
+        expect(input).toHaveAttribute("aria-activedescendant", assembly.id);
+        expect(input).toHaveFocus();
+        expect(assembly.scrollIntoView).toHaveBeenCalled();
+
+        await user.keyboard("{ArrowDown}");
+        expect(catalog).toHaveAttribute("aria-selected", "true");
+        expect(input).toHaveAttribute("aria-activedescendant", catalog.id);
+
+        await user.keyboard("{ArrowDown}");
+        expect(assembly).toHaveAttribute("aria-selected", "true");
+
+        await user.keyboard("{ArrowUp}");
+        expect(catalog).toHaveAttribute("aria-selected", "true");
+      });
+
+      it("activates the highlighted assembly with Enter", async () => {
+        mockExpandActualWorkAssembly.mockResolvedValue({
+          lineIds: ["l1", "l2", "l3"], skippedCatalogItemIds: [], actualWorkConcurrencyVersion: "v2",
+        });
+        const { user } = await openWithResults();
+        await user.keyboard("{ArrowDown}{Enter}");
+        await waitFor(() =>
+          expect(mockExpandActualWorkAssembly).toHaveBeenCalledWith(
+            "draft-1", { offeringAssemblyId: "assembly-1", includedOptionalItemIds: [] }, "v1",
+          ),
+        );
+      });
+
+      it("activates the highlighted catalog item with Enter, opening the quantity step", async () => {
+        const { user } = await openWithResults();
+        await user.keyboard("{ArrowDown}{ArrowDown}{Enter}");
+        expect(await screen.findByLabelText("Quantity")).toBeInTheDocument();
+      });
+
+      it("Escape first clears the results, then closes the drawer", async () => {
+        const { user, input } = await openWithResults();
+        await user.keyboard("{ArrowDown}");
+
+        await user.keyboard("{Escape}");
+        expect(screen.queryByRole("option")).not.toBeInTheDocument();
+        expect(input).toHaveValue("");
+        expect(screen.getByRole("dialog", { name: "Add work & materials" })).toBeInTheDocument();
+
+        await user.keyboard("{Escape}");
+        expect(screen.queryByRole("dialog", { name: "Add work & materials" })).not.toBeInTheDocument();
+      });
     });
 
     it("forces the item picker closed when the performer gate re-opens", async () => {

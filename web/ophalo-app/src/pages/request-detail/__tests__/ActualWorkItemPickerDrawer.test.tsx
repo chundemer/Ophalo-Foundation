@@ -38,7 +38,7 @@ describe("ActualWorkItemPickerDrawer", () => {
     expect(screen.getByLabelText("Search")).toHaveFocus();
   });
 
-  it("closes on the Done button and on Escape, but not on a backdrop click", async () => {
+  it("closes on the Done adding button, the header close icon, and Escape, but not on a backdrop click", async () => {
     const user = userEvent.setup();
     const onClose = vi.fn();
     const { container } = render(<Harness onClose={onClose} />);
@@ -49,8 +49,11 @@ describe("ActualWorkItemPickerDrawer", () => {
     await user.keyboard("{Escape}");
     expect(onClose).toHaveBeenCalledTimes(1);
 
-    await user.click(screen.getByRole("button", { name: "Done" }));
+    await user.click(screen.getByRole("button", { name: "Done adding" }));
     expect(onClose).toHaveBeenCalledTimes(2);
+
+    await user.click(screen.getByRole("button", { name: "Close" }));
+    expect(onClose).toHaveBeenCalledTimes(3);
   });
 
   it("renders the connection-failure slot inside the dialog", () => {
