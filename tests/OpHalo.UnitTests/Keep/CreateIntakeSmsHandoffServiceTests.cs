@@ -190,8 +190,76 @@ public class CreateIntakeSmsHandoffServiceTests
         Assert.True(result.IsSuccess);
         Assert.Equal(ValidPhone, result.Value.CustomerPhone);
         Assert.Equal(
-            $"Submit your request here: {ValidPublicBase}/keep/s/test-biz",
+            $"Hi, this is Alex Carter with Northside HVAC. Submit your request here: {ValidPublicBase}/keep/s/test-biz",
             result.Value.MessageBody);
+    }
+
+    [Fact]
+    public async Task Execute_success_without_configured_business_phone_omits_recovery_line()
+    {
+        var persistence = new FakePersistence(
+            AccountUserRole.Owner, hasActiveLink: true, slug: "acme-hvac",
+            staffDisplayName: "Dana Lee", businessName: "Acme HVAC",
+            configuredPublicBusinessPhone: null);
+        var sut = BuildSut(persistence: persistence);
+        var result = await sut.ExecuteAsync(ValidCommand());
+        Assert.True(result.IsSuccess);
+        Assert.Equal(
+            $"Hi, this is Dana Lee with Acme HVAC. Submit your request here: {ValidPublicBase}/keep/s/acme-hvac",
+            result.Value.MessageBody);
+        Assert.DoesNotContain("If you have trouble", result.Value.MessageBody);
+    }
+
+    [Fact]
+    public async Task Execute_success_with_configured_business_phone_appends_formatted_recovery_line()
+    {
+        var persistence = new FakePersistence(
+            AccountUserRole.Owner, hasActiveLink: true, slug: "acme-hvac",
+            staffDisplayName: "Dana Lee", businessName: "Acme HVAC",
+            configuredPublicBusinessPhone: "5559876543");
+        var sut = BuildSut(persistence: persistence);
+        var result = await sut.ExecuteAsync(ValidCommand());
+        Assert.True(result.IsSuccess);
+        Assert.Equal(
+            $"Hi, this is Dana Lee with Acme HVAC. Submit your request here: {ValidPublicBase}/keep/s/acme-hvac"
+            + " If you have trouble, call (555) 987-6543.",
+            result.Value.MessageBody);
+    }
+
+    [Fact]
+    public async Task Execute_success_business_phone_display_falls_back_to_trimmed_value_when_non_canonical()
+    {
+        var persistence = new FakePersistence(
+            AccountUserRole.Owner, hasActiveLink: true, slug: "acme-hvac",
+            configuredPublicBusinessPhone: "  555-9876 ext 12  ");
+        var sut = BuildSut(persistence: persistence);
+        var result = await sut.ExecuteAsync(ValidCommand());
+        Assert.True(result.IsSuccess);
+        Assert.EndsWith("If you have trouble, call 555-9876 ext 12.", result.Value.MessageBody);
+    }
+
+    [Fact]
+    public async Task Execute_success_uses_server_derived_sender_and_business_identity()
+    {
+        var persistence = new FakePersistence(
+            AccountUserRole.Owner, hasActiveLink: true,
+            staffDisplayName: "Jamie Reyes", businessName: "Apex Home Services");
+        var sut = BuildSut(persistence: persistence);
+        var result = await sut.ExecuteAsync(ValidCommand());
+        Assert.True(result.IsSuccess);
+        Assert.StartsWith("Hi, this is Jamie Reyes with Apex Home Services. ", result.Value.MessageBody);
+        Assert.Equal(result.Value.MessageBody, persistence.StoredHandoff!.MessageBody);
+    }
+
+    [Fact]
+    public async Task Execute_returns_forbidden_when_sender_context_unresolved()
+    {
+        var persistence = new FakePersistence(
+            AccountUserRole.Owner, hasActiveLink: true, hasSenderContext: false);
+        var sut = BuildSut(persistence: persistence);
+        var result = await sut.ExecuteAsync(ValidCommand());
+        Assert.False(result.IsSuccess);
+        Assert.Equal("auth.forbidden", result.Error.Code);
     }
 
     [Fact]
@@ -255,9 +323,20 @@ public class CreateIntakeSmsHandoffServiceTests
     private sealed class FakePersistence(
         AccountUserRole role,
         bool hasActiveLink,
-        string slug = "test-biz") : IKeepIntakeSmsHandoffPersistence
+        string slug = "test-biz",
+        string staffDisplayName = "Alex Carter",
+        string businessName = "Northside HVAC",
+        string? configuredPublicBusinessPhone = null,
+        bool hasSenderContext = true) : IKeepIntakeSmsHandoffPersistence
     {
         public KeepIntakeSmsHandoff? StoredHandoff { get; private set; }
+
+        public Task<IntakeSmsHandoffSenderContext?> GetSenderContextAsync(
+            Guid accountId, Guid accountUserId, CancellationToken ct) =>
+            Task.FromResult<IntakeSmsHandoffSenderContext?>(
+                hasSenderContext
+                    ? new IntakeSmsHandoffSenderContext(staffDisplayName, businessName, configuredPublicBusinessPhone)
+                    : null);
 
         public Task<AccountUserSnapshot?> GetAccountUserSnapshotAsync(Guid id, CancellationToken ct) =>
             Task.FromResult<AccountUserSnapshot?>(

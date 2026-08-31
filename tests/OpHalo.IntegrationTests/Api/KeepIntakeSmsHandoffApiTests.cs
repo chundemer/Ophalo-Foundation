@@ -217,7 +217,60 @@ public sealed class KeepIntakeSmsHandoffApiTests : IClassFixture<KeepApiWebFacto
         // handoffUrl must use PublicBaseUrl (https://test.ophalo.com), not AppBaseUrl
         Assert.StartsWith("https://test.ophalo.com/keep/intake-sms/", body.HandoffUrl);
         Assert.Equal("5551234567", body.CustomerPhone);
-        Assert.Equal($"Submit your request here: https://test.ophalo.com/keep/s/{Slug}", body.MessageBody);
+        // Sender + business identity is server-derived from the authenticated account/user.
+        // Account A has no configured public business phone, so no recovery line is appended.
+        Assert.Equal(
+            $"Hi, this is Handoff Owner with Handoff Test Co. Submit your request here: https://test.ophalo.com/keep/s/{Slug}",
+            body.MessageBody);
+    }
+
+    [Fact]
+    public async Task Post_WithConfiguredBusinessPhone_ComposesFormattedRecoveryLine_AndResolverReturnsSameBody()
+    {
+        await using (var scope = _factory.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<OpHaloDbContext>();
+            var profile = KeepBusinessProfile.Create(_accountId);
+            profile.UpdateContact("5559876543", null);
+            db.Set<KeepBusinessProfile>().Add(profile);
+            await db.SaveChangesAsync();
+        }
+
+        var cookie = await _factory.SeedSessionAsync(_ownerUserId, _accountId);
+        using var req = PostAuthed(new { customerPhone = "5551234567" }, cookie);
+        var resp = await _client.SendAsync(req);
+        Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
+
+        var created = await resp.Content.ReadFromJsonAsync<HandoffCreatedBody>(JsonOptions);
+        var expected =
+            $"Hi, this is Handoff Owner with Handoff Test Co. Submit your request here: https://test.ophalo.com/keep/s/{Slug}"
+            + " If you have trouble, call (555) 987-6543.";
+        Assert.Equal(expected, created!.MessageBody);
+
+        var token = created.HandoffUrl!.Split('/').Last();
+        var getResp = await _client.GetAsync($"/keep/intake-sms/{token}");
+        Assert.Equal(HttpStatusCode.OK, getResp.StatusCode);
+        var resolved = await getResp.Content.ReadFromJsonAsync<HandoffResolvedBody>(JsonOptions);
+        Assert.Equal(expected, resolved!.MessageBody);
+    }
+
+    [Fact]
+    public async Task Post_DoesNotAcceptSenderOrBusinessFieldsFromRequestBody()
+    {
+        var cookie = await _factory.SeedSessionAsync(_ownerUserId, _accountId);
+        using var req = PostAuthed(new
+        {
+            customerPhone = "5551234567",
+            staffDisplayName = "Attacker",
+            businessName = "Spoofed Co",
+            businessPhone = "5550000000",
+        }, cookie);
+        var resp = await _client.SendAsync(req);
+        Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
+        var body = await resp.Content.ReadFromJsonAsync<HandoffCreatedBody>(JsonOptions);
+        Assert.Equal(
+            $"Hi, this is Handoff Owner with Handoff Test Co. Submit your request here: https://test.ophalo.com/keep/s/{Slug}",
+            body!.MessageBody);
     }
 
     [Fact]

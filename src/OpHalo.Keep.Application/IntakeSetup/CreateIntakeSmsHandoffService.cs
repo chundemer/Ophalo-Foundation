@@ -64,7 +64,20 @@ public sealed class CreateIntakeSmsHandoffService(
         if (link is null)
             return Result<CreateIntakeSmsHandoffResult>.Failure(NoActiveLink);
 
-        var messageBody = $"Submit your request here: {publicBaseUrl.TrimEnd('/')}/keep/s/{link.PublicSlug}";
+        var sender = await persistence.GetSenderContextAsync(currentUser.AccountId, currentUser.UserId, ct);
+        if (sender is null)
+            return Result<CreateIntakeSmsHandoffResult>.Failure(Forbidden);
+
+        // Public intake URL and the opaque QR handoff architecture are unchanged — only the
+        // human-readable preamble and optional recovery line are added. All identity fields are
+        // server-derived (sender), never taken from the request body.
+        var intakeUrl = $"{publicBaseUrl.TrimEnd('/')}/keep/s/{link.PublicSlug}";
+        var messageBody =
+            $"Hi, this is {sender.StaffDisplayName} with {sender.BusinessName}. " +
+            $"Submit your request here: {intakeUrl}";
+        if (!string.IsNullOrWhiteSpace(sender.ConfiguredPublicBusinessPhone))
+            messageBody +=
+                $" If you have trouble, call {PhoneDisplayFormatter.Format(sender.ConfiguredPublicBusinessPhone)}.";
 
         var rawToken     = tokenService.GeneratePublicIntakeToken();
         var tokenHash    = tokenService.HashPublicIntakeToken(rawToken);

@@ -41,6 +41,42 @@ public sealed class EfKeepIntakeSmsHandoffPersistence(OpHaloDbContext dbContext)
             entitlements.PastDueGraceEndsAtUtc);
     }
 
+    public async Task<IntakeSmsHandoffSenderContext?> GetSenderContextAsync(
+        Guid accountId, Guid accountUserId, CancellationToken ct)
+    {
+        // Staff display name: same source as GetActorDisplayNameAsync — the linked User's name,
+        // falling back to the membership email. Never a personal phone or a request-body value.
+        var user = await dbContext.AccountUsers
+            .AsNoTracking()
+            .Where(u => u.Id == accountUserId)
+            .Select(u => new { u.Email, UserName = u.UserId != null ? u.User!.Name : null })
+            .FirstOrDefaultAsync(ct);
+        if (user is null) return null;
+
+        var businessName = await dbContext.Accounts
+            .AsNoTracking()
+            .Where(a => a.Id == accountId)
+            .Select(a => a.BusinessName)
+            .FirstOrDefaultAsync(ct);
+        if (businessName is null) return null;
+
+        // Configured public business phone only (KeepBusinessProfile) — null when unset.
+        var configuredPhone = await dbContext.Set<KeepBusinessProfile>()
+            .AsNoTracking()
+            .Where(p => p.AccountId == accountId)
+            .Select(p => p.CustomerFacingPhone)
+            .FirstOrDefaultAsync(ct);
+
+        var displayName = !string.IsNullOrWhiteSpace(user.UserName)
+            ? user.UserName.Trim()
+            : user.Email.Trim();
+
+        return new IntakeSmsHandoffSenderContext(
+            displayName,
+            businessName,
+            string.IsNullOrWhiteSpace(configuredPhone) ? null : configuredPhone);
+    }
+
     public Task<KeepPublicIntakeLink?> FindActiveLinkByAccountAsync(Guid accountId, CancellationToken ct) =>
         dbContext.Set<KeepPublicIntakeLink>()
             .AsNoTracking()

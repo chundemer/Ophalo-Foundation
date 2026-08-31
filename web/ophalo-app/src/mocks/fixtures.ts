@@ -164,7 +164,12 @@ export function mockIntakeSmsHandoff(customerPhone: string): CreateIntakeSmsHand
   return {
     handoffUrl: "https://app.ophalo.com/keep/intake-sms/mock-raw-token",
     customerPhone,
-    messageBody: `Submit your request here: https://ophalo.com/keep/s/${mockIntake.publicSlug}`,
+    // Server-composed: authenticated staff display name + business name, plus the configured
+    // public business phone formatted for reading (mockSetup.customerFacingPhone).
+    messageBody:
+      `Hi, this is Jamie Reyes with ${mockSetup.businessName}. ` +
+      `Submit your request here: https://ophalo.com/keep/s/${mockIntake.publicSlug}` +
+      ` If you have trouble, call (555) 555-0100.`,
     expiresAtUtc: new Date(Date.now() + 15 * 60_000).toISOString(),
   };
 }
