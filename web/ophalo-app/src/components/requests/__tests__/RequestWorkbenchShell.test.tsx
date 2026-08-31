@@ -118,6 +118,39 @@ function renderShell(
   );
 }
 
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((r) => { resolve = r; });
+  return { promise, resolve };
+}
+
+function renderShellWithExit(
+  handlers: {
+    onExitStaleDetail?: () => void;
+    onOpenDestinationRequest?: (requestId: string, requestIds: string[]) => void;
+    onSelectRequest?: (requestId: string, navContext?: { requestIds: string[] }) => void;
+  },
+  route: { page: "requests" } | { page: "detail"; requestId: string; focusPanel?: string },
+) {
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  render(
+    <QueryClientProvider client={queryClient}>
+      <RequestWorkbenchShell
+        role="owner"
+        route={route}
+        viewCounts={null}
+        onViewCountsUpdate={() => {}}
+        onSelectRequest={handlers.onSelectRequest ?? (() => {})}
+        onNavigateSettings={() => {}}
+        onStartCapture={() => {}}
+        onBack={() => {}}
+        onOpenDestinationRequest={handlers.onOpenDestinationRequest}
+        onExitStaleDetail={handlers.onExitStaleDetail}
+      />
+    </QueryClientProvider>,
+  );
+}
+
 describe("RequestWorkbenchShell", () => {
   beforeEach(() => {
     roCallback = null;
@@ -368,6 +401,161 @@ describe("RequestWorkbenchShell", () => {
       screen.getByRole("button", { name: "stub-navigate" }).click();
 
       expect(onSelectRequest).toHaveBeenCalledWith("mock-req-003");
+    });
+
+    it("GAP-061: a queue switch to a populated queue that excludes the open request opens its first server-ranked row — no second click, nothing during loading", async () => {
+      const inAttention = mockRequestSummaries[0];
+      const defaultRows = mockRequestSummaries.slice(1, 3); // excludes inAttention
+      const defaultGate = deferred<KeepRequestListResult>();
+      mockGetRequests.mockImplementation((args: { view: string }) =>
+        args.view === "needs_attention"
+          ? Promise.resolve({
+              requests: [inAttention],
+              pageInfo: { limit: 50, hasMore: false, nextCursor: null },
+              viewCounts: mockViewCounts,
+              listContext: { view: "needs_attention", isDefaultCommandCenter: false, isHistory: false, isSearch: false },
+            })
+          : defaultGate.promise,
+      );
+      const onExitStaleDetail = vi.fn();
+      const onOpenDestinationRequest = vi.fn();
+      renderShellWithExit(
+        { onExitStaleDetail, onOpenDestinationRequest },
+        { page: "detail", requestId: inAttention.id },
+      );
+      fireWidth(1001);
+      await waitFor(() =>
+        expect(screen.getAllByText(inAttention.customerName).length).toBeGreaterThan(0),
+      );
+
+      // Switch to All Work — its authoritative result has not arrived yet.
+      act(() => {
+        screen.getByRole("tab", { name: "All Work" }).click();
+      });
+      await waitFor(() => expect(mockGetRequests).toHaveBeenCalledWith(expect.objectContaining({ view: "default" })));
+
+      // Nothing changes while the destination query is loading.
+      expect(onOpenDestinationRequest).not.toHaveBeenCalled();
+      expect(onExitStaleDetail).not.toHaveBeenCalled();
+
+      await act(async () => {
+        defaultGate.resolve({
+          requests: defaultRows,
+          pageInfo: { limit: 50, hasMore: false, nextCursor: null },
+          viewCounts: mockViewCounts,
+          listContext: { view: "default", isDefaultCommandCenter: true, isHistory: false, isSearch: false },
+        });
+      });
+
+      // First server-returned row is opened automatically; the empty-state clear never fires.
+      await waitFor(() =>
+        expect(onOpenDestinationRequest).toHaveBeenCalledWith(
+          defaultRows[0].id,
+          defaultRows.map((r) => r.id),
+        ),
+      );
+      expect(onOpenDestinationRequest).toHaveBeenCalledTimes(1);
+      expect(onExitStaleDetail).not.toHaveBeenCalled();
+    });
+
+    it("GAP-061: a queue switch to an empty queue clears the detail/route and shows the truthful empty state", async () => {
+      const inAttention = mockRequestSummaries[0];
+      const defaultGate = deferred<KeepRequestListResult>();
+      mockGetRequests.mockImplementation((args: { view: string }) =>
+        args.view === "needs_attention"
+          ? Promise.resolve({
+              requests: [inAttention],
+              pageInfo: { limit: 50, hasMore: false, nextCursor: null },
+              viewCounts: mockViewCounts,
+              listContext: { view: "needs_attention", isDefaultCommandCenter: false, isHistory: false, isSearch: false },
+            })
+          : defaultGate.promise,
+      );
+      const onExitStaleDetail = vi.fn();
+      const onOpenDestinationRequest = vi.fn();
+      renderShellWithExit(
+        { onExitStaleDetail, onOpenDestinationRequest },
+        { page: "detail", requestId: inAttention.id },
+      );
+      fireWidth(1001);
+      await waitFor(() =>
+        expect(screen.getAllByText(inAttention.customerName).length).toBeGreaterThan(0),
+      );
+
+      act(() => {
+        screen.getByRole("tab", { name: "All Work" }).click();
+      });
+      await waitFor(() => expect(mockGetRequests).toHaveBeenCalledWith(expect.objectContaining({ view: "default" })));
+      expect(onExitStaleDetail).not.toHaveBeenCalled();
+
+      await act(async () => {
+        defaultGate.resolve({
+          requests: [],
+          pageInfo: { limit: 50, hasMore: false, nextCursor: null },
+          viewCounts: mockViewCounts,
+          listContext: { view: "default", isDefaultCommandCenter: true, isHistory: false, isSearch: false },
+        });
+      });
+
+      await waitFor(() => expect(onExitStaleDetail).toHaveBeenCalledTimes(1));
+      expect(onOpenDestinationRequest).not.toHaveBeenCalled();
+    });
+
+    it("GAP-061: a queue switch to a queue where the open request is still a member keeps the detail", async () => {
+      const shared = mockRequestSummaries[0];
+      mockGetRequests.mockImplementation((args: { view: string }) =>
+        Promise.resolve({
+          requests: [shared],
+          pageInfo: { limit: 50, hasMore: false, nextCursor: null },
+          viewCounts: mockViewCounts,
+          listContext: { view: args.view, isDefaultCommandCenter: args.view === "default", isHistory: false, isSearch: false },
+        }),
+      );
+      const onExitStaleDetail = vi.fn();
+      const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+      render(
+        <QueryClientProvider client={queryClient}>
+          <RequestWorkbenchShell
+            role="owner"
+            route={{ page: "detail", requestId: shared.id }}
+            viewCounts={null}
+            onViewCountsUpdate={() => {}}
+            onSelectRequest={() => {}}
+            onNavigateSettings={() => {}}
+            onStartCapture={() => {}}
+            onBack={() => {}}
+            onExitStaleDetail={onExitStaleDetail}
+          />
+        </QueryClientProvider>,
+      );
+      fireWidth(1001);
+      await waitFor(() => expect(screen.getAllByText(shared.customerName).length).toBeGreaterThan(0));
+
+      act(() => {
+        screen.getByRole("tab", { name: "All Work" }).click();
+      });
+      await waitFor(() => expect(mockGetRequests).toHaveBeenCalledWith(expect.objectContaining({ view: "default" })));
+      await new Promise((r) => setTimeout(r, 0));
+
+      expect(onExitStaleDetail).not.toHaveBeenCalled();
+      expect(screen.getByTestId("request-detail-stub")).toBeInTheDocument();
+    });
+
+    it("GAP-061: a direct detail URL whose request is absent from the landing queue is left alone (no switch occurred)", async () => {
+      mockGetRequests.mockResolvedValue(listResultMulti());
+      const onExitStaleDetail = vi.fn();
+      const onOpenDestinationRequest = vi.fn();
+      renderShellWithExit(
+        { onExitStaleDetail, onOpenDestinationRequest },
+        { page: "detail", requestId: "not-in-any-queue" },
+      );
+      fireWidth(1001);
+      await waitFor(() =>
+        expect(screen.getAllByText(mockRequestSummaries[0].customerName).length).toBeGreaterThan(0),
+      );
+      await new Promise((r) => setTimeout(r, 0));
+      expect(onExitStaleDetail).not.toHaveBeenCalled();
+      expect(onOpenDestinationRequest).not.toHaveBeenCalled();
     });
 
     it("falls back to the narrow one-pane detail presentation below the protected minimum, without mounting the Queue", async () => {

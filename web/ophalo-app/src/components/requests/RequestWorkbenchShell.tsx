@@ -43,6 +43,14 @@ interface RequestWorkbenchShellProps {
   // per-pane scrolling. Narrow fallback and every non-workbench route keep normal document
   // scroll untouched.
   onWideModeChange?: (active: boolean) => void;
+  // GAP-061: reconcile an orphaned Request Detail after a queue switch. Both are implemented
+  // by App with history.replaceState (not pushState) so browser Back does not return to the
+  // stale request under the new queue label.
+  //  - onOpenDestinationRequest: the destination queue is populated but excludes the open
+  //    request — route to its first server-ranked row so work continues without a second click.
+  //  - onExitStaleDetail: the destination queue is empty — drop the detail and route.
+  onOpenDestinationRequest?: (requestId: string, requestIds: string[]) => void;
+  onExitStaleDetail?: () => void;
 }
 
 export function RequestWorkbenchShell(props: RequestWorkbenchShellProps) {
@@ -61,6 +69,8 @@ export function RequestWorkbenchShell(props: RequestWorkbenchShellProps) {
     onNarrowNavigate,
     onWideModeChange,
     onNavigateToActualWorkspace,
+    onOpenDestinationRequest,
+    onExitStaleDetail,
   } = props;
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [isWide, setIsWide] = useState(false);
@@ -123,6 +133,54 @@ export function RequestWorkbenchShell(props: RequestWorkbenchShellProps) {
     const firstEligible = snapshot.requests.find(hasAttention) ?? snapshot.requests[0];
     onSelectRequest(firstEligible.id, { requestIds: snapshot.requests.map((r) => r.id) });
   }, [detailRoute, showTwoPaneRequests, snapshot, onSelectRequest, requestEntryIntent]);
+  // GAP-061: a queue (tab) switch is a change of working context. Latch the queue a Request
+  // Detail was opened under; once a *different* queue's authoritative (settled) result is
+  // available, the active queue determines the active detail:
+  //  - open request still a member    → keep it;
+  //  - not a member, queue populated   → route to the first server-ranked row;
+  //  - not a member, queue empty       → clear the detail and route.
+  // Never act while the destination query is still loading; never invent client-side ranking.
+  const detailOpenedUnderQueueRef = useRef<string | null>(null);
+  const detailLatchedIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!detailRoute) {
+      detailOpenedUnderQueueRef.current = null;
+      detailLatchedIdRef.current = null;
+      return;
+    }
+    if (detailLatchedIdRef.current === detailRoute.requestId) return;
+    // Latch only against a settled ranked queue context — a direct URL / refresh landing on a
+    // detail route must adopt whatever queue the pane shows, so it is never treated as a switch.
+    if (!snapshot || snapshot.isLoading || !snapshot.isRankedView) return;
+    detailLatchedIdRef.current = detailRoute.requestId;
+    detailOpenedUnderQueueRef.current = snapshot.queueKey;
+  }, [detailRoute, snapshot]);
+
+  useEffect(() => {
+    if (!detailRoute) return;
+    if (!snapshot || !snapshot.isRankedView) return;
+    if (snapshot.isLoading || snapshot.isError || snapshot.isForbidden) return;
+    const openedUnder = detailOpenedUnderQueueRef.current;
+    if (openedUnder === null || openedUnder === snapshot.queueKey) return;
+    if (snapshot.requests.some((r) => r.id === detailRoute.requestId)) {
+      // Still a member of the destination queue — adopt it as the detail's context.
+      detailOpenedUnderQueueRef.current = snapshot.queueKey;
+      return;
+    }
+    if (snapshot.requests.length > 0) {
+      // Populated destination — continue work on its first server-ranked request, no extra click.
+      const first = snapshot.requests[0];
+      detailOpenedUnderQueueRef.current = snapshot.queueKey;
+      detailLatchedIdRef.current = first.id;
+      onOpenDestinationRequest?.(first.id, snapshot.requests.map((r) => r.id));
+      return;
+    }
+    detailOpenedUnderQueueRef.current = null;
+    detailLatchedIdRef.current = null;
+    onExitStaleDetail?.();
+  }, [detailRoute, snapshot, onOpenDestinationRequest, onExitStaleDetail]);
+
   const paneMode = showTwoPaneRequests || showPaneDetail;
   // The Queue pane persists mounted across #/requests <-> #/request/{id} at wide widths (Step 5
   // requirement 1) so its filters/scroll/live snapshot survive; below the protected minimum with

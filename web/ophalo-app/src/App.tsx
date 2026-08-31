@@ -274,6 +274,23 @@ function AppShell() {
     setNavContext(null);
   }
 
+  // GAP-061: a queue switch moved the working context off the open Request Detail. Replace
+  // (not push) the history entry in both cases so browser Back does not return to the stale
+  // request under the new queue label.
+  function openDestinationRequest(requestId: string, requestIds: string[]) {
+    const base = window.location.pathname + window.location.search;
+    history.replaceState(null, "", `${base}#/request/${requestId}`);
+    setRoute({ page: "detail", requestId });
+    setNavContext(requestIds.length > 0 ? { requestIds } : null);
+  }
+
+  function exitStaleDetail() {
+    const base = window.location.pathname + window.location.search;
+    history.replaceState(null, "", base);
+    setRoute({ page: "requests" });
+    setNavContext(null);
+  }
+
   const currentNavIdx =
     route.page === "detail" && navContext
       ? navContext.requestIds.indexOf(route.requestId)
@@ -501,6 +518,8 @@ function AppShell() {
             onStartCapture={openCapture}
             requestEntryIntent={requestEntryIntent}
             onBack={backToRequests}
+            onOpenDestinationRequest={openDestinationRequest}
+            onExitStaleDetail={exitStaleDetail}
             narrowPrevId={prevRequestId}
             narrowNextId={nextRequestId}
             onNarrowNavigate={(id) => selectRequest(id, navContext ?? undefined)}

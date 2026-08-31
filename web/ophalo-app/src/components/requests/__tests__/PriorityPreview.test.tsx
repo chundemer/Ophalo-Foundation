@@ -13,6 +13,8 @@ function snapshot(overrides: Partial<AppliedQueueSnapshot> = {}): AppliedQueueSn
     isForbidden: false,
     isFiltered: false,
     isRankedView: true,
+    queueKey: "needs_attention",
+    attentionEmptyWithActiveWork: null,
     onResetFilters: vi.fn(),
     onRetry: vi.fn(),
     ...overrides,

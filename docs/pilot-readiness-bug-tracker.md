@@ -35,7 +35,7 @@ Complete each numbered slice with focused automated coverage and a production-ca
 2. **Field-work correctness:** GAP-055. This is a P0 authorization/data-model correction and needs its own migration, API, UI, and concurrency test plan.
 3. **Phone and capture integrity:** GAP-016, GAP-021, GAP-051, then GAP-025. Consolidate the ADR-444 normalization path before extending fallback customer recognition.
 4. **Request Detail foundation and correctness:** GAP-019, GAP-058, GAP-059, then GAP-047, GAP-048, and GAP-049. Decompose layout ownership before changing shared desktop/mobile behavior; then fix the review/completion hierarchy, schedule-control legibility, and bounded mutation, sharing, and follow-up defects.
-5. **Request-list product decision and core behavior:** GAP-027 (decision), then GAP-045, GAP-057, GAP-042, GAP-041, GAP-046, GAP-043, GAP-044, GAP-026, and GAP-053. This locks row hierarchy before implementing queue context, sensible default selection, loading, filtering, scale/history, and small action-order polish. (GAP-060 Views-menu off-screen clipping — resolved, commit `689c748`.)
+5. **Request-list product decision and core behavior:** GAP-027 (decision), then GAP-045, GAP-042, GAP-041, GAP-046, GAP-043, GAP-044, GAP-026, and GAP-053. This locks row hierarchy before implementing queue context, loading, filtering, scale/history, and small action-order polish. (GAP-057 empty-Attention fallback and truthful state; GAP-060 Views-menu off-screen clipping; GAP-061 queue/detail synchronization — resolved in `3c0819a`.)
 6. **Pilot operating loop and final usability review:** GAP-037 (after GAP-039), GAP-038, and GAP-054. Deliver the founder's evidence/reporting loop, a fail-soft feedback route, and a final role/device navigation review.
 
 ## Active Work
@@ -183,23 +183,6 @@ Lock a compact, truthful lifecycle cue and a deterministic single-exception prio
 **Area:** Request-list orientation
 
 Replace implementation language with the locked Owner/Admin label **All work** and clear supporting copy explaining that open requests and review work are ranked with customer promises needing attention first. Keep server queue/ranking authority unchanged.
-
-### GAP-057 — Empty Attention queue falsely implies the system has no active requests
-
-**Status:** Open — decision locked
-**Severity:** P1
-**Area:** Request-list initial queue selection and empty state
-
-When an Owner/Admin opens Requests and **Needs Attention** is empty, the current selection leaves the work area saying **No active requests** even when the visible **All** tab has active work. That is false and makes an owner click a tab just to see the system's actual workload.
-
-**Locked resolution:** Do not add another tab. On initial Requests landing only, select **Needs Attention** when it has one or more items; otherwise select **All work**. Preserve a user's explicit tab selection for the rest of that visit—do not automatically switch tabs after a mutation or background refresh. If a user is already viewing an Attention queue that becomes empty, retain the selected queue and show the truthful **Nothing needs attention** state with an accessible **View all {count} active requests** action when active work exists. The main empty state must never say **No active requests** unless the All-work result is actually empty.
-
-**Acceptance criteria:**
-
-- With zero attention items and active work present, initial landing shows All work and its requests without a click.
-- With attention items present, initial landing retains attention-first triage.
-- An explicit selection does not jump because counts change; every empty-state message and action remains truthful, keyboard-accessible, and correct after refresh.
-- Focused PWA tests cover both initial-count cases, post-mutation empty Attention, and truly empty All work.
 
 ### GAP-042 — Authenticated request work lacks visible business identity
 

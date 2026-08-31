@@ -10,7 +10,12 @@ interface RequestListHeadingState {
   isFetching: boolean;
   isError: boolean;
   isForbidden: boolean;
-  emptyState: { heading: string; detail: string; isFiltered?: boolean };
+  emptyState: {
+    heading: string;
+    detail: string;
+    isFiltered?: boolean;
+    action?: { label: string; onClick: () => void };
+  };
   onClearFilters: () => void;
 }
 
@@ -123,6 +128,15 @@ export function RequestListContent({
                 className="mt-1 text-sm font-semibold text-[var(--keep-accent)] hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-offset-1 rounded"
               >
                 Clear filters
+              </button>
+            )}
+            {emptyState.action && (
+              <button
+                type="button"
+                onClick={emptyState.action.onClick}
+                className="mt-1 text-sm font-semibold text-[var(--keep-accent)] hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--keep-accent)] focus-visible:ring-offset-1 rounded"
+              >
+                {emptyState.action.label}
               </button>
             )}
           </div>

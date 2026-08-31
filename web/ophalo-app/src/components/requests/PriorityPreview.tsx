@@ -106,6 +106,25 @@ export function PriorityPreview({ snapshot, onOpenRequest, onStartCapture }: Pri
       );
     }
 
+    // GAP-057: a deliberately-selected, empty Needs Attention queue is not "no active
+    // requests" when All work still has active items — show the truthful state plus an
+    // explicit jump to the real workload, never the New Request CTA.
+    if (snapshot.attentionEmptyWithActiveWork) {
+      const { activeCount, onViewAllWork } = snapshot.attentionEmptyWithActiveWork;
+      return (
+        <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center">
+          <span className="keep-row-title">Nothing needs attention</span>
+          <button
+            type="button"
+            onClick={onViewAllWork}
+            className={`rounded-lg border border-[var(--ophalo-border)] px-3 py-1.5 text-sm hover:border-[var(--ophalo-navy)] ${FOCUS_RING}`}
+          >
+            View all {activeCount} active requests
+          </button>
+        </div>
+      );
+    }
+
     return (
       <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center">
         <span className="keep-row-title">No active requests</span>

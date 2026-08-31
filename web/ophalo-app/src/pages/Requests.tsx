@@ -71,6 +71,14 @@ export interface AppliedQueueSnapshot {
   isForbidden: boolean;
   isFiltered: boolean;
   isRankedView: boolean;
+  // GAP-061: stable identity of the queue this snapshot describes. It changes only on a
+  // queue (tab) switch, never on pagination/search — the Workbench shell compares it to the
+  // queue a Request Detail was opened under to decide whether a switch orphaned that detail.
+  queueKey: string;
+  // GAP-057: non-null only while the deliberately-selected queue is an empty Needs Attention
+  // queue AND All work has active items — lets a sibling preview render the truthful
+  // "Nothing needs attention" + "View all N" state instead of a false "No active requests".
+  attentionEmptyWithActiveWork: { activeCount: number; onViewAllWork: () => void } | null;
   onResetFilters: () => void;
   onRetry: () => void;
 }
@@ -104,6 +112,12 @@ export function Requests({
 }: RequestsProps) {
   const tabs = getTabsForRole(role);
   const [activeTab, setActiveTab] = useState<TabDef>(tabs[0]);
+  const allWorkTab = tabs.find((t) => t.id === "default") ?? null;
+  // GAP-057: an explicit queue choice (tab click or keyboard) locks the queue for the rest of
+  // the visit — the initial-landing auto-selection must never override it, and neither may a
+  // later background count refresh. The ref latches once the landing decision has been made.
+  const [queueExplicitlyChosen, setQueueExplicitlyChosen] = useState(false);
+  const initialQueueResolvedRef = useRef(false);
   const [activeModalAction, setActiveModalAction] = useState<{
     row: KeepRequestSummary;
     action: KeepQuickAction;
@@ -129,6 +143,8 @@ export function Requests({
   const isOnFirstPage = cursor === null;
 
   function selectTab(tab: TabDef) {
+    setQueueExplicitlyChosen(true);
+    initialQueueResolvedRef.current = true;
     setActiveTab(tab);
     setQ("");
     setDraftQ("");
@@ -298,7 +314,28 @@ export function Requests({
     ? (presentAsHistory ? historyHeadingSuffix(q, historyScopeLabel, historyDateLabel) : operationalHeadingSuffix(q, statusFilter))
     : "";
 
-  const emptyState = criteriaActive
+  // GAP-057: when the deliberately-selected Needs Attention queue is empty while All work
+  // still has active items, the truthful recovery is an explicit jump to All work — never a
+  // silent "No active requests". Null everywhere else.
+  const attentionEmptyActiveWorkCount =
+    !presentAsHistory &&
+    activeTab.id === "needs_attention" &&
+    !!allWorkTab &&
+    !!viewCounts &&
+    viewCounts.default > 0
+      ? viewCounts.default
+      : null;
+
+  function viewAllActiveWork() {
+    if (allWorkTab) selectTab(allWorkTab);
+  }
+
+  const emptyState: {
+    heading: string;
+    detail: string;
+    isFiltered?: boolean;
+    action?: { label: string; onClick: () => void };
+  } = criteriaActive
     ? {
         heading: presentAsHistory ? "No matching history" : "No matching requests",
         detail: presentAsHistory
@@ -308,7 +345,17 @@ export function Requests({
       }
     : presentAsHistory
       ? HISTORY_EMPTY_STATE[historyScope]
-      : EMPTY_STATE[activeTab.id];
+      : {
+          ...EMPTY_STATE[activeTab.id],
+          ...(attentionEmptyActiveWorkCount != null
+            ? {
+                action: {
+                  label: `View all ${attentionEmptyActiveWorkCount} active requests`,
+                  onClick: viewAllActiveWork,
+                },
+              }
+            : {}),
+        };
 
   // GAP-046: the criteria-aware empty state's recovery action. History preserves the selected
   // scope/date — those aren't part of what a filtered-empty state is recovering from.
@@ -337,6 +384,21 @@ export function Requests({
       onViewCountsUpdate(latestCounts);
     }
   }, [latestCounts, onViewCountsUpdate]);
+
+  // GAP-057: on initial Requests landing only — if the landing Needs Attention queue is empty,
+  // move to All work so the owner sees the real workload (or All work's genuine no-active-work
+  // state) without a click. Runs once, only before any explicit queue choice, never in history
+  // mode. If Needs Attention has items, the attention-first landing stays put.
+  useEffect(() => {
+    if (initialQueueResolvedRef.current || queueExplicitlyChosen || historyMode) return;
+    if (!viewCounts || !allWorkTab || activeTab.id !== "needs_attention") return;
+    initialQueueResolvedRef.current = true;
+    if (viewCounts.needsAttention === 0) {
+      setActiveTab(allWorkTab);
+      setCursor(null);
+      cursorStack.current = [];
+    }
+  }, [viewCounts, queueExplicitlyChosen, historyMode, activeTab.id, allWorkTab]);
 
   const secondaryViews = getSecondaryViewsForRole(role);
   const officeReviewMembers = getOfficeReviewMembersForRole(role);
@@ -399,11 +461,19 @@ export function Requests({
       isForbidden,
       isFiltered: criteriaActive,
       isRankedView,
+      queueKey: effectiveView,
+      attentionEmptyWithActiveWork:
+        isRankedView &&
+        !criteriaActive &&
+        attentionEmptyActiveWorkCount != null &&
+        (listQuery.data?.requests ?? []).length === 0
+          ? { activeCount: attentionEmptyActiveWorkCount, onViewAllWork: viewAllActiveWork }
+          : null,
       onResetFilters: clearFilters,
       onRetry: () => void (isAvailableTab ? availableQuery.refetch() : listQuery.refetch()),
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isRankedView, presentAsHistory, listQuery.data, isLoading, isError, isForbidden, criteriaActive, onAppliedSnapshotChange]);
+  }, [isRankedView, presentAsHistory, listQuery.data, isLoading, isError, isForbidden, criteriaActive, effectiveView, attentionEmptyActiveWorkCount, onAppliedSnapshotChange]);
 
   // GAP-043: a truthful numbered range, never "of N" — this cursor model has no server total.
   // Valid under the existing fixed-limit, short-final-page contract: only the last page can be
