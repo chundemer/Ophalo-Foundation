@@ -1,7 +1,7 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-08-31 (4f-v item-picker-drawer `7ab1c09`; 4f-iv `b6a7d19`; 4f-iii `0ff4c2c`;
-4f-ii `144bee6`; 4f-i `144e458`)
+**Last updated:** 2026-08-31 (4f-vi item-picker-drawer polish + keyboard nav `1fe8580`;
+4f-v item-picker-drawer `7ab1c09`; 4f-iv `b6a7d19`; 4f-iii `0ff4c2c`; 4f-ii `144bee6`; 4f-i `144e458`)
 **Purpose:** active handoff only. Completed implementation detail belongs in Git history and the
 relevant build log.
 
@@ -24,15 +24,15 @@ existing-ticket workflow as the explicit outage fallback.
 
 `main` at `8495ba3` (pushed 2026-08-30) carries the 4e-0 signal seam, 4e-i supersession foundation,
 and `AddActualWorkSupersession`. Railway deployment completed and the migration is applied —
-confirmed 2026-08-30; `ActualWorkSupersessionPersistenceTests` (4) pass. Local commits — `7ab1c09`
-(4f-v), `b6a7d19`
+confirmed 2026-08-30; `ActualWorkSupersessionPersistenceTests` (4) pass. Local commits — `1fe8580`
+(4f-vi), `7ab1c09` (4f-v), `b6a7d19`
 (4f-iv), `0ff4c2c` (4f-iii), `144bee6` (4f-ii), `144e458` (4f-i), the 4e-iii-a review follow-up `8095611`, `9084985` (4e-iii-b),
 `a18219e` (4e-iii-a), `e19e5f9` (4e-ii-c), `29db179` (4e-ii-b-2), `2be5203` (4e-ii-b-1), `82d9b9e` (4e-ii-a)
-and earlier — are **not yet pushed**. No migration since 4e-i (4e-ii through 4f-v are code-only /
+and earlier — are **not yet pushed**. No migration since 4e-i (4e-ii through 4f-vi are code-only /
 UI-only: services, read/mutation guards, routes, mapper, response shape, the workspace route shell,
 the workspace office region + its removal from wide-viewport Request Detail, the inline composer
-presentation + persistent Keep shell / ticket-context band, and the large-ticket capture-density
-refinement).
+presentation + persistent Keep shell / ticket-context band, the large-ticket capture-density
+refinement, and the item-picker drawer + its polish/keyboard-nav pass).
 
 ### Prior slice — 4e-ii-a (local commit `82d9b9e`)
 
@@ -305,12 +305,55 @@ Frontend-only, `web/ophalo-app`. **2 prod + 2 test** (children/slot approach —
 - Verification: frontend suite 907/907, `tsc` clean, `check:tokens` passed, `git diff --check`
   clean. No backend / API-client / routing / migration change.
 
-### Next code slice — 4g request-close eligibility gate (fresh session)
+### Prior slice — 4f-vi item-picker drawer polish + keyboard nav (local commit `1fe8580`)
 
-BL136 **4g** (P-preflight slice 4g): domain-authoritative Resolved→Closed gate on outstanding
-Actual Work (open Draft OR submitted∧¬reviewed∧¬superseded), advisory policy hint, API error
-mapping, frontend Close disable + reason copy. Core + Application + Api + frontend, 1 mutation
-family. Full unit + architecture + focused integration at the gate.
+Frontend-only, `web/ophalo-app`. **2 prod + 2 test.** Children/slot architecture and the
+API/mutation families unchanged; the non-inline modal composer path preserved.
+
+- **`ActualWorkItemPickerDrawer.tsx`:** accessible top-right close button in the header; footer
+  "Done" → "Done adding" with a heavier top divider + upward shadow bleeding past the sheet
+  padding. Escape / focus trap / restoration / `backdropClosable={false}` unchanged.
+- **`ActualWorkComposer.tsx` (`ActualWorkSearchAndAdd`, private):** decorative search icon;
+  accessible Clear button (callback-ref merge refocuses the input); compact in-input fetch spinner
+  on `isFetching`. Unified single `role="status"` add feedback for both paths — assembly expand
+  (`Added <name> (N items).`) and direct catalog/custom line (`Added <name>.`); drawer stays open
+  for multi-add; notice cleared on new search / new selection. Catalog-item quantity gains an
+  accessible `− / qty / +` stepper (input still editable/validated as before). Combobox/listbox
+  keyboard navigation: `role="listbox"` results with `role="option"` rows (headers
+  `role="presentation"`), input `role="combobox"` + `aria-activedescendant`; ArrowUp/Down walk
+  actionable options only, Enter activates via existing behavior, active option scrolls into view —
+  in **both** presentations. Escape interception (first Escape clears the open result list, second
+  closes the host) gated to the inline/drawer host via new `dismissResultsOnEscape` prop; the modal
+  composer keeps one-Escape-to-close. "Add as custom item" moved out of the `<ul>` to a sibling
+  button.
+- Tests: `ActualWorkItemPickerDrawer.test.tsx` — close icon + renamed footer action.
+  `ActualWorkComposer.test.tsx` — search clear/focus, loading state, direct-add + assembly-add
+  feedback wording, quantity +/−, `describe("keyboard result navigation")` (arrow traversal past
+  headers, Enter activation for assembly + catalog, Escape sequencing), and a modal-path
+  Escape-still-closes guard; 6 result-row assertions moved from `getByRole("button")` to `option`.
+- Verification: `ActualWorkComposer` + `ActualWorkItemPickerDrawer` 82/82; `src/pages` +
+  `src/components` 841/841; `tsc --noEmit` clean; `check:tokens` passed; `git diff --check` clean.
+  No backend / API-client / routing / migration change.
+
+### Next code slice — 4g pilot request-close advisory (fresh session)
+
+**Product decision, 2026-08-31:** do **not** ship BL136 4g as an unconditional hard
+Resolved→Closed block for the controlled pilot. A hard gate would turn a small Actual Work trial
+into an implicit requirement to adopt Keep's complete Request lifecycle (and, operationally, its
+Price Book workflow) before the client has validated the product fit.
+
+Instead, scope the pilot slice as an advisory on outstanding Actual Work (open Draft OR
+submitted∧¬reviewed∧¬superseded): explain that the visit should be resolved before closing, while
+allowing an explicit **Close anyway** pilot-exception path. Capture only a structured exception
+reason (for example, completed in the existing system or pilot exception), not customer free text,
+so the rollout yields actionable friction evidence: abandoned drafts, catalog gaps, review
+confusion, or readiness to move closeout into Keep. Actual Work may still be trialled with custom
+lines; Price Book adoption is not a prerequisite.
+
+The domain-authoritative hard close gate, API error mapping, and frontend disable/reason copy from
+BL136 4g are deferred until the client has adopted the request/Actual Work loop and the Billing
+Revision closeout path is available. Preflight the advisory/exception design before implementation;
+do not infer a persistence shape or authorization rule for exceptions.
 
 ### Remaining pilot/release work
 
@@ -320,6 +363,8 @@ family. Full unit + architecture + focused integration at the gate.
 - **Pilot acceptance and rehearsal:** real-device/browser-zoom validation of the fixed Actual Work
   composer; normal-repair and diagnostic/no-work flows; non-recorder and Owner/Admin review paths;
   alert/feedback routing; field fallback/escalation guide; targeted phone/tablet/desktop quality pass.
+  Include the 4g close-advisory/structured-exception flow and use its outcomes to decide whether
+  hard close enforcement is warranted after the pilot.
 - **Price Book nudge ordinal defect:** display the API's one-based `Order` directly. Do not change
   persisted/API numbering or composer behavior; cover one-, two-, and three-suggestion rules.
 
