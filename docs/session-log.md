@@ -1,7 +1,7 @@
 # Session Log — OpHalo Foundation
 
-**Last updated:** 2026-08-31 (4f-v item-picker-drawer implemented, local commit pending — see
-"Prior slice — 4f-v"; 4f-iv `b6a7d19`; 4f-iii `0ff4c2c`; 4f-ii `144bee6`; 4f-i `144e458`)
+**Last updated:** 2026-08-31 (4f-v item-picker-drawer `7ab1c09`; 4f-iv `b6a7d19`; 4f-iii `0ff4c2c`;
+4f-ii `144bee6`; 4f-i `144e458`)
 **Purpose:** active handoff only. Completed implementation detail belongs in Git history and the
 relevant build log.
 
@@ -24,10 +24,11 @@ existing-ticket workflow as the explicit outage fallback.
 
 `main` at `8495ba3` (pushed 2026-08-30) carries the 4e-0 signal seam, 4e-i supersession foundation,
 and `AddActualWorkSupersession`. Railway deployment completed and the migration is applied —
-confirmed 2026-08-30; `ActualWorkSupersessionPersistenceTests` (4) pass. Local commits — `b6a7d19`
+confirmed 2026-08-30; `ActualWorkSupersessionPersistenceTests` (4) pass. Local commits — `7ab1c09`
+(4f-v), `b6a7d19`
 (4f-iv), `0ff4c2c` (4f-iii), `144bee6` (4f-ii), `144e458` (4f-i), the 4e-iii-a review follow-up `8095611`, `9084985` (4e-iii-b),
 `a18219e` (4e-iii-a), `e19e5f9` (4e-ii-c), `29db179` (4e-ii-b-2), `2be5203` (4e-ii-b-1), `82d9b9e` (4e-ii-a)
-and earlier — are **not yet pushed**. No migration since 4e-i (4e-ii through 4f-iv are code-only /
+and earlier — are **not yet pushed**. No migration since 4e-i (4e-ii through 4f-v are code-only /
 UI-only: services, read/mutation guards, routes, mapper, response shape, the workspace route shell,
 the workspace office region + its removal from wide-viewport Request Detail, the inline composer
 presentation + persistent Keep shell / ticket-context band, and the large-ticket capture-density
@@ -277,7 +278,7 @@ modal composer is unchanged.
   `ActualWorkWorkspacePage.test.tsx` (+1).
 - **Deferred to 4f-v:** search-results surface rework (now the item-picker drawer, below).
 
-### Prior slice — 4f-v Actual Work item-picker drawer (local commit pending)
+### Prior slice — 4f-v Actual Work item-picker drawer (local commit `7ab1c09`)
 
 Frontend-only, `web/ophalo-app`. **2 prod + 2 test** (children/slot approach — kept
 `ActualWorkSearchAndAdd` private, avoided a composer↔drawer circular import; the preflight's
