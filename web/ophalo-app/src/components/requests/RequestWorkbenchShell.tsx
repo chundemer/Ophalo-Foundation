@@ -114,6 +114,14 @@ export function RequestWorkbenchShell(props: RequestWorkbenchShellProps) {
   // never select a replacement customer.
   const hasAutoSelectedRef = useRef(false);
   const priorRequestEntryIntentRef = useRef(requestEntryIntent);
+
+  // GAP-061 transaction state (see the effects below).
+  const [queueTxnEpoch, setQueueTxnEpoch] = useState(0);
+  const handleUserQueueChange = useCallback(() => setQueueTxnEpoch((e) => e + 1), []);
+  const pendingQueueTxnRef = useRef(false);
+  const armedQueueTxnEpochRef = useRef(0);
+  const queueTxnFromQueueKeyRef = useRef<string | null>(null);
+
   useEffect(() => {
     if (priorRequestEntryIntentRef.current === requestEntryIntent) return;
     priorRequestEntryIntentRef.current = requestEntryIntent;
@@ -125,6 +133,9 @@ export function RequestWorkbenchShell(props: RequestWorkbenchShellProps) {
       return;
     }
     if (hasAutoSelectedRef.current) return;
+    // GAP-061: a pending user-initiated queue transaction owns detail selection — the one-time
+    // initial-landing auto-select must not also fire (and possibly pick a different row).
+    if (pendingQueueTxnRef.current) return;
     if (!showTwoPaneRequests) return;
     if (!snapshot || snapshot.isLoading || snapshot.isError || snapshot.isForbidden) return;
     if (snapshot.requests.length === 0) return;
@@ -133,53 +144,55 @@ export function RequestWorkbenchShell(props: RequestWorkbenchShellProps) {
     const firstEligible = snapshot.requests.find(hasAttention) ?? snapshot.requests[0];
     onSelectRequest(firstEligible.id, { requestIds: snapshot.requests.map((r) => r.id) });
   }, [detailRoute, showTwoPaneRequests, snapshot, onSelectRequest, requestEntryIntent]);
-  // GAP-061: a queue (tab) switch is a change of working context. Latch the queue a Request
-  // Detail was opened under; once a *different* queue's authoritative (settled) result is
-  // available, the active queue determines the active detail:
-  //  - open request still a member    → keep it;
-  //  - not a member, queue populated   → route to the first server-ranked row;
-  //  - not a member, queue empty       → clear the detail and route.
-  // Never act while the destination query is still loading; never invent client-side ranking.
-  const detailOpenedUnderQueueRef = useRef<string | null>(null);
-  const detailLatchedIdRef = useRef<string | null>(null);
+
+  // GAP-061: a user-initiated queue transition (tab click or keyboard, including the empty-
+  // Attention "View all" jump) is its own detail-selection transaction — it does NOT rely on
+  // the one-time initial-landing latch above. `Requests` bumps this epoch on every explicit
+  // queue change; the shell then reconciles the detail against that queue's authoritative
+  // result exactly once:
+  //   - open request still a member of the destination     → keep the current detail;
+  //   - not a member, destination populated                → open its first server-ranked row
+  //     (replace the stale detail route, or open from a bare Requests route — never a second
+  //     click, never client-side ranking);
+  //   - not a member, destination empty                    → clear the detail/route.
+  // The transaction never resolves while the destination query is loading, and never before
+  // the snapshot actually reflects the new queue.
+  useEffect(() => {
+    // Arm once per epoch, capturing the queue that was active *before* the switch — the effect
+    // runs on the tab-click commit, before `Requests` has published the new queue's snapshot.
+    if (queueTxnEpoch === armedQueueTxnEpochRef.current) return;
+    armedQueueTxnEpochRef.current = queueTxnEpoch;
+    pendingQueueTxnRef.current = true;
+    queueTxnFromQueueKeyRef.current = snapshot?.queueKey ?? null;
+  }, [queueTxnEpoch, snapshot]);
 
   useEffect(() => {
-    if (!detailRoute) {
-      detailOpenedUnderQueueRef.current = null;
-      detailLatchedIdRef.current = null;
-      return;
-    }
-    if (detailLatchedIdRef.current === detailRoute.requestId) return;
-    // Latch only against a settled ranked queue context — a direct URL / refresh landing on a
-    // detail route must adopt whatever queue the pane shows, so it is never treated as a switch.
-    if (!snapshot || snapshot.isLoading || !snapshot.isRankedView) return;
-    detailLatchedIdRef.current = detailRoute.requestId;
-    detailOpenedUnderQueueRef.current = snapshot.queueKey;
-  }, [detailRoute, snapshot]);
-
-  useEffect(() => {
-    if (!detailRoute) return;
+    if (!pendingQueueTxnRef.current) return;
     if (!snapshot || !snapshot.isRankedView) return;
     if (snapshot.isLoading || snapshot.isError || snapshot.isForbidden) return;
-    const openedUnder = detailOpenedUnderQueueRef.current;
-    if (openedUnder === null || openedUnder === snapshot.queueKey) return;
-    if (snapshot.requests.some((r) => r.id === detailRoute.requestId)) {
-      // Still a member of the destination queue — adopt it as the detail's context.
-      detailOpenedUnderQueueRef.current = snapshot.queueKey;
-      return;
-    }
+    // Wait until the snapshot reflects the destination queue, not the one selected before it.
+    if (snapshot.queueKey === queueTxnFromQueueKeyRef.current) return;
+
+    pendingQueueTxnRef.current = false;
+
+    const openId = detailRoute?.requestId ?? null;
+    if (openId !== null && snapshot.requests.some((r) => r.id === openId)) return;
+
     if (snapshot.requests.length > 0) {
-      // Populated destination — continue work on its first server-ranked request, no extra click.
       const first = snapshot.requests[0];
-      detailOpenedUnderQueueRef.current = snapshot.queueKey;
-      detailLatchedIdRef.current = first.id;
-      onOpenDestinationRequest?.(first.id, snapshot.requests.map((r) => r.id));
+      const ids = snapshot.requests.map((r) => r.id);
+      if (openId !== null) {
+        onOpenDestinationRequest?.(first.id, ids);
+      } else if (isWide) {
+        // A bare, wide two-pane Requests route: open the first request instead of leaving the
+        // compact preview up. Narrow list mode stays a list — a tab switch is not a selection.
+        onSelectRequest(first.id, { requestIds: ids });
+      }
       return;
     }
-    detailOpenedUnderQueueRef.current = null;
-    detailLatchedIdRef.current = null;
-    onExitStaleDetail?.();
-  }, [detailRoute, snapshot, onOpenDestinationRequest, onExitStaleDetail]);
+
+    if (openId !== null) onExitStaleDetail?.();
+  }, [snapshot, detailRoute, isWide, onSelectRequest, onOpenDestinationRequest, onExitStaleDetail]);
 
   const paneMode = showTwoPaneRequests || showPaneDetail;
   // The Queue pane persists mounted across #/requests <-> #/request/{id} at wide widths (Step 5
@@ -215,6 +228,7 @@ export function RequestWorkbenchShell(props: RequestWorkbenchShellProps) {
             onNavigateSettings={onNavigateSettings}
             onStartCapture={onStartCapture}
             onAppliedSnapshotChange={handleAppliedSnapshotChange}
+            onUserQueueChange={handleUserQueueChange}
             selectedRequestId={detailRoute?.requestId}
             paneMode={paneMode}
           />

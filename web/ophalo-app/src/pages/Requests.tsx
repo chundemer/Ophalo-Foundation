@@ -91,6 +91,9 @@ interface RequestsProps {
   onNavigateSettings: (section?: "public-profile" | "policy" | "team") => void;
   onStartCapture: () => void;
   onAppliedSnapshotChange?: (snapshot: AppliedQueueSnapshot) => void;
+  // GAP-061: fired on every explicit user queue change (tab click, keyboard, or the empty-
+  // Attention "View all" jump) so the Workbench shell can run its detail-selection transaction.
+  onUserQueueChange?: () => void;
   // UI-001 Step 4: true when rendered inside the bounded Queue pane — see
   // RequestQueueNavigation's paneMode doc. Undefined/false keeps today's full-width layout.
   paneMode?: boolean;
@@ -107,6 +110,7 @@ export function Requests({
   onNavigateSettings,
   onStartCapture,
   onAppliedSnapshotChange,
+  onUserQueueChange,
   paneMode,
   selectedRequestId,
 }: RequestsProps) {
@@ -145,6 +149,7 @@ export function Requests({
   function selectTab(tab: TabDef) {
     setQueueExplicitlyChosen(true);
     initialQueueResolvedRef.current = true;
+    if (tab.view !== activeTab.view) onUserQueueChange?.();
     setActiveTab(tab);
     setQ("");
     setDraftQ("");

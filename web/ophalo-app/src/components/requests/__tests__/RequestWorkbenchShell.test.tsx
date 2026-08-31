@@ -501,6 +501,87 @@ describe("RequestWorkbenchShell", () => {
       expect(onOpenDestinationRequest).not.toHaveBeenCalled();
     });
 
+    it("GAP-061 regression: detail open → switch to empty queue clears it → switch to populated queue opens its first server-ranked request with no Open-request click", async () => {
+      const inAttention = mockRequestSummaries[0];
+      const myWorkRows = mockRequestSummaries.slice(1, 3); // excludes inAttention
+      const defaultGate = deferred<KeepRequestListResult>();
+      const myWorkGate = deferred<KeepRequestListResult>();
+      mockGetRequests.mockImplementation((args: { view: string }) => {
+        if (args.view === "needs_attention") {
+          return Promise.resolve({
+            requests: [inAttention],
+            pageInfo: { limit: 50, hasMore: false, nextCursor: null },
+            viewCounts: mockViewCounts,
+            listContext: { view: "needs_attention", isDefaultCommandCenter: false, isHistory: false, isSearch: false },
+          });
+        }
+        if (args.view === "default") return defaultGate.promise;
+        return myWorkGate.promise; // assigned_to_me
+      });
+      const onExitStaleDetail = vi.fn();
+      const onOpenDestinationRequest = vi.fn();
+      const onSelectRequest = vi.fn();
+      const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+      const baseProps = {
+        role: "owner" as const,
+        viewCounts: null,
+        onViewCountsUpdate: () => {},
+        onSelectRequest,
+        onNavigateSettings: () => {},
+        onStartCapture: () => {},
+        onBack: () => {},
+        onOpenDestinationRequest,
+        onExitStaleDetail,
+      };
+      const { rerender } = render(
+        <QueryClientProvider client={queryClient}>
+          <RequestWorkbenchShell {...baseProps} route={{ page: "detail", requestId: inAttention.id }} />
+        </QueryClientProvider>,
+      );
+      fireWidth(1001);
+      await waitFor(() => expect(screen.getAllByText(inAttention.customerName).length).toBeGreaterThan(0));
+
+      // Step 1 — switch to All Work; it settles empty → stale detail is cleared.
+      act(() => { screen.getByRole("tab", { name: "All Work" }).click(); });
+      await waitFor(() => expect(mockGetRequests).toHaveBeenCalledWith(expect.objectContaining({ view: "default" })));
+      await act(async () => {
+        defaultGate.resolve({
+          requests: [],
+          pageInfo: { limit: 50, hasMore: false, nextCursor: null },
+          viewCounts: mockViewCounts,
+          listContext: { view: "default", isDefaultCommandCenter: true, isHistory: false, isSearch: false },
+        });
+      });
+      await waitFor(() => expect(onExitStaleDetail).toHaveBeenCalledTimes(1));
+
+      // App reacts to the clear by routing back to bare Requests.
+      rerender(
+        <QueryClientProvider client={queryClient}>
+          <RequestWorkbenchShell {...baseProps} route={{ page: "requests" }} />
+        </QueryClientProvider>,
+      );
+
+      // Step 2 — switch to My Work; it settles populated → its first server-ranked row opens,
+      // no compact-preview "Open request" second click.
+      act(() => { screen.getByRole("tab", { name: "My Work" }).click(); });
+      await waitFor(() => expect(mockGetRequests).toHaveBeenCalledWith(expect.objectContaining({ view: "assigned_to_me" })));
+      expect(onSelectRequest).not.toHaveBeenCalled(); // nothing while loading
+
+      await act(async () => {
+        myWorkGate.resolve({
+          requests: myWorkRows,
+          pageInfo: { limit: 50, hasMore: false, nextCursor: null },
+          viewCounts: mockViewCounts,
+          listContext: { view: "assigned_to_me", isDefaultCommandCenter: false, isHistory: false, isSearch: false },
+        });
+      });
+
+      await waitFor(() =>
+        expect(onSelectRequest).toHaveBeenCalledWith(myWorkRows[0].id, { requestIds: myWorkRows.map((r) => r.id) }),
+      );
+      expect(onSelectRequest).toHaveBeenCalledTimes(1);
+    });
+
     it("GAP-061: a queue switch to a queue where the open request is still a member keeps the detail", async () => {
       const shared = mockRequestSummaries[0];
       mockGetRequests.mockImplementation((args: { view: string }) =>
