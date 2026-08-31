@@ -1,8 +1,17 @@
 import type { RefObject } from "react";
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { Check, ChevronDown, RefreshCw, Search, X } from "lucide-react";
 import type { KeepRequestViewCounts } from "../../lib/apiClient";
 import { STATUS_OPTIONS, countForTab, type TabDef } from "../../pages/requestsWorkspace";
+import { computeAnchoredPosition, type AnchoredPosition } from "./viewsPopoverPosition";
+
+// GAP-060: menu geometry. Preferred width fits the longest current option
+// ("Actual Work Review" / "Office Review — couldn't load counts · Retry", which is
+// allowed to wrap); minWidth keeps it usable; margin doubles as the trigger gap and
+// the minimum viewport-edge inset.
+const VIEWS_MENU_PREFERRED_WIDTH = 288;
+const VIEWS_MENU_MIN_WIDTH = 224;
+const VIEWS_MENU_MARGIN = 8;
 
 // UI-004 amendment (2026-08-21): the aggregate/loading/error contract for the Office Review
 // destinations inside Views. "error" is distinct from "loading" — a failed count query must
@@ -83,6 +92,7 @@ function ViewsPopover({
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const [draftStatus, setDraftStatus] = useState(statusFilter);
+  const [position, setPosition] = useState<AnchoredPosition | null>(null);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const popoverId = useId();
@@ -98,6 +108,33 @@ function ViewsPopover({
     setIsOpen(false);
     triggerRef.current?.focus();
   }
+
+  // GAP-060: recompute the fixed placement whenever the menu is open and the trigger
+  // may have moved (open, viewport resize, browser zoom, ancestor scroll).
+  useLayoutEffect(() => {
+    if (!isOpen) return;
+    function reposition() {
+      const trigger = triggerRef.current?.getBoundingClientRect();
+      if (!trigger) return;
+      setPosition(
+        computeAnchoredPosition({
+          trigger,
+          viewportWidth: window.innerWidth,
+          viewportHeight: window.innerHeight,
+          preferredWidth: VIEWS_MENU_PREFERRED_WIDTH,
+          minWidth: VIEWS_MENU_MIN_WIDTH,
+          margin: VIEWS_MENU_MARGIN,
+        }),
+      );
+    }
+    reposition();
+    window.addEventListener("resize", reposition);
+    window.addEventListener("scroll", reposition, true);
+    return () => {
+      window.removeEventListener("resize", reposition);
+      window.removeEventListener("scroll", reposition, true);
+    };
+  }, [isOpen]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -154,7 +191,14 @@ function ViewsPopover({
           id={popoverId}
           role="group"
           aria-label="Views"
-          className="absolute right-0 z-20 mt-1 w-64 rounded-md border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] py-1 shadow-lg"
+          className="fixed z-40 overflow-y-auto overscroll-contain rounded-md border border-[var(--ophalo-border)] bg-[var(--ophalo-card)] py-1 shadow-lg"
+          style={{
+            left: position?.left ?? 0,
+            top: position?.top ?? 0,
+            width: position?.width ?? VIEWS_MENU_PREFERRED_WIDTH,
+            maxHeight: position?.maxHeight ?? undefined,
+            visibility: position ? "visible" : "hidden",
+          }}
         >
           <div className="px-3 py-1 text-xs font-semibold uppercase tracking-wide text-[var(--ophalo-muted)]">
             Saved views

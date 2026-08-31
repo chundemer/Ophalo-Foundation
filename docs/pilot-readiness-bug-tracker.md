@@ -34,8 +34,8 @@ Complete each numbered slice with focused automated coverage and a production-ca
 1. **Release safety and truthful public entry:** GAP-039, GAP-033, then GAP-040. Establish safe production observability and configuration validation first; make the public request journey and published claims truthful second. (GAP-056 customer SMS/QR handoff sender/business context — resolved, commit `0fc7a2a`.)
 2. **Field-work correctness:** GAP-055. This is a P0 authorization/data-model correction and needs its own migration, API, UI, and concurrency test plan.
 3. **Phone and capture integrity:** GAP-016, GAP-021, GAP-051, then GAP-025. Consolidate the ADR-444 normalization path before extending fallback customer recognition.
-4. **Request Detail foundation and correctness:** GAP-019, then GAP-047, GAP-048, and GAP-049. Decompose layout ownership before changing shared desktop/mobile behavior; then fix the bounded mutation, sharing, and follow-up defects.
-5. **Request-list product decision and core behavior:** GAP-027 (decision), then GAP-045, GAP-057, GAP-042, GAP-041, GAP-046, GAP-043, GAP-044, GAP-026, and GAP-053. This locks row hierarchy before implementing queue context, sensible default selection, loading, filtering, scale/history, and small action-order polish.
+4. **Request Detail foundation and correctness:** GAP-019, GAP-058, GAP-059, then GAP-047, GAP-048, and GAP-049. Decompose layout ownership before changing shared desktop/mobile behavior; then fix the review/completion hierarchy, schedule-control legibility, and bounded mutation, sharing, and follow-up defects.
+5. **Request-list product decision and core behavior:** GAP-027 (decision), then GAP-045, GAP-057, GAP-042, GAP-041, GAP-046, GAP-043, GAP-044, GAP-026, and GAP-053. This locks row hierarchy before implementing queue context, sensible default selection, loading, filtering, scale/history, and small action-order polish. (GAP-060 Views-menu off-screen clipping — resolved, commit `b3573a7`.)
 6. **Pilot operating loop and final usability review:** GAP-037 (after GAP-039), GAP-038, and GAP-054. Deliver the founder's evidence/reporting loop, a fail-soft feedback route, and a final role/device navigation review.
 
 ## Active Work
@@ -111,6 +111,38 @@ Implement ADR-492: retain canonical-customer matches, but render a request-phone
 **Area:** `ophalo-app` Request Detail architecture
 
 Keep one controller for data and mutations, while extracting desktop/mobile composition and shared panels. Do not fork business behavior by device; shared callbacks, policy, accessibility, and concurrency behavior must remain common.
+
+### GAP-058 — Actual Work review and request-completion actions compete on Request Detail
+
+**Status:** Open
+**Severity:** P1
+**Area:** Request Detail Actual Work review and lifecycle action hierarchy
+
+When a request is in **Actual Work Review**, the page simultaneously presents the request-level **Mark work done** action and the review-card **Mark visit reviewed** action. The request can still show an early lifecycle state such as **Received**, making it unclear whether the operator is reviewing recorded work, completing the customer request, or expected to do both. A mistaken completion can change the customer-facing lifecycle before the required financial review is complete.
+
+**Required resolution:** Make the two actions and their consequences unmistakable. The review card must explain that **Mark visit reviewed** completes only the internal financial review; the request-level lifecycle action must retain a distinct label, placement, and confirmation/copy that states its customer-work consequence. Review the queue/detail context so an Actual Work Review item does not imply that its request lifecycle has already advanced. Do not couple review completion to request completion or change server lifecycle authority as a presentation fix.
+
+**Acceptance criteria:**
+
+- An Owner/Admin can distinguish financial-review completion from customer-request completion before acting.
+- A visit-review action cannot be mistaken for, or silently cause, a request status change; a request-completion action cannot be mistaken for review.
+- Desktop/mobile, keyboard focus order, permission variants, and the `Received` plus actual-work-review state have focused regression coverage.
+
+### GAP-059 — Planned-work and internal-follow-up selects look disabled or unreadable
+
+**Status:** Open
+**Severity:** P1
+**Area:** Request Detail schedule and follow-up controls
+
+The **Set planned work date…** and **Set internal follow-up…** controls use placeholder-like low-contrast text and a weak select affordance. In the observed Request Detail state, they visually read as unavailable rather than actionable controls, making a core scheduling/follow-up path easy to miss.
+
+**Required resolution:** Give enabled empty selects an accessible, readable empty-state treatment that is visually distinct from disabled controls and clearly indicates that a choice can be made. Preserve visible labels, native/select keyboard behavior, selected-value readability, focus indication, error/disabled states, and the existing mutation policy. Do not rely on color alone to distinguish enabled from disabled.
+
+**Acceptance criteria:**
+
+- At normal desktop and mobile widths, an Owner/Admin can identify both controls as available and understand their purpose before opening them.
+- Empty text, selected values, focus, hover, disabled, validation, loading, and mutation-error states meet the established contrast and accessibility treatment.
+- Focused PWA coverage verifies keyboard selection and that enabled empty controls are not rendered with disabled semantics or appearance.
 
 ### GAP-047 — Internal-priority updates can fail silently on Request Detail
 
